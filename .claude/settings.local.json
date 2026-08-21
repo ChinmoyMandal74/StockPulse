@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npm start)",
+      "PowerShell(Start-Sleep -Seconds 6; try { $r = Invoke-RestMethod \"http://localhost:3000/api/stocks\"; Write-Output \"OK\"; $r.stocks | Select-Object -First 4 | ForEach-Object { Write-Output \\(\"{0,-6} today={1}% yest={2}% 1W={3}% 2W={4}% 1M={5}%\" -f $_.symbol, \\([math]::Round\\($_.todayPct,2\\)\\), \\([math]::Round\\($_.yesterdayPct,2\\)\\), \\([math]::Round\\($_.oneWeekPct,2\\)\\), \\([math]::Round\\($_.twoWeekPct,2\\)\\), \\([math]::Round\\($_.oneMonthPct,1\\)\\)\\) } } catch { Write-Output \"FAILED: $_\" })"
+    ]
+  }
+}

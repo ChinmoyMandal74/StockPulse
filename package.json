@@ -1,0 +1,14 @@
+{
+  "name": "stock-momentum-screener-poc",
+  "version": "0.1.0",
+  "description": "Proof-of-concept momentum screener: track stock tickers and view multi-timeframe % changes (Twelve Data, no database).",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --use-system-ca server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "Mag 7": [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "AMZN",
+    "GOOGL",
+    "TSLA",
+    "META"
+  ],
+  "Chips": [
+    "NVDA",
+    "MU",
+    "AMD",
+    "AVGO",
+    "SMH",
+    "INTC"
+  ],
+  "Industrials": [
+    "GEV",
+    "VRT"
+  ],
+  "CyberSecurity": [
+    "PANW",
+    "CRWD"
+  ],
+  "Memory": [
+    "DRAM",
+    "MU",
+    "005930",
+    "SNDK",
+    "SKHY"
+  ],
+  "Watchlist": [
+    "AVAV",
+    "JOBY",
+    "SG",
+    "SHAK",
+    "SPCX",
+    "UBER",
+    "BABA",
+    "CAVA",
+    "MTUM",
+    "CVNA",
+    "SHOP",
+    "CRWV",
+    "CEG",
+    "SMCI",
+    "LITE"
+  ],
+  "Software": [
+    "CRM",
+    "DDOG",
+    "PLTR",
+    "SNOW"
+  ],
+  "Fin": [
+    "MSTR",
+    "HOOD",
+    "KKR"
+  ]
+}

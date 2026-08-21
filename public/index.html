@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock Tracker</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#0f1419" />
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a212b;
+      --border: #2a333f;
+      --text: #e6edf3;
+      --muted: #8b98a5;
+      --green: #2ea043;
+      --red: #f85149;
+      --accent: #388bfd;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px;
+    }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+
+    /* Portfolio tabs */
+    .tabs { display: flex; gap: 2px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+    .tab {
+      padding: 9px 16px; border: none; background: none; color: var(--muted);
+      cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; border-radius: 0;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+    .tab .count { color: var(--muted); font-size: 11px; margin-left: 5px; font-weight: 400; }
+    .tab .tdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    .tab-new { color: var(--accent); font-size: 18px; line-height: 1; padding: 6px 12px; }
+
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+    input[type="text"], select {
+      background: var(--panel); border: 1px solid var(--border); color: var(--text);
+      padding: 8px 12px; border-radius: 6px; font-size: 14px;
+    }
+    input[type="text"] { width: 150px; text-transform: uppercase; }
+    input[type="date"] { color-scheme: dark; }
+    .addto { color: var(--muted); font-size: 13px; }
+    #backtestBar {
+      background: #2a2410; border: 1px solid #6b5a1e; color: #e5c76b;
+      padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    #backtestBar button { background: #6b5a1e; color: #fff; padding: 4px 10px; font-size: 12px; }
+    button {
+      background: var(--accent); color: #fff; border: none;
+      padding: 8px 14px; border-radius: 6px; font-size: 14px; cursor: pointer;
+    }
+    button.secondary { background: var(--panel); border: 1px solid var(--border); color: var(--text); }
+    button.ghost { background: none; border: 1px solid var(--border); color: var(--muted); padding: 8px 12px; }
+    button.ghost:hover { color: var(--text); }
+    button:disabled { opacity: 0.5; cursor: default; }
+    .spacer { flex: 1; }
+    .status { color: var(--muted); font-size: 13px; }
+    .error { color: var(--red); font-size: 13px; margin-bottom: 12px; min-height: 16px; }
+
+    /* Column-group toggle chips */
+    .groups-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    .glabel { color: var(--muted); font-size: 12px; margin-right: 2px; }
+    .gtoggle {
+      background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+      padding: 4px 10px; border-radius: 14px; font-size: 12px; cursor: pointer;
+    }
+    .gtoggle.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .gtoggle::before { content: "− "; }
+    .gtoggle:not(.active)::before { content: "+ "; }
+
+    .table-wrap { overflow: auto; max-height: calc(100vh - 220px); }
+    table { width: 100%; border-collapse: collapse; }
+    /* Freeze the two header rows while scrolling vertically. */
+    thead th { position: sticky; z-index: 4; background: var(--bg); }
+    thead tr:first-child th { top: 0; }
+    thead tr:nth-child(2) th { top: var(--h1, 28px); }
+    /* Freeze the left columns (Symbol … Name) while scrolling horizontally. */
+    .frz { position: sticky; background: var(--bg); z-index: 3; }
+    thead .frz { z-index: 6; }
+    .frz0 { left: 0; }
+    .frz1 { left: var(--l1, 0); }
+    .frz2 { left: var(--l2, 0); }
+    .frz3 { left: var(--l3, 0); }
+    .frz4 { left: var(--l4, 0); }
+    .frz5 { left: var(--l5, 0); border-right: 2px solid var(--border); }
+    tbody tr:hover .frz { background: var(--panel); }
+    th, td {
+      text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    td { white-space: nowrap; }
+    th {
+      color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.02em; white-space: normal; vertical-align: bottom; line-height: 1.15;
+    }
+    th[data-key] { cursor: pointer; user-select: none; }
+    th.left, td.left { text-align: left; }
+    th.group {
+      text-align: center; cursor: pointer; user-select: none;
+      background: #131a24; color: var(--muted); border-bottom: 1px solid var(--border);
+    }
+    th.group:hover { color: var(--text); }
+    th.group::after { content: " ▾"; }
+    tbody tr:hover { background: var(--panel); }
+    .sym { font-weight: 700; }
+    .name { color: var(--muted); }
+    .pos { color: var(--green); }
+    .neg { color: var(--red); }
+    .na { color: var(--muted); }
+    .remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 4px; }
+    .remove:hover { color: var(--red); }
+    .empty { text-align: center; color: var(--muted); padding: 40px; }
+    .badge {
+      display: inline-block; border: 1px solid; border-radius: 10px;
+      padding: 1px 7px; font-size: 11px; margin: 0 3px 0 0; white-space: nowrap;
+    }
+    td.rating { cursor: help; }
+    td.sym { cursor: help; }
+    .warn { color: #d29922; cursor: help; }
+    .tickerlink { color: inherit; text-decoration: none; cursor: pointer; }
+    .tickerlink:hover { color: #388bfd; text-decoration: underline; }
+
+    /* Buy Rating breakdown tooltip */
+    #tip {
+      position: fixed; display: none; z-index: 1000; width: 240px;
+      background: #0b0f14; border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.55); font-size: 12px; color: var(--text);
+    }
+    #tip .tip-head { font-weight: 700; margin-bottom: 7px; }
+    #tip .tip-head span { color: var(--muted); font-weight: 400; }
+    #tip .tip-row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
+    #tip .tip-row .lbl { flex: 1; color: var(--muted); white-space: nowrap; }
+    #tip .tip-row .lbl em { color: #5a6673; font-style: normal; }
+    #tip .tip-row.off .lbl, #tip .tip-row.off .val { color: #5a6673; }
+    #tip .tip-bar { width: 54px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; flex: none; }
+    #tip .tip-bar i { display: block; height: 100%; background: var(--accent); }
+    #tip .val { width: 22px; text-align: right; }
+    #tip .tip-foot { margin-top: 7px; color: #5a6673; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <h1>Stock Tracker</h1>
+  <div class="sub">Data via Twelve Data. Group tickers into portfolios; a stock can belong to several. Click a column header to sort; use the chips to collapse column groups. Hover any value to see when it was last pulled.</div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="controls">
+    <input type="text" id="symbolInput" class="admin-only" placeholder="e.g. TSLA" maxlength="12" />
+    <span class="addto admin-only">to</span>
+    <select id="addTarget" class="admin-only"></select>
+    <button id="addBtn" class="admin-only">Add</button>
+    <button class="ghost" id="renameBtn" style="display:none">Rename</button>
+    <button class="ghost" id="deleteBtn" style="display:none">Delete</button>
+    <div class="spacer"></div>
+    <span class="status" id="status"></span>
+    <button class="secondary admin-only" id="refreshBtn">↻ Refresh</button>
+    <button class="secondary admin-only" id="refreshAllBtn" title="Clear cached sector / fundamentals / analyst data and re-pull everything fresh from the API">↻↻ Refresh All</button>
+    <span class="addto admin-only" style="margin-left:8px">As of</span>
+    <input type="date" id="asOfDate" class="admin-only" title="Backtest: view the momentum ranking as of a past date" />
+    <button class="secondary" id="exportBtn" title="Export the current view to a CSV file (opens in Excel)">⤓ Export to Excel</button>
+    <button class="secondary" id="loginBtn" style="display:none" title="Log in to unlock refresh, backtest and ticker editing">🔒 Admin login</button>
+    <button class="ghost" id="logoutBtn" style="display:none">Log out</button>
+  </div>
+
+  <div id="readonlyNote" style="display:none;margin:8px 0;padding:8px 12px;background:#161b22;border:1px solid #30363d;border-radius:6px;color:#8b949e;font-size:13px">
+    🔒 <b>Read-only view.</b> The data updates when the site owner refreshes. You can sort, collapse column groups and export.
+  </div>
+
+  <div id="backtestBar" style="display:none"></div>
+
+  <div class="groups-bar">
+    <span class="glabel">Column groups:</span>
+    <button class="gtoggle active" data-group="info">Info</button>
+    <button class="gtoggle active" data-group="short">Short-term %</button>
+    <button class="gtoggle active" data-group="long">Long-term %</button>
+    <button class="gtoggle" data-group="fwd">Forward</button>
+    <button class="gtoggle active" data-group="rel">Relative</button>
+    <button class="gtoggle active" data-group="trend">Trend</button>
+    <button class="gtoggle active" data-group="vol">Volume</button>
+    <button class="gtoggle active" data-group="fund">Fundamentals</button>
+  </div>
+
+  <div class="error" id="error"></div>
+
+  <div id="tip"></div>
+
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
+        <th rowspan="2" class="frz frz1" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
+        <th rowspan="2" class="frz frz2" data-key="momentumScore" title="Momentum 1–10: price/trend/volume (returns, RS, MAs, MA cross, MACD, RSI, volume). Hover for factors.">Mom.</th>
+        <th rowspan="2" class="frz frz3" data-key="qualityScore" title="Quality 1–10: company data (earnings & revenue growth, PEG, P/E, margin, ROE). Hover for factors.">Qual.</th>
+        <th rowspan="2" class="frz frz4" title="Rank by Overall within the stocks currently shown">Rank</th>
+        <th rowspan="2" class="left frz frz5" data-key="name">Name</th>
+        <th rowspan="2" class="left">Portfolios</th>
+        <th rowspan="2" data-key="price">Price</th>
+        <th class="group grp-info" data-group="info" colspan="3">Info</th>
+        <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
+        <th class="group grp-long" data-group="long" colspan="3">Long-term %</th>
+        <th class="group grp-fwd" data-group="fwd" colspan="4">Forward (backtest)</th>
+        <th class="group grp-rel" data-group="rel" colspan="3">Relative</th>
+        <th class="group grp-trend" data-group="trend" colspan="4">Trend</th>
+        <th class="group grp-vol" data-group="vol" colspan="1">Volume</th>
+        <th class="group grp-fund" data-group="fund" colspan="7">Fundamentals</th>
+        <th rowspan="2"></th>
+      </tr>
+      <tr>
+        <th class="left grp-info" data-key="sector">Sector</th>
+        <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
+        <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
+        <th class="grp-short" data-key="todayPct">Today</th>
+        <th class="grp-short" data-key="yesterdayPct">YDAY</th>
+        <th class="grp-short" data-key="oneWeekPct">1W</th>
+        <th class="grp-short" data-key="twoWeekPct">2W</th>
+        <th class="grp-short" data-key="oneMonthPct">1M</th>
+        <th class="grp-long" data-key="threeMonthPct">3M</th>
+        <th class="grp-long" data-key="sixMonthPct">6M</th>
+        <th class="grp-long" data-key="oneYearPct">1Y</th>
+        <th class="grp-fwd" data-key="fwd1M" title="Return in the ~1 month AFTER the as-of date">+1M</th>
+        <th class="grp-fwd" data-key="fwd3M" title="Return in the ~3 months after the as-of date">+3M</th>
+        <th class="grp-fwd" data-key="fwd6M" title="Return in the ~6 months after the as-of date">+6M</th>
+        <th class="grp-fwd" data-key="fwdSince" title="Return from the as-of date to the latest close">Since</th>
+        <th class="grp-rel" data-key="relStrength" title="3-month return minus the S&P 500's">RS vs<br>S&amp;P</th>
+        <th class="grp-rel" data-key="pctFromHigh" title="Distance below the 52-week high">% from<br>52W Hi</th>
+        <th class="grp-rel" data-key="rsi" title="Relative Strength Index (14-day)">RSI</th>
+        <th class="grp-trend" data-key="vs50ma" title="Price vs 50-day moving average">vs 50D<br>MA</th>
+        <th class="grp-trend" data-key="vs200ma" title="Price vs 200-day moving average">vs 200D<br>MA</th>
+        <th class="left grp-trend" data-key="maCrossRank" title="50/200-day MA cross: Golden (50 above 200) or Death, with trading days since the last cross">MA<br>Cross</th>
+        <th class="grp-trend" data-key="macdHist" title="MACD histogram (12/26/9) = MACD line − signal; positive = bullish momentum">MACD</th>
+        <th class="grp-vol" data-key="volTrend" title="5-day avg volume vs 20-day avg (rising = volume expanding)">Vol<br>Trend</th>
+        <th class="grp-fund" data-key="earningsGrowthYoY" title="Quarterly earnings growth, year-over-year">Earn<br>Grth</th>
+        <th class="grp-fund" data-key="revenueGrowthYoY" title="Quarterly revenue growth, year-over-year">Rev<br>Grth</th>
+        <th class="grp-fund" data-key="profitMargin" title="Net profit margin (TTM)">Profit<br>Margin</th>
+        <th class="grp-fund" data-key="roe" title="Return on equity (TTM)">ROE</th>
+        <th class="grp-fund" data-key="forwardPe" title="Forward price/earnings ratio">Fwd<br>P/E</th>
+        <th class="grp-fund" data-key="peg" title="PEG ratio — <1 cheap, >2 expensive">PEG</th>
+        <th class="grp-fund" data-key="shortPctFloat" title="Short interest as % of float — high = crowded short / squeeze potential (feeds the Momentum score)">Short<br>% Fl</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  </div>
+
+  <script>
+    let stocks = [];
+    let portfolios = [];       // ordered portfolio names
+    let activeTab = 'All';
+    let sortKey = 'overallScore';
+    let sortDir = -1;          // -1 desc, 1 asc
+    let lastUpdated = null;    // when /api/stocks was last pulled (live data)
+    let asOfDate = null;       // backtest: view momentum as of this past date (YYYY-MM-DD)
+    let isAdmin = true;        // may add/remove tickers, refresh, backtest (true = open/local or logged in)
+    let authRequired = false;  // server has an ADMIN_PASSWORD set (published, read-only for the public)
+
+    const GROUPS = ['info', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'fund'];
+    const collapsed = {};
+    GROUPS.forEach((g) => (collapsed[g] = false));
+    collapsed.fwd = true; // forward-return columns appear only in backtest mode
+
+    const PALETTE = ['#388bfd', '#2ea043', '#a371f7', '#f0883e', '#e5534b', '#39c5cf', '#c9a227', '#db61a2'];
+    const colorFor = (name) => {
+      const i = portfolios.indexOf(name);
+      return PALETTE[(i < 0 ? 0 : i) % PALETTE.length];
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    async function api(method, url, body) {
+      const opt = { method, headers: {}, cache: 'no-store' };
+      if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+      const res = await fetch(url, opt);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    // ---- formatting helpers ----
+    function fmtNum(n, digits = 2) { return (n == null || !isFinite(n)) ? null : n.toFixed(digits); }
+    // title="" attribute, safely escaped (empty string -> no attribute)
+    function attr(t) { return t ? ` title="${String(t).replace(/"/g, '&quot;')}"` : ''; }
+    function fmtDateTime(iso) { try { return new Date(iso).toLocaleString(); } catch { return iso; } }
+    function fmtTime(iso) { try { return new Date(iso).toLocaleTimeString(); } catch { return iso; } }
+    const CUR = { USD: '$', EUR: '€', GBP: '£', JPY: '¥', KRW: '₩', HKD: 'HK$', CNY: '¥', INR: '₹', CAD: 'C$', AUD: 'A$', CHF: 'CHF ', TWD: 'NT$', BRL: 'R$', SGD: 'S$' };
+    function curSym(code) { return code ? (CUR[code] || code + ' ') : '$'; }
+
+    function fmtMktCap(n, code) {
+      if (n == null || !isFinite(n)) return null;
+      const c = curSym(code);
+      if (n >= 1e12) return c + (n / 1e12).toFixed(1) + 'T';
+      if (n >= 1e9) return c + (n / 1e9).toFixed(1) + 'B';
+      if (n >= 1e6) return c + (n / 1e6).toFixed(1) + 'M';
+      return c + n.toLocaleString();
+    }
+    function pctCell(n, cls = '', title = '') {
+      const t = attr(title);
+      if (n == null || !isFinite(n)) return `<td class="na ${cls}"${t}>—</td>`;
+      const c = n >= 0 ? 'pos' : 'neg';
+      const sign = n >= 0 ? '+' : '';
+      return `<td class="${c} ${cls}"${t}>${sign}${n.toFixed(1)}%</td>`;
+    }
+    function numCell(n, cls = '', title = '') {
+      const t = attr(title);
+      if (n == null || !isFinite(n)) return `<td class="na ${cls}"${t}>—</td>`;
+      return `<td class="${cls}"${t}>${n.toFixed(1)}</td>`;
+    }
+    function pegCell(n, cls = '', title = '') {
+      const t = attr(title);
+      if (n == null || !isFinite(n)) return `<td class="na ${cls}"${t}>—</td>`;
+      let c = 'na';
+      if (n > 0 && n <= 1) c = 'pos';
+      else if (n >= 2) c = 'neg';
+      return `<td class="${c} ${cls}"${t}>${n.toFixed(2)}</td>`;
+    }
+    function rsiCell(n, cls = '', title = '') {
+      const t = attr(title);
+      if (n == null || !isFinite(n)) return `<td class="na ${cls}"${t}>—</td>`;
+      let c = 'na';
+      if (n >= 70) c = 'neg';
+      else if (n <= 30) c = 'pos';
+      return `<td class="${c} ${cls}"${t}>${n.toFixed(0)}</td>`;
+    }
+    function ratingCell(n, sym, kind, extraCls = '') {
+      if (n == null || !isFinite(n)) return `<td class="na ${extraCls}">—</td>`;
+      let color = '#d29922'; // amber (mid)
+      if (n >= 8) color = 'var(--green)';
+      else if (n <= 4) color = 'var(--red)';
+      return `<td class="rating ${extraCls}" data-sym="${sym}" data-kind="${kind}" style="font-weight:700;color:${color}">${n}</td>`;
+    }
+    function rankCell(r, total, extraCls = '') {
+      if (r == null) return `<td class="na ${extraCls}">—</td>`;
+      return `<td class="na ${extraCls}">${r}/${total}</td>`;
+    }
+    // Map a Twelve Data MIC / exchange to the code Google Finance uses in its quote URL
+    // (https://www.google.com/finance/quote/SYMBOL:EXCHANGE). MIC is authoritative; the
+    // free-text exchange is a fallback. Covers the common US venues plus a few foreign ones.
+    const GF_MIC = {
+      XNGS: 'NASDAQ', XNMS: 'NASDAQ', XNCM: 'NASDAQ', XNAS: 'NASDAQ',
+      XNYS: 'NYSE', ARCX: 'NYSEARCA', XASE: 'NYSEAMERICAN',
+      BATS: 'BATS', BATY: 'BATS', EDGX: 'BATS', EDGA: 'BATS',
+      XKRX: 'KRX', XLON: 'LON', XTKS: 'TYO', XHKG: 'HKG', XTSE: 'TSE',
+      XSHG: 'SHA', XSHE: 'SHE', XPAR: 'EPA', XETR: 'ETR', XAMS: 'AMS',
+      XSWX: 'SWX', XNSE: 'NSE', XBOM: 'BOM', XASX: 'ASX',
+    };
+    const GF_EXCH = {
+      NASDAQ: 'NASDAQ', NYSE: 'NYSE', 'NYSE ARCA': 'NYSEARCA', ARCA: 'NYSEARCA',
+      'NYSE AMERICAN': 'NYSEAMERICAN', AMEX: 'NYSEAMERICAN', CBOE: 'BATS', BATS: 'BATS', KRX: 'KRX',
+    };
+    function googleExchange(s) {
+      const mic = (s.micCode || '').toUpperCase();
+      if (GF_MIC[mic]) return GF_MIC[mic];
+      const ex = (s.exchange || '').toUpperCase();
+      return GF_EXCH[ex] || ex || null;
+    }
+    function gfUrl(s) {
+      const sym = encodeURIComponent(s.symbol);
+      const exch = googleExchange(s);
+      return exch
+        ? `https://www.google.com/finance/quote/${sym}:${encodeURIComponent(exch)}`
+        : `https://www.google.com/finance/quote/${sym}`;
+    }
+    function tickerLink(s) {
+      return `<a class="tickerlink" href="${gfUrl(s)}" target="_blank" rel="noopener" title="Open ${s.symbol} in Google Finance ↗">${s.symbol}</a>`;
+    }
+
+    function symbolCell(s, freshest) {
+      const thin = s.historyDays != null && s.historyDays > 0 && s.historyDays < 63;
+      const stale = s.latestDate && freshest && s.latestDate < freshest;
+      let title = s.latestDate
+        ? `History: ${s.historyDays} trading days · last data ${s.latestDate}`
+        : 'No price history returned';
+      let warn = '';
+      if (thin || stale) {
+        const notes = [];
+        if (thin) notes.push(`only ${s.historyDays} days of history — longer-period columns and Buy Rating need more`);
+        if (stale) notes.push(`price data is from ${s.latestDate}, behind the latest (${freshest})`);
+        title = notes.join(' · ');
+        warn = ' <span class="warn">⚠</span>';
+      }
+      return `<td class="sym left frz frz0" title="${title}">${tickerLink(s)}${warn}</td>`;
+    }
+
+    function shortCell(n, cls, title) {
+      if (n == null || !isFinite(n)) return `<td class="na ${cls}"${attr(title)}>—</td>`;
+      let style = '';
+      if (n >= 20) style = 'color:#e5534b;font-weight:600;'; // heavily shorted
+      else if (n >= 10) style = 'color:#d29922;';
+      return `<td class="${cls}" style="${style}"${attr(title)}>${n.toFixed(1)}%</td>`;
+    }
+    function fmtShortDate(iso) {
+      const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const p = String(iso).split('-');
+      return p.length === 3 ? `${M[+p[1] - 1]} ${+p[2]}` : iso;
+    }
+    function earningsCell(s, cacheTitle) {
+      const cls = 'grp-info';
+      const d = s.nextEarningsDate;
+      if (!d) return `<td class="na ${cls}"${attr(cacheTitle)}>—</td>`;
+      const est = s.nextEarningsEstimated;
+      const days = Math.round((new Date(d) - new Date()) / 86400000);
+      const soon = days >= 0 && days <= 7; // reporting within a week = catalyst/risk
+      const style = soon ? 'color:#d29922;font-weight:600;' : '';
+      const label = (est ? '~' : '') + fmtShortDate(d);
+      const surp = s.lastSurprise != null ? `last surprise ${s.lastSurprise >= 0 ? '+' : ''}${s.lastSurprise}%` : 'no surprise data';
+      const kind = est ? 'estimated (~91d after last report)' : 'confirmed';
+      const title = `Next earnings ${d} (${kind})` +
+        (s.lastEarningsDate ? ` · last ${s.lastEarningsDate}, ${surp}` : '') +
+        (days >= 0 ? ` · in ${days}d` : '');
+      return `<td class="${cls}" style="${style}"${attr(title)}>${label}</td>`;
+    }
+    function maCrossCell(s) {
+      const cls = 'grp-trend';
+      if (s.maBullish == null) return `<td class="na left ${cls}">—</td>`;
+      const days = s.maCrossDays;
+      const fresh = days != null && days <= 20; // cross within ~1 month = a fresh signal
+      const color = s.maBullish ? 'var(--green)' : 'var(--red)';
+      let label;
+      if (s.maBullish) label = fresh ? `Golden ▲ ${days}d` : 'Bullish';
+      else label = fresh ? `Death ▼ ${days}d` : 'Bearish';
+      const ma50 = s.ma50 != null ? s.ma50.toFixed(2) : '—';
+      const ma200 = s.ma200 != null ? s.ma200.toFixed(2) : '—';
+      const crossTxt = days != null ? `last cross ${days} trading days ago` : 'no cross in the past year';
+      const title = `50DMA ${ma50} vs 200DMA ${ma200} · ${crossTxt}`;
+      const weight = fresh ? 'font-weight:700;' : '';
+      return `<td class="left ${cls}" style="color:${color};${weight}"${attr(title)}>${label}</td>`;
+    }
+    function macdCell(s) {
+      const cls = 'grp-trend';
+      const h = s.macdHist;
+      if (h == null || !isFinite(h)) return `<td class="na ${cls}">—</td>`;
+      const color = h >= 0 ? 'var(--green)' : 'var(--red)';
+      const line = s.macdLine != null ? s.macdLine.toFixed(2) : '—';
+      const sig = s.macdSignal != null ? s.macdSignal.toFixed(2) : '—';
+      const title = `MACD ${line} vs signal ${sig} (12/26/9) · histogram = MACD − signal`;
+      return `<td class="${cls}" style="color:${color}"${attr(title)}>${h.toFixed(2)}</td>`;
+    }
+    function badges(names) {
+      return (names || [])
+        .map((n) => `<span class="badge" style="color:${colorFor(n)};border-color:${colorFor(n)}">${n}</span>`)
+        .join('');
+    }
+
+    // ---- tabs ----
+    function renderTabs() {
+      const countAll = stocks.length;
+      const countFor = (name) => stocks.filter((s) => (s.portfolios || []).includes(name)).length;
+
+      const parts = [`<button class="tab ${activeTab === 'All' ? 'active' : ''}" data-tab="All">All <span class="count">${countAll}</span></button>`];
+      for (const name of portfolios) {
+        const c = colorFor(name);
+        const isActive = activeTab === name;
+        const style = `color:${c};` + (isActive ? `border-bottom-color:${c};` : '');
+        parts.push(
+          `<button class="tab ${isActive ? 'active' : ''}" data-tab="${name}" style="${style}">` +
+          `<span class="tdot" style="background:${c}"></span>${name} <span class="count">${countFor(name)}</span></button>`
+        );
+      }
+      if (isAdmin) parts.push('<button class="tab tab-new" id="newTab" title="New portfolio">＋</button>');
+      $('tabs').innerHTML = parts.join('');
+
+      $('tabs').querySelectorAll('.tab[data-tab]').forEach((b) => {
+        b.addEventListener('click', () => { activeTab = b.dataset.tab; render(); });
+        if (b.dataset.tab !== 'All' && isAdmin) {
+          b.title = 'Double-click to rename';
+          b.addEventListener('dblclick', (e) => { e.preventDefault(); renamePortfolio(b.dataset.tab); });
+        }
+      });
+      if (isAdmin) $('newTab').addEventListener('click', newPortfolio);
+
+      // Add-target dropdown
+      const sel = $('addTarget');
+      sel.innerHTML = portfolios.length
+        ? portfolios.map((n) => `<option value="${n}">${n}</option>`).join('')
+        : '<option value="">(create a portfolio first)</option>';
+      if (activeTab !== 'All' && portfolios.includes(activeTab)) sel.value = activeTab;
+
+      // Rename/Delete only apply to a specific portfolio
+      const isPortfolio = activeTab !== 'All';
+      $('renameBtn').style.display = (isPortfolio && isAdmin) ? '' : 'none';
+      $('deleteBtn').style.display = (isPortfolio && isAdmin) ? '' : 'none';
+    }
+
+    // ---- table ----
+    function visibleStocks() {
+      return activeTab === 'All' ? stocks : stocks.filter((s) => (s.portfolios || []).includes(activeTab));
+    }
+
+    function render() {
+      renderTabs();
+      const tbody = $('tbody');
+      const rows = visibleStocks();
+
+      // Rank within the currently-shown stocks, by Overall score.
+      const ranked = rows.filter((s) => s.overallScore != null).slice().sort((a, b) => b.overallScore - a.overallScore);
+      const rankMap = {};
+      ranked.forEach((s, i) => (rankMap[s.symbol] = i + 1));
+      const rankTotal = ranked.length;
+
+      // Freshest data date among shown stocks, to flag any lagging behind it.
+      const freshest = rows.reduce((m, s) => (s.latestDate && s.latestDate > m ? s.latestDate : m), '');
+
+      if (rows.length === 0) {
+        const msg = activeTab === 'All'
+          ? 'No tickers yet — add one above.'
+          : `No tickers in "${activeTab}" yet — add one above.`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="39">${msg}</td></tr>`;
+        applyGroups();
+        return;
+      }
+
+      const sorted = [...rows].sort((a, b) => {
+        const av = a[sortKey], bv = b[sortKey];
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
+        return (av - bv) * sortDir;
+      });
+
+      tbody.innerHTML = sorted.map((s) => {
+        const rmTitle = activeTab === 'All' ? 'Remove from all portfolios' : `Remove from ${activeTab}`;
+        const removeBtn = isAdmin
+          ? `<td><button class="remove" data-remove="${s.symbol}" title="${rmTitle}">×</button></td>`
+          : '<td></td>';
+        if (s.error) {
+          return `<tr>
+            <td class="sym left frz frz0">${tickerLink(s)}</td>
+            <td class="na" colspan="37">${s.error}</td>
+            ${removeBtn}
+          </tr>`;
+        }
+        const price = fmtNum(s.price, 1);
+        const mktCap = fmtMktCap(s.marketCap, s.currency);
+        const updatedStr = lastUpdated ? fmtTime(lastUpdated) : 'n/a';
+        // Freshness tooltips: price/momentum are live; sector/fundamentals/analyst are cached.
+        const liveTitle = asOfDate
+          ? `Historical — as of ${asOfDate}`
+          : `Live — price as of ${s.latestDate || 'n/a'}, pulled ${updatedStr}`;
+        const cacheTitle = asOfDate
+          ? 'Fundamentals are hidden in backtest mode (not point-in-time)'
+          : (s.profileFetchedAt
+              ? `Cached ${fmtDateTime(s.profileFetchedAt)} — auto-refreshes daily (Refresh All to force)`
+              : 'Not fetched yet — backfills over the next refreshes');
+        const fwdTitle = 'Forward return after the as-of date (what happened next)';
+        return `<tr>
+          ${symbolCell(s, freshest)}
+          ${ratingCell(s.overallRating, s.symbol, 'overall', 'frz frz1')}
+          ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'frz frz2')}
+          ${ratingCell(s.qualityRating, s.symbol, 'quality', 'frz frz3')}
+          ${rankCell(rankMap[s.symbol] ?? null, rankTotal, 'frz frz4')}
+          <td class="name left frz frz5">${s.name || ''}</td>
+          <td class="left">${badges(s.portfolios)}</td>
+          <td${attr(liveTitle)}>${price != null ? curSym(s.currency) + price : '—'}</td>
+          <td class="name left grp-info"${attr(cacheTitle)}>${s.sector || '—'}</td>
+          <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
+          ${earningsCell(s, cacheTitle)}
+          ${pctCell(s.todayPct, 'grp-short', liveTitle)}
+          ${pctCell(s.yesterdayPct, 'grp-short', liveTitle)}
+          ${pctCell(s.oneWeekPct, 'grp-short', liveTitle)}
+          ${pctCell(s.twoWeekPct, 'grp-short', liveTitle)}
+          ${pctCell(s.oneMonthPct, 'grp-short', liveTitle)}
+          ${pctCell(s.threeMonthPct, 'grp-long', liveTitle)}
+          ${pctCell(s.sixMonthPct, 'grp-long', liveTitle)}
+          ${pctCell(s.oneYearPct, 'grp-long', liveTitle)}
+          ${pctCell(s.fwd1M, 'grp-fwd', fwdTitle)}
+          ${pctCell(s.fwd3M, 'grp-fwd', fwdTitle)}
+          ${pctCell(s.fwd6M, 'grp-fwd', fwdTitle)}
+          ${pctCell(s.fwdSince, 'grp-fwd', fwdTitle)}
+          ${pctCell(s.relStrength, 'grp-rel', liveTitle)}
+          ${pctCell(s.pctFromHigh, 'grp-rel', liveTitle)}
+          ${rsiCell(s.rsi, 'grp-rel', liveTitle)}
+          ${pctCell(s.vs50ma, 'grp-trend', liveTitle)}
+          ${pctCell(s.vs200ma, 'grp-trend', liveTitle)}
+          ${maCrossCell(s)}
+          ${macdCell(s)}
+          ${pctCell(s.volTrend, 'grp-vol', liveTitle)}
+          ${pctCell(s.earningsGrowthYoY, 'grp-fund', cacheTitle)}
+          ${pctCell(s.revenueGrowthYoY, 'grp-fund', cacheTitle)}
+          ${pctCell(s.profitMargin, 'grp-fund', cacheTitle)}
+          ${pctCell(s.roe, 'grp-fund', cacheTitle)}
+          ${numCell(s.forwardPe, 'grp-fund', cacheTitle)}
+          ${pegCell(s.peg, 'grp-fund', cacheTitle)}
+          ${shortCell(s.shortPctFloat, 'grp-fund', cacheTitle)}
+          ${removeBtn}
+        </tr>`;
+      }).join('');
+
+      tbody.querySelectorAll('[data-remove]').forEach((btn) => {
+        btn.addEventListener('click', () => removeTicker(btn.dataset.remove));
+      });
+      tbody.querySelectorAll('.rating[data-sym]').forEach((el) => {
+        el.addEventListener('mouseenter', () => showTip(el));
+        el.addEventListener('mouseleave', hideTip);
+      });
+
+      applyGroups();
+    }
+
+    // ---- Buy Rating breakdown tooltip ----
+    const tip = $('tip');
+    function factorRow(b) {
+      if (b.sub == null) return `<div class="tip-row off"><span class="lbl">${b.label} <em>${b.weight}%</em></span><span class="val">n/a</span></div>`;
+      const pct = Math.round(b.sub * 100);
+      return `<div class="tip-row"><span class="lbl">${b.label} <em>${b.weight}%</em></span>` +
+        `<span class="tip-bar"><i style="width:${pct}%"></i></span><span class="val">${pct}</span></div>`;
+    }
+
+    function showTip(el) {
+      const s = stocks.find((x) => x.symbol === el.dataset.sym);
+      if (!s) return;
+      const kind = el.dataset.kind;
+      const pulled = lastUpdated ? ` · pulled ${fmtTime(lastUpdated)}` : '';
+      let html;
+
+      if (kind === 'overall') {
+        if (s.overallRating == null) return;
+        const parts = [];
+        if (s.momentumScore != null) parts.push(['Momentum', s.momentumScore, 65]);
+        if (s.qualityScore != null) parts.push(['Quality', s.qualityScore, 35]);
+        const rows = parts.map(([lbl, sc, w]) => {
+          const pct = Math.round(sc);
+          return `<div class="tip-row"><span class="lbl">${lbl} <em>${parts.length > 1 ? w + '%' : 'only'}</em></span>` +
+            `<span class="tip-bar"><i style="width:${pct}%"></i></span><span class="val">${pct}</span></div>`;
+        }).join('');
+        const note = parts.length > 1 ? 'Overall = 65% Momentum + 35% Quality.' : 'Overall = Momentum only (no company data).';
+        html = `<div class="tip-head">Overall ${s.overallRating}/10 <span>· score ${s.overallScore}/100</span></div>` + rows + `<div class="tip-foot">${note}${pulled}</div>`;
+      } else {
+        const bd = kind === 'quality' ? s.qualityBreakdown : s.momentumBreakdown;
+        if (!bd) return;
+        const rating = kind === 'quality' ? s.qualityRating : s.momentumRating;
+        const score = kind === 'quality' ? s.qualityScore : s.momentumScore;
+        const label = kind === 'quality' ? 'Quality' : 'Momentum';
+        const rows = bd.map(factorRow).join('');
+        const totalW = bd.reduce((a, b) => a + b.weight, 0);
+        const availW = bd.reduce((a, b) => a + (b.sub != null ? b.weight : 0), 0);
+        const conf = totalW ? Math.round((availW / totalW) * 100) : 0;
+        html = `<div class="tip-head">${label} ${rating}/10 <span>· score ${score}/100 · ${conf}% of factors</span></div>` +
+          rows + `<div class="tip-foot">Confidence ${conf}%: share of factor-weight with data (rest excluded &amp; renormalized).${pulled}</div>`;
+      }
+
+      tip.innerHTML = html;
+      tip.style.display = 'block';
+      const r = el.getBoundingClientRect();
+      const tw = tip.offsetWidth, th = tip.offsetHeight;
+      let left = r.right + 8;
+      if (left + tw > window.innerWidth - 8) left = r.left - tw - 8;
+      if (left < 8) left = 8;
+      let top = r.top;
+      if (top + th > window.innerHeight - 8) top = window.innerHeight - th - 8;
+      if (top < 8) top = 8;
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+    }
+    function hideTip() { tip.style.display = 'none'; }
+
+    // ---- Export current view to CSV (opens in Excel) ----
+    function sortRows(rows) {
+      return [...rows].sort((a, b) => {
+        const av = a[sortKey], bv = b[sortKey];
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
+        return (av - bv) * sortDir;
+      });
+    }
+
+    function exportExcel() {
+      const rows = sortRows(visibleStocks());
+      const ranked = rows.filter((s) => s.overallScore != null).slice().sort((a, b) => b.overallScore - a.overallScore);
+      const rankMap = {};
+      ranked.forEach((s, i) => (rankMap[s.symbol] = i + 1));
+
+      const cols = [
+        ['Symbol', (s) => s.symbol],
+        ['Overall', (s) => s.overallRating],
+        ['Momentum', (s) => s.momentumRating],
+        ['Quality', (s) => s.qualityRating],
+        ['Rank', (s) => rankMap[s.symbol] ?? ''],
+        ['Name', (s) => s.name],
+        ['Portfolios', (s) => (s.portfolios || []).join('; ')],
+        ['Price', (s) => s.price],
+        ['Currency', (s) => s.currency],
+        ['Sector', (s) => s.sector],
+        ['Market Cap', (s) => s.marketCap],
+        ['Last Earnings', (s) => s.lastEarningsDate],
+        ['Last Surprise %', (s) => s.lastSurprise],
+        ['Next Earnings', (s) => s.nextEarningsDate],
+        ['Next Est?', (s) => (s.nextEarningsEstimated ? 'estimated' : '')],
+        ['Today %', (s) => s.todayPct],
+        ['Yesterday %', (s) => s.yesterdayPct],
+        ['1W %', (s) => s.oneWeekPct],
+        ['2W %', (s) => s.twoWeekPct],
+        ['1M %', (s) => s.oneMonthPct],
+        ['3M %', (s) => s.threeMonthPct],
+        ['6M %', (s) => s.sixMonthPct],
+        ['1Y %', (s) => s.oneYearPct],
+        ['Fwd +1M %', (s) => s.fwd1M],
+        ['Fwd +3M %', (s) => s.fwd3M],
+        ['Fwd +6M %', (s) => s.fwd6M],
+        ['Fwd Since %', (s) => s.fwdSince],
+        ['RS vs S&P %', (s) => s.relStrength],
+        ['% from 52W High', (s) => s.pctFromHigh],
+        ['RSI', (s) => s.rsi],
+        ['vs 50D MA %', (s) => s.vs50ma],
+        ['vs 200D MA %', (s) => s.vs200ma],
+        ['MA Cross', (s) => (s.maBullish == null ? '' : (s.maBullish ? 'Golden' : 'Death') + (s.maCrossDays != null ? ` (${s.maCrossDays}d)` : ''))],
+        ['MACD Hist', (s) => s.macdHist],
+        ['Vol Trend %', (s) => s.volTrend],
+        ['Earnings Growth %', (s) => s.earningsGrowthYoY],
+        ['Revenue Growth %', (s) => s.revenueGrowthYoY],
+        ['Profit Margin %', (s) => s.profitMargin],
+        ['ROE %', (s) => s.roe],
+        ['Forward P/E', (s) => s.forwardPe],
+        ['PEG', (s) => s.peg],
+        ['Short % Float', (s) => s.shortPctFloat],
+        ['History Days', (s) => s.historyDays],
+        ['Latest Data', (s) => s.latestDate],
+      ];
+
+      const esc = (v) => {
+        if (v == null || v === '') return '';
+        let str = (typeof v === 'number' && isFinite(v)) ? (Math.round(v * 100) / 100).toString() : String(v);
+        if (/[",\n]/.test(str)) str = '"' + str.replace(/"/g, '""') + '"';
+        return str;
+      };
+
+      const lines = [cols.map((c) => esc(c[0])).join(',')];
+      for (const s of rows) lines.push(cols.map((c) => esc(c[1](s))).join(','));
+      const csv = '﻿' + lines.join('\r\n'); // BOM so Excel reads UTF-8
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+      const tab = String(activeTab).replace(/[^A-Za-z0-9._-]+/g, '_');
+      a.href = url;
+      a.download = `stock-screener-${tab}-${date}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Show/hide every cell (group header + detail headers + body cells) per group.
+    function applyGroups() {
+      GROUPS.forEach((id) => {
+        const hide = collapsed[id];
+        document.querySelectorAll('.grp-' + id).forEach((el) => { el.style.display = hide ? 'none' : ''; });
+        const chip = document.querySelector('.gtoggle[data-group="' + id + '"]');
+        if (chip) chip.classList.toggle('active', !hide);
+      });
+      updateStickyOffsets();
+    }
+    function toggleGroup(id) { collapsed[id] = !collapsed[id]; applyGroups(); }
+
+    // Pin the 2nd header row exactly below the 1st (heights vary with wrapped labels).
+    function updateStickyOffsets() {
+      const root = document.documentElement.style;
+      const firstRow = document.querySelector('thead tr:first-child');
+      if (firstRow) root.setProperty('--h1', firstRow.offsetHeight + 'px');
+      // Cumulative left offsets for the frozen columns, measured from their header cells.
+      let acc = 0;
+      for (let i = 0; i < 6; i++) {
+        if (i > 0) root.setProperty('--l' + i, acc + 'px');
+        const cell = document.querySelector('thead .frz' + i);
+        acc += cell ? cell.offsetWidth : 0;
+      }
+    }
+    window.addEventListener('resize', updateStickyOffsets);
+
+    function setStatus(msg) { $('status').textContent = msg; }
+    function setError(msg) { $('error').textContent = msg || ''; }
+
+    // Backtest banner + button states reflecting whether an as-of date is active.
+    function updateBacktestUI() {
+      const bar = $('backtestBar');
+      if (asOfDate) {
+        bar.style.display = 'flex';
+        bar.innerHTML =
+          `⏳ <b>Backtest mode</b> — ranking &amp; returns are as of <b>${asOfDate}</b>. ` +
+          `Fundamentals (Quality) are hidden (not point-in-time); the <b>Forward</b> columns show what happened next. ` +
+          `<button id="backtestClear">← Back to live</button>`;
+        $('backtestClear').addEventListener('click', clearBacktest);
+        $('refreshAllBtn').disabled = true; // fundamentals backfill is a live-mode action
+      } else {
+        bar.style.display = 'none';
+        bar.innerHTML = '';
+        $('refreshAllBtn').disabled = false;
+      }
+    }
+
+    function clearBacktest() {
+      asOfDate = null;
+      $('asOfDate').value = '';
+      refresh();
+    }
+
+    // ---- admin auth (read-only publishing) ----
+    async function checkAuth() {
+      try {
+        const me = await api('GET', '/api/me');
+        isAdmin = !!me.admin;
+        authRequired = !!me.authRequired;
+      } catch {
+        isAdmin = true; authRequired = false;
+      }
+      applyAdminUI();
+    }
+
+    function applyAdminUI() {
+      document.querySelectorAll('.admin-only').forEach((el) => { el.style.display = isAdmin ? '' : 'none'; });
+      $('loginBtn').style.display = (authRequired && !isAdmin) ? '' : 'none';
+      $('logoutBtn').style.display = (authRequired && isAdmin) ? '' : 'none';
+      $('readonlyNote').style.display = (authRequired && !isAdmin) ? '' : 'none';
+    }
+
+    async function doLogin() {
+      const pw = window.prompt('Admin password:');
+      if (pw == null || pw === '') return;
+      setError('');
+      try {
+        await api('POST', '/api/login', { password: pw });
+        isAdmin = true;
+        applyAdminUI();
+        render();
+        setStatus('Logged in as admin.');
+      } catch (err) { setError(err.message); }
+    }
+
+    async function doLogout() {
+      try { await api('POST', '/api/logout'); } catch { /* ignore */ }
+      isAdmin = false;
+      asOfDate = null; $('asOfDate').value = '';
+      applyAdminUI();
+      await refresh({ live: false });
+    }
+
+    // live !== false → recompute from the API (admin Refresh / backtest) and save the
+    // snapshot; {live:false} just reads the saved snapshot (page load, public view).
+    async function refresh(opts = {}) {
+      const live = opts.live !== false;
+      setError('');
+      setStatus('Loading…');
+      $('refreshBtn').disabled = true;
+      try {
+        const params = new URLSearchParams();
+        if (asOfDate) params.set('asOf', asOfDate);   // backtest is always a live pull
+        else if (live) params.set('refresh', '1');    // admin refresh → recompute + save snapshot
+        const qs = params.toString();
+        const data = await api('GET', '/api/stocks' + (qs ? '?' + qs : ''));
+        lastUpdated = data.updatedAt;
+        stocks = data.stocks || [];
+        portfolios = data.portfolios || [];
+        if (activeTab !== 'All' && !portfolios.includes(activeTab)) activeTab = 'All';
+        collapsed.fwd = !asOfDate;      // forward-return columns only in backtest mode
+        updateBacktestUI();
+        render();
+        if (asOfDate) {
+          setStatus(`Backtest — momentum as of ${asOfDate}`);
+        } else if (!data.updatedAt) {
+          setStatus(isAdmin ? 'No data yet — click ↻ Refresh to pull.' : 'No data available yet.');
+        } else {
+          const freshest = stocks.reduce((m, s) => (s.latestDate && s.latestDate > m ? s.latestDate : m), '');
+          const prefix = data.fromSnapshot && !isAdmin ? 'As of' : 'Updated';
+          setStatus(`${prefix} ${fmtTime(data.updatedAt)}${freshest ? ' · prices as of ' + freshest : ''}`);
+        }
+      } catch (err) {
+        setError(err.message);
+        setStatus('');
+      } finally {
+        $('refreshBtn').disabled = false;
+      }
+    }
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    function showLoading(msg) {
+      $('tbody').innerHTML = `<tr><td class="empty" colspan="39">${msg}</td></tr>`;
+    }
+
+    // Clear the cache, then keep re-pulling until EVERY ticker's fundamentals are
+    // loaded (paced around the API rate limit). Shows progress; renders only when done.
+    async function refreshAll() {
+      setError('');
+      const busy = (b) => { $('refreshBtn').disabled = b; $('refreshAllBtn').disabled = b; $('addBtn').disabled = b; };
+      busy(true);
+      try {
+        setStatus('Clearing cache…');
+        showLoading('Clearing cache and re-pulling everything…');
+        await api('POST', '/api/refresh-all');
+
+        let data = null;
+        let lastLoaded = -1;
+        let stagnant = 0;
+        for (let round = 0; round < 15; round++) {
+          try {
+            data = await api('GET', '/api/stocks?refresh=1');
+          } catch (e) {
+            setStatus('Rate limited — waiting a minute…');
+            showLoading('Waiting for the API rate limit to reset… (resumes automatically)');
+            await sleep(62000);
+            continue;
+          }
+          const total = data.stocks.length;
+          const loaded = data.stocks.filter((s) => s.profileFetchedAt != null).length;
+          if (total === 0 || loaded >= total) break; // everything fetched
+          setStatus(`Loading all data… ${loaded}/${total}`);
+          showLoading(`Loading all data — fundamentals ${loaded} of ${total} loaded.<br>This can take a few minutes due to API rate limits. Please wait…`);
+          if (loaded === lastLoaded) stagnant++; else stagnant = 0;
+          lastLoaded = loaded;
+          if (stagnant >= 3) break; // no further progress — stop waiting
+          await sleep(62000); // let the per-minute credit budget recover before the next batch
+        }
+
+        if (data) {
+          lastUpdated = data.updatedAt;
+          stocks = data.stocks || [];
+          portfolios = data.portfolios || [];
+          if (activeTab !== 'All' && !portfolios.includes(activeTab)) activeTab = 'All';
+          render();
+          const freshest = stocks.reduce((m, s) => (s.latestDate && s.latestDate > m ? s.latestDate : m), '');
+          setStatus(`Updated ${fmtTime(data.updatedAt)}${freshest ? ' · prices as of ' + freshest : ''}`);
+        }
+      } catch (err) {
+        setError(err.message);
+        setStatus('');
+      } finally {
+        busy(false);
+      }
+    }
+
+    async function addTicker() {
+      const symbol = $('symbolInput').value.trim().toUpperCase();
+      if (!symbol) return;
+      const target = $('addTarget').value;
+      if (!target) { setError('Create a portfolio first (＋), then add tickers to it.'); return; }
+      setError('');
+      try {
+        await api('POST', `/api/portfolios/${encodeURIComponent(target)}/tickers`, { symbol });
+        $('symbolInput').value = '';
+        if (activeTab === 'All' || activeTab === target) { /* keep view */ } else { activeTab = target; }
+        await refresh();
+      } catch (err) { setError(err.message); }
+    }
+
+    async function removeTicker(symbol) {
+      setError('');
+      try {
+        if (activeTab === 'All') {
+          await api('DELETE', '/api/tickers/' + encodeURIComponent(symbol));
+        } else {
+          await api('DELETE', `/api/portfolios/${encodeURIComponent(activeTab)}/tickers/${encodeURIComponent(symbol)}`);
+        }
+        await refresh();
+      } catch (err) { setError(err.message); }
+    }
+
+    async function newPortfolio() {
+      const name = (window.prompt('New portfolio name:') || '').trim();
+      if (!name) return;
+      setError('');
+      try {
+        await api('POST', '/api/portfolios', { name });
+        activeTab = name;
+        await refresh();
+      } catch (err) { setError(err.message); }
+    }
+
+    async function renamePortfolio(target) {
+      const name = target || activeTab;
+      if (!name || name === 'All') return;
+      const newName = (window.prompt('Rename portfolio:', name) || '').trim();
+      if (!newName || newName === name) return;
+      setError('');
+      try {
+        await api('PUT', '/api/portfolios/' + encodeURIComponent(name), { newName });
+        if (activeTab === name) activeTab = newName;
+        await refresh();
+      } catch (err) { setError(err.message); }
+    }
+
+    async function deletePortfolio() {
+      if (activeTab === 'All') return;
+      if (!window.confirm(`Delete portfolio "${activeTab}"? Its stocks stay in any other portfolios.`)) return;
+      setError('');
+      try {
+        await api('DELETE', '/api/portfolios/' + encodeURIComponent(activeTab));
+        activeTab = 'All';
+        await refresh();
+      } catch (err) { setError(err.message); }
+    }
+
+    // Sorting
+    document.querySelectorAll('th[data-key]').forEach((th) => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.key;
+        if (sortKey === key) sortDir *= -1;
+        else { sortKey = key; sortDir = -1; }
+        render();
+      });
+    });
+
+    // Column group collapse/expand
+    document.querySelectorAll('th.group[data-group]').forEach((th) => {
+      th.addEventListener('click', () => toggleGroup(th.dataset.group));
+    });
+    document.querySelectorAll('.gtoggle[data-group]').forEach((chip) => {
+      chip.addEventListener('click', () => toggleGroup(chip.dataset.group));
+    });
+
+    document.querySelector('.table-wrap').addEventListener('scroll', hideTip);
+    window.addEventListener('scroll', hideTip, true);
+
+    $('addBtn').addEventListener('click', addTicker);
+    $('renameBtn').addEventListener('click', () => renamePortfolio());
+    $('deleteBtn').addEventListener('click', deletePortfolio);
+    $('refreshBtn').addEventListener('click', refresh);
+    $('refreshAllBtn').addEventListener('click', refreshAll);
+    $('asOfDate').addEventListener('change', (e) => {
+      const v = e.target.value; // '' when cleared
+      asOfDate = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+      refresh();
+    });
+    $('exportBtn').addEventListener('click', exportExcel);
+    $('loginBtn').addEventListener('click', doLogin);
+    $('logoutBtn').addEventListener('click', doLogout);
+    $('symbolInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTicker(); });
+
+    // Boot: find out if we're admin, then load the saved snapshot (no live API call).
+    checkAuth().then(() => refresh({ live: false }));
+  </script>
+</body>
+</html>
