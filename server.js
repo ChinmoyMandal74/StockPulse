@@ -18,6 +18,7 @@ const PORTFOLIOS_FILE = path.join(__dirname, 'portfolios.json');
 const NAMES_FILE = path.join(__dirname, 'names.json');
 const PROFILES_FILE = path.join(__dirname, 'profiles.json');
 const SNAPSHOT_FILE = path.join(__dirname, 'snapshot.json'); // last computed data served to the public (read-only)
+const VISITORS_FILE = path.join(__dirname, 'visitors.log');
 const PROFILE_TTL_MS = 24 * 60 * 60 * 1000; // refresh sector/market cap once a day
 // Publishing: set ADMIN_PASSWORD in .env to make the app read-only for the public.
 // The public sees a cached snapshot; only an admin (logged in with this password)
@@ -47,7 +48,24 @@ const SYMBOL_RE = /^[A-Z0-9.\-]{1,12}$/;
 
 app.set('trust proxy', 1); // so req.secure reflects an HTTPS reverse proxy when published
 app.use(express.json());
+
+// Log every public page load before static files are served.
+app.get(['/', '/index.html'], (req, res, next) => {
+  const entry = {
+    ts: new Date().toISOString(),
+    ip: req.ip || null,
+    ua: req.headers['user-agent'] || null,
+    ref: req.headers['referer'] || req.headers['referrer'] || null,
+  };
+  try { fs.appendFileSync(VISITORS_FILE, JSON.stringify(entry) + '\n'); } catch { /* ignore */ }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/visitors', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'visitors.html'));
+});
 
 // ---- Admin auth (cookie-based, no DB) --------------------------------------
 // A deterministic token derived from the password (HMAC) is stored in an httpOnly
@@ -1026,6 +1044,19 @@ app.get('/api/stocks', async (req, res) => {
     return res.json(r.payload);
   }
   return res.json({ stocks: [], portfolios: Object.keys(readPortfolios()), asOf: null, updatedAt: null, fromSnapshot: true, empty: true });
+});
+
+app.get('/api/visitors', requireAdmin, (req, res) => {
+  let entries = [];
+  try {
+    const raw = fs.readFileSync(VISITORS_FILE, 'utf8');
+    entries = raw.split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  } catch { /* no log yet */ }
+  const today = new Date().toISOString().slice(0, 10);
+  const total = entries.length;
+  const todayCount = entries.filter((e) => e.ts.startsWith(today)).length;
+  const uniqueIps = new Set(entries.map((e) => e.ip)).size;
+  res.json({ total, todayCount, uniqueIps, entries: entries.slice(-500).reverse() });
 });
 
 app.listen(PORT, () => {

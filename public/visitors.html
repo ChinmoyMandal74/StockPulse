@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visitor Log — Stock Tracker</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <style>
+    :root {
+      --bg: #0f1419; --panel: #1a212b; --border: #2a333f;
+      --text: #e6edf3; --muted: #8b98a5; --green: #2ea043;
+      --red: #f85149; --accent: #388bfd;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 20px; min-width: 130px; }
+    .stat .val { font-size: 28px; font-weight: 700; color: var(--accent); }
+    .stat .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .table-wrap { overflow: auto; max-height: calc(100vh - 260px); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { position: sticky; top: 0; background: var(--bg); z-index: 2; }
+    th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+    tbody tr:hover { background: var(--panel); }
+    .ip { font-family: monospace; font-size: 12px; }
+    .ua { color: var(--muted); max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ref { color: var(--muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .empty { text-align: center; color: var(--muted); padding: 40px; }
+    .error { color: var(--red); padding: 20px; }
+    .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Visitor Log</h1>
+  <div class="sub"><a href="/">← Back to Stock Tracker</a></div>
+
+  <div id="main">
+    <div class="empty">Loading…</div>
+  </div>
+
+  <script>
+    async function load() {
+      const main = document.getElementById('main');
+      try {
+        const me = await fetch('/api/me').then(r => r.json());
+        if (!me.admin) {
+          main.innerHTML = '<div class="error">Admin access required. <a href="/">Go back</a> and log in first.</div>';
+          return;
+        }
+        const data = await fetch('/api/visitors').then(r => r.json());
+        const { total, todayCount, uniqueIps, entries } = data;
+
+        let html = `
+          <div class="stats">
+            <div class="stat"><div class="val">${total.toLocaleString()}</div><div class="lbl">Total visits</div></div>
+            <div class="stat"><div class="val">${todayCount.toLocaleString()}</div><div class="lbl">Today</div></div>
+            <div class="stat"><div class="val">${uniqueIps.toLocaleString()}</div><div class="lbl">Unique IPs</div></div>
+          </div>`;
+
+        if (entries.length === 0) {
+          html += '<div class="empty">No visits logged yet.</div>';
+        } else {
+          html += `<div class="table-wrap"><table>
+            <thead><tr><th>Time</th><th>IP</th><th>User Agent</th><th>Referrer</th></tr></thead>
+            <tbody>`;
+          for (const e of entries) {
+            const ts = new Date(e.ts).toLocaleString();
+            const ua = e.ua ? `<td class="ua" title="${esc(e.ua)}">${esc(e.ua)}</td>` : '<td class="ua" style="color:#5a6673">—</td>';
+            const ref = e.ref ? `<td class="ref" title="${esc(e.ref)}">${esc(e.ref)}</td>` : '<td class="ref" style="color:#5a6673">—</td>';
+            html += `<tr><td style="white-space:nowrap">${esc(ts)}</td><td class="ip">${esc(e.ip || '—')}</td>${ua}${ref}</tr>`;
+          }
+          html += '</tbody></table></div>';
+          if (total > 500) html += `<p class="note">Showing the most recent 500 of ${total.toLocaleString()} visits.</p>`;
+        }
+        main.innerHTML = html;
+      } catch (err) {
+        main.innerHTML = `<div class="error">Failed to load: ${err.message}</div>`;
+      }
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    load();
+  </script>
+</body>
+</html>

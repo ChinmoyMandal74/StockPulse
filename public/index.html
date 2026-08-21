@@ -167,6 +167,7 @@
     <span class="addto admin-only" style="margin-left:8px">As of</span>
     <input type="date" id="asOfDate" class="admin-only" title="Backtest: view the momentum ranking as of a past date" />
     <button class="secondary" id="exportBtn" title="Export the current view to a CSV file (opens in Excel)">⤓ Export to Excel</button>
+    <a class="secondary admin-only" href="/visitors" target="_blank" rel="noopener" style="display:none;padding:8px 14px;border-radius:6px;font-size:14px;background:var(--panel);border:1px solid var(--border);color:var(--text);text-decoration:none" title="View the visitor log (admin only)">👥 Visitors</a>
     <button class="secondary" id="loginBtn" style="display:none" title="Log in to unlock refresh, backtest and ticker editing">🔒 Admin login</button>
     <button class="ghost" id="logoutBtn" style="display:none">Log out</button>
   </div>
@@ -264,6 +265,10 @@
     let authRequired = false;  // server has an ADMIN_PASSWORD set (published, read-only for the public)
 
     const GROUPS = ['info', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'fund'];
+    const GROUP_COLORS = {
+      info: '#388bfd', short: '#2ea043', long: '#a371f7', fwd: '#f0883e',
+      rel:  '#39c5cf', trend: '#c9a227', vol:  '#db61a2', fund: '#e5534b',
+    };
     const collapsed = {};
     GROUPS.forEach((g) => (collapsed[g] = false));
     collapsed.fwd = true; // forward-return columns appear only in backtest mode
@@ -756,7 +761,25 @@
         const hide = collapsed[id];
         document.querySelectorAll('.grp-' + id).forEach((el) => { el.style.display = hide ? 'none' : ''; });
         const chip = document.querySelector('.gtoggle[data-group="' + id + '"]');
-        if (chip) chip.classList.toggle('active', !hide);
+        const hdr  = document.querySelector('th.group[data-group="' + id + '"]');
+        const c = GROUP_COLORS[id];
+        if (chip) {
+          chip.classList.toggle('active', !hide);
+          if (c) {
+            chip.style.borderColor = c;
+            if (!hide) {
+              chip.style.background = c;
+              chip.style.color = '#fff';
+            } else {
+              chip.style.background = 'none';
+              chip.style.color = c;
+            }
+          }
+        }
+        if (hdr && c) {
+          hdr.style.color = c;
+          hdr.style.borderBottom = `2px solid ${c}`;
+        }
       });
       updateStickyOffsets();
     }
