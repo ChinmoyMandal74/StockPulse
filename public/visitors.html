@@ -2,54 +2,250 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Visitor Log — Stock Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Visitor Log — Ticker Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
+    /* Same visual system as the screener: Ethereal Glass + double-bezel surfaces. */
     :root {
-      --bg: #0f1419; --panel: #1a212b; --border: #2a333f;
-      --text: #e6edf3; --muted: #8b98a5; --green: #2ea043;
-      --red: #f85149; --accent: #388bfd;
+      color-scheme: dark;
+      --void: #050505;
+      --surface: #0a0c11;
+      --surface-2: #0d1017;
+      --shell: rgba(255, 255, 255, 0.028);
+      --hair: rgba(255, 255, 255, 0.07);
+      --hair-2: rgba(255, 255, 255, 0.13);
+      --inset: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+      --text: #e9ecf2;
+      --muted: #8b94a4;
+      --faint: #59616f;
+      --green: #34d399;
+      --red: #fb7185;
+      --accent: #7c9cff;
+      --accent-2: #a78bfa;
+      --panel: #141822;
+      --ease: cubic-bezier(0.32, 0.72, 0, 1);
+      --ease-soft: cubic-bezier(0.16, 1, 0.3, 1);
+      --z-grain: 60;
+      --sans: 'Geist', ui-sans-serif, system-ui, 'Segoe UI Variable Text', sans-serif;
+      --mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', 'SF Mono', monospace;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
-    h1 { font-size: 20px; margin: 0 0 4px; }
-    .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-    .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 20px; min-width: 130px; }
-    .stat .val { font-size: 28px; font-weight: 700; color: var(--accent); }
-    .stat .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .table-wrap { overflow: auto; max-height: calc(100vh - 260px); }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    thead th { position: sticky; top: 0; background: var(--bg); z-index: 2; }
-    th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); }
-    th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+    body {
+      margin: 0; min-height: 100dvh; padding: 0 0 80px; overflow-x: clip;
+      background: var(--void); color: var(--text);
+      font-family: var(--sans); font-size: 14px; line-height: 1.5;
+      letter-spacing: -0.01em; -webkit-font-smoothing: antialiased;
+    }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      position: fixed; inset: -10%; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(124, 156, 255, 0.13), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(167, 139, 250, 0.11), transparent 64%);
+      animation: drift 44s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+      will-change: transform;
+    }
+    @keyframes drift {
+      from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
+      to   { transform: translate3d(2%, 1.5%, 0) scale(1.06); }
+    }
+    .grain {
+      position: fixed; inset: 0; z-index: var(--z-grain); pointer-events: none;
+      opacity: 0.038; mix-blend-mode: overlay; background-size: 170px 170px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='170' height='170' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+    .ic { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
+          stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+    .ic-sm { width: 13px; height: 13px; stroke-width: 1.5; }
+    #sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+    .bezel {
+      background: var(--shell); border: 1px solid var(--hair); border-radius: 26px;
+      padding: 6px; box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.95);
+    }
+    .bezel > .core {
+      background: var(--surface); border-radius: 20px; box-shadow: var(--inset); overflow: hidden;
+    }
+
+    /* floating glass island */
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair);
+      box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark { display: inline-flex; align-items: center; gap: 9px; }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    }
+    .mark .wordmark { font-size: 13.5px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+    .divider { width: 1px; height: 20px; background: var(--hair); flex: none; margin: 0 2px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; padding: 9px 15px; border-radius: 999px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04); color: var(--text);
+      font-family: var(--sans); font-size: 12.5px; font-weight: 500; line-height: 1;
+      white-space: nowrap; cursor: pointer; text-decoration: none; box-shadow: var(--inset);
+      transition: background 0.55s var(--ease), border-color 0.55s var(--ease),
+                  color 0.55s var(--ease), transform 0.4s var(--ease);
+    }
+    .btn:hover { background: rgba(255, 255, 255, 0.085); border-color: var(--hair-2); color: #fff; }
+    .btn:active { transform: scale(0.975); }
+
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em;
+      color: var(--muted); box-shadow: var(--inset);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600;
+         line-height: 0.94; letter-spacing: -0.045em; }
+    h1 .w2 { background: linear-gradient(100deg, #9aa4b6 10%, #5d6474 92%);
+             -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lede { margin: 16px 0 0; max-width: 52ch; color: var(--muted); font-size: 13px; line-height: 1.65; }
+    .masthead { margin: 34px 0 22px; }
+
+    /* stat bento */
+    .stats { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; margin-bottom: 16px; }
+    .stat { grid-column: span 4; }
+    .stat > .core { padding: 22px 24px; }
+    .k { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    .val { margin-top: 12px; font-family: var(--mono); font-size: 34px; font-weight: 500;
+           letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+    .stat:nth-child(1) .val { color: var(--accent); }
+    .stat:nth-child(2) .val { color: var(--green); }
+    .stat:nth-child(3) .val { color: var(--accent-2); }
+
+    .table-wrap {
+      overflow: auto; max-height: calc(100dvh - 420px); min-height: 260px;
+      scrollbar-color: rgba(255, 255, 255, 0.16) transparent; scrollbar-width: thin;
+    }
+    .table-wrap::-webkit-scrollbar { width: 11px; height: 11px; }
+    .table-wrap::-webkit-scrollbar-track { background: transparent; }
+    .table-wrap::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.14); border-radius: 999px;
+      border: 3px solid var(--surface); background-clip: padding-box;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-2); }
+    th, td { text-align: left; padding: 8px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); }
+    th {
+      color: var(--faint); font-size: 9.5px; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.2em; border-bottom: 1px solid var(--hair);
+    }
+    tbody tr { transition: background 0.4s var(--ease); animation: rowIn 0.5s var(--ease-soft) both;
+               animation-delay: calc(min(var(--i, 0), 24) * 14ms); }
     tbody tr:hover { background: var(--panel); }
-    .ip { font-family: monospace; font-size: 12px; }
-    .ua { color: var(--muted); max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ref { color: var(--muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .empty { text-align: center; color: var(--muted); padding: 40px; }
-    .error { color: var(--red); padding: 20px; }
-    .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+    @keyframes rowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .ts { font-family: var(--mono); font-size: 11.5px; white-space: nowrap; letter-spacing: -0.02em; }
+    .ip { font-family: var(--mono); font-size: 11.5px; color: var(--accent); letter-spacing: -0.01em; }
+    .ua { color: var(--muted); max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ref { color: var(--muted); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dash { color: var(--faint); }
+    .empty { text-align: center; color: var(--muted); padding: 56px 24px; font-size: 13px; }
+    .error { display: flex; align-items: center; gap: 10px; color: var(--red); padding: 28px; font-size: 13px; }
+    .error a { color: var(--accent); text-decoration: none; }
+    .error a:hover { text-decoration: underline; }
+    .note { color: var(--faint); font-size: 11.5px; margin: 14px 4px 0; }
+
+    .reveal {
+      opacity: 0; transform: translateY(46px); filter: blur(10px);
+      transition: opacity 0.9s var(--ease-soft), transform 0.9s var(--ease-soft), filter 0.9s var(--ease-soft);
+      transition-delay: var(--d, 0ms);
+    }
+    .reveal.in { opacity: 1; transform: none; filter: none; }
+
+    @media (max-width: 900px) { .stat { grid-column: span 12; } }
+    @media (max-width: 768px) {
+      .page { padding: 0 16px; }
+      .hide-sm { display: none !important; }
+      h1 { font-size: clamp(32px, 11vw, 44px); }
+      .stats { grid-template-columns: 1fr; }
+      .stat { grid-column: span 1; }
+      .table-wrap { max-height: calc(100dvh - 340px); }
+      .ua, .ref { max-width: 46vw; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+      .reveal { opacity: 1; transform: none; filter: none; }
+    }
   </style>
 </head>
 <body>
-  <h1>Visitor Log</h1>
-  <div class="sub"><a href="/">← Back to Stock Tracker</a></div>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
 
-  <div id="main">
-    <div class="empty">Loading…</div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.6 21 19.4H3L12 4.6Z"/><path d="M12 10.4v3.8M12 17.1v.1"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Ticker Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/">
+        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener
+      </a>
+    </nav>
   </div>
 
+  <main class="page">
+    <header class="masthead reveal">
+      <span class="eyebrow"><span class="pip"></span>Admin</span>
+      <h1><span class="w1">Visitor</span> <span class="w2">Log</span></h1>
+      <p class="lede">Every request the screener has served, newest first — timestamp, source address, client and referrer.</p>
+    </header>
+
+    <div id="main">
+      <div class="bezel"><div class="core"><div class="empty">Loading…</div></div></div>
+    </div>
+  </main>
+
   <script>
+    function revealAll() {
+      const els = document.querySelectorAll('.reveal:not(.in)');
+      if (!('IntersectionObserver' in window)) { els.forEach((el) => el.classList.add('in')); return; }
+      const obs = new IntersectionObserver((entries) => {
+        entries.forEach((e) => {
+          if (!e.isIntersecting) return;
+          e.target.classList.add('in');
+          obs.unobserve(e.target);
+        });
+      }, { rootMargin: '0px 0px -6% 0px', threshold: 0 });
+      els.forEach((el) => obs.observe(el));
+    }
+
     async function load() {
       const main = document.getElementById('main');
       try {
         const me = await fetch('/api/me').then(r => r.json());
         if (!me.admin) {
-          main.innerHTML = '<div class="error">Admin access required. <a href="/">Go back</a> and log in first.</div>';
+          main.innerHTML = '<div class="bezel reveal"><div class="core"><div class="error">' +
+            '<svg class="ic" aria-hidden="true"><use href="#i-warn" /></svg>' +
+            '<span>Admin access required. <a href="/">Go back</a> and log in first.</span>' +
+            '</div></div></div>';
+          revealAll();
           return;
         }
         const data = await fetch('/api/visitors').then(r => r.json());
@@ -57,29 +253,33 @@
 
         let html = `
           <div class="stats">
-            <div class="stat"><div class="val">${total.toLocaleString()}</div><div class="lbl">Total visits</div></div>
-            <div class="stat"><div class="val">${todayCount.toLocaleString()}</div><div class="lbl">Today</div></div>
-            <div class="stat"><div class="val">${uniqueIps.toLocaleString()}</div><div class="lbl">Unique IPs</div></div>
+            <div class="stat bezel reveal"><div class="core"><div class="k">Total visits</div><div class="val">${total.toLocaleString()}</div></div></div>
+            <div class="stat bezel reveal" style="--d:90ms"><div class="core"><div class="k">Today</div><div class="val">${todayCount.toLocaleString()}</div></div></div>
+            <div class="stat bezel reveal" style="--d:150ms"><div class="core"><div class="k">Unique IPs</div><div class="val">${uniqueIps.toLocaleString()}</div></div></div>
           </div>`;
 
         if (entries.length === 0) {
-          html += '<div class="empty">No visits logged yet.</div>';
+          html += '<div class="bezel reveal"><div class="core"><div class="empty">No visits logged yet.</div></div></div>';
         } else {
-          html += `<div class="table-wrap"><table>
-            <thead><tr><th>Time</th><th>IP</th><th>User Agent</th><th>Referrer</th></tr></thead>
+          html += `<div class="bezel reveal" style="--d:210ms"><div class="core"><div class="table-wrap"><table>
+            <thead><tr><th>Time</th><th>IP</th><th>User agent</th><th>Referrer</th></tr></thead>
             <tbody>`;
-          for (const e of entries) {
+          entries.forEach((e, i) => {
             const ts = new Date(e.ts).toLocaleString();
-            const ua = e.ua ? `<td class="ua" title="${esc(e.ua)}">${esc(e.ua)}</td>` : '<td class="ua" style="color:#5a6673">—</td>';
-            const ref = e.ref ? `<td class="ref" title="${esc(e.ref)}">${esc(e.ref)}</td>` : '<td class="ref" style="color:#5a6673">—</td>';
-            html += `<tr><td style="white-space:nowrap">${esc(ts)}</td><td class="ip">${esc(e.ip || '—')}</td>${ua}${ref}</tr>`;
-          }
-          html += '</tbody></table></div>';
+            const ua = e.ua ? `<td class="ua" title="${esc(e.ua)}">${esc(e.ua)}</td>` : '<td class="ua dash">—</td>';
+            const ref = e.ref ? `<td class="ref" title="${esc(e.ref)}">${esc(e.ref)}</td>` : '<td class="ref dash">—</td>';
+            html += `<tr style="--i:${i}"><td class="ts">${esc(ts)}</td><td class="ip">${esc(e.ip || '—')}</td>${ua}${ref}</tr>`;
+          });
+          html += '</tbody></table></div></div></div>';
           if (total > 500) html += `<p class="note">Showing the most recent 500 of ${total.toLocaleString()} visits.</p>`;
         }
         main.innerHTML = html;
+        revealAll();
       } catch (err) {
-        main.innerHTML = `<div class="error">Failed to load: ${err.message}</div>`;
+        main.innerHTML = '<div class="bezel reveal"><div class="core"><div class="error">' +
+          '<svg class="ic" aria-hidden="true"><use href="#i-warn" /></svg>' +
+          `<span>Failed to load: ${esc(err.message)}</span></div></div></div>`;
+        revealAll();
       }
     }
 
@@ -87,6 +287,7 @@
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    revealAll();
     load();
   </script>
 </body>
