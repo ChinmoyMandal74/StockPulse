@@ -1,9 +1,9 @@
 {
   "AAPL": {
     "sector": "Technology",
-    "marketCap": 4543168088058,
-    "forwardPe": 32.877674,
-    "peg": 1.2289699926086959,
+    "marketCap": 4529157821200,
+    "forwardPe": 32.535477,
+    "peg": 1.2105186700000004,
     "earningsGrowthYoY": 27.1,
     "revenueGrowthYoY": 16.400000000000002,
     "profitMargin": 27.618998,
@@ -20,13 +20,13 @@
     "targetMean": null,
     "targetHigh": null,
     "targetLow": null,
-    "fetchedAt": 1787320319846
+    "fetchedAt": 1787686533035
   },
   "MSFT": {
     "sector": "Technology",
-    "marketCap": 3572801138739,
-    "forwardPe": 20.431183,
-    "peg": 0.8437677232758617,
+    "marketCap": 3618542573219,
+    "forwardPe": 20.49948,
+    "peg": 0.8503655674137928,
     "earningsGrowthYoY": 31.3,
     "revenueGrowthYoY": 17.7,
     "profitMargin": 40.305,
@@ -43,13 +43,13 @@
     "targetMean": null,
     "targetHigh": null,
     "targetLow": null,
-    "fetchedAt": 1787320319846
+    "fetchedAt": 1787686533035
   },
   "NVDA": {
     "sector": "Technology",
-    "marketCap": 5252324092210,
-    "forwardPe": 16.667679,
-    "peg": 0.15735535766871167,
+    "marketCap": 5049594080000,
+    "forwardPe": 16.322052,
+    "peg": 0.15398400950920246,
     "earningsGrowthYoY": 210.6,
     "revenueGrowthYoY": 85.2,
     "profitMargin": 62.966,
@@ -66,13 +66,13 @@
     "targetMean": null,
     "targetHigh": null,
     "targetLow": null,
-    "fetchedAt": 1787320319846
+    "fetchedAt": 1787686533035
   },
   "AMZN": {
     "sector": "Consumer Cyclical",
-    "marketCap": 2805627915349,
-    "forwardPe": 24.939299,
-    "peg": 0.0874059510218978,
+    "marketCap": 2826769273318,
+    "forwardPe": 24.890984,
+    "peg": 0.08649934729927006,
     "earningsGrowthYoY": 244.89999999999998,
     "revenueGrowthYoY": 19.6,
     "profitMargin": 17.44,
@@ -89,13 +89,13 @@
     "targetMean": null,
     "targetHigh": null,
     "targetLow": null,
-    "fetchedAt": 1787320319846
+    "fetchedAt": 1787686533035
   },
   "GOOGL": {
     "sector": "Communication Services",
-    "marketCap": 4166372021176,
-    "forwardPe": 23.028017,
-    "peg": 0.05781433389855072,
+    "marketCap": 4256751092817,
+    "forwardPe": 23.500084,
+    "peg": 0.058416152637681164,
     "earningsGrowthYoY": 297.90000000000003,
     "revenueGrowthYoY": 24.2,
     "profitMargin": 54.771,
@@ -112,13 +112,13 @@
     "targetMean": null,
     "targetHigh": null,
     "targetLow": null,
-    "fetchedAt": 1787320319846
+    "fetchedAt": 1787686533035
   },
   "TSLA": {
     "sector": "Consumer Cyclical",
-    "marketCap": 1363107292091,
-    "forwardPe": 161.43597,
-    "peg": -58.5199944000001,
+    "marketCap": 1378194602631,
+    "forwardPe": 165.63203,
+    "peg": -59.0416488000001,
     "earningsGrowthYoY": -4.9,
     "revenueGrowthYoY": 25.5,
     "profitMargin": 3.671,
@@ -135,7 +135,7 @@
     "targetMean": null,
     "targetHigh": null,
     "targetLow": null,
-    "fetchedAt": 1787320319846
+    "fetchedAt": 1787686533035
   },
   "META": {
     "sector": "Communication Services",

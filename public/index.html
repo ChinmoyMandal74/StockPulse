@@ -13,7 +13,7 @@
     /* ==========================================================================
        Ticker Lab — visual system
        Vibe archetype ...... Ethereal Glass (OLED black, mesh aura, glass chrome)
-       Layout archetype .... compact masthead band over a glass rail + deck
+       Layout archetype .... compact masthead band (title + portfolio picker) over a deck
        Every surface is a double-bezel: an outer translucent shell with a hairline
        and a large radius, holding an opaque inner core with a top highlight.
        ========================================================================== */
@@ -197,53 +197,79 @@
     /* ==========================================================================
        Masthead
        ========================================================================== */
-    .bezel > .core, .lede, .title { min-width: 0; }
+    .bezel > .core, .title { min-width: 0; }
     .masthead { margin: 0 0 8px; }
     .masthead > .core {
-      display: flex; align-items: flex-end; gap: 16px 44px; flex-wrap: wrap;
-      padding: 16px 26px;
+      display: flex; align-items: center; gap: 12px 22px; flex-wrap: wrap;
+      overflow: visible;   /* the portfolio dropdown escapes the card */
+      padding: 13px 26px;
       background:
         radial-gradient(90% 200% at 0% 0%, rgba(52, 211, 153, 0.08), transparent 58%),
         radial-gradient(80% 180% at 100% 100%, rgba(124, 156, 255, 0.08), transparent 60%),
         var(--surface);
     }
 
-    h1 { margin: 0; font-size: clamp(28px, 2.9vw, 40px); font-weight: 600;
+    h1 { margin: 0; cursor: help; font-size: clamp(28px, 2.9vw, 40px); font-weight: 600;
          line-height: 0.98; letter-spacing: -0.04em; }
     h1 .w2 {
       background: linear-gradient(100deg, #9aa4b6 10%, #5d6474 92%);
       -webkit-background-clip: text; background-clip: text; color: transparent;
     }
-    .lede { margin: 0 0 3px; flex: 1 1 340px; color: var(--muted);
-            font-size: 12.5px; line-height: 1.6; }
 
     /* ==========================================================================
-       Portfolio rail
+       Portfolio picker
        ========================================================================== */
-    .rail > .core { display: flex; align-items: center; gap: 6px; padding: 4px 6px; overflow-x: auto; }
-    .rail > .core::-webkit-scrollbar { height: 0; }
-    .tabs { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
-    .tab {
-      display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
-      padding: 8px 15px; border-radius: 999px; border: 1px solid transparent;
-      background: none; color: var(--muted); cursor: pointer;
-      font-size: 12.5px; font-weight: 500; letter-spacing: -0.01em; line-height: 1;
-      transition: background 0.5s var(--ease), color 0.5s var(--ease),
-                  border-color 0.5s var(--ease), transform 0.35s var(--ease);
+    .tdot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+    .count { font-family: var(--mono); font-size: 10px; color: var(--faint); letter-spacing: 0; }
+
+    .picker { position: relative; flex: none; }
+    .picker-btn { padding: 8px 11px 8px 13px; gap: 9px; }
+    .picker-btn .picker-label { font-weight: 600; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
+    .picker-btn .chev { opacity: 0.5; transition: transform 0.5s var(--ease), opacity 0.5s var(--ease); }
+    .picker[data-open="1"] .picker-btn { background: rgba(255, 255, 255, 0.085); border-color: var(--hair-2); }
+    .picker[data-open="1"] .chev { transform: rotate(180deg); opacity: 1; }
+
+    .picker-menu {
+      position: absolute; top: calc(100% + 8px); left: 0; z-index: 30;
+      min-width: 236px; max-width: calc(100vw - 24px); max-height: 62vh; overflow-y: auto;
+      padding: 6px; border-radius: 20px;
+      background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+      backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
+      box-shadow: 0 34px 70px -24px rgba(0, 0, 0, 0.95);
+      opacity: 0; visibility: hidden; transform: translateY(-6px) scale(0.98);
+      transform-origin: top left;
+      transition: opacity 0.45s var(--ease), transform 0.45s var(--ease), visibility 0.45s var(--ease);
     }
-    .tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.045); }
-    .tab:active { transform: scale(0.97); }
-    .tab.active {
+    .picker[data-open="1"] .picker-menu { opacity: 1; visibility: visible; transform: none; }
+    .picker-inner { background: rgba(10, 12, 17, 0.9); border-radius: 15px; padding: 5px; box-shadow: var(--inset); }
+    .pick {
+      display: flex; align-items: center; gap: 9px; width: 100%;
+      padding: 8px 12px; border-radius: 11px; border: 1px solid transparent;
+      background: none; color: var(--muted); cursor: pointer; text-align: left;
+      font-size: 12.5px; font-weight: 500; line-height: 1;
+      transition: background 0.4s var(--ease), color 0.4s var(--ease), border-color 0.4s var(--ease);
+    }
+    .pick:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+    .pick.on {
       color: #fff;
       background: color-mix(in srgb, var(--tint, #7c9cff) 15%, transparent);
-      border-color: color-mix(in srgb, var(--tint, #7c9cff) 36%, transparent);
-      box-shadow: var(--inset);
+      border-color: color-mix(in srgb, var(--tint, #7c9cff) 34%, transparent);
     }
-    .tab .count { font-family: var(--mono); font-size: 10px; color: var(--faint); letter-spacing: 0; }
-    .tab.active .count { color: color-mix(in srgb, var(--tint, #7c9cff) 65%, #ffffff); }
-    .tab .tdot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
-    .tab-new { color: var(--muted); padding: 8px 11px; }
-    .tab-new:hover { color: var(--green); background: rgba(52, 211, 153, 0.1); }
+    .pick .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pick.on .count { color: color-mix(in srgb, var(--tint, #7c9cff) 65%, #ffffff); }
+    .pick .chk { opacity: 0; color: currentColor; transition: opacity 0.4s var(--ease); }
+    .pick.on .chk { opacity: 1; }
+    .pick-sep { height: 1px; margin: 5px 9px; background: var(--hair); }
+    .pick-foot { display: flex; gap: 6px; padding: 1px 4px 3px; }
+    .pick-mini {
+      flex: 1; padding: 7px 10px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+      color: var(--muted); font-family: var(--sans); font-size: 11.5px; line-height: 1;
+      transition: background 0.4s var(--ease), color 0.4s var(--ease);
+    }
+    .pick-mini:hover { background: rgba(255, 255, 255, 0.075); color: var(--text); }
+    .pick-new { color: var(--green); }
+    .pick-new:hover { background: rgba(52, 211, 153, 0.1); color: var(--green); }
 
     /* ==========================================================================
        Control deck
@@ -251,9 +277,6 @@
     .deck { margin-top: 8px; }
     .deck .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 12px; }
     .deck .row:not(:last-child) { border-bottom: 1px solid var(--hair); }
-    .glabel { font-size: 10px; font-weight: 500; text-transform: uppercase;
-              letter-spacing: 0.2em; color: var(--faint); margin-right: 4px; }
-
     /* segmented input group */
     .field {
       display: inline-flex; align-items: center; gap: 2px;
@@ -288,24 +311,6 @@
       background-repeat: no-repeat; background-position: right 4px center; background-size: 13px;
     }
     .field select option { background: #0d1017; color: var(--text); }
-
-    /* column-group chips */
-    .gtoggle {
-      display: inline-flex; align-items: center; gap: 7px;
-      padding: 6px 13px; border-radius: 999px; cursor: pointer;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03); color: var(--faint);
-      font-size: 11.5px; font-weight: 500; line-height: 1;
-      transition: background 0.5s var(--ease), color 0.5s var(--ease),
-                  border-color 0.5s var(--ease), transform 0.35s var(--ease);
-    }
-    .gtoggle:hover { transform: translateY(-1px); }
-    .gtoggle:active { transform: scale(0.97); }
-    .gtoggle::before {
-      content: ''; width: 5px; height: 5px; border-radius: 50%; flex: none;
-      background: currentColor; opacity: 0.3;
-      transition: opacity 0.5s var(--ease), transform 0.5s var(--ease), box-shadow 0.5s var(--ease);
-    }
-    .gtoggle.active::before { opacity: 1; transform: scale(1.15); box-shadow: 0 0 9px currentColor; }
 
     /* ==========================================================================
        Notices
@@ -504,7 +509,7 @@
         box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.9), var(--inset);
       }
       .masthead { margin: 0 0 8px; }
-      .masthead > .core { padding: 16px 18px; gap: 12px; }
+      .masthead > .core { padding: 12px 16px; gap: 12px; }
       h1 { font-size: clamp(28px, 8vw, 36px); }
       .table-wrap { max-height: calc(100dvh - 210px); }
 
@@ -559,6 +564,9 @@
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 7v5.3l3.4 2"/></symbol>
     <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.6 21 19.4H3L12 4.6Z"/><path d="M12 10.4v3.8M12 17.1v.1"/></symbol>
     <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3.6" y="5.2" width="16.8" height="13.6" rx="2.6"/><path d="M9.2 5.2v13.6M14.8 5.2v13.6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.6 9.8 17.4 19 6.6"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15.2l5.5-5.7"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.6 6.6 17.4 17.4M17.4 6.6 6.6 17.4"/></symbol>
   </svg>
 
@@ -567,18 +575,18 @@
     <header class="bezel masthead reveal">
       <div class="core">
         <div class="title">
-          <h1><span class="w1">Ticker</span> <span class="w2">Lab</span></h1>
+          <h1 title="Data via Twelve Data. Group tickers into portfolios — a stock can belong to several. Click a column header to sort, use the chips to collapse column groups, and hover any value to see when it was last pulled."><span class="w1">Ticker</span> <span class="w2">Lab</span></h1>
         </div>
-        <p class="lede">Data via Twelve Data. Group tickers into portfolios — a stock can belong to several. Click a column header to sort, use the chips to collapse column groups, and hover any value to see when it was last pulled.</p>
+        <div class="picker" id="picker" data-open="0">
+          <button class="btn picker-btn" id="pickerBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="picker-menu" id="pickerMenu" role="listbox" aria-label="Portfolio"></div>
+        </div>
+        <div class="picker" id="colPicker" data-open="0">
+          <button class="btn picker-btn" id="colBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="picker-menu" id="colMenu" role="listbox" aria-multiselectable="true" aria-label="Column groups"></div>
+        </div>
       </div>
     </header>
-
-    <!-- Portfolio rail -->
-    <div class="bezel rail reveal">
-      <div class="core">
-        <div class="tabs" id="tabs"></div>
-      </div>
-    </div>
 
     <button class="btn icon quiet menu-btn" id="menuBtn" aria-label="Controls" aria-expanded="false">
       <span class="burger"><i></i><i></i></span>
@@ -626,17 +634,6 @@
           <button class="btn icon quiet" id="logoutBtn" style="display:none" title="Log out" aria-label="Log out">
             <svg class="ic" aria-hidden="true"><use href="#i-logout" /></svg>
           </button>
-        </div>
-        <div class="row">
-          <span class="glabel">Columns</span>
-          <button class="gtoggle active" data-group="info">Info</button>
-          <button class="gtoggle active" data-group="short">Short-term %</button>
-          <button class="gtoggle active" data-group="long">Long-term %</button>
-          <button class="gtoggle" data-group="fwd">Forward</button>
-          <button class="gtoggle active" data-group="rel">Relative</button>
-          <button class="gtoggle active" data-group="trend">Trend</button>
-          <button class="gtoggle active" data-group="vol">Volume</button>
-          <button class="gtoggle active" data-group="fund">Fundamentals</button>
         </div>
       </div>
     </div>
@@ -733,6 +730,12 @@
     const GROUP_COLORS = {
       info: '#7c9cff', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
       rel:  '#22d3ee', trend: '#fbbf24', vol:  '#f472b6', fund: '#fb7185',
+    };
+    // Labels live here so adding a group later is: append to GROUPS, give it a
+    // colour and a label, and tag the <th>/<td> cells with .grp-<id>.
+    const GROUP_LABELS = {
+      info: 'Info', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
+      rel: 'Relative', trend: 'Trend', vol: 'Volume', fund: 'Fundamentals',
     };
     const collapsed = {};
     GROUPS.forEach((g) => (collapsed[g] = false));
@@ -924,31 +927,66 @@
     }
 
     // ---- tabs ----
-    function renderTabs() {
+    const ALL_TINT = '#7c9cff';
+    // Keep an opened menu inside the viewport: shift it left of its trigger when it
+    // would overflow the right edge, and never let it cross the left gutter.
+    function placeMenu(picker, menu) {
+      menu.style.left = '0px';
+      const pad = 12;
+      const pr = picker.getBoundingClientRect();
+      const w = menu.offsetWidth;
+      let left = 0;
+      if (pr.left + w > window.innerWidth - pad) left = window.innerWidth - pad - w - pr.left;
+      if (pr.left + left < pad) left = pad - pr.left;
+      menu.style.left = Math.round(left) + 'px';
+    }
+
+    function setPicker(open) {
+      $('picker').dataset.open = open ? '1' : '0';
+      $('pickerBtn').setAttribute('aria-expanded', String(open));
+      if (open) { setColPicker(false); placeMenu($('picker'), $('pickerMenu')); }
+    }
+    function setColPicker(open) {
+      $('colPicker').dataset.open = open ? '1' : '0';
+      $('colBtn').setAttribute('aria-expanded', String(open));
+      if (open) { setPicker(false); placeMenu($('colPicker'), $('colMenu')); }
+    }
+
+    function renderPicker() {
       const countAll = stocks.length;
       const countFor = (name) => stocks.filter((s) => (s.portfolios || []).includes(name)).length;
+      const dot = (c) => `<span class="tdot" style="background:${c};box-shadow:0 0 10px ${c}"></span>`;
 
-      const parts = [`<button class="tab ${activeTab === 'All' ? 'active' : ''}" data-tab="All">All <span class="count">${countAll}</span></button>`];
-      for (const name of portfolios) {
-        const c = colorFor(name);
-        const isActive = activeTab === name;
-        const style = `--tint:${c};`;
-        parts.push(
-          `<button class="tab ${isActive ? 'active' : ''}" data-tab="${name}" style="${style}">` +
-          `<span class="tdot" style="background:${c};box-shadow:0 0 10px ${c}"></span>${name} <span class="count">${countFor(name)}</span></button>`
-        );
+      const activeColor = activeTab === 'All' ? ALL_TINT : colorFor(activeTab);
+      const activeCount = activeTab === 'All' ? countAll : countFor(activeTab);
+      $('pickerBtn').innerHTML = dot(activeColor) +
+        `<span class="picker-label">${activeTab}</span><span class="count">${activeCount}</span>` +
+        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
+      $('pickerBtn').title = `Showing ${activeTab} — click to switch portfolio`;
+
+      const item = (name, c, n) =>
+        `<button class="pick ${activeTab === name ? 'on' : ''}" data-tab="${name}" role="option" ` +
+        `aria-selected="${activeTab === name}" style="--tint:${c}">` +
+        dot(c) + `<span class="nm">${name}</span><span class="count">${n}</span></button>`;
+
+      const parts = [item('All', ALL_TINT, countAll)];
+      for (const name of portfolios) parts.push(item(name, colorFor(name), countFor(name)));
+      if (isAdmin) {
+        parts.push('<div class="pick-sep"></div>' +
+          '<button class="pick pick-new" id="newTab">' +
+          '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>' +
+          '<span class="nm">New portfolio</span></button>');
       }
-      if (isAdmin) parts.push('<button class="tab tab-new" id="newTab" title="New portfolio" aria-label="New portfolio"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg></button>');
-      $('tabs').innerHTML = parts.join('');
+      $('pickerMenu').innerHTML = `<div class="picker-inner">${parts.join('')}</div>`;
 
-      $('tabs').querySelectorAll('.tab[data-tab]').forEach((b) => {
-        b.addEventListener('click', () => { activeTab = b.dataset.tab; render(); });
-        if (b.dataset.tab !== 'All' && isAdmin) {
-          b.title = 'Double-click to rename';
-          b.addEventListener('dblclick', (e) => { e.preventDefault(); renamePortfolio(b.dataset.tab); });
-        }
+      $('pickerMenu').querySelectorAll('.pick[data-tab]').forEach((b) => {
+        b.addEventListener('click', () => {
+          activeTab = b.dataset.tab;
+          setPicker(false);
+          render();
+        });
       });
-      if (isAdmin) $('newTab').addEventListener('click', newPortfolio);
+      if (isAdmin) $('newTab').addEventListener('click', () => { setPicker(false); newPortfolio(); });
 
       // Add-target dropdown
       const sel = $('addTarget');
@@ -969,7 +1007,7 @@
     }
 
     function render() {
-      renderTabs();
+      renderPicker();
       const tbody = $('tbody');
       const rows = visibleStocks();
       markSortedColumn();
@@ -1238,23 +1276,8 @@
       GROUPS.forEach((id) => {
         const hide = collapsed[id];
         document.querySelectorAll('.grp-' + id).forEach((el) => { el.style.display = hide ? 'none' : ''; });
-        const chip = document.querySelector('.gtoggle[data-group="' + id + '"]');
-        const hdr  = document.querySelector('th.group[data-group="' + id + '"]');
+        const hdr = document.querySelector('th.group[data-group="' + id + '"]');
         const c = GROUP_COLORS[id];
-        if (chip) {
-          chip.classList.toggle('active', !hide);
-          if (c) {
-            if (!hide) {
-              chip.style.color = c;
-              chip.style.background = `color-mix(in srgb, ${c} 15%, transparent)`;
-              chip.style.borderColor = `color-mix(in srgb, ${c} 42%, transparent)`;
-            } else {
-              chip.style.color = '';
-              chip.style.background = '';
-              chip.style.borderColor = '';
-            }
-          }
-        }
         if (hdr && c) {
           hdr.style.color = c;
           // stays fully opaque — these header cells are sticky and mask the rows behind them
@@ -1262,9 +1285,44 @@
           hdr.style.borderBottom = `1px solid color-mix(in srgb, ${c} 45%, transparent)`;
         }
       });
+      renderColumnMenu();
       updateStickyOffsets();
     }
     function toggleGroup(id) { collapsed[id] = !collapsed[id]; applyGroups(); }
+    function setAllGroups(show) { GROUPS.forEach((id) => (collapsed[id] = !show)); applyGroups(); }
+
+    // Multi-select column-group menu. Rebuilt on every applyGroups() so the trigger
+    // count and the row states stay in step; the menu stays open while toggling.
+    function renderColumnMenu() {
+      const shown = GROUPS.filter((id) => !collapsed[id]).length;
+      $('colBtn').innerHTML =
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-columns" /></svg>' +
+        '<span class="picker-label">Columns</span>' +
+        `<span class="count">${shown}/${GROUPS.length}</span>` +
+        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
+      $('colBtn').title = `${shown} of ${GROUPS.length} column groups shown`;
+
+      const rows = GROUPS.map((id) => {
+        const on = !collapsed[id];
+        const c = GROUP_COLORS[id] || 'var(--accent)';
+        const dot = `<span class="tdot" style="background:${c};${on ? `box-shadow:0 0 10px ${c}` : 'opacity:.35'}"></span>`;
+        return `<button class="pick ${on ? 'on' : ''}" data-group="${id}" role="option" ` +
+          `aria-selected="${on}" style="--tint:${c}">` + dot +
+          `<span class="nm">${GROUP_LABELS[id] || id}</span>` +
+          '<svg class="ic ic-sm chk" aria-hidden="true"><use href="#i-check" /></svg></button>';
+      });
+      $('colMenu').innerHTML = '<div class="picker-inner">' + rows.join('') +
+        '<div class="pick-sep"></div><div class="pick-foot">' +
+        '<button class="pick-mini" data-all="1">Show all</button>' +
+        '<button class="pick-mini" data-all="0">Hide all</button></div></div>';
+
+      $('colMenu').querySelectorAll('.pick[data-group]').forEach((b) => {
+        b.addEventListener('click', (e) => { e.stopPropagation(); toggleGroup(b.dataset.group); });
+      });
+      $('colMenu').querySelectorAll('.pick-mini[data-all]').forEach((b) => {
+        b.addEventListener('click', (e) => { e.stopPropagation(); setAllGroups(b.dataset.all === '1'); });
+      });
+    }
 
     // Pin the 2nd header row exactly below the 1st (heights vary with wrapped labels).
     function updateStickyOffsets() {
@@ -1522,9 +1580,6 @@
     document.querySelectorAll('th.group[data-group]').forEach((th) => {
       th.addEventListener('click', () => toggleGroup(th.dataset.group));
     });
-    document.querySelectorAll('.gtoggle[data-group]').forEach((chip) => {
-      chip.addEventListener('click', () => toggleGroup(chip.dataset.group));
-    });
 
     document.querySelector('.table-wrap').addEventListener('scroll', hideTip);
     window.addEventListener('scroll', hideTip, true);
@@ -1558,6 +1613,19 @@
       document.querySelectorAll('.reveal').forEach((el) => el.classList.add('in'));
     }
 
+    $('pickerBtn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      setPicker($('picker').dataset.open !== '1');
+    });
+    $('colBtn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      setColPicker($('colPicker').dataset.open !== '1');
+    });
+    document.addEventListener('click', (e) => {
+      if (!$('picker').contains(e.target)) setPicker(false);
+      if (!$('colPicker').contains(e.target)) setColPicker(false);
+    });
+
     // ---- control sheet (below 768px the deck becomes a full-screen glass overlay) ----
     const menuBtn = $('menuBtn');
     function setSheet(open) {
@@ -1566,8 +1634,13 @@
     }
     menuBtn.addEventListener('click', () => setSheet(!document.body.classList.contains('sheet-open')));
     $('deck').addEventListener('click', (e) => { if (e.target === $('deck')) setSheet(false); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { setSheet(false); hideTip(); } });
-    window.addEventListener('resize', () => { if (window.innerWidth > 768) setSheet(false); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { setSheet(false); setPicker(false); setColPicker(false); hideTip(); }
+    });
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768) setSheet(false);
+      setPicker(false); setColPicker(false);
+    });
 
     // Boot: find out if we're admin, then load the saved snapshot (no live API call).
     checkAuth().then(() => refresh({ live: false }));
