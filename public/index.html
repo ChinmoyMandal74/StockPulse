@@ -13,7 +13,7 @@
     /* ==========================================================================
        Ticker Lab — visual system
        Vibe archetype ...... Ethereal Glass (OLED black, mesh aura, glass chrome)
-       Layout archetype .... compact masthead band (title + portfolio picker) over a deck
+       Layout archetype .... one control bar (identity + filters + actions) over the table
        Every surface is a double-bezel: an outer translucent shell with a hairline
        and a large radius, holding an opaque inner core with a top highlight.
        ========================================================================== */
@@ -64,12 +64,12 @@
     }
 
     * { box-sizing: border-box; }
-    html { -webkit-text-size-adjust: 100%; }
+    html { -webkit-text-size-adjust: 100%; height: 100%; }
     body {
       margin: 0;
-      min-height: 100dvh;
-      padding: 0 0 96px;
-      overflow-x: clip;            /* clip, not hidden — hidden breaks position: sticky */
+      height: 100dvh;
+      padding: 0;
+      overflow: hidden;            /* the table scrolls, the page never does */
       background: var(--void);
       color: var(--text);
       font-family: var(--sans);
@@ -78,7 +78,12 @@
       letter-spacing: -0.01em;
       -webkit-font-smoothing: antialiased;
     }
-    .page { position: relative; z-index: 1; max-width: 1720px; margin: 0 auto; padding: 10px 32px 0; }
+    .page {
+      position: relative; z-index: 1; height: 100%;
+      max-width: 1720px; margin: 0 auto; padding: 10px 32px;
+      display: flex; flex-direction: column; min-height: 0;
+    }
+    .bar, .notice, .error { flex: none; }
 
     /* ---- atmosphere: fixed mesh aura + film grain (never attached to a scroller) ---- */
     .aura {
@@ -127,14 +132,15 @@
        Live status readout
        ========================================================================== */
     .status {
-      display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px;
+      display: block; text-align: right;
       /* basis 0 → invisible to flex line-breaking, so it can never wrap a button */
       flex: 1 1 0; min-width: 0;
-      color: var(--muted); font-size: 12px; white-space: nowrap;
+      color: var(--muted); font-size: 12px; line-height: 1.4; white-space: nowrap;
       overflow: hidden; text-overflow: ellipsis;
     }
     .status::before {
-      content: ''; width: 6px; height: 6px; border-radius: 50%; flex: none;
+      content: ''; display: inline-block; vertical-align: middle;
+      width: 6px; height: 6px; border-radius: 50%; margin-right: 8px;
       background: var(--green); box-shadow: 0 0 10px rgba(52, 211, 153, 0.9);
       animation: pulse 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
     }
@@ -195,26 +201,28 @@
     body.sheet-open .burger i:nth-child(2) { transform: translateY(-3.5px) rotate(-45deg); }
 
     /* ==========================================================================
-       Masthead
+       Control bar — identity, filters and every control on one line
        ========================================================================== */
-    .bezel > .core, .title { min-width: 0; }
-    .masthead { margin: 0 0 8px; }
-    .masthead > .core {
-      display: flex; align-items: center; gap: 12px 22px; flex-wrap: wrap;
-      overflow: visible;   /* the portfolio dropdown escapes the card */
-      padding: 13px 26px;
+    .bezel > .core { min-width: 0; }
+    .bar { margin: 0 0 10px; }
+    .bar > .core {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      overflow: visible;   /* the dropdowns escape the card */
+      padding: 7px 12px;
       background:
-        radial-gradient(90% 200% at 0% 0%, rgba(52, 211, 153, 0.08), transparent 58%),
-        radial-gradient(80% 180% at 100% 100%, rgba(124, 156, 255, 0.08), transparent 60%),
+        radial-gradient(70% 240% at 0% 0%, rgba(52, 211, 153, 0.07), transparent 60%),
+        radial-gradient(60% 220% at 100% 100%, rgba(124, 156, 255, 0.07), transparent 62%),
         var(--surface);
     }
-
-    h1 { margin: 0; cursor: help; font-size: clamp(28px, 2.9vw, 40px); font-weight: 600;
-         line-height: 0.98; letter-spacing: -0.04em; }
-    h1 .w2 {
+    .brand {
+      margin: 0; padding: 0 2px 0 6px; flex: none; cursor: help; white-space: nowrap;
+      font-size: 15px; font-weight: 600; letter-spacing: -0.025em; line-height: 1;
+    }
+    .brand .w2 {
       background: linear-gradient(100deg, #9aa4b6 10%, #5d6474 92%);
       -webkit-background-clip: text; background-clip: text; color: transparent;
     }
+    .bar-sep { width: 1px; height: 20px; background: var(--hair); flex: none; }
 
     /* ==========================================================================
        Portfolio picker
@@ -223,7 +231,7 @@
     .count { font-family: var(--mono); font-size: 10px; color: var(--faint); letter-spacing: 0; }
 
     .picker { position: relative; flex: none; }
-    .picker-btn { padding: 8px 11px 8px 13px; gap: 9px; }
+    .picker-btn { padding: 8px 9px 8px 11px; gap: 8px; }
     .picker-btn .picker-label { font-weight: 600; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
     .picker-btn .chev { opacity: 0.5; transition: transform 0.5s var(--ease), opacity 0.5s var(--ease); }
     .picker[data-open="1"] .picker-btn { background: rgba(255, 255, 255, 0.085); border-color: var(--hair-2); }
@@ -246,6 +254,7 @@
       display: flex; align-items: center; gap: 9px; width: 100%;
       padding: 8px 12px; border-radius: 11px; border: 1px solid transparent;
       background: none; color: var(--muted); cursor: pointer; text-align: left;
+      text-decoration: none; font-family: var(--sans);
       font-size: 12.5px; font-weight: 500; line-height: 1;
       transition: background 0.4s var(--ease), color 0.4s var(--ease), border-color 0.4s var(--ease);
     }
@@ -259,6 +268,9 @@
     .pick.on .count { color: color-mix(in srgb, var(--tint, #7c9cff) 65%, #ffffff); }
     .pick .chk { opacity: 0; color: currentColor; transition: opacity 0.4s var(--ease); }
     .pick.on .chk { opacity: 1; }
+    .pick:disabled { opacity: 0.35; cursor: default; }
+    .pick:disabled:hover { background: none; color: var(--muted); }
+    .pick-danger:hover { color: var(--red); background: rgba(251, 113, 133, 0.1); }
     .pick-sep { height: 1px; margin: 5px 9px; background: var(--hair); }
     .pick-foot { display: flex; gap: 6px; padding: 1px 4px 3px; }
     .pick-mini {
@@ -274,9 +286,9 @@
     /* ==========================================================================
        Control deck
        ========================================================================== */
-    .deck { margin-top: 8px; }
-    .deck .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 12px; }
-    .deck .row:not(:last-child) { border-bottom: 1px solid var(--hair); }
+    /* On desktop the deck is not a box at all — its children join the bar's flex
+       row directly. Below 768px it becomes a sheet again (see the media query). */
+    .deck, .deck .row { display: contents; }
     /* segmented input group */
     .field {
       display: inline-flex; align-items: center; gap: 2px;
@@ -351,9 +363,13 @@
     /* ==========================================================================
        Data table
        ========================================================================== */
-    .table-bezel { margin-top: 10px; }
+    .table-bezel {
+      margin-top: 10px; flex: 1 1 auto; min-height: 0;
+      display: flex; flex-direction: column;
+    }
+    .table-bezel > .core { flex: 1 1 auto; min-height: 0; display: flex; }
     .table-wrap {
-      overflow: auto; max-height: calc(100dvh - 250px); min-height: 340px;
+      overflow: auto; flex: 1 1 auto; min-height: 0; width: 100%;
       scrollbar-color: rgba(255, 255, 255, 0.16) transparent; scrollbar-width: thin;
     }
     .table-wrap::-webkit-scrollbar { width: 11px; height: 11px; }
@@ -500,22 +516,19 @@
        Responsive collapse
        ========================================================================== */
     @media (max-width: 768px) {
-      body { padding-bottom: 48px; }
-      .page { padding: 10px 16px 0; }
+      .page { padding: 10px 16px; }
       .menu-btn {
         display: inline-flex; position: fixed; top: 14px; right: 16px; z-index: var(--z-nav);
         background: rgba(9, 11, 15, 0.74); border-color: var(--hair);
         backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%);
         box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.9), var(--inset);
       }
-      .masthead { margin: 0 0 8px; }
-      .masthead > .core { padding: 12px 16px; gap: 12px; }
-      h1 { font-size: clamp(28px, 8vw, 36px); }
-      .table-wrap { max-height: calc(100dvh - 210px); }
+      .bar > .core { padding: 6px 8px; gap: 8px; }
+      .brand { font-size: 14px; padding-left: 4px; }
 
       /* the deck becomes a full-screen glass sheet with a staggered mask reveal */
       .deck {
-        position: fixed; inset: 0; z-index: var(--z-sheet); margin: 0;
+        display: block; position: fixed; inset: 0; z-index: var(--z-sheet); margin: 0;
         padding: 68px 18px 40px; overflow-y: auto;
         background: rgba(5, 5, 5, 0.84);
         backdrop-filter: blur(30px) saturate(150%); -webkit-backdrop-filter: blur(30px) saturate(150%);
@@ -525,14 +538,15 @@
       body.sheet-open { overflow: hidden; }
       body.sheet-open .deck { opacity: 1; visibility: visible; }
       .deck .row {
-        opacity: 0; transform: translateY(38px); padding: 16px 4px;
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        padding: 16px 14px; border-radius: 20px;
+        background: var(--surface); border: 1px solid var(--hair); box-shadow: var(--inset);
+        opacity: 0; transform: translateY(38px);
         transition: opacity 0.75s var(--ease-soft), transform 0.75s var(--ease-soft);
       }
-      body.sheet-open .deck .row { opacity: 1; transform: none; }
-      body.sheet-open .deck .row:nth-child(1) { transition-delay: 0.10s; }
-      body.sheet-open .deck .row:nth-child(2) { transition-delay: 0.16s; }
-      body.sheet-open .deck .row:nth-child(3) { transition-delay: 0.22s; }
-      .status { flex: 1 1 100%; justify-content: flex-start; }
+      body.sheet-open .deck .row { opacity: 1; transform: none; transition-delay: 0.1s; }
+      .deck .bar-sep { display: none !important; }
+      .status { flex: 1 1 100%; text-align: left; }
       .field input[type="text"] { width: 100px; }
     }
 
@@ -564,6 +578,7 @@
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 7v5.3l3.4 2"/></symbol>
     <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.6 21 19.4H3L12 4.6Z"/><path d="M12 10.4v3.8M12 17.1v.1"/></symbol>
     <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="2.4"/></symbol>
     <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3.6" y="5.2" width="16.8" height="13.6" rx="2.6"/><path d="M9.2 5.2v13.6M14.8 5.2v13.6"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.6 9.8 17.4 19 6.6"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15.2l5.5-5.7"/></symbol>
@@ -571,12 +586,12 @@
   </svg>
 
   <main class="page">
-    <!-- Masthead -->
-    <header class="bezel masthead reveal">
+    <!-- One bar: identity, filters and every control -->
+    <header class="bezel bar reveal">
       <div class="core">
-        <div class="title">
-          <h1 title="Data via Twelve Data. Group tickers into portfolios — a stock can belong to several. Click a column header to sort, use the chips to collapse column groups, and hover any value to see when it was last pulled."><span class="w1">Ticker</span> <span class="w2">Lab</span></h1>
-        </div>
+        <h1 class="brand" title="Data via Twelve Data. Group tickers into portfolios — a stock can belong to several. Click a column header to sort, use the chips to collapse column groups, and hover any value to see when it was last pulled."><span class="w1">Ticker</span> <span class="w2">Lab</span></h1>
+        <span class="bar-sep"></span>
+
         <div class="picker" id="picker" data-open="0">
           <button class="btn picker-btn" id="pickerBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="pickerMenu" role="listbox" aria-label="Portfolio"></div>
@@ -585,58 +600,79 @@
           <button class="btn picker-btn" id="colBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="colMenu" role="listbox" aria-multiselectable="true" aria-label="Column groups"></div>
         </div>
+
+        <!-- display:contents on desktop, a full-screen glass sheet below 768px -->
+        <div class="deck" id="deck">
+          <div class="row">
+            <span class="bar-sep admin-only"></span>
+            <span class="field admin-only">
+              <span class="lead"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg></span>
+              <input type="text" id="symbolInput" placeholder="e.g. TSLA" maxlength="12" aria-label="Ticker symbol" />
+              <span class="sep">to</span>
+              <select id="addTarget" aria-label="Portfolio to add to"></select>
+              <button class="btn" id="addBtn">Add</button>
+            </span>
+            <span class="field admin-only">
+              <span class="lead"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-calendar" /></svg></span>
+              <span class="sep">As of</span>
+              <input type="date" id="asOfDate" title="Backtest: view the momentum ranking as of a past date" aria-label="Backtest as-of date" />
+            </span>
+            <span class="status" id="status"></span>
+            <button class="btn admin-only" id="refreshBtn" title="Re-pull prices and recompute the ranking">
+              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Refresh
+            </button>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="exportBtn" title="Export the current view to a CSV file (opens in Excel)">
+          <span class="lbl">Export to Excel</span>
+          <span class="nub"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-download" /></svg></span>
+        </button>
+        <button class="btn icon quiet" id="loginBtn" style="display:none" title="Log in to unlock refresh, backtest and ticker editing" aria-label="Admin login">
+          <svg class="ic" aria-hidden="true"><use href="#i-lock" /></svg>
+        </button>
+
+        <div class="picker" id="morePicker" data-open="0">
+          <button class="btn icon quiet admin-only" id="moreBtn" title="More actions" aria-haspopup="menu" aria-expanded="false" aria-label="More actions">
+            <svg class="ic" aria-hidden="true"><use href="#i-dots" /></svg>
+          </button>
+          <div class="picker-menu" id="moreMenu" role="menu" aria-label="More actions">
+            <div class="picker-inner">
+              <button class="pick" id="refreshAllBtn" title="Clear cached sector / fundamentals / analyst data and re-pull everything fresh from the API">
+                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh-all" /></svg>
+                <span class="nm">Refresh all data</span>
+              </button>
+              <a class="pick admin-only" href="/visitors" target="_blank" rel="noopener" style="display:none" title="View the visitor log (admin only)">
+                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-users" /></svg>
+                <span class="nm">Visitor log</span>
+              </a>
+              <div id="portfolioActions" style="display:none">
+                <div class="pick-sep"></div>
+                <button class="pick" id="renameBtn">
+                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-pencil" /></svg>
+                  <span class="nm">Rename portfolio</span>
+                </button>
+                <button class="pick pick-danger" id="deleteBtn">
+                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-trash" /></svg>
+                  <span class="nm">Delete portfolio</span>
+                </button>
+              </div>
+              <div id="sessionActions" style="display:none">
+                <div class="pick-sep"></div>
+                <button class="pick" id="logoutBtn">
+                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-logout" /></svg>
+                  <span class="nm">Log out</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn icon quiet menu-btn" id="menuBtn" aria-label="Controls" aria-expanded="false">
+          <span class="burger"><i></i><i></i></span>
+        </button>
       </div>
     </header>
-
-    <button class="btn icon quiet menu-btn" id="menuBtn" aria-label="Controls" aria-expanded="false">
-      <span class="burger"><i></i><i></i></span>
-    </button>
-
-    <!-- Control deck — becomes a full-screen glass sheet below 768px -->
-    <div class="bezel deck reveal" id="deck">
-      <div class="core">
-        <div class="row">
-          <span class="field admin-only">
-            <span class="lead"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg></span>
-            <input type="text" id="symbolInput" placeholder="e.g. TSLA" maxlength="12" aria-label="Ticker symbol" />
-            <span class="sep">to</span>
-            <select id="addTarget" aria-label="Portfolio to add to"></select>
-            <button class="btn" id="addBtn">Add</button>
-          </span>
-          <span class="field admin-only">
-            <span class="lead"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-calendar" /></svg></span>
-            <span class="sep">As of</span>
-            <input type="date" id="asOfDate" title="Backtest: view the momentum ranking as of a past date" aria-label="Backtest as-of date" />
-          </span>
-          <button class="btn quiet" id="renameBtn" style="display:none">
-            <svg class="ic ic-sm" aria-hidden="true"><use href="#i-pencil" /></svg>Rename
-          </button>
-          <button class="btn quiet danger" id="deleteBtn" style="display:none">
-            <svg class="ic ic-sm" aria-hidden="true"><use href="#i-trash" /></svg>Delete
-          </button>
-          <span class="status" id="status"></span>
-          <button class="btn admin-only" id="refreshBtn" title="Re-pull prices and recompute the ranking">
-            <svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Refresh
-          </button>
-          <button class="btn quiet admin-only" id="refreshAllBtn" title="Clear cached sector / fundamentals / analyst data and re-pull everything fresh from the API">
-            <svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh-all" /></svg>Refresh all
-          </button>
-          <a class="btn quiet admin-only" href="/visitors" target="_blank" rel="noopener" style="display:none" title="View the visitor log (admin only)">
-            <svg class="ic ic-sm" aria-hidden="true"><use href="#i-users" /></svg>Visitors
-          </a>
-          <button class="btn btn-primary" id="exportBtn" title="Export the current view to a CSV file (opens in Excel)">
-            <span class="lbl">Export to Excel</span>
-            <span class="nub"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-download" /></svg></span>
-          </button>
-          <button class="btn icon quiet" id="loginBtn" style="display:none" title="Log in to unlock refresh, backtest and ticker editing" aria-label="Admin login">
-            <svg class="ic" aria-hidden="true"><use href="#i-lock" /></svg>
-          </button>
-          <button class="btn icon quiet" id="logoutBtn" style="display:none" title="Log out" aria-label="Log out">
-            <svg class="ic" aria-hidden="true"><use href="#i-logout" /></svg>
-          </button>
-        </div>
-      </div>
-    </div>
 
     <div class="bezel notice" id="readonlyNote" style="display:none">
       <div class="core">
@@ -928,6 +964,12 @@
 
     // ---- tabs ----
     const ALL_TINT = '#7c9cff';
+    const PICKERS = [
+      { root: 'picker', btn: 'pickerBtn', menu: 'pickerMenu' },
+      { root: 'colPicker', btn: 'colBtn', menu: 'colMenu' },
+      { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
+    ];
+
     // Keep an opened menu inside the viewport: shift it left of its trigger when it
     // would overflow the right edge, and never let it cross the left gutter.
     function placeMenu(picker, menu) {
@@ -941,16 +983,16 @@
       menu.style.left = Math.round(left) + 'px';
     }
 
-    function setPicker(open) {
-      $('picker').dataset.open = open ? '1' : '0';
-      $('pickerBtn').setAttribute('aria-expanded', String(open));
-      if (open) { setColPicker(false); placeMenu($('picker'), $('pickerMenu')); }
+    // Only one menu is ever open; pass null to close them all.
+    function openPicker(id) {
+      PICKERS.forEach((p) => {
+        const on = p.root === id;
+        $(p.root).dataset.open = on ? '1' : '0';
+        $(p.btn).setAttribute('aria-expanded', String(on));
+        if (on) placeMenu($(p.root), $(p.menu));
+      });
     }
-    function setColPicker(open) {
-      $('colPicker').dataset.open = open ? '1' : '0';
-      $('colBtn').setAttribute('aria-expanded', String(open));
-      if (open) { setPicker(false); placeMenu($('colPicker'), $('colMenu')); }
-    }
+    const closePickers = () => openPicker(null);
 
     function renderPicker() {
       const countAll = stocks.length;
@@ -982,11 +1024,11 @@
       $('pickerMenu').querySelectorAll('.pick[data-tab]').forEach((b) => {
         b.addEventListener('click', () => {
           activeTab = b.dataset.tab;
-          setPicker(false);
+          closePickers();
           render();
         });
       });
-      if (isAdmin) $('newTab').addEventListener('click', () => { setPicker(false); newPortfolio(); });
+      if (isAdmin) $('newTab').addEventListener('click', () => { closePickers(); newPortfolio(); });
 
       // Add-target dropdown
       const sel = $('addTarget');
@@ -996,9 +1038,7 @@
       if (activeTab !== 'All' && portfolios.includes(activeTab)) sel.value = activeTab;
 
       // Rename/Delete only apply to a specific portfolio
-      const isPortfolio = activeTab !== 'All';
-      $('renameBtn').style.display = (isPortfolio && isAdmin) ? '' : 'none';
-      $('deleteBtn').style.display = (isPortfolio && isAdmin) ? '' : 'none';
+      $('portfolioActions').style.display = (activeTab !== 'All' && isAdmin) ? '' : 'none';
     }
 
     // ---- table ----
@@ -1387,7 +1427,7 @@
     function applyAdminUI() {
       document.querySelectorAll('.admin-only').forEach((el) => { el.style.display = isAdmin ? '' : 'none'; });
       $('loginBtn').style.display = (authRequired && !isAdmin) ? '' : 'none';
-      $('logoutBtn').style.display = (authRequired && isAdmin) ? '' : 'none';
+      $('sessionActions').style.display = (authRequired && isAdmin) ? '' : 'none';
       $('readonlyNote').style.display = (authRequired && !isAdmin) ? '' : 'none';
     }
 
@@ -1613,18 +1653,17 @@
       document.querySelectorAll('.reveal').forEach((el) => el.classList.add('in'));
     }
 
-    $('pickerBtn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      setPicker($('picker').dataset.open !== '1');
-    });
-    $('colBtn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      setColPicker($('colPicker').dataset.open !== '1');
+    PICKERS.forEach((p) => {
+      $(p.btn).addEventListener('click', (e) => {
+        e.stopPropagation();
+        openPicker($(p.root).dataset.open === '1' ? null : p.root);
+      });
     });
     document.addEventListener('click', (e) => {
-      if (!$('picker').contains(e.target)) setPicker(false);
-      if (!$('colPicker').contains(e.target)) setColPicker(false);
+      if (!PICKERS.some((p) => $(p.root).contains(e.target))) closePickers();
     });
+    // acting on a more-menu item dismisses the menu
+    $('moreMenu').addEventListener('click', () => closePickers());
 
     // ---- control sheet (below 768px the deck becomes a full-screen glass overlay) ----
     const menuBtn = $('menuBtn');
@@ -1635,11 +1674,11 @@
     menuBtn.addEventListener('click', () => setSheet(!document.body.classList.contains('sheet-open')));
     $('deck').addEventListener('click', (e) => { if (e.target === $('deck')) setSheet(false); });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { setSheet(false); setPicker(false); setColPicker(false); hideTip(); }
+      if (e.key === 'Escape') { setSheet(false); closePickers(); hideTip(); }
     });
     window.addEventListener('resize', () => {
       if (window.innerWidth > 768) setSheet(false);
-      setPicker(false); setColPicker(false);
+      closePickers();
     });
 
     // Boot: find out if we're admin, then load the saved snapshot (no live API call).
