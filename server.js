@@ -37,12 +37,15 @@ const FUNDAMENTALS_ENABLED = process.env.ENABLE_FUNDAMENTALS === 'true';
 // works) and still cost credits, so they're OFF by default. Set ENABLE_ANALYST=true
 // in .env once you're on Ultra+ to populate the Analyst columns.
 const ANALYST_ENABLED = process.env.ENABLE_ANALYST === 'true';
-// A cold profile fetch hits several premium endpoints — /profile plus the pricey
-// /statistics (~45 credits/symbol), and — when analyst is on — /recommendations +
-// /price_target. Cap how many we backfill per refresh so a cold start can't burst
-// past the plan's per-minute credit limit; the rest fill in on later refreshes,
-// then cache for a day. Steady-state refreshes (all cached) are just one cheap
-// time_series call regardless.
+// A cold profile fetch hits several endpoints — /profile, /statistics, /earnings,
+// and — when analyst is on — /recommendations + /price_target. Measured Aug 2026:
+// each costs 1 credit per symbol, as does each symbol in a batched time_series
+// call, against a 610 credits/minute Pro limit. Credits are therefore not the
+// binding constraint; the cap below exists to keep a cold start from bursting,
+// and the rest fill in on later refreshes, then cache for a day.
+// The real ceilings are elsewhere: Twelve Data rejects a batched time_series of
+// more than 120 symbols (HTTP 414), and SPY is appended as the benchmark, so the
+// universe cannot exceed 119 tickers without chunking that call.
 const MAX_PROFILE_FETCHES_PER_CALL = ANALYST_ENABLED ? 4 : 6;
 const SYMBOL_RE = /^[A-Z0-9.\-]{1,12}$/;
 
@@ -254,6 +257,16 @@ async function fetchProfile(symbol) {
     revenueGrowthYoY: null,
     profitMargin: null,
     roe: null,
+    // absolute size, all TTM except the balance-sheet pair (most recent quarter)
+    revenueTtm: null,
+    grossProfitTtm: null,
+    netIncomeTtm: null,
+    fcfTtm: null,
+    netCash: null,
+    // derived from the absolutes above, not from the API's own margin fields —
+    // those are computed on a different basis and don't equal grossProfit / revenue
+    grossMargin: null,
+    fcfMargin: null,
     shortPctFloat: null,
     lastEarningsDate: null,
     lastSurprise: null,
@@ -292,6 +305,26 @@ async function fetchProfile(symbol) {
       }
       if (fin && fin.profit_margin != null) out.profitMargin = fin.profit_margin * 100;
       if (fin && fin.return_on_equity_ttm != null) out.roe = fin.return_on_equity_ttm * 100;
+
+      // Absolute size — how big the business actually is, in its reporting currency.
+      const bs = fin?.balance_sheet;
+      const cf = fin?.cash_flow;
+      if (inc) {
+        out.revenueTtm = inc.revenue_ttm ?? null;
+        out.grossProfitTtm = inc.gross_profit_ttm ?? null;
+        out.netIncomeTtm = inc.net_income_to_common_ttm ?? null;
+      }
+      if (cf) out.fcfTtm = cf.levered_free_cash_flow_ttm ?? null;
+      if (bs && bs.total_cash_mrq != null && bs.total_debt_mrq != null) {
+        out.netCash = bs.total_cash_mrq - bs.total_debt_mrq; // negative = net debt
+      }
+      // Margins derived from the two columns shown beside them, so the table is
+      // internally consistent (fin.gross_margin uses a different basis and differs
+      // by up to ~4 points).
+      if (out.revenueTtm) {
+        if (out.grossProfitTtm != null) out.grossMargin = (out.grossProfitTtm / out.revenueTtm) * 100;
+        if (out.fcfTtm != null) out.fcfMargin = (out.fcfTtm / out.revenueTtm) * 100;
+      }
       const ss = st?.statistics?.stock_statistics;
       if (ss && ss.shares_short != null && ss.float_shares) {
         out.shortPctFloat = (ss.shares_short / ss.float_shares) * 100; // short interest as % of float
@@ -938,6 +971,13 @@ async function computeStocks(asOf) {
         revenueGrowthYoY: prof.revenueGrowthYoY ?? null,
         profitMargin: prof.profitMargin ?? null,
         roe: prof.roe ?? null,
+        revenueTtm: prof.revenueTtm ?? null,
+        grossProfitTtm: prof.grossProfitTtm ?? null,
+        netIncomeTtm: prof.netIncomeTtm ?? null,
+        fcfTtm: prof.fcfTtm ?? null,
+        netCash: prof.netCash ?? null,
+        grossMargin: prof.grossMargin ?? null,
+        fcfMargin: prof.fcfMargin ?? null,
         shortPctFloat: prof.shortPctFloat ?? null,
         lastEarningsDate: prof.lastEarningsDate ?? null,
         lastSurprise: prof.lastSurprise ?? null,

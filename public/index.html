@@ -702,6 +702,7 @@
         <th class="group grp-rel" data-group="rel" colspan="3">Relative</th>
         <th class="group grp-trend" data-group="trend" colspan="4">Trend</th>
         <th class="group grp-vol" data-group="vol" colspan="1">Volume</th>
+        <th class="group grp-size" data-group="size" colspan="7">Size</th>
         <th class="group grp-fund" data-group="fund" colspan="7">Fundamentals</th>
         <th rowspan="2"></th>
       </tr>
@@ -735,8 +736,15 @@
         <th class="left grp-trend" data-key="maCrossRank" title="50/200-day MA cross: Golden (50 above 200) or Death, with trading days since the last cross">MA<br>Cross</th>
         <th class="grp-trend" data-key="macdHist" title="MACD histogram (12/26/9) = MACD line − signal; positive = bullish momentum">MACD</th>
         <th class="grp-vol" data-key="volTrend" title="5-day avg volume vs 20-day avg (rising = volume expanding)">Vol<br>Trend</th>
-        <th class="grp-fund" data-key="earningsGrowthYoY" title="Quarterly earnings growth, year-over-year">Earn<br>Grth</th>
-        <th class="grp-fund" data-key="revenueGrowthYoY" title="Quarterly revenue growth, year-over-year">Rev<br>Grth</th>
+        <th class="grp-size" data-key="revenueTtm" title="Revenue, trailing twelve months (sum of the last 4 reported quarters), in the company's own reporting currency — do not compare across currencies">Revenue<br>TTM</th>
+        <th class="grp-size" data-key="grossProfitTtm" title="Gross profit, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">Gross<br>Profit</th>
+        <th class="grp-size" data-key="grossMargin" title="Gross profit ÷ revenue, both trailing twelve months — derived from the two columns to the left so the numbers reconcile">Gross<br>Margin</th>
+        <th class="grp-size" data-key="netIncomeTtm" title="Net income to common, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">Net<br>Income</th>
+        <th class="grp-size" data-key="fcfTtm" title="Levered free cash flow, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">FCF<br>TTM</th>
+        <th class="grp-size" data-key="fcfMargin" title="Free cash flow ÷ revenue, both trailing twelve months — derived from the columns to the left">FCF<br>Margin</th>
+        <th class="grp-size" data-key="netCash" title="Total cash minus total debt, most recent quarter. Positive = net cash, negative = net debt">Net<br>Cash</th>
+        <th class="grp-fund" data-key="earningsGrowthYoY" title="Earnings growth: the most recent quarter versus the same quarter a year ago. It describes that one quarter, not the trailing-twelve-month figures in the Size group.">Earn Grth<br>Q YoY</th>
+        <th class="grp-fund" data-key="revenueGrowthYoY" title="Revenue growth: the most recent quarter versus the same quarter a year ago. It describes that one quarter, not the Revenue TTM column.">Rev Grth<br>Q YoY</th>
         <th class="grp-fund" data-key="profitMargin" title="Net profit margin (TTM)">Profit<br>Margin</th>
         <th class="grp-fund" data-key="roe" title="Return on equity (TTM)">ROE</th>
         <th class="grp-fund" data-key="forwardPe" title="Forward price/earnings ratio">Fwd<br>P/E</th>
@@ -762,16 +770,18 @@
     let isAdmin = true;        // may add/remove tickers, refresh, backtest (true = open/local or logged in)
     let authRequired = false;  // server has an ADMIN_PASSWORD set (published, read-only for the public)
 
-    const GROUPS = ['info', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'fund'];
+    const GROUPS = ['info', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
     const GROUP_COLORS = {
       info: '#7c9cff', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
-      rel:  '#22d3ee', trend: '#fbbf24', vol:  '#f472b6', fund: '#fb7185',
+      rel:  '#22d3ee', trend: '#fbbf24', vol:  '#f472b6',
+      size: '#94a3b8', fund: '#fb7185',
     };
     // Labels live here so adding a group later is: append to GROUPS, give it a
     // colour and a label, and tag the <th>/<td> cells with .grp-<id>.
     const GROUP_LABELS = {
       info: 'Info', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
-      rel: 'Relative', trend: 'Trend', vol: 'Volume', fund: 'Fundamentals',
+      rel: 'Relative', trend: 'Trend', vol: 'Volume',
+      size: 'Size', fund: 'Fundamentals',
     };
     const collapsed = {};
     GROUPS.forEach((g) => (collapsed[g] = false));
@@ -825,6 +835,26 @@
       const t = attr(title);
       if (n == null || !isFinite(n)) return `<td class="na ${cls}"${t}>—</td>`;
       return `<td class="${cls}"${t}>${n.toFixed(1)}</td>`;
+    }
+    // Absolute money, in the company's own reporting currency.
+    function capCell(n, code, cls = '', title = '') {
+      const t = attr(title);
+      if (n == null || !isFinite(n)) return `<td class="na ${cls}"${t}>—</td>`;
+      return `<td class="${cls}"${t}>${fmtMktCap(n, code)}</td>`;
+    }
+    // Same, but signed — net cash is positive, net debt negative.
+    function netCashCell(n, code, cls = '', title = '') {
+      const t = attr(title);
+      if (n == null || !isFinite(n)) return `<td class="na ${cls}"${t}>—</td>`;
+      const c = n >= 0 ? 'pos' : 'neg';
+      return `<td class="${c} ${cls}"${t}>${n < 0 ? '−' : ''}${fmtMktCap(Math.abs(n), code)}</td>`;
+    }
+    // A margin is a level, not a change, so no leading "+" — only a negative is
+    // worth flagging in red.
+    function marginCell(n, cls = '', title = '') {
+      const t = attr(title);
+      if (n == null || !isFinite(n)) return `<td class="na ${cls}"${t}>—</td>`;
+      return `<td class="${n < 0 ? 'neg ' : ''}${cls}"${t}>${n.toFixed(1)}%</td>`;
     }
     function pegCell(n, cls = '', title = '') {
       const t = attr(title);
@@ -1065,7 +1095,7 @@
         const msg = activeTab === 'All'
           ? 'No tickers yet — add one above.'
           : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="39">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="46">${msg}</td></tr>`;
         applyGroups();
         return;
       }
@@ -1086,7 +1116,7 @@
         if (s.error) {
           return `<tr style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="37">${s.error}</td>
+            <td class="na" colspan="44">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -1135,6 +1165,13 @@
           ${maCrossCell(s)}
           ${macdCell(s)}
           ${pctCell(s.volTrend, 'grp-vol', liveTitle)}
+          ${capCell(s.revenueTtm, s.currency, 'grp-size', cacheTitle)}
+          ${capCell(s.grossProfitTtm, s.currency, 'grp-size', cacheTitle)}
+          ${marginCell(s.grossMargin, 'grp-size', cacheTitle)}
+          ${capCell(s.netIncomeTtm, s.currency, 'grp-size', cacheTitle)}
+          ${capCell(s.fcfTtm, s.currency, 'grp-size', cacheTitle)}
+          ${marginCell(s.fcfMargin, 'grp-size', cacheTitle)}
+          ${netCashCell(s.netCash, s.currency, 'grp-size', cacheTitle)}
           ${pctCell(s.earningsGrowthYoY, 'grp-fund', cacheTitle)}
           ${pctCell(s.revenueGrowthYoY, 'grp-fund', cacheTitle)}
           ${pctCell(s.profitMargin, 'grp-fund', cacheTitle)}
@@ -1285,6 +1322,14 @@
         ['Short % Float', (s) => s.shortPctFloat],
         ['History Days', (s) => s.historyDays],
         ['Latest Data', (s) => s.latestDate],
+        // Appended rather than slotted in, so saved exports keep their column order.
+        ['Revenue TTM', (s) => s.revenueTtm],
+        ['Gross Profit TTM', (s) => s.grossProfitTtm],
+        ['Gross Margin %', (s) => s.grossMargin],
+        ['Net Income TTM', (s) => s.netIncomeTtm],
+        ['FCF TTM', (s) => s.fcfTtm],
+        ['FCF Margin %', (s) => s.fcfMargin],
+        ['Net Cash', (s) => s.netCash],
       ];
 
       const esc = (v) => {
@@ -1491,7 +1536,7 @@
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     function showLoading(msg) {
-      $('tbody').innerHTML = `<tr><td class="empty" colspan="39">${msg}</td></tr>`;
+      $('tbody').innerHTML = `<tr><td class="empty" colspan="46">${msg}</td></tr>`;
     }
 
     // Clear the cache, then keep re-pulling until EVERY ticker's fundamentals are

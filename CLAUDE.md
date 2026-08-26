@@ -3,18 +3,23 @@
 ## What this is
 A stock momentum screener POC. No database — all state lives in flat JSON files. Price data comes from the Twelve Data API. The owner (admin) manages portfolios and refreshes data; the public sees a read-only cached snapshot.
 
+The repo/folder is `StockPulse`; the app is branded **Ticker Lab** in the UI (`<title>` and the bar wordmark).
+
 ## Running the app
 ```
 node --use-system-ca server.js
 ```
 Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY` and `ADMIN_PASSWORD`.
 
+**Careful when running it just to look at the UI:** `computeStocks()` calls `ensureProfiles()`, which re-pulls any profile older than a day and rewrites `profiles.json` / `snapshot.json`, burning API credits. To check frontend changes only, serve `public/` with a throwaway static server instead — the page falls back to admin-open mode when `/api/me` fails, so the whole chrome renders without touching the API.
+
 ## Key files
 | File | Purpose |
 |---|---|
 | `server.js` | Express backend — all API routes, auth, data computation |
-| `public/index.html` | Single-page frontend (no build step, vanilla JS) |
+| `public/index.html` | Single-page frontend (no build step, vanilla JS, all CSS inline) |
 | `public/visitors.html` | Admin-only visitor log page at `/visitors` |
+| `public/favicon.svg` | Momentum-line mark, emerald on OLED black |
 | `portfolios.json` | Portfolio → symbol membership (many-to-many) |
 | `snapshot.json` | Last computed screener data served to the public |
 | `profiles.json` | Cached sector/fundamentals per symbol (refreshed daily) |
@@ -24,9 +29,10 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY` and `ADMIN_PASSWOR
 
 ## Auth model
 - `ADMIN_PASSWORD` unset → fully open (local dev, everyone is admin)
-- `ADMIN_PASSWORD` set → public sees read-only snapshot; admin logs in via "🔒 Admin login" button (cookie-based, 30-day session)
+- `ADMIN_PASSWORD` set → public sees read-only snapshot; admin logs in via the lock icon in the control bar (cookie-based, 30-day session)
 - Auth is checked via `isAdmin(req)` / `requireAdmin` middleware in server.js
 - Admin cookie is an HMAC of the password — no separate secret needed
+- **Do not change the HMAC salt string `'stock-tracker-admin-v1'`** in `adminToken()`. It predates the Ticker Lab rename and is never shown to anyone; changing it invalidates every live admin session.
 
 ## Feature flags in .env
 - `ENABLE_FUNDAMENTALS=true` — requires Twelve Data Pro+ plan
@@ -36,15 +42,86 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY` and `ADMIN_PASSWOR
 - Every `GET /` is appended to `visitors.log` (JSON Lines, one object per line)
 - Fields: `ts`, `ip`, `ua` (user-agent), `ref` (referrer)
 - Admin-only endpoint: `GET /api/visitors` — returns summary + last 500 entries
-- Admin-only page: `/visitors` — dark-themed table UI
+- Admin-only page: `/visitors` — same visual system as the screener
+
+## Frontend layout
+Everything above the table is **one bar**. There is no separate masthead, no tab rail, no chip row — they were merged to reclaim vertical space (the table used to start ~685px down; it now starts ~91px down).
+
+```
+.page (100dvh flex column, never scrolls)
+├── header.bezel.bar          ← wordmark · portfolio picker · columns picker
+│                               · add-ticker field · as-of field · status
+│                               · Refresh · Export · ⋯ more menu
+├── #readonlyNote / #backtestBar / .error   (flex: none, shown conditionally)
+└── .table-bezel (flex: 1, min-height: 0)
+    └── .table-wrap           ← the only scroll container on the page
+```
+
+- **The page itself does not scroll.** `body` is `height: 100dvh; overflow: hidden`; the table bezel is the flexible row and `.table-wrap` scrolls inside it. Never reintroduce a `max-height: calc(100dvh - Npx)` on the table — its height is derived from the flex column, so adding a notice steals from the table instead of pushing the page taller.
+- **`.deck`** (add-ticker field, as-of field, status, Refresh) is `display: contents` on desktop, so its children join the bar's flex row directly. Below 768px it becomes a fixed full-screen glass sheet toggled by `#menuBtn` (a hamburger that morphs into an X, fixed to the top-right corner).
+- **`.status`** uses `flex: 1 1 0` — a zero flex-basis makes it invisible to flex line-breaking, so it can never wrap a button onto a second line; it absorbs the slack instead. It's a **block** with `text-align: right`, not a flex row: a flex row justified to the end clips its *start* with no ellipsis.
+- The bar stays on one line down to ~1280px; below that it wraps, which is intended.
+
+### Dropdown menus
+Three menus share one controller. Only one is open at a time.
+
+| id | trigger | contents |
+|---|---|---|
+| `#picker` | portfolio name + count | All + every portfolio + "New portfolio" |
+| `#colPicker` | `Columns n/9` | multi-select column groups + Show all / Hide all |
+| `#morePicker` | `⋯` (admin only) | Refresh all, Visitor log, Rename/Delete portfolio, Log out |
+
+- `openPicker(id)` opens one and closes the rest; `closePickers()` closes all. They close on outside click, Escape and resize.
+- `placeMenu()` clamps an opened menu inside the viewport — it shifts left of its trigger rather than overflowing, and never crosses the left gutter. Don't replace it with a static `left`/`right` anchor; no single anchor suits both triggers at every width.
+- `#morePicker` holds the *real* buttons (`#refreshAllBtn`, `#renameBtn`, `#deleteBtn`, `#logoutBtn`) restyled as `.pick` rows, so their existing listeners and disabled-state logic still apply. `#portfolioActions` and `#sessionActions` wrap the contextual rows with their separators so both hide together.
+- The column menu is rebuilt by `renderColumnMenu()` from inside `applyGroups()`, so the trigger count can't drift from the table state. It deliberately stays open while you toggle.
+
+## Design system
+Dark-only. "Ethereal glass": OLED black with a fixed radial mesh aura and a film-grain overlay, glass chrome, hairline borders.
+
+- **Type** — `Geist` / `Geist Mono` from Google Fonts (`--sans` / `--mono`). Numeric table cells use the mono face with `font-variant-numeric: tabular-nums`. This is the app's only external dependency; it degrades to `system-ui` offline.
+- **Double bezel** — every card is `.bezel` (translucent shell, hairline, `--r-shell` radius, 6px padding) wrapping `.core` (opaque `--surface`, `--r-core` radius, inset top highlight). `--r-core` = `--r-shell` − padding, for concentric curves.
+- **Icons** — inline SVG sprite in `#sprite`, used as `<svg class="ic"><use href="#i-name" /></svg>`. No emoji, no icon font. Add new glyphs as `<symbol id="i-...">` with 1.35px strokes on a 24×24 viewBox.
+- **Motion** — only `--ease` / `--ease-soft` cubic-beziers, never `linear` or `ease-in-out`. `.reveal` + `IntersectionObserver` gives blocks a fade-up-and-deblur entry; table rows stagger via `--i` on each `<tr>`. All of it is disabled under `prefers-reduced-motion`.
+- **Performance rules** — `backdrop-filter` only on fixed/sticky elements (island menus, mobile sheet, tooltip), never on a scrolling container. The grain and aura are fixed `pointer-events: none` layers. Animate `transform`/`opacity` only.
+- **Layers** — `--z-sheet: 45`, `--z-nav: 46`, `--z-tip: 55`, `--z-grain: 60`. Menus sit at `z-index: 30` inside `.page`'s stacking context.
+
+### CSS tokens (`:root` in index.html)
+```
+--void #050505      page          --text  #e9ecf2
+--surface #0a0c11   card interior --muted #8b94a4
+--surface-2 #0d1017 group headers --faint #59616f
+--shell   rgba(255,255,255,.028)  --green #34d399   --red   #fb7185
+--hair    rgba(255,255,255,.07)   --amber #fbbf24
+--hair-2  rgba(255,255,255,.13)   --accent #7c9cff  --accent-2 #a78bfa
+```
+`--bg`, `--panel` and `--border` are kept as aliases so older rules and inline styles keep resolving.
+
+**`--surface` must stay opaque.** The frozen table columns and the sticky header cells paint on it to mask the rows scrolling underneath; a translucent value makes them see-through.
 
 ## Column groups (frontend)
-Each column group has a fixed color used for both the header `th` and the toggle chips:
-- Info: blue `#388bfd` · Short-term: green `#2ea043` · Long-term: purple `#a371f7`
-- Forward: orange `#f0883e` · Relative: teal `#39c5cf` · Trend: gold `#c9a227`
-- Volume: pink `#db61a2` · Fundamentals: red `#e5534b`
+Each group has a fixed colour used for the group header `th` and its row in the columns menu:
+- Info `#7c9cff` · Short-term `#34d399` · Long-term `#a78bfa` · Forward `#fb923c`
+- Relative `#22d3ee` · Trend `#fbbf24` · Volume `#f472b6` · Size `#94a3b8` · Fundamentals `#fb7185`
 
-Colors are defined in `GROUP_COLORS` in index.html and applied via `applyGroups()`.
+**To add a group:** append the id to `GROUPS`, give it a colour in `GROUP_COLORS` and a label in `GROUP_LABELS`, add the `th.group` banner with the right `colspan`, and tag every header/body cell with `class="grp-<id>"`. `applyGroups()` and the columns menu pick it up with no further changes.
+
+The **Size** group carries the absolute-size columns — Revenue TTM, Gross Profit TTM, Gross Margin, Net Income TTM, FCF TTM, FCF Margin, Net Cash. Every one comes out of the `/statistics` call `fetchProfile()` already makes, so the group costs **no extra API credits**.
+
+The **Info** banner spans nine columns — Overall, Mom., Qual., Rank, Portfolios, Price, Sector, Market Cap, Next Earn — and all nine collapse together.
+
+## Table specifics
+- **Frozen columns are Symbol and Name only** (`.frz0`, `.frz1`). The classes are *positional*: `updateStickyOffsets()` measures header cell widths left-to-right to compute the cumulative `left` offsets, so reordering columns means re-dealing the `frz` numbers in DOM order, not just moving the markup. `.frz1` carries the boundary shadow.
+- Two sticky header rows; `--h1` is measured at runtime because the second row's top offset depends on the first row's wrapped height.
+- The sorted column is marked by a small accent arrow absolutely positioned in the header's bottom padding — it's positioned, not inline, so it can't reflow a wrapped label.
+- Score cells (`td.rating`) open the factor-breakdown tooltip (`#tip`, fixed-position glass card) on hover.
+
+## Fundamentals data — three things that will bite you
+- **Margins are derived, not taken from the API.** `financials.gross_margin` does *not* equal `gross_profit_ttm / revenue_ttm` — it's computed on a different basis and differs by up to ~4 points (Samsung: 61.2% vs 57.5%). `fetchProfile()` derives `grossMargin` and `fcfMargin` from the same absolutes the table displays, so a user dividing the two columns gets the number shown.
+- **Absolute columns are in the company's reporting currency.** Samsung's revenue is ₩485T. Pass `s.currency` to `fmtMktCap()` for every money column, and treat sorting on them as within-currency only — a KRW reporter tops any cross-currency sort.
+- **ADR fundamentals can be incoherent.** SKHY returns net income (116.8B) larger than gross profit (104.0B), which is impossible, and its EBITDA appears to be in a different unit from its revenue. Don't assume a populated field is a correct one.
+
+Forward revenue / EPS estimates (`/revenue_estimate`, `/earnings_estimate`, `/growth_estimates`) are **Ultra-plan only** — they 403 on the current Pro key. AAPL returns data for them because it's Twelve Data's free sample symbol, which makes it a misleading symbol to test plan access with. `/income_statement?period=quarterly` works but costs 100 credits/symbol (vs ~45 for `/statistics`) and is capped at 6 quarters, so trailing-twelve-month growth — which needs 8 — can't be computed on this plan.
 
 ## Scores / ratings
 Three composite scores per stock (1–10): **Momentum** (price/trend/volume), **Quality** (company fundamentals), **Overall** (65% momentum + 35% quality). Computed in `computeScores()` in server.js.
@@ -57,6 +134,6 @@ Three composite scores per stock (1–10): **Momentum** (price/trend/volume), **
 
 ## Conventions
 - No database — use flat JSON files (`fs.readFileSync` / `fs.writeFileSync`)
-- No build step — frontend is a single `public/index.html` file, vanilla JS
-- Dark theme CSS vars: `--bg: #0f1419`, `--panel: #1a212b`, `--border: #2a333f`, `--text: #e6edf3`, `--muted: #8b98a5`, `--accent: #388bfd`
+- No build step — the frontend is a single `public/index.html`, vanilla JS, CSS in one `<style>` block
 - Admin-only UI elements use class `admin-only` — toggled by `applyAdminUI()` in index.html
+- The CSV export column order is deliberately *not* kept in sync with the on-screen column order, so saved exports stay stable
