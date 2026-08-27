@@ -2,13 +2,13 @@
 
 A minimal proof of concept. Organise tickers into **portfolios** (strategies) and view
 current price, multi-timeframe % change, and trend/momentum signals. A stock can belong
-to **multiple portfolios** (many-to-many). **No database** — portfolios live in a flat
-`portfolios.json` file (`{ "Portfolio name": ["AAPL", ...] }`).
+to **multiple portfolios** (many-to-many). State lives in **Turso** (hosted libSQL/SQLite);
+all persistence goes through `db.js`.
 
 Data source: [Twelve Data](https://twelvedata.com). Each refresh makes **one batched
 `/time_series` call** for the *union* of all portfolios (so a stock in several portfolios
 is fetched once) and derives price plus every % / trend column from the daily closes.
-Company names (`names.json`) and sectors (`profiles.json`) are fetched once and cached,
+Company names and sectors/fundamentals are fetched once and cached in the database,
 so a normal refresh is just the single time_series call.
 
 ## Setup
@@ -125,7 +125,7 @@ To put this on a public URL while keeping full control to yourself, set an
 **`ADMIN_PASSWORD`** in `.env`. That flips on a two-tier model:
 
 - **Public visitors** get a **read-only snapshot** — the last data *you* refreshed,
-  served straight from `snapshot.json` with **zero Twelve Data calls** (so visitors
+  served straight from the stored snapshot with **zero Twelve Data calls** (so visitors
   can't burn your API credits or rate-limit you). They can sort, collapse column
   groups, and export to Excel. Add/remove, Refresh, Refresh All and the backtest date
   picker are hidden.
@@ -166,8 +166,10 @@ so the cookie is sent securely (the app already trusts `x-forwarded-proto`).
 - **Corporate network / SSL:** the `start` script uses `node --use-system-ca` so
   Node trusts the company root certificate used for HTTPS inspection. Without it
   you'd get `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`.
-- Persistence (all flat files, no database): portfolios + membership in
-  `portfolios.json`, names in `names.json`, sectors/fundamentals in `profiles.json`.
-  A legacy `tickers.json` is auto-migrated into a "Watchlist" portfolio on first run.
+- Persistence: Turso (hosted libSQL/SQLite), via `db.js`. Tables: `portfolios`,
+  `portfolio_tickers`, `names`, `profiles`, `snapshot`, `visitors`. Set
+  `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in `.env` — and in the Vercel project's
+  environment variables before deploying. `migrate-to-turso.js` seeds the database
+  from the pre-migration JSON files if you ever need to re-seed.
 
 See [PLAN.md](PLAN.md) for the full database-backed architecture.

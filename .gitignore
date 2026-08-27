@@ -2,3 +2,12 @@ node_modules/
 .env
 server.out.log
 server.err.log
+# Legacy flat-file state, superseded by Turso (see db.js). These are kept on disk
+# as pre-migration backups only — nothing reads or writes them any more, so
+# tracking them would just commit stale copies that drift from the database.
+portfolios.json
+snapshot.json
+profiles.json
+names.json
+tickers.json
+visitors.log

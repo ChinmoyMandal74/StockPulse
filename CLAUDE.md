@@ -11,7 +11,7 @@ node --use-system-ca server.js
 ```
 Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` and `ADMIN_PASSWORD`.
 
-**Careful when running it just to look at the UI:** `computeStocks()` calls `ensureProfiles()`, which re-pulls any profile older than a day and rewrites `profiles.json` / `snapshot.json`, burning API credits. To check frontend changes only, serve `public/` with a throwaway static server instead — the page falls back to admin-open mode when `/api/me` fails, so the whole chrome renders without touching the API.
+**Careful when running it just to look at the UI:** `computeStocks()` calls `ensureProfiles()`, which re-pulls any profile older than a day and rewrites the `profiles` and `snapshot` tables, burning API credits. To check frontend changes only, serve `public/` with a throwaway static server instead — the page falls back to admin-open mode when `/api/me` fails, so the whole chrome renders without touching the API.
 
 ## Key files
 | File | Purpose |
@@ -47,7 +47,7 @@ Everything goes through `db.js`. Tables: `portfolios`, `portfolio_tickers`, `nam
 - `ENABLE_ANALYST=true` — requires Twelve Data Ultra+ plan
 
 ## Visitor logging
-- Every `GET /` is appended to `visitors.log` (JSON Lines, one object per line)
+- Every `GET /` inserts a row into the `visitors` table (fire-and-forget, so a logging failure can't block the page)
 - Fields: `ts`, `ip`, `ua` (user-agent), `ref` (referrer)
 - Admin-only endpoint: `GET /api/visitors` — returns summary + last 500 entries
 - Admin-only page: `/visitors` — same visual system as the screener
@@ -141,7 +141,7 @@ Three composite scores per stock (1–10): **Momentum** (price/trend/volume), **
 - All portfolio/ticker CRUD routes require admin
 
 ## Conventions
-- No database — use flat JSON files (`fs.readFileSync` / `fs.writeFileSync`)
+- All persistence goes through `db.js` — never reintroduce `fs` reads/writes for state; a serverless filesystem discards them
 - No build step — the frontend is a single `public/index.html`, vanilla JS, CSS in one `<style>` block
 - Admin-only UI elements use class `admin-only` — toggled by `applyAdminUI()` in index.html
 - The CSV export column order is deliberately *not* kept in sync with the on-screen column order, so saved exports stay stable

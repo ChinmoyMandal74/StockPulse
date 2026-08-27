@@ -1,7 +1,8 @@
 // Stock Momentum Screener — POC backend
-// No database: portfolios (name -> [symbols]) live in a flat JSON file
-// (portfolios.json). A stock can belong to multiple portfolios (many-to-many).
-// The "universe" fetched from Twelve Data is the deduped union of all portfolios.
+// State lives in Turso (hosted libSQL); every read and write goes through db.js.
+// Portfolios map a name -> [symbols], and a stock can belong to several
+// (many-to-many). The "universe" fetched from Twelve Data is the deduped union
+// of all portfolios.
 
 require('dotenv').config();
 const express = require('express');
@@ -144,7 +145,7 @@ app.post('/api/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-// ---- Portfolio persistence (flat file, no DB) ------------------------------
+// ---- Portfolio helpers (persistence lives in db.js) ------------------------
 
 // Deduped union of every portfolio's symbols.
 function getUniverse(portfolios) {
@@ -166,7 +167,7 @@ function membershipOf(symbol, portfolios) {
   return Object.keys(portfolios).filter((name) => portfolios[name].includes(symbol));
 }
 
-// ---- Company name cache (flat file) ----------------------------------------
+// ---- Company name cache ----------------------------------------------------
 // Names never change, so we fetch them once (on add) and reuse them. This keeps
 // every refresh at just 1 API credit per ticker (time_series only).
 
