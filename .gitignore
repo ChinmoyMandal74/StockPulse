@@ -11,3 +11,4 @@ profiles.json
 names.json
 tickers.json
 visitors.log
+visitors-archive-*.jsonl

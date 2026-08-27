@@ -889,10 +889,12 @@
     function fmtMktCap(n, code) {
       if (n == null || !isFinite(n)) return null;
       const c = curSym(code);
-      if (n >= 1e12) return c + (n / 1e12).toFixed(1) + 'T';
-      if (n >= 1e9) return c + (n / 1e9).toFixed(1) + 'B';
-      if (n >= 1e6) return c + (n / 1e6).toFixed(1) + 'M';
-      return c + n.toLocaleString();
+      const sign = n < 0 ? '-' : '';   // plain hyphen, as every % column uses
+      const a = Math.abs(n);
+      if (a >= 1e12) return sign + c + (a / 1e12).toFixed(1) + 'T';
+      if (a >= 1e9) return sign + c + (a / 1e9).toFixed(1) + 'B';
+      if (a >= 1e6) return sign + c + (a / 1e6).toFixed(1) + 'M';
+      return sign + c + a.toLocaleString();
     }
     function pctCell(n, cls = '', title = '') {
       const t = attr(title);
@@ -910,14 +912,13 @@
     function capCell(n, code, cls = '', title = '') {
       const t = attr(title);
       if (n == null || !isFinite(n)) return `<td class="na ${cls}"${t}>—</td>`;
-      return `<td class="${cls}"${t}>${fmtMktCap(n, code)}</td>`;
+      return `<td class="${n < 0 ? 'neg ' : ''}${cls}"${t}>${fmtMktCap(n, code)}</td>`;
     }
     // Same, but signed — net cash is positive, net debt negative.
     function netCashCell(n, code, cls = '', title = '') {
       const t = attr(title);
       if (n == null || !isFinite(n)) return `<td class="na ${cls}"${t}>—</td>`;
-      const c = n >= 0 ? 'pos' : 'neg';
-      return `<td class="${c} ${cls}"${t}>${n < 0 ? '−' : ''}${fmtMktCap(Math.abs(n), code)}</td>`;
+      return `<td class="${n >= 0 ? 'pos' : 'neg'} ${cls}"${t}>${fmtMktCap(n, code)}</td>`;
     }
     // A margin is a level, not a change, so no leading "+" — only a negative is
     // worth flagging in red.
