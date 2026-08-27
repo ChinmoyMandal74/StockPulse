@@ -18,6 +18,7 @@
 // batch is simpler and safer than diffing, and it keeps writeProfiles({})
 // working as the cache-clear that /api/refresh-all relies on.
 
+const crypto = require('crypto');
 const { createClient } = require('@tursodatabase/serverless/compat');
 
 const url = process.env.TURSO_DATABASE_URL;
@@ -70,13 +71,43 @@ const SCHEMA = [
      updated_at text
    )`,
   `create table if not exists visitors (
-     id  integer primary key autoincrement,
-     ts  text not null,
-     ip  text,
-     ua  text,
-     ref text
+     id         integer primary key autoincrement,
+     ts         text not null,
+     ip         text,
+     ua         text,
+     ref        text,
+     user_email text
    )`,
   `create index if not exists idx_visitors_ts on visitors (ts)`,
+  // Accounts. The screener itself is shared — every signed-in user sees the same
+  // data — so these exist purely to control who gets through the door.
+  // role: 'owner' can edit tickers / refresh / backtest; 'member' is read-only.
+  // failed_count + locked_until throttle password guessing against a known email.
+  `create table if not exists users (
+     id            integer primary key autoincrement,
+     email         text not null unique,
+     password_hash text not null,
+     salt          text not null,
+     role          text not null default 'member',
+     created_at    text not null,
+     failed_count  integer not null default 0,
+     locked_until  integer
+   )`,
+  // Random per-login tokens rather than a deterministic cookie, so a single
+  // session can be revoked and expiry is just a column.
+  `create table if not exists sessions (
+     token      text primary key,
+     user_id    integer not null,
+     created_at text not null,
+     expires_at integer not null
+   )`,
+  `create index if not exists idx_sessions_user on sessions (user_id)`,
+];
+
+// Columns added after a table shipped. SQLite has no "add column if not
+// exists", so each is attempted and a duplicate-column error is ignored.
+const ADDED_COLUMNS = [
+  'alter table visitors add column user_email text',
 ];
 
 let ready = null;
@@ -84,6 +115,13 @@ async function init() {
   if (!ready) {
     ready = (async () => {
       for (const stmt of SCHEMA) await db.execute(stmt);
+      for (const stmt of ADDED_COLUMNS) {
+        try {
+          await db.execute(stmt);
+        } catch (err) {
+          if (!/duplicate column/i.test(err.message || '')) throw err;
+        }
+      }
     })();
   }
   return ready;
@@ -221,8 +259,8 @@ async function writeSnapshot(payload) {
 async function logVisit(entry) {
   await init();
   await db.execute({
-    sql: 'insert into visitors (ts, ip, ua, ref) values (?, ?, ?, ?)',
-    args: [entry.ts, entry.ip ?? null, entry.ua ?? null, entry.ref ?? null],
+    sql: 'insert into visitors (ts, ip, ua, ref, user_email) values (?, ?, ?, ?, ?)',
+    args: [entry.ts, entry.ip ?? null, entry.ua ?? null, entry.ref ?? null, entry.userEmail ?? null],
   });
 }
 
@@ -235,24 +273,172 @@ async function readVisitorStats(limit = 500) {
     db.execute({
       sql: `select count(*) as total,
                    sum(case when ts like ? then 1 else 0 end) as today_count,
-                   count(distinct ip) as unique_ips
+                   count(distinct ip) as unique_ips,
+                   count(distinct user_email) as unique_users
             from visitors`,
       args: [today + '%'],
     }),
-    db.execute({ sql: 'select ts, ip, ua, ref from visitors order by id desc limit ?', args: [limit] }),
+    db.execute({ sql: 'select ts, ip, ua, ref, user_email from visitors order by id desc limit ?', args: [limit] }),
   ]);
   const a = agg.rows[0] || {};
   return {
     total: Number(a.total || 0),
     todayCount: Number(a.today_count || 0),
     uniqueIps: Number(a.unique_ips || 0),
-    entries: recent.rows.map((r) => ({ ts: r.ts, ip: r.ip, ua: r.ua, ref: r.ref })),
+    uniqueUsers: Number(a.unique_users || 0),
+    entries: recent.rows.map((r) => ({ ts: r.ts, ip: r.ip, ua: r.ua, ref: r.ref, user: r.user_email })),
   };
+}
+
+// ---- accounts -------------------------------------------------------------
+// scrypt ships with Node, so accounts need no dependency. Defined here rather
+// than in server.js so set-password.js hashes identically — two copies of a
+// security primitive is how they quietly diverge.
+
+function hashPassword(password, salt) {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(String(password), salt, 64, (err, dk) => (err ? reject(err) : resolve(dk.toString('hex'))));
+  });
+}
+
+function newSalt() {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+async function verifyPassword(password, salt, expectedHex) {
+  const got = Buffer.from(await hashPassword(password, salt));
+  const want = Buffer.from(String(expectedHex));
+  return got.length === want.length && crypto.timingSafeEqual(got, want);
+}
+
+// Sets a new password and drops every existing session for that user, so a
+// password change actually signs other devices out.
+async function setPassword(userId, password) {
+  await init();
+  const salt = newSalt();
+  const passwordHash = await hashPassword(password, salt);
+  await db.batch([
+    { sql: 'update users set password_hash = ?, salt = ?, failed_count = 0, locked_until = null where id = ?',
+      args: [passwordHash, salt, userId] },
+    { sql: 'delete from sessions where user_id = ?', args: [userId] },
+  ], 'write');
+}
+
+async function setRole(userId, role) {
+  await init();
+  await db.execute({ sql: 'update users set role = ? where id = ?', args: [role, userId] });
+}
+
+async function countUsers() {
+  await init();
+  const r = await db.execute('select count(*) as c from users');
+  return Number(r.rows[0].c || 0);
+}
+
+async function findUserByEmail(email) {
+  await init();
+  const r = await db.execute({
+    sql: 'select * from users where email = ?',
+    args: [String(email || '').trim().toLowerCase()],
+  });
+  return r.rows[0] || null;
+}
+
+async function createUser({ email, passwordHash, salt, role }) {
+  await init();
+  await db.execute({
+    sql: `insert into users (email, password_hash, salt, role, created_at)
+          values (?, ?, ?, ?, ?)`,
+    args: [String(email).trim().toLowerCase(), passwordHash, salt, role, new Date().toISOString()],
+  });
+  return findUserByEmail(email);
+}
+
+async function listUsers() {
+  await init();
+  const r = await db.execute(
+    'select id, email, role, created_at from users order by created_at'
+  );
+  return r.rows.map((u) => ({ id: Number(u.id), email: u.email, role: u.role, createdAt: u.created_at }));
+}
+
+async function deleteUser(id) {
+  await init();
+  await db.batch([
+    { sql: 'delete from sessions where user_id = ?', args: [id] },
+    { sql: 'delete from users where id = ?', args: [id] },
+  ], 'write');
+}
+
+// Failed-login throttling, recorded against the account being targeted.
+async function noteLoginFailure(userId, lockedUntil) {
+  await init();
+  await db.execute({
+    sql: 'update users set failed_count = failed_count + 1, locked_until = ? where id = ?',
+    args: [lockedUntil ?? null, userId],
+  });
+}
+
+async function clearLoginFailures(userId) {
+  await init();
+  await db.execute({
+    sql: 'update users set failed_count = 0, locked_until = null where id = ?',
+    args: [userId],
+  });
+}
+
+// ---- sessions -------------------------------------------------------------
+
+async function createSession(token, userId, expiresAt) {
+  await init();
+  await db.execute({
+    sql: 'insert into sessions (token, user_id, created_at, expires_at) values (?, ?, ?, ?)',
+    args: [token, userId, new Date().toISOString(), expiresAt],
+  });
+}
+
+// Returns the user for a live session, or null. Expired rows are swept lazily.
+async function getSessionUser(token) {
+  if (!token) return null;
+  await init();
+  const r = await db.execute({
+    sql: `select u.id, u.email, u.role, s.expires_at
+          from sessions s join users u on u.id = s.user_id
+          where s.token = ?`,
+    args: [token],
+  });
+  const row = r.rows[0];
+  if (!row) return null;
+  if (Number(row.expires_at) < Date.now()) {
+    await deleteSession(token);
+    return null;
+  }
+  return { id: Number(row.id), email: row.email, role: row.role };
+}
+
+async function deleteSession(token) {
+  await init();
+  await db.execute({ sql: 'delete from sessions where token = ?', args: [token] });
 }
 
 module.exports = {
   db,
   init,
+  hashPassword,
+  newSalt,
+  verifyPassword,
+  setPassword,
+  setRole,
+  countUsers,
+  findUserByEmail,
+  createUser,
+  listUsers,
+  deleteUser,
+  noteLoginFailure,
+  clearLoginFailures,
+  createSession,
+  getSessionUser,
+  deleteSession,
   readPortfolios,
   writePortfolios,
   readNames,

@@ -19,6 +19,7 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `server.js` | Express backend — all API routes, auth, data computation |
 | `db.js` | Turso persistence layer — every read/write goes through here |
 | `migrate-to-turso.js` | One-off JSON → Turso seeder; `--commit` to write, idempotent |
+| `set-password.js` | Local account admin — list accounts, set a password, change a role |
 | `public/index.html` | Single-page frontend (no build step, vanilla JS, all CSS inline) |
 | `public/visitors.html` | Admin-only visitor log page at `/visitors` |
 | `public/favicon.svg` | Momentum-line mark, emerald on OLED black |
@@ -36,11 +37,24 @@ Everything goes through `db.js`. Tables: `portfolios`, `portfolio_tickers`, `nam
 - **Express 4 does not catch async handler rejections.** Every async route is wrapped in the `route()` helper near the top of `server.js`, which turns a database error into a 500 instead of a hung request. Any new async route must use it.
 
 ## Auth model
-- `ADMIN_PASSWORD` unset → fully open (local dev, everyone is admin)
-- `ADMIN_PASSWORD` set → public sees read-only snapshot; admin logs in via the lock icon in the control bar (cookie-based, 30-day session)
-- Auth is checked via `isAdmin(req)` / `requireAdmin` middleware in server.js
-- Admin cookie is an HMAC of the password — no separate secret needed
-- **Do not change the HMAC salt string `'stock-tracker-admin-v1'`** in `adminToken()`. It predates the Ticker Lab rename and is never shown to anyone; changing it invalidates every live admin session.
+The app is a **door**: the screener is shared, and accounts only decide who gets in.
+
+- **Anonymous** → `/` redirects to `/login`; `/api/stocks` and `/api/portfolios` return 401.
+- **`member`** → sees the same shared screener, read-only (sort, collapse, export).
+- **`owner`** → everything: add/remove tickers, Refresh, Refresh all, backtest, visitor log, user management.
+- `ADMIN_PASSWORD` unset → fully open, everyone is admin (local dev). Set → sign-in required.
+
+Accounts live in Turso (`users`, `sessions`). Passwords are hashed with **`crypto.scrypt`** and a per-user random salt — no dependency needed. Sessions are random 32-byte tokens in the `sessions` table with a 30-day expiry, so a single session can be revoked; they are *not* the old deterministic HMAC cookie, which cannot work for more than one user.
+
+- **The first account created becomes `owner`**, so a fresh install bootstraps itself. Everyone after is a `member`.
+- **`SIGNUP_CODE`** (optional env var) gates registration. Without it anyone who finds the URL can sign themselves up — set it before making the site public.
+- **`POST /api/login` with a password but no email still checks `ADMIN_PASSWORD`.** That escape hatch is deliberate: a broken `users` table can't lock you out of your own instance. **Do not change the HMAC salt `'stock-tracker-admin-v1'`** in `adminToken()` or every legacy admin cookie dies.
+- Login failures are counted on the user row (`failed_count`, `locked_until`) and lock the account for 15 minutes after 8 tries. Tracked per user, not per IP, because an in-memory counter is useless on serverless.
+- Wrong password and unknown email return the **same** error, so the endpoint can't enumerate accounts.
+- **There is no email sender, so there is no "forgot password" link.** Recovery is `node --use-system-ca set-password.js <email>` run locally against the same Turso database the deployed app uses — it prompts for the password rather than taking it as an argument, which would leak it into shell history and the process list. `--role owner|member` changes a role, refusing to demote the last owner.
+- A signed-in user can change their own password via `POST /api/password` (needs the current one). Both paths drop that user's sessions, so a change signs other devices out.
+- Password hashing (`hashPassword`, `newSalt`, `verifyPassword`) lives in **db.js**, beside the users table — `server.js` and `set-password.js` both import it so scrypt parameters can't drift apart.
+- `isAdmin(req)` and `isSignedIn(req)` are **async** now — always `await` them. `requireAdmin` / `requireAuth` are middleware built on the `route()` wrapper.
 
 ## Feature flags in .env
 - `ENABLE_FUNDAMENTALS=true` — requires Twelve Data Pro+ plan

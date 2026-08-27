@@ -53,6 +53,20 @@ const ANALYST_ENABLED = process.env.ENABLE_ANALYST === 'true';
 const MAX_PROFILE_FETCHES_PER_CALL = ANALYST_ENABLED ? 4 : 6;
 const SYMBOL_RE = /^[A-Z0-9.\-]{1,12}$/;
 
+// Registration gate. When SIGNUP_CODE is set, a new account must supply it —
+// that is what makes this a door rather than an open sign-up sheet. Unset (the
+// default) leaves registration open, which is fine locally but not in public.
+const SIGNUP_CODE = process.env.SIGNUP_CODE || '';
+const SESSION_COOKIE = 'sp_session';
+const SESSION_DAYS = 30;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const MIN_PASSWORD = 8;
+// Lock an account briefly after repeated wrong passwords. Tracked per user row
+// rather than per IP, because an in-memory counter is useless on serverless
+// where every request may hit a fresh instance.
+const MAX_FAILED = 8;
+const LOCK_MS = 15 * 60 * 1000;
+
 app.set('trust proxy', 1); // so req.secure reflects an HTTPS reverse proxy when published
 app.use(express.json());
 
@@ -66,16 +80,27 @@ const route = (fn) => (req, res, next) =>
   });
 
 // Log every public page load before static files are served.
-app.get(['/', '/index.html'], (req, res, next) => {
+app.get(['/', '/index.html'], route(async (req, res, next) => {
+  // The door: the screener is only served to signed-in users.
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  // isSignedIn() above already resolved and cached the user on req, so this
+  // costs nothing extra. Null means either a pre-accounts row or someone signed
+  // in with ADMIN_PASSWORD, which has no account behind it.
+  const who = await currentUser(req);
   const entry = {
     ts: new Date().toISOString(),
     ip: req.ip || null,
     ua: req.headers['user-agent'] || null,
     ref: req.headers['referer'] || req.headers['referrer'] || null,
+    userEmail: who ? who.email : (AUTH_REQUIRED ? 'admin (legacy login)' : null),
   };
   // Fire and forget: a logging failure must never block the page load.
   store.logVisit(entry).catch(() => { /* ignore */ });
   next();
+}));
+
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -111,39 +136,188 @@ function safeEqual(a, b) {
   return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
 }
 
-function isAdmin(req) {
-  if (!AUTH_REQUIRED) return true; // no password configured → open
-  const tok = parseCookies(req)[ADMIN_COOKIE];
-  return !!tok && safeEqual(tok, adminToken());
+// ---- accounts: sessions and gates ------------------------------------------
+// Password hashing lives in db.js beside the users table, so this file and the
+// local set-password script can't drift apart on scrypt parameters.
+const { hashPassword, newSalt, verifyPassword } = store;
+
+// Resolves the signed-in user for a request, or null. Cached on req so a single
+// request never queries the sessions table twice.
+async function currentUser(req) {
+  if (req._user !== undefined) return req._user;
+  const token = parseCookies(req)[SESSION_COOKIE];
+  req._user = token ? await store.getSessionUser(token) : null;
+  return req._user;
 }
 
-function requireAdmin(req, res, next) {
-  if (isAdmin(req)) return next();
-  res.status(403).json({ error: 'Admin only — log in to make changes.' });
-}
-
-app.get('/api/me', (req, res) => {
-  res.json({ admin: isAdmin(req), authRequired: AUTH_REQUIRED });
-});
-
-app.post('/api/login', (req, res) => {
-  if (!AUTH_REQUIRED) return res.json({ ok: true, admin: true });
-  if (!safeEqual(String(req.body?.password || ''), ADMIN_PASSWORD)) {
-    return res.status(401).json({ error: 'Incorrect password.' });
-  }
-  res.cookie(ADMIN_COOKIE, adminToken(), {
+function setSessionCookie(res, token) {
+  res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-    secure: req.secure, // set only over HTTPS (true behind an HTTPS proxy)
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: SESSION_DAYS * 24 * 60 * 60 * 1000,
   });
-  res.json({ ok: true, admin: true });
+}
+
+// Admin = the legacy ADMIN_PASSWORD cookie (kept so you can never lock yourself
+// out of your own instance) or a signed-in user whose role is 'owner'.
+async function isAdmin(req) {
+  if (!AUTH_REQUIRED) return true; // no password configured → open (local dev)
+  const tok = parseCookies(req)[ADMIN_COOKIE];
+  if (tok && safeEqual(tok, adminToken())) return true;
+  const u = await currentUser(req);
+  return !!u && u.role === 'owner';
+}
+
+// The door: any signed-in user, or an admin by either route.
+async function isSignedIn(req) {
+  if (!AUTH_REQUIRED) return true;
+  if (await isAdmin(req)) return true;
+  return !!(await currentUser(req));
+}
+
+const requireAdmin = route(async (req, res, next) => {
+  if (await isAdmin(req)) return next();
+  res.status(403).json({ error: 'Admin only — log in to make changes.' });
 });
 
-app.post('/api/logout', (req, res) => {
+const requireAuth = route(async (req, res, next) => {
+  if (await isSignedIn(req)) return next();
+  res.status(401).json({ error: 'Please sign in.' });
+});
+
+app.get('/api/me', route(async (req, res) => {
+  const u = await currentUser(req);
+  const admin = await isAdmin(req);
+  res.json({
+    admin,
+    authRequired: AUTH_REQUIRED,
+    signedIn: await isSignedIn(req),
+    user: u ? { email: u.email, role: u.role } : (admin && AUTH_REQUIRED ? { email: null, role: 'owner' } : null),
+    signupCodeRequired: !!SIGNUP_CODE,
+  });
+}));
+
+// Create an account. The first account created becomes the owner, so a fresh
+// install can bootstrap itself; everyone after that is a read-only member.
+app.post('/api/register', route(async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+  const code = String(req.body?.code || '');
+
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+  if (password.length < MIN_PASSWORD) {
+    return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD} characters.` });
+  }
+  if (SIGNUP_CODE && !safeEqual(code, SIGNUP_CODE)) {
+    return res.status(403).json({ error: 'That invite code is not valid.' });
+  }
+  if (await store.findUserByEmail(email)) {
+    return res.status(409).json({ error: 'An account with that email already exists.' });
+  }
+
+  const salt = newSalt();
+  const passwordHash = await hashPassword(password, salt);
+  const role = (await store.countUsers()) === 0 ? 'owner' : 'member';
+  const user = await store.createUser({ email, passwordHash, salt, role });
+
+  const token = crypto.randomBytes(32).toString('hex');
+  await store.createSession(token, Number(user.id), Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  setSessionCookie(res, token);
+  res.json({ ok: true, user: { email, role } });
+}));
+
+// Sign in with an account. Passing only a password (no email) still works and
+// checks it against ADMIN_PASSWORD — that is the escape hatch that stops a
+// broken accounts table from locking you out of your own instance.
+app.post('/api/login', route(async (req, res) => {
+  if (!AUTH_REQUIRED) return res.json({ ok: true, admin: true });
+
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+
+  if (!email) {
+    if (!safeEqual(password, ADMIN_PASSWORD)) {
+      return res.status(401).json({ error: 'Incorrect password.' });
+    }
+    res.cookie(ADMIN_COOKIE, adminToken(), {
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      secure: req.secure, // set only over HTTPS (true behind an HTTPS proxy)
+    });
+    return res.json({ ok: true, admin: true });
+  }
+
+  const user = await store.findUserByEmail(email);
+  // Same response whether the email is unknown or the password is wrong, so the
+  // endpoint can't be used to enumerate who has an account.
+  const reject = () => res.status(401).json({ error: 'Incorrect email or password.' });
+  if (!user) return reject();
+
+  if (user.locked_until && Number(user.locked_until) > Date.now()) {
+    const mins = Math.ceil((Number(user.locked_until) - Date.now()) / 60000);
+    return res.status(429).json({ error: `Too many attempts. Try again in ${mins} minute(s).` });
+  }
+
+  if (!(await verifyPassword(password, user.salt, user.password_hash))) {
+    const failed = Number(user.failed_count || 0) + 1;
+    await store.noteLoginFailure(Number(user.id), failed >= MAX_FAILED ? Date.now() + LOCK_MS : null);
+    return reject();
+  }
+
+  await store.clearLoginFailures(Number(user.id));
+  const token = crypto.randomBytes(32).toString('hex');
+  await store.createSession(token, Number(user.id), Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  setSessionCookie(res, token);
+  res.json({ ok: true, admin: user.role === 'owner', user: { email: user.email, role: user.role } });
+}));
+
+app.post('/api/logout', route(async (req, res) => {
+  const token = parseCookies(req)[SESSION_COOKIE];
+  if (token) await store.deleteSession(token);
+  res.clearCookie(SESSION_COOKIE);
   res.clearCookie(ADMIN_COOKIE);
   res.json({ ok: true });
-});
+}));
+
+// Change your own password. Requires the current one, and every other session
+// for that account is dropped, so a change signs out other devices.
+app.post('/api/password', requireAuth, route(async (req, res) => {
+  const me = await currentUser(req);
+  if (!me) {
+    return res.status(400).json({ error: 'Password changes need an account — you are signed in with ADMIN_PASSWORD.' });
+  }
+  const current = String(req.body?.currentPassword || '');
+  const next = String(req.body?.newPassword || '');
+  if (next.length < MIN_PASSWORD) {
+    return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD} characters.` });
+  }
+  const user = await store.findUserByEmail(me.email);
+  if (!user || !(await verifyPassword(current, user.salt, user.password_hash))) {
+    return res.status(401).json({ error: 'Current password is incorrect.' });
+  }
+  await store.setPassword(Number(user.id), next);
+  res.clearCookie(SESSION_COOKIE);
+  res.json({ ok: true });
+}));
+
+// Owner-only: see who has an account, and revoke one.
+app.get('/api/users', requireAdmin, route(async (req, res) => {
+  res.json({ users: await store.listUsers() });
+}));
+
+app.delete('/api/users/:id', requireAdmin, route(async (req, res) => {
+  const id = Number(req.params.id);
+  const users = await store.listUsers();
+  const target = users.find((u) => u.id === id);
+  if (!target) return res.status(404).json({ error: 'User not found.' });
+  if (target.role === 'owner' && users.filter((u) => u.role === 'owner').length === 1) {
+    return res.status(409).json({ error: 'Cannot remove the only owner.' });
+  }
+  await store.deleteUser(id);
+  res.json({ ok: true });
+}));
 
 // ---- Portfolio helpers (persistence lives in db.js) ------------------------
 
@@ -679,7 +853,7 @@ function computeScores(m) {
 
 // ---- API: portfolios (management) ------------------------------------------
 
-app.get('/api/portfolios', route(async (req, res) => {
+app.get('/api/portfolios', requireAuth, route(async (req, res) => {
   res.json({ portfolios: await readPortfolios() });
 }));
 
@@ -984,7 +1158,7 @@ async function computeStocks(asOf) {
 
 // Snapshot: the public sees the last computed data (no live API calls). Admin
 // refreshes recompute live and overwrite it.
-app.get('/api/stocks', route(async (req, res) => {
+app.get('/api/stocks', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store'); // never let the browser serve a stale copy
 
   // Backtest mode: ?asOf=YYYY-MM-DD recomputes momentum as it looked on that date.
@@ -995,7 +1169,7 @@ app.get('/api/stocks', route(async (req, res) => {
   const wantLive = !!asOf || req.query.refresh === '1';
 
   if (wantLive) {
-    if (!isAdmin(req)) {
+    if (!(await isAdmin(req))) {
       return res.status(403).json({ error: 'Admin only — log in to refresh or run a backtest.' });
     }
     const r = await computeStocks(asOf);
@@ -1009,7 +1183,7 @@ app.get('/api/stocks', route(async (req, res) => {
   if (snap) return res.json({ ...snap, fromSnapshot: true });
 
   // No snapshot yet: an admin (or open/local mode) computes and seeds the first one.
-  if (isAdmin(req)) {
+  if (await isAdmin(req)) {
     const r = await computeStocks(null);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
     await writeSnapshot({ ...r.payload, snapshotAt: r.payload.updatedAt });

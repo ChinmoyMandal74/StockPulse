@@ -503,6 +503,37 @@
                      color: var(--faint); font-size: 10.5px; line-height: 1.5; }
 
     /* ==========================================================================
+       Change-password dialog
+       ==========================================================================
+       A native <dialog> so focus trapping, Escape and the top layer come for
+       free — no z-index juggling against the grain and menu layers. */
+    dialog.modal {
+      width: min(400px, calc(100vw - 32px)); padding: 6px; border: 1px solid var(--hair);
+      border-radius: var(--r-shell); background: var(--shell); color: var(--text);
+      box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.95);
+    }
+    dialog.modal::backdrop { background: rgba(5, 5, 5, 0.7); backdrop-filter: blur(6px); }
+    dialog.modal .core { padding: 24px 24px 22px; }
+    dialog.modal h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.02em; }
+    dialog.modal .sub { margin: 8px 0 18px; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+    dialog.modal label { display: block; margin: 0 0 6px; font-size: 10px; font-weight: 500;
+                         text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    dialog.modal .row-f { margin-bottom: 13px; }
+    dialog.modal input {
+      width: 100%; padding: 10px 13px; border-radius: 12px; outline: none;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+      color: var(--text); font-family: var(--sans); font-size: 13.5px; box-shadow: var(--inset);
+      transition: border-color 0.5s var(--ease), background 0.5s var(--ease);
+    }
+    dialog.modal input:focus { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.055); }
+    dialog.modal .actions { display: flex; gap: 8px; margin-top: 18px; }
+    dialog.modal .actions .btn { flex: 1; justify-content: center; }
+    dialog.modal .note { display: none; margin-top: 14px; font-size: 12px; line-height: 1.5; }
+    dialog.modal .note.show { display: block; }
+    dialog.modal .note.err { color: var(--red); }
+    dialog.modal .note.ok { color: var(--green); }
+
+    /* ==========================================================================
        Scroll-entry choreography
        ========================================================================== */
     .reveal {
@@ -628,17 +659,17 @@
           <span class="lbl">Export to Excel</span>
           <span class="nub"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-download" /></svg></span>
         </button>
-        <button class="btn icon quiet" id="loginBtn" style="display:none" title="Log in to unlock refresh, backtest and ticker editing" aria-label="Admin login">
+        <button class="btn icon quiet" id="loginBtn" style="display:none" title="Sign in" aria-label="Sign in">
           <svg class="ic" aria-hidden="true"><use href="#i-lock" /></svg>
         </button>
 
         <div class="picker" id="morePicker" data-open="0">
-          <button class="btn icon quiet admin-only" id="moreBtn" title="More actions" aria-haspopup="menu" aria-expanded="false" aria-label="More actions">
+          <button class="btn icon quiet" id="moreBtn" style="display:none" title="More actions" aria-haspopup="menu" aria-expanded="false" aria-label="More actions">
             <svg class="ic" aria-hidden="true"><use href="#i-dots" /></svg>
           </button>
           <div class="picker-menu" id="moreMenu" role="menu" aria-label="More actions">
             <div class="picker-inner">
-              <button class="pick" id="refreshAllBtn" title="Clear cached sector / fundamentals / analyst data and re-pull everything fresh from the API">
+              <button class="pick admin-only" id="refreshAllBtn" title="Clear cached sector / fundamentals / analyst data and re-pull everything fresh from the API">
                 <svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh-all" /></svg>
                 <span class="nm">Refresh all data</span>
               </button>
@@ -658,10 +689,15 @@
                 </button>
               </div>
               <div id="sessionActions" style="display:none">
-                <div class="pick-sep"></div>
+                <div class="pick-sep" id="sessionSep"></div>
+                <div class="pick" id="whoami" style="display:none;cursor:default;color:var(--faint);font-family:var(--mono);font-size:11px"></div>
+                <button class="pick" id="changePwBtn" style="display:none">
+                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-lock" /></svg>
+                  <span class="nm">Change password</span>
+                </button>
                 <button class="pick" id="logoutBtn">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-logout" /></svg>
-                  <span class="nm">Log out</span>
+                  <span class="nm">Sign out</span>
                 </button>
               </div>
             </div>
@@ -686,6 +722,34 @@
     <div class="error" id="error"></div>
 
     <div id="tip"></div>
+
+    <dialog class="modal" id="pwDialog">
+      <div class="core">
+        <h2>Change password</h2>
+        <p class="sub">You will be signed out on every device and asked to sign in again.</p>
+        <form id="pwForm">
+          <div class="row-f">
+            <label for="pwCurrent">Current password</label>
+            <input type="password" id="pwCurrent" autocomplete="current-password" required />
+          </div>
+          <div class="row-f">
+            <label for="pwNew">New password</label>
+            <input type="password" id="pwNew" autocomplete="new-password" minlength="8" required />
+          </div>
+          <div class="row-f">
+            <label for="pwConfirm">Confirm new password</label>
+            <input type="password" id="pwConfirm" autocomplete="new-password" minlength="8" required />
+          </div>
+          <div class="note" id="pwNote"></div>
+          <div class="actions">
+            <button type="button" class="btn" id="pwCancel">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="pwSave" style="padding:9px 15px">
+              <span class="lbl">Update password</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </dialog>
 
     <div class="bezel table-bezel reveal">
     <div class="core">
@@ -767,8 +831,10 @@
     let sortDir = -1;          // -1 desc, 1 asc
     let lastUpdated = null;    // when /api/stocks was last pulled (live data)
     let asOfDate = null;       // backtest: view momentum as of this past date (YYYY-MM-DD)
-    let isAdmin = true;        // may add/remove tickers, refresh, backtest (true = open/local or logged in)
-    let authRequired = false;  // server has an ADMIN_PASSWORD set (published, read-only for the public)
+    let isAdmin = true;        // may add/remove tickers, refresh, backtest (true = open/local or owner)
+    let authRequired = false;  // server has an ADMIN_PASSWORD set (published, sign-in required)
+    let signedIn = true;       // has a live session (or the app is open/local)
+    let currentUser = null;    // { email, role } once signed in
 
     const GROUPS = ['info', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
     const GROUP_COLORS = {
@@ -800,6 +866,10 @@
       if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
       const res = await fetch(url, opt);
       const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {   // session lapsed — back to the door
+        window.location.href = '/login';
+        throw new Error('Session expired. Redirecting to sign in…');
+      }
       if (!res.ok) throw new Error(data.error || 'Request failed');
       return data;
     }
@@ -1463,38 +1533,41 @@
         const me = await api('GET', '/api/me');
         isAdmin = !!me.admin;
         authRequired = !!me.authRequired;
+        signedIn = me.signedIn !== false;
+        currentUser = me.user || null;
       } catch {
-        isAdmin = true; authRequired = false;
+        isAdmin = true; authRequired = false; signedIn = true; currentUser = null;
       }
       applyAdminUI();
     }
 
     function applyAdminUI() {
       document.querySelectorAll('.admin-only').forEach((el) => { el.style.display = isAdmin ? '' : 'none'; });
-      $('loginBtn').style.display = (authRequired && !isAdmin) ? '' : 'none';
-      $('sessionActions').style.display = (authRequired && isAdmin) ? '' : 'none';
+      // Signing in is its own page now, so this button is only a nudge back to
+      // the door — it appears if a session lapsed while the tab was open.
+      $('loginBtn').style.display = (authRequired && !signedIn) ? '' : 'none';
+      // Anyone signed in can sign out, member or owner.
+      $('sessionActions').style.display = (authRequired && signedIn) ? '' : 'none';
+      // The ⋯ menu doubles as the account menu, so anyone signed in needs it —
+      // for a member it holds nothing but their email and Sign out.
+      $('moreBtn').style.display = (isAdmin || (authRequired && signedIn)) ? '' : 'none';
+      // No divider above Sign out when it is the first item in the menu.
+      $('sessionSep').style.display = isAdmin ? '' : 'none';
       $('readonlyNote').style.display = (authRequired && !isAdmin) ? '' : 'none';
+      const who = $('whoami');
+      if (who) {
+        who.textContent = currentUser && currentUser.email ? currentUser.email : '';
+        who.style.display = currentUser && currentUser.email ? '' : 'none';
+      }
+      // An ADMIN_PASSWORD login has no user row behind it, so nothing to change.
+      $('changePwBtn').style.display = currentUser && currentUser.email ? '' : 'none';
     }
 
-    async function doLogin() {
-      const pw = window.prompt('Admin password:');
-      if (pw == null || pw === '') return;
-      setError('');
-      try {
-        await api('POST', '/api/login', { password: pw });
-        isAdmin = true;
-        applyAdminUI();
-        render();
-        setStatus('Logged in as admin.');
-      } catch (err) { setError(err.message); }
-    }
+    function doLogin() { window.location.href = '/login'; }
 
     async function doLogout() {
       try { await api('POST', '/api/logout'); } catch { /* ignore */ }
-      isAdmin = false;
-      asOfDate = null; $('asOfDate').value = '';
-      applyAdminUI();
-      await refresh({ live: false });
+      window.location.href = '/login';
     }
 
     // live !== false → recompute from the API (admin Refresh / backtest) and save the
@@ -1679,6 +1752,43 @@
       asOfDate = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
       refresh();
     });
+    // ---- change password ----
+    function pwNote(text, kind) {
+      const n = $('pwNote');
+      n.className = 'note' + (text ? ' show ' + kind : '');
+      n.textContent = text || '';
+    }
+    $('changePwBtn').addEventListener('click', () => {
+      closePickers();
+      $('pwForm').reset();
+      pwNote('');
+      $('pwDialog').showModal();
+    });
+    $('pwCancel').addEventListener('click', () => $('pwDialog').close());
+    $('pwForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if ($('pwNew').value !== $('pwConfirm').value) return pwNote('The new passwords do not match.', 'err');
+      $('pwSave').disabled = true;
+      pwNote('');
+      try {
+        // Deliberately not api(): that redirects on 401, but here a 401 means a
+        // wrong current password and should stay on the dialog.
+        const res = await fetch('/api/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({ currentPassword: $('pwCurrent').value, newPassword: $('pwNew').value }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not change the password.');
+        pwNote('Password updated. Signing you in again…', 'ok');
+        setTimeout(() => { window.location.href = '/login'; }, 1200);
+      } catch (err) {
+        pwNote(err.message, 'err');
+        $('pwSave').disabled = false;
+      }
+    });
+
     $('exportBtn').addEventListener('click', exportExcel);
     $('loginBtn').addEventListener('click', doLogin);
     $('logoutBtn').addEventListener('click', doLogout);

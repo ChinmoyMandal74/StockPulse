@@ -128,6 +128,7 @@
     .stat:nth-child(1) .val { color: var(--accent); }
     .stat:nth-child(2) .val { color: var(--green); }
     .stat:nth-child(3) .val { color: var(--accent-2); }
+    @media (max-width: 768px) { .who { max-width: 30vw; } }
 
     .table-wrap {
       overflow: auto; max-height: calc(100dvh - 420px); min-height: 260px;
@@ -152,6 +153,9 @@
     @keyframes rowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
     .ts { font-family: var(--mono); font-size: 11.5px; white-space: nowrap; letter-spacing: -0.02em; }
     .ip { font-family: var(--mono); font-size: 11.5px; color: var(--accent); letter-spacing: -0.01em; }
+    .who { font-family: var(--mono); font-size: 11.5px; color: var(--green); white-space: nowrap;
+           max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+    .who.dash { color: var(--faint); }
     .ua { color: var(--muted); max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ref { color: var(--muted); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dash { color: var(--faint); }
@@ -249,26 +253,31 @@
           return;
         }
         const data = await fetch('/api/visitors').then(r => r.json());
-        const { total, todayCount, uniqueIps, entries } = data;
+        const { total, todayCount, uniqueIps, uniqueUsers, entries } = data;
 
         let html = `
           <div class="stats">
             <div class="stat bezel reveal"><div class="core"><div class="k">Total visits</div><div class="val">${total.toLocaleString()}</div></div></div>
             <div class="stat bezel reveal" style="--d:90ms"><div class="core"><div class="k">Today</div><div class="val">${todayCount.toLocaleString()}</div></div></div>
-            <div class="stat bezel reveal" style="--d:150ms"><div class="core"><div class="k">Unique IPs</div><div class="val">${uniqueIps.toLocaleString()}</div></div></div>
+            <div class="stat bezel reveal" style="--d:150ms"><div class="core"><div class="k">Signed-in users</div><div class="val">${(uniqueUsers ?? 0).toLocaleString()}</div></div></div>
           </div>`;
 
         if (entries.length === 0) {
           html += '<div class="bezel reveal"><div class="core"><div class="empty">No visits logged yet.</div></div></div>';
         } else {
           html += `<div class="bezel reveal" style="--d:210ms"><div class="core"><div class="table-wrap"><table>
-            <thead><tr><th>Time</th><th>IP</th><th>User agent</th><th>Referrer</th></tr></thead>
+            <thead><tr><th>Time</th><th>User</th><th>IP</th><th>User agent</th><th>Referrer</th></tr></thead>
             <tbody>`;
           entries.forEach((e, i) => {
             const ts = new Date(e.ts).toLocaleString();
             const ua = e.ua ? `<td class="ua" title="${esc(e.ua)}">${esc(e.ua)}</td>` : '<td class="ua dash">—</td>';
             const ref = e.ref ? `<td class="ref" title="${esc(e.ref)}">${esc(e.ref)}</td>` : '<td class="ref dash">—</td>';
-            html += `<tr style="--i:${i}"><td class="ts">${esc(ts)}</td><td class="ip">${esc(e.ip || '—')}</td>${ua}${ref}</tr>`;
+            // Null means the visit predates accounts, or was an ADMIN_PASSWORD
+            // login, which has no account behind it.
+            const who = e.user
+              ? `<td class="who">${esc(e.user)}</td>`
+              : '<td class="who dash" title="Before accounts existed, or an ADMIN_PASSWORD login">—</td>';
+            html += `<tr style="--i:${i}"><td class="ts">${esc(ts)}</td>${who}<td class="ip">${esc(e.ip || '—')}</td>${ua}${ref}</tr>`;
           });
           html += '</tbody></table></div></div></div>';
           if (total > 500) html += `<p class="note">Showing the most recent 500 of ${total.toLocaleString()} visits.</p>`;

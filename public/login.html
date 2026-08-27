@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Sign in — Ticker Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /* Same visual system as the screener: Ethereal Glass + double-bezel surfaces. */
+    :root {
+      color-scheme: dark;
+      --void: #050505;
+      --surface: #0a0c11;
+      --shell: rgba(255, 255, 255, 0.028);
+      --hair: rgba(255, 255, 255, 0.07);
+      --hair-2: rgba(255, 255, 255, 0.13);
+      --inset: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+      --text: #e9ecf2;
+      --muted: #8b94a4;
+      --faint: #59616f;
+      --green: #34d399;
+      --red: #fb7185;
+      --accent: #7c9cff;
+      --ease: cubic-bezier(0.32, 0.72, 0, 1);
+      --ease-soft: cubic-bezier(0.16, 1, 0.3, 1);
+      --sans: 'Geist', ui-sans-serif, system-ui, 'Segoe UI Variable Text', sans-serif;
+      --mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', 'SF Mono', monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100dvh; overflow-x: clip;
+      background: var(--void); color: var(--text);
+      font-family: var(--sans); font-size: 14px; line-height: 1.5;
+      letter-spacing: -0.01em; -webkit-font-smoothing: antialiased;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .aura {
+      position: fixed; inset: -10%; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(46vw 40vw at 12% 4%, rgba(52, 211, 153, 0.13), transparent 62%),
+        radial-gradient(50vw 44vw at 92% 96%, rgba(124, 156, 255, 0.13), transparent 64%);
+      animation: drift 44s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+      will-change: transform;
+    }
+    @keyframes drift {
+      from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
+      to   { transform: translate3d(2%, 1.5%, 0) scale(1.06); }
+    }
+    .grain {
+      position: fixed; inset: 0; z-index: 60; pointer-events: none;
+      opacity: 0.038; mix-blend-mode: overlay; background-size: 170px 170px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='170' height='170' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+    .ic { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
+          stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+    #sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+    .bezel {
+      position: relative; z-index: 1; width: 100%; max-width: 420px;
+      background: var(--shell); border: 1px solid var(--hair); border-radius: 26px;
+      padding: 6px; box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.95);
+    }
+    .core {
+      background:
+        radial-gradient(90% 60% at 0% 0%, rgba(52, 211, 153, 0.07), transparent 60%),
+        radial-gradient(80% 60% at 100% 100%, rgba(124, 156, 255, 0.07), transparent 62%),
+        var(--surface);
+      border-radius: 20px; box-shadow: var(--inset); padding: 30px 28px;
+    }
+
+    .brand { display: inline-flex; align-items: baseline; gap: 6px; margin: 0;
+             font-size: 19px; font-weight: 600; letter-spacing: -0.03em; }
+    .brand .w2 {
+      background: linear-gradient(100deg, #9aa4b6 10%, #5d6474 92%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .lede { margin: 10px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+
+    .tabs { display: flex; gap: 4px; margin: 22px 0 18px; padding: 4px;
+            border: 1px solid var(--hair); border-radius: 999px; background: rgba(255, 255, 255, 0.03); }
+    .tab {
+      flex: 1; padding: 8px 12px; border: 0; border-radius: 999px; cursor: pointer;
+      background: none; color: var(--muted); font-family: var(--sans);
+      font-size: 12.5px; font-weight: 500; line-height: 1;
+      transition: background 0.5s var(--ease), color 0.5s var(--ease);
+    }
+    .tab:hover { color: var(--text); }
+    .tab[aria-selected="true"] { background: rgba(255, 255, 255, 0.085); color: #fff; box-shadow: var(--inset); }
+
+    label { display: block; margin: 0 0 6px; font-size: 10px; font-weight: 500;
+            text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    .field { margin-bottom: 14px; }
+    input {
+      width: 100%; padding: 11px 14px; border-radius: 12px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+      color: var(--text); font-family: var(--sans); font-size: 13.5px;
+      box-shadow: var(--inset); outline: none;
+      transition: border-color 0.5s var(--ease), background 0.5s var(--ease);
+    }
+    input:focus { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.055); }
+    input::placeholder { color: var(--faint); }
+    .hint { margin: 6px 0 0; font-size: 11px; color: var(--faint); }
+
+    .btn {
+      width: 100%; margin-top: 6px; padding: 12px 16px; border-radius: 999px;
+      border: 1px solid transparent; cursor: pointer;
+      background: linear-gradient(180deg, #ffffff, #dee3ed); color: #07090d;
+      font-family: var(--sans); font-size: 13.5px; font-weight: 600; line-height: 1;
+      box-shadow: 0 14px 34px -14px rgba(255, 255, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      transition: transform 0.4s var(--ease), background 0.5s var(--ease);
+    }
+    .btn:hover { background: linear-gradient(180deg, #ffffff, #e9edf5); }
+    .btn:active { transform: scale(0.985); }
+    .btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+    .msg { display: none; align-items: flex-start; gap: 9px; margin-top: 16px;
+           font-size: 12.5px; line-height: 1.5; }
+    .msg.show { display: flex; }
+    .msg.err { color: var(--red); }
+    .msg.ok { color: var(--green); }
+    .msg .ic { margin-top: 1px; }
+
+    .foot { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--hair);
+            font-size: 11.5px; color: var(--faint); line-height: 1.6; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.6 21 19.4H3L12 4.6Z"/><path d="M12 10.4v3.8M12 17.1v.1"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.6 9.8 17.4 19 6.6"/></symbol>
+  </svg>
+
+  <main class="bezel">
+    <div class="core">
+      <h1 class="brand"><span class="w1">Ticker</span> <span class="w2">Lab</span></h1>
+      <p class="lede" id="lede">Sign in to view the screener.</p>
+
+      <div class="tabs" role="tablist">
+        <button class="tab" id="tabSignin" role="tab" aria-selected="true">Sign in</button>
+        <button class="tab" id="tabRegister" role="tab" aria-selected="false">Create account</button>
+      </div>
+
+      <form id="form" autocomplete="on">
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" autocomplete="email" placeholder="you@example.com" required />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" placeholder="••••••••" required />
+          <p class="hint" id="pwHint" style="display:none">At least 8 characters.</p>
+        </div>
+        <div class="field" id="codeField" style="display:none">
+          <label for="code">Invite code</label>
+          <input type="text" id="code" name="code" autocomplete="off" placeholder="Ask the owner for this" />
+        </div>
+        <button class="btn" id="submit" type="submit">Sign in</button>
+      </form>
+
+      <div class="msg" id="msg"><svg class="ic" aria-hidden="true"><use href="#i-warn" /></svg><span id="msgText"></span></div>
+
+      <p class="foot" id="foot">Everyone signed in sees the same shared screener. Only the owner can add tickers, refresh data or run a backtest.</p>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let mode = 'signin';
+    let signupCodeRequired = false;
+
+    function setMsg(text, kind) {
+      const box = $('msg');
+      if (!text) { box.classList.remove('show'); return; }
+      box.className = 'msg show ' + (kind || 'err');
+      box.querySelector('use').setAttribute('href', kind === 'ok' ? '#i-check' : '#i-warn');
+      $('msgText').textContent = text;
+    }
+
+    function setMode(next) {
+      mode = next;
+      const reg = mode === 'register';
+      $('tabSignin').setAttribute('aria-selected', String(!reg));
+      $('tabRegister').setAttribute('aria-selected', String(reg));
+      $('submit').textContent = reg ? 'Create account' : 'Sign in';
+      $('lede').textContent = reg
+        ? 'Create an account to view the screener.'
+        : 'Sign in to view the screener.';
+      $('pwHint').style.display = reg ? '' : 'none';
+      $('codeField').style.display = reg && signupCodeRequired ? '' : 'none';
+      $('password').setAttribute('autocomplete', reg ? 'new-password' : 'current-password');
+      setMsg('');
+    }
+
+    $('tabSignin').addEventListener('click', () => setMode('signin'));
+    $('tabRegister').addEventListener('click', () => setMode('register'));
+
+    $('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      setMsg('');
+      $('submit').disabled = true;
+      const body = {
+        email: $('email').value.trim(),
+        password: $('password').value,
+        code: $('code').value.trim(),
+      };
+      try {
+        const res = await fetch(mode === 'register' ? '/api/register' : '/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+        setMsg(mode === 'register' ? 'Account created — taking you in…' : 'Signed in — taking you in…', 'ok');
+        window.location.href = '/';
+      } catch (err) {
+        setMsg(err.message);
+        $('submit').disabled = false;
+      }
+    });
+
+    // If a session is already live, skip the form entirely.
+    (async () => {
+      try {
+        const me = await fetch('/api/me', { cache: 'no-store' }).then((r) => r.json());
+        signupCodeRequired = !!me.signupCodeRequired;
+        if (me.signedIn) { window.location.href = '/'; return; }
+      } catch { /* show the form */ }
+      setMode('signin');
+    })();
+  </script>
+</body>
+</html>
