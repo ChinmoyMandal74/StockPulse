@@ -503,6 +503,41 @@
                      color: var(--faint); font-size: 10.5px; line-height: 1.5; }
 
     /* ==========================================================================
+       Row card — every column for one row, on hover
+       ========================================================================== */
+    #rowcard {
+      position: fixed; display: none; z-index: var(--z-tip);
+      width: 660px; max-width: calc(100vw - 24px);
+      padding: 6px; border-radius: 20px;
+      background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+      backdrop-filter: blur(26px) saturate(160%); -webkit-backdrop-filter: blur(26px) saturate(160%);
+      box-shadow: 0 40px 80px -28px rgba(0, 0, 0, 0.95);
+      font-size: 11.5px; color: var(--text); pointer-events: none;
+    }
+    #rowcard .rc-core { background: rgba(10, 12, 17, 0.92); border-radius: 15px;
+                        padding: 14px 16px; box-shadow: var(--inset); }
+    #rowcard .rc-head { display: flex; align-items: baseline; gap: 10px;
+                        padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--hair); }
+    #rowcard .rc-sym { font-family: var(--mono); font-size: 14px; font-weight: 600; letter-spacing: 0.02em; }
+    #rowcard .rc-name { color: var(--muted); font-size: 12px; min-width: 0;
+                        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #rowcard .rc-price { margin-left: auto; font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+    #rowcard .rc-cols { column-count: 3; column-gap: 20px; }
+    #rowcard .rc-sec { break-inside: avoid; margin-bottom: 11px; }
+    #rowcard .rc-sec-h { font-size: 9px; font-weight: 500; text-transform: uppercase;
+                         letter-spacing: 0.18em; margin-bottom: 4px;
+                         display: flex; align-items: center; gap: 6px; }
+    #rowcard .rc-sec-h i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none; }
+    #rowcard .rc-row { display: flex; align-items: baseline; gap: 8px; line-height: 1.75; }
+    #rowcard .rc-k { color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #rowcard .rc-v { margin-left: auto; font-family: var(--mono); font-size: 11px;
+                     white-space: nowrap; font-variant-numeric: tabular-nums; }
+    #rowcard .rc-foot { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--hair);
+                        color: var(--faint); font-size: 10.5px; }
+    /* the hover target */
+    td.name { cursor: help; }
+
+    /* ==========================================================================
        Change-password dialog
        ==========================================================================
        A native <dialog> so focus trapping, Escape and the top layer come for
@@ -722,6 +757,7 @@
     <div class="error" id="error"></div>
 
     <div id="tip"></div>
+    <div id="rowcard"></div>
 
     <dialog class="modal" id="pwDialog">
       <div class="core">
@@ -1286,6 +1322,7 @@
     function showTip(el) {
       const s = stocks.find((x) => x.symbol === el.dataset.sym);
       if (!s) return;
+      hideRowCard();
       const kind = el.dataset.kind;
       const pulled = lastUpdated ? ` · pulled ${fmtTime(lastUpdated)}` : '';
       let html;
@@ -1330,6 +1367,113 @@
       tip.style.top = top + 'px';
     }
     function hideTip() { tip.style.display = 'none'; }
+
+    // ---- Row card: every column for one row, on hover -----------------------
+    // Values are lifted straight from the row's own cells, so the card always
+    // agrees with the table — including columns whose group is collapsed.
+    const rowcard = $('rowcard');
+    let rowcardTimer = null;
+
+    // Leaf header labels in DOM order: the two rowspan headers, then the second
+    // header row, then the trailing remove column.
+    function leafHeaders() {
+      const first = [...document.querySelectorAll('thead tr:first-child th')].filter((th) => th.rowSpan === 2);
+      const second = [...document.querySelectorAll('thead tr:nth-child(2) th')];
+      const labels = [];
+      // Symbol and Name come first; the empty remove header is last.
+      for (const th of first.slice(0, 2)) labels.push(th.textContent.trim());
+      for (const th of second) labels.push(th.innerText.replace(/\s+/g, ' ').trim());
+      for (const th of first.slice(2)) labels.push(th.textContent.trim());
+      return labels;
+    }
+
+    function buildRowCard(tr) {
+      const sym = tr.querySelector('td.sym')?.textContent.trim() || '';
+      const s = stocks.find((x) => x.symbol === sym);
+      const labels = leafHeaders();
+      const tds = [...tr.children];
+
+      // Bucket every cell under its column group, in table order.
+      const order = [];
+      const byGroup = {};
+      tds.forEach((td, i) => {
+        const g = [...td.classList].find((c) => c.startsWith('grp-'));
+        if (!g) return;                       // symbol, name, remove
+        const id = g.slice(4);
+        if (!byGroup[id]) { byGroup[id] = []; order.push(id); }
+        const val = td.textContent.trim() || '—';
+        const cls = td.classList.contains('pos') ? 'pos'
+          : td.classList.contains('neg') ? 'neg'
+          : td.classList.contains('na') ? 'na' : '';
+        byGroup[id].push({ k: labels[i] || '', v: val, cls });
+      });
+
+      const sections = order.filter((id) => byGroup[id].some((r) => r.v !== '—')).map((id) => {
+        const c = GROUP_COLORS[id] || 'var(--accent)';
+        const rows = byGroup[id]
+          .map((r) => `<div class="rc-row"><span class="rc-k">${r.k}</span>` +
+                      `<span class="rc-v ${r.cls}">${r.v}</span></div>`)
+          .join('');
+        return `<div class="rc-sec"><div class="rc-sec-h" style="color:${c}"><i></i>` +
+               `${GROUP_LABELS[id] || id}</div>${rows}</div>`;
+      }).join('');
+
+      // innerText reflects the header's CSS text-transform, so labels arrive
+      // uppercased — match case-insensitively.
+      const priceIdx = labels.findIndex((l) => l.toLowerCase() === 'price');
+      const price = priceIdx >= 0 && tds[priceIdx] ? tds[priceIdx].textContent.trim() : '';
+      const stale = s && s.profileFetchedAt
+        ? `Company data cached ${fmtDateTime(s.profileFetchedAt)}`
+        : 'Company data not cached yet';
+
+      rowcard.innerHTML =
+        '<div class="rc-core">' +
+          `<div class="rc-head"><span class="rc-sym">${sym}</span>` +
+          `<span class="rc-name">${(s && s.name) || ''}</span>` +
+          `<span class="rc-price">${price}</span></div>` +
+          `<div class="rc-cols">${sections}</div>` +
+          `<div class="rc-foot">${stale}</div>` +
+        '</div>';
+    }
+
+    function showRowCard(td) {
+      const tr = td.closest('tr');
+      if (!tr || !tr.querySelector('td.sym')) return;   // error / empty rows
+      hideTip();
+      buildRowCard(tr);
+      rowcard.style.display = 'block';
+      // Prefer the right of the frozen Name column, then clamp to the viewport.
+      const r = td.getBoundingClientRect();
+      const pad = 10;
+      const w = rowcard.offsetWidth;
+      const h = rowcard.offsetHeight;
+      let left = r.right + 12;
+      if (left + w > window.innerWidth - pad) left = Math.max(pad, r.left - w - 12);
+      let top = r.top - 8;
+      if (top + h > window.innerHeight - pad) top = window.innerHeight - h - pad;
+      if (top < pad) top = pad;
+      rowcard.style.left = Math.round(left) + 'px';
+      rowcard.style.top = Math.round(top) + 'px';
+    }
+
+    function hideRowCard() {
+      clearTimeout(rowcardTimer);
+      rowcard.style.display = 'none';
+    }
+
+    // Delegated, so it keeps working after every re-render.
+    $('tbody').addEventListener('mouseover', (e) => {
+      const td = e.target.closest('td.name');
+      if (!td || !$('tbody').contains(td)) return;
+      clearTimeout(rowcardTimer);
+      // A short delay so the card does not fire while scanning down the column.
+      rowcardTimer = setTimeout(() => showRowCard(td), 140);
+    });
+    $('tbody').addEventListener('mouseout', (e) => {
+      const to = e.relatedTarget;
+      if (to && to.closest && to.closest('td.name')) return;   // moving within the cell
+      hideRowCard();
+    });
 
     // ---- Export current view to CSV (opens in Excel) ----
     function sortRows(rows) {
@@ -1740,8 +1884,8 @@
       th.addEventListener('click', () => toggleGroup(th.dataset.group));
     });
 
-    document.querySelector('.table-wrap').addEventListener('scroll', hideTip);
-    window.addEventListener('scroll', hideTip, true);
+    document.querySelector('.table-wrap').addEventListener('scroll', () => { hideTip(); hideRowCard(); });
+    window.addEventListener('scroll', () => { hideTip(); hideRowCard(); }, true);
 
     $('addBtn').addEventListener('click', addTicker);
     $('renameBtn').addEventListener('click', () => renamePortfolio());
@@ -1830,7 +1974,7 @@
     menuBtn.addEventListener('click', () => setSheet(!document.body.classList.contains('sheet-open')));
     $('deck').addEventListener('click', (e) => { if (e.target === $('deck')) setSheet(false); });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { setSheet(false); closePickers(); hideTip(); }
+      if (e.key === 'Escape') { setSheet(false); closePickers(); hideTip(); hideRowCard(); }
     });
     window.addEventListener('resize', () => {
       if (window.innerWidth > 768) setSheet(false);
