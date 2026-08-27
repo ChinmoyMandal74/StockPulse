@@ -1,7 +1,7 @@
 # StockPulse — Claude Code Context
 
 ## What this is
-A stock momentum screener POC. No database — all state lives in flat JSON files. Price data comes from the Twelve Data API. The owner (admin) manages portfolios and refreshes data; the public sees a read-only cached snapshot.
+A stock momentum screener POC. State lives in **Turso** (hosted libSQL/SQLite). Price data comes from the Twelve Data API. The owner (admin) manages portfolios and refreshes data; the public sees a read-only cached snapshot.
 
 The repo/folder is `StockPulse`; the app is branded **Ticker Lab** in the UI (`<title>` and the bar wordmark).
 
@@ -9,7 +9,7 @@ The repo/folder is `StockPulse`; the app is branded **Ticker Lab** in the UI (`<
 ```
 node --use-system-ca server.js
 ```
-Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY` and `ADMIN_PASSWORD`.
+Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` and `ADMIN_PASSWORD`.
 
 **Careful when running it just to look at the UI:** `computeStocks()` calls `ensureProfiles()`, which re-pulls any profile older than a day and rewrites `profiles.json` / `snapshot.json`, burning API credits. To check frontend changes only, serve `public/` with a throwaway static server instead — the page falls back to admin-open mode when `/api/me` fails, so the whole chrome renders without touching the API.
 
@@ -17,15 +17,23 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY` and `ADMIN_PASSWOR
 | File | Purpose |
 |---|---|
 | `server.js` | Express backend — all API routes, auth, data computation |
+| `db.js` | Turso persistence layer — every read/write goes through here |
+| `migrate-to-turso.js` | One-off JSON → Turso seeder; `--commit` to write, idempotent |
 | `public/index.html` | Single-page frontend (no build step, vanilla JS, all CSS inline) |
 | `public/visitors.html` | Admin-only visitor log page at `/visitors` |
 | `public/favicon.svg` | Momentum-line mark, emerald on OLED black |
-| `portfolios.json` | Portfolio → symbol membership (many-to-many) |
-| `snapshot.json` | Last computed screener data served to the public |
-| `profiles.json` | Cached sector/fundamentals per symbol (refreshed daily) |
-| `names.json` | Cached company names (fetched once on add) |
-| `visitors.log` | JSON Lines file — one entry per page load |
-| `.env` | `TWELVE_DATA_API_KEY`, `ADMIN_PASSWORD`, optional feature flags |
+| `portfolios.json`, `snapshot.json`, `profiles.json`, `names.json`, `visitors.log` | **Legacy.** Pre-migration backups only — nothing reads or writes them any more. Safe to delete once you trust the database. |
+| `.env` | `TWELVE_DATA_API_KEY`, `TURSO_*`, `ADMIN_PASSWORD`, optional feature flags |
+
+## Persistence (Turso)
+Everything goes through `db.js`. Tables: `portfolios`, `portfolio_tickers`, `names`, `profiles`, `snapshot`, `visitors`.
+
+- **The accessor names are unchanged** from the flat-file era (`readPortfolios`, `writeProfiles`, …) and return the same shapes, so call sites only gained an `await`. `server.js` destructures them from `db.js`.
+- **Writes are whole-collection replaces** — delete-then-insert inside one `db.batch`. That mirrors the old "rewrite the file" semantics and keeps `writeProfiles({})` working as the cache-clear `/api/refresh-all` depends on. Fine at tens of rows; revisit if the universe grows.
+- **Portfolio order is an explicit `position` column.** The UI colours portfolios by index, so order has to survive the round trip — don't rely on insertion order.
+- **`profiles.data` is a JSON blob** because it caches a third-party response whose shape we don't control. `fetched_at` is lifted into its own indexed column because the 24h TTL check runs against it every refresh.
+- **`/api/visitors` aggregates in SQL** now (counts + `LIMIT 500`), instead of parsing the whole log into memory on every request.
+- **Express 4 does not catch async handler rejections.** Every async route is wrapped in the `route()` helper near the top of `server.js`, which turns a database error into a 500 instead of a hung request. Any new async route must use it.
 
 ## Auth model
 - `ADMIN_PASSWORD` unset → fully open (local dev, everyone is admin)

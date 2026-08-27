@@ -5,7 +5,6 @@
 
 require('dotenv').config();
 const express = require('express');
-const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
@@ -13,12 +12,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.TWELVE_DATA_API_KEY;
 const TD_BASE = 'https://api.twelvedata.com';
-const TICKERS_FILE = path.join(__dirname, 'tickers.json'); // legacy, for one-time migration
-const PORTFOLIOS_FILE = path.join(__dirname, 'portfolios.json');
-const NAMES_FILE = path.join(__dirname, 'names.json');
-const PROFILES_FILE = path.join(__dirname, 'profiles.json');
-const SNAPSHOT_FILE = path.join(__dirname, 'snapshot.json'); // last computed data served to the public (read-only)
-const VISITORS_FILE = path.join(__dirname, 'visitors.log');
+// Persistence lives in Turso (libSQL). The accessors below keep the shapes the
+// old flat-file helpers returned, so this file only had to gain `await`s.
+// See db.js and migrate-to-turso.js.
+const store = require('./db');
+const {
+  readPortfolios, writePortfolios,
+  readNames, writeNames,
+  readProfiles, writeProfiles,
+  readSnapshot, writeSnapshot,
+} = store;
 const PROFILE_TTL_MS = 24 * 60 * 60 * 1000; // refresh sector/market cap once a day
 // Publishing: set ADMIN_PASSWORD in .env to make the app read-only for the public.
 // The public sees a cached snapshot; only an admin (logged in with this password)
@@ -52,6 +55,15 @@ const SYMBOL_RE = /^[A-Z0-9.\-]{1,12}$/;
 app.set('trust proxy', 1); // so req.secure reflects an HTTPS reverse proxy when published
 app.use(express.json());
 
+// Express 4 does not catch rejected promises from async handlers — an unhandled
+// rejection would hang the request and can take the process down. Every async
+// route below is wrapped so a database error becomes a normal 500 instead.
+const route = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch((err) => {
+    console.error(`${req.method} ${req.originalUrl} failed:`, err);
+    if (!res.headersSent) res.status(500).json({ error: 'Server error. Please try again.' });
+  });
+
 // Log every public page load before static files are served.
 app.get(['/', '/index.html'], (req, res, next) => {
   const entry = {
@@ -60,7 +72,8 @@ app.get(['/', '/index.html'], (req, res, next) => {
     ua: req.headers['user-agent'] || null,
     ref: req.headers['referer'] || req.headers['referrer'] || null,
   };
-  try { fs.appendFileSync(VISITORS_FILE, JSON.stringify(entry) + '\n'); } catch { /* ignore */ }
+  // Fire and forget: a logging failure must never block the page load.
+  store.logVisit(entry).catch(() => { /* ignore */ });
   next();
 });
 
@@ -133,49 +146,6 @@ app.post('/api/logout', (req, res) => {
 
 // ---- Portfolio persistence (flat file, no DB) ------------------------------
 
-function normalizePortfolios(obj) {
-  const out = {};
-  for (const [name, arr] of Object.entries(obj || {})) {
-    const nm = String(name).trim();
-    if (!nm) continue;
-    const seen = new Set();
-    const syms = [];
-    for (const s of Array.isArray(arr) ? arr : []) {
-      const sym = String(s).trim().toUpperCase();
-      if (sym && !seen.has(sym)) {
-        seen.add(sym);
-        syms.push(sym);
-      }
-    }
-    out[nm] = syms;
-  }
-  return out;
-}
-
-function readPortfolios() {
-  try {
-    const obj = JSON.parse(fs.readFileSync(PORTFOLIOS_FILE, 'utf8'));
-    if (obj && typeof obj === 'object' && !Array.isArray(obj)) return normalizePortfolios(obj);
-  } catch {
-    /* fall through to migration */
-  }
-  // One-time migration from a legacy flat tickers.json, else start empty.
-  let legacy = [];
-  try {
-    const t = JSON.parse(fs.readFileSync(TICKERS_FILE, 'utf8'));
-    if (Array.isArray(t)) legacy = t;
-  } catch {
-    /* no legacy file */
-  }
-  const migrated = legacy.length ? { Watchlist: legacy } : {};
-  writePortfolios(migrated);
-  return normalizePortfolios(migrated);
-}
-
-function writePortfolios(obj) {
-  fs.writeFileSync(PORTFOLIOS_FILE, JSON.stringify(normalizePortfolios(obj), null, 2));
-}
-
 // Deduped union of every portfolio's symbols.
 function getUniverse(portfolios) {
   const seen = new Set();
@@ -200,33 +170,9 @@ function membershipOf(symbol, portfolios) {
 // Names never change, so we fetch them once (on add) and reuse them. This keeps
 // every refresh at just 1 API credit per ticker (time_series only).
 
-function readNames() {
-  try {
-    return JSON.parse(fs.readFileSync(NAMES_FILE, 'utf8')) || {};
-  } catch {
-    return {};
-  }
-}
-
-function writeNames(map) {
-  fs.writeFileSync(NAMES_FILE, JSON.stringify(map, null, 2));
-}
-
 // ---- Profile cache: sector + fundamentals (premium endpoints) --------------
 // Sector is static; fundamentals move slowly. We cache per symbol and refresh at
 // most once a day, so a normal refresh stays a single time_series call.
-
-function readProfiles() {
-  try {
-    return JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf8')) || {};
-  } catch {
-    return {};
-  }
-}
-
-function writeProfiles(map) {
-  fs.writeFileSync(PROFILES_FILE, JSON.stringify(map, null, 2));
-}
 
 // Consensus label + 1–5 score from analyst buy/hold/sell counts.
 function analystConsensus(c) {
@@ -397,7 +343,7 @@ async function fetchProfile(symbol) {
 
 // Ensure sector/fundamentals are cached and fresh for the given symbols.
 async function ensureProfiles(symbols) {
-  const profiles = readProfiles();
+  const profiles = await readProfiles();
   const now = Date.now();
   const stale = symbols.filter((s) => {
     const p = profiles[s];
@@ -410,7 +356,7 @@ async function ensureProfiles(symbols) {
       batch.map((s) => fetchProfile(s).then((r) => ({ s, r })))
     );
     for (const { s, r } of results) profiles[s] = { ...r, fetchedAt: now };
-    if (results.length) writeProfiles(profiles);
+    if (results.length) await writeProfiles(profiles);
   }
   return profiles;
 }
@@ -732,31 +678,31 @@ function computeScores(m) {
 
 // ---- API: portfolios (management) ------------------------------------------
 
-app.get('/api/portfolios', (req, res) => {
-  res.json({ portfolios: readPortfolios() });
-});
+app.get('/api/portfolios', route(async (req, res) => {
+  res.json({ portfolios: await readPortfolios() });
+}));
 
 // Create an empty portfolio.
-app.post('/api/portfolios', requireAdmin, (req, res) => {
+app.post('/api/portfolios', requireAdmin, route(async (req, res) => {
   const name = String(req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Portfolio name is required.' });
   if (name.length > 40) return res.status(400).json({ error: 'Name too long (max 40 chars).' });
-  const p = readPortfolios();
+  const p = await readPortfolios();
   if (Object.keys(p).some((n) => n.toLowerCase() === name.toLowerCase())) {
     return res.status(409).json({ error: `Portfolio "${name}" already exists.` });
   }
   p[name] = [];
-  writePortfolios(p);
+  await writePortfolios(p);
   res.json({ portfolios: p });
-});
+}));
 
 // Rename a portfolio (preserves order + membership).
-app.put('/api/portfolios/:name', requireAdmin, (req, res) => {
+app.put('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
   const oldName = decodeURIComponent(req.params.name);
   const newName = String(req.body?.newName || '').trim();
   if (!newName) return res.status(400).json({ error: 'New name is required.' });
   if (newName.length > 40) return res.status(400).json({ error: 'Name too long (max 40 chars).' });
-  const p = readPortfolios();
+  const p = await readPortfolios();
   if (!(oldName in p)) return res.status(404).json({ error: 'Portfolio not found.' });
   if (
     newName.toLowerCase() !== oldName.toLowerCase() &&
@@ -766,77 +712,69 @@ app.put('/api/portfolios/:name', requireAdmin, (req, res) => {
   }
   const rebuilt = {};
   for (const [k, v] of Object.entries(p)) rebuilt[k === oldName ? newName : k] = v;
-  writePortfolios(rebuilt);
+  await writePortfolios(rebuilt);
   res.json({ portfolios: rebuilt });
-});
+}));
 
 // Delete a portfolio (its stocks remain in any other portfolios).
-app.delete('/api/portfolios/:name', requireAdmin, (req, res) => {
+app.delete('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
   const name = decodeURIComponent(req.params.name);
-  const p = readPortfolios();
+  const p = await readPortfolios();
   if (!(name in p)) return res.status(404).json({ error: 'Portfolio not found.' });
   delete p[name];
-  writePortfolios(p);
+  await writePortfolios(p);
   res.json({ portfolios: p });
-});
+}));
 
 // Add a ticker to a portfolio.
-app.post('/api/portfolios/:name/tickers', requireAdmin, async (req, res) => {
+app.post('/api/portfolios/:name/tickers', requireAdmin, route(async (req, res) => {
   const name = decodeURIComponent(req.params.name);
   const symbol = String(req.body?.symbol || '').trim().toUpperCase();
   if (!symbol) return res.status(400).json({ error: 'Symbol is required.' });
   if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Invalid symbol format.' });
-  const p = readPortfolios();
+  const p = await readPortfolios();
   if (!(name in p)) return res.status(404).json({ error: 'Portfolio not found.' });
   if (p[name].includes(symbol)) {
     return res.status(409).json({ error: `${symbol} is already in "${name}".` });
   }
   p[name].push(symbol);
-  writePortfolios(p);
+  await writePortfolios(p);
 
   // Cache the company name once (1 credit) so refreshes stay history-only.
-  if (API_KEY && !readNames()[symbol]) {
+  if (API_KEY && !(await readNames())[symbol]) {
     const nm = await fetchName(symbol);
-    if (nm) {
-      const names = readNames();
-      names[symbol] = nm;
-      writeNames(names);
-    }
+    if (nm) await writeNames({ [symbol]: nm });
   }
 
   res.json({ portfolios: p });
-});
+}));
 
 // Remove a ticker from one portfolio.
-app.delete('/api/portfolios/:name/tickers/:symbol', requireAdmin, (req, res) => {
+app.delete('/api/portfolios/:name/tickers/:symbol', requireAdmin, route(async (req, res) => {
   const name = decodeURIComponent(req.params.name);
   const symbol = String(req.params.symbol || '').trim().toUpperCase();
-  const p = readPortfolios();
+  const p = await readPortfolios();
   if (!(name in p)) return res.status(404).json({ error: 'Portfolio not found.' });
   p[name] = p[name].filter((s) => s !== symbol);
-  writePortfolios(p);
+  await writePortfolios(p);
   res.json({ portfolios: p });
-});
+}));
 
 // Remove a ticker from every portfolio (used by the "All" view).
-app.delete('/api/tickers/:symbol', requireAdmin, (req, res) => {
+app.delete('/api/tickers/:symbol', requireAdmin, route(async (req, res) => {
   const symbol = String(req.params.symbol || '').trim().toUpperCase();
-  const p = readPortfolios();
+  const p = await readPortfolios();
   for (const name of Object.keys(p)) p[name] = p[name].filter((s) => s !== symbol);
-  writePortfolios(p);
+  await writePortfolios(p);
   res.json({ portfolios: p });
-});
+}));
 
 // Clear the per-symbol profile cache (sector / fundamentals / analyst) so the next
 // refresh re-pulls it fresh from the API. Company names are static, so they're kept.
-app.post('/api/refresh-all', requireAdmin, (req, res) => {
-  try {
-    writeProfiles({});
-  } catch {
-    /* ignore */
-  }
+app.post('/api/refresh-all', requireAdmin, route(async (req, res) => {
+  await writeProfiles({});
   res.json({ ok: true });
-});
+}));
 
 // ---- API: stocks (the screener data) ---------------------------------------
 
@@ -848,7 +786,7 @@ async function computeStocks(asOf) {
     return { ok: false, status: 500, error: 'TWELVE_DATA_API_KEY is not set. Copy .env.example to .env and add your key.' };
   }
 
-  const portfolios = readPortfolios();
+  const portfolios = await readPortfolios();
   const portfolioNames = Object.keys(portfolios);
   const symbols = getUniverse(portfolios);
   if (symbols.length === 0) {
@@ -860,7 +798,7 @@ async function computeStocks(asOf) {
   const BENCHMARK = 'SPY';
   const fetchSymbols = symbols.includes(BENCHMARK) ? symbols : [...symbols, BENCHMARK];
   const symbolParam = encodeURIComponent(fetchSymbols.join(','));
-  const names = readNames();
+  const names = await readNames();
   const profiles = asOf ? {} : await ensureProfiles(symbols); // no point-in-time fundamentals
 
   try {
@@ -1045,14 +983,7 @@ async function computeStocks(asOf) {
 
 // Snapshot: the public sees the last computed data (no live API calls). Admin
 // refreshes recompute live and overwrite it.
-function readSnapshot() {
-  try { return JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf8')); } catch { return null; }
-}
-function writeSnapshot(payload) {
-  try { fs.writeFileSync(SNAPSHOT_FILE, JSON.stringify(payload)); } catch { /* ignore */ }
-}
-
-app.get('/api/stocks', async (req, res) => {
+app.get('/api/stocks', route(async (req, res) => {
   res.set('Cache-Control', 'no-store'); // never let the browser serve a stale copy
 
   // Backtest mode: ?asOf=YYYY-MM-DD recomputes momentum as it looked on that date.
@@ -1068,36 +999,34 @@ app.get('/api/stocks', async (req, res) => {
     }
     const r = await computeStocks(asOf);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
-    if (!asOf) writeSnapshot({ ...r.payload, snapshotAt: r.payload.updatedAt }); // cache live (non-backtest) pulls
+    if (!asOf) await writeSnapshot({ ...r.payload, snapshotAt: r.payload.updatedAt }); // cache live (non-backtest) pulls
     return res.json(r.payload);
   }
 
   // Public read: serve the saved snapshot — no API calls, no credits burned.
-  const snap = readSnapshot();
+  const snap = await readSnapshot();
   if (snap) return res.json({ ...snap, fromSnapshot: true });
 
   // No snapshot yet: an admin (or open/local mode) computes and seeds the first one.
   if (isAdmin(req)) {
     const r = await computeStocks(null);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
-    writeSnapshot({ ...r.payload, snapshotAt: r.payload.updatedAt });
+    await writeSnapshot({ ...r.payload, snapshotAt: r.payload.updatedAt });
     return res.json(r.payload);
   }
-  return res.json({ stocks: [], portfolios: Object.keys(readPortfolios()), asOf: null, updatedAt: null, fromSnapshot: true, empty: true });
-});
+  return res.json({ stocks: [], portfolios: Object.keys(await readPortfolios()), asOf: null, updatedAt: null, fromSnapshot: true, empty: true });
+}));
 
-app.get('/api/visitors', requireAdmin, (req, res) => {
-  let entries = [];
-  try {
-    const raw = fs.readFileSync(VISITORS_FILE, 'utf8');
-    entries = raw.split('\n').filter(Boolean).map((l) => JSON.parse(l));
-  } catch { /* no log yet */ }
-  const today = new Date().toISOString().slice(0, 10);
-  const total = entries.length;
-  const todayCount = entries.filter((e) => e.ts.startsWith(today)).length;
-  const uniqueIps = new Set(entries.map((e) => e.ip)).size;
-  res.json({ total, todayCount, uniqueIps, entries: entries.slice(-500).reverse() });
-});
+app.get('/api/visitors', requireAdmin, route(async (req, res) => {
+  // Counted and sliced in SQL — the old version parsed the entire log on every
+  // request just to produce three totals and the last 500 rows.
+  res.json(await store.readVisitorStats(500));
+}));
+
+store.init().then(
+  () => console.log('Turso: schema ready'),
+  (err) => console.error('Turso: schema init failed —', err.message)
+);
 
 app.listen(PORT, () => {
   console.log(`Stock screener POC running at http://localhost:${PORT}`);
