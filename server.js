@@ -20,8 +20,9 @@ const store = require('./db');
 const {
   readPortfolios, writePortfolios,
   readNames, writeNames,
-  readProfiles, writeProfiles,
+  readProfiles, writeProfiles, expireProfiles,
   readSnapshot, writeSnapshot,
+  beginRefresh, noteRefreshProgress, endRefresh, readRefreshState,
 } = store;
 const PROFILE_TTL_MS = 24 * 60 * 60 * 1000; // refresh sector/market cap once a day
 // Publishing: set ADMIN_PASSWORD in .env to make the app read-only for the public.
@@ -960,11 +961,34 @@ app.delete('/api/tickers/:symbol', requireAdmin, route(async (req, res) => {
   res.json({ portfolios: p });
 }));
 
-// Clear the per-symbol profile cache (sector / fundamentals / analyst) so the next
-// refresh re-pulls it fresh from the API. Company names are static, so they're kept.
+// Expire the per-symbol profile cache (sector / fundamentals / analyst) so the
+// next refresh re-pulls it. Company names are static, so they're kept.
+//
+// Expire rather than delete: the backfill only manages a few symbols per call,
+// so deleting the rows stripped sector, market cap and fundamentals out of the
+// shared snapshot for the ten-odd minutes it ran, and every other viewer saw
+// the holes. The old values stay visible and are replaced one by one.
 app.post('/api/refresh-all', requireAdmin, route(async (req, res) => {
-  await writeProfiles({});
+  const expired = await expireProfiles();
+  const total = getUniverse(await readPortfolios()).length;
+  const who = await currentUser(req);
+  await beginRefresh(who ? who.email : null, total);
+  res.json({ ok: true, expired, total });
+}));
+
+// The client calls this when its backfill loop finishes or gives up, so the
+// notice clears promptly. readRefreshState() ages the flag out on its own if
+// this never arrives — an admin can always just close the tab.
+app.delete('/api/refresh-all', requireAdmin, route(async (req, res) => {
+  await endRefresh();
   res.json({ ok: true });
+}));
+
+// Cheap poll for viewers: is a refresh running? Deliberately not the whole
+// snapshot, since every open page hits this while one is in progress.
+app.get('/api/status', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ refreshing: await readRefreshState() });
 }));
 
 // ---- API: stocks (the screener data) ---------------------------------------
@@ -1196,13 +1220,22 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     }
     const r = await computeStocks(asOf);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
-    if (!asOf) await writeSnapshot({ ...r.payload, snapshotAt: r.payload.updatedAt }); // cache live (non-backtest) pulls
-    return res.json(r.payload);
+    if (!asOf) {
+      await writeSnapshot({ ...r.payload, snapshotAt: r.payload.updatedAt }); // cache live (non-backtest) pulls
+      // Keep the shared flag in step. noteRefreshProgress only touches a refresh
+      // that is already running, so an ordinary price Refresh — seconds long —
+      // never raises the banner.
+      const rows = r.payload.stocks || [];
+      const loaded = rows.filter((x) => x.profileFetchedAt != null).length;
+      if (rows.length && loaded >= rows.length) await endRefresh();
+      else await noteRefreshProgress(loaded, rows.length);
+    }
+    return res.json({ ...r.payload, refreshing: await readRefreshState() });
   }
 
   // Public read: serve the saved snapshot — no API calls, no credits burned.
   const snap = await readSnapshot();
-  if (snap) return res.json({ ...snap, fromSnapshot: true });
+  if (snap) return res.json({ ...snap, fromSnapshot: true, refreshing: await readRefreshState() });
 
   // No snapshot yet: an admin (or open/local mode) computes and seeds the first one.
   if (await isAdmin(req)) {

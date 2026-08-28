@@ -223,7 +223,23 @@
     }
     .notice .ic { color: var(--faint); }
     .notice b { color: var(--text); font-weight: 600; }
-    #readonlyNote, #backtestBar { margin-top: 8px; }
+    #readonlyNote, #backtestBar, #refreshBar { margin-top: 8px; }
+    #refreshBar > .core {
+      background:
+        linear-gradient(100deg, rgba(52, 211, 153, 0.10), rgba(52, 211, 153, 0.02) 60%),
+        var(--surface);
+      color: #b6ded0;
+    }
+    #refreshBar .ic { color: var(--green); }
+    #refreshBar b { color: var(--green); font-weight: 600; }
+    #refreshBar .pctpill {
+      margin-left: auto; flex: none; padding: 4px 11px; border-radius: 999px;
+      border: 1px solid rgba(52, 211, 153, 0.32); background: rgba(52, 211, 153, 0.12);
+      color: var(--green); font-family: var(--mono); font-size: 11.5px;
+      font-variant-numeric: tabular-nums;
+    }
+    .ic.spin { animation: spin 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite; transform-origin: 50% 50%; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     #backtestBar > .core {
       background:
         linear-gradient(100deg, rgba(251, 191, 36, 0.10), rgba(251, 191, 36, 0.02) 60%),
@@ -595,6 +611,8 @@
     </div>
 
     <div class="bezel notice" id="backtestBar" style="display:none"></div>
+
+    <div class="bezel notice" id="refreshBar" style="display:none"></div>
 
     <div class="error" id="error"></div>
 
@@ -1514,6 +1532,50 @@
 
     // live !== false → recompute from the API (admin Refresh / backtest) and save the
     // snapshot; {live:false} just reads the saved snapshot (page load, public view).
+    // ---- shared "being refreshed" notice ------------------------------------
+    // A Refresh All re-pulls only a handful of companies per call, so it runs for
+    // several minutes. The flag lives in the database rather than in a variable,
+    // because every open page needs to see it — and on Vercel no two requests
+    // are guaranteed to share a process anyway.
+    let refreshPoll = null;
+    let refreshingHere = false;   // true while THIS tab is the one doing the work
+
+    function renderRefreshNote(state) {
+      const bar = $('refreshBar');
+      if (!state) {
+        bar.style.display = 'none';
+        bar.innerHTML = '';
+        stopRefreshPoll();
+        return;
+      }
+      const done = state.total ? `${state.loaded} of ${state.total} companies reloaded` : 'in progress';
+      const pct = state.total ? Math.round((state.loaded / state.total) * 100) : null;
+      bar.style.display = '';
+      bar.innerHTML =
+        '<div class="core"><svg class="ic spin" aria-hidden="true"><use href="#i-refresh" /></svg>' +
+        `<span><b>Data is being refreshed.</b> Company details — sector, market cap, ` +
+        `fundamentals — are reloading, ${done}. Values on screen stay usable meanwhile; ` +
+        'prices and scores are unaffected.</span>' +
+        (pct == null ? '' : `<span class="pctpill">${pct}%</span>`);
+      if (!refreshingHere) startRefreshPoll();
+    }
+
+    // Viewers poll a tiny endpoint rather than the whole snapshot, then pull the
+    // finished data once the flag clears, so nobody has to know to hit reload.
+    function startRefreshPoll() {
+      if (refreshPoll) return;
+      refreshPoll = setInterval(async () => {
+        try {
+          const s = await api('GET', '/api/status');
+          if (s.refreshing) { renderRefreshNote(s.refreshing); return; }
+          stopRefreshPoll();
+          renderRefreshNote(null);
+          await refresh({ live: false });
+        } catch (e) { /* transient — keep polling */ }
+      }, 30000);
+    }
+    function stopRefreshPoll() { clearInterval(refreshPoll); refreshPoll = null; }
+
     async function refresh(opts = {}) {
       const live = opts.live !== false;
       setError('');
@@ -1532,6 +1594,7 @@
         collapsed.fwd = !asOfDate;      // forward-return columns only in backtest mode
         updateBacktestUI();
         render();
+        renderRefreshNote(asOfDate ? null : (data.refreshing || null));
         if (asOfDate) {
           setStatus(`Backtest — momentum as of ${asOfDate}`);
         } else if (!data.updatedAt) {
@@ -1560,9 +1623,10 @@
       setError('');
       const busy = (b) => { $('refreshBtn').disabled = b; $('refreshAllBtn').disabled = b; $('addBtn').disabled = b; };
       busy(true);
+      refreshingHere = true;   // this tab drives it, so don't also poll for it
       try {
-        setStatus('Clearing cache…');
-        showLoading('Clearing cache and re-pulling everything…');
+        setStatus('Expiring cached company data…');
+        showLoading('Expiring cached company data and re-pulling it…');
         await api('POST', '/api/refresh-all');
 
         let data = null;
@@ -1579,6 +1643,7 @@
           }
           const total = data.stocks.length;
           const loaded = data.stocks.filter((s) => s.profileFetchedAt != null).length;
+          renderRefreshNote(data.refreshing || null);
           if (total === 0 || loaded >= total) break; // everything fetched
           setStatus(`Loading all data… ${loaded}/${total}`);
           showLoading(`Loading all data — fundamentals ${loaded} of ${total} loaded.<br>This can take a few minutes due to API rate limits. Please wait…`);
@@ -1601,6 +1666,11 @@
         setError(err.message);
         setStatus('');
       } finally {
+        // Whether it finished or gave up, drop the shared flag so no one is left
+        // watching a notice for work that has stopped.
+        try { await api('DELETE', '/api/refresh-all'); } catch (e) { /* it ages out anyway */ }
+        refreshingHere = false;
+        renderRefreshNote(null);
         busy(false);
       }
     }

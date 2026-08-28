@@ -102,6 +102,17 @@ const SCHEMA = [
      expires_at integer not null
    )`,
   `create index if not exists idx_sessions_user on sessions (user_id)`,
+  // A refresh runs for ten-odd minutes and every instance needs to know, so the
+  // flag lives here rather than in a process variable — serverless instances
+  // share nothing else. At most one row; its absence means "not refreshing".
+  `create table if not exists refresh_state (
+     id         integer primary key check (id = 1),
+     started_at integer not null,
+     updated_at integer not null,
+     loaded     integer,
+     total      integer,
+     actor      text
+   )`,
 ];
 
 // Columns added after a table shipped. SQLite has no "add column if not
@@ -208,8 +219,15 @@ async function readProfiles() {
   for (const row of r.rows) {
     try {
       const obj = JSON.parse(row.data);
-      // fetched_at is authoritative — the column is what the TTL check reads.
-      if (row.fetched_at != null) obj.fetchedAt = Number(row.fetched_at);
+      // fetched_at is authoritative — the column is what the TTL check reads,
+      // and it also overrides the copy inside the blob. 0 is the sentinel
+      // expireProfiles() writes: keep the cached values so they stay on screen,
+      // but drop the timestamp so the next refresh re-pulls the symbol.
+      if (row.fetched_at != null) {
+        const t = Number(row.fetched_at);
+        if (t > 0) obj.fetchedAt = t;
+        else delete obj.fetchedAt;
+      }
       out[row.symbol] = obj;
     } catch {
       /* skip a corrupt row rather than failing the whole refresh */
@@ -230,6 +248,71 @@ async function writeProfiles(map) {
     });
   }
   await db.batch(stmts, 'write');
+}
+
+// Mark every cached profile stale without discarding it.
+//
+// /api/refresh-all used to delete these rows outright. Because the re-pull is
+// capped at a handful of symbols per call, that left the shared snapshot — and
+// so every other viewer — with no sector, market cap or fundamentals for the
+// ten-odd minutes the backfill takes. Keeping the values and clearing only the
+// timestamp means each one is replaced in place as its fresh copy lands, so the
+// snapshot never regresses.
+async function expireProfiles() {
+  await init();
+  const r = await db.execute('update profiles set fetched_at = 0');
+  return r.rowsAffected ?? 0;
+}
+
+// ---- refresh state --------------------------------------------------------
+
+// A refresh whose last progress report is older than this is treated as over.
+// Rounds are ~62s apart, so this tolerates a missed one; it is what stops an
+// admin closing the tab mid-backfill from pinning the banner up forever.
+const REFRESH_STALE_MS = 4 * 60 * 1000;
+
+async function beginRefresh(actor, total) {
+  await init();
+  const now = Date.now();
+  await db.execute({
+    sql: `insert into refresh_state (id, started_at, updated_at, loaded, total, actor)
+          values (1, ?, ?, 0, ?, ?)
+          on conflict(id) do update set
+            started_at = excluded.started_at, updated_at = excluded.updated_at,
+            loaded = 0, total = excluded.total, actor = excluded.actor`,
+    args: [now, now, total ?? null, actor || null],
+  });
+}
+
+// Only ever updates a refresh that is already running: a plain price Refresh
+// takes seconds and has no business raising the banner.
+async function noteRefreshProgress(loaded, total) {
+  await init();
+  const r = await db.execute({
+    sql: 'update refresh_state set updated_at = ?, loaded = ?, total = ? where id = 1',
+    args: [Date.now(), loaded ?? null, total ?? null],
+  });
+  return (r.rowsAffected ?? 0) > 0;
+}
+
+async function endRefresh() {
+  await init();
+  await db.execute('delete from refresh_state where id = 1');
+}
+
+// null when nothing is running, so callers can spread it straight into a payload.
+async function readRefreshState() {
+  await init();
+  const r = await db.execute('select started_at, updated_at, loaded, total, actor from refresh_state where id = 1');
+  if (!r.rows.length) return null;
+  const row = r.rows[0];
+  if (Date.now() - Number(row.updated_at) > REFRESH_STALE_MS) return null;
+  return {
+    startedAt: Number(row.started_at),
+    loaded: row.loaded == null ? null : Number(row.loaded),
+    total: row.total == null ? null : Number(row.total),
+    actor: row.actor || null,
+  };
 }
 
 // ---- snapshot -------------------------------------------------------------
@@ -458,6 +541,11 @@ module.exports = {
   writeNames,
   readProfiles,
   writeProfiles,
+  expireProfiles,
+  beginRefresh,
+  noteRefreshProgress,
+  endRefresh,
+  readRefreshState,
   readSnapshot,
   writeSnapshot,
   logVisit,

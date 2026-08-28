@@ -35,6 +35,7 @@ Everything goes through `db.js`. Tables: `portfolios`, `portfolio_tickers`, `nam
 - **Portfolio order is an explicit `position` column.** The UI colours portfolios by index, so order has to survive the round trip — don't rely on insertion order.
 - **`profiles.data` is a JSON blob** because it caches a third-party response whose shape we don't control. `fetched_at` is lifted into its own indexed column because the 24h TTL check runs against it every refresh.
 - **`/api/visitors` aggregates in SQL** now (counts + `LIMIT 500`), instead of parsing the whole log into memory on every request.
+- **`/api/refresh-all` expires profiles, it does not delete them** (`expireProfiles()` sets `fetched_at = 0`). Deleting them used to strip sector, market cap and fundamentals out of the shared snapshot for the ten-odd minutes the backfill ran, so every other viewer saw the holes. `readProfiles()` treats `0` as "keep the values, drop the timestamp": the row still renders, and `ensureProfiles()` still re-pulls it. **The blob also carries a `fetchedAt`, so the column has to override it** — otherwise the stale copy inside the JSON makes an expired profile look fresh.
 - **Express 4 does not catch async handler rejections.** Every async route is wrapped in the `route()` helper near the top of `server.js`, which turns a database error into a 500 instead of a hung request. Any new async route must use it.
 
 ## Auth model
@@ -169,10 +170,19 @@ Three composite scores per stock (1–10): **Momentum** (price/trend/volume), **
 
 Applying these moved 9 of 44 ratings — MSTR 5→2, JOBY 8→5, AVAV 7→5, four loss-makers down one, and SPCX 3→**5** (its meaningless PEG of 86.7 had been scoring zero and dragging it down).
 
+## Refresh state
+A Refresh All re-pulls only `MAX_PROFILE_FETCHES_PER_CALL` (6) symbols per call, 62s apart, so it runs for several minutes. The `refresh_state` table (at most one row; absent = idle) lets every instance know — a process variable cannot work, since Vercel shares nothing between them.
+
+- `POST /api/refresh-all` expires the cache and calls `beginRefresh()`; `DELETE /api/refresh-all` ends it when the client's loop finishes or gives up.
+- Each `?refresh=1` round calls `noteRefreshProgress()`, which **only updates a refresh that is already running** — that is what stops an ordinary price Refresh (seconds long) from raising the banner. It closes the flag itself once every row has a profile.
+- `readRefreshState()` returns `null` once `updated_at` is older than `REFRESH_STALE_MS` (4 min), so an admin closing the tab mid-backfill can't pin the notice up forever.
+- `GET /api/status` is a cheap poll for viewers — every open page hits it every 30s while a refresh runs, so it deliberately does not return the snapshot. When the flag clears the page pulls the finished data on its own.
+
 ## API patterns
 - `GET /api/stocks` — serves snapshot to public; `?refresh=1` recomputes live (admin only)
 - `GET /api/stocks?asOf=YYYY-MM-DD` — backtest mode (admin only)
-- `POST /api/refresh-all` — clears profile cache, forces re-pull (admin only)
+- `POST /api/refresh-all` — expires the profile cache, forces re-pull (admin only); `DELETE` ends the refresh flag
+- `GET /api/status` — `{ refreshing }` only; polled by every open page during a refresh
 - All portfolio/ticker CRUD routes require admin
 
 ## Conventions
