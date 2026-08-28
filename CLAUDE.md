@@ -92,11 +92,12 @@ Three menus share one controller. Only one is open at a time.
 |---|---|---|
 | `#picker` | portfolio name + count | All + every portfolio + "New portfolio" |
 | `#colPicker` | `Columns n/10` | multi-select column groups + Show all / Hide all |
-| `#morePicker` | `⋯` (admin only) | Refresh all, Visitor log, Rename/Delete portfolio, Log out |
+| `#morePicker` | `⋯` (admin only) | Rename/Delete portfolio, Change password, Sign out |
 
 - `openPicker(id)` opens one and closes the rest; `closePickers()` closes all. They close on outside click, Escape and resize.
 - `placeMenu()` clamps an opened menu inside the viewport — it shifts left of its trigger rather than overflowing, and never crosses the left gutter. Don't replace it with a static `left`/`right` anchor; no single anchor suits both triggers at every width.
-- `#morePicker` holds the *real* buttons (`#refreshAllBtn`, `#renameBtn`, `#deleteBtn`, `#logoutBtn`) restyled as `.pick` rows, so their existing listeners and disabled-state logic still apply. `#portfolioActions` and `#sessionActions` wrap the contextual rows with their separators so both hide together.
+- `#morePicker` holds the *real* buttons (`#renameBtn`, `#deleteBtn`, `#changePwBtn`, `#logoutBtn`) restyled as `.pick` rows, so their existing listeners and disabled-state logic still apply. `#portfolioActions` and `#sessionActions` wrap the contextual rows with their separators so both hide together.
+- **Analysis, Visitor log, Refresh and Refresh all are top-level bar buttons**, not menu rows. Refresh and Refresh all are both labelled `.btn` pills — they run the same kind of action, so they carry the same weight; only their icons differ.
 - The column menu is rebuilt by `renderColumnMenu()` from inside `applyGroups()`, so the trigger count can't drift from the table state. It deliberately stays open while you toggle.
 
 ## Design system
