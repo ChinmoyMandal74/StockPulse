@@ -90,7 +90,7 @@ Three menus share one controller. Only one is open at a time.
 | id | trigger | contents |
 |---|---|---|
 | `#picker` | portfolio name + count | All + every portfolio + "New portfolio" |
-| `#colPicker` | `Columns n/9` | multi-select column groups + Show all / Hide all |
+| `#colPicker` | `Columns n/10` | multi-select column groups + Show all / Hide all |
 | `#morePicker` | `⋯` (admin only) | Refresh all, Visitor log, Rename/Delete portfolio, Log out |
 
 - `openPicker(id)` opens one and closes the rest; `closePickers()` closes all. They close on outside click, Escape and resize.
@@ -123,10 +123,12 @@ Dark-only. "Ethereal glass": OLED black with a fixed radial mesh aura and a film
 
 ## Column groups (frontend)
 Each group has a fixed colour used for the group header `th` and its row in the columns menu:
-- Info `#7c9cff` · Short-term `#34d399` · Long-term `#a78bfa` · Forward `#fb923c`
+- Rank `#a3e635` · Info `#7c9cff` · Short-term `#34d399` · Long-term `#a78bfa` · Forward `#fb923c`
 - Relative `#22d3ee` · Trend `#fbbf24` · Volume `#f472b6` · Size `#94a3b8` · Fundamentals `#fb7185`
 
-**To add a group:** append the id to `GROUPS`, give it a colour in `GROUP_COLORS` and a label in `GROUP_LABELS`, add the `th.group` banner with the right `colspan`, and tag every header/body cell with `class="grp-<id>"`. `applyGroups()` and the columns menu pick it up with no further changes.
+**To add a group:** append the id to `GROUPS`, give it a colour in `GROUP_COLORS` and a label in `GROUP_LABELS`, add the `th.group` banner with the right `colspan`, and tag every header/body cell with `class="grp-<id>"`. Then mirror it in **three more places**: `GROUP_ORDER` and `FIELD_SPEC` in `public/rowcard.js`, and the palette copies at the top of `public/analysis.html`. `applyGroups()` and the columns menu pick it up with no further changes.
+
+The **Rank** group carries the four score columns (Overall, Mom., Qual., Rank) and **Info** the five metadata ones (Portfolios, Price, Sector, Market Cap, Next Earn) — they were one 9-column group until they were split, so that the scores and the metadata can be collapsed independently.
 
 The **Size** group carries the absolute-size columns — Revenue TTM, Gross Profit TTM, Gross Margin, Net Income TTM, FCF TTM, FCF Margin, Net Cash. Every one comes out of the `/statistics` call `fetchProfile()` already makes, so the group costs **no extra API credits**.
 

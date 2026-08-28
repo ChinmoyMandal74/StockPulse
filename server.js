@@ -99,6 +99,11 @@ app.get(['/', '/index.html'], route(async (req, res, next) => {
   next();
 }));
 
+app.get('/analysis', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  res.sendFile(path.join(__dirname, 'public', 'analysis.html'));
+}));
+
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
@@ -1190,6 +1195,12 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     return res.json(r.payload);
   }
   return res.json({ stocks: [], portfolios: Object.keys(await readPortfolios()), asOf: null, updatedAt: null, fromSnapshot: true, empty: true });
+}));
+
+// Wipe the log. Irreversible — the client confirms before calling this.
+app.delete('/api/visitors', requireAdmin, route(async (req, res) => {
+  const removed = await store.clearVisitors();
+  res.json({ ok: true, removed });
 }));
 
 app.get('/api/visitors', requireAdmin, route(async (req, res) => {

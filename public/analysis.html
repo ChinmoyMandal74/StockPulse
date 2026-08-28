@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Analysis — Ticker Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /* Same visual system as the screener: Ethereal Glass + double-bezel surfaces. */
+    :root {
+      color-scheme: dark;
+      --void: #050505; --surface: #0a0c11; --surface-2: #0d1017;
+      --shell: rgba(255, 255, 255, 0.028);
+      --hair: rgba(255, 255, 255, 0.07); --hair-2: rgba(255, 255, 255, 0.13);
+      --inset: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+      --text: #e9ecf2; --muted: #8b94a4; --faint: #59616f;
+      --green: #34d399; --red: #fb7185; --amber: #fbbf24;
+      --accent: #7c9cff; --accent-2: #a78bfa;
+      --panel: #141822;
+      --ease: cubic-bezier(0.32, 0.72, 0, 1);
+      --ease-soft: cubic-bezier(0.16, 1, 0.3, 1);
+      --sans: 'Geist', ui-sans-serif, system-ui, 'Segoe UI Variable Text', sans-serif;
+      --mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', 'SF Mono', monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100dvh; padding: 0 0 60px; overflow-x: clip;
+      background: var(--void); color: var(--text); font-family: var(--sans);
+      font-size: 14px; line-height: 1.5; letter-spacing: -0.01em; -webkit-font-smoothing: antialiased;
+    }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+    .aura {
+      position: fixed; inset: -10%; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(46vw 40vw at 6% -6%, rgba(52, 211, 153, 0.12), transparent 62%),
+        radial-gradient(50vw 44vw at 96% 4%, rgba(124, 156, 255, 0.12), transparent 64%);
+      animation: drift 44s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; will-change: transform;
+    }
+    @keyframes drift { from { transform: translate3d(-1.5%,-1%,0) scale(1); } to { transform: translate3d(2%,1.5%,0) scale(1.06); } }
+    .grain {
+      position: fixed; inset: 0; z-index: 60; pointer-events: none;
+      opacity: 0.038; mix-blend-mode: overlay; background-size: 170px 170px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='170' height='170' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+    .ic { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
+          stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+    .ic-sm { width: 13px; height: 13px; stroke-width: 1.5; }
+    #sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+    .bezel { background: var(--shell); border: 1px solid var(--hair); border-radius: 26px;
+             padding: 6px; box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.95); }
+    .bezel > .core { background: var(--surface); border-radius: 20px; box-shadow: var(--inset); overflow: hidden; }
+
+    /* floating island */
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
+                   padding: 16px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
+      padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark { display: inline-flex; align-items: center; gap: 9px; }
+    .mark .wordmark { font-size: 13.5px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+    .divider { width: 1px; height: 20px; background: var(--hair); flex: none; margin: 0 2px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; padding: 9px 15px; border-radius: 999px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04); color: var(--text);
+      font-family: var(--sans); font-size: 12.5px; font-weight: 500; line-height: 1;
+      white-space: nowrap; cursor: pointer; text-decoration: none; box-shadow: var(--inset);
+      transition: background 0.55s var(--ease), border-color 0.55s var(--ease), color 0.55s var(--ease);
+    }
+    .btn:hover { background: rgba(255, 255, 255, 0.085); border-color: var(--hair-2); color: #fff; }
+
+    h1 { margin: 22px 0 0; font-size: clamp(26px, 3vw, 34px); font-weight: 600;
+         line-height: 1; letter-spacing: -0.04em; }
+    h1 .w2 { background: linear-gradient(100deg, #9aa4b6 10%, #5d6474 92%);
+             -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lede { margin: 10px 0 20px; color: var(--muted); font-size: 12.5px; line-height: 1.6; max-width: 76ch; }
+
+    /* sections */
+    .sec { margin-bottom: 14px; }
+    .sec > .core { padding: 18px 20px 8px; }
+    .sec-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+    .sec-h h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
+    .pill { font-family: var(--mono); font-size: 10.5px; padding: 2px 8px; border-radius: 999px;
+            border: 1px solid; background: color-mix(in srgb, currentColor 12%, transparent); }
+    .sec-sub { margin: 0 0 12px; font-size: 11.5px; color: var(--faint); line-height: 1.6; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: right; padding: 7px 10px; font-size: 12px;
+             border-bottom: 1px solid rgba(255, 255, 255, 0.045); font-variant-numeric: tabular-nums; }
+    th { color: var(--faint); font-size: 9.5px; font-weight: 500; text-transform: uppercase;
+         letter-spacing: 0.14em; white-space: nowrap; }
+    td { font-family: var(--mono); letter-spacing: -0.02em; white-space: nowrap; }
+    th.l, td.l { text-align: left; }
+    td.name { font-family: var(--sans); color: var(--muted); font-size: 12.5px;
+              max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+    tbody tr { transition: background 0.35s var(--ease); }
+    tbody tr:hover { background: var(--panel); }
+    tbody tr:last-child td { border-bottom: 0; }
+    .sym { font-weight: 600; letter-spacing: 0.03em; }
+    .sym a { color: inherit; text-decoration: none; }
+    .sym a:hover { color: var(--accent); }
+    .pos { color: var(--green); } .neg { color: var(--red); } .na { color: var(--faint); }
+    .warn { color: var(--amber); }
+    .badge { display: inline-block; padding: 1px 7px; border-radius: 999px; border: 1px solid;
+             font-size: 10px; font-family: var(--sans);
+             background: color-mix(in srgb, currentColor 12%, transparent); }
+    .empty { padding: 26px 4px 30px; color: var(--muted); font-size: 12.5px; font-family: var(--sans); }
+    .note { padding: 10px 4px 14px; color: var(--faint); font-size: 11px; font-family: var(--sans); line-height: 1.6; }
+
+    /* ---- shared row card (see /rowcard.js) ---- */
+    #rowcard {
+      position: fixed; display: none; z-index: 55;
+      width: 660px; max-width: calc(100vw - 24px);
+      padding: 6px; border-radius: 20px;
+      background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+      backdrop-filter: blur(26px) saturate(160%); -webkit-backdrop-filter: blur(26px) saturate(160%);
+      box-shadow: 0 40px 80px -28px rgba(0, 0, 0, 0.95);
+      font-size: 11.5px; color: var(--text); pointer-events: none;
+    }
+    #rowcard .rc-core { background: rgba(10, 12, 17, 0.92); border-radius: 15px;
+                        padding: 14px 16px; box-shadow: var(--inset); }
+    #rowcard .rc-head { display: flex; align-items: baseline; gap: 10px;
+                        padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--hair); }
+    #rowcard .rc-sym { font-family: var(--mono); font-size: 14px; font-weight: 600; letter-spacing: 0.02em; }
+    #rowcard .rc-name { color: var(--muted); font-size: 12px; min-width: 0;
+                        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #rowcard .rc-price { margin-left: auto; font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+    #rowcard .rc-cols { column-count: 3; column-gap: 20px; }
+    #rowcard .rc-sec { break-inside: avoid; margin-bottom: 11px; }
+    #rowcard .rc-sec-h { font-size: 9px; font-weight: 500; text-transform: uppercase;
+                         letter-spacing: 0.18em; margin-bottom: 4px;
+                         display: flex; align-items: center; gap: 6px; }
+    #rowcard .rc-sec-h i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none; }
+    #rowcard .rc-row { display: flex; align-items: baseline; gap: 8px; line-height: 1.75; }
+    #rowcard .rc-k { color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #rowcard .rc-v { margin-left: auto; font-family: var(--mono); font-size: 11px;
+                     white-space: nowrap; font-variant-numeric: tabular-nums; }
+    #rowcard .rc-foot { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--hair);
+                        color: var(--faint); font-size: 10.5px; }
+    td.name { cursor: help; }
+
+    @media (max-width: 760px) {
+      .page { padding: 0 14px; }
+      td.name, th.name-h { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="wordmark">Ticker Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <h1><span class="w1">Analysis</span></h1>
+    <p class="lede" id="lede">Loading…</p>
+    <div id="out"></div>
+  </main>
+  <div id="rowcard"></div>
+
+  <script src="/rowcard.js"></script>
+  <script>
+    // Must match GROUP_COLORS / GROUP_LABELS in index.html — the card colours
+    // its sections with these.
+    const GROUP_COLORS = {
+      info: '#7c9cff', rank: '#a3e635', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
+      rel:  '#22d3ee', trend: '#fbbf24', vol:  '#f472b6',
+      size: '#94a3b8', fund: '#fb7185',
+    };
+    const GROUP_LABELS = {
+      info: 'Info', rank: 'Rank', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
+      rel: 'Relative', trend: 'Trend', vol: 'Volume',
+      size: 'Size', fund: 'Fundamentals',
+    };
+
+    // ---- formatting ---------------------------------------------------------
+    const CUR = { USD:'$', EUR:'€', GBP:'£', JPY:'¥', KRW:'₩', HKD:'HK$', CNY:'¥', INR:'₹',
+                  CAD:'C$', AUD:'A$', CHF:'CHF ', TWD:'NT$', BRL:'R$', SGD:'S$' };
+    const cur = (c) => (c ? (CUR[c] || c + ' ') : '$');
+    const num = (n) => n != null && isFinite(n);
+    const esc = (s) => String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+    // Signed percentage, coloured the way the screener colours it.
+    const pct = (n, d = 1) => num(n)
+      ? `<td class="${n >= 0 ? 'pos' : 'neg'}">${n >= 0 ? '+' : ''}${n.toFixed(d)}%</td>`
+      : '<td class="na">—</td>';
+    // A level rather than a change: no leading +, red only when negative.
+    const lvl = (n, d = 1, suffix = '%') => num(n)
+      ? `<td class="${n < 0 ? 'neg' : ''}">${n.toFixed(d)}${suffix}</td>`
+      : '<td class="na">—</td>';
+    const plain = (n, d = 1) => num(n) ? `<td>${n.toFixed(d)}</td>` : '<td class="na">—</td>';
+    const money = (n, c) => {
+      if (!num(n)) return '<td class="na">—</td>';
+      const sign = n < 0 ? '-' : '', a = Math.abs(n), s = cur(c);
+      const t = a >= 1e12 ? (a/1e12).toFixed(1)+'T' : a >= 1e9 ? (a/1e9).toFixed(1)+'B'
+              : a >= 1e6 ? (a/1e6).toFixed(1)+'M' : a.toLocaleString();
+      return `<td>${sign}${s}${t}</td>`;
+    };
+    const score = (n) => {
+      if (!num(n)) return '<td class="na">—</td>';
+      const c = n >= 8 ? 'pos' : n <= 4 ? 'neg' : 'warn';
+      return `<td class="${c}" style="font-weight:600">${n}</td>`;
+    };
+    const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const shortDate = (iso) => { const p = String(iso).split('-'); return p.length === 3 ? `${M[+p[1]-1]} ${+p[2]}` : iso; };
+    const gf = (s) => `https://www.google.com/finance/quote/${encodeURIComponent(s.symbol)}`;
+    const symCell = (s) => `<td class="l sym"><a href="${gf(s)}" target="_blank" rel="noopener">${esc(s.symbol)}</a></td>`;
+    const nameCell = (s) => `<td class="l name">${esc(s.name || '')}</td>`;
+
+    function section(id, title, count, tone, subtitle, headers, rows, emptyMsg, note) {
+      const head = headers.map((h) => `<th class="${h.l ? 'l' : ''}${h.name ? ' name-h' : ''}">${h.t}</th>`).join('');
+      const body = rows.length
+        ? `<table><thead><tr>${head}</tr></thead><tbody>${rows.join('')}</tbody></table>`
+        : `<div class="empty">${emptyMsg}</div>`;
+      return `<section class="bezel sec"><div class="core">
+        <div class="sec-h"><h2>${title}</h2>
+          <span class="pill" style="color:${tone}">${count}</span></div>
+        <p class="sec-sub">${subtitle}</p>
+        ${body}
+        ${note ? `<div class="note">${note}</div>` : ''}
+      </div></section>`;
+    }
+
+    // ---- build --------------------------------------------------------------
+    (async () => {
+      let data;
+      try {
+        const res = await fetch('/api/stocks', { cache: 'no-store' });
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        data = await res.json();
+      } catch {
+        document.getElementById('lede').textContent = 'Could not load the screener data.';
+        return;
+      }
+      const all = (data.stocks || []).filter((s) => !s.error);
+      const asOf = data.updatedAt ? new Date(data.updatedAt).toLocaleString() : 'n/a';
+      document.getElementById('lede').innerHTML =
+        `Three views the sorted table can't give you: what reports next, where the two scores disagree, ` +
+        `and how deep the drawdowns run. ${all.length} tickers, as of ${esc(asOf)}.`;
+
+      const out = [];
+
+      // --- 2. Earnings in the next 14 days ---------------------------------
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const days = (d) => Math.round((new Date(d) - today) / 86400000);
+      const soon = all
+        .filter((s) => s.nextEarningsDate && days(s.nextEarningsDate) >= 0 && days(s.nextEarningsDate) <= 14)
+        .sort((a, b) => a.nextEarningsDate.localeCompare(b.nextEarningsDate));
+      out.push(section('earnings', 'Reporting in the next 14 days', soon.length, 'var(--amber)',
+        'A catalyst and a risk in the same event. Confirmed dates come from the feed; ~ marks an estimate ' +
+        '(about 91 days after the last report). Last surprise is how far the previous quarter beat or missed consensus.',
+        [{t:'Symbol',l:1},{t:'Name',l:1,name:1},{t:'Reports'},{t:'In'},{t:'Last surprise'},{t:'Overall'},{t:'1M'},{t:'3M'}],
+        soon.map((s) => `<tr>${symCell(s)}${nameCell(s)}` +
+          `<td class="${s.nextEarningsEstimated ? 'na' : ''}">${s.nextEarningsEstimated ? '~' : ''}${shortDate(s.nextEarningsDate)}</td>` +
+          `<td class="${days(s.nextEarningsDate) <= 7 ? 'warn' : ''}">${days(s.nextEarningsDate)}d</td>` +
+          pct(s.lastSurprise) + score(s.overallRating) + pct(s.oneMonthPct) + pct(s.threeMonthPct) + '</tr>'),
+        'Nothing in your universe reports in the next 14 days.'));
+
+      // --- 3. Where the two scores disagree ---------------------------------
+      const qNotM = all.filter((s) => num(s.qualityRating) && num(s.momentumRating)
+        && s.qualityRating >= 8 && s.momentumRating <= 5)
+        .sort((a, b) => (b.qualityRating - a.qualityRating) || (a.momentumRating - b.momentumRating));
+      const mNotQ = all.filter((s) => num(s.qualityRating) && num(s.momentumRating)
+        && s.momentumRating >= 8 && s.qualityRating <= 5)
+        .sort((a, b) => (b.momentumRating - a.momentumRating) || (a.qualityRating - b.qualityRating));
+
+      const conflictHead = [{t:'Symbol',l:1},{t:'Name',l:1,name:1},{t:'Qual.'},{t:'Mom.'},{t:'Overall'},
+                            {t:'3M'},{t:'From 52w hi'},{t:'Fwd P/E'},{t:'ROE'}];
+      const conflictRow = (s) => `<tr>${symCell(s)}${nameCell(s)}` +
+        score(s.qualityRating) + score(s.momentumRating) + score(s.overallRating) +
+        pct(s.threeMonthPct) + pct(s.pctFromHigh) + plain(s.forwardPe) + lvl(s.roe) + '</tr>';
+
+      out.push(section('qnotm', 'Good business, price not working', qNotM.length, 'var(--accent)',
+        'Quality 8+ but momentum 5 or below. Overall weights momentum 65% to quality 35%, so these names rank ' +
+        'lower than the business alone would justify — the ranking is hiding them by design. Either the market ' +
+        'knows something the fundamentals do not show yet, or you are early.',
+        conflictHead, qNotM.map(conflictRow),
+        'No name currently has strong quality with weak momentum.'));
+
+      out.push(section('mnotq', 'Price working, business not', mNotQ.length, 'var(--red)',
+        'The mirror image: momentum 8+ but quality 5 or below. These rank high mostly on price action, ' +
+        'so they are the names most exposed if sentiment turns.',
+        conflictHead, mNotQ.map(conflictRow),
+        'No name currently has strong momentum with weak quality.'));
+
+      // --- 4. Deepest drawdowns ---------------------------------------------
+      const draw = all.filter((s) => num(s.pctFromHigh) && s.pctFromHigh <= -20)
+        .sort((a, b) => a.pctFromHigh - b.pctFromHigh);
+      const above200 = draw.filter((s) => num(s.vs200ma) && s.vs200ma > 0).length;
+      out.push(section('drawdown', 'Deepest drawdowns', draw.length, 'var(--accent-2)',
+        'More than 20% below the 52-week high. The 200-day column is what separates a pullback inside an uptrend ' +
+        `from a broken trend — <b>${above200} of these ${draw.length}</b> are still above their 200-day average. ` +
+        'RSI below 30 would mark washed-out selling; none of yours are there yet.',
+        [{t:'Symbol',l:1},{t:'Name',l:1,name:1},{t:'From 52w hi'},{t:'vs 200D MA'},{t:'vs 50D MA'},
+         {t:'3M'},{t:'RSI'},{t:'Overall'},{t:'Mkt cap'}],
+        draw.map((s) => `<tr>${symCell(s)}${nameCell(s)}` +
+          pct(s.pctFromHigh) + pct(s.vs200ma) + pct(s.vs50ma) + pct(s.threeMonthPct) +
+          plain(s.rsi, 0) + score(s.overallRating) + money(s.marketCap, s.currency) + '</tr>'),
+        'Nothing is more than 20% off its 52-week high.'));
+
+      document.getElementById('out').innerHTML = out.join('');
+
+      // Same hover card as the screener. Rank is computed across the whole
+      // universe here, since these lists are filtered views rather than a
+      // ranking of their own.
+      const ranked = all.filter((s) => s.overallScore != null)
+        .slice().sort((a, b) => b.overallScore - a.overallScore);
+      RowCard.attach({
+        root: document.getElementById('out'),
+        selector: 'td.name',
+        colors: GROUP_COLORS,
+        labels: GROUP_LABELS,
+        getStock: (td) => {
+          const sym = td.closest('tr')?.querySelector('td.sym')?.textContent.trim();
+          return sym ? all.find((x) => x.symbol === sym) : null;
+        },
+        rankOf: (s) => {
+          const i = ranked.findIndex((x) => x.symbol === s.symbol);
+          return i < 0 ? null : `${i + 1}/${ranked.length}`;
+        },
+      });
+    })();
+  </script>
+</body>
+</html>

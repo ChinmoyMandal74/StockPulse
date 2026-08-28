@@ -236,6 +236,12 @@
     .picker-btn .chev { opacity: 0.5; transition: transform 0.5s var(--ease), opacity 0.5s var(--ease); }
     .picker[data-open="1"] .picker-btn { background: rgba(255, 255, 255, 0.085); border-color: var(--hair-2); }
     .picker[data-open="1"] .chev { transform: rotate(180deg); opacity: 1; }
+    /* backtest active: the bar itself should say you are off live data */
+    #dateOpenBtn.on {
+      color: var(--amber); border-color: rgba(251, 191, 36, 0.35);
+      background: rgba(251, 191, 36, 0.12); width: auto; gap: 7px; padding: 0 11px;
+      font-family: var(--mono); font-size: 11.5px;
+    }
 
     .picker-menu {
       position: absolute; top: calc(100% + 8px); left: 0; z-index: 30;
@@ -272,6 +278,41 @@
     .pick:disabled:hover { background: none; color: var(--muted); }
     .pick-danger:hover { color: var(--red); background: rgba(251, 113, 133, 0.1); }
     .pick-sep { height: 1px; margin: 5px 9px; background: var(--hair); }
+    /* add-ticker panel, inside a picker menu */
+    .formpanel { padding: 4px 5px 6px; }
+    .formpanel label { display: block; margin: 0 0 5px; font-size: 9.5px; font-weight: 500;
+                      text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    .formpanel .fld { margin-bottom: 10px; }
+    .formpanel input[type="text"], .formpanel select {
+      width: 100%; padding: 9px 11px; border-radius: 11px; outline: none;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+      color: var(--text); font-size: 13px; box-shadow: var(--inset);
+      transition: border-color 0.5s var(--ease), background 0.5s var(--ease);
+    }
+    .formpanel input[type="text"] {
+      font-family: var(--mono); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .formpanel input[type="text"]::placeholder {
+      font-family: var(--sans); font-weight: 400; letter-spacing: -0.01em;
+      text-transform: none; color: var(--faint);
+    }
+    .formpanel input:focus, .formpanel select:focus { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.055); }
+    .formpanel select {
+      appearance: none; -webkit-appearance: none; cursor: pointer; font-family: var(--sans);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b94a4' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9.5 12 15.5 18 9.5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 9px center; background-size: 13px;
+    }
+    .formpanel select option { background: #0d1017; color: var(--text); }
+    .formpanel input[type="date"] {
+      width: 100%; padding: 9px 11px; border-radius: 11px; outline: none;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+      color: var(--text); font-family: var(--mono); font-size: 13px; box-shadow: var(--inset);
+      transition: border-color 0.5s var(--ease), background 0.5s var(--ease);
+    }
+    .formpanel input[type="date"]:focus { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.055); }
+    .formpanel input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; cursor: pointer; }
+    .formpanel .go { width: 100%; justify-content: center; margin-top: 2px; }
+    .formpanel .hint { margin: 8px 1px 0; font-size: 10.5px; color: var(--faint); line-height: 1.5; }
     .pick-foot { display: flex; gap: 6px; padding: 1px 4px 3px; }
     .pick-mini {
       flex: 1; padding: 7px 10px; border-radius: 10px; cursor: pointer;
@@ -666,26 +707,61 @@
           <button class="btn picker-btn" id="colBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="colMenu" role="listbox" aria-multiselectable="true" aria-label="Column groups"></div>
         </div>
+        <div class="picker admin-only" id="datePicker" data-open="0">
+          <button class="btn icon quiet" id="dateOpenBtn" title="Backtest: view the ranking as of a past date" aria-haspopup="dialog" aria-expanded="false" aria-label="Backtest date">
+            <svg class="ic" aria-hidden="true"><use href="#i-calendar" /></svg>
+          </button>
+          <div class="picker-menu" id="dateMenu" role="dialog" aria-label="Backtest date">
+            <div class="picker-inner">
+              <div class="formpanel">
+                <div class="fld">
+                  <label for="asOfDate">Show the ranking as of</label>
+                  <input type="date" id="asOfDate" title="Backtest: view the momentum ranking as of a past date" aria-label="Backtest as-of date" />
+                </div>
+                <button class="btn go" id="backToLive" style="display:none;padding:9px 15px">Back to live</button>
+                <p class="hint">Momentum and returns are recomputed as they looked on that date. Fundamentals are hidden — they are not point-in-time.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="picker admin-only" id="addPicker" data-open="0">
+          <button class="btn icon quiet" id="addOpenBtn" title="Add a ticker" aria-haspopup="dialog" aria-expanded="false" aria-label="Add a ticker">
+            <svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>
+          </button>
+          <div class="picker-menu" id="addMenu" role="dialog" aria-label="Add a ticker">
+            <div class="picker-inner">
+              <div class="formpanel">
+                <div class="fld">
+                  <label for="symbolInput">Ticker</label>
+                  <input type="text" id="symbolInput" placeholder="e.g. TSLA" maxlength="12" autocomplete="off" aria-label="Ticker symbol" />
+                </div>
+                <div class="fld">
+                  <label for="addTarget">Add to portfolio</label>
+                  <select id="addTarget" aria-label="Portfolio to add to"></select>
+                </div>
+                <button class="btn btn-primary go" id="addBtn" style="padding:9px 15px"><span class="lbl">Add ticker</span></button>
+                <p class="hint">The panel stays open so you can add several in a row.</p>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <!-- display:contents on desktop, a full-screen glass sheet below 768px -->
         <div class="deck" id="deck">
           <div class="row">
             <span class="bar-sep admin-only"></span>
-            <span class="field admin-only">
-              <span class="lead"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg></span>
-              <input type="text" id="symbolInput" placeholder="e.g. TSLA" maxlength="12" aria-label="Ticker symbol" />
-              <span class="sep">to</span>
-              <select id="addTarget" aria-label="Portfolio to add to"></select>
-              <button class="btn" id="addBtn">Add</button>
-            </span>
-            <span class="field admin-only">
-              <span class="lead"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-calendar" /></svg></span>
-              <span class="sep">As of</span>
-              <input type="date" id="asOfDate" title="Backtest: view the momentum ranking as of a past date" aria-label="Backtest as-of date" />
-            </span>
             <span class="status" id="status"></span>
+            <a class="btn" href="/analysis" title="Earnings due, score conflicts and drawdowns">
+              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-columns" /></svg>Analysis
+            </a>
+            <a class="btn icon quiet admin-only" href="/visitors" target="_blank" rel="noopener" style="display:none" title="Visitor log (admin only)" aria-label="Visitor log">
+              <svg class="ic" aria-hidden="true"><use href="#i-users" /></svg>
+            </a>
             <button class="btn admin-only" id="refreshBtn" title="Re-pull prices and recompute the ranking">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Refresh
+            </button>
+            <button class="btn icon quiet admin-only" id="refreshAllBtn" title="Refresh all: clear the cached sector / fundamentals data and re-pull everything fresh" aria-label="Refresh all data">
+              <svg class="ic" aria-hidden="true"><use href="#i-refresh-all" /></svg>
             </button>
           </div>
         </div>
@@ -704,16 +780,7 @@
           </button>
           <div class="picker-menu" id="moreMenu" role="menu" aria-label="More actions">
             <div class="picker-inner">
-              <button class="pick admin-only" id="refreshAllBtn" title="Clear cached sector / fundamentals / analyst data and re-pull everything fresh from the API">
-                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh-all" /></svg>
-                <span class="nm">Refresh all data</span>
-              </button>
-              <a class="pick admin-only" href="/visitors" target="_blank" rel="noopener" style="display:none" title="View the visitor log (admin only)">
-                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-users" /></svg>
-                <span class="nm">Visitor log</span>
-              </a>
               <div id="portfolioActions" style="display:none">
-                <div class="pick-sep"></div>
                 <button class="pick" id="renameBtn">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-pencil" /></svg>
                   <span class="nm">Rename portfolio</span>
@@ -795,7 +862,8 @@
       <tr>
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="name">Name</th>
-        <th class="group grp-info" data-group="info" colspan="9">Info</th>
+        <th class="group grp-info" data-group="info" colspan="5">Info</th>
+        <th class="group grp-rank" data-group="rank" colspan="4">Rank</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="3">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward (backtest)</th>
@@ -807,15 +875,15 @@
         <th rowspan="2"></th>
       </tr>
       <tr>
-        <th class="grp-info" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
-        <th class="grp-info" data-key="momentumScore" title="Momentum 1–10: price/trend/volume (returns, RS, MAs, MA cross, MACD, RSI, volume). Hover for factors.">Mom.</th>
-        <th class="grp-info" data-key="qualityScore" title="Quality 1–10: company data (earnings & revenue growth, PEG, P/E, margin, ROE). Hover for factors.">Qual.</th>
-        <th class="grp-info" title="Rank by Overall within the stocks currently shown">Rank</th>
         <th class="left grp-info">Portfolios</th>
         <th class="grp-info" data-key="price">Price</th>
         <th class="left grp-info" data-key="sector">Sector</th>
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
         <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
+        <th class="grp-rank" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
+        <th class="grp-rank" data-key="momentumScore" title="Momentum 1–10: price/trend/volume (returns, RS, MAs, MA cross, MACD, RSI, volume). Hover for factors.">Mom.</th>
+        <th class="grp-rank" data-key="qualityScore" title="Quality 1–10: company data (earnings & revenue growth, PEG, P/E, margin, ROE). Hover for factors.">Qual.</th>
+        <th class="grp-rank" title="Rank by Overall within the stocks currently shown">Rank</th>
         <th class="grp-short" data-key="todayPct">Today</th>
         <th class="grp-short" data-key="yesterdayPct">YDAY</th>
         <th class="grp-short" data-key="oneWeekPct">1W</th>
@@ -859,6 +927,7 @@
     </div>
   </main>
 
+  <script src="/rowcard.js"></script>
   <script>
     let stocks = [];
     let portfolios = [];       // ordered portfolio names
@@ -872,16 +941,16 @@
     let signedIn = true;       // has a live session (or the app is open/local)
     let currentUser = null;    // { email, role } once signed in
 
-    const GROUPS = ['info', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
+    const GROUPS = ['info', 'rank', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
     const GROUP_COLORS = {
-      info: '#7c9cff', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
+      info: '#7c9cff', rank: '#a3e635', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
       rel:  '#22d3ee', trend: '#fbbf24', vol:  '#f472b6',
       size: '#94a3b8', fund: '#fb7185',
     };
     // Labels live here so adding a group later is: append to GROUPS, give it a
     // colour and a label, and tag the <th>/<td> cells with .grp-<id>.
     const GROUP_LABELS = {
-      info: 'Info', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
+      info: 'Info', rank: 'Rank', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
       rel: 'Relative', trend: 'Trend', vol: 'Volume',
       size: 'Size', fund: 'Fundamentals',
     };
@@ -1105,6 +1174,8 @@
       { root: 'picker', btn: 'pickerBtn', menu: 'pickerMenu' },
       { root: 'colPicker', btn: 'colBtn', menu: 'colMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
+      { root: 'addPicker', btn: 'addOpenBtn', menu: 'addMenu' },
+      { root: 'datePicker', btn: 'dateOpenBtn', menu: 'dateMenu' },
     ];
 
     // Keep an opened menu inside the viewport: shift it left of its trigger when it
@@ -1175,7 +1246,10 @@
       if (activeTab !== 'All' && portfolios.includes(activeTab)) sel.value = activeTab;
 
       // Rename/Delete only apply to a specific portfolio
-      $('portfolioActions').style.display = (activeTab !== 'All' && isAdmin) ? '' : 'none';
+      const showPortfolioActions = activeTab !== 'All' && isAdmin;
+      $('portfolioActions').style.display = showPortfolioActions ? '' : 'none';
+      // Only divide the account block off when something sits above it.
+      $('sessionSep').style.display = showPortfolioActions ? '' : 'none';
     }
 
     // ---- table ----
@@ -1243,15 +1317,15 @@
         return `<tr style="--i:${i}">
           ${symbolCell(s, freshest)}
           <td class="name left frz frz1">${s.name || ''}</td>
-          ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-info')}
-          ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-info')}
-          ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-info')}
-          ${rankCell(rankMap[s.symbol] ?? null, rankTotal, 'grp-info')}
           <td class="left grp-info">${badges(s.portfolios)}</td>
           <td class="grp-info"${attr(liveTitle)}>${price != null ? curSym(s.currency) + price : '—'}</td>
           <td class="name left grp-info"${attr(cacheTitle)}>${s.sector || '—'}</td>
           <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
           ${earningsCell(s, cacheTitle)}
+          ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-rank')}
+          ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-rank')}
+          ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank')}
+          ${rankCell(rankMap[s.symbol] ?? null, rankTotal, 'grp-rank')}
           ${pctCell(s.todayPct, 'grp-short', liveTitle)}
           ${pctCell(s.yesterdayPct, 'grp-short', liveTitle)}
           ${pctCell(s.oneWeekPct, 'grp-short', liveTitle)}
@@ -1369,110 +1443,30 @@
     function hideTip() { tip.style.display = 'none'; }
 
     // ---- Row card: every column for one row, on hover -----------------------
-    // Values are lifted straight from the row's own cells, so the card always
-    // agrees with the table — including columns whose group is collapsed.
-    const rowcard = $('rowcard');
-    let rowcardTimer = null;
+    // Built by the shared module in /rowcard.js so this page and the analysis
+    // page render an identical card. It takes the stock object rather than
+    // reading the row's cells, because the analysis tables carry only a handful
+    // of columns and could not be read the same way.
+    let rowcardApi = null;
+    function hideRowCard() { if (rowcardApi) rowcardApi.hide(); }
 
-    // Leaf header labels in DOM order: the two rowspan headers, then the second
-    // header row, then the trailing remove column.
-    function leafHeaders() {
-      const first = [...document.querySelectorAll('thead tr:first-child th')].filter((th) => th.rowSpan === 2);
-      const second = [...document.querySelectorAll('thead tr:nth-child(2) th')];
-      const labels = [];
-      // Symbol and Name come first; the empty remove header is last.
-      for (const th of first.slice(0, 2)) labels.push(th.textContent.trim());
-      for (const th of second) labels.push(th.innerText.replace(/\s+/g, ' ').trim());
-      for (const th of first.slice(2)) labels.push(th.textContent.trim());
-      return labels;
-    }
-
-    function buildRowCard(tr) {
-      const sym = tr.querySelector('td.sym')?.textContent.trim() || '';
-      const s = stocks.find((x) => x.symbol === sym);
-      const labels = leafHeaders();
-      const tds = [...tr.children];
-
-      // Bucket every cell under its column group, in table order.
-      const order = [];
-      const byGroup = {};
-      tds.forEach((td, i) => {
-        const g = [...td.classList].find((c) => c.startsWith('grp-'));
-        if (!g) return;                       // symbol, name, remove
-        const id = g.slice(4);
-        if (!byGroup[id]) { byGroup[id] = []; order.push(id); }
-        const val = td.textContent.trim() || '—';
-        const cls = td.classList.contains('pos') ? 'pos'
-          : td.classList.contains('neg') ? 'neg'
-          : td.classList.contains('na') ? 'na' : '';
-        byGroup[id].push({ k: labels[i] || '', v: val, cls });
-      });
-
-      const sections = order.filter((id) => byGroup[id].some((r) => r.v !== '—')).map((id) => {
-        const c = GROUP_COLORS[id] || 'var(--accent)';
-        const rows = byGroup[id]
-          .map((r) => `<div class="rc-row"><span class="rc-k">${r.k}</span>` +
-                      `<span class="rc-v ${r.cls}">${r.v}</span></div>`)
-          .join('');
-        return `<div class="rc-sec"><div class="rc-sec-h" style="color:${c}"><i></i>` +
-               `${GROUP_LABELS[id] || id}</div>${rows}</div>`;
-      }).join('');
-
-      // innerText reflects the header's CSS text-transform, so labels arrive
-      // uppercased — match case-insensitively.
-      const priceIdx = labels.findIndex((l) => l.toLowerCase() === 'price');
-      const price = priceIdx >= 0 && tds[priceIdx] ? tds[priceIdx].textContent.trim() : '';
-      const stale = s && s.profileFetchedAt
-        ? `Company data cached ${fmtDateTime(s.profileFetchedAt)}`
-        : 'Company data not cached yet';
-
-      rowcard.innerHTML =
-        '<div class="rc-core">' +
-          `<div class="rc-head"><span class="rc-sym">${sym}</span>` +
-          `<span class="rc-name">${(s && s.name) || ''}</span>` +
-          `<span class="rc-price">${price}</span></div>` +
-          `<div class="rc-cols">${sections}</div>` +
-          `<div class="rc-foot">${stale}</div>` +
-        '</div>';
-    }
-
-    function showRowCard(td) {
-      const tr = td.closest('tr');
-      if (!tr || !tr.querySelector('td.sym')) return;   // error / empty rows
-      hideTip();
-      buildRowCard(tr);
-      rowcard.style.display = 'block';
-      // Prefer the right of the frozen Name column, then clamp to the viewport.
-      const r = td.getBoundingClientRect();
-      const pad = 10;
-      const w = rowcard.offsetWidth;
-      const h = rowcard.offsetHeight;
-      let left = r.right + 12;
-      if (left + w > window.innerWidth - pad) left = Math.max(pad, r.left - w - 12);
-      let top = r.top - 8;
-      if (top + h > window.innerHeight - pad) top = window.innerHeight - h - pad;
-      if (top < pad) top = pad;
-      rowcard.style.left = Math.round(left) + 'px';
-      rowcard.style.top = Math.round(top) + 'px';
-    }
-
-    function hideRowCard() {
-      clearTimeout(rowcardTimer);
-      rowcard.style.display = 'none';
-    }
-
-    // Delegated, so it keeps working after every re-render.
-    $('tbody').addEventListener('mouseover', (e) => {
-      const td = e.target.closest('td.name');
-      if (!td || !$('tbody').contains(td)) return;
-      clearTimeout(rowcardTimer);
-      // A short delay so the card does not fire while scanning down the column.
-      rowcardTimer = setTimeout(() => showRowCard(td), 140);
-    });
-    $('tbody').addEventListener('mouseout', (e) => {
-      const to = e.relatedTarget;
-      if (to && to.closest && to.closest('td.name')) return;   // moving within the cell
-      hideRowCard();
+    rowcardApi = RowCard.attach({
+      root: $('tbody'),
+      selector: 'td.name',
+      colors: GROUP_COLORS,
+      labels: GROUP_LABELS,
+      onShow: () => hideTip(),
+      getStock: (td) => {
+        const sym = td.closest('tr')?.querySelector('td.sym')?.textContent.trim();
+        return sym ? stocks.find((x) => x.symbol === sym) : null;
+      },
+      // Rank within the rows currently on screen, matching the Rank column.
+      rankOf: (s) => {
+        const rows = visibleStocks().filter((x) => x.overallScore != null)
+          .slice().sort((a, b) => b.overallScore - a.overallScore);
+        const i = rows.findIndex((x) => x.symbol === s.symbol);
+        return i < 0 ? null : `${i + 1}/${rows.length}`;
+      },
     });
 
     // ---- Export current view to CSV (opens in Excel) ----
@@ -1650,6 +1644,15 @@
     // Backtest banner + button states reflecting whether an as-of date is active.
     function updateBacktestUI() {
       const bar = $('backtestBar');
+      // The collapsed trigger has to carry the state now that the field is hidden.
+      const btn = $('dateOpenBtn');
+      btn.classList.toggle('on', !!asOfDate);
+      btn.innerHTML = '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-calendar" /></svg>' +
+        (asOfDate ? `<span>${asOfDate}</span>` : '');
+      btn.title = asOfDate
+        ? `Backtest mode — showing the ranking as of ${asOfDate}`
+        : 'Backtest: view the ranking as of a past date';
+      $('backToLive').style.display = asOfDate ? '' : 'none';
       if (asOfDate) {
         bar.style.display = '';
         bar.innerHTML =
@@ -1669,6 +1672,10 @@
     function clearBacktest() {
       asOfDate = null;
       $('asOfDate').value = '';
+      // Repaint the control immediately. updateBacktestUI() otherwise only runs
+      // after a successful refresh, so a slow or failed pull would leave the
+      // trigger and banner still claiming backtest mode.
+      updateBacktestUI();
       refresh();
     }
 
@@ -1696,8 +1703,8 @@
       // The ⋯ menu doubles as the account menu, so anyone signed in needs it —
       // for a member it holds nothing but their email and Sign out.
       $('moreBtn').style.display = (isAdmin || (authRequired && signedIn)) ? '' : 'none';
-      // No divider above Sign out when it is the first item in the menu.
-      $('sessionSep').style.display = isAdmin ? '' : 'none';
+      // The divider above the account block is owned by renderPicker(), which
+      // knows whether the portfolio actions are showing above it.
       $('readonlyNote').style.display = (authRequired && !isAdmin) ? '' : 'none';
       const who = $('whoami');
       if (who) {
@@ -1810,7 +1817,7 @@
 
     async function addTicker() {
       const symbol = $('symbolInput').value.trim().toUpperCase();
-      if (!symbol) return;
+      if (!symbol) return $('symbolInput').focus();
       const target = $('addTarget').value;
       if (!target) { setError('Create a portfolio first (＋), then add tickers to it.'); return; }
       setError('');
@@ -1819,6 +1826,8 @@
         $('symbolInput').value = '';
         if (activeTab === 'All' || activeTab === target) { /* keep view */ } else { activeTab = target; }
         await refresh();
+        // Panel stays open for the next one.
+        $('symbolInput').focus();
       } catch (err) { setError(err.message); }
     }
 
@@ -1895,6 +1904,7 @@
     $('asOfDate').addEventListener('change', (e) => {
       const v = e.target.value; // '' when cleared
       asOfDate = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+      closePickers();
       refresh();
     });
     // ---- change password ----
@@ -1956,9 +1966,15 @@
     PICKERS.forEach((p) => {
       $(p.btn).addEventListener('click', (e) => {
         e.stopPropagation();
-        openPicker($(p.root).dataset.open === '1' ? null : p.root);
+        const opening = $(p.root).dataset.open !== '1';
+        openPicker(opening ? p.root : null);
+        if (opening && p.root === 'addPicker') setTimeout(() => $('symbolInput').focus(), 60);
       });
     });
+    // Interacting inside a form panel must not be treated as a click outside it.
+    $('addMenu').addEventListener('click', (e) => e.stopPropagation());
+    $('dateMenu').addEventListener('click', (e) => e.stopPropagation());
+    $('backToLive').addEventListener('click', () => { closePickers(); clearBacktest(); });
     document.addEventListener('click', (e) => {
       if (!PICKERS.some((p) => $(p.root).contains(e.target))) closePickers();
     });

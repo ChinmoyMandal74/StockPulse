@@ -421,9 +421,22 @@ async function deleteSession(token) {
   await db.execute({ sql: 'delete from sessions where token = ?', args: [token] });
 }
 
+// Wipes the log. The autoincrement is reset too, so ids start from 1 again
+// rather than carrying on from the deleted rows.
+async function clearVisitors() {
+  await init();
+  const before = await db.execute('select count(*) as c from visitors');
+  await db.batch([
+    { sql: 'delete from visitors', args: [] },
+    { sql: "delete from sqlite_sequence where name = 'visitors'", args: [] },
+  ], 'write');
+  return Number(before.rows[0].c || 0);
+}
+
 module.exports = {
   db,
   init,
+  clearVisitors,
   hashPassword,
   newSalt,
   verifyPassword,
