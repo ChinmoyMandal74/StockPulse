@@ -279,7 +279,10 @@
       // --- 5. Cheap, growing and profitable --------------------------------
       // Deliberately not PEG: on this feed PEG < 1.2 alone returns a third of
       // the universe, and it is the field that rated a loss-maker 8/10.
-      const fcfYield = (x) => (num(x.fcfTtm) && x.marketCap) ? (x.fcfTtm / x.marketCap) * 100 : null;
+      // Server-derived now, so the page, the export and the chatbot all read one
+      // number. The fallback keeps snapshots written before the field existed working.
+      const fcfYield = (x) => num(x.fcfYield) ? x.fcfYield
+        : ((num(x.fcfTtm) && x.marketCap) ? (x.fcfTtm / x.marketCap) * 100 : null);
       const value = all.filter((x) => num(x.forwardPe) && x.forwardPe > 0 && x.forwardPe < 20
         && num(x.revenueGrowthYoY) && x.revenueGrowthYoY > 15
         && num(x.profitMargin) && x.profitMargin > 15)

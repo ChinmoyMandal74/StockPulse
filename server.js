@@ -105,9 +105,22 @@ app.get('/analysis', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'analysis.html'));
 }));
 
+// Owner-only for now. Opening it to members is a one-word change here and in
+// the /api/chat guard, once real usage has been watched.
+app.get('/chat', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  res.sendFile(path.join(__dirname, 'public', 'chat.html'));
+}));
+
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
+
+// public/ is served wholesale, which would otherwise hand out the gated pages
+// at their raw .html path and bypass the checks above. Bounce those to the
+// routed path, where the guard runs.
+const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors' };
+app.get(Object.keys(GATED_PAGES), (req, res) => res.redirect(GATED_PAGES[req.path]));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -834,6 +847,14 @@ function positiveMonths(values, months = 12, span = 21) {
   return (up / months) * 100;
 }
 
+// A ratio of two absolutes, as a percentage. Derived server-side so the value
+// on screen, in the export and in the chatbot's context is one number computed
+// once — the same reason the margins are derived rather than taken from the feed.
+function yieldPct(part, whole) {
+  if (part == null || whole == null || !isFinite(part) || !isFinite(whole) || whole <= 0) return null;
+  return (part / whole) * 100;
+}
+
 // Return per unit of risk taken.
 function riskAdj(ret, vol) {
   if (ret == null || vol == null || !isFinite(ret) || !isFinite(vol) || vol <= 0) return null;
@@ -1349,6 +1370,8 @@ async function computeStocks(asOf) {
         // no additional API credits.
         mom12_1: windowReturn(values, ONE_YEAR, ONE_MONTH), // 12 months, skipping the last
         pctFromLow: pctFromLow(values),
+        fcfYield: yieldPct(prof.fcfTtm, prof.marketCap),      // FCF / market cap
+        netCashPct: yieldPct(prof.netCash, prof.marketCap),   // net cash as % of market cap
         range52Pos: range52Pos(values),   // 0 = on the 52w low, 100 = on the high
         realisedVol: rvol,
         posMonths: positiveMonths(values),
@@ -1371,6 +1394,228 @@ async function computeStocks(asOf) {
     return { ok: false, status: 502, error: `Failed to reach Twelve Data: ${err.message}` };
   }
 }
+
+// ============================================================================
+// Chatbot
+// ============================================================================
+// The entire universe is ~110 tokens per stock, so the whole snapshot goes into
+// the system prompt and there is no retrieval layer at all. Embeddings would be
+// the wrong tool twice over: the data is a numeric table where "margin above
+// 15%" is an exact filter rather than a similarity, and retrieval could only
+// drop rows the answer needs. It stays viable to roughly 1,800 stocks, well past
+// the 119-ticker ceiling the price API imposes.
+
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
+const CHAT_MODEL = process.env.CHAT_MODEL || 'claude-sonnet-5';
+const CHAT_DAILY_LIMIT = Number(process.env.CHAT_DAILY_LIMIT || 60);
+// Generous on purpose. The model reasons before answering, and that reasoning
+// is billed against max_tokens: at 1200 a ranking question spent the entire
+// budget thinking and returned a "thinking" block with no text at all. The
+// reasoning is worth keeping — working through 69 rows is exactly where a model
+// miscounts — so the budget has to cover it plus the answer.
+const CHAT_MAX_TOKENS = 6000;
+const CHAT_MAX_TURNS = 12;      // trailing turns kept from the client's history
+const CHAT_MAX_CHARS = 2000;    // per message
+
+// The columns the model sees, and what each one means. Cryptic names invite
+// confident misreadings, so every field is spelled out.
+const CHAT_FIELDS = [
+  ['symbol', 'ticker'],
+  ['name', 'company name'],
+  ['sector', 'sector'],
+  ['portfolios', 'which of the user\'s watchlists it belongs to'],
+  ['price', 'last close, in the currency column'],
+  ['currency', 'reporting and price currency — money columns are NOT converted to USD'],
+  ['marketCap', 'market capitalisation'],
+  ['overallRating', 'composite 1-10: 65% momentum, 35% quality'],
+  ['momentumRating', 'momentum 1-10, ranked against this universe'],
+  ['qualityRating', 'quality 1-10 from fundamentals; blank when too few inputs are usable'],
+  ['todayPct', 'return today, %'],
+  ['oneWeekPct', 'return over 1 week, %'],
+  ['twoWeekPct', 'return over 2 weeks, %'],
+  ['oneMonthPct', 'return over 1 month, %'],
+  ['threeMonthPct', 'return over 3 months, %'],
+  ['sixMonthPct', 'return over 6 months, %'],
+  ['oneYearPct', 'return over 1 year, %'],
+  ['mom12_1', '12-month return excluding the most recent month, %'],
+  ['pctFromHigh', 'distance below the 52-week high, % (negative)'],
+  ['pctFromLow', 'distance above the 52-week low, % (positive)'],
+  ['range52Pos', 'position in the 52-week range: 0 = on the low, 100 = on the high'],
+  ['relStrength', '3-month return minus the S&P 500\'s'],
+  ['rsi', 'RSI(14). Above 70 overbought, below 30 oversold'],
+  ['vs50ma', 'price vs the 50-day average, %'],
+  ['vs200ma', 'price vs the 200-day average, %'],
+  ['maBullish', 'true when the 50-day sits above the 200-day'],
+  ['maCrossDays', 'trading days since that crossover'],
+  ['macdHist', 'MACD histogram'],
+  ['volTrend', '5-day average volume vs 20-day, %'],
+  ['realisedVol', 'annualised volatility, %'],
+  ['posMonths', 'share of the last 12 months that closed up, %'],
+  ['revenueTtm', 'revenue, trailing twelve months'],
+  ['revenueGrowthYoY', 'quarterly revenue growth year on year, %'],
+  ['grossProfitTtm', 'gross profit TTM'],
+  ['grossMargin', 'gross profit / revenue, %'],
+  ['netIncomeTtm', 'net income TTM — negative means loss-making'],
+  ['profitMargin', 'net income / revenue, %'],
+  ['earningsGrowthYoY', 'quarterly earnings growth year on year, %'],
+  ['fcfTtm', 'free cash flow TTM'],
+  ['fcfMargin', 'FCF / revenue, %'],
+  ['fcfYield', 'FCF / market cap, % — the cleanest cheapness measure here'],
+  ['netCash', 'cash minus debt; negative means net debt'],
+  ['netCashPct', 'net cash as % of market cap. Meaningless for banks'],
+  ['roe', 'return on equity, %'],
+  ['forwardPe', 'forward price/earnings'],
+  ['peg', 'PEG ratio — unreliable on this feed, treat with suspicion'],
+  ['shortPctFloat', 'short interest as % of float'],
+  ['nextEarningsDate', 'next earnings date'],
+  ['nextEarningsEstimated', 'true when that date is an estimate, not confirmed'],
+  ['lastEarningsDate', 'date of the last report'],
+  ['lastSurprise', 'how far the last quarter beat/missed consensus, %'],
+  ['latestDate', 'date of the most recent price bar'],
+  ['historyDays', 'trading days of history available'],
+];
+
+function chatCsv(stocks) {
+  const keys = CHAT_FIELDS.map(([k]) => k);
+  const cell = (v) => {
+    if (v == null) return '';
+    if (Array.isArray(v)) return v.join(' ');
+    if (typeof v === 'number') return String(Math.round(v * 100) / 100);
+    const t = String(v);
+    return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  };
+  return keys.join(',') + '\n' +
+    stocks.filter((s) => !s.error).map((s) => keys.map((k) => cell(s[k])).join(',')).join('\n');
+}
+
+// The rules half of the prompt. Kept separate from the data so the data block
+// alone carries the cache marker and survives between questions.
+function chatRules(asOf, count) {
+  return [
+    'You are the analyst built into Ticker Lab, a stock screener. You answer questions about one',
+    'fixed table of ' + count + ' stocks, supplied below. Prices and fundamentals are a snapshot taken',
+    (asOf ? 'at ' + asOf + '.' : 'at an unknown time.'),
+    '',
+    'WHAT YOU DO NOT HAVE. Say so plainly rather than reaching for something plausible:',
+    '  - no news, filings, transcripts, or any account of WHY a price moved',
+    '  - no analyst ratings or price targets (the plan does not return them)',
+    '  - no intraday prices, no data after the snapshot date, no live quotes',
+    '  - no history beyond roughly 14 months, so no multi-year or all-time figures',
+    '  - nothing about the user\'s holdings, position sizes, cost basis or tax position',
+    '  - no stock outside the table below',
+    '',
+    'WHEN A QUESTION FALLS OUTSIDE THAT DATA:',
+    '  Name the specific gap, then give what the table DOES show on the subject. "I have no news,',
+    '  so I cannot tell you why it fell. What I can see: down 20% over three months, sitting at 25%',
+    '  of its 52-week range, revenue still growing 25%." Never a bare refusal, and never a guess',
+    '  dressed as an answer.',
+    '',
+    'GENERAL KNOWLEDGE is fine and welcome — what a company does, what PEG means, how RSI is built.',
+    '  Answer those, and make clear it is background rather than something read off this table.',
+    '',
+    'YOU DO NOT GIVE BUY, SELL OR HOLD VERDICTS. Asked whether to buy something, set out what the',
+    '  data supports on both sides and stop there. This is not a disclaimer, it is the same rule as',
+    '  above: a verdict would need news, a valuation model, and the person\'s horizon and risk',
+    '  tolerance, none of which you have. Do not append a standing disclaimer to every reply.',
+    '',
+    'PREDICTIONS. "Will it go up?" is not a missing-data problem, it is unknowable. Say so briefly,',
+    '  then describe where the stock actually stands.',
+    '',
+    'BEING ACCURATE WITH NUMBERS:',
+    '  - Quote figures from the table exactly. Do not re-derive one that is already a column.',
+    '  - Ratios you might reach for are already computed: fcfYield, netCashPct, all three margins,',
+    '    range52Pos. Use them rather than dividing.',
+    '  - When ranking or counting, work through the rows deliberately and state how many matched.',
+    '  - Blank means the field is missing for that stock, not zero. Say when it is missing.',
+    '  - Money columns are in each company\'s own currency (see the currency column). Never compare',
+    '    or total them across currencies; a KRW reporter dwarfs any USD one for no real reason.',
+    '  - netIncomeTtm below zero means loss-making, which makes P/E, PEG and earnings growth',
+    '    meaningless for that row.',
+    '',
+    'STYLE: brief and concrete. Lead with the answer. Small markdown tables when comparing several',
+    'stocks. Always give the snapshot date when quoting prices or returns.',
+  ].join('\n');
+}
+
+// Owner-only while the prompt is still being shaped against real questions.
+app.post('/api/chat', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!ANTHROPIC_KEY) {
+    return res.status(503).json({ error: 'The assistant is not configured: ANTHROPIC_API_KEY is unset.' });
+  }
+
+  const incoming = Array.isArray(req.body && req.body.messages) ? req.body.messages : [];
+  const messages = incoming
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+    .slice(-CHAT_MAX_TURNS)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, CHAT_MAX_CHARS) }));
+  if (!messages.length || messages[messages.length - 1].role !== 'user') {
+    return res.status(400).json({ error: 'Ask a question first.' });
+  }
+
+  const who = await currentUser(req);
+  const quota = await store.noteChatUse(who ? who.email : 'admin', CHAT_DAILY_LIMIT);
+  if (!quota.allowed) {
+    return res.status(429).json({ error: `Daily limit of ${quota.limit} questions reached. It resets at midnight UTC.` });
+  }
+
+  const snap = await readSnapshot();
+  const stocks = (snap && snap.stocks) || [];
+  if (!stocks.length) {
+    return res.status(503).json({ error: 'No screener data yet — refresh the screener first.' });
+  }
+  const asOf = snap.updatedAt || null;
+
+  let data;
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: CHAT_MODEL,
+        max_tokens: CHAT_MAX_TOKENS,
+        system: [
+          { type: 'text', text: chatRules(asOf, stocks.filter((s) => !s.error).length) },
+          // The table changes only when the screener is refreshed, so it is
+          // worth caching: every question after the first re-reads it cheaply.
+          {
+            type: 'text',
+            text: 'COLUMNS\n' + CHAT_FIELDS.map(([k, d]) => `  ${k}: ${d}`).join('\n') +
+                  '\n\nDATA (CSV, one row per stock)\n' + chatCsv(stocks),
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+        messages,
+      }),
+    });
+    data = await r.json();
+    if (!r.ok) {
+      // Never surface the upstream body: it can echo the request, and the key
+      // lives in the same headers.
+      console.error('anthropic error', r.status, data && data.error && data.error.type);
+      return res.status(502).json({ error: 'The assistant is unavailable right now. Try again shortly.' });
+    }
+  } catch (err) {
+    console.error('anthropic call failed', err.message);
+    return res.status(502).json({ error: 'Could not reach the assistant.' });
+  }
+
+  const text = (data.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').trim();
+  // Distinguish "ran out of room" from "said nothing": the first is actionable.
+  const ranOut = data.stop_reason === 'max_tokens';
+  res.json({
+    reply: text || (ranOut
+      ? 'That needed more room than I have. Try a narrower question — fewer stocks, or one thing at a time.'
+      : 'No answer came back — try rephrasing.'),
+    asOf,
+    used: quota.used,
+    limit: quota.limit,
+  });
+}));
 
 // Snapshot: the public sees the last computed data (no live API calls). Admin
 // refreshes recompute live and overwrite it.

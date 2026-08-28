@@ -102,6 +102,14 @@ const SCHEMA = [
      expires_at integer not null
    )`,
   `create index if not exists idx_sessions_user on sessions (user_id)`,
+  // One row per user per UTC day. A counter in memory is useless on serverless —
+  // consecutive requests need not share a process — so the quota lives here.
+  `create table if not exists chat_usage (
+     user_key text not null,
+     day      text not null,
+     count    integer not null default 0,
+     primary key (user_key, day)
+   )`,
   // A refresh runs for ten-odd minutes and every instance needs to know, so the
   // flag lives here rather than in a process variable — serverless instances
   // share nothing else. At most one row; its absence means "not refreshing".
@@ -313,6 +321,27 @@ async function readRefreshState() {
     total: row.total == null ? null : Number(row.total),
     actor: row.actor || null,
   };
+}
+
+// ---- chat quota -----------------------------------------------------------
+
+// Counts one question against today's quota and reports what remains. Returns
+// { allowed, used, limit }. The insert and the read are one statement so two
+// requests landing together cannot both see the old count.
+async function noteChatUse(userKey, limit) {
+  await init();
+  const day = new Date().toISOString().slice(0, 10);
+  await db.execute({
+    sql: `insert into chat_usage (user_key, day, count) values (?, ?, 1)
+          on conflict(user_key, day) do update set count = count + 1`,
+    args: [String(userKey), day],
+  });
+  const r = await db.execute({
+    sql: 'select count from chat_usage where user_key = ? and day = ?',
+    args: [String(userKey), day],
+  });
+  const used = r.rows.length ? Number(r.rows[0].count) : 1;
+  return { allowed: used <= limit, used, limit };
 }
 
 // ---- snapshot -------------------------------------------------------------
@@ -548,6 +577,7 @@ module.exports = {
   readRefreshState,
   readSnapshot,
   writeSnapshot,
+  noteChatUse,
   logVisit,
   readVisitorStats,
 };

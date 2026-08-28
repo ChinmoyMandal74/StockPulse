@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Assistant — Ticker Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 40px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 0 24px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 8% -6%, rgba(167, 139, 250, 0.12), transparent 62%),
+        radial-gradient(50vw 44vw at 94% 6%, rgba(52, 211, 153, 0.11), transparent 64%); }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
+                   padding: 16px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
+      padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+
+    h1 { margin: 22px 0 0; font-size: clamp(26px, 3vw, 34px); font-weight: 600;
+         letter-spacing: -0.035em; line-height: 1.05; }
+    .lede { margin: 10px 0 18px; max-width: 70ch; }
+
+    /* transcript */
+    #log { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
+    .msg { max-width: 100%; }
+    .msg .who { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.16em;
+                color: var(--faint); margin-bottom: 6px; }
+    .msg.you .bubble {
+      margin-left: auto; max-width: 80%; background: rgba(124, 156, 255, 0.11);
+      border: 1px solid rgba(124, 156, 255, 0.22); color: var(--text);
+    }
+    .msg.you .who { text-align: right; }
+    .bubble { padding: 13px 16px; border-radius: 16px; background: var(--surface-2);
+              border: 1px solid var(--hair); font-size: 13.5px; line-height: 1.62; }
+    .bubble > :first-child { margin-top: 0; }
+    .bubble > :last-child { margin-bottom: 0; }
+    .bubble p { margin: 0 0 9px; }
+    .bubble ul, .bubble ol { margin: 0 0 9px; padding-left: 20px; }
+    .bubble li { margin: 2px 0; }
+    .bubble h3 { font-size: 13px; font-weight: 600; margin: 12px 0 6px; letter-spacing: -0.01em; }
+    .bubble code { font-family: var(--mono); font-size: 12px; background: rgba(255, 255, 255, 0.06);
+                   padding: 1px 5px; border-radius: 5px; }
+    .bubble strong { color: #fff; font-weight: 600; }
+    /* a wide table scrolls inside the bubble rather than stretching the page */
+    .tblwrap { overflow-x: auto; margin: 0 0 9px; }
+    .bubble table { width: auto; min-width: 100%; border-collapse: collapse; font-size: 12px; }
+    .bubble th, .bubble td { padding: 5px 10px; border-bottom: 1px solid var(--hair);
+                             text-align: right; white-space: nowrap; }
+    .bubble th:first-child, .bubble td:first-child { text-align: left; }
+    .bubble th { color: var(--muted); font-weight: 500; font-size: 10.5px;
+                 text-transform: uppercase; letter-spacing: 0.1em; }
+    .bubble td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .bubble td:first-child { font-family: var(--sans); }
+
+    .thinking { display: inline-flex; gap: 4px; align-items: center; }
+    .thinking i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted);
+                  animation: blink 1.3s var(--ease) infinite; }
+    .thinking i:nth-child(2) { animation-delay: 0.18s; }
+    .thinking i:nth-child(3) { animation-delay: 0.36s; }
+    @keyframes blink { 0%, 60%, 100% { opacity: 0.25; } 30% { opacity: 1; } }
+
+    /* composer */
+    .composer > .core { padding: 10px 10px 10px 16px; display: flex; align-items: flex-end; gap: 10px; }
+    #q {
+      flex: 1; min-width: 0; resize: none; border: 0; outline: none; background: none;
+      color: var(--text); font-family: var(--sans); font-size: 13.5px; line-height: 1.5;
+      max-height: 140px; padding: 8px 0;
+    }
+    #q::placeholder { color: var(--faint); }
+    #send { flex: none; }
+
+    .starters { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 18px; }
+    .starter {
+      padding: 7px 13px; border-radius: 999px; cursor: pointer; font-size: 12px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03); color: var(--muted);
+      font-family: var(--sans); text-align: left;
+      transition: background 0.45s var(--ease), color 0.45s var(--ease), border-color 0.45s var(--ease);
+    }
+    .starter:hover { background: rgba(255, 255, 255, 0.07); color: var(--text); border-color: var(--hair-2); }
+
+    .foot { display: flex; gap: 12px; align-items: center; margin-top: 10px;
+            font-size: 11px; color: var(--faint); }
+    .foot .sep { opacity: 0.5; }
+    .err { color: var(--red); font-size: 12.5px; margin-top: 10px; }
+
+    @media (max-width: 640px) {
+      .page { padding: 0 16px; }
+      .msg.you .bubble { max-width: 92%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M4.4 12h15"/><path d="M13.4 6 19.4 12l-6 6"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark"><span class="wordmark">Ticker Lab</span></span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <h1>Assistant</h1>
+    <p class="lede" id="lede">
+      Ask about the stocks in your screener. It reads the same snapshot the table does — prices,
+      returns, trend and fundamentals — and nothing else: no news, no price targets, no view on
+      what happens next.
+    </p>
+
+    <div class="starters" id="starters"></div>
+    <div id="log"></div>
+
+    <form class="bezel composer" id="form">
+      <div class="core">
+        <textarea id="q" rows="1" placeholder="Ask about your stocks…" autocomplete="off"></textarea>
+        <button class="btn btn-primary" id="send" type="submit">
+          Ask <span class="nub"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-send" /></svg></span>
+        </button>
+      </div>
+    </form>
+    <div class="foot">
+      <span id="asof">—</span><span class="sep">·</span><span id="quota"></span>
+    </div>
+    <div class="err" id="err"></div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const history = [];
+
+    const STARTERS = [
+      'Which stocks look cheapest on free cash flow yield?',
+      'Compare MU and STX on growth and margins.',
+      'Which names are low in their 52-week range but turning up?',
+      'Which of my stocks report earnings soonest?',
+      'Summarise the sector exposure across my portfolios.',
+    ];
+
+    const esc = (t) => String(t).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    // Just enough markdown for what the model actually emits. Escaping happens
+    // first, so nothing the model returns can inject markup.
+    function md(src) {
+      const lines = esc(src).split('\n');
+      const out = [];
+      let list = null;   // 'ul' | 'ol'
+      let para = [];
+
+      const inline = (t) => t
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+      const flushPara = () => { if (para.length) { out.push('<p>' + inline(para.join(' ')) + '</p>'); para = []; } };
+      const flushList = () => { if (list) { out.push('</' + list + '>'); list = null; } };
+      const isRow = (t) => /^\s*\|.*\|\s*$/.test(t);
+      const cells = (t) => t.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+
+      for (let i = 0; i < lines.length; i++) {
+        const ln = lines[i];
+
+        // table: a header row, a dashed separator, then body rows
+        if (isRow(ln) && isRow(lines[i + 1] || '') && /^[\s|:-]+$/.test(lines[i + 1])) {
+          flushPara(); flushList();
+          const head = cells(ln);
+          i += 2;
+          const body = [];
+          while (i < lines.length && isRow(lines[i])) body.push(cells(lines[i++]));
+          i--;
+          out.push('<div class="tblwrap"><table><thead><tr>' +
+            head.map((c) => '<th>' + inline(c) + '</th>').join('') + '</tr></thead><tbody>' +
+            body.map((r) => '<tr>' + r.map((c) => '<td>' + inline(c) + '</td>').join('') + '</tr>').join('') +
+            '</tbody></table></div>');
+          continue;
+        }
+        if (/^#{1,6}\s+/.test(ln)) { flushPara(); flushList(); out.push('<h3>' + inline(ln.replace(/^#+\s+/, '')) + '</h3>'); continue; }
+        const ul = ln.match(/^\s*[-*]\s+(.*)$/);
+        const ol = ln.match(/^\s*\d+\.\s+(.*)$/);
+        if (ul || ol) {
+          flushPara();
+          const want = ul ? 'ul' : 'ol';
+          if (list !== want) { flushList(); out.push('<' + want + '>'); list = want; }
+          out.push('<li>' + inline((ul || ol)[1]) + '</li>');
+          continue;
+        }
+        if (!ln.trim()) { flushPara(); flushList(); continue; }
+        flushList();
+        para.push(ln.trim());
+      }
+      flushPara(); flushList();
+      return out.join('');
+    }
+
+    function add(role, html) {
+      const el = document.createElement('div');
+      el.className = 'msg ' + (role === 'user' ? 'you' : 'bot');
+      el.innerHTML = `<div class="who">${role === 'user' ? 'You' : 'Assistant'}</div>` +
+                     `<div class="bubble">${html}</div>`;
+      $('log').appendChild(el);
+      el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      return el;
+    }
+
+    async function ask(text) {
+      const q = text.trim();
+      if (!q) return;
+      $('err').textContent = '';
+      $('starters').style.display = 'none';
+      add('user', md(q));
+      history.push({ role: 'user', content: q });
+      $('q').value = ''; $('q').style.height = 'auto';
+
+      const pending = add('assistant', '<span class="thinking"><i></i><i></i><i></i></span>');
+      $('send').disabled = true;
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: history }),
+        });
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Request failed');
+        pending.querySelector('.bubble').innerHTML = md(data.reply);
+        history.push({ role: 'assistant', content: data.reply });
+        if (data.asOf) $('asof').textContent = 'Snapshot ' + new Date(data.asOf).toLocaleString();
+        if (data.limit) $('quota').textContent = `${data.used} of ${data.limit} questions today`;
+      } catch (err) {
+        pending.remove();
+        history.pop();   // drop the unanswered question so it is not resent
+        $('err').textContent = err.message;
+      } finally {
+        $('send').disabled = false;
+        $('q').focus();
+      }
+    }
+
+    $('starters').innerHTML = STARTERS
+      .map((t) => `<button class="starter" type="button">${esc(t)}</button>`).join('');
+    $('starters').addEventListener('click', (e) => {
+      const b = e.target.closest('.starter');
+      if (b) ask(b.textContent);
+    });
+
+    $('form').addEventListener('submit', (e) => { e.preventDefault(); ask($('q').value); });
+    $('q').addEventListener('input', () => {
+      $('q').style.height = 'auto';
+      $('q').style.height = Math.min($('q').scrollHeight, 140) + 'px';
+    });
+    $('q').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask($('q').value); }
+    });
+    $('q').focus();
+  </script>
+</body>
+</html>
