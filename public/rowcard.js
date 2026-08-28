@@ -78,6 +78,7 @@
     ['fwd',   '+6M',            (s) => V.pct(s.fwd6M)],
     ['fwd',   'Since',          (s) => V.pct(s.fwdSince)],
     ['rel',   'RS vs S&P',      (s) => V.pct(s.relStrength)],
+    ['rel',   '% from 52W lo',  (s) => V.lvl(s.pctFromLow)],
     ['rel',   '% from 52W hi',  (s) => V.pct(s.pctFromHigh)],
     ['rel',   'RSI',            (s) => V.rsi(s.rsi)],
     ['trend', 'vs 50D MA',      (s) => V.pct(s.vs50ma)],

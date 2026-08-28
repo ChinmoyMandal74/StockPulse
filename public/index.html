@@ -660,7 +660,7 @@
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="3">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward (backtest)</th>
-        <th class="group grp-rel" data-group="rel" colspan="3">Relative</th>
+        <th class="group grp-rel" data-group="rel" colspan="4">Relative</th>
         <th class="group grp-trend" data-group="trend" colspan="4">Trend</th>
         <th class="group grp-vol" data-group="vol" colspan="1">Volume</th>
         <th class="group grp-size" data-group="size" colspan="7">Size</th>
@@ -690,6 +690,7 @@
         <th class="grp-fwd" data-key="fwd6M" title="Return in the ~6 months after the as-of date">+6M</th>
         <th class="grp-fwd" data-key="fwdSince" title="Return from the as-of date to the latest close">Since</th>
         <th class="grp-rel" data-key="relStrength" title="3-month return minus the S&P 500's">RS vs<br>S&amp;P</th>
+        <th class="grp-rel" data-key="pctFromLow" title="How far the price has risen above its 52-week low. A level, not a change — small means it is still sitting on the floor of its range.">% from<br>52W Lo</th>
         <th class="grp-rel" data-key="pctFromHigh" title="Distance below the 52-week high">% from<br>52W Hi</th>
         <th class="grp-rel" data-key="rsi" title="Relative Strength Index (14-day)">RSI</th>
         <th class="grp-trend" data-key="vs50ma" title="Price vs 50-day moving average">vs 50D<br>MA</th>
@@ -1069,7 +1070,7 @@
         const msg = activeTab === 'All'
           ? 'No tickers yet — add one above.'
           : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="46">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="47">${msg}</td></tr>`;
         applyGroups();
         return;
       }
@@ -1090,7 +1091,7 @@
         if (s.error) {
           return `<tr style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="44">${s.error}</td>
+            <td class="na" colspan="45">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -1132,6 +1133,7 @@
           ${pctCell(s.fwd6M, 'grp-fwd', fwdTitle)}
           ${pctCell(s.fwdSince, 'grp-fwd', fwdTitle)}
           ${pctCell(s.relStrength, 'grp-rel', liveTitle)}
+          ${marginCell(s.pctFromLow, 'grp-rel', liveTitle)}
           ${pctCell(s.pctFromHigh, 'grp-rel', liveTitle)}
           ${rsiCell(s.rsi, 'grp-rel', liveTitle)}
           ${pctCell(s.vs50ma, 'grp-trend', liveTitle)}
@@ -1347,6 +1349,8 @@
         ['FCF TTM', (s) => s.fcfTtm],
         ['FCF Margin %', (s) => s.fcfMargin],
         ['Net Cash', (s) => s.netCash],
+        ['% from 52W Low', (s) => s.pctFromLow],
+        ['52W Range Pos %', (s) => s.range52Pos],
       ];
 
       const esc = (v) => {
@@ -1614,7 +1618,7 @@
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     function showLoading(msg) {
-      $('tbody').innerHTML = `<tr><td class="empty" colspan="46">${msg}</td></tr>`;
+      $('tbody').innerHTML = `<tr><td class="empty" colspan="47">${msg}</td></tr>`;
     }
 
     // Clear the cache, then keep re-pulling until EVERY ticker's fundamentals are
