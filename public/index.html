@@ -9,124 +9,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
   <style>
-    /* ==========================================================================
-       Ticker Lab — visual system
-       Vibe archetype ...... Ethereal Glass (OLED black, mesh aura, glass chrome)
-       Layout archetype .... one control bar (identity + filters + actions) over the table
-       Every surface is a double-bezel: an outer translucent shell with a hairline
-       and a large radius, holding an opaque inner core with a top highlight.
-       ========================================================================== */
-    :root {
-      color-scheme: dark;
-
-      /* surfaces */
-      --void: #050505;
-      --surface: #0a0c11;          /* inner core — MUST stay opaque: frozen table cells sit on it */
-      --surface-2: #0d1017;
-      --shell: rgba(255, 255, 255, 0.028);
-      --hair: rgba(255, 255, 255, 0.07);
-      --hair-2: rgba(255, 255, 255, 0.13);
-      --inset: inset 0 1px 0 rgba(255, 255, 255, 0.055);
-
-      /* ink */
-      --text: #e9ecf2;
-      --muted: #8b94a4;
-      --faint: #59616f;
-
-      /* signal */
-      --green: #34d399;
-      --red: #fb7185;
-      --amber: #fbbf24;
-      --accent: #7c9cff;
-      --accent-2: #a78bfa;
-
-      /* aliases kept so long-standing rules and inline styles keep resolving */
-      --bg: var(--void);
-      --panel: #141822;            /* opaque raised / row hover */
-      --border: var(--hair);
-
-      /* motion — spring-ish curves only, never linear or ease-in-out */
-      --ease: cubic-bezier(0.32, 0.72, 0, 1);
-      --ease-soft: cubic-bezier(0.16, 1, 0.3, 1);
-
-      /* systemic layers */
-      --z-sheet: 45;
-      --z-nav: 46;
-      --z-tip: 55;
-      --z-grain: 60;
-
-      --r-shell: 26px;
-      --r-core: 20px;              /* r-shell − bezel padding, for concentric curves */
-
-      --sans: 'Geist', ui-sans-serif, system-ui, 'Segoe UI Variable Text', sans-serif;
-      --mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', 'SF Mono', monospace;
-    }
-
-    * { box-sizing: border-box; }
-    html { -webkit-text-size-adjust: 100%; height: 100%; }
     body {
-      margin: 0;
       height: 100dvh;
       padding: 0;
-      overflow: hidden;            /* the table scrolls, the page never does */
-      background: var(--void);
-      color: var(--text);
-      font-family: var(--sans);
-      font-size: 14px;
-      line-height: 1.5;
-      letter-spacing: -0.01em;
-      -webkit-font-smoothing: antialiased;
-    }
+      overflow: hidden; }
     .page {
       position: relative; z-index: 1; height: 100%;
       max-width: 1720px; margin: 0 auto; padding: 10px 32px;
       display: flex; flex-direction: column; min-height: 0;
     }
     .bar, .notice, .error { flex: none; }
-
-    /* ---- atmosphere: fixed mesh aura + film grain (never attached to a scroller) ---- */
-    .aura {
-      position: fixed; inset: -10%; z-index: 0; pointer-events: none;
-      background:
-        radial-gradient(46vw 40vw at 6% -8%, rgba(52, 211, 153, 0.13), transparent 62%),
-        radial-gradient(52vw 44vw at 98% 2%, rgba(124, 156, 255, 0.14), transparent 64%),
-        radial-gradient(58vw 48vw at 48% 112%, rgba(167, 139, 250, 0.10), transparent 62%);
-      animation: drift 44s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
-      will-change: transform;
-    }
-    @keyframes drift {
-      from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
-      to   { transform: translate3d(2%, 1.5%, 0) scale(1.06); }
-    }
-    .grain {
-      position: fixed; inset: 0; z-index: var(--z-grain); pointer-events: none;
-      opacity: 0.038; mix-blend-mode: overlay; background-size: 170px 170px;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='170' height='170' filter='url(%23n)'/%3E%3C/svg%3E");
-    }
-
-    /* ---- icons: ultra-light strokes, currentColor ---- */
-    .ic { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
-          stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
-    .ic-sm { width: 13px; height: 13px; stroke-width: 1.5; }
-    #sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
-
-    /* ==========================================================================
-       Double-bezel primitive
-       ========================================================================== */
-    .bezel {
-      background: var(--shell);
-      border: 1px solid var(--hair);
-      border-radius: var(--r-shell);
-      padding: 6px;
-      box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.95);
-    }
-    .bezel > .core {
-      background: var(--surface);
-      border-radius: var(--r-core);
-      box-shadow: var(--inset);
-      overflow: hidden;
-    }
 
     /* ==========================================================================
        Live status readout
@@ -147,46 +41,6 @@
     .status:empty { display: none; }
     @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.75); } }
 
-    /* ==========================================================================
-       Buttons — pills, magnetic hover, button-in-button trailing nub
-       ========================================================================== */
-    button, select, input, a.btn { font-family: var(--sans); }
-    .btn {
-      position: relative; display: inline-flex; align-items: center; gap: 8px;
-      padding: 9px 15px; border-radius: 999px;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
-      color: var(--text); font-size: 12.5px; font-weight: 500; letter-spacing: -0.01em;
-      line-height: 1; white-space: nowrap; cursor: pointer; text-decoration: none;
-      box-shadow: var(--inset);
-      transition: background 0.55s var(--ease), border-color 0.55s var(--ease),
-                  color 0.55s var(--ease), transform 0.4s var(--ease), box-shadow 0.55s var(--ease);
-    }
-    .btn:hover { background: rgba(255, 255, 255, 0.085); border-color: var(--hair-2); color: #fff; }
-    .btn:active { transform: scale(0.975); }
-    .btn:disabled { opacity: 0.35; cursor: default; transform: none; }
-    .btn:disabled:hover { background: rgba(255, 255, 255, 0.04); border-color: var(--hair); color: var(--text); }
-    .btn:focus-visible { outline: none; box-shadow: var(--inset), 0 0 0 3px rgba(124, 156, 255, 0.35); }
-    .btn.icon { padding: 0; width: 34px; height: 34px; justify-content: center; gap: 0; }
-    .btn.quiet { background: none; border-color: transparent; color: var(--muted); }
-    .btn.quiet:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
-    .btn.danger:hover { color: var(--red); border-color: rgba(251, 113, 133, 0.4); background: rgba(251, 113, 133, 0.1); }
-
-    /* primary CTA: the trailing icon sits in its own circle, flush to the inner padding */
-    .btn-primary {
-      padding: 5px 5px 5px 16px; gap: 10px;
-      background: linear-gradient(180deg, #ffffff, #dee3ed);
-      color: #07090d; border-color: transparent; font-weight: 600;
-      box-shadow: 0 14px 34px -14px rgba(255, 255, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    }
-    .btn-primary:hover { background: linear-gradient(180deg, #ffffff, #e9edf5); color: #07090d; }
-    .btn-primary .nub {
-      width: 26px; height: 26px; border-radius: 999px; flex: none;
-      display: inline-flex; align-items: center; justify-content: center;
-      background: rgba(7, 9, 13, 0.08);
-      transition: transform 0.55s var(--ease), background 0.55s var(--ease);
-    }
-    .btn-primary:hover .nub { transform: translate(2px, -1px) scale(1.07); background: rgba(7, 9, 13, 0.16); }
-
     /* hamburger: two rules that fluidly rotate into an X */
     /* mobile-only: floats in the corner, costs no vertical space in the flow */
     .menu-btn { display: none; }
@@ -199,11 +53,6 @@
     .burger i:nth-child(2) { top: 8px; }
     body.sheet-open .burger i:nth-child(1) { transform: translateY(3.5px) rotate(45deg); }
     body.sheet-open .burger i:nth-child(2) { transform: translateY(-3.5px) rotate(-45deg); }
-
-    /* ==========================================================================
-       Control bar — identity, filters and every control on one line
-       ========================================================================== */
-    .bezel > .core { min-width: 0; }
     .bar { margin: 0 0 10px; }
     .bar > .core {
       display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -409,20 +258,14 @@
       display: flex; flex-direction: column;
     }
     .table-bezel > .core { flex: 1 1 auto; min-height: 0; display: flex; }
-    .table-wrap {
-      overflow: auto; flex: 1 1 auto; min-height: 0; width: 100%;
-      scrollbar-color: rgba(255, 255, 255, 0.16) transparent; scrollbar-width: thin;
-    }
+    .table-wrap { flex: 1 1 auto; min-height: 0; width: 100%;
+      scrollbar-color: rgba(255, 255, 255, 0.16) transparent; scrollbar-width: thin; }
     .table-wrap::-webkit-scrollbar { width: 11px; height: 11px; }
-    .table-wrap::-webkit-scrollbar-track { background: transparent; }
     .table-wrap::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.14); border-radius: 999px;
-      border: 3px solid var(--surface); background-clip: padding-box;
-    }
+      background: rgba(255, 255, 255, 0.14);
+      border: 3px solid var(--surface); background-clip: padding-box; }
     .table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.26); background-clip: padding-box; }
     .table-wrap::-webkit-scrollbar-corner { background: transparent; }
-
-    table { width: 100%; border-collapse: collapse; }
     /* Freeze the two header rows while scrolling vertically. */
     thead th { position: sticky; z-index: 4; background: var(--surface); }
     thead tr:first-child th { top: 0; }
@@ -437,17 +280,12 @@
     tbody tr:hover .frz0 { box-shadow: inset 2px 0 0 var(--accent); }
 
     th, td {
-      text-align: right; padding: 7px 11px; font-size: 12.5px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.045);
-      font-variant-numeric: tabular-nums;
-    }
+      text-align: right; padding: 7px 11px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.045); }
     td { white-space: nowrap; font-family: var(--mono); font-size: 12px; letter-spacing: -0.02em; }
     td.left, td.name { font-family: var(--sans); font-size: 12.5px; letter-spacing: -0.01em; }
-    th {
-      color: var(--faint); font-weight: 500; font-size: 9.5px; text-transform: uppercase;
-      letter-spacing: 0.14em; white-space: normal; vertical-align: bottom; line-height: 1.3;
-      padding-bottom: 9px; transition: color 0.45s var(--ease);
-    }
+    th { white-space: normal; vertical-align: bottom; line-height: 1.3;
+      padding-bottom: 9px; transition: color 0.45s var(--ease); }
     th[data-key] { cursor: pointer; user-select: none; }
     th[data-key]:hover { color: var(--text); }
     th.left, td.left { text-align: left; }
@@ -479,19 +317,10 @@
     th.sorted { box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 55%, transparent); }
 
     tbody tr {
-      transition: background 0.4s var(--ease);
       animation: rowIn 0.5s var(--ease-soft) both;
-      animation-delay: calc(min(var(--i, 0), 24) * 15ms);
-    }
-    tbody tr:hover { background: var(--panel); }
-    @keyframes rowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-
-    .sym { font-weight: 600; }
+      animation-delay: calc(min(var(--i, 0), 24) * 15ms); }
     .name { color: var(--muted); }
-    .pos { color: var(--green); }
-    .neg { color: var(--red); }
-    .na { color: var(--faint); }
-    .warn { color: var(--amber); cursor: help; display: inline-block; vertical-align: -2px; margin-left: 3px; }
+    .warn { cursor: help; display: inline-block; vertical-align: -2px; margin-left: 3px; }
     td.rating { cursor: help; font-size: 13px; }
     td.sym { cursor: help; }
     .tickerlink {
@@ -507,15 +336,10 @@
     }
     tbody tr:hover .remove, .remove:focus-visible { opacity: 1; }
     .remove:hover { color: var(--red); background: rgba(251, 113, 133, 0.12); }
-    .empty { text-align: center; color: var(--muted); padding: 56px 24px;
-             font-family: var(--sans); font-size: 13px; line-height: 1.7; }
 
     .badge {
-      display: inline-flex; align-items: center; border: 1px solid; border-radius: 999px;
-      padding: 2px 9px; font-size: 10.5px; font-weight: 500;
-      margin: 0 4px 0 0; white-space: nowrap;
-      background: color-mix(in srgb, currentColor 12%, transparent);
-    }
+      margin: 0 4px 0 0;
+      background: color-mix(in srgb, currentColor 12%, transparent); }
 
     /* ==========================================================================
        Score breakdown tooltip (fixed → blur is safe here)
@@ -542,39 +366,8 @@
     #tip .val { width: 24px; text-align: right; font-family: var(--mono); font-size: 11px; }
     #tip .tip-foot { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--hair);
                      color: var(--faint); font-size: 10.5px; line-height: 1.5; }
-
-    /* ==========================================================================
-       Row card — every column for one row, on hover
-       ========================================================================== */
-    #rowcard {
-      position: fixed; display: none; z-index: var(--z-tip);
-      width: 660px; max-width: calc(100vw - 24px);
-      padding: 6px; border-radius: 20px;
-      background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
-      backdrop-filter: blur(26px) saturate(160%); -webkit-backdrop-filter: blur(26px) saturate(160%);
-      box-shadow: 0 40px 80px -28px rgba(0, 0, 0, 0.95);
-      font-size: 11.5px; color: var(--text); pointer-events: none;
-    }
-    #rowcard .rc-core { background: rgba(10, 12, 17, 0.92); border-radius: 15px;
-                        padding: 14px 16px; box-shadow: var(--inset); }
-    #rowcard .rc-head { display: flex; align-items: baseline; gap: 10px;
-                        padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--hair); }
-    #rowcard .rc-sym { font-family: var(--mono); font-size: 14px; font-weight: 600; letter-spacing: 0.02em; }
-    #rowcard .rc-name { color: var(--muted); font-size: 12px; min-width: 0;
-                        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #rowcard .rc-price { margin-left: auto; font-family: var(--mono); font-size: 13px; white-space: nowrap; }
-    #rowcard .rc-cols { column-count: 3; column-gap: 20px; }
-    #rowcard .rc-sec { break-inside: avoid; margin-bottom: 11px; }
-    #rowcard .rc-sec-h { font-size: 9px; font-weight: 500; text-transform: uppercase;
-                         letter-spacing: 0.18em; margin-bottom: 4px;
-                         display: flex; align-items: center; gap: 6px; }
-    #rowcard .rc-sec-h i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none; }
-    #rowcard .rc-row { display: flex; align-items: baseline; gap: 8px; line-height: 1.75; }
-    #rowcard .rc-k { color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    #rowcard .rc-v { margin-left: auto; font-family: var(--mono); font-size: 11px;
-                     white-space: nowrap; font-variant-numeric: tabular-nums; }
-    #rowcard .rc-foot { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--hair);
-                        color: var(--faint); font-size: 10.5px; }
+    #rowcard .rc-sec-h { font-size: 9px;
+                         letter-spacing: 0.18em; }
     /* the hover target */
     td.name { cursor: help; }
 
@@ -608,16 +401,6 @@
     dialog.modal .note.show { display: block; }
     dialog.modal .note.err { color: var(--red); }
     dialog.modal .note.ok { color: var(--green); }
-
-    /* ==========================================================================
-       Scroll-entry choreography
-       ========================================================================== */
-    .reveal {
-      opacity: 0; transform: translateY(46px); filter: blur(10px);
-      transition: opacity 0.9s var(--ease-soft), transform 0.9s var(--ease-soft), filter 0.9s var(--ease-soft);
-      transition-delay: var(--d, 0ms);
-    }
-    .reveal.in { opacity: 1; transform: none; filter: none; }
 
     /* ==========================================================================
        Responsive collapse
@@ -655,14 +438,6 @@
       .deck .bar-sep { display: none !important; }
       .status { flex: 1 1 100%; text-align: left; }
       .field input[type="text"] { width: 100px; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
-        transition-duration: 0.001ms !important;
-      }
-      .reveal { opacity: 1; transform: none; filter: none; }
     }
   </style>
 </head>
@@ -1459,6 +1234,21 @@
       getStock: (td) => {
         const sym = td.closest('tr')?.querySelector('td.sym')?.textContent.trim();
         return sym ? stocks.find((x) => x.symbol === sym) : null;
+      },
+      // Removing is admin-only, and what it means depends on the active view —
+      // the same distinction the × at the end of the row makes.
+      actions: (s) => (isAdmin ? [{
+        id: 'remove',
+        danger: true,
+        label: activeTab === 'All' ? 'Remove from all portfolios' : `Remove from ${activeTab}`,
+      }] : []),
+      onAction: (id, s) => {
+        if (id !== 'remove') return;
+        // Confirm only when it would drop the ticker from every list — removing
+        // it from one portfolio is trivially undone by adding it back.
+        if (activeTab === 'All' &&
+            !window.confirm(`Remove ${s.symbol} from every portfolio?`)) return;
+        removeTicker(s.symbol);
       },
       // Rank within the rows currently on screen, matching the Rank column.
       rankOf: (s) => {

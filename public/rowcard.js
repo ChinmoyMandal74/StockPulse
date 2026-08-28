@@ -110,7 +110,7 @@
 
   const GROUP_ORDER = ['info', 'rank', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
 
-  // opts: { colors, labels, rank, updatedAt }
+  // opts: { colors, labels, rank, actions }
   function buildHTML(s, opts) {
     const o = opts || {};
     const colors = o.colors || {};
@@ -147,30 +147,40 @@
       try { foot = 'Company data cached ' + new Date(s.profileFetchedAt).toLocaleString(); } catch { /* keep default */ }
     }
 
+    const actions = (o.actions || []).map((a) =>
+      `<button class="rc-act${a.danger ? ' danger' : ''}" data-action="${esc(a.id)}">${esc(a.label)}</button>`
+    ).join('');
+
     return '<div class="rc-core">' +
       `<div class="rc-head"><span class="rc-sym">${esc(s.symbol)}</span>` +
       `<span class="rc-name">${esc(s.name || '')}</span>` +
       `<span class="rc-price">${esc(price)}</span></div>` +
       `<div class="rc-cols">${sections}</div>` +
-      `<div class="rc-foot">${esc(foot)}</div>` +
+      `<div class="rc-foot"><span>${esc(foot)}</span>` +
+      (actions ? `<span class="rc-acts">${actions}</span>` : '') +
+      '</div>' +
       '</div>';
   }
 
   // --- attach hover behaviour to a container ---------------------------------
-  // opts: { root, selector, getStock, colors, labels, rankOf, onShow }
+  // opts: { root, selector, getStock, colors, labels, rankOf, onShow, actions, onAction }
   function attach(opts) {
     const el = document.getElementById('rowcard');
     if (!el) return;
-    let timer = null;
+    let timer = null;      // delay before showing
+    let hideTimer = null;  // grace period before hiding
+    let current = null;    // the stock the open card describes
 
     function show(target) {
       const s = opts.getStock(target);
       if (!s) return;
       if (opts.onShow) opts.onShow();
+      current = s;
       el.innerHTML = buildHTML(s, {
         colors: opts.colors,
         labels: opts.labels,
         rank: opts.rankOf ? opts.rankOf(s) : null,
+        actions: opts.actions ? opts.actions(s) : null,
       });
       el.style.display = 'block';
       const r = target.getBoundingClientRect();
@@ -188,20 +198,41 @@
 
     function hide() {
       clearTimeout(timer);
+      clearTimeout(hideTimer);
       el.style.display = 'none';
+      current = null;
+    }
+
+    // The card sits 12px clear of the cell, so leaving the cell must not dismiss
+    // it instantly — the pointer needs time to cross the gap and land on it.
+    function scheduleHide() {
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(hide, 220);
     }
 
     opts.root.addEventListener('mouseover', (e) => {
       const t = e.target.closest(opts.selector);
       if (!t || !opts.root.contains(t)) return;
       clearTimeout(timer);
+      clearTimeout(hideTimer);
       // A short delay so the card does not fire while scanning down the column.
       timer = setTimeout(() => show(t), 140);
     });
     opts.root.addEventListener('mouseout', (e) => {
       const to = e.relatedTarget;
       if (to && to.closest && to.closest(opts.selector)) return;
+      if (to && el.contains(to)) return;   // heading into the card
+      clearTimeout(timer);
+      scheduleHide();
+    });
+    el.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+    el.addEventListener('mouseleave', hide);
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('.rc-act');
+      if (!b || !current || !opts.onAction) return;
+      const s = current;
       hide();
+      opts.onAction(b.dataset.action, s);
     });
 
     return { hide };

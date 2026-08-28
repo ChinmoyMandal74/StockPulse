@@ -9,62 +9,20 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
   <style>
-    /* Same visual system as the screener: Ethereal Glass + double-bezel surfaces. */
-    :root {
-      color-scheme: dark;
-      --void: #050505;
-      --surface: #0a0c11;
-      --shell: rgba(255, 255, 255, 0.028);
-      --hair: rgba(255, 255, 255, 0.07);
-      --hair-2: rgba(255, 255, 255, 0.13);
-      --inset: inset 0 1px 0 rgba(255, 255, 255, 0.055);
-      --text: #e9ecf2;
-      --muted: #8b94a4;
-      --faint: #59616f;
-      --green: #34d399;
-      --red: #fb7185;
-      --accent: #7c9cff;
-      --ease: cubic-bezier(0.32, 0.72, 0, 1);
-      --ease-soft: cubic-bezier(0.16, 1, 0.3, 1);
-      --sans: 'Geist', ui-sans-serif, system-ui, 'Segoe UI Variable Text', sans-serif;
-      --mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', 'SF Mono', monospace;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0; min-height: 100dvh; overflow-x: clip;
-      background: var(--void); color: var(--text);
-      font-family: var(--sans); font-size: 14px; line-height: 1.5;
-      letter-spacing: -0.01em; -webkit-font-smoothing: antialiased;
-      display: flex; align-items: center; justify-content: center; padding: 24px;
-    }
+    body { min-height: 100dvh; overflow-x: clip;
+      display: flex; align-items: center; justify-content: center; padding: 24px; }
     .aura {
-      position: fixed; inset: -10%; z-index: 0; pointer-events: none;
       background:
         radial-gradient(46vw 40vw at 12% 4%, rgba(52, 211, 153, 0.13), transparent 62%),
-        radial-gradient(50vw 44vw at 92% 96%, rgba(124, 156, 255, 0.13), transparent 64%);
-      animation: drift 44s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
-      will-change: transform;
-    }
-    @keyframes drift {
-      from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
-      to   { transform: translate3d(2%, 1.5%, 0) scale(1.06); }
-    }
-    .grain {
-      position: fixed; inset: 0; z-index: 60; pointer-events: none;
-      opacity: 0.038; mix-blend-mode: overlay; background-size: 170px 170px;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='170' height='170' filter='url(%23n)'/%3E%3C/svg%3E");
-    }
-    .ic { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
-          stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
-    #sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+        radial-gradient(50vw 44vw at 92% 96%, rgba(124, 156, 255, 0.13), transparent 64%); }
+    .grain { z-index: 60; }
 
     .bezel {
-      position: relative; z-index: 1; width: 100%; max-width: 420px;
-      background: var(--shell); border: 1px solid var(--hair); border-radius: 26px;
-      padding: 6px; box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.95);
-    }
-    .core {
+      position: relative; z-index: 1; width: 100%; max-width: 420px; border-radius: 26px; box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.95); }
+    .bezel > .core {
+      overflow: visible;
       background:
         radial-gradient(90% 60% at 0% 0%, rgba(52, 211, 153, 0.07), transparent 60%),
         radial-gradient(80% 60% at 100% 100%, rgba(124, 156, 255, 0.07), transparent 62%),
@@ -78,7 +36,7 @@
       background: linear-gradient(100deg, #9aa4b6 10%, #5d6474 92%);
       -webkit-background-clip: text; background-clip: text; color: transparent;
     }
-    .lede { margin: 10px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+    .lede { margin: 10px 0 0; }
 
     .tabs { display: flex; gap: 4px; margin: 22px 0 18px; padding: 4px;
             border: 1px solid var(--hair); border-radius: 999px; background: rgba(255, 255, 255, 0.03); }
@@ -106,16 +64,14 @@
     .hint { margin: 6px 0 0; font-size: 11px; color: var(--faint); }
 
     .btn {
-      width: 100%; margin-top: 6px; padding: 12px 16px; border-radius: 999px;
-      border: 1px solid transparent; cursor: pointer;
-      background: linear-gradient(180deg, #ffffff, #dee3ed); color: #07090d;
-      font-family: var(--sans); font-size: 13.5px; font-weight: 600; line-height: 1;
+      width: 100%; justify-content: center; margin-top: 6px; padding: 12px 16px;
+      border: 1px solid transparent;
+      background: linear-gradient(180deg, #ffffff, #dee3ed); color: #07090d; font-size: 13.5px; font-weight: 600;
       box-shadow: 0 14px 34px -14px rgba(255, 255, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-      transition: transform 0.4s var(--ease), background 0.5s var(--ease);
-    }
+      transition: transform 0.4s var(--ease), background 0.5s var(--ease); }
     .btn:hover { background: linear-gradient(180deg, #ffffff, #e9edf5); }
     .btn:active { transform: scale(0.985); }
-    .btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+    .btn:disabled { opacity: 0.5; }
 
     .msg { display: none; align-items: flex-start; gap: 9px; margin-top: 16px;
            font-size: 12.5px; line-height: 1.5; }
