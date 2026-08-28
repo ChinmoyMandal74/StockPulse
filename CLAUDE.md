@@ -161,7 +161,33 @@ The **Info** banner spans nine columns — Overall, Mom., Qual., Rank, Portfolio
 Forward revenue / EPS estimates (`/revenue_estimate`, `/earnings_estimate`, `/growth_estimates`) are **Ultra-plan only** — they 403 on the current Pro key. AAPL returns data for them because it's Twelve Data's free sample symbol, which makes it a misleading symbol to test plan access with. `/income_statement?period=quarterly` works but costs 100 credits/symbol (vs ~45 for `/statistics`) and is capped at 6 quarters, so trailing-twelve-month growth — which needs 8 — can't be computed on this plan.
 
 ## Scores / ratings
-Three composite scores per stock (1–10): **Momentum** (price/trend/volume), **Quality** (company fundamentals), **Overall** (65% momentum + 35% quality). Computed in `computeScores()` in server.js.
+Three composite scores per stock (1–10): **Momentum** (price strength), **Quality** (company fundamentals), **Overall** (65% momentum + 35% quality). Computed in `computeScores()` in server.js.
+
+### Momentum is cross-sectional
+Momentum is scored **against the universe**, not against fixed thresholds, so it needs every row before it can be worked out: `computeStocks()` builds the rows, then `applyScores()` percentile-ranks the return factors and scores each one. Adding a momentum factor that is a *number* means adding it to `applyScores()`; a *category* (like trend regime) can stay inside `computeScores()`.
+
+| factor | weight | notes |
+|---|---|---|
+| 12-1 momentum | 20 | 12-month return **skipping the last month**, risk-adjusted |
+| 6M return | 18 | risk-adjusted |
+| 3M return | 17 | risk-adjusted |
+| % from 52W high | 10 | |
+| Trend regime | 10 | 200D side + cross freshness; categorical, not ranked |
+| Consistency | 10 | share of the last 12 months that closed up |
+| 1M reversal | 8 | **inverted** — the biggest recent movers score lowest |
+| RSI timing | 7 | non-monotonic, peaks at 70–75 |
+
+Everything comes from the daily bars already fetched, so the extra factors cost **no API credits**. 12-1 and consistency need ~260 of the 300 bars `outputsize=300` returns.
+
+**Why percentiles instead of `lin()` thresholds.** Measured against the live universe, the old absolute cut-offs left **33–51% of stocks pinned** at a floor or ceiling on every major factor — a factor that is constant across half the list cannot rank anything. Percentiles also survive a regime change: in a bad quarter the best names still score well *relatively* rather than everything collapsing to zero at once.
+
+**Four factors were removed, each for a measured reason:**
+- **RS vs S&P** was `threeMonthPct` minus a constant identical for every stock — correlation with 3M return was exactly **1.000**, so it could not reorder anything while consuming a quarter of the weight. Ranking within the universe is already relative.
+- **MACD** was binary (0.8/0.2), discarding magnitude; correlation with the composite was **0.022**.
+- **Vol trend** was unsigned, so a crash on heavy volume scored like a breakout, and **51%** of the universe sat at its floor while none reached the ceiling. If it returns, sign it: `volTrend × sign(1M)`.
+- **Short squeeze** rewarded heavy short interest, which predicts *weaker* returns; it correlated **−0.223** with the composite, pulling against everything else.
+
+**Do not add 1W/2W/1M as more-is-better factors.** At those horizons the evidence is reversal, not continuation — the same reason 12-1 skips its final month. `rsi` already correlates 0.745 with the 1-month return, so the horizon was partly in the score even before `1M reversal` made it explicit.
 
 **Quality guards against bad feed data** — without these it rated a company 8/10 while it lost $878M:
 - **Loss-makers exclude the three earnings-based factors** (earnings growth 25%, PEG 20%, forward P/E 10%). None of them means anything without earnings, and the feed happily returns a healthy-looking PEG of 0.16 on a large loss — `pegScore`/`peScore` only guard a ratio ≤ 0, so a *positive* nonsense value sails through. Excluded rather than penalised: `scoreFactors()` renormalises over what remains.

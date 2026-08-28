@@ -752,6 +752,96 @@ function lin(v, lo, hi) {
 }
 
 // PEG: ≤1 great, ≥3 poor; ≤0 (negative earnings) = weak.
+// Return between two points, both measured back from the latest bar.
+// windowReturn(values, 252, 21) is the classic 12-1 momentum: a year of return
+// that stops a month short of today. The skip is deliberate — the most recent
+// month tends to reverse rather than continue, which is why the standard
+// momentum construction leaves it out.
+function windowReturn(values, fromDaysAgo, toDaysAgo = 0) {
+  if (!Array.isArray(values) || values.length <= fromDaysAgo) return null;
+  const a = parseFloat(values[toDaysAgo].close);
+  const b = parseFloat(values[fromDaysAgo].close);
+  if (!isFinite(a) || !isFinite(b) || b === 0) return null;
+  return ((a - b) / b) * 100;
+}
+
+// Annualised realised volatility (%), from daily log returns. Momentum is
+// divided by this so a 40% move in a quiet name outranks the same move in one
+// that swings 40% routinely.
+function realisedVol(values, lookback = 126) {
+  if (!Array.isArray(values)) return null;
+  const n = Math.min(values.length - 1, lookback);
+  if (n < 20) return null;
+  const r = [];
+  for (let i = 0; i < n; i++) {
+    const a = parseFloat(values[i].close);
+    const b = parseFloat(values[i + 1].close);
+    if (isFinite(a) && isFinite(b) && b > 0 && a > 0) r.push(Math.log(a / b));
+  }
+  if (r.length < 20) return null;
+  const mean = r.reduce((t, x) => t + x, 0) / r.length;
+  const varc = r.reduce((t, x) => t + (x - mean) ** 2, 0) / (r.length - 1);
+  return Math.sqrt(varc * 252) * 100;
+}
+
+// Share (%) of the last `months` 21-day blocks that closed higher than they
+// started — it separates a steady climber from one that gapped once on news
+// and has drifted ever since.
+function positiveMonths(values, months = 12, span = 21) {
+  if (!Array.isArray(values) || values.length < months * span + 1) return null;
+  let up = 0;
+  for (let k = 0; k < months; k++) {
+    const a = parseFloat(values[k * span].close);
+    const b = parseFloat(values[(k + 1) * span].close);
+    if (!isFinite(a) || !isFinite(b) || b === 0) return null;
+    if (a > b) up++;
+  }
+  return (up / months) * 100;
+}
+
+// Return per unit of risk taken.
+function riskAdj(ret, vol) {
+  if (ret == null || vol == null || !isFinite(ret) || !isFinite(vol) || vol <= 0) return null;
+  return ret / vol;
+}
+
+// Percentile rank of each value within the universe (0–1, ties share the mean
+// rank); null stays null.
+//
+// This replaces the absolute lin() thresholds for the return factors. A
+// screener ranks a universe, and fixed cut-offs left a third to a half of it
+// pinned at a floor or ceiling — a factor that is a constant across half the
+// list cannot rank anything. Percentiles also hold up across regimes: in a bad
+// quarter the best names still score well relatively, instead of everything
+// collapsing to zero together.
+function percentileRanks(vals) {
+  const out = new Array(vals.length).fill(null);
+  const idx = vals.map((v, i) => [v, i]).filter(([v]) => v != null && isFinite(v));
+  if (idx.length === 0) return out;
+  if (idx.length === 1) { out[idx[0][1]] = 0.5; return out; }
+  idx.sort((a, b) => a[0] - b[0]);
+  let i = 0;
+  while (i < idx.length) {
+    let j = i;
+    while (j + 1 < idx.length && idx[j + 1][0] === idx[i][0]) j++;
+    const p = ((i + j) / 2) / (idx.length - 1);
+    for (let k = i; k <= j; k++) out[idx[k][1]] = p;
+    i = j + 1;
+  }
+  return out;
+}
+
+// Trend regime: above the 200-day line is the filter, a fresh cross the
+// strongest (and, inverted, weakest) case. Categorical, so it is not ranked.
+function trendRegimeSub(m) {
+  const above = m.vs200ma == null || !isFinite(m.vs200ma) ? null : m.vs200ma > 0;
+  const bull = above == null ? m.maBullish : above;
+  if (bull == null) return null;
+  const fresh = m.maCrossDays != null && m.maCrossDays <= 20;
+  if (bull) return fresh ? 1.0 : 0.75;
+  return fresh ? 0.0 : 0.25;
+}
+
 function pegScore(v) {
   if (v == null || !isFinite(v)) return null;
   if (v <= 0) return 0.2;
@@ -776,18 +866,6 @@ function rsiScore(r) {
   return 0.4;
 }
 
-// 50/200 cross as a 0–1 sub-score: golden regime good (fresh = best), death bad.
-function maCrossSub(m) {
-  if (m.maBullish == null) return null;
-  const fresh = m.maCrossDays != null && m.maCrossDays <= 20;
-  if (m.maBullish) return fresh ? 1.0 : 0.7;
-  return fresh ? 0.0 : 0.3;
-}
-// MACD histogram sign as a 0–1 confirmation sub-score.
-function macdSub(m) {
-  if (m.macdHist == null || !isFinite(m.macdHist)) return null;
-  return m.macdHist >= 0 ? 0.8 : 0.2;
-}
 
 // Weighted, renormalized composite of factors → { score01, score, rating, breakdown, coverage }.
 // Share of the quality factor weight that must have usable data before a
@@ -816,20 +894,74 @@ function scoreFactors(comps, minWeightFrac = 0) {
 }
 
 // Momentum (price/trend/volume), Quality (company data), and a blended Overall — each 1–10.
-function computeScores(m) {
+// Ranks the universe on each return factor, then scores every row.
+//
+// Momentum is comparative — the question a screener answers is "which of these
+// is strongest", not "does this clear some absolute bar" — so each return
+// factor becomes the stock's percentile among its peers. Quality stays
+// absolute: a 25% margin is a 25% margin regardless of the company it keeps.
+function applyScores(rows) {
+  const at = (f) => percentileRanks(rows.map(f));
+
+  const mom121 = at((r) => riskAdj(r.mom12_1, r.realisedVol));
+  const ret6m = at((r) => riskAdj(r.sixMonthPct, r.realisedVol));
+  const ret3m = at((r) => riskAdj(r.threeMonthPct, r.realisedVol));
+  const fromHigh = at((r) => r.pctFromHigh);
+  const consistency = at((r) => r.posMonths);
+  const oneMonth = at((r) => r.oneMonthPct);
+
+  rows.forEach((row, i) => {
+    const sc = computeScores(row, {
+      mom121: mom121[i],
+      ret6m: ret6m[i],
+      ret3m: ret3m[i],
+      fromHigh: fromHigh[i],
+      consistency: consistency[i],
+      // Inverted: at a one-month horizon the strongest recent movers are the
+      // likeliest to give some back, so leading this list is a caution.
+      revers1m: oneMonth[i] == null ? null : 1 - oneMonth[i],
+    });
+    row.momentumScore = sc.momentum ? sc.momentum.score : null;
+    row.momentumRating = sc.momentum ? sc.momentum.rating : null;
+    row.momentumBreakdown = sc.momentum ? sc.momentum.breakdown : null;
+    row.qualityScore = sc.quality ? sc.quality.score : null;
+    row.qualityRating = sc.quality ? sc.quality.rating : null;
+    row.qualityBreakdown = sc.quality ? sc.quality.breakdown : null;
+    row.overallScore = sc.overall ? sc.overall.score : null;
+    row.overallRating = sc.overall ? sc.overall.rating : null;
+  });
+}
+
+// `x` carries this row's cross-sectional percentiles, computed across the whole
+// universe by rankUniverse(). Momentum is a ranking question — "is this one of
+// the stronger names on the list" — so the return factors are scored by where
+// they sit among their peers rather than against fixed thresholds.
+//
+// What changed, and why (the previous set was measured against the live
+// universe before being replaced):
+//   - `RS vs S&P` was `3M return` minus a constant that is identical for every
+//     stock, so it correlated 1.000 with 3M and could not reorder anything. It
+//     spent a quarter of the weight restating one horizon. Ranking within the
+//     universe is already relative, so no benchmark term is needed.
+//   - `MACD` was binary 0.8/0.2 and correlated 0.022 with the composite;
+//     `Vol trend` was unsigned, so a crash on heavy volume scored as well as a
+//     breakout, and 51% of the universe sat at its floor. Both are dropped.
+//   - `Short squeeze` correlated -0.223 with the composite and rewarded heavy
+//     short interest, which predicts weaker returns, not stronger. Dropped: it
+//     is not a momentum factor.
+//   - The short horizons enter as `1M reversal`, inverted. At one month the
+//     evidence is reversal, not continuation — the same reason the 12-1 factor
+//     skips its final month.
+function computeScores(m, x = {}) {
   const momComps = [
-    { label: '6M return', weight: 15, sub: lin(m.sixMonthPct, -15, 40) },
-    { label: '3M return', weight: 12, sub: lin(m.threeMonthPct, -10, 25) },
-    { label: '1Y return', weight: 10, sub: lin(m.oneYearPct, -20, 80) },
-    { label: 'RS vs S&P', weight: 14, sub: lin(m.relStrength, -10, 20) },
-    { label: 'vs 200D MA', weight: 8, sub: lin(m.vs200ma, -10, 20) },
-    { label: 'vs 50D MA', weight: 6, sub: lin(m.vs50ma, -10, 15) },
-    { label: '% from 52W high', weight: 8, sub: lin(m.pctFromHigh, -40, 0) },
-    { label: 'MA cross', weight: 8, sub: maCrossSub(m) },
-    { label: 'MACD', weight: 6, sub: macdSub(m) },
-    { label: 'Vol trend', weight: 5, sub: lin(m.volTrend, -30, 60) },
-    { label: 'RSI timing', weight: 8, sub: rsiScore(m.rsi) },
-    { label: 'Short squeeze', weight: 5, sub: lin(m.shortPctFloat, 0, 20) }, // high short % of float = squeeze fuel
+    { label: '12-1 momentum', weight: 20, sub: x.mom121 },
+    { label: '6M return (risk-adj.)', weight: 18, sub: x.ret6m },
+    { label: '3M return (risk-adj.)', weight: 17, sub: x.ret3m },
+    { label: '% from 52W high', weight: 10, sub: x.fromHigh },
+    { label: 'Trend regime', weight: 10, sub: trendRegimeSub(m) },
+    { label: 'Consistency', weight: 10, sub: x.consistency },
+    { label: '1M reversal', weight: 8, sub: x.revers1m },
+    { label: 'RSI timing', weight: 7, sub: rsiScore(m.rsi) },
   ];
   // Earnings growth, PEG and forward P/E all describe earnings, so none of them
   // says anything useful about a company that does not have any. The feed still
@@ -1089,6 +1221,7 @@ async function computeStocks(asOf) {
 
       const ok = Array.isArray(values) && values.length > 0;
       const prof = profiles[sym] || {};
+      const rvol = realisedVol(values); // one pass, reused by every risk-adjusted factor
 
       const threeMonthPct = pctChange(values, THREE_MONTH);
       const relStrength =
@@ -1177,6 +1310,11 @@ async function computeStocks(asOf) {
         macdLine: mac ? mac.line : null,
         macdSignal: mac ? mac.signal : null,
         volTrend: volumeTrendPct(values),
+        // Momentum inputs. All derived from the same daily bars, so they cost
+        // no additional API credits.
+        mom12_1: windowReturn(values, ONE_YEAR, ONE_MONTH), // 12 months, skipping the last
+        realisedVol: rvol,
+        posMonths: positiveMonths(values),
         fwd1M,
         fwd3M,
         fwd6M,
@@ -1184,17 +1322,12 @@ async function computeStocks(asOf) {
         error: ok ? null : (s.message || 'No data returned for this symbol.'),
       };
 
-      const sc = computeScores(row);
-      row.momentumScore = sc.momentum ? sc.momentum.score : null;
-      row.momentumRating = sc.momentum ? sc.momentum.rating : null;
-      row.momentumBreakdown = sc.momentum ? sc.momentum.breakdown : null;
-      row.qualityScore = sc.quality ? sc.quality.score : null;
-      row.qualityRating = sc.quality ? sc.quality.rating : null;
-      row.qualityBreakdown = sc.quality ? sc.quality.breakdown : null;
-      row.overallScore = sc.overall ? sc.overall.score : null;
-      row.overallRating = sc.overall ? sc.overall.rating : null;
       return row;
     });
+
+    // Momentum is scored against the universe, so it can only be worked out
+    // once every row exists — hence the second pass.
+    applyScores(stocks);
 
     return { ok: true, payload: { stocks, portfolios: portfolioNames, asOf, updatedAt: new Date().toISOString() } };
   } catch (err) {
