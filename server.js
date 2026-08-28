@@ -752,6 +752,41 @@ function lin(v, lo, hi) {
 }
 
 // PEG: ≤1 great, ≥3 poor; ≤0 (negative earnings) = weak.
+// Latest close vs the 52-week low, as a percentage (0 = at the low, positive =
+// above it). The mirror of pctFromHigh.
+function pctFromLow(values, lookback = 252) {
+  if (!Array.isArray(values) || values.length === 0) return null;
+  const latest = parseFloat(values[0].close);
+  let low = Infinity;
+  const n = Math.min(values.length, lookback);
+  for (let i = 0; i < n; i++) {
+    const l = parseFloat(values[i].low);
+    if (isFinite(l) && l > 0 && l < low) low = l;
+  }
+  if (!isFinite(latest) || !isFinite(low) || low === 0) return null;
+  return ((latest - low) / low) * 100;
+}
+
+// Where the price sits in its 52-week range: 0 = on the low, 100 = on the high.
+// One number that answers "how far into its own range is this?", which distance
+// from the high alone cannot — a stock 30% off its high might be sitting on the
+// floor of a tight range or halfway up a wide one.
+function range52Pos(values, lookback = 252) {
+  if (!Array.isArray(values) || values.length === 0) return null;
+  const latest = parseFloat(values[0].close);
+  let high = -Infinity;
+  let low = Infinity;
+  const n = Math.min(values.length, lookback);
+  for (let i = 0; i < n; i++) {
+    const h = parseFloat(values[i].high);
+    const l = parseFloat(values[i].low);
+    if (isFinite(h) && h > high) high = h;
+    if (isFinite(l) && l > 0 && l < low) low = l;
+  }
+  if (!isFinite(latest) || !isFinite(high) || !isFinite(low) || high <= low) return null;
+  return ((latest - low) / (high - low)) * 100;
+}
+
 // Return between two points, both measured back from the latest bar.
 // windowReturn(values, 252, 21) is the classic 12-1 momentum: a year of return
 // that stops a month short of today. The skip is deliberate — the most recent
@@ -1313,6 +1348,8 @@ async function computeStocks(asOf) {
         // Momentum inputs. All derived from the same daily bars, so they cost
         // no additional API credits.
         mom12_1: windowReturn(values, ONE_YEAR, ONE_MONTH), // 12 months, skipping the last
+        pctFromLow: pctFromLow(values),
+        range52Pos: range52Pos(values),   // 0 = on the 52w low, 100 = on the high
         realisedVol: rvol,
         posMonths: positiveMonths(values),
         fwd1M,

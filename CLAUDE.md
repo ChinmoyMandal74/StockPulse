@@ -22,6 +22,7 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `set-password.js` | Local account admin — list accounts, set a password, change a role |
 | `public/app.css` | **Shared stylesheet** — tokens, atmosphere, bezel, buttons, table base, row card. Linked by all four pages |
 | `public/index.html` | Single-page frontend (no build step, vanilla JS, page-specific CSS inline) |
+| `public/analysis.html` | Signal screens at `/analysis` — see **Analysis screens** below |
 | `public/visitors.html` | Admin-only visitor log page at `/visitors` |
 | `public/favicon.svg` | Momentum-line mark, emerald on OLED black |
 | `portfolios.json`, `snapshot.json`, `profiles.json`, `names.json`, `visitors.log` | **Legacy.** Pre-migration backups only — nothing reads or writes them any more. Safe to delete once you trust the database. |
@@ -203,6 +204,25 @@ A Refresh All re-pulls only `MAX_PROFILE_FETCHES_PER_CALL` (6) symbols per call,
 - Each `?refresh=1` round calls `noteRefreshProgress()`, which **only updates a refresh that is already running** — that is what stops an ordinary price Refresh (seconds long) from raising the banner. It closes the flag itself once every row has a profile.
 - `readRefreshState()` returns `null` once `updated_at` is older than `REFRESH_STALE_MS` (4 min), so an admin closing the tab mid-backfill can't pin the notice up forever.
 - `GET /api/status` is a cheap poll for viewers — every open page hits it every 30s while a refresh runs, so it deliberately does not return the snapshot. When the flag clears the page pulls the finished data on its own.
+
+## Analysis screens
+`/analysis` is seven filtered views built from the **raw fields, not the composite scores** — the scores already drive the table's ranking, and a screen that just re-sorts them adds nothing. Every threshold below was set by running the candidate against the live universe: a screen returning 0 names is a dead box, and one returning 25 of 69 is not a signal.
+
+| screen | rule | hits when set |
+|---|---|---|
+| Bouncing off the lows | `range52Pos ≤ 30` (or `pctFromHigh ≤ −25`), `1M > 3%`, `2W > 0` | 5 |
+| Just started moving | `2W > 5%` while `3M < 0` | 2 |
+| Drifting after a beat | surprise 10–100%, reported ≤ 21d | 2 |
+| Reporting in 14 days | unchanged | 4 |
+| Cheap, growing, profitable | fwd P/E < 20, rev > 15%, margin > 15% | 13 |
+| Business improving, price isn't | rev > 25%, `3M < −10%` | 13 |
+| Overextended | RSI > 75 and > 12% above the 50-day | 2 |
+
+- **`range52Pos`** (0 = on the 52-week low, 100 = on the high) and **`pctFromLow`** are derived in `computeStocks()` from bars already fetched, so they cost no credits. Snapshots written before they existed fall back to `pctFromHigh ≤ −25`, and the section prints a note saying so. **The `≤ 30` threshold is unverified against real range data** — it was tuned on the fallback — so expect to adjust that one number after the first refresh.
+- **Earnings surprises above 100% are excluded** as feed artefacts. Two different mega-caps currently report *exactly* +214%, which is a data bug rather than a coincidence; without the cap they would top the drift screen.
+- **`netCash` is meaningless for financials** — if a balance-sheet screen is ever added, exclude the Financial Services sector, or JPM and HOOD will lead it.
+- `analystConsensus`, `targetUpside` and the forward estimates are **0/69** on the current plan, so nothing can be built on them.
+- Two removed screens ("Good business, price not working" / "Price working, business not") keyed off Quality and Momentum ratings; "Business improving, price isn't" is the same idea on raw revenue growth. "Deepest drawdowns" went too — it is the bounce screen's population without the part that matters, whether the thing has turned.
 
 ## API patterns
 - `GET /api/stocks` — serves snapshot to public; `?refresh=1` recomputes live (admin only)
