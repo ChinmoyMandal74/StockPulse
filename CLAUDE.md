@@ -140,8 +140,8 @@ The **Info** banner spans nine columns — Overall, Mom., Qual., Rank, Portfolio
 - The sorted column is marked by a small accent arrow absolutely positioned in the header's bottom padding — it's positioned, not inline, so it can't reflow a wrapped label.
 - Score cells (`td.rating`) open the factor-breakdown tooltip (`#tip`, fixed-position glass card) on hover.
 
-## Fundamentals data — three things that will bite you
-- **Margins are derived, not taken from the API.** `financials.gross_margin` does *not* equal `gross_profit_ttm / revenue_ttm` — it's computed on a different basis and differs by up to ~4 points (Samsung: 61.2% vs 57.5%). `fetchProfile()` derives `grossMargin` and `fcfMargin` from the same absolutes the table displays, so a user dividing the two columns gets the number shown.
+## Fundamentals data — things that will bite you
+- **All three margins are derived, not taken from the API.** `financials.gross_margin` does *not* equal `gross_profit_ttm / revenue_ttm` — it's computed on a different basis and differs by up to ~4 points (Samsung: 61.2% vs 57.5%). `profit_margin` is worse: it agrees with `net_income / revenue` for 42 of 44 tickers and is flatly wrong for the other two (JOBY +45.1% vs −755.1%, MSTR +68.7% vs −6294.2% — both loss-makers with small revenue). `fetchProfile()` derives `grossMargin`, `fcfMargin` **and `profitMargin`** from the absolutes the table displays, so dividing the two columns on screen gives the number shown.
 - **Absolute columns are in the company's reporting currency.** Samsung's revenue is ₩485T. Pass `s.currency` to `fmtMktCap()` for every money column, and treat sorting on them as within-currency only — a KRW reporter tops any cross-currency sort.
 - **ADR fundamentals can be incoherent.** SKHY returns net income (116.8B) larger than gross profit (104.0B), which is impossible, and its EBITDA appears to be in a different unit from its revenue. Don't assume a populated field is a correct one.
 
@@ -149,6 +149,13 @@ Forward revenue / EPS estimates (`/revenue_estimate`, `/earnings_estimate`, `/gr
 
 ## Scores / ratings
 Three composite scores per stock (1–10): **Momentum** (price/trend/volume), **Quality** (company fundamentals), **Overall** (65% momentum + 35% quality). Computed in `computeScores()` in server.js.
+
+**Quality guards against bad feed data** — without these it rated a company 8/10 while it lost $878M:
+- **Loss-makers exclude the three earnings-based factors** (earnings growth 25%, PEG 20%, forward P/E 10%). None of them means anything without earnings, and the feed happily returns a healthy-looking PEG of 0.16 on a large loss — `pegScore`/`peScore` only guard a ratio ≤ 0, so a *positive* nonsense value sails through. Excluded rather than penalised: `scoreFactors()` renormalises over what remains.
+- **`QUALITY_MIN_WEIGHT` (0.4)** — below that share of usable factor weight, no quality score is reported and Overall falls back to momentum alone. A score resting on one factor is not a score.
+- **Do not add a blanket cap on extreme growth.** MU, Samsung and SKHY report 1,200–1,400% earnings growth, which is real — memory in a cyclical upswing off a near-zero base. `lin(v, 0, 30)` already clamps the contribution, so the magnitude does no harm; rejecting it would throw away genuine signal.
+
+Applying these moved 9 of 44 ratings — MSTR 5→2, JOBY 8→5, AVAV 7→5, four loss-makers down one, and SPCX 3→**5** (its meaningless PEG of 86.7 had been scoring zero and dragging it down).
 
 ## API patterns
 - `GET /api/stocks` — serves snapshot to public; `?refresh=1` recomputes live (admin only)

@@ -381,7 +381,6 @@ async function fetchProfile(symbol) {
     peg: null,
     earningsGrowthYoY: null,
     revenueGrowthYoY: null,
-    profitMargin: null,
     roe: null,
     // absolute size, all TTM except the balance-sheet pair (most recent quarter)
     revenueTtm: null,
@@ -389,10 +388,6 @@ async function fetchProfile(symbol) {
     netIncomeTtm: null,
     fcfTtm: null,
     netCash: null,
-    // derived from the absolutes above, not from the API's own margin fields —
-    // those are computed on a different basis and don't equal grossProfit / revenue
-    grossMargin: null,
-    fcfMargin: null,
     shortPctFloat: null,
     lastEarningsDate: null,
     lastSurprise: null,
@@ -429,7 +424,6 @@ async function fetchProfile(symbol) {
       if (inc && inc.quarterly_revenue_growth != null) {
         out.revenueGrowthYoY = inc.quarterly_revenue_growth * 100;
       }
-      if (fin && fin.profit_margin != null) out.profitMargin = fin.profit_margin * 100;
       if (fin && fin.return_on_equity_ttm != null) out.roe = fin.return_on_equity_ttm * 100;
 
       // Absolute size — how big the business actually is, in its reporting currency.
@@ -447,10 +441,9 @@ async function fetchProfile(symbol) {
       // Margins derived from the two columns shown beside them, so the table is
       // internally consistent (fin.gross_margin uses a different basis and differs
       // by up to ~4 points).
-      if (out.revenueTtm) {
-        if (out.grossProfitTtm != null) out.grossMargin = (out.grossProfitTtm / out.revenueTtm) * 100;
-        if (out.fcfTtm != null) out.fcfMargin = (out.fcfTtm / out.revenueTtm) * 100;
-      }
+      // Margins are not stored: they are derived from the absolutes when the
+      // row is assembled (see below), so a cached profile can never carry a
+      // stale or wrong one.
       const ss = st?.statistics?.stock_statistics;
       if (ss && ss.shares_short != null && ss.float_shares) {
         out.shortPctFloat = (ss.shares_short / ss.float_shares) * 100; // short interest as % of float
@@ -747,6 +740,9 @@ function maCross(values, shortP = 50, longP = 200) {
 // missing metrics drop out and the remaining weights are renormalized.
 
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+// A margin as a percentage of revenue, or null when either side is missing.
+const margin = (part, revenue) =>
+  (part != null && isFinite(part) && revenue) ? (part / revenue) * 100 : null;
 
 // "Higher is better": lo → 0, hi → 1.
 function lin(v, lo, hi) {
@@ -793,12 +789,17 @@ function macdSub(m) {
 }
 
 // Weighted, renormalized composite of factors → { score01, score, rating, breakdown, coverage }.
-function scoreFactors(comps) {
+// Share of the quality factor weight that must have usable data before a
+// quality score is reported at all.
+const QUALITY_MIN_WEIGHT = 0.4;
+
+function scoreFactors(comps, minWeightFrac = 0) {
   let w = 0;
   let acc = 0;
   for (const c of comps) if (c.sub != null) { w += c.weight; acc += c.weight * c.sub; }
   if (w === 0) return null;
   const totalW = comps.reduce((a, c) => a + c.weight, 0);
+  if (w / totalW < minWeightFrac) return null;
   const score01 = acc / w;
   return {
     score01,
@@ -829,18 +830,28 @@ function computeScores(m) {
     { label: 'RSI timing', weight: 8, sub: rsiScore(m.rsi) },
     { label: 'Short squeeze', weight: 5, sub: lin(m.shortPctFloat, 0, 20) }, // high short % of float = squeeze fuel
   ];
+  // Earnings growth, PEG and forward P/E all describe earnings, so none of them
+  // says anything useful about a company that does not have any. The feed still
+  // supplies values — a positive-looking PEG of 0.16 on an $878M loss — and
+  // pegScore/peScore only guard against a ratio <= 0, so they sail through.
+  // Excluded rather than penalised: scoreFactors() renormalises over whatever
+  // remains, so the surviving factors simply carry the score.
+  const lossMaking = m.netIncomeTtm != null && m.netIncomeTtm < 0;
   const qualComps = [
-    { label: 'Earnings growth', weight: 25, sub: lin(m.earningsGrowthYoY, 0, 30) },
+    { label: 'Earnings growth', weight: 25, sub: lossMaking ? null : lin(m.earningsGrowthYoY, 0, 30) },
     { label: 'Revenue growth', weight: 20, sub: lin(m.revenueGrowthYoY, 0, 20) },
-    { label: 'PEG', weight: 20, sub: pegScore(m.peg) },
-    { label: 'Forward P/E', weight: 10, sub: peScore(m.forwardPe) },
+    { label: 'PEG', weight: 20, sub: lossMaking ? null : pegScore(m.peg) },
+    { label: 'Forward P/E', weight: 10, sub: lossMaking ? null : peScore(m.forwardPe) },
     { label: 'Profit margin', weight: 15, sub: lin(m.profitMargin, 0, 25) },
     { label: 'ROE', weight: 10, sub: lin(m.roe, 0, 30) },
   ];
 
   // Momentum needs ~3 months of history to be meaningful.
   const momentum = m.threeMonthPct == null ? null : scoreFactors(momComps);
-  const quality = scoreFactors(qualComps);
+  // A quality score resting on a sliver of the factor weight is not a quality
+  // score — below this share of available weight, report none at all and let
+  // Overall fall back to momentum.
+  const quality = scoreFactors(qualComps, QUALITY_MIN_WEIGHT);
 
   let overall = null;
   let o01 = null;
@@ -1087,15 +1098,21 @@ async function computeStocks(asOf) {
         peg: prof.peg ?? null,
         earningsGrowthYoY: prof.earningsGrowthYoY ?? null,
         revenueGrowthYoY: prof.revenueGrowthYoY ?? null,
-        profitMargin: prof.profitMargin ?? null,
+        profitMargin: margin(prof.netIncomeTtm, prof.revenueTtm),
         roe: prof.roe ?? null,
         revenueTtm: prof.revenueTtm ?? null,
         grossProfitTtm: prof.grossProfitTtm ?? null,
         netIncomeTtm: prof.netIncomeTtm ?? null,
         fcfTtm: prof.fcfTtm ?? null,
         netCash: prof.netCash ?? null,
-        grossMargin: prof.grossMargin ?? null,
-        fcfMargin: prof.fcfMargin ?? null,
+        // Derived here rather than read from the feed. financials.profit_margin
+        // is wrong for loss-makers with small revenue (+45% for a company
+        // losing $878M), and gross_margin uses a different basis than
+        // gross_profit / revenue. Deriving keeps the percentage equal to the
+        // two absolute columns shown beside it, and works off whatever is in
+        // the profile cache rather than needing a re-fetch.
+        grossMargin: margin(prof.grossProfitTtm, prof.revenueTtm),
+        fcfMargin: margin(prof.fcfTtm, prof.revenueTtm),
         shortPctFloat: prof.shortPctFloat ?? null,
         lastEarningsDate: prof.lastEarningsDate ?? null,
         lastSurprise: prof.lastSurprise ?? null,

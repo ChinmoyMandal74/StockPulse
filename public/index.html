@@ -882,7 +882,7 @@
         <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
         <th class="grp-rank" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
         <th class="grp-rank" data-key="momentumScore" title="Momentum 1–10: price/trend/volume (returns, RS, MAs, MA cross, MACD, RSI, volume). Hover for factors.">Mom.</th>
-        <th class="grp-rank" data-key="qualityScore" title="Quality 1–10: company data (earnings & revenue growth, PEG, P/E, margin, ROE). Hover for factors.">Qual.</th>
+        <th class="grp-rank" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all and Overall falls back to momentum. Hover a cell for the factor split and the confidence figure.">Qual.</th>
         <th class="grp-rank" title="Rank by Overall within the stocks currently shown">Rank</th>
         <th class="grp-short" data-key="todayPct">Today</th>
         <th class="grp-short" data-key="yesterdayPct">YDAY</th>
@@ -911,12 +911,12 @@
         <th class="grp-size" data-key="fcfTtm" title="Levered free cash flow, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">FCF<br>TTM</th>
         <th class="grp-size" data-key="fcfMargin" title="Free cash flow ÷ revenue, both trailing twelve months — derived from the columns to the left">FCF<br>Margin</th>
         <th class="grp-size" data-key="netCash" title="Total cash minus total debt, most recent quarter. Positive = net cash, negative = net debt">Net<br>Cash</th>
-        <th class="grp-fund" data-key="earningsGrowthYoY" title="Earnings growth: the most recent quarter versus the same quarter a year ago. It describes that one quarter, not the trailing-twelve-month figures in the Size group.">Earn Grth<br>Q YoY</th>
+        <th class="grp-fund" data-key="earningsGrowthYoY" title="Earnings growth: the most recent quarter versus the same quarter a year ago. It describes that one quarter, not the trailing-twelve-month figures in the Size group. Excluded from the Quality score for loss-making companies — a shrinking loss is not earnings growth. Very large values are usually genuine but come off a near-zero base (memory names in an upcycle), and the score caps their contribution anyway.">Earn Grth<br>Q YoY</th>
         <th class="grp-fund" data-key="revenueGrowthYoY" title="Revenue growth: the most recent quarter versus the same quarter a year ago. It describes that one quarter, not the Revenue TTM column.">Rev Grth<br>Q YoY</th>
-        <th class="grp-fund" data-key="profitMargin" title="Net profit margin (TTM)">Profit<br>Margin</th>
+        <th class="grp-fund" data-key="profitMargin" title="Net profit margin (TTM), derived as Net Income ÷ Revenue from the two columns in the Size group — not taken from the data feed, which reports it incorrectly for loss-making companies with small revenue. Dividing those two columns gives exactly this number.">Profit<br>Margin</th>
         <th class="grp-fund" data-key="roe" title="Return on equity (TTM)">ROE</th>
-        <th class="grp-fund" data-key="forwardPe" title="Forward price/earnings ratio">Fwd<br>P/E</th>
-        <th class="grp-fund" data-key="peg" title="PEG ratio — <1 cheap, >2 expensive">PEG</th>
+        <th class="grp-fund" data-key="forwardPe" title="Forward price/earnings ratio. Shown for reference but excluded from the Quality score when the company is loss-making, where it carries no meaning.">Fwd<br>P/E</th>
+        <th class="grp-fund" data-key="peg" title="PEG ratio — &lt;1 cheap, &gt;2 expensive. Shown for reference but excluded from the Quality score when the company is loss-making: the feed still returns a healthy-looking figure there (0.16 for a company losing $878M), which is meaningless.">PEG</th>
         <th class="grp-fund" data-key="shortPctFloat" title="Short interest as % of float — high = crowded short / squeeze potential (feeds the Momentum score)">Short<br>% Fl</th>
       </tr>
     </thead>
