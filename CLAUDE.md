@@ -23,7 +23,7 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `public/app.css` | **Shared stylesheet** — tokens, atmosphere, bezel, buttons, table base, row card. Linked by all four pages |
 | `public/index.html` | Single-page frontend (no build step, vanilla JS, page-specific CSS inline) |
 | `public/analysis.html` | Signal screens at `/analysis` — see **Analysis screens** below |
-| `public/chat.html` | The assistant at `/chat` — owner-only, see **Chatbot** below |
+| `public/chat.html` | The assistant at `/chat` — any signed-in user, see **Chatbot** below |
 | `public/visitors.html` | Admin-only visitor log page at `/visitors` |
 | `public/favicon.svg` | Momentum-line mark, emerald on OLED black |
 | `portfolios.json`, `snapshot.json`, `profiles.json`, `names.json`, `visitors.log` | **Legacy.** Pre-migration backups only — nothing reads or writes them any more. Safe to delete once you trust the database. |
@@ -207,7 +207,7 @@ A Refresh All re-pulls only `MAX_PROFILE_FETCHES_PER_CALL` (6) symbols per call,
 - `GET /api/status` is a cheap poll for viewers — every open page hits it every 30s while a refresh runs, so it deliberately does not return the snapshot. When the flag clears the page pulls the finished data on its own.
 
 ## Chatbot
-`/chat` answers questions about the screener data. `POST /api/chat` is owner-only (`requireAdmin`).
+`/chat` answers questions about the screener data. Open to **any signed-in user** (`requireAuth`), with the allowance set by role.
 
 **The whole dataset goes in the system prompt — there is no retrieval layer, and adding one would make it worse.** Measured against the live API, not estimated: the system prompt is **~17,500 tokens** for 69 stocks, roughly 250 per stock. (A bytes/4 estimate said 7,400 — it underestimates dense numeric CSV by well over 2x, so trust `usage` in a real response, not arithmetic on the payload.) That still fits a 200k context about eleven times over and stays viable past 700 stocks, well beyond the 119-ticker ceiling the price API imposes. Embeddings are the wrong tool twice: the data is a numeric table where "margin above 15%" is an exact filter rather than a similarity, and retrieval could only drop rows the answer needs.
 
@@ -216,7 +216,8 @@ A Refresh All re-pulls only `MAX_PROFILE_FETCHES_PER_CALL` (6) symbols per call,
 - **`CHAT_FIELDS` is the glossary and the column list at once.** Adding a column to the bot means adding one entry there — nothing else. Fields absent from older snapshots simply come through blank.
 - **Derived values are computed server-side on purpose** (`fcfYield`, `netCashPct`, all three margins, `range52Pos`). Asking a model to divide across 69 rows is where it goes wrong, so the prompt tells it to use the column rather than re-derive it.
 - **Four behavioural rules live in `chatRules()`**, and they are the actual product: name the specific gap and redirect rather than refusing bare; general finance and company knowledge is fine but flagged as background; no buy/sell/hold verdicts (declined for the same reason as any unsupported claim, *not* as a standing disclaimer); "will it go up" is unknowable rather than missing. The prompt lists what the data does **not** contain — a general "say you don't know" instruction does not stop confabulation, an explicit inventory does.
-- **Quota lives in `chat_usage`** (one row per user per UTC day), because an in-memory counter cannot work when consecutive requests need not share a process. It is charged only after the config and validation checks, so a malformed request cannot burn it.
+- **Quota lives in `chat_usage`** (one row per user per UTC day), because an in-memory counter cannot work when consecutive requests need not share a process. It is charged only after the config and validation checks, so a malformed request cannot burn it, and the 429 is returned before any API call — a member over their limit costs nothing.
+- **Two ceilings:** `CHAT_DAILY_LIMIT` (60) for the owner, `CHAT_DAILY_LIMIT_MEMBER` (3) for everyone else. The owner pays for the key and does the prompt tuning; members get enough to be useful. **Keyed on the account**, so a shared login shares the allowance rather than multiplying it. With the current roster that caps daily exposure at 60 + 3 per member.
 - **Upstream errors are never echoed to the client** — the response body can restate the request, and the API key travels in the same headers.
 - Not streaming yet. Responses are a few seconds behind a "thinking" indicator; streaming is the obvious next step but could not be verified against Vercel from here.
 - `public/chat.html` carries a ~60-line markdown renderer for the reply (tables, lists, headings, bold/italic/code). **It escapes HTML before applying any markdown**, so nothing a model returns can inject markup.

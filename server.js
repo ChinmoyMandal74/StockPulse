@@ -105,10 +105,8 @@ app.get('/analysis', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'analysis.html'));
 }));
 
-// Owner-only for now. Opening it to members is a one-word change here and in
-// the /api/chat guard, once real usage has been watched.
 app.get('/chat', route(async (req, res) => {
-  if (!(await isAdmin(req))) return res.redirect('/');
+  if (!(await isSignedIn(req))) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'chat.html'));
 }));
 
@@ -1407,7 +1405,11 @@ async function computeStocks(asOf) {
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
 const CHAT_MODEL = process.env.CHAT_MODEL || 'claude-sonnet-5';
+// Two ceilings. The owner pays for the key and does the tuning, so they get
+// room to work; everyone else gets enough to be useful without turning a shared
+// login into an open tab on someone else's account.
 const CHAT_DAILY_LIMIT = Number(process.env.CHAT_DAILY_LIMIT || 60);
+const CHAT_DAILY_LIMIT_MEMBER = Number(process.env.CHAT_DAILY_LIMIT_MEMBER || 3);
 // Generous on purpose. The model reasons before answering, and that reasoning
 // is billed against max_tokens: at 1200 a ranking question spent the entire
 // budget thinking and returned a "thinking" block with no text at all. The
@@ -1537,8 +1539,7 @@ function chatRules(asOf, count) {
   ].join('\n');
 }
 
-// Owner-only while the prompt is still being shaped against real questions.
-app.post('/api/chat', requireAdmin, route(async (req, res) => {
+app.post('/api/chat', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!ANTHROPIC_KEY) {
     return res.status(503).json({ error: 'The assistant is not configured: ANTHROPIC_API_KEY is unset.' });
@@ -1554,9 +1555,15 @@ app.post('/api/chat', requireAdmin, route(async (req, res) => {
   }
 
   const who = await currentUser(req);
-  const quota = await store.noteChatUse(who ? who.email : 'admin', CHAT_DAILY_LIMIT);
+  const owner = await isAdmin(req);
+  const limit = owner ? CHAT_DAILY_LIMIT : CHAT_DAILY_LIMIT_MEMBER;
+  // Keyed on the account, so sharing a login shares the allowance rather than
+  // multiplying it. Falls back for the legacy admin cookie, which has no user row.
+  const quota = await store.noteChatUse(who ? who.email : 'admin', limit);
   if (!quota.allowed) {
-    return res.status(429).json({ error: `Daily limit of ${quota.limit} questions reached. It resets at midnight UTC.` });
+    return res.status(429).json({
+      error: `You have used your ${quota.limit} questions for today. The allowance resets at midnight UTC.`,
+    });
   }
 
   const snap = await readSnapshot();
