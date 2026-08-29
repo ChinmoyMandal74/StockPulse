@@ -382,10 +382,10 @@
     #tip .val { width: 24px; text-align: right; font-family: var(--mono); font-size: 11px; }
     #tip .tip-foot { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--hair);
                      color: var(--faint); font-size: 10.5px; line-height: 1.5; }
-    #rowcard .rc-sec-h { font-size: 9px;
-                         letter-spacing: 0.18em; }
     /* the hover target */
     td.name { cursor: help; }
+    .namelink { color: inherit; text-decoration: none; }
+    .namelink:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 
     /* ==========================================================================
        Change-password dialog
@@ -1114,7 +1114,7 @@
         const fwdTitle = 'Forward return after the as-of date (what happened next)';
         return `<tr style="--i:${i}">
           ${symbolCell(s, freshest)}
-          <td class="name left frz frz1">${s.name || ''}</td>
+          <td class="name left frz frz1"><a class="namelink" href="/stock/${encodeURIComponent(s.symbol)}">${s.name || ''}</a></td>
           <td class="left grp-info">${badges(s.portfolios)}</td>
           <td class="grp-info"${attr(liveTitle)}>${price != null ? curSym(s.currency) + price : '—'}</td>
           <td class="name left grp-info"${attr(cacheTitle)}>${s.sector || '—'}</td>

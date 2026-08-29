@@ -105,6 +105,13 @@ app.get('/analysis', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'analysis.html'));
 }));
 
+// One stock, in full. The symbol is read client-side from the path, so every
+// ticker serves the same file.
+app.get('/stock/:symbol', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  res.sendFile(path.join(__dirname, 'public', 'stock.html'));
+}));
+
 app.get('/chat', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'chat.html'));
@@ -117,7 +124,9 @@ app.get('/login', (req, res) => {
 // public/ is served wholesale, which would otherwise hand out the gated pages
 // at their raw .html path and bypass the checks above. Bounce those to the
 // routed path, where the guard runs.
-const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors' };
+const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
+                      // no symbol in that path, so there is nothing to show
+                      '/stock.html': '/' };
 app.get(Object.keys(GATED_PAGES), (req, res) => res.redirect(GATED_PAGES[req.path]));
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -1387,10 +1396,103 @@ async function computeStocks(asOf) {
     // once every row exists — hence the second pass.
     applyScores(stocks);
 
+    // Archive the bars we just fetched. Live pulls only — a backtest's range is
+    // truncated and would corrupt the history. Awaited rather than fired and
+    // forgotten, because a serverless instance is free to stop the moment the
+    // response is sent, but never allowed to fail the refresh: the archive is a
+    // by-product, and the screener must still work if it breaks.
+    if (!asOf) {
+      try {
+        const b = await persistBars(symbols, series);
+        if (b.inserted) {
+          console.log(`bars: +${b.inserted} rows across ${b.symbols} symbols` +
+                      (b.rewritten ? `, ${b.rewritten} rewritten in full` : ''));
+        }
+      } catch (err) {
+        console.warn('bars: archive write failed (screener unaffected):', err.message);
+      }
+    }
+
     return { ok: true, payload: { stocks, portfolios: portfolioNames, asOf, updatedAt: new Date().toISOString() } };
   } catch (err) {
     return { ok: false, status: 502, error: `Failed to reach Twelve Data: ${err.message}` };
   }
+}
+
+// ============================================================================
+// Bar archive
+// ============================================================================
+// Every refresh already fetches ~300 daily bars per symbol and throws them away.
+// Keeping them costs no API credits and turns a rolling window into an archive.
+
+// How many bars back to compare stored against freshly fetched. A split
+// re-adjusts the entire history, so any old date reveals it.
+const SPLIT_PROBE_BARS = 60;
+const SPLIT_TOLERANCE = 0.005;   // 0.5% — past rounding, well short of any split
+// Re-write this many already-stored bars each refresh. It is what upgrades a
+// provisional close, captured while the market was open, to the settled one.
+const BAR_OVERLAP = 5;
+
+const barRow = (symbol, b) => {
+  const num = (v) => { const n = parseFloat(v); return isFinite(n) ? n : null; };
+  const close = num(b.close);
+  if (close == null || !b.datetime) return null;
+  return { symbol, d: String(b.datetime).slice(0, 10),
+           open: num(b.open), high: num(b.high), low: num(b.low), close, volume: num(b.volume) };
+};
+
+// Only ever called for a live pull. A backtest fetches a different, truncated
+// range, and persisting from that path would poison the archive.
+async function persistBars(symbols, series) {
+  const meta = await store.barsMaxDates();
+
+  const probes = [];
+  const have = [];
+  for (const sym of symbols) {
+    const v = series[sym] && series[sym].values;
+    if (!Array.isArray(v) || !v.length) continue;
+    have.push([sym, v]);
+    const p = v[Math.min(SPLIT_PROBE_BARS, v.length - 1)];
+    if (p && p.datetime) probes.push({ sym, d: String(p.datetime).slice(0, 10), close: parseFloat(p.close) });
+  }
+  const stored = await store.barsOn(probes.map((x) => x.d));
+  const probeBySym = new Map(probes.map((x) => [x.sym, x]));
+
+  let inserted = 0, rewritten = 0;
+  for (const [sym, v] of have) {
+    const rows = v.map((b) => barRow(sym, b)).filter(Boolean);
+    if (!rows.length) continue;
+    const m = meta.get(sym);
+
+    // Nothing stored yet, or the fetched window does not reach back to what we
+    // hold (a gap we cannot bridge) — take the whole window as the truth.
+    let full = !m || !m.maxDate;
+    if (!full) {
+      const probe = probeBySym.get(sym);
+      const was = probe ? stored.get(sym + '|' + probe.d) : undefined;
+      // A split re-prices all of history; the archive has to be rebuilt.
+      if (was != null && isFinite(probe.close) && probe.close > 0 &&
+          Math.abs(was - probe.close) / probe.close > SPLIT_TOLERANCE) {
+        full = true;
+      } else if (!rows.some((r) => r.d === m.maxDate)) {
+        full = true;   // no overlap with what we hold
+      }
+    }
+
+    if (full) {
+      await store.replaceBarsFor(sym, rows);
+      rewritten++;
+      inserted += rows.length;
+      continue;
+    }
+
+    // Steady state: everything newer than what we hold, plus a short overlap so
+    // a provisional close gets corrected.
+    const at = rows.findIndex((r) => r.d === m.maxDate);
+    const slice = rows.slice(0, Math.min(rows.length, at + 1 + BAR_OVERLAP));
+    inserted += await store.upsertBars(slice);
+  }
+  return { inserted, rewritten, symbols: have.length };
 }
 
 // ============================================================================
@@ -1621,6 +1723,49 @@ app.post('/api/chat', requireAuth, route(async (req, res) => {
     asOf,
     used: quota.used,
     limit: quota.limit,
+  });
+}));
+
+// One row out of the snapshot. The stock page needs a single stock, and
+// /api/stocks is 172 KB — most of it about the other 68.
+app.get('/api/stock', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  const snap = await readSnapshot();
+  const stocks = (snap && snap.stocks) || [];
+  const stock = stocks.find((x) => String(x.symbol).toUpperCase() === symbol);
+  if (!stock) return res.status(404).json({ error: 'Not in the screener.' });
+  // Rank across the universe, so the page agrees with the table's Rank column.
+  const ranked = stocks.filter((x) => x.overallScore != null)
+    .slice().sort((a, b) => b.overallScore - a.overallScore);
+  const rank = ranked.findIndex((x) => x.symbol === stock.symbol);
+  res.json({
+    stock,
+    rank: rank >= 0 ? rank + 1 : null,
+    rankTotal: ranked.length,
+    updatedAt: snap.updatedAt || null,
+  });
+}));
+
+// Closes for one symbol, oldest-first, for the hover card's chart. Reads the
+// archive only — no API call, so it costs nothing and works for every signed-in
+// user. Fetched per symbol on hover and cached in the browser rather than
+// shipping all 69 series with the table, most of which are never looked at.
+app.get('/api/history', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  const days = Math.min(5200, Math.max(20, Number(req.query.days) || 260));   // the archive goes ~20y deep
+
+  const bars = await store.readBars(symbol, days);   // newest-first
+  if (!bars.length) return res.json({ symbol, closes: [], from: null, to: null });
+  const asc = bars.slice().reverse();
+  res.json({
+    symbol,
+    from: asc[0].datetime,
+    to: asc[asc.length - 1].datetime,
+    // 2dp keeps the payload small; a chart 600px wide cannot show more.
+    closes: asc.map((b) => Math.round(b.close * 100) / 100),
   });
 }));
 

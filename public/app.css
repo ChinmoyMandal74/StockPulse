@@ -226,8 +226,10 @@ tbody tr:hover { background: var(--panel); }
                                        border: 3px solid transparent; background-clip: content-box; }
 
 /* ==========================================================================
-   Row hover card — shared by the screener and the analysis page.
-   Markup is built by rowcard.js; this is the whole of its styling.
+   Row detail — the hover card, and the stock page, which shows the same
+   sections at full size. Markup comes from rowcard.js in both cases, so the
+   .rc-* classes are deliberately unscoped; only the floating container below
+   is tied to #rowcard.
    ========================================================================== */
 #rowcard {
   position: fixed; display: none; z-index: var(--z-tip);
@@ -238,36 +240,70 @@ tbody tr:hover { background: var(--panel); }
   box-shadow: 0 40px 80px -28px rgba(0, 0, 0, 0.95);
   font-size: 11.5px; color: var(--text);
 }
-#rowcard .rc-core { background: rgba(10, 12, 17, 0.92); border-radius: 15px;
+.rc-core { background: rgba(10, 12, 17, 0.92); border-radius: 15px;
                     padding: 14px 16px; box-shadow: var(--inset); }
-#rowcard .rc-head { display: flex; align-items: baseline; gap: 10px;
+.rc-head { display: flex; align-items: baseline; gap: 10px;
                     padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--hair); }
-#rowcard .rc-sym { font-family: var(--mono); font-size: 14px; font-weight: 600; letter-spacing: 0.02em; }
-#rowcard .rc-name { color: var(--muted); font-size: 12px; min-width: 0;
+.rc-sym { font-family: var(--mono); font-size: 14px; font-weight: 600; letter-spacing: 0.02em; }
+.rc-name { color: var(--muted); font-size: 12px; min-width: 0;
                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#rowcard .rc-price { margin-left: auto; font-family: var(--mono); font-size: 13px; white-space: nowrap; }
-#rowcard .rc-cols { column-count: 3; column-gap: 20px; }
-#rowcard .rc-sec { break-inside: avoid; margin-bottom: 11px; }
-#rowcard .rc-sec-h { font-size: 9.5px; font-weight: 500; text-transform: uppercase;
+.rc-price { margin-left: auto; font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+/* price history — drawn from the bar archive, fetched on hover and cached */
+.rc-chart {
+  position: relative; height: 104px; margin: 0 0 12px;
+  border-radius: 10px; background: rgba(255, 255, 255, 0.022);
+  border: 1px solid var(--hair); overflow: hidden;
+}
+.rc-chart svg { display: block; width: 100%; height: 100%; }
+.rc-chart .ln { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.rc-chart .ar { stroke: none; opacity: 0.13; }
+.rc-chart .dot { stroke: none; }
+/* the flat line marking where the period opened, so the shape reads against it */
+.rc-chart .base { stroke: var(--hair-2); stroke-width: 1; stroke-dasharray: 2 3; }
+.rc-chart.up .ln, .rc-chart.up .dot { stroke: var(--green); fill: var(--green); }
+.rc-chart.up .ar { fill: var(--green); }
+.rc-chart.down .ln, .rc-chart.down .dot { stroke: var(--red); fill: var(--red); }
+.rc-chart.down .ar { fill: var(--red); }
+.rc-chart .cap {
+  position: absolute; font-family: var(--mono); font-size: 9.5px; color: var(--faint);
+  font-variant-numeric: tabular-nums; pointer-events: none;
+  /* the labels sit on top of the area fill, so they need their own ground —
+     the same legibility problem the greys had, in miniature */
+  text-shadow: 0 0 4px rgba(10, 12, 17, 0.95), 0 0 2px rgba(10, 12, 17, 0.95);
+}
+.rc-chart .cap.hi { top: 6px; right: 8px; }
+.rc-chart .cap.lo { bottom: 6px; right: 8px; }
+.rc-chart .cap.from { bottom: 6px; left: 9px; }
+.rc-chart .cap.chg { top: 6px; left: 9px; font-size: 10.5px; }
+.rc-chart.up .cap.chg { color: var(--green); }
+.rc-chart.down .cap.chg { color: var(--red); }
+.rc-chart .msg {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--faint); font-size: 11px;
+}
+
+.rc-cols { column-count: 3; column-gap: 20px; }
+.rc-sec { break-inside: avoid; margin-bottom: 11px; }
+.rc-sec-h { font-size: 9.5px; font-weight: 500; text-transform: uppercase;
                      letter-spacing: 0.14em; margin-bottom: 4px;
                      display: flex; align-items: center; gap: 6px; }
-#rowcard .rc-sec-h i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none; }
-#rowcard .rc-row { display: flex; align-items: baseline; gap: 8px; line-height: 1.75; }
-#rowcard .rc-k { color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#rowcard .rc-v { margin-left: auto; font-family: var(--mono); font-size: 11px;
+.rc-sec-h i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none; }
+.rc-row { display: flex; align-items: baseline; gap: 8px; line-height: 1.75; }
+.rc-k { color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-v { margin-left: auto; font-family: var(--mono); font-size: 11px;
                  white-space: nowrap; font-variant-numeric: tabular-nums; }
-#rowcard .rc-foot { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--hair);
+.rc-foot { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--hair);
                     color: var(--faint); font-size: 10.5px;
                     display: flex; align-items: center; gap: 12px; }
-#rowcard .rc-acts { margin-left: auto; display: flex; gap: 6px; flex: none; }
-#rowcard .rc-act {
+.rc-acts { margin-left: auto; display: flex; gap: 6px; flex: none; }
+.rc-act {
   padding: 6px 11px; border-radius: 999px; cursor: pointer; line-height: 1;
   border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
   color: var(--muted); font-family: var(--sans); font-size: 11px; white-space: nowrap;
   transition: background 0.4s var(--ease), color 0.4s var(--ease), border-color 0.4s var(--ease);
 }
-#rowcard .rc-act:hover { background: rgba(255, 255, 255, 0.09); color: var(--text); }
-#rowcard .rc-act.danger:hover { color: var(--red); border-color: rgba(251, 113, 133, 0.4);
+.rc-act:hover { background: rgba(255, 255, 255, 0.09); color: var(--text); }
+.rc-act.danger:hover { color: var(--red); border-color: rgba(251, 113, 133, 0.4);
                                 background: rgba(251, 113, 133, 0.12); }
 
 /* ==========================================================================

@@ -19,10 +19,12 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `server.js` | Express backend — all API routes, auth, data computation |
 | `db.js` | Turso persistence layer — every read/write goes through here |
 | `migrate-to-turso.js` | One-off JSON → Turso seeder; `--commit` to write, idempotent |
+| `backfill-bars.js` | One-off deep pull of the daily bar archive; `--commit`, `--depth`, `--only` |
 | `set-password.js` | Local account admin — list accounts, set a password, change a role |
 | `public/app.css` | **Shared stylesheet** — tokens, atmosphere, bezel, buttons, table base, row card. Linked by all four pages |
 | `public/index.html` | Single-page frontend (no build step, vanilla JS, page-specific CSS inline) |
 | `public/analysis.html` | Signal screens at `/analysis` — see **Analysis screens** below |
+| `public/stock.html` | One stock in full at `/stock/<SYMBOL>` — chart, range buttons, every field |
 | `public/chat.html` | The assistant at `/chat` — any signed-in user, see **Chatbot** below |
 | `public/visitors.html` | Admin-only visitor log page at `/visitors` |
 | `public/favicon.svg` | Momentum-line mark, emerald on OLED black |
@@ -205,6 +207,29 @@ A Refresh All re-pulls only `MAX_PROFILE_FETCHES_PER_CALL` (6) symbols per call,
 - Each `?refresh=1` round calls `noteRefreshProgress()`, which **only updates a refresh that is already running** — that is what stops an ordinary price Refresh (seconds long) from raising the banner. It closes the flag itself once every row has a profile.
 - `readRefreshState()` returns `null` once `updated_at` is older than `REFRESH_STALE_MS` (4 min), so an admin closing the tab mid-backfill can't pin the notice up forever.
 - `GET /api/status` is a cheap poll for viewers — every open page hits it every 30s while a refresh runs, so it deliberately does not return the snapshot. When the flag clears the page pulls the finished data on its own.
+
+## Charts and the stock page
+Charts are hand-rolled inline SVG in `rowcard.js` — no library, no build step. `chartSVG(closes)` returns `{ svg, log }`.
+
+- **The y-axis goes logarithmic above a 4× range.** MU ran from $1.69 to $932, so on a linear axis nineteen of twenty years flatten onto the floor and only the last month is visible. The caption says "log scale" when it happens, because an unmarked log axis misleads. A single year rarely trips it, so the default view stays linear.
+- **The chart window is 253 bars, not 252.** A change is measured across the *gaps* between bars, so matching `pctChange(values, ONE_YEAR)` — bar 0 against bar 252 — needs one bar more than there are intervals. One short and the headline disagreed with the card's own 1Y row by 27 points on a name that gapped on earnings a year ago.
+- **`/api/history` reads the archive only** — no API call, so it costs nothing and works for members. ~1.9 KB for a year, 28 KB for the full 5,000 bars. Fetched per symbol on hover and cached by `symbol|days`, so the card never waits on the network to appear.
+- **`.rc-*` classes are unscoped in `app.css`**; only the floating container is tied to `#rowcard`. The hover card and `/stock/<SYMBOL>` render the same sections from the same `FIELD_SPEC` via `RowCard.buildSections()` — a third copy of the field list is exactly what the row card existed to prevent.
+- **`GROUP_COLORS` / `GROUP_LABELS` now live in `rowcard.js`** and are exported. `index.html` still keeps its own copy because it also colours the table's group banners and the columns menu, so **those two must stay in step**.
+- The name cell in the screener links to `/stock/<SYMBOL>`; the symbol cell still links out to Google Finance. `.namelink` inherits its colour and only underlines on hover — 69 rows of blue underlines would wreck the table.
+
+## Bar archive
+The `bars` table keeps one row per symbol per trading day (`open/high/low/close/volume`, keyed on `(symbol, d)`). **Currently 241,022 rows across 69 symbols, 2006-05-25 → 2026-08-28.**
+
+**It costs no API credits.** Every refresh already fetches ~300 daily bars per symbol and discards them; `persistBars()` writes them instead. Twelve Data charges **1 credit per symbol regardless of `outputsize`** — measured, `Api-Credits-Request: 1` for 5000 bars — which is why the deep backfill was affordable in the first place.
+
+- **`backfill-bars.js` is a local script, not a route.** 5000 bars is ~580 KB per symbol and ~40 MB across the universe: fine locally, far past what a serverless function should hold. Same one-off pattern as `migrate-to-turso.js`, dry-run by default.
+- **Writes are incremental, not wholesale.** `persistBars()` upserts only bars newer than the stored `max(d)` plus a `BAR_OVERLAP` of 5. Steady state is a handful of rows per symbol per refresh, not 300.
+- **The overlap is not decoration.** Twelve Data returns a bar for *today* while the market is open, with the current price as its close, so a mid-session refresh stores a provisional value. Re-upserting the recent window replaces it with the settled close. Measured drift on a real pull: 0.003–0.007%.
+- **Splits are detected, not ignored.** A split re-prices all of history, so a stored bar `SPLIT_PROBE_BARS` (60) back would silently disagree with the fetched one and leave a phantom cliff in any chart. `persistBars()` compares that one bar per symbol — one query for the whole universe, since US symbols share trading days — and rewrites the symbol in full when it differs by more than `SPLIT_TOLERANCE` (0.5%). Re-running `backfill-bars.js --only SYM` is the manual repair.
+- **Backtests must never write.** `computeStocks(asOf)` fetches a truncated range; persisting from it would corrupt the archive. Guarded by `if (!asOf)`, the same rule the snapshot uses.
+- **A failed archive write never fails the refresh** — it is caught and logged. The screener is the product; the archive is a by-product.
+- `open` is stored although nothing reads it yet. `high`/`low` drive the 52-week range and `volume` the volume trend, so an archive without them could draw a chart but not reproduce the screener — which is the point of keeping it.
 
 ## Chatbot
 `/chat` answers questions about the screener data. Open to **any signed-in user** (`requireAuth`), with the allowance set by role.

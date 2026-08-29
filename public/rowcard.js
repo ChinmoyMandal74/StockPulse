@@ -110,9 +110,112 @@
   ];
 
   const GROUP_ORDER = ['info', 'rank', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
+  // The palette lives here because this file already owns GROUP_ORDER and
+  // FIELD_SPEC. index.html keeps its own copy — it also colours the table's
+  // group banners and the columns menu — so those two must stay in step.
+  const GROUP_COLORS = {
+    info: '#7c9cff', rank: '#a3e635', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
+    rel: '#22d3ee', trend: '#fbbf24', vol: '#f472b6', size: '#94a3b8', fund: '#fb7185',
+  };
+  const GROUP_LABELS = {
+    info: 'Info', rank: 'Rank', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
+    rel: 'Relative', trend: 'Trend', vol: 'Volume', size: 'Size', fund: 'Fundamentals',
+  };
 
-  // opts: { colors, labels, rank, actions }
-  function buildHTML(s, opts) {
+  // ---- price history -------------------------------------------------------
+  // Cached per symbol for the life of the page: the same row gets hovered over
+  // and over while scanning, and the archive only changes on a refresh.
+  // Exactly the window computeStocks() calls ONE_YEAR. Anything else and the
+  // chart's headline change disagrees with the 1Y row a few centimetres below
+  // it, which reads as a bug even though both numbers are right.
+  // 253 bars, not 252: the change is measured across the gaps between bars, so
+  // matching pctChange(values, ONE_YEAR) — which compares bar 0 against bar 252
+  // — needs one more bar than there are intervals. One short and the headline
+  // disagreed with the 1Y row by 27 points on a name that gapped on earnings a
+  // year ago.
+  const HISTORY_DAYS = 253;
+  const histCache = new Map();
+
+  function loadHistory(symbol, days) {
+    const n = days || HISTORY_DAYS;
+    const key = symbol + '|' + n;
+    if (histCache.has(key)) return histCache.get(key);
+    const pr = fetch(`/api/history?symbol=${encodeURIComponent(symbol)}&days=${n}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    histCache.set(key, pr);
+    return pr;
+  }
+
+  // A plain line with a soft fill, coloured by the period's direction, and a
+  // dashed line at the opening price so the shape reads against a baseline
+  // rather than floating.
+  // Returns { svg, log } — the caller labels the chart when the scale is
+  // logarithmic, because an unmarked log axis misleads.
+  function chartSVG(closes) {
+    const W = 600, H = 104, PT = 12, PB = 12;
+    const lo = Math.min.apply(null, closes);
+    const hi = Math.max.apply(null, closes);
+    // Over a long span a linear axis is useless: MU ran from $1.69 to $932, so
+    // nineteen of twenty years flatten onto the floor and only the last month
+    // is visible. Above a 4x range the axis goes logarithmic, which is what
+    // makes a 20-year price chart readable at all. A single year almost never
+    // trips it, so the default view stays linear and literal.
+    const useLog = lo > 0 && hi / lo > 4;
+    const t = useLog ? Math.log : (v) => v;
+    const tLo = t(lo), tSpan = (t(hi) - tLo) || 1;
+    const x = (i) => (closes.length === 1 ? W / 2 : (i / (closes.length - 1)) * W);
+    const y = (v) => PT + (1 - (t(v) - tLo) / tSpan) * (H - PT - PB);
+
+    let d = '';
+    for (let i = 0; i < closes.length; i++) d += (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(closes[i]).toFixed(1);
+    const area = d + `L${W} ${H}L0 ${H}Z`;
+    const baseY = y(closes[0]).toFixed(1);
+
+    const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` +
+      `<path class="ar" d="${area}"/>` +
+      `<line class="base" x1="0" y1="${baseY}" x2="${W}" y2="${baseY}"/>` +
+      `<path class="ln" d="${d}"/>` +
+      `<circle class="dot" cx="${x(closes.length - 1).toFixed(1)}" cy="${y(closes[closes.length - 1]).toFixed(1)}" r="2.6"/>` +
+      '</svg>';
+    return { svg, log: useLog };
+  }
+
+  const fmtPrice = (n) => (n >= 1000 ? n.toFixed(0) : n.toFixed(2));
+  const shortDay = (iso) => {
+    const p = String(iso).split('-');
+    return p.length === 3 ? MON[+p[1] - 1] + " '" + p[0].slice(2) : iso;
+  };
+
+  // Called after the card is already on screen. Bails if the pointer has moved
+  // on to a different row in the meantime.
+  function paintChart(el, symbol) {
+    const box = el.querySelector('.rc-chart');
+    if (!box) return;
+    loadHistory(symbol).then((data) => {
+      if (!box.isConnected || box.dataset.sym !== symbol) return;
+      const closes = (data && data.closes) || [];
+      if (closes.length < 2) {
+        box.innerHTML = '<div class="msg">No price history stored yet</div>';
+        return;
+      }
+      const first = closes[0], last = closes[closes.length - 1];
+      const chg = ((last - first) / first) * 100;
+      box.classList.add(chg >= 0 ? 'up' : 'down');
+      const c = chartSVG(closes);
+      box.innerHTML = c.svg +
+        `<span class="cap chg">${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%</span>` +
+        `<span class="cap hi">${fmtPrice(Math.max.apply(null, closes))}${c.log ? ' · log' : ''}</span>` +
+        `<span class="cap lo">${fmtPrice(Math.min.apply(null, closes))}</span>` +
+        `<span class="cap from">${esc(shortDay(data.from))} → now</span>`;
+    });
+  }
+
+  // Every field of a row, grouped and coloured. Shared by the hover card and
+  // the stock page so FIELD_SPEC stays the single description of a row —
+  // the same reason the card exists rather than a second copy of the table.
+  // opts: { colors, labels, rank }
+  function buildSections(s, opts) {
     const o = opts || {};
     const colors = o.colors || {};
     const labels = o.labels || {};
@@ -130,7 +233,7 @@
       });
     }
 
-    const sections = GROUP_ORDER
+    return GROUP_ORDER
       .filter((g) => byGroup[g] && byGroup[g].some((r) => r.t !== '—'))
       .map((g) => {
         const c = colors[g] || 'var(--accent)';
@@ -141,6 +244,12 @@
         return `<div class="rc-sec"><div class="rc-sec-h" style="color:${c}"><i></i>` +
                `${esc(labels[g] || g)}</div>${rows}</div>`;
       }).join('');
+  }
+
+  // opts: { colors, labels, rank, actions }
+  function buildHTML(s, opts) {
+    const o = opts || {};
+    const sections = buildSections(s, o);
 
     const price = ok(s.price) ? curSym(s.currency) + s.price.toFixed(1) : '';
     let foot = 'Company data not cached yet';
@@ -156,6 +265,10 @@
       `<div class="rc-head"><span class="rc-sym">${esc(s.symbol)}</span>` +
       `<span class="rc-name">${esc(s.name || '')}</span>` +
       `<span class="rc-price">${esc(price)}</span></div>` +
+      // Filled in asynchronously by paintChart(); the card must not wait on a
+      // network round trip to appear, since it opens 140ms after the pointer
+      // settles and any further delay reads as broken.
+      `<div class="rc-chart" data-sym="${esc(s.symbol)}"><div class="msg">…</div></div>` +
       `<div class="rc-cols">${sections}</div>` +
       `<div class="rc-foot"><span>${esc(foot)}</span>` +
       (actions ? `<span class="rc-acts">${actions}</span>` : '') +
@@ -183,6 +296,7 @@
         rank: opts.rankOf ? opts.rankOf(s) : null,
         actions: opts.actions ? opts.actions(s) : null,
       });
+      paintChart(el, s.symbol);
       el.style.display = 'block';
       const r = target.getBoundingClientRect();
       const pad = 10;
@@ -239,5 +353,10 @@
     return { hide };
   }
 
-  global.RowCard = { buildHTML, attach, fmtMktCap, FIELD_SPEC };
+  global.RowCard = {
+    buildHTML, attach, fmtMktCap, FIELD_SPEC,
+    // used by the stock page
+    buildSections, chartSVG, loadHistory, fmtPrice, shortDay, HISTORY_DAYS,
+    GROUP_ORDER, GROUP_COLORS, GROUP_LABELS,
+  };
 })(window);

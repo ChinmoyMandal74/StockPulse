@@ -102,6 +102,30 @@ const SCHEMA = [
      expires_at integer not null
    )`,
   `create index if not exists idx_sessions_user on sessions (user_id)`,
+  // One row per symbol per trading day. The daily bars are already fetched on
+  // every refresh and then thrown away, so keeping them costs no API credits and
+  // turns a rolling 14-month window into an archive that only grows.
+  //
+  // The (symbol, d) key is what makes the write cheap and self-correcting: a
+  // refresh upserts a small recent window, so a provisional close stored while
+  // the market was open is replaced by the settled one, and a split that
+  // re-adjusts old prices is repaired by rewriting the symbol rather than
+  // leaving a phantom cliff in the chart.
+  //
+  // open/high/low/volume are stored alongside close because computeStocks()
+  // reads them — high/low for the 52-week range, volume for the volume trend.
+  // Without them the archive could draw a chart but could not reproduce the
+  // screener, which is the whole point of keeping it.
+  `create table if not exists bars (
+     symbol text not null,
+     d      text not null,
+     open   real,
+     high   real,
+     low    real,
+     close  real not null,
+     volume real,
+     primary key (symbol, d)
+   )`,
   // One row per user per UTC day. A counter in memory is useless on serverless —
   // consecutive requests need not share a process — so the quota lives here.
   `create table if not exists chat_usage (
@@ -321,6 +345,106 @@ async function readRefreshState() {
     total: row.total == null ? null : Number(row.total),
     actor: row.actor || null,
   };
+}
+
+// ---- daily bars -----------------------------------------------------------
+
+// libSQL takes a whole batch in one round trip, but a 20,000-statement batch is
+// not a round trip anyone enjoys. Everything here chunks.
+const BAR_CHUNK = 500;
+
+async function writeBarChunks(stmts) {
+  for (let i = 0; i < stmts.length; i += BAR_CHUNK) {
+    await db.batch(stmts.slice(i, i + BAR_CHUNK), 'write');
+  }
+}
+
+const barInsert = (r) => ({
+  sql: `insert into bars (symbol, d, open, high, low, close, volume)
+        values (?, ?, ?, ?, ?, ?, ?)
+        on conflict(symbol, d) do update set
+          open = excluded.open, high = excluded.high, low = excluded.low,
+          close = excluded.close, volume = excluded.volume`,
+  args: [r.symbol, r.d, r.open ?? null, r.high ?? null, r.low ?? null, r.close, r.volume ?? null],
+});
+
+// Newest stored date per symbol, in one query — the refresh path needs it for
+// every symbol at once and must not make 69 round trips to find out.
+async function barsMaxDates() {
+  await init();
+  const r = await db.execute('select symbol, max(d) as maxd, count(*) as n from bars group by symbol');
+  const out = new Map();
+  for (const row of r.rows) out.set(row.symbol, { maxDate: row.maxd, count: Number(row.n) });
+  return out;
+}
+
+// Stored closes on a handful of dates, for the split probe. One query for the
+// whole universe: US symbols share trading days, so the date set is tiny.
+async function barsOn(dates) {
+  await init();
+  const list = [...new Set(dates.filter(Boolean))];
+  if (!list.length) return new Map();
+  const r = await db.execute({
+    sql: `select symbol, d, close from bars where d in (${list.map(() => '?').join(',')})`,
+    args: list,
+  });
+  const out = new Map();
+  for (const row of r.rows) out.set(row.symbol + '|' + row.d, Number(row.close));
+  return out;
+}
+
+async function upsertBars(rows) {
+  await init();
+  if (!rows || !rows.length) return 0;
+  await writeBarChunks(rows.map(barInsert));
+  return rows.length;
+}
+
+// Used when a split has re-adjusted history, and by the backfill script. The
+// delete and the first inserts share a batch so the symbol is never empty for
+// longer than one round trip.
+async function replaceBarsFor(symbol, rows) {
+  await init();
+  const stmts = [{ sql: 'delete from bars where symbol = ?', args: [symbol] },
+                 ...rows.map(barInsert)];
+  await writeBarChunks(stmts);
+  return rows.length;
+}
+
+// Newest-first, matching the shape computeStocks() already works in.
+async function readBars(symbol, limit = 400) {
+  await init();
+  const r = await db.execute({
+    sql: 'select d, open, high, low, close, volume from bars where symbol = ? order by d desc limit ?',
+    args: [symbol, limit],
+  });
+  return r.rows.map((x) => ({
+    datetime: x.d,
+    open: x.open, high: x.high, low: x.low, close: x.close, volume: x.volume,
+  }));
+}
+
+// Closes only, for sparklines across the whole table. One query, oldest-first
+// per symbol so the caller can draw straight through it.
+async function readCloses(symbols, since) {
+  await init();
+  if (!symbols || !symbols.length) return {};
+  const r = await db.execute({
+    sql: `select symbol, d, close from bars
+          where symbol in (${symbols.map(() => '?').join(',')}) and d >= ?
+          order by symbol, d`,
+    args: [...symbols, since],
+  });
+  const out = {};
+  for (const row of r.rows) (out[row.symbol] ||= []).push(Number(row.close));
+  return out;
+}
+
+async function barsStats() {
+  await init();
+  const r = await db.execute('select count(*) as n, count(distinct symbol) as syms, min(d) as mind, max(d) as maxd from bars');
+  const x = r.rows[0] || {};
+  return { rows: Number(x.n || 0), symbols: Number(x.syms || 0), from: x.mind || null, to: x.maxd || null };
 }
 
 // ---- chat quota -----------------------------------------------------------
@@ -578,6 +702,13 @@ module.exports = {
   readSnapshot,
   writeSnapshot,
   noteChatUse,
+  barsMaxDates,
+  barsOn,
+  upsertBars,
+  replaceBarsFor,
+  readBars,
+  readCloses,
+  barsStats,
   logVisit,
   readVisitorStats,
 };
