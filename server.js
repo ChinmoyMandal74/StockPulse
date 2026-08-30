@@ -1755,17 +1755,23 @@ app.get('/api/history', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
   if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
-  const days = Math.min(5200, Math.max(20, Number(req.query.days) || 260));   // the archive goes ~20y deep
+  // Floor of 2, not 20: the shortest range on the stock page is a trading
+  // week. Ceiling is the archive's depth, about 20 years.
+  const days = Math.min(5200, Math.max(2, Number(req.query.days) || 260));
 
   const bars = await store.readBars(symbol, days);   // newest-first
-  if (!bars.length) return res.json({ symbol, closes: [], from: null, to: null });
+  if (!bars.length) return res.json({ symbol, dates: [], closes: [], volumes: [], from: null, to: null });
   const asc = bars.slice().reverse();
   res.json({
     symbol,
     from: asc[0].datetime,
     to: asc[asc.length - 1].datetime,
+    dates: asc.map((b) => b.datetime),
     // 2dp keeps the payload small; a chart 600px wide cannot show more.
     closes: asc.map((b) => Math.round(b.close * 100) / 100),
+    // Volume is split-adjusted the same way price is, so it is comparable
+    // across the series but is not the literal share count for a past day.
+    volumes: asc.map((b) => (b.volume == null ? 0 : Math.round(b.volume))),
   });
 }));
 

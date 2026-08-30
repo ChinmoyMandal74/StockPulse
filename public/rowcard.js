@@ -150,12 +150,61 @@
   // A plain line with a soft fill, coloured by the period's direction, and a
   // dashed line at the opening price so the shape reads against a baseline
   // rather than floating.
-  // Returns { svg, log } — the caller labels the chart when the scale is
+  // Simple moving average. Returns an array the same length as the input, with
+  // null for the first n-1 points where the window is not yet full — the caller
+  // fetches extra history so those nulls fall outside the visible window.
+  function sma(values, n) {
+    const out = new Array(values.length).fill(null);
+    let sum = 0;
+    for (let i = 0; i < values.length; i++) {
+      sum += values[i];
+      if (i >= n) sum -= values[i - n];
+      if (i >= n - 1) out[i] = sum / n;
+    }
+    return out;
+  }
+
+  // Prices at even steps along whichever scale is in use, each rounded to a
+  // readable precision. Even spacing beats round numbers here: on a log axis
+  // round values land unevenly and the gridlines look accidental.
+  function priceTicks(lo, hi, useLog, n) {
+    const t = useLog ? Math.log : (v) => v;
+    const inv = useLog ? Math.exp : (v) => v;
+    const a = t(lo), b = t(hi);
+    const out = [];
+    for (let k = 0; k < n; k++) {
+      const f = n === 1 ? 0.5 : k / (n - 1);
+      const v = inv(a + f * (b - a));
+      // significant-figure rounding, so $1.69 and $932 both read sensibly
+      const mag = Math.pow(10, Math.floor(Math.log10(Math.abs(v) || 1)) - 1);
+      out.push({ v: Math.round(v / mag) * mag, f: 1 - f });   // f: 0 = top
+    }
+    return out;
+  }
+
+  // Returns { svg, log, ticks }. The caller labels the chart when the scale is
   // logarithmic, because an unmarked log axis misleads.
-  function chartSVG(closes) {
-    const W = 600, H = 104, PT = 12, PB = 12;
-    const lo = Math.min.apply(null, closes);
-    const hi = Math.max.apply(null, closes);
+  //
+  // opts.volumes draws bars beneath the price, each coloured by whether that
+  // session closed up or down. The hover card passes none — at 104px tall
+  // there is no room — so it stays a plain price line.
+  function chartSVG(closes, opts) {
+    const o = opts || {};
+    const vols = o.volumes && o.volumes.length === closes.length ? o.volumes : null;
+    const W = 600;
+    const H = vols ? 200 : 104;
+    // With bars, the price keeps the top ~72% and volume sits in a band below,
+    // separated by a gap so the two never read as one shape.
+    const PRICE_H = vols ? 140 : H;
+    const VOL_TOP = 152, VOL_BOT = 194;
+    const PT = 12, PB = vols ? 8 : 12;
+    // Overlays are folded into the range: a moving average sits above a falling
+    // price and below a rising one, so scaling to the price alone clips it.
+    const overlays = (o.overlays || []).filter((ov) => ov && ov.values);
+    const scaleVals = closes.concat(
+      overlays.reduce((acc, ov) => acc.concat(ov.values.filter((v) => v != null)), []));
+    const lo = Math.min.apply(null, scaleVals);
+    const hi = Math.max.apply(null, scaleVals);
     // Over a long span a linear axis is useless: MU ran from $1.69 to $932, so
     // nineteen of twenty years flatten onto the floor and only the last month
     // is visible. Above a 4x range the axis goes logarithmic, which is what
@@ -165,20 +214,68 @@
     const t = useLog ? Math.log : (v) => v;
     const tLo = t(lo), tSpan = (t(hi) - tLo) || 1;
     const x = (i) => (closes.length === 1 ? W / 2 : (i / (closes.length - 1)) * W);
-    const y = (v) => PT + (1 - (t(v) - tLo) / tSpan) * (H - PT - PB);
+    const y = (v) => PT + (1 - (t(v) - tLo) / tSpan) * (PRICE_H - PT - PB);
 
     let d = '';
     for (let i = 0; i < closes.length; i++) d += (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(closes[i]).toFixed(1);
-    const area = d + `L${W} ${H}L0 ${H}Z`;
     const baseY = y(closes[0]).toFixed(1);
 
+    // Gridlines at the price ticks. Returned alongside so the caller can put
+    // HTML labels at the same heights — SVG text would distort, since the
+    // chart stretches with preserveAspectRatio="none".
+    // Overlay paths. A null breaks the line rather than joining across the gap.
+    let overlayPaths = '';
+    for (const ov of overlays) {
+      let od = '', pen = false;
+      for (let i = 0; i < ov.values.length; i++) {
+        const v = ov.values[i];
+        if (v == null) { pen = false; continue; }
+        od += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1);
+        pen = true;
+      }
+      if (od) overlayPaths += `<path class="ov ${ov.cls || ''}" d="${od}"/>`;
+    }
+
+    const wantTicks = o.ticks || 0;
+    const ticks = wantTicks ? priceTicks(lo, hi, useLog, wantTicks) : [];
+    let grid = '';
+    for (const tk of ticks) {
+      const gy = y(tk.v);
+      if (gy < PT - 1 || gy > PRICE_H) continue;
+      grid += `<line class="grid" x1="0" y1="${gy.toFixed(1)}" x2="${W}" y2="${gy.toFixed(1)}"/>`;
+    }
+    // Where each label sits as a fraction of the whole viewBox, not of the
+    // price band, since the caller positions against the rendered svg.
+    for (const tk of ticks) tk.top = y(tk.v) / H;
+
+    // Volume bars. Scaled to the largest bar in view rather than an absolute,
+    // so a quiet stretch still shows its own shape.
+    let bars = '';
+    if (vols) {
+      const vMax = Math.max.apply(null, vols) || 1;
+      const slot = W / vols.length;
+      const bw = Math.max(0.6, Math.min(slot * 0.72, 7));
+      const band = VOL_BOT - VOL_TOP;
+      for (let i = 0; i < vols.length; i++) {
+        const h = Math.max(0.5, (vols[i] / vMax) * band);
+        const cx = vols.length === 1 ? W / 2 : (i / (vols.length - 1)) * (W - bw) + bw / 2;
+        // Green when the session closed up on the one before it, matching the
+        // convention every other charting tool uses.
+        const up = i === 0 ? closes[i] <= closes[Math.min(1, closes.length - 1)] : closes[i] >= closes[i - 1];
+        bars += `<rect class="vb ${up ? 'vu' : 'vd'}" x="${(cx - bw / 2).toFixed(2)}" ` +
+                `y="${(VOL_BOT - h).toFixed(2)}" width="${bw.toFixed(2)}" height="${h.toFixed(2)}"/>`;
+      }
+    }
+
     const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` +
-      `<path class="ar" d="${area}"/>` +
+      grid +
       `<line class="base" x1="0" y1="${baseY}" x2="${W}" y2="${baseY}"/>` +
       `<path class="ln" d="${d}"/>` +
+      overlayPaths +
       `<circle class="dot" cx="${x(closes.length - 1).toFixed(1)}" cy="${y(closes[closes.length - 1]).toFixed(1)}" r="2.6"/>` +
+      bars +
       '</svg>';
-    return { svg, log: useLog };
+    return { svg, log: useLog, ticks };
   }
 
   const fmtPrice = (n) => (n >= 1000 ? n.toFixed(0) : n.toFixed(2));
@@ -356,7 +453,7 @@
   global.RowCard = {
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
     // used by the stock page
-    buildSections, chartSVG, loadHistory, fmtPrice, shortDay, HISTORY_DAYS,
+    buildSections, chartSVG, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS,
   };
 })(window);

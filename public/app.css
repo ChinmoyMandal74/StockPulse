@@ -256,14 +256,31 @@ tbody tr:hover { background: var(--panel); }
 }
 .rc-chart svg { display: block; width: 100%; height: 100%; }
 .rc-chart .ln { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
-.rc-chart .ar { stroke: none; opacity: 0.13; }
 .rc-chart .dot { stroke: none; }
+/* volume bars sit in their own band under the price; green on an up session,
+   red on a down one, dimmed so they never compete with the price line */
+.rc-chart .vb { stroke: none; opacity: 0.55; }
+.rc-chart .vb.vu { fill: var(--green); }
+.rc-chart .vb.vd { fill: var(--red); }
 /* the flat line marking where the period opened, so the shape reads against it */
 .rc-chart .base { stroke: var(--hair-2); stroke-width: 1; stroke-dasharray: 2 3; }
-.rc-chart.up .ln, .rc-chart.up .dot { stroke: var(--green); fill: var(--green); }
-.rc-chart.up .ar { fill: var(--green); }
-.rc-chart.down .ln, .rc-chart.down .dot { stroke: var(--red); fill: var(--red); }
-.rc-chart.down .ar { fill: var(--red); }
+/* overlays sit in a neutral colour so they read as a second series rather than
+   as part of the price, which is already green or red by direction */
+.rc-chart .ov { fill: none; stroke-width: 1.2; opacity: 0.9;
+                vector-effect: non-scaling-stroke; }
+.rc-chart .ov.ma50 { stroke: var(--accent); }
+.rc-chart .ov.ma200 { stroke: var(--amber); }
+/* stroke and fill kept apart on purpose: grouping them set fill on the line
+   path too, which closed it back to its start and drew a filled wedge. The
+   area path hid that until it was removed. */
+.rc-chart.up .ln { stroke: var(--green); }
+.rc-chart.up .dot { fill: var(--green); stroke: none; }
+.rc-chart.down .ln { stroke: var(--red); }
+.rc-chart.down .dot { fill: var(--red); stroke: none; }
+/* price gridlines — present enough to read a level against, faint enough that
+   the line stays the subject */
+.rc-chart .grid { stroke: rgba(255, 255, 255, 0.055); stroke-width: 1;
+                  vector-effect: non-scaling-stroke; }
 .rc-chart .cap {
   position: absolute; font-family: var(--mono); font-size: 9.5px; color: var(--faint);
   font-variant-numeric: tabular-nums; pointer-events: none;

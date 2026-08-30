@@ -55,10 +55,51 @@
     .rng:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
     .rng.on { background: rgba(124, 156, 255, 0.14); border-color: rgba(124, 156, 255, 0.4); color: var(--text); }
 
-    /* the shared chart, at page scale */
-    #chart.rc-chart { height: 300px; border-radius: 12px; }
+    /* the shared chart, at page scale — taller, with a gutter on the right for
+       the price axis and room underneath for the dates. The svg fills the
+       content box, so the padding is what creates both. */
+    #chart.rc-chart { height: 320px; border-radius: 12px; padding: 0 52px 18px 0; }
     #chart .cap { font-size: 11px; }
     #chart .cap.chg { font-size: 15px; }
+    #chart .cap.vol { left: 9px; top: 71%; bottom: auto; font-size: 9.5px;
+                      text-transform: uppercase; letter-spacing: 0.12em; }
+    /* legend: a swatch per average, in that average's own colour */
+    #chart .cap.ma { left: 9px; top: 30px; font-size: 10px; color: var(--faint);
+                     display: flex; gap: 12px; }
+    #chart .cap.ma i { display: inline-block; width: 10px; height: 2px;
+                       margin-right: 5px; vertical-align: 3px; border-radius: 1px; }
+    #chart .cap.ma i.ma50 { background: var(--accent); }
+    #chart .cap.ma i.ma200 { background: var(--amber); }
+
+    .ma-toggle:first-of-type { margin-left: 10px; }
+    .ma-toggle.ma50.on { background: rgba(124, 156, 255, 0.14);
+                         border-color: rgba(124, 156, 255, 0.4); color: var(--accent); }
+    .ma-toggle.ma200.on { background: rgba(251, 191, 36, 0.14);
+                          border-color: rgba(251, 191, 36, 0.4); color: var(--amber); }
+
+    /* price axis, in the right gutter */
+    #chart .yaxis { position: absolute; top: 0; right: 0; bottom: 18px; width: 52px;
+                    pointer-events: none; }
+    #chart .ytick {
+      position: absolute; right: 0; transform: translateY(-50%);
+      padding-left: 8px; font-family: var(--mono); font-size: 10px;
+      color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    /* the top and bottom labels would otherwise be clipped by the box */
+    #chart .ytick:first-child { transform: none; }
+    #chart .ytick:last-child { transform: translateY(-100%); }
+
+    #chart .axis { position: absolute; left: 0; right: 52px; bottom: 3px; height: 12px;
+                   pointer-events: none; }
+    #chart .axis .tick {
+      position: absolute; transform: translateX(-50%); white-space: nowrap;
+      font-family: var(--mono); font-size: 9.5px; color: var(--faint);
+    }
+    /* the end labels would otherwise hang off the edges */
+    #chart .axis .tick:first-child { transform: none; }
+    #chart .axis .tick:last-child { transform: translateX(-100%); }
+    .ranges { flex-wrap: wrap; }
+    .rng { padding: 5px 10px; }
 
     /* the shared sections, wider than the card's three columns */
     .fields { column-count: 4; column-gap: 26px; }
@@ -100,39 +141,108 @@
     // /stock/MU  ->  MU
     const SYMBOL = decodeURIComponent(location.pathname.split('/').filter(Boolean)[1] || '').toUpperCase();
 
-    // The archive reaches ~20 years for older listings; a symbol simply gets
-    // whatever it has, so "Max" is honest rather than a fixed promise.
+    // Trading days, not calendar days — roughly 21 a month. The archive reaches
+    // ~20 years for older listings and a symbol simply gets whatever it has, so
+    // "Max" is honest rather than a fixed promise.
     const RANGES = [
-      { id: '1y', label: '1Y', days: RowCard.HISTORY_DAYS },
-      { id: '5y', label: '5Y', days: 1260 },
+      { id: '1w',  label: '1W',  days: 5 },
+      { id: '2w',  label: '2W',  days: 10 },
+      { id: '1m',  label: '1M',  days: 21 },
+      { id: '3m',  label: '3M',  days: 63 },
+      { id: '6m',  label: '6M',  days: 126 },
+      { id: '1y',  label: '1Y',  days: RowCard.HISTORY_DAYS },
+      { id: '5y',  label: '5Y',  days: 1260 },
       { id: 'max', label: 'Max', days: 5200 },
     ];
-    let range = RANGES[0];
+    let range = RANGES.find((r) => r.id === '1y');
+    // Moving averages. Adding another is one entry here plus a colour in
+    // app.css; nothing else needs to change.
+    const MAS = [
+      { len: 50,  cls: 'ma50',  label: '50D',  on: true },
+      { len: 200, cls: 'ma200', label: '200D', on: true },
+    ];
+    // Always padded by the longest average rather than by whichever are
+    // switched on, so toggling redraws from the cache instead of refetching.
+    // The server clamps at its own ceiling, which only bites on Max, where 200
+    // missing bars are invisible across twenty years.
+    const MA_PAD = Math.max.apply(null, MAS.map((m) => m.len));
     let stock = null;
 
     const curSym = (c) => ({ USD: '$', EUR: '€', GBP: '£', JPY: '¥', KRW: '₩', INR: '₹' }[c] || '');
+
+    // Axis labels want to be scannable, not precise: decimals on a gridline are
+    // noise, but a $2 stock still needs them.
+    function tickLabel(v) {
+      const a = Math.abs(v);
+      if (a >= 100) return String(Math.round(v));
+      if (a >= 10) return v.toFixed(1);
+      return v.toFixed(2);
+    }
+
+    const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    // Short spans want a day, long ones want a year; a month alone is ambiguous
+    // over five years and redundant over five days.
+    function axisLabel(iso) {
+      const p = String(iso || '').split('-');
+      if (p.length !== 3) return iso || '';
+      const [y, m, d] = p;
+      if (range.days <= 63) return `${+d} ${MON[+m - 1]}`;
+      if (range.days <= 253) return `${MON[+m - 1]} ${y.slice(2)}`;
+      return `${MON[+m - 1]} ${y}`;
+    }
 
     function paintChart() {
       const box = document.getElementById('chart');
       if (!box) return;
       box.dataset.range = range.id;
-      RowCard.loadHistory(SYMBOL, range.days).then((data) => {
+      RowCard.loadHistory(SYMBOL, range.days + MA_PAD).then((data) => {
         if (box.dataset.range !== range.id) return;      // a later click won
-        const closes = (data && data.closes) || [];
+        const all = (data && data.closes) || [];
         box.classList.remove('up', 'down');
-        if (closes.length < 2) {
+        if (all.length < 2) {
           box.innerHTML = '<div class="msg">No price history stored for this symbol yet</div>';
           return;
         }
+        // Averaged over everything fetched, then sliced to the window asked
+        // for, so each line is drawn from the first visible bar.
+        const from = Math.max(0, all.length - range.days);
+        const closes = all.slice(from);
+        const series = MAS.map((m) => ({
+          ma: m, values: RowCard.sma(all, m.len).slice(from),
+        })).filter((x) => x.ma.on && x.values.some((v) => v != null));
+        const volumes = (data.volumes || []).slice(from);
+        const dates = (data.dates || []).slice(from);
         const first = closes[0], last = closes[closes.length - 1];
         const chg = ((last - first) / first) * 100;
         box.classList.add(chg >= 0 ? 'up' : 'down');
-        const c = RowCard.chartSVG(closes);
+        const c = RowCard.chartSVG(closes, {
+          volumes, ticks: 5,
+          overlays: series.map((x) => ({ values: x.values, cls: x.ma.cls })),
+        });
+
+        // Axis labels are HTML rather than SVG text: the chart stretches with
+        // preserveAspectRatio="none", which would distort any glyph inside it.
+        const ticks = [];
+        const want = Math.min(5, Math.max(2, Math.floor(closes.length / 25) + 1));
+        for (let k = 0; k < want; k++) {
+          const i = Math.round((k / (want - 1)) * (dates.length - 1));
+          const pct = dates.length === 1 ? 50 : (i / (dates.length - 1)) * 100;
+          ticks.push(`<span class="tick" style="left:${pct.toFixed(2)}%">${esc(axisLabel(dates[i]))}</span>`);
+        }
+
+        // The price axis replaces the old floating high/low captions — with real
+        // gridlines those two were saying the same thing twice.
+        const yLabels = c.ticks.map((tk) =>
+          `<span class="ytick" style="top:${(tk.top * 100).toFixed(2)}%">${esc(tickLabel(tk.v))}</span>`
+        ).join('');
+
         box.innerHTML = c.svg +
-          `<span class="cap chg">${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%</span>` +
-          `<span class="cap hi">${RowCard.fmtPrice(Math.max.apply(null, closes))}${c.log ? ' · log scale' : ''}</span>` +
-          `<span class="cap lo">${RowCard.fmtPrice(Math.min.apply(null, closes))}</span>` +
-          `<span class="cap from">${esc(RowCard.shortDay(data.from))} → now · ${closes.length} sessions</span>`;
+          `<span class="cap chg">${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%${c.log ? ' · log scale' : ''}</span>` +
+          `<span class="cap ma">${series.map((x) =>
+            `<i class="${x.ma.cls}"></i>${x.ma.len}-day`).join('')}</span>` +
+          `<span class="cap vol">Volume</span>` +
+          `<span class="yaxis">${yLabels}</span>` +
+          `<span class="axis">${ticks.join('')}</span>`;
       });
     }
 
@@ -172,7 +282,10 @@
         <section class="bezel card"><div class="core">
           <div class="sec-h"><h2>Price</h2>
             <span class="ranges">${RANGES.map((r) =>
-              `<button class="rng${r.id === range.id ? ' on' : ''}" data-r="${r.id}">${r.label}</button>`).join('')}</span>
+              `<button class="rng${r.id === range.id ? ' on' : ''}" data-r="${r.id}">${r.label}</button>`).join('')}
+              ${MAS.map((m) =>
+                `<button class="rng ma-toggle ${m.cls}${m.on ? ' on' : ''}" data-ma="${m.len}">${m.label}</button>`
+              ).join('')}</span>
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
         </section></div>
@@ -191,8 +304,15 @@
       document.querySelector('.ranges').addEventListener('click', (e) => {
         const b = e.target.closest('.rng');
         if (!b) return;
+        if (b.dataset.ma) {
+          const m = MAS.find((x) => String(x.len) === b.dataset.ma);
+          m.on = !m.on;
+          b.classList.toggle('on', m.on);
+          paintChart();
+          return;
+        }
         range = RANGES.find((r) => r.id === b.dataset.r) || RANGES[0];
-        document.querySelectorAll('.rng').forEach((x) => x.classList.toggle('on', x.dataset.r === range.id));
+        document.querySelectorAll('.rng[data-r]').forEach((x) => x.classList.toggle('on', x.dataset.r === range.id));
         paintChart();
       });
       paintChart();
