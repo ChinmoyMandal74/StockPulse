@@ -192,6 +192,10 @@ button, select, input, a.btn { font-family: var(--sans); }
    Signal colours
    ========================================================================== */
 .sym { font-weight: 600; }
+/* A company name that links to its page. Inherits the row's colour and only
+   underlines on hover — 69 rows of blue underlines would wreck a table. */
+.namelink { color: inherit; text-decoration: none; }
+.namelink:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 .pos { color: var(--green); }
 .neg { color: var(--red); }
 .na { color: var(--faint); }

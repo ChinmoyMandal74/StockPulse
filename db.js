@@ -126,6 +126,41 @@ const SCHEMA = [
      volume real,
      primary key (symbol, d)
    )`,
+  // One row per symbol per day. The screener holds only the current value of
+  // every fundamental — `profiles` is overwritten on each refresh — so there is
+  // no way to chart how a valuation moved. This accumulates one.
+  //
+  // Explicit columns rather than a JSON blob, unlike `profiles`: the shape here
+  // is ours and stable, and a chart wants `select d, forward_pe` over a year
+  // rather than 365 blobs to parse. Adding a field later is an ALTER in
+  // ADDED_COLUMNS, the same as any other table.
+  //
+  // The scores are deliberately absent. They are model output, not measurement:
+  // momentum was rewritten once already, and a series that mixes two scoring
+  // regimes compares nothing to nothing.
+  `create table if not exists fundamentals_history (
+     symbol              text not null,
+     d                   text not null,
+     price               real,
+     market_cap          real,
+     forward_pe          real,
+     peg                 real,
+     revenue_ttm         real,
+     revenue_growth_yoy  real,
+     gross_profit_ttm    real,
+     gross_margin        real,
+     net_income_ttm      real,
+     profit_margin       real,
+     earnings_growth_yoy real,
+     fcf_ttm             real,
+     fcf_margin          real,
+     fcf_yield           real,
+     net_cash            real,
+     net_cash_pct        real,
+     roe                 real,
+     short_pct_float     real,
+     primary key (symbol, d)
+   )`,
   // Per-account UI preferences — which column groups are collapsed, for now.
   // Stored server-side rather than in localStorage so the setting follows the
   // person to another browser or machine, instead of belonging to a device and
@@ -457,6 +492,77 @@ async function barsStats() {
   return { rows: Number(x.n || 0), symbols: Number(x.syms || 0), from: x.mind || null, to: x.maxd || null };
 }
 
+// ---- fundamentals history -------------------------------------------------
+
+// Column name in the table, then the field it comes from on a screener row.
+const FUND_FIELDS = [
+  ['price', 'price'],
+  ['market_cap', 'marketCap'],
+  ['forward_pe', 'forwardPe'],
+  ['peg', 'peg'],
+  ['revenue_ttm', 'revenueTtm'],
+  ['revenue_growth_yoy', 'revenueGrowthYoY'],
+  ['gross_profit_ttm', 'grossProfitTtm'],
+  ['gross_margin', 'grossMargin'],
+  ['net_income_ttm', 'netIncomeTtm'],
+  ['profit_margin', 'profitMargin'],
+  ['earnings_growth_yoy', 'earningsGrowthYoY'],
+  ['fcf_ttm', 'fcfTtm'],
+  ['fcf_margin', 'fcfMargin'],
+  ['fcf_yield', 'fcfYield'],
+  ['net_cash', 'netCash'],
+  ['net_cash_pct', 'netCashPct'],
+  ['roe', 'roe'],
+  ['short_pct_float', 'shortPctFloat'],
+];
+
+// One set per symbol per day, enforced by the primary key. A Refresh all runs
+// for a dozen-odd rounds and calls this on each, so the upsert matters: later
+// rounds carry more populated profiles and should replace what earlier ones
+// wrote, not sit alongside it.
+async function writeFundamentals(day, rows) {
+  await init();
+  if (!rows || !rows.length) return 0;
+  const cols = FUND_FIELDS.map(([c]) => c);
+  const num = (v) => (v == null || !isFinite(v) ? null : Number(v));
+  const stmts = rows.map((r) => ({
+    sql: `insert into fundamentals_history (symbol, d, ${cols.join(', ')})
+          values (?, ?, ${cols.map(() => '?').join(', ')})
+          on conflict(symbol, d) do update set
+            ${cols.map((c) => `${c} = excluded.${c}`).join(', ')}`,
+    args: [r.symbol, day, ...FUND_FIELDS.map(([, f]) => num(r[f]))],
+  }));
+  for (let i = 0; i < stmts.length; i += BAR_CHUNK) {
+    await db.batch(stmts.slice(i, i + BAR_CHUNK), 'write');
+  }
+  return rows.length;
+}
+
+// Oldest-first, which is the order a chart draws in.
+async function readFundamentals(symbol, since) {
+  await init();
+  const cols = FUND_FIELDS.map(([c]) => c);
+  const r = await db.execute({
+    sql: `select d, ${cols.join(', ')} from fundamentals_history
+          where symbol = ? and d >= ? order by d`,
+    args: [String(symbol).toUpperCase(), since || '0000-00-00'],
+  });
+  return r.rows.map((row) => {
+    const out = { d: row.d };
+    for (const [c, f] of FUND_FIELDS) out[f] = row[c] == null ? null : Number(row[c]);
+    return out;
+  });
+}
+
+async function fundamentalsStats() {
+  await init();
+  const r = await db.execute(
+    'select count(*) n, count(distinct symbol) syms, count(distinct d) days, min(d) mind, max(d) maxd from fundamentals_history');
+  const x = r.rows[0] || {};
+  return { rows: Number(x.n || 0), symbols: Number(x.syms || 0), days: Number(x.days || 0),
+           from: x.mind || null, to: x.maxd || null };
+}
+
 // ---- per-account preferences ----------------------------------------------
 
 async function readPrefs(userKey) {
@@ -736,6 +842,9 @@ module.exports = {
   noteChatUse,
   readPrefs,
   writePrefs,
+  writeFundamentals,
+  readFundamentals,
+  fundamentalsStats,
   barsMaxDates,
   barsOn,
   upsertBars,

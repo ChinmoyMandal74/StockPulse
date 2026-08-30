@@ -209,6 +209,17 @@ Everything comes from the daily bars already fetched, so the extra factors cost 
 
 Applying these moved 9 of 44 ratings — MSTR 5→2, JOBY 8→5, AVAV 7→5, four loss-makers down one, and SPCX 3→**5** (its meaningless PEG of 86.7 had been scoring zero and dragging it down).
 
+## Fundamentals history
+`fundamentals_history` keeps one row per symbol per day (18 columns — valuation, size, margins, growth, balance sheet), so the movement of a P/E or a margin can eventually be charted. **Empty until the next Refresh all** — nothing is backfillable, because `profiles` only ever holds the current value and no API on this plan returns historical forward estimates.
+
+- **Written during a Refresh all only**, gated on `readRefreshState()` being non-null. An ordinary price Refresh reuses day-old cached profiles, so recording then would store identical numbers under a new date and invent movement that never happened.
+- **One set per day**, enforced by the `(symbol, d)` primary key. A Refresh all calls this on each of its dozen-odd rounds, so the write is an upsert: later rounds carry more populated profiles and replace what earlier ones wrote.
+- **Rows without a profile yet are skipped, not stored empty** — a later round in the same run fills them in.
+- **Explicit columns, not a JSON blob** (unlike `profiles`): the shape is ours and stable, and a chart wants `select d, forward_pe` over a year rather than 365 blobs to parse. Adding a field is an `ALTER` in `ADDED_COLUMNS`.
+- **The scores are deliberately absent.** They are model output rather than measurement — momentum has already been rewritten once, and a series mixing two scoring regimes compares nothing to nothing.
+- **A history write never fails a refresh**, the same rule the bar archive follows.
+- The series will be **irregular**: a point exists only for days a Refresh all was run, not every calendar day. Fine for a chart, awkward for precise period comparisons.
+
 ## Saved column layout
 Which column groups a user has collapsed is stored per account in the `prefs` table (`user_key`, JSON `data`), read by `GET /api/prefs` and written by `PUT /api/prefs`.
 
@@ -244,7 +255,7 @@ Charts are hand-rolled inline SVG in `rowcard.js` — no library, no build step.
   - `RowCard.sma()` is exported for it. Cross-checked against the screener's own `vs50ma` and `vs200ma` for six symbols: exact agreement, gap 0.000 on both.
 - **`.rc-*` classes are unscoped in `app.css`**; only the floating container is tied to `#rowcard`. The hover card and `/stock/<SYMBOL>` render the same sections from the same `FIELD_SPEC` via `RowCard.buildSections()` — a third copy of the field list is exactly what the row card existed to prevent.
 - **`GROUP_COLORS` / `GROUP_LABELS` now live in `rowcard.js`** and are exported. `index.html` still keeps its own copy because it also colours the table's group banners and the columns menu, so **those two must stay in step**.
-- The name cell in the screener links to `/stock/<SYMBOL>`; the symbol cell still links out to Google Finance. Both open in a new tab (`target="_blank" rel="noopener"`), so a click never loses your place in the table. `.namelink` inherits its colour and only underlines on hover — 69 rows of blue underlines would wreck the table.
+- The name cell links to `/stock/<SYMBOL>` on **both** the screener and the analysis page; the symbol cell still links out to Google Finance. All of them open in a new tab (`target="_blank" rel="noopener"`), so a click never loses your place in the list. `.namelink` lives in `app.css` because two pages use it; only the frozen-column truncation (`td.frz1 .namelink`) stays in index.html. `.namelink` inherits its colour and only underlines on hover — 69 rows of blue underlines would wreck the table.
 
 ## Bar archive
 The `bars` table keeps one row per symbol per trading day (`open/high/low/close/volume`, keyed on `(symbol, d)`). **Currently 241,022 rows across 69 symbols, 2006-05-25 → 2026-08-28.**

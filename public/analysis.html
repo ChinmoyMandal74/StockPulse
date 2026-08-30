@@ -165,7 +165,11 @@
     const shortDate = (iso) => { const p = String(iso).split('-'); return p.length === 3 ? `${M[+p[1]-1]} ${+p[2]}` : iso; };
     const gf = (s) => `https://www.google.com/finance/quote/${encodeURIComponent(s.symbol)}`;
     const symCell = (s) => `<td class="l sym"><a href="${gf(s)}" target="_blank" rel="noopener">${esc(s.symbol)}</a></td>`;
-    const nameCell = (s) => `<td class="l name">${esc(s.name || '')}</td>`;
+    // Same destination and behaviour as the screener's name cell: a new tab, so
+    // following one from a screen never loses the list you were reading.
+    const nameCell = (s) => `<td class="l name"><a class="namelink" ` +
+      `href="/stock/${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener" ` +
+      `title="Open ${esc(s.symbol)} in full ↗">${esc(s.name || '')}</a></td>`;
 
     function section(id, title, count, tone, subtitle, headers, rows, emptyMsg, note) {
       const head = headers.map((h) => `<th class="${h.l ? 'l' : ''}${h.name ? ' name-h' : ''}">${h.t}</th>`).join('');

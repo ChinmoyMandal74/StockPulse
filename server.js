@@ -1849,6 +1849,25 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
       // never raises the banner.
       const rows = r.payload.stocks || [];
       const loaded = rows.filter((x) => x.profileFetchedAt != null).length;
+
+      // Snapshot today's fundamentals — but only during a Refresh all, which is
+      // when the profile cache has actually been re-pulled. An ordinary price
+      // Refresh reuses day-old cached profiles, so writing then would record
+      // the same numbers under a new date and invent movement that never
+      // happened. readRefreshState() is non-null only while a Refresh all runs.
+      if (await readRefreshState()) {
+        try {
+          // Rows whose profile has not come back yet are skipped rather than
+          // stored empty; a later round in the same run upserts over them.
+          const withProfile = rows.filter((x) => !x.error && x.profileFetchedAt != null);
+          const n = await store.writeFundamentals(new Date().toISOString().slice(0, 10), withProfile);
+          if (n) console.log(`fundamentals: ${n} symbols recorded for today`);
+        } catch (err) {
+          // A history write must never fail a refresh — same rule as the bars.
+          console.warn('fundamentals: history write failed (screener unaffected):', err.message);
+        }
+      }
+
       if (rows.length && loaded >= rows.length) await endRefresh();
       else await noteRefreshProgress(loaded, rows.length);
     }
