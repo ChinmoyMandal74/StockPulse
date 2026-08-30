@@ -292,6 +292,14 @@
     thead .frz { z-index: 6; }
     .frz0 { left: 0; }
     .frz1 { left: var(--l1, 0); box-shadow: 16px 0 24px -20px rgba(0, 0, 0, 1); }
+    /* Fixed rather than content-sized. Left to itself the column grew to 406px
+       to fit one 66-character fund name, and since it is frozen that width was
+       taken out of the viewport on every screen and for every row. Half that,
+       with an ellipsis — the full name is still in the hover card. Targeted on
+       .frz1, not .name, because the Sector cell shares the .name class. */
+    .frz1 { width: 203px; max-width: 203px; }
+    td.frz1 .namelink { display: block; overflow: hidden;
+                        text-overflow: ellipsis; white-space: nowrap; }
     tbody tr:hover .frz { background: var(--panel); }
     tbody tr:hover .frz0 { box-shadow: inset 2px 0 0 var(--accent); }
 
@@ -661,6 +669,7 @@
         <th rowspan="2" class="left frz frz1" data-key="name">Name</th>
         <th class="group grp-info" data-group="info" colspan="5">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="4">Rank</th>
+        <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="3">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward (backtest)</th>
@@ -681,6 +690,7 @@
         <th class="grp-rank" data-key="momentumScore" title="Momentum 1–10: strength ranked against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
         <th class="grp-rank" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all and Overall falls back to momentum. Hover a cell for the factor split and the confidence figure.">Qual.</th>
         <th class="grp-rank" title="Rank by Overall within the stocks currently shown">Rank</th>
+        <th class="grp-chart" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
         <th class="grp-short" data-key="todayPct">Today</th>
         <th class="grp-short" data-key="yesterdayPct">YDAY</th>
         <th class="grp-short" data-key="oneWeekPct">1W</th>
@@ -739,16 +749,18 @@
     let signedIn = true;       // has a live session (or the app is open/local)
     let currentUser = null;    // { email, role } once signed in
 
-    const GROUPS = ['info', 'rank', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
+    const GROUPS = ['info', 'rank', 'chart', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
     const GROUP_COLORS = {
-      info: '#7c9cff', rank: '#a3e635', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
+      // Warm neutral, and the only unused region of the palette: every other
+      // group is a family of numbers, this one is a picture.
+      info: '#7c9cff', rank: '#a3e635', chart: '#a8a29e', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
       rel:  '#22d3ee', trend: '#fbbf24', vol:  '#f472b6',
       size: '#94a3b8', fund: '#fb7185',
     };
     // Labels live here so adding a group later is: append to GROUPS, give it a
     // colour and a label, and tag the <th>/<td> cells with .grp-<id>.
     const GROUP_LABELS = {
-      info: 'Info', rank: 'Rank', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
+      info: 'Info', rank: 'Rank', chart: 'Chart', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
       rel: 'Relative', trend: 'Trend', vol: 'Volume',
       size: 'Size', fund: 'Fundamentals',
     };
@@ -1074,7 +1086,7 @@
         const msg = activeTab === 'All'
           ? 'No tickers yet — add one above.'
           : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="47">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="48">${msg}</td></tr>`;
         applyGroups();
         return;
       }
@@ -1095,7 +1107,7 @@
         if (s.error) {
           return `<tr style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="45">${s.error}</td>
+            <td class="na" colspan="46">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -1114,7 +1126,7 @@
         const fwdTitle = 'Forward return after the as-of date (what happened next)';
         return `<tr style="--i:${i}">
           ${symbolCell(s, freshest)}
-          <td class="name left frz frz1"><a class="namelink" href="/stock/${encodeURIComponent(s.symbol)}">${s.name || ''}</a></td>
+          <td class="name left frz frz1"><a class="namelink" href="/stock/${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener" title="Open ${s.symbol} in full ↗">${s.name || ''}</a></td>
           <td class="left grp-info">${badges(s.portfolios)}</td>
           <td class="grp-info"${attr(liveTitle)}>${price != null ? curSym(s.currency) + price : '—'}</td>
           <td class="name left grp-info"${attr(cacheTitle)}>${s.sector || '—'}</td>
@@ -1124,6 +1136,7 @@
           ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-rank')}
           ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank')}
           ${rankCell(rankMap[s.symbol] ?? null, rankTotal, 'grp-rank')}
+          <td class="spark grp-chart" data-spark="${s.symbol}">${sparkCache[s.symbol] || ''}</td>
           ${pctCell(s.todayPct, 'grp-short', liveTitle)}
           ${pctCell(s.yesterdayPct, 'grp-short', liveTitle)}
           ${pctCell(s.oneWeekPct, 'grp-short', liveTitle)}
@@ -1172,6 +1185,9 @@
       });
 
       applyGroups();
+      // Cheap when the cache is warm; kicks off the one fetch when it is not.
+      paintSparklines();
+      loadSparklines();
     }
 
     // Mark whichever column the table is currently sorted by.
@@ -1398,8 +1414,52 @@
       renderColumnMenu();
       updateStickyOffsets();
     }
-    function toggleGroup(id) { collapsed[id] = !collapsed[id]; applyGroups(); }
-    function setAllGroups(show) { GROUPS.forEach((id) => (collapsed[id] = !show)); applyGroups(); }
+    function toggleGroup(id) { collapsed[id] = !collapsed[id]; applyGroups(); savePrefs(); }
+    function setAllGroups(show) {
+      GROUPS.forEach((id) => (collapsed[id] = !show));
+      applyGroups();
+      savePrefs();
+    }
+
+    // ---- column layout, remembered per account -------------------------------
+    // Server-side rather than localStorage: the choice belongs to the person,
+    // so it should follow them to another browser or machine rather than
+    // belonging to a device and being shared by whoever sits at it.
+    //
+    // `fwd` is deliberately never persisted. It is derived state — refresh()
+    // sets it from whether a backtest is running — so saving it would only
+    // store a value that the next load overwrites.
+    let prefsReady = false;
+    let prefsTimer = null;
+
+    async function loadPrefs() {
+      try {
+        const res = await api('GET', '/api/prefs');
+        const saved = res && res.prefs && res.prefs.collapsed;
+        if (saved) {
+          for (const g of GROUPS) {
+            if (g !== 'fwd' && Object.prototype.hasOwnProperty.call(saved, g)) collapsed[g] = !!saved[g];
+          }
+        }
+      } catch (e) {
+        /* an unreachable prefs endpoint must never stop the table loading */
+      }
+      prefsReady = true;
+    }
+
+    function savePrefs() {
+      // Until the load has landed, `collapsed` still holds defaults; writing it
+      // back would overwrite the very thing being fetched.
+      if (!prefsReady) return;
+      clearTimeout(prefsTimer);
+      // The menu stays open while toggling, so several changes usually arrive
+      // together — one write when the user stops, not one per click.
+      prefsTimer = setTimeout(() => {
+        const out = {};
+        for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
+        api('PUT', '/api/prefs', { prefs: { collapsed: out } }).catch(() => {});
+      }, 600);
+    }
 
     // Multi-select column-group menu. Rebuilt on every applyGroups() so the trigger
     // count and the row states stay in step; the menu stays open while toggling.
@@ -1584,6 +1644,37 @@
     }
     function stopRefreshPoll() { clearInterval(refreshPoll); refreshPoll = null; }
 
+    // ---- sparklines ---------------------------------------------------------
+    // Fetched once, after the table has painted, and the generated markup is
+    // cached per symbol: the table re-renders on every sort and filter, and
+    // regenerating 69 paths each time would make sorting feel heavy.
+    const sparkCache = {};
+    let sparksLoaded = false;
+
+    async function loadSparklines() {
+      if (sparksLoaded) return;
+      sparksLoaded = true;
+      try {
+        const data = await api('GET', '/api/sparklines?days=90');
+        for (const [sym, closes] of Object.entries(data.closes || {})) {
+          const svg = RowCard.sparkSVG(closes);
+          if (svg) sparkCache[sym] = svg;
+        }
+        paintSparklines();
+      } catch (e) {
+        sparksLoaded = false;   // a later refresh may succeed
+      }
+    }
+
+    // Fills whatever is on screen now. Called after every render, since the
+    // table rebuilds its rows from scratch each time.
+    function paintSparklines() {
+      document.querySelectorAll('td.spark[data-spark]').forEach((td) => {
+        const svg = sparkCache[td.dataset.spark];
+        if (svg && !td.firstChild) td.innerHTML = svg;
+      });
+    }
+
     async function refresh(opts = {}) {
       const live = opts.live !== false;
       setError('');
@@ -1622,7 +1713,7 @@
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     function showLoading(msg) {
-      $('tbody').innerHTML = `<tr><td class="empty" colspan="47">${msg}</td></tr>`;
+      $('tbody').innerHTML = `<tr><td class="empty" colspan="48">${msg}</td></tr>`;
     }
 
     // Clear the cache, then keep re-pulling until EVERY ticker's fundamentals are
@@ -1865,8 +1956,12 @@
       closePickers();
     });
 
-    // Boot: find out if we're admin, then load the saved snapshot (no live API call).
-    checkAuth().then(() => refresh({ live: false }));
+    // Boot: find out who we are, restore the saved column layout, then load the
+    // snapshot. Prefs are awaited before the first render — applying them after
+    // would show the default layout and then visibly rearrange it.
+    checkAuth()
+      .then(loadPrefs)
+      .then(() => refresh({ live: false }));
   </script>
 </body>
 </html>

@@ -1747,6 +1747,55 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   });
 }));
 
+// Per-account UI preferences. Keyed on the signed-in email, falling back to
+// 'admin' for the legacy cookie and for open mode, where there is no user row —
+// the same key convention chat_usage uses.
+async function prefsKey(req) {
+  const who = await currentUser(req);
+  return who ? who.email : 'admin';
+}
+
+app.get('/api/prefs', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ prefs: await store.readPrefs(await prefsKey(req)) });
+}));
+
+app.put('/api/prefs', requireAuth, route(async (req, res) => {
+  const incoming = req.body && req.body.prefs;
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+    return res.status(400).json({ error: 'Expected a prefs object.' });
+  }
+  // Only what the app actually understands is stored, so a client cannot use
+  // this as free per-user storage, and a future field cannot arrive by accident.
+  const collapsed = {};
+  const src = incoming.collapsed && typeof incoming.collapsed === 'object' ? incoming.collapsed : {};
+  for (const k of Object.keys(src).slice(0, 40)) {
+    if (/^[a-z]{1,16}$/.test(k)) collapsed[k] = !!src[k];
+  }
+  await store.writePrefs(await prefsKey(req), { collapsed });
+  res.json({ ok: true });
+}));
+
+// Closes for the whole universe, for the table's sparklines. One query rather
+// than 69, and loaded after the table paints — a decoration must not make the
+// data wait on it.
+app.get('/api/sparklines', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const days = Math.min(400, Math.max(20, Number(req.query.days) || 90));
+  const snap = await readSnapshot();
+  const symbols = ((snap && snap.stocks) || []).filter((x) => !x.error).map((x) => x.symbol);
+  if (!symbols.length) return res.json({ closes: {}, days });
+  // A calendar cutoff rather than a row limit: one query for every symbol, and
+  // US tickers share trading days so they come back the same length.
+  const since = new Date(Date.now() - Math.round(days * 1.45) * 86400000)
+    .toISOString().slice(0, 10);
+  const closes = await store.readCloses(symbols, since);
+  for (const k of Object.keys(closes)) {
+    closes[k] = closes[k].slice(-days).map((v) => Math.round(v * 100) / 100);
+  }
+  res.json({ closes, days });
+}));
+
 // Closes for one symbol, oldest-first, for the hover card's chart. Reads the
 // archive only — no API call, so it costs nothing and works for every signed-in
 // user. Fetched per symbol on hover and cached in the browser rather than

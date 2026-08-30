@@ -140,7 +140,7 @@ Dark-only. "Ethereal glass": OLED black with a fixed radial mesh aura and a film
 
 ## Column groups (frontend)
 Each group has a fixed colour used for the group header `th` and its row in the columns menu:
-- Rank `#a3e635` · Info `#7c9cff` · Short-term `#34d399` · Long-term `#a78bfa` · Forward `#fb923c`
+- Rank `#a3e635` · Info `#7c9cff` · Chart `#a8a29e` · Short-term `#34d399` · Long-term `#a78bfa` · Forward `#fb923c`
 - Relative `#22d3ee` · Trend `#fbbf24` · Volume `#f472b6` · Size `#94a3b8` · Fundamentals `#fb7185`
 
 **To add a group:** append the id to `GROUPS`, give it a colour in `GROUP_COLORS` and a label in `GROUP_LABELS`, add the `th.group` banner with the right `colspan`, and tag every header/body cell with `class="grp-<id>"`. Then mirror it in **three more places**: `GROUP_ORDER` and `FIELD_SPEC` in `public/rowcard.js`, and the palette copies at the top of `public/analysis.html`. `applyGroups()` and the columns menu pick it up with no further changes.
@@ -150,6 +150,15 @@ The **Rank** group carries the four score columns (Overall, Mom., Qual., Rank) a
 The **Size** group carries the absolute-size columns — Revenue TTM, Gross Profit TTM, Gross Margin, Net Income TTM, FCF TTM, FCF Margin, Net Cash. Every one comes out of the `/statistics` call `fetchProfile()` already makes, so the group costs **no extra API credits**.
 
 The **Info** banner spans nine columns — Overall, Mom., Qual., Rank, Portfolios, Price, Sector, Market Cap, Next Earn — and all nine collapse together.
+
+### Sparklines
+The **Chart** group is one column (`90d`) between Rank and Short-term, holding a 90-session price line per row. A group of its own rather than a column inside Info, because the columns menu toggles *groups* — inside Info it could only be hidden by hiding Price, Sector and Market Cap too. `data-group="vol" colspan="1"` was already the precedent for a one-column group.
+
+- **`RowCard.sparkSVG()` is separate from `chartSVG()`**, not a flag on it. At 63×20px there is no room for a baseline, an end dot or padding, and a function that draws "everything except" is harder to follow than two small ones.
+- **The line is neutral (`--muted`), not green/red.** The five percentage columns immediately to its right are already coloured; a sixth coloured element there is noise. The shape carries the information, colour is left to the numbers. It brightens to `--text` on row hover.
+- **`/api/sparklines` is one query for the whole universe** (`readCloses`), ~41 KB, fetched *after* the table paints — a decoration must not make the data wait. Each line is scaled to its own high and low, so the shape is readable but levels are not comparable between rows; the column header says so.
+- **The generated markup is cached per symbol.** The table rebuilds every row on each sort and filter, and regenerating 69 paths each time would make sorting feel heavy. Measured at 81ms per sort with all 69 intact afterwards.
+- Row height is unchanged at 37px — a 20px line fits inside the existing `padding: 7px` cells.
 
 ## Table specifics
 - **Frozen columns are Symbol and Name only** (`.frz0`, `.frz1`). The classes are *positional*: `updateStickyOffsets()` measures header cell widths left-to-right to compute the cumulative `left` offsets, so reordering columns means re-dealing the `frz` numbers in DOM order, not just moving the markup. `.frz1` carries the boundary shadow.
@@ -200,6 +209,16 @@ Everything comes from the daily bars already fetched, so the extra factors cost 
 
 Applying these moved 9 of 44 ratings — MSTR 5→2, JOBY 8→5, AVAV 7→5, four loss-makers down one, and SPCX 3→**5** (its meaningless PEG of 86.7 had been scoring zero and dragging it down).
 
+## Saved column layout
+Which column groups a user has collapsed is stored per account in the `prefs` table (`user_key`, JSON `data`), read by `GET /api/prefs` and written by `PUT /api/prefs`.
+
+- **Server-side, not `localStorage`.** The choice belongs to the person, so it follows them to another browser or machine rather than belonging to a device and being shared by whoever sits at it.
+- **Keyed on the signed-in email**, falling back to `'admin'` for the legacy password cookie and for open mode, where there is no user row — the same convention `chat_usage` uses.
+- **`fwd` is never persisted.** It is derived state: `refresh()` sets it from whether a backtest is running, so saving it would only store a value the next load overwrites.
+- **Prefs are awaited before the first render**, in the boot chain `checkAuth().then(loadPrefs).then(refresh)`. Applying them afterwards would paint the default layout and then visibly rearrange it.
+- **Writes are debounced 600ms** — the columns menu stays open while toggling, so changes arrive in bursts — and are suppressed until the load lands, or the defaults would be written back over the values being fetched.
+- **The server stores only what it understands.** `PUT` rebuilds the `collapsed` map from scratch against `/^[a-z]{1,16}$/`, so the endpoint cannot be used as free per-user storage and `__proto__` cannot get in.
+
 ## Refresh state
 A Refresh All re-pulls only `MAX_PROFILE_FETCHES_PER_CALL` (6) symbols per call, 62s apart, so it runs for several minutes. The `refresh_state` table (at most one row; absent = idle) lets every instance know — a process variable cannot work, since Vercel shares nothing between them.
 
@@ -225,7 +244,7 @@ Charts are hand-rolled inline SVG in `rowcard.js` — no library, no build step.
   - `RowCard.sma()` is exported for it. Cross-checked against the screener's own `vs50ma` and `vs200ma` for six symbols: exact agreement, gap 0.000 on both.
 - **`.rc-*` classes are unscoped in `app.css`**; only the floating container is tied to `#rowcard`. The hover card and `/stock/<SYMBOL>` render the same sections from the same `FIELD_SPEC` via `RowCard.buildSections()` — a third copy of the field list is exactly what the row card existed to prevent.
 - **`GROUP_COLORS` / `GROUP_LABELS` now live in `rowcard.js`** and are exported. `index.html` still keeps its own copy because it also colours the table's group banners and the columns menu, so **those two must stay in step**.
-- The name cell in the screener links to `/stock/<SYMBOL>`; the symbol cell still links out to Google Finance. `.namelink` inherits its colour and only underlines on hover — 69 rows of blue underlines would wreck the table.
+- The name cell in the screener links to `/stock/<SYMBOL>`; the symbol cell still links out to Google Finance. Both open in a new tab (`target="_blank" rel="noopener"`), so a click never loses your place in the table. `.namelink` inherits its colour and only underlines on hover — 69 rows of blue underlines would wreck the table.
 
 ## Bar archive
 The `bars` table keeps one row per symbol per trading day (`open/high/low/close/volume`, keyed on `(symbol, d)`). **Currently 241,022 rows across 69 symbols, 2006-05-25 → 2026-08-28.**

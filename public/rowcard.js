@@ -182,6 +182,26 @@
     return out;
   }
 
+  // A sparkline: the line and nothing else. Deliberately not chartSVG with
+  // flags — at 72x20 there is no room for a baseline, an end dot or padding,
+  // and a function that draws "everything except" is harder to reason about
+  // than two small ones.
+  function sparkSVG(closes) {
+    if (!closes || closes.length < 2) return '';
+    const W = 120, H = 32, PAD = 3;
+    const lo = Math.min.apply(null, closes);
+    const hi = Math.max.apply(null, closes);
+    const span = (hi - lo) || 1;
+    let d = '';
+    for (let i = 0; i < closes.length; i++) {
+      const x = (i / (closes.length - 1)) * W;
+      const y = PAD + (1 - (closes[i] - lo) / span) * (H - PAD * 2);
+      d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+    }
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` +
+           `<path d="${d}"/></svg>`;
+  }
+
   // Returns { svg, log, ticks }. The caller labels the chart when the scale is
   // logarithmic, because an unmarked log axis misleads.
   //
@@ -453,7 +473,7 @@
   global.RowCard = {
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
     // used by the stock page
-    buildSections, chartSVG, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma,
+    buildSections, chartSVG, sparkSVG, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS,
   };
 })(window);

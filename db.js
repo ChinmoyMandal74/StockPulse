@@ -126,6 +126,16 @@ const SCHEMA = [
      volume real,
      primary key (symbol, d)
    )`,
+  // Per-account UI preferences — which column groups are collapsed, for now.
+  // Stored server-side rather than in localStorage so the setting follows the
+  // person to another browser or machine, instead of belonging to a device and
+  // being shared by anyone who sits at it. A JSON blob because nothing queries
+  // inside it and the shape will grow.
+  `create table if not exists prefs (
+     user_key   text primary key,
+     data       text not null,
+     updated_at integer not null
+   )`,
   // One row per user per UTC day. A counter in memory is useless on serverless —
   // consecutive requests need not share a process — so the quota lives here.
   `create table if not exists chat_usage (
@@ -447,6 +457,28 @@ async function barsStats() {
   return { rows: Number(x.n || 0), symbols: Number(x.syms || 0), from: x.mind || null, to: x.maxd || null };
 }
 
+// ---- per-account preferences ----------------------------------------------
+
+async function readPrefs(userKey) {
+  await init();
+  const r = await db.execute({ sql: 'select data from prefs where user_key = ?', args: [String(userKey)] });
+  if (!r.rows.length) return {};
+  try {
+    return JSON.parse(r.rows[0].data) || {};
+  } catch {
+    return {};   // a corrupt blob is not worth failing a page load over
+  }
+}
+
+async function writePrefs(userKey, obj) {
+  await init();
+  await db.execute({
+    sql: `insert into prefs (user_key, data, updated_at) values (?, ?, ?)
+          on conflict(user_key) do update set data = excluded.data, updated_at = excluded.updated_at`,
+    args: [String(userKey), JSON.stringify(obj || {}), Date.now()],
+  });
+}
+
 // ---- chat quota -----------------------------------------------------------
 
 // Counts one question against today's quota and reports what remains. Returns
@@ -702,6 +734,8 @@ module.exports = {
   readSnapshot,
   writeSnapshot,
   noteChatUse,
+  readPrefs,
+  writePrefs,
   barsMaxDates,
   barsOn,
   upsertBars,
