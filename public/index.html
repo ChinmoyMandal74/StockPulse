@@ -591,6 +591,15 @@
                   <span class="nm">Delete portfolio</span>
                 </button>
               </div>
+              <!-- Account maintenance: rare, so it lives in the menu rather than
+                   taking a slot in a bar that already wraps around 1100px. -->
+              <div id="adminActions" style="display:none">
+                <div class="pick-sep"></div>
+                <a class="pick" href="/users">
+                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-users" /></svg>
+                  <span class="nm">Users</span>
+                </a>
+              </div>
               <div id="sessionActions" style="display:none">
                 <div class="pick-sep" id="sessionSep"></div>
                 <div class="pick" id="whoami" style="display:none;cursor:default;color:var(--faint);font-family:var(--mono);font-size:11px"></div>
@@ -1569,6 +1578,7 @@
 
     function applyAdminUI() {
       document.querySelectorAll('.admin-only').forEach((el) => { el.style.display = isAdmin ? '' : 'none'; });
+      $('adminActions').style.display = isAdmin ? '' : 'none';
       // Signing in is its own page now, so this button is only a nudge back to
       // the door — it appears if a session lapsed while the tab was open.
       $('loginBtn').style.display = (authRequired && !signedIn) ? '' : 'none';

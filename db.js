@@ -728,20 +728,48 @@ async function createUser({ email, passwordHash, salt, role }) {
   return findUserByEmail(email);
 }
 
+// Includes enough for a maintenance screen to be useful: who is actually
+// signed in somewhere, when they last did, and whether an account is locked
+// out after failed sign-ins.
 async function listUsers() {
   await init();
-  const r = await db.execute(
-    'select id, email, role, created_at from users order by created_at'
-  );
-  return r.rows.map((u) => ({ id: Number(u.id), email: u.email, role: u.role, createdAt: u.created_at }));
+  const r = await db.execute({
+    sql: `select u.id, u.email, u.role, u.created_at, u.locked_until,
+                 (select count(*) from sessions s
+                   where s.user_id = u.id and s.expires_at > ?) as active,
+                 (select max(s.created_at) from sessions s where s.user_id = u.id) as last_seen
+            from users u order by u.created_at`,
+    args: [Date.now()],
+  });
+  return r.rows.map((u) => ({
+    id: Number(u.id),
+    email: u.email,
+    role: u.role,
+    createdAt: u.created_at,
+    activeSessions: Number(u.active || 0),
+    lastSignIn: u.last_seen || null,
+    lockedUntil: u.locked_until != null && Number(u.locked_until) > Date.now()
+      ? Number(u.locked_until) : null,
+  }));
 }
 
+// Everything belonging to the account goes, not just the row. prefs and
+// chat_usage are keyed on email rather than user id, so without this a new
+// account registered at the same address would inherit the old one's saved
+// column layout and its chat quota for the day.
 async function deleteUser(id) {
   await init();
-  await db.batch([
+  const r = await db.execute({ sql: 'select email from users where id = ?', args: [id] });
+  const email = r.rows.length ? r.rows[0].email : null;
+  const stmts = [
     { sql: 'delete from sessions where user_id = ?', args: [id] },
     { sql: 'delete from users where id = ?', args: [id] },
-  ], 'write');
+  ];
+  if (email) {
+    stmts.push({ sql: 'delete from prefs where user_key = ?', args: [email] });
+    stmts.push({ sql: 'delete from chat_usage where user_key = ?', args: [email] });
+  }
+  await db.batch(stmts, 'write');
 }
 
 // Failed-login throttling, recorded against the account being targeted.

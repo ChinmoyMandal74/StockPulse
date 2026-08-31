@@ -112,6 +112,11 @@ app.get('/stock/:symbol', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'stock.html'));
 }));
 
+app.get('/users', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  res.sendFile(path.join(__dirname, 'public', 'users.html'));
+}));
+
 app.get('/chat', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'chat.html'));
@@ -125,6 +130,7 @@ app.get('/login', (req, res) => {
 // at their raw .html path and bypass the checks above. Bounce those to the
 // routed path, where the guard runs.
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
+                      '/users.html': '/users',
                       // no symbol in that path, so there is nothing to show
                       '/stock.html': '/' };
 app.get(Object.keys(GATED_PAGES), (req, res) => res.redirect(GATED_PAGES[req.path]));
@@ -340,6 +346,13 @@ app.delete('/api/users/:id', requireAdmin, route(async (req, res) => {
   if (!target) return res.status(404).json({ error: 'User not found.' });
   if (target.role === 'owner' && users.filter((u) => u.role === 'owner').length === 1) {
     return res.status(409).json({ error: 'Cannot remove the only owner.' });
+  }
+  // Deleting the account you are signed in as would revoke your own session
+  // mid-request and drop you at the login page. Sign in as another owner if it
+  // really needs doing.
+  const me = await currentUser(req);
+  if (me && me.id === id) {
+    return res.status(409).json({ error: 'You cannot delete the account you are signed in as.' });
   }
   await store.deleteUser(id);
   res.json({ ok: true });

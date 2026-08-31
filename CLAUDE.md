@@ -27,6 +27,7 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `public/stock.html` | One stock in full at `/stock/<SYMBOL>` — chart, range buttons, every field |
 | `public/chat.html` | The assistant at `/chat` — any signed-in user, see **Chatbot** below |
 | `public/visitors.html` | Admin-only visitor log page at `/visitors` |
+| `public/users.html` | Admin-only account maintenance at `/users` — list and delete, no add |
 | `public/favicon.svg` | Momentum-line mark, emerald on OLED black |
 | `portfolios.json`, `snapshot.json`, `profiles.json`, `names.json`, `visitors.log` | **Legacy.** Pre-migration backups only — nothing reads or writes them any more. Safe to delete once you trust the database. |
 | `.env` | `TWELVE_DATA_API_KEY`, `TURSO_*`, `ADMIN_PASSWORD`, optional feature flags |
@@ -59,6 +60,9 @@ Accounts live in Turso (`users`, `sessions`). Passwords are hashed with **`crypt
 - Wrong password and unknown email return the **same** error, so the endpoint can't enumerate accounts.
 - **There is no email sender, so there is no "forgot password" link.** Recovery is `node --use-system-ca set-password.js <email>` run locally against the same Turso database the deployed app uses — it prompts for the password rather than taking it as an argument, which would leak it into shell history and the process list. `--role owner|member` changes a role, refusing to demote the last owner.
 - A signed-in user can change their own password via `POST /api/password` (needs the current one). Both paths drop that user's sessions, so a change signs other devices out.
+- **`/users` is list-and-delete only, never create.** Accounts come from sign-up (gated by `SIGNUP_CODE`); an admin-created account would need a password set for it, which means either mailing a secret or inventing one — `set-password.js` already covers the rare case properly.
+- **`deleteUser()` purges `prefs` and `chat_usage` too.** Those are keyed on email, not user id, so without it a new account registered at the same address would inherit the deleted one's saved column layout and its chat quota for the day.
+- **Two guards, both enforced server-side and mirrored in the UI as a disabled button:** the only owner cannot be removed, and nobody can delete the account they are signed in as — that would revoke their own session mid-request. `listUsers()` also returns active session count, last sign-in and any lockout, which is what makes the page worth opening.
 - Password hashing (`hashPassword`, `newSalt`, `verifyPassword`) lives in **db.js**, beside the users table — `server.js` and `set-password.js` both import it so scrypt parameters can't drift apart.
 - `isAdmin(req)` and `isSignedIn(req)` are **async** now — always `await` them. `requireAdmin` / `requireAuth` are middleware built on the `route()` wrapper.
 

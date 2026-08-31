@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Users — Ticker Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(124, 156, 255, 0.13), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(52, 211, 153, 0.10), transparent 64%); }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 16px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
+      padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+
+    h1 { margin: 22px 0 0; font-size: clamp(26px, 3vw, 34px); font-weight: 600;
+         letter-spacing: -0.035em; line-height: 1.05; }
+    .lede { margin: 10px 0 22px; max-width: 70ch; }
+
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+    .stat > .core { padding: 18px 20px; }
+    .stat .val { font-family: var(--mono); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+    .stat:nth-child(1) .val { color: var(--accent); }
+    .stat:nth-child(2) .val { color: var(--green); }
+    .stat:nth-child(3) .val { color: var(--accent-2); }
+    .stat .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em;
+                 color: var(--faint); margin-top: 6px; }
+    @media (max-width: 700px) { .stats { grid-template-columns: 1fr; } }
+
+    .tbl > .core { padding: 4px 0 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 11px 18px;
+             border-bottom: 1px solid rgba(255, 255, 255, 0.045); }
+    tbody tr:last-child td { border-bottom: none; }
+    td { font-size: 13px; }
+    td.email { font-family: var(--mono); font-size: 12.5px; letter-spacing: -0.02em; }
+    td.when { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+    td.act { text-align: right; }
+
+    .role { display: inline-flex; padding: 2px 10px; border-radius: 999px;
+            border: 1px solid; font-size: 10.5px; font-weight: 500; }
+    .role.owner { color: var(--amber); border-color: rgba(251, 191, 36, 0.4);
+                  background: rgba(251, 191, 36, 0.1); }
+    .role.member { color: var(--muted); border-color: var(--hair);
+                   background: rgba(255, 255, 255, 0.03); }
+    .you { margin-left: 8px; font-size: 10.5px; color: var(--faint); }
+    .locked { color: var(--red); font-size: 11px; }
+    .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+           background: var(--green); margin-right: 7px; vertical-align: 1px; }
+
+    .del {
+      padding: 5px 12px; border-radius: 999px; cursor: pointer; line-height: 1;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+      color: var(--muted); font-family: var(--sans); font-size: 11.5px;
+      transition: background 0.4s var(--ease), color 0.4s var(--ease), border-color 0.4s var(--ease);
+    }
+    .del:hover { color: var(--red); border-color: rgba(251, 113, 133, 0.4);
+                 background: rgba(251, 113, 133, 0.12); }
+    .del:disabled { opacity: 0.3; cursor: default; }
+    .del:disabled:hover { color: var(--muted); border-color: var(--hair);
+                          background: rgba(255, 255, 255, 0.03); }
+
+    .note { margin: 16px 4px 0; line-height: 1.6; }
+    .err { color: var(--red); font-size: 13px; margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark"><span class="wordmark">Ticker Lab</span></span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <h1>Users</h1>
+    <p class="lede">
+      Everyone with an account. Accounts are created by signing up, not here — this page only
+      shows who exists and lets you remove someone.
+    </p>
+
+    <div class="stats" id="stats"></div>
+    <section class="bezel tbl"><div class="core" id="out">
+      <p class="lede" style="padding: 20px 18px; margin: 0;">Loading…</p>
+    </div></section>
+    <p class="note" id="note"></p>
+    <div class="err" id="err"></div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    const when = (v) => {
+      if (!v) return '—';
+      const d = new Date(v);
+      return isNaN(d) ? '—' : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    let me = null;
+
+    async function load() {
+      $('err').textContent = '';
+      let data;
+      try {
+        const res = await fetch('/api/users', { cache: 'no-store' });
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (res.status === 403) { window.location.href = '/'; return; }
+        data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not load users.');
+      } catch (e) {
+        $('out').innerHTML = `<p class="lede" style="padding:20px 18px;margin:0">${esc(e.message)}</p>`;
+        return;
+      }
+
+      const users = data.users || [];
+      const owners = users.filter((u) => u.role === 'owner').length;
+      const active = users.filter((u) => u.activeSessions > 0).length;
+
+      $('stats').innerHTML = [
+        [users.length, 'Accounts'],
+        [owners, owners === 1 ? 'Owner' : 'Owners'],
+        [active, 'Signed in now'],
+      ].map(([v, l]) => `<div class="bezel stat"><div class="core">
+          <div class="val">${v}</div><div class="lbl">${l}</div></div></div>`).join('');
+
+      $('out').innerHTML = `<table><thead><tr>
+          <th>Email</th><th>Role</th><th>Joined</th><th>Last sign-in</th><th></th>
+        </tr></thead><tbody>${users.map((u) => row(u, owners)).join('')}</tbody></table>`;
+
+      // Why a button may be disabled, said once rather than per row.
+      const onlyOwner = owners === 1;
+      $('note').innerHTML =
+        'Deleting an account removes its sessions, saved column layout and chat usage, and signs it out everywhere. ' +
+        (onlyOwner ? 'The only owner cannot be removed, and nor can the account you are signed in as.'
+                   : 'You cannot remove the account you are signed in as.');
+    }
+
+    function row(u, owners) {
+      const isMe = me && me.email && u.email === me.email;
+      // Mirrors the two guards the server enforces, so a button is never
+      // offered for something the server would refuse anyway.
+      const lastOwner = u.role === 'owner' && owners === 1;
+      const blocked = isMe || lastOwner;
+      return `<tr>
+        <td class="email">${u.activeSessions > 0 ? '<span class="dot" title="Signed in"></span>' : ''}${esc(u.email)}${isMe ? '<span class="you">you</span>' : ''}</td>
+        <td><span class="role ${u.role === 'owner' ? 'owner' : 'member'}">${esc(u.role)}</span>
+            ${u.lockedUntil ? `<div class="locked">locked until ${esc(new Date(u.lockedUntil).toLocaleTimeString())}</div>` : ''}</td>
+        <td class="when">${esc(when(u.createdAt))}</td>
+        <td class="when">${esc(when(u.lastSignIn))}</td>
+        <td class="act"><button class="del" data-id="${u.id}" data-email="${esc(u.email)}"
+            ${blocked ? 'disabled' : ''}>Delete</button></td>
+      </tr>`;
+    }
+
+    $('out').addEventListener('click', async (e) => {
+      const b = e.target.closest('.del');
+      if (!b || b.disabled) return;
+      const email = b.dataset.email;
+      if (!window.confirm(`Delete ${email}? They lose access immediately and this cannot be undone.`)) return;
+      b.disabled = true;
+      $('err').textContent = '';
+      try {
+        const res = await fetch(`/api/users/${encodeURIComponent(b.dataset.id)}`, { method: 'DELETE' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not delete that account.');
+        await load();
+      } catch (err) {
+        $('err').textContent = err.message;
+        b.disabled = false;
+      }
+    });
+
+    (async () => {
+      try {
+        const who = await (await fetch('/api/me', { cache: 'no-store' })).json();
+        me = who.user || null;
+        if (!who.admin) { window.location.href = '/'; return; }
+      } catch { /* the API calls below will redirect if we are not allowed */ }
+      await load();
+    })();
+  </script>
+</body>
+</html>
