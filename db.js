@@ -161,6 +161,16 @@ const SCHEMA = [
      short_pct_float     real,
      primary key (symbol, d)
    )`,
+  // Password-reset tokens. The token itself is never stored: only its SHA-256,
+  // for the same reason sessions and passwords are hashed — a database read
+  // must not hand anyone a working reset link.
+  `create table if not exists password_resets (
+     token_hash text primary key,
+     user_id    integer not null,
+     created_at integer not null,
+     expires_at integer not null
+   )`,
+  `create index if not exists idx_resets_user on password_resets (user_id)`,
   // Per-account UI preferences — which column groups are collapsed, for now.
   // Stored server-side rather than in localStorage so the setting follows the
   // person to another browser or machine, instead of belonging to a device and
@@ -563,6 +573,52 @@ async function fundamentalsStats() {
            from: x.mind || null, to: x.maxd || null };
 }
 
+// ---- password reset -------------------------------------------------------
+
+const RESET_TTL_MS = 30 * 60 * 1000;   // long enough to find the mail, short enough to matter
+const RESET_MIN_GAP_MS = 60 * 1000;    // one request a minute per account
+
+const hashToken = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
+
+// Returns the raw token to put in the link, or null if one was issued moments
+// ago — otherwise this endpoint is a way to flood someone's inbox.
+async function createReset(userId) {
+  await init();
+  const now = Date.now();
+  const recent = await db.execute({
+    sql: 'select max(created_at) as last from password_resets where user_id = ?',
+    args: [userId],
+  });
+  const last = recent.rows[0] && recent.rows[0].last;
+  if (last != null && now - Number(last) < RESET_MIN_GAP_MS) return null;
+
+  const token = crypto.randomBytes(32).toString('hex');
+  await db.batch([
+    // Only the newest link works. An older one still sitting in an inbox is a
+    // liability, not a convenience.
+    { sql: 'delete from password_resets where user_id = ?', args: [userId] },
+    { sql: 'insert into password_resets (token_hash, user_id, created_at, expires_at) values (?, ?, ?, ?)',
+      args: [hashToken(token), userId, now, now + RESET_TTL_MS] },
+  ], 'write');
+  return token;
+}
+
+// Single use: valid tokens are deleted as they are read, so a link cannot be
+// replayed even within its lifetime.
+async function consumeReset(token) {
+  await init();
+  const h = hashToken(token);
+  const r = await db.execute({
+    sql: 'select user_id, expires_at from password_resets where token_hash = ?',
+    args: [h],
+  });
+  if (!r.rows.length) return null;
+  const row = r.rows[0];
+  await db.execute({ sql: 'delete from password_resets where token_hash = ?', args: [h] });
+  if (Number(row.expires_at) < Date.now()) return null;
+  return Number(row.user_id);
+}
+
 // ---- per-account preferences ----------------------------------------------
 
 async function readPrefs(userKey) {
@@ -870,6 +926,8 @@ module.exports = {
   noteChatUse,
   readPrefs,
   writePrefs,
+  createReset,
+  consumeReset,
   writeFundamentals,
   readFundamentals,
   fundamentalsStats,

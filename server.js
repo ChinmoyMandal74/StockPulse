@@ -112,6 +112,10 @@ app.get('/stock/:symbol', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'stock.html'));
 }));
 
+app.get('/reset', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'reset.html'));
+});
+
 app.get('/users', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'users.html'));
@@ -130,7 +134,7 @@ app.get('/login', (req, res) => {
 // at their raw .html path and bypass the checks above. Bounce those to the
 // routed path, where the guard runs.
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
-                      '/users.html': '/users',
+                      '/users.html': '/users', '/reset.html': '/reset',
                       // no symbol in that path, so there is nothing to show
                       '/stock.html': '/' };
 app.get(Object.keys(GATED_PAGES), (req, res) => res.redirect(GATED_PAGES[req.path]));
@@ -331,6 +335,111 @@ app.post('/api/password', requireAuth, route(async (req, res) => {
   }
   await store.setPassword(Number(user.id), next);
   res.clearCookie(SESSION_COOKIE);
+  res.json({ ok: true });
+}));
+
+// ============================================================================
+// Email
+// ============================================================================
+// Resend over plain fetch — a REST call does not justify a fourth dependency
+// alongside express, dotenv and the Turso client.
+const RESEND_KEY = process.env.RESEND_API_KEY || '';
+const MAIL_FROM = process.env.MAIL_FROM || '';
+const APP_URL = (process.env.APP_URL || '').replace(/\/+$/, '');
+const MAIL_READY = !!(RESEND_KEY && MAIL_FROM && APP_URL);
+
+// Resolves true when accepted. Never throws: a failed send must not decide
+// what the caller tells the user, because the reply is deliberately the same
+// either way.
+async function sendMail({ to, subject, text, html, replyTo }) {
+  if (!MAIL_READY) return false;
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${RESEND_KEY}` },
+      body: JSON.stringify({
+        from: MAIL_FROM,
+        to: [to],
+        subject,
+        text,
+        html,
+        // Nothing receives mail at the sending subdomain, so replies would
+        // vanish. Point them somewhere a person reads.
+        ...(replyTo ? { reply_to: replyTo } : {}),
+      }),
+    });
+    if (!r.ok) {
+      // The body can echo the request, and the key travels in the same headers.
+      const body = await r.json().catch(() => ({}));
+      console.error('resend error', r.status, body && body.name);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('resend call failed', err.message);
+    return false;
+  }
+}
+
+// ---- Password reset --------------------------------------------------------
+
+// Always answers the same, whether or not the address has an account. The
+// login endpoint already refuses to confirm which emails exist; this one would
+// otherwise give it away.
+app.post('/api/forgot', route(async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const generic = { ok: true, message: 'If that address has an account, a reset link is on its way.' };
+  if (!EMAIL_RE.test(email)) return res.json(generic);
+  if (!MAIL_READY) {
+    console.warn('forgot: mail is not configured (RESEND_API_KEY / MAIL_FROM / APP_URL)');
+    return res.json(generic);
+  }
+
+  const user = await store.findUserByEmail(email);
+  if (!user) return res.json(generic);
+
+  const token = await store.createReset(user.id);
+  if (!token) return res.json(generic);   // one was issued moments ago
+
+  const link = `${APP_URL}/reset?token=${encodeURIComponent(token)}`;
+  await sendMail({
+    to: email,
+    replyTo: process.env.MAIL_REPLY_TO || undefined,
+    subject: 'Reset your Ticker Lab password',
+    text: [
+      'Someone asked to reset the password for this Ticker Lab account.',
+      '',
+      link,
+      '',
+      'The link works once and expires in 30 minutes.',
+      'If this was not you, ignore this email — nothing has changed.',
+    ].join('\n'),
+    html: [
+      '<div style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:15px;line-height:1.6;color:#111">',
+      '<p>Someone asked to reset the password for this Ticker Lab account.</p>',
+      `<p><a href="${link}" style="display:inline-block;padding:11px 18px;border-radius:999px;`,
+      'background:#111;color:#fff;text-decoration:none;font-weight:600">Choose a new password</a></p>',
+      '<p style="color:#666;font-size:13px">The link works once and expires in 30 minutes.<br>',
+      'If this was not you, ignore this email — nothing has changed.</p>',
+      '</div>',
+    ].join(''),
+  });
+  res.json(generic);
+}));
+
+app.post('/api/reset', route(async (req, res) => {
+  const token = String(req.body?.token || '');
+  const password = String(req.body?.password || '');
+  if (password.length < MIN_PASSWORD) {
+    return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD} characters.` });
+  }
+  const userId = await store.consumeReset(token);
+  if (!userId) {
+    return res.status(400).json({ error: 'That link has expired or has already been used. Request a new one.' });
+  }
+  // setPassword also clears the lockout counter and drops every session for the
+  // account — a reset usually means someone else may have had access.
+  await store.setPassword(userId, password);
   res.json({ ok: true });
 }));
 

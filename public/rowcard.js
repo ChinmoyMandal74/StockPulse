@@ -164,6 +164,35 @@
     return out;
   }
 
+  // RSI at every point, oldest-first, with Wilder smoothing — the same method
+  // rsi() uses in server.js, so the last visible value matches the screener's
+  // RSI column. Null until the window is full; the caller over-fetches so those
+  // nulls fall outside the visible range.
+  //
+  // Wilder is an exponential average, so it converges slowly: a value computed
+  // from 15 bars differs materially from one computed over 250 and read at the
+  // same point. The padding is not decoration.
+  function rsiSeries(closes, period) {
+    const n = period || 14;
+    const out = new Array(closes.length).fill(null);
+    if (closes.length < n + 1) return out;
+    let gains = 0, losses = 0;
+    for (let i = 1; i <= n; i++) {
+      const d = closes[i] - closes[i - 1];
+      if (d >= 0) gains += d; else losses -= d;
+    }
+    let avgGain = gains / n, avgLoss = losses / n;
+    const val = () => (avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss));
+    out[n] = val();
+    for (let i = n + 1; i < closes.length; i++) {
+      const d = closes[i] - closes[i - 1];
+      avgGain = (avgGain * (n - 1) + (d > 0 ? d : 0)) / n;
+      avgLoss = (avgLoss * (n - 1) + (d < 0 ? -d : 0)) / n;
+      out[i] = val();
+    }
+    return out;
+  }
+
   // Prices at even steps along whichever scale is in use, each rounded to a
   // readable precision. Even spacing beats round numbers here: on a log axis
   // round values land unevenly and the gridlines look accidental.
@@ -211,13 +240,21 @@
   function chartSVG(closes, opts) {
     const o = opts || {};
     const vols = o.volumes && o.volumes.length === closes.length ? o.volumes : null;
+    const rsis = o.rsi && o.rsi.length === closes.length ? o.rsi : null;
     const W = 600;
-    const H = vols ? 200 : 104;
-    // With bars, the price keeps the top ~72% and volume sits in a band below,
-    // separated by a gap so the two never read as one shape.
-    const PRICE_H = vols ? 140 : H;
-    const VOL_TOP = 152, VOL_BOT = 194;
-    const PT = 12, PB = vols ? 8 : 12;
+
+    // Indicator panes stack below the price, in the order RSI then volume, each
+    // with its own scale and a gap so none of them reads as part of another.
+    // Turning one on grows the chart rather than squeezing the price, which is
+    // the panel that matters.
+    const PANE_H = 44, PANE_GAP = 13;
+    const PRICE_H = (vols || rsis) ? 150 : 104;
+    let cursor = PRICE_H;
+    let rsiTop = 0, rsiBot = 0, volTop = 0, volBot = 0;
+    if (rsis) { cursor += PANE_GAP; rsiTop = cursor; rsiBot = cursor + PANE_H; cursor = rsiBot; }
+    if (vols) { cursor += PANE_GAP; volTop = cursor; volBot = cursor + PANE_H; cursor = volBot; }
+    const H = (vols || rsis) ? cursor + 6 : 104;
+    const PT = 12, PB = (vols || rsis) ? 8 : 12;
     // Overlays are folded into the range: a moving average sits above a falling
     // price and below a rising one, so scaling to the price alone clips it.
     const overlays = (o.overlays || []).filter((ov) => ov && ov.values);
@@ -256,6 +293,25 @@
       if (od) overlayPaths += `<path class="ov ${ov.cls || ''}" d="${od}"/>`;
     }
 
+    // RSI pane: 0-100 on its own scale, with the 30 and 70 lines that make the
+    // reading mean anything, and a faint 50 midline.
+    let rsiPane = '';
+    if (rsis) {
+      const ry = (v) => rsiBot - (Math.max(0, Math.min(100, v)) / 100) * (rsiBot - rsiTop);
+      for (const lvl of [70, 50, 30]) {
+        rsiPane += `<line class="rsi-gl${lvl === 50 ? ' mid' : ''}" x1="0" y1="${ry(lvl).toFixed(1)}" ` +
+                   `x2="${W}" y2="${ry(lvl).toFixed(1)}"/>`;
+      }
+      let rd = '', pen = false;
+      for (let i = 0; i < rsis.length; i++) {
+        const v = rsis[i];
+        if (v == null) { pen = false; continue; }
+        rd += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + ry(v).toFixed(1);
+        pen = true;
+      }
+      if (rd) rsiPane += `<path class="rsi-ln" d="${rd}"/>`;
+    }
+
     const wantTicks = o.ticks || 0;
     const ticks = wantTicks ? priceTicks(lo, hi, useLog, wantTicks) : [];
     let grid = '';
@@ -268,6 +324,15 @@
     // price band, since the caller positions against the rendered svg.
     for (const tk of ticks) tk.top = y(tk.v) / H;
 
+    // Fractions of the viewBox, so the caller can place HTML labels against
+    // each pane without knowing the geometry.
+    const panes = {
+      price: { top: 0, bottom: PRICE_H / H },
+      rsi: rsis ? { top: rsiTop / H, bottom: rsiBot / H,
+                    at: (v) => (rsiBot - (v / 100) * (rsiBot - rsiTop)) / H } : null,
+      volume: vols ? { top: volTop / H, bottom: volBot / H } : null,
+    };
+
     // Volume bars. Scaled to the largest bar in view rather than an absolute,
     // so a quiet stretch still shows its own shape.
     let bars = '';
@@ -275,7 +340,7 @@
       const vMax = Math.max.apply(null, vols) || 1;
       const slot = W / vols.length;
       const bw = Math.max(0.6, Math.min(slot * 0.72, 7));
-      const band = VOL_BOT - VOL_TOP;
+      const band = volBot - volTop;
       for (let i = 0; i < vols.length; i++) {
         const h = Math.max(0.5, (vols[i] / vMax) * band);
         const cx = vols.length === 1 ? W / 2 : (i / (vols.length - 1)) * (W - bw) + bw / 2;
@@ -283,7 +348,7 @@
         // convention every other charting tool uses.
         const up = i === 0 ? closes[i] <= closes[Math.min(1, closes.length - 1)] : closes[i] >= closes[i - 1];
         bars += `<rect class="vb ${up ? 'vu' : 'vd'}" x="${(cx - bw / 2).toFixed(2)}" ` +
-                `y="${(VOL_BOT - h).toFixed(2)}" width="${bw.toFixed(2)}" height="${h.toFixed(2)}"/>`;
+                `y="${(volBot - h).toFixed(2)}" width="${bw.toFixed(2)}" height="${h.toFixed(2)}"/>`;
       }
     }
 
@@ -292,10 +357,11 @@
       `<line class="base" x1="0" y1="${baseY}" x2="${W}" y2="${baseY}"/>` +
       `<path class="ln" d="${d}"/>` +
       overlayPaths +
+      rsiPane +
       `<circle class="dot" cx="${x(closes.length - 1).toFixed(1)}" cy="${y(closes[closes.length - 1]).toFixed(1)}" r="2.6"/>` +
       bars +
       '</svg>';
-    return { svg, log: useLog, ticks };
+    return { svg, log: useLog, ticks, panes };
   }
 
   const fmtPrice = (n) => (n >= 1000 ? n.toFixed(0) : n.toFixed(2));
@@ -473,7 +539,7 @@
   global.RowCard = {
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
     // used by the stock page
-    buildSections, chartSVG, sparkSVG, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma,
+    buildSections, chartSVG, sparkSVG, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS,
   };
 })(window);

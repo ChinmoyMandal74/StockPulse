@@ -58,11 +58,30 @@
     /* the shared chart, at page scale — taller, with a gutter on the right for
        the price axis and room underneath for the dates. The svg fills the
        content box, so the padding is what creates both. */
-    #chart.rc-chart { height: 320px; border-radius: 12px; padding: 0 52px 18px 0; }
+    #chart.rc-chart { height: 320px; border-radius: 12px; padding: 0 52px 18px 0;
+                      transition: height 0.45s var(--ease); }
+    /* The svg stretches with preserveAspectRatio="none", so a taller viewBox
+       alone would squash every band instead of adding one. Growing the box in
+       the same proportion (213 -> 270) keeps the price panel its own size. */
+    #chart.rc-chart.has-rsi { height: 406px; }
     #chart .cap { font-size: 11px; }
     #chart .cap.chg { font-size: 15px; }
-    #chart .cap.vol { left: 9px; top: 71%; bottom: auto; font-size: 9.5px;
-                      text-transform: uppercase; letter-spacing: 0.12em; }
+    /* Pane labels sit against the geometry the chart reports, not a guessed
+       percentage — turning RSI on moves the volume band down. */
+    #chart .cap.vol, #chart .cap.rsi {
+      left: 9px; bottom: auto; font-size: 9.5px;
+      text-transform: uppercase; letter-spacing: 0.12em;
+      transform: translateY(-125%);
+    }
+    #chart .cap.rsi { color: var(--accent-2); }
+    #chart .rsi-lbl {
+      position: absolute; right: 56px; transform: translateY(-50%);
+      font-family: var(--mono); font-size: 9px; color: var(--faint);
+      pointer-events: none;
+      text-shadow: 0 0 4px rgba(10, 12, 17, 0.95), 0 0 2px rgba(10, 12, 17, 0.95);
+    }
+    .rsi-toggle.on { background: rgba(167, 139, 250, 0.14);
+                     border-color: rgba(167, 139, 250, 0.4); color: var(--accent-2); }
     /* legend: a swatch per average, in that average's own colour */
     #chart .cap.ma { left: 9px; top: 30px; font-size: 10px; color: var(--faint);
                      display: flex; gap: 12px; }
@@ -166,6 +185,11 @@
     // The server clamps at its own ceiling, which only bites on Max, where 200
     // missing bars are invisible across twenty years.
     const MA_PAD = Math.max.apply(null, MAS.map((m) => m.len));
+    // On by default. RSI(14) rides on the same padding the averages need —
+    // Wilder smoothing converges slowly, so a short warm-up would not match the
+    // screener's own RSI column.
+    const RSI_LEN = 14;
+    let showRSI = true;
     let stock = null;
 
     const curSym = (c) => ({ USD: '$', EUR: '€', GBP: '£', JPY: '¥', KRW: '₩', INR: '₹' }[c] || '');
@@ -195,6 +219,7 @@
       const box = document.getElementById('chart');
       if (!box) return;
       box.dataset.range = range.id;
+      box.classList.toggle('has-rsi', showRSI);
       RowCard.loadHistory(SYMBOL, range.days + MA_PAD).then((data) => {
         if (box.dataset.range !== range.id) return;      // a later click won
         const all = (data && data.closes) || [];
@@ -215,8 +240,10 @@
         const first = closes[0], last = closes[closes.length - 1];
         const chg = ((last - first) / first) * 100;
         box.classList.add(chg >= 0 ? 'up' : 'down');
+        const rsi = showRSI ? RowCard.rsiSeries(all, RSI_LEN).slice(from) : null;
+        const rsiNow = rsi ? [...rsi].reverse().find((v) => v != null) ?? null : null;
         const c = RowCard.chartSVG(closes, {
-          volumes, ticks: 5,
+          volumes, ticks: 5, rsi,
           overlays: series.map((x) => ({ values: x.values, cls: x.ma.cls })),
         });
 
@@ -240,7 +267,13 @@
           `<span class="cap chg">${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%${c.log ? ' · log scale' : ''}</span>` +
           `<span class="cap ma">${series.map((x) =>
             `<i class="${x.ma.cls}"></i>${x.ma.len}-day`).join('')}</span>` +
-          `<span class="cap vol">Volume</span>` +
+          (c.panes.rsi
+            ? `<span class="cap rsi" style="top:${(c.panes.rsi.top * 100).toFixed(2)}%">` +
+              `RSI ${RSI_LEN}${rsiNow == null ? '' : ' &middot; ' + rsiNow.toFixed(0)}</span>` +
+              `<span class="rsi-lbl" style="top:${(c.panes.rsi.at(70) * 100).toFixed(2)}%">70</span>` +
+              `<span class="rsi-lbl" style="top:${(c.panes.rsi.at(30) * 100).toFixed(2)}%">30</span>`
+            : '') +
+          `<span class="cap vol" style="top:${(c.panes.volume.top * 100).toFixed(2)}%">Volume</span>` +
           `<span class="yaxis">${yLabels}</span>` +
           `<span class="axis">${ticks.join('')}</span>`;
       });
@@ -285,7 +318,8 @@
               `<button class="rng${r.id === range.id ? ' on' : ''}" data-r="${r.id}">${r.label}</button>`).join('')}
               ${MAS.map((m) =>
                 `<button class="rng ma-toggle ${m.cls}${m.on ? ' on' : ''}" data-ma="${m.len}">${m.label}</button>`
-              ).join('')}</span>
+              ).join('')}
+              <button class="rng rsi-toggle${showRSI ? ' on' : ''}" id="rsiBtn">RSI</button></span>
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
         </section></div>
@@ -304,6 +338,12 @@
       document.querySelector('.ranges').addEventListener('click', (e) => {
         const b = e.target.closest('.rng');
         if (!b) return;
+        if (b.id === 'rsiBtn') {
+          showRSI = !showRSI;
+          b.classList.toggle('on', showRSI);
+          paintChart();
+          return;
+        }
         if (b.dataset.ma) {
           const m = MAS.find((x) => String(x.len) === b.dataset.ma);
           m.on = !m.on;
