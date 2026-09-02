@@ -247,11 +247,15 @@
     // with its own scale and a gap so none of them reads as part of another.
     // Turning one on grows the chart rather than squeezing the price, which is
     // the panel that matters.
-    const PANE_H = 44, PANE_GAP = 13;
+    // The RSI band is the taller of the two: it carries threshold lines with
+    // words above and below them, where volume only needs bars.
+    const PANE_GAP = 13;
+    const PANE_H = 44;
+    const RSI_H = 58;
     const PRICE_H = (vols || rsis) ? 150 : 104;
     let cursor = PRICE_H;
     let rsiTop = 0, rsiBot = 0, volTop = 0, volBot = 0;
-    if (rsis) { cursor += PANE_GAP; rsiTop = cursor; rsiBot = cursor + PANE_H; cursor = rsiBot; }
+    if (rsis) { cursor += PANE_GAP; rsiTop = cursor; rsiBot = cursor + RSI_H; cursor = rsiBot; }
     if (vols) { cursor += PANE_GAP; volTop = cursor; volBot = cursor + PANE_H; cursor = volBot; }
     const H = (vols || rsis) ? cursor + 6 : 104;
     const PT = 12, PB = (vols || rsis) ? 8 : 12;
@@ -298,8 +302,13 @@
     let rsiPane = '';
     if (rsis) {
       const ry = (v) => rsiBot - (Math.max(0, Math.min(100, v)) / 100) * (rsiBot - rsiTop);
-      for (const lvl of [70, 50, 30]) {
-        rsiPane += `<line class="rsi-gl${lvl === 50 ? ' mid' : ''}" x1="0" y1="${ry(lvl).toFixed(1)}" ` +
+      // A band of its own, so the indicator reads as a separate instrument
+      // rather than as more of the price chart.
+      rsiPane += `<rect class="pane-bg" x="0" y="${rsiTop}" width="${W}" height="${(rsiBot - rsiTop).toFixed(1)}"/>`;
+      // Overbought and oversold carry the colours they mean; 50 is only an
+      // anchor for the eye and stays neutral.
+      for (const [lvl, cls] of [[70, 'hi'], [50, 'mid'], [30, 'lo']]) {
+        rsiPane += `<line class="rsi-gl ${cls}" x1="0" y1="${ry(lvl).toFixed(1)}" ` +
                    `x2="${W}" y2="${ry(lvl).toFixed(1)}"/>`;
       }
       let rd = '', pen = false;
@@ -327,7 +336,9 @@
     // Fractions of the viewBox, so the caller can place HTML labels against
     // each pane without knowing the geometry.
     const panes = {
-      price: { top: 0, bottom: PRICE_H / H },
+      // `at` maps a price to its height, through whichever scale is in use, so a
+      // crosshair can sit on the line without knowing about the log switch.
+      price: { top: 0, bottom: PRICE_H / H, at: (v) => y(v) / H, lo, hi },
       rsi: rsis ? { top: rsiTop / H, bottom: rsiBot / H,
                     at: (v) => (rsiBot - (v / 100) * (rsiBot - rsiTop)) / H } : null,
       volume: vols ? { top: volTop / H, bottom: volBot / H } : null,

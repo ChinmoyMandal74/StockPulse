@@ -112,6 +112,11 @@ app.get('/stock/:symbol', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'stock.html'));
 }));
 
+app.get('/contact', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  res.sendFile(path.join(__dirname, 'public', 'contact.html'));
+}));
+
 app.get('/reset', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'reset.html'));
 });
@@ -135,6 +140,7 @@ app.get('/login', (req, res) => {
 // routed path, where the guard runs.
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/users.html': '/users', '/reset.html': '/reset',
+                      '/contact.html': '/contact',
                       // no symbol in that path, so there is nothing to show
                       '/stock.html': '/' };
 app.get(Object.keys(GATED_PAGES), (req, res) => res.redirect(GATED_PAGES[req.path]));
@@ -380,6 +386,63 @@ async function sendMail({ to, subject, text, html, replyTo }) {
     return false;
   }
 }
+
+// ---- Contact ---------------------------------------------------------------
+
+const CONTACT_MAX_SUBJECT = 120;
+const CONTACT_MAX_BODY = 4000;
+const CONTACT_DAILY_LIMIT = Number(process.env.CONTACT_DAILY_LIMIT || 10);
+
+// Where it lands. Falls back to the owner's own account, so the feature works
+// even if the env var is never set.
+async function contactDestination() {
+  if (process.env.CONTACT_TO) return process.env.CONTACT_TO;
+  const owner = (await store.listUsers()).find((u) => u.role === 'owner');
+  return owner ? owner.email : null;
+}
+
+// Signed-in only, so every sender is a known account and there is no honeypot
+// or captcha to build. The address is not typed by anyone — it comes off the
+// session — which is what makes the Reply-To below safe.
+app.post('/api/contact', requireAuth, route(async (req, res) => {
+  if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
+
+  // Newlines stripped, not escaped: a CR or LF in a header is how a subject
+  // line becomes extra headers. The body is the only place free text belongs.
+  const subject = String(req.body?.subject || '').replace(/[\r\n]+/g, ' ').trim().slice(0, CONTACT_MAX_SUBJECT);
+  const body = String(req.body?.message || '').trim().slice(0, CONTACT_MAX_BODY);
+  if (!subject) return res.status(400).json({ error: 'Add a subject.' });
+  if (body.length < 4) return res.status(400).json({ error: 'Add a message.' });
+
+  const who = await currentUser(req);
+  const from = who ? who.email : 'admin (legacy login)';
+
+  // Same per-key-per-day counter the chat quota uses — the table is a generic
+  // counter that happens to be named for its first caller. The prefix keeps the
+  // two namespaces apart.
+  const quota = await store.noteChatUse('contact:' + from, CONTACT_DAILY_LIMIT);
+  if (!quota.allowed) {
+    return res.status(429).json({ error: `That is ${quota.limit} messages today. Try again tomorrow.` });
+  }
+
+  const to = await contactDestination();
+  if (!to) return res.status(503).json({ error: 'No destination address is configured.' });
+
+  const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const ok = await sendMail({
+    to,
+    // Replying in a mail client answers the person, not the server.
+    replyTo: who ? who.email : (process.env.MAIL_REPLY_TO || undefined),
+    subject: `[Ticker Lab] ${subject}`,
+    text: [`From: ${from}`, '', body].join('\n'),
+    html:
+      '<div style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:15px;line-height:1.6;color:#111">' +
+      `<p style="color:#666;font-size:13px;margin:0 0 14px">From <b>${esc(from)}</b></p>` +
+      `<div style="white-space:pre-wrap">${esc(body)}</div></div>`,
+  });
+  if (!ok) return res.status(502).json({ error: 'Could not send that just now. Try again shortly.' });
+  res.json({ ok: true });
+}));
 
 // ---- Password reset --------------------------------------------------------
 

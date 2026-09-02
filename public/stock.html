@@ -19,7 +19,7 @@
         radial-gradient(50vw 44vw at 96% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
 
     .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
-                   padding: 16px 20px 0; pointer-events: none; }
+                   padding: 10px 20px 0; pointer-events: none; }
     .island {
       pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
       padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
@@ -27,22 +27,24 @@
       border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
     }
 
-    /* masthead */
-    .head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 24px 0 4px; }
+    /* masthead — the chips sit on this row rather than claiming one of their
+       own, which was costing a 26px band plus 30px of margins above the chart */
+    .head { display: flex; align-items: baseline; gap: 10px 14px; flex-wrap: wrap; margin: 12px 0 0; }
     h1 { margin: 0; font-size: clamp(28px, 3.4vw, 38px); font-weight: 600;
          letter-spacing: -0.035em; line-height: 1; font-family: var(--mono); }
     .co { font-size: 15px; color: var(--muted); letter-spacing: -0.01em; }
-    .px { margin-left: auto; text-align: right; }
+    .px { margin-left: auto; text-align: right; align-self: flex-end; }
     .px b { display: block; font-family: var(--mono); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
     .px span { font-family: var(--mono); font-size: 12.5px; }
-    .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
-            margin: 12px 0 18px; font-size: 12px; color: var(--faint); }
+    .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+            font-size: 12px; color: var(--faint); }
     .chip { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hair);
             background: rgba(255, 255, 255, 0.03); color: var(--muted); }
 
     section.card { margin-bottom: 16px; }
-    section.card > .core { padding: 16px 18px; }
-    .sec-h { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    section.card:first-of-type { margin-top: 14px; }
+    section.card > .core { padding: 13px 18px 16px; }
+    .sec-h { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
     .sec-h h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
                 text-transform: uppercase; color: var(--muted); }
     .ranges { margin-left: auto; display: flex; gap: 5px; }
@@ -62,8 +64,8 @@
                       transition: height 0.45s var(--ease); }
     /* The svg stretches with preserveAspectRatio="none", so a taller viewBox
        alone would squash every band instead of adding one. Growing the box in
-       the same proportion (213 -> 270) keeps the price panel its own size. */
-    #chart.rc-chart.has-rsi { height: 406px; }
+       the same proportion (213 -> 284) keeps the price panel its own size. */
+    #chart.rc-chart.has-rsi { height: 427px; }
     #chart .cap { font-size: 11px; }
     #chart .cap.chg { font-size: 15px; }
     /* Pane labels sit against the geometry the chart reports, not a guessed
@@ -74,6 +76,16 @@
       transform: translateY(-125%);
     }
     #chart .cap.rsi { color: var(--accent-2); }
+    /* Worded thresholds, sitting just clear of the lines they name — above the
+       overbought line, below the oversold one, as a terminal draws them. */
+    #chart .rsi-zone {
+      position: absolute; left: 50%; pointer-events: none;
+      font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 500;
+      text-shadow: 0 0 4px rgba(10, 12, 17, 0.95), 0 0 2px rgba(10, 12, 17, 0.95);
+    }
+    #chart .rsi-zone.hi { color: var(--red); transform: translate(-50%, -118%); }
+    #chart .rsi-zone.lo { color: var(--green); transform: translate(-50%, 18%); }
+
     #chart .rsi-lbl {
       position: absolute; right: 56px; transform: translateY(-50%);
       font-family: var(--mono); font-size: 9px; color: var(--faint);
@@ -104,9 +116,44 @@
       padding-left: 8px; font-family: var(--mono); font-size: 10px;
       color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap;
     }
-    /* the top and bottom labels would otherwise be clipped by the box */
-    #chart .ytick:first-child { transform: none; }
-    #chart .ytick:last-child { transform: translateY(-100%); }
+    /* The ticks come back low-to-high, so the FIRST is the bottom of the axis
+       and the LAST is the top — the reverse of reading order. Getting this the
+       wrong way round pushed the top label 6px above the chart, where
+       overflow:hidden ate it. */
+    #chart .ytick:first-child { transform: translateY(-100%); }
+    #chart .ytick:last-child { transform: translateY(0); }
+
+    /* crosshair */
+    #chart .xhair {
+      position: absolute; top: 0; bottom: 18px; width: 0; pointer-events: none;
+      border-left: 1px dashed rgba(255, 255, 255, 0.45);
+    }
+    #chart .xdot {
+      position: absolute; width: 7px; height: 7px; border-radius: 50%;
+      transform: translate(-50%, -50%); pointer-events: none;
+      background: var(--text); box-shadow: 0 0 0 2px var(--surface);
+    }
+    #chart .xdate {
+      position: absolute; bottom: 0; padding: 2px 7px; border-radius: 6px;
+      background: var(--surface-2); border: 1px solid var(--hair);
+      font-family: var(--mono); font-size: 9.5px; color: var(--text);
+      white-space: nowrap; pointer-events: none;
+    }
+    /* Sits over the static change caption while hovering, so the top-left says
+       one thing at a time. */
+    #chart .readout {
+      position: absolute; left: 9px; top: 8px; padding: 5px 10px; border-radius: 8px;
+      background: rgba(13, 16, 23, 0.92); border: 1px solid var(--hair);
+      font-family: var(--mono); font-size: 11px; white-space: nowrap;
+      pointer-events: none; display: flex; gap: 6px; align-items: baseline;
+    }
+    #chart .readout .k { color: var(--faint); font-size: 9.5px;
+                         text-transform: uppercase; letter-spacing: 0.1em; }
+    #chart .readout .v { color: var(--text); }
+    #chart .readout .v.rsi { color: var(--accent-2); }
+    /* the captions the readout replaces */
+    #chart.hovering .cap.chg, #chart.hovering .cap.ma { opacity: 0; }
+    #chart .cap.chg, #chart .cap.ma { transition: opacity 0.2s var(--ease); }
 
     #chart .axis { position: absolute; left: 0; right: 52px; bottom: 3px; height: 12px;
                    pointer-events: none; }
@@ -215,6 +262,29 @@
       return `${MON[+m - 1]} ${y}`;
     }
 
+    // chartSVG reports positions as fractions of the viewBox, but the svg does
+    // not fill the box — 18px at the bottom is reserved for the date axis. A
+    // raw top:% therefore lands everything progressively low, which pushed the
+    // oversold label clean out of its pane. Convert once, here.
+    const AXIS_H = 18;
+    const atY = (f) => `calc(${f.toFixed(4)} * (100% - ${AXIS_H}px))`;
+
+    // The series currently drawn, so the crosshair can read values without
+    // recomputing anything.
+    let hover = null;
+
+    const fmtVol = (v) => {
+      if (v == null || !isFinite(v) || v <= 0) return '—';
+      if (v >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+      if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+      if (v >= 1e3) return Math.round(v / 1e3) + 'K';
+      return String(Math.round(v));
+    };
+    const fullDate = (iso) => {
+      const p = String(iso || '').split('-');
+      return p.length === 3 ? `${MON[+p[1] - 1]} ${+p[2]}, ${p[0]}` : (iso || '');
+    };
+
     function paintChart() {
       const box = document.getElementById('chart');
       if (!box) return;
@@ -260,7 +330,7 @@
         // The price axis replaces the old floating high/low captions — with real
         // gridlines those two were saying the same thing twice.
         const yLabels = c.ticks.map((tk) =>
-          `<span class="ytick" style="top:${(tk.top * 100).toFixed(2)}%">${esc(tickLabel(tk.v))}</span>`
+          `<span class="ytick" style="top:${atY(tk.top)}">${esc(tickLabel(tk.v))}</span>`
         ).join('');
 
         box.innerHTML = c.svg +
@@ -268,14 +338,25 @@
           `<span class="cap ma">${series.map((x) =>
             `<i class="${x.ma.cls}"></i>${x.ma.len}-day`).join('')}</span>` +
           (c.panes.rsi
-            ? `<span class="cap rsi" style="top:${(c.panes.rsi.top * 100).toFixed(2)}%">` +
+            ? `<span class="cap rsi" style="top:${atY(c.panes.rsi.top)}">` +
               `RSI ${RSI_LEN}${rsiNow == null ? '' : ' &middot; ' + rsiNow.toFixed(0)}</span>` +
-              `<span class="rsi-lbl" style="top:${(c.panes.rsi.at(70) * 100).toFixed(2)}%">70</span>` +
-              `<span class="rsi-lbl" style="top:${(c.panes.rsi.at(30) * 100).toFixed(2)}%">30</span>`
+              `<span class="rsi-lbl" style="top:${atY(c.panes.rsi.at(70))}">70</span>` +
+              `<span class="rsi-lbl" style="top:${atY(c.panes.rsi.at(30))}">30</span>` +
+              `<span class="rsi-zone hi" style="top:${atY(c.panes.rsi.at(70))}">Overbought</span>` +
+              `<span class="rsi-zone lo" style="top:${atY(c.panes.rsi.at(30))}">Oversold</span>`
             : '') +
-          `<span class="cap vol" style="top:${(c.panes.volume.top * 100).toFixed(2)}%">Volume</span>` +
+          `<span class="cap vol" style="top:${atY(c.panes.volume.top)}">Volume</span>` +
           `<span class="yaxis">${yLabels}</span>` +
-          `<span class="axis">${ticks.join('')}</span>`;
+          `<span class="axis">${ticks.join('')}</span>` +
+          // Overlaid rather than drawn into the svg: preserveAspectRatio="none"
+          // would stretch a dot into an ellipse and distort any text.
+          '<span class="xhair" hidden></span>' +
+          '<span class="xdot" hidden></span>' +
+          '<span class="xdate" hidden></span>' +
+          '<span class="readout" hidden></span>';
+
+        // Everything the crosshair needs, kept for the pointer handler.
+        hover = { dates, closes, volumes, rsi, panes: c.panes };
       });
     }
 
@@ -306,11 +387,11 @@
         <div class="head">
           <h1>${esc(stock.symbol)}</h1>
           <span class="co">${esc(stock.name || '')}</span>
+          <span class="meta">${chips.map((c) => `<span class="chip">${c}</span>`).join('')}</span>
           <span class="px"><b>${esc(price)}</b>
             <span class="${today == null ? 'na' : today >= 0 ? 'pos' : 'neg'}">${
               today == null ? '—' : (today >= 0 ? '+' : '') + today.toFixed(2) + '% today'}</span></span>
         </div>
-        <div class="meta">${chips.map((c) => `<span class="chip">${c}</span>`).join('')}</div>
 
         <section class="bezel card"><div class="core">
           <div class="sec-h"><h2>Price</h2>
@@ -334,6 +415,62 @@
         <p class="later">Prices as of ${esc(payload.updatedAt ? new Date(payload.updatedAt).toLocaleString() : 'n/a')}.
         More charts will land on this page.</p>
       `;
+
+      // ---- hover crosshair ---------------------------------------------------
+      const chartEl = document.getElementById('chart');
+
+      function hideHover() {
+        chartEl.querySelectorAll('.xhair, .xdot, .xdate, .readout')
+          .forEach((el) => { el.hidden = true; });
+        chartEl.classList.remove('hovering');
+      }
+
+      chartEl.addEventListener('pointermove', (e) => {
+        if (!hover || !hover.closes || hover.closes.length < 2) return;
+        const box = chartEl.getBoundingClientRect();
+        // The svg does not fill the box: 52px on the right is the price axis,
+        // 18px at the foot is the date axis.
+        const plotW = box.width - 52;
+        const x = e.clientX - box.left;
+        if (x < 0 || x > plotW) return hideHover();
+
+        const n = hover.closes.length;
+        const i = Math.max(0, Math.min(n - 1, Math.round((x / plotW) * (n - 1))));
+        const px = (i / (n - 1)) * plotW;
+
+        const close = hover.closes[i];
+        const prev = i > 0 ? hover.closes[i - 1] : null;
+        const chg = prev ? ((close - prev) / prev) * 100 : null;
+        const r = hover.rsi ? hover.rsi[i] : null;
+
+        const line = chartEl.querySelector('.xhair');
+        const dot = chartEl.querySelector('.xdot');
+        const date = chartEl.querySelector('.xdate');
+        const out = chartEl.querySelector('.readout');
+
+        line.style.left = px + 'px';
+        line.hidden = false;
+
+        dot.style.left = px + 'px';
+        dot.style.top = atY(hover.panes.price.at(close));
+        dot.hidden = false;
+
+        date.textContent = fullDate(hover.dates[i]);
+        date.hidden = false;
+        // Keep the pill inside the plot rather than letting it hang off an edge.
+        const dw = date.offsetWidth || 90;
+        date.style.left = Math.max(0, Math.min(plotW - dw, px - dw / 2)) + 'px';
+
+        out.innerHTML =
+          `<span class="k">Price</span> <span class="v">${RowCard.fmtPrice(close)}</span>` +
+          (chg == null ? '' : ` <span class="${chg >= 0 ? 'pos' : 'neg'}">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span>`) +
+          `<span class="k">Vol</span> <span class="v">${fmtVol(hover.volumes[i])}</span>` +
+          (r == null ? '' : `<span class="k">RSI</span> <span class="v rsi">${r.toFixed(1)}</span>`);
+        out.hidden = false;
+        chartEl.classList.add('hovering');
+      });
+
+      chartEl.addEventListener('pointerleave', hideHover);
 
       document.querySelector('.ranges').addEventListener('click', (e) => {
         const b = e.target.closest('.rng');

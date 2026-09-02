@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Contact — Ticker Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 60px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 640px; margin: 0 auto; padding: 0 24px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 10% 0%, rgba(52, 211, 153, 0.11), transparent 62%),
+        radial-gradient(50vw 44vw at 94% 8%, rgba(124, 156, 255, 0.12), transparent 64%); }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 10px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
+      padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+
+    h1 { margin: 20px 0 0; font-size: clamp(24px, 3vw, 30px); font-weight: 600;
+         letter-spacing: -0.035em; line-height: 1.05; }
+    .lede { margin: 8px 0 18px; }
+
+    section > .core { padding: 22px 24px; }
+    label { display: block; font-size: 10.5px; text-transform: uppercase;
+            letter-spacing: 0.14em; color: var(--faint); margin: 0 0 6px; }
+    input, textarea {
+      width: 100%; padding: 11px 13px; border-radius: 12px; margin-bottom: 16px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+      color: var(--text); font-family: var(--sans); font-size: 13.5px; outline: none;
+      transition: border-color 0.4s var(--ease), background 0.4s var(--ease);
+    }
+    input:focus, textarea:focus { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.055); }
+    textarea { resize: vertical; min-height: 150px; line-height: 1.6; }
+
+    .row { display: flex; align-items: center; gap: 12px; }
+    .from { flex: 1; font-size: 11.5px; color: var(--faint); line-height: 1.5; }
+    .from b { color: var(--muted); font-weight: 500; font-family: var(--mono); }
+    .count { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+    .count.over { color: var(--red); }
+
+    .msg { margin-top: 16px; font-size: 12.5px; line-height: 1.6; }
+    .msg.err { color: var(--red); }
+    .done > .core { padding: 34px 24px; text-align: center; }
+    .done .ic { width: 30px; height: 30px; color: var(--green); }
+    .done p { margin: 12px 0 0; font-size: 13.5px; }
+    .done .sub { color: var(--faint); font-size: 12px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5 9.5 17.5 19.5 7"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark"><span class="wordmark">Ticker Lab</span></span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <h1>Contact</h1>
+    <p class="lede">Send a message to the owner of this screener — a question, something that looks wrong,
+      or a ticker you would like added.</p>
+
+    <section class="bezel" id="card"><div class="core">
+      <form id="form">
+        <label for="subject">Subject</label>
+        <input type="text" id="subject" maxlength="120" required
+               placeholder="What is this about?" autocomplete="off" />
+
+        <label for="message">Message</label>
+        <textarea id="message" maxlength="4000" required placeholder="Say as much as you like."></textarea>
+
+        <div class="row">
+          <span class="from" id="from"></span>
+          <span class="count" id="count"></span>
+          <button class="btn btn-primary" type="submit" id="send">Send</button>
+        </div>
+      </form>
+      <div class="msg" id="msg"></div>
+    </div></section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const MAX = 4000;
+
+    function say(text, cls) {
+      const m = $('msg');
+      m.className = 'msg' + (cls ? ' ' + cls : '');
+      m.textContent = text;
+    }
+
+    // Who it will come from — taken from the session, never typed, which is why
+    // the server can safely use it as the Reply-To.
+    (async () => {
+      try {
+        const me = await (await fetch('/api/me', { cache: 'no-store' })).json();
+        if (me.authRequired && !me.signedIn) { window.location.href = '/login'; return; }
+        $('from').innerHTML = me.user && me.user.email
+          ? `Sent as <b>${esc(me.user.email)}</b> — replies come back to you.`
+          : 'Sent from this account.';
+      } catch { $('from').textContent = ''; }
+    })();
+
+    $('message').addEventListener('input', () => {
+      const n = $('message').value.length;
+      $('count').textContent = n > MAX - 500 ? `${n}/${MAX}` : '';
+      $('count').classList.toggle('over', n >= MAX);
+    });
+
+    $('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('send').disabled = true;
+      say('');
+      try {
+        const res = await fetch('/api/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject: $('subject').value, message: $('message').value }),
+        });
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not send that message.');
+        $('card').className = 'bezel done';
+        $('card').innerHTML =
+          '<div class="core"><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>' +
+          '<p>Message sent.</p>' +
+          '<p class="sub">A reply will come to the address you are signed in with.</p></div>';
+      } catch (err) {
+        say(err.message, 'err');
+        $('send').disabled = false;
+      }
+    });
+
+    $('subject').focus();
+  </script>
+</body>
+</html>

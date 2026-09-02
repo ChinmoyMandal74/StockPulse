@@ -274,9 +274,12 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
    70 lines are what make a reading mean anything; 50 is a fainter anchor. */
 .rc-chart .rsi-ln { fill: none; stroke: var(--accent-2); stroke-width: 1.3;
                     vector-effect: non-scaling-stroke; }
-.rc-chart .rsi-gl { stroke: rgba(255, 255, 255, 0.10); stroke-width: 1;
-                    stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.rc-chart .rsi-gl { stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.rc-chart .rsi-gl.hi { stroke: var(--red); opacity: 0.55; }
+.rc-chart .rsi-gl.lo { stroke: var(--green); opacity: 0.55; }
 .rc-chart .rsi-gl.mid { stroke: rgba(255, 255, 255, 0.05); stroke-dasharray: 1 4; }
+/* the indicator sits on its own ground, a shade off the chart's */
+.rc-chart .pane-bg { fill: rgba(255, 255, 255, 0.05); stroke: none; }
 
 /* volume bars sit in their own band under the price; green on an up session,
    red on a down one, dimmed so they never compete with the price line */
