@@ -105,6 +105,24 @@
     }
     .picker[data-open="1"] .picker-menu { opacity: 1; visibility: visible; transform: none; }
     .picker-inner { background: rgba(10, 12, 17, 0.9); border-radius: 15px; padding: 5px; box-shadow: var(--inset); }
+    .pick-row { display: flex; align-items: center; gap: 2px; }
+    .pick-row .pick { flex: 1 1 auto; min-width: 0; }
+    /* The jump arrow reuses the back-arrow glyph, turned round. */
+    .jump {
+      flex: none; display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 9px; cursor: pointer;
+      border: 1px solid transparent; background: none; color: var(--faint);
+      transition: background 0.4s var(--ease), color 0.4s var(--ease);
+    }
+    .jump svg { transform: rotate(180deg); }
+    .jump:hover { background: rgba(255, 255, 255, 0.07); color: var(--text); }
+    .jump:disabled { opacity: 0.25; cursor: default; }
+    .jump:disabled:hover { background: none; color: var(--faint); }
+    .pick-hint {
+      padding: 8px 12px 4px; font-size: 10.5px; line-height: 1.5;
+      color: var(--faint); border-top: 1px solid var(--hair); margin-top: 4px;
+    }
+
     .pick {
       display: flex; align-items: center; gap: 9px; width: 100%;
       padding: 8px 12px; border-radius: 11px; border: 1px solid transparent;
@@ -1421,6 +1439,66 @@
       renderColumnMenu();
       updateStickyOffsets();
     }
+    // ---- getting around a 48-column table ------------------------------------
+    const tableWrap = () => document.querySelector('.table-wrap');
+
+    // Lands the group just right of the frozen Symbol/Name block. Without that
+    // offset the target sits underneath them, which looks like nothing happened.
+    function scrollToGroup(id) {
+      const wrap = tableWrap();
+      const th = document.querySelector(`thead th.group[data-group="${id}"]`);
+      if (!wrap || !th || collapsed[id]) return;
+      // Worked from where things actually are on screen, plus the current scroll,
+      // rather than from offsetLeft: a table cell's offsetParent here is
+      // main.page, not the table, so offsetLeft overstates by the table's own
+      // inset and drops the group ~29px underneath the frozen columns.
+      const frz = document.querySelector('thead th.frz1');
+      const wrapLeft = wrap.getBoundingClientRect().left;
+      const gutter = frz ? frz.getBoundingClientRect().right - wrapLeft : 0;
+      const delta = th.getBoundingClientRect().left - wrapLeft;
+      wrap.scrollTo({ left: Math.max(0, wrap.scrollLeft + delta - gutter - 10), behavior: 'smooth' });
+    }
+
+    // Shift+wheel already scrolls horizontally in every browser, but nobody
+    // knows that. Arrow keys are the discoverable equivalent; the hint in the
+    // columns menu is where they are advertised.
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
+      if (document.body.classList.contains('sheet-open')) return;
+      const wrap = tableWrap();
+      if (!wrap) return;
+      // Checked per axis: a table can overflow one way and not the other, and an
+      // early return on the horizontal test would have killed vertical keys too.
+      const canX = wrap.scrollWidth > wrap.clientWidth;
+      const canY = wrap.scrollHeight > wrap.clientHeight;
+
+      // Leave the frozen block on screen when paging sideways; vertically, keep
+      // a couple of rows of overlap so you do not lose your place.
+      const pageX = Math.max(240, wrap.clientWidth - 340);
+      const pageY = Math.max(160, wrap.clientHeight - 80);
+      const rows = 3 * (document.querySelector('tbody tr')?.getBoundingClientRect().height || 37);
+
+      let left = null, top = null, toX = null, toY = null;
+      switch (e.key) {
+        case 'ArrowRight': if (canX) left = e.shiftKey ? pageX : 170; break;
+        case 'ArrowLeft':  if (canX) left = e.shiftKey ? -pageX : -170; break;
+        case 'ArrowDown':  if (canY) top = e.shiftKey ? pageY : rows; break;
+        case 'ArrowUp':    if (canY) top = e.shiftKey ? -pageY : -rows; break;
+        case 'PageDown':   if (canY) top = pageY; break;
+        case 'PageUp':     if (canY) top = -pageY; break;
+        // Home/End move along the row, as they do in a spreadsheet; the whole
+        // point of this table is that it is wider than it is tall.
+        case 'Home':       if (canX) toX = 0; break;
+        case 'End':        if (canX) toX = wrap.scrollWidth; break;
+        default: return;
+      }
+      if (left == null && top == null && toX == null && toY == null) return;
+      e.preventDefault();
+      if (toX != null || toY != null) wrap.scrollTo({ left: toX ?? undefined, top: toY ?? undefined, behavior: 'smooth' });
+      else wrap.scrollBy({ left: left || 0, top: top || 0, behavior: 'smooth' });
+    });
+
     function toggleGroup(id) { collapsed[id] = !collapsed[id]; applyGroups(); savePrefs(); }
     function setAllGroups(show) {
       GROUPS.forEach((id) => (collapsed[id] = !show));
@@ -1483,21 +1561,33 @@
         const on = !collapsed[id];
         const c = GROUP_COLORS[id] || 'var(--accent)';
         const dot = `<span class="tdot" style="background:${c};${on ? `box-shadow:0 0 10px ${c}` : 'opacity:.35'}"></span>`;
-        return `<button class="pick ${on ? 'on' : ''}" data-group="${id}" role="option" ` +
+        // A button cannot nest inside a button, so the toggle and the jump are
+        // siblings in a flex row rather than one control doing two jobs.
+        return '<div class="pick-row">' +
+          `<button class="pick ${on ? 'on' : ''}" data-group="${id}" role="option" ` +
           `aria-selected="${on}" style="--tint:${c}">` + dot +
           `<span class="nm">${GROUP_LABELS[id] || id}</span>` +
-          '<svg class="ic ic-sm chk" aria-hidden="true"><use href="#i-check" /></svg></button>';
+          '<svg class="ic ic-sm chk" aria-hidden="true"><use href="#i-check" /></svg></button>' +
+          `<button class="jump" data-jump="${id}" ${on ? '' : 'disabled'} ` +
+          `title="Scroll to ${GROUP_LABELS[id] || id}" aria-label="Scroll to ${GROUP_LABELS[id] || id}">` +
+          '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg></button>' +
+          '</div>';
       });
       $('colMenu').innerHTML = '<div class="picker-inner">' + rows.join('') +
         '<div class="pick-sep"></div><div class="pick-foot">' +
         '<button class="pick-mini" data-all="1">Show all</button>' +
-        '<button class="pick-mini" data-all="0">Hide all</button></div></div>';
+        '<button class="pick-mini" data-all="0">Hide all</button></div>' +
+        '<div class="pick-hint">arrow keys scroll the table · shift for a page · home / end for the row ends</div>' +
+        '</div>';
 
       $('colMenu').querySelectorAll('.pick[data-group]').forEach((b) => {
         b.addEventListener('click', (e) => { e.stopPropagation(); toggleGroup(b.dataset.group); });
       });
       $('colMenu').querySelectorAll('.pick-mini[data-all]').forEach((b) => {
         b.addEventListener('click', (e) => { e.stopPropagation(); setAllGroups(b.dataset.all === '1'); });
+      });
+      $('colMenu').querySelectorAll('.jump[data-jump]').forEach((b) => {
+        b.addEventListener('click', (e) => { e.stopPropagation(); scrollToGroup(b.dataset.jump); });
       });
     }
 
