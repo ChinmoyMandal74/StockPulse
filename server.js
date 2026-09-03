@@ -46,11 +46,13 @@ const FUNDAMENTALS_ENABLED = process.env.ENABLE_FUNDAMENTALS === 'true';
 // in .env once you're on Ultra+ to populate the Analyst columns.
 const ANALYST_ENABLED = process.env.ENABLE_ANALYST === 'true';
 // A cold profile fetch hits several endpoints — /profile, /statistics, /earnings,
-// and — when analyst is on — /recommendations + /price_target. Measured Aug 2026:
-// each costs 1 credit per symbol, as does each symbol in a batched time_series
-// call, against a 610 credits/minute Pro limit. Credits are therefore not the
-// binding constraint; the cap below exists to keep a cold start from bursting,
-// and the rest fill in on later refreshes, then cache for a day.
+// and — when analyst is on — /recommendations + /price_target. Costs are not
+// uniform: a symbol in a batched time_series call is 1 credit, but /statistics
+// is 50, measured off the Api-Credits-Used header in Sep 2026. Against a 610
+// credits/minute Pro limit that makes six cold profiles about 300 credits, so
+// credits are the binding constraint after all — two refresh rounds inside one
+// minute are refused. The cap below keeps a single round inside the budget, and
+// the rest fill in on later refreshes, then cache for a day.
 // The real ceilings are elsewhere: Twelve Data rejects a batched time_series of
 // more than 120 symbols (HTTP 414), and SPY is appended as the benchmark, so the
 // universe cannot exceed 119 tickers without chunking that call.
@@ -849,15 +851,27 @@ async function fetchProfile(symbol) {
     targetHigh: null,
     targetLow: null,
   };
+  // Whether every call that should have returned data actually did. A rate
+  // limit or an outage leaves this false, and the caller then keeps what it
+  // already had rather than replacing it with the nulls below.
+  //
+  // The distinction is exact, not a guess: Twelve Data answers a refused call
+  // with { status: 'error' }, while an instrument that genuinely has no
+  // fundamentals — an ETF — answers with a real statistics object whose market
+  // capitalization is 0. Only the first is a failure.
+  out.fetchOk = true;
+
   try {
     const p = await fetchJson(`${TD_BASE}/profile?symbol=${enc}&apikey=${API_KEY}`);
-    if (p && p.sector) out.sector = p.sector;
+    if (p && p.status === 'error') out.fetchOk = false;
+    else if (p && p.sector) out.sector = p.sector;
   } catch {
-    /* leave sector null */
+    out.fetchOk = false;
   }
   if (FUNDAMENTALS_ENABLED) {
     try {
       const st = await fetchJson(`${TD_BASE}/statistics?symbol=${enc}&apikey=${API_KEY}`);
+      if (st && st.status === 'error') out.fetchOk = false;
       const vm = st?.statistics?.valuations_metrics;
       const fin = st?.statistics?.financials;
       const inc = fin?.income_statement;
@@ -897,6 +911,7 @@ async function fetchProfile(symbol) {
         out.shortPctFloat = (ss.shares_short / ss.float_shares) * 100; // short interest as % of float
       }
     } catch {
+      out.fetchOk = false;
       /* leave fundamentals null */
     }
     // Earnings: last reported date + surprise, and the next date (confirmed if the
@@ -976,7 +991,25 @@ async function ensureProfiles(symbols) {
     const results = await Promise.all(
       batch.map((s) => fetchProfile(s).then((r) => ({ s, r })))
     );
-    for (const { s, r } of results) profiles[s] = { ...r, fetchedAt: now };
+    for (const { s, r } of results) {
+      const { fetchOk, ...vals } = r;
+      if (fetchOk) {
+        profiles[s] = { ...vals, fetchedAt: now };
+        continue;
+      }
+      // The pull was refused, so `vals` is mostly nulls. Overwriting with it
+      // erased good data and — because the row then looked fresh — kept it
+      // erased for a day: a burst of rate limits could blank the fundamentals
+      // for half the universe until the next Refresh all. Keep the previous
+      // values, take whatever did come back, and leave the timestamp stale so
+      // the next round tries again.
+      const prev = profiles[s] || {};
+      const merged = { ...prev };
+      for (const [k, v] of Object.entries(vals)) if (v != null) merged[k] = v;
+      merged.fetchedAt = prev.fetchedAt || 0;
+      profiles[s] = merged;
+      console.warn(`profile: ${s} pull was refused — keeping the cached values, will retry`);
+    }
     if (results.length) await writeProfiles(profiles);
   }
   return profiles;
