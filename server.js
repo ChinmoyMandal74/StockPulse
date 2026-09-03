@@ -2078,7 +2078,11 @@ const rating = (x) => String(x.overallRating != null ? x.overallRating
 
 // Everything the report says, gathered once so the text and HTML bodies cannot
 // disagree with each other.
-async function buildRefreshReport(state, snap) {
+// `kind` is 'all' for a Refresh all and 'plain' for an ordinary price Refresh.
+// The two runs differ in one way that matters to a reader: a plain Refresh does
+// not re-pull the profile cache, so every fundamental in the snapshot is
+// yesterday's. Saying so is the difference between a report and a misleading one.
+async function buildRefreshReport(state, snap, kind = 'all') {
   const rows = (snap && snap.stocks) || [];
   const live = rows.filter((x) => !x.error);
   const loaded = live.filter((x) => x.profileFetchedAt != null);
@@ -2094,13 +2098,17 @@ async function buildRefreshReport(state, snap) {
   }
 
   const asOf = live.reduce((m, x) => (x.latestDate && x.latestDate > m ? x.latestDate : m), '');
-  const complete = rows.length > 0 && loaded.length >= live.length && !failed.length;
+  // A Refresh all is judged on coverage; a plain Refresh never touches profiles,
+  // so the only thing that can go wrong in one is a symbol that failed outright.
+  const complete = kind === 'all'
+    ? (rows.length > 0 && loaded.length >= live.length && !failed.length)
+    : (rows.length > 0 && !failed.length);
 
   const num = (n) => n != null && isFinite(n);
   const movers = live.filter((x) => num(x.todayPct)).sort((a, b) => b.todayPct - a.todayPct);
 
   return {
-    complete, rows, live, loaded, failed, missing, asOf, day, stats,
+    kind, complete, rows, live, loaded, failed, missing, asOf, day, stats,
     top: movers.slice(0, REPORT_MOVERS),
     bottom: movers.slice(-REPORT_MOVERS).reverse(),
     // Ranked on the 0-100 score because it separates names the 1-10 rating
@@ -2117,13 +2125,20 @@ async function buildRefreshReport(state, snap) {
 function refreshReportBodies(r) {
   const url = APP_URL || '';
   const line = (k, v) => k.padEnd(14) + v;
-  const fundLine = r.stats.fundamentalsToday == null ? '—'
-    : `${r.stats.fundamentalsToday} symbols recorded for ${r.day}`;
+  const isAll = r.kind === 'all';
+  const runName = isAll ? 'Refresh all' : 'Refresh';
+  // Prices moved; the company numbers did not. Say which.
+  const fundLine = !isAll ? 'not re-pulled — prices only'
+    : (r.stats.fundamentalsToday == null ? '—'
+      : `${r.stats.fundamentalsToday} symbols recorded for ${r.day}`);
+  const headCount = isAll
+    ? `${r.loaded.length} of ${r.live.length} profiles`
+    : `${r.live.length} symbols`;
   const barLine = r.stats.barRows == null ? '—'
     : `${r.stats.barRows.toLocaleString()} rows through ${r.stats.barsThrough || '—'}`;
 
   const t = [
-    `Refresh all — ${r.loaded.length} of ${r.live.length} profiles`,
+    `${runName} — ${headCount}`,
     r.complete ? 'Complete.' : 'Incomplete — see below.',
     '',
     line('Took', r.duration),
@@ -2138,7 +2153,7 @@ function refreshReportBodies(r) {
     t.push('', `Failed (${r.failed.length}): ` +
       r.failed.map((x) => `${x.symbol} — ${x.error}`).join('; '));
   }
-  if (r.missing.length) {
+  if (isAll && r.missing.length) {
     t.push('', `No profile yet (${r.missing.length}): ` + r.missing.map((x) => x.symbol).join(', '));
   }
   t.push('', 'Movers today');
@@ -2186,7 +2201,7 @@ function refreshReportBodies(r) {
       `Failed (${r.failed.length}):</b> ` +
       r.failed.map((x) => `${escHtml(x.symbol)} — ${escHtml(x.error)}`).join('; ') + '</p>';
   }
-  if (r.missing.length) {
+  if (isAll && r.missing.length) {
     problems += `<p style="margin:8px 0 0;font-size:13px"><b style="color:#b06000">` +
       `No profile yet (${r.missing.length}):</b> ` +
       escHtml(r.missing.map((x) => x.symbol).join(', ')) + '</p>';
@@ -2194,8 +2209,8 @@ function refreshReportBodies(r) {
 
   const html =
     '<div style="font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;color:#111;max-width:620px">' +
-    `<h2 style="margin:0;font-size:18px">Refresh all — ` +
-    `<span style="color:${tone}">${r.loaded.length} of ${r.live.length}</span></h2>` +
+    `<h2 style="margin:0;font-size:18px">${runName} — ` +
+    `<span style="color:${tone}">${escHtml(headCount)}</span></h2>` +
     `<p style="margin:4px 0 16px;color:#777;font-size:13px">` +
     `${r.complete ? 'Complete' : 'Incomplete'} · ${escHtml(r.actor)}</p>` +
     '<table style="border-collapse:collapse">' +
@@ -2223,22 +2238,21 @@ function refreshReportBodies(r) {
 
 // Never throws: the report is a by-product, and a mail outage must not fail the
 // refresh round that happened to finish the run.
-async function sendRefreshReport(state) {
+async function sendRefreshReport(state, kind = 'all') {
   if (!state) return false;          // nothing was cleared — someone else reported this run
   if (!MAIL_READY) return false;
   try {
     const to = process.env.REPORT_TO || (await ownerEmail());
     if (!to) return false;
-    const r = await buildRefreshReport(state, await readSnapshot());
+    const r = await buildRefreshReport(state, await readSnapshot(), kind);
     const { text, html } = refreshReportBodies(r);
-    const ok = await sendMail({
-      to,
-      subject: `[Ticker Lab] Refresh all — ${r.loaded.length}/${r.live.length}` +
-        (r.complete ? '' : ' incomplete'),
-      text,
-      html,
-    });
-    console.log(`report: refresh summary ${ok ? 'sent to ' + to : 'could not be sent'}`);
+    const subject = kind === 'all'
+      ? `[Ticker Lab] Refresh all — ${r.loaded.length}/${r.live.length}` + (r.complete ? '' : ' incomplete')
+      : `[Ticker Lab] Refresh — ${r.live.length} symbols as of ${r.asOf || 'n/a'}` +
+        (r.failed.length ? `, ${r.failed.length} failed` : '');
+    const ok = await sendMail({ to, subject, text, html });
+    console.log(`report: ${kind === 'all' ? 'refresh all' : 'refresh'} summary ` +
+      `${ok ? 'sent to ' + to : 'could not be sent'}`);
     return ok;
   } catch (err) {
     console.warn('report: refresh summary failed (refresh unaffected):', err.message);
@@ -2259,7 +2273,10 @@ function marketDay(rows) {
 // Everything that happens after a live, non-backtest recompute: cache it, record
 // the day's fundamentals, move the shared flag on, and report when the run ends.
 // Shared by the admin's ?refresh=1 and the cron route so the two cannot drift.
-async function finishLiveRefresh(payload) {
+// `ctx` carries what an ordinary Refresh has no refresh_state row to hold: when
+// the request started, and who asked for it. Absent, no plain-refresh report is
+// sent — which is what keeps the nightly job's rounds quiet.
+async function finishLiveRefresh(payload, ctx = {}) {
   await writeSnapshot({ ...payload, snapshotAt: payload.updatedAt });
   const rows = payload.stocks || [];
   const loaded = rows.filter((x) => x.profileFetchedAt != null).length;
@@ -2269,7 +2286,8 @@ async function finishLiveRefresh(payload) {
   // Refresh reuses day-old cached profiles, so writing then would record the
   // same numbers under a new date and invent movement that never happened.
   // readRefreshState() is non-null only while a Refresh all runs.
-  if (await readRefreshState()) {
+  const running = await readRefreshState();
+  if (running) {
     try {
       // Rows whose profile has not come back yet are skipped rather than
       // stored empty; a later round in the same run upserts over them.
@@ -2283,8 +2301,20 @@ async function finishLiveRefresh(payload) {
   }
 
   const done = rows.length > 0 && loaded >= rows.length;
-  if (done) await sendRefreshReport(await endRefresh());
-  else await noteRefreshProgress(loaded, rows.length);
+  if (done) {
+    // endRefresh() runs either way, so a flag left stale by an abandoned run is
+    // cleared rather than lingering. Which report goes out is decided by whether
+    // a run was still live a moment ago, not by what the delete returned: a
+    // stalled Refresh all reports nothing, and the click that happens to finish
+    // the universe is reported as the ordinary Refresh it was.
+    const cleared = await endRefresh();
+    if (running && cleared) await sendRefreshReport(cleared, 'all');
+    else if (!running && ctx.startedAt) {
+      await sendRefreshReport({ startedAt: ctx.startedAt, actor: ctx.actor }, 'plain');
+    }
+  } else {
+    await noteRefreshProgress(loaded, rows.length);
+  }
   return { loaded, total: rows.length, done };
 }
 
@@ -2331,12 +2361,18 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     if (!(await isAdmin(req))) {
       return res.status(403).json({ error: 'Admin only — log in to refresh or run a backtest.' });
     }
+    const startedAt = Date.now();
     const r = await computeStocks(asOf);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
     // Cache the live (non-backtest) pull, record today's fundamentals, and move
     // the shared refresh flag on — the same tail the nightly job runs, so the
     // two callers cannot drift apart.
-    if (!asOf) await finishLiveRefresh(r.payload);
+    if (!asOf) {
+      const who = await currentUser(req);
+      await finishLiveRefresh(r.payload, {
+        startedAt, actor: who ? who.email : 'admin (legacy login)',
+      });
+    }
     return res.json({ ...r.payload, refreshing: await readRefreshState() });
   }
 

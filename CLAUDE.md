@@ -319,7 +319,12 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 - Repository secrets required: `APP_URL`, `CRON_SECRET`.
 
 ### The refresh report
-Every completed Refresh all emails the owner — **whoever started it**, the job or the button. That is why it hangs off `endRefresh()` rather than the cron route: both paths converge there.
+**Both kinds of refresh email the owner** — a Refresh all and an ordinary price Refresh — **whoever started it**, the job or the button. The Refresh all path hangs off `endRefresh()` rather than the cron route, because both ways of finishing one converge there.
+
+- **Which report goes out is decided by whether a run was live a moment earlier, not by what the `delete` returned.** `endRefresh()` runs either way so a flag left stale by an abandoned run gets cleared, but a *stalled* Refresh all still reports nothing, and the click that happens to complete the universe is reported as the ordinary Refresh it was.
+- **An ordinary Refresh has no `refresh_state` row**, so `/api/stocks` passes its own `startedAt` and actor into `finishLiveRefresh()` as `ctx`. No `ctx`, no plain report — which is what keeps the nightly job's dozen rounds quiet.
+- **The plain report says `Fundamentals: not re-pulled — prices only`.** A price Refresh reuses cached profiles, so presenting the fundamentals as fresh would make the mail actively misleading. It is judged on failed symbols alone; coverage is a Refresh all's measure, and "no profile yet" is omitted entirely.
+- **Every click of Refresh sends one.** There is no throttle — add a floor if it gets noisy.
 
 - **Receipt**: run time first and largest, then the start and finish clock times, actor, `n/total` coverage, failed symbols, symbols still without a profile, prices-as-of, fundamentals rows recorded, bar-archive size and through-date. The duration leads because it is the number that says whether the night went normally — a Refresh all that finishes in seconds did not really run.
 - **Clock times are rendered in `REPORT_TZ`, defaulting to `America/New_York`** — the runner is UTC and the reader is not. `fmtClock()` uses explicit `month`/`day`/`hour` components rather than `dateStyle`/`timeStyle`, because ECMA-402 refuses to combine those with `timeZoneName` and the throw lands in the fallback, which would quietly print UTC instead of saying so.
