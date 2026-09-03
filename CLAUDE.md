@@ -394,6 +394,8 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 
 | screen | rule | hits when set |
 |---|---|---|
+| **Momentum improving** | `momentumChange ≥ 5` | 19 |
+| **Momentum fading** | `momentumChange ≤ −5` | 23 |
 | Bouncing off the lows | `range52Pos ≤ 30` (or `pctFromHigh ≤ −25`), `1M > 3%`, `2W > 0` | 5 |
 | Just started moving | `2W > 5%` while `3M < 0` | 2 |
 | Drifting after a beat | surprise 10–100%, reported ≤ 21d | 2 |
@@ -402,6 +404,9 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 | Business improving, price isn't | rev > 25%, `3M < −10%` | 13 |
 | Overextended | RSI > 75 and > 12% above the 50-day | 2 |
 
+- **The two momentum screens lead the page**, because they are the only ones describing a *change* in standing rather than a standing — the thing a ranked table can never show. They also appear in the nightly report, since both surfaces read `SCREENS`.
+- **`MOM_MIN_MOVE` (5) is defined in `screens.js`**, the module the server can `require` and every page loads. `rowcard.js` reads it for the tooltip wording and `index.html` for the arrow, so the threshold, the arrow and the sentence describing it cannot disagree. Every page therefore loads `screens.js` *before* `rowcard.js`.
+- **Both lists are empty on a snapshot written before `momentumChange` existed**, and the section says so rather than looking like a quiet market.
 - **`range52Pos`** (0 = on the 52-week low, 100 = on the high) and **`pctFromLow`** are derived in `computeStocks()` from bars already fetched, so they cost no credits. Snapshots written before they existed fall back to `pctFromHigh ≤ −25`, and the section prints a note saying so. **The `≤ 30` threshold is unverified against real range data** — it was tuned on the fallback — so expect to adjust that one number after the first refresh.
 - **Earnings surprises above 100% are excluded** as feed artefacts. Two different mega-caps currently report *exactly* +214%, which is a data bug rather than a coincidence; without the cap they would top the drift screen.
 - **`netCash` is meaningless for financials** — if a balance-sheet screen is ever added, exclude the Financial Services sector, or JPM and HOOD will lead it.

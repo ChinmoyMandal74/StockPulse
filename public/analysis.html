@@ -105,8 +105,8 @@
   </main>
   <div id="rowcard"></div>
 
-  <script src="/rowcard.js"></script>
   <script src="/screens.js"></script>
+  <script src="/rowcard.js"></script>
   <script>
     // Must match GROUP_COLORS / GROUP_LABELS in index.html — the card colours
     // its sections with these.
@@ -138,6 +138,11 @@
       ? `<td class="${n < 0 ? 'neg' : ''}">${n.toFixed(d)}${suffix}</td>`
       : '<td class="na">—</td>';
     const plain = (n, d = 1) => num(n) ? `<td>${n.toFixed(d)}</td>` : '<td class="na">—</td>';
+    // Score points, not a percentage: signed and coloured, but no % sign, since
+    // a move from 48.9 to 65 is 16 points and emphatically not 16%.
+    const pts = (n, d = 1) => num(n)
+      ? `<td class="${n >= 0 ? 'pos' : 'neg'}">${n >= 0 ? '+' : ''}${n.toFixed(d)}</td>`
+      : '<td class="na">—</td>';
     const money = (n, c) => {
       if (!num(n)) return '<td class="na">—</td>';
       const sign = n < 0 ? '-' : '', a = Math.abs(n), s = cur(c);
@@ -195,8 +200,9 @@
       const all = (data.stocks || []).filter((s) => !s.error);
       const asOf = data.updatedAt ? new Date(data.updatedAt).toLocaleString() : 'n/a';
       document.getElementById('lede').innerHTML =
-        `Seven screens the sorted table can't give you — where a base is turning, what has just started ` +
-        `moving, what is drifting after a beat, what looks cheap on its own numbers, and what is stretched. ` +
+        `Nine screens the sorted table can't give you — which way momentum is moving, where a base is ` +
+        `turning, what has just started moving, what is drifting after a beat, what looks cheap on its ` +
+        `own numbers, and what is stretched. ` +
         `Built from the raw data, not the composite scores. ${all.length} tickers, as of ${esc(asOf)}.`;
 
       const out = [];
@@ -208,6 +214,41 @@
       // email reports exactly what this page shows. The columns and the prose
       // below are the page's own.
       const S = Screens.run(all);
+
+      // --- Momentum improving / fading -------------------------------------
+      // These lead because they are the only screens describing a change in
+      // standing rather than a standing. The ranked table already tells you who
+      // is strong; only this says who is getting stronger.
+      const MOVE = Screens.MOM_MIN_MOVE;
+      const climbing = S.climbing;
+      const fading = S.fading;
+      // The field arrived with the direction arrow; a snapshot written before
+      // that has none, and both lists sit empty until the next refresh.
+      const noMove = all.length > 0 && all.every((x) => !num(x.momentumChange));
+      const moveNote = noMove
+        ? 'Momentum change is worked out on refresh — until the next one these two lists stay empty.'
+        : '';
+      const moveCols = [{t:'Symbol',l:1},{t:'Name',l:1,name:1},{t:'Mom.'},{t:'Change'},
+                        {t:'Was'},{t:'Now'},{t:'2W'},{t:'1M'},{t:'3M'},{t:'RSI'}];
+      const moveRow = (x) => `<tr>${symCell(x)}${nameCell(x)}` +
+        score(x.momentumRating) + pts(x.momentumChange) +
+        plain(x.momentumScorePrev) + plain(x.momentumScore) +
+        pct(x.twoWeekPct) + pct(x.oneMonthPct) + pct(x.threeMonthPct) + plain(x.rsi, 0) + '</tr>';
+
+      out.push(section('climbing', 'Momentum improving', climbing.length, 'var(--green)',
+        `Momentum score up ${MOVE} points or more over the last fortnight. Every other screen here ` +
+        'describes where a stock stands; this one describes where it is going. A name climbing from ' +
+        'the middle of the pack is the interesting case — by the time it reaches the top of the ' +
+        'ranking the move has already happened.',
+        moveCols, climbing.map(moveRow),
+        `Nothing has gained ${MOVE} points of momentum in the last fortnight.`, moveNote));
+
+      out.push(section('fading', 'Momentum fading', fading.length, 'var(--red)',
+        `Momentum score down ${MOVE} points or more over the last fortnight. A high rating that is ` +
+        'falling is worth more attention than a low one sitting still: the score is relative, so ' +
+        'losing ground here means the rest of the list is pulling away.',
+        moveCols, fading.map(moveRow),
+        `Nothing has lost ${MOVE} points of momentum in the last fortnight.`, moveNote));
 
       // --- 1. Bouncing off the lows ----------------------------------------
       const bounce = S.bounce;

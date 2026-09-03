@@ -33,6 +33,16 @@
   // mega-caps currently report exactly +214%, which is not a coincidence.
   const SURPRISE_CAP = 100;
 
+  // How far the momentum score must move over a fortnight before it counts as
+  // movement rather than noise. Measured across the live universe: a fortnight
+  // shifts the median name 4.5 points, so 5 leaves about half the list out.
+  //
+  // The canonical copy lives here because this is the module the server can
+  // require; rowcard.js reads it for the wording of its tooltip and index.html
+  // for the arrow, so the threshold, the arrow and the sentence describing it
+  // can never disagree.
+  const MOM_MIN_MOVE = 5;
+
   // Whole days from midnight today to an ISO date: negative is the past.
   function dayDelta(iso, today) {
     if (!iso) return null;
@@ -47,6 +57,23 @@
     : ((num(x.fcfTtm) && x.marketCap) ? (x.fcfTtm / x.marketCap) * 100 : null));
 
   const SCREENS = [
+    // These two lead: they are the only screens that describe a *change* in
+    // standing rather than a standing, which is the thing a ranked table can
+    // never show you.
+    {
+      id: 'climbing',
+      title: 'Momentum improving',
+      blurb: `momentum score up ${MOM_MIN_MOVE} points or more over the last fortnight`,
+      test: (x) => num(x.momentumChange) && x.momentumChange >= MOM_MIN_MOVE,
+      sort: (a, b) => b.momentumChange - a.momentumChange,
+    },
+    {
+      id: 'fading',
+      title: 'Momentum fading',
+      blurb: `momentum score down ${MOM_MIN_MOVE} points or more over the last fortnight`,
+      test: (x) => num(x.momentumChange) && x.momentumChange <= -MOM_MIN_MOVE,
+      sort: (a, b) => a.momentumChange - b.momentumChange,
+    },
     {
       id: 'bounce',
       title: 'Bouncing off the lows',
@@ -122,5 +149,5 @@
     return out;
   }
 
-  return { SCREENS, run, num, rangePos, lowInRange, fcfYield, SURPRISE_CAP, dayDelta };
+  return { SCREENS, run, num, rangePos, lowInRange, fcfYield, SURPRISE_CAP, MOM_MIN_MOVE, dayDelta };
 });

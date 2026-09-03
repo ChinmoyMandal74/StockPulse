@@ -415,10 +415,11 @@
   // exists at all. Only the markup is shared; each page owns its own hover
   // wiring, since one hovers table cells and the other a chip and a card row.
 
-  // A fortnight moves the median name 4.5 score points, so +/-5 leaves about
-  // half the list neutral. Lives here because index.html draws the arrow and
-  // scoreTip() describes it, and the two must agree on the number.
-  const MOM_ARROW_MIN = 5;
+  // Defined in screens.js, which the server can require and every page loads —
+  // the arrow, the sentence describing it and the two momentum screens all read
+  // one number. The fallback only matters if that script fails to load.
+  const MOM_ARROW_MIN = (typeof Screens !== 'undefined' && Screens.MOM_MIN_MOVE != null)
+    ? Screens.MOM_MIN_MOVE : 5;
 
   function factorRow(b) {
     if (b.sub == null) {
