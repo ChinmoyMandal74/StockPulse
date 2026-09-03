@@ -393,7 +393,14 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 **Gated pages are no longer served raw.** `public/` is mounted wholesale, which used to hand out `/chat.html`, `/analysis.html` and `/visitors.html` at their file path and skip the guard. `GATED_PAGES` redirects those to the routed path.
 
 ## Momentum weight lens
-`/analysis` carries a **Default · Trend · Steady** selector above the screens. It re-scores momentum **in the browser, on that page only** — the screener, the nightly report, the assistant and the stored snapshot all stay on Default, so the shared score remains one comparable measurement.
+**Both `/` and `/analysis` carry a Default · Trend · Steady selector** — a `Weights` picker in the screener's bar, and a bar above the screens on the analysis page. Each page keeps its own choice; the nightly report, the assistant and the stored snapshot always stay on Default, so the shared score remains one comparable measurement.
+
+- **On the screener the lens reaches further, so it is marked loudly**: it changes Momentum, Overall *and* the Rank column, which means it also changes the sort. `body.lensed` tints those two headers and the picker in accent, and underlines the affected cells.
+- **The CSV names the weighting in the three column headers it alters** — `Overall (Trend)`, `Momentum (Trend)`, `Rank (Trend)` — and in the filename. A comment row would have changed the shape every parser expects; a header rename travels with the file and leaves the column order alone, which the export is documented to keep stable.
+- **`applyWeights()` restates the weights inside `momentumBreakdown` too**, or the factor tooltip would explain a score using percentages that did not produce it.
+- **`renderWeightMenu()` carries its own escaper.** The only `esc` in `index.html` is scoped inside the CSV export; reaching for it there throws and takes `render()` down with it — this has now caused two bugs, so check the scope before using that name on that page.
+
+It re-scores momentum **in the browser** — the screener, the nightly report, the assistant and the stored snapshot all stay on Default, so the shared score remains one comparable measurement.
 
 - **It costs nothing to compute.** `momentumBreakdown` already ships every factor's sub-score to the client, so re-weighting is arithmetic on data that is already there: no refetch, no endpoint, no API credits. `applyWeights()` returns a shallow copy using the same field names, so screens and cell renderers need no idea a lens is in play.
 - **`momentumBreakdownPrev` ships too**, or the change column would re-weight today and not the fortnight-ago comparison and quietly mix two schemes.

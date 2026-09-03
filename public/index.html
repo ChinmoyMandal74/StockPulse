@@ -333,6 +333,17 @@
     th.left, td.left { text-align: left; }
     /* Alignment only. Not `.left`, which also switches the cell to the sans
        face — these hold numbers and belong in the mono one. */
+    /* When a non-default weighting is in play the three columns it changes say
+       so — this reaches the Rank column and the CSV, so it must not be subtle. */
+    body.lensed th[data-key="overallScore"],
+    body.lensed th[data-key="momentumScore"] { color: var(--accent); }
+    body.lensed td.rating[data-kind="overall"],
+    body.lensed td.rating[data-kind="momentum"] { box-shadow: inset 0 -1px 0 var(--accent); }
+    body.lensed #weightBtn { border-color: var(--accent); color: var(--text); }
+    body.lensed #weightBtn .count { color: var(--accent); }
+    .pick .nm em { display: block; font-style: normal; font-size: 10.5px;
+                   color: var(--faint); margin-top: 2px; white-space: normal; }
+
     th.ta-c, td.ta-c { text-align: center; }
     th.ta-l, td.ta-l { text-align: left; }
     th.group {
@@ -494,6 +505,7 @@
     <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3.6" y="5.2" width="16.8" height="13.6" rx="2.6"/><path d="M9.2 5.2v13.6M14.8 5.2v13.6"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.6 9.8 17.4 19 6.6"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15.2l5.5-5.7"/></symbol>
+    <symbol id="i-scales" viewBox="0 0 24 24"><path d="M12 4.4v15.2"/><path d="M6.6 19.6h10.8"/><path d="M4 9.2h16"/><path d="M4 9.2 1.8 14.2h4.4z"/><path d="M20 9.2 17.8 14.2h4.4z"/></symbol>
     <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3.6 19.2h16.8"/><path d="M4.4 14.6 9.6 9l3.6 3.4 6.2-6.8"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.6 6.6 17.4 17.4M17.4 6.6 6.6 17.4"/></symbol>
   </svg>
@@ -512,6 +524,10 @@
         <div class="picker" id="colPicker" data-open="0">
           <button class="btn picker-btn" id="colBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="colMenu" role="listbox" aria-multiselectable="true" aria-label="Column groups"></div>
+        </div>
+        <div class="picker" id="weightPicker" data-open="0">
+          <button class="btn picker-btn" id="weightBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="picker-menu" id="weightMenu" role="listbox" aria-label="Momentum weighting"></div>
         </div>
         <div class="picker admin-only" id="datePicker" data-open="0">
           <button class="btn icon quiet" id="dateOpenBtn" title="Backtest: view the ranking as of a past date" aria-haspopup="dialog" aria-expanded="false" aria-label="Backtest date">
@@ -763,7 +779,13 @@
   <script src="/screens.js"></script>
   <script src="/rowcard.js"></script>
   <script>
+    // The universe exactly as the server scored it, and the view the chosen
+    // weighting produces. Everything on the page reads `stocks`, so a lens
+    // reaches the ranking, the sort, the arrows and the export without any of
+    // them knowing about it.
+    let baseStocks = [];
     let stocks = [];
+    let weightPreset = 'default';
     let portfolios = [];       // ordered portfolio names
     let activeTab = 'All';
     let sortKey = 'overallScore';
@@ -1025,6 +1047,7 @@
     const PICKERS = [
       { root: 'picker', btn: 'pickerBtn', menu: 'pickerMenu' },
       { root: 'colPicker', btn: 'colBtn', menu: 'colMenu' },
+      { root: 'weightPicker', btn: 'weightBtn', menu: 'weightMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
       { root: 'addPicker', btn: 'addOpenBtn', menu: 'addMenu' },
       { root: 'datePicker', btn: 'dateOpenBtn', menu: 'dateMenu' },
@@ -1111,6 +1134,7 @@
 
     function render() {
       renderPicker();
+      renderWeightMenu();
       const tbody = $('tbody');
       const rows = visibleStocks();
       markSortedColumn();
@@ -1394,7 +1418,15 @@
         return str;
       };
 
-      const lines = [cols.map((c) => esc(c[0])).join(',')];
+      // A file outlives the session that made it. Rather than add a comment row —
+      // which would change the shape every parser expects — the three columns the
+      // lens actually alters name the weighting in their own headers.
+      const lensName = Screens.presetById(weightPreset);
+      const head = cols.map((c) => {
+        if (lensName.id === 'default') return c[0];
+        return /^(Overall|Momentum|Rank)$/.test(c[0]) ? `${c[0]} (${lensName.label})` : c[0];
+      });
+      const lines = [head.map((h) => esc(h)).join(',')];
       for (const s of rows) lines.push(cols.map((c) => esc(c[1](s))).join(','));
       const csv = '﻿' + lines.join('\r\n'); // BOM so Excel reads UTF-8
 
@@ -1404,7 +1436,8 @@
       const date = new Date().toISOString().slice(0, 10);
       const tab = String(activeTab).replace(/[^A-Za-z0-9._-]+/g, '_');
       a.href = url;
-      a.download = `stock-screener-${tab}-${date}.csv`;
+      const lens = weightPreset === 'default' ? '' : `-${weightPreset}`;
+      a.download = `stock-screener-${tab}${lens}-${date}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1488,6 +1521,57 @@
       else wrap.scrollBy({ left: left || 0, top: top || 0, behavior: 'smooth' });
     });
 
+    // ---- momentum weight lens -------------------------------------------------
+    // Re-scores every row in the browser from the factor sub-scores already in
+    // the payload. Nothing is refetched and the shared snapshot is untouched —
+    // but unlike the analysis page, here the lens reaches the Rank column, the
+    // sort and the CSV, so it is marked loudly rather than quietly.
+    function applyLens() {
+      const p = Screens.presetById(weightPreset);
+      stocks = p.id === 'default'
+        ? baseStocks
+        : baseStocks.map((x) => (x.error ? x : Screens.applyWeights(x, p.weights)));
+      document.body.classList.toggle('lensed', p.id !== 'default');
+    }
+
+    function setWeightPreset(id) {
+      if (id === weightPreset) return;
+      weightPreset = id;
+      applyLens();
+      render();
+      renderWeightMenu();
+      savePrefs();
+    }
+
+    function renderWeightMenu() {
+      // A local escaper: the only `esc` on this page is scoped inside the CSV
+      // export, and reaching for it here throws and takes render() down with it.
+      const e = (t) => String(t == null ? '' : t)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const active = Screens.presetById(weightPreset);
+      $('weightBtn').innerHTML =
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>' +
+        '<span class="picker-label">Weights</span>' +
+        `<span class="count">${e(active.label)}</span>` +
+        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
+      $('weightBtn').title = active.id === 'default'
+        ? 'Momentum weighting — the one every other page uses'
+        : `Momentum re-scored under ${active.label}. The nightly email and the assistant stay on Default.`;
+      $('weightMenu').innerHTML =
+        '<div class="picker-inner">' +
+        Screens.WEIGHT_PRESETS.map((w) =>
+          `<button class="pick ${w.id === weightPreset ? 'on' : ''}" data-weight="${w.id}" role="option" ` +
+          `aria-selected="${w.id === weightPreset}">` +
+          `<span class="nm">${e(w.label)}<em>${e(w.note)}</em></span>` +
+          '<svg class="ic ic-sm chk" aria-hidden="true"><use href="#i-check" /></svg></button>').join('') +
+        '<div class="pick-sep"></div>' +
+        '<div class="pick-hint">Changes the Momentum, Overall and Rank columns on this page only. ' +
+        'The nightly email, the assistant and /analysis keep their own setting.</div></div>';
+      $('weightMenu').querySelectorAll('[data-weight]').forEach((b) => {
+        b.addEventListener('click', (e) => { e.stopPropagation(); setWeightPreset(b.dataset.weight); });
+      });
+    }
+
     function toggleGroup(id) { collapsed[id] = !collapsed[id]; applyGroups(); savePrefs(); }
     function setAllGroups(show) {
       GROUPS.forEach((id) => (collapsed[id] = !show));
@@ -1509,6 +1593,8 @@
     async function loadPrefs() {
       try {
         const res = await api('GET', '/api/prefs');
+        const savedW = res && res.prefs && res.prefs.weights;
+        if (savedW && Screens.WEIGHT_PRESETS.some((w) => w.id === savedW)) weightPreset = savedW;
         const saved = res && res.prefs && res.prefs.collapsed;
         if (saved) {
           for (const g of GROUPS) {
@@ -1531,7 +1617,7 @@
       prefsTimer = setTimeout(() => {
         const out = {};
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
-        api('PUT', '/api/prefs', { prefs: { collapsed: out } }).catch(() => {});
+        api('PUT', '/api/prefs', { prefs: { collapsed: out, weights: weightPreset } }).catch(() => {});
       }, 600);
     }
 
@@ -1774,7 +1860,8 @@
         const qs = params.toString();
         const data = await api('GET', '/api/stocks' + (qs ? '?' + qs : ''));
         lastUpdated = data.updatedAt;
-        stocks = data.stocks || [];
+        baseStocks = data.stocks || [];
+        applyLens();
         portfolios = data.portfolios || [];
         if (activeTab !== 'All' && !portfolios.includes(activeTab)) activeTab = 'All';
         collapsed.fwd = !asOfDate;      // forward-return columns only in backtest mode
@@ -1841,7 +1928,8 @@
 
         if (data) {
           lastUpdated = data.updatedAt;
-          stocks = data.stocks || [];
+          baseStocks = data.stocks || [];
+          applyLens();
           portfolios = data.portfolios || [];
           if (activeTab !== 'All' && !portfolios.includes(activeTab)) activeTab = 'All';
           render();

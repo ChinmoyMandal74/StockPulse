@@ -130,6 +130,11 @@
       momentumRating: now.rating,
       momentumScorePrev: then ? then.score : null,
       momentumChange: then ? Math.round((now.score - then.score) * 10) / 10 : null,
+      // Restate the weights inside the breakdown too, or the factor tooltip
+      // would explain a score using percentages that did not produce it.
+      momentumBreakdown: stock.momentumBreakdown.map((c) => Object.assign({}, c, {
+        weight: c.key != null && weights[c.key] != null ? weights[c.key] : c.weight,
+      })),
     });
     if (stock.qualityScore != null) {
       const o = now.score * 0.65 + stock.qualityScore * 0.35;
