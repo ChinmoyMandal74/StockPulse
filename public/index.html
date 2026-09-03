@@ -336,9 +336,12 @@
     /* When a non-default weighting is in play the three columns it changes say
        so — this reaches the Rank column and the CSV, so it must not be subtle. */
     body.lensed th[data-key="overallScore"],
-    body.lensed th[data-key="momentumScore"] { color: var(--accent); }
-    body.lensed td.rating[data-kind="overall"],
-    body.lensed td.rating[data-kind="momentum"] { box-shadow: inset 0 -1px 0 var(--accent); }
+    body.lensed th[data-key="momentumScore"],
+    body.lensed th.lens-col { color: var(--accent); }
+    /* A tint down the whole column, not a border per cell: a bottom rule on
+       every row draws a line between each pair of them and reads as a ladder. */
+    body.lensed td.lens-col { background: rgba(124, 156, 255, 0.07); }
+    body.lensed tbody tr:hover td.lens-col { background: rgba(124, 156, 255, 0.12); }
     body.lensed #weightBtn { border-color: var(--accent); color: var(--text); }
     body.lensed #weightBtn .count { color: var(--accent); }
     .pick .nm em { display: block; font-style: normal; font-size: 10.5px;
@@ -730,7 +733,7 @@
         <th class="grp-rank ta-c" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
         <th class="grp-rank ta-l" data-key="momentumScore" title="Momentum 1–10: strength ranked against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
         <th class="grp-rank" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all and Overall falls back to momentum. Hover a cell for the factor split and the confidence figure.">Qual.</th>
-        <th class="grp-rank" title="Rank by Overall within the stocks currently shown">Rank</th>
+        <th class="grp-rank lens-col" title="Rank by Overall within the stocks currently shown">Rank</th>
         <th class="grp-chart" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
         <th class="grp-short" data-key="todayPct">Today</th>
         <th class="grp-short" data-key="yesterdayPct">YDAY</th>
@@ -1209,10 +1212,10 @@
           <td class="name left grp-info"${attr(cacheTitle)}>${s.sector || '—'}</td>
           <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
           ${earningsCell(s, cacheTitle)}
-          ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-rank ta-c')}
-          ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-rank ta-l', s.momentumChange)}
+          ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-rank ta-c lens-col')}
+          ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-rank ta-l lens-col', s.momentumChange)}
           ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank')}
-          ${rankCell(rankMap[s.symbol] ?? null, rankTotal, 'grp-rank')}
+          ${rankCell(rankMap[s.symbol] ?? null, rankTotal, 'grp-rank lens-col')}
           <td class="spark grp-chart" data-spark="${s.symbol}">${sparkCache[s.symbol] || ''}</td>
           ${pctCell(s.todayPct, 'grp-short', liveTitle)}
           ${pctCell(s.yesterdayPct, 'grp-short', liveTitle)}
