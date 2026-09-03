@@ -389,6 +389,7 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 #tip .tip-bar i { display: block; height: 100%; border-radius: 999px;
                   background: linear-gradient(90deg, var(--accent-2), var(--accent)); }
 #tip .val { width: 24px; text-align: right; font-family: var(--mono); font-size: 11px; }
+#tip .tip-sep { height: 1px; background: var(--hair); margin: 9px 0 7px; }
 #tip .tip-foot { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--hair);
                  color: var(--faint); font-size: 10.5px; line-height: 1.5; }
 

@@ -1170,6 +1170,58 @@ function scoreFactors(comps, minWeightFrac = 0) {
 // is strongest", not "does this clear some absolute bar" — so each return
 // factor becomes the stock's percentile among its peers. Quality stays
 // absolute: a 25% margin is a 25% margin regardless of the company it keeps.
+// ---- momentum, a fortnight ago ---------------------------------------------
+// The score says where a stock stands; on its own it cannot say which way it is
+// heading. Re-scoring the universe as it stood MOM_LOOKBACK sessions back gives
+// that, and costs nothing: momentum is derived entirely from daily bars, and the
+// bars are already in hand — the same series, just sliced.
+//
+// Measured over the live universe before choosing the window. Median |change in
+// rank| runs 2 over one day, 5 over a fortnight, 8 over a month; at one day
+// 46% of the list moves three or more places on no news at all, so a daily
+// arrow would be pure flicker. A fortnight moves the median name 4.5 score
+// points, which is enough to mean something and soon enough to act on.
+const MOM_LOOKBACK = 10;             // trading sessions ≈ 2 weeks
+// The longest factor needs a year of bars plus the month 12-1 skips, so a
+// series shorter than this cannot be scored at the older date at all.
+const MOM_MIN_BARS = 254;
+
+// Just the fields applyScores() reads. Deliberately not the whole row: a profile
+// belongs to now, not to a fortnight ago, and quality is not being restated.
+function momentumInputs(values) {
+  if (!Array.isArray(values) || values.length < MOM_MIN_BARS) return null;
+  const mc = maCross(values);
+  return {
+    mom12_1: windowReturn(values, 252, 21),
+    sixMonthPct: pctChange(values, 126),
+    threeMonthPct: pctChange(values, 63),
+    oneMonthPct: pctChange(values, 21),
+    realisedVol: realisedVol(values),
+    pctFromHigh: pctFromHigh(values, 252),
+    posMonths: positiveMonths(values),
+    rsi: rsi(values, 14),
+    vs200ma: pctVsMA(values, 200),
+    maBullish: mc ? mc.bullish : null,
+    maCrossDays: mc ? mc.daysSince : null,
+  };
+}
+
+// symbol -> momentum score as of `back` sessions ago, or null where the series
+// is too short. Scored by the same applyScores() the live rows go through, so
+// both ends of the comparison are always on the current model — which is what a
+// stored history could not promise the next time the model changes.
+function momentumAsOf(valuesBySymbol, back) {
+  const rows = [];
+  for (const [symbol, values] of valuesBySymbol) {
+    const sliced = Array.isArray(values) ? values.slice(back) : null;
+    rows.push({ symbol, ...(momentumInputs(sliced) || {}) });
+  }
+  applyScores(rows);
+  const out = new Map();
+  for (const r of rows) out.set(r.symbol, r.momentumScore);
+  return out;
+}
+
 function applyScores(rows) {
   const at = (f) => percentileRanks(rows.map(f));
 
@@ -1464,6 +1516,9 @@ async function computeStocks(asOf) {
       spyThreeMonthPct = pctChange(spyFull, THREE_MONTH);
     }
 
+    // Kept so momentum can be re-scored at an earlier date without refetching.
+    const valuesBySymbol = new Map();
+
     const stocks = symbols.map((sym) => {
       const s = series[sym] || {};
       const full = s.values;
@@ -1596,12 +1651,28 @@ async function computeStocks(asOf) {
         error: ok ? null : (s.message || 'No data returned for this symbol.'),
       };
 
+      valuesBySymbol.set(sym, values);
       return row;
     });
 
     // Momentum is scored against the universe, so it can only be worked out
     // once every row exists — hence the second pass.
     applyScores(stocks);
+
+    // …and again as the universe stood a fortnight ago, for the direction arrow.
+    // Never allowed to fail a refresh: it is a decoration on a number that is
+    // already correct.
+    try {
+      const then = momentumAsOf(valuesBySymbol, MOM_LOOKBACK);
+      for (const row of stocks) {
+        const was = then.get(row.symbol);
+        row.momentumScorePrev = was == null ? null : Math.round(was * 10) / 10;
+        row.momentumChange = (was == null || row.momentumScore == null)
+          ? null : Math.round((row.momentumScore - was) * 10) / 10;
+      }
+    } catch (err) {
+      console.warn('momentum: could not score the earlier date:', err.message);
+    }
 
     // Archive the bars we just fetched. Live pulls only — a backtest's range is
     // truncated and would corrupt the history. Awaited rather than fired and
@@ -1762,6 +1833,7 @@ const CHAT_FIELDS = [
   ['volTrend', '5-day average volume vs 20-day, %'],
   ['realisedVol', 'annualised volatility, %'],
   ['posMonths', 'share of the last 12 months that closed up, %'],
+  ['momentumChange', 'change in the momentum score over the last 2 weeks, points (positive = improving)'],
   ['revenueTtm', 'revenue, trailing twelve months'],
   ['revenueGrowthYoY', 'quarterly revenue growth year on year, %'],
   ['grossProfitTtm', 'gross profit TTM'],

@@ -192,6 +192,7 @@ The **Chart** group is one column (`90d`) between Rank and Short-term, holding a
 ## Table specifics
 - **Frozen columns are Symbol and Name only** (`.frz0`, `.frz1`). The classes are *positional*: `updateStickyOffsets()` measures header cell widths left-to-right to compute the cumulative `left` offsets, so reordering columns means re-dealing the `frz` numbers in DOM order, not just moving the markup. `.frz1` carries the boundary shadow.
 - Two sticky header rows; `--h1` is measured at runtime because the second row's top offset depends on the first row's wrapped height.
+- **Overall is centred (`ta-c`) and Mom. is left-aligned (`ta-l`);** everything else stays right-aligned. Those are alignment-only classes on purpose — `.left` also switches the cell to the sans face, and a rating is a number that belongs in the mono one. The sorted-column marker is `left: 50%`, so it is unaffected by either.
 - The sorted column is marked by a small accent arrow absolutely positioned in the header's bottom padding — it's positioned, not inline, so it can't reflow a wrapped label.
 - Score cells (`td.rating`) open the factor-breakdown tooltip (`#tip`, fixed-position glass card) on hover.
 
@@ -235,6 +236,18 @@ Everything comes from the daily bars already fetched, so the extra factors cost 
 - **MACD** was binary (0.8/0.2), discarding magnitude; correlation with the composite was **0.022**.
 - **Vol trend** was unsigned, so a crash on heavy volume scored like a breakout, and **51%** of the universe sat at its floor while none reached the ceiling. If it returns, sign it: `volTrend × sign(1M)`.
 - **Short squeeze** rewarded heavy short interest, which predicts *weaker* returns; it correlated **−0.223** with the composite, pulling against everything else.
+
+### The direction arrow
+`momentumChange` is the move in the momentum score over **`MOM_LOOKBACK` = 10 sessions (a fortnight)**, shown as a small green or red chevron beside the Mom. rating, with the size in the tooltip.
+
+- **Both ends are scored by the same `applyScores()` on the same fetched series**, sliced — `momentumAsOf()` re-runs the pass over `values.slice(back)`. So no history is stored, nothing waits for data to accumulate, and the two ends can never sit on different models. That last point is why this beats recording scores nightly: a stored series silently mixes scoring regimes the next time momentum is rewritten, which is the reason the scores were kept out of `fundamentals_history` in the first place.
+- **It costs no API credits and no extra query.** Momentum is entirely bar-derived and a normal refresh already fetches 300 bars; slicing 10 leaves 290, comfortably above the 254 the year-plus-skipped-month factor needs. `MOM_MIN_BARS` guards the short series.
+- **The window was measured, not chosen.** Median |change in rank| across the live universe: 2 over one day, 4 over a week, **5 over a fortnight**, 8 over a month, 15 over a quarter. At one day **46% of the list moves three or more places on no news**, so a daily arrow is pure flicker.
+- **`MOM_ARROW_MIN` = 5 points is what makes the arrow mean anything.** A fortnight moves the median name 4.5 points, so ±5 leaves about half the list neutral — measured on the live data: 16 up, 22 down, **43 neutral (53%)**. Without a deadband nearly every row is lit and the column stops carrying information.
+- **Driven by the score, not the rank**, though displayed beside the rating. Rank amplifies noise — a 0.374-point score difference reshuffled 28 of 81 ranks in testing — and shifts for everyone whenever a ticker is added or removed.
+- The arrow carries its own green/red, not the rating's: green here means *improving*, which is a different statement from the green that means *a high score*.
+- **`MOM_ARROW_MIN` lives in `rowcard.js` and is imported by `index.html`.** The table draws the arrow and `scoreTip()` describes it in words — the number and the sentence explaining it must not drift.
+- **The tooltip carries what the arrow cannot**: the score a fortnight ago, the signed change, and a sentence naming what the chevron means. When the move is inside the deadband it says so explicitly rather than staying silent, so a missing arrow is never ambiguous.
 
 **Do not add 1W/2W/1M as more-is-better factors.** At those horizons the evidence is reversal, not continuation — the same reason 12-1 skips its final month. `rsi` already correlates 0.745 with the 1-month return, so the horizon was partly in the score even before `1M reversal` made it explicit.
 

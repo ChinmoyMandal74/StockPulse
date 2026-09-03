@@ -415,6 +415,11 @@
   // exists at all. Only the markup is shared; each page owns its own hover
   // wiring, since one hovers table cells and the other a chip and a card row.
 
+  // A fortnight moves the median name 4.5 score points, so +/-5 leaves about
+  // half the list neutral. Lives here because index.html draws the arrow and
+  // scoreTip() describes it, and the two must agree on the number.
+  const MOM_ARROW_MIN = 5;
+
   function factorRow(b) {
     if (b.sub == null) {
       return `<div class="tip-row off"><span class="lbl">${esc(b.label)} <em>${b.weight}%</em></span>` +
@@ -478,11 +483,32 @@
     const totalW = bd.reduce((a, b) => a + b.weight, 0);
     const availW = bd.reduce((a, b) => a + (b.sub != null ? b.weight : 0), 0);
     const conf = totalW ? Math.round((availW / totalW) * 100) : 0;
+    // The arrow in the table says only which way. Where it came from, how far it
+    // moved, and what the arrow actually means all belong here.
+    const d = s.momentumChange;
+    const hasMove = !quality && d != null && isFinite(d) && s.momentumScorePrev != null;
+    const moved = hasMove
+      ? '<div class="tip-sep"></div>' +
+        `<div class="tip-row"><span class="lbl">Score, 2 weeks ago</span>` +
+        `<span class="val" style="width:auto">${s.momentumScorePrev}</span></div>` +
+        `<div class="tip-row"><span class="lbl">Change</span>` +
+        `<span class="val" style="width:auto;color:${d >= 0 ? 'var(--green)' : 'var(--red)'}">` +
+        `${d >= 0 ? '+' : ''}${d.toFixed(1)}</span></div>`
+      : '';
+    const arrowNote = hasMove
+      ? (Math.abs(d) >= MOM_ARROW_MIN
+          ? ` The ${d >= 0 ? 'green' : 'red'} chevron beside the rating marks that move: ` +
+            `momentum has ${d >= 0 ? 'strengthened' : 'weakened'} against the rest of the list ` +
+            'over the last two weeks. It appears only past ' + MOM_ARROW_MIN + ' points, ' +
+            'which leaves about half the table unmarked.'
+          : ` No chevron: the move is under ${MOM_ARROW_MIN} points, which is within ` +
+            'the fortnightly noise for this universe.')
+      : '';
     return `<div class="tip-head">${label} ${rating}/10 ` +
       `<span>· score ${score}/100 · ${conf}% of factors</span></div>` +
-      bd.map(factorRow).join('') +
+      bd.map(factorRow).join('') + moved +
       `<div class="tip-foot">Confidence ${conf}%: share of factor-weight with data ` +
-      `(rest excluded &amp; renormalized).${foot}</div>`;
+      `(rest excluded &amp; renormalized).${arrowNote}${foot}</div>`;
   }
 
   // Clamp the card beside its anchor and inside the viewport — preferring the
@@ -650,7 +676,7 @@
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
     // used by the stock page
     buildSections, chartSVG, sparkSVG, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries,
-    scoreTip, placeTip,
+    scoreTip, placeTip, MOM_ARROW_MIN,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS,
   };
 })(window);
