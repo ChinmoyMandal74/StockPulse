@@ -56,6 +56,92 @@
   const fcfYield = (x) => (num(x.fcfYield) ? x.fcfYield
     : ((num(x.fcfTtm) && x.marketCap) ? (x.fcfTtm / x.marketCap) * 100 : null));
 
+  // ---- momentum weightings --------------------------------------------------
+  // The server always scores on `default`; these are a lens the analysis page
+  // can look through. Keyed on the stable factor keys the server ships in
+  // momentumBreakdown, not on the captions, which are prose and may be reworded.
+  //
+  // The axis is continuation versus caution, because that is the one real
+  // disagreement between reasonable people about a momentum score. Adjectives
+  // like "aggressive" would be a mood; these are positions.
+  //
+  //   Trend  leans shorter-horizon and removes the reversal brake entirely — it
+  //          wants whatever is working now and does not care that a big
+  //          one-month move often gives some back.
+  //   Steady leans on the year-long factor and on month-to-month consistency,
+  //          and keeps the brake, so a name has to have been working for a
+  //          while and to have done it repeatedly.
+  //
+  // Weights need not total 100: the score renormalises over whichever factors
+  // have data, exactly as the server's scoreFactors() does.
+  const WEIGHT_PRESETS = [
+    {
+      id: 'default',
+      label: 'Default',
+      note: 'The weighting every other page uses.',
+      weights: { mom121: 20, ret6m: 18, ret3m: 17, fromHigh: 10, trend: 10, consistency: 10, revers1m: 8, rsi: 7 },
+    },
+    {
+      id: 'trend',
+      label: 'Trend',
+      note: 'Shorter horizons, stronger trend, no reversal brake.',
+      weights: { mom121: 18, ret6m: 20, ret3m: 24, fromHigh: 12, trend: 16, consistency: 4, revers1m: 0, rsi: 6 },
+    },
+    {
+      id: 'steady',
+      label: 'Steady',
+      note: 'The year-long factor and month-to-month consistency lead.',
+      weights: { mom121: 24, ret6m: 16, ret3m: 10, fromHigh: 8, trend: 10, consistency: 20, revers1m: 8, rsi: 4 },
+    },
+  ];
+
+  const presetById = (id) => WEIGHT_PRESETS.find((p) => p.id === id) || WEIGHT_PRESETS[0];
+
+  // Re-score one factor breakdown under a different weighting. Mirrors
+  // scoreFactors() in server.js: absent factors are dropped and the rest
+  // renormalised, so a missing sub-score dilutes nobody.
+  function scoreWithWeights(breakdown, weights) {
+    if (!Array.isArray(breakdown) || !weights) return null;
+    let w = 0, acc = 0;
+    for (const c of breakdown) {
+      if (c.sub == null) continue;
+      const wt = c.key != null && weights[c.key] != null ? weights[c.key] : c.weight;
+      if (!(wt > 0)) continue;
+      w += wt;
+      acc += wt * c.sub;
+    }
+    if (w === 0) return null;
+    const score01 = acc / w;
+    return {
+      score: Math.round(score01 * 1000) / 10,
+      rating: Math.max(1, Math.min(10, Math.round(score01 * 9 + 1))),
+    };
+  }
+
+  // A stock re-scored under `weights`, as a shallow copy carrying the same field
+  // names the rest of the app uses — so a screen or a cell renderer needs no
+  // idea that a lens is in play. Overall moves with it: it is 65% momentum.
+  function applyWeights(stock, weights) {
+    const now = scoreWithWeights(stock.momentumBreakdown, weights);
+    if (!now) return stock;
+    const then = scoreWithWeights(stock.momentumBreakdownPrev, weights);
+    const out = Object.assign({}, stock, {
+      momentumScore: now.score,
+      momentumRating: now.rating,
+      momentumScorePrev: then ? then.score : null,
+      momentumChange: then ? Math.round((now.score - then.score) * 10) / 10 : null,
+    });
+    if (stock.qualityScore != null) {
+      const o = now.score * 0.65 + stock.qualityScore * 0.35;
+      out.overallScore = Math.round(o * 10) / 10;
+      out.overallRating = Math.max(1, Math.min(10, Math.round((o / 100) * 9 + 1)));
+    } else {
+      out.overallScore = now.score;
+      out.overallRating = now.rating;
+    }
+    return out;
+  }
+
   const SCREENS = [
     // These two lead: they are the only screens that describe a *change* in
     // standing rather than a standing, which is the thing a ranked table can
@@ -149,5 +235,8 @@
     return out;
   }
 
-  return { SCREENS, run, num, rangePos, lowInRange, fcfYield, SURPRISE_CAP, MOM_MIN_MOVE, dayDelta };
+  return {
+    SCREENS, run, num, rangePos, lowInRange, fcfYield, SURPRISE_CAP, MOM_MIN_MOVE, dayDelta,
+    WEIGHT_PRESETS, presetById, scoreWithWeights, applyWeights,
+  };
 });

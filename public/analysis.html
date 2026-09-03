@@ -44,6 +44,26 @@
     /* sections */
     .sec { margin-bottom: 14px; }
     .sec > .core { padding: 18px 20px 8px; }
+    /* The lens control. Quiet by design: it changes this page only, and the
+       note beside it says so whenever it is not on Default. */
+    .wbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+            margin: 0 0 18px; padding: 10px 14px; border-radius: 14px;
+            border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.022); }
+    .wbar.off { border-color: var(--hair-2); background: rgba(124, 156, 255, 0.06); }
+    .wlab { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.14em;
+            color: var(--faint); white-space: nowrap; }
+    .wsel { display: flex; gap: 4px; flex-wrap: wrap; }
+    .wsel button {
+      padding: 5px 13px; border-radius: 999px; cursor: pointer; font-family: var(--sans);
+      font-size: 12px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+      color: var(--muted); transition: color 0.35s var(--ease), background 0.35s var(--ease),
+                                       border-color 0.35s var(--ease);
+    }
+    .wsel button:hover { color: var(--text); background: rgba(255, 255, 255, 0.07); }
+    .wsel button.on { color: var(--text); border-color: var(--hair-2); background: rgba(255, 255, 255, 0.1); }
+    .wnote { flex: 1 1 280px; font-size: 11.5px; line-height: 1.5; color: var(--faint); }
+    .wnote b { color: var(--muted); font-weight: 500; }
+
     .sec-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
     .sec-h h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
     .pill { font-family: var(--mono); font-size: 10.5px; padding: 2px 8px; border-radius: 999px;
@@ -101,6 +121,11 @@
   <main class="page">
     <h1><span class="w1">Analysis</span></h1>
     <p class="lede" id="lede">Loading…</p>
+    <div class="wbar" id="wbar" hidden>
+      <span class="wlab">Momentum weights</span>
+      <span class="wsel" id="wsel"></span>
+      <span class="wnote" id="wnote"></span>
+    </div>
     <div id="out"></div>
   </main>
   <div id="rowcard"></div>
@@ -187,6 +212,11 @@
     }
 
     // ---- build --------------------------------------------------------------
+    let BASE = [];          // the universe exactly as the server scored it
+    let ASOF = 'n/a';
+    let baseRank = new Map();
+    let presetId = 'default';
+
     (async () => {
       let data;
       try {
@@ -197,13 +227,100 @@
         document.getElementById('lede').textContent = 'Could not load the screener data.';
         return;
       }
-      const all = (data.stocks || []).filter((s) => !s.error);
-      const asOf = data.updatedAt ? new Date(data.updatedAt).toLocaleString() : 'n/a';
+      BASE = (data.stocks || []).filter((s) => !s.error);
+      ASOF = data.updatedAt ? new Date(data.updatedAt).toLocaleString() : 'n/a';
+
+      // Which weighting this page is being read through, if the account saved one.
+      try {
+        const pr = await (await fetch('/api/prefs', { cache: 'no-store' })).json();
+        if (pr && pr.prefs && pr.prefs.weights) presetId = pr.prefs.weights;
+      } catch { /* Default is a fine fallback */ }
+
+      baseRank = rankBy(BASE);
+      draw();
+    })();
+
+    // ---- momentum weight lens -------------------------------------------------
+    // Every other surface — the screener, the nightly report, the assistant —
+    // stays on Default. This re-scores *this page only*, in the browser, from the
+    // factor sub-scores already in the payload: no refetch, no API credits, and
+    // the shared snapshot is never touched.
+    function rankBy(rows) {
+      const m = new Map();
+      rows.filter((x) => num(x.momentumScore))
+        .slice().sort((a, b) => b.momentumScore - a.momentumScore)
+        .forEach((x, i) => m.set(x.symbol, i + 1));
+      return m;
+    }
+
+    function weighted(id) {
+      const p = Screens.presetById(id);
+      return p.id === 'default' ? BASE : BASE.map((x) => Screens.applyWeights(x, p.weights));
+    }
+
+    // How far a weighting actually moves the list. Printed rather than asserted:
+    // a preset that reorders three names is a dial that does nothing, and you
+    // should be able to see that without taking anyone's word for it.
+    function movement(rows) {
+      const r = rankBy(rows);
+      const d = [];
+      for (const [sym, rank] of r) {
+        const b = baseRank.get(sym);
+        if (b != null) d.push(Math.abs(rank - b));
+      }
+      if (!d.length) return '';
+      const moved = d.filter((x) => x > 0).length;
+      const sorted = [...d].sort((a, b) => a - b);
+      return `Reorders <b>${moved}</b> of ${d.length} names · median move <b>` +
+        `${sorted[Math.floor(sorted.length / 2)]}</b>, largest <b>${sorted[sorted.length - 1]}</b>.`;
+    }
+
+    function savePreset(id) {
+      fetch('/api/prefs', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefs: { collapsed: {}, weights: id } }),
+      }).catch(() => { /* a lens that fails to persist still works today */ });
+    }
+
+    function renderWbar() {
+      const p = Screens.presetById(presetId);
+      const bar = document.getElementById('wbar');
+      bar.hidden = false;
+      bar.classList.toggle('off', p.id !== 'default');
+      document.getElementById('wsel').innerHTML = Screens.WEIGHT_PRESETS.map((w) =>
+        `<button class="${w.id === p.id ? 'on' : ''}" data-w="${w.id}" title="${esc(w.note)}">${esc(w.label)}</button>`
+      ).join('');
+      document.getElementById('wnote').innerHTML = p.id === 'default'
+        ? esc(p.note)
+        : `${esc(p.note)} ${movement(weighted(p.id))} ` +
+          'Everywhere else stays on Default.';
+      document.getElementById('wsel').querySelectorAll('button').forEach((b) => {
+        b.addEventListener('click', () => {
+          if (b.dataset.w === presetId) return;
+          presetId = b.dataset.w;
+          savePreset(presetId);
+          draw();
+        });
+      });
+    }
+
+    function draw() {
+      renderWbar();
+      build(weighted(presetId));
+    }
+
+    // `all` is the universe as the chosen weighting sees it — identical to the
+    // snapshot on Default, and a re-scored copy otherwise.
+    function build(all) {
+      const asOf = ASOF;
+      const weightNote = presetId === 'default' ? ''
+        : ` Momentum is re-scored under the <b>${esc(Screens.presetById(presetId).label)}</b> weighting.`;
       document.getElementById('lede').innerHTML =
         `Nine screens the sorted table can't give you — which way momentum is moving, where a base is ` +
         `turning, what has just started moving, what is drifting after a beat, what looks cheap on its ` +
         `own numbers, and what is stretched. ` +
-        `Built from the raw data, not the composite scores. ${all.length} tickers, as of ${esc(asOf)}.`;
+        `Built from the raw data, not the composite scores. ${all.length} tickers, as of ${esc(asOf)}.` +
+        weightNote;
 
       const out = [];
 
@@ -374,7 +491,7 @@
           return i < 0 ? null : `${i + 1}/${ranked.length}`;
         },
       });
-    })();
+    }
   </script>
 </body>
 </html>

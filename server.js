@@ -1408,6 +1408,7 @@ function scoreFactors(comps, minWeightFrac = 0) {
     score: Math.round(score01 * 1000) / 10, // 0–100
     rating: Math.max(1, Math.min(10, Math.round(score01 * 9 + 1))),
     breakdown: comps.map((c) => ({
+      key: c.key || null,
       label: c.label,
       weight: c.weight,
       sub: c.sub == null ? null : Math.round(c.sub * 100) / 100,
@@ -1471,7 +1472,10 @@ function momentumAsOf(valuesBySymbol, back) {
   }
   applyScores(rows);
   const out = new Map();
-  for (const r of rows) out.set(r.symbol, r.momentumScore);
+  for (const r of rows) {
+    out.set(r.symbol, r.momentumScore == null ? null
+      : { score: r.momentumScore, breakdown: r.momentumBreakdown });
+  }
   return out;
 }
 
@@ -1528,15 +1532,18 @@ function applyScores(rows) {
 //     evidence is reversal, not continuation — the same reason the 12-1 factor
 //     skips its final month.
 function computeScores(m, x = {}) {
+  // `key` is the stable name a client re-weights against. The label is prose and
+  // may be reworded; the key is the contract, so a preset in screens.js cannot
+  // quietly stop matching because a caption was improved.
   const momComps = [
-    { label: '12-1 momentum', weight: 20, sub: x.mom121 },
-    { label: '6M return (risk-adj.)', weight: 18, sub: x.ret6m },
-    { label: '3M return (risk-adj.)', weight: 17, sub: x.ret3m },
-    { label: '% from 52W high', weight: 10, sub: x.fromHigh },
-    { label: 'Trend regime', weight: 10, sub: trendRegimeSub(m) },
-    { label: 'Consistency', weight: 10, sub: x.consistency },
-    { label: '1M reversal', weight: 8, sub: x.revers1m },
-    { label: 'RSI timing', weight: 7, sub: rsiScore(m.rsi) },
+    { key: 'mom121', label: '12-1 momentum', weight: 20, sub: x.mom121 },
+    { key: 'ret6m', label: '6M return (risk-adj.)', weight: 18, sub: x.ret6m },
+    { key: 'ret3m', label: '3M return (risk-adj.)', weight: 17, sub: x.ret3m },
+    { key: 'fromHigh', label: '% from 52W high', weight: 10, sub: x.fromHigh },
+    { key: 'trend', label: 'Trend regime', weight: 10, sub: trendRegimeSub(m) },
+    { key: 'consistency', label: 'Consistency', weight: 10, sub: x.consistency },
+    { key: 'revers1m', label: '1M reversal', weight: 8, sub: x.revers1m },
+    { key: 'rsi', label: 'RSI timing', weight: 7, sub: rsiScore(m.rsi) },
   ];
   // Earnings growth, PEG and forward P/E all describe earnings, so none of them
   // says anything useful about a company that does not have any. The feed still
@@ -1919,9 +1926,13 @@ async function computeStocks(asOf) {
       const then = momentumAsOf(valuesBySymbol, MOM_LOOKBACK);
       for (const row of stocks) {
         const was = then.get(row.symbol);
-        row.momentumScorePrev = was == null ? null : Math.round(was * 10) / 10;
+        row.momentumScorePrev = was == null ? null : Math.round(was.score * 10) / 10;
         row.momentumChange = (was == null || row.momentumScore == null)
-          ? null : Math.round((row.momentumScore - was) * 10) / 10;
+          ? null : Math.round((row.momentumScore - was.score) * 10) / 10;
+        // The factor sub-scores as they stood a fortnight ago. Only the analysis
+        // page's weight lens reads these — without them it could re-weight today
+        // and not the comparison, and the change column would mix two schemes.
+        row.momentumBreakdownPrev = was ? was.breakdown : null;
       }
     } catch (err) {
       console.warn('momentum: could not score the earlier date:', err.message);
@@ -2312,7 +2323,11 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   for (const k of Object.keys(src).slice(0, 40)) {
     if (/^[a-z]{1,16}$/.test(k)) collapsed[k] = !!src[k];
   }
-  await store.writePrefs(await prefsKey(req), { collapsed });
+  // Which momentum weighting the analysis page is showing. A preset id only —
+  // never a weight map, so this cannot become free per-user storage and a bad
+  // value can only ever fall back to the default.
+  const weights = /^[a-z]{1,16}$/.test(String(incoming.weights || '')) ? String(incoming.weights) : null;
+  await store.writePrefs(await prefsKey(req), weights ? { collapsed, weights } : { collapsed });
   res.json({ ok: true });
 }));
 

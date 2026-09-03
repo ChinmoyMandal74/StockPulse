@@ -392,6 +392,17 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 
 **Gated pages are no longer served raw.** `public/` is mounted wholesale, which used to hand out `/chat.html`, `/analysis.html` and `/visitors.html` at their file path and skip the guard. `GATED_PAGES` redirects those to the routed path.
 
+## Momentum weight lens
+`/analysis` carries a **Default · Trend · Steady** selector above the screens. It re-scores momentum **in the browser, on that page only** — the screener, the nightly report, the assistant and the stored snapshot all stay on Default, so the shared score remains one comparable measurement.
+
+- **It costs nothing to compute.** `momentumBreakdown` already ships every factor's sub-score to the client, so re-weighting is arithmetic on data that is already there: no refetch, no endpoint, no API credits. `applyWeights()` returns a shallow copy using the same field names, so screens and cell renderers need no idea a lens is in play.
+- **`momentumBreakdownPrev` ships too**, or the change column would re-weight today and not the fortnight-ago comparison and quietly mix two schemes.
+- **Presets key on a stable `key` per factor, not the caption.** Labels are prose and may be reworded; `key` is the contract.
+- **Weights need not total 100** — `scoreWithWeights()` renormalises over whichever factors have data, mirroring `scoreFactors()`.
+- **The axis is continuation versus caution**, not adjectives. Trend leans short-horizon, strengthens trend regime and removes the reversal brake entirely; Steady leans on 12-1 and consistency and keeps it.
+- **The bar prints how far the weighting actually moves the list** — measured live: Trend reorders 69 of 82 names, median 4 places, largest 20; Steady 75 of 82. A preset that reordered three names would be a dial that does nothing, and this says so rather than hiding it.
+- **The saved choice is a preset id in `prefs`, never a weight map**, so the endpoint cannot become free per-user storage and a bad value falls back to Default.
+
 ## Analysis screens
 **The seven predicates live in `public/screens.js`, not in the page.** `analysis.html` loads it with a `<script>` tag and `server.js` `require`s it, so the nightly report and the page can never disagree about what "bouncing off the lows" means — the same reason `rowcard.js` exists. Only the *selection* is shared (which rows, in what order); the columns, the prose and the empty messages stay with whichever surface is drawing them. Verified equivalent against the live universe on extraction: all seven lists identical, order included.
 
