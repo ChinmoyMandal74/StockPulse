@@ -321,7 +321,8 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 ### The refresh report
 Every completed Refresh all emails the owner — **whoever started it**, the job or the button. That is why it hangs off `endRefresh()` rather than the cron route: both paths converge there.
 
-- **Receipt**: actor, duration, `n/total` coverage, failed symbols, symbols still without a profile, prices-as-of, fundamentals rows recorded, bar-archive size and through-date.
+- **Receipt**: run time first and largest, then the start and finish clock times, actor, `n/total` coverage, failed symbols, symbols still without a profile, prices-as-of, fundamentals rows recorded, bar-archive size and through-date. The duration leads because it is the number that says whether the night went normally — a Refresh all that finishes in seconds did not really run.
+- **Clock times are rendered in `REPORT_TZ`, defaulting to `America/New_York`** — the runner is UTC and the reader is not. `fmtClock()` uses explicit `month`/`day`/`hour` components rather than `dateStyle`/`timeStyle`, because ECMA-402 refuses to combine those with `timeZoneName` and the throw lands in the fallback, which would quietly print UTC instead of saying so.
 - **Digest**: the seven screens run against the fresh snapshot, the day's five best and worst movers, and the highest Overall ratings.
 - A run that *stalls* sends nothing — nobody calls `endRefresh()` and the flag ages out on its own. The cron job covers that case, since it is the thing still awake.
 - `REPORT_TO` overrides the destination; unset it falls back to the owner account's email, so it works before anything is configured.

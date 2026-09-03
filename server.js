@@ -2043,7 +2043,27 @@ const REPORT_MOVERS = 5;
 function fmtDuration(ms) {
   const sec = Math.max(0, Math.round(ms / 1000));
   if (sec < 60) return sec + 's';
-  return Math.floor(sec / 60) + 'm ' + String(sec % 60).padStart(2, '0') + 's';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return min + 'm ' + String(sec % 60).padStart(2, '0') + 's';
+  return Math.floor(min / 60) + 'h ' + String(min % 60).padStart(2, '0') + 'm';
+}
+
+// Wall-clock start, in the market's own timezone rather than the server's. The
+// runner is UTC and the reader is not, so "00:03" would need translating every
+// night; REPORT_TZ exists for whoever eventually reads this somewhere else.
+function fmtClock(ms) {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: process.env.REPORT_TZ || 'America/New_York',
+      // Explicit components rather than dateStyle/timeStyle: ECMA-402 refuses
+      // to combine those with timeZoneName, and the throw lands in the catch
+      // below, which would quietly print UTC instead of saying so.
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    }).format(new Date(ms));
+  } catch {
+    return new Date(ms).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+  }
 }
 
 const escHtml = (t) => String(t == null ? '' : t)
@@ -2089,6 +2109,7 @@ async function buildRefreshReport(state, snap) {
       .sort((a, b) => b.overallScore - a.overallScore).slice(0, REPORT_MOVERS),
     screens: Screens.run(live),
     actor: state.actor || 'unknown',
+    startedAt: state.startedAt,
     duration: fmtDuration(Date.now() - state.startedAt),
   };
 }
@@ -2105,8 +2126,10 @@ function refreshReportBodies(r) {
     `Refresh all — ${r.loaded.length} of ${r.live.length} profiles`,
     r.complete ? 'Complete.' : 'Incomplete — see below.',
     '',
-    line('Triggered by', r.actor),
     line('Took', r.duration),
+    line('Started', fmtClock(r.startedAt)),
+    line('Finished', fmtClock(Date.now())),
+    line('Triggered by', r.actor),
     line('Prices as of', r.asOf || '—'),
     line('Fundamentals', fundLine),
     line('Bar archive', barLine),
@@ -2174,8 +2197,14 @@ function refreshReportBodies(r) {
     `<h2 style="margin:0;font-size:18px">Refresh all — ` +
     `<span style="color:${tone}">${r.loaded.length} of ${r.live.length}</span></h2>` +
     `<p style="margin:4px 0 16px;color:#777;font-size:13px">` +
-    `${r.complete ? 'Complete' : 'Incomplete'} · ${escHtml(r.actor)} · ${escHtml(r.duration)}</p>` +
+    `${r.complete ? 'Complete' : 'Incomplete'} · ${escHtml(r.actor)}</p>` +
     '<table style="border-collapse:collapse">' +
+    // The run time leads: it is the number that says whether the night went
+    // normally, and a Refresh all that finishes in seconds did not really run.
+    `<tr><td style="${cell};color:#777;white-space:nowrap">Took</td>` +
+    `<td style="padding:3px 10px 3px 0;font-size:15px;font-weight:600">${escHtml(r.duration)}</td></tr>` +
+    kv('Started', fmtClock(r.startedAt)) +
+    kv('Finished', fmtClock(Date.now())) +
     kv('Prices as of', r.asOf || '—') + kv('Fundamentals', fundLine) + kv('Bar archive', barLine) +
     '</table>' + problems +
     '<h3 style="margin:22px 0 6px;font-size:14px">Movers today</h3>' +
