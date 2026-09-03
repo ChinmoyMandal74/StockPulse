@@ -33,11 +33,62 @@
     h1 { margin: 0; font-size: clamp(28px, 3.4vw, 38px); font-weight: 600;
          letter-spacing: -0.035em; line-height: 1; font-family: var(--mono); }
     .co { font-size: 15px; color: var(--muted); letter-spacing: -0.01em; }
+
+    /* The symbol doubles as the way to reach another one. Styled to look like
+       the heading it replaced, so the page does not grow a control: the caret
+       is the only thing that says it opens. */
+    .sympick { position: relative; }
+    #symBtn {
+      display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+      margin: 0; padding: 2px 6px 2px 0; border: 0; background: none; border-radius: 10px;
+      font: inherit; color: inherit; letter-spacing: inherit;
+      transition: background 0.35s var(--ease);
+    }
+    #symBtn:hover, #symBtn[aria-expanded="true"] { background: rgba(255, 255, 255, 0.05); }
+    #symBtn .caret { width: 15px; height: 15px; color: var(--faint); flex: none;
+                     transition: transform 0.4s var(--ease), color 0.35s var(--ease); }
+    #symBtn:hover .caret { color: var(--muted); }
+    #symBtn[aria-expanded="true"] .caret { transform: rotate(180deg); }
+
+    #symMenu {
+      position: absolute; top: calc(100% + 8px); left: 0; z-index: var(--z-nav);
+      display: none; width: 320px; max-width: calc(100vw - 32px);
+      padding: 6px; border-radius: 18px;
+      background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      box-shadow: 0 34px 70px -24px rgba(0, 0, 0, 0.95);
+    }
+    #symMenu.open { display: block; }
+    #symMenu .menucore { background: rgba(10, 12, 17, 0.92); border-radius: 13px;
+                         padding: 8px; box-shadow: var(--inset); }
+    #symFilter {
+      width: 100%; padding: 8px 11px; margin-bottom: 6px; border-radius: 10px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      color: var(--text); font-family: var(--sans); font-size: 13px; outline: none;
+      transition: border-color 0.35s var(--ease);
+    }
+    #symFilter:focus { border-color: var(--hair-2); }
+    #symList { max-height: 46vh; overflow-y: auto; scrollbar-width: thin; }
+    #symList .opt {
+      display: flex; align-items: baseline; gap: 9px; width: 100%;
+      padding: 7px 10px; border: 0; border-radius: 9px; cursor: pointer;
+      background: none; color: var(--text); text-align: left; font-family: var(--sans);
+      transition: background 0.25s var(--ease);
+    }
+    #symList .opt .s { font-family: var(--mono); font-size: 12.5px; font-weight: 600;
+                       min-width: 62px; flex: none; }
+    #symList .opt .n { font-size: 12px; color: var(--faint); overflow: hidden;
+                       text-overflow: ellipsis; white-space: nowrap; }
+    #symList .opt:hover, #symList .opt.active { background: rgba(255, 255, 255, 0.07); }
+    #symList .opt.here .s { color: var(--accent); }
+    #symList .none { padding: 12px 10px; font-size: 12px; color: var(--faint); }
     .px { margin-left: auto; text-align: right; align-self: flex-end; }
     .px b { display: block; font-family: var(--mono); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
     .px span { font-family: var(--mono); font-size: 12.5px; }
     .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
             font-size: 12px; color: var(--faint); }
+    .chip.has-tip { cursor: help; border-color: var(--hair-2); }
+    .chip.has-tip:hover { background: rgba(255, 255, 255, 0.06); }
     .chip { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hair);
             background: rgba(255, 255, 255, 0.03); color: var(--muted); }
 
@@ -185,6 +236,7 @@
 
   <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
     <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15.2l5.5-5.7"/></symbol>
   </svg>
 
   <div class="island-wrap">
@@ -378,16 +430,28 @@
 
       const price = stock.price != null ? curSym(stock.currency) + stock.price.toFixed(2) : '—';
       const today = stock.todayPct;
+      // Rank is the one chip with a calculation behind it, so it is the one that
+      // opens the breakdown; the rest are plain labels.
       const chips = []
-        .concat(stock.sector ? [esc(stock.sector)] : [])
-        .concat((stock.portfolios || []).map(esc))
-        .concat(payload.rank ? [`Rank ${payload.rank} of ${payload.rankTotal}`] : []);
+        .concat(stock.sector ? [{ t: esc(stock.sector) }] : [])
+        .concat((stock.portfolios || []).map((x) => ({ t: esc(x) })))
+        .concat(payload.rank ? [{ t: `Rank ${payload.rank} of ${payload.rankTotal}`, tip: 'rank' }] : []);
 
       document.getElementById('page').innerHTML = `
         <div class="head">
-          <h1>${esc(stock.symbol)}</h1>
+          <h1 class="sympick">
+            <button id="symBtn" aria-expanded="false" aria-haspopup="listbox"
+                    title="Pick another stock">${esc(stock.symbol)}<svg class="caret ic" aria-hidden="true"><use href="#i-chevron" /></svg></button>
+            <div id="symMenu"><div class="menucore">
+              <input id="symFilter" type="text" placeholder="Filter by symbol or name"
+                     autocomplete="off" spellcheck="false" />
+              <div id="symList" role="listbox"></div>
+            </div></div>
+          </h1>
           <span class="co">${esc(stock.name || '')}</span>
-          <span class="meta">${chips.map((c) => `<span class="chip">${c}</span>`).join('')}</span>
+          <span class="meta">${chips.map((c) =>
+            `<span class="chip${c.tip ? ' has-tip' : ''}"${c.tip ? ` data-tip="${c.tip}"` : ''}>${c.t}</span>`
+          ).join('')}</span>
           <span class="px"><b>${esc(price)}</b>
             <span class="${today == null ? 'na' : today >= 0 ? 'pos' : 'neg'}">${
               today == null ? '—' : (today >= 0 ? '+' : '') + today.toFixed(2) + '% today'}</span></span>
@@ -409,12 +473,129 @@
           <div class="sec-h"><h2>Everything the screener knows</h2></div>
           <div class="fields">${RowCard.buildSections(stock, {
             colors: RowCard.GROUP_COLORS, labels: RowCard.GROUP_LABELS, rank: payload.rank,
+            // There is no table to hover here, so the scores would otherwise be
+            // four bare numbers with nothing to explain them.
+            tips: true,
           })}</div>
         </section></div>
 
         <p class="later">Prices as of ${esc(payload.updatedAt ? new Date(payload.updatedAt).toLocaleString() : 'n/a')}.
         More charts will land on this page.</p>
       `;
+
+      // ---- symbol picker ------------------------------------------------------
+      // The masthead symbol opens the whole universe, alphabetically, with a
+      // filter over symbol and name. A plain navigation rather than swapping the
+      // page in place: back and forward keep working, and the per-symbol history
+      // fetch dominates the timing anyway.
+      const symBtn = document.getElementById('symBtn');
+      const symMenu = document.getElementById('symMenu');
+      const symFilter = document.getElementById('symFilter');
+      const symList = document.getElementById('symList');
+      const universe = payload.universe || [];
+      let shown = universe;
+      let active = -1;
+
+      function drawList() {
+        const q = symFilter.value.trim().toLowerCase();
+        shown = !q ? universe : universe.filter((x) =>
+          x.symbol.toLowerCase().includes(q) || x.name.toLowerCase().includes(q));
+        active = shown.length ? 0 : -1;
+        // Typing has its own first match; with no filter the eye wants the stock
+        // it is already looking at.
+        if (!q) {
+          const i = shown.findIndex((x) => x.symbol === stock.symbol);
+          if (i >= 0) active = i;
+        }
+        symList.innerHTML = shown.length
+          ? shown.map((x, i) =>
+              `<button class="opt${x.symbol === stock.symbol ? ' here' : ''}${i === active ? ' active' : ''}" ` +
+              `role="option" aria-selected="${i === active}" data-sym="${esc(x.symbol)}">` +
+              `<span class="s">${esc(x.symbol)}</span><span class="n">${esc(x.name)}</span></button>`).join('')
+          : '<div class="none">Nothing matches that.</div>';
+        scrollActiveIntoView('center');
+      }
+
+      // 'center' when the list is rebuilt, so opening on a stock two-thirds down
+      // the alphabet does not leave it pinned to the bottom edge; 'nearest' while
+      // arrowing, which should scroll as little as possible.
+      function scrollActiveIntoView(mode) {
+        const el = symList.children[active];
+        if (el && el.scrollIntoView) el.scrollIntoView({ block: mode || 'nearest' });
+      }
+
+      function markActive(next) {
+        if (!shown.length) return;
+        const els = symList.querySelectorAll('.opt');
+        if (els[active]) { els[active].classList.remove('active'); els[active].setAttribute('aria-selected', 'false'); }
+        active = (next + shown.length) % shown.length;
+        if (els[active]) { els[active].classList.add('active'); els[active].setAttribute('aria-selected', 'true'); }
+        scrollActiveIntoView();
+      }
+
+      function go(sym) {
+        if (sym && sym !== stock.symbol) window.location.href = '/stock/' + encodeURIComponent(sym);
+        else closeSym();
+      }
+
+      function openSym() {
+        symMenu.classList.add('open');
+        symBtn.setAttribute('aria-expanded', 'true');
+        symFilter.value = '';
+        drawList();
+        symFilter.focus();
+      }
+      function closeSym() {
+        symMenu.classList.remove('open');
+        symBtn.setAttribute('aria-expanded', 'false');
+      }
+      const symOpen = () => symMenu.classList.contains('open');
+
+      symBtn.addEventListener('click', (e) => { e.stopPropagation(); symOpen() ? closeSym() : openSym(); });
+      symFilter.addEventListener('input', drawList);
+      symList.addEventListener('click', (e) => {
+        const b = e.target.closest('.opt');
+        if (b) go(b.dataset.sym);
+      });
+      symMenu.addEventListener('click', (e) => e.stopPropagation());
+      document.addEventListener('click', () => { if (symOpen()) closeSym(); });
+      window.addEventListener('resize', () => { if (symOpen()) closeSym(); });
+
+      symFilter.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); markActive(active + 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); markActive(active - 1); }
+        else if (e.key === 'Enter') { e.preventDefault(); if (shown[active]) go(shown[active].symbol); }
+        else if (e.key === 'Escape') { e.preventDefault(); closeSym(); symBtn.focus(); }
+      });
+
+      // ---- score breakdown on hover -----------------------------------------
+      // Markup from rowcard.js, so this page and the screener explain a score
+      // identically. Rank has no factors of its own — it is a position in a
+      // sorted list — so what its card explains is the number it sorts on.
+      const tipEl = document.getElementById('tip');
+      const pulled = payload.updatedAt
+        ? new Date(payload.updatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+        : null;
+
+      function hideTip() { tipEl.style.display = 'none'; }
+
+      document.querySelectorAll('[data-tip]').forEach((el) => {
+        el.addEventListener('mouseenter', () => {
+          const html = RowCard.scoreTip(stock, el.dataset.tip, {
+            pulled, rank: payload.rank, rankTotal: payload.rankTotal,
+          });
+          if (!html) return;
+          tipEl.innerHTML = `<div class="tipcore">${html}</div>`;
+          tipEl.style.display = 'block';
+          RowCard.placeTip(tipEl, el);
+        });
+        el.addEventListener('mouseleave', hideTip);
+      });
+      window.addEventListener('scroll', hideTip, true);
+      window.addEventListener('resize', hideTip);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { hideTip(); if (symOpen()) closeSym(); }
+      });
 
       // ---- hover crosshair ---------------------------------------------------
       const chartEl = document.getElementById('chart');
@@ -495,5 +676,6 @@
       paintChart();
     })();
   </script>
+  <div id="tip"></div>
 </body>
 </html>

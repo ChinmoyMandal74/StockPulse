@@ -1946,6 +1946,14 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     stock,
     rank: rank >= 0 ? rank + 1 : null,
     rankTotal: ranked.length,
+    // The symbol picker's list. The whole snapshot is already in memory to work
+    // out the rank above, so this costs a map and ~3 KB rather than a query.
+    // Alphabetical, because the picker is for reaching a ticker you have in
+    // mind; the filter box does the rest.
+    universe: stocks
+      .filter((x) => !x.error)
+      .map((x) => ({ symbol: x.symbol, name: x.name || '' }))
+      .sort((a, b) => a.symbol.localeCompare(b.symbol)),
     updatedAt: snap.updatedAt || null,
   });
 }));

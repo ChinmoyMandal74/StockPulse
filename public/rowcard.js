@@ -408,7 +408,104 @@
   // Every field of a row, grouped and coloured. Shared by the hover card and
   // the stock page so FIELD_SPEC stays the single description of a row —
   // the same reason the card exists rather than a second copy of the table.
+
+  // ---- score breakdown tooltip ---------------------------------------------
+  // Lives here rather than in index.html because the stock page explains the
+  // same three numbers and a second copy would drift — the reason this module
+  // exists at all. Only the markup is shared; each page owns its own hover
+  // wiring, since one hovers table cells and the other a chip and a card row.
+
+  function factorRow(b) {
+    if (b.sub == null) {
+      return `<div class="tip-row off"><span class="lbl">${esc(b.label)} <em>${b.weight}%</em></span>` +
+             '<span class="val">n/a</span></div>';
+    }
+    const pct = Math.round(b.sub * 100);
+    return `<div class="tip-row"><span class="lbl">${esc(b.label)} <em>${b.weight}%</em></span>` +
+      `<span class="tip-bar"><i style="width:${pct}%"></i></span><span class="val">${pct}</span></div>`;
+  }
+
+  // The two halves of Overall, as bars. Shared by the 'overall' and 'rank'
+  // tooltips, which differ only in what they put above them.
+  function overallRows(s) {
+    const parts = [];
+    if (s.momentumScore != null) parts.push(['Momentum', s.momentumScore, 65]);
+    if (s.qualityScore != null) parts.push(['Quality', s.qualityScore, 35]);
+    const rows = parts.map(([lbl, sc, w]) => {
+      const pct = Math.round(sc);
+      return `<div class="tip-row"><span class="lbl">${lbl} <em>${parts.length > 1 ? w + '%' : 'only'}</em></span>` +
+        `<span class="tip-bar"><i style="width:${pct}%"></i></span><span class="val">${pct}</span></div>`;
+    }).join('');
+    const note = parts.length > 1
+      ? 'Overall = 65% Momentum + 35% Quality.'
+      : 'Overall = Momentum only (no company data).';
+    return { rows, note, count: parts.length };
+  }
+
+  // kind: 'overall' | 'momentum' | 'quality' | 'rank'.
+  // opts: { pulled, rank, rankTotal } — `pulled` is the "as of" line, and the
+  // two rank fields are only read by the 'rank' kind.
+  // Returns null when there is nothing to explain, so a caller can skip showing.
+  function scoreTip(s, kind, opts) {
+    const o = opts || {};
+    const foot = o.pulled ? ` · pulled ${esc(o.pulled)}` : '';
+
+    if (kind === 'rank') {
+      if (!o.rank) return null;
+      const { rows, note } = overallRows(s);
+      // Rank is not a factor of its own — it is a position in a sorted list, so
+      // what needs explaining is the number it sorts on.
+      return `<div class="tip-head">Rank ${esc(o.rank)} of ${esc(o.rankTotal)} ` +
+        `<span>· by Overall score</span></div>` + rows +
+        `<div class="tip-foot">Ranked on Overall score${s.overallScore != null ? ` (${s.overallScore}/100)` : ''}, ` +
+        `highest first, across every stock in the screener. ${note}${foot}</div>`;
+    }
+
+    if (kind === 'overall') {
+      if (s.overallRating == null) return null;
+      const { rows, note } = overallRows(s);
+      return `<div class="tip-head">Overall ${s.overallRating}/10 ` +
+        `<span>· score ${s.overallScore}/100</span></div>` + rows +
+        `<div class="tip-foot">${note}${foot}</div>`;
+    }
+
+    const quality = kind === 'quality';
+    const bd = quality ? s.qualityBreakdown : s.momentumBreakdown;
+    if (!bd) return null;
+    const rating = quality ? s.qualityRating : s.momentumRating;
+    const score = quality ? s.qualityScore : s.momentumScore;
+    const label = quality ? 'Quality' : 'Momentum';
+    const totalW = bd.reduce((a, b) => a + b.weight, 0);
+    const availW = bd.reduce((a, b) => a + (b.sub != null ? b.weight : 0), 0);
+    const conf = totalW ? Math.round((availW / totalW) * 100) : 0;
+    return `<div class="tip-head">${label} ${rating}/10 ` +
+      `<span>· score ${score}/100 · ${conf}% of factors</span></div>` +
+      bd.map(factorRow).join('') +
+      `<div class="tip-foot">Confidence ${conf}%: share of factor-weight with data ` +
+      `(rest excluded &amp; renormalized).${foot}</div>`;
+  }
+
+  // Clamp the card beside its anchor and inside the viewport — preferring the
+  // right, falling back to the left rather than hanging off the edge.
+  function placeTip(tip, el) {
+    const r = el.getBoundingClientRect();
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let left = r.right + 8;
+    if (left + tw > window.innerWidth - 8) left = r.left - tw - 8;
+    if (left < 8) left = 8;
+    let top = r.top;
+    if (top + th > window.innerHeight - 8) top = window.innerHeight - th - 8;
+    if (top < 8) top = 8;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+
   // opts: { colors, labels, rank }
+  // Which rank-group rows carry a breakdown, when a caller asks for them.
+  // Off by default: inside the hover card these rows are already in a tooltip,
+  // and a tooltip on a tooltip helps nobody.
+  const ROW_TIPS = { 'Overall': 'overall', 'Mom.': 'momentum', 'Qual.': 'quality', 'Rank': 'rank' };
+
   function buildSections(s, opts) {
     const o = opts || {};
     const colors = o.colors || {};
@@ -431,10 +528,12 @@
       .filter((g) => byGroup[g] && byGroup[g].some((r) => r.t !== '—'))
       .map((g) => {
         const c = colors[g] || 'var(--accent)';
-        const rows = byGroup[g].map((r) =>
-          `<div class="rc-row"><span class="rc-k">${esc(r.k)}</span>` +
-          `<span class="rc-v ${r.c}"${r.b ? ' style="font-weight:600"' : ''}>${esc(r.t)}</span></div>`
-        ).join('');
+        const rows = byGroup[g].map((r) => {
+          const tip = o.tips && g === 'rank' ? ROW_TIPS[r.k] : null;
+          return `<div class="rc-row${tip ? ' has-tip' : ''}"${tip ? ` data-tip="${tip}"` : ''}>` +
+            `<span class="rc-k">${esc(r.k)}</span>` +
+            `<span class="rc-v ${r.c}"${r.b ? ' style="font-weight:600"' : ''}>${esc(r.t)}</span></div>`;
+        }).join('');
         return `<div class="rc-sec"><div class="rc-sec-h" style="color:${c}"><i></i>` +
                `${esc(labels[g] || g)}</div>${rows}</div>`;
       }).join('');
@@ -551,6 +650,7 @@
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
     // used by the stock page
     buildSections, chartSVG, sparkSVG, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries,
+    scoreTip, placeTip,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS,
   };
 })(window);
