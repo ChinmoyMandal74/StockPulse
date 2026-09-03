@@ -261,6 +261,59 @@ app.get('/api/me', route(async (req, res) => {
 
 // Create an account. The first account created becomes the owner, so a fresh
 // install can bootstrap itself; everyone after that is a read-only member.
+// Registration is open, so the owner is told each time somebody takes the link
+// up on it — both as a welcome and as the moderation prompt, since removing an
+// account is the only lever there is.
+//
+// Never sent for the very first account: that one becomes the owner, so the
+// note would be an email telling you that you had joined your own site.
+async function sendSignupNotice(email, role) {
+  if (!MAIL_READY || role === 'owner') return false;
+  try {
+    const to = await operatorEmail();
+    if (!to || to.toLowerCase() === email.toLowerCase()) return false;
+
+    const total = await store.countUsers();
+    const rows = [
+      ['Email', email],
+      ['Role', role],
+      ['Joined', fmtClock(Date.now())],
+      ['Accounts now', String(total)],
+    ].map(([k, v]) =>
+      `<tr><td style="padding:3px 14px 3px 0;font-size:14px;color:${MC.mute};white-space:nowrap">${mailEsc(k)}</td>` +
+      `<td style="padding:3px 0;font-size:14px;color:${MC.ink}">${mailEsc(v)}</td></tr>`).join('');
+
+    const note = 'Sign-up is open, so anyone with the link can create an account. ' +
+      'Replying to this email answers the new member directly.';
+
+    return await sendMail({
+      to,
+      // The address came from the form, but it has just been used to create an
+      // account, so a reply reaches the person who typed it.
+      replyTo: email,
+      subject: `New sign-up: ${email}`,
+      text: textShell({
+        heading: 'New sign-up',
+        intro: `${email} just created an account.`,
+        lines: [`Role: ${role}`, `Joined: ${fmtClock(Date.now())}`, `Accounts now: ${total}`]
+          .concat(APP_URL ? ['', `${APP_URL}/users`] : []),
+        note,
+      }),
+      html: emailShell({
+        heading: 'New sign-up',
+        intro: `${email} just created an account.`,
+        body: `<table role="presentation" cellpadding="0" cellspacing="0" border="0" ` +
+          `style="margin-top:18px">${rows}</table>` +
+          (APP_URL ? mailButton(`${APP_URL}/users`, 'Manage accounts') : ''),
+        note,
+      }),
+    });
+  } catch (err) {
+    console.warn('signup notice: could not send (registration unaffected):', err.message);
+    return false;
+  }
+}
+
 // A new account gets one note: what this is, and the one thing worth doing
 // first. Never allowed to fail the registration that triggered it — an account
 // that exists but could not be greeted is still a working account.
@@ -339,8 +392,10 @@ app.post('/api/register', route(async (req, res) => {
   res.json({ ok: true, user: { email, role } });
 
   // After the response: the account is made and the session is set, so a slow
-  // or failing mail provider must not hold up the sign-up or fail it.
+  // or failing mail provider must not hold up the sign-up or fail it. The two
+  // notes go to different people and neither depends on the other.
   sendWelcome(email, role).catch(() => {});
+  sendSignupNotice(email, role).catch(() => {});
 }));
 
 // Sign in with an account. Passing only a password (no email) still works and
@@ -576,6 +631,11 @@ async function ownerEmail() {
 
 async function contactDestination() {
   return process.env.CONTACT_TO || (await ownerEmail());
+}
+
+// Where operational mail goes — the refresh report and the sign-up notice.
+async function operatorEmail() {
+  return process.env.REPORT_TO || (await ownerEmail());
 }
 
 // Signed-in only, so every sender is a known account and there is no honeypot
@@ -2488,7 +2548,7 @@ async function sendRefreshReport(state, kind = 'all') {
   if (!state) return false;          // nothing was cleared — someone else reported this run
   if (!MAIL_READY) return false;
   try {
-    const to = process.env.REPORT_TO || (await ownerEmail());
+    const to = await operatorEmail();
     if (!to) return false;
     const r = await buildRefreshReport(state, await readSnapshot(), kind);
     const { text, html } = refreshReportBodies(r);

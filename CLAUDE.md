@@ -82,7 +82,9 @@ Accounts live in Turso (`users`, `sessions`). Passwords are hashed with **`crypt
 - **`mailButton()` wraps the pill in a table cell** — Outlook ignores `border-radius` on an `<a>`, so the radius goes on the cell.
 - **The From display name comes from `BRAND`, not from `MAIL_FROM`.** `fromHeader()` keeps only the address out of that variable, so renaming the product cannot leave a stale name sitting in everyone's inbox — which is exactly what happened when Ticker Lab became Tickr Lab.
 - **A hidden preheader repeats the intro**, so the grey line clients print beside the subject is the real first sentence rather than whatever markup happens to come first.
-- **The welcome email is sent after the response**, `sendWelcome(...).catch(() => {})`. The account and session already exist by then, so a slow or failing mail provider can never hold up or fail a registration.
+- **Registration sends two notes to two people**, both after the response and both with their rejections swallowed — the account and session already exist by then, so a slow or failing mail provider can never hold up or fail a sign-up. `sendWelcome()` greets the new member; `sendSignupNotice()` tells the operator, with `Reply-To` set to the new member so a welcome reply reaches them directly.
+- **The sign-up notice is skipped for the very first account**, which becomes the owner — otherwise it is an email telling you that you have joined your own site. It is skipped again when the destination *is* the address that just registered. Both guards are verified.
+- **`operatorEmail()` (`REPORT_TO`, else the owner account) resolves the destination for both the refresh report and the sign-up notice**, so the two cannot drift apart. `contactDestination()` stays separate because `CONTACT_TO` is a deliberately different inbox.
 
 Sent through **Resend** over plain `fetch` — a REST call does not justify a fourth dependency. Needs `RESEND_API_KEY`, `MAIL_FROM` and `APP_URL`; without all three `MAIL_READY` is false and `/api/forgot` still returns its normal reply while logging that mail is unconfigured, so the endpoint never reveals the difference.
 
