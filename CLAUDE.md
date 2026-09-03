@@ -3,7 +3,7 @@
 ## What this is
 A stock momentum screener POC. State lives in **Turso** (hosted libSQL/SQLite). Price data comes from the Twelve Data API. The owner (admin) manages portfolios and refreshes data; the public sees a read-only cached snapshot.
 
-The repo/folder is `StockPulse`; the app is branded **Ticker Lab** in the UI (`<title>` and the bar wordmark).
+The repo/folder is `StockPulse`; the app is branded **Tickr Lab** in the UI (`<title>` and the bar wordmark).
 
 ## Running the app
 ```
@@ -75,6 +75,15 @@ Accounts live in Turso (`users`, `sessions`). Passwords are hashed with **`crypt
 - `isAdmin(req)` and `isSignedIn(req)` are **async** now — always `await` them. `requireAdmin` / `requireAuth` are middleware built on the `route()` wrapper.
 
 ## Email
+**Every message goes through one shell.** `emailShell()` and `textShell()` in `server.js` wrap a dark header carrying the wordmark, a white card, and a footer with the tagline, the site link and a one-line note saying why this particular message arrived — the question a reader asks first about mail they did not expect. Four messages use it: the welcome, the password reset, the contact form and the refresh report.
+
+- **Tables and inline styles, not the app's CSS.** Outlook renders through Word, most clients strip `<style>` blocks, and neither flexbox nor grid is available. The wordmark is text rather than an image, because images are blocked by default in most clients and a logo would leave a broken box exactly where the brand should be.
+- **The palette is for a light background**, not lifted from the app. Mail clients invert or ignore dark themes unpredictably, and a screenshot-black email arrives unreadable somewhere.
+- **`mailButton()` wraps the pill in a table cell** — Outlook ignores `border-radius` on an `<a>`, so the radius goes on the cell.
+- **The From display name comes from `BRAND`, not from `MAIL_FROM`.** `fromHeader()` keeps only the address out of that variable, so renaming the product cannot leave a stale name sitting in everyone's inbox — which is exactly what happened when Ticker Lab became Tickr Lab.
+- **A hidden preheader repeats the intro**, so the grey line clients print beside the subject is the real first sentence rather than whatever markup happens to come first.
+- **The welcome email is sent after the response**, `sendWelcome(...).catch(() => {})`. The account and session already exist by then, so a slow or failing mail provider can never hold up or fail a registration.
+
 Sent through **Resend** over plain `fetch` — a REST call does not justify a fourth dependency. Needs `RESEND_API_KEY`, `MAIL_FROM` and `APP_URL`; without all three `MAIL_READY` is false and `/api/forgot` still returns its normal reply while logging that mail is unconfigured, so the endpoint never reveals the difference.
 
 - **Sending is scoped to `mail.tickrlab.com`**, a subdomain, so a reputation problem cannot reach the domain the site is served from. SPF, DKIM and an `MX` for bounce feedback live under it; **DMARC sits at the root** (`_dmarc`), where one policy covers every subdomain.
@@ -83,7 +92,7 @@ Sent through **Resend** over plain `fetch` — a REST call does not justify a fo
 - **Nothing receives mail at the sending address.** Set `MAIL_REPLY_TO` to a real inbox, or add a forwarder (ImprovMX or Forward Email work with Vercel DNS; Cloudflare Email Routing does not, since it needs Cloudflare as the DNS host).
 - Upstream errors are logged by type only, never echoed to the client — the response body can restate the request, and the key travels in the same headers.
 - **`/contact` is signed-in only**, which is what makes it safe without a captcha or a honeypot: every sender is a known account and the address comes off the session rather than a form field. That is also why the address can be used as `Reply-To` — replying in a mail client answers the person, not the server.
-- **The subject has CR and LF stripped, not escaped.** A newline in a header is how a subject line becomes extra headers; the body is the only place free text belongs. The subject is prefixed `[Ticker Lab]` and capped at 120 characters, the body at 4,000.
+- **The subject has CR and LF stripped, not escaped.** A newline in a header is how a subject line becomes extra headers; the body is the only place free text belongs. The subject is prefixed `[Tickr Lab]` and capped at 120 characters, the body at 4,000.
 - **Destination is `CONTACT_TO`, falling back to the owner account's email**, so the form works even if the variable is never set.
 - The daily cap reuses `chat_usage` under a `contact:` key prefix — that table is a generic per-key-per-day counter that happens to be named for its first caller.
 

@@ -261,6 +261,57 @@ app.get('/api/me', route(async (req, res) => {
 
 // Create an account. The first account created becomes the owner, so a fresh
 // install can bootstrap itself; everyone after that is a read-only member.
+// A new account gets one note: what this is, and the one thing worth doing
+// first. Never allowed to fail the registration that triggered it — an account
+// that exists but could not be greeted is still a working account.
+async function sendWelcome(email, role) {
+  if (!MAIL_READY) return false;
+  try {
+    const owner = role === 'owner';
+    const intro = owner
+      ? `Your ${BRAND} instance is live, and this first account owns it.`
+      : `You now have access to ${BRAND} — a momentum screener for a watchlist of stocks, ` +
+        'refreshed after every close.';
+    const bullets = [
+      ['The screener', 'Every ticker scored on momentum and quality, with 48 columns you can ' +
+        'collapse into groups and sort however you like.'],
+      ['Signal screens', 'Seven views the sorted table cannot give you — bases turning up, ' +
+        'names that have just started moving, earnings drift, and what is stretched.'],
+      ['Ask', 'Put a question to the data in plain English rather than reading down a column.'],
+    ];
+    if (owner) {
+      bullets.push(['Refresh all', 'Re-pulls every company profile and emails you a report ' +
+        'when it finishes. It also runs on its own each evening.']);
+    }
+    const rows = bullets.map(([h, d]) =>
+      `<tr><td style="padding:0 0 14px"><strong style="color:${MC.ink}">${h}</strong><br>` +
+      `<span style="color:${MC.mute};font-size:14px">${d}</span></td></tr>`).join('');
+
+    return await sendMail({
+      to: email,
+      replyTo: process.env.MAIL_REPLY_TO || undefined,
+      subject: `Welcome to ${BRAND}`,
+      text: textShell({
+        heading: `Welcome to ${BRAND}`,
+        intro,
+        lines: bullets.map(([h, d]) => `${h} — ${d}`).concat(APP_URL ? ['', APP_URL] : []),
+        note: 'You are receiving this because an account was created with this address.',
+      }),
+      html: emailShell({
+        heading: `Welcome to ${BRAND}`,
+        intro,
+        body: `<table role="presentation" cellpadding="0" cellspacing="0" border="0" ` +
+          `style="width:100%;margin-top:20px">${rows}</table>` +
+          (APP_URL ? mailButton(APP_URL, 'Open the screener') : ''),
+        note: 'You are receiving this because an account was created with this address.',
+      }),
+    });
+  } catch (err) {
+    console.warn('welcome: could not send (registration unaffected):', err.message);
+    return false;
+  }
+}
+
 app.post('/api/register', route(async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
@@ -286,6 +337,10 @@ app.post('/api/register', route(async (req, res) => {
   await store.createSession(token, Number(user.id), Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   setSessionCookie(res, token);
   res.json({ ok: true, user: { email, role } });
+
+  // After the response: the account is made and the session is set, so a slow
+  // or failing mail provider must not hold up the sign-up or fail it.
+  sendWelcome(email, role).catch(() => {});
 }));
 
 // Sign in with an account. Passing only a password (no email) still works and
@@ -373,9 +428,107 @@ const MAIL_FROM = process.env.MAIL_FROM || '';
 const APP_URL = (process.env.APP_URL || '').replace(/\/+$/, '');
 const MAIL_READY = !!(RESEND_KEY && MAIL_FROM && APP_URL);
 
+// MAIL_FROM may be a bare address or a "Name <addr>" pair. Either way the name
+// shown to a reader is the app's own.
+function fromHeader() {
+  const m = /<([^>]+)>/.exec(MAIL_FROM);
+  const addr = (m ? m[1] : MAIL_FROM).trim();
+  return `${BRAND} <${addr}>`;
+}
+
 // Resolves true when accepted. Never throws: a failed send must not decide
 // what the caller tells the user, because the reply is deliberately the same
 // either way.
+// ---- the look of an email ---------------------------------------------------
+// Every message the app sends goes through emailShell(), so a reader sees one
+// sender rather than four different-looking notes. Only the middle changes.
+//
+// Written as tables with inline styles because that is what mail clients
+// support: Outlook renders through Word, most clients strip <style> blocks, and
+// flexbox and grid are not available. The wordmark is text, not an image —
+// images are blocked by default in most clients, so a logo would leave a broken
+// box where the brand should be.
+
+const BRAND = 'Tickr Lab';
+const BRAND_TAG = 'Momentum screening, one page.';
+
+// Colours picked for a light background rather than lifted from the app: mail
+// clients invert or ignore dark themes unpredictably, and a screenshot-black
+// email tends to arrive unreadable somewhere.
+const MC = {
+  ink: '#12151c', body: '#3d4450', mute: '#6b7382', faint: '#98a0ae',
+  line: '#e4e7ec', panel: '#f6f7f9', head: '#0c0f16', accent: '#0f9d58', bad: '#c5221f',
+};
+
+const mailEsc = (t) => String(t == null ? '' : t)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// A pill button that survives Outlook, which ignores border-radius on <a>.
+function mailButton(href, label) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0">` +
+    `<tr><td style="border-radius:999px;background:${MC.head}">` +
+    `<a href="${href}" style="display:inline-block;padding:13px 26px;font-family:` +
+    `-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;` +
+    `font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:999px">` +
+    `${mailEsc(label)}</a></td></tr></table>`;
+}
+
+// `note` is the one line that says why this particular message arrived — the
+// question a reader asks first about mail they did not expect.
+function emailShell({ heading, intro, body = '', note = '' }) {
+  const sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+  const site = APP_URL || '';
+  return `<!doctype html><html><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<meta name="color-scheme" content="light"></head>` +
+    `<body style="margin:0;padding:0;background:${MC.panel}">` +
+    // Preheader: the grey line clients show beside the subject. Left to the
+    // intro rather than invented, and hidden in the body itself.
+    `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${mailEsc(intro)}</div>` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ` +
+    `style="background:${MC.panel};padding:28px 12px">` +
+    `<tr><td align="center">` +
+    `<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" ` +
+    `style="width:100%;max-width:600px;background:#ffffff;border:1px solid ${MC.line};border-radius:14px;overflow:hidden">` +
+
+    // header
+    `<tr><td style="background:${MC.head};padding:20px 28px">` +
+    `<span style="font-family:${sans};font-size:17px;font-weight:700;letter-spacing:-0.4px;color:#ffffff">Tickr</span>` +
+    `<span style="font-family:${sans};font-size:17px;font-weight:700;letter-spacing:-0.4px;color:#8b93a3"> Lab</span>` +
+    `</td></tr>` +
+
+    // content
+    `<tr><td style="padding:30px 28px 8px">` +
+    `<h1 style="margin:0 0 12px;font-family:${sans};font-size:21px;line-height:1.3;` +
+    `font-weight:700;letter-spacing:-0.4px;color:${MC.ink}">${mailEsc(heading)}</h1>` +
+    `<p style="margin:0;font-family:${sans};font-size:15px;line-height:1.62;color:${MC.body}">${mailEsc(intro)}</p>` +
+    `</td></tr>` +
+    `<tr><td style="padding:0 28px 26px;font-family:${sans};font-size:15px;line-height:1.62;color:${MC.body}">` +
+    `${body}</td></tr>` +
+
+    // footer
+    `<tr><td style="padding:18px 28px 22px;border-top:1px solid ${MC.line};background:#fbfcfd">` +
+    (note ? `<p style="margin:0 0 10px;font-family:${sans};font-size:12.5px;line-height:1.6;color:${MC.mute}">${note}</p>` : '') +
+    `<p style="margin:0;font-family:${sans};font-size:12.5px;line-height:1.6;color:${MC.faint}">` +
+    `<strong style="color:${MC.mute}">${BRAND}</strong> — ${BRAND_TAG}` +
+    (site ? `<br><a href="${site}" style="color:${MC.mute};text-decoration:underline">${site.replace(/^https?:\/\//, '')}</a>` : '') +
+    `</p></td></tr>` +
+
+    `</table></td></tr></table></body></html>`;
+}
+
+// The plain-text half gets the same treatment, or the two halves read as if they
+// came from different products.
+function textShell({ heading, intro, lines = [], note = '' }) {
+  const out = [BRAND.toUpperCase(), '='.repeat(BRAND.length), '', heading, '', intro];
+  if (lines.length) out.push('', ...lines);
+  out.push('', '—'.repeat(28));
+  if (note) out.push(note);
+  out.push(`${BRAND} — ${BRAND_TAG}`);
+  if (APP_URL) out.push(APP_URL);
+  return out.join('\n');
+}
+
 async function sendMail({ to, subject, text, html, replyTo }) {
   if (!MAIL_READY) return false;
   try {
@@ -383,7 +536,9 @@ async function sendMail({ to, subject, text, html, replyTo }) {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${RESEND_KEY}` },
       body: JSON.stringify({
-        from: MAIL_FROM,
+        // The address is configuration; the display name is the product's, so a
+        // rename cannot leave a stale name sitting in everyone's inbox.
+        from: fromHeader(),
         to: [to],
         subject,
         text,
@@ -450,17 +605,24 @@ app.post('/api/contact', requireAuth, route(async (req, res) => {
   const to = await contactDestination();
   if (!to) return res.status(503).json({ error: 'No destination address is configured.' });
 
-  const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   const ok = await sendMail({
     to,
     // Replying in a mail client answers the person, not the server.
     replyTo: who ? who.email : (process.env.MAIL_REPLY_TO || undefined),
-    subject: `[Ticker Lab] ${subject}`,
-    text: [`From: ${from}`, '', body].join('\n'),
-    html:
-      '<div style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:15px;line-height:1.6;color:#111">' +
-      `<p style="color:#666;font-size:13px;margin:0 0 14px">From <b>${esc(from)}</b></p>` +
-      `<div style="white-space:pre-wrap">${esc(body)}</div></div>`,
+    subject: `[${BRAND}] ${subject}`,
+    text: textShell({
+      heading: subject,
+      intro: `From ${from}`,
+      lines: [body],
+      note: 'Sent from the contact form. Replying to this email answers the sender directly.',
+    }),
+    html: emailShell({
+      heading: subject,
+      intro: `From ${from}`,
+      body: `<div style="white-space:pre-wrap;padding:16px 18px;border-radius:10px;` +
+        `background:${MC.panel};border:1px solid ${MC.line}">${mailEsc(body)}</div>`,
+      note: 'Sent from the contact form. Replying to this email answers the sender directly.',
+    }),
   });
   if (!ok) return res.status(502).json({ error: 'Could not send that just now. Try again shortly.' });
   res.json({ ok: true });
@@ -490,24 +652,22 @@ app.post('/api/forgot', route(async (req, res) => {
   await sendMail({
     to: email,
     replyTo: process.env.MAIL_REPLY_TO || undefined,
-    subject: 'Reset your Ticker Lab password',
-    text: [
-      'Someone asked to reset the password for this Ticker Lab account.',
-      '',
-      link,
-      '',
-      'The link works once and expires in 30 minutes.',
-      'If this was not you, ignore this email — nothing has changed.',
-    ].join('\n'),
-    html: [
-      '<div style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:15px;line-height:1.6;color:#111">',
-      '<p>Someone asked to reset the password for this Ticker Lab account.</p>',
-      `<p><a href="${link}" style="display:inline-block;padding:11px 18px;border-radius:999px;`,
-      'background:#111;color:#fff;text-decoration:none;font-weight:600">Choose a new password</a></p>',
-      '<p style="color:#666;font-size:13px">The link works once and expires in 30 minutes.<br>',
-      'If this was not you, ignore this email — nothing has changed.</p>',
-      '</div>',
-    ].join(''),
+    subject: `Reset your ${BRAND} password`,
+    text: textShell({
+      heading: 'Reset your password',
+      intro: `Someone asked to reset the password for this ${BRAND} account.`,
+      lines: [link, '', 'The link works once and expires in 30 minutes.'],
+      note: 'If this was not you, ignore this email — nothing has changed.',
+    }),
+    html: emailShell({
+      heading: 'Reset your password',
+      intro: `Someone asked to reset the password for this ${BRAND} account.`,
+      body: mailButton(link, 'Choose a new password') +
+        `<p style="margin:0;font-size:13.5px;color:${MC.mute}">The link works once and expires in ` +
+        '30 minutes. If the button does not work, paste this into your browser:<br>' +
+        `<span style="word-break:break-all;color:${MC.faint}">${mailEsc(link)}</span></p>`,
+      note: 'If this was not you, ignore this email — nothing has changed and the link will expire on its own.',
+    }),
   });
   res.json(generic);
 }));
@@ -1875,7 +2035,7 @@ function chatCsv(stocks) {
 // alone carries the cache marker and survives between questions.
 function chatRules(asOf, count) {
   return [
-    'You are the analyst built into Ticker Lab, a stock screener. You answer questions about one',
+    'You are the analyst built into Tickr Lab, a stock screener. You answer questions about one',
     'fixed table of ' + count + ' stocks, supplied below. Prices and fundamentals are a snapshot taken',
     (asOf ? 'at ' + asOf + '.' : 'at an unknown time.'),
     '',
@@ -2291,12 +2451,7 @@ function refreshReportBodies(r) {
       escHtml(r.missing.map((x) => x.symbol).join(', ')) + '</p>';
   }
 
-  const html =
-    '<div style="font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;color:#111;max-width:620px">' +
-    `<h2 style="margin:0;font-size:18px">${runName} — ` +
-    `<span style="color:${tone}">${escHtml(headCount)}</span></h2>` +
-    `<p style="margin:4px 0 16px;color:#777;font-size:13px">` +
-    `${r.complete ? 'Complete' : 'Incomplete'} · ${escHtml(r.actor)}</p>` +
+  const inner =
     '<table style="border-collapse:collapse">' +
     // The run time leads: it is the number that says whether the night went
     // normally, and a Refresh all that finishes in seconds did not really run.
@@ -2314,8 +2469,15 @@ function refreshReportBodies(r) {
     '<h3 style="margin:22px 0 6px;font-size:14px">Highest overall</h3>' +
     '<div>' + r.best.map((x) => `<span style="display:inline-block;margin:0 10px 4px 0;font-size:13px">` +
       `<b>${escHtml(rating(x))}</b> ${symLink(x)}</span>`).join('') + '</div>' +
-    (url ? `<p style="margin:24px 0 0"><a href="${url}" style="color:#1a73e8">Open the screener</a></p>` : '') +
-    '</div>';
+    '';
+
+  const html = emailShell({
+    heading: `${runName} — ${headCount}`,
+    // The duration leads the table below; repeating it here reads as a stutter.
+    intro: `${r.complete ? 'Complete' : 'Incomplete'} · started by ${r.actor}`,
+    body: inner + (url ? mailButton(url, 'Open the screener') : ''),
+    note: `Sent automatically when a ${runName} finishes.`,
+  });
 
   return { text: t.join('\n'), html };
 }
@@ -2331,8 +2493,8 @@ async function sendRefreshReport(state, kind = 'all') {
     const r = await buildRefreshReport(state, await readSnapshot(), kind);
     const { text, html } = refreshReportBodies(r);
     const subject = kind === 'all'
-      ? `[Ticker Lab] Refresh all — ${r.loaded.length}/${r.live.length}` + (r.complete ? '' : ' incomplete')
-      : `[Ticker Lab] Refresh — ${r.live.length} symbols as of ${r.asOf || 'n/a'}` +
+      ? `[Tickr Lab] Refresh all — ${r.loaded.length}/${r.live.length}` + (r.complete ? '' : ' incomplete')
+      : `[Tickr Lab] Refresh — ${r.live.length} symbols as of ${r.asOf || 'n/a'}` +
         (r.failed.length ? `, ${r.failed.length} failed` : '');
     const ok = await sendMail({ to, subject, text, html });
     console.log(`report: ${kind === 'all' ? 'refresh all' : 'refresh'} summary ` +

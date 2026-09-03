@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Stock — Ticker Lab</title>
+  <title>Stock — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -241,7 +241,7 @@
 
   <div class="island-wrap">
     <nav class="island">
-      <span class="mark"><span class="wordmark">Ticker Lab</span></span>
+      <span class="mark"><span class="wordmark">Tickr Lab</span></span>
       <span class="divider"></span>
       <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener</a>
     </nav>
@@ -426,7 +426,7 @@
       }
 
       stock = payload.stock;
-      document.title = `${stock.symbol} — Ticker Lab`;
+      document.title = `${stock.symbol} — Tickr Lab`;
 
       const price = stock.price != null ? curSym(stock.currency) + stock.price.toFixed(2) : '—';
       const today = stock.todayPct;
