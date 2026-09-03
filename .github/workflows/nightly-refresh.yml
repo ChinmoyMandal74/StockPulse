@@ -1,0 +1,103 @@
+# Nightly "Refresh all": re-pull every profile, record the day's fundamentals,
+# extend the bar archive, and email the report.
+#
+# Why a runner rather than a Vercel cron: a full pass is a dozen rounds spaced a
+# minute apart, and no serverless function stays alive for twelve minutes. This
+# drives exactly the loop the browser drives, against the same endpoint.
+#
+# Secrets required (Settings -> Secrets and variables -> Actions):
+#   APP_URL       https://www.tickrlab.com   (no trailing slash)
+#   CRON_SECRET   the same value set in the Vercel environment
+
+name: Nightly refresh
+
+on:
+  schedule:
+    # 00:00 UTC. That is 8PM Eastern while daylight saving is in force and 7PM
+    # the rest of the year — both comfortably after the 4PM close, which is what
+    # actually matters. GitHub can start a scheduled run late under load.
+    - cron: '0 0 * * *'
+  workflow_dispatch:          # the "Run workflow" button, for a refresh on demand
+
+# A run still going when the next fires would fight it for the refresh flag.
+concurrency:
+  group: nightly-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Drive a full Refresh all
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -uo pipefail
+          if [ -z "${APP_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::APP_URL and CRON_SECRET must both be set as repository secrets."
+            exit 1
+          fi
+
+          MAX_ROUNDS=25        # 6 symbols a round; 25 covers a 150-symbol universe
+          GAP=62               # the pacing the browser loop uses, unchanged
+          STAGNANT_LIMIT=3     # rounds without progress before giving up
+
+          call() {             # $1 = query string
+            curl -sS -m 180 -X POST "${APP_URL}/api/cron/refresh$1" \
+              -H "authorization: Bearer ${CRON_SECRET}" \
+              -H 'content-type: application/json' \
+              -d '{"actor":"nightly job (GitHub Actions)"}'
+          }
+
+          finish() {           # clear the flag and report whatever was gathered
+            curl -sS -m 120 -X DELETE "${APP_URL}/api/cron/refresh" \
+              -H "authorization: Bearer ${CRON_SECRET}" >/dev/null || true
+          }
+
+          echo "Starting Refresh all against ${APP_URL}"
+          resp=$(call '?start=1')
+          last=-1
+          stagnant=0
+
+          for round in $(seq 1 $MAX_ROUNDS); do
+            done=$(printf '%s' "$resp" | jq -r '.done // empty' 2>/dev/null)
+            loaded=$(printf '%s' "$resp" | jq -r '.loaded // empty' 2>/dev/null)
+            total=$(printf '%s' "$resp" | jq -r '.total // empty' 2>/dev/null)
+
+            if [ -z "$loaded" ]; then
+              # A rate limit or a cold start, not a reason to abandon the night.
+              echo "round ${round}: no usable response — $(printf '%s' "$resp" | head -c 200)"
+              stagnant=$((stagnant + 1))
+              if [ "$stagnant" -ge "$STAGNANT_LIMIT" ]; then
+                echo "::warning::Giving up after ${stagnant} failed rounds."
+                finish
+                exit 1
+              fi
+            else
+              echo "round ${round}: ${loaded}/${total} profiles"
+              if [ "$done" = "true" ]; then
+                echo "Complete — the server has sent the report."
+                exit 0
+              fi
+              if [ "$loaded" = "$last" ]; then
+                stagnant=$((stagnant + 1))
+              else
+                stagnant=0
+              fi
+              last="$loaded"
+              if [ "$stagnant" -ge "$STAGNANT_LIMIT" ]; then
+                echo "::warning::No progress for ${stagnant} rounds — stopping at ${loaded}/${total}."
+                finish
+                exit 1
+              fi
+            fi
+
+            sleep "$GAP"
+            resp=$(call '')
+          done
+
+          echo "::warning::Hit the ${MAX_ROUNDS}-round ceiling without finishing."
+          finish
+          exit 1

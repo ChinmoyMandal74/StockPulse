@@ -17,6 +17,9 @@ const TD_BASE = 'https://api.twelvedata.com';
 // old flat-file helpers returned, so this file only had to gain `await`s.
 // See db.js and migrate-to-turso.js.
 const store = require('./db');
+// The analysis screens, shared with public/analysis.html so the nightly report
+// and the page can never disagree about what "bouncing off the lows" means.
+const Screens = require('./public/screens.js');
 const {
   readPortfolios, writePortfolios,
   readNames, writeNames,
@@ -176,6 +179,18 @@ function safeEqual(a, b) {
   const ba = Buffer.from(String(a));
   const bb = Buffer.from(String(b));
   return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
+
+// The nightly job's credential. Deliberately not admin: it satisfies exactly
+// one route, /api/cron/refresh, so a leak cannot delete a portfolio. Unset means
+// the route is closed entirely rather than open.
+const CRON_SECRET = process.env.CRON_SECRET || '';
+
+function isCron(req) {
+  if (!CRON_SECRET) return false;
+  const h = String(req.get('authorization') || '');
+  const tok = h.startsWith('Bearer ') ? h.slice(7) : '';
+  return !!tok && safeEqual(tok, CRON_SECRET);
 }
 
 // ---- accounts: sessions and gates ------------------------------------------
@@ -393,12 +408,15 @@ const CONTACT_MAX_SUBJECT = 120;
 const CONTACT_MAX_BODY = 4000;
 const CONTACT_DAILY_LIMIT = Number(process.env.CONTACT_DAILY_LIMIT || 10);
 
-// Where it lands. Falls back to the owner's own account, so the feature works
-// even if the env var is never set.
-async function contactDestination() {
-  if (process.env.CONTACT_TO) return process.env.CONTACT_TO;
+// Where mail to the operator lands. Falls back to the owner's own account, so
+// both the contact form and the nightly report work before any env var is set.
+async function ownerEmail() {
   const owner = (await store.listUsers()).find((u) => u.role === 'owner');
   return owner ? owner.email : null;
+}
+
+async function contactDestination() {
+  return process.env.CONTACT_TO || (await ownerEmail());
 }
 
 // Signed-in only, so every sender is a known account and there is no honeypot
@@ -2009,6 +2027,265 @@ app.get('/api/history', requireAuth, route(async (req, res) => {
   });
 }));
 
+// ---- the nightly refresh report --------------------------------------------
+// Sent whenever a Refresh all finishes, whoever started it — the cron job, or
+// the button. That is why it hangs off endRefresh() rather than off the cron
+// route: both paths converge there, and endRefresh() reports only the caller
+// that actually cleared the flag, so one run can never send two emails.
+//
+// A run that stalls outright sends nothing: nobody calls endRefresh() and the
+// flag ages out on its own after REFRESH_STALE_MS. The cron job covers that
+// case instead, since it is the thing still awake.
+
+const REPORT_SCREEN_NAMES = 8;   // per screen, before it becomes "+n more"
+const REPORT_MOVERS = 5;
+
+function fmtDuration(ms) {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  if (sec < 60) return sec + 's';
+  return Math.floor(sec / 60) + 'm ' + String(sec % 60).padStart(2, '0') + 's';
+}
+
+const escHtml = (t) => String(t == null ? '' : t)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+const signed = (n, d = 1) => (n == null || !isFinite(n) ? '—'
+  : `${n >= 0 ? '+' : ''}${n.toFixed(d)}%`);
+
+// The 1-10 rating the table shows; older snapshots carry only the raw score.
+const rating = (x) => String(x.overallRating != null ? x.overallRating
+  : (x.overallScore != null ? Math.round(x.overallScore / 10) : '—'));
+
+// Everything the report says, gathered once so the text and HTML bodies cannot
+// disagree with each other.
+async function buildRefreshReport(state, snap) {
+  const rows = (snap && snap.stocks) || [];
+  const live = rows.filter((x) => !x.error);
+  const loaded = live.filter((x) => x.profileFetchedAt != null);
+  const failed = rows.filter((x) => x.error);
+  const missing = live.filter((x) => x.profileFetchedAt == null);
+  const day = marketDay(live);
+
+  let stats = { barRows: null, barsThrough: null, fundamentalsToday: null };
+  try {
+    stats = await store.archiveStats(day);
+  } catch (err) {
+    console.warn('report: archive stats unavailable:', err.message);
+  }
+
+  const asOf = live.reduce((m, x) => (x.latestDate && x.latestDate > m ? x.latestDate : m), '');
+  const complete = rows.length > 0 && loaded.length >= live.length && !failed.length;
+
+  const num = (n) => n != null && isFinite(n);
+  const movers = live.filter((x) => num(x.todayPct)).sort((a, b) => b.todayPct - a.todayPct);
+
+  return {
+    complete, rows, live, loaded, failed, missing, asOf, day, stats,
+    top: movers.slice(0, REPORT_MOVERS),
+    bottom: movers.slice(-REPORT_MOVERS).reverse(),
+    // Ranked on the 0-100 score because it separates names the 1-10 rating
+    // ties, but printed as the rating, which is what the table shows.
+    best: live.filter((x) => num(x.overallScore))
+      .sort((a, b) => b.overallScore - a.overallScore).slice(0, REPORT_MOVERS),
+    screens: Screens.run(live),
+    actor: state.actor || 'unknown',
+    duration: fmtDuration(Date.now() - state.startedAt),
+  };
+}
+
+function refreshReportBodies(r) {
+  const url = APP_URL || '';
+  const line = (k, v) => k.padEnd(14) + v;
+  const fundLine = r.stats.fundamentalsToday == null ? '—'
+    : `${r.stats.fundamentalsToday} symbols recorded for ${r.day}`;
+  const barLine = r.stats.barRows == null ? '—'
+    : `${r.stats.barRows.toLocaleString()} rows through ${r.stats.barsThrough || '—'}`;
+
+  const t = [
+    `Refresh all — ${r.loaded.length} of ${r.live.length} profiles`,
+    r.complete ? 'Complete.' : 'Incomplete — see below.',
+    '',
+    line('Triggered by', r.actor),
+    line('Took', r.duration),
+    line('Prices as of', r.asOf || '—'),
+    line('Fundamentals', fundLine),
+    line('Bar archive', barLine),
+  ];
+  if (r.failed.length) {
+    t.push('', `Failed (${r.failed.length}): ` +
+      r.failed.map((x) => `${x.symbol} — ${x.error}`).join('; '));
+  }
+  if (r.missing.length) {
+    t.push('', `No profile yet (${r.missing.length}): ` + r.missing.map((x) => x.symbol).join(', '));
+  }
+  t.push('', 'Movers today');
+  for (const x of r.top) t.push('  ' + signed(x.todayPct).padStart(7) + '  ' + x.symbol);
+  if (r.top.length && r.bottom.length) t.push('  …');
+  for (const x of r.bottom) t.push('  ' + signed(x.todayPct).padStart(7) + '  ' + x.symbol);
+  t.push('', 'Screens tonight');
+  for (const sc of Screens.SCREENS) {
+    const hits = r.screens[sc.id] || [];
+    const names = hits.slice(0, REPORT_SCREEN_NAMES).map((x) => x.symbol).join(', ');
+    const more = hits.length > REPORT_SCREEN_NAMES ? `, +${hits.length - REPORT_SCREEN_NAMES} more` : '';
+    t.push(`  ${sc.title} (${hits.length})` + (hits.length ? ': ' + names + more : ''));
+  }
+  t.push('', 'Highest overall');
+  for (const x of r.best) t.push('  ' + rating(x) + '  ' + x.symbol);
+  if (url) t.push('', url);
+
+  // --- html ---
+  const tone = r.complete ? '#0f9d58' : '#c5221f';
+  const cell = 'padding:3px 10px 3px 0;font-size:13px';
+  const kv = (k, v) => `<tr><td style="${cell};color:#777;white-space:nowrap">${escHtml(k)}</td>` +
+    `<td style="${cell}">${escHtml(v)}</td></tr>`;
+  const chip = (x) => `<span style="display:inline-block;margin:0 10px 4px 0;font-size:13px">` +
+    `<b>${escHtml(x.symbol)}</b> <span style="color:${x.todayPct >= 0 ? '#0f9d58' : '#c5221f'}">` +
+    `${signed(x.todayPct)}</span></span>`;
+  const symLink = (x) => (url
+    ? `<a href="${url}/stock/${encodeURIComponent(x.symbol)}" style="color:#1a73e8;text-decoration:none">${escHtml(x.symbol)}</a>`
+    : escHtml(x.symbol));
+
+  const screenRows = Screens.SCREENS.map((sc) => {
+    const hits = r.screens[sc.id] || [];
+    const extra = hits.length > REPORT_SCREEN_NAMES
+      ? ` <span style="color:#999">+${hits.length - REPORT_SCREEN_NAMES} more</span>` : '';
+    const names = hits.length
+      ? hits.slice(0, REPORT_SCREEN_NAMES).map(symLink).join(', ') + extra
+      : '<span style="color:#999">nothing tonight</span>';
+    return `<tr><td style="${cell};white-space:nowrap;vertical-align:top">` +
+      `<b>${escHtml(sc.title)}</b> <span style="color:#999">${hits.length}</span></td>` +
+      `<td style="${cell}">${names}</td></tr>`;
+  }).join('');
+
+  let problems = '';
+  if (r.failed.length) {
+    problems += `<p style="margin:14px 0 0;font-size:13px"><b style="color:#c5221f">` +
+      `Failed (${r.failed.length}):</b> ` +
+      r.failed.map((x) => `${escHtml(x.symbol)} — ${escHtml(x.error)}`).join('; ') + '</p>';
+  }
+  if (r.missing.length) {
+    problems += `<p style="margin:8px 0 0;font-size:13px"><b style="color:#b06000">` +
+      `No profile yet (${r.missing.length}):</b> ` +
+      escHtml(r.missing.map((x) => x.symbol).join(', ')) + '</p>';
+  }
+
+  const html =
+    '<div style="font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;color:#111;max-width:620px">' +
+    `<h2 style="margin:0;font-size:18px">Refresh all — ` +
+    `<span style="color:${tone}">${r.loaded.length} of ${r.live.length}</span></h2>` +
+    `<p style="margin:4px 0 16px;color:#777;font-size:13px">` +
+    `${r.complete ? 'Complete' : 'Incomplete'} · ${escHtml(r.actor)} · ${escHtml(r.duration)}</p>` +
+    '<table style="border-collapse:collapse">' +
+    kv('Prices as of', r.asOf || '—') + kv('Fundamentals', fundLine) + kv('Bar archive', barLine) +
+    '</table>' + problems +
+    '<h3 style="margin:22px 0 6px;font-size:14px">Movers today</h3>' +
+    '<div>' + r.top.map(chip).join('') + '</div>' +
+    '<div style="margin-top:4px">' + r.bottom.map(chip).join('') + '</div>' +
+    '<h3 style="margin:22px 0 6px;font-size:14px">Screens tonight</h3>' +
+    `<table style="border-collapse:collapse">${screenRows}</table>` +
+    '<h3 style="margin:22px 0 6px;font-size:14px">Highest overall</h3>' +
+    '<div>' + r.best.map((x) => `<span style="display:inline-block;margin:0 10px 4px 0;font-size:13px">` +
+      `<b>${escHtml(rating(x))}</b> ${symLink(x)}</span>`).join('') + '</div>' +
+    (url ? `<p style="margin:24px 0 0"><a href="${url}" style="color:#1a73e8">Open the screener</a></p>` : '') +
+    '</div>';
+
+  return { text: t.join('\n'), html };
+}
+
+// Never throws: the report is a by-product, and a mail outage must not fail the
+// refresh round that happened to finish the run.
+async function sendRefreshReport(state) {
+  if (!state) return false;          // nothing was cleared — someone else reported this run
+  if (!MAIL_READY) return false;
+  try {
+    const to = process.env.REPORT_TO || (await ownerEmail());
+    if (!to) return false;
+    const r = await buildRefreshReport(state, await readSnapshot());
+    const { text, html } = refreshReportBodies(r);
+    const ok = await sendMail({
+      to,
+      subject: `[Ticker Lab] Refresh all — ${r.loaded.length}/${r.live.length}` +
+        (r.complete ? '' : ' incomplete'),
+      text,
+      html,
+    });
+    console.log(`report: refresh summary ${ok ? 'sent to ' + to : 'could not be sent'}`);
+    return ok;
+  } catch (err) {
+    console.warn('report: refresh summary failed (refresh unaffected):', err.message);
+    return false;
+  }
+}
+
+// The trading day a run belongs to — the freshest bar anything in the universe
+// has, not the wall clock. The nightly job runs at 8PM Eastern, which is already
+// tomorrow in UTC, so dating these rows by the server's own date would file every
+// automated run one day ahead of the bars it was computed from. Falls back to the
+// UTC date only when no row carries a bar date at all.
+function marketDay(rows) {
+  const latest = (rows || []).reduce((m, x) => (x.latestDate && x.latestDate > m ? x.latestDate : m), '');
+  return latest || new Date().toISOString().slice(0, 10);
+}
+
+// Everything that happens after a live, non-backtest recompute: cache it, record
+// the day's fundamentals, move the shared flag on, and report when the run ends.
+// Shared by the admin's ?refresh=1 and the cron route so the two cannot drift.
+async function finishLiveRefresh(payload) {
+  await writeSnapshot({ ...payload, snapshotAt: payload.updatedAt });
+  const rows = payload.stocks || [];
+  const loaded = rows.filter((x) => x.profileFetchedAt != null).length;
+
+  // Snapshot the day's fundamentals — but only during a Refresh all, which is
+  // when the profile cache has actually been re-pulled. An ordinary price
+  // Refresh reuses day-old cached profiles, so writing then would record the
+  // same numbers under a new date and invent movement that never happened.
+  // readRefreshState() is non-null only while a Refresh all runs.
+  if (await readRefreshState()) {
+    try {
+      // Rows whose profile has not come back yet are skipped rather than
+      // stored empty; a later round in the same run upserts over them.
+      const withProfile = rows.filter((x) => !x.error && x.profileFetchedAt != null);
+      const n = await store.writeFundamentals(marketDay(rows), withProfile);
+      if (n) console.log(`fundamentals: ${n} symbols recorded for ${marketDay(rows)}`);
+    } catch (err) {
+      // A history write must never fail a refresh — same rule as the bars.
+      console.warn('fundamentals: history write failed (screener unaffected):', err.message);
+    }
+  }
+
+  const done = rows.length > 0 && loaded >= rows.length;
+  if (done) await sendRefreshReport(await endRefresh());
+  else await noteRefreshProgress(loaded, rows.length);
+  return { loaded, total: rows.length, done };
+}
+
+// The nightly job's one endpoint. It drives exactly the loop the browser drives
+// — start once, then a round per call — because that loop is the one proven
+// against the rate limits, and no serverless function can hold the twelve
+// minutes it takes.
+app.post('/api/cron/refresh', route(async (req, res) => {
+  if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
+  if (!API_KEY) return res.status(500).json({ error: 'No API key configured.' });
+
+  if (req.query.start === '1' || req.body?.start === true) {
+    const expired = await expireProfiles();
+    const total = getUniverse(await readPortfolios()).length;
+    await beginRefresh(String(req.body?.actor || 'nightly job').slice(0, 80), total);
+    console.log(`cron: refresh all started — ${expired} profiles expired, ${total} symbols`);
+  }
+
+  const r = await computeStocks(null);
+  if (!r.ok) return res.status(r.status).json({ error: r.error });
+  res.json({ ok: true, ...(await finishLiveRefresh(r.payload)) });
+}));
+
+// Lets the job clean up after itself when it gives up, and report what it got.
+// Same idempotency as everywhere else: only the caller that clears the flag mails.
+app.delete('/api/cron/refresh', route(async (req, res) => {
+  if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
+  res.json({ ok: true, reported: await sendRefreshReport(await endRefresh()) });
+}));
+
 // Snapshot: the public sees the last computed data (no live API calls). Admin
 // refreshes recompute live and overwrite it.
 app.get('/api/stocks', requireAuth, route(async (req, res) => {
@@ -2027,35 +2304,10 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     }
     const r = await computeStocks(asOf);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
-    if (!asOf) {
-      await writeSnapshot({ ...r.payload, snapshotAt: r.payload.updatedAt }); // cache live (non-backtest) pulls
-      // Keep the shared flag in step. noteRefreshProgress only touches a refresh
-      // that is already running, so an ordinary price Refresh — seconds long —
-      // never raises the banner.
-      const rows = r.payload.stocks || [];
-      const loaded = rows.filter((x) => x.profileFetchedAt != null).length;
-
-      // Snapshot today's fundamentals — but only during a Refresh all, which is
-      // when the profile cache has actually been re-pulled. An ordinary price
-      // Refresh reuses day-old cached profiles, so writing then would record
-      // the same numbers under a new date and invent movement that never
-      // happened. readRefreshState() is non-null only while a Refresh all runs.
-      if (await readRefreshState()) {
-        try {
-          // Rows whose profile has not come back yet are skipped rather than
-          // stored empty; a later round in the same run upserts over them.
-          const withProfile = rows.filter((x) => !x.error && x.profileFetchedAt != null);
-          const n = await store.writeFundamentals(new Date().toISOString().slice(0, 10), withProfile);
-          if (n) console.log(`fundamentals: ${n} symbols recorded for today`);
-        } catch (err) {
-          // A history write must never fail a refresh — same rule as the bars.
-          console.warn('fundamentals: history write failed (screener unaffected):', err.message);
-        }
-      }
-
-      if (rows.length && loaded >= rows.length) await endRefresh();
-      else await noteRefreshProgress(loaded, rows.length);
-    }
+    // Cache the live (non-backtest) pull, record today's fundamentals, and move
+    // the shared refresh flag on — the same tail the nightly job runs, so the
+    // two callers cannot drift apart.
+    if (!asOf) await finishLiveRefresh(r.payload);
     return res.json({ ...r.payload, refreshing: await readRefreshState() });
   }
 

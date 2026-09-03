@@ -106,6 +106,7 @@
   <div id="rowcard"></div>
 
   <script src="/rowcard.js"></script>
+  <script src="/screens.js"></script>
   <script>
     // Must match GROUP_COLORS / GROUP_LABELS in index.html — the card colours
     // its sections with these.
@@ -152,14 +153,9 @@
     // Where a stock sits in its own 52-week range, 0 = on the low. Older
     // snapshots predate the field, so fall back to distance from the high and
     // say so rather than showing a blank column.
-    const rangePos = (x) => num(x.range52Pos) ? x.range52Pos : null;
     const rangeCell = (x) => num(x.range52Pos)
       ? `<td class="${x.range52Pos <= 25 ? 'neg' : x.range52Pos >= 75 ? 'pos' : ''}">${x.range52Pos.toFixed(0)}%</td>`
       : '<td class="na">—</td>';
-    // Deep in the range: the real measure when it is there, distance from the
-    // high as a stand-in until the next refresh populates it.
-    const lowInRange = (x) => num(x.range52Pos) ? x.range52Pos <= 30
-      : (num(x.pctFromHigh) && x.pctFromHigh <= -25);
 
     const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const shortDate = (iso) => { const p = String(iso).split('-'); return p.length === 3 ? `${M[+p[1]-1]} ${+p[2]}` : iso; };
@@ -207,11 +203,14 @@
 
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const days = (d) => Math.round((new Date(d) - today) / 86400000);
+
+      // Which rows each screen contains — defined in screens.js so the nightly
+      // email reports exactly what this page shows. The columns and the prose
+      // below are the page's own.
+      const S = Screens.run(all);
+
       // --- 1. Bouncing off the lows ----------------------------------------
-      const bounce = all.filter((x) => lowInRange(x)
-        && num(x.oneMonthPct) && x.oneMonthPct > 3
-        && num(x.twoWeekPct) && x.twoWeekPct > 0)
-        .sort((a, b) => (rangePos(a) ?? 999) - (rangePos(b) ?? 999) || a.pctFromHigh - b.pctFromHigh);
+      const bounce = S.bounce;
       const noRange = all.some((x) => !num(x.range52Pos));
       out.push(section('bounce', 'Bouncing off the lows', bounce.length, 'var(--green)',
         'Low in the 52-week range but rising over both the last month and the last fortnight — a base that has ' +
@@ -228,9 +227,7 @@
                   '“more than 25% below the 52-week high”, which is a coarser filter.' : ''));
 
       // --- 2. Just started moving ------------------------------------------
-      const waking = all.filter((x) => num(x.twoWeekPct) && x.twoWeekPct > 5
-        && num(x.threeMonthPct) && x.threeMonthPct < 0)
-        .sort((a, b) => b.twoWeekPct - a.twoWeekPct);
+      const waking = S.waking;
       out.push(section('waking', 'Just started moving', waking.length, 'var(--accent-2)',
         'Up more than 5% in a fortnight while still negative over three months. The recent move has not yet ' +
         'shown up in the longer horizons, which is the whole point — by the time it does, the ranking will ' +
@@ -243,13 +240,8 @@
         'Nothing has broken ranks over the last two weeks.'));
 
       // --- 3. Drifting after a beat ----------------------------------------
-      // Surprises above 100% are feed artefacts, not results — two different
-      // mega-caps currently report exactly +214%, which is not a coincidence.
-      const SURPRISE_CAP = 100;
-      const drift = all.filter((x) => num(x.lastSurprise) && x.lastSurprise > 10
-        && x.lastSurprise <= SURPRISE_CAP
-        && x.lastEarningsDate && -days(x.lastEarningsDate) <= 21 && -days(x.lastEarningsDate) >= 0)
-        .sort((a, b) => b.lastSurprise - a.lastSurprise);
+      const SURPRISE_CAP = Screens.SURPRISE_CAP;
+      const drift = S.drift;
       out.push(section('drift', 'Drifting after a beat', drift.length, 'var(--amber)',
         'Beat consensus by more than 10% and reported within the last three weeks. Prices tend to keep ' +
         'drifting in the direction of a surprise for weeks after the print rather than adjusting at once, ' +
@@ -265,9 +257,7 @@
         'rather than a real result.'));
 
       // --- 4. Earnings in the next 14 days ---------------------------------
-      const soon = all
-        .filter((s) => s.nextEarningsDate && days(s.nextEarningsDate) >= 0 && days(s.nextEarningsDate) <= 14)
-        .sort((a, b) => a.nextEarningsDate.localeCompare(b.nextEarningsDate));
+      const soon = S.earnings;
       out.push(section('earnings', 'Reporting in the next 14 days', soon.length, 'var(--amber)',
         'A catalyst and a risk in the same event. Confirmed dates come from the feed; ~ marks an estimate ' +
         '(about 91 days after the last report). Last surprise is how far the previous quarter beat or missed consensus.',
@@ -283,12 +273,8 @@
       // the universe, and it is the field that rated a loss-maker 8/10.
       // Server-derived now, so the page, the export and the chatbot all read one
       // number. The fallback keeps snapshots written before the field existed working.
-      const fcfYield = (x) => num(x.fcfYield) ? x.fcfYield
-        : ((num(x.fcfTtm) && x.marketCap) ? (x.fcfTtm / x.marketCap) * 100 : null);
-      const value = all.filter((x) => num(x.forwardPe) && x.forwardPe > 0 && x.forwardPe < 20
-        && num(x.revenueGrowthYoY) && x.revenueGrowthYoY > 15
-        && num(x.profitMargin) && x.profitMargin > 15)
-        .sort((a, b) => a.forwardPe - b.forwardPe);
+      const fcfYield = Screens.fcfYield;
+      const value = S.value;
       out.push(section('value', 'Cheap, growing and profitable', value.length, 'var(--green)',
         'Forward P/E under 20 while revenue grows more than 15% and the net margin clears 15% — three ' +
         'conditions that rarely hold together. Free-cash-flow yield is the cross-check: it comes from cash ' +
@@ -301,9 +287,7 @@
         'Nothing currently clears all three bars at once.'));
 
       // --- 6. Business improving, price isn't ------------------------------
-      const disconnect = all.filter((x) => num(x.revenueGrowthYoY) && x.revenueGrowthYoY > 25
-        && num(x.threeMonthPct) && x.threeMonthPct < -10)
-        .sort((a, b) => b.revenueGrowthYoY - a.revenueGrowthYoY);
+      const disconnect = S.disconnect;
       out.push(section('disconnect', "Business improving, price isn't", disconnect.length, 'var(--accent)',
         'Revenue growing more than 25% while the price has fallen more than 10% over three months. Either the ' +
         'market is discounting something the reported numbers do not show yet, or you are early. The 200-day ' +
@@ -316,8 +300,7 @@
         'No name is growing that fast while the price falls.'));
 
       // --- 7. Overextended -------------------------------------------------
-      const hot = all.filter((x) => num(x.rsi) && x.rsi > 75 && num(x.vs50ma) && x.vs50ma > 12)
-        .sort((a, b) => b.rsi - a.rsi);
+      const hot = S.hot;
       out.push(section('hot', 'Overextended', hot.length, 'var(--red)',
         'RSI above 75 and more than 12% above the 50-day average. This is a risk list, not a sell list — ' +
         'strong trends stay overbought for a long time. It is where a stop is worth reviewing, and where ' +

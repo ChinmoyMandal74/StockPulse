@@ -29,6 +29,8 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `public/visitors.html` | Admin-only visitor log page at `/visitors` |
 | `public/users.html` | Admin-only account maintenance at `/users` — list and delete, no add |
 | `public/contact.html` | Signed-in contact form at `/contact` — subject + message, mailed to the owner |
+| `public/screens.js` | **The seven analysis screens, defined once** — loaded by `analysis.html` and `require`d by `server.js` |
+| `.github/workflows/nightly-refresh.yml` | The 8PM Refresh all — see **The nightly job** below |
 | `public/favicon.svg` | Momentum-line mark, emerald on OLED black |
 | `portfolios.json`, `snapshot.json`, `profiles.json`, `names.json`, `visitors.log` | **Legacy.** Pre-migration backups only — nothing reads or writes them any more. Safe to delete once you trust the database. |
 | `.env` | `TWELVE_DATA_API_KEY`, `TURSO_*`, `ADMIN_PASSWORD`, optional feature flags |
@@ -262,6 +264,7 @@ A Refresh All re-pulls only `MAX_PROFILE_FETCHES_PER_CALL` (6) symbols per call,
 - `POST /api/refresh-all` expires the cache and calls `beginRefresh()`; `DELETE /api/refresh-all` ends it when the client's loop finishes or gives up.
 - Each `?refresh=1` round calls `noteRefreshProgress()`, which **only updates a refresh that is already running** — that is what stops an ordinary price Refresh (seconds long) from raising the banner. It closes the flag itself once every row has a profile.
 - `readRefreshState()` returns `null` once `updated_at` is older than `REFRESH_STALE_MS` (4 min), so an admin closing the tab mid-backfill can't pin the notice up forever.
+- **`endRefresh()` returns the run it cleared, or `null`.** Both the natural finish and the client's `DELETE` land there, and only the caller whose `delete` actually removed a row gets the state back — that is what stops one run sending two report emails. Anything hung off completion must go through its return value, not just call it.
 - `GET /api/status` is a cheap poll for viewers — every open page hits it every 30s while a refresh runs, so it deliberately does not return the snapshot. When the flag clears the page pulls the finished data on its own.
 
 ## Charts and the stock page
@@ -305,6 +308,25 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 - **A failed archive write never fails the refresh** — it is caught and logged. The screener is the product; the archive is a by-product.
 - `open` is stored although nothing reads it yet. `high`/`low` drive the 52-week range and `volume` the volume trend, so an archive without them could draw a chart but not reproduce the screener — which is the point of keeping it.
 
+## The nightly job
+`.github/workflows/nightly-refresh.yml` runs a full Refresh all at **00:00 UTC** — 8PM Eastern in summer, 7PM in winter. Both are after the 4PM close, which is the part that matters; the hour of drift is deliberate rather than worth a second cron entry and a timezone guard.
+
+**A runner, not a Vercel cron, because a full pass takes ~13 minutes** and no serverless function stays alive that long. The workflow drives exactly the loop the browser drives.
+
+- **`POST /api/cron/refresh`** is the job's only endpoint, authenticated by `Authorization: Bearer $CRON_SECRET`. Deliberately **not** admin: the secret satisfies that one route, so a leak cannot delete a portfolio. Unset leaves the route closed, not open. `?start=1` expires the cache and raises the flag; every later call runs one round. `DELETE` on the same path ends a run early and reports what it got.
+- **The 62-second gap between rounds is not conservatism — it is measured.** Two rounds inside one minute returned *"1128 API credits were used, with the current limit being 610"*. A round costs roughly **560 credits**, nearly all of it the batched `time_series`, so the plan allows about one round per minute and the loop cannot be collapsed into a single call. Don't lower `GAP` without measuring again.
+- The job stops after 3 rounds without progress, same as the browser loop, and cleans up the flag on its way out.
+- Repository secrets required: `APP_URL`, `CRON_SECRET`.
+
+### The refresh report
+Every completed Refresh all emails the owner — **whoever started it**, the job or the button. That is why it hangs off `endRefresh()` rather than the cron route: both paths converge there.
+
+- **Receipt**: actor, duration, `n/total` coverage, failed symbols, symbols still without a profile, prices-as-of, fundamentals rows recorded, bar-archive size and through-date.
+- **Digest**: the seven screens run against the fresh snapshot, the day's five best and worst movers, and the highest Overall ratings.
+- A run that *stalls* sends nothing — nobody calls `endRefresh()` and the flag ages out on its own. The cron job covers that case, since it is the thing still awake.
+- `REPORT_TO` overrides the destination; unset it falls back to the owner account's email, so it works before anything is configured.
+- **Fundamentals rows are dated by `marketDay(rows)`** — the freshest bar in the universe, not the server clock. At 8PM Eastern the server's UTC date is already tomorrow, so dating by `new Date()` would file every automated run one day ahead of the bars it was computed from.
+
 ## Chatbot
 `/chat` answers questions about the screener data. Open to **any signed-in user** (`requireAuth`), with the allowance set by role.
 
@@ -324,6 +346,8 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 **Gated pages are no longer served raw.** `public/` is mounted wholesale, which used to hand out `/chat.html`, `/analysis.html` and `/visitors.html` at their file path and skip the guard. `GATED_PAGES` redirects those to the routed path.
 
 ## Analysis screens
+**The seven predicates live in `public/screens.js`, not in the page.** `analysis.html` loads it with a `<script>` tag and `server.js` `require`s it, so the nightly report and the page can never disagree about what "bouncing off the lows" means — the same reason `rowcard.js` exists. Only the *selection* is shared (which rows, in what order); the columns, the prose and the empty messages stay with whichever surface is drawing them. Verified equivalent against the live universe on extraction: all seven lists identical, order included.
+
 `/analysis` is seven filtered views built from the **raw fields, not the composite scores** — the scores already drive the table's ranking, and a screen that just re-sorts them adds nothing. Every threshold below was set by running the candidate against the live universe: a screen returning 0 names is a dead box, and one returning 25 of 69 is not a signal.
 
 | screen | rule | hits when set |
@@ -347,6 +371,7 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 - `GET /api/stocks?asOf=YYYY-MM-DD` — backtest mode (admin only)
 - `POST /api/refresh-all` — expires the profile cache, forces re-pull (admin only); `DELETE` ends the refresh flag
 - `GET /api/status` — `{ refreshing }` only; polled by every open page during a refresh
+- `POST /api/cron/refresh` — the nightly job's one round (bearer `CRON_SECRET`, not admin); `?start=1` begins a run, `DELETE` ends one early
 - All portfolio/ticker CRUD routes require admin
 
 ## Conventions

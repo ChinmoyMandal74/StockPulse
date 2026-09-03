@@ -382,9 +382,40 @@ async function noteRefreshProgress(loaded, total) {
   return (r.rowsAffected ?? 0) > 0;
 }
 
+// Returns the run it just cleared, or null when there was nothing to clear.
+// Both the natural finish and the client's DELETE land here, so "did I actually
+// clear it" is the only thing standing between one run and two report emails.
+// The read and the delete are separate statements, so two callers can both see
+// the row — but only one delete reports a row affected, and that one reports.
 async function endRefresh() {
   await init();
-  await db.execute('delete from refresh_state where id = 1');
+  const r = await db.execute(
+    'select started_at, updated_at, loaded, total, actor from refresh_state where id = 1');
+  const del = await db.execute('delete from refresh_state where id = 1');
+  if (!r.rows.length || (del.rowsAffected ?? 0) < 1) return null;
+  const row = r.rows[0];
+  return {
+    startedAt: Number(row.started_at),
+    updatedAt: Number(row.updated_at),
+    loaded: row.loaded == null ? null : Number(row.loaded),
+    total: row.total == null ? null : Number(row.total),
+    actor: row.actor || null,
+  };
+}
+
+// Counts for the nightly report: how much of the archive exists, and whether
+// today's fundamentals row actually landed. Cheap enough to run once per run.
+async function archiveStats(day) {
+  await init();
+  const b = await db.execute('select count(*) as n, max(d) as through from bars');
+  const f = await db.execute({
+    sql: 'select count(*) as n from fundamentals_history where d = ?', args: [day],
+  });
+  return {
+    barRows: Number(b.rows[0]?.n || 0),
+    barsThrough: b.rows[0]?.through || null,
+    fundamentalsToday: Number(f.rows[0]?.n || 0),
+  };
 }
 
 // null when nothing is running, so callers can spread it straight into a payload.
@@ -917,6 +948,7 @@ module.exports = {
   readProfiles,
   writeProfiles,
   expireProfiles,
+  archiveStats,
   beginRefresh,
   noteRefreshProgress,
   endRefresh,
