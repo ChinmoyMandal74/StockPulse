@@ -482,6 +482,7 @@
     <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3.6" y="5.2" width="16.8" height="13.6" rx="2.6"/><path d="M9.2 5.2v13.6M14.8 5.2v13.6"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.6 9.8 17.4 19 6.6"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15.2l5.5-5.7"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3.6 19.2h16.8"/><path d="M4.4 14.6 9.6 9l3.6 3.4 6.2-6.8"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.6 6.6 17.4 17.4M17.4 6.6 6.6 17.4"/></symbol>
   </svg>
 
@@ -549,6 +550,12 @@
             </a>
             <a class="btn" href="/chat" title="Ask questions about this data">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chat" /></svg>Ask
+            </a>
+            <!-- A door into /stock/<SYMBOL>. Which stock barely matters now that
+                 the page has its own picker, so it opens the top of whatever is
+                 currently shown rather than asking anyone to choose first. -->
+            <a class="btn" id="stockLink" href="/stock/SPY">
+              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>Stock
             </a>
             <a class="btn icon quiet admin-only" href="/visitors" target="_blank" rel="noopener" style="display:none" title="Visitor log (admin only)" aria-label="Visitor log">
               <svg class="ic" aria-hidden="true"><use href="#i-users" /></svg>
@@ -1085,6 +1092,9 @@
       ranked.forEach((s, i) => (rankMap[s.symbol] = i + 1));
       const rankTotal = ranked.length;
 
+      const stockLink = $('stockLink');
+      stockLink.style.display = rows.length ? '' : 'none';
+
       // Freshest data date among shown stocks, to flag any lagging behind it.
       const freshest = rows.reduce((m, s) => (s.latestDate && s.latestDate > m ? s.latestDate : m), '');
 
@@ -1104,6 +1114,14 @@
         if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
         return (av - bv) * sortDir;
       });
+
+      // The row actually on top, so the bar link follows the sort rather than
+      // quietly always meaning rank 1.
+      if (sorted[0]) {
+        stockLink.href = '/stock/' + encodeURIComponent(sorted[0].symbol);
+        stockLink.title = `Open ${sorted[0].symbol} in full — the top of this view. ` +
+          'Switch to any other stock from the symbol on that page.';
+      }
 
       tbody.innerHTML = sorted.map((s, i) => {
         const rmTitle = activeTab === 'All' ? 'Remove from all portfolios' : `Remove from ${activeTab}`;

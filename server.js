@@ -150,9 +150,13 @@ app.get(Object.keys(GATED_PAGES), (req, res) => res.redirect(GATED_PAGES[req.pat
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/visitors', (req, res) => {
+// Admin only, like /users. The data behind it (GET /api/visitors) has always
+// been guarded, so this only ever served an empty shell — but it was the one
+// page route that did not check, and GATED_PAGES funnels /visitors.html here.
+app.get('/visitors', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'visitors.html'));
-});
+}));
 
 // ---- Admin auth (cookie-based, no DB) --------------------------------------
 // A deterministic token derived from the password (HMAC) is stored in an httpOnly
