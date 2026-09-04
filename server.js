@@ -555,11 +555,30 @@ function emailShell({ heading, intro, body = '', note = '' }) {
     `<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" ` +
     `style="width:100%;max-width:600px;background:#ffffff;border:1px solid ${MC.line};border-radius:14px;overflow:hidden">` +
 
-    // header
-    `<tr><td style="background:${MC.head};padding:20px 28px">` +
+    // Header. The mark is an image and the wordmark is text, on purpose: most
+    // clients block images by default for a sender you have not written to
+    // before, and someone opening their first password reset would otherwise
+    // see an empty box where the brand should be. Blocked, this degrades to
+    // exactly the header it had before the logo existed.
+    //
+    // A PNG rather than the SVG in public/ — Gmail strips <img> pointing at SVG
+    // and Outlook will not render one. Shipped at 128px and displayed at 30 so
+    // it stays sharp on a retina screen, with width and height set so the
+    // layout does not jump while it loads, and the cell painted the header
+    // colour so a transparent or blocked image is invisible rather than a pale
+    // rectangle — which also survives Gmail's dark-mode repainting.
+    `<tr><td style="background:${MC.head};padding:18px 28px">` +
+    '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>' +
+    (site
+      ? `<td style="padding-right:10px;line-height:0;background:${MC.head}">` +
+        `<img src="${site}/logo.png" width="30" height="30" alt="Tickr Lab" ` +
+        `style="display:block;width:30px;height:30px;border:0;outline:none;text-decoration:none;` +
+        `color:#8b93a3;font-family:${sans};font-size:13px;font-weight:700"></td>`
+      : '') +
+    `<td style="background:${MC.head}">` +
     `<span style="font-family:${sans};font-size:17px;font-weight:700;letter-spacing:-0.4px;color:#ffffff">Tickr</span>` +
     `<span style="font-family:${sans};font-size:17px;font-weight:700;letter-spacing:-0.4px;color:#8b93a3"> Lab</span>` +
-    `</td></tr>` +
+    '</td></tr></table></td></tr>' +
 
     // content
     `<tr><td style="padding:30px 28px 8px">` +
