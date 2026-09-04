@@ -216,6 +216,11 @@
     let ASOF = 'n/a';
     let baseRank = new Map();
     let presetId = 'default';
+    let customWeights = null;   // set with the sliders on the screener, used here
+    // The screener's column layout lives in the same prefs row. This page does
+    // not edit it, so it must hand back exactly what it was given — writing an
+    // empty map here would quietly reset every collapsed column group.
+    let savedCollapsed = {};
 
     (async () => {
       let data;
@@ -233,7 +238,12 @@
       // Which weighting this page is being read through, if the account saved one.
       try {
         const pr = await (await fetch('/api/prefs', { cache: 'no-store' })).json();
-        if (pr && pr.prefs && pr.prefs.weights) presetId = pr.prefs.weights;
+        if (pr && pr.prefs) {
+          if (pr.prefs.collapsed && typeof pr.prefs.collapsed === 'object') savedCollapsed = pr.prefs.collapsed;
+          customWeights = Screens.cleanWeights(pr.prefs.customWeights);
+          if (customWeights) customWeights = Object.assign(Screens.defaultWeights(), customWeights);
+          if (pr.prefs.weights) presetId = pr.prefs.weights;
+        }
       } catch { /* Default is a fine fallback */ }
 
       baseRank = rankBy(BASE);
@@ -253,9 +263,15 @@
       return m;
     }
 
+    const choices = () => Screens.WEIGHT_PRESETS.concat(customWeights
+      ? [{ id: 'custom', label: 'Custom', note: 'Your own weighting, set on the screener.' }] : []);
+    const chosen = (id) => choices().find((c) => c.id === id) || choices()[0];
+    const weightsFor = (id) => (id === 'custom' ? customWeights : Screens.presetById(id).weights);
+
     function weighted(id) {
-      const p = Screens.presetById(id);
-      return p.id === 'default' ? BASE : BASE.map((x) => Screens.applyWeights(x, p.weights));
+      if (id === 'default') return BASE;
+      const w = weightsFor(id);
+      return w ? BASE.map((x) => Screens.applyWeights(x, w)) : BASE;
     }
 
     // How far a weighting actually moves the list. Printed rather than asserted:
@@ -278,16 +294,20 @@
     function savePreset(id) {
       fetch('/api/prefs', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prefs: { collapsed: {}, weights: id } }),
+        // Both the column layout and the slider set go back untouched: this page
+        // selects a weighting, it does not edit either, and dropping them from
+        // the payload would erase them.
+        body: JSON.stringify({ prefs: { collapsed: savedCollapsed, weights: id, customWeights } }),
       }).catch(() => { /* a lens that fails to persist still works today */ });
     }
 
     function renderWbar() {
-      const p = Screens.presetById(presetId);
+      const p = chosen(presetId);
+      presetId = p.id;
       const bar = document.getElementById('wbar');
       bar.hidden = false;
       bar.classList.toggle('off', p.id !== 'default');
-      document.getElementById('wsel').innerHTML = Screens.WEIGHT_PRESETS.map((w) =>
+      document.getElementById('wsel').innerHTML = choices().map((w) =>
         `<button class="${w.id === p.id ? 'on' : ''}" data-w="${w.id}" title="${esc(w.note)}">${esc(w.label)}</button>`
       ).join('');
       document.getElementById('wnote').innerHTML = p.id === 'default'
@@ -314,7 +334,7 @@
     function build(all) {
       const asOf = ASOF;
       const weightNote = presetId === 'default' ? ''
-        : ` Momentum is re-scored under the <b>${esc(Screens.presetById(presetId).label)}</b> weighting.`;
+        : ` Momentum is re-scored under the <b>${esc(chosen(presetId).label)}</b> weighting.`;
       document.getElementById('lede').innerHTML =
         `Nine screens the sorted table can't give you — which way momentum is moving, where a base is ` +
         `turning, what has just started moving, what is drifting after a beat, what looks cheap on its ` +

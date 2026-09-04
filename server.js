@@ -2323,11 +2323,17 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   for (const k of Object.keys(src).slice(0, 40)) {
     if (/^[a-z]{1,16}$/.test(k)) collapsed[k] = !!src[k];
   }
-  // Which momentum weighting the analysis page is showing. A preset id only —
-  // never a weight map, so this cannot become free per-user storage and a bad
-  // value can only ever fall back to the default.
-  const weights = /^[a-z]{1,16}$/.test(String(incoming.weights || '')) ? String(incoming.weights) : null;
-  await store.writePrefs(await prefsKey(req), weights ? { collapsed, weights } : { collapsed });
+  // Which momentum weighting the pages are showing: a preset id, and — only
+  // for 'custom' — the map behind it. The map goes through the same
+  // cleanWeights() the browser uses, so only the eight known factors survive,
+  // as integers inside the slider's range. Anything else is dropped rather than
+  // stored, which is what keeps this row from becoming free per-user storage.
+  const out = { collapsed };
+  const wid = /^[a-z]{1,16}$/.test(String(incoming.weights || '')) ? String(incoming.weights) : null;
+  if (wid) out.weights = wid;
+  const custom = Screens.cleanWeights(incoming.customWeights);
+  if (custom) out.customWeights = custom;
+  await store.writePrefs(await prefsKey(req), out);
   res.json({ ok: true });
 }));
 

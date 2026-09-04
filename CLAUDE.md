@@ -408,7 +408,13 @@ It re-scores momentum **in the browser** — the screener, the nightly report, t
 - **Weights need not total 100** — `scoreWithWeights()` renormalises over whichever factors have data, mirroring `scoreFactors()`.
 - **The axis is continuation versus caution**, not adjectives. Trend leans short-horizon, strengthens trend regime and removes the reversal brake entirely; Steady leans on 12-1 and consistency and keeps it.
 - **The bar prints how far the weighting actually moves the list** — measured live: Trend reorders 69 of 82 names, median 4 places, largest 20; Steady 75 of 82. A preset that reordered three names would be a dial that does nothing, and this says so rather than hiding it.
-- **The saved choice is a preset id in `prefs`, never a weight map**, so the endpoint cannot become free per-user storage and a bad value falls back to Default.
+- **`Custom` adds sliders, edited in one place only** — the screener's Weights menu. `/analysis` offers Custom as a fourth choice and reads the saved set, but never edits it: two editors would double the work and drift.
+  - **`cleanWeights()` in `screens.js` is used by both the browser and the server.** Only the eight known factor keys survive, as integers in `0…MAX_WEIGHT`, and an all-zero map is rejected because it leaves nothing to score with. That is what keeps `PUT /api/prefs` from becoming free per-user storage — verified: `evil`, `__proto__` and a negative are all dropped.
+  - **The menu is built on open, not on every render.** A rebuild mid-drag replaces the slider under the cursor and kills the gesture, so `render()` redraws only the trigger.
+  - **Table redraws are debounced 120ms** while the numbers beside each slider update immediately. A full re-score and rebuild is ~80ms, far too slow to run on every step of a drag.
+  - **Each slider shows its renormalised share** (`25 → 23%`) because weights need not total 100, so a bare number means nothing on its own.
+  - **Any page that writes prefs must hand back the parts it does not edit.** `/analysis` sending `collapsed: {}` silently reset every collapsed column group — it now returns what it was given.
+- **The saved choice is a preset id plus, for Custom only, the map behind it.** A bad id falls back to Default.
 
 ## Analysis screens
 **The seven predicates live in `public/screens.js`, not in the page.** `analysis.html` loads it with a `<script>` tag and `server.js` `require`s it, so the nightly report and the page can never disagree about what "bouncing off the lows" means — the same reason `rowcard.js` exists. Only the *selection* is shared (which rows, in what order); the columns, the prose and the empty messages stay with whichever surface is drawing them. Verified equivalent against the live universe on extraction: all seven lists identical, order included.

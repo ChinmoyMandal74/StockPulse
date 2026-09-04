@@ -343,6 +343,34 @@
     body.lensed td.lens-col { background: rgba(124, 156, 255, 0.07); }
     body.lensed tbody tr:hover td.lens-col { background: rgba(124, 156, 255, 0.12); }
     body.lensed #weightBtn { border-color: var(--accent); color: var(--text); }
+    /* the custom-weight sliders */
+    .picker-inner.wide { width: 340px; max-width: calc(100vw - 24px); }
+    /* With eight sliders open the four preset descriptions push Copy Default
+       below the fold. The labels alone are enough once you are editing. */
+    .picker-inner.wide .pick .nm em { display: none; }
+    .picker-inner.wide .pick { padding-top: 6px; padding-bottom: 6px; }
+    .wsliders { padding: 4px 2px 2px; }
+    .wrow { display: grid; grid-template-columns: 1fr 96px 22px 30px; align-items: center;
+            gap: 8px; padding: 4px 10px; cursor: pointer; }
+    .wrow:hover { background: rgba(255, 255, 255, 0.04); border-radius: 8px; }
+    .wn { font-size: 11.5px; color: var(--muted); white-space: nowrap;
+          overflow: hidden; text-overflow: ellipsis; }
+    .wv { font-family: var(--mono); font-size: 11px; color: var(--text); text-align: right; }
+    .ws { font-family: var(--mono); font-size: 10px; color: var(--faint); text-align: right; }
+    .wrow input[type="range"] {
+      -webkit-appearance: none; appearance: none; width: 100%; height: 3px; cursor: pointer;
+      background: rgba(255, 255, 255, 0.14); border-radius: 999px; outline: none;
+    }
+    .wrow input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none; width: 12px; height: 12px;
+      border-radius: 50%; background: var(--accent); border: 0; cursor: pointer;
+    }
+    .wrow input[type="range"]::-moz-range-thumb {
+      width: 12px; height: 12px; border-radius: 50%; background: var(--accent);
+      border: 0; cursor: pointer;
+    }
+    .wfoot { display: flex; align-items: center; gap: 10px; padding: 8px 10px 2px; }
+    .wfoot span { font-size: 10.5px; line-height: 1.5; color: var(--faint); }
     body.lensed #weightBtn .count { color: var(--accent); }
     .pick .nm em { display: block; font-style: normal; font-size: 10.5px;
                    color: var(--faint); margin-top: 2px; white-space: normal; }
@@ -789,6 +817,7 @@
     let baseStocks = [];
     let stocks = [];
     let weightPreset = 'default';
+    let customWeights = null;      // the saved slider set, or null until one exists
     let portfolios = [];       // ordered portfolio names
     let activeTab = 'All';
     let sortKey = 'overallScore';
@@ -1137,7 +1166,7 @@
 
     function render() {
       renderPicker();
-      renderWeightMenu();
+      renderWeightTrigger();
       const tbody = $('tbody');
       const rows = visibleStocks();
       markSortedColumn();
@@ -1529,50 +1558,126 @@
     // the payload. Nothing is refetched and the shared snapshot is untouched —
     // but unlike the analysis page, here the lens reaches the Rank column, the
     // sort and the CSV, so it is marked loudly rather than quietly.
+    // The weighting in force: a preset's, or the slider set when Custom is on.
+    // Custom with nothing saved yet falls back to Default rather than to nothing.
+    function activeWeights() {
+      if (weightPreset === 'custom') return customWeights || Screens.defaultWeights();
+      return Screens.presetById(weightPreset).weights;
+    }
+    const lensOn = () => weightPreset !== 'default';
+
     function applyLens() {
-      const p = Screens.presetById(weightPreset);
-      stocks = p.id === 'default'
+      const w = activeWeights();
+      stocks = !lensOn()
         ? baseStocks
-        : baseStocks.map((x) => (x.error ? x : Screens.applyWeights(x, p.weights)));
-      document.body.classList.toggle('lensed', p.id !== 'default');
+        : baseStocks.map((x) => (x.error ? x : Screens.applyWeights(x, w)));
+      document.body.classList.toggle('lensed', lensOn());
     }
 
     function setWeightPreset(id) {
       if (id === weightPreset) return;
       weightPreset = id;
+      if (id === 'custom' && !customWeights) customWeights = Screens.defaultWeights();
       applyLens();
       render();
       renderWeightMenu();
       savePrefs();
     }
 
-    function renderWeightMenu() {
-      // A local escaper: the only `esc` on this page is scoped inside the CSV
-      // export, and reaching for it here throws and takes render() down with it.
-      const e = (t) => String(t == null ? '' : t)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-      const active = Screens.presetById(weightPreset);
+    // Re-scoring 84 rows and rebuilding the table takes ~80ms, which is far too
+    // slow to do on every step of a drag. The numbers beside the slider update
+    // immediately; the table catches up when the hand pauses.
+    let lensTimer = null;
+    function scheduleLensRedraw() {
+      clearTimeout(lensTimer);
+      lensTimer = setTimeout(() => { applyLens(); render(); }, 120);
+    }
+
+    // A local escaper: the only `esc` on this page is scoped inside the CSV
+    // export, and reaching for it here throws and takes render() down with it.
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    const weightLabel = () =>
+      (weightPreset === 'custom' ? 'Custom' : Screens.presetById(weightPreset).label);
+
+    // Drawn on every render. Deliberately separate from the menu below: a redraw
+    // while a slider is being dragged would replace the very input under the
+    // cursor and the drag would die mid-gesture.
+    function renderWeightTrigger() {
       $('weightBtn').innerHTML =
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>' +
         '<span class="picker-label">Weights</span>' +
-        `<span class="count">${e(active.label)}</span>` +
+        `<span class="count">${we(weightLabel())}</span>` +
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
-      $('weightBtn').title = active.id === 'default'
+      $('weightBtn').title = !lensOn()
         ? 'Momentum weighting — the one every other page uses'
-        : `Momentum re-scored under ${active.label}. The nightly email and the assistant stay on Default.`;
+        : `Momentum re-scored under ${weightLabel()}. The nightly email and the assistant stay on Default.`;
+    }
+
+    // Just the numbers beside each slider, so a drag stays cheap.
+    function refreshSliderReadouts() {
+      const shares = Screens.weightShares(customWeights || Screens.defaultWeights());
+      $('weightMenu').querySelectorAll('[data-wrow]').forEach((row) => {
+        const k = row.dataset.wrow;
+        row.querySelector('.wv').textContent = customWeights[k];
+        row.querySelector('.ws').textContent = shares[k] + '%';
+      });
+    }
+
+    function renderWeightMenu() {
+      const rows = Screens.WEIGHT_PRESETS.concat([{ id: 'custom', label: 'Custom',
+        note: 'Your own weighting — set it with the sliders below.' }]);
+      const sliders = weightPreset !== 'custom' ? '' :
+        '<div class="pick-sep"></div><div class="wsliders">' +
+        Screens.FACTORS.map((f) => {
+          const v = (customWeights || Screens.defaultWeights())[f.key] ?? 0;
+          return `<label class="wrow" data-wrow="${f.key}">` +
+            `<span class="wn">${we(f.label)}</span>` +
+            `<input type="range" min="0" max="${Screens.MAX_WEIGHT}" step="1" value="${v}" data-wkey="${f.key}" />` +
+            `<span class="wv">${v}</span><span class="ws"></span></label>`;
+        }).join('') +
+        '<div class="wfoot"><button class="pick-mini" id="wReset">Copy Default</button>' +
+        '<span>Weights need not total 100 — the second number is each factor\'s ' +
+        'share once the rest are counted.</span></div></div>';
+
       $('weightMenu').innerHTML =
-        '<div class="picker-inner">' +
-        Screens.WEIGHT_PRESETS.map((w) =>
+        `<div class="picker-inner${weightPreset === 'custom' ? ' wide' : ''}">` +
+        rows.map((w) =>
           `<button class="pick ${w.id === weightPreset ? 'on' : ''}" data-weight="${w.id}" role="option" ` +
           `aria-selected="${w.id === weightPreset}">` +
-          `<span class="nm">${e(w.label)}<em>${e(w.note)}</em></span>` +
+          `<span class="nm">${we(w.label)}<em>${we(w.note)}</em></span>` +
           '<svg class="ic ic-sm chk" aria-hidden="true"><use href="#i-check" /></svg></button>').join('') +
+        sliders +
         '<div class="pick-sep"></div>' +
         '<div class="pick-hint">Changes the Momentum, Overall and Rank columns on this page only. ' +
         'The nightly email, the assistant and /analysis keep their own setting.</div></div>';
+
       $('weightMenu').querySelectorAll('[data-weight]').forEach((b) => {
-        b.addEventListener('click', (e) => { e.stopPropagation(); setWeightPreset(b.dataset.weight); });
+        b.addEventListener('click', (ev) => { ev.stopPropagation(); setWeightPreset(b.dataset.weight); });
       });
+      $('weightMenu').querySelectorAll('[data-wkey]').forEach((inp) => {
+        inp.addEventListener('input', () => {
+          customWeights = Object.assign({}, customWeights || Screens.defaultWeights(),
+            { [inp.dataset.wkey]: Number(inp.value) });
+          refreshSliderReadouts();
+          scheduleLensRedraw();
+          savePrefs();
+        });
+      });
+      const reset = $('wReset');
+      if (reset) {
+        reset.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          customWeights = Screens.defaultWeights();
+          renderWeightMenu();
+          applyLens();
+          render();
+          savePrefs();
+        });
+      }
+      if (weightPreset === 'custom') refreshSliderReadouts();
+      placeMenu($('weightPicker'), $('weightMenu'));
     }
 
     function toggleGroup(id) { collapsed[id] = !collapsed[id]; applyGroups(); savePrefs(); }
@@ -1596,8 +1701,10 @@
     async function loadPrefs() {
       try {
         const res = await api('GET', '/api/prefs');
+        const savedC = res && res.prefs && Screens.cleanWeights(res.prefs.customWeights);
+        if (savedC) customWeights = Object.assign(Screens.defaultWeights(), savedC);
         const savedW = res && res.prefs && res.prefs.weights;
-        if (savedW && Screens.WEIGHT_PRESETS.some((w) => w.id === savedW)) weightPreset = savedW;
+        if (savedW === 'custom' || Screens.WEIGHT_PRESETS.some((w) => w.id === savedW)) weightPreset = savedW;
         const saved = res && res.prefs && res.prefs.collapsed;
         if (saved) {
           for (const g of GROUPS) {
@@ -1620,7 +1727,9 @@
       prefsTimer = setTimeout(() => {
         const out = {};
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
-        api('PUT', '/api/prefs', { prefs: { collapsed: out, weights: weightPreset } }).catch(() => {});
+        api('PUT', '/api/prefs', {
+          prefs: { collapsed: out, weights: weightPreset, customWeights },
+        }).catch(() => {});
       }, 600);
     }
 
@@ -2104,6 +2213,9 @@
       $(p.btn).addEventListener('click', (e) => {
         e.stopPropagation();
         const opening = $(p.root).dataset.open !== '1';
+        // Built on open rather than on every render: a rebuild mid-drag would
+        // replace the slider under the cursor and kill the gesture.
+        if (opening && p.root === 'weightPicker') renderWeightMenu();
         openPicker(opening ? p.root : null);
         if (opening && p.root === 'addPicker') setTimeout(() => $('symbolInput').focus(), 60);
       });

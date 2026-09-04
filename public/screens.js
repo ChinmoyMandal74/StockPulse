@@ -74,6 +74,23 @@
   //
   // Weights need not total 100: the score renormalises over whichever factors
   // have data, exactly as the server's scoreFactors() does.
+  // The factors a weighting can move, in the order the sliders show them, with
+  // the captions the server also ships inside momentumBreakdown. Held here so a
+  // slider panel can be drawn before any data has loaded, and so the server can
+  // validate a submitted map against one list rather than a second copy.
+  const FACTORS = [
+    { key: 'mom121', label: '12-1 momentum' },
+    { key: 'ret6m', label: '6M return (risk-adj.)' },
+    { key: 'ret3m', label: '3M return (risk-adj.)' },
+    { key: 'fromHigh', label: '% from 52W high' },
+    { key: 'trend', label: 'Trend regime' },
+    { key: 'consistency', label: 'Consistency' },
+    { key: 'revers1m', label: '1M reversal' },
+    { key: 'rsi', label: 'RSI timing' },
+  ];
+
+  const MAX_WEIGHT = 40;   // the slider ceiling, and the server's upper bound
+
   const WEIGHT_PRESETS = [
     {
       id: 'default',
@@ -96,6 +113,35 @@
   ];
 
   const presetById = (id) => WEIGHT_PRESETS.find((p) => p.id === id) || WEIGHT_PRESETS[0];
+  const defaultWeights = () => Object.assign({}, WEIGHT_PRESETS[0].weights);
+
+  // Keeps only the eight known factors, as finite numbers inside the slider's
+  // range. Used by the browser before saving and by the server before storing,
+  // so a hand-made request cannot turn the prefs row into free storage.
+  function cleanWeights(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const out = {};
+    let any = false;
+    for (const f of FACTORS) {
+      const v = Number(raw[f.key]);
+      if (!isFinite(v) || v < 0) continue;
+      out[f.key] = Math.min(MAX_WEIGHT, Math.round(v));
+      if (out[f.key] > 0) any = true;
+    }
+    // Every factor at zero would leave nothing to score with.
+    return any ? out : null;
+  }
+
+  // What each weight is actually worth once the rest are taken into account —
+  // weights need not total 100, so a bare 20 means nothing on its own.
+  function weightShares(weights) {
+    const total = FACTORS.reduce((t, f) => t + (Number(weights[f.key]) || 0), 0);
+    const out = {};
+    for (const f of FACTORS) {
+      out[f.key] = total > 0 ? Math.round(((Number(weights[f.key]) || 0) / total) * 100) : 0;
+    }
+    return out;
+  }
 
   // Re-score one factor breakdown under a different weighting. Mirrors
   // scoreFactors() in server.js: absent factors are dropped and the rest
@@ -243,5 +289,6 @@
   return {
     SCREENS, run, num, rangePos, lowInRange, fcfYield, SURPRISE_CAP, MOM_MIN_MOVE, dayDelta,
     WEIGHT_PRESETS, presetById, scoreWithWeights, applyWeights,
+    FACTORS, MAX_WEIGHT, defaultWeights, cleanWeights, weightShares,
   };
 });
