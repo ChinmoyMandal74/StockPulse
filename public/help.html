@@ -32,11 +32,35 @@
     .lede { margin: 8px 0 22px; max-width: 62ch; }
 
     /* contents */
-    .toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 26px; }
-    .toc a { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--hair);
-             background: rgba(255, 255, 255, 0.03); color: var(--muted); font-size: 12px;
-             text-decoration: none; transition: color 0.35s var(--ease), background 0.35s var(--ease); }
-    .toc a:hover { color: var(--text); background: rgba(255, 255, 255, 0.07); }
+    .toc-wrap { margin: 0 0 22px; }
+    .toc { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+           gap: 2px 18px; margin: 0; padding: 0; list-style: none; counter-reset: toc; }
+    .toc a {
+      display: flex; align-items: baseline; gap: 9px; padding: 7px 10px; border-radius: 10px;
+      text-decoration: none; color: var(--muted); transition: background 0.3s var(--ease),
+                                                              color 0.3s var(--ease);
+    }
+    .toc a:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+    .toc .no { font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+               min-width: 15px; flex: none; }
+    .toc .tt { font-size: 13px; font-weight: 500; color: var(--text); }
+    .toc .td { display: block; font-size: 11.5px; font-weight: 400; color: var(--faint);
+               margin-top: 1px; line-height: 1.45; }
+    .toc a:hover .td { color: var(--muted); }
+
+    .adm { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em;
+           text-transform: uppercase; color: var(--amber); border: 1px solid var(--hair);
+           border-radius: 999px; padding: 1px 7px; vertical-align: 2px; }
+    ul { margin: 0 0 10px; padding-left: 18px; }
+    li { font-size: 13.5px; line-height: 1.65; color: var(--muted); margin-bottom: 5px;
+         max-width: 68ch; }
+    li b { color: var(--text); font-weight: 600; }
+    .kbd { font-family: var(--mono); font-size: 11px; color: var(--text);
+           border: 1px solid var(--hair-2); border-radius: 5px; padding: 1px 6px;
+           background: rgba(255, 255, 255, 0.05); }
+    .top { display: inline-block; margin-top: 14px; font-size: 11.5px; color: var(--faint);
+           text-decoration: none; }
+    .top:hover { color: var(--muted); }
 
     section.card { margin-bottom: 18px; scroll-margin-top: 74px; }
     section.card > .core { padding: 20px 24px 22px; }
@@ -93,19 +117,88 @@
     </nav>
   </div>
 
-  <main class="page">
+  <main class="page" id="top">
     <h1>Help</h1>
-    <p class="lede">How the numbers on the screener are worked out, and what happens when you change them.</p>
+    <p class="lede">How to read the screener, what every score means, and what happens when you change
+      it. Start anywhere — each section stands on its own.</p>
 
-    <nav class="toc">
-      <a href="#scoring">How scoring works</a>
-      <a href="#weights">The eight momentum factors</a>
-      <a href="#presets">Presets and Custom</a>
-    </nav>
+    <div class="toc-wrap bezel"><div class="core" style="padding:14px 12px">
+      <ul class="toc">
+        <li><a href="#start"><span class="no">1</span><span><span class="tt">What this is</span>
+          <span class="td">The shape of the app in a paragraph</span></span></a></li>
+        <li><a href="#table"><span class="no">2</span><span><span class="tt">Reading the table</span>
+          <span class="td">Columns, sorting, and getting around 48 of them</span></span></a></li>
+        <li><a href="#scoring"><span class="no">3</span><span><span class="tt">How scoring works</span>
+          <span class="td">Momentum, Quality and Overall out of ten</span></span></a></li>
+        <li><a href="#weights"><span class="no">4</span><span><span class="tt">The eight momentum factors</span>
+          <span class="td">What each slider measures, and why</span></span></a></li>
+        <li><a href="#presets"><span class="no">5</span><span><span class="tt">Presets and Custom</span>
+          <span class="td">Trend, Steady, and your own weighting</span></span></a></li>
+        <li><a href="#quality"><span class="no">6</span><span><span class="tt">The Quality score</span>
+          <span class="td">Company numbers, and what happens without earnings</span></span></a></li>
+        <li><a href="#screens"><span class="no">7</span><span><span class="tt">The analysis screens</span>
+          <span class="td">Nine views the sorted table cannot give you</span></span></a></li>
+        <li><a href="#stock"><span class="no">8</span><span><span class="tt">One stock in full</span>
+          <span class="td">The chart, its ranges, and the indicators</span></span></a></li>
+        <li><a href="#ask"><span class="no">9</span><span><span class="tt">Asking questions</span>
+          <span class="td">The assistant, and what it will not do</span></span></a></li>
+        <li><a href="#fresh"><span class="no">10</span><span><span class="tt">How fresh the data is</span>
+          <span class="td">Refresh, Refresh all, and the nightly run</span></span></a></li>
+        <li><a href="#account"><span class="no">11</span><span><span class="tt">Your account</span>
+          <span class="td">What is remembered, and the emails you may get</span></span></a></li>
+      </ul>
+    </div></div>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="start"><div class="core">
+      <div class="sec-h"><h2>1 · What this is</h2></div>
+      <p>Tickr Lab watches a list of stocks and ranks them on how their prices are behaving and how the
+        underlying companies are doing. It is a <strong>screener</strong>: it narrows a list down to the
+        few names worth a closer look. It does not tell you what to buy, and it deliberately never
+        offers a verdict.</p>
+      <p>Stocks are grouped into <strong>portfolios</strong> — a stock can belong to several — and the
+        picker at the top left switches between them. Prices update after each close; the company
+        numbers behind Quality refresh about once a day.</p>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="table"><div class="core">
+      <div class="sec-h"><h2>2 · Reading the table</h2></div>
+
+      <p>There are 48 columns, arranged into groups you can collapse: <em>Rank</em>, <em>Info</em>,
+        <em>Chart</em>, <em>Short-term %</em>, <em>Long-term %</em>, <em>Relative</em>, <em>Trend</em>,
+        <em>Volume</em>, <em>Size</em> and <em>Fundamentals</em>. The <strong>Columns</strong> menu
+        turns whole groups on and off, and remembers your choice against your account.</p>
+
+      <h3>Getting around</h3>
+      <ul>
+        <li>Each row in the Columns menu has a <b>jump arrow</b> that scrolls that group into view —
+          faster than dragging a scrollbar across 3,400 pixels.</li>
+        <li><span class="kbd">←</span> <span class="kbd">→</span> scroll the table sideways,
+          <span class="kbd">Shift</span> with them moves a page at a time, and
+          <span class="kbd">Home</span> / <span class="kbd">End</span> jump to either end.</li>
+        <li>Click any column header to sort by it; click again to reverse.</li>
+      </ul>
+
+      <h3>What is hiding behind a cell</h3>
+      <ul>
+        <li>Hover a <b>company name</b> for a card showing every column for that row at once — useful
+          when the value you want is off to the right.</li>
+        <li>Hover a <b>score</b> (Overall, Mom. or Qual.) to see the factors behind it, each with its
+          weight and how this stock scored on it.</li>
+        <li>The <b>90d</b> column is a sparkline of the last 90 sessions. Read the shape, not the
+          level — each line is scaled to its own high and low, so two lines are not comparable.</li>
+        <li>A small <b>chevron</b> beside the Momentum rating means the score has moved five points or
+          more over the last fortnight: green improving, red fading. No chevron means the move was
+          inside the noise.</li>
+      </ul>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="scoring"><div class="core">
-      <div class="sec-h"><h2>How scoring works</h2></div>
+      <div class="sec-h"><h2>3 · How scoring works</h2></div>
 
       <p>Every stock carries three scores out of ten. <strong>Momentum</strong> describes how the price
         has behaved. <strong>Quality</strong> describes the company behind it — growth, margins,
@@ -130,7 +223,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="weights"><div class="core">
-      <div class="sec-h"><h2>The eight momentum factors</h2></div>
+      <div class="sec-h"><h2>4 · The eight momentum factors</h2></div>
       <p>These are the sliders behind <strong>Weights → Custom</strong>. The percentage beside each name
         is its share under the Default weighting.</p>
 
@@ -227,7 +320,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="presets"><div class="core">
-      <div class="sec-h"><h2>Presets and Custom</h2></div>
+      <div class="sec-h"><h2>5 · Presets and Custom</h2></div>
 
       <p>The three presets are positions on one axis: <strong>how much you trust a move to
         continue</strong> versus how much you distrust a move that has just happened.</p>
@@ -269,6 +362,174 @@
         agrees with something you already believe, then to read that back as evidence. The reordering
         figure shown when you pick a preset is there to keep you honest about how much you have moved.
         If a weighting only looks right for today's list, it is probably fitted to it.</div>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="quality"><div class="core">
+      <div class="sec-h"><h2>6 · The Quality score</h2></div>
+      <p>Where Momentum reads the price, Quality reads the company. Six factors, all absolute rather
+        than ranked against the list — a 30% margin is a 30% margin whoever else is on your screen.</p>
+
+      <table>
+        <thead><tr><th>Factor</th><th class="n">Weight</th><th>Measures</th></tr></thead>
+        <tbody>
+          <tr><td>Earnings growth</td><td class="n">25</td><td>Latest quarter against the same quarter a year earlier</td></tr>
+          <tr><td>Revenue growth</td><td class="n">20</td><td>The same, on the top line</td></tr>
+          <tr><td>PEG</td><td class="n">20</td><td>Price/earnings set against the growth rate — cheapness relative to growth</td></tr>
+          <tr><td>Profit margin</td><td class="n">15</td><td>Net income as a share of revenue</td></tr>
+          <tr><td>Forward P/E</td><td class="n">10</td><td>Price against next year's expected earnings</td></tr>
+          <tr><td>ROE</td><td class="n">10</td><td>Return on equity — profit against the capital behind it</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Companies without earnings</h3>
+      <p>Three of those factors — earnings growth, PEG and forward P/E — describe earnings, and mean
+        nothing for a company that is losing money. For a loss-maker they are <strong>excluded rather
+        than scored zero</strong>, and the remaining factors are re-weighted to cover the gap.</p>
+      <p>This matters more than it sounds. The data feed will happily report a healthy-looking PEG for a
+        company losing hundreds of millions, and taken at face value it once rated such a company
+        8 out of 10.</p>
+
+      <div class="note"><b>Sometimes there is no Quality score at all.</b> If less than 40% of the
+        factor weight has usable data, the column shows a dash rather than a number, and Overall falls
+        back to Momentum alone. A score resting on one factor is not a score. ETFs and funds show a dash
+        for the same reason — they have no revenue or earnings of their own.</div>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="screens"><div class="core">
+      <div class="sec-h"><h2>7 · The analysis screens</h2></div>
+      <p>The <strong>Analysis</strong> page holds nine filtered views. They are built from the raw
+        numbers rather than the composite scores, on purpose: a screen that just re-sorts the ranking
+        tells you nothing the table did not.</p>
+      <p>Every threshold was set by running the candidate against the real list. A screen that returns
+        nothing is a dead box, and one that returns a third of the list is not a signal.</p>
+
+      <table>
+        <thead><tr><th>Screen</th><th>What it looks for</th></tr></thead>
+        <tbody>
+          <tr><td>Momentum improving</td><td>Momentum score up 5 points or more over a fortnight</td></tr>
+          <tr><td>Momentum fading</td><td>Down 5 points or more — a high rating that is slipping</td></tr>
+          <tr><td>Bouncing off the lows</td><td>Low in its 52-week range, but up over both the last month and the last fortnight</td></tr>
+          <tr><td>Just started moving</td><td>Up more than 5% in a fortnight while still negative over three months</td></tr>
+          <tr><td>Drifting after a beat</td><td>Beat consensus by more than 10% and reported within three weeks</td></tr>
+          <tr><td>Reporting in 14 days</td><td>A catalyst and a risk in the same event</td></tr>
+          <tr><td>Cheap, growing, profitable</td><td>Forward P/E under 20, revenue growth over 15%, net margin over 15%</td></tr>
+          <tr><td>Business improving, price isn't</td><td>Revenue growing over 25% while the price fell more than 10% in three months</td></tr>
+          <tr><td>Overextended</td><td>RSI above 75 and more than 12% above the 50-day average</td></tr>
+        </tbody>
+      </table>
+
+      <div class="note"><b>The first two are the ones a ranked table cannot give you.</b> Everything
+        else describes where a stock stands; those describe where it is going. A name climbing from the
+        middle of the pack is the interesting case — by the time it reaches the top of the ranking, the
+        move has already happened.</div>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="stock"><div class="core">
+      <div class="sec-h"><h2>8 · One stock in full</h2></div>
+      <p>Clicking a company name opens that stock on its own page, in a new tab, with a price chart and
+        every column the screener holds. The symbol at the top is also a picker — click it to jump to
+        any other stock without going back.</p>
+
+      <h3>The chart</h3>
+      <ul>
+        <li><b>Ranges</b> from one week to the full archive, which for most names runs back to 2006.</li>
+        <li><b>50-day and 200-day averages</b> can be switched on independently. Each is drawn from
+          enough extra history to start at the left edge rather than partway across.</li>
+        <li><b>Volume</b> sits below the price, each bar green or red by whether that session closed
+          above the one before.</li>
+        <li><b>RSI</b> is its own panel with the 70 and 30 lines marked. Turning it on makes the chart
+          taller rather than squeezing the price.</li>
+        <li><b>Move the pointer across</b> for a dotted crosshair, the date on the axis, and a readout
+          of price, day change, volume and RSI at that point.</li>
+      </ul>
+
+      <div class="note"><b>The y-axis switches to a log scale</b> when a range spans more than about
+        four-fold, and says so in the caption. Over twenty years a linear axis flattens everything but
+        the last few months into a line along the bottom.</div>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="ask"><div class="core">
+      <div class="sec-h"><h2>9 · Asking questions</h2></div>
+      <p><strong>Ask</strong> puts a question to the same data in plain English — "which names have a
+        margin above 20% and are within 10% of their high", or "what is improving fastest". The whole
+        table is given to the assistant, so it is answering from your actual numbers rather than from
+        memory.</p>
+
+      <h3>What it will not do</h3>
+      <ul>
+        <li><b>No buy, sell or hold verdicts.</b> Not a disclaimer bolted on the end — it will not
+          produce one, for the same reason it will not make up a number.</li>
+        <li><b>It says when something is missing</b> and points you at what is there instead, rather
+          than inventing a plausible answer.</li>
+        <li><b>"Will it go up" is unknowable</b>, and it will say so rather than guessing.</li>
+        <li>General company knowledge is allowed, but flagged as background rather than presented as
+          something your data shows.</li>
+      </ul>
+
+      <div class="note"><b>There is a daily limit</b> — three questions a day for members, sixty for the
+        owner. It counts against your account rather than your browser, resets at midnight UTC, and a
+        question that fails on a bad request does not consume one.</div>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="fresh"><div class="core">
+      <div class="sec-h"><h2>10 · How fresh the data is</h2></div>
+      <p>The bar shows when the data was last pulled and the trading day it covers. Everyone sees the
+        same stored snapshot, so two people reading the screener are reading the same numbers.</p>
+
+      <h3>Two kinds of refresh <span class="adm">owner only</span></h3>
+      <ul>
+        <li><b>Refresh</b> re-pulls prices and recomputes the ranking. Seconds, and the company numbers
+          are left as they were.</li>
+        <li><b>Refresh all</b> additionally re-pulls every company profile — sector, market cap,
+          margins, growth. It runs for about thirteen minutes, in batches, because the data provider
+          only allows so much per minute.</li>
+      </ul>
+
+      <p><strong>A full refresh runs on its own every evening</strong>, after the close, so the list is
+        current each morning without anyone touching it. While one is in progress every open page shows
+        a notice, and the values already on screen stay put rather than blanking out.</p>
+
+      <div class="note"><b>A warning triangle beside a symbol</b> means that stock's most recent price
+        is older than the freshest one on the list. Usually it trades on an exchange with a different
+        calendar, not that anything is broken.</div>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="account"><div class="core">
+      <div class="sec-h"><h2>11 · Your account</h2></div>
+
+      <h3>What is remembered</h3>
+      <p>Which column groups you have collapsed, and which momentum weighting each page is using, are
+        stored <em>against your account rather than your browser</em> — so they follow you to another
+        machine, and are not shared with whoever else uses this computer.</p>
+
+      <h3>Emails</h3>
+      <ul>
+        <li>A short <b>welcome</b> when the account is created.</li>
+        <li>A <b>password reset link</b> if you ask for one. It works once and expires in thirty
+          minutes; asking for a new one cancels the old.</li>
+        <li>Replies to anything you send through <b>Contact</b>, which reaches the owner directly.</li>
+      </ul>
+
+      <h3>Signing in</h3>
+      <p>Change your password from the <strong>⋯</strong> menu; doing so signs out your other devices,
+        which is the point. If you are locked out after too many attempts, it clears itself after
+        fifteen minutes.</p>
+
+      <div class="note"><b>Something wrong, or a ticker you would like added?</b> Use
+        <a href="/contact" style="color:var(--muted)">Contact</a> — it comes from your account, so a
+        reply reaches you directly.</div>
+      <a class="top" href="#top">↑ Contents</a>
     </div></section>
   </main>
 </body>

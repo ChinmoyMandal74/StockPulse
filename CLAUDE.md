@@ -396,7 +396,8 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 ## The help page
 `/help` explains the app to the people using it, so it is open to **any signed-in user** rather than admin-only. Reached from `Help` in the ⋯ menu, beside Contact, and from a link in the Weights menu itself — which is where the question actually arises.
 
-- **Three sections so far**: how scoring works, what each of the eight momentum factors measures, and what the presets do. Written for someone deciding whether to move a slider, so every factor says what raising or lowering it changes rather than only what it is.
+- **Eleven numbered sections behind a contents grid**: what the app is, reading the table, how scoring works, the eight momentum factors, presets and Custom, the Quality score, the analysis screens, the stock page, the assistant, data freshness, and the account. Each ends with a link back to the contents, and `scroll-margin-top` clears the sticky island on an anchor jump.
+- Written for someone with a hand on a control, not someone studying the model — every factor says what raising or lowering it changes, not only what it is. Owner-only features carry an `.adm` badge rather than being hidden, so members can see what the buttons they lack actually do.
 - **It restates numbers that live in code** — the default weights, the 65/35 blend, the preset table. If those change, this page has to change with them; there is deliberately no attempt to generate it from `screens.js`, because the prose around each number matters more than the number.
 - The caution about fitting a weighting to today's list lives at the bottom of the presets section, next to the thing that invites it.
 
