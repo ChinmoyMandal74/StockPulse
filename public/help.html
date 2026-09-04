@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Help — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 860px; margin: 0 auto; padding: 0 24px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 8% 0%, rgba(124, 156, 255, 0.10), transparent 62%),
+        radial-gradient(50vw 44vw at 96% 6%, rgba(167, 139, 250, 0.10), transparent 64%); }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 10px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
+      padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+
+    h1 { margin: 22px 0 0; font-size: clamp(26px, 3.4vw, 34px); font-weight: 600;
+         letter-spacing: -0.035em; line-height: 1.05; }
+    .lede { margin: 8px 0 22px; max-width: 62ch; }
+
+    /* contents */
+    .toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 26px; }
+    .toc a { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--hair);
+             background: rgba(255, 255, 255, 0.03); color: var(--muted); font-size: 12px;
+             text-decoration: none; transition: color 0.35s var(--ease), background 0.35s var(--ease); }
+    .toc a:hover { color: var(--text); background: rgba(255, 255, 255, 0.07); }
+
+    section.card { margin-bottom: 18px; scroll-margin-top: 74px; }
+    section.card > .core { padding: 20px 24px 22px; }
+    .sec-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+    .sec-h h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em;
+                text-transform: uppercase; color: var(--muted); }
+    h3 { margin: 22px 0 4px; font-size: 15px; font-weight: 600; letter-spacing: -0.015em; }
+    h3:first-of-type { margin-top: 10px; }
+    p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.65; color: var(--muted); max-width: 70ch; }
+    p.tight { margin-bottom: 4px; }
+    strong { color: var(--text); font-weight: 600; }
+    em { color: var(--text); font-style: normal; }
+    code { font-family: var(--mono); font-size: 12px; color: var(--text);
+           background: rgba(255, 255, 255, 0.05); padding: 1px 5px; border-radius: 5px; }
+
+    /* the factor list */
+    .factor { padding: 14px 0; border-top: 1px solid var(--hair); }
+    .factor:first-of-type { border-top: 0; padding-top: 4px; }
+    .fh { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 5px; }
+    .fh h3 { margin: 0; }
+    .wt { font-family: var(--mono); font-size: 11px; color: var(--faint);
+          border: 1px solid var(--hair); border-radius: 999px; padding: 1px 8px; }
+    .lever { margin-top: 6px; font-size: 12.5px; line-height: 1.6; color: var(--faint); }
+    .lever b { color: var(--muted); font-weight: 500; }
+
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 2px; }
+    th, td { text-align: left; padding: 7px 10px 7px 0; font-size: 12.5px;
+             border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+    th { color: var(--faint); font-weight: 500; font-size: 10.5px;
+         text-transform: uppercase; letter-spacing: 0.12em; }
+    td { color: var(--muted); }
+    td.n { font-family: var(--mono); color: var(--text); text-align: right; width: 62px; }
+    td:first-child { color: var(--text); }
+
+    .note { margin-top: 14px; padding: 11px 14px; border-radius: 11px;
+            border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.022);
+            font-size: 12.5px; line-height: 1.6; color: var(--faint); }
+    .note b { color: var(--muted); font-weight: 500; }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark"><span class="wordmark">Tickr Lab</span></span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <h1>Help</h1>
+    <p class="lede">How the numbers on the screener are worked out, and what happens when you change them.</p>
+
+    <nav class="toc">
+      <a href="#scoring">How scoring works</a>
+      <a href="#weights">The eight momentum factors</a>
+      <a href="#presets">Presets and Custom</a>
+    </nav>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="scoring"><div class="core">
+      <div class="sec-h"><h2>How scoring works</h2></div>
+
+      <p>Every stock carries three scores out of ten. <strong>Momentum</strong> describes how the price
+        has behaved. <strong>Quality</strong> describes the company behind it — growth, margins,
+        valuation. <strong>Overall</strong> blends them, <em>65% momentum and 35% quality</em>, and the
+        Rank column orders the list by it.</p>
+
+      <p>Momentum is scored <strong>against the other stocks on your list</strong>, not against fixed
+        targets. Six of the eight factors below are percentile-ranked across the universe, so a score of
+        90 means "near the top of this list" rather than "past some threshold". That has two
+        consequences worth knowing: adding or removing tickers can nudge everyone's score, and in a bad
+        quarter the strongest names still score well relatively instead of everything collapsing to zero
+        together.</p>
+
+      <p>The remaining two factors — <em>trend regime</em> and <em>RSI timing</em> — are absolute,
+        because "above its 200-day average" and "overbought" mean the same thing regardless of what the
+        rest of the list is doing.</p>
+
+      <div class="note"><b>Missing data is dropped, not counted as zero.</b> If a factor cannot be
+        computed for a stock — usually too little price history — it is removed and the remaining
+        weights are rescaled to fill the gap. A stock is never punished for a number nobody has.</div>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="weights"><div class="core">
+      <div class="sec-h"><h2>The eight momentum factors</h2></div>
+      <p>These are the sliders behind <strong>Weights → Custom</strong>. The percentage beside each name
+        is its share under the Default weighting.</p>
+
+      <div class="factor">
+        <div class="fh"><h3>12-1 momentum</h3><span class="wt">20%</span></div>
+        <p class="tight">The last twelve months of return, <em>excluding the most recent month</em>,
+          divided by how much the stock normally swings.</p>
+        <p>Skipping the final month is deliberate. Over a year, strength tends to continue; over a few
+          weeks it tends to give some back. Leaving the last month in would mix the two effects and
+          blunt both.</p>
+        <div class="lever"><b>Raise it</b> to favour names with a long, established run.
+          <b>Lower it</b> if you care more about what is happening now than what happened last autumn.</div>
+      </div>
+
+      <div class="factor">
+        <div class="fh"><h3>6M return (risk-adjusted)</h3><span class="wt">18%</span></div>
+        <p class="tight">Six-month return divided by realised volatility.</p>
+        <p>The division is the important part. A 40% gain in a stock that normally drifts is a stronger
+          signal than the same 40% in one that swings that much routinely — without adjusting, the
+          score would simply reward whatever is most volatile.</p>
+        <div class="lever"><b>Raise it</b> for a medium-horizon view that still leans on established
+          moves. <b>Lower it</b> to let the one-year and three-month factors decide.</div>
+      </div>
+
+      <div class="factor">
+        <div class="fh"><h3>3M return (risk-adjusted)</h3><span class="wt">17%</span></div>
+        <p class="tight">The same measure over three months.</p>
+        <p>This is the shortest horizon treated as <em>more is better</em>. Below about three months the
+          evidence flips towards reversal, which is why the one-month factor further down is inverted
+          rather than simply weighted less.</p>
+        <div class="lever"><b>Raise it</b> to react sooner to something that has started working.
+          <b>Lower it</b> to be less easily impressed by a good quarter.</div>
+      </div>
+
+      <div class="factor">
+        <div class="fh"><h3>% from 52-week high</h3><span class="wt">10%</span></div>
+        <p class="tight">How far below its highest point of the last year the stock is trading.</p>
+        <p>Sitting near a 52-week high is itself a form of strength: there is nobody left holding at a
+          loss and waiting to sell into a recovery. A stock 40% below its high has to climb through all
+          of that.</p>
+        <div class="lever"><b>Raise it</b> to favour names already at the top of their range.
+          <b>Lower it</b> if you are hunting for recoveries rather than leaders.</div>
+      </div>
+
+      <div class="factor">
+        <div class="fh"><h3>Trend regime</h3><span class="wt">10%</span></div>
+        <p class="tight">Which side of its 200-day average the stock is on, and whether the 50-day has
+          crossed the 200-day in the last twenty sessions.</p>
+        <p>Unlike the return factors this one is a category, not a ranking. A fresh cross upward scores
+          full marks, an established uptrend slightly less, a long downtrend little, and a fresh cross
+          downward nothing. It is the one factor that says <em>which way the tide is running</em>
+          rather than how fast.</p>
+        <div class="lever"><b>Raise it</b> to insist on trend confirmation. <b>Lower it</b> if you are
+          willing to be early, before the averages agree.</div>
+      </div>
+
+      <div class="factor">
+        <div class="fh"><h3>Consistency</h3><span class="wt">10%</span></div>
+        <p class="tight">What share of the last twelve months closed higher than the month before.</p>
+        <p>Two stocks can post the same annual return, one by grinding upward most months and one on a
+          single enormous week. This separates them. It is the closest thing here to a measure of how
+          comfortable the ride was.</p>
+        <div class="lever"><b>Raise it</b> to prefer steady climbers over one-jump wonders.
+          <b>Lower it</b> if you do not care how the return arrived.</div>
+      </div>
+
+      <div class="factor">
+        <div class="fh"><h3>1M reversal</h3><span class="wt">8%</span></div>
+        <p class="tight">The one-month return, <em>inverted</em> — the biggest recent movers score
+          <em>lowest</em> here.</p>
+        <p>This is the only factor that runs backwards, and it is not a mistake. At a one-month horizon
+          the evidence points to reversal rather than continuation, so a name that has just jumped 30%
+          is more likely to give some back than to repeat. Treat it as a brake, not a verdict: it never
+          outvotes the longer factors, it just stops the score chasing whatever moved last week.</p>
+        <div class="lever"><b>Raise it</b> to be more cautious about anything that has just run.
+          <b>Set it to zero</b> — as the Trend preset does — to chase strength wherever it appears.</div>
+      </div>
+
+      <div class="factor">
+        <div class="fh"><h3>RSI timing</h3><span class="wt">7%</span></div>
+        <p class="tight">Where the 14-day Relative Strength Index sits, scored on a curve that
+          <em>peaks around 70–75</em>.</p>
+        <p>Not more-is-better. A reading in the low 70s is the sweet spot — strong but not stretched.
+          Below 30 scores poorly because the stock is falling, and above 85 the score drops away again
+          because it is overextended and prone to a snapback.</p>
+        <div class="lever"><b>Raise it</b> to weight entry timing more heavily. <b>Lower it</b> if you
+          intend to hold through the noise anyway.</div>
+      </div>
+
+      <div class="note"><b>Weights do not have to total 100.</b> Only their relative sizes matter — the
+        score rescales them for you, which is what the second number beside each slider shows. Setting
+        every slider to 10 is the same as setting them all to 1.</div>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="presets"><div class="core">
+      <div class="sec-h"><h2>Presets and Custom</h2></div>
+
+      <p>The three presets are positions on one axis: <strong>how much you trust a move to
+        continue</strong> versus how much you distrust a move that has just happened.</p>
+
+      <table>
+        <thead><tr><th>Factor</th><th class="n">Default</th><th class="n">Trend</th><th class="n">Steady</th></tr></thead>
+        <tbody>
+          <tr><td>12-1 momentum</td><td class="n">20</td><td class="n">18</td><td class="n">24</td></tr>
+          <tr><td>6M return</td><td class="n">18</td><td class="n">20</td><td class="n">16</td></tr>
+          <tr><td>3M return</td><td class="n">17</td><td class="n">24</td><td class="n">10</td></tr>
+          <tr><td>% from 52W high</td><td class="n">10</td><td class="n">12</td><td class="n">8</td></tr>
+          <tr><td>Trend regime</td><td class="n">10</td><td class="n">16</td><td class="n">10</td></tr>
+          <tr><td>Consistency</td><td class="n">10</td><td class="n">4</td><td class="n">20</td></tr>
+          <tr><td>1M reversal</td><td class="n">8</td><td class="n">0</td><td class="n">8</td></tr>
+          <tr><td>RSI timing</td><td class="n">7</td><td class="n">6</td><td class="n">4</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Trend</h3>
+      <p>Shorter horizons, a stronger trend requirement, and <em>no reversal brake at all</em>. It wants
+        whatever is working right now and accepts that some of it will give back.</p>
+
+      <h3>Steady</h3>
+      <p>The year-long factor and month-to-month consistency lead, and the three-month factor is cut to
+        10. A name has to have been working for a while, and to have done it repeatedly.</p>
+
+      <h3>Custom</h3>
+      <p>Eight sliders, saved to your account, so the setting follows you to another browser or machine.
+        Choosing Custom starts from a copy of Default rather than a blank slate, and
+        <strong>Copy Default</strong> puts it back at any time.</p>
+
+      <div class="note"><b>Changing weights changes your view, not the data.</b> The screener and the
+        analysis page each remember their own choice. The nightly email, the assistant and the stored
+        snapshot always use Default, so a score quoted anywhere outside your own screen means the same
+        thing to everyone. Whenever a non-default weighting is in force, the Momentum, Overall and Rank
+        columns are tinted, and an exported CSV names the weighting in those column headers.</div>
+
+      <div class="note"><b>A word of caution.</b> Sliders make it easy to keep adjusting until the list
+        agrees with something you already believe, then to read that back as evidence. The reordering
+        figure shown when you pick a preset is there to keep you honest about how much you have moved.
+        If a weighting only looks right for today's list, it is probably fitted to it.</div>
+    </div></section>
+  </main>
+</body>
+</html>

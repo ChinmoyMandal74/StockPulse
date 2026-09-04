@@ -29,6 +29,7 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `public/visitors.html` | Admin-only visitor log page at `/visitors` |
 | `public/users.html` | Admin-only account maintenance at `/users` — list and delete, no add |
 | `public/contact.html` | Signed-in contact form at `/contact` — subject + message, mailed to the owner |
+| `public/help.html` | User-facing help at `/help` — how scoring works, what each momentum factor means |
 | `public/screens.js` | **The seven analysis screens, defined once** — loaded by `analysis.html` and `require`d by `server.js` |
 | `.github/workflows/nightly-refresh.yml` | The 8PM Refresh all — see **The nightly job** below |
 | `public/favicon.svg` | Momentum-line mark, emerald on OLED black |
@@ -391,6 +392,13 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 - `public/chat.html` carries a ~60-line markdown renderer for the reply (tables, lists, headings, bold/italic/code). **It escapes HTML before applying any markdown**, so nothing a model returns can inject markup.
 
 **Gated pages are no longer served raw.** `public/` is mounted wholesale, which used to hand out `/chat.html`, `/analysis.html` and `/visitors.html` at their file path and skip the guard. `GATED_PAGES` redirects those to the routed path.
+
+## The help page
+`/help` explains the app to the people using it, so it is open to **any signed-in user** rather than admin-only. Reached from `Help` in the ⋯ menu, beside Contact, and from a link in the Weights menu itself — which is where the question actually arises.
+
+- **Three sections so far**: how scoring works, what each of the eight momentum factors measures, and what the presets do. Written for someone deciding whether to move a slider, so every factor says what raising or lowering it changes rather than only what it is.
+- **It restates numbers that live in code** — the default weights, the 65/35 blend, the preset table. If those change, this page has to change with them; there is deliberately no attempt to generate it from `screens.js`, because the prose around each number matters more than the number.
+- The caution about fitting a weighting to today's list lives at the bottom of the presets section, next to the thing that invites it.
 
 ## Momentum weight lens
 **Both `/` and `/analysis` carry a Default · Trend · Steady selector** — a `Weights` picker in the screener's bar, and a bar above the screens on the analysis page. Each page keeps its own choice; the nightly report, the assistant and the stored snapshot always stay on Default, so the shared score remains one comparable measurement.

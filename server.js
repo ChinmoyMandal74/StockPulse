@@ -117,6 +117,13 @@ app.get('/stock/:symbol', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'stock.html'));
 }));
 
+// Open to any signed-in user, like /analysis and /chat — it explains the app to
+// whoever is using it, so gating it behind admin would defeat the point.
+app.get('/help', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  res.sendFile(path.join(__dirname, 'public', 'help.html'));
+}));
+
 app.get('/contact', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'contact.html'));
@@ -145,7 +152,7 @@ app.get('/login', (req, res) => {
 // routed path, where the guard runs.
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/users.html': '/users', '/reset.html': '/reset',
-                      '/contact.html': '/contact',
+                      '/contact.html': '/contact', '/help.html': '/help',
                       // no symbol in that path, so there is nothing to show
                       '/stock.html': '/' };
 app.get(Object.keys(GATED_PAGES), (req, res) => res.redirect(GATED_PAGES[req.path]));

@@ -536,6 +536,7 @@
     <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3.6" y="5.2" width="16.8" height="13.6" rx="2.6"/><path d="M9.2 5.2v13.6M14.8 5.2v13.6"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.6 9.8 17.4 19 6.6"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15.2l5.5-5.7"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.4a2.6 2.6 0 1 1 3.4 2.5c-.6.2-.9.7-.9 1.3v.5"/><path d="M12 17.1h.01"/></symbol>
     <symbol id="i-scales" viewBox="0 0 24 24"><path d="M12 4.4v15.2"/><path d="M6.6 19.6h10.8"/><path d="M4 9.2h16"/><path d="M4 9.2 1.8 14.2h4.4z"/><path d="M20 9.2 17.8 14.2h4.4z"/></symbol>
     <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3.6 19.2h16.8"/><path d="M4.4 14.6 9.6 9l3.6 3.4 6.2-6.8"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.6 6.6 17.4 17.4M17.4 6.6 6.6 17.4"/></symbol>
@@ -664,6 +665,10 @@
               <div id="sessionActions" style="display:none">
                 <div class="pick-sep" id="sessionSep"></div>
                 <div class="pick" id="whoami" style="display:none;cursor:default;color:var(--faint);font-family:var(--mono);font-size:11px"></div>
+                <a class="pick" href="/help">
+                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-help" /></svg>
+                  <span class="nm">Help</span>
+                </a>
                 <a class="pick" href="/contact">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-mail" /></svg>
                   <span class="nm">Contact the owner</span>
@@ -1651,7 +1656,8 @@
         sliders +
         '<div class="pick-sep"></div>' +
         '<div class="pick-hint">Changes the Momentum, Overall and Rank columns on this page only. ' +
-        'The nightly email, the assistant and /analysis keep their own setting.</div></div>';
+        'The nightly email, the assistant and /analysis keep their own setting.<br>' +
+        '<a href="/help#weights" style="color:var(--muted)">What does each factor mean?</a></div></div>';
 
       $('weightMenu').querySelectorAll('[data-weight]').forEach((b) => {
         b.addEventListener('click', (ev) => { ev.stopPropagation(); setWeightPreset(b.dataset.weight); });
