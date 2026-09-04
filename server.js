@@ -1733,8 +1733,15 @@ app.post('/api/refresh-all', requireAdmin, route(async (req, res) => {
 // notice clears promptly. readRefreshState() ages the flag out on its own if
 // this never arrives — an admin can always just close the tab.
 app.delete('/api/refresh-all', requireAdmin, route(async (req, res) => {
-  await endRefresh();
-  res.json({ ok: true });
+  // Report from here too, the way the cron job's equivalent does. This is the
+  // give-up path — the loop ran out of rounds, or the tab was closed — and a run
+  // that stopped at 78 of 84 needs to say so. Silence is indistinguishable from
+  // success, which is exactly how the incomplete run went unnoticed.
+  //
+  // endRefresh() returns the run only to whoever actually cleared the flag, so a
+  // run that already finished naturally and reported cannot report twice.
+  const reported = await sendRefreshReport(await endRefresh(), 'all');
+  res.json({ ok: true, reported });
 }));
 
 // Cheap poll for viewers: is a refresh running? Deliberately not the whole

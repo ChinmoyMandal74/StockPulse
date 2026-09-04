@@ -2018,20 +2018,36 @@
       try {
         setStatus('Expiring cached company data…');
         showLoading('Expiring cached company data and re-pulling it…');
-        await api('POST', '/api/refresh-all');
+        const started = await api('POST', '/api/refresh-all');
+
+        // The server fetches PROFILES_PER_ROUND symbols per call, so the rounds
+        // needed scale with the universe. This used to be a flat 15, which at 84
+        // symbols left one round of slack — so a single refused round ended the
+        // run a round early and it stopped at 78 of 84 with no explanation.
+        const PROFILES_PER_ROUND = 6;
+        const universe = Number(started && started.total) || 0;
+        const budget = Math.ceil((universe || 84) / PROFILES_PER_ROUND) + 4;
+        // A round the rate limiter refuses fetched nothing, so it must not spend
+        // the budget for a round that would have. It gets its own allowance.
+        const REFUSALS_ALLOWED = 8;
 
         let data = null;
         let lastLoaded = -1;
         let stagnant = 0;
-        for (let round = 0; round < 15; round++) {
+        let rounds = 0;
+        let refusals = 0;
+
+        while (rounds < budget && refusals < REFUSALS_ALLOWED) {
           try {
             data = await api('GET', '/api/stocks?refresh=1');
           } catch (e) {
+            refusals++;
             setStatus('Rate limited — waiting a minute…');
             showLoading('Waiting for the API rate limit to reset… (resumes automatically)');
             await sleep(62000);
             continue;
           }
+          rounds++;
           const total = data.stocks.length;
           const loaded = data.stocks.filter((s) => s.profileFetchedAt != null).length;
           renderRefreshNote(data.refreshing || null);
