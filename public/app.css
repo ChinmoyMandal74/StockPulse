@@ -394,6 +394,10 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
                  color: var(--faint); font-size: 10.5px; line-height: 1.5; }
 
 /* A card row that carries a breakdown, on the stock page only. */
+/* a linked value inside a card row — only the stock page uses one so far */
+.rc-link { color: inherit; text-decoration: none; border-bottom: 1px solid var(--hair-2); }
+.rc-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
 .rc-row.has-tip { cursor: help; border-radius: 6px; margin: 0 -6px; padding: 0 6px;
                   transition: background 0.35s var(--ease); }
 .rc-row.has-tip:hover { background: rgba(255, 255, 255, 0.045); }

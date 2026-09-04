@@ -92,6 +92,8 @@
     .chip { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hair);
             background: rgba(255, 255, 255, 0.03); color: var(--muted); }
 
+    .about { margin: 0; font-size: 13.5px; line-height: 1.7; color: var(--muted); max-width: 78ch; }
+
     section.card { margin-bottom: 16px; }
     section.card:first-of-type { margin-top: 14px; }
     section.card > .core { padding: 13px 18px 16px; }
@@ -338,6 +340,22 @@
       return p.length === 3 ? `${MON[+p[1] - 1]} ${+p[2]}, ${p[0]}` : (iso || '');
     };
 
+    // Rows appended to the Info group. Each is skipped rather than shown empty:
+    // a profile that has not been re-pulled since these fields were captured
+    // simply has fewer rows, which reads better than a column of em-dashes.
+    function companyRows(c) {
+      if (!c) return [];
+      const rows = [];
+      if (c.employees != null && isFinite(c.employees)) {
+        rows.push({ k: 'Employees', t: Number(c.employees).toLocaleString() });
+      }
+      if (c.website) {
+        rows.push({ k: 'Website', t: String(c.website).replace(/^https?:\/\//, '').replace(/\/$/, ''),
+                    href: c.website });
+      }
+      return rows;
+    }
+
     function paintChart() {
       const box = document.getElementById('chart');
       if (!box) return;
@@ -477,8 +495,17 @@
             // There is no table to hover here, so the scores would otherwise be
             // four bare numbers with nothing to explain them.
             tips: true,
+            // Company facts the screener never carries — they come from the
+            // profile rather than the snapshot, so only this page has them.
+            extra: { info: companyRows(payload.company) },
           })}</div>
         </section></div>
+
+        ${payload.company && payload.company.description ? `
+        <section class="bezel card"><div class="core">
+          <div class="sec-h"><h2>About ${esc(stock.symbol)}</h2></div>
+          <p class="about">${esc(payload.company.description)}</p>
+        </div></section>` : ''}
 
         <p class="later">Prices as of ${esc(payload.updatedAt ? new Date(payload.updatedAt).toLocaleString() : 'n/a')}.
         More charts will land on this page.</p>

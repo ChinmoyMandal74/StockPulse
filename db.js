@@ -299,6 +299,25 @@ async function writeNames(map) {
 
 // ---- profile cache --------------------------------------------------------
 
+// One profile, for the stock page. readProfiles() pulls the whole table, and the
+// blob now carries a company description — reading 84 of them to render one page
+// is a lot of rows to throw away.
+async function readProfile(symbol) {
+  await init();
+  const r = await db.execute({
+    sql: 'select data, fetched_at from profiles where symbol = ?', args: [String(symbol)],
+  });
+  if (!r.rows.length) return null;
+  try {
+    const obj = JSON.parse(r.rows[0].data) || {};
+    const t = Number(r.rows[0].fetched_at);
+    if (t > 0) obj.fetchedAt = t; else delete obj.fetchedAt;
+    return obj;
+  } catch {
+    return null;
+  }
+}
+
 async function readProfiles() {
   await init();
   const r = await db.execute('select symbol, data, fetched_at from profiles');
@@ -945,6 +964,7 @@ module.exports = {
   writePortfolios,
   readNames,
   writeNames,
+  readProfile,
   readProfiles,
   writeProfiles,
   expireProfiles,

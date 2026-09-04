@@ -552,14 +552,22 @@
     }
 
     return GROUP_ORDER
-      .filter((g) => byGroup[g] && byGroup[g].some((r) => r.t !== '—'))
+      .filter((g) => (byGroup[g] && byGroup[g].some((r) => r.t !== '—'))
+        || ((o.extra && o.extra[g] || []).length > 0))
       .map((g) => {
         const c = colors[g] || 'var(--accent)';
-        const rows = byGroup[g].map((r) => {
+        // `extra` appends rows to a named group. Opt-in, and only the stock page
+        // passes it: these values are not in the snapshot, so putting them in
+        // FIELD_SPEC would print an em-dash in the hover card on every other page.
+        const extras = (o.extra && o.extra[g]) || [];
+        const rows = byGroup[g].concat(extras).map((r) => {
           const tip = o.tips && g === 'rank' ? ROW_TIPS[r.k] : null;
+          const val = r.href
+            ? `<a class="rc-link" href="${esc(r.href)}" target="_blank" rel="noopener">${esc(r.t)}</a>`
+            : esc(r.t);
           return `<div class="rc-row${tip ? ' has-tip' : ''}"${tip ? ` data-tip="${tip}"` : ''}>` +
             `<span class="rc-k">${esc(r.k)}</span>` +
-            `<span class="rc-v ${r.c}"${r.b ? ' style="font-weight:600"' : ''}>${esc(r.t)}</span></div>`;
+            `<span class="rc-v ${r.c || ''}"${r.b ? ' style="font-weight:600"' : ''}>${val}</span></div>`;
         }).join('');
         return `<div class="rc-sec"><div class="rc-sec-h" style="color:${c}"><i></i>` +
                `${esc(labels[g] || g)}</div>${rows}</div>`;

@@ -870,8 +870,21 @@ async function fetchProfile(symbol) {
 
   try {
     const p = await fetchJson(`${TD_BASE}/profile?symbol=${enc}&apikey=${API_KEY}`);
-    if (p && p.status === 'error') out.fetchOk = false;
-    else if (p && p.sector) out.sector = p.sector;
+    if (p && p.status === 'error') {
+      out.fetchOk = false;
+    } else if (p) {
+      if (p.sector) out.sector = p.sector;
+      // Everything below was already in this response and being discarded. The
+      // call costs the same whether one field is read or five, so these are
+      // free — but they are kept out of the snapshot and out of the assistant's
+      // prompt, and served only to the stock page. Eighty-odd descriptions is
+      // ~70 KB on every screener load and ~20k tokens of prose that answers
+      // none of the numeric questions anyone asks the bot.
+      if (p.description) out.description = String(p.description).slice(0, 4000);
+      const emp = Number(p.employees);
+      if (isFinite(emp) && emp > 0) out.employees = Math.round(emp);
+      if (p.website) out.website = String(p.website).slice(0, 300);
+    }
   } catch {
     out.fetchOk = false;
   }
@@ -2289,8 +2302,18 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   const ranked = stocks.filter((x) => x.overallScore != null)
     .slice().sort((a, b) => b.overallScore - a.overallScore);
   const rank = ranked.findIndex((x) => x.symbol === stock.symbol);
+  // Read straight from the profile rather than the snapshot: these three are
+  // deliberately absent from the row the screener serves to everyone.
+  let profile = null;
+  try { profile = await store.readProfile(stock.symbol); } catch { /* optional */ }
+
   res.json({
     stock,
+    company: profile ? {
+      description: profile.description || null,
+      employees: profile.employees ?? null,
+      website: profile.website || null,
+    } : null,
     rank: rank >= 0 ? rank + 1 : null,
     rankTotal: ranked.length,
     // The symbol picker's list. The whole snapshot is already in memory to work
