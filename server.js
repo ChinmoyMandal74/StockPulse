@@ -2667,22 +2667,29 @@ async function finishLiveRefresh(payload, ctx = {}) {
     }
   }
 
-  const done = rows.length > 0 && loaded >= rows.length;
-  if (done) {
-    // endRefresh() runs either way, so a flag left stale by an abandoned run is
-    // cleared rather than lingering. Which report goes out is decided by whether
-    // a run was still live a moment ago, not by what the delete returned: a
-    // stalled Refresh all reports nothing, and the click that happens to finish
-    // the universe is reported as the ordinary Refresh it was.
-    const cleared = await endRefresh();
-    if (running && cleared) await sendRefreshReport(cleared, 'all');
-    else if (!running && ctx.startedAt) {
-      await sendRefreshReport({ startedAt: ctx.startedAt, actor: ctx.actor }, 'plain');
+  // Full profile coverage is what finishing means for a Refresh all, and only
+  // for a Refresh all. An ordinary Refresh never touches a profile, so it is
+  // complete the moment it returns — tying its report to coverage meant that one
+  // abandoned Refresh all silently suppressed every plain-refresh email until
+  // somebody noticed the missing mail.
+  const covered = rows.length > 0 && loaded >= rows.length;
+
+  if (running) {
+    if (covered) {
+      const cleared = await endRefresh();
+      if (cleared) await sendRefreshReport(cleared, 'all');
+    } else {
+      await noteRefreshProgress(loaded, rows.length);
     }
-  } else {
-    await noteRefreshProgress(loaded, rows.length);
+  } else if (ctx.startedAt) {
+    // endRefresh() here is housekeeping: it clears a row left behind by a run
+    // that was abandoned and has since aged out, so the next Refresh all starts
+    // from a clean flag. It returns the stale run, which is deliberately not
+    // reported — a run nobody finished has nothing to say.
+    await endRefresh();
+    await sendRefreshReport({ startedAt: ctx.startedAt, actor: ctx.actor }, 'plain');
   }
-  return { loaded, total: rows.length, done };
+  return { loaded, total: rows.length, done: running ? covered : true };
 }
 
 // The nightly job's one endpoint. It drives exactly the loop the browser drives
