@@ -31,14 +31,35 @@ jobs:
     steps:
       - name: Drive a full Refresh all
         env:
-          APP_URL: ${{ secrets.APP_URL }}
+          # APP_URL is not sensitive, so accept it from either tab. "Secrets and
+          # variables" puts them side by side and the wrong one is easy to pick.
+          APP_URL: ${{ secrets.APP_URL || vars.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          # Read only so the failure can say *where* the value ended up. A
+          # variable is not masked, so this must never be echoed.
+          CRON_SECRET_IN_VARS: ${{ vars.CRON_SECRET }}
         run: |
           set -uo pipefail
-          if [ -z "${APP_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
-            echo "::error::APP_URL and CRON_SECRET must both be set as repository secrets."
+
+          # The old message named both variables whether or not both were
+          # missing, which left the actual fault to guesswork. Say which one,
+          # and say where it is if it was filed in the wrong place.
+          missing=""
+          [ -z "${APP_URL:-}" ] && missing="APP_URL"
+          [ -z "${CRON_SECRET:-}" ] && missing="${missing:+$missing and }CRON_SECRET"
+
+          if [ -n "$missing" ]; then
+            echo "::error::Missing from this workflow's environment: ${missing}."
+            if [ -n "${CRON_SECRET_IN_VARS:-}" ]; then
+              echo "::error::CRON_SECRET exists as a repository *variable*. It has to be a *secret* — variables are readable by anyone who can see the repo. Delete it from the Variables tab and add it under Secrets."
+            fi
+            echo "::error::Set them at Settings -> Secrets and variables -> Actions -> Secrets (repository level, not an environment): APP_URL = https://www.tickrlab.com (no trailing slash), CRON_SECRET = the same value as in Vercel."
             exit 1
           fi
+
+          # Enough to spot a typo or a pasted newline without revealing anything.
+          echo "APP_URL     = ${APP_URL}"
+          echo "CRON_SECRET = ${#CRON_SECRET} characters"
 
           MAX_ROUNDS=25        # 6 symbols a round; 25 covers a 150-symbol universe
           GAP=62               # the pacing the browser loop uses, unchanged
