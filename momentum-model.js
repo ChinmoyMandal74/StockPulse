@@ -197,10 +197,11 @@ function buildModel(SYMBOL, bars, live, momentum) {
   const RSI_SEED = LAST - 14;               // Wilder is seeded at the old end
   const b = [];
   b.push([{ v: `${SYMBOL} — daily bars and the running indicators`, s: S.title }]);
-  b.push([{ v: `Newest first. Row 2 is the most recent session, exactly as the app holds it. Grey columns are intermediates the factors need. Momentum is the stored score for that date — a value, not a formula, and the only cell here that does not recalculate. Past Mom. and Mom. Delta read it ${PAST_LAG} rows down, which is the fortnight the screener compares against.`, s: S.note }]);
+  b.push([{ v: `Newest first. Row 2 is the most recent session, exactly as the app holds it. Grey columns are intermediates the factors need. Momentum is the stored score for that date — a value, not a formula, and the only cell here that does not recalculate. Past Mom. and Mom. Delta read it ${PAST_LAG} rows down, which is the fortnight the screener compares against. Return ${PAST_LABEL} covers that same fortnight; Next ${PAST_LABEL} Return covers the one after it, and is the column to put the delta against when asking whether it predicts anything.`, s: S.note }]);
   b.push([]);
   b.push(['Date', 'High', 'Close', 'Log return', 'MA 50', 'MA 200', 'MA50 vs 200', 'Gain', 'Loss', 'Avg gain', 'Avg loss', 'RSI 14',
-    'Momentum', `Past Mom. (${PAST_LABEL})`, `Mom. Delta (${PAST_LABEL})`].map((h) => ({ v: h, s: S.head })));
+    'Momentum', `Past Mom. (${PAST_LABEL})`, `Mom. Delta (${PAST_LABEL})`,
+    `Return ${PAST_LABEL} %`, `Next ${PAST_LABEL} Return %`].map((h) => ({ v: h, s: S.head })));
   for (let i = 0; i < n; i++) {
     const R = i + 5;                        // data starts at row 5
     const nxt = R + 1;                      // the older session
@@ -242,6 +243,20 @@ function buildModel(SYMBOL, bars, live, momentum) {
     const hasPast = i + PAST_LAG < n;
     row.push(hasPast ? { f: `IF(M${P}="","",M${P})`, s: S.num2 } : '');
     row.push(hasPast ? { f: `IF(OR(M${R}="",M${P}=""),"",M${R}-M${P})`, s: S.num2 } : '');
+
+    // The price beside the score, so the delta can be read against what the
+    // stock actually did. Two columns because they answer different questions
+    // and are easy to conflate: the first covers the SAME fortnight as the
+    // delta, which is why they track each other (measured across the archive:
+    // correlation 0.554, most of it by construction — the score is built out of
+    // returns). The second is the NEXT fortnight, which nothing in the score has
+    // seen, and is the only one of the two a backtest can honestly use.
+    //
+    // The sheet is newest-first, so the past is DOWN the rows and the future is
+    // UP them. Getting that backwards would silently invert the whole question.
+    const F = R - PAST_LAG;
+    row.push(hasPast ? { f: `(C${R}-C${P})/C${P}*100`, s: S.num2 } : '');
+    row.push(F >= 5 ? { f: `(C${F}-C${R})/C${R}*100`, s: S.num2 } : '');   // row 5 is the newest bar
     b.push(row);
   }
 
@@ -365,7 +380,7 @@ function buildModel(SYMBOL, bars, live, momentum) {
 
   // ---- assemble ------------------------------------------------------------
   const sheets = [
-    { name: 'Bars', xml: sheetXml(b, { widths: [12, 10, 10, 11, 10, 10, 12, 9, 9, 10, 10, 9, 11, 14, 15], freeze: 4 }) },
+    { name: 'Bars', xml: sheetXml(b, { widths: [12, 10, 10, 11, 10, 10, 12, 9, 9, 10, 10, 9, 11, 14, 15, 13, 17], freeze: 4 }) },
     { name: 'Factors', xml: sheetXml(f, { widths: [26, 14, 9, 9, 11, 8, 10, 70], tab: true }) },
     { name: 'Score', xml: sheetXml(sc, { widths: [24, 14, 78] }) },
   ];

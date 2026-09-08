@@ -171,20 +171,30 @@ const SCHEMA = [
   // the running model's is how a forgotten MODEL_VERSION bump gets caught.
   `create index if not exists idx_momentum_d on momentum_history (d)`,
 
-  // Past momentum and momentum delta, for every horizon the app offers.
+  // Past momentum, momentum delta, and the price return beside them.
   //
   // A VIEW, not columns. Past momentum at a horizon IS the stored score N
-  // trading days back — verified against the app's own numbers across 40
-  // symbol-horizon pairs, gap 0.000 — so materialising it would put ten copies
-  // of a number beside the number itself, on 270,000 rows, free to drift from
-  // it and needing a rewrite on every model change. The view costs nothing,
-  // cannot disagree with the score, and reads like a table for analysis.
+  // trading days back — verified against the app's own numbers across 72
+  // symbol-horizon pairs, gap 0.000 — so materialising it would put copies of a
+  // number beside the number itself on 270,000 rows, free to drift from it and
+  // needing a rewrite on every model change. The view costs nothing, cannot
+  // disagree with the score, and reads like a table for analysis.
   //
   // LAG counts rows, and there is one row per symbol per trading day, so an
   // offset of 10 rows is the fortnight the app means. Partitioned by model as
   // well as symbol so a window can never step across a scoring change.
-  `create view if not exists momentum_deltas as
-   select symbol, d, model, score,
+  //
+  // ret_2w and fwd_ret_2w answer two different questions and are easy to
+  // confuse. ret_2w covers the SAME fortnight as delta_2w, so the two move
+  // together largely by construction — the score is built out of returns.
+  // fwd_ret_2w is the next fortnight, which nothing in the score has seen, and
+  // is therefore the only one of the pair a backtest can honestly use.
+  //
+  // Dropped and recreated on every init so the definition can never lag the
+  // code that documents it; a view carries no data, so this is free.
+  `drop view if exists momentum_deltas`,
+  `create view momentum_deltas as
+   select symbol, d, model, score, close,
      lag(score, 5)   over w as past_1w,
      lag(score, 10)  over w as past_2w,
      lag(score, 21)  over w as past_1m,
@@ -194,8 +204,14 @@ const SCHEMA = [
      score - lag(score, 10)  over w as delta_2w,
      score - lag(score, 21)  over w as delta_1m,
      score - lag(score, 63)  over w as delta_3m,
-     score - lag(score, 126) over w as delta_6m
-   from momentum_history
+     score - lag(score, 126) over w as delta_6m,
+     (close - lag(close, 10) over w) / lag(close, 10) over w * 100  as ret_2w,
+     (lead(close, 10) over w - close) / close * 100                 as fwd_ret_2w
+   from (
+     select h.symbol, h.d, h.model, h.score, b.close
+     from momentum_history h
+     join bars b on b.symbol = h.symbol and b.d = h.d
+   )
    window w as (partition by symbol, model order by d)`,
 
   `create table if not exists momentum_model (
@@ -727,7 +743,8 @@ async function purgeSymbol(symbol) {
 }
 
 const DELTA_COLS = ['past_1w', 'past_2w', 'past_1m', 'past_3m', 'past_6m',
-                    'delta_1w', 'delta_2w', 'delta_1m', 'delta_3m', 'delta_6m'];
+                    'delta_1w', 'delta_2w', 'delta_1m', 'delta_3m', 'delta_6m',
+                    'close', 'ret_2w', 'fwd_ret_2w'];
 
 // The momentum series with every horizon's past score and delta beside it.
 // Ascending, filtered to one model, the same contract readMomentum() has.
@@ -741,15 +758,23 @@ async function readMomentumDeltas(symbol, since, model = MOMENTUM_MODEL) {
   const lags = [['1w', 5], ['2w', 10], ['1m', 21], ['3m', 63], ['6m', 126]];
   const cols = lags.map(([id, n]) => `lag(score, ${n}) over w as past_${id}`)
     .concat(lags.map(([id, n]) => `score - lag(score, ${n}) over w as delta_${id}`))
+    // The price beside the score. ret_2w spans the same fortnight as delta_2w;
+    // fwd_ret_2w spans the next one, which is the half a backtest can use.
+    .concat([
+      '(close - lag(close, 10) over w) / lag(close, 10) over w * 100 as ret_2w',
+      '(lead(close, 10) over w - close) / close * 100 as fwd_ret_2w',
+    ])
     .join(', ');
   // The date filter sits outside the window, not in its WHERE: the first row a
   // caller asks for still needs the 126 rows before it to have a 6m past score.
   // Trimming in SQL rather than in JS keeps the discarded rows off the wire.
   const r = await db.execute({
     sql: `select * from (
-            select d, score, ${cols} from momentum_history
-            where symbol = ? and model = ?
-            window w as (order by d)
+            select h.d, h.score, b.close, ${cols}
+            from momentum_history h
+            join bars b on b.symbol = h.symbol and b.d = h.d
+            where h.symbol = ? and h.model = ?
+            window w as (order by h.d)
           ) where d >= ? order by d asc`,
     args: [String(symbol).toUpperCase(), model, since || '0000-00-00'],
   });
