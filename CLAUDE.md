@@ -21,6 +21,7 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `migrate-to-turso.js` | One-off JSON → Turso seeder; `--commit` to write, idempotent |
 | `backfill-bars.js` | One-off deep pull of the daily bar archive; `--commit`, `--depth`, `--only` |
 | `set-password.js` | Local account admin — list accounts, set a password, change a role |
+| `momentum-model.js` | Writes an Excel model of the momentum score for one symbol — see **The Excel model** below |
 | `public/app.css` | **Shared stylesheet** — tokens, atmosphere, bezel, buttons, table base, row card. Linked by all four pages |
 | `public/index.html` | Single-page frontend (no build step, vanilla JS, page-specific CSS inline) |
 | `public/analysis.html` | Signal screens at `/analysis` — see **Analysis screens** below |
@@ -282,6 +283,16 @@ Everything comes from the daily bars already fetched, so the extra factors cost 
 - **Do not add a blanket cap on extreme growth.** MU, Samsung and SKHY report 1,200–1,400% earnings growth, which is real — memory in a cyclical upswing off a near-zero base. `lin(v, 0, 30)` already clamps the contribution, so the magnitude does no harm; rejecting it would throw away genuine signal.
 
 Applying these moved 9 of 44 ratings — MSTR 5→2, JOBY 8→5, AVAV 7→5, four loss-makers down one, and SPCX 3→**5** (its meaningless PEG of 86.7 had been scoring zero and dragging it down).
+
+## The Excel model
+`node --use-system-ca momentum-model.js CRWD` writes `momentum-model-<SYMBOL>.xlsx`: three sheets — **Bars**, **Factors**, **Score** — in which every cell is a live formula over the daily bars. Change a close price and the score moves, because the workbook is the calculation rather than a picture of it.
+
+- **Verified against the app, not asserted.** The Score sheet holds what the app reported when the file was written and subtracts. Checked on CRWD: **72.1 against 72.1**, every factor agreeing within the 2dp the stored breakdown rounds to.
+- **`values[k]` lives on row `D + 1 + k`.** Writing `D + k` reads the wrong session, and every return is a difference between two of these — it cost four wrong formulas the first time. The `B(k)` helper exists so it cannot happen again.
+- **320 rows, mirroring the ~300 bars a refresh fetches.** The deepest factor needs 253, the moving averages 200 plus somewhere to look back for the last cross.
+- **RSI is a recursive column**, seeded with a simple 14-day average at the *old* end and smoothed upward, because Wilder runs oldest-first while the sheet is newest-first.
+- **Written by hand — an xlsx is a zip of XML.** A spreadsheet library would be a fourth dependency for a one-off explainer; the same reasoning that sends mail over plain `fetch`. Excel is told to `fullCalcOnLoad`, since no cached values are stored.
+- **The output is gitignored.** It goes stale as soon as prices move, and regenerating takes a second.
 
 ## Fundamentals history
 `fundamentals_history` keeps one row per symbol per day (18 columns — valuation, size, margins, growth, balance sheet), so the movement of a P/E or a margin can eventually be charted. **Empty until the next Refresh all** — nothing is backfillable, because `profiles` only ever holds the current value and no API on this plan returns historical forward estimates.
