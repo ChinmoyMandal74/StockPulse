@@ -10,6 +10,8 @@
 
 'use strict';
 
+const crypto = require('crypto');
+
 // Bumped whenever the scoring changes in a way that makes old rows incomparable.
 // Stored beside every row so a mixed table can never be read as one series.
 //   1 — cross-sectional percentiles (never stored)
@@ -204,8 +206,56 @@ function scoreBars(v, weights) {
   };
 }
 
+// ---- model fingerprint -----------------------------------------------------
+// MODEL_VERSION is a human decision and humans forget to bump it. Changing a
+// weight, a curve centre or a breakpoint inside rsiScore without touching the
+// version would leave 270,000 stored rows stamped as current while no longer
+// matching the code that reads them — the exact failure the version column
+// exists to prevent, arriving silently. So the model also fingerprints itself.
+//
+// Comments and whitespace are stripped before hashing, or rewording a comment
+// would demand a ten-minute recompute. Anything that can change a number cannot
+// hide from it: the constants are hashed directly, and the scoring functions by
+// their normalised source, so an edited breakpoint counts even though it is a
+// literal buried in a function body.
+function normalise(fn) {
+  return String(fn)
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')      // block comments
+    .replace(/\/\/.*/g, ' ')                 // line comments
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Every function whose body can change a number. Named once so the list cannot
+// drift out of step with the loop that hashes it.
+const FNS = [curve, pctChange, windowReturn, realisedVol, pctFromHigh,
+             positiveMonths, smaAt, maCross, rsi, rsiScore, trendSub,
+             riskAdj, subScores, composite, scoreBars];
+
+function fingerprint() {
+  const h = crypto.createHash('sha256');
+  h.update(JSON.stringify({
+    version: MODEL_VERSION, minBars: MIN_BARS,
+    factors: FACTORS,
+    // Key order is fixed by FACTORS rather than by object literal order, so
+    // reordering the WEIGHTS declaration is not mistaken for a model change.
+    weights: FACTORS.map((k) => [k, WEIGHTS[k]]),
+    curves: FACTORS.map((k) => [k, CURVES[k] || null]),
+  }));
+  for (let i = 0; i < FNS.length; i++) {
+    // Index-prefixed so two function bodies cannot run together into the same
+    // byte stream. A separator that is itself a NUL would put a control
+    // character in the source and make git treat this file as binary.
+    h.update('|' + i + '|' + normalise(FNS[i]));
+  }
+  return h.digest('hex').slice(0, 12);
+}
+
+// Computed once at require. Cheap — fifteen small strings.
+const MODEL_ID = fingerprint();
+
 module.exports = {
-  MODEL_VERSION, MIN_BARS, FACTORS, WEIGHTS, CURVES,
+  MODEL_VERSION, MODEL_ID, MIN_BARS, FACTORS, WEIGHTS, CURVES,
   subScores, composite, scoreBars,
   // exported for the tests and for anything that needs one factor alone
   curve, pctChange, windowReturn, realisedVol, pctFromHigh, positiveMonths,

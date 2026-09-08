@@ -1,10 +1,25 @@
 // One-off backfill of the momentum history, computed from the bar archive.
 //
+//   node --use-system-ca backfill-momentum.js --check         # status only
 //   node --use-system-ca backfill-momentum.js                 # dry run
 //   node --use-system-ca backfill-momentum.js --commit        # write
 //   node --use-system-ca backfill-momentum.js --commit --only MU,DELL
 //   node --use-system-ca backfill-momentum.js --commit --from 2020-01-01
 //   node --use-system-ca backfill-momentum.js --commit --rebuild   # wipe first
+//
+// CHANGED THE MODEL? Bump MODEL_VERSION in momentum.js, then run this with
+// --commit and no other flags. That is the whole procedure.
+//
+//   - Nothing needs wiping. Rows are keyed on (symbol, d) and the write is an
+//     upsert, so a plain re-run overwrites every date in place. --rebuild exists
+//     to drop symbols that have left the universe, and it blanks the table for
+//     the ten minutes the run takes, so it is the worse choice by default.
+//   - The app stays up throughout. Reads filter on MODEL_VERSION, so once it is
+//     bumped the charts show a series that fills in symbol by symbol rather than
+//     one quietly mixing two models.
+//   - The run stamps momentum_model only if it covered the whole universe. A
+//     --only or --from run leaves the old stamp deliberately, so an interrupted
+//     rebuild keeps reporting as out of date.
 //
 // No API calls: every value is a pure function of bars already stored, which is
 // what makes this table a cache. If the scoring model changes, bump
@@ -23,6 +38,7 @@ const M = require('./momentum.js');
 
 const COMMIT = process.argv.includes('--commit');
 const REBUILD = process.argv.includes('--rebuild');
+const CHECK = process.argv.includes('--check');
 const argOf = (name, dflt) => {
   const i = process.argv.indexOf(name);
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt;
@@ -30,16 +46,40 @@ const argOf = (name, dflt) => {
 const ONLY = argOf('--only', '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean);
 const FROM = argOf('--from', '');   // only write dates on or after this
 
+// What the stored rows are, against what this code would produce now.
+async function report() {
+  const st = await store.momentumModelStatus(M.MODEL_VERSION, M.MODEL_ID);
+  console.log(`momentum_history        : ${st.rows.toLocaleString()} rows, ` +
+    `${st.symbols} symbols${st.rows ? `, ${st.from} to ${st.to}` : ''}`);
+  console.log(`running model           : version ${M.MODEL_VERSION}, fingerprint ${M.MODEL_ID}`);
+  console.log(`stored history built by : ${st.stored
+    ? `version ${st.stored.model}, fingerprint ${st.stored.fingerprint}` +
+      ` on ${st.stored.computedAt.slice(0, 10)}`
+    : 'unrecorded'}`);
+  if (st.stale) console.log(`  ${st.stale.toLocaleString()} rows carry a different model version.`);
+
+  const say = {
+    current: 'the stored history is what this code produces.',
+    empty: 'nothing stored yet. Run with --commit to build it.',
+    unstamped: 'these rows predate the provenance check, or a run was interrupted. '
+      + 'Re-run with --commit to recompute and stamp them.',
+    drifted: st.versionBumped
+      ? 'MODEL_VERSION was bumped and the history has not been rebuilt. Reads '
+        + 'filter the old rows out, so charts stay short until you run --commit.'
+      : 'THE SCORING CHANGED WITHOUT A VERSION BUMP. The stored rows no longer '
+        + 'match this code and are still being served as current. Bump '
+        + 'MODEL_VERSION in momentum.js, then re-run with --commit.',
+  }[st.state];
+  console.log(`status                  : ${st.state} - ${say}`);
+  return st;
+}
+
 (async () => {
-  const before = await store.momentumStats(M.MODEL_VERSION);
-  console.log(`momentum_history before : ${before.rows.toLocaleString()} rows, ` +
-    `${before.symbols} symbols${before.rows ? `, ${before.from} → ${before.to}` : ''}`);
-  if (before.stale) {
-    console.log(`  ${before.stale.toLocaleString()} rows were written by an older model — ` +
-      'use --rebuild so the table holds one scoring regime.');
+  const st = await report();
+  if (CHECK) {
+    process.exit(st.state === 'current' || st.state === 'empty' ? 0 : 1);
   }
-  console.log(`model version           : ${M.MODEL_VERSION}`);
-  console.log(`mode                    : ${COMMIT ? 'COMMIT — this writes' : 'DRY RUN — nothing will be written'}`);
+  console.log(`mode                    : ${COMMIT ? 'COMMIT - this writes' : 'DRY RUN - nothing will be written'}`);
   if (FROM) console.log(`from                    : ${FROM}`);
   console.log('');
 
@@ -91,12 +131,24 @@ const FROM = argOf('--from', '');   // only write dates on or after this
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(`\n${symbols.length - skipped} symbols scored, ${skipped} too short, ` +
     `${written.toLocaleString()} rows ${COMMIT ? 'written' : 'would be written'} in ${secs}s`);
-  if (COMMIT) {
-    const after = await store.momentumStats(M.MODEL_VERSION);
-    console.log(`momentum_history after  : ${after.rows.toLocaleString()} rows, ` +
-      `${after.symbols} symbols, ${after.from} → ${after.to}`);
-  } else {
+  if (!COMMIT) {
     console.log('Re-run with --commit to write.');
+    process.exit(0);
   }
+
+  // Stamp only a run that covered the whole universe from the start of the
+  // archive. A --only or --from run has recomputed part of the table, and
+  // claiming the whole of it is current would hide exactly what this check
+  // exists to surface.
+  const full = !ONLY.length && !FROM;
+  if (full) {
+    await store.recordMomentumModel(M.MODEL_VERSION, M.MODEL_ID);
+    console.log(`stamped momentum_model  : version ${M.MODEL_VERSION}, fingerprint ${M.MODEL_ID}`);
+  } else {
+    console.log('partial run (--only/--from), so momentum_model was left alone - '
+      + 're-run without those flags to mark the history current.');
+  }
+  console.log('');
+  await report();
   process.exit(0);
 })();

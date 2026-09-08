@@ -2550,6 +2550,23 @@ async function buildRefreshReport(state, snap, kind = 'all') {
     console.warn('report: archive stats unavailable:', err.message);
   }
 
+  // Only surfaced when something is wrong: a line saying the model is fine,
+  // every night, is a line nobody reads by the third email.
+  let modelWarning = null;
+  try {
+    const st = await store.momentumModelStatus(Momentum.MODEL_VERSION, Momentum.MODEL_ID);
+    if (st.state === 'drifted' && !st.versionBumped) {
+      modelWarning = `The momentum scoring has changed but MODEL_VERSION is still ${Momentum.MODEL_VERSION}, ` +
+        `so ${st.rows.toLocaleString()} stored rows no longer match the running model and are being served as current. ` +
+        'Bump MODEL_VERSION and re-run the backfill.';
+    } else if (st.state === 'drifted') {
+      modelWarning = `Momentum history was built at model version ${st.stored.model}, the app is on ` +
+        `${Momentum.MODEL_VERSION}. Old rows are filtered out, so charts stay short until the backfill is re-run.`;
+    }
+  } catch (err) {
+    console.warn('report: momentum model status unavailable:', err.message);
+  }
+
   const asOf = live.reduce((m, x) => (x.latestDate && x.latestDate > m ? x.latestDate : m), '');
   // A Refresh all is judged on coverage; a plain Refresh never touches profiles,
   // so the only thing that can go wrong in one is a symbol that failed outright.
@@ -2561,7 +2578,7 @@ async function buildRefreshReport(state, snap, kind = 'all') {
   const movers = live.filter((x) => num(x.todayPct)).sort((a, b) => b.todayPct - a.todayPct);
 
   return {
-    kind, complete, rows, live, loaded, failed, missing, asOf, day, stats,
+    kind, complete, rows, live, loaded, failed, missing, asOf, day, stats, modelWarning,
     top: movers.slice(0, REPORT_MOVERS),
     bottom: movers.slice(-REPORT_MOVERS).reverse(),
     // Ranked on the 0-100 score because it separates names the 1-10 rating
@@ -2602,6 +2619,7 @@ function refreshReportBodies(r) {
     line('Fundamentals', fundLine),
     line('Bar archive', barLine),
   ];
+  if (r.modelWarning) t.push('', 'Momentum model: ' + r.modelWarning);
   if (r.failed.length) {
     t.push('', `Failed (${r.failed.length}): ` +
       r.failed.map((x) => `${x.symbol} — ${x.error}`).join('; '));
@@ -2669,7 +2687,12 @@ function refreshReportBodies(r) {
     kv('Started', fmtClock(r.startedAt)) +
     kv('Finished', fmtClock(Date.now())) +
     kv('Prices as of', r.asOf || '—') + kv('Fundamentals', fundLine) + kv('Bar archive', barLine) +
-    '</table>' + problems +
+    '</table>' +
+    (r.modelWarning
+      ? '<p style="margin:14px 0 0;padding:10px 12px;border-radius:6px;background:#fff4e5;' +
+        'border:1px solid #f0c98a;font-size:13px;color:#7a4b00">' +
+        '<b>Momentum model</b><br>' + escHtml(r.modelWarning) + '</p>'
+      : '') + problems +
     '<h3 style="margin:22px 0 6px;font-size:14px">Movers today</h3>' +
     '<div>' + r.top.map(chip).join('') + '</div>' +
     '<div style="margin-top:4px">' + r.bottom.map(chip).join('') + '</div>' +
@@ -2957,9 +2980,35 @@ store.init().then(
   (err) => console.error('Turso: schema init failed —', err.message)
 );
 
+// One query at boot: is the stored momentum history still what this code
+// produces? MODEL_VERSION is a human decision and humans forget to bump it, so
+// the model fingerprints itself and the mismatch is reported here rather than
+// waiting for somebody to run the backfill and notice.
+async function checkMomentumModel() {
+  try {
+    const st = await store.momentumModelStatus(Momentum.MODEL_VERSION, Momentum.MODEL_ID);
+    if (st.state === 'current' || st.state === 'empty') return;
+    const fix = 'run: node --use-system-ca backfill-momentum.js --commit';
+    if (st.state === 'drifted' && !st.versionBumped) {
+      console.warn(`WARNING: the momentum scoring has changed but MODEL_VERSION has not (still ${Momentum.MODEL_VERSION}). ` +
+        `${st.rows.toLocaleString()} stored rows were built by fingerprint ${st.stored.fingerprint}, this code is ${Momentum.MODEL_ID}, ` +
+        `and they are being served as current. Bump MODEL_VERSION in momentum.js, then ${fix}`);
+    } else if (st.state === 'drifted') {
+      console.warn(`NOTE: MODEL_VERSION is ${Momentum.MODEL_VERSION} but the stored momentum history was built at version ${st.stored.model}. ` +
+        `Reads filter the old rows out, so charts stay short until you ${fix}`);
+    } else {
+      console.warn(`NOTE: ${st.rows.toLocaleString()} momentum rows have no recorded model. To confirm they match this code, ${fix}`);
+    }
+  } catch (err) {
+    // Never let a diagnostic stop the server coming up.
+    console.warn('momentum model check skipped:', err.message);
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`Stock screener POC running at http://localhost:${PORT}`);
   if (!API_KEY) {
     console.warn('WARNING: TWELVE_DATA_API_KEY is not set — /api/stocks will return an error until you add it to .env');
   }
+  checkMomentumModel();
 });

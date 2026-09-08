@@ -165,6 +165,16 @@ const SCHEMA = [
      rsi         real,
      primary key (symbol, d)
    )`,
+
+  // What actually produced the rows in momentum_history. One row, ever. The
+  // fingerprint is derived from the scoring code itself, so comparing it with
+  // the running model's is how a forgotten MODEL_VERSION bump gets caught.
+  `create table if not exists momentum_model (
+     id          integer primary key check (id = 1),
+     model       integer not null,
+     fingerprint text not null,
+     computed_at text not null
+   )`,
   `create table if not exists fundamentals_history (
      symbol              text not null,
      d                   text not null,
@@ -664,6 +674,59 @@ async function momentumStats(model) {
 async function clearMomentum() {
   await init();
   await db.execute('delete from momentum_history');
+  await db.execute('delete from momentum_model');
+}
+
+// Stamped by the backfill once a full recompute has actually landed — never on
+// a partial run, or a half-finished rebuild would report itself as current.
+async function recordMomentumModel(model, fingerprint) {
+  await init();
+  await db.execute({
+    sql: `insert into momentum_model (id, model, fingerprint, computed_at)
+          values (1, ?, ?, ?)
+          on conflict(id) do update set
+            model = excluded.model, fingerprint = excluded.fingerprint,
+            computed_at = excluded.computed_at`,
+    args: [model, String(fingerprint), new Date().toISOString()],
+  });
+}
+
+async function readMomentumModel() {
+  await init();
+  const r = await db.execute('select model, fingerprint, computed_at from momentum_model where id = 1');
+  const x = r.rows[0];
+  return x ? { model: Number(x.model), fingerprint: x.fingerprint, computedAt: x.computed_at } : null;
+}
+
+// Is the stored history still the model the code would produce today?
+//
+//   current   — the rows match the running model
+//   drifted   — the scoring changed; the stored numbers are no longer what this
+//               code produces and need recomputing
+//   unstamped — rows exist from before this check did, or from a partial run
+//   empty     — nothing stored yet
+//
+// `versionBumped` separates the safe case (MODEL_VERSION was raised, so reads
+// already filter the old rows out and the app is merely short of history) from
+// the dangerous one (the maths changed under an unchanged version, so stale
+// rows are still being served as current).
+async function momentumModelStatus(model, fingerprint) {
+  await init();
+  const stats = await momentumStats(model);
+  const stored = await readMomentumModel();
+  let state;
+  if (!stats.rows) state = 'empty';
+  else if (!stored) state = 'unstamped';
+  else if (stored.fingerprint === fingerprint && stored.model === model) state = 'current';
+  else state = 'drifted';
+  return {
+    state,
+    stored,
+    current: { model, fingerprint },
+    versionBumped: !!(stored && stored.model !== model),
+    rows: stats.rows, symbols: stats.symbols, stale: stats.stale,
+    from: stats.from, to: stats.to,
+  };
 }
 
 async function barsStats() {
@@ -1112,6 +1175,9 @@ module.exports = {
   readBarsFor,
   writeMomentum,
   readMomentum,
+  recordMomentumModel,
+  readMomentumModel,
+  momentumModelStatus,
   momentumStats,
   clearMomentum,
   readCloses,
