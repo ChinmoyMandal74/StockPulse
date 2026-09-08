@@ -671,6 +671,52 @@ async function momentumStats(model) {
   };
 }
 
+// Every table keyed by symbol. `snapshot` is deliberately absent: it is one
+// JSON row rewritten wholesale on the next refresh, so it heals itself.
+const SYMBOL_TABLES = ['bars', 'momentum_history', 'fundamentals_history', 'profiles', 'names'];
+
+// Remove a symbol from the database entirely.
+//
+// Two of these come back on their own — bars cost one API credit to re-pull at
+// any depth, and momentum is computed from bars — but FUNDAMENTALS HISTORY DOES
+// NOT. The API only ever returns today's values, so a row that is deleted is
+// gone for good and re-adding the ticker starts its series from zero. That is
+// the price of the caller's request to drop everything, and it is why this
+// returns per-table counts rather than doing its work quietly.
+async function purgeSymbol(symbol) {
+  await init();
+  const sym = String(symbol).toUpperCase();
+  const removed = {};
+  let total = 0;
+  for (const table of SYMBOL_TABLES) {
+    const r = await db.execute({ sql: `delete from ${table} where symbol = ?`, args: [sym] });
+    const n = Number(r.rowsAffected || 0);
+    if (n) removed[table] = n;
+    total += n;
+  }
+  return { symbol: sym, removed, total };
+}
+
+// What purgeSymbol would remove from one table, so a dry run cannot promise
+// one thing and the delete do another.
+async function countSymbolRows(table, symbol) {
+  await init();
+  if (!SYMBOL_TABLES.includes(table)) throw new Error(`not a per-symbol table: ${table}`);
+  const r = await db.execute({
+    sql: `select count(*) n from ${table} where symbol = ?`, args: [String(symbol).toUpperCase()],
+  });
+  return Number(r.rows[0]?.n || 0);
+}
+
+// Every symbol that has rows anywhere, so a caller can compare against the
+// portfolios and find what has been left behind.
+async function symbolsWithData() {
+  await init();
+  const sql = SYMBOL_TABLES.map((t) => `select distinct symbol from ${t}`).join(' union ');
+  const r = await db.execute(sql);
+  return r.rows.map((x) => x.symbol).filter(Boolean).sort();
+}
+
 async function clearMomentum() {
   await init();
   await db.execute('delete from momentum_history');
@@ -1178,6 +1224,10 @@ module.exports = {
   recordMomentumModel,
   readMomentumModel,
   momentumModelStatus,
+  purgeSymbol,
+  symbolsWithData,
+  countSymbolRows,
+  SYMBOL_TABLES,
   momentumStats,
   clearMomentum,
   readCloses,

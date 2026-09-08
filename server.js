@@ -1646,13 +1646,42 @@ app.put('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
 }));
 
 // Delete a portfolio (its stocks remain in any other portfolios).
+// A symbol dropped from the last portfolio holding it takes its data with it:
+// bars, momentum history, fundamentals history, the cached profile and the
+// name. Anything still in another portfolio is untouched, which is why this
+// compares the universe before and after rather than trusting the route.
+//
+// Bars and momentum come back by themselves — a re-pull is one credit and
+// momentum is computed from bars — but fundamentals history cannot be
+// rebuilt at all, so re-adding a ticker starts that series over. The counts are
+// logged for exactly that reason: this is not a reversible operation.
+async function purgeDropped(before) {
+  const after = new Set(getUniverse(await readPortfolios()));
+  const gone = before.filter((s) => !after.has(s));
+  const purged = [];
+  for (const symbol of gone) {
+    try {
+      const r = await store.purgeSymbol(symbol);
+      purged.push(r);
+      console.log(`purged ${r.symbol}: ${r.total.toLocaleString()} rows — ` +
+        (Object.entries(r.removed).map(([t, n]) => `${t} ${n.toLocaleString()}`).join(', ') || 'nothing stored'));
+    } catch (err) {
+      // Losing the portfolio edit because the cleanup failed would be worse
+      // than leaving rows behind; purge-orphans.js sweeps them up later.
+      console.warn(`purge ${symbol} failed (the ticker was still removed):`, err.message);
+    }
+  }
+  return purged;
+}
+
 app.delete('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
   const name = decodeURIComponent(req.params.name);
   const p = await readPortfolios();
   if (!(name in p)) return res.status(404).json({ error: 'Portfolio not found.' });
+  const before = getUniverse(p);
   delete p[name];
   await writePortfolios(p);
-  res.json({ portfolios: p });
+  res.json({ portfolios: p, purged: await purgeDropped(before) });
 }));
 
 // Add a ticker to a portfolio.
@@ -1684,18 +1713,20 @@ app.delete('/api/portfolios/:name/tickers/:symbol', requireAdmin, route(async (r
   const symbol = String(req.params.symbol || '').trim().toUpperCase();
   const p = await readPortfolios();
   if (!(name in p)) return res.status(404).json({ error: 'Portfolio not found.' });
+  const before = getUniverse(p);
   p[name] = p[name].filter((s) => s !== symbol);
   await writePortfolios(p);
-  res.json({ portfolios: p });
+  res.json({ portfolios: p, purged: await purgeDropped(before) });
 }));
 
 // Remove a ticker from every portfolio (used by the "All" view).
 app.delete('/api/tickers/:symbol', requireAdmin, route(async (req, res) => {
   const symbol = String(req.params.symbol || '').trim().toUpperCase();
   const p = await readPortfolios();
+  const before = getUniverse(p);
   for (const name of Object.keys(p)) p[name] = p[name].filter((s) => s !== symbol);
   await writePortfolios(p);
-  res.json({ portfolios: p });
+  res.json({ portfolios: p, purged: await purgeDropped(before) });
 }));
 
 // Expire the per-symbol profile cache (sector / fundamentals / analyst) so the

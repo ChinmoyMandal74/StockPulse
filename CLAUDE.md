@@ -21,6 +21,7 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `migrate-to-turso.js` | One-off JSON → Turso seeder; `--commit` to write, idempotent |
 | `momentum.js` | **Momentum scored from bars and nothing else** — no database, no API, no universe. Shared by the live refresh, the backfill and the chart |
 | `backfill-momentum.js` | One-off recompute of `momentum_history` from the archive; `--commit`, `--only`, `--from`, `--rebuild` |
+| `purge-orphans.js` | Deletes data for symbols in no portfolio; `--commit`, `--only`. Dry run by default |
 | `backfill-bars.js` | One-off deep pull of the daily bar archive; `--commit`, `--depth`, `--only` |
 | `set-password.js` | Local account admin — list accounts, set a password, change a role |
 | `momentum-model.js` | Writes an Excel model of the momentum score for one symbol — see **The Excel model** below |
@@ -340,7 +341,7 @@ The workbook: three sheets — **Bars**, **Factors**, **Score** — in which eve
 - **`momentum_model` records which version and fingerprint built the stored rows** — one row, ever. `momentumModelStatus()` compares it with the running model and returns `current`, `drifted`, `unstamped` or `empty`. `versionBumped` separates the safe case (the version was raised, so reads already exclude the old rows and the app is merely short of history) from the dangerous one (the maths changed under an unchanged version, so stale rows are still served as current).
 - **The stamp is only written by a run that covered the whole universe.** A `--only` or `--from` run leaves it deliberately, so an interrupted rebuild keeps reporting as out of date rather than claiming to be finished.
 - **Drift is reported without anyone having to ask.** `backfill-momentum.js --check` prints the status and exits non-zero when something needs doing; `server.js` runs the same check once at boot; and the refresh report email carries a note when it fires, since the boot warning only reaches a log nobody reads on a deployed instance. The unbumped-version case is worded as a warning and the bumped one as a note — only the first silently serves wrong numbers.
-- **A `--rebuild` is for orphans, not for correctness.** A symbol dropped from the screener keeps its rows: SPY has 4,730 sitting in the table right now. Harmless, because every read is per-symbol, but that is the one thing a plain re-run will not clean up.
+- **`--rebuild` is not needed to clear departed symbols any more** — dropping a ticker purges it, see **Dropping a symbol**. It remains the way to force every row to be rewritten from scratch.
 - Measured: a full recompute is **265,890 rows across 80 symbols in 272.7s**.
 
 - **`MODEL_VERSION` is stored on every row** (`2` = absolute logistic curves; `1` was the cross-sectional percentiles and was never stored). `readMomentum()` filters on it and defaults to the current version — it did not at first, which would have let a half-finished re-backfill serve a chart mixing two models. Filtering so a half-migrated table returns a short series rather than a series that silently mixes two scoring regimes. Bump it whenever a change makes old rows incomparable, then re-run the backfill with `--rebuild`.
@@ -350,6 +351,16 @@ The workbook: three sheets — **Bars**, **Factors**, **Score** — in which eve
 - **`MIN_BARS` is 274** — a year of bars, plus the month 12-1 skips, plus the bar it measures against. Shorter series score `null` rather than a partial number.
 - **Writes are multi-row `INSERT … ON CONFLICT`, chunked at `MOMENTUM_CHUNK` (60).** A `db.batch` of 400 separate statements drew an ECONNRESET from Turso; 12 columns × 60 rows also keeps the statement under SQLite's 999-parameter ceiling.
 - Backfill cost, measured: **0.31 ms per stock-day**, 270,620 rows in **559.6s**. Recomputing every factor from scratch at each date is wasteful in principle and irrelevant at this size, so the factors stay the plain implementations the rest of the app uses rather than rolling variants that could drift from them.
+
+## Dropping a symbol
+**A ticker removed from the last portfolio holding it takes its data with it** — `bars`, `momentum_history`, `fundamentals_history`, `profiles` and `names`, via `purgeSymbol()`. All three removal routes do it, and `purge-orphans.js` sweeps up anything left from before.
+
+- **Two of those come back, one does not.** Bars cost a single API credit to re-pull at any depth and momentum is recomputed from bars, but **`fundamentals_history` cannot be rebuilt** — the API only ever returns today's numbers, so a deleted row is gone and re-adding the ticker starts that series from zero. Every surface says so: the confirm dialog, the dry run, and the comment on `purgeSymbol()`.
+- **The decision is made from the universe before and after the edit, not from the route.** A symbol still in another portfolio is untouched — verified: removing AAPL from one of two lists purged nothing, deleting the last portfolio holding SPY removed all 9,739 of its rows.
+- **`snapshot` is deliberately not in `SYMBOL_TABLES`.** It is one JSON row rewritten wholesale on the next refresh, so it heals itself.
+- **A failed purge never fails the edit.** Losing the portfolio change because the cleanup broke would be worse than leaving rows behind, and the sweep exists to collect them.
+- **The UI confirms only when data will actually be destroyed.** `lastHome()` asks whether this removal leaves the symbol in no portfolio, so removing it from one of several still passes without a dialog — that really is trivially undone. Deleting a portfolio names the symbols that will lose their history. Both then report the row count through `setStatus()`, because a silent ten-thousand-row delete is not something to discover later.
+- Swept on introduction: **SPY 9,739 rows, XLF 5,009, BTC 1** — the database now holds data for exactly the 83 symbols in the portfolios.
 
 ## Saved column layout
 Which column groups a user has collapsed is stored per account in the `prefs` table (`user_key`, JSON `data`), read by `GET /api/prefs` and written by `PUT /api/prefs`.

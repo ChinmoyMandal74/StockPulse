@@ -1393,10 +1393,18 @@
       }] : []),
       onAction: (id, s) => {
         if (id !== 'remove') return;
-        // Confirm only when it would drop the ticker from every list — removing
-        // it from one portfolio is trivially undone by adding it back.
-        if (activeTab === 'All' &&
-            !window.confirm(`Remove ${s.symbol} from every portfolio?`)) return;
+        // Dropping a ticker from the last portfolio holding it now deletes its
+        // stored data too, and the fundamentals history among that cannot be
+        // rebuilt — so the confirmation names that rather than only asking about
+        // the list. Removing it from one of several portfolios is still trivially
+        // undone by adding it back, and still does not ask.
+        if (lastHome(s.symbol) &&
+            !window.confirm(`Remove ${s.symbol} from ${activeTab === 'All' ? 'every portfolio' : `"${activeTab}"`}?
+
+` +
+              'It is in no other portfolio, so its stored price history, momentum ' +
+              'history and fundamentals history will be deleted. The fundamentals ' +
+              'history cannot be rebuilt.')) return;
         removeTicker(s.symbol);
       },
     });
@@ -2169,15 +2177,31 @@
       } catch (err) { setError(err.message); }
     }
 
+    // True when removing the symbol here leaves it in no portfolio at all, which
+    // is exactly when the server purges its stored data.
+    function lastHome(symbol) {
+      const row = stocks.find((x) => x.symbol === symbol);
+      const holders = (row && row.portfolios) || [];
+      return activeTab === 'All' ? holders.length > 0 : holders.length <= 1;
+    }
+
+    // What the server reports having deleted, said plainly. A silent purge of
+    // ten thousand rows is not something to find out about later.
+    function notePurge(purged) {
+      if (!purged || !purged.length) return;
+      const n = purged.reduce((t, x) => t + x.total, 0);
+      setStatus(`${purged.map((x) => x.symbol).join(', ')} removed — ` +
+        `${n.toLocaleString()} stored row${n === 1 ? '' : 's'} deleted`);
+    }
+
     async function removeTicker(symbol) {
       setError('');
       try {
-        if (activeTab === 'All') {
-          await api('DELETE', '/api/tickers/' + encodeURIComponent(symbol));
-        } else {
-          await api('DELETE', `/api/portfolios/${encodeURIComponent(activeTab)}/tickers/${encodeURIComponent(symbol)}`);
-        }
+        const r = activeTab === 'All'
+          ? await api('DELETE', '/api/tickers/' + encodeURIComponent(symbol))
+          : await api('DELETE', `/api/portfolios/${encodeURIComponent(activeTab)}/tickers/${encodeURIComponent(symbol)}`);
         await refresh();
+        notePurge(r && r.purged);
       } catch (err) { setError(err.message); }
     }
 
@@ -2207,12 +2231,24 @@
 
     async function deletePortfolio() {
       if (activeTab === 'All') return;
-      if (!window.confirm(`Delete portfolio "${activeTab}"? Its stocks stay in any other portfolios.`)) return;
+      // Name the ones that are about to lose their data, since "they stay in any
+      // other portfolios" is only reassuring for the ones that do.
+      const orphaned = stocks
+        .filter((x) => (x.portfolios || []).length === 1 && x.portfolios[0] === activeTab)
+        .map((x) => x.symbol);
+      const warn = orphaned.length
+        ? `
+
+${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portfolio, ` +
+          'so their stored history will be deleted. Fundamentals history cannot be rebuilt.'
+        : '';
+      if (!window.confirm(`Delete portfolio "${activeTab}"? Its stocks stay in any other portfolios.${warn}`)) return;
       setError('');
       try {
-        await api('DELETE', '/api/portfolios/' + encodeURIComponent(activeTab));
+        const r = await api('DELETE', '/api/portfolios/' + encodeURIComponent(activeTab));
         activeTab = 'All';
         await refresh();
+        notePurge(r && r.purged);
       } catch (err) { setError(err.message); }
     }
 
