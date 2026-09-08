@@ -92,7 +92,10 @@
     .chip { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hair);
             background: rgba(255, 255, 255, 0.03); color: var(--muted); }
 
-    .about { margin: 0; font-size: 13.5px; line-height: 1.7; color: var(--muted); max-width: 78ch; }
+    /* Full card width, as asked. The usual 70-80ch reading limit is dropped
+       here on purpose: this is four or five sentences read once, not prose you
+       work down, and the surrounding cards already run the full width. */
+    .about { margin: 0; font-size: 13.5px; line-height: 1.7; color: var(--muted); }
 
     /* Sits in the card header like the chart's range buttons do. Hidden
        entirely when there is no momentum score, since there would be nothing to
