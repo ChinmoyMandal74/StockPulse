@@ -26,6 +26,12 @@ const MIN_BARS = 274;
 // averages need 200 with somewhere to look back for the last cross.
 const ROWS = Math.max(280, Number(process.argv[3]) || 320);
 
+// The fortnight. PAST_DEFAULT in server.js is '2w' and PAST_PERIODS puts that at
+// 10 sessions, which is the pair the screener ships as momentumScorePrev and
+// momentumChange, and the same offset momentum_deltas lags by.
+const PAST_LAG = 10;
+const PAST_LABEL = '2W';
+
 // ---- a minimal zip writer --------------------------------------------------
 // Local file header + central directory, deflated. No dependency, ~50 lines.
 const CRC = (() => {
@@ -191,9 +197,10 @@ function buildModel(SYMBOL, bars, live, momentum) {
   const RSI_SEED = LAST - 14;               // Wilder is seeded at the old end
   const b = [];
   b.push([{ v: `${SYMBOL} — daily bars and the running indicators`, s: S.title }]);
-  b.push([{ v: 'Newest first. Row 2 is the most recent session, exactly as the app holds it. Grey columns are intermediates the factors need. Momentum is the stored score for that date — a value, not a formula, and the only cell here that does not recalculate.', s: S.note }]);
+  b.push([{ v: `Newest first. Row 2 is the most recent session, exactly as the app holds it. Grey columns are intermediates the factors need. Momentum is the stored score for that date — a value, not a formula, and the only cell here that does not recalculate. Past Mom. and Mom. Delta read it ${PAST_LAG} rows down, which is the fortnight the screener compares against.`, s: S.note }]);
   b.push([]);
-  b.push(['Date', 'High', 'Close', 'Log return', 'MA 50', 'MA 200', 'MA50 vs 200', 'Gain', 'Loss', 'Avg gain', 'Avg loss', 'RSI 14', 'Momentum'].map((h) => ({ v: h, s: S.head })));
+  b.push(['Date', 'High', 'Close', 'Log return', 'MA 50', 'MA 200', 'MA50 vs 200', 'Gain', 'Loss', 'Avg gain', 'Avg loss', 'RSI 14',
+    'Momentum', `Past Mom. (${PAST_LABEL})`, `Mom. Delta (${PAST_LABEL})`].map((h) => ({ v: h, s: S.head })));
   for (let i = 0; i < n; i++) {
     const R = i + 5;                        // data starts at row 5
     const nxt = R + 1;                      // the older session
@@ -222,6 +229,19 @@ function buildModel(SYMBOL, bars, live, momentum) {
     // gap in the history reads as a gap.
     const mv = momentum ? momentum.get(bars[i].d) : undefined;
     row.push(mv == null ? '' : { v: mv, s: S.num2 });
+
+    // Past momentum and the delta are formulas over the Momentum column, not
+    // more stored values. The sheet is newest-first, so the score a fortnight
+    // ago is simply ten rows further down — the same offset momentum_deltas
+    // lags by, and the reason the workbook agrees with the screener's Past Mom.
+    // and Mom. Delta rather than approximating them. Both test for a blank
+    // rather than trusting the reference: an empty cell reads as 0 in Excel, so
+    // a gap in the stored history would otherwise print a score of zero and a
+    // delta the full size of today's score.
+    const P = R + PAST_LAG;
+    const hasPast = i + PAST_LAG < n;
+    row.push(hasPast ? { f: `IF(M${P}="","",M${P})`, s: S.num2 } : '');
+    row.push(hasPast ? { f: `IF(OR(M${R}="",M${P}=""),"",M${R}-M${P})`, s: S.num2 } : '');
     b.push(row);
   }
 
@@ -345,7 +365,7 @@ function buildModel(SYMBOL, bars, live, momentum) {
 
   // ---- assemble ------------------------------------------------------------
   const sheets = [
-    { name: 'Bars', xml: sheetXml(b, { widths: [12, 10, 10, 11, 10, 10, 12, 9, 9, 10, 10, 9, 11], freeze: 4 }) },
+    { name: 'Bars', xml: sheetXml(b, { widths: [12, 10, 10, 11, 10, 10, 12, 9, 9, 10, 10, 9, 11, 14, 15], freeze: 4 }) },
     { name: 'Factors', xml: sheetXml(f, { widths: [26, 14, 9, 9, 11, 8, 10, 70], tab: true }) },
     { name: 'Score', xml: sheetXml(sc, { widths: [24, 14, 78] }) },
   ];
