@@ -166,9 +166,9 @@
     <section class="bezel card" id="table"><div class="core">
       <div class="sec-h"><h2>2 · Reading the table</h2></div>
 
-      <p>There are 47 columns, arranged into groups you can collapse: <em>Scores</em>, <em>Info</em>,
-        <em>Chart</em>, <em>Short-term %</em>, <em>Long-term %</em>, <em>Relative</em>, <em>Trend</em>,
-        <em>Volume</em>, <em>Size</em> and <em>Fundamentals</em>. The <strong>Columns</strong> menu
+      <p>There are 49 columns, arranged into groups you can collapse: <em>Info</em>, <em>Scores</em>,
+        <em>Price Momentum</em>, <em>Chart</em>, <em>Short-term %</em>, <em>Long-term %</em>,
+        <em>Relative</em>, <em>Trend</em>, <em>Volume</em>, <em>Size</em> and <em>Fundamentals</em>. The <strong>Columns</strong> menu
         turns whole groups on and off, and remembers your choice against your account.</p>
 
       <h3>Getting around</h3>
@@ -181,6 +181,25 @@
         <li>Click any column header to sort by it; click again to reverse.</li>
       </ul>
 
+      <h3>Price Momentum</h3>
+      <p>Three columns that describe the momentum score and how it has moved:</p>
+      <ul>
+        <li><b>Mom.</b> — the score now, 1 to 10.</li>
+        <li><b>Past Mom.</b> — the same score as it stood at the end of a horizon you choose, on the
+          0–100 scale. The <b>Past</b> picker in the bar offers one week, two weeks, one month, three
+          months and six months.</li>
+        <li><b>Mom. Delta</b> — now minus then, in score points. Positive means the stock has
+          strengthened <em>against the fixed scale</em>, not merely against its neighbours.</li>
+      </ul>
+      <p>The Delta is only coloured, and the arrow beside Mom. only appears, once the move clears a
+        threshold that <strong>scales with the horizon</strong>. The median name travels about three
+        points in a week and fifteen in six months, so a single fixed cut-off would mark half the
+        table at one horizon and nearly all of it at another.</p>
+
+      <div class="note"><b>These read across time, which is only meaningful because the score is
+        absolute.</b> While momentum was ranked against the list, a change could come from a ticker
+        being added rather than from the stock. Now it cannot.</div>
+
       <h3>What is hiding behind a cell</h3>
       <ul>
         <li>Hover a <b>company name</b> for a card showing every column for that row at once — useful
@@ -189,9 +208,9 @@
           weight and how this stock scored on it.</li>
         <li>The <b>90d</b> column is a sparkline of the last 90 sessions. Read the shape, not the
           level — each line is scaled to its own high and low, so two lines are not comparable.</li>
-        <li>A small <b>chevron</b> beside the Momentum rating means the score has moved five points or
-          more over the last fortnight: green improving, red fading. No chevron means the move was
-          inside the noise.</li>
+        <li>A small <b>chevron</b> beside the Momentum rating means the score has moved further than
+          the chosen horizon's threshold: green improving, red fading. No chevron means the move was
+          inside the noise for that horizon.</li>
       </ul>
       <a class="top" href="#top">↑ Contents</a>
     </div></section>

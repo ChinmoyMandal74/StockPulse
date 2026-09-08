@@ -91,6 +91,21 @@
 
   const MAX_WEIGHT = 40;   // the slider ceiling, and the server's upper bound
 
+  // The horizons the Past Momentum column offers, and how far the median name's
+  // score actually travels over each — measured across the live universe. A
+  // fixed deadband cannot work: five points marks half the table at a fortnight
+  // and nearly all of it at three months, so the arrow scales with the horizon.
+  const PAST_PERIODS = [
+    { id: '1w', days: 5, label: '1 week', move: 3 },
+    { id: '2w', days: 10, label: '2 weeks', move: 5 },
+    { id: '1m', days: 21, label: '1 month', move: 7 },
+    { id: '3m', days: 63, label: '3 months', move: 12 },
+    { id: '6m', days: 126, label: '6 months', move: 15 },
+  ];
+  // What the screens and the nightly email use, whatever a reader has selected.
+  const DEFAULT_PAST = '2w';
+  const pastById = (id) => PAST_PERIODS.find((p) => p.id === id) || PAST_PERIODS[1];
+
   const WEIGHT_PRESETS = [
     {
       id: 'default',
@@ -164,16 +179,44 @@
     };
   }
 
+  // The past horizons ship only their sub-scores, positionally matching the
+  // current breakdown — the labels and weights would be the same five times over.
+  // Re-weighting one is therefore the same arithmetic against that ordering.
+  function scoreSubs(subs, breakdown, weights) {
+    if (!Array.isArray(subs) || !Array.isArray(breakdown)) return null;
+    let w = 0, acc = 0;
+    breakdown.forEach((c, i) => {
+      const sub = subs[i];
+      if (sub == null) return;
+      const wt = c.key != null && weights[c.key] != null ? weights[c.key] : c.weight;
+      if (!(wt > 0)) return;
+      w += wt;
+      acc += wt * sub;
+    });
+    return w ? Math.round((acc / w) * 1000) / 10 : null;
+  }
+
   // A stock re-scored under `weights`, as a shallow copy carrying the same field
   // names the rest of the app uses — so a screen or a cell renderer needs no
   // idea that a lens is in play. Overall moves with it: it is 65% momentum.
+  //
+  // Every past horizon is re-weighted too. Leaving them on the default would
+  // make the Delta column subtract two different scoring schemes from each
+  // other, which is worse than showing nothing.
   function applyWeights(stock, weights) {
     const now = scoreWithWeights(stock.momentumBreakdown, weights);
     if (!now) return stock;
-    const then = scoreWithWeights(stock.momentumBreakdownPrev, weights);
+    const bd = stock.momentumBreakdown;
+    const past = {};
+    for (const k of Object.keys(stock.pastSubs || {})) {
+      const v = scoreSubs(stock.pastSubs[k], bd, weights);
+      if (v != null) past[k] = v;
+    }
+    const then = past[DEFAULT_PAST] != null ? { score: past[DEFAULT_PAST] } : null;
     const out = Object.assign({}, stock, {
       momentumScore: now.score,
       momentumRating: now.rating,
+      pastMomentum: past,
       momentumScorePrev: then ? then.score : null,
       momentumChange: then ? Math.round((now.score - then.score) * 10) / 10 : null,
       // Restate the weights inside the breakdown too, or the factor tooltip
@@ -288,7 +331,8 @@
 
   return {
     SCREENS, run, num, rangePos, lowInRange, fcfYield, SURPRISE_CAP, MOM_MIN_MOVE, dayDelta,
-    WEIGHT_PRESETS, presetById, scoreWithWeights, applyWeights,
+    WEIGHT_PRESETS, presetById, scoreWithWeights, scoreSubs, applyWeights,
+    PAST_PERIODS, DEFAULT_PAST, pastById,
     FACTORS, MAX_WEIGHT, defaultWeights, cleanWeights, weightShares,
   };
 });

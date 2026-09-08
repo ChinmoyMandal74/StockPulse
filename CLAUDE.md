@@ -185,7 +185,7 @@ Each group has a fixed colour used for the group header `th` and its row in the 
 - Scores `#a3e635` (group id `rank`) · Info `#7c9cff` · Chart `#a8a29e` · Short-term `#34d399` · Long-term `#a78bfa` · Forward `#fb923c`
 - Relative `#22d3ee` · Trend `#fbbf24` · Volume `#f472b6` · Size `#94a3b8` · Fundamentals `#fb7185`
 
-**To add a group:** append the id to `GROUPS`, give it a colour in `GROUP_COLORS` and a label in `GROUP_LABELS`, add the `th.group` banner with the right `colspan`, and tag every header/body cell with `class="grp-<id>"`. Then mirror it in **three more places**: `GROUP_ORDER` and `FIELD_SPEC` in `public/rowcard.js`, and the palette copies at the top of `public/analysis.html`. `applyGroups()` and the columns menu pick it up with no further changes.
+**To add a group:** append the id to `GROUPS`, give it a colour in `GROUP_COLORS` and a label in `GROUP_LABELS`, add the `th.group` banner with the right `colspan`, and tag every header/body cell with `class="grp-<id>"`. **The header cells and the body cells must be in the same order, and a group's columns must be contiguous** — a banner spans by `colspan`, so interleaving two groups puts every banner over the wrong columns and silently mismatches headers to values. Then mirror it in **three more places**: `GROUP_ORDER` and `FIELD_SPEC` in `public/rowcard.js`, and the palette copies at the top of `public/analysis.html`. `applyGroups()` and the columns menu pick it up with no further changes.
 
 The **Scores** group (id `rank`, kept so saved prefs and `grp-rank` classes still resolve) carries the three score columns (Overall, Mom., Qual.) and **Info** the five metadata ones (Portfolios, Price, Sector, Market Cap, Next Earn) — they were one group until they were split, so scores and metadata collapse independently.
 
@@ -262,6 +262,18 @@ Everything comes from the daily bars already fetched, so the extra factors cost 
 - **MACD** was binary (0.8/0.2), discarding magnitude; correlation with the composite was **0.022**.
 - **Vol trend** was unsigned, so a crash on heavy volume scored like a breakout, and **51%** of the universe sat at its floor while none reached the ceiling. If it returns, sign it: `volTrend × sign(1M)`.
 - **Short squeeze** rewarded heavy short interest, which predicts *weaker* returns; it correlated **−0.223** with the composite, pulling against everything else.
+
+### Past Momentum and the horizon picker
+The **Price Momentum** group carries `Mom.`, `Past Mom.` and `Mom. Delta`; the **Past** picker in the bar chooses the horizon from `PAST_PERIODS` — 1w, 2w, 1m, 3m, 6m.
+
+- **Every horizon is precomputed at refresh and shipped in the payload** (`pastMomentum` and `pastSubs` per row), so switching is instant and needs no request. The alternative — an endpoint per change — is a round trip and a fresh scoring pass for five useful answers.
+- **Scored from the bar archive, not the fetched series.** A refresh pulls `outputsize=300` and momentum needs 274 of run-up, so the pull only reaches back about a month. `readBarsFor()` takes a 650-day window across every symbol at once. Measured: **3.5s for 85 symbols**, of which 3.4 is the read and 0.15 the scoring; it warns above 10s.
+- **The deadband scales with the horizon** (`move` on each period: 3, 5, 7, 12, 15 points). The median name travels ~3 points in a week and ~15 in six months, so one fixed threshold marks half the table at a fortnight and nearly all of it at three months. Both the Delta colouring and the arrow use it.
+- **`momentumScorePrev` / `momentumChange` stay pinned to `PAST_DEFAULT` ('2w')**, because the analysis screens and the nightly email read them and must not follow a dropdown somebody set on their own screen.
+- **`pastSubs` ships positional sub-scores, not full breakdowns** — the labels and weights would be the same five times over. `Screens.scoreSubs()` re-weights against the current breakdown's ordering, so the weight lens moves every horizon together; leaving them on Default would make Delta subtract two different scoring schemes.
+- **The picker hides when the group is collapsed.** `renderPastTrigger()` is called from `applyGroups()` as well as `render()`, since collapsing a group does not go through `render()`.
+- **Both new columns are derived, so sorting needs a `valueFor()` shim** — `pastShown` and `deltaShown` are not fields on the row.
+- **The CSV names the horizon** in those two headers, as the weight lens names the weighting.
 
 ### The direction arrow
 `momentumChange` is the move in the momentum score over **`MOM_LOOKBACK` = 10 sessions (a fortnight)**, shown as a small green or red chevron beside the Mom. rating, with the size in the tooltip.

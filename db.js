@@ -545,6 +545,27 @@ async function readCloses(symbols, since) {
   return out;
 }
 
+// Bars for many symbols at once, newest first, with the high — which readCloses
+// drops and `% from 52-week high` needs. Used to re-score momentum at a past
+// date: the refresh only fetches ~300 bars per symbol, and scoring six months
+// ago needs 274 of run-up on top of the 126 you are stepping back, so anything
+// past about a month has to come from the archive rather than the pull.
+async function readBarsFor(symbols, since) {
+  await init();
+  if (!symbols || !symbols.length) return {};
+  const r = await db.execute({
+    sql: `select symbol, d, high, close from bars
+          where symbol in (${symbols.map(() => '?').join(',')}) and d >= ?
+          order by symbol, d desc`,
+    args: [...symbols, since],
+  });
+  const out = {};
+  for (const row of r.rows) {
+    (out[row.symbol] ||= []).push({ d: row.d, high: Number(row.high), close: Number(row.close) });
+  }
+  return out;
+}
+
 async function barsStats() {
   await init();
   const r = await db.execute('select count(*) as n, count(distinct symbol) as syms, min(d) as mind, max(d) as maxd from bars');
@@ -988,6 +1009,7 @@ module.exports = {
   upsertBars,
   replaceBarsFor,
   readBars,
+  readBarsFor,
   readCloses,
   barsStats,
   logVisit,

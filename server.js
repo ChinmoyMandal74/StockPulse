@@ -1441,20 +1441,17 @@ function scoreFactors(comps, minWeightFrac = 0) {
 // is strongest", not "does this clear some absolute bar" — so each return
 // factor becomes the stock's percentile among its peers. Quality stays
 // absolute: a 25% margin is a 25% margin regardless of the company it keeps.
-// ---- momentum, a fortnight ago ---------------------------------------------
+// ---- momentum at a past date ------------------------------------------------
 // The score says where a stock stands; on its own it cannot say which way it is
-// heading. Re-scoring the universe as it stood MOM_LOOKBACK sessions back gives
-// that, and costs nothing: momentum is derived entirely from daily bars, and the
-// bars are already in hand — the same series, just sliced.
+// heading. Re-scoring the universe as it stood N sessions back gives that, and
+// costs no API credits — momentum is derived entirely from daily bars, and the
+// archive already holds them.
 //
-// Measured over the live universe before choosing the window. Median |change in
-// rank| runs 2 over one day, 5 over a fortnight, 8 over a month; at one day
-// 46% of the list moves three or more places on no news at all, so a daily
-// arrow would be pure flicker. A fortnight moves the median name 4.5 score
-// points, which is enough to mean something and soon enough to act on.
-const MOM_LOOKBACK = 10;             // trading sessions ≈ 2 weeks
-// The longest factor needs a year of bars plus the month 12-1 skips, so a
-// series shorter than this cannot be scored at the older date at all.
+// A daily horizon was measured and rejected: 46% of the list moves three or more
+// places on no news at all, so an arrow at that horizon is pure flicker.
+//
+// The longest factor needs a year of bars plus the month 12-1 skips, so a series
+// shorter than this cannot be scored at the older date at all.
 const MOM_MIN_BARS = 254;
 
 // Just the fields applyScores() reads. Deliberately not the whole row: a profile
@@ -1475,25 +1472,6 @@ function momentumInputs(values) {
     maBullish: mc ? mc.bullish : null,
     maCrossDays: mc ? mc.daysSince : null,
   };
-}
-
-// symbol -> momentum score as of `back` sessions ago, or null where the series
-// is too short. Scored by the same applyScores() the live rows go through, so
-// both ends of the comparison are always on the current model — which is what a
-// stored history could not promise the next time the model changes.
-function momentumAsOf(valuesBySymbol, back) {
-  const rows = [];
-  for (const [symbol, values] of valuesBySymbol) {
-    const sliced = Array.isArray(values) ? values.slice(back) : null;
-    rows.push({ symbol, ...(momentumInputs(sliced) || {}) });
-  }
-  applyScores(rows);
-  const out = new Map();
-  for (const r of rows) {
-    out.set(r.symbol, r.momentumScore == null ? null
-      : { score: r.momentumScore, breakdown: r.momentumBreakdown });
-  }
-  return out;
 }
 
 // ---- absolute factor curves -------------------------------------------------
@@ -1825,9 +1803,6 @@ async function computeStocks(asOf) {
       spyThreeMonthPct = pctChange(spyFull, THREE_MONTH);
     }
 
-    // Kept so momentum can be re-scored at an earlier date without refetching.
-    const valuesBySymbol = new Map();
-
     const stocks = symbols.map((sym) => {
       const s = series[sym] || {};
       const full = s.values;
@@ -1960,7 +1935,6 @@ async function computeStocks(asOf) {
         error: ok ? null : (s.message || 'No data returned for this symbol.'),
       };
 
-      valuesBySymbol.set(sym, values);
       return row;
     });
 
@@ -1969,23 +1943,32 @@ async function computeStocks(asOf) {
     // pass is here only because the rows are built by now anyway.
     applyScores(stocks);
 
-    // …and again as the universe stood a fortnight ago, for the direction arrow.
-    // Never allowed to fail a refresh: it is a decoration on a number that is
-    // already correct.
+    // …and again at each past horizon, for the Past Momentum column and the
+    // direction arrow. Scored from the archive rather than from the series just
+    // fetched: 300 bars only reaches back about a month once momentum's own
+    // run-up is taken out. Never allowed to fail a refresh — it is a decoration
+    // on numbers that are already correct.
     try {
-      const then = momentumAsOf(valuesBySymbol, MOM_LOOKBACK);
+      const past = await pastMomentum(stocks.map((r) => r.symbol));
       for (const row of stocks) {
-        const was = then.get(row.symbol);
-        row.momentumScorePrev = was == null ? null : Math.round(was.score * 10) / 10;
-        row.momentumChange = (was == null || row.momentumScore == null)
-          ? null : Math.round((row.momentumScore - was.score) * 10) / 10;
-        // The factor sub-scores as they stood a fortnight ago. Only the analysis
-        // page's weight lens reads these — without them it could re-weight today
-        // and not the comparison, and the change column would mix two schemes.
-        row.momentumBreakdownPrev = was ? was.breakdown : null;
+        const p = past[row.symbol] || {};
+        row.pastMomentum = {};
+        row.pastSubs = {};
+        for (const period of PAST_PERIODS) {
+          const hit = p[period.id];
+          if (!hit) continue;
+          row.pastMomentum[period.id] = hit.score;
+          row.pastSubs[period.id] = hit.subs;
+        }
+        // The default horizon also fills the fields the screens and the email
+        // read, so those keep one fixed meaning whatever the dropdown says.
+        const base = p[PAST_DEFAULT];
+        row.momentumScorePrev = base ? base.score : null;
+        row.momentumChange = (!base || row.momentumScore == null)
+          ? null : Math.round((row.momentumScore - base.score) * 10) / 10;
       }
     } catch (err) {
-      console.warn('momentum: could not score the earlier date:', err.message);
+      console.warn('momentum: could not score the earlier dates:', err.message);
     }
 
     // Archive the bars we just fetched. Live pulls only — a backtest's range is
@@ -2415,6 +2398,9 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   if (wid) out.weights = wid;
   const custom = Screens.cleanWeights(incoming.customWeights);
   if (custom) out.customWeights = custom;
+  // Which Past Momentum horizon the table is showing. An id from the known list
+  // only — anything else is dropped and the default stands.
+  if (Screens.PAST_PERIODS.some((x) => x.id === incoming.past)) out.past = String(incoming.past);
   await store.writePrefs(await prefsKey(req), out);
   res.json({ ok: true });
 }));
@@ -2765,6 +2751,68 @@ async function finishLiveRefresh(payload, ctx = {}) {
     await sendRefreshReport({ startedAt: ctx.startedAt, actor: ctx.actor }, 'plain');
   }
   return { loaded, total: rows.length, done: running ? covered : true };
+}
+
+// The horizons the Past Momentum column offers. Fixed rather than free-form, so
+// every one is precomputed at refresh and switching between them is instant —
+// the alternative is a round trip and a fresh scoring pass on every change of a
+// dropdown, which is a lot of machinery for five useful answers.
+//
+// `move` is how far the median name's score actually travels over that horizon,
+// measured across the live universe. A fixed threshold cannot work here: five
+// points is half the table at a fortnight and nearly all of it at three months,
+// so the arrow and the Delta column scale their deadband with the horizon.
+const PAST_PERIODS = [
+  { id: '1w', days: 5, label: '1 week', move: 3 },
+  { id: '2w', days: 10, label: '2 weeks', move: 5 },
+  { id: '1m', days: 21, label: '1 month', move: 7 },
+  { id: '3m', days: 63, label: '3 months', move: 12 },
+  { id: '6m', days: 126, label: '6 months', move: 15 },
+];
+// The one the screens and the nightly email use. Those must not follow a
+// dropdown somebody set on their own screen, or the email changes meaning.
+const PAST_DEFAULT = '2w';
+
+// Enough calendar days to cover the deepest horizon plus the run-up momentum
+// needs, with slack for holidays: 126 + 274 trading days is about 580 calendar.
+const PAST_WINDOW_DAYS = 650;
+
+// Momentum for the whole universe at each horizon, scored from the archive.
+// Returns { SYMBOL: { '1w': { score, subs }, ... } }.
+async function pastMomentum(symbols) {
+  const T0 = Date.now();
+  const since = new Date(Date.now() - PAST_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
+  const bars = await store.readBarsFor(symbols, since);
+  const T1 = Date.now();
+  const out = {};
+  for (const p of PAST_PERIODS) {
+    const rows = [];
+    for (const sym of symbols) {
+      const all = bars[sym];
+      const sliced = Array.isArray(all) ? all.slice(p.days) : null;
+      rows.push({ symbol: sym, ...(momentumInputs(sliced) || {}) });
+    }
+    applyScores(rows);
+    for (const r of rows) {
+      if (r.momentumScore == null) continue;
+      (out[r.symbol] ||= {})[p.id] = {
+        score: Math.round(r.momentumScore * 10) / 10,
+        // Just the sub-scores, in momComps order. The labels and weights are
+        // already on the row's current breakdown, and repeating them five times
+        // over would be most of the payload for none of the information.
+        subs: (r.momentumBreakdown || []).map((b) => (b.sub == null ? null : b.sub)),
+      };
+    }
+  }
+  // Measured at ~3.5s for 85 symbols — 3.4 of it the archive read, the scoring
+  // itself is 0.15. Logged only when it runs long, as an early warning that the
+  // archive query has outgrown the window rather than as noise on every round.
+  const took = Date.now() - T0;
+  if (took > 10000) {
+    console.warn(`momentum: past horizons took ${(took / 1000).toFixed(1)}s ` +
+      `(read ${((T1 - T0) / 1000).toFixed(1)}s) for ${symbols.length} symbols`);
+  }
+  return out;
 }
 
 // The nightly job's one endpoint. It drives exactly the loop the browser drives

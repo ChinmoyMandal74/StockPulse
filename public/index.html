@@ -557,6 +557,10 @@
           <button class="btn picker-btn" id="colBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="colMenu" role="listbox" aria-multiselectable="true" aria-label="Column groups"></div>
         </div>
+        <div class="picker" id="pastPicker" data-open="0">
+          <button class="btn picker-btn" id="pastBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="picker-menu" id="pastMenu" role="listbox" aria-label="Past momentum horizon"></div>
+        </div>
         <div class="picker" id="weightPicker" data-open="0">
           <button class="btn picker-btn" id="weightBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="weightMenu" role="listbox" aria-label="Momentum weighting"></div>
@@ -745,7 +749,8 @@
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="name">Name</th>
         <th class="group grp-info" data-group="info" colspan="5">Info</th>
-        <th class="group grp-rank" data-group="rank" colspan="3">Scores</th>
+        <th class="group grp-rank" data-group="rank" colspan="2">Scores</th>
+        <th class="group grp-pmom" data-group="pmom" colspan="3">Price Momentum</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="3">Long-term %</th>
@@ -764,8 +769,12 @@
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
         <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
         <th class="grp-rank ta-c" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
-        <th class="grp-rank ta-l" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
-        <th class="grp-rank" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all and Overall falls back to momentum. Hover a cell for the factor split and the confidence figure.">Qual.</th>
+        <th class="grp-rank ta-c" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all and Overall falls back to momentum. Hover a cell for the factor split and the confidence figure.">Qual.</th>
+        <th class="grp-pmom ta-l" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
+        <th class="grp-pmom ta-l" data-key="pastShown" id="thPast"
+            title="The momentum score as it stood at the end of the chosen horizon. Change the horizon with the Past picker in the bar.">Past<br>Mom.</th>
+        <th class="grp-pmom ta-l" data-key="deltaShown" id="thDelta"
+            title="Momentum now minus Past Momentum, in score points. Positive means the stock has strengthened on the fixed scale since then.">Mom.<br>Delta</th>
         <th class="grp-chart" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
         <th class="grp-short" data-key="todayPct">Today</th>
         <th class="grp-short" data-key="yesterdayPct">YDAY</th>
@@ -822,6 +831,7 @@
     let stocks = [];
     let weightPreset = 'default';
     let customWeights = null;      // the saved slider set, or null until one exists
+    let pastPeriod = Screens.DEFAULT_PAST;   // which horizon Past Mom. and Delta show
     let portfolios = [];       // ordered portfolio names
     let activeTab = 'All';
     let sortKey = 'overallScore';
@@ -833,18 +843,20 @@
     let signedIn = true;       // has a live session (or the app is open/local)
     let currentUser = null;    // { email, role } once signed in
 
-    const GROUPS = ['info', 'rank', 'chart', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
+    const GROUPS = ['info', 'rank', 'pmom', 'chart', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
     const GROUP_COLORS = {
       // Warm neutral, and the only unused region of the palette: every other
       // group is a family of numbers, this one is a picture.
-      info: '#7c9cff', rank: '#a3e635', chart: '#a8a29e', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
+      info: '#7c9cff', rank: '#a3e635', pmom: '#34d399', chart: '#a8a29e',
+      short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
       rel:  '#22d3ee', trend: '#fbbf24', vol:  '#f472b6',
       size: '#94a3b8', fund: '#fb7185',
     };
     // Labels live here so adding a group later is: append to GROUPS, give it a
     // colour and a label, and tag the <th>/<td> cells with .grp-<id>.
     const GROUP_LABELS = {
-      info: 'Info', rank: 'Scores', chart: 'Chart', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
+      info: 'Info', rank: 'Scores', pmom: 'Price Momentum', chart: 'Chart',
+      short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
       rel: 'Relative', trend: 'Trend', vol: 'Volume',
       size: 'Size', fund: 'Fundamentals',
     };
@@ -946,13 +958,41 @@
     // and the sentence explaining it must not drift apart.
     const MOM_ARROW_MIN = RowCard.MOM_ARROW_MIN;
 
-    // Which way momentum has moved over the last fortnight, or nothing at all.
+    // The past score and the move, for whichever horizon is selected. Both are
+    // read rather than stored on the row, so switching the picker needs no
+    // re-fetch and no re-scoring — every horizon is already in the payload.
+    const pastOf = (s) => (s.pastMomentum ? s.pastMomentum[pastPeriod] : null) ?? null;
+    const deltaOf = (s) => {
+      const was = pastOf(s);
+      return was == null || s.momentumScore == null
+        ? null : Math.round((s.momentumScore - was) * 10) / 10;
+    };
+
+    function pastCell(s) {
+      const v = pastOf(s);
+      if (v == null) return '<td class="na grp-pmom ta-l lens-col">—</td>';
+      return `<td class="grp-pmom ta-l lens-col">${v.toFixed(1)}</td>`;
+    }
+
+    function deltaCell(s) {
+      const d = deltaOf(s);
+      if (d == null) return '<td class="na grp-pmom ta-l lens-col">—</td>';
+      // Coloured only past the horizon's own deadband, so a move inside the
+      // noise reads as neutral rather than as a signal.
+      const move = Screens.pastById(pastPeriod).move;
+      const cls = Math.abs(d) < move ? 'na' : (d >= 0 ? 'pos' : 'neg');
+      return `<td class="${cls} grp-pmom ta-l lens-col">${d >= 0 ? '+' : ''}${d.toFixed(1)}</td>`;
+    }
+
+    // Which way momentum has moved over the selected horizon, or nothing at all.
     // Deliberately direction only: the size is in the tooltip, and 84 rows of
     // signed numbers in a rating column would be harder to scan, not easier.
     function momArrow(d) {
-      if (d == null || !isFinite(d) || Math.abs(d) < MOM_ARROW_MIN) return '';
+      const min = Screens.pastById(pastPeriod).move;
+      if (d == null || !isFinite(d) || Math.abs(d) < min) return '';
       const up = d > 0;
-      const word = `Momentum ${up ? 'up' : 'down'} ${Math.abs(d).toFixed(1)} points over the last two weeks`;
+      const word = `Momentum ${up ? 'up' : 'down'} ${Math.abs(d).toFixed(1)} points over ` +
+        Screens.pastById(pastPeriod).label;
       return `<svg class="momarrow ${up ? 'up' : 'down'}" aria-label="${word}" role="img">` +
              '<use href="#i-chevron" /></svg>';
     }
@@ -1079,6 +1119,7 @@
     const PICKERS = [
       { root: 'picker', btn: 'pickerBtn', menu: 'pickerMenu' },
       { root: 'colPicker', btn: 'colBtn', menu: 'colMenu' },
+      { root: 'pastPicker', btn: 'pastBtn', menu: 'pastMenu' },
       { root: 'weightPicker', btn: 'weightBtn', menu: 'weightMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
       { root: 'addPicker', btn: 'addOpenBtn', menu: 'addMenu' },
@@ -1167,6 +1208,7 @@
     function render() {
       renderPicker();
       renderWeightTrigger();
+      renderPastTrigger();
       const tbody = $('tbody');
       const rows = visibleStocks();
       markSortedColumn();
@@ -1186,8 +1228,10 @@
         return;
       }
 
+      const valueFor = (x) => (sortKey === 'pastShown' ? pastOf(x)
+        : sortKey === 'deltaShown' ? deltaOf(x) : x[sortKey]);
       const sorted = [...rows].sort((a, b) => {
-        const av = a[sortKey], bv = b[sortKey];
+        const av = valueFor(a), bv = valueFor(b);
         if (av == null) return 1;
         if (bv == null) return -1;
         if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
@@ -1236,8 +1280,10 @@
           <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
           ${earningsCell(s, cacheTitle)}
           ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-rank ta-c lens-col')}
-          ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-rank ta-l lens-col', s.momentumChange)}
-          ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank')}
+          ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank ta-c')}
+          ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-pmom ta-l lens-col', deltaOf(s))}
+          ${pastCell(s)}
+          ${deltaCell(s)}
           <td class="spark grp-chart" data-spark="${s.symbol}">${sparkCache[s.symbol] || ''}</td>
           ${pctCell(s.todayPct, 'grp-short', liveTitle)}
           ${pctCell(s.yesterdayPct, 'grp-short', liveTitle)}
@@ -1373,6 +1419,8 @@
         ['Symbol', (s) => s.symbol],
         ['Overall', (s) => s.overallRating],
         ['Momentum', (s) => s.momentumRating],
+        ['Past Momentum', (s) => pastOf(s)],
+        ['Momentum Delta', (s) => deltaOf(s)],
         ['Quality', (s) => s.qualityRating],
         ['Name', (s) => s.name],
         ['Portfolios', (s) => (s.portfolios || []).join('; ')],
@@ -1438,8 +1486,10 @@
       const lensName = Screens.presetById(weightPreset);
       const head = cols.map((c) => {
         if (lensName.id === 'default') return c[0];
-        return /^(Overall|Momentum|Rank)$/.test(c[0]) ? `${c[0]} (${lensName.label})` : c[0];
-      });
+        return /^(Overall|Momentum)$/.test(c[0]) ? `${c[0]} (${lensName.label})` : c[0];
+      }).map((h) => (/^(Past Momentum|Momentum Delta)$/.test(h)
+        // The horizon travels with the file: these two mean nothing without it.
+        ? `${h} (${Screens.pastById(pastPeriod).label})` : h));
       const lines = [head.map((h) => esc(h)).join(',')];
       for (const s of rows) lines.push(cols.map((c) => esc(c[1](s))).join(','));
       const csv = '﻿' + lines.join('\r\n'); // BOM so Excel reads UTF-8
@@ -1460,6 +1510,10 @@
 
     // Show/hide every cell (group header + detail headers + body cells) per group.
     function applyGroups() {
+      // The horizon picker drives the Price Momentum columns, so it follows them
+      // in and out of view. Collapsing a group runs through here rather than
+      // render(), which is why the trigger is redrawn from both.
+      renderPastTrigger();
       GROUPS.forEach((id) => {
         const hide = collapsed[id];
         document.querySelectorAll('.grp-' + id).forEach((el) => { el.style.display = hide ? 'none' : ''; });
@@ -1586,6 +1640,43 @@
     // Drawn on every render. Deliberately separate from the menu below: a redraw
     // while a slider is being dragged would replace the very input under the
     // cursor and the drag would die mid-gesture.
+    function setPastPeriod(id) {
+      if (id === pastPeriod) return;
+      pastPeriod = id;
+      render();
+      renderPastMenu();
+      savePrefs();
+    }
+
+    function renderPastTrigger() {
+      const p = Screens.pastById(pastPeriod);
+      $('pastBtn').innerHTML =
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-clock" /></svg>' +
+        '<span class="picker-label">Past</span>' +
+        `<span class="count">${we(p.label)}</span>` +
+        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
+      $('pastBtn').title = `Past Mom. and Mom. Delta are measured over ${p.label}. ` +
+        'The analysis screens and the nightly email always use two weeks.';
+      // The picker is only meaningful while the columns it drives are visible.
+      $('pastPicker').style.display = collapsed.pmom ? 'none' : '';
+    }
+
+    function renderPastMenu() {
+      $('pastMenu').innerHTML = '<div class="picker-inner">' +
+        Screens.PAST_PERIODS.map((w) =>
+          `<button class="pick ${w.id === pastPeriod ? 'on' : ''}" data-past="${w.id}" role="option" ` +
+          `aria-selected="${w.id === pastPeriod}">` +
+          `<span class="nm">${we(w.label)}<em>${w.days} sessions · marks a move past ${w.move} points</em></span>` +
+          '<svg class="ic ic-sm chk" aria-hidden="true"><use href="#i-check" /></svg></button>').join('') +
+        '<div class="pick-sep"></div>' +
+        '<div class="pick-hint">How far back Past Mom. looks. The deadband on Mom. Delta and the ' +
+        'arrow scales with it — the median name moves about three points in a week and fifteen in ' +
+        'six months, so one fixed threshold cannot serve both.</div></div>';
+      $('pastMenu').querySelectorAll('[data-past]').forEach((b) => {
+        b.addEventListener('click', (ev) => { ev.stopPropagation(); setPastPeriod(b.dataset.past); });
+      });
+    }
+
     function renderWeightTrigger() {
       $('weightBtn').innerHTML =
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>' +
@@ -1686,6 +1777,8 @@
         const res = await api('GET', '/api/prefs');
         const savedC = res && res.prefs && Screens.cleanWeights(res.prefs.customWeights);
         if (savedC) customWeights = Object.assign(Screens.defaultWeights(), savedC);
+        const savedP = res && res.prefs && res.prefs.past;
+        if (savedP && Screens.PAST_PERIODS.some((x) => x.id === savedP)) pastPeriod = savedP;
         const savedW = res && res.prefs && res.prefs.weights;
         if (savedW === 'custom' || Screens.WEIGHT_PRESETS.some((w) => w.id === savedW)) weightPreset = savedW;
         const saved = res && res.prefs && res.prefs.collapsed;
@@ -1711,7 +1804,7 @@
         const out = {};
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
-          prefs: { collapsed: out, weights: weightPreset, customWeights },
+          prefs: { collapsed: out, weights: weightPreset, customWeights, past: pastPeriod },
         }).catch(() => {});
       }, 600);
     }
@@ -2215,6 +2308,7 @@
         // Built on open rather than on every render: a rebuild mid-drag would
         // replace the slider under the cursor and kill the gesture.
         if (opening && p.root === 'weightPicker') renderWeightMenu();
+        if (opening && p.root === 'pastPicker') renderPastMenu();
         openPicker(opening ? p.root : null);
         if (opening && p.root === 'addPicker') setTimeout(() => $('symbolInput').focus(), 60);
       });

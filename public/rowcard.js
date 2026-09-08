@@ -62,8 +62,16 @@
     ['info',  'Next Earn',      (s) => s.nextEarningsDate
                                   ? { t: (s.nextEarningsEstimated ? '~' : '') + shortDate(s.nextEarningsDate), c: '' } : null],
     ['rank',  'Overall',        (s) => V.rating(s.overallRating)],
-    ['rank',  'Mom.',           (s) => V.rating(s.momentumRating)],
     ['rank',  'Qual.',          (s) => V.rating(s.qualityRating)],
+    ['pmom',  'Mom.',           (s) => V.rating(s.momentumRating)],
+    ['pmom',  'Score',          (s) => (s.momentumScore == null ? null : { t: s.momentumScore.toFixed(1), c: '' })],
+    // The card has no horizon picker, so it shows the default and says so
+    // rather than borrowing whatever the table happens to be set to.
+    ['pmom',  'Past (2W)',      (s) => (s.momentumScorePrev == null ? null
+                                  : { t: s.momentumScorePrev.toFixed(1), c: '' })],
+    ['pmom',  'Delta (2W)',     (s) => (s.momentumChange == null ? null
+                                  : { t: (s.momentumChange >= 0 ? '+' : '') + s.momentumChange.toFixed(1),
+                                      c: s.momentumChange >= 0 ? 'pos' : 'neg' })],
     ['short', 'Today',          (s) => V.pct(s.todayPct)],
     ['short', 'YDAY',           (s) => V.pct(s.yesterdayPct)],
     ['short', '1W',             (s) => V.pct(s.oneWeekPct)],
@@ -108,16 +116,16 @@
     ['fund',  'Short % float',  (s) => V.short(s.shortPctFloat)],
   ];
 
-  const GROUP_ORDER = ['info', 'rank', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
+  const GROUP_ORDER = ['info', 'rank', 'pmom', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
   // The palette lives here because this file already owns GROUP_ORDER and
   // FIELD_SPEC. index.html keeps its own copy — it also colours the table's
   // group banners and the columns menu — so those two must stay in step.
   const GROUP_COLORS = {
-    info: '#7c9cff', rank: '#a3e635', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
+    info: '#7c9cff', rank: '#a3e635', pmom: '#34d399', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
     rel: '#22d3ee', trend: '#fbbf24', vol: '#f472b6', size: '#94a3b8', fund: '#fb7185',
   };
   const GROUP_LABELS = {
-    info: 'Info', rank: 'Scores', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
+    info: 'Info', rank: 'Scores', pmom: 'Price Momentum', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
     rel: 'Relative', trend: 'Trend', vol: 'Volume', size: 'Size', fund: 'Fundamentals',
   };
 
@@ -517,6 +525,8 @@
   // Off by default: inside the hover card these rows are already in a tooltip,
   // and a tooltip on a tooltip helps nobody.
   const ROW_TIPS = { 'Overall': 'overall', 'Mom.': 'momentum', 'Qual.': 'quality' };
+  // Which groups carry rows that can explain themselves.
+  const TIP_GROUPS = ['rank', 'pmom'];
 
   function buildSections(s, opts) {
     const o = opts || {};
@@ -546,7 +556,7 @@
         // FIELD_SPEC would print an em-dash in the hover card on every other page.
         const extras = (o.extra && o.extra[g]) || [];
         const rows = byGroup[g].concat(extras).map((r) => {
-          const tip = o.tips && g === 'rank' ? ROW_TIPS[r.k] : null;
+          const tip = o.tips && TIP_GROUPS.includes(g) ? ROW_TIPS[r.k] : null;
           const val = r.href
             ? `<a class="rc-link" href="${esc(r.href)}" target="_blank" rel="noopener">${esc(r.t)}</a>`
             : esc(r.t);
