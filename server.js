@@ -20,6 +20,9 @@ const store = require('./db');
 // The analysis screens, shared with public/analysis.html so the nightly report
 // and the page can never disagree about what "bouncing off the lows" means.
 const Screens = require('./public/screens.js');
+// The Excel model of the momentum calculation, shared with the CLI in the same
+// file so the workbook served here and the one written locally are one thing.
+const { buildModel, MODEL_ROWS, MODEL_MIN_BARS } = require('./momentum-model.js');
 const {
   readPortfolios, writePortfolios,
   readNames, writeNames,
@@ -2347,6 +2350,34 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
       .sort((a, b) => a.symbol.localeCompare(b.symbol)),
     updatedAt: snap.updatedAt || null,
   });
+}));
+
+// The momentum calculation as a spreadsheet, for one symbol. Built by the same
+// module the CLI uses, so the workbook a reader downloads cannot drift from the
+// one generated locally. ~35 KB and well under a second, so it is generated per
+// request rather than cached — a cached copy would go stale on the next refresh
+// and quietly disagree with the page it was downloaded from.
+app.get('/api/model', requireAuth, route(async (req, res) => {
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+
+  const rows = await store.readBars(symbol, MODEL_ROWS);
+  if (rows.length < MODEL_MIN_BARS) {
+    // Too young to have a momentum score at all, so there is nothing to model.
+    return res.status(422).json({
+      error: `${symbol} has ${rows.length} sessions stored; the model needs ${MODEL_MIN_BARS}.`,
+    });
+  }
+  // readBars returns newest-first with `datetime`; the builder wants `d`.
+  const bars = rows.map((b) => ({ d: b.datetime, high: Number(b.high), close: Number(b.close) }));
+  const snap = await readSnapshot();
+  const live = (snap && snap.stocks || []).find((x) => x.symbol === symbol) || null;
+
+  const buf = buildModel(symbol, bars, live);
+  res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.set('Content-Disposition', `attachment; filename="momentum-model-${symbol}.xlsx"`);
+  res.set('Cache-Control', 'no-store');
+  res.send(buf);
 }));
 
 // Per-account UI preferences. Keyed on the signed-in email, falling back to

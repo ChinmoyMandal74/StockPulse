@@ -117,7 +117,7 @@
     rel: '#22d3ee', trend: '#fbbf24', vol: '#f472b6', size: '#94a3b8', fund: '#fb7185',
   };
   const GROUP_LABELS = {
-    info: 'Info', rank: 'Rank', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
+    info: 'Info', rank: 'Scores', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
     rel: 'Relative', trend: 'Trend', vol: 'Volume', size: 'Size', fund: 'Fundamentals',
   };
 

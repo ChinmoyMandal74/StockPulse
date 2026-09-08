@@ -17,7 +17,10 @@ const fs = require('fs');
 const zlib = require('zlib');
 const { createClient } = require('@tursodatabase/serverless/compat');
 
-const SYMBOL = (process.argv[2] || 'CRWD').toUpperCase();
+const SYMBOL = (process.argv[2] || 'CRWD').toUpperCase();   // CLI only
+// The shortest series momentum can be scored from at all: a year, plus the
+// month 12-1 skips, plus the bar the return is measured against.
+const MIN_BARS = 274;
 // 320 rows mirrors the ~300 bars a refresh fetches, with a little room. The
 // deepest factor needs 253 (a year plus the month 12-1 skips), and the moving
 // averages need 200 with somewhere to look back for the last cross.
@@ -164,22 +167,15 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </styleSheet>`;
 
 // ---- the workbook ----------------------------------------------------------
-(async () => {
-  const db = createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN });
-  const r = await db.execute({
-    sql: 'select d, high, close from bars where symbol = ? order by d desc limit ?',
-    args: [SYMBOL, ROWS],
-  });
-  if (r.rows.length < 274) {
-    console.error(`${SYMBOL}: only ${r.rows.length} bars — momentum needs at least 274.`);
-    process.exit(1);
-  }
-  const bars = r.rows.map((x) => ({ d: x.d, high: Number(x.high), close: Number(x.close) }));
+// ---- the workbook ----------------------------------------------------------
+// Takes the bars and the score the app currently reports, and returns the file
+// as a Buffer. Kept separate from any I/O so the same code serves the CLI below
+// and GET /api/model, rather than the route growing a second copy that drifts.
+//
+//   bars: newest first, [{ d, high, close }]
+//   live: the app's momentum score, or null — only used for the CHECK block
+function buildModel(SYMBOL, bars, live) {
   const n = bars.length;
-
-  // What the app currently says, so the workbook can check itself.
-  const store = require('./db.js');
-  const live = ((await store.readSnapshot()).stocks || []).find((x) => x.symbol === SYMBOL);
 
   // Excel serial dates: days since 1899-12-30.
   const serial = (iso) => Math.round((Date.parse(iso + 'T00:00:00Z') / 86400000) + 25569);
@@ -377,11 +373,36 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     ...sheets.map((s, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: s.xml })),
   ];
 
+
+  return zip(files);
+}
+
+// ---- CLI -------------------------------------------------------------------
+// Only when run directly. Requiring this file must not touch the database.
+async function main() {
+  const db = createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN });
+  const r = await db.execute({
+    sql: 'select d, high, close from bars where symbol = ? order by d desc limit ?',
+    args: [SYMBOL, ROWS],
+  });
+  if (r.rows.length < MIN_BARS) {
+    console.error(`${SYMBOL}: only ${r.rows.length} bars — momentum needs at least ${MIN_BARS}.`);
+    process.exit(1);
+  }
+  const bars = r.rows.map((x) => ({ d: x.d, high: Number(x.high), close: Number(x.close) }));
+  const live = ((await require('./db.js').readSnapshot()).stocks || [])
+    .find((x) => x.symbol === SYMBOL);
+
   const out = `momentum-model-${SYMBOL}.xlsx`;
-  fs.writeFileSync(out, zip(files));
-  console.log(`${out}  —  ${n} bars, ${bars[n - 1].d} to ${bars[0].d}`);
+  fs.writeFileSync(out, buildModel(SYMBOL, bars, live));
+  console.log(`${out}  —  ${bars.length} bars, ${bars[bars.length - 1].d} to ${bars[0].d}`);
   if (live && live.momentumScore != null) {
     console.log(`the app currently reports momentum ${live.momentumScore} for ${SYMBOL}; the Score sheet checks itself against it`);
   }
   process.exit(0);
-})();
+}
+
+module.exports = { buildModel, MODEL_ROWS: ROWS, MODEL_MIN_BARS: MIN_BARS };
+
+if (require.main === module) main();
+

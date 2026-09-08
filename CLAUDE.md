@@ -285,13 +285,16 @@ Everything comes from the daily bars already fetched, so the extra factors cost 
 Applying these moved 9 of 44 ratings — MSTR 5→2, JOBY 8→5, AVAV 7→5, four loss-makers down one, and SPCX 3→**5** (its meaningless PEG of 86.7 had been scoring zero and dragging it down).
 
 ## The Excel model
-`node --use-system-ca momentum-model.js CRWD` writes `momentum-model-<SYMBOL>.xlsx`: three sheets — **Bars**, **Factors**, **Score** — in which every cell is a live formula over the daily bars. Change a close price and the score moves, because the workbook is the calculation rather than a picture of it.
+**`GET /api/model?symbol=X`** serves it from the stock page, and `node --use-system-ca momentum-model.js CRWD` writes it locally. Both call `buildModel()` in the same file — verified byte-identical by SHA-256, so the workbook a reader downloads cannot drift from the one generated on the command line. The link is hidden when a symbol has no momentum score, because a link that downloads an error is worse than no link; the route answers 422 with the session count for anything under 274 bars.
+
+The workbook: three sheets — **Bars**, **Factors**, **Score** — in which every cell is a live formula over the daily bars. Change a close price and the score moves, because the workbook is the calculation rather than a picture of it.
 
 - **Verified against the app, not asserted.** The Score sheet holds what the app reported when the file was written and subtracts. Checked on CRWD: **72.1 against 72.1**, every factor agreeing within the 2dp the stored breakdown rounds to.
 - **`values[k]` lives on row `D + 1 + k`.** Writing `D + k` reads the wrong session, and every return is a difference between two of these — it cost four wrong formulas the first time. The `B(k)` helper exists so it cannot happen again.
 - **320 rows, mirroring the ~300 bars a refresh fetches.** The deepest factor needs 253, the moving averages 200 plus somewhere to look back for the last cross.
 - **RSI is a recursive column**, seeded with a simple 14-day average at the *old* end and smoothed upward, because Wilder runs oldest-first while the sheet is newest-first.
 - **Written by hand — an xlsx is a zip of XML.** A spreadsheet library would be a fourth dependency for a one-off explainer; the same reasoning that sends mail over plain `fetch`. Excel is told to `fullCalcOnLoad`, since no cached values are stored.
+- **Generated per request, not cached.** ~35 KB and well under a second, and a cached copy would go stale on the next refresh and quietly disagree with the page it was downloaded from.
 - **The output is gitignored.** It goes stale as soon as prices move, and regenerating takes a second.
 
 ## Fundamentals history
@@ -359,7 +362,7 @@ Charts are hand-rolled inline SVG in `rowcard.js` — no library, no build step.
   - **Overlays are folded into the y-scale.** An average sits above a falling price and below a rising one, so scaling to the price alone clips it. A `null` breaks the path rather than joining across the gap.
   - `RowCard.sma()` is exported for it. Cross-checked against the screener's own `vs50ma` and `vs200ma` for six symbols: exact agreement, gap 0.000 on both.
 - **`.rc-*` classes are unscoped in `app.css`**; only the floating container is tied to `#rowcard`. The hover card and `/stock/<SYMBOL>` render the same sections from the same `FIELD_SPEC` via `RowCard.buildSections()` — a third copy of the field list is exactly what the row card existed to prevent.
-- **`GROUP_COLORS` / `GROUP_LABELS` now live in `rowcard.js`** and are exported. `index.html` still keeps its own copy because it also colours the table's group banners and the columns menu, so **those two must stay in step**.
+- **`GROUP_COLORS` / `GROUP_LABELS` now live in `rowcard.js`** and are exported. `index.html` and `analysis.html` keep their own copies because they also colour the table's group banners and the columns menu, so **all three must stay in step** — renaming the `rank` group's label to `Scores` in one of them left the stock page's card still saying `RANK`.
 - The name cell links to `/stock/<SYMBOL>` on **both** the screener and the analysis page; the symbol cell still links out to Google Finance. All of them open in a new tab (`target="_blank" rel="noopener"`), so a click never loses your place in the list. `.namelink` lives in `app.css` because two pages use it; only the frozen-column truncation (`td.frz1 .namelink`) stays in index.html. `.namelink` inherits its colour and only underlines on hover — 69 rows of blue underlines would wreck the table.
 
 ## Bar archive

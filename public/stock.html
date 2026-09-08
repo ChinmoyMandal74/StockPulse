@@ -94,6 +94,11 @@
 
     .about { margin: 0; font-size: 13.5px; line-height: 1.7; color: var(--muted); max-width: 78ch; }
 
+    /* Sits in the card header like the chart's range buttons do. Hidden
+       entirely when there is no momentum score, since there would be nothing to
+       model — a link that downloads an error is worse than no link. */
+    .sec-h .model { margin-left: auto; text-decoration: none; }
+
     section.card { margin-bottom: 16px; }
     section.card:first-of-type { margin-top: 14px; }
     section.card > .core { padding: 13px 18px 16px; }
@@ -487,7 +492,11 @@
         </section></div>
 
         <section class="bezel card"><div class="core">
-          <div class="sec-h"><h2>Everything the screener knows</h2></div>
+          <div class="sec-h"><h2>Everything the screener knows</h2>
+            ${stock.momentumScore != null ? `<a class="rng model" id="modelLink"
+              href="/api/model?symbol=${encodeURIComponent(stock.symbol)}"
+              title="An Excel workbook of the momentum calculation for ${esc(stock.symbol)} — every cell a live formula over the daily bars">Momentum model (.xlsx)</a>` : ''}
+          </div>
           <div class="fields">${RowCard.buildSections(stock, {
             colors: RowCard.GROUP_COLORS, labels: RowCard.GROUP_LABELS,
             // There is no table to hover here, so the scores would otherwise be
