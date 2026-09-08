@@ -169,6 +169,35 @@ const SCHEMA = [
   // What actually produced the rows in momentum_history. One row, ever. The
   // fingerprint is derived from the scoring code itself, so comparing it with
   // the running model's is how a forgotten MODEL_VERSION bump gets caught.
+  `create index if not exists idx_momentum_d on momentum_history (d)`,
+
+  // Past momentum and momentum delta, for every horizon the app offers.
+  //
+  // A VIEW, not columns. Past momentum at a horizon IS the stored score N
+  // trading days back — verified against the app's own numbers across 40
+  // symbol-horizon pairs, gap 0.000 — so materialising it would put ten copies
+  // of a number beside the number itself, on 270,000 rows, free to drift from
+  // it and needing a rewrite on every model change. The view costs nothing,
+  // cannot disagree with the score, and reads like a table for analysis.
+  //
+  // LAG counts rows, and there is one row per symbol per trading day, so an
+  // offset of 10 rows is the fortnight the app means. Partitioned by model as
+  // well as symbol so a window can never step across a scoring change.
+  `create view if not exists momentum_deltas as
+   select symbol, d, model, score,
+     lag(score, 5)   over w as past_1w,
+     lag(score, 10)  over w as past_2w,
+     lag(score, 21)  over w as past_1m,
+     lag(score, 63)  over w as past_3m,
+     lag(score, 126) over w as past_6m,
+     score - lag(score, 5)   over w as delta_1w,
+     score - lag(score, 10)  over w as delta_2w,
+     score - lag(score, 21)  over w as delta_1m,
+     score - lag(score, 63)  over w as delta_3m,
+     score - lag(score, 126) over w as delta_6m
+   from momentum_history
+   window w as (partition by symbol, model order by d)`,
+
   `create table if not exists momentum_model (
      id          integer primary key check (id = 1),
      model       integer not null,
@@ -695,6 +724,40 @@ async function purgeSymbol(symbol) {
     total += n;
   }
   return { symbol: sym, removed, total };
+}
+
+const DELTA_COLS = ['past_1w', 'past_2w', 'past_1m', 'past_3m', 'past_6m',
+                    'delta_1w', 'delta_2w', 'delta_1m', 'delta_3m', 'delta_6m'];
+
+// The momentum series with every horizon's past score and delta beside it.
+// Ascending, filtered to one model, the same contract readMomentum() has.
+async function readMomentumDeltas(symbol, since, model = MOMENTUM_MODEL) {
+  await init();
+  // Deliberately not `select ... from momentum_deltas where symbol = ?`. A
+  // window function is computed before the outer filter, so reading one symbol
+  // out of the view made SQLite window all 270,000 rows and throw away 269,000
+  // of them — 1.6s against 0.1s for the same answer. The view stays for ad-hoc
+  // and cross-sectional queries; this is the hot path and windows one partition.
+  const lags = [['1w', 5], ['2w', 10], ['1m', 21], ['3m', 63], ['6m', 126]];
+  const cols = lags.map(([id, n]) => `lag(score, ${n}) over w as past_${id}`)
+    .concat(lags.map(([id, n]) => `score - lag(score, ${n}) over w as delta_${id}`))
+    .join(', ');
+  // The date filter sits outside the window, not in its WHERE: the first row a
+  // caller asks for still needs the 126 rows before it to have a 6m past score.
+  // Trimming in SQL rather than in JS keeps the discarded rows off the wire.
+  const r = await db.execute({
+    sql: `select * from (
+            select d, score, ${cols} from momentum_history
+            where symbol = ? and model = ?
+            window w as (order by d)
+          ) where d >= ? order by d asc`,
+    args: [String(symbol).toUpperCase(), model, since || '0000-00-00'],
+  });
+  return r.rows.map((x) => {
+    const out = { d: x.d, score: Number(x.score) };
+    for (const c of DELTA_COLS) out[c] = x[c] == null ? null : Number(x[c]);
+    return out;
+  });
 }
 
 // What purgeSymbol would remove from one table, so a dry run cannot promise
@@ -1228,6 +1291,8 @@ module.exports = {
   symbolsWithData,
   countSymbolRows,
   SYMBOL_TABLES,
+  readMomentumDeltas,
+  DELTA_COLS,
   momentumStats,
   clearMomentum,
   readCloses,

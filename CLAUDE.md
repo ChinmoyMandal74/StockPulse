@@ -332,6 +332,17 @@ The workbook: three sheets — **Bars**, **Factors**, **Score** — in which eve
 **It is a cache, not a record.** Every value is a pure function of bars already stored, so if the model changes the right move is to throw the rows away and recompute — nothing is lost, because nothing here was ever a measurement of its own. That is the opposite of `fundamentals_history`, where the API only ever returns *today* and an unrecorded day is gone forever.
 
 - **`momentum.js` holds the scoring, and it is the only copy.** It was extracted from `server.js` precisely so the live refresh, the backfill and any later analysis cannot drift into three slightly different models. Verified on extraction against the live app: worst gap **0.100** across 81 symbols, none over 0.15.
+### Past momentum and delta — the `momentum_deltas` view
+**They are not stored, because they are already stored.** Past momentum at a horizon *is* the score N trading days back, and `momentum_history` holds every trading day since 2007. Verified against the app's own numbers across **72 symbol-horizon pairs, gap 0.000** — including `delta_2w` against the `momentumChange` the screener ships. Materialising them would put ten copies of a number beside the number itself on 270,000 rows, free to drift from it and needing a rewrite on every model change.
+
+The view gives them the shape of a table without the duplication: `symbol, d, model, score, past_1w…past_6m, delta_1w…delta_6m`, for the same five horizons `PAST_PERIODS` offers.
+
+- **`LAG` counts rows, and there is one row per symbol per trading day**, so an offset of 10 rows is the fortnight the app means — the same thing `pastMomentum()` gets by slicing 10 bars. That is why the two agree exactly rather than approximately.
+- **Partitioned by `(symbol, model)`, not just symbol**, so a window can never step across a scoring change and subtract two different models.
+- **`readMomentumDeltas()` deliberately does not read the view.** A window function is computed before the outer filter, so pulling one symbol out of it windowed all 270,000 rows to keep 4,700 — 1.6s against **64ms** for the same answer. It windows a single partition instead. The date filter sits *outside* the window in a subquery, or the first row asked for would have no run-up behind it and its past scores would come back null.
+- **Cross-sectional queries go through the view and take ~3.8s** ("who improved most on this date"), because there is no way to push a date predicate into a window. Fine for analysis, which is what the view is for; anything on the hot path should use the accessor.
+- `idx_momentum_d` was added with it — the primary key is `(symbol, d)`, so a date-first query had no index at all, and that is the shape every cross-sectional question takes.
+
 ### Changing the model
 **Bump `MODEL_VERSION` in `momentum.js`, then run `node --use-system-ca backfill-momentum.js --commit`. That is the whole procedure.**
 
