@@ -174,7 +174,12 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 //
 //   bars: newest first, [{ d, high, close }]
 //   live: the app's momentum score, or null — only used for the CHECK block
-function buildModel(SYMBOL, bars, live) {
+// `momentum` is a date -> score map read from momentum_history. It is the one
+// column on the Bars sheet that is a stored value rather than a formula: the
+// score at an earlier date needs a year of run-up before it, and reproducing
+// that down 320 rows would mean 320 copies of the whole Factors sheet. The
+// current score stays live on Score, which is the one anybody checks.
+function buildModel(SYMBOL, bars, live, momentum) {
   const n = bars.length;
 
   // Excel serial dates: days since 1899-12-30.
@@ -186,9 +191,9 @@ function buildModel(SYMBOL, bars, live) {
   const RSI_SEED = LAST - 14;               // Wilder is seeded at the old end
   const b = [];
   b.push([{ v: `${SYMBOL} — daily bars and the running indicators`, s: S.title }]);
-  b.push([{ v: 'Newest first. Row 2 is the most recent session, exactly as the app holds it. Grey columns are intermediates the factors need.', s: S.note }]);
+  b.push([{ v: 'Newest first. Row 2 is the most recent session, exactly as the app holds it. Grey columns are intermediates the factors need. Momentum is the stored score for that date — a value, not a formula, and the only cell here that does not recalculate.', s: S.note }]);
   b.push([]);
-  b.push(['Date', 'High', 'Close', 'Log return', 'MA 50', 'MA 200', 'MA50 vs 200', 'Gain', 'Loss', 'Avg gain', 'Avg loss', 'RSI 14'].map((h) => ({ v: h, s: S.head })));
+  b.push(['Date', 'High', 'Close', 'Log return', 'MA 50', 'MA 200', 'MA50 vs 200', 'Gain', 'Loss', 'Avg gain', 'Avg loss', 'RSI 14', 'Momentum'].map((h) => ({ v: h, s: S.head })));
   for (let i = 0; i < n; i++) {
     const R = i + 5;                        // data starts at row 5
     const nxt = R + 1;                      // the older session
@@ -213,6 +218,10 @@ function buildModel(SYMBOL, bars, live) {
       row.push({ f: `(K${R + 1}*13+I${R})/14`, s: S.num3 });
     } else { row.push('', ''); }
     row.push(R <= RSI_SEED + 4 ? { f: `IF(K${R}=0,100,100-100/(1+J${R}/K${R}))`, s: S.num2 } : '');
+    // A date with no stored row is left blank rather than carried forward, so a
+    // gap in the history reads as a gap.
+    const mv = momentum ? momentum.get(bars[i].d) : undefined;
+    row.push(mv == null ? '' : { v: mv, s: S.num2 });
     b.push(row);
   }
 
@@ -328,7 +337,7 @@ function buildModel(SYMBOL, bars, live) {
   sc.push([]);
   sc.push([{ v: 'HOW TO USE THIS', s: S.head }, { v: '', s: S.head }, { v: '', s: S.head }]);
   for (const line of [
-    'Change any close price on the Bars sheet and watch every number move — nothing here is typed in but the constants.',
+    'Change any close price on the Bars sheet and watch every number move — nothing here is typed in but the constants and the stored Momentum column on Bars, which is history rather than calculation.',
     'The centres and scales on the Factors sheet are the fixed scale. They do not depend on the other stocks, which is why a score means the same thing in any month.',
     'Weights are the same eight the app uses. Editing column F reproduces what the Weights menu does on the screener.',
     'Overall = 0.65 × momentum + 0.35 × quality. Quality is company data and is not modelled here.',
@@ -336,7 +345,7 @@ function buildModel(SYMBOL, bars, live) {
 
   // ---- assemble ------------------------------------------------------------
   const sheets = [
-    { name: 'Bars', xml: sheetXml(b, { widths: [12, 10, 10, 11, 10, 10, 12, 9, 9, 10, 10, 9], freeze: 4 }) },
+    { name: 'Bars', xml: sheetXml(b, { widths: [12, 10, 10, 11, 10, 10, 12, 9, 9, 10, 10, 9, 11], freeze: 4 }) },
     { name: 'Factors', xml: sheetXml(f, { widths: [26, 14, 9, 9, 11, 8, 10, 70], tab: true }) },
     { name: 'Score', xml: sheetXml(sc, { widths: [24, 14, 78] }) },
   ];
@@ -390,11 +399,13 @@ async function main() {
     process.exit(1);
   }
   const bars = r.rows.map((x) => ({ d: x.d, high: Number(x.high), close: Number(x.close) }));
-  const live = ((await require('./db.js').readSnapshot()).stocks || [])
+  const store = require('./db.js');
+  const live = ((await store.readSnapshot()).stocks || [])
     .find((x) => x.symbol === SYMBOL);
+  const momentum = await momentumMap(store, SYMBOL, bars);
 
   const out = `momentum-model-${SYMBOL}.xlsx`;
-  fs.writeFileSync(out, buildModel(SYMBOL, bars, live));
+  fs.writeFileSync(out, buildModel(SYMBOL, bars, live, momentum));
   console.log(`${out}  —  ${bars.length} bars, ${bars[bars.length - 1].d} to ${bars[0].d}`);
   if (live && live.momentumScore != null) {
     console.log(`the app currently reports momentum ${live.momentumScore} for ${SYMBOL}; the Score sheet checks itself against it`);
@@ -402,7 +413,17 @@ async function main() {
   process.exit(0);
 }
 
-module.exports = { buildModel, MODEL_ROWS: ROWS, MODEL_MIN_BARS: MIN_BARS };
+// The stored momentum for exactly the dates on the Bars sheet. Shared by the
+// CLI and /api/model: the two are verified byte-identical, which only holds if
+// they assemble their inputs the same way.
+async function momentumMap(store, symbol, bars) {
+  const oldest = bars.length ? bars[bars.length - 1].d : null;
+  if (!oldest) return new Map();
+  const rows = await store.readMomentum(symbol, oldest);
+  return new Map(rows.map((r) => [r.d, r.score]));
+}
+
+module.exports = { buildModel, momentumMap, MODEL_ROWS: ROWS, MODEL_MIN_BARS: MIN_BARS };
 
 if (require.main === module) main();
 

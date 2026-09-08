@@ -20,6 +20,9 @@
 
 const crypto = require('crypto');
 const { createClient } = require('@tursodatabase/serverless/compat');
+// The scoring model's version, so momentum reads can filter on it without
+// every caller having to remember to pass one.
+const { MODEL_VERSION: MOMENTUM_MODEL } = require('./momentum.js');
 
 const url = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
@@ -625,12 +628,15 @@ async function writeMomentum(rows) {
 }
 
 // One symbol's series, oldest first, for charting.
-async function readMomentum(symbol, since) {
+// Filtered on the model by default, so a half-migrated table returns a short
+// series rather than one that silently mixes two scoring regimes. Pass `model`
+// explicitly only to read rows written by an older one on purpose.
+async function readMomentum(symbol, since, model = MOMENTUM_MODEL) {
   await init();
   const r = await db.execute({
     sql: `select d, score, ${MOMENTUM_COLS.join(', ')} from momentum_history
-          where symbol = ? and d >= ? order by d asc`,
-    args: [String(symbol), since || '0000-00-00'],
+          where symbol = ? and d >= ? and model = ? order by d asc`,
+    args: [String(symbol), since || '0000-00-00', model],
   });
   return r.rows.map((x) => {
     const out = { d: x.d, score: Number(x.score) };

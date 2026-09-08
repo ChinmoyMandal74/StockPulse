@@ -22,7 +22,7 @@ const store = require('./db');
 const Screens = require('./public/screens.js');
 // The Excel model of the momentum calculation, shared with the CLI in the same
 // file so the workbook served here and the one written locally are one thing.
-const { buildModel, MODEL_ROWS, MODEL_MIN_BARS } = require('./momentum-model.js');
+const { buildModel, momentumMap, MODEL_ROWS, MODEL_MIN_BARS } = require('./momentum-model.js');
 // Momentum scored from bars alone, shared with the backfill so the stored
 // history and the live score can never drift into two different models.
 const Momentum = require('./momentum.js');
@@ -2359,7 +2359,7 @@ app.get('/api/model', requireAuth, route(async (req, res) => {
   const snap = await readSnapshot();
   const live = (snap && snap.stocks || []).find((x) => x.symbol === symbol) || null;
 
-  const buf = buildModel(symbol, bars, live);
+  const buf = buildModel(symbol, bars, live, await momentumMap(store, symbol, bars));
   res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.set('Content-Disposition', `attachment; filename="momentum-model-${symbol}.xlsx"`);
   res.set('Cache-Control', 'no-store');
