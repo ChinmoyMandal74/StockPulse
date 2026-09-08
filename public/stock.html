@@ -130,8 +130,10 @@
     #chart.rc-chart.has-rsi { height: 427px; }
     #chart.rc-chart.has-mom { height: 420px; }
     #chart.rc-chart.has-rsi.has-mom { height: 530px; }
-    .rng.mom-toggle.on { color: var(--accent-2); border-color: var(--accent-2); }
-    .cap.mom { color: var(--accent-2); }
+    .rng.mom-toggle.on { color: var(--mom); border-color: var(--mom);
+                         background: rgba(34, 211, 238, 0.14); }
+    .rng.mom-toggle:disabled { opacity: 0.35; cursor: not-allowed; }
+    .cap.mom { color: var(--mom); }
     .mom-lbl { position: absolute; right: 56px; transform: translateY(-50%);
                font-family: var(--mono); font-size: 9px; color: var(--faint); }
     #chart .cap { font-size: 11px; }
@@ -219,6 +221,7 @@
                          text-transform: uppercase; letter-spacing: 0.1em; }
     #chart .readout .v { color: var(--text); }
     #chart .readout .v.rsi { color: var(--accent-2); }
+    #chart .readout .v.mom { color: var(--mom); }
     /* the captions the readout replaces */
     #chart.hovering .cap.chg, #chart.hovering .cap.ma { opacity: 0; }
     #chart .cap.chg, #chart .cap.ma { transition: opacity 0.2s var(--ease); }
@@ -308,10 +311,11 @@
     // screener's own RSI column.
     const RSI_LEN = 14;
     let showRSI = true;
-    // Off by default: the price and its averages are what most visits are for,
-    // and a third pane makes the chart tall enough to push the numbers below the
-    // fold. It is one click away and remembered for the session.
-    let showMom = false;
+    // On by default: momentum is the score the whole screener sorts on, so on
+    // the page for one stock it is the second thing worth seeing after the price
+    // — not an indicator you go looking for. RSI and volume describe how a move
+    // happened; this says what the move is currently worth.
+    let showMom = true;
     let stock = null;
 
     const curSym = (c) => ({ USD: '$', EUR: '€', GBP: '£', JPY: '¥', KRW: '₩', INR: '₹' }[c] || '');
@@ -406,7 +410,23 @@
         // Momentum comes from the archive rather than being derived here: it
         // needs a year of run-up the chart window does not carry. Aligned to the
         // bars server-side, so it can be sliced the same way as everything else.
-        const mom = showMom && data.momentum ? data.momentum.slice(from) : null;
+        // A symbol whose archive is too short to score has no momentum history at
+        // all — SKHY and SPCX today. Now that the pane opens by default it would
+        // otherwise greet them with an empty box, so the toggle goes dark instead.
+        const momAll = data.momentum ? data.momentum.slice(from) : null;
+        const momOk = !!(momAll && momAll.some((v) => v != null));
+        const mom = showMom && momOk ? momAll : null;
+        const momBtn = document.getElementById('momBtn');
+        if (momBtn) {
+          momBtn.disabled = !momOk;
+          momBtn.classList.toggle('on', showMom && momOk);
+          momBtn.title = momOk
+            ? 'The momentum score over time, 0-100 on the same fixed scale the table uses'
+            : 'No momentum history — this symbol has too little price history to score';
+        }
+        // The optimistic toggle before the fetch can be wrong for those two; this
+        // is the one that matches what was actually drawn.
+        box.classList.toggle('has-mom', mom != null);
         const rsiNow = rsi ? [...rsi].reverse().find((v) => v != null) ?? null : null;
         const momNow = mom ? [...mom].reverse().find((v) => v != null) ?? null : null;
         const c = RowCard.chartSVG(closes, {
@@ -459,7 +479,7 @@
           '<span class="readout" hidden></span>';
 
         // Everything the crosshair needs, kept for the pointer handler.
-        hover = { dates, closes, volumes, rsi, panes: c.panes };
+        hover = { dates, closes, volumes, rsi, mom, panes: c.panes };
       });
     }
 
@@ -687,6 +707,8 @@
         const prev = i > 0 ? hover.closes[i - 1] : null;
         const chg = prev ? ((close - prev) / prev) * 100 : null;
         const r = hover.rsi ? hover.rsi[i] : null;
+        // A gap in the stored history reads as absent rather than as a zero.
+        const mv = hover.mom ? hover.mom[i] : null;
 
         const line = chartEl.querySelector('.xhair');
         const dot = chartEl.querySelector('.xdot');
@@ -709,8 +731,11 @@
         out.innerHTML =
           `<span class="k">Price</span> <span class="v">${RowCard.fmtPrice(close)}</span>` +
           (chg == null ? '' : ` <span class="${chg >= 0 ? 'pos' : 'neg'}">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span>`) +
-          `<span class="k">Vol</span> <span class="v">${fmtVol(hover.volumes[i])}</span>` +
-          (r == null ? '' : `<span class="k">RSI</span> <span class="v rsi">${r.toFixed(1)}</span>`);
+          // Ordered to match the panes top to bottom, so the readout reads down
+          // the chart rather than in whatever order the fields were added.
+          (mv == null ? '' : `<span class="k">Mom</span> <span class="v mom">${mv.toFixed(1)}</span>`) +
+          (r == null ? '' : `<span class="k">RSI</span> <span class="v rsi">${r.toFixed(1)}</span>`) +
+          `<span class="k">Vol</span> <span class="v">${fmtVol(hover.volumes[i])}</span>`;
         out.hidden = false;
         chartEl.classList.add('hovering');
       });
