@@ -138,6 +138,30 @@ const SCHEMA = [
   // The scores are deliberately absent. They are model output, not measurement:
   // momentum was rewritten once already, and a series that mixes two scoring
   // regimes compares nothing to nothing.
+  // Momentum per symbol per day. Unlike fundamentals_history this is a *cache*,
+  // not a record: every value is a pure function of bars we already keep, so if
+  // the model changes the right move is to bump `model`, delete and recompute.
+  // That is exactly why the scores were kept out of fundamentals_history — there
+  // they would have been unreproducible, here they are not.
+  //
+  // The eight sub-scores are stored beside the composite so any weighting can be
+  // replayed over history, which is the whole point of keeping them at all: the
+  // score is one opinion, the sub-scores are the measurements behind it.
+  `create table if not exists momentum_history (
+     symbol      text not null,
+     d           text not null,
+     model       integer not null,
+     score       real not null,
+     mom121      real,
+     ret6m       real,
+     ret3m       real,
+     from_high   real,
+     trend       real,
+     consistency real,
+     revers1m    real,
+     rsi         real,
+     primary key (symbol, d)
+   )`,
   `create table if not exists fundamentals_history (
      symbol              text not null,
      d                   text not null,
@@ -564,6 +588,76 @@ async function readBarsFor(symbols, since) {
     (out[row.symbol] ||= []).push({ d: row.d, high: Number(row.high), close: Number(row.close) });
   }
   return out;
+}
+
+// Upsert momentum rows. Chunked because a backfill writes a quarter of a
+// million of them and one statement per row would be a quarter of a million
+// round trips.
+const MOMENTUM_COLS = ['mom121', 'ret6m', 'ret3m', 'from_high', 'trend', 'consistency', 'revers1m', 'rsi'];
+
+// One multi-row INSERT per chunk rather than a batch of single-row statements:
+// a batch of 400 reset the connection outright, and even when it did not it is
+// 400 statements to parse instead of one. 12 columns a row against SQLite's
+// 999-parameter ceiling puts the chunk at 60 with room to spare.
+const MOMENTUM_CHUNK = 60;
+
+async function writeMomentum(rows) {
+  await init();
+  if (!rows || !rows.length) return 0;
+  const cols = ['symbol', 'd', 'model', 'score', ...MOMENTUM_COLS];
+  const placeholders = `(${cols.map(() => '?').join(', ')})`;
+  let n = 0;
+  for (let i = 0; i < rows.length; i += MOMENTUM_CHUNK) {
+    const slice = rows.slice(i, i + MOMENTUM_CHUNK);
+    const args = [];
+    for (const r of slice) for (const c of cols) args.push(r[c] ?? null);
+    await db.execute({
+      sql: `insert into momentum_history (${cols.join(', ')})
+            values ${slice.map(() => placeholders).join(', ')}
+            on conflict(symbol, d) do update set
+              model = excluded.model, score = excluded.score,
+              ${MOMENTUM_COLS.map((c) => `${c} = excluded.${c}`).join(', ')}`,
+      args,
+    });
+    n += slice.length;
+  }
+  return n;
+}
+
+// One symbol's series, oldest first, for charting.
+async function readMomentum(symbol, since) {
+  await init();
+  const r = await db.execute({
+    sql: `select d, score, ${MOMENTUM_COLS.join(', ')} from momentum_history
+          where symbol = ? and d >= ? order by d asc`,
+    args: [String(symbol), since || '0000-00-00'],
+  });
+  return r.rows.map((x) => {
+    const out = { d: x.d, score: Number(x.score) };
+    for (const c of MOMENTUM_COLS) out[c] = x[c] == null ? null : Number(x[c]);
+    return out;
+  });
+}
+
+// Rows that predate the current scoring model, so a caller can refuse to mix them.
+async function momentumStats(model) {
+  await init();
+  const r = await db.execute({
+    sql: `select count(*) n, count(distinct symbol) syms, min(d) a, max(d) z,
+                 sum(case when model <> ? then 1 else 0 end) stale
+          from momentum_history`,
+    args: [model],
+  });
+  const x = r.rows[0] || {};
+  return {
+    rows: Number(x.n || 0), symbols: Number(x.syms || 0),
+    from: x.a || null, to: x.z || null, stale: Number(x.stale || 0),
+  };
+}
+
+async function clearMomentum() {
+  await init();
+  await db.execute('delete from momentum_history');
 }
 
 async function barsStats() {
@@ -1010,6 +1104,10 @@ module.exports = {
   replaceBarsFor,
   readBars,
   readBarsFor,
+  writeMomentum,
+  readMomentum,
+  momentumStats,
+  clearMomentum,
   readCloses,
   barsStats,
   logVisit,

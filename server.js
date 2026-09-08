@@ -23,6 +23,9 @@ const Screens = require('./public/screens.js');
 // The Excel model of the momentum calculation, shared with the CLI in the same
 // file so the workbook served here and the one written locally are one thing.
 const { buildModel, MODEL_ROWS, MODEL_MIN_BARS } = require('./momentum-model.js');
+// Momentum scored from bars alone, shared with the backfill so the stored
+// history and the live score can never drift into two different models.
+const Momentum = require('./momentum.js');
 const {
   readPortfolios, writePortfolios,
   readNames, writeNames,
@@ -2440,6 +2443,29 @@ app.get('/api/history', requireAuth, route(async (req, res) => {
   const bars = await store.readBars(symbol, days);   // newest-first
   if (!bars.length) return res.json({ symbol, dates: [], closes: [], volumes: [], from: null, to: null });
   const asc = bars.slice().reverse();
+
+  // Momentum for the same window, read from momentum_history rather than
+  // recomputed: scoring every date on demand is ~0.3ms a day, which is fine for
+  // a backfill and far too slow inside a page load. Aligned to the bar dates by
+  // lookup, so a gap in the momentum table leaves a gap in the line rather than
+  // shifting every later point.
+  let momentum = null;
+  try {
+    const rows = await store.readMomentum(symbol, asc[0].datetime);
+    if (rows.length) {
+      const byDate = new Map(rows.map((r) => [r.d, r.score]));
+      momentum = asc.map((b) => {
+        const v = byDate.get(b.datetime);
+        return v == null ? null : Math.round(v * 10) / 10;
+      });
+      // All-null is the same as absent to the caller, and cheaper to send.
+      if (!momentum.some((v) => v != null)) momentum = null;
+    }
+  } catch (err) {
+    // A chart pane must never cost the price chart its data.
+    console.warn('history: momentum unavailable for', symbol, err.message);
+  }
+
   res.json({
     symbol,
     from: asc[0].datetime,
@@ -2450,6 +2476,7 @@ app.get('/api/history', requireAuth, route(async (req, res) => {
     // Volume is split-adjusted the same way price is, so it is comparable
     // across the series but is not the literal share count for a past day.
     volumes: asc.map((b) => (b.volume == null ? 0 : Math.round(b.volume))),
+    momentum,
   });
 }));
 
@@ -2733,6 +2760,32 @@ async function finishLiveRefresh(payload, ctx = {}) {
   // complete the moment it returns — tying its report to coverage meant that one
   // abandoned Refresh all silently suppressed every plain-refresh email until
   // somebody noticed the missing mail.
+  // Today's momentum into the history table, so the series the chart draws stays
+  // current without ever re-running the backfill. Keyed on (symbol, day), so
+  // repeated refreshes in one day overwrite rather than accumulate — and what is
+  // stored is the score the page is showing, not a second opinion computed from
+  // the archive. Unlike the fundamentals above, this is not gated on a Refresh
+  // all: momentum comes from bars, which every refresh re-pulls.
+  try {
+    const day = marketDay(rows);
+    const mrows = [];
+    for (const r of rows) {
+      if (r.error || r.momentumScore == null || !Array.isArray(r.momentumBreakdown)) continue;
+      const sub = {};
+      for (const c of r.momentumBreakdown) if (c.key) sub[c.key] = c.sub;
+      mrows.push({
+        symbol: r.symbol, d: day, model: Momentum.MODEL_VERSION, score: r.momentumScore,
+        mom121: sub.mom121 ?? null, ret6m: sub.ret6m ?? null, ret3m: sub.ret3m ?? null,
+        from_high: sub.fromHigh ?? null, trend: sub.trend ?? null,
+        consistency: sub.consistency ?? null, revers1m: sub.revers1m ?? null, rsi: sub.rsi ?? null,
+      });
+    }
+    if (mrows.length) await store.writeMomentum(mrows);
+  } catch (err) {
+    // A history write never fails a refresh — the same rule the bars follow.
+    console.warn('momentum: history write failed (screener unaffected):', err.message);
+  }
+
   const covered = rows.length > 0 && loaded >= rows.length;
 
   if (running) {

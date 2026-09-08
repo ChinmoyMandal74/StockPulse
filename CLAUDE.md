@@ -19,6 +19,8 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `server.js` | Express backend — all API routes, auth, data computation |
 | `db.js` | Turso persistence layer — every read/write goes through here |
 | `migrate-to-turso.js` | One-off JSON → Turso seeder; `--commit` to write, idempotent |
+| `momentum.js` | **Momentum scored from bars and nothing else** — no database, no API, no universe. Shared by the live refresh, the backfill and the chart |
+| `backfill-momentum.js` | One-off recompute of `momentum_history` from the archive; `--commit`, `--only`, `--from`, `--rebuild` |
 | `backfill-bars.js` | One-off deep pull of the daily bar archive; `--commit`, `--depth`, `--only` |
 | `set-password.js` | Local account admin — list accounts, set a password, change a role |
 | `momentum-model.js` | Writes an Excel model of the momentum score for one symbol — see **The Excel model** below |
@@ -320,6 +322,20 @@ The workbook: three sheets — **Bars**, **Factors**, **Score** — in which eve
 - **A history write never fails a refresh**, the same rule the bar archive follows.
 - The series will be **irregular**: a point exists only for days a Refresh all was run, not every calendar day. Fine for a chart, awkward for precise period comparisons.
 
+## Momentum history
+`momentum_history` keeps one row per symbol per trading day — the momentum score plus all eight sub-scores, stamped with the `model` that produced it, keyed on `(symbol, d)`. **Currently ~270,600 rows across 82 symbols, 2007-07-02 → today.**
+
+**It is a cache, not a record.** Every value is a pure function of bars already stored, so if the model changes the right move is to throw the rows away and recompute — nothing is lost, because nothing here was ever a measurement of its own. That is the opposite of `fundamentals_history`, where the API only ever returns *today* and an unrecorded day is gone forever.
+
+- **`momentum.js` holds the scoring, and it is the only copy.** It was extracted from `server.js` precisely so the live refresh, the backfill and any later analysis cannot drift into three slightly different models. Verified on extraction against the live app: worst gap **0.100** across 81 symbols, none over 0.15.
+- **`MODEL_VERSION` is stored on every row** (`2` = absolute logistic curves; `1` was the cross-sectional percentiles and was never stored). Every read filters on it, so a half-migrated table returns a short series rather than a series that silently mixes two scoring regimes. Bump it whenever a change makes old rows incomparable, then re-run the backfill with `--rebuild`.
+- **The sub-scores are stored, not just the composite**, so a different weighting can be replayed over history without recomputing from bars — which is what makes the weight presets answerable over time rather than only for today. `composite(subs, weights)` is the same function the live path uses.
+- **Written on every refresh**, plain or Refresh all, from `finishLiveRefresh()`. Unlike the fundamentals write beside it there is no Refresh-all gate: momentum comes from bars, and every refresh re-pulls those. What is stored is the score the page is showing, not a second opinion recomputed from the archive.
+- **A history write never fails a refresh** — the same rule the bar archive follows.
+- **`MIN_BARS` is 274** — a year of bars, plus the month 12-1 skips, plus the bar it measures against. Shorter series score `null` rather than a partial number.
+- **Writes are multi-row `INSERT … ON CONFLICT`, chunked at `MOMENTUM_CHUNK` (60).** A `db.batch` of 400 separate statements drew an ECONNRESET from Turso; 12 columns × 60 rows also keeps the statement under SQLite's 999-parameter ceiling.
+- Backfill cost, measured: **0.31 ms per stock-day**, 270,620 rows in **559.6s**. Recomputing every factor from scratch at each date is wasteful in principle and irrelevant at this size, so the factors stay the plain implementations the rest of the app uses rather than rolling variants that could drift from them.
+
 ## Saved column layout
 Which column groups a user has collapsed is stored per account in the `prefs` table (`user_key`, JSON `data`), read by `GET /api/prefs` and written by `PUT /api/prefs`.
 
@@ -368,6 +384,8 @@ Charts are hand-rolled inline SVG in `rowcard.js` — no library, no build step.
 - **`priceTicks()` returns low-to-high**, so in the DOM the *first* axis label is the bottom of the scale and the *last* is the top — the reverse of reading order. The end-clamping rules were briefly backwards and pushed the top label 6px above the chart, where `overflow: hidden` ate it.
 - **The RSI band is taller than the volume band** (58 vs 44 viewBox units) because it carries threshold lines with words above and below them, where volume only needs bars. It also paints its own `.pane-bg`, a shade off the chart's ground, so the indicator reads as a separate instrument. 70 is red and 30 is green — the colours mean overbought and oversold; 50 stays neutral because it is only an anchor for the eye.
 - **`RowCard.rsiSeries()` uses Wilder smoothing**, matching `rsi()` in server.js. Wilder is an exponential average and converges slowly, so it is computed over the padded window and sliced. Cross-checked against the screener's own RSI column for six symbols: **gap 0.000**, at both 300- and 453-bar warm-ups.
+- **The momentum pane sits between the price and RSI** (`MOM_H = 52`), off by default. It is the closest thing to a second reading of the price line, where RSI and volume describe how the move happened. Its series is **read from `momentum_history`, not derived in the browser**: momentum needs a year of run-up the chart window does not carry, so `/api/history` returns a `momentum` array already aligned to the bar dates by date lookup, and a gap in it breaks the path rather than joining across it.
+- **The momentum pane's axis is a fixed 0-100**, with reference lines at 70/50/30 — the whole point of an absolute score is that 68 means 68, so auto-scaling to the visible range would throw away the only thing the number has over a percentile. A consistently strong name therefore draws a flat high line, which is the correct picture.
 - MACD is the obvious next pane and is already computed per row (`macdLine`, `macdSignal`, `macdHist`); adding it is a pane entry rather than a rewrite.
 - **Moving averages are a list (`MAS` in stock.html), 50-day and 200-day.** Adding another is one entry there plus a colour in `app.css`.
   - **The page fetches `range.days + MA_PAD`**, padded by the *longest* average rather than by whichever are switched on, so toggling redraws from the cache instead of refetching. Without the run-up a line would start 200 sessions late and leave a gap at the left edge; with it, even the 1M view draws both averages as unbroken paths.

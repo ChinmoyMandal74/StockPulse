@@ -248,6 +248,9 @@
     const o = opts || {};
     const vols = o.volumes && o.volumes.length === closes.length ? o.volumes : null;
     const rsis = o.rsi && o.rsi.length === closes.length ? o.rsi : null;
+    // Momentum is stored, not derived here — it needs a year of run-up the chart
+    // window does not have, so the caller reads it from the archive.
+    const moms = o.momentum && o.momentum.length === closes.length ? o.momentum : null;
     const W = 600;
 
     // Indicator panes stack below the price, in the order RSI then volume, each
@@ -259,13 +262,19 @@
     const PANE_GAP = 13;
     const PANE_H = 44;
     const RSI_H = 58;
-    const PRICE_H = (vols || rsis) ? 150 : 104;
+    // Momentum sits directly under the price, before RSI: it is the closest
+    // thing to a second reading of the same line, where RSI and volume describe
+    // how the move happened.
+    const MOM_H = 52;
+    const anyPane = vols || rsis || moms;
+    const PRICE_H = anyPane ? 150 : 104;
     let cursor = PRICE_H;
-    let rsiTop = 0, rsiBot = 0, volTop = 0, volBot = 0;
+    let momTop = 0, momBot = 0, rsiTop = 0, rsiBot = 0, volTop = 0, volBot = 0;
+    if (moms) { cursor += PANE_GAP; momTop = cursor; momBot = cursor + MOM_H; cursor = momBot; }
     if (rsis) { cursor += PANE_GAP; rsiTop = cursor; rsiBot = cursor + RSI_H; cursor = rsiBot; }
     if (vols) { cursor += PANE_GAP; volTop = cursor; volBot = cursor + PANE_H; cursor = volBot; }
-    const H = (vols || rsis) ? cursor + 6 : 104;
-    const PT = 12, PB = (vols || rsis) ? 8 : 12;
+    const H = anyPane ? cursor + 6 : 104;
+    const PT = 12, PB = anyPane ? 8 : 12;
     // Overlays are folded into the range: a moving average sits above a falling
     // price and below a rising one, so scaling to the price alone clips it.
     const overlays = (o.overlays || []).filter((ov) => ov && ov.values);
@@ -306,6 +315,28 @@
 
     // RSI pane: 0-100 on its own scale, with the 30 and 70 lines that make the
     // reading mean anything, and a faint 50 midline.
+    // Momentum runs 0-100 on a fixed scale, so 50 is a real midpoint rather
+    // than an average of the list — the line crossing it means something.
+    let momPane = '';
+    if (moms) {
+      const my = (v) => momBot - (Math.max(0, Math.min(100, v)) / 100) * (momBot - momTop);
+      momPane += `<rect class="pane-bg" x="0" y="${momTop}" width="${W}" height="${(momBot - momTop).toFixed(1)}"/>`;
+      for (const [lvl, cls] of [[70, 'hi'], [50, 'mid'], [30, 'lo']]) {
+        momPane += `<line class="mom-gl ${cls}" x1="0" y1="${my(lvl).toFixed(1)}" ` +
+                   `x2="${W}" y2="${my(lvl).toFixed(1)}"/>`;
+      }
+      let md = '', pen = false;
+      for (let i = 0; i < moms.length; i++) {
+        const v = moms[i];
+        // A gap in the stored history breaks the line rather than joining
+        // across it, the same rule the moving averages follow.
+        if (v == null) { pen = false; continue; }
+        md += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + my(v).toFixed(1);
+        pen = true;
+      }
+      if (md) momPane += `<path class="mom-ln" d="${md}"/>`;
+    }
+
     let rsiPane = '';
     if (rsis) {
       const ry = (v) => rsiBot - (Math.max(0, Math.min(100, v)) / 100) * (rsiBot - rsiTop);
@@ -348,6 +379,8 @@
       price: { top: 0, bottom: PRICE_H / H, at: (v) => y(v) / H, lo, hi },
       rsi: rsis ? { top: rsiTop / H, bottom: rsiBot / H,
                     at: (v) => (rsiBot - (v / 100) * (rsiBot - rsiTop)) / H } : null,
+      momentum: moms ? { top: momTop / H, bottom: momBot / H,
+                         at: (v) => (momBot - (v / 100) * (momBot - momTop)) / H } : null,
       volume: vols ? { top: volTop / H, bottom: volBot / H } : null,
     };
 
@@ -375,6 +408,7 @@
       `<line class="base" x1="0" y1="${baseY}" x2="${W}" y2="${baseY}"/>` +
       `<path class="ln" d="${d}"/>` +
       overlayPaths +
+      momPane +
       rsiPane +
       `<circle class="dot" cx="${x(closes.length - 1).toFixed(1)}" cy="${y(closes[closes.length - 1]).toFixed(1)}" r="2.6"/>` +
       bars +

@@ -128,6 +128,12 @@
        alone would squash every band instead of adding one. Growing the box in
        the same proportion (213 -> 284) keeps the price panel its own size. */
     #chart.rc-chart.has-rsi { height: 427px; }
+    #chart.rc-chart.has-mom { height: 420px; }
+    #chart.rc-chart.has-rsi.has-mom { height: 530px; }
+    .rng.mom-toggle.on { color: var(--accent-2); border-color: var(--accent-2); }
+    .cap.mom { color: var(--accent-2); }
+    .mom-lbl { position: absolute; right: 56px; transform: translateY(-50%);
+               font-family: var(--mono); font-size: 9px; color: var(--faint); }
     #chart .cap { font-size: 11px; }
     #chart .cap.chg { font-size: 15px; }
     /* Pane labels sit against the geometry the chart reports, not a guessed
@@ -302,6 +308,10 @@
     // screener's own RSI column.
     const RSI_LEN = 14;
     let showRSI = true;
+    // Off by default: the price and its averages are what most visits are for,
+    // and a third pane makes the chart tall enough to push the numbers below the
+    // fold. It is one click away and remembered for the session.
+    let showMom = false;
     let stock = null;
 
     const curSym = (c) => ({ USD: '$', EUR: '€', GBP: '£', JPY: '¥', KRW: '₩', INR: '₹' }[c] || '');
@@ -371,6 +381,7 @@
       if (!box) return;
       box.dataset.range = range.id;
       box.classList.toggle('has-rsi', showRSI);
+      box.classList.toggle('has-mom', showMom);
       RowCard.loadHistory(SYMBOL, range.days + MA_PAD).then((data) => {
         if (box.dataset.range !== range.id) return;      // a later click won
         const all = (data && data.closes) || [];
@@ -392,9 +403,14 @@
         const chg = ((last - first) / first) * 100;
         box.classList.add(chg >= 0 ? 'up' : 'down');
         const rsi = showRSI ? RowCard.rsiSeries(all, RSI_LEN).slice(from) : null;
+        // Momentum comes from the archive rather than being derived here: it
+        // needs a year of run-up the chart window does not carry. Aligned to the
+        // bars server-side, so it can be sliced the same way as everything else.
+        const mom = showMom && data.momentum ? data.momentum.slice(from) : null;
         const rsiNow = rsi ? [...rsi].reverse().find((v) => v != null) ?? null : null;
+        const momNow = mom ? [...mom].reverse().find((v) => v != null) ?? null : null;
         const c = RowCard.chartSVG(closes, {
-          volumes, ticks: 5, rsi,
+          volumes, ticks: 5, rsi, momentum: mom,
           overlays: series.map((x) => ({ values: x.values, cls: x.ma.cls })),
         });
 
@@ -418,6 +434,12 @@
           `<span class="cap chg">${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%${c.log ? ' · log scale' : ''}</span>` +
           `<span class="cap ma">${series.map((x) =>
             `<i class="${x.ma.cls}"></i>${x.ma.len}-day`).join('')}</span>` +
+          (c.panes.momentum
+            ? `<span class="cap mom" style="top:${atY(c.panes.momentum.top)}">Momentum` +
+              `${momNow == null ? '' : ' &middot; ' + momNow.toFixed(0)}</span>` +
+              `<span class="mom-lbl" style="top:${atY(c.panes.momentum.at(70))}">70</span>` +
+              `<span class="mom-lbl" style="top:${atY(c.panes.momentum.at(30))}">30</span>`
+            : '') +
           (c.panes.rsi
             ? `<span class="cap rsi" style="top:${atY(c.panes.rsi.top)}">` +
               `RSI ${RSI_LEN}${rsiNow == null ? '' : ' &middot; ' + rsiNow.toFixed(0)}</span>` +
@@ -491,7 +513,9 @@
               ${MAS.map((m) =>
                 `<button class="rng ma-toggle ${m.cls}${m.on ? ' on' : ''}" data-ma="${m.len}">${m.label}</button>`
               ).join('')}
-              <button class="rng rsi-toggle${showRSI ? ' on' : ''}" id="rsiBtn">RSI</button></span>
+              <button class="rng rsi-toggle${showRSI ? ' on' : ''}" id="rsiBtn">RSI</button>
+              <button class="rng mom-toggle${showMom ? ' on' : ''}" id="momBtn"
+                title="The momentum score over time, 0-100 on the same fixed scale the table uses">MOM</button></span>
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
         </section></div>
@@ -696,6 +720,12 @@
       document.querySelector('.ranges').addEventListener('click', (e) => {
         const b = e.target.closest('.rng');
         if (!b) return;
+        if (b.id === 'momBtn') {
+          showMom = !showMom;
+          b.classList.toggle('on', showMom);
+          paintChart();
+          return;
+        }
         if (b.id === 'rsiBtn') {
           showRSI = !showRSI;
           b.classList.toggle('on', showRSI);
