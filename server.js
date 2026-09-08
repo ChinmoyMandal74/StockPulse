@@ -27,7 +27,7 @@ const { buildModel, momentumMap, MODEL_ROWS, MODEL_MIN_BARS } = require('./momen
 // history and the live score can never drift into two different models.
 const Momentum = require('./momentum.js');
 // The arithmetic behind /signal, kept apart so it can be checked on its own.
-const Signal = require('./signal.js');
+const Signal = require('./public/signal-stats.js');
 const {
   readPortfolios, writePortfolios,
   readNames, writeNames,
@@ -2428,6 +2428,18 @@ const SIGNAL_XS = {
            high: 'was high', low: 'was low' },
 };
 
+// Oversold to overbought, on the conventional 30/70 lines with the middle split
+// so "not stretched either way" is not one giant bucket. Ranges are half-open so
+// a reading belongs to exactly one band.
+const RSI_BANDS = [
+  { id: 'all', label: 'Any', lo: null, hi: null },
+  { id: 'os', label: '< 30', lo: null, hi: 30 },
+  { id: 'lo', label: '30–45', lo: 30, hi: 45 },
+  { id: 'mid', label: '45–55', lo: 45, hi: 55 },
+  { id: 'hi', label: '55–70', lo: 55, hi: 70 },
+  { id: 'ob', label: '> 70', lo: 70, hi: null },
+];
+
 app.get('/api/signal', requireAuth, route(async (req, res) => {
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
   if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
@@ -2435,7 +2447,19 @@ app.get('/api/signal', requireAuth, route(async (req, res) => {
   const xs = SIGNAL_XS[String(req.query.signal || 'delta')] || SIGNAL_XS.delta;
 
   const rows = await store.readMomentumDeltas(symbol, '0000-00-00');
-  const usable = rows.filter((r) => r[xs.col] != null && r[h.col] != null);
+
+  // Raw RSI at every date, so the page can ask whether a momentum move means
+  // something different when the stock is oversold. momentum_history stores the
+  // rsi *sub-score*, which is a non-monotonic curve and therefore cannot be
+  // inverted back to the reading — 25 and 85 both score low. So it is computed
+  // here from the bars, by the same Wilder pass the scorer uses.
+  const bars = (await store.readBars(symbol, 6000))
+    .map((b) => ({ d: b.datetime, high: Number(b.high), close: Number(b.close) }));
+  const rsiAt = new Map();
+  const series = Momentum.rsiSeriesAt(bars);
+  bars.forEach((b, i) => { if (series[i] != null) rsiAt.set(b.d, Math.round(series[i] * 100) / 100); });
+
+  const usable = rows.filter((r) => r[xs.col] != null && r[h.col] != null && rsiAt.has(r.d));
   if (usable.length < 30) {
     return res.status(422).json({
       error: `${symbol} has ${usable.length} scored sessions with a ${h.label} return behind them; ` +
@@ -2443,7 +2467,15 @@ app.get('/api/signal', requireAuth, route(async (req, res) => {
     });
   }
 
-  const pairs = usable.map((r) => ({ x: r[xs.col], y: r[h.col] }));
+  // Rounded to the 2dp the payload ships, and the statistics are computed from
+  // the same rounded numbers. The page recomputes everything itself when the RSI
+  // filter changes, so if the server summarised the full-precision values the
+  // two would disagree in the sixth decimal — a difference that means nothing
+  // and would cost someone an afternoon working out which was wrong.
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const px = usable.map((r) => r2(r[xs.col]));
+  const py = usable.map((r) => r2(r[h.col]));
+  const pairs = px.map((x, i) => ({ x, y: py[i] }));
   // The same statistics twice: once over every day, once over a sample whose
   // forward windows do not overlap. The gap between them is the point — it is
   // what says how much of the first number was ever really there.
@@ -2466,8 +2498,10 @@ app.get('/api/signal', requireAuth, route(async (req, res) => {
     from: usable[0].d,
     to: usable[usable.length - 1].d,
     dates: usable.map((r) => r.d),
-    x: usable.map((r) => Math.round(r[xs.col] * 100) / 100),
-    y: usable.map((r) => Math.round(r[h.col] * 100) / 100),
+    x: px,
+    y: py,
+    rsi: usable.map((r) => rsiAt.get(r.d)),
+    rsiBands: RSI_BANDS,
     stats: Signal.summarise(pairs, h.days, xs.split),
     sampled: Signal.summarise(thinned, 1, xs.split),
     universe,

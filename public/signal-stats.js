@@ -16,8 +16,19 @@
 //   - A hit rate with no baseline. A stock that rises 55% of fortnights gives a
 //     55% hit rate to a signal that knows nothing, so `quadrants` returns the
 //     base rate next to it and the lift between them.
+//
+// Loaded as a plain <script> by /signal and required() by server.js, the same
+// arrangement screens.js has. The page needs it because the RSI filter re-runs
+// every statistic on a subset, and a round trip per band would make a control
+// that should feel instant feel like a query.
 
 'use strict';
+
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root) root.SignalStats = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
 
 const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
 
@@ -173,4 +184,5 @@ function summarise(pairs, overlap = 10, split = 'zero') {
   };
 }
 
-module.exports = { pearson, fit, mean, median, buckets, quadrants, effectiveN, thin, verdict, summarise };
+return { pearson, fit, mean, median, buckets, quadrants, effectiveN, thin, verdict, summarise };
+});

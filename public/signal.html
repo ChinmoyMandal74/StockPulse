@@ -143,6 +143,26 @@
     .rate .rl { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
     .rate .rs { font-size: 11.5px; color: var(--muted); }
 
+    /* the matrix */
+    .mtx table { border-collapse: collapse; width: 100%; max-width: 640px; }
+    .mtx th, .mtx td { padding: 8px 10px; text-align: right; font-family: var(--mono); font-size: 13px; }
+    .mtx th { font-family: var(--sans); font-size: 10.5px; letter-spacing: 0.1em;
+              text-transform: uppercase; color: var(--faint); font-weight: 500;
+              border-bottom: 1px solid var(--hair); }
+    .mtx th:first-child, .mtx td:first-child { text-align: left; }
+    .mtx tr.on td { background: rgba(124, 156, 255, 0.09); }
+    .mtx td .sub { display: block; font-size: 10.5px; color: var(--faint); }
+    /* Shaded against the overall mean, so a cell that merely matches the
+       baseline does not read as a result. */
+    .mtx .up2 { color: var(--green); }
+    .mtx .up1 { color: #86e8c0; }
+    .mtx .flat { color: var(--muted); }
+    .mtx .dn1 { color: #f7a6b4; }
+    .mtx .dn2 { color: var(--red); }
+    .mtx .thin { opacity: 0.45; }
+    .mtx caption { caption-side: bottom; text-align: left; padding-top: 10px;
+                   font-size: 11.5px; color: var(--faint); font-family: var(--sans); }
+
     .foot { margin: 22px 0 0; font-size: 12.5px; color: var(--faint); line-height: 1.65; max-width: 86ch; }
     .foot b { color: var(--muted); font-weight: 500; }
     .foot p { margin: 0 0 8px; }
@@ -198,6 +218,7 @@
     <div class="controls" id="controls" hidden>
       <div class="grp"><span class="lbl">Signal</span><span id="sigOpts"></span></div>
       <div class="grp"><span class="lbl">Against</span><span id="horOpts"></span></div>
+      <div class="grp"><span class="lbl">RSI</span><span id="rsiOpts"></span></div>
       <div class="grp"><span class="lbl">Sample</span><span id="sampOpts"></span></div>
     </div>
 
@@ -244,13 +265,22 @@
       </div>
     </section>
 
+    <section class="bezel panel" id="p4" hidden>
+      <div class="core">
+        <div class="ptitle">RSI band against the direction of the signal</div>
+        <p class="pnote" id="n4"></p>
+        <div class="mtx" id="mtx"></div>
+      </div>
+    </section>
+
     <div class="foot" id="foot" hidden></div>
   </main>
 
+  <script src="/signal-stats.js"></script>
   <script>
     const SYMBOL = decodeURIComponent(location.pathname.split('/').pop() || '').toUpperCase();
     let data = null;
-    let sig = 'delta', hor = '2w', samp = 'all';
+    let sig = 'delta', hor = '2w', samp = 'all', band = 'all';
 
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t)
@@ -274,8 +304,33 @@
         $('loading').hidden = true;
         $('err').hidden = false;
         $('err').textContent = e.message;
-        for (const id of ['verdict', 'p1', 'p2', 'p3', 'foot']) $(id).hidden = true;
+        for (const id of ['verdict', 'p1', 'p2', 'p3', 'p4', 'foot']) $(id).hidden = true;
       }
+    }
+
+    // Which observations a band and a sample leave. Sampling is applied after
+    // filtering, so "non-overlapping" still means every Nth *surviving* session
+    // rather than every Nth session of which most were then thrown away.
+    function idxFor(b, sm) {
+      const spec = (data.rsiBands || []).find((x) => x.id === b) || { lo: null, hi: null };
+      const step = sm === 'thin' ? data.horizon.days : 1;
+      const out = [];
+      for (let i = 0; i < data.x.length; i++) {
+        const r = data.rsi[i];
+        if (spec.lo != null && !(r >= spec.lo)) continue;
+        if (spec.hi != null && !(r < spec.hi)) continue;
+        out.push(i);
+      }
+      return step === 1 ? out : out.filter((_, k) => k % step === 0);
+    }
+
+    let idx = [];
+    function currentStats() {
+      idx = idxFor(band, samp);
+      const pairs = idx.map((i) => ({ x: data.x[i], y: data.y[i] }));
+      // Same module the server used, so a filtered view and the whole-history
+      // view can never be two different calculations.
+      return SignalStats.summarise(pairs, samp === 'thin' ? 1 : data.horizon.days, data.signal.split);
     }
 
     function render() {
@@ -287,15 +342,14 @@
       document.title = `${data.symbol} signal study — Tickr Lab`;
       renderControls();
 
-      // The sampled figures are the honest ones; the full set is shown because
-      // the difference between the two is itself the lesson.
-      const s = samp === 'thin' ? data.sampled : data.stats;
+      const s = currentStats();
       renderVerdict(s);
       renderScatter(s);
       renderBars(s);
       renderQuads(s);
-      renderFoot();
-      for (const id of ['controls', 'verdict', 'p1', 'p2', 'p3', 'foot']) $(id).hidden = false;
+      renderMatrix();
+      renderFoot(s);
+      for (const id of ['controls', 'verdict', 'p1', 'p2', 'p3', 'p4', 'foot']) $(id).hidden = false;
     }
 
     // ---- controls -----------------------------------------------------------
@@ -304,6 +358,14 @@
         `<button class="opt${x.id === sig ? ' on' : ''}" data-sig="${esc(x.id)}">${esc(x.label)}</button>`).join(' ');
       $('horOpts').innerHTML = data.horizons.map((x) =>
         `<button class="opt${x.id === hor ? ' on' : ''}" data-hor="${esc(x.id)}">${esc(x.label)}</button>`).join(' ');
+      // Counts on the pills, because a band that filters down to nothing should
+      // say so before you read a mean computed from nine observations.
+      $('rsiOpts').innerHTML = data.rsiBands.map((b) => {
+        const n = idxFor(b.id, 'all').length;
+        return `<button class="opt${b.id === band ? ' on' : ''}" data-band="${esc(b.id)}"` +
+          `${n < 40 && b.id !== 'all' ? ' title="Too few sessions here to read a mean from"' : ''}>` +
+          `${esc(b.label)} <span style="opacity:.55">${n.toLocaleString()}</span></button>`;
+      }).join(' ');
       $('sampOpts').innerHTML =
         `<button class="opt${samp === 'all' ? ' on' : ''}" data-samp="all">All days</button> ` +
         `<button class="opt${samp === 'thin' ? ' on' : ''}" data-samp="thin" ` +
@@ -316,6 +378,7 @@
       if (b.dataset.sig) { sig = b.dataset.sig; load(); }
       else if (b.dataset.hor) { hor = b.dataset.hor; load(); }
       else if (b.dataset.samp) { samp = b.dataset.samp; render(); }
+      else if (b.dataset.band) { band = b.dataset.band; render(); }
     });
 
     // ---- verdict ------------------------------------------------------------
@@ -352,10 +415,7 @@
 
     function renderScatter(s) {
       const xs = data.x, ys = data.y;
-      // The sample toggle has to pick the same rows the stats did.
-      const step = samp === 'thin' ? data.horizon.days : 1;
-      const idx = [];
-      for (let i = 0; i < xs.length; i += step) idx.push(i);
+      if (!idx.length) { $('scatter').innerHTML = ''; $('n1').textContent = 'Nothing in this band.'; return; }
 
       const pad = (a, b) => { const g = (b - a) * 0.06 || 1; return [a - g, b + g]; };
       // Scaled to the middle 99%, not to the extremes. DELL has fortnights past
@@ -537,13 +597,66 @@
         `that knows nothing. Lift is the hit rate minus that base rate, and it is the only one of the three worth reading.`;
     }
 
+    // ---- RSI band x signal direction ----------------------------------------
+    // The whole hypothesis in one view. A filter alone makes you click through
+    // combinations and hold the numbers in your head; this puts them side by
+    // side, against the baseline, with the counts that say which are readable.
+    function renderMatrix() {
+      const base = SignalStats.mean(data.y);
+      const cellsFor = (bandId, pick) => {
+        const spec = data.rsiBands.find((b) => b.id === bandId);
+        const ys = [];
+        for (let i = 0; i < data.x.length; i++) {
+          const r = data.rsi[i];
+          if (spec.lo != null && !(r >= spec.lo)) continue;
+          if (spec.hi != null && !(r < spec.hi)) continue;
+          if (pick === 'neg' && !(data.x[i] < s0())) continue;
+          if (pick === 'pos' && !(data.x[i] >= s0())) continue;
+          ys.push(data.y[i]);
+        }
+        return { m: SignalStats.mean(ys), n: ys.length };
+      };
+      const s0 = () => (data.signal.split === 'median'
+        ? SignalStats.median(data.x) : 0);
+
+      const cls = (m, n) => {
+        if (m == null) return 'flat';
+        const d = m - base;
+        const c = d > 1.5 ? 'up2' : d > 0.5 ? 'up1' : d < -1.5 ? 'dn2' : d < -0.5 ? 'dn1' : 'flat';
+        // Below ~40 observations a fortnight mean is a coin toss; greyed rather
+        // than hidden, because an empty cell hides that the setup is rare.
+        return c + (n < 40 ? ' thin' : '');
+      };
+      const td = (c) => `<td class="${cls(c.m, c.n)}">` +
+        (c.m == null ? '—' : (c.m >= 0 ? '+' : '') + c.m.toFixed(2) + '%') +
+        `<span class="sub">n ${c.n.toLocaleString()}</span></td>`;
+
+      const lowWord = data.signal.low, highWord = data.signal.high;
+      let rows = '';
+      for (const b of data.rsiBands) {
+        if (b.id === 'all') continue;
+        rows += `<tr class="${b.id === band ? 'on' : ''}"><td>RSI ${esc(b.label)}</td>` +
+          td(cellsFor(b.id, 'neg')) + td(cellsFor(b.id, 'pos')) + td(cellsFor(b.id, 'any')) + '</tr>';
+      }
+      $('mtx').innerHTML =
+        `<table><thead><tr><th>Band</th><th>Signal ${esc(lowWord)}</th>` +
+        `<th>Signal ${esc(highWord)}</th><th>Either</th></tr></thead><tbody>${rows}</tbody>` +
+        `<caption>Mean return over the ${esc(data.horizon.label)}. Green is above the ` +
+        `${(base >= 0 ? '+' : '') + base.toFixed(2)}% this stock returned on average; red below. ` +
+        `Faded cells hold fewer than 40 sessions — and remember each is worth about a tenth of that ` +
+        `once the overlap is taken out.</caption></table>`;
+      $('n4').textContent =
+        `Every combination at once, so the question "does a rising signal pay better when the stock is ` +
+        `oversold?" is read across a row rather than by clicking through bands and remembering.`;
+    }
+
     // ---- the caveats --------------------------------------------------------
-    function renderFoot() {
+    function renderFoot(s) {
       const d = data.horizon.days;
       $('foot').innerHTML =
         `<p><b>Overlapping windows.</b> Sessions are one day apart but each return spans ${d}, so consecutive ` +
-        `observations share ${d - 1} of their ${d} days. ${nf(data.stats.n)} points therefore carry closer to ` +
-        `${nf(data.stats.effectiveN)} observations' worth of evidence. <b>Non-overlapping</b> above samples every ` +
+        `observations share ${d - 1} of their ${d} days. ${nf(s.n)} points therefore carry closer to ` +
+        `${nf(samp === 'thin' ? s.n : s.effectiveN)} observations' worth of evidence. <b>Non-overlapping</b> above samples every ` +
         `${d}th session so none of them overlap — expect a noisier number, not a better one.</p>` +
         `<p><b>Survivorship.</b> ${esc(data.symbol)} is in this screener because it is a stock you follow today, ` +
         `so its whole history is conditioned on it having got here. That lifts the average return in every bucket ` +

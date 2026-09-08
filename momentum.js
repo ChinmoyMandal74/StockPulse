@@ -130,6 +130,36 @@ function rsi(v, period = 14) {
   return 100 - 100 / (1 + ag / al);
 }
 
+// Wilder's RSI at every date rather than only the newest, returned newest-first
+// to match `values`. One forward pass reproduces exactly what rsi() returns for
+// each date, because Wilder is recursive from a seed at the oldest bar: the same
+// seed and the same increments give the same number at every step. Verified
+// against rsi() across the archive rather than assumed.
+//
+// Not part of the scoring, so it is deliberately absent from FNS below and does
+// not move MODEL_ID — the stored history is untouched by adding it.
+function rsiSeriesAt(v, period = 14) {
+  const n = v.length;
+  const out = new Array(n).fill(null);
+  if (n < period + 1) return out;
+  const c = v.map((x) => num(x.close)).reverse();      // oldest first
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const d = c[i] - c[i - 1];
+    if (d >= 0) gains += d; else losses -= d;
+  }
+  let ag = gains / period, al = losses / period;
+  const put = (oldIdx, val) => { out[n - 1 - oldIdx] = val; };
+  put(period, al === 0 ? 100 : 100 - 100 / (1 + ag / al));
+  for (let i = period + 1; i < c.length; i++) {
+    const d = c[i] - c[i - 1];
+    ag = (ag * (period - 1) + Math.max(d, 0)) / period;
+    al = (al * (period - 1) + Math.max(-d, 0)) / period;
+    put(i, al === 0 ? 100 : 100 - 100 / (1 + ag / al));
+  }
+  return out;
+}
+
 // Non-monotonic on purpose: the sweet spot is strong-but-not-stretched, so this
 // peaks at 70-75 and falls away above 85 as well as below 30.
 function rsiScore(r) {
@@ -259,5 +289,6 @@ module.exports = {
   subScores, composite, scoreBars,
   // exported for the tests and for anything that needs one factor alone
   curve, pctChange, windowReturn, realisedVol, pctFromHigh, positiveMonths,
+  rsiSeriesAt,
   smaAt, maCross, rsi, rsiScore, trendSub, riskAdj,
 };

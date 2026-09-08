@@ -28,7 +28,7 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `public/app.css` | **Shared stylesheet** — tokens, atmosphere, bezel, buttons, table base, row card. Linked by all four pages |
 | `public/index.html` | Single-page frontend (no build step, vanilla JS, page-specific CSS inline) |
 | `public/analysis.html` | Signal screens at `/analysis` — see **Analysis screens** below |
-| `signal.js` | **The statistics behind `/signal`** — correlation, fit, deciles, quadrants, effective n. Pure functions, no database |
+| `public/signal-stats.js` | **The statistics behind `/signal`** — correlation, fit, deciles, quadrants, effective n. Pure functions; `require`d by the server and loaded by the page, like `screens.js` |
 | `public/signal.html` | Signal study at `/signal/<SYMBOL>` — does a momentum move predict the next move in price |
 | `public/stock.html` | One stock in full at `/stock/<SYMBOL>` — chart, range buttons, every field |
 | `public/chat.html` | The assistant at `/chat` — any signed-in user, see **Chatbot** below |
@@ -512,6 +512,10 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 - **The scatter scales uniformly**, unlike the price chart — no `preserveAspectRatio="none"` — so a dot stays a dot and this chart can label itself in SVG where the price chart must use HTML overlays.
 - **Axes cover the middle 99%, and the strays are pinned to the edge in amber and counted**, not dropped. DELL has fortnights past +100%; letting them set the scale pressed the other 2,200 points into a band a few pixels tall, and the shape of the cloud is the whole point of the panel.
 - **The decile panel draws the overall mean as a dashed line**, because "flat at the mean" is what no signal looks like and bars against zero cannot show it.
+- **The RSI filter and the matrix.** Bands are Any / <30 / 30–45 / 45–55 / 55–70 / >70, half-open so a reading falls in exactly one, with the session count on each pill because a band that filters down to nothing should say so before you read a mean off it. The matrix panel crosses those bands with the direction of the signal, since a filter alone makes you click through combinations and hold numbers in your head.
+- **Raw RSI is computed per request, not stored.** `momentum_history` keeps the rsi *sub-score*, which is a non-monotonic curve — 25 and 85 both score low — so it cannot be inverted back to a reading. `Momentum.rsiSeriesAt()` does one Wilder pass over the bars instead; verified to reproduce `rsi()` exactly at 61 sampled dates (gap 0) and to match the screener's own RSI column to four decimals. It is outside `FNS`, so adding it left `MODEL_ID` unchanged and the stored history untouched.
+- **The page recomputes every statistic itself**, through the same module the server used — a round trip per band would make a control that should feel instant feel like a query. The payload's `x`/`y` are rounded to 2dp for size, and **the server now summarises those same rounded arrays**: computing its own numbers at full precision left the page and the payload disagreeing in the sixth decimal, which means nothing and would cost somebody an afternoon.
+- **On the hypothesis the filter was built to test** — low RSI plus a positive momentum delta. Across 264,290 stock-fortnights that cell returns **+3.57% against a +1.02% baseline**, the best of the twenty-five. But it is **811 sessions, ~81 independent, t = 1.71** against everything else, and the setup occurs 0.31% of the time. Suggestive, not established. Splitting it further, oversold alone gives +1.74% and a positive delta alone gives +0.99% — so what little there is comes from the RSI side, not the delta.
 - **What it currently says**: DELL, delta vs the next fortnight, **r 0.032 over 2,235 sessions (~223 independent), lift +3.5 pts** — no usable relationship, matching the universe-wide −0.003.
 
 ## The help page
