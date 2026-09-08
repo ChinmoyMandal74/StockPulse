@@ -449,12 +449,10 @@
 
       const price = stock.price != null ? curSym(stock.currency) + stock.price.toFixed(2) : '—';
       const today = stock.todayPct;
-      // Rank is the one chip with a calculation behind it, so it is the one that
-      // opens the breakdown; the rest are plain labels.
       const chips = []
         .concat(stock.sector ? [{ t: esc(stock.sector) }] : [])
         .concat((stock.portfolios || []).map((x) => ({ t: esc(x) })))
-        .concat(payload.rank ? [{ t: `Rank ${payload.rank} of ${payload.rankTotal}`, tip: 'rank' }] : []);
+        ;
 
       document.getElementById('page').innerHTML = `
         <div class="head">
@@ -491,7 +489,7 @@
         <section class="bezel card"><div class="core">
           <div class="sec-h"><h2>Everything the screener knows</h2></div>
           <div class="fields">${RowCard.buildSections(stock, {
-            colors: RowCard.GROUP_COLORS, labels: RowCard.GROUP_LABELS, rank: payload.rank,
+            colors: RowCard.GROUP_COLORS, labels: RowCard.GROUP_LABELS,
             // There is no table to hover here, so the scores would otherwise be
             // four bare numbers with nothing to explain them.
             tips: true,
@@ -598,8 +596,7 @@
 
       // ---- score breakdown on hover -----------------------------------------
       // Markup from rowcard.js, so this page and the screener explain a score
-      // identically. Rank has no factors of its own — it is a position in a
-      // sorted list — so what its card explains is the number it sorts on.
+      // identically.
       const tipEl = document.getElementById('tip');
       const pulled = payload.updatedAt
         ? new Date(payload.updatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
@@ -609,9 +606,7 @@
 
       document.querySelectorAll('[data-tip]').forEach((el) => {
         el.addEventListener('mouseenter', () => {
-          const html = RowCard.scoreTip(stock, el.dataset.tip, {
-            pulled, rank: payload.rank, rankTotal: payload.rankTotal,
-          });
+          const html = RowCard.scoreTip(stock, el.dataset.tip, { pulled });
           if (!html) return;
           tipEl.innerHTML = `<div class="tipcore">${html}</div>`;
           tipEl.style.display = 'block';

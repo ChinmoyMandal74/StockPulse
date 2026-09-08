@@ -142,7 +142,7 @@ Three menus share one controller. Only one is open at a time.
 - **`#stockLink` ("Stock") is the bar's door into `/stock/<SYMBOL>`.** It points at whatever row is currently on top — it is set from `sorted[0]` in `render()`, not from the ranking, so it follows the sort and the portfolio filter rather than quietly always meaning rank 1. Which stock it lands on matters little now the page has its own picker; the point is not having to hunt for a name to click first.
 - **Analysis, Visitor log, Refresh and Refresh all are top-level bar buttons**, not menu rows. Refresh and Refresh all are both labelled `.btn` pills — they run the same kind of action, so they carry the same weight; only their icons differ.
 - The column menu is rebuilt by `renderColumnMenu()` from inside `applyGroups()`, so the trigger count can't drift from the table state. It deliberately stays open while you toggle.
-- **Each menu row also carries a jump arrow** that scrolls that group into view — 48 columns across ~3,400px is more than a scrollbar should be asked to do, and the groups are how anyone thinks about the table anyway. The toggle and the jump are siblings in a `.pick-row`, because a button cannot nest inside a button. The arrow is disabled while its group is collapsed.
+- **Each menu row also carries a jump arrow** that scrolls that group into view — 47 columns across ~3,300px is more than a scrollbar should be asked to do, and the groups are how anyone thinks about the table anyway. The toggle and the jump are siblings in a `.pick-row`, because a button cannot nest inside a button. The arrow is disabled while its group is collapsed.
 - **`scrollToGroup()` works from `getBoundingClientRect()` plus the current `scrollLeft`, never `offsetLeft`.** A table cell's `offsetParent` here is `main.page`, not the table, so `offsetLeft` overstates by the table's own inset and lands the group ~29px *underneath* the frozen columns. It also subtracts the frozen block's measured width, or the target hides behind Symbol and Name.
 - **Arrow keys scroll the table horizontally**, shift for a page, home/end for the ends — the hint at the foot of the columns menu is where they are advertised, since Shift+wheel already works natively but nobody knows. The handler ignores keystrokes aimed at an input and does nothing when there is no horizontal overflow.
 
@@ -181,19 +181,21 @@ Dark-only. "Ethereal glass": OLED black with a fixed radial mesh aura and a film
 
 ## Column groups (frontend)
 Each group has a fixed colour used for the group header `th` and its row in the columns menu:
-- Rank `#a3e635` · Info `#7c9cff` · Chart `#a8a29e` · Short-term `#34d399` · Long-term `#a78bfa` · Forward `#fb923c`
+- Scores `#a3e635` (group id `rank`) · Info `#7c9cff` · Chart `#a8a29e` · Short-term `#34d399` · Long-term `#a78bfa` · Forward `#fb923c`
 - Relative `#22d3ee` · Trend `#fbbf24` · Volume `#f472b6` · Size `#94a3b8` · Fundamentals `#fb7185`
 
 **To add a group:** append the id to `GROUPS`, give it a colour in `GROUP_COLORS` and a label in `GROUP_LABELS`, add the `th.group` banner with the right `colspan`, and tag every header/body cell with `class="grp-<id>"`. Then mirror it in **three more places**: `GROUP_ORDER` and `FIELD_SPEC` in `public/rowcard.js`, and the palette copies at the top of `public/analysis.html`. `applyGroups()` and the columns menu pick it up with no further changes.
 
-The **Rank** group carries the four score columns (Overall, Mom., Qual., Rank) and **Info** the five metadata ones (Portfolios, Price, Sector, Market Cap, Next Earn) — they were one 9-column group until they were split, so that the scores and the metadata can be collapsed independently.
+The **Scores** group (id `rank`, kept so saved prefs and `grp-rank` classes still resolve) carries the three score columns (Overall, Mom., Qual.) and **Info** the five metadata ones (Portfolios, Price, Sector, Market Cap, Next Earn) — they were one group until they were split, so scores and metadata collapse independently.
+
+**There is no Rank column.** It was removed in Sep 2026: it only ever restated the row's position under the default sort, and read as a contradiction when the table was sorted by anything else. Sorting by Overall gives the same ordering. It went from the table, the CSV, the hover card, the stock page chip and `/api/stock` together.
 
 The **Size** group carries the absolute-size columns — Revenue TTM, Gross Profit TTM, Gross Margin, Net Income TTM, FCF TTM, FCF Margin, Net Cash. Every one comes out of the `/statistics` call `fetchProfile()` already makes, so the group costs **no extra API credits**.
 
-The **Info** banner spans nine columns — Overall, Mom., Qual., Rank, Portfolios, Price, Sector, Market Cap, Next Earn — and all nine collapse together.
+The **Info** banner spans eight columns — Overall, Mom., Qual., Portfolios, Price, Sector, Market Cap, Next Earn — and all eight collapse together.
 
 ### Sparklines
-The **Chart** group is one column (`90d`) between Rank and Short-term, holding a 90-session price line per row. A group of its own rather than a column inside Info, because the columns menu toggles *groups* — inside Info it could only be hidden by hiding Price, Sector and Market Cap too. `data-group="vol" colspan="1"` was already the precedent for a one-column group.
+The **Chart** group is one column (`90d`) between Scores and Short-term, holding a 90-session price line per row. A group of its own rather than a column inside Info, because the columns menu toggles *groups* — inside Info it could only be hidden by hiding Price, Sector and Market Cap too. `data-group="vol" colspan="1"` was already the precedent for a one-column group.
 
 - **`RowCard.sparkSVG()` is separate from `chartSVG()`**, not a flag on it. At 63×20px there is no room for a baseline, an end dot or padding, and a function that draws "everything except" is harder to follow than two small ones.
 - **The line is neutral (`--muted`), not green/red.** The five percentage columns immediately to its right are already coloured; a sixth coloured element there is noise. The shape carries the information, colour is left to the numbers. It brightens to `--text` on row hover.
@@ -213,7 +215,7 @@ The **Chart** group is one column (`90d`) between Rank and Short-term, holding a
 
 - `kind` is `overall` | `momentum` | `quality` | `rank`, and it returns **`null` when there is nothing to explain**, so a caller can skip showing rather than flash an empty card.
 - **`rank` is not a factor breakdown** — a rank is a position in a sorted list, so the card explains the number it sorts on: the Overall score, its 65/35 split, and that the ordering runs across every stock in the screener.
-- **`buildSections(s, { tips: true })`** marks the Overall/Mom./Qual./Rank rows with `data-tip`. Off by default: inside the hover card those rows are already in a tooltip, and a tooltip on a tooltip helps nobody. Only `/stock/<SYMBOL>` passes it, where there is no table to hover and the scores would otherwise be four bare numbers.
+- **`buildSections(s, { tips: true })`** marks the Overall/Mom./Qual. rows with `data-tip`. Off by default: inside the hover card those rows are already in a tooltip, and a tooltip on a tooltip helps nobody. Only `/stock/<SYMBOL>` passes it, where there is no table to hover and the scores would otherwise be four bare numbers.
 
 ## Fundamentals data — things that will bite you
 - **A refused profile pull must never overwrite a good one.** `fetchProfile()` returns every field as `null` when a call fails, and `ensureProfiles()` used to store that verbatim with a fresh `fetchedAt` — so a rate-limited round blanked market cap, every fundamental and every size column, and the row then looked fresh enough to keep it blanked for a day. Observed live: twelve symbols, CRWD and Samsung among them, lost their fundamentals during a burst of refreshes. `fetchProfile()` now reports `fetchOk`, and a failed pull keeps the cached values and leaves `fetched_at` at `0` so the next round retries.
@@ -230,8 +232,10 @@ Forward revenue / EPS estimates (`/revenue_estimate`, `/earnings_estimate`, `/gr
 ## Scores / ratings
 Three composite scores per stock (1–10): **Momentum** (price strength), **Quality** (company fundamentals), **Overall** (65% momentum + 35% quality). Computed in `computeScores()` in server.js.
 
-### Momentum is cross-sectional
-Momentum is scored **against the universe**, not against fixed thresholds, so it needs every row before it can be worked out: `computeStocks()` builds the rows, then `applyScores()` percentile-ranks the return factors and scores each one. Adding a momentum factor that is a *number* means adding it to `applyScores()`; a *category* (like trend regime) can stay inside `computeScores()`.
+### Momentum is absolute
+Momentum is measured against a **fixed scale**, not against the rest of the list. A score therefore means the same thing in a weak quarter as a strong one, does not move when a ticker is added or removed, and is comparable with the same stock's score a year ago. `applyScores()` is now a plain loop over `computeScores()`; there is no cross-sectional pass and nothing depends on the universe. Adding a factor means one entry in `momComps`.
+
+**It was cross-sectional until Sep 2026**, percentile-ranking six of the eight factors. That was dropped because a percentile median is 0.5 *by construction*: measured at six dates between 2011 and 2026 the ranked model's median score sat at **54 in every single period**, so it could not express a weak market at all — the best of a bad lot always scored near the top. It also meant adding a ticker nudged everyone's score, and made a momentum *history* meaningless, since the series was contaminated by changes in universe composition.
 
 | factor | weight | notes |
 |---|---|---|
@@ -246,7 +250,11 @@ Momentum is scored **against the universe**, not against fixed thresholds, so it
 
 Everything comes from the daily bars already fetched, so the extra factors cost **no API credits**. 12-1 and consistency need ~260 of the 300 bars `outputsize=300` returns.
 
-**Why percentiles instead of `lin()` thresholds.** Measured against the live universe, the old absolute cut-offs left **33–51% of stocks pinned** at a floor or ceiling on every major factor — a factor that is constant across half the list cannot rank anything. Percentiles also survive a regime change: in a bad quarter the best names still score well *relatively* rather than everything collapsing to zero at once.
+**Why a logistic curve and not `lin()`.** The first absolute model used clamped straight lines and pinned **33–51% of stocks** at exactly a floor or ceiling on every major factor — a factor constant across half the list cannot order anything, and that is what sent the model to percentiles. `curve(v, centre, scale)` is `0.5 + 0.5·tanh((v − centre) / scale)`: asymptotic, so it approaches the ends without reaching them and ordering survives at the extremes. Measured after the change: **3.4% of sub-scores** land within 0.005 of an end, and that is an upper bound because the stored breakdown rounds to two decimals.
+
+**The centres are measured, not guessed.** Each is the median of that factor across the bar archive at six dates spanning 2011–2026, with the scale roughly the interquartile spread — `mom121` 0.70/1.30, `ret6m` 0.55/0.90, `ret3m` 0.25/0.45, `fromHigh` −12/14, `consistency` 58/15, `revers1m` 1.0/10 inverted. The risk-adjusted returns are dimensionless (a return over its own volatility), which is what makes a fixed scale meaningful for them at all. **They are constants on purpose** — deriving them from the current universe would be percentiles under another name.
+
+**Switching cost, measured before the change:** median order change **2 places**, worst 11; **no stock's 1–10 momentum rating moved by more than one point**, 48 of 82 unchanged. The list barely moved; what changed is that the numbers now mean something fixed.
 
 **Four factors were removed, each for a measured reason:**
 - **RS vs S&P** was `threeMonthPct` minus a constant identical for every stock — correlation with 3M return was exactly **1.000**, so it could not reorder anything while consuming a quarter of the weight. Ranking within the universe is already relative.
@@ -261,7 +269,7 @@ Everything comes from the daily bars already fetched, so the extra factors cost 
 - **It costs no API credits and no extra query.** Momentum is entirely bar-derived and a normal refresh already fetches 300 bars; slicing 10 leaves 290, comfortably above the 254 the year-plus-skipped-month factor needs. `MOM_MIN_BARS` guards the short series.
 - **The window was measured, not chosen.** Median |change in rank| across the live universe: 2 over one day, 4 over a week, **5 over a fortnight**, 8 over a month, 15 over a quarter. At one day **46% of the list moves three or more places on no news**, so a daily arrow is pure flicker.
 - **`MOM_ARROW_MIN` = 5 points is what makes the arrow mean anything.** A fortnight moves the median name 4.5 points, so ±5 leaves about half the list neutral — measured on the live data: 16 up, 22 down, **43 neutral (53%)**. Without a deadband nearly every row is lit and the column stops carrying information.
-- **Driven by the score, not the rank**, though displayed beside the rating. Rank amplifies noise — a 0.374-point score difference reshuffled 28 of 81 ranks in testing — and shifts for everyone whenever a ticker is added or removed.
+- **Driven by the score.** Now that momentum is absolute, both ends of the comparison sit on the same fixed scale, so the change reflects the stock and nothing else — the universe cannot move it.
 - The arrow carries its own green/red, not the rating's: green here means *improving*, which is a different statement from the green that means *a high score*.
 - **`MOM_ARROW_MIN` lives in `rowcard.js` and is imported by `index.html`.** The table draws the arrow and `scoreTip()` describes it in words — the number and the sentence explaining it must not drift.
 - **The tooltip carries what the arrow cannot**: the score a fortnight ago, the signed change, and a sentence naming what the chevron means. When the move is inside the deadband it says so explicitly rather than staying silent, so a missing arrow is never ambiguous.
@@ -410,8 +418,8 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 ## Momentum weight lens
 **Both `/` and `/analysis` carry a Default · Trend · Steady selector** — a `Weights` picker in the screener's bar, and a bar above the screens on the analysis page. Each page keeps its own choice; the nightly report, the assistant and the stored snapshot always stay on Default, so the shared score remains one comparable measurement.
 
-- **On the screener the lens reaches further, so it is marked loudly**: it changes Momentum, Overall *and* the Rank column, which means it also changes the sort. `body.lensed` tints the Overall, Mom. and Rank columns (`.lens-col`) and the picker in accent. Quality is deliberately left plain — it is the one score a momentum weighting does not change. Marking was a per-cell bottom rule at first, which drew a line between every pair of rows and read as a ladder rather than a column.
-- **The CSV names the weighting in the three column headers it alters** — `Overall (Trend)`, `Momentum (Trend)`, `Rank (Trend)` — and in the filename. A comment row would have changed the shape every parser expects; a header rename travels with the file and leaves the column order alone, which the export is documented to keep stable.
+- **On the screener the lens reaches further, so it is marked loudly**: it changes Momentum and Overall, which means it also changes the sort. `body.lensed` tints those columns (`.lens-col`) and the picker in accent. Quality is deliberately left plain — it is the one score a momentum weighting does not change. Marking was a per-cell bottom rule at first, which drew a line between every pair of rows and read as a ladder rather than a column.
+- **The CSV names the weighting in the column headers it alters** — `Overall (Trend)`, `Momentum (Trend)` — and in the filename. A comment row would have changed the shape every parser expects; a header rename travels with the file and leaves the column order alone, which the export is documented to keep stable.
 - **`applyWeights()` restates the weights inside `momentumBreakdown` too**, or the factor tooltip would explain a score using percentages that did not produce it.
 - **`renderWeightMenu()` carries its own escaper.** The only `esc` in `index.html` is scoped inside the CSV export; reaching for it there throws and takes `render()` down with it — this has now caused two bugs, so check the scope before using that name on that page.
 

@@ -492,11 +492,7 @@
 
       document.getElementById('out').innerHTML = out.join('');
 
-      // Same hover card as the screener. Rank is computed across the whole
-      // universe here, since these lists are filtered views rather than a
-      // ranking of their own.
-      const ranked = all.filter((s) => s.overallScore != null)
-        .slice().sort((a, b) => b.overallScore - a.overallScore);
+      // Same hover card as the screener.
       RowCard.attach({
         root: document.getElementById('out'),
         selector: 'td.name',
@@ -505,10 +501,6 @@
         getStock: (td) => {
           const sym = td.closest('tr')?.querySelector('td.sym')?.textContent.trim();
           return sym ? all.find((x) => x.symbol === sym) : null;
-        },
-        rankOf: (s) => {
-          const i = ranked.findIndex((x) => x.symbol === s.symbol);
-          return i < 0 ? null : `${i + 1}/${ranked.length}`;
         },
       });
     }

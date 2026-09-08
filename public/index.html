@@ -745,7 +745,7 @@
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="name">Name</th>
         <th class="group grp-info" data-group="info" colspan="5">Info</th>
-        <th class="group grp-rank" data-group="rank" colspan="4">Rank</th>
+        <th class="group grp-rank" data-group="rank" colspan="3">Scores</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="3">Long-term %</th>
@@ -764,9 +764,8 @@
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
         <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
         <th class="grp-rank ta-c" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
-        <th class="grp-rank ta-l" data-key="momentumScore" title="Momentum 1–10: strength ranked against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
+        <th class="grp-rank ta-l" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
         <th class="grp-rank" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all and Overall falls back to momentum. Hover a cell for the factor split and the confidence figure.">Qual.</th>
-        <th class="grp-rank lens-col" title="Rank by Overall within the stocks currently shown">Rank</th>
         <th class="grp-chart" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
         <th class="grp-short" data-key="todayPct">Today</th>
         <th class="grp-short" data-key="yesterdayPct">YDAY</th>
@@ -845,7 +844,7 @@
     // Labels live here so adding a group later is: append to GROUPS, give it a
     // colour and a label, and tag the <th>/<td> cells with .grp-<id>.
     const GROUP_LABELS = {
-      info: 'Info', rank: 'Rank', chart: 'Chart', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
+      info: 'Info', rank: 'Scores', chart: 'Chart', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
       rel: 'Relative', trend: 'Trend', vol: 'Volume',
       size: 'Size', fund: 'Fundamentals',
     };
@@ -965,10 +964,6 @@
       else if (n <= 4) color = 'var(--red)';
       return `<td class="rating ${extraCls}" data-sym="${sym}" data-kind="${kind}" style="font-weight:700;color:${color}">` +
              `${n}${momArrow(delta)}</td>`;
-    }
-    function rankCell(r, total, extraCls = '') {
-      if (r == null) return `<td class="na ${extraCls}">—</td>`;
-      return `<td class="na ${extraCls}">${r}/${total}</td>`;
     }
     // Map a Twelve Data MIC / exchange to the code Google Finance uses in its quote URL
     // (https://www.google.com/finance/quote/SYMBOL:EXCHANGE). MIC is authoritative; the
@@ -1176,12 +1171,6 @@
       const rows = visibleStocks();
       markSortedColumn();
 
-      // Rank within the currently-shown stocks, by Overall score.
-      const ranked = rows.filter((s) => s.overallScore != null).slice().sort((a, b) => b.overallScore - a.overallScore);
-      const rankMap = {};
-      ranked.forEach((s, i) => (rankMap[s.symbol] = i + 1));
-      const rankTotal = ranked.length;
-
       const stockLink = $('stockLink');
       stockLink.style.display = rows.length ? '' : 'none';
 
@@ -1249,7 +1238,6 @@
           ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-rank ta-c lens-col')}
           ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-rank ta-l lens-col', s.momentumChange)}
           ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank')}
-          ${rankCell(rankMap[s.symbol] ?? null, rankTotal, 'grp-rank lens-col')}
           <td class="spark grp-chart" data-spark="${s.symbol}">${sparkCache[s.symbol] || ''}</td>
           ${pctCell(s.todayPct, 'grp-short', liveTitle)}
           ${pctCell(s.yesterdayPct, 'grp-short', liveTitle)}
@@ -1365,13 +1353,6 @@
             !window.confirm(`Remove ${s.symbol} from every portfolio?`)) return;
         removeTicker(s.symbol);
       },
-      // Rank within the rows currently on screen, matching the Rank column.
-      rankOf: (s) => {
-        const rows = visibleStocks().filter((x) => x.overallScore != null)
-          .slice().sort((a, b) => b.overallScore - a.overallScore);
-        const i = rows.findIndex((x) => x.symbol === s.symbol);
-        return i < 0 ? null : `${i + 1}/${rows.length}`;
-      },
     });
 
     // ---- Export current view to CSV (opens in Excel) ----
@@ -1387,16 +1368,12 @@
 
     function exportExcel() {
       const rows = sortRows(visibleStocks());
-      const ranked = rows.filter((s) => s.overallScore != null).slice().sort((a, b) => b.overallScore - a.overallScore);
-      const rankMap = {};
-      ranked.forEach((s, i) => (rankMap[s.symbol] = i + 1));
 
       const cols = [
         ['Symbol', (s) => s.symbol],
         ['Overall', (s) => s.overallRating],
         ['Momentum', (s) => s.momentumRating],
         ['Quality', (s) => s.qualityRating],
-        ['Rank', (s) => rankMap[s.symbol] ?? ''],
         ['Name', (s) => s.name],
         ['Portfolios', (s) => (s.portfolios || []).join('; ')],
         ['Price', (s) => s.price],

@@ -152,8 +152,8 @@
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="start"><div class="core">
       <div class="sec-h"><h2>1 · What this is</h2></div>
-      <p>Tickr Lab watches a list of stocks and ranks them on how their prices are behaving and how the
-        underlying companies are doing. It is a <strong>screener</strong>: it narrows a list down to the
+      <p>Tickr Lab watches a list of stocks and scores them on how their prices are behaving and how
+        the underlying companies are doing. It is a <strong>screener</strong>: it narrows a list down to the
         few names worth a closer look. It does not tell you what to buy, and it deliberately never
         offers a verdict.</p>
       <p>Stocks are grouped into <strong>portfolios</strong> — a stock can belong to several — and the
@@ -166,7 +166,7 @@
     <section class="bezel card" id="table"><div class="core">
       <div class="sec-h"><h2>2 · Reading the table</h2></div>
 
-      <p>There are 48 columns, arranged into groups you can collapse: <em>Rank</em>, <em>Info</em>,
+      <p>There are 47 columns, arranged into groups you can collapse: <em>Scores</em>, <em>Info</em>,
         <em>Chart</em>, <em>Short-term %</em>, <em>Long-term %</em>, <em>Relative</em>, <em>Trend</em>,
         <em>Volume</em>, <em>Size</em> and <em>Fundamentals</em>. The <strong>Columns</strong> menu
         turns whole groups on and off, and remembers your choice against your account.</p>
@@ -202,19 +202,30 @@
 
       <p>Every stock carries three scores out of ten. <strong>Momentum</strong> describes how the price
         has behaved. <strong>Quality</strong> describes the company behind it — growth, margins,
-        valuation. <strong>Overall</strong> blends them, <em>65% momentum and 35% quality</em>, and the
-        Rank column orders the list by it.</p>
+        valuation. <strong>Overall</strong> blends them, <em>65% momentum and 35% quality</em>, and
+        clicking that column sorts the list by it.</p>
 
-      <p>Momentum is scored <strong>against the other stocks on your list</strong>, not against fixed
-        targets. Six of the eight factors below are percentile-ranked across the universe, so a score of
-        90 means "near the top of this list" rather than "past some threshold". That has two
-        consequences worth knowing: adding or removing tickers can nudge everyone's score, and in a bad
-        quarter the strongest names still score well relatively instead of everything collapsing to zero
-        together.</p>
+      <p>Every score is <strong>absolute</strong>. Each factor is measured against a fixed scale rather
+        than against the other stocks on your list, which means three things worth knowing:</p>
 
-      <p>The remaining two factors — <em>trend regime</em> and <em>RSI timing</em> — are absolute,
-        because "above its 200-day average" and "overbought" mean the same thing regardless of what the
-        rest of the list is doing.</p>
+      <ul>
+        <li><b>A number means the same thing over time.</b> A momentum of 70 in a weak quarter is the
+          same 70 as in a strong one, so this month's score can be compared with last year's.</li>
+        <li><b>Adding or removing a ticker changes nobody else's score.</b> Your scores describe the
+          stocks, not the company they happen to be keeping.</li>
+        <li><b>In a bad market the whole list scores low</b>, which is the honest answer. A ranked score
+          cannot say that — the best of a bad lot still comes out near the top.</li>
+      </ul>
+
+      <p>The scales are not guesses. Each factor's centre is the median measured across the price
+        archive at dates spanning 2011 to 2026, so a typical stock in a typical period sits near the
+        middle. The return factors are divided by volatility first, which makes them dimensionless and
+        is what allows a fixed scale to mean anything at all.</p>
+
+      <div class="note"><b>Nothing is pinned at the ends.</b> Each factor uses a curve that approaches
+        0 and 100 without reaching them, so two very strong stocks still separate. An earlier version
+        used straight cut-offs and flattened a third to a half of the list onto a floor or a ceiling,
+        which is a factor that cannot tell anything apart.</div>
 
       <div class="note"><b>Missing data is dropped, not counted as zero.</b> If a factor cannot be
         computed for a stock — usually too little price history — it is removed and the remaining
@@ -355,7 +366,7 @@
       <div class="note"><b>Changing weights changes your view, not the data.</b> The screener and the
         analysis page each remember their own choice. The nightly email, the assistant and the stored
         snapshot always use Default, so a score quoted anywhere outside your own screen means the same
-        thing to everyone. Whenever a non-default weighting is in force, the Momentum, Overall and Rank
+        thing to everyone. Whenever a non-default weighting is in force, the Momentum and Overall
         columns are tinted, and an exported CSV names the weighting in those column headers.</div>
 
       <div class="note"><b>A word of caution.</b> Sliders make it easy to keep adjusting until the list

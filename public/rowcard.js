@@ -64,7 +64,6 @@
     ['rank',  'Overall',        (s) => V.rating(s.overallRating)],
     ['rank',  'Mom.',           (s) => V.rating(s.momentumRating)],
     ['rank',  'Qual.',          (s) => V.rating(s.qualityRating)],
-    ['rank',  'Rank',           (s, x) => x.rank ? { t: x.rank, c: 'na' } : null],
     ['short', 'Today',          (s) => V.pct(s.todayPct)],
     ['short', 'YDAY',           (s) => V.pct(s.yesterdayPct)],
     ['short', '1W',             (s) => V.pct(s.oneWeekPct)],
@@ -431,8 +430,7 @@
       `<span class="tip-bar"><i style="width:${pct}%"></i></span><span class="val">${pct}</span></div>`;
   }
 
-  // The two halves of Overall, as bars. Shared by the 'overall' and 'rank'
-  // tooltips, which differ only in what they put above them.
+  // The two halves of Overall, as bars.
   function overallRows(s) {
     const parts = [];
     if (s.momentumScore != null) parts.push(['Momentum', s.momentumScore, 65]);
@@ -448,24 +446,11 @@
     return { rows, note, count: parts.length };
   }
 
-  // kind: 'overall' | 'momentum' | 'quality' | 'rank'.
-  // opts: { pulled, rank, rankTotal } — `pulled` is the "as of" line, and the
-  // two rank fields are only read by the 'rank' kind.
+  // kind: 'overall' | 'momentum' | 'quality'. `pulled` is the "as of" line.
   // Returns null when there is nothing to explain, so a caller can skip showing.
   function scoreTip(s, kind, opts) {
     const o = opts || {};
     const foot = o.pulled ? ` · pulled ${esc(o.pulled)}` : '';
-
-    if (kind === 'rank') {
-      if (!o.rank) return null;
-      const { rows, note } = overallRows(s);
-      // Rank is not a factor of its own — it is a position in a sorted list, so
-      // what needs explaining is the number it sorts on.
-      return `<div class="tip-head">Rank ${esc(o.rank)} of ${esc(o.rankTotal)} ` +
-        `<span>· by Overall score</span></div>` + rows +
-        `<div class="tip-foot">Ranked on Overall score${s.overallScore != null ? ` (${s.overallScore}/100)` : ''}, ` +
-        `highest first, across every stock in the screener. ${note}${foot}</div>`;
-    }
 
     if (kind === 'overall') {
       if (s.overallRating == null) return null;
@@ -527,17 +512,17 @@
     tip.style.top = top + 'px';
   }
 
-  // opts: { colors, labels, rank }
+  // opts: { colors, labels }
   // Which rank-group rows carry a breakdown, when a caller asks for them.
   // Off by default: inside the hover card these rows are already in a tooltip,
   // and a tooltip on a tooltip helps nobody.
-  const ROW_TIPS = { 'Overall': 'overall', 'Mom.': 'momentum', 'Qual.': 'quality', 'Rank': 'rank' };
+  const ROW_TIPS = { 'Overall': 'overall', 'Mom.': 'momentum', 'Qual.': 'quality' };
 
   function buildSections(s, opts) {
     const o = opts || {};
     const colors = o.colors || {};
     const labels = o.labels || {};
-    const ctx = { rank: o.rank || null };
+    const ctx = {};
 
     const byGroup = {};
     for (const [g, label, get] of FIELD_SPEC) {
@@ -574,7 +559,7 @@
       }).join('');
   }
 
-  // opts: { colors, labels, rank, actions }
+  // opts: { colors, labels, actions }
   function buildHTML(s, opts) {
     const o = opts || {};
     const sections = buildSections(s, o);
@@ -605,7 +590,7 @@
   }
 
   // --- attach hover behaviour to a container ---------------------------------
-  // opts: { root, selector, getStock, colors, labels, rankOf, onShow, actions, onAction }
+  // opts: { root, selector, getStock, colors, labels, onShow, actions, onAction }
   function attach(opts) {
     const el = document.getElementById('rowcard');
     if (!el) return;
@@ -621,7 +606,6 @@
       el.innerHTML = buildHTML(s, {
         colors: opts.colors,
         labels: opts.labels,
-        rank: opts.rankOf ? opts.rankOf(s) : null,
         actions: opts.actions ? opts.actions(s) : null,
       });
       paintChart(el, s.symbol);

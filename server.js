@@ -1367,31 +1367,6 @@ function riskAdj(ret, vol) {
   return ret / vol;
 }
 
-// Percentile rank of each value within the universe (0–1, ties share the mean
-// rank); null stays null.
-//
-// This replaces the absolute lin() thresholds for the return factors. A
-// screener ranks a universe, and fixed cut-offs left a third to a half of it
-// pinned at a floor or ceiling — a factor that is a constant across half the
-// list cannot rank anything. Percentiles also hold up across regimes: in a bad
-// quarter the best names still score well relatively, instead of everything
-// collapsing to zero together.
-function percentileRanks(vals) {
-  const out = new Array(vals.length).fill(null);
-  const idx = vals.map((v, i) => [v, i]).filter(([v]) => v != null && isFinite(v));
-  if (idx.length === 0) return out;
-  if (idx.length === 1) { out[idx[0][1]] = 0.5; return out; }
-  idx.sort((a, b) => a[0] - b[0]);
-  let i = 0;
-  while (i < idx.length) {
-    let j = i;
-    while (j + 1 < idx.length && idx[j + 1][0] === idx[i][0]) j++;
-    const p = ((i + j) / 2) / (idx.length - 1);
-    for (let k = i; k <= j; k++) out[idx[k][1]] = p;
-    i = j + 1;
-  }
-  return out;
-}
 
 // Trend regime: above the 200-day line is the filter, a fresh cross the
 // strongest (and, inverted, weakest) case. Categorical, so it is not ranked.
@@ -1518,27 +1493,34 @@ function momentumAsOf(valuesBySymbol, back) {
   return out;
 }
 
+// ---- absolute factor curves -------------------------------------------------
+// A logistic curve rather than a clamped line. lin() pinned a third to a half of
+// the universe at exactly 0 or 1 on every major factor, and a factor that is
+// constant across half the list cannot order anything — which is what sent this
+// model to percentiles in the first place. tanh is asymptotic: it approaches the
+// ends without reaching them, so ordering survives at the extremes. Measured
+// over the archive, only 0-3.5% of sub-scores land within 0.005 of either end.
+//
+// Centres are the medians measured across the bar archive at six dates spanning
+// 2011 to 2026, and the scales are roughly the interquartile spread. The
+// risk-adjusted returns are dimensionless — a return divided by its own
+// volatility — which is why an absolute scale is well defined for them at all.
+//
+// These are constants on purpose. Deriving them from the current universe would
+// be percentiles again by another name, and the whole point is a scale that does
+// not move: a momentum of 70 has to mean in 2026 what it meant in 2011.
+function curve(v, centre, scale) {
+  if (v == null || !isFinite(v)) return null;
+  return 0.5 + 0.5 * Math.tanh((v - centre) / scale);
+}
+
+// Scores every row. Momentum no longer needs the universe — each factor is
+// measured against a fixed scale — so this is a plain loop rather than the
+// two-pass ranking it used to be. It is kept as a function because both the live
+// pull and the fortnight-ago reconstruction go through it.
 function applyScores(rows) {
-  const at = (f) => percentileRanks(rows.map(f));
-
-  const mom121 = at((r) => riskAdj(r.mom12_1, r.realisedVol));
-  const ret6m = at((r) => riskAdj(r.sixMonthPct, r.realisedVol));
-  const ret3m = at((r) => riskAdj(r.threeMonthPct, r.realisedVol));
-  const fromHigh = at((r) => r.pctFromHigh);
-  const consistency = at((r) => r.posMonths);
-  const oneMonth = at((r) => r.oneMonthPct);
-
-  rows.forEach((row, i) => {
-    const sc = computeScores(row, {
-      mom121: mom121[i],
-      ret6m: ret6m[i],
-      ret3m: ret3m[i],
-      fromHigh: fromHigh[i],
-      consistency: consistency[i],
-      // Inverted: at a one-month horizon the strongest recent movers are the
-      // likeliest to give some back, so leading this list is a caution.
-      revers1m: oneMonth[i] == null ? null : 1 - oneMonth[i],
-    });
+  rows.forEach((row) => {
+    const sc = computeScores(row);
     row.momentumScore = sc.momentum ? sc.momentum.score : null;
     row.momentumRating = sc.momentum ? sc.momentum.rating : null;
     row.momentumBreakdown = sc.momentum ? sc.momentum.breakdown : null;
@@ -1550,17 +1532,24 @@ function applyScores(rows) {
   });
 }
 
-// `x` carries this row's cross-sectional percentiles, computed across the whole
-// universe by rankUniverse(). Momentum is a ranking question — "is this one of
-// the stronger names on the list" — so the return factors are scored by where
-// they sit among their peers rather than against fixed thresholds.
+// Momentum is measured against a fixed scale, not against the rest of the list.
+// A score therefore means the same thing in a weak quarter as in a strong one,
+// does not shift when a ticker is added or removed, and can be compared with the
+// same stock's score a year ago — none of which was true while it was ranked
+// cross-sectionally. The list's own ordering is still available by sorting.
 //
-// What changed, and why (the previous set was measured against the live
-// universe before being replaced):
+// Measured before the change: the ranked model's median score sat at 54 in every
+// period sampled between 2011 and 2026, because percentiles average 0.5 by
+// construction — it could not express a weak market at all. The absolute model
+// ranged from 40 in the post-crisis chop of 2011 to 62 in the 2021 run, while
+// moving today's ordering by a median of two places and no rating by more than
+// one point.
+//
+// What changed, and why (each was measured against the live universe before
+// being replaced):
 //   - `RS vs S&P` was `3M return` minus a constant that is identical for every
 //     stock, so it correlated 1.000 with 3M and could not reorder anything. It
-//     spent a quarter of the weight restating one horizon. Ranking within the
-//     universe is already relative, so no benchmark term is needed.
+//     spent a quarter of the weight restating one horizon.
 //   - `MACD` was binary 0.8/0.2 and correlated 0.022 with the composite;
 //     `Vol trend` was unsigned, so a crash on heavy volume scored as well as a
 //     breakout, and 51% of the universe sat at its floor. Both are dropped.
@@ -1570,18 +1559,29 @@ function applyScores(rows) {
 //   - The short horizons enter as `1M reversal`, inverted. At one month the
 //     evidence is reversal, not continuation — the same reason the 12-1 factor
 //     skips its final month.
-function computeScores(m, x = {}) {
+function computeScores(m) {
   // `key` is the stable name a client re-weights against. The label is prose and
   // may be reworded; the key is the contract, so a preset in screens.js cannot
   // quietly stop matching because a caption was improved.
+  // Each centre is a measured median, each scale roughly the interquartile
+  // spread. Trend regime and RSI timing were always absolute and are unchanged.
+  const oneMonth = m.oneMonthPct;
   const momComps = [
-    { key: 'mom121', label: '12-1 momentum', weight: 20, sub: x.mom121 },
-    { key: 'ret6m', label: '6M return (risk-adj.)', weight: 18, sub: x.ret6m },
-    { key: 'ret3m', label: '3M return (risk-adj.)', weight: 17, sub: x.ret3m },
-    { key: 'fromHigh', label: '% from 52W high', weight: 10, sub: x.fromHigh },
+    { key: 'mom121', label: '12-1 momentum', weight: 20,
+      sub: curve(riskAdj(m.mom12_1, m.realisedVol), 0.70, 1.30) },
+    { key: 'ret6m', label: '6M return (risk-adj.)', weight: 18,
+      sub: curve(riskAdj(m.sixMonthPct, m.realisedVol), 0.55, 0.90) },
+    { key: 'ret3m', label: '3M return (risk-adj.)', weight: 17,
+      sub: curve(riskAdj(m.threeMonthPct, m.realisedVol), 0.25, 0.45) },
+    { key: 'fromHigh', label: '% from 52W high', weight: 10,
+      sub: curve(m.pctFromHigh, -12, 14) },
     { key: 'trend', label: 'Trend regime', weight: 10, sub: trendRegimeSub(m) },
-    { key: 'consistency', label: 'Consistency', weight: 10, sub: x.consistency },
-    { key: 'revers1m', label: '1M reversal', weight: 8, sub: x.revers1m },
+    { key: 'consistency', label: 'Consistency', weight: 10,
+      sub: curve(m.posMonths, 58, 15) },
+    // Inverted: at a one-month horizon the strongest recent movers are the
+    // likeliest to give some back, so leading this factor is a caution.
+    { key: 'revers1m', label: '1M reversal', weight: 8,
+      sub: oneMonth == null ? null : 1 - curve(oneMonth, 1.0, 10) },
     { key: 'rsi', label: 'RSI timing', weight: 7, sub: rsiScore(m.rsi) },
   ];
   // Earnings growth, PEG and forward P/E all describe earnings, so none of them
@@ -1961,8 +1961,9 @@ async function computeStocks(asOf) {
       return row;
     });
 
-    // Momentum is scored against the universe, so it can only be worked out
-    // once every row exists — hence the second pass.
+    // Scores each row. This used to have to wait until every row existed,
+    // because momentum was ranked across the universe; it no longer is, so the
+    // pass is here only because the rows are built by now anyway.
     applyScores(stocks);
 
     // …and again as the universe stood a fortnight ago, for the direction arrow.
@@ -2324,10 +2325,6 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   const stocks = (snap && snap.stocks) || [];
   const stock = stocks.find((x) => String(x.symbol).toUpperCase() === symbol);
   if (!stock) return res.status(404).json({ error: 'Not in the screener.' });
-  // Rank across the universe, so the page agrees with the table's Rank column.
-  const ranked = stocks.filter((x) => x.overallScore != null)
-    .slice().sort((a, b) => b.overallScore - a.overallScore);
-  const rank = ranked.findIndex((x) => x.symbol === stock.symbol);
   // Read straight from the profile rather than the snapshot: these three are
   // deliberately absent from the row the screener serves to everyone.
   let profile = null;
@@ -2340,8 +2337,6 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
       employees: profile.employees ?? null,
       website: profile.website || null,
     } : null,
-    rank: rank >= 0 ? rank + 1 : null,
-    rankTotal: ranked.length,
     // The symbol picker's list. The whole snapshot is already in memory to work
     // out the rank above, so this costs a map and ~3 KB rather than a query.
     // Alphabetical, because the picker is for reaching a ticker you have in
