@@ -12,7 +12,18 @@
      - backdrop-filter only on fixed/sticky elements, never a scrolling one
      - motion uses --ease / --ease-soft only, never linear or ease-in-out
      - --surface must stay opaque: frozen table cells paint on it
+     - the hidden attribute is re-asserted below; see the note there
    ========================================================================== */
+
+/* The hidden attribute is only a plain UA declaration, so ANY rule of ours that
+   sets display beats it on specificity and the element keeps painting. That is
+   not hypothetical: `#chart .readout { display: flex }` left an empty 22x12
+   glass pill parked over the change caption on every stock page, visible until
+   somebody looked closely at a screenshot. Re-assert it once, here, rather than
+   remembering a `[hidden]` variant beside every future display rule.
+   Checked before adding: across /, /analysis, /stock, /chat, /help, /visitors
+   and /users the readout was the only element this changes. */
+[hidden] { display: none !important; }
 
 :root {
   color-scheme: dark;
