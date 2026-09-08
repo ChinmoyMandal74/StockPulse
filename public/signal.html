@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Signal study — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 60px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 6% -6%, rgba(34, 211, 238, 0.12), transparent 62%),
+        radial-gradient(50vw 44vw at 96% 4%, rgba(124, 156, 255, 0.11), transparent 64%); }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
+                   padding: 10px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
+      padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+
+    .head { display: flex; align-items: baseline; gap: 10px 14px; flex-wrap: wrap; margin: 14px 0 0; }
+    h1 { margin: 0; font-size: clamp(26px, 3.2vw, 34px); font-weight: 600;
+         letter-spacing: -0.035em; line-height: 1; font-family: var(--mono); }
+    .co { font-size: 15px; color: var(--muted); letter-spacing: -0.01em; }
+    .span { font-size: 12.5px; color: var(--faint); font-family: var(--mono); }
+
+    /* Same idea as the stock page: the symbol is the way to another one, so the
+       page gains navigation without gaining a control. */
+    .sympick { position: relative; }
+    #symBtn {
+      display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+      margin: 0; padding: 2px 6px 2px 0; border: 0; background: none; border-radius: 10px;
+      font: inherit; color: inherit; letter-spacing: inherit;
+      transition: background 0.35s var(--ease);
+    }
+    #symBtn:hover, #symBtn[aria-expanded="true"] { background: rgba(255, 255, 255, 0.05); }
+    #symBtn .caret { width: 15px; height: 15px; color: var(--faint); flex: none;
+                     transition: transform 0.4s var(--ease); }
+    #symBtn[aria-expanded="true"] .caret { transform: rotate(180deg); }
+    #symMenu {
+      position: absolute; top: calc(100% + 8px); left: 0; z-index: var(--z-nav);
+      display: none; width: 320px; max-width: calc(100vw - 32px); padding: 6px; border-radius: 18px;
+      background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      box-shadow: 0 34px 70px -24px rgba(0, 0, 0, 0.95);
+    }
+    #symMenu.open { display: block; }
+    #symFilter {
+      width: 100%; padding: 9px 11px; margin-bottom: 6px; border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04); border: 1px solid var(--hair);
+      color: var(--text); font-family: var(--mono); font-size: 13px; outline: none;
+    }
+    #symList { max-height: 320px; overflow-y: auto; }
+    .symrow {
+      display: flex; gap: 10px; align-items: baseline; width: 100%; padding: 7px 10px;
+      border: 0; border-radius: 10px; background: none; cursor: pointer; text-align: left;
+      color: var(--text); font-family: inherit; font-size: 13px;
+    }
+    .symrow:hover, .symrow.on { background: rgba(255, 255, 255, 0.06); }
+    .symrow b { font-family: var(--mono); font-weight: 500; min-width: 62px; }
+    .symrow span { color: var(--faint); font-size: 12px; overflow: hidden;
+                   text-overflow: ellipsis; white-space: nowrap; }
+
+    /* controls */
+    .controls { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin: 18px 0 0; }
+    .grp { display: flex; align-items: center; gap: 6px; }
+    .grp > .lbl { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+                  color: var(--faint); margin-right: 2px; }
+    .opt {
+      padding: 5px 11px; border-radius: 999px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer;
+      font-family: var(--sans); font-size: 12.5px; transition: all 0.3s var(--ease);
+    }
+    .opt:hover { color: var(--text); border-color: var(--hair-2); }
+    .opt.on { color: var(--text); border-color: var(--accent); background: rgba(124, 156, 255, 0.12); }
+
+    /* verdict */
+    .verdict { margin: 20px 0 0; }
+    .verdict .core { padding: 18px 20px; }
+    .vtop { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 22px; }
+    .vr { font-family: var(--mono); font-size: 30px; font-weight: 600; letter-spacing: -0.03em; }
+    .vr.weak { color: var(--faint); }
+    .vr.some { color: var(--amber); }
+    .vr.real { color: var(--green); }
+    .vlab { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint);
+            margin-left: 7px; }
+    .vtop > span { display: inline-flex; align-items: baseline; }
+    .vsay { margin: 10px 0 0; font-size: 14px; line-height: 1.55; color: var(--text); max-width: 78ch; }
+    .vmeta { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); font-family: var(--mono); }
+
+    /* panels */
+    .panel { margin: 18px 0 0; }
+    .panel .core { padding: 16px 18px 18px; }
+    .ptitle { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+    .pnote { margin: 4px 0 12px; font-size: 12.5px; color: var(--muted); line-height: 1.5; max-width: 84ch; }
+
+    /* The scatter scales uniformly (no preserveAspectRatio="none"), so a dot
+       stays a dot and SVG text is not distorted — which is why this chart can
+       label itself inside the svg where the price chart cannot. */
+    .plot { width: 100%; height: auto; display: block; }
+    .plot .ax { stroke: var(--hair-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
+    .plot .zero { stroke: var(--hair-2); stroke-width: 1; stroke-dasharray: 4 4;
+                  vector-effect: non-scaling-stroke; }
+    .plot .dot { fill: var(--accent); fill-opacity: 0.34; }
+    .plot .dot.hi { fill: var(--mom); fill-opacity: 1; }
+    /* pinned to the edge, so it should not read as an ordinary observation */
+    .plot .dot.off { fill: var(--amber); fill-opacity: 0.5; }
+    .plot .fitln { stroke: var(--faint); stroke-width: 1.4; stroke-dasharray: 6 5;
+                   vector-effect: non-scaling-stroke; fill: none; }
+    .plot .tick { fill: var(--faint); font-family: var(--mono); font-size: 9px; }
+    .plot .axname { fill: var(--muted); font-family: var(--sans); font-size: 10px;
+                    letter-spacing: 0.08em; text-transform: uppercase; }
+    .plot .qlab { fill: var(--faint); font-family: var(--sans); font-size: 9px; letter-spacing: 0.06em; }
+
+    /* bars */
+    .bars .bar { fill: var(--accent); fill-opacity: 0.55; }
+    .bars .bar.neg { fill: var(--red); fill-opacity: 0.5; }
+    .bars .mean { stroke: var(--amber); stroke-width: 1.2; stroke-dasharray: 5 4;
+                  vector-effect: non-scaling-stroke; }
+    .bars .base { stroke: var(--hair-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
+
+    /* quadrants */
+    .quads { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-width: 520px; }
+    .quad { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--hair);
+            background: rgba(255, 255, 255, 0.02); }
+    .quad .qn { font-family: var(--mono); font-size: 21px; font-weight: 600; }
+    .quad .qp { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-left: 6px; }
+    .quad .qt { margin-top: 3px; font-size: 11.5px; color: var(--faint); line-height: 1.4; }
+    .quad.good { border-color: rgba(52, 211, 153, 0.3); }
+    .quad.good .qn { color: var(--green); }
+    .quad.bad .qn { color: var(--red); }
+    .rates { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 14px 0 0; }
+    .rate .rn { font-family: var(--mono); font-size: 19px; font-weight: 600; }
+    .rate .rl { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+    .rate .rs { font-size: 11.5px; color: var(--muted); }
+
+    .foot { margin: 22px 0 0; font-size: 12.5px; color: var(--faint); line-height: 1.65; max-width: 86ch; }
+    .foot b { color: var(--muted); font-weight: 500; }
+    .foot p { margin: 0 0 8px; }
+    .err { margin: 24px 0 0; padding: 14px 16px; border-radius: 14px;
+           border: 1px solid rgba(251, 113, 133, 0.3); background: rgba(251, 113, 133, 0.08);
+           color: var(--red); font-size: 13.5px; }
+    .loading { margin: 30px 0; color: var(--faint); font-size: 13px; }
+
+    /* hover readout on the scatter */
+    .plotwrap { position: relative; }
+    .readout {
+      position: absolute; left: 10px; top: 8px; padding: 5px 10px; border-radius: 8px;
+      background: rgba(13, 16, 23, 0.92); border: 1px solid var(--hair);
+      font-family: var(--mono); font-size: 11px; white-space: nowrap; pointer-events: none;
+      display: flex; gap: 8px; align-items: baseline;
+    }
+    .readout .k { color: var(--faint); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.1em; }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15.2l5.5-5.7"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark"><span class="wordmark">Tickr Lab</span></span>
+      <span class="divider"></span>
+      <a class="btn" id="backStock" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to stock</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <div class="head">
+      <span class="sympick">
+        <button id="symBtn" aria-expanded="false" aria-haspopup="listbox">
+          <h1 id="sym">—</h1>
+          <svg class="caret" aria-hidden="true"><use href="#i-chevron" /></svg>
+        </button>
+        <div id="symMenu" role="listbox">
+          <input id="symFilter" type="text" placeholder="Filter by symbol or name…" autocomplete="off" />
+          <div id="symList"></div>
+        </div>
+      </span>
+      <span class="co" id="co"></span>
+      <span class="span" id="span"></span>
+    </div>
+
+    <div class="controls" id="controls" hidden>
+      <div class="grp"><span class="lbl">Signal</span><span id="sigOpts"></span></div>
+      <div class="grp"><span class="lbl">Against</span><span id="horOpts"></span></div>
+      <div class="grp"><span class="lbl">Sample</span><span id="sampOpts"></span></div>
+    </div>
+
+    <div class="loading" id="loading">Loading…</div>
+    <div class="err" id="err" hidden></div>
+
+    <section class="bezel verdict" id="verdict" hidden>
+      <div class="core">
+        <div class="vtop">
+          <span><span class="vr" id="vr">—</span> <span class="vlab">correlation</span></span>
+          <span><span class="vr" id="vn" style="font-size:19px;color:var(--text)">—</span> <span class="vlab">observations</span></span>
+          <span><span class="vr" id="veff" style="font-size:19px;color:var(--text)">—</span> <span class="vlab">independent</span></span>
+        </div>
+        <p class="vsay" id="vsay"></p>
+        <p class="vmeta" id="vmeta"></p>
+      </div>
+    </section>
+
+    <section class="bezel panel" id="p1" hidden>
+      <div class="core">
+        <div class="ptitle">The relationship, every observation</div>
+        <p class="pnote" id="n1"></p>
+        <div class="plotwrap">
+          <svg class="plot" id="scatter" viewBox="0 0 620 380" role="img"></svg>
+          <span class="readout" id="ro" hidden></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="bezel panel" id="p2" hidden>
+      <div class="core">
+        <div class="ptitle">Mean return by signal decile</div>
+        <p class="pnote" id="n2"></p>
+        <svg class="plot bars" id="bars" viewBox="0 0 620 260" role="img"></svg>
+      </div>
+    </section>
+
+    <section class="bezel panel" id="p3" hidden>
+      <div class="core">
+        <div class="ptitle">Direction, and whether it beats doing nothing</div>
+        <p class="pnote" id="n3"></p>
+        <div class="quads" id="quads"></div>
+        <div class="rates" id="rates"></div>
+      </div>
+    </section>
+
+    <div class="foot" id="foot" hidden></div>
+  </main>
+
+  <script>
+    const SYMBOL = decodeURIComponent(location.pathname.split('/').pop() || '').toUpperCase();
+    let data = null;
+    let sig = 'delta', hor = '2w', samp = 'all';
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const pct = (v, d = 2) => (v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(d) + '%');
+    const nf = (v) => (v == null ? '—' : v.toLocaleString());
+
+    // ---- load ---------------------------------------------------------------
+    async function load() {
+      $('loading').hidden = false;
+      $('err').hidden = true;
+      try {
+        const res = await fetch(`/api/signal?symbol=${encodeURIComponent(SYMBOL)}` +
+          `&signal=${encodeURIComponent(sig)}&horizon=${encodeURIComponent(hor)}`, { cache: 'no-store' });
+        if (res.status === 401) { location.href = '/login'; return; }
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || 'Could not load the study.');
+        data = j;
+        render();
+      } catch (e) {
+        $('loading').hidden = true;
+        $('err').hidden = false;
+        $('err').textContent = e.message;
+        for (const id of ['verdict', 'p1', 'p2', 'p3', 'foot']) $(id).hidden = true;
+      }
+    }
+
+    function render() {
+      $('loading').hidden = true;
+      $('sym').textContent = data.symbol;
+      $('co').textContent = data.name || '';
+      $('span').textContent = `${data.from} → ${data.to}`;
+      $('backStock').href = `/stock/${encodeURIComponent(data.symbol)}`;
+      document.title = `${data.symbol} signal study — Tickr Lab`;
+      renderControls();
+
+      // The sampled figures are the honest ones; the full set is shown because
+      // the difference between the two is itself the lesson.
+      const s = samp === 'thin' ? data.sampled : data.stats;
+      renderVerdict(s);
+      renderScatter(s);
+      renderBars(s);
+      renderQuads(s);
+      renderFoot();
+      for (const id of ['controls', 'verdict', 'p1', 'p2', 'p3', 'foot']) $(id).hidden = false;
+    }
+
+    // ---- controls -----------------------------------------------------------
+    function renderControls() {
+      $('sigOpts').innerHTML = data.signals.map((x) =>
+        `<button class="opt${x.id === sig ? ' on' : ''}" data-sig="${esc(x.id)}">${esc(x.label)}</button>`).join(' ');
+      $('horOpts').innerHTML = data.horizons.map((x) =>
+        `<button class="opt${x.id === hor ? ' on' : ''}" data-hor="${esc(x.id)}">${esc(x.label)}</button>`).join(' ');
+      $('sampOpts').innerHTML =
+        `<button class="opt${samp === 'all' ? ' on' : ''}" data-samp="all">All days</button> ` +
+        `<button class="opt${samp === 'thin' ? ' on' : ''}" data-samp="thin" ` +
+        `title="Every ${data.horizon.days}th day, so no two forward windows share a session">Non-overlapping</button>`;
+    }
+
+    $('controls').addEventListener('click', (e) => {
+      const b = e.target.closest('.opt');
+      if (!b) return;
+      if (b.dataset.sig) { sig = b.dataset.sig; load(); }
+      else if (b.dataset.hor) { hor = b.dataset.hor; load(); }
+      else if (b.dataset.samp) { samp = b.dataset.samp; render(); }
+    });
+
+    // ---- verdict ------------------------------------------------------------
+    function renderVerdict(s) {
+      const r = s.r;
+      const el = $('vr');
+      el.textContent = r == null ? '—' : (r >= 0 ? '+' : '') + r.toFixed(3);
+      el.className = 'vr ' + (r == null || Math.abs(r) < 0.1 ? 'weak' : Math.abs(r) < 0.25 ? 'some' : 'real');
+      $('vn').textContent = nf(s.n);
+      // A non-overlapping sample already IS independent, so it does not get to
+      // claim a second discount on itself.
+      $('veff').textContent = samp === 'thin' ? nf(s.n) : nf(s.effectiveN);
+      $('vsay').textContent = s.verdict;
+      const f = s.fit;
+      $('vmeta').textContent = f
+        ? `r² ${f.r2.toFixed(4)}  ·  slope ${f.slope.toFixed(3)}% per point  ·  ` +
+          `mean ${data.horizon.label} ${pct(s.yMean)}`
+        : '';
+    }
+
+    // ---- scatter ------------------------------------------------------------
+    const PL = { l: 52, r: 16, t: 14, b: 44, w: 620, h: 380 };
+    let plotted = [];   // {cx, cy, i} for the hover readout
+
+    function niceTicks(lo, hi, want = 5) {
+      if (!(hi > lo)) return [lo];
+      const raw = (hi - lo) / want;
+      const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+      const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((v) => v >= raw) || mag * 10;
+      const out = [];
+      for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+      return out;
+    }
+
+    function renderScatter(s) {
+      const xs = data.x, ys = data.y;
+      // The sample toggle has to pick the same rows the stats did.
+      const step = samp === 'thin' ? data.horizon.days : 1;
+      const idx = [];
+      for (let i = 0; i < xs.length; i += step) idx.push(i);
+
+      const pad = (a, b) => { const g = (b - a) * 0.06 || 1; return [a - g, b + g]; };
+      // Scaled to the middle 99%, not to the extremes. DELL has fortnights past
+      // +100%, and letting them set the axis pressed everything else into a
+      // band a few pixels tall — the shape of the cloud is the whole point of
+      // this panel. The strays are pinned to the edge and counted underneath
+      // rather than dropped, because silently discarding data from a scatter is
+      // exactly the kind of tidying that invents a finding.
+      const q = (arr, p) => {
+        const a = [...arr].sort((m, n) => m - n);
+        return a[Math.min(a.length - 1, Math.max(0, Math.round(p * (a.length - 1))))];
+      };
+      const xv = idx.map((i) => xs[i]), yv = idx.map((i) => ys[i]);
+      const [x0, x1] = pad(q(xv, 0.005), q(xv, 0.995));
+      const [y0, y1] = pad(q(yv, 0.005), q(yv, 0.995));
+      let clamped = 0;
+      const X = (v) => PL.l + ((v - x0) / (x1 - x0)) * (PL.w - PL.l - PL.r);
+      const Y = (v) => PL.h - PL.b - ((v - y0) / (y1 - y0)) * (PL.h - PL.t - PL.b);
+
+      let g = '';
+      // gridlines and ticks
+      for (const t of niceTicks(x0, x1)) {
+        g += `<line class="ax" x1="${X(t).toFixed(1)}" y1="${PL.t}" x2="${X(t).toFixed(1)}" y2="${PL.h - PL.b}" opacity="0.35"/>` +
+             `<text class="tick" x="${X(t).toFixed(1)}" y="${PL.h - PL.b + 14}" text-anchor="middle">${t}</text>`;
+      }
+      for (const t of niceTicks(y0, y1)) {
+        g += `<line class="ax" x1="${PL.l}" y1="${Y(t).toFixed(1)}" x2="${PL.w - PL.r}" y2="${Y(t).toFixed(1)}" opacity="0.35"/>` +
+             `<text class="tick" x="${PL.l - 8}" y="${(Y(t) + 3).toFixed(1)}" text-anchor="end">${t}%</text>`;
+      }
+      // the zero cross — the quadrants only mean anything against it
+      const xs0 = s.xSplit || 0;
+      if (xs0 > x0 && xs0 < x1) {
+        g += `<line class="zero" x1="${X(xs0).toFixed(1)}" y1="${PL.t}" x2="${X(xs0).toFixed(1)}" y2="${PL.h - PL.b}"/>`;
+        if (data.signal.split === 'median') {
+          g += `<text class="qlab" x="${(X(xs0) + 5).toFixed(1)}" y="${PL.t + 10}">median ${xs0.toFixed(1)}</text>`;
+        }
+      }
+      if (y0 < 0 && y1 > 0) g += `<line class="zero" x1="${PL.l}" y1="${Y(0).toFixed(1)}" x2="${PL.w - PL.r}" y2="${Y(0).toFixed(1)}"/>`;
+
+      plotted = [];
+      let dots = '';
+      const lo = { x: PL.l, y: PL.t }, hi = { x: PL.w - PL.r, y: PL.h - PL.b };
+      for (const i of idx) {
+        const rawX = X(xs[i]), rawY = Y(ys[i]);
+        const cx = Math.min(hi.x, Math.max(lo.x, rawX));
+        const cy = Math.min(hi.y, Math.max(lo.y, rawY));
+        const off = cx !== rawX || cy !== rawY;
+        if (off) clamped++;
+        plotted.push({ cx, cy, i });
+        dots += `<circle class="dot${off ? ' off' : ''}" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" ` +
+                `r="${idx.length > 900 ? 1.7 : 2.4}"/>`;
+      }
+
+      // The fit, drawn faint on purpose: a bold line through a round cloud is
+      // the easiest way to make noise look like a finding.
+      let fitln = '';
+      if (s.fit) {
+        const a = s.fit.intercept + s.fit.slope * x0, b = s.fit.intercept + s.fit.slope * x1;
+        fitln = `<line class="fitln" x1="${X(x0).toFixed(1)}" y1="${Y(a).toFixed(1)}" ` +
+                `x2="${X(x1).toFixed(1)}" y2="${Y(b).toFixed(1)}"/>` +
+                `<text class="qlab" x="${PL.w - PL.r}" y="${PL.t + 10}" text-anchor="end">` +
+                `fit · r² ${s.fit.r2.toFixed(4)}</text>`;
+      }
+      const axn = `<text class="axname" x="${(PL.l + PL.w - PL.r) / 2}" y="${PL.h - 6}" text-anchor="middle">${esc(data.signal.label)}</text>` +
+        `<text class="axname" transform="translate(13 ${(PL.t + PL.h - PL.b) / 2}) rotate(-90)" text-anchor="middle">Return, ${esc(data.horizon.label)}</text>`;
+
+      $('scatter').innerHTML = g + fitln + dots + axn;
+      $('n1').textContent =
+        `Each dot is one session: where the signal stood, against what the price then did over the ` +
+        `${data.horizon.label}. A relationship would show as a tilt in the cloud, not as the dashed line — ` +
+        `that line is drawn through whatever it is given.` +
+        (clamped ? ` Axes cover the middle 99%; ${clamped} point${clamped === 1 ? ' sits' : 's sit'} ` +
+          `beyond them and ${clamped === 1 ? 'is' : 'are'} pinned to the edge.` : '');
+    }
+
+    // hover: nearest dot within a radius, so an empty patch says nothing
+    $('scatter').addEventListener('pointermove', (e) => {
+      if (!plotted.length) return;
+      const box = e.currentTarget.getBoundingClientRect();
+      const sx = (e.clientX - box.left) / box.width * PL.w;
+      const sy = (e.clientY - box.top) / box.height * PL.h;
+      let best = null, bd = 12 * 12;
+      for (const p of plotted) {
+        const d = (p.cx - sx) ** 2 + (p.cy - sy) ** 2;
+        if (d < bd) { bd = d; best = p; }
+      }
+      const ro = $('ro');
+      const old = document.querySelector('.plot .dot.hi');
+      if (old) old.classList.remove('hi');
+      if (!best) { ro.hidden = true; return; }
+      const node = $('scatter').querySelectorAll('.dot')[plotted.indexOf(best)];
+      if (node) node.classList.add('hi');
+      ro.innerHTML =
+        `<span class="k">${esc(data.dates[best.i])}</span>` +
+        `<span class="k">signal</span> ${data.x[best.i].toFixed(2)}` +
+        `<span class="k">then</span> ${pct(data.y[best.i])}`;
+      ro.hidden = false;
+    });
+    $('scatter').addEventListener('pointerleave', () => {
+      $('ro').hidden = true;
+      const old = document.querySelector('.plot .dot.hi');
+      if (old) old.classList.remove('hi');
+    });
+
+    // ---- decile bars --------------------------------------------------------
+    function renderBars(s) {
+      const B = { l: 52, r: 16, t: 16, b: 52, w: 620, h: 260 };
+      const bs = s.buckets;
+      if (!bs.length) { $('bars').innerHTML = ''; return; }
+      const vals = bs.map((b) => b.yMean).concat([0, s.yMean]);
+      const lo = Math.min(...vals), hi = Math.max(...vals);
+      const pad = (hi - lo) * 0.12 || 1;
+      const y0 = lo - pad, y1 = hi + pad;
+      const Y = (v) => B.h - B.b - ((v - y0) / (y1 - y0)) * (B.h - B.t - B.b);
+      const bw = (B.w - B.l - B.r) / bs.length;
+
+      let g = '';
+      for (const t of niceTicks(y0, y1, 4)) {
+        g += `<line class="ax" x1="${B.l}" y1="${Y(t).toFixed(1)}" x2="${B.w - B.r}" y2="${Y(t).toFixed(1)}" opacity="0.3"/>` +
+             `<text class="tick" x="${B.l - 8}" y="${(Y(t) + 3).toFixed(1)}" text-anchor="end">${t}%</text>`;
+      }
+      bs.forEach((b, i) => {
+        const x = B.l + i * bw + bw * 0.16, w = bw * 0.68;
+        const yTop = Y(Math.max(b.yMean, 0)), yBot = Y(Math.min(b.yMean, 0));
+        g += `<rect class="bar${b.yMean < 0 ? ' neg' : ''}" x="${x.toFixed(1)}" y="${yTop.toFixed(1)}" ` +
+             `width="${w.toFixed(1)}" height="${Math.max(1, yBot - yTop).toFixed(1)}" rx="2"><title>` +
+             `decile ${b.i}: signal ${b.xFrom.toFixed(1)} to ${b.xTo.toFixed(1)}, n ${b.n}, mean ${b.yMean.toFixed(2)}%` +
+             `</title></rect>` +
+             `<text class="tick" x="${(x + w / 2).toFixed(1)}" y="${B.h - B.b + 14}" text-anchor="middle">${b.i}</text>` +
+             `<text class="tick" x="${(x + w / 2).toFixed(1)}" y="${B.h - B.b + 26}" text-anchor="middle" opacity="0.75">${b.xMean.toFixed(1)}</text>`;
+      });
+      // zero, and the overall mean — the line the bars would sit on if the
+      // signal told you nothing at all. That is the comparison that matters.
+      g += `<line class="base" x1="${B.l}" y1="${Y(0).toFixed(1)}" x2="${B.w - B.r}" y2="${Y(0).toFixed(1)}"/>`;
+      // The caption goes on whichever side has room — against the last bar it
+      // was unreadable, and it is the line a reader compares every bar to.
+      const lastTall = bs[bs.length - 1].yMean > s.yMean;
+      g += `<line class="mean" x1="${B.l}" y1="${Y(s.yMean).toFixed(1)}" x2="${B.w - B.r}" y2="${Y(s.yMean).toFixed(1)}"/>` +
+           `<text class="qlab" x="${lastTall ? B.l + 4 : B.w - B.r}" y="${(Y(s.yMean) - 6).toFixed(1)}" ` +
+           `text-anchor="${lastTall ? 'start' : 'end'}" fill="var(--amber)">overall mean ${pct(s.yMean)}</text>`;
+      g += `<text class="axname" x="${(B.l + B.w - B.r) / 2}" y="${B.h - 8}" text-anchor="middle">` +
+           `Decile of ${esc(data.signal.label.toLowerCase())} — weakest to strongest</text>`;
+      $('bars').innerHTML = g;
+      $('n2').textContent =
+        `Equal-count buckets, so each holds the same number of sessions. If the signal carried information the ` +
+        `bars would climb from left to right; if it does not, they scatter around the dashed overall mean.`;
+    }
+
+    // ---- quadrants ----------------------------------------------------------
+    function renderQuads(s) {
+      const q = s.quadrants;
+      const cell = (n, of, title, note, cls) =>
+        `<div class="quad ${cls}"><span class="qn">${nf(n)}</span>` +
+        `<span class="qp">${of ? (n / of * 100).toFixed(1) + '%' : '—'}</span>` +
+        `<div class="qt"><b>${esc(title)}</b><br>${esc(note)}</div></div>`;
+      // "rose/fell" for a delta, "was high/low" for a level — the divider is the
+      // median there, and calling that "up" would be a plain misstatement.
+      const hi = data.signal.high, lo = data.signal.low;
+      $('quads').innerHTML =
+        cell(q.upUp, q.nUp, `Signal ${hi} → price up`, `of the sessions the signal ${hi}`, 'good') +
+        cell(q.upDown, q.nUp, `Signal ${hi} → price down`, `of the sessions the signal ${hi}`, 'bad') +
+        cell(q.downUp, q.nDown, `Signal ${lo} → price up`, `of the sessions the signal ${lo}`, '') +
+        cell(q.downDown, q.nDown, `Signal ${lo} → price down`, `of the sessions the signal ${lo}`, 'good');
+
+      const lift = q.lift == null ? null : q.lift * 100;
+      $('rates').innerHTML =
+        `<div class="rate"><div class="rl">Hit rate</div>` +
+        `<div class="rn">${q.hitRate == null ? '—' : (q.hitRate * 100).toFixed(1) + '%'}</div>` +
+        `<div class="rs">price rose, given the signal ${esc(hi)}</div></div>` +
+        `<div class="rate"><div class="rl">Base rate</div>` +
+        `<div class="rn" style="color:var(--muted)">${q.baseRate == null ? '—' : (q.baseRate * 100).toFixed(1) + '%'}</div>` +
+        `<div class="rs">price rose, regardless</div></div>` +
+        `<div class="rate"><div class="rl">Lift</div>` +
+        `<div class="rn" style="color:${lift == null ? 'var(--faint)' : Math.abs(lift) < 2 ? 'var(--faint)' : lift > 0 ? 'var(--green)' : 'var(--red)'}">` +
+        `${lift == null ? '—' : (lift >= 0 ? '+' : '') + lift.toFixed(1) + ' pts'}</div>` +
+        `<div class="rs">what the signal added</div></div>`;
+      $('n3').textContent =
+        `A hit rate means nothing on its own: a stock that rises most fortnights hands a high one to a signal ` +
+        `that knows nothing. Lift is the hit rate minus that base rate, and it is the only one of the three worth reading.`;
+    }
+
+    // ---- the caveats --------------------------------------------------------
+    function renderFoot() {
+      const d = data.horizon.days;
+      $('foot').innerHTML =
+        `<p><b>Overlapping windows.</b> Sessions are one day apart but each return spans ${d}, so consecutive ` +
+        `observations share ${d - 1} of their ${d} days. ${nf(data.stats.n)} points therefore carry closer to ` +
+        `${nf(data.stats.effectiveN)} observations' worth of evidence. <b>Non-overlapping</b> above samples every ` +
+        `${d}th session so none of them overlap — expect a noisier number, not a better one.</p>` +
+        `<p><b>Survivorship.</b> ${esc(data.symbol)} is in this screener because it is a stock you follow today, ` +
+        `so its whole history is conditioned on it having got here. That lifts the average return in every bucket ` +
+        `and is a reason to compare buckets against each other rather than against zero.</p>` +
+        `<p><b>One stock is a small sample.</b> Across the whole universe the same test gives a correlation of ` +
+        `−0.003 over 264,290 stock-fortnights. A single symbol will wander either side of that by chance.</p>`;
+    }
+
+    // ---- symbol picker ------------------------------------------------------
+    let symOpen = false, active = 0, shown = [];
+    function renderSymList() {
+      const q = $('symFilter').value.trim().toUpperCase();
+      shown = (data ? data.universe : []).filter((u) =>
+        !q || u.symbol.includes(q) || (u.name || '').toUpperCase().includes(q));
+      $('symList').innerHTML = shown.map((u, i) =>
+        `<button class="symrow${i === active ? ' on' : ''}" data-sym="${esc(u.symbol)}">` +
+        `<b>${esc(u.symbol)}</b><span>${esc(u.name || '')}</span></button>`).join('') ||
+        '<div class="symrow" style="color:var(--faint)">No match</div>';
+    }
+    function openSym(open) {
+      symOpen = open;
+      $('symMenu').classList.toggle('open', open);
+      $('symBtn').setAttribute('aria-expanded', String(open));
+      if (open) {
+        $('symFilter').value = '';
+        active = Math.max(0, (data ? data.universe : []).findIndex((u) => u.symbol === SYMBOL));
+        renderSymList();
+        $('symFilter').focus();
+        const on = $('symList').querySelector('.symrow.on');
+        if (on) on.scrollIntoView({ block: 'center' });
+      }
+    }
+    $('symBtn').addEventListener('click', () => openSym(!symOpen));
+    $('symFilter').addEventListener('input', () => { active = 0; renderSymList(); });
+    $('symList').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-sym]');
+      if (b) location.href = `/signal/${encodeURIComponent(b.dataset.sym)}`;
+    });
+    $('symFilter').addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        active = Math.max(0, Math.min(shown.length - 1, active + (e.key === 'ArrowDown' ? 1 : -1)));
+        renderSymList();
+        const on = $('symList').querySelector('.symrow.on');
+        if (on) on.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' && shown[active]) {
+        location.href = `/signal/${encodeURIComponent(shown[active].symbol)}`;
+      } else if (e.key === 'Escape') { openSym(false); }
+    });
+    document.addEventListener('click', (e) => {
+      if (symOpen && !e.target.closest('.sympick')) openSym(false);
+    });
+
+    load();
+  </script>
+</body>
+</html>

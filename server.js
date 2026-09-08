@@ -26,6 +26,8 @@ const { buildModel, momentumMap, MODEL_ROWS, MODEL_MIN_BARS } = require('./momen
 // Momentum scored from bars alone, shared with the backfill so the stored
 // history and the live score can never drift into two different models.
 const Momentum = require('./momentum.js');
+// The arithmetic behind /signal, kept apart so it can be checked on its own.
+const Signal = require('./signal.js');
 const {
   readPortfolios, writePortfolios,
   readNames, writeNames,
@@ -125,6 +127,12 @@ app.get('/stock/:symbol', route(async (req, res) => {
 
 // Open to any signed-in user, like /analysis and /chat — it explains the app to
 // whoever is using it, so gating it behind admin would defeat the point.
+// Does a momentum move predict the next move in price? One symbol at a time.
+app.get('/signal/:symbol', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  res.sendFile(path.join(__dirname, 'public', 'signal.html'));
+}));
+
 app.get('/help', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'help.html'));
@@ -160,7 +168,9 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/users.html': '/users', '/reset.html': '/reset',
                       '/contact.html': '/contact', '/help.html': '/help',
                       // no symbol in that path, so there is nothing to show
-                      '/stock.html': '/' };
+                      '/stock.html': '/',
+                      // no symbol in that path either
+                      '/signal.html': '/' };
 app.get(Object.keys(GATED_PAGES), (req, res) => res.redirect(GATED_PAGES[req.path]));
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -2395,6 +2405,73 @@ app.get('/api/model', requireAuth, route(async (req, res) => {
   res.set('Content-Disposition', `attachment; filename="momentum-model-${symbol}.xlsx"`);
   res.set('Cache-Control', 'no-store');
   res.send(buf);
+}));
+
+// The signal study: a momentum move against what the price did next.
+//
+// The signal is fixed and the test horizon varies, which is the way round that
+// answers a question — fixing the horizon and varying the signal would be
+// fishing. `score` is offered beside `delta` because a 12-1 model is built out
+// of levels, so the level is the other obvious thing to test.
+const SIGNAL_HORIZONS = {
+  '2w': { id: '2w', label: 'next 2 weeks', col: 'fwd_ret_2w', days: 10 },
+  '1m': { id: '1m', label: 'next month', col: 'fwd_ret_1m', days: 21 },
+  '3m': { id: '3m', label: 'next 3 months', col: 'fwd_ret_3m', days: 63 },
+};
+// `split` is where "high" begins. A delta straddles zero; a 0-100 score never
+// goes negative, so splitting it at zero would put every row on one side and
+// report a lift of exactly zero however the data looked.
+const SIGNAL_XS = {
+  delta: { id: 'delta', label: 'Momentum delta (2W)', col: 'delta_2w', split: 'zero',
+           high: 'rose', low: 'fell' },
+  score: { id: 'score', label: 'Momentum score', col: 'score', split: 'median',
+           high: 'was high', low: 'was low' },
+};
+
+app.get('/api/signal', requireAuth, route(async (req, res) => {
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  const h = SIGNAL_HORIZONS[String(req.query.horizon || '2w')] || SIGNAL_HORIZONS['2w'];
+  const xs = SIGNAL_XS[String(req.query.signal || 'delta')] || SIGNAL_XS.delta;
+
+  const rows = await store.readMomentumDeltas(symbol, '0000-00-00');
+  const usable = rows.filter((r) => r[xs.col] != null && r[h.col] != null);
+  if (usable.length < 30) {
+    return res.status(422).json({
+      error: `${symbol} has ${usable.length} scored sessions with a ${h.label} return behind them; ` +
+        'the study needs at least 30.',
+    });
+  }
+
+  const pairs = usable.map((r) => ({ x: r[xs.col], y: r[h.col] }));
+  // The same statistics twice: once over every day, once over a sample whose
+  // forward windows do not overlap. The gap between them is the point — it is
+  // what says how much of the first number was ever really there.
+  const thinned = Signal.thin(pairs, h.days);
+
+  const snap = await readSnapshot();
+  const row = (snap && snap.stocks || []).find((x) => x.symbol === symbol);
+  const universe = ((snap && snap.stocks) || [])
+    .map((x) => ({ symbol: x.symbol, name: x.name || '' }))
+    .sort((a, b) => a.symbol.localeCompare(b.symbol));
+
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    symbol,
+    name: row ? row.name : '',
+    signal: xs,
+    horizon: h,
+    horizons: Object.values(SIGNAL_HORIZONS),
+    signals: Object.values(SIGNAL_XS),
+    from: usable[0].d,
+    to: usable[usable.length - 1].d,
+    dates: usable.map((r) => r.d),
+    x: usable.map((r) => Math.round(r[xs.col] * 100) / 100),
+    y: usable.map((r) => Math.round(r[h.col] * 100) / 100),
+    stats: Signal.summarise(pairs, h.days, xs.split),
+    sampled: Signal.summarise(thinned, 1, xs.split),
+    universe,
+  });
 }));
 
 // Per-account UI preferences. Keyed on the signed-in email, falling back to

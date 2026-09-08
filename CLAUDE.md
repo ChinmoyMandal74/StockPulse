@@ -28,6 +28,8 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `public/app.css` | **Shared stylesheet** — tokens, atmosphere, bezel, buttons, table base, row card. Linked by all four pages |
 | `public/index.html` | Single-page frontend (no build step, vanilla JS, page-specific CSS inline) |
 | `public/analysis.html` | Signal screens at `/analysis` — see **Analysis screens** below |
+| `signal.js` | **The statistics behind `/signal`** — correlation, fit, deciles, quadrants, effective n. Pure functions, no database |
+| `public/signal.html` | Signal study at `/signal/<SYMBOL>` — does a momentum move predict the next move in price |
 | `public/stock.html` | One stock in full at `/stock/<SYMBOL>` — chart, range buttons, every field |
 | `public/chat.html` | The assistant at `/chat` — any signed-in user, see **Chatbot** below |
 | `public/visitors.html` | Admin-only visitor log page at `/visitors` |
@@ -498,6 +500,19 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 - `public/chat.html` carries a ~60-line markdown renderer for the reply (tables, lists, headings, bold/italic/code). **It escapes HTML before applying any markdown**, so nothing a model returns can inject markup.
 
 **Gated pages are no longer served raw.** `public/` is mounted wholesale, which used to hand out `/chat.html`, `/analysis.html` and `/visitors.html` at their file path and skip the guard. `GATED_PAGES` redirects those to the routed path.
+
+## The signal study
+`/signal/<SYMBOL>` puts a momentum reading against what the price did next, one stock at a time. Reached from **Signal study** beside the Momentum model download on `/stock/<SYMBOL>` — both are "go deeper on this stock's momentum", so the row already existed.
+
+**The signal is fixed and the horizon varies** — `Momentum delta (2W)` or `Momentum score` against the next 2 weeks, month or 3 months. The other way round (fix the horizon, try signals until one works) is fishing, and the page should not make that the easy path.
+
+- **`signal.js` holds the arithmetic**, apart from the page for the same reason `momentum.js` is apart from the server: this is what decides whether a chart says "signal" or "noise", so it has to be checkable alone. Verified against hand-computed values and a textbook r of 0.7746, and `/api/signal`'s answer for DELL re-derived straight from the view — **r 0.031897 both ways, hit 63.8%, base 60.2%**.
+- **Three things make a weak relationship look strong, and each has an answer in the module.** A trend line through a round cloud — so `fit` returns r² beside the slope and the page draws the line faint. Overlapping windows — 2,235 daily observations of a 10-day return carry ~223 observations' worth of evidence, which the page prints beside the raw n, with a **Non-overlapping** toggle that samples every 10th session. A hit rate with no baseline — so `quadrants` returns the base rate and the **lift** between them, which is the only one of the three worth reading.
+- **A level is split at its median, not at zero.** `quadrants(pairs, xSplit)` exists because splitting the 0-100 momentum score at zero put every row on the high side and reported a lift of exactly `+0.0 pts` for every horizon — a number that looked like a finding and was an artefact. `SIGNAL_XS` carries `split`, plus the words (`rose`/`fell` against `was high`/`was low`) so the labels cannot describe a median as "up".
+- **The scatter scales uniformly**, unlike the price chart — no `preserveAspectRatio="none"` — so a dot stays a dot and this chart can label itself in SVG where the price chart must use HTML overlays.
+- **Axes cover the middle 99%, and the strays are pinned to the edge in amber and counted**, not dropped. DELL has fortnights past +100%; letting them set the scale pressed the other 2,200 points into a band a few pixels tall, and the shape of the cloud is the whole point of the panel.
+- **The decile panel draws the overall mean as a dashed line**, because "flat at the mean" is what no signal looks like and bars against zero cannot show it.
+- **What it currently says**: DELL, delta vs the next fortnight, **r 0.032 over 2,235 sessions (~223 independent), lift +3.5 pts** — no usable relationship, matching the universe-wide −0.003.
 
 ## The help page
 `/help` explains the app to the people using it, so it is open to **any signed-in user** rather than admin-only. Reached from `Help` in the ⋯ menu, beside Contact, and from a link in the Weights menu itself — which is where the question actually arises.

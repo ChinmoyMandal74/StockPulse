@@ -206,7 +206,9 @@ const SCHEMA = [
      score - lag(score, 63)  over w as delta_3m,
      score - lag(score, 126) over w as delta_6m,
      (close - lag(close, 10) over w) / lag(close, 10) over w * 100  as ret_2w,
-     (lead(close, 10) over w - close) / close * 100                 as fwd_ret_2w
+     (lead(close, 10) over w - close) / close * 100                 as fwd_ret_2w,
+     (lead(close, 21) over w - close) / close * 100                 as fwd_ret_1m,
+     (lead(close, 63) over w - close) / close * 100                 as fwd_ret_3m
    from (
      select h.symbol, h.d, h.model, h.score, b.close
      from momentum_history h
@@ -744,7 +746,7 @@ async function purgeSymbol(symbol) {
 
 const DELTA_COLS = ['past_1w', 'past_2w', 'past_1m', 'past_3m', 'past_6m',
                     'delta_1w', 'delta_2w', 'delta_1m', 'delta_3m', 'delta_6m',
-                    'close', 'ret_2w', 'fwd_ret_2w'];
+                    'close', 'ret_2w', 'fwd_ret_2w', 'fwd_ret_1m', 'fwd_ret_3m'];
 
 // The momentum series with every horizon's past score and delta beside it.
 // Ascending, filtered to one model, the same contract readMomentum() has.
@@ -763,6 +765,10 @@ async function readMomentumDeltas(symbol, since, model = MOMENTUM_MODEL) {
     .concat([
       '(close - lag(close, 10) over w) / lag(close, 10) over w * 100 as ret_2w',
       '(lead(close, 10) over w - close) / close * 100 as fwd_ret_2w',
+      // A 12-1 momentum model is built for months, so a fortnight may simply be
+      // the wrong window to judge it on. One LEAD each to find out.
+      '(lead(close, 21) over w - close) / close * 100 as fwd_ret_1m',
+      '(lead(close, 63) over w - close) / close * 100 as fwd_ret_3m',
     ])
     .join(', ');
   // The date filter sits outside the window, not in its WHERE: the first row a
