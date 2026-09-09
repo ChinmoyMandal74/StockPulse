@@ -31,6 +31,9 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `public/app.css` | **Shared stylesheet** — tokens, atmosphere, bezel, buttons, table base, row card. Linked by all four pages |
 | `public/index.html` | Single-page frontend (no build step, vanilla JS, page-specific CSS inline) |
 | `public/analysis.html` | Signal screens at `/analysis` — see **Analysis screens** below |
+| `public/indicators.js` | **Tunable short-horizon indicators, defined once** — loaded by `/lab`, `require`d by the server and the offline grid |
+| `lab-grid.js` | Builds `public/lab-grid.json`: the cross-sectional result for every parameter setting the lab can reach. Runs against the local copy, never Turso |
+| `public/lab.html` | The indicator lab at `/lab/<SYMBOL>` — sliders, a chart, and the universe-wide truth beside it |
 | `public/signal-stats.js` | **The statistics behind `/signal`** — correlation, fit, deciles, quadrants, effective n. Pure functions; `require`d by the server and loaded by the page, like `screens.js` |
 | `public/signal.html` | Signal study at `/signal/<SYMBOL>` — does a momentum move predict the next move in price |
 | `public/stock.html` | One stock in full at `/stock/<SYMBOL>` — chart, range buttons, every field |
@@ -560,6 +563,7 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 | **all eight sub-scores individually**, 1m and 3m, cross-sectional | Return factors repeat the composite exactly. `revers1m`, `rsi`, `consistency` are noise. `trend` has the largest single t (−3.3) and flips sign after 2020 |
 | **range position → next month**, three definitions (60d z-score, 252d and 120d high-low band), cross-sectional | **Flat, and mildly the wrong way.** Bottom band −0.00% to +0.53%, top band +0.23% to +0.27%; largest \|t\| anywhere 1.2 in one thin cell. The *top* of the range does slightly better than the bottom |
 | **the two falling-knife filters** on the bottom band — idiosyncratic vs market-wide fall, and "has it turned" | Neither helps; both point slightly the wrong way. Stacking trend + idiosyncratic + turned leaves **under 500 observations in nineteen years**, ~26 a year — unusable even if it worked |
+| **risk-adjusted velocity**, 144 parameter settings, cross-sectional at one month | **Best top-decile t anywhere on the grid: 1.73.** With 144 tests that is noise. Pre-2020 t 0.2–0.6, post-2020 t 1.6–2.1 — the same split as everything else |
 | **low RSI + rising delta** (the owner's hypothesis) | +3.57% against a +1.02% baseline — but 811 sessions, ~81 independent, **t = 1.71**, occurring 0.31% of the time. Oversold alone gives +1.74%, a positive delta alone +0.99%, so what little is there comes from the RSI side |
 
 ### The conclusions
@@ -621,6 +625,20 @@ So a single query has carried 441k full rows fine, and the failure came after **
   - **It deliberately omits `users`, `sessions` and `password_resets`** — password hashes and live session tokens have no business in an unencrypted file on a laptop — and `visitors`, `prefs`, `chat_usage` as personal and useless here. **It is not a backup.**
   - The schema is copied from `sqlite_master` rather than restated, so a column added upstream arrives without this file knowing about it. Dated tables re-pull `OVERLAP_DAYS` (10) on top of what is local, because the archive rewrites recent bars — a provisional close for a session still in progress is not final. A split rewrites a symbol's whole history, so **`--full` after a split**, the same repair path `backfill-bars.js --only` is for.
 - A full momentum backfill is **500.3s for 113 symbols**. The whole-universe cross-sectional query through `momentum_deltas` is **~3.8s**.
+
+## The indicator lab
+`/lab/<SYMBOL>` builds a short-horizon indicator, draws it under the price, and reports what it does — for that stock live, and for the whole universe from a precomputed grid. Reached from **Indicator lab** beside Signal study on the stock page.
+
+**The first indicator is risk-adjusted velocity**: a short-horizon return divided by the stock's own volatility. It fills a hole in the momentum score, which risk-adjusts at 3, 6 and 12 months and at nothing below that. Four sliders — lookback, skip, vol window, smoothing. `skip` is 12-1's trick at a short horizon: the recent days are where reversal lives, so leaving them out asks for continuation without buying the bounce.
+
+- **`indicators.js` is shared three ways** — the page, the server and the offline grid — for the same reason `momentum.js` and `signal-stats.js` are. A second implementation of "vol-normalised 10-day return" would have drifted inside a week. Verified against `momentum.js` on creation: `windowReturn` agrees to **0.00e+0** and `realisedVolSeries` to **1.14e-13** once the parameterisations are lined up (momentum.js takes two endpoints, this takes length-and-skip, so its 252→21 is lookback 231 skip 21).
+- **Series are oldest-first here**, the reverse of `momentum.js`, because charts and rolling windows both read forward. Flip once at the boundary rather than reasoning about a reversed index in every loop.
+- **The rolling volatility requires its full window, which deliberately differs from `momentum.js`.** That function scores one date from whatever history it has; this one draws a line, and a line whose early points used 20 returns and whose later ones used 126 is not one measurement along its length.
+- **The browser computes the indicator, not the server.** A round trip per slider drag would make the control feel like a query. `/api/lab` ships bars and forward returns; the page recomputes the indicator and every statistic through the same modules the server uses. Redraws are debounced 90ms while the number beside the slider updates immediately.
+- **The page is a machine for finding things that are not there, and is built to say so.** Four sliders over one stock is thousands of combinations and some will look excellent by chance. So the **universe-wide result and the pre-2020 / post-2020 split sit on screen beside whatever is being tuned**, and the caption names the best |t| anywhere on the grid so a promising-looking cell can be compared against it.
+- **`lab-grid.json` is committed derived data.** 144 settings, 42 KB, rebuilt by `lab-grid.js` in 17.1s against the local copy. Shipping it static means the page costs the server nothing; the page prints the build date so a stale grid is visible rather than silent. Re-run it after a backfill.
+- **Log price axis above a 4x range**, the same rule the price chart follows — MU ran from $70 to $1,033 over three years and a linear axis flattened all but the last few months onto the floor.
+- **What the grid says so far: nothing.** Across 144 settings the best top-decile t over the full period is **1.73**, and with that many tests anything under about 3 is noise. The split is the familiar one — pre-2020 t 0.2 to 0.6, post-2020 t 1.6 to 2.1.
 
 ## The help page
 `/help` explains the app to the people using it, so it is open to **any signed-in user** rather than admin-only. Reached from `Help` in the ⋯ menu, beside Contact, and from a link in the Weights menu itself — which is where the question actually arises.

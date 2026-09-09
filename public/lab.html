@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Indicator lab — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 60px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+    .aura { background:
+      radial-gradient(46vw 40vw at 6% -6%, rgba(251, 191, 36, 0.10), transparent 62%),
+      radial-gradient(50vw 44vw at 96% 4%, rgba(34, 211, 238, 0.11), transparent 64%); }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
+                   padding: 10px 20px 0; pointer-events: none; }
+    .island { pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content;
+      max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+
+    .head { display: flex; align-items: baseline; gap: 10px 14px; flex-wrap: wrap; margin: 14px 0 0; }
+    h1 { margin: 0; font-size: clamp(26px, 3.2vw, 34px); font-weight: 600;
+         letter-spacing: -0.035em; line-height: 1; font-family: var(--mono); }
+    .co { font-size: 15px; color: var(--muted); letter-spacing: -0.01em; }
+    .span { font-size: 12.5px; color: var(--faint); font-family: var(--mono); }
+
+    .sympick { position: relative; }
+    #symBtn { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; margin: 0;
+      padding: 2px 6px 2px 0; border: 0; background: none; border-radius: 10px; font: inherit;
+      color: inherit; letter-spacing: inherit; transition: background 0.35s var(--ease); }
+    #symBtn:hover, #symBtn[aria-expanded="true"] { background: rgba(255, 255, 255, 0.05); }
+    #symBtn .caret { width: 15px; height: 15px; color: var(--faint); flex: none;
+                     transition: transform 0.4s var(--ease), color 0.35s var(--ease); }
+    #symBtn:hover .caret { color: var(--muted); }
+    #symBtn[aria-expanded="true"] .caret { transform: rotate(180deg); }
+    #symMenu { position: absolute; top: calc(100% + 8px); left: 0; z-index: var(--z-nav);
+      display: none; width: 320px; max-width: calc(100vw - 32px); padding: 6px; border-radius: 18px;
+      background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      box-shadow: 0 34px 70px -24px rgba(0, 0, 0, 0.95); }
+    #symMenu.open { display: block; }
+    #symFilter { width: 100%; padding: 9px 11px; margin-bottom: 6px; border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04); border: 1px solid var(--hair); color: var(--text);
+      font-family: var(--mono); font-size: 13px; outline: none; }
+    #symList { max-height: 320px; overflow-y: auto; }
+    .symrow { display: flex; gap: 10px; align-items: baseline; width: 100%; padding: 7px 10px;
+      border: 0; border-radius: 10px; background: none; cursor: pointer; text-align: left;
+      color: var(--text); font-family: inherit; font-size: 13px; }
+    .symrow:hover, .symrow.on { background: rgba(255, 255, 255, 0.06); }
+    .symrow b { font-family: var(--mono); font-weight: 500; min-width: 62px; }
+    .symrow span { color: var(--faint); font-size: 12px; overflow: hidden;
+                   text-overflow: ellipsis; white-space: nowrap; }
+
+    .panel { margin: 18px 0 0; }
+    .panel .core { padding: 16px 18px 18px; }
+    .ptitle { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+    .pnote { margin: 4px 0 12px; font-size: 12.5px; color: var(--muted); line-height: 1.5; max-width: 86ch; }
+
+    /* the sliders */
+    .knobs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 26px; }
+    .knob .kh { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+    .knob .kn { font-size: 12.5px; color: var(--text); }
+    .knob .kv { font-family: var(--mono); font-size: 13px; color: var(--amber); }
+    .knob input[type=range] { width: 100%; margin: 6px 0 0; accent-color: var(--amber); }
+    .knob .kd { margin-top: 3px; font-size: 11px; color: var(--faint); line-height: 1.45; }
+    .reset { margin-top: 12px; }
+
+    /* chart */
+    #chart { position: relative; width: 100%; height: 400px; margin-top: 4px; }
+    #chart svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .lab-ln { fill: none; stroke: var(--green); stroke-width: 1.4; vector-effect: non-scaling-stroke;
+              stroke-linejoin: round; }
+    .ind-ln { fill: none; stroke: var(--amber); stroke-width: 1.4; vector-effect: non-scaling-stroke;
+              stroke-linejoin: round; }
+    .ind-zero { stroke: var(--hair-2); stroke-width: 1; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+    .pane-bg2 { fill: rgba(255, 255, 255, 0.018); }
+    .cap { position: absolute; left: 9px; font-family: var(--mono); font-size: 10.5px;
+           letter-spacing: 0.04em; pointer-events: none; }
+    .cap.price { top: 6px; color: var(--green); }
+    .cap.ind { color: var(--amber); }
+    .rng-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
+    .rng { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer;
+      font-family: var(--sans); font-size: 12px; transition: all 0.3s var(--ease); }
+    .rng.on { color: var(--text); border-color: var(--amber); background: rgba(251, 191, 36, 0.12); }
+
+    /* stats */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+    .card2 { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--hair);
+             background: rgba(255, 255, 255, 0.02); }
+    .card2 .cv { font-family: var(--mono); font-size: 21px; font-weight: 600; }
+    .card2 .cl { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+                 color: var(--faint); margin-bottom: 4px; }
+    .card2 .cs { margin-top: 3px; font-size: 11px; color: var(--faint); line-height: 1.4; }
+    .weak { color: var(--faint); } .some { color: var(--amber); } .real { color: var(--green); }
+
+    table.grid { border-collapse: collapse; width: 100%; max-width: 640px; }
+    table.grid th, table.grid td { padding: 8px 10px; text-align: right; font-family: var(--mono); font-size: 13px; }
+    table.grid th { font-family: var(--sans); font-size: 10.5px; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--faint); font-weight: 500; border-bottom: 1px solid var(--hair); }
+    table.grid th:first-child, table.grid td:first-child { text-align: left; color: var(--muted); }
+    table.grid td .sub { display: block; font-size: 10.5px; color: var(--faint); }
+    table.grid caption { caption-side: bottom; text-align: left; padding-top: 10px;
+      font-size: 11.5px; color: var(--faint); font-family: var(--sans); line-height: 1.5; }
+
+    .warnbox { margin: 18px 0 0; padding: 13px 15px; border-radius: 12px;
+      border: 1px solid rgba(251, 191, 36, 0.28); background: rgba(251, 191, 36, 0.07);
+      font-size: 12.5px; line-height: 1.6; color: var(--muted); }
+    .warnbox b { color: var(--amber); }
+    .err { margin: 24px 0 0; padding: 14px 16px; border-radius: 14px;
+      border: 1px solid rgba(251, 113, 133, 0.3); background: rgba(251, 113, 133, 0.08);
+      color: var(--red); font-size: 13.5px; }
+    .loading { margin: 30px 0; color: var(--faint); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15.2l5.5-5.7"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark"><span class="wordmark">Tickr Lab</span></span>
+      <span class="divider"></span>
+      <a class="btn" id="backStock" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to stock</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <div class="head">
+      <span class="sympick">
+        <button id="symBtn" aria-expanded="false" aria-haspopup="listbox">
+          <h1 id="sym">—</h1>
+          <svg class="caret ic" aria-hidden="true"><use href="#i-chevron" /></svg>
+        </button>
+        <div id="symMenu" role="listbox">
+          <input id="symFilter" type="text" placeholder="Filter by symbol or name…" autocomplete="off" />
+          <div id="symList"></div>
+        </div>
+      </span>
+      <a class="co namelink" id="co" href="#"></a>
+      <span class="span" id="span"></span>
+    </div>
+
+    <div class="loading" id="loading">Loading…</div>
+    <div class="err" id="err" hidden></div>
+
+    <section class="bezel panel" id="pKnobs" hidden><div class="core">
+      <div class="ptitle" id="indName">The indicator</div>
+      <p class="pnote" id="indBlurb"></p>
+      <div class="knobs" id="knobs"></div>
+      <button class="btn reset" id="resetBtn">Reset to defaults</button>
+    </div></section>
+
+    <section class="bezel panel" id="pChart" hidden><div class="core">
+      <div class="ptitle">The indicator against the price</div>
+      <p class="pnote">The indicator is drawn under the price on its own axis, zero marked. Watch where it turns against what the stock actually did — that is the part a statistic cannot show you.</p>
+      <div class="rng-row" id="ranges"></div>
+      <div id="chart"></div>
+    </div></section>
+
+    <section class="bezel panel" id="pStats" hidden><div class="core">
+      <div class="ptitle">This stock, at these settings</div>
+      <p class="pnote" id="statNote"></p>
+      <div class="cards" id="cards"></div>
+    </div></section>
+
+    <section class="bezel panel" id="pGrid" hidden><div class="core">
+      <div class="ptitle">The whole universe, at the nearest tested settings</div>
+      <p class="pnote" id="gridNote"></p>
+      <div id="gridTable"></div>
+    </div></section>
+
+    <div class="warnbox" id="warn" hidden></div>
+  </main>
+
+  <script src="/signal-stats.js"></script>
+  <script src="/indicators.js"></script>
+  <script>
+    const SYMBOL = decodeURIComponent(location.pathname.split('/').pop() || '').toUpperCase();
+    let data = null, grid = null, params = null, range = 756;
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const pct = (v, d = 2) => (v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(d) + '%');
+    const nf = (v) => (v == null ? '—' : v.toLocaleString());
+
+    const RANGES = [
+      { id: 252, label: '1Y' }, { id: 504, label: '2Y' }, { id: 756, label: '3Y' },
+      { id: 1260, label: '5Y' }, { id: 99999, label: 'Max' },
+    ];
+
+    async function load() {
+      try {
+        const [res, g] = await Promise.all([
+          fetch(`/api/lab?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' }),
+          fetch('/lab-grid.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        ]);
+        if (res.status === 401) { location.href = '/login'; return; }
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || 'Could not load the lab.');
+        data = j; grid = g;
+        params = Indicators.clean(data.defaults);
+        boot();
+      } catch (e) {
+        $('loading').hidden = true;
+        $('err').hidden = false; $('err').textContent = e.message;
+      }
+    }
+
+    function boot() {
+      $('loading').hidden = true;
+      $('sym').textContent = data.symbol;
+      $('co').textContent = data.name || '';
+      $('co').href = `/stock/${encodeURIComponent(data.symbol)}`;
+      $('span').textContent = `${data.dates[0]} → ${data.dates[data.dates.length - 1]}`;
+      $('backStock').href = `/stock/${encodeURIComponent(data.symbol)}`;
+      document.title = `${data.symbol} indicator lab — Tickr Lab`;
+      const ind = data.indicators[0];
+      $('indName').textContent = ind.label;
+      $('indBlurb').textContent = ind.blurb;
+
+      $('ranges').innerHTML = RANGES.map((r) =>
+        `<button class="rng${r.id === range ? ' on' : ''}" data-range="${r.id}">${r.label}</button>`).join('');
+      $('ranges').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-range]');
+        if (!b) return;
+        range = Number(b.dataset.range);
+        $('ranges').querySelectorAll('.rng').forEach((x) => x.classList.toggle('on', Number(x.dataset.range) === range));
+        drawChart();
+      });
+
+      renderKnobs();
+      $('resetBtn').addEventListener('click', () => {
+        params = Indicators.clean(data.defaults);
+        renderKnobs(); recompute();
+      });
+      for (const id of ['pKnobs', 'pChart', 'pStats', 'pGrid', 'warn']) $(id).hidden = false;
+      renderWarning();
+      recompute();
+    }
+
+    // ---- the sliders --------------------------------------------------------
+    function renderKnobs() {
+      const ind = data.indicators[0];
+      $('knobs').innerHTML = ind.params.map((k) => {
+        const b = data.bounds[k];
+        return `<div class="knob" data-k="${esc(k)}">
+          <div class="kh"><span class="kn">${esc(b.label)}</span>
+            <span class="kv" id="kv-${esc(k)}">${params[k]}${esc(b.unit)}</span></div>
+          <input type="range" min="${b.min}" max="${b.max}" step="1" value="${params[k]}" data-knob="${esc(k)}" />
+          <div class="kd">${esc(b.help)}</div></div>`;
+      }).join('');
+    }
+    // Redrawing on every step of a drag is wasteful; the number beside the
+    // slider updates immediately so the control still feels direct.
+    let pending = null;
+    $('knobs').addEventListener('input', (e) => {
+      const el = e.target.closest('[data-knob]');
+      if (!el) return;
+      const k = el.dataset.knob;
+      params[k] = Number(el.value);
+      $(`kv-${k}`).textContent = params[k] + data.bounds[k].unit;
+      clearTimeout(pending);
+      pending = setTimeout(recompute, 90);
+    });
+
+    // ---- compute ------------------------------------------------------------
+    let series = null, stats = null;
+    function recompute() {
+      params = Indicators.clean(params);
+      series = Indicators.velocity(data.closes, params);
+      const pairs = [];
+      for (let i = 0; i < series.length; i++) {
+        if (series[i] == null || data.fwd[i] == null) continue;
+        if (data.dates[i] < '2008-01-01') continue;
+        pairs.push({ d: data.dates[i], x: series[i], y: data.fwd[i] });
+      }
+      const at = (from, to) => {
+        const p = pairs.filter((q) => q.d >= from && q.d < to).map((q) => ({ x: q.x, y: q.y }));
+        return p.length > 60 ? SignalStats.summarise(p, data.horizonDays) : null;
+      };
+      stats = { all: at('0000', '9999'), pre: at('0000', '2020-01-01'), post: at('2020-01-01', '9999') };
+      drawChart(); renderStats(); renderGrid();
+    }
+
+    // ---- chart --------------------------------------------------------------
+    function drawChart() {
+      if (!series) return;
+      const from = Math.max(0, data.closes.length - range);
+      const dates = data.dates.slice(from), px = data.closes.slice(from), iv = series.slice(from);
+      const W = 900, H = 400, L = 8, R = 54, T = 10, B = 22;
+      const PRICE_H = 236, GAP = 14, IND_H = H - T - B - PRICE_H - GAP;
+      const x = (i) => L + (i / Math.max(1, px.length - 1)) * (W - L - R);
+
+      // Log above a 4x range, the same rule the price chart follows: MU ran from
+      // $70 to $1,033 over three years, and on a linear axis all but the last
+      // few months flatten onto the floor. An unmarked log axis misleads, so the
+      // caption says so when it happens.
+      const lo = Math.min(...px), hi = Math.max(...px);
+      const log = lo > 0 && hi / lo > 4;
+      const lv = (v) => (log ? Math.log(v) : v);
+      const l0 = lv(lo), l1 = lv(hi);
+      const py = (v) => T + (1 - (lv(v) - l0) / ((l1 - l0) || 1)) * PRICE_H;
+      const iset = iv.filter((v) => v != null);
+      const ilo = iset.length ? Math.min(...iset) : -1, ihi = iset.length ? Math.max(...iset) : 1;
+      const pad = (ihi - ilo) * 0.08 || 0.1;
+      const i0 = ilo - pad, i1 = ihi + pad;
+      const iy = (v) => T + PRICE_H + GAP + (1 - (v - i0) / ((i1 - i0) || 1)) * IND_H;
+
+      const linePath = (arr, fy) => {
+        let d = '', pen = false;
+        for (let i = 0; i < arr.length; i++) {
+          if (arr[i] == null) { pen = false; continue; }
+          d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + fy(arr[i]).toFixed(1);
+          pen = true;
+        }
+        return d;
+      };
+
+      let g = `<rect class="pane-bg2" x="0" y="${T + PRICE_H + GAP}" width="${W}" height="${IND_H}"/>`;
+      if (i0 < 0 && i1 > 0) g += `<line class="ind-zero" x1="${L}" y1="${iy(0).toFixed(1)}" x2="${W - R}" y2="${iy(0).toFixed(1)}"/>`;
+      g += `<path class="lab-ln" d="${linePath(px, py)}"/>`;
+      g += `<path class="ind-ln" d="${linePath(iv, iy)}"/>`;
+      // axis labels, in HTML so nothing is distorted by the stretch
+      const last = [...iv].reverse().find((v) => v != null);
+      $('chart').innerHTML =
+        `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${g}</svg>` +
+        `<span class="cap price">${esc(data.symbol)} &middot; ${px[px.length - 1].toFixed(2)}` +
+        `${log ? ' &middot; log scale' : ''}</span>` +
+        `<span class="cap ind" style="top:${((T + PRICE_H + GAP) / H * 100).toFixed(2)}%">` +
+        `${esc(data.indicators[0].label)}${last == null ? '' : ' &middot; ' + last.toFixed(3)}</span>` +
+        `<span class="cap" style="top:${(iy(i1) / H * 100).toFixed(2)}%;left:auto;right:8px;color:var(--faint)">${i1.toFixed(2)}</span>` +
+        `<span class="cap" style="top:${(iy(i0) / H * 100 - 3).toFixed(2)}%;left:auto;right:8px;color:var(--faint)">${i0.toFixed(2)}</span>` +
+        `<span class="cap" style="bottom:2px;top:auto;color:var(--faint)">${esc(dates[0])}</span>` +
+        `<span class="cap" style="bottom:2px;top:auto;left:auto;right:8px;color:var(--faint)">${esc(dates[dates.length - 1])}</span>`;
+    }
+
+    // ---- this stock ---------------------------------------------------------
+    function renderStats() {
+      const s = stats.all;
+      $('statNote').textContent = s
+        ? `Correlation of the indicator with the next ${data.horizonDays} sessions' return, for ${data.symbol} alone. ` +
+          `One stock is a small sample and the periods below are the check on it.`
+        : 'Not enough history at these settings.';
+      if (!s) { $('cards').innerHTML = ''; return; }
+      const cls = (r) => (r == null || Math.abs(r) < 0.1 ? 'weak' : Math.abs(r) < 0.25 ? 'some' : 'real');
+      const card = (label, val, sub, k) =>
+        `<div class="card2"><div class="cl">${esc(label)}</div>` +
+        `<div class="cv ${k || ''}">${esc(val)}</div><div class="cs">${esc(sub)}</div></div>`;
+      $('cards').innerHTML =
+        card('Correlation', (s.r >= 0 ? '+' : '') + s.r.toFixed(3), 'with the next month', cls(s.r)) +
+        card('Observations', nf(s.n), `~${nf(s.effectiveN)} independent`) +
+        card('Lift', (s.quadrants.lift * 100 >= 0 ? '+' : '') + (s.quadrants.lift * 100).toFixed(1) + ' pts',
+          'hit rate minus base rate', Math.abs(s.quadrants.lift * 100) < 2 ? 'weak' : (s.quadrants.lift > 0 ? 'real' : 'weak')) +
+        card('Before 2020', stats.pre ? (stats.pre.r >= 0 ? '+' : '') + stats.pre.r.toFixed(3) : '—',
+          'correlation', cls(stats.pre && stats.pre.r)) +
+        card('2020 onward', stats.post ? (stats.post.r >= 0 ? '+' : '') + stats.post.r.toFixed(3) : '—',
+          'correlation', cls(stats.post && stats.post.r));
+    }
+
+    // ---- the universe, from the precomputed grid ----------------------------
+    function nearest() {
+      if (!grid || !grid.results.length) return null;
+      const near = (arr, v) => arr.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
+      const want = {
+        lookback: near(grid.grid.lookback, params.lookback),
+        skip: near(grid.grid.skip, params.skip),
+        volWindow: near(grid.grid.volWindow, params.volWindow),
+        smooth: near(grid.grid.smooth, params.smooth),
+      };
+      return { want, row: grid.results.find((r) => grid.grid && r.lookback === want.lookback &&
+        r.skip === want.skip && r.volWindow === want.volWindow && r.smooth === want.smooth) || null };
+    }
+
+    function renderGrid() {
+      const n = nearest();
+      if (!n || !n.row) {
+        $('gridNote').textContent = 'No precomputed grid — run lab-grid.js to build one.';
+        $('gridTable').innerHTML = ''; return;
+      }
+      const exact = ['lookback', 'skip', 'volWindow', 'smooth'].every((k) => n.want[k] === params[k]);
+      $('gridNote').textContent =
+        `Every stock, ranked against the others each day, return measured as excess over the universe that day. ` +
+        (exact ? 'These are your exact settings.'
+          : `Your settings are between grid points — showing the nearest tested: ` +
+            `lookback ${n.want.lookback}, skip ${n.want.skip}, vol ${n.want.volWindow}, smooth ${n.want.smooth}.`);
+      const cell = (s) => (s == null ? '<td>—</td>'
+        : `<td class="${Math.abs(s.t) < 2 ? 'weak' : (s.t > 0 ? 'real' : 'weak')}">` +
+          `${(s.m >= 0 ? '+' : '') + s.m.toFixed(2)}%<span class="sub">t ${s.t.toFixed(1)} · n ${s.n}</span></td>`);
+      const r = n.row;
+      $('gridTable').innerHTML =
+        '<table class="grid"><thead><tr><th>measure</th><th>2008–2019</th><th>2020–2026</th><th>full period</th></tr></thead><tbody>' +
+        `<tr><td>Top decile, excess</td>${cell(r.top.pre)}${cell(r.top.post)}${cell(r.top.all)}</tr>` +
+        `<tr><td>Top third minus bottom</td>${cell(r.spread.pre)}${cell(r.spread.post)}${cell(r.spread.all)}</tr>` +
+        `</tbody><caption>Built ${esc((grid.builtAt || '').slice(0, 10))} over ${nf(grid.symbols)} symbols, ` +
+        `${nf(grid.results.length)} settings tested. With that many settings, a |t| under about 3 is what ` +
+        `noise looks like — the best anywhere on this grid is ${Math.max(...grid.results.filter((x) => x.top.all).map((x) => Math.abs(x.top.all.t))).toFixed(2)}.` +
+        `</caption></table>`;
+    }
+
+    function renderWarning() {
+      $('warn').innerHTML =
+        '<b>This page is a machine for finding things that are not there.</b> Four sliders over ' +
+        'one stock is thousands of combinations, and some of them will look excellent by chance. ' +
+        'That is why the universe-wide result and the pre-2020 / post-2020 split are on screen ' +
+        'beside whatever you are tuning: a setting that only works after 2020, or only on this ' +
+        'symbol, has told you about the sample rather than about the market. Nothing found here ' +
+        'is worth acting on until it survives data you did not tune against.';
+    }
+
+    // ---- symbol picker ------------------------------------------------------
+    let symOpen = false, active = 0, shown = [];
+    function renderSymList() {
+      const q = $('symFilter').value.trim().toUpperCase();
+      shown = (data ? data.universe : []).filter((u) =>
+        !q || u.symbol.includes(q) || (u.name || '').toUpperCase().includes(q));
+      $('symList').innerHTML = shown.map((u, i) =>
+        `<button class="symrow${i === active ? ' on' : ''}" data-sym="${esc(u.symbol)}">` +
+        `<b>${esc(u.symbol)}</b><span>${esc(u.name || '')}</span></button>`).join('') ||
+        '<div class="symrow" style="color:var(--faint)">No match</div>';
+    }
+    function openSym(open) {
+      symOpen = open;
+      $('symMenu').classList.toggle('open', open);
+      $('symBtn').setAttribute('aria-expanded', String(open));
+      if (open) {
+        $('symFilter').value = '';
+        active = Math.max(0, (data ? data.universe : []).findIndex((u) => u.symbol === SYMBOL));
+        renderSymList(); $('symFilter').focus();
+        const on = $('symList').querySelector('.symrow.on');
+        if (on) on.scrollIntoView({ block: 'center' });
+      }
+    }
+    $('symBtn').addEventListener('click', () => openSym(!symOpen));
+    $('symFilter').addEventListener('input', () => { active = 0; renderSymList(); });
+    $('symList').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-sym]');
+      if (b) location.href = `/lab/${encodeURIComponent(b.dataset.sym)}`;
+    });
+    $('symFilter').addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        active = Math.max(0, Math.min(shown.length - 1, active + (e.key === 'ArrowDown' ? 1 : -1)));
+        renderSymList();
+        const on = $('symList').querySelector('.symrow.on');
+        if (on) on.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' && shown[active]) {
+        location.href = `/lab/${encodeURIComponent(shown[active].symbol)}`;
+      } else if (e.key === 'Escape') openSym(false);
+    });
+    document.addEventListener('click', (e) => {
+      if (symOpen && !e.target.closest('.sympick')) openSym(false);
+    });
+
+    load();
+  </script>
+</body>
+</html>

@@ -28,6 +28,8 @@ const { buildModel, momentumMap, MODEL_ROWS, MODEL_MIN_BARS } = require('./momen
 const Momentum = require('./momentum.js');
 // The arithmetic behind /signal, kept apart so it can be checked on its own.
 const Signal = require('./public/signal-stats.js');
+// Tunable indicators, shared with /lab and the offline grid.
+const Indicators = require('./public/indicators.js');
 const {
   readPortfolios, writePortfolios,
   readNames, writeNames,
@@ -133,6 +135,13 @@ app.get('/signal/:symbol', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'signal.html'));
 }));
 
+// Build an indicator and watch what it does. The page computes everything
+// itself from the bars this ships, so a slider drag redraws without a request.
+app.get('/lab/:symbol', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  res.sendFile(path.join(__dirname, 'public', 'lab.html'));
+}));
+
 app.get('/help', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'help.html'));
@@ -170,7 +179,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       // no symbol in that path, so there is nothing to show
                       '/stock.html': '/',
                       // no symbol in that path either
-                      '/signal.html': '/' };
+                      '/signal.html': '/', '/lab.html': '/' };
 app.get(Object.keys(GATED_PAGES), (req, res) => res.redirect(GATED_PAGES[req.path]));
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -2405,6 +2414,43 @@ app.get('/api/model', requireAuth, route(async (req, res) => {
   res.set('Content-Disposition', `attachment; filename="momentum-model-${symbol}.xlsx"`);
   res.set('Cache-Control', 'no-store');
   res.send(buf);
+}));
+
+// Everything /lab needs for one symbol: the price series and what happened
+// next. The indicator itself is computed in the browser from the sliders —
+// a round trip per drag would make the control feel like a query, and the
+// arithmetic is the same module either way.
+app.get('/api/lab', requireAuth, route(async (req, res) => {
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+
+  const rows = (await store.readBars(symbol, 6000))
+    .map((b) => ({ d: b.datetime, c: Number(b.close) }))
+    .reverse();                                     // oldest first, as Indicators wants
+  if (rows.length < 300) {
+    return res.status(422).json({ error: `${symbol} has ${rows.length} sessions stored; the lab needs 300.` });
+  }
+  const FWD = 21;
+  const fwd = rows.map((r, i) => (i + FWD < rows.length
+    ? Math.round((rows[i + FWD].c - r.c) / r.c * 10000) / 100 : null));
+
+  const snap = await readSnapshot();
+  const row = (snap && snap.stocks || []).find((x) => x.symbol === symbol);
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    symbol,
+    name: row ? row.name : '',
+    horizonDays: FWD,
+    dates: rows.map((r) => r.d),
+    closes: rows.map((r) => Math.round(r.c * 100) / 100),
+    fwd,
+    indicators: Indicators.INDICATORS.map((x) => ({ id: x.id, label: x.label, blurb: x.blurb, params: x.params })),
+    bounds: Indicators.BOUNDS,
+    defaults: Indicators.DEFAULTS,
+    universe: ((snap && snap.stocks) || [])
+      .map((x) => ({ symbol: x.symbol, name: x.name || '' }))
+      .sort((a, b) => a.symbol.localeCompare(b.symbol)),
+  });
 }));
 
 // The signal study: a momentum move against what the price did next.
