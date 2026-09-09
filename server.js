@@ -2434,6 +2434,15 @@ app.get('/api/lab', requireAuth, route(async (req, res) => {
   const fwd = rows.map((r, i) => (i + FWD < rows.length
     ? Math.round((rows[i + FWD].c - r.c) / r.c * 10000) / 100 : null));
 
+  // The momentum score, aligned to the bar dates by lookup rather than by
+  // position. momentum_history only holds rows for days a symbol was scoreable —
+  // nothing until MIN_BARS of run-up — so its dates are a subset of the bars',
+  // and zipping the two arrays would silently offset the whole series. The
+  // momentum pane on /api/history aligns the same way for the same reason.
+  const hist = await store.readMomentum(symbol, '0000-00-00');
+  const scoreAt = new Map(hist.map((h) => [h.d, h.score]));
+  const score = rows.map((r) => (scoreAt.has(r.d) ? scoreAt.get(r.d) : null));
+
   const snap = await readSnapshot();
   const row = (snap && snap.stocks || []).find((x) => x.symbol === symbol);
   res.set('Cache-Control', 'no-store');
@@ -2444,9 +2453,13 @@ app.get('/api/lab', requireAuth, route(async (req, res) => {
     dates: rows.map((r) => r.d),
     closes: rows.map((r) => Math.round(r.c * 100) / 100),
     fwd,
-    indicators: Indicators.INDICATORS.map((x) => ({ id: x.id, label: x.label, blurb: x.blurb, params: x.params })),
+    score,
+    scoredFrom: hist.length ? hist[0].d : null,
+    indicators: Indicators.INDICATORS.map((x) => ({
+      id: x.id, label: x.label, blurb: x.blurb, needs: x.needs,
+      params: x.params, defaults: x.defaults,
+    })),
     bounds: Indicators.BOUNDS,
-    defaults: Indicators.DEFAULTS,
     universe: ((snap && snap.stocks) || [])
       .map((x) => ({ symbol: x.symbol, name: x.name || '' }))
       .sort((a, b) => a.symbol.localeCompare(b.symbol)),

@@ -70,6 +70,16 @@
     .knob input[type=range] { width: 100%; margin: 6px 0 0; accent-color: var(--amber); }
     .knob .kd { margin-top: 3px; font-size: 11px; color: var(--faint); line-height: 1.45; }
     .reset { margin-top: 12px; }
+    .picks { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 10px; }
+    .pick2 { padding: 6px 13px; border-radius: 999px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer;
+      font-family: var(--sans); font-size: 13px; transition: all 0.3s var(--ease); }
+    .pick2:hover { color: var(--text); border-color: var(--hair-2); }
+    .pick2.on { color: var(--text); border-color: var(--amber); background: rgba(251, 191, 36, 0.13); }
+    .pick2:disabled { opacity: 0.35; cursor: not-allowed; }
+    .nodata { margin: 0 0 12px; padding: 10px 13px; border-radius: 10px;
+      border: 1px solid rgba(251, 113, 133, 0.28); background: rgba(251, 113, 133, 0.07);
+      font-size: 12.5px; color: var(--muted); line-height: 1.55; }
 
     /* chart */
     #chart { position: relative; width: 100%; height: 400px; margin-top: 4px; }
@@ -197,8 +207,10 @@
     <div class="err" id="err" hidden></div>
 
     <section class="bezel panel" id="pKnobs" hidden><div class="core">
-      <div class="ptitle" id="indName">The indicator</div>
+      <div class="ptitle">The indicator</div>
+      <div class="picks" id="indPicks"></div>
       <p class="pnote" id="indBlurb"></p>
+      <div class="nodata" id="noScore" hidden></div>
       <div class="knobs" id="knobs"></div>
       <button class="btn reset" id="resetBtn">Reset to defaults</button>
     </div></section>
@@ -239,7 +251,12 @@
   <script src="/indicators.js"></script>
   <script>
     const SYMBOL = decodeURIComponent(location.pathname.split('/').pop() || '').toUpperCase();
-    let data = null, grid = null, params = null, range = 756;
+    let data = null, grid = null, params = null, range = 756, current = 'velocity';
+    const ind = () => (data.indicators.find((x) => x.id === current) || data.indicators[0]);
+    // An indicator that reads the score is unusable on a symbol too short to
+    // have one — SKHY and SPCX have neither, and several faders are scored only
+    // for part of their history.
+    const hasScore = () => (data.score || []).some((v) => v != null);
 
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t)
@@ -262,7 +279,7 @@
         const j = await res.json();
         if (!res.ok) throw new Error(j.error || 'Could not load the lab.');
         data = j; grid = g;
-        params = Indicators.clean(data.defaults);
+        params = Indicators.clean(ind().defaults, current);
         boot();
       } catch (e) {
         $('loading').hidden = true;
@@ -278,9 +295,7 @@
       $('span').textContent = `${data.dates[0]} → ${data.dates[data.dates.length - 1]}`;
       $('backStock').href = `/stock/${encodeURIComponent(data.symbol)}`;
       document.title = `${data.symbol} indicator lab — Tickr Lab`;
-      const ind = data.indicators[0];
-      $('indName').textContent = ind.label;
-      $('indBlurb').textContent = ind.blurb;
+      renderPicks();
 
       $('ranges').innerHTML = RANGES.map((r) =>
         `<button class="rng${r.id === range ? ' on' : ''}" data-range="${r.id}">${r.label}</button>`).join('');
@@ -294,18 +309,43 @@
 
       renderKnobs();
       $('resetBtn').addEventListener('click', () => {
-        params = Indicators.clean(data.defaults);
+        params = Indicators.clean(ind().defaults, current);
         renderKnobs(); recompute();
+      });
+      $('indPicks').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-ind]');
+        if (!b || b.disabled || b.dataset.ind === current) return;
+        current = b.dataset.ind;
+        // Each indicator carries its own knobs, so the parameters reset rather
+        // than trying to carry a `volWindow` into something that has no such
+        // thing — and a stale key would match the wrong row in the grid.
+        params = Indicators.clean(ind().defaults, current);
+        renderPicks(); renderKnobs(); recompute();
       });
       for (const id of ['pKnobs', 'pChart', 'pScatter', 'pStats', 'pGrid', 'warn']) $(id).hidden = false;
       renderWarning();
       recompute();
     }
 
+    function renderPicks() {
+      const scored = hasScore();
+      $('indPicks').innerHTML = data.indicators.map((x) => {
+        const off = x.needs === 'score' && !scored;
+        return `<button class="pick2${x.id === current ? ' on' : ''}" data-ind="${esc(x.id)}"` +
+          `${off ? ' disabled title="No momentum score stored for this symbol"' : ''}>${esc(x.label)}</button>`;
+      }).join('');
+      $('indBlurb').textContent = ind().blurb;
+      const needScore = ind().needs === 'score';
+      $('noScore').hidden = !(needScore && !scored);
+      if (needScore && !scored) {
+        $('noScore').textContent = `${data.symbol} has no stored momentum score — it needs 274 sessions ` +
+          'of run-up before the model will score it at all, so there is no series to take a slope of.';
+      }
+    }
+
     // ---- the sliders --------------------------------------------------------
     function renderKnobs() {
-      const ind = data.indicators[0];
-      $('knobs').innerHTML = ind.params.map((k) => {
+      $('knobs').innerHTML = ind().params.map((k) => {
         const b = data.bounds[k];
         return `<div class="knob" data-k="${esc(k)}">
           <div class="kh"><span class="kn">${esc(b.label)}</span>
@@ -331,8 +371,10 @@
     let series = null, stats = null, pairs = [];
     const show = { pre: true, post: true };
     function recompute() {
-      params = Indicators.clean(params);
-      series = Indicators.velocity(data.closes, params);
+      params = Indicators.clean(params, current);
+      // `data` already is the series bundle the indicators expect: closes,
+      // score and dates, all aligned to the same index.
+      series = Indicators.compute(data, params, current);
       pairs = [];
       for (let i = 0; i < series.length; i++) {
         if (series[i] == null || data.fwd[i] == null) continue;
@@ -392,7 +434,7 @@
         `<span class="cap price">${esc(data.symbol)} &middot; ${px[px.length - 1].toFixed(2)}` +
         `${log ? ' &middot; log scale' : ''}</span>` +
         `<span class="cap ind" style="top:${((T + PRICE_H + GAP) / H * 100).toFixed(2)}%">` +
-        `${esc(data.indicators[0].label)}${last == null ? '' : ' &middot; ' + last.toFixed(3)}</span>` +
+        `${esc(ind().label)}${last == null ? '' : ' &middot; ' + last.toFixed(3)}</span>` +
         `<span class="cap" style="top:${(iy(i1) / H * 100).toFixed(2)}%;left:auto;right:8px;color:var(--faint)">${i1.toFixed(2)}</span>` +
         `<span class="cap" style="top:${(iy(i0) / H * 100 - 3).toFixed(2)}%;left:auto;right:8px;color:var(--faint)">${i0.toFixed(2)}</span>` +
         `<span class="cap" style="bottom:2px;top:auto;color:var(--faint)">${esc(dates[0])}</span>` +
@@ -471,7 +513,7 @@
           `x2="${X(x1).toFixed(1)}" y2="${Y(b).toFixed(1)}"/>`;
       }
       const axn = `<text class="axname" x="${(SC.l + SC.w - SC.r) / 2}" y="${SC.h - 6}" text-anchor="middle">` +
-        `${esc(data.indicators[0].label)}</text>` +
+        `${esc(ind().label)}</text>` +
         `<text class="axname" transform="translate(13 ${(SC.t + SC.h - SC.b) / 2}) rotate(-90)" text-anchor="middle">` +
         `Return, next ${data.horizonDays} sessions</text>`;
 
@@ -529,7 +571,7 @@
       const v = plotted[best].v;
       const ro = $('ro');
       ro.innerHTML = `<div class="dt-d">${esc(v.d)}</div>` +
-        tipRow(data.indicators[0].label, v.x.toFixed(3)) +
+        tipRow(ind().label, v.x.toFixed(3)) +
         tipRow(`Next ${data.horizonDays} sessions`, pct(v.y), v.y >= 0 ? 'pos' : 'neg');
       ro.hidden = false;
       const wrap = e.currentTarget.parentElement.getBoundingClientRect();
@@ -569,16 +611,14 @@
 
     // ---- the universe, from the precomputed grid ----------------------------
     function nearest() {
-      if (!grid || !grid.results.length) return null;
+      const g = grid && grid.grids && grid.grids[current];
+      if (!g) return null;
       const near = (arr, v) => arr.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
-      const want = {
-        lookback: near(grid.grid.lookback, params.lookback),
-        skip: near(grid.grid.skip, params.skip),
-        volWindow: near(grid.grid.volWindow, params.volWindow),
-        smooth: near(grid.grid.smooth, params.smooth),
-      };
-      return { want, row: grid.results.find((r) => grid.grid && r.lookback === want.lookback &&
-        r.skip === want.skip && r.volWindow === want.volWindow && r.smooth === want.smooth) || null };
+      const want = {};
+      for (const k of ind().params) want[k] = near(g[k], params[k]);
+      const row = grid.results.find((r) => r.indicator === current &&
+        ind().params.every((k) => r[k] === want[k])) || null;
+      return { want, row };
     }
 
     function renderGrid() {
@@ -587,12 +627,13 @@
         $('gridNote').textContent = 'No precomputed grid — run lab-grid.js to build one.';
         $('gridTable').innerHTML = ''; return;
       }
-      const exact = ['lookback', 'skip', 'volWindow', 'smooth'].every((k) => n.want[k] === params[k]);
+      const exact = ind().params.every((k) => n.want[k] === params[k]);
       $('gridNote').textContent =
         `Every stock, ranked against the others each day, return measured as excess over the universe that day. ` +
         (exact ? 'These are your exact settings.'
-          : `Your settings are between grid points — showing the nearest tested: ` +
-            `lookback ${n.want.lookback}, skip ${n.want.skip}, vol ${n.want.volWindow}, smooth ${n.want.smooth}.`);
+          : 'Your settings are between grid points — showing the nearest tested: ' +
+            ind().params.map((k) => `${data.bounds[k].label.toLowerCase()} ${n.want[k]}`).join(', ') + '.');
+      const mine = grid.results.filter((x) => x.indicator === current && x.top.all);
       const cell = (s) => (s == null ? '<td>—</td>'
         : `<td class="${Math.abs(s.t) < 2 ? 'weak' : (s.t > 0 ? 'real' : 'weak')}">` +
           `${(s.m >= 0 ? '+' : '') + s.m.toFixed(2)}%<span class="sub">t ${s.t.toFixed(1)} · n ${s.n}</span></td>`);
@@ -602,8 +643,9 @@
         `<tr><td>Top decile, excess</td>${cell(r.top.pre)}${cell(r.top.post)}${cell(r.top.all)}</tr>` +
         `<tr><td>Top third minus bottom</td>${cell(r.spread.pre)}${cell(r.spread.post)}${cell(r.spread.all)}</tr>` +
         `</tbody><caption>Built ${esc((grid.builtAt || '').slice(0, 10))} over ${nf(grid.symbols)} symbols, ` +
-        `${nf(grid.results.length)} settings tested. With that many settings, a |t| under about 3 is what ` +
-        `noise looks like — the best anywhere on this grid is ${Math.max(...grid.results.filter((x) => x.top.all).map((x) => Math.abs(x.top.all.t))).toFixed(2)}.` +
+        `${nf(mine.length)} settings tested for this indicator. With that many, a |t| under about 3 is what ` +
+        `noise looks like — the best anywhere on this indicator's grid is ` +
+        `${Math.max(...mine.map((x) => Math.abs(x.top.all.t))).toFixed(2)}.` +
         `</caption></table>`;
     }
 

@@ -9,9 +9,15 @@
 // the WHOLE universe, split at 2020 so a setting that only works after that date
 // says so on screen while you are dragging the slider.
 //
-// Runs against the local SQLite copy (analysis-db.js), never Turso — 144
-// parameter sets each needing every symbol's history is exactly the workload
-// that pushed a Turso response past its timeout.
+// Runs against the local SQLite copy (analysis-db.js), never Turso — a couple of
+// hundred parameter sets each needing every symbol's history is exactly the
+// workload that pushed a Turso response past its timeout.
+//
+// This calls Indicators.compute() rather than composing the pieces itself. The
+// first version inlined the composition so it could cache volatility across
+// parameter sets, which was a second implementation of the indicator — the very
+// thing indicators.js exists to prevent, and untenable the moment there were two
+// indicators. The caching bought seconds in a script that runs offline.
 //
 // The output is committed. It is derived data, but it is small, it changes only
 // when the archive meaningfully grows, and shipping it as a static file means
@@ -27,14 +33,23 @@ const QUICK = process.argv.includes('--quick');
 const DB = path.resolve('analysis.db');
 const OUT = path.resolve('public/lab-grid.json');
 
-const GRID = QUICK
-  ? { lookback: [5, 10, 20], skip: [0], volWindow: [60], smooth: [1] }
-  : {
+// One grid per indicator, over the knobs that indicator actually has.
+const GRIDS = QUICK ? {
+  velocity: { lookback: [5, 20], skip: [0], volWindow: [60], smooth: [1] },
+  scoreSlope: { window: [10, 30], skip: [0], smooth: [1] },
+} : {
+  velocity: {
     lookback: [3, 5, 10, 15, 20, 30],
     skip: [0, 1, 3, 5],
     volWindow: [20, 60, 126],
     smooth: [1, 5],
-  };
+  },
+  scoreSlope: {
+    window: [5, 10, 20, 30, 45, 60],
+    skip: [0, 1, 3, 5],
+    smooth: [1, 5],
+  },
+};
 
 const FWD = 21;                 // one month forward, the owner's horizon
 const MIN_PER_DAY = 20;
@@ -51,44 +66,39 @@ if (!fs.existsSync(DB)) {
 const db = new DatabaseSync(DB);
 const t0 = Date.now();
 
-// Bars once, and the forward return once: neither depends on the parameters.
-const rows = db.prepare('select symbol, d, close from bars order by symbol, d').all();
+// Bars and scores once; neither depends on the parameters.
+const bars = db.prepare('select symbol, d, close from bars order by symbol, d').all();
+const scores = db.prepare('select symbol, d, score from momentum_history where model = 2').all();
+const scoreAt = new Map();
+for (const r of scores) scoreAt.set(r.symbol + '|' + r.d, Number(r.score));
+
 const syms = new Map();
-for (const r of rows) {
-  if (!syms.has(r.symbol)) syms.set(r.symbol, { d: [], c: [] });
+for (const r of bars) {
+  if (!syms.has(r.symbol)) syms.set(r.symbol, { dates: [], closes: [], score: [] });
   const s = syms.get(r.symbol);
-  s.d.push(r.d); s.c.push(Number(r.close));
+  s.dates.push(r.d);
+  s.closes.push(Number(r.close));
+  // Aligned by lookup, not by position: a symbol has no score until MIN_BARS of
+  // run-up, so the two tables do not line up row for row.
+  const k = r.symbol + '|' + r.d;
+  s.score.push(scoreAt.has(k) ? scoreAt.get(k) : null);
 }
 for (const s of syms.values()) {
-  s.fwd = s.c.map((c, i) => (i + FWD < s.c.length ? (s.c[i + FWD] - c) / c * 100 : null));
+  s.fwd = s.closes.map((c, i) => (i + FWD < s.closes.length ? (s.closes[i + FWD] - c) / c * 100 : null));
 }
-console.log(`${rows.length.toLocaleString()} bars, ${syms.size} symbols, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
-
-// Volatility depends only on its own window, so compute each once rather than
-// once per parameter set — it is the expensive half and there are only three.
-const volCache = new Map();
-for (const w of GRID.volWindow) {
-  const m = new Map();
-  for (const [sym, s] of syms) m.set(sym, I.realisedVolSeries(s.c, w));
-  volCache.set(w, m);
-}
-console.log(`volatility cached for windows ${GRID.volWindow.join(', ')}\n`);
+console.log(`${bars.length.toLocaleString()} bars, ${scores.length.toLocaleString()} scored rows, ` +
+  `${syms.size} symbols, ${((Date.now() - t0) / 1000).toFixed(1)}s\n`);
 
 // One parameter set: rank within each day, measure excess over that day's
 // universe, and report the top decile and the top-minus-bottom-third spread.
-function evaluate(p) {
-  const vol = volCache.get(p.volWindow);
+function evaluate(indId, p) {
   const days = new Map();
-  for (const [sym, s] of syms) {
-    const ret = I.windowReturn(s.c, p.lookback, p.skip);
-    const v = vol.get(sym);
-    let raw = s.c.map((_, i) =>
-      (ret[i] == null || v[i] == null || !(v[i] > 0) ? null : ret[i] / v[i]));
-    if (p.smooth > 1) raw = I.ema(raw, p.smooth);
-    for (let i = 0; i < s.c.length; i++) {
-      if (raw[i] == null || s.fwd[i] == null || s.d[i] < FROM) continue;
-      if (!days.has(s.d[i])) days.set(s.d[i], []);
-      days.get(s.d[i]).push({ x: raw[i], y: s.fwd[i] });
+  for (const [, s] of syms) {
+    const v = I.compute(s, p, indId);
+    for (let i = 0; i < v.length; i++) {
+      if (v[i] == null || s.fwd[i] == null || s.dates[i] < FROM) continue;
+      if (!days.has(s.dates[i])) days.set(s.dates[i], []);
+      days.get(s.dates[i]).push({ x: v[i], y: s.fwd[i] });
     }
   }
   const td = [], ls = [];
@@ -111,52 +121,57 @@ function evaluate(p) {
     return { m: +m.toFixed(4), t: +(m / (sd(v) / Math.sqrt(eff))).toFixed(2), n: eff };
   };
   return {
-    ...p,
-    days: td.length,
+    indicator: indId, ...p, days: td.length,
     top: { all: stat(td, FROM, '2099'), pre: stat(td, FROM, SPLIT), post: stat(td, SPLIT, '2099') },
     spread: { all: stat(ls, FROM, '2099'), pre: stat(ls, FROM, SPLIT), post: stat(ls, SPLIT, '2099') },
   };
 }
 
 const combos = [];
-for (const lookback of GRID.lookback) {
-  for (const skip of GRID.skip) {
-    for (const volWindow of GRID.volWindow) {
-      for (const smooth of GRID.smooth) combos.push({ lookback, skip, volWindow, smooth });
-    }
-  }
+for (const ind of I.INDICATORS) {
+  const g = GRIDS[ind.id];
+  if (!g) continue;
+  const keys = ind.params;
+  const walk = (i, acc) => {
+    if (i === keys.length) { combos.push({ ind: ind.id, p: { ...acc } }); return; }
+    for (const v of g[keys[i]]) walk(i + 1, { ...acc, [keys[i]]: v });
+  };
+  walk(0, {});
 }
-console.log(`evaluating ${combos.length} parameter sets...`);
+console.log(`evaluating ${combos.length} parameter sets across ${I.INDICATORS.length} indicators...`);
 const out = [];
 for (let i = 0; i < combos.length; i++) {
-  out.push(evaluate(combos[i]));
+  out.push(evaluate(combos[i].ind, combos[i].p));
   process.stdout.write(`\r  ${i + 1}/${combos.length}`);
 }
 console.log('');
 
 const payload = {
-  indicator: 'velocity',
   builtAt: new Date().toISOString(),
   horizonDays: FWD,
   from: FROM,
   split: SPLIT,
   symbols: syms.size,
-  grid: GRID,
+  grids: GRIDS,
   results: out,
 };
 fs.writeFileSync(OUT, JSON.stringify(payload));
-console.log(`\nwrote ${OUT}  (${(fs.statSync(OUT).size / 1024).toFixed(0)} KB) in ${((Date.now() - t0) / 1000).toFixed(1)}s\n`);
+console.log(`\nwrote ${OUT}  (${(fs.statSync(OUT).size / 1024).toFixed(0)} KB) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
-// What the grid found, so a run that produced nothing says so rather than
-// leaving it to be discovered in the UI.
-const ranked = out.filter((r) => r.top.all).sort((a, b) => b.top.all.t - a.top.all.t);
-console.log('strongest settings by top-decile t over the full period:');
-console.log(`  ${'lookback skip vol smooth'.padEnd(26)}${'full'.padStart(16)}${'pre-2020'.padStart(16)}${'2020+'.padStart(16)}`);
+// What the grid found, per indicator, so a run that produced nothing says so
+// rather than leaving it to be discovered in the UI.
 const cell = (s) => (s ? `${(s.m >= 0 ? '+' : '') + s.m.toFixed(2)}% t${s.t.toFixed(1).padStart(6)}` : '—');
-for (const r of ranked.slice(0, 8)) {
-  console.log(`  ${String(r.lookback).padStart(5)}${String(r.skip).padStart(6)}${String(r.volWindow).padStart(5)}` +
-    `${String(r.smooth).padStart(7)}     ${cell(r.top.all).padStart(15)}${cell(r.top.pre).padStart(16)}${cell(r.top.post).padStart(16)}`);
+for (const ind of I.INDICATORS) {
+  const mine = out.filter((r) => r.indicator === ind.id && r.top.all);
+  if (!mine.length) continue;
+  const ranked = [...mine].sort((a, b) => b.top.all.t - a.top.all.t);
+  console.log(`\n${ind.label} — strongest by top-decile t over the full period:`);
+  console.log(`  ${'settings'.padEnd(34)}${'full'.padStart(15)}${'pre-2020'.padStart(16)}${'2020+'.padStart(16)}`);
+  for (const r of ranked.slice(0, 5)) {
+    const desc = ind.params.map((k) => `${k} ${r[k]}`).join(', ');
+    console.log(`  ${desc.padEnd(34)}${cell(r.top.all).padStart(15)}${cell(r.top.pre).padStart(16)}${cell(r.top.post).padStart(16)}`);
+  }
+  const best = Math.max(...mine.map((r) => Math.abs(r.top.all.t)));
+  console.log(`  best |t| across ${mine.length} settings: ${best.toFixed(2)}` +
+    ` — at that many tests, under about 3 is what noise looks like.`);
 }
-const best = ranked[0];
-console.log(`\nbest |t| anywhere on the grid: ${best ? best.top.all.t.toFixed(2) : 'n/a'}` +
-  ` — with ${out.length} settings tested, anything under about 3 is what noise looks like.`);
