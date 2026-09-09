@@ -212,7 +212,7 @@
           <div id="symList"></div>
         </div>
       </span>
-      <span class="co" id="co"></span>
+      <a class="co namelink" id="co" href="#"></a>
       <span class="span" id="span"></span>
     </div>
 
@@ -338,6 +338,8 @@
       $('loading').hidden = true;
       $('sym').textContent = data.symbol;
       $('co').textContent = data.name || '';
+      $('co').href = `/stock/${encodeURIComponent(data.symbol)}`;
+      $('co').title = `${data.symbol} on the stock page`;
       $('span').textContent = `${data.from} → ${data.to}`;
       $('backStock').href = `/stock/${encodeURIComponent(data.symbol)}`;
       document.title = `${data.symbol} signal study — Tickr Lab`;
