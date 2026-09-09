@@ -2430,9 +2430,9 @@ app.get('/api/lab', requireAuth, route(async (req, res) => {
   if (rows.length < 300) {
     return res.status(422).json({ error: `${symbol} has ${rows.length} sessions stored; the lab needs 300.` });
   }
-  const FWD = 21;
-  const fwd = rows.map((r, i) => (i + FWD < rows.length
-    ? Math.round((rows[i + FWD].c - r.c) / r.c * 10000) / 100 : null));
+  // No forward-return array here. The page derives it from the closes for
+  // whichever horizon is selected, which is both cheaper than shipping five of
+  // them and the only way an arbitrary horizon could work at all.
 
   // The momentum score, aligned to the bar dates by lookup rather than by
   // position. momentum_history only holds rows for days a symbol was scoreable —
@@ -2449,10 +2449,9 @@ app.get('/api/lab', requireAuth, route(async (req, res) => {
   res.json({
     symbol,
     name: row ? row.name : '',
-    horizonDays: FWD,
+    horizons: Indicators.HORIZONS,
     dates: rows.map((r) => r.d),
     closes: rows.map((r) => Math.round(r.c * 100) / 100),
-    fwd,
     score,
     scoredFrom: hist.length ? hist[0].d : null,
     indicators: Indicators.INDICATORS.map((x) => ({

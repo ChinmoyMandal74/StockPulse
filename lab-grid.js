@@ -57,7 +57,6 @@ const GRIDS = QUICK ? {
   },
 };
 
-const FWD = 21;                 // one month forward, the owner's horizon
 const MIN_PER_DAY = 20;
 const FROM = '2008-01-01';
 const SPLIT = '2020-01-01';
@@ -89,22 +88,25 @@ for (const r of bars) {
   const k = r.symbol + '|' + r.d;
   s.score.push(scoreAt.has(k) ? scoreAt.get(k) : null);
 }
+// One forward series per horizon, computed once — the parameters do not touch it.
 for (const s of syms.values()) {
-  s.fwd = s.closes.map((c, i) => (i + FWD < s.closes.length ? (s.closes[i + FWD] - c) / c * 100 : null));
+  s.fwdBy = {};
+  for (const h of I.HORIZONS) s.fwdBy[h.days] = I.forwardReturn(s.closes, h.days);
 }
 console.log(`${bars.length.toLocaleString()} bars, ${scores.length.toLocaleString()} scored rows, ` +
   `${syms.size} symbols, ${((Date.now() - t0) / 1000).toFixed(1)}s\n`);
 
 // One parameter set: rank within each day, measure excess over that day's
 // universe, and report the top decile and the top-minus-bottom-third spread.
-function evaluate(indId, p) {
+function evaluate(indId, p, FWD) {
   const days = new Map();
   for (const [, s] of syms) {
     const v = I.compute(s, p, indId);
+    const fwd = s.fwdBy[FWD];
     for (let i = 0; i < v.length; i++) {
-      if (v[i] == null || s.fwd[i] == null || s.dates[i] < FROM) continue;
+      if (v[i] == null || fwd[i] == null || s.dates[i] < FROM) continue;
       if (!days.has(s.dates[i])) days.set(s.dates[i], []);
-      days.get(s.dates[i]).push({ x: v[i], y: s.fwd[i] });
+      days.get(s.dates[i]).push({ x: v[i], y: fwd[i] });
     }
   }
   const td = [], ls = [];
@@ -127,7 +129,7 @@ function evaluate(indId, p) {
     return { m: +m.toFixed(4), t: +(m / (sd(v) / Math.sqrt(eff))).toFixed(2), n: eff };
   };
   return {
-    indicator: indId, ...p, days: td.length,
+    indicator: indId, horizon: FWD, ...p, days: td.length,
     top: { all: stat(td, FROM, '2099'), pre: stat(td, FROM, SPLIT), post: stat(td, SPLIT, '2099') },
     spread: { all: stat(ls, FROM, '2099'), pre: stat(ls, FROM, SPLIT), post: stat(ls, SPLIT, '2099') },
   };
@@ -139,7 +141,10 @@ for (const ind of I.INDICATORS) {
   if (!g) continue;
   const keys = ind.params;
   const walk = (i, acc) => {
-    if (i === keys.length) { combos.push({ ind: ind.id, p: { ...acc } }); return; }
+    if (i === keys.length) {
+      for (const h of I.HORIZONS) combos.push({ ind: ind.id, p: { ...acc }, h: h.days });
+      return;
+    }
     for (const v of g[keys[i]]) walk(i + 1, { ...acc, [keys[i]]: v });
   };
   walk(0, {});
@@ -147,14 +152,14 @@ for (const ind of I.INDICATORS) {
 console.log(`evaluating ${combos.length} parameter sets across ${I.INDICATORS.length} indicators...`);
 const out = [];
 for (let i = 0; i < combos.length; i++) {
-  out.push(evaluate(combos[i].ind, combos[i].p));
+  out.push(evaluate(combos[i].ind, combos[i].p, combos[i].h));
   process.stdout.write(`\r  ${i + 1}/${combos.length}`);
 }
 console.log('');
 
 const payload = {
   builtAt: new Date().toISOString(),
-  horizonDays: FWD,
+  horizons: I.HORIZONS,
   from: FROM,
   split: SPLIT,
   symbols: syms.size,
@@ -168,10 +173,10 @@ console.log(`\nwrote ${OUT}  (${(fs.statSync(OUT).size / 1024).toFixed(0)} KB) i
 // rather than leaving it to be discovered in the UI.
 const cell = (s) => (s ? `${(s.m >= 0 ? '+' : '') + s.m.toFixed(2)}% t${s.t.toFixed(1).padStart(6)}` : '—');
 for (const ind of I.INDICATORS) {
-  const mine = out.filter((r) => r.indicator === ind.id && r.top.all);
+  const mine = out.filter((r) => r.indicator === ind.id && r.horizon === 21 && r.top.all);
   if (!mine.length) continue;
   const ranked = [...mine].sort((a, b) => b.top.all.t - a.top.all.t);
-  console.log(`\n${ind.label} — strongest by top-decile t over the full period:`);
+  console.log(`\n${ind.label} — strongest by top-decile t, one month forward:`);
   console.log(`  ${'settings'.padEnd(34)}${'full'.padStart(15)}${'pre-2020'.padStart(16)}${'2020+'.padStart(16)}`);
   for (const r of ranked.slice(0, 5)) {
     const desc = ind.params.map((k) => `${k} ${r[k]}`).join(', ');

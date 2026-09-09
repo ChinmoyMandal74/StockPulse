@@ -248,6 +248,35 @@
     warmup: (p) => p.period + p.skip + 1,
   });
 
+  // The forward horizons the lab can test over. Not a property of any indicator
+  // — it is a property of the question — but it lives here because this is the
+  // module all three surfaces already load, and a page offering a horizon the
+  // grid never computed would snap silently to the wrong row.
+  //
+  // The owner holds for one to two months, so 21 and 42 are the ones that matter;
+  // the shorter two are there because reversal and continuation change places
+  // somewhere below a month and it should be possible to see where.
+  const HORIZONS = [
+    { days: 5, label: '1 week' },
+    { days: 10, label: '2 weeks' },
+    { days: 21, label: '1 month' },
+    { days: 42, label: '2 months' },
+    { days: 63, label: '3 months' },
+  ];
+
+  // Forward return over `days` sessions, as a percentage. Derived rather than
+  // shipped: the browser already has the closes, so sending a forward array per
+  // horizon would be five copies of something it can work out itself.
+  function forwardReturn(closes, days) {
+    const out = new Array(closes.length).fill(null);
+    for (let i = 0; i + days < closes.length; i++) {
+      const a = num(closes[i]), b = num(closes[i + days]);
+      if (a == null || b == null || a === 0) continue;
+      out[i] = (b - a) / a * 100;
+    }
+    return out;
+  }
+
   const byId = (id) => INDICATORS.find((x) => x.id === id) || INDICATORS[0];
 
   // Clamped to the bounds of whichever indicator is asking, and anything it does
@@ -276,6 +305,6 @@
     return ind.compute(series, clean(p, indicatorId));
   }
 
-  return { INDICATORS, byId, BOUNDS, clean, warmup, compute,
+  return { INDICATORS, HORIZONS, byId, BOUNDS, clean, warmup, compute, forwardReturn,
     realisedVolSeries, windowReturn, rollingSlope, rsiSeries, lag, ema };
 });

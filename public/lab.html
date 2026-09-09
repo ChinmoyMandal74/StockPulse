@@ -71,6 +71,13 @@
     .knob .kd { margin-top: 3px; font-size: 11px; color: var(--faint); line-height: 1.45; }
     .reset { margin-top: 12px; }
     .picks { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 10px; }
+    .hrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+    .hlab { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+    .hor { padding: 4px 11px; border-radius: 999px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer;
+      font-family: var(--sans); font-size: 12.5px; transition: all 0.3s var(--ease); }
+    .hor:hover { color: var(--text); border-color: var(--hair-2); }
+    .hor.on { color: var(--text); border-color: var(--mom); background: rgba(34, 211, 238, 0.12); }
     .pick2 { padding: 6px 13px; border-radius: 999px; border: 1px solid var(--hair);
       background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer;
       font-family: var(--sans); font-size: 13px; transition: all 0.3s var(--ease); }
@@ -218,6 +225,7 @@
       <div class="ptitle">The indicator</div>
       <div class="picks" id="indPicks"></div>
       <p class="pnote" id="indBlurb"></p>
+      <div class="hrow"><span class="hlab">Measure against the next</span><span id="horPicks"></span></div>
       <div class="nodata" id="noScore" hidden></div>
       <div class="knobs" id="knobs"></div>
       <button class="btn reset" id="resetBtn">Reset to defaults</button>
@@ -266,6 +274,11 @@
   <script>
     const SYMBOL = decodeURIComponent(location.pathname.split('/').pop() || '').toUpperCase();
     let data = null, grid = null, params = null, range = 756, current = 'velocity';
+    // The forward horizon every statistic on the page is measured over. Not
+    // shipped as an array per horizon — the browser has the closes and derives
+    // it, which is why this can be any value the grid has rather than a fixed one.
+    let horizon = 21;
+    const hLabel = () => (data.horizons.find((h) => h.days === horizon) || { label: horizon + ' sessions' }).label;
     const ind = () => (data.indicators.find((x) => x.id === current) || data.indicators[0]);
     // An indicator that reads the score is unusable on a symbol too short to
     // have one — SKHY and SPCX have neither, and several faders are scored only
@@ -310,6 +323,13 @@
       $('backStock').href = `/stock/${encodeURIComponent(data.symbol)}`;
       document.title = `${data.symbol} indicator lab — Tickr Lab`;
       renderPicks();
+      renderHorizons();
+      $('horPicks').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-h]');
+        if (!b || Number(b.dataset.h) === horizon) return;
+        horizon = Number(b.dataset.h);
+        renderHorizons(); recompute();
+      });
 
       $('ranges').innerHTML = RANGES.map((r) =>
         `<button class="rng${r.id === range ? ' on' : ''}" data-range="${r.id}">${r.label}</button>`).join('');
@@ -339,6 +359,11 @@
       for (const id of ['pKnobs', 'pChart', 'pScatter', 'pDeciles', 'pStats', 'pGrid', 'warn']) $(id).hidden = false;
       renderWarning();
       recompute();
+    }
+
+    function renderHorizons() {
+      $('horPicks').innerHTML = data.horizons.map((h) =>
+        `<button class="hor${h.days === horizon ? ' on' : ''}" data-h="${h.days}">${esc(h.label)}</button>`).join(' ');
     }
 
     function renderPicks() {
@@ -389,15 +414,16 @@
       // `data` already is the series bundle the indicators expect: closes,
       // score and dates, all aligned to the same index.
       series = Indicators.compute(data, params, current);
+      const fwd = Indicators.forwardReturn(data.closes, horizon);
       pairs = [];
       for (let i = 0; i < series.length; i++) {
-        if (series[i] == null || data.fwd[i] == null) continue;
+        if (series[i] == null || fwd[i] == null) continue;
         if (data.dates[i] < '2008-01-01') continue;
-        pairs.push({ d: data.dates[i], x: series[i], y: data.fwd[i] });
+        pairs.push({ d: data.dates[i], x: series[i], y: fwd[i] });
       }
       const at = (from, to) => {
         const p = pairs.filter((q) => q.d >= from && q.d < to).map((q) => ({ x: q.x, y: q.y }));
-        return p.length > 60 ? SignalStats.summarise(p, data.horizonDays) : null;
+        return p.length > 60 ? SignalStats.summarise(p, horizon) : null;
       };
       stats = { all: at('0000', '9999'), pre: at('0000', '2020-01-01'), post: at('2020-01-01', '9999') };
       drawChart(); drawScatter(); drawDeciles(); renderStats(); renderGrid();
@@ -529,14 +555,14 @@
       const axn = `<text class="axname" x="${(SC.l + SC.w - SC.r) / 2}" y="${SC.h - 6}" text-anchor="middle">` +
         `${esc(ind().label)}</text>` +
         `<text class="axname" transform="translate(13 ${(SC.t + SC.h - SC.b) / 2}) rotate(-90)" text-anchor="middle">` +
-        `Return, next ${data.horizonDays} sessions</text>`;
+        `Return, next ${horizon} sessions</text>`;
 
       $('scatter').innerHTML = g + fits + dots + axn;
       dotNodes = $('scatter').querySelectorAll('.dot');
       hideTip();
       $('scNote').textContent =
         `One dot per session: the indicator that day against what the price did over the next ` +
-        `${data.horizonDays} sessions. A relationship shows as a tilt in the cloud, not as the dashed ` +
+        `${hLabel()}. A relationship shows as a tilt in the cloud, not as the dashed ` +
         `lines — those are drawn through whatever they are given.` +
         (clamped ? ` Axes cover the middle 99%; ${clamped} point${clamped === 1 ? '' : 's'} pinned to the edge.` : '');
     }
@@ -586,7 +612,7 @@
       const ro = $('ro');
       ro.innerHTML = `<div class="dt-d">${esc(v.d)}</div>` +
         tipRow(ind().label, v.x.toFixed(3)) +
-        tipRow(`Next ${data.horizonDays} sessions`, pct(v.y), v.y >= 0 ? 'pos' : 'neg');
+        tipRow(`Next ${horizon} sessions`, pct(v.y), v.y >= 0 ? 'pos' : 'neg');
       ro.hidden = false;
       const wrap = e.currentTarget.parentElement.getBoundingClientRect();
       const dx = (plotted[best].cx / SC.w) * box.width + (box.left - wrap.left);
@@ -660,7 +686,7 @@
     function renderStats() {
       const s = stats.all;
       $('statNote').textContent = s
-        ? `Correlation of the indicator with the next ${data.horizonDays} sessions' return, for ${data.symbol} alone. ` +
+        ? `Correlation of the indicator with the next ${hLabel()}' return, for ${data.symbol} alone. ` +
           `One stock is a small sample and the periods below are the check on it.`
         : 'Not enough history at these settings.';
       if (!s) { $('cards').innerHTML = ''; return; }
@@ -669,7 +695,7 @@
         `<div class="card2"><div class="cl">${esc(label)}</div>` +
         `<div class="cv ${k || ''}">${esc(val)}</div><div class="cs">${esc(sub)}</div></div>`;
       $('cards').innerHTML =
-        card('Correlation', (s.r >= 0 ? '+' : '') + s.r.toFixed(3), 'with the next month', cls(s.r)) +
+        card('Correlation', (s.r >= 0 ? '+' : '') + s.r.toFixed(3), `with the next ${hLabel()}`, cls(s.r)) +
         card('Observations', nf(s.n), `~${nf(s.effectiveN)} independent`) +
         card('Lift', (s.quadrants.lift * 100 >= 0 ? '+' : '') + (s.quadrants.lift * 100).toFixed(1) + ' pts',
           'hit rate minus base rate', Math.abs(s.quadrants.lift * 100) < 2 ? 'weak' : (s.quadrants.lift > 0 ? 'real' : 'weak')) +
@@ -686,9 +712,14 @@
       const near = (arr, v) => arr.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
       const want = {};
       for (const k of ind().params) want[k] = near(g[k], params[k]);
-      const row = grid.results.find((r) => r.indicator === current &&
+      // Snap to the nearest horizon the grid actually computed, the same way the
+      // parameters snap — offering a horizon it never tested would quietly show
+      // the numbers for a different question.
+      const hs = (grid.horizons || []).map((h) => h.days);
+      const wantH = hs.length ? near(hs, horizon) : horizon;
+      const row = grid.results.find((r) => r.indicator === current && r.horizon === wantH &&
         ind().params.every((k) => r[k] === want[k])) || null;
-      return { want, row };
+      return { want, wantH, row };
     }
 
     function renderGrid() {
@@ -697,13 +728,15 @@
         $('gridNote').textContent = 'No precomputed grid — run lab-grid.js to build one.';
         $('gridTable').innerHTML = ''; return;
       }
-      const exact = ind().params.every((k) => n.want[k] === params[k]);
+      const exact = ind().params.every((k) => n.want[k] === params[k]) && n.wantH === horizon;
       $('gridNote').textContent =
         `Every stock, ranked against the others each day, return measured as excess over the universe that day. ` +
         (exact ? 'These are your exact settings.'
           : 'Your settings are between grid points — showing the nearest tested: ' +
-            ind().params.map((k) => `${data.bounds[k].label.toLowerCase()} ${n.want[k]}`).join(', ') + '.');
-      const mine = grid.results.filter((x) => x.indicator === current && x.top.all);
+            ind().params.map((k) => `${data.bounds[k].label.toLowerCase()} ${n.want[k]}`).join(', ') +
+            (n.wantH === horizon ? '' : `, measured over ${n.wantH} sessions`) + '.');
+      const mine = grid.results.filter((x) => x.indicator === current &&
+        x.horizon === n.wantH && x.top.all);
       const cell = (s) => (s == null ? '<td>—</td>'
         : `<td class="${Math.abs(s.t) < 2 ? 'weak' : (s.t > 0 ? 'real' : 'weak')}">` +
           `${(s.m >= 0 ? '+' : '') + s.m.toFixed(2)}%<span class="sub">t ${s.t.toFixed(1)} · n ${s.n}</span></td>`);
