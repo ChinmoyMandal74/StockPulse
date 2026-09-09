@@ -172,15 +172,24 @@
            color: var(--red); font-size: 13.5px; }
     .loading { margin: 30px 0; color: var(--faint); font-size: 13px; }
 
-    /* hover readout on the scatter */
+    /* the dot tooltip — follows the cursor rather than sitting in a corner, so
+       the eye does not have to leave the point it is asking about */
     .plotwrap { position: relative; }
-    .readout {
-      position: absolute; left: 10px; top: 8px; padding: 5px 10px; border-radius: 8px;
-      background: rgba(13, 16, 23, 0.92); border: 1px solid var(--hair);
-      font-family: var(--mono); font-size: 11px; white-space: nowrap; pointer-events: none;
-      display: flex; gap: 8px; align-items: baseline;
+    .dottip {
+      position: absolute; z-index: var(--z-tip); pointer-events: none;
+      min-width: 168px; padding: 9px 11px; border-radius: 12px;
+      background: rgba(10, 12, 17, 0.94); border: 1px solid var(--hair-2);
+      backdrop-filter: blur(18px) saturate(160%); -webkit-backdrop-filter: blur(18px) saturate(160%);
+      box-shadow: 0 22px 46px -18px rgba(0, 0, 0, 0.95);
     }
-    .readout .k { color: var(--faint); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.1em; }
+    .dottip .dt-d { font-family: var(--mono); font-size: 12px; color: var(--text);
+                    padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--hair); }
+    .dottip .dt-r { display: flex; justify-content: space-between; gap: 16px; padding: 1.5px 0; }
+    .dottip .dt-k { font-size: 11px; color: var(--faint); }
+    .dottip .dt-v { font-family: var(--mono); font-size: 11.5px; color: var(--text); }
+    .dottip .dt-v.pos { color: var(--green); }
+    .dottip .dt-v.neg { color: var(--red); }
+    .dottip .dt-hr { height: 1px; background: var(--hair); margin: 6px 0; }
   </style>
 </head>
 <body>
@@ -244,7 +253,7 @@
         <p class="pnote" id="n1"></p>
         <div class="plotwrap">
           <svg class="plot" id="scatter" viewBox="0 0 620 380" role="img"></svg>
-          <span class="readout" id="ro" hidden></span>
+          <div class="dottip" id="ro" hidden></div>
         </div>
       </div>
     </section>
@@ -404,7 +413,8 @@
 
     // ---- scatter ------------------------------------------------------------
     const PL = { l: 52, r: 16, t: 14, b: 44, w: 620, h: 380 };
-    let plotted = [];   // {cx, cy, i} for the hover readout
+    let plotted = [];       // {cx, cy, i} for the hover tooltip
+    let dotNodes = [];      // the circles, in the same order as `plotted`
 
     function niceTicks(lo, hi, want = 5) {
       if (!(hi > lo)) return [lo];
@@ -486,6 +496,8 @@
         `<text class="axname" transform="translate(13 ${(PL.t + PL.h - PL.b) / 2}) rotate(-90)" text-anchor="middle">Return, ${esc(data.horizon.label)}</text>`;
 
       $('scatter').innerHTML = g + fitln + dots + axn;
+      dotNodes = $('scatter').querySelectorAll('.dot');
+      hideTip();
       $('n1').textContent =
         `Each dot is one session: where the signal stood, against what the price then did over the ` +
         `${data.horizon.label}. A relationship would show as a tilt in the cloud, not as the dashed line — ` +
@@ -494,34 +506,83 @@
           `beyond them and ${clamped === 1 ? 'is' : 'are'} pinned to the edge.` : '');
     }
 
-    // hover: nearest dot within a radius, so an empty patch says nothing
+    // hover: nearest dot within a radius, so an empty patch says nothing rather
+    // than volunteering whichever point happens to be closest across the chart.
+    let hiNode = null;
+    const row = (k, v, cls) =>
+      `<div class="dt-r"><span class="dt-k">${esc(k)}</span>` +
+      `<span class="dt-v${cls ? ' ' + cls : ''}">${esc(v)}</span></div>`;
+
+    function tipFor(i) {
+      const sc = data.score ? data.score[i] : null;
+      const delta = data.signal.id === 'delta' ? data.x[i] : null;
+      const was = sc != null && delta != null ? sc - delta : null;
+      const cl = data.close ? data.close[i] : null;
+      let h = `<div class="dt-d">${esc(data.dates[i])}</div>`;
+      if (cl != null) h += row('Close', cl.toFixed(2));
+      if (sc != null) h += row('Momentum', sc.toFixed(1));
+      if (was != null) {
+        h += row(`${pastLabel()} ago`, was.toFixed(1));
+        h += row('Delta', (delta >= 0 ? '+' : '') + delta.toFixed(1),
+          Math.abs(delta) < 0.05 ? '' : delta > 0 ? 'pos' : 'neg');
+      } else {
+        h += row(data.signal.label, data.x[i].toFixed(2));
+      }
+      if (data.rsi && data.rsi[i] != null) h += row('RSI 14', data.rsi[i].toFixed(1));
+      h += '<div class="dt-hr"></div>';
+      // The forward return is the answer the whole chart is asking after, so it
+      // sits below a rule rather than in the list of conditions above it.
+      h += row(`Next ${esc(data.horizon.label.replace('next ', ''))}`, pct(data.y[i]),
+        data.y[i] >= 0 ? 'pos' : 'neg');
+      return h;
+    }
+    // Read off the signal's own label — "Momentum delta (2W)" — so changing the
+    // delta's lookback in SIGNAL_XS cannot leave the tooltip saying 2W forever.
+    const pastLabel = () => (data.signal.label.match(/\(([^)]+)\)/) || [, ''])[1];
+
+    function hideTip() {
+      $('ro').hidden = true;
+      if (hiNode) { hiNode.classList.remove('hi'); hiNode = null; }
+    }
+
     $('scatter').addEventListener('pointermove', (e) => {
-      if (!plotted.length) return;
+      if (!plotted.length) return hideTip();
       const box = e.currentTarget.getBoundingClientRect();
       const sx = (e.clientX - box.left) / box.width * PL.w;
       const sy = (e.clientY - box.top) / box.height * PL.h;
-      let best = null, bd = 12 * 12;
-      for (const p of plotted) {
+      let best = -1, bd = 11 * 11;
+      for (let k = 0; k < plotted.length; k++) {
+        const p = plotted[k];
         const d = (p.cx - sx) ** 2 + (p.cy - sy) ** 2;
-        if (d < bd) { bd = d; best = p; }
+        if (d < bd) { bd = d; best = k; }
       }
+      if (best < 0) return hideTip();
+
+      // dotNodes is captured once per render; querying 2,235 circles on every
+      // pointer move made the chart feel sticky.
+      const node = dotNodes[best];
+      if (node !== hiNode) {
+        if (hiNode) hiNode.classList.remove('hi');
+        hiNode = node;
+        if (node) node.classList.add('hi');
+      }
+
       const ro = $('ro');
-      const old = document.querySelector('.plot .dot.hi');
-      if (old) old.classList.remove('hi');
-      if (!best) { ro.hidden = true; return; }
-      const node = $('scatter').querySelectorAll('.dot')[plotted.indexOf(best)];
-      if (node) node.classList.add('hi');
-      ro.innerHTML =
-        `<span class="k">${esc(data.dates[best.i])}</span>` +
-        `<span class="k">signal</span> ${data.x[best.i].toFixed(2)}` +
-        `<span class="k">then</span> ${pct(data.y[best.i])}`;
+      ro.innerHTML = tipFor(plotted[best].i);
       ro.hidden = false;
+      // Placed against the dot, then clamped inside the plot so a point near an
+      // edge does not push the card out of the card it lives in.
+      const wrap = e.currentTarget.parentElement.getBoundingClientRect();
+      const dotX = (plotted[best].cx / PL.w) * box.width + (box.left - wrap.left);
+      const dotY = (plotted[best].cy / PL.h) * box.height + (box.top - wrap.top);
+      const tw = ro.offsetWidth, th = ro.offsetHeight;
+      let left = dotX + 14, top = dotY - th - 12;
+      if (left + tw > wrap.width - 4) left = dotX - tw - 14;
+      if (top < 4) top = dotY + 16;
+      ro.style.left = Math.max(4, Math.min(wrap.width - tw - 4, left)) + 'px';
+      ro.style.top = Math.max(4, Math.min(wrap.height - th - 4, top)) + 'px';
     });
-    $('scatter').addEventListener('pointerleave', () => {
-      $('ro').hidden = true;
-      const old = document.querySelector('.plot .dot.hi');
-      if (old) old.classList.remove('hi');
-    });
+    $('scatter').addEventListener('pointerleave', hideTip);
 
     // ---- decile bars --------------------------------------------------------
     function renderBars(s) {

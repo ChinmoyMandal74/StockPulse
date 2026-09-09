@@ -2501,6 +2501,11 @@ app.get('/api/signal', requireAuth, route(async (req, res) => {
     x: px,
     y: py,
     rsi: usable.map((r) => rsiAt.get(r.d)),
+    // The score and the close on each date, so a dot's tooltip can say what the
+    // stock actually was that day rather than only where it sits on two axes.
+    // The score a lookback ago is score - delta, so it costs nothing to ship.
+    score: usable.map((r) => r.score),
+    close: usable.map((r) => r.close),
     rsiBands: RSI_BANDS,
     stats: Signal.summarise(pairs, h.days, xs.split),
     sampled: Signal.summarise(thinned, 1, xs.split),
