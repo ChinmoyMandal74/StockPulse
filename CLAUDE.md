@@ -23,6 +23,7 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `migrate-to-turso.js` | One-off JSON → Turso seeder; `--commit` to write, idempotent |
 | `momentum.js` | **Momentum scored from bars and nothing else** — no database, no API, no universe. Shared by the live refresh, the backfill and the chart |
 | `backfill-momentum.js` | One-off recompute of `momentum_history` from the archive; `--commit`, `--only`, `--from`, `--rebuild` |
+| `analysis-db.js` | **The local SQLite copy of the archive, for analysis.** `--full` rebuilds, no flag syncs, `--stats` reports. Never query Turso for research when this exists |
 | `purge-orphans.js` | Deletes data for symbols in no portfolio; `--commit`, `--only`. Dry run by default |
 | `backfill-bars.js` | One-off deep pull of the daily bar archive; `--commit`, `--depth`, `--only` |
 | `set-password.js` | Local account admin — list accounts, set a password, change a role |
@@ -603,7 +604,10 @@ So a single query has carried 441k full rows fine, and the failure came after **
 
 - **Production is nowhere near it.** The largest query any route issues is 50k rows in 2.0s — about eighty times inside the wall. This constrains ad-hoc analysis, nothing else.
 - **Pushing the work into SQL is not the escape hatch it looks like.** The `ntile()` aggregation returns ten rows and still took 159.7s: for whole-archive work Turso is compute-bound too, and that query is itself close to timing out.
-- **For repeated analysis, take a local copy.** `node:sqlite` ships with Node 24, so a local archive costs no dependency, and analysis against it is network-free and instant to iterate. Chunked export by symbol (groups of 8) pulls the lot in 41s.
+- **For repeated analysis, use the local copy — `analysis-db.js`.** `node:sqlite` ships with Node 24, so it adds no dependency. **Full build 48.6s for 852,706 rows; incremental sync 4.7s.** Verified faithful on creation: every table's count matched and 726 spot-checked values differed by exactly zero.
+  - **The gain is not marginal.** The `ntile()` decile query takes **0.53s locally against 159.7s on Turso — 300x**, and the whole momentum table loads into memory in 0.39s against 41s chunked over the network. Research that was minutes-per-iteration is now instant, and costs no rows against the Turso account.
+  - **It deliberately omits `users`, `sessions` and `password_resets`** — password hashes and live session tokens have no business in an unencrypted file on a laptop — and `visitors`, `prefs`, `chat_usage` as personal and useless here. **It is not a backup.**
+  - The schema is copied from `sqlite_master` rather than restated, so a column added upstream arrives without this file knowing about it. Dated tables re-pull `OVERLAP_DAYS` (10) on top of what is local, because the archive rewrites recent bars — a provisional close for a session still in progress is not final. A split rewrites a symbol's whole history, so **`--full` after a split**, the same repair path `backfill-bars.js --only` is for.
 - A full momentum backfill is **500.3s for 113 symbols**. The whole-universe cross-sectional query through `momentum_deltas` is **~3.8s**.
 
 ## The help page

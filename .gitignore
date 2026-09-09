@@ -18,3 +18,8 @@ visitors-archive-*.jsonl
 momentum-model-*.xlsx
 # Excel's lock file, created while the workbook is open.
 ~$*
+
+# Local analysis copy of the archive — derived, disposable, ~120 MB
+analysis.db
+analysis.db-wal
+analysis.db-shm
