@@ -44,7 +44,8 @@
     }
     #symBtn:hover, #symBtn[aria-expanded="true"] { background: rgba(255, 255, 255, 0.05); }
     #symBtn .caret { width: 15px; height: 15px; color: var(--faint); flex: none;
-                     transition: transform 0.4s var(--ease); }
+                     transition: transform 0.4s var(--ease), color 0.35s var(--ease); }
+    #symBtn:hover .caret { color: var(--muted); }
     #symBtn[aria-expanded="true"] .caret { transform: rotate(180deg); }
     #symMenu {
       position: absolute; top: calc(100% + 8px); left: 0; z-index: var(--z-nav);
@@ -204,7 +205,7 @@
       <span class="sympick">
         <button id="symBtn" aria-expanded="false" aria-haspopup="listbox">
           <h1 id="sym">—</h1>
-          <svg class="caret" aria-hidden="true"><use href="#i-chevron" /></svg>
+          <svg class="caret ic" aria-hidden="true"><use href="#i-chevron" /></svg>
         </button>
         <div id="symMenu" role="listbox">
           <input id="symFilter" type="text" placeholder="Filter by symbol or name…" autocomplete="off" />
