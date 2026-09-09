@@ -338,11 +338,23 @@ The workbook: four sheets — **Bars**, **Factors**, **Score**, **Signal** — i
 - **A history write never fails a refresh**, the same rule the bar archive follows.
 - The series will be **irregular**: a point exists only for days a Refresh all was run, not every calendar day. Fine for a chart, awkward for precise period comparisons.
 
+## The universe, and why it holds 33 stocks nobody is watching
+**116 symbols, of which 33 sit in a portfolio called `Faded`** — names that were prominent and have since declined: T, VZ, LUMN, WBD, NOK, ERIC, IBM, HPQ, XRX, CVS, TGT, DG, GPS, M, KSS, BBY, EL, NKE, SBUX, VFC, HAS, MMM, BA, F, GE, PFE, BMY, VTRS, DIS, PYPL, KHC, ZM, PTON. They are **deliberate ballast, not picks.**
+
+Every backtest before they existed ran on 83 stocks chosen *because they are worth following in 2026*, so the whole archive was conditioned on having survived to that date — visible as a **+1.02% per fortnight baseline, about 30% a year**, which no universe returns. A ranking test needs losers in the pool or it only measures the selection.
+
+- **29 of the 33 have pre-2010 history**, which was the selection criterion that mattered: the pre-2020 window is where every result vanished, and a 2021 IPO cannot de-bias it. Candidates were validated against the API *before* being added — a dead symbol would sit in a portfolio erroring forever. WBA was rejected that way (taken private).
+- **This is survivorship-*lite*, not a fix.** Every fader still trades. Companies that went bankrupt or were acquired are still absent, and those are the tail that matters most. Treat it as a large reduction in the bias, not its removal.
+- **119 is a hard ceiling** — Twelve Data rejects a batched `time_series` over 120 symbols and SPY is appended as the benchmark. At 116 there are three slots left. Past that the call needs chunking.
+- **They cost the screener something**, and that was accepted: the All tab is 116 rows instead of 83, and a Refresh all now needs ~20 rounds rather than 14 (`MAX_ROUNDS=25` already covered it). Filter to a portfolio to get the old view back.
+- **What adding them proved.** `from_high` had looked like the one factor with a consistent sign across the whole archive (1m long-short t −2.2 pre-2020). On the broadened universe it **fell to t −1.4 and lost half its magnitude** — it was universe-dependent, exactly the kind of result the hold-out discipline exists to catch. Meanwhile the post-2020 momentum effect *survived* de-biasing almost intact (mom121 top-decile t 3.3 before and after), which makes it more likely a regime than pure selection. The pre-2020 window stayed flat for everything (best t 0.9). Nothing yet clears a bar worth trading.
+
 ## Momentum history
-`momentum_history` keeps one row per symbol per trading day — the momentum score plus all eight sub-scores, stamped with the `model` that produced it, keyed on `(symbol, d)`. **Currently ~270,600 rows across 82 symbols, 2007-07-02 → today.**
+`momentum_history` keeps one row per symbol per trading day — the momentum score plus all eight sub-scores, stamped with the `model` that produced it, keyed on `(symbol, d)`. **Currently ~410,300 rows across 114 symbols, 2002-08-12 → today.**
 
 **It is a cache, not a record.** Every value is a pure function of bars already stored, so if the model changes the right move is to throw the rows away and recompute — nothing is lost, because nothing here was ever a measurement of its own. That is the opposite of `fundamentals_history`, where the API only ever returns *today* and an unrecorded day is gone forever.
 
+- **The backfill takes its symbol list from the PORTFOLIOS, not the snapshot.** It read the snapshot until Sep 2026, which is a cache of the last refresh — so the day 33 tickers were added it skipped every one of them and reported a clean "80 symbols scored" while doing it. The portfolios are the definition of what the screener covers; the snapshot is one rendering of it.
 - **`momentum.js` holds the scoring, and it is the only copy.** It was extracted from `server.js` precisely so the live refresh, the backfill and any later analysis cannot drift into three slightly different models. Verified on extraction against the live app: worst gap **0.100** across 81 symbols, none over 0.15.
 ### Past momentum and delta — the `momentum_deltas` view
 **They are not stored, because they are already stored.** Past momentum at a horizon *is* the score N trading days back, and `momentum_history` holds every trading day since 2007. Verified against the app's own numbers across **72 symbol-horizon pairs, gap 0.000** — including `delta_2w` against the `momentumChange` the screener ships. Materialising them would put ten copies of a number beside the number itself on 270,000 rows, free to drift from it and needing a rewrite on every model change.
@@ -453,7 +465,7 @@ Charts are hand-rolled inline SVG in `rowcard.js` — no library, no build step.
 - The name cell links to `/stock/<SYMBOL>` on **both** the screener and the analysis page; the symbol cell still links out to Google Finance. All of them open in a new tab (`target="_blank" rel="noopener"`), so a click never loses your place in the list. `.namelink` lives in `app.css` because two pages use it; only the frozen-column truncation (`td.frz1 .namelink`) stays in index.html. `.namelink` inherits its colour and only underlines on hover — 69 rows of blue underlines would wreck the table.
 
 ## Bar archive
-The `bars` table keeps one row per symbol per trading day (`open/high/low/close/volume`, keyed on `(symbol, d)`). **Currently 241,022 rows across 69 symbols, 2006-05-25 → 2026-08-28.**
+The `bars` table keeps one row per symbol per trading day (`open/high/low/close/volume`, keyed on `(symbol, d)`). **Currently 441,401 rows across 116 symbols, 2001-07-06 → today.**
 
 **It costs no API credits.** Every refresh already fetches ~300 daily bars per symbol and discards them; `persistBars()` writes them instead. Twelve Data charges **1 credit per symbol regardless of `outputsize`** — measured, `Api-Credits-Request: 1` for 5000 bars — which is why the deep backfill was affordable in the first place.
 

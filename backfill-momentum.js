@@ -88,8 +88,13 @@ async function report() {
     console.log('cleared momentum_history\n');
   }
 
-  const all = await store.readSnapshot();
-  let symbols = [...new Set(((all && all.stocks) || []).map((s) => s.symbol))];
+  // The universe comes from the PORTFOLIOS, not from the snapshot. The snapshot
+  // is a cache of the last refresh, so a ticker added since is invisible to it —
+  // which silently skipped all 33 names the day they were added, and reported a
+  // clean "80 symbols scored" while doing it. The portfolios are the definition
+  // of what the screener covers; the snapshot is one rendering of it.
+  const portfolios = await store.readPortfolios();
+  let symbols = [...new Set(Object.values(portfolios).flat())].sort();
   if (ONLY.length) symbols = symbols.filter((s) => ONLY.includes(s));
   if (!symbols.length) { console.error('no symbols'); process.exit(1); }
 
