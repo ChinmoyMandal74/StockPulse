@@ -5,6 +5,8 @@ A stock momentum screener POC. State lives in **Turso** (hosted libSQL/SQLite). 
 
 The repo/folder is `StockPulse`; the app is branded **Tickr Lab** in the UI (`<title>` and the bar wordmark).
 
+**116 symbols**, 33 of which are deliberate ballast — see **The universe, and why it holds 33 stocks nobody is watching**. Before designing any backtest, read **Does any of this predict anything? — the research log**: four framings have been tested and all four came back flat, and it records what is ruled out so the next attempt is a new one.
+
 ## Running the app
 ```
 node --use-system-ca server.js
@@ -505,7 +507,7 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 ## Chatbot
 `/chat` answers questions about the screener data. Open to **any signed-in user** (`requireAuth`), with the allowance set by role.
 
-**The whole dataset goes in the system prompt — there is no retrieval layer, and adding one would make it worse.** Measured against the live API, not estimated: the system prompt is **~17,500 tokens** for 69 stocks, roughly 250 per stock. (A bytes/4 estimate said 7,400 — it underestimates dense numeric CSV by well over 2x, so trust `usage` in a real response, not arithmetic on the payload.) That still fits a 200k context about eleven times over and stays viable past 700 stocks, well beyond the 119-ticker ceiling the price API imposes. Embeddings are the wrong tool twice: the data is a numeric table where "margin above 15%" is an exact filter rather than a similarity, and retrieval could only drop rows the answer needs.
+**The whole dataset goes in the system prompt — there is no retrieval layer, and adding one would make it worse.** Measured against the live API, not estimated: the system prompt was **~17,500 tokens** for 69 stocks, roughly 250 per stock — so at the current 116 it is around **29,000**, and worth re-measuring off `usage` rather than scaling this number if it ever matters. (A bytes/4 estimate said 7,400 — it underestimates dense numeric CSV by well over 2x, so trust `usage` in a real response, not arithmetic on the payload.) That still fits a 200k context about eleven times over and stays viable past 700 stocks, well beyond the 119-ticker ceiling the price API imposes. Embeddings are the wrong tool twice: the data is a numeric table where "margin above 15%" is an exact filter rather than a similarity, and retrieval could only drop rows the answer needs.
 
 - **`cache_control` sits on the data block, which caches everything before it too** — so the rules block rides along and the whole system prompt is cached. A real call showed `cache_read_input_tokens: 17470` against `input_tokens: 31`: after the first question, all you pay for is the question and the answer.
 - **`max_tokens` must cover the model's reasoning, not just the reply.** At 1200 a ranking question spent the entire budget thinking and came back with a single `thinking` block and no text at all — a silent empty answer. It is 6000 now. The reasoning is worth paying for: working through 69 rows is exactly where a model miscounts. `stop_reason === 'max_tokens'` is reported to the user as "ask something narrower" rather than a generic failure.
@@ -539,6 +541,54 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 - **On the hypothesis the filter was built to test** — low RSI plus a positive momentum delta. Across 264,290 stock-fortnights that cell returns **+3.57% against a +1.02% baseline**, the best of the twenty-five. But it is **811 sessions, ~81 independent, t = 1.71** against everything else, and the setup occurs 0.31% of the time. Suggestive, not established. Splitting it further, oversold alone gives +1.74% and a positive delta alone gives +0.99% — so what little there is comes from the RSI side, not the delta.
 - **What it currently says**: DELL, delta vs the next fortnight, **r 0.032 over 2,235 sessions (~223 independent), lift +3.5 pts** — no usable relationship, matching the universe-wide −0.003.
 
+## Does any of this predict anything? — the research log
+**Read this before designing another backtest.** Four framings have been tested against the full archive and all four came back flat. The point of writing them down is so the next session tries something new rather than rediscovering the same negatives.
+
+**The owner's constraint: a maximum holding period of one to two months.** That is the hardest horizon there is — short-term reversal has faded and momentum has not started — and it rules out most of what the literature offers. Anything proposed should be judged against it.
+
+### What has been tested, and what came back
+
+| test | result |
+|---|---|
+| **delta_2w → next fortnight**, pooled, 264,290 stock-fortnights | **r = −0.003.** Deciles flat at ~+1% |
+| delta_2w → *same* fortnight | r = 0.554 — it mostly restates the move that just happened |
+| **delta_2w cross-sectionally**, long-short | **−0.02%, t −0.15.** Nothing |
+| **score (level) → next fortnight**, pooled | **r = 0.0008.** Swapping level for delta in the same framing changes nothing |
+| **score cross-sectionally**, top decile | +0.51% excess per fortnight — but see the split below |
+| **the hold-out split** on that | **2008–2019 t 0.13; 2020–2026 t 2.47.** Twelve years of nothing, then everything |
+| **all eight sub-scores individually**, 1m and 3m, cross-sectional | Return factors repeat the composite exactly. `revers1m`, `rsi`, `consistency` are noise. `trend` has the largest single t (−3.3) and flips sign after 2020 |
+| **low RSI + rising delta** (the owner's hypothesis) | +3.57% against a +1.02% baseline — but 811 sessions, ~81 independent, **t = 1.71**, occurring 0.31% of the time. Oversold alone gives +1.74%, a positive delta alone +0.99%, so what little is there comes from the RSI side |
+
+### The conclusions
+
+- **The delta is not predictive in any framing** — pooled, per-stock, or cross-sectional. It stays in the product as the table's arrow, which is a descriptive job it does well. Do not test it again without a new reason.
+- **The level is the better-founded variable** and is the right input to a cross-sectional test, but its apparent edge lives entirely after 2020. A regime-dependent effect is not a tradeable one.
+- **Nothing yet clears a bar worth acting on**, least of all at a one-to-two-month horizon.
+- **The screener is descriptive rather than predictive**, and that is a legitimate thing for it to be: a consistent way to see where 116 stocks stand and how each got there.
+
+### The method, which matters more than any single result
+
+Four ways to make a weak relationship look strong, each of which has caught something real here:
+
+- **Hold out a period before looking.** `from_high` looked like the one factor with a consistent sign across the whole archive until it was re-run on the widened universe, where it fell from t −2.2 to −1.4 and lost half its magnitude. It was a universe artefact.
+- **Discount for overlapping windows.** Daily observations of a 10-day forward return carry about one observation's worth of evidence per ten. A level is far more autocorrelated than a delta, so its effective sample is smaller still — a per-stock test of the level has almost no power, whatever its n says.
+- **Rank within the day, not across the pool.** Both legs then live through the same fortnight, so the market subtracts out and the baseline becomes zero by construction. This is the only framing that has shown anything at all.
+- **Give a hit rate its base rate.** A stock that rises most fortnights hands a high hit rate to a signal that knows nothing. Only the lift is worth reading. Splitting a 0-100 score at zero once reported a lift of exactly `+0.0 pts` for every horizon — an artefact that looked like a finding.
+
+### Untested, and worth doing
+
+- **Post-earnings announcement drift** is the best fit for a one-to-two-month hold that exists — right timescale, durable literature, and there is already a "Drifting after a beat" screen built on the idea. **It cannot be backtested**: earnings dates and surprises have never been recorded historically, and `fundamentals_history` is effectively empty. Start recording them and it becomes answerable in a couple of quarters. That costs nothing — they are already in the profile payload every refresh fetches and currently discards.
+- **Benchmark-relative returns everywhere** — subtract the universe's equal-weight return that day. It turns "did it go up" into "did it beat its peers", which is the only version that survives the remaining bias.
+- **Longer horizons, 6m and 12m.** The model is built around 12-1 momentum and has never been tested at the horizon it was designed for. Two more `LEAD`s in the view.
+- **A per-factor sign.** `cleanWeights()` clamps weights to `0…MAX_WEIGHT` as integers, so a factor can be zeroed but not inverted. Expressing a reversion model needs a sign. Build that as a second model, not as a preset — a momentum model with its momentum inverted is a different thing wearing the same name.
+
+### Where the analysis actually runs
+
+**On the owner's machine, in throwaway scripts, leaving no trace.** None of the numbers above can be reproduced from the product; there is no button for any of it. If a result starts mattering, precompute it nightly into its own table the way `momentum_history` is — a page that recomputes a universe-wide statistic per request would be the 3.8s cross-sectional query on every load.
+
+- **Turso closes the socket somewhere past ~36 MB in one round trip.** Pulling 410k scored rows and 441k bars as two parallel queries fails with `terminated` / `other side closed`. Chunk by symbol (groups of 8 works) and run sequentially: the same load then takes 41s.
+- A full momentum backfill is **500.3s for 113 symbols**. The whole-universe cross-sectional query through `momentum_deltas` is **~3.8s**.
+
 ## The help page
 `/help` explains the app to the people using it, so it is open to **any signed-in user** rather than admin-only. Reached from `Help` in the ⋯ menu, beside Contact, and from a link in the Weights menu itself — which is where the question actually arises.
 
@@ -562,7 +612,7 @@ It re-scores momentum **in the browser** — the screener, the nightly report, t
 - **Presets key on a stable `key` per factor, not the caption.** Labels are prose and may be reworded; `key` is the contract.
 - **Weights need not total 100** — `scoreWithWeights()` renormalises over whichever factors have data, mirroring `scoreFactors()`.
 - **The axis is continuation versus caution**, not adjectives. Trend leans short-horizon, strengthens trend regime and removes the reversal brake entirely; Steady leans on 12-1 and consistency and keeps it.
-- **The bar prints how far the weighting actually moves the list** — measured live: Trend reorders 69 of 82 names, median 4 places, largest 20; Steady 75 of 82. A preset that reordered three names would be a dial that does nothing, and this says so rather than hiding it.
+- **The bar prints how far the weighting actually moves the list** — measured live *on the 82-symbol universe*: Trend reordered 69 of 82 names, median 4 places, largest 20; Steady 75 of 82. The universe is 116 now, so those figures are stale as absolutes; the bar computes them live and is not. A preset that reordered three names would be a dial that does nothing, and this says so rather than hiding it.
 - **`Custom` adds sliders, edited in one place only** — the screener's Weights menu. `/analysis` offers Custom as a fourth choice and reads the saved set, but never edits it: two editors would double the work and drift.
   - **`cleanWeights()` in `screens.js` is used by both the browser and the server.** Only the eight known factor keys survive, as integers in `0…MAX_WEIGHT`, and an all-zero map is rejected because it leaves nothing to score with. That is what keeps `PUT /api/prefs` from becoming free per-user storage — verified: `evil`, `__proto__` and a negative are all dropped.
   - **The menu is built on open, not on every render.** A rebuild mid-drag replaces the slider under the cursor and kills the gesture, so `render()` redraws only the trigger.
@@ -574,7 +624,7 @@ It re-scores momentum **in the browser** — the screener, the nightly report, t
 ## Analysis screens
 **The seven predicates live in `public/screens.js`, not in the page.** `analysis.html` loads it with a `<script>` tag and `server.js` `require`s it, so the nightly report and the page can never disagree about what "bouncing off the lows" means — the same reason `rowcard.js` exists. Only the *selection* is shared (which rows, in what order); the columns, the prose and the empty messages stay with whichever surface is drawing them. Verified equivalent against the live universe on extraction: all seven lists identical, order included.
 
-`/analysis` is seven filtered views built from the **raw fields, not the composite scores** — the scores already drive the table's ranking, and a screen that just re-sorts them adds nothing. Every threshold below was set by running the candidate against the live universe: a screen returning 0 names is a dead box, and one returning 25 of 69 is not a signal.
+`/analysis` is seven filtered views built from the **raw fields, not the composite scores** — the scores already drive the table's ranking, and a screen that just re-sorts them adds nothing. Every threshold below was set by running the candidate against the live universe: a screen returning 0 names is a dead box, and one returning 25 of 69 is not a signal. **The hit counts in the table were measured at 69 symbols and the universe is now 116 — expect every one of them to be larger, and the 33 `Faded` names to crowd the bounce and value screens in particular.** Re-tune the thresholds against a fresh snapshot before reading anything into them.
 
 | screen | rule | hits when set |
 |---|---|---|
