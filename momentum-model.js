@@ -26,11 +26,17 @@ const MIN_BARS = 274;
 // averages need 200 with somewhere to look back for the last cross.
 const ROWS = Math.max(280, Number(process.argv[3]) || 320);
 
-// The fortnight. PAST_DEFAULT in server.js is '2w' and PAST_PERIODS puts that at
-// 10 sessions, which is the pair the screener ships as momentumScorePrev and
-// momentumChange, and the same offset momentum_deltas lags by.
-const PAST_LAG = 10;
-const PAST_LABEL = '2W';
+// Every horizon the screener's Past picker offers, taken from the module that
+// defines that picker rather than restated here — a workbook that disagreed
+// with the dropdown it is named after would be worse than one that omits it.
+const { PAST_PERIODS, DEFAULT_PAST } = require('./public/screens.js');
+const HORIZONS = PAST_PERIODS.map((p) => ({ id: p.id, lag: p.days, label: p.id.toUpperCase() }));
+
+// The fortnight still has a special place: it is what the screener ships as
+// momentumScorePrev and momentumChange, what momentum_deltas lags by, and so
+// what the two return columns are measured over.
+const PAST_LAG = (PAST_PERIODS.find((p) => p.id === DEFAULT_PAST) || { days: 10 }).days;
+const PAST_LABEL = DEFAULT_PAST.toUpperCase();
 
 // ---- a minimal zip writer --------------------------------------------------
 // Local file header + central directory, deflated. No dependency, ~50 lines.
@@ -197,10 +203,15 @@ function buildModel(SYMBOL, bars, live, momentum) {
   const RSI_SEED = LAST - 14;               // Wilder is seeded at the old end
   const b = [];
   b.push([{ v: `${SYMBOL} — daily bars and the running indicators`, s: S.title }]);
-  b.push([{ v: `Newest first. Row 2 is the most recent session, exactly as the app holds it. Grey columns are intermediates the factors need. Momentum is the stored score for that date — a value, not a formula, and the only cell here that does not recalculate. Past Mom. and Mom. Delta read it ${PAST_LAG} rows down, which is the fortnight the screener compares against. Return ${PAST_LABEL} covers that same fortnight; Next ${PAST_LABEL} Return covers the one after it, and is the column to put the delta against when asking whether it predicts anything.`, s: S.note }]);
+  b.push([{ v: `Newest first. Row 2 is the most recent session, exactly as the app holds it. Grey columns are intermediates the factors need. Momentum is the stored score for that date — a value, not a formula, and the only cell here that does not recalculate. Past Mom. and Mom. Delta read it ${HORIZONS.map((h) => h.lag).join(', ')} rows down — the five horizons the screener's Past picker offers. Return ${PAST_LABEL} covers that same fortnight; Next ${PAST_LABEL} Return covers the one after it, and is the column to put the delta against when asking whether it predicts anything.`, s: S.note }]);
   b.push([]);
-  b.push(['Date', 'High', 'Close', 'Log return', 'MA 50', 'MA 200', 'MA50 vs 200', 'Gain', 'Loss', 'Avg gain', 'Avg loss', 'RSI 14',
-    'Momentum', `Past Mom. (${PAST_LABEL})`, `Mom. Delta (${PAST_LABEL})`,
+  // Paired by horizon — Past 1W, Delta 1W, Past 2W, Delta 2W … — because that
+  // is the pairing the dropdown expresses: pick a period, read what momentum was
+  // and how far it has moved. All five Pasts followed by all five Deltas would
+  // read better across horizons and worse for the question actually being asked.
+  const MOM_COL = 'M';                       // where the stored score sits
+  b.push([...['Date', 'High', 'Close', 'Log return', 'MA 50', 'MA 200', 'MA50 vs 200', 'Gain', 'Loss', 'Avg gain', 'Avg loss', 'RSI 14', 'Momentum'],
+    ...HORIZONS.flatMap((h) => [`Past Mom. (${h.label})`, `Mom. Delta (${h.label})`]),
     `Return ${PAST_LABEL} %`, `Next ${PAST_LABEL} Return %`].map((h) => ({ v: h, s: S.head })));
   for (let i = 0; i < n; i++) {
     const R = i + 5;                        // data starts at row 5
@@ -231,18 +242,22 @@ function buildModel(SYMBOL, bars, live, momentum) {
     const mv = momentum ? momentum.get(bars[i].d) : undefined;
     row.push(mv == null ? '' : { v: mv, s: S.num2 });
 
-    // Past momentum and the delta are formulas over the Momentum column, not
-    // more stored values. The sheet is newest-first, so the score a fortnight
-    // ago is simply ten rows further down — the same offset momentum_deltas
-    // lags by, and the reason the workbook agrees with the screener's Past Mom.
-    // and Mom. Delta rather than approximating them. Both test for a blank
-    // rather than trusting the reference: an empty cell reads as 0 in Excel, so
-    // a gap in the stored history would otherwise print a score of zero and a
-    // delta the full size of today's score.
+    // Past momentum and the deltas are formulas over the Momentum column, not
+    // more stored values. The sheet is newest-first, so the score N sessions ago
+    // is simply N rows further down — the same offset momentum_deltas lags by,
+    // and the reason the workbook agrees with the screener's Past Mom. and Mom.
+    // Delta rather than approximating them. Each tests for a blank rather than
+    // trusting the reference: an empty cell reads as 0 in Excel, so a gap in the
+    // stored history would otherwise print a score of zero and a delta the full
+    // size of today's score.
+    for (const h of HORIZONS) {
+      const P = R + h.lag;
+      const ok = i + h.lag < n;
+      row.push(ok ? { f: `IF(${MOM_COL}${P}="","",${MOM_COL}${P})`, s: S.num2 } : '');
+      row.push(ok ? { f: `IF(OR(${MOM_COL}${R}="",${MOM_COL}${P}=""),"",${MOM_COL}${R}-${MOM_COL}${P})`, s: S.num2 } : '');
+    }
     const P = R + PAST_LAG;
     const hasPast = i + PAST_LAG < n;
-    row.push(hasPast ? { f: `IF(M${P}="","",M${P})`, s: S.num2 } : '');
-    row.push(hasPast ? { f: `IF(OR(M${R}="",M${P}=""),"",M${R}-M${P})`, s: S.num2 } : '');
 
     // The price beside the score, so the delta can be read against what the
     // stock actually did. Two columns because they answer different questions
@@ -380,7 +395,10 @@ function buildModel(SYMBOL, bars, live, momentum) {
 
   // ---- assemble ------------------------------------------------------------
   const sheets = [
-    { name: 'Bars', xml: sheetXml(b, { widths: [12, 10, 10, 11, 10, 10, 12, 9, 9, 10, 10, 9, 11, 14, 15, 13, 17], freeze: 4 }) },
+    { name: 'Bars', xml: sheetXml(b, {
+      widths: [12, 10, 10, 11, 10, 10, 12, 9, 9, 10, 10, 9, 11,
+        ...HORIZONS.flatMap(() => [14, 15]), 13, 17],
+      freeze: 4 }) },
     { name: 'Factors', xml: sheetXml(f, { widths: [26, 14, 9, 9, 11, 8, 10, 70], tab: true }) },
     { name: 'Score', xml: sheetXml(sc, { widths: [24, 14, 78] }) },
   ];
