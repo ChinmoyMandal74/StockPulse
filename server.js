@@ -3152,10 +3152,19 @@ async function checkMomentumModel() {
   }
 }
 
-app.listen(PORT, () => {
-  console.log(`Stock screener POC running at http://localhost:${PORT}`);
-  if (!API_KEY) {
-    console.warn('WARNING: TWELVE_DATA_API_KEY is not set — /api/stocks will return an error until you add it to .env');
-  }
-  checkMomentumModel();
-});
+// Only when run directly. That makes the file requirable, so a one-off script
+// can send through the same shell every other message uses instead of growing a
+// second copy of the brand chrome — which is the thing the mail section of
+// CLAUDE.md exists to prevent. Vercel runs this file, so the listen still fires
+// there.
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Stock screener POC running at http://localhost:${PORT}`);
+    if (!API_KEY) {
+      console.warn('WARNING: TWELVE_DATA_API_KEY is not set — /api/stocks will return an error until you add it to .env');
+    }
+    checkMomentumModel();
+  });
+}
+
+module.exports = { app, sendMail, emailShell, textShell, mailButton, operatorEmail, MAIL_READY, MC };
