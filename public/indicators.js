@@ -120,6 +120,46 @@
     return out;
   }
 
+  // Wilder's RSI at every date. Oldest-first here, where momentum.js works
+  // newest-first — verified equal to Momentum.rsiSeriesAt, which is itself
+  // checked against the screener's own RSI column to four decimals.
+  //
+  // Wilder is recursive from a seed, so this is one forward pass: a simple
+  // average of the first `period` changes, then smoothed. The first value lands
+  // at index `period`; before that there is nothing to seed from.
+  function rsiSeries(closes, period) {
+    const n = closes.length;
+    const out = new Array(n).fill(null);
+    if (n < period + 1 || period < 2) return out;
+    let gains = 0, losses = 0;
+    for (let i = 1; i <= period; i++) {
+      const a = num(closes[i]), b = num(closes[i - 1]);
+      if (a == null || b == null) return out;
+      const d = a - b;
+      if (d >= 0) gains += d; else losses -= d;
+    }
+    let ag = gains / period, al = losses / period;
+    out[period] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+    for (let i = period + 1; i < n; i++) {
+      const a = num(closes[i]), b = num(closes[i - 1]);
+      if (a == null || b == null) continue;
+      const d = a - b;
+      ag = (ag * (period - 1) + Math.max(d, 0)) / period;
+      al = (al * (period - 1) + Math.max(-d, 0)) / period;
+      out[i] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+    }
+    return out;
+  }
+
+  // Shift a series back by `skip` sessions, so an indicator can be read as it
+  // stood a few days ago without every indicator implementing the same offset.
+  function lag(values, skip) {
+    if (!(skip > 0)) return values.slice();
+    const out = new Array(values.length).fill(null);
+    for (let i = skip; i < values.length; i++) out[i] = values[i - skip];
+    return out;
+  }
+
   // Exponential smoothing. span 1 is a no-op, which is the default: smoothing is
   // something to reach for deliberately, not to have applied silently.
   function ema(values, span) {
@@ -147,6 +187,8 @@
       help: 'Sessions left out at the recent end. This is what 12-1 momentum does with its final month — the most recent days are where reversal lives.' },
     volWindow: { min: 20, max: 126, label: 'Vol window', unit: ' sessions',
       help: 'The window the volatility is measured over. Shorter reacts faster and is noisier; 126 is what the momentum score uses.' },
+    period: { min: 2, max: 50, label: 'Period', unit: ' sessions',
+      help: 'Wilder’s RSI period. 14 is the convention and what the screener’s own RSI column uses; shorter reacts faster and swings wider.' },
     smooth: { min: 1, max: 15, label: 'Smoothing', unit: '-day EMA',
       help: 'Exponential smoothing of the finished indicator. 1 is off.' },
   };
@@ -190,6 +232,22 @@
     },
   ];
 
+  INDICATORS.push({
+    id: 'rsi',
+    label: 'RSI',
+    needs: 'closes',
+    blurb: 'Wilder’s RSI, the plain reading — not the sub-score the momentum model ' +
+      'derives from it. Worth looking at with the deciles rather than the correlation: ' +
+      'the hypothesis about RSI is that both ends matter and the middle does not, and a ' +
+      'correlation measures a straight line, so a U would cancel itself out and report zero.',
+    params: ['period', 'skip', 'smooth'],
+    defaults: { period: 14, skip: 0, smooth: 1 },
+    compute(series, p) {
+      return ema(lag(rsiSeries(series.closes, p.period), p.skip), p.smooth);
+    },
+    warmup: (p) => p.period + p.skip + 1,
+  });
+
   const byId = (id) => INDICATORS.find((x) => x.id === id) || INDICATORS[0];
 
   // Clamped to the bounds of whichever indicator is asking, and anything it does
@@ -219,5 +277,5 @@
   }
 
   return { INDICATORS, byId, BOUNDS, clean, warmup, compute,
-    realisedVolSeries, windowReturn, rollingSlope, ema };
+    realisedVolSeries, windowReturn, rollingSlope, rsiSeries, lag, ema };
 });

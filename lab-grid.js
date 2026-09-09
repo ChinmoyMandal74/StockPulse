@@ -37,6 +37,7 @@ const OUT = path.resolve('public/lab-grid.json');
 const GRIDS = QUICK ? {
   velocity: { lookback: [5, 20], skip: [0], volWindow: [60], smooth: [1] },
   scoreSlope: { window: [10, 30], skip: [0], smooth: [1] },
+  rsi: { period: [14], skip: [0], smooth: [1] },
 } : {
   velocity: {
     lookback: [3, 5, 10, 15, 20, 30],
@@ -46,6 +47,11 @@ const GRIDS = QUICK ? {
   },
   scoreSlope: {
     window: [5, 10, 20, 30, 45, 60],
+    skip: [0, 1, 3, 5],
+    smooth: [1, 5],
+  },
+  rsi: {
+    period: [5, 9, 14, 21, 30],
     skip: [0, 1, 3, 5],
     smooth: [1, 5],
   },

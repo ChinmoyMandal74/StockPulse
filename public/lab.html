@@ -141,6 +141,14 @@
     .dottip .dt-v.pos { color: var(--green); }
     .dottip .dt-v.neg { color: var(--red); }
 
+    /* deciles */
+    .bars .bar { fill: var(--amber); fill-opacity: 0.55; }
+    .bars .bar.neg { fill: var(--red); fill-opacity: 0.5; }
+    .bars .mean { stroke: var(--mom); stroke-width: 1.2; stroke-dasharray: 5 4;
+                  vector-effect: non-scaling-stroke; }
+    .bars .base { stroke: var(--hair-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
+    .bars .lab { fill: var(--faint); font-family: var(--mono); font-size: 9px; }
+
     /* stats */
     .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
     .card2 { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--hair);
@@ -230,6 +238,12 @@
         <svg class="plot" id="scatter" viewBox="0 0 620 380" role="img"></svg>
         <div class="dottip" id="ro" hidden></div>
       </div>
+    </div></section>
+
+    <section class="bezel panel" id="pDeciles" hidden><div class="core">
+      <div class="ptitle">Mean return by decile of the indicator</div>
+      <p class="pnote" id="decNote"></p>
+      <svg class="plot bars" id="deciles" viewBox="0 0 620 270" role="img"></svg>
     </div></section>
 
     <section class="bezel panel" id="pStats" hidden><div class="core">
@@ -322,7 +336,7 @@
         params = Indicators.clean(ind().defaults, current);
         renderPicks(); renderKnobs(); recompute();
       });
-      for (const id of ['pKnobs', 'pChart', 'pScatter', 'pStats', 'pGrid', 'warn']) $(id).hidden = false;
+      for (const id of ['pKnobs', 'pChart', 'pScatter', 'pDeciles', 'pStats', 'pGrid', 'warn']) $(id).hidden = false;
       renderWarning();
       recompute();
     }
@@ -386,7 +400,7 @@
         return p.length > 60 ? SignalStats.summarise(p, data.horizonDays) : null;
       };
       stats = { all: at('0000', '9999'), pre: at('0000', '2020-01-01'), post: at('2020-01-01', '9999') };
-      drawChart(); drawScatter(); renderStats(); renderGrid();
+      drawChart(); drawScatter(); drawDeciles(); renderStats(); renderGrid();
     }
 
     // ---- chart --------------------------------------------------------------
@@ -541,7 +555,7 @@
       show[b.dataset.era] = !show[b.dataset.era];
       // Never hide both — an empty chart is not a view of anything.
       if (!show.pre && !show.post) show[b.dataset.era] = true;
-      drawScatter();
+      drawScatter(); drawDeciles();
     });
 
     let hiNode = null;
@@ -585,6 +599,62 @@
       ro.style.top = Math.max(4, Math.min(wrap.height - th - 4, top)) + 'px';
     });
     $('scatter').addEventListener('pointerleave', hideTip);
+
+    // ---- deciles ------------------------------------------------------------
+    // The readable version of the scatter, and the panel that matters most for a
+    // non-monotonic indicator. A correlation measures a straight line, so a
+    // relationship where both ends pay and the middle does not cancels itself
+    // out and reports zero — which is exactly the shape RSI is supposed to have,
+    // and why the momentum model's own rsiScore() is a curve rather than a slope.
+    function drawDeciles() {
+      const vis = pairs.filter((q) => (q.d < '2020-01-01' ? show.pre : show.post));
+      if (vis.length < 200) { $('deciles').innerHTML = ''; $('decNote').textContent = 'Not enough observations to bucket.'; return; }
+      // Same bucketing the signal study uses, from the same module.
+      const bs = SignalStats.buckets(vis.map((q) => ({ x: q.x, y: q.y })), 10);
+      const overall = SignalStats.mean(vis.map((q) => q.y));
+      if (!bs.length) { $('deciles').innerHTML = ''; return; }
+
+      const B = { l: 54, r: 16, t: 16, b: 58, w: 620, h: 270 };
+      const vals = bs.map((b) => b.yMean).concat([0, overall]);
+      const lo = Math.min(...vals), hi = Math.max(...vals);
+      const pad = (hi - lo) * 0.14 || 1;
+      const y0 = lo - pad, y1 = hi + pad;
+      const Y = (v) => B.h - B.b - ((v - y0) / ((y1 - y0) || 1)) * (B.h - B.t - B.b);
+      const bw = (B.w - B.l - B.r) / bs.length;
+
+      let g = '';
+      for (const t of niceTicks(y0, y1, 4)) {
+        g += `<line class="ax" x1="${B.l}" y1="${Y(t).toFixed(1)}" x2="${B.w - B.r}" y2="${Y(t).toFixed(1)}" opacity="0.3"/>` +
+          `<text class="tick" x="${B.l - 8}" y="${(Y(t) + 3).toFixed(1)}" text-anchor="end">${t}%</text>`;
+      }
+      bs.forEach((b, i) => {
+        const x = B.l + i * bw + bw * 0.16, w = bw * 0.68;
+        const top = Y(Math.max(b.yMean, 0)), bot = Y(Math.min(b.yMean, 0));
+        g += `<rect class="bar${b.yMean < 0 ? ' neg' : ''}" x="${x.toFixed(1)}" y="${top.toFixed(1)}" ` +
+          `width="${w.toFixed(1)}" height="${Math.max(1, bot - top).toFixed(1)}" rx="2"><title>` +
+          `decile ${b.i}: ${b.xFrom.toFixed(2)} to ${b.xTo.toFixed(2)}, n ${b.n}, mean ${b.yMean.toFixed(2)}%` +
+          `</title></rect>` +
+          `<text class="lab" x="${(x + w / 2).toFixed(1)}" y="${B.h - B.b + 14}" text-anchor="middle">${b.i}</text>` +
+          `<text class="lab" x="${(x + w / 2).toFixed(1)}" y="${B.h - B.b + 26}" text-anchor="middle" opacity="0.8">` +
+          `${b.xMean.toFixed(b.xMean >= 10 ? 0 : 2)}</text>`;
+      });
+      g += `<line class="base" x1="${B.l}" y1="${Y(0).toFixed(1)}" x2="${B.w - B.r}" y2="${Y(0).toFixed(1)}"/>`;
+      // The overall mean, not zero, is the line that means "this told you
+      // nothing" — bars measured against zero only show that the stock went up.
+      const lastTall = bs[bs.length - 1].yMean > overall;
+      g += `<line class="mean" x1="${B.l}" y1="${Y(overall).toFixed(1)}" x2="${B.w - B.r}" y2="${Y(overall).toFixed(1)}"/>` +
+        `<text class="qlab" x="${lastTall ? B.l + 4 : B.w - B.r}" y="${(Y(overall) - 6).toFixed(1)}" ` +
+        `text-anchor="${lastTall ? 'start' : 'end'}" fill="var(--mom)" font-family="var(--sans)" font-size="9">` +
+        `overall mean ${pct(overall)}</text>`;
+      g += `<text class="axname" x="${(B.l + B.w - B.r) / 2}" y="${B.h - 8}" text-anchor="middle">` +
+        `Decile of ${esc(ind().label.toLowerCase())} — lowest to highest</text>`;
+      $('deciles').innerHTML = g;
+      $('decNote').textContent =
+        `Equal-count buckets, so each holds the same number of sessions. This is the panel to read for an ` +
+        `indicator whose extremes might matter more than its middle: a correlation measures a straight line, ` +
+        `so a U-shape cancels itself out and reports nothing. Climbing bars mean the indicator orders the ` +
+        `future; bars scattered around the dashed overall mean say it does not.`;
+    }
 
     // ---- this stock ---------------------------------------------------------
     function renderStats() {
