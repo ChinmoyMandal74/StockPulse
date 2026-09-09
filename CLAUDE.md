@@ -558,12 +558,16 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 | **score cross-sectionally**, top decile | +0.51% excess per fortnight — but see the split below |
 | **the hold-out split** on that | **2008–2019 t 0.13; 2020–2026 t 2.47.** Twelve years of nothing, then everything |
 | **all eight sub-scores individually**, 1m and 3m, cross-sectional | Return factors repeat the composite exactly. `revers1m`, `rsi`, `consistency` are noise. `trend` has the largest single t (−3.3) and flips sign after 2020 |
+| **range position → next month**, three definitions (60d z-score, 252d and 120d high-low band), cross-sectional | **Flat, and mildly the wrong way.** Bottom band −0.00% to +0.53%, top band +0.23% to +0.27%; largest \|t\| anywhere 1.2 in one thin cell. The *top* of the range does slightly better than the bottom |
+| **the two falling-knife filters** on the bottom band — idiosyncratic vs market-wide fall, and "has it turned" | Neither helps; both point slightly the wrong way. Stacking trend + idiosyncratic + turned leaves **under 500 observations in nineteen years**, ~26 a year — unusable even if it worked |
 | **low RSI + rising delta** (the owner's hypothesis) | +3.57% against a +1.02% baseline — but 811 sessions, ~81 independent, **t = 1.71**, occurring 0.31% of the time. Oversold alone gives +1.74%, a positive delta alone +0.99%, so what little is there comes from the RSI side |
 
 ### The conclusions
 
 - **The delta is not predictive in any framing** — pooled, per-stock, or cross-sectional. It stays in the product as the table's arrow, which is a descriptive job it does well. Do not test it again without a new reason.
 - **The level is the better-founded variable** and is the right input to a cross-sectional test, but its apparent edge lives entirely after 2020. A regime-dependent effect is not a tradeable one.
+- **The range hypothesis does not hold here.** "Stocks trade in ranges, buy the lower side, avoid the falling knife" was tested with three range definitions and both knife filters. Every cell sits inside noise, and the faint direction runs *toward* momentum rather than reversion. The one cell that looked interesting — bottom band, trend intact, not falling worse than the market — reads **−0.03% before 2020 against +1.59% after, t 0.6**: the same regime split as everything else.
+- **The trend filter (above/below the 200-day) is the only thing that keeps reappearing**, positive in four of five range bands and negative below the line in four of five. It is never significant (|t| ≤ 0.8) and `from_high` looked this promising once too, so treat it as a lead and not a finding.
 - **Nothing yet clears a bar worth acting on**, least of all at a one-to-two-month horizon.
 - **The screener is descriptive rather than predictive**, and that is a legitimate thing for it to be: a consistent way to see where 116 stocks stand and how each got there.
 
@@ -575,6 +579,14 @@ Four ways to make a weak relationship look strong, each of which has caught some
 - **Discount for overlapping windows.** Daily observations of a 10-day forward return carry about one observation's worth of evidence per ten. A level is far more autocorrelated than a delta, so its effective sample is smaller still — a per-stock test of the level has almost no power, whatever its n says.
 - **Rank within the day, not across the pool.** Both legs then live through the same fortnight, so the market subtracts out and the baseline becomes zero by construction. This is the only framing that has shown anything at all.
 - **Give a hit rate its base rate.** A stock that rises most fortnights hands a high hit rate to a signal that knows nothing. Only the lift is worth reading. Splitting a 0-100 score at zero once reported a lift of exactly `+0.0 pts` for every horizon — an artefact that looked like a finding.
+
+### What would actually change the answer
+
+Five hypotheses have now come back flat, which starts to say something about the search space rather than the hypotheses. The binding constraints, in order:
+
+- **The universe.** 116 large, heavily-covered, correlated names is the most arbitraged corner of the market, and at a one-month horizon most of their variance is common. Mean reversion in particular works better in higher-volatility, less-followed stocks. Changing this would do more than any signal.
+- **The data.** Everything tested comes from daily bars. Earnings revisions, short interest, options positioning and intraday behaviour are all absent, and they are where the remaining short-horizon effects live.
+- **The horizon.** One to two months is the gap between reversal and momentum. Nothing much lives there.
 
 ### Untested, and worth doing
 
