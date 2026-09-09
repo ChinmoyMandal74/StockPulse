@@ -586,7 +586,24 @@ Four ways to make a weak relationship look strong, each of which has caught some
 
 **On the owner's machine, in throwaway scripts, leaving no trace.** None of the numbers above can be reproduced from the product; there is no button for any of it. If a result starts mattering, precompute it nightly into its own table the way `momentum_history` is — a page that recomputes a universe-wide statistic per request would be the 3.8s cross-sectional query on every load.
 
-- **Turso closes the socket somewhere past ~36 MB in one round trip.** Pulling 410k scored rows and 441k bars as two parallel queries fails with `terminated` / `other side closed`. Chunk by symbol (groups of 8 works) and run sequentially: the same load then takes 41s.
+**The wall is a duration, not a size.** An early note here said "~36 MB in one round trip" and that was wrong — measured properly:
+
+| query | result |
+|---|---|
+| `readBarsFor`-shaped, 650 days x universe — **the biggest the app issues** | **50,036 rows, 2.0s** |
+| one symbol's full momentum history | 4,734 rows, 0.2s |
+| the snapshot `/api/stocks` serves | 0.34 MB |
+| all bars, `close` only | 441,483 rows, **82.6s — ok** |
+| all bars, every column | 441,483 rows, **158.1s — ok** |
+| all `momentum_history`, every column | **fails at 261.1s**, having read 83.3 MB |
+| both of those in parallel | **fails at 215.8s**, having read 36.2 MB |
+| `ntile()` deciles aggregated server-side, returning 10 rows | **ok, but 159.7s** |
+
+So a single query has carried 441k full rows fine, and the failure came after **83 MB**. The boundary sits between **158s and 216s** — a response timeout of roughly three minutes somewhere in the stack. Parallel queries fail *sooner in bytes* only because they share wall-clock, which is what made it look like a size cap.
+
+- **Production is nowhere near it.** The largest query any route issues is 50k rows in 2.0s — about eighty times inside the wall. This constrains ad-hoc analysis, nothing else.
+- **Pushing the work into SQL is not the escape hatch it looks like.** The `ntile()` aggregation returns ten rows and still took 159.7s: for whole-archive work Turso is compute-bound too, and that query is itself close to timing out.
+- **For repeated analysis, take a local copy.** `node:sqlite` ships with Node 24, so a local archive costs no dependency, and analysis against it is network-free and instant to iterate. Chunked export by symbol (groups of 8) pulls the lot in 41s.
 - A full momentum backfill is **500.3s for 113 symbols**. The whole-universe cross-sectional query through `momentum_deltas` is **~3.8s**.
 
 ## The help page
