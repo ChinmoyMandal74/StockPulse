@@ -102,6 +102,79 @@ function zip(files) {
   return Buffer.concat([...chunks, cdBuf, end]);
 }
 
+// ---- the scatter chart -----------------------------------------------------
+// A chart is four more parts in the zip — the chart itself, a drawing that
+// anchors it to a sheet, and a relationship apiece — plus two content-type
+// overrides. Written out by hand for the same reason the rest is: a chart is
+// XML, and reaching for a library to emit 60 lines of it would buy a dependency
+// and lose the ability to say exactly what is in the file.
+//
+// The series points at the Bars sheet rather than copying the numbers, so the
+// scatter is a view of the same formulas everything else uses. Edit a close
+// price and the cloud moves with the score.
+const AX_X = 745110001, AX_Y = 745110002;   // any two stable ids
+
+function chartXml(title, xRef, yRef, xName, yName) {
+  const t = (txt, size) =>
+    `<c:rich><a:bodyPr/><a:p><a:pPr><a:defRPr sz="${size}" b="0"/></a:pPr>` +
+    `<a:r><a:rPr lang="en-US" sz="${size}"/><a:t>${esc(txt)}</a:t></a:r></a:p></c:rich>`;
+  const axTitle = (txt) => `<c:title><c:tx>${t(txt, 900)}</c:tx><c:overlay val="0"/></c:title>`;
+  const valAx = (id, cross, pos, name) =>
+    `<c:valAx><c:axId val="${id}"/><c:scaling><c:orientation val="minMax"/></c:scaling>` +
+    `<c:delete val="0"/><c:axPos val="${pos}"/>` +
+    `<c:majorGridlines/>${axTitle(name)}<c:numFmt formatCode="General" sourceLinked="0"/>` +
+    `<c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>` +
+    // Cross at zero, so the four quadrants of the scatter read as quadrants.
+    `<c:crossAx val="${cross}"/><c:crosses val="autoZero"/><c:crossBetween val="midCat"/></c:valAx>`;
+
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" ' +
+    'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    `<c:chart><c:title><c:tx>${t(title, 1200)}</c:tx><c:overlay val="0"/></c:title>` +
+    '<c:autoTitleDeleted val="0"/><c:plotArea><c:layout/>' +
+    '<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>' +
+    '<c:ser><c:idx val="0"/><c:order val="0"/>' +
+    `<c:tx><c:v>${esc(yName)}</c:v></c:tx>` +
+    // No connecting line: joining 300 points in date order would draw a scribble
+    // over the very shape the chart exists to show.
+    '<c:spPr><a:ln w="19050"><a:noFill/></a:ln></c:spPr>' +
+    '<c:marker><c:symbol val="circle"/><c:size val="4"/><c:spPr>' +
+    '<a:solidFill><a:srgbClr val="4472C4"><a:alpha val="55000"/></a:srgbClr></a:solidFill>' +
+    '<a:ln><a:noFill/></a:ln></c:spPr></c:marker>' +
+    // Excel draws the fit and prints r2 on it, so the number on the Signal sheet
+    // and the line through the cloud cannot disagree.
+    '<c:trendline><c:spPr><a:ln w="12700"><a:solidFill><a:srgbClr val="808080"/></a:solidFill>' +
+    '<a:prstDash val="dash"/></a:ln></c:spPr><c:trendlineType val="linear"/>' +
+    '<c:dispRSqr val="1"/><c:dispEq val="0"/></c:trendline>' +
+    `<c:xVal><c:numRef><c:f>${esc(xRef)}</c:f></c:numRef></c:xVal>` +
+    `<c:yVal><c:numRef><c:f>${esc(yRef)}</c:f></c:numRef></c:yVal>` +
+    '<c:smooth val="0"/></c:ser>' +
+    `<c:axId val="${AX_X}"/><c:axId val="${AX_Y}"/></c:scatterChart>` +
+    valAx(AX_X, AX_Y, 'b', xName) + valAx(AX_Y, AX_X, 'l', yName) +
+    '</c:plotArea><c:plotVisOnly val="1"/>' +
+    // A blank must leave a hole, never be read as zero — the oldest ten rows
+    // have no fortnight behind them and the newest ten have no fortnight ahead.
+    '<c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>';
+}
+
+// Anchored across a block of cells so it resizes with the window rather than
+// sitting at a fixed pixel size.
+const DRAWING_XML =
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+  '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" ' +
+  'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
+  '<xdr:twoCellAnchor>' +
+  '<xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>13</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>' +
+  '<xdr:to><xdr:col>9</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>44</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>' +
+  '<xdr:graphicFrame macro="">' +
+  '<xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="Signal scatter"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>' +
+  '<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>' +
+  '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">' +
+  '<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" ' +
+  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/>' +
+  '</a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>';
+
 // ---- sheet building --------------------------------------------------------
 const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const col = (n) => { let s = ''; n++; while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = (n - r - 1) / 26; } return s; };
@@ -133,8 +206,12 @@ function sheetXml(rows, opts = {}) {
       '</sheetView></sheetViews>'
     : `<sheetViews><sheetView workbookViewId="0"${opts.tab ? ' tabSelected="1"' : ''}/></sheetViews>`;
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    freeze + cols + `<sheetData>${body}</sheetData></worksheet>`;
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    // <drawing> must follow sheetData: the schema fixes the order of these
+    // children, and Excel repairs — silently dropping the chart — if it does not.
+    freeze + cols + `<sheetData>${body}</sheetData>` +
+    (opts.drawing ? `<drawing r:id="${opts.drawing}"/>` : '') + '</worksheet>';
 }
 
 const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -209,10 +286,19 @@ function buildModel(SYMBOL, bars, live, momentum) {
   // is the pairing the dropdown expresses: pick a period, read what momentum was
   // and how far it has moved. All five Pasts followed by all five Deltas would
   // read better across horizons and worse for the question actually being asked.
-  const MOM_COL = 'M';                       // where the stored score sits
-  b.push([...['Date', 'High', 'Close', 'Log return', 'MA 50', 'MA 200', 'MA50 vs 200', 'Gain', 'Loss', 'Avg gain', 'Avg loss', 'RSI 14', 'Momentum'],
+  const HEAD = [...['Date', 'High', 'Close', 'Log return', 'MA 50', 'MA 200', 'MA50 vs 200', 'Gain', 'Loss', 'Avg gain', 'Avg loss', 'RSI 14', 'Momentum'],
     ...HORIZONS.flatMap((h) => [`Past Mom. (${h.label})`, `Mom. Delta (${h.label})`]),
-    `Return ${PAST_LABEL} %`, `Next ${PAST_LABEL} Return %`].map((h) => ({ v: h, s: S.head })));
+    `Return ${PAST_LABEL} %`, `Next ${PAST_LABEL} Return %`];
+  // Looked up rather than counted: adding a horizon shifts every column after
+  // it, and a chart pointed at a hardcoded letter would quietly plot the wrong
+  // series instead of failing.
+  const colOf = (label) => {
+    const i = HEAD.indexOf(label);
+    if (i < 0) throw new Error(`no such Bars column: ${label}`);
+    return col(i);
+  };
+  const MOM_COL = colOf('Momentum');
+  b.push(HEAD.map((h) => ({ v: h, s: S.head })));
   for (let i = 0; i < n; i++) {
     const R = i + 5;                        // data starts at row 5
     const nxt = R + 1;                      // the older session
@@ -284,29 +370,29 @@ function buildModel(SYMBOL, bars, live, momentum) {
   // and every return here is a difference between two of these.
   const B = (k) => D + 1 + k;
   const f = [];
-  const F = (label, formula, style, note) => f.push([
+  const SF = (label, formula, style, note) => f.push([
     { v: label, s: S.label }, { f: formula, s: style }, { v: note || '', s: S.note },
   ]);
   f.push([{ v: `${SYMBOL} — the eight momentum factors`, s: S.title }]);
   f.push([{ v: 'Each raw value is read from the Bars sheet; each sub-score is that value put through a fixed curve. Change a close price on Bars and every number here moves.', s: S.note }]);
   f.push([]);
   f.push([{ v: 'RAW MEASUREMENTS', s: S.head }, { v: 'Value', s: S.head }, { v: 'What it is', s: S.head }]);
-  F('Close today', `Bars!C${D + 1}`, S.num2, 'The latest session on the Bars sheet.');
-  F('Realised volatility %', `STDEV.S(Bars!D${D + 1}:Bars!D${D + 126})*SQRT(252)*100`, S.num2,
+  SF('Close today', `Bars!C${D + 1}`, S.num2, 'The latest session on the Bars sheet.');
+  SF('Realised volatility %', `STDEV.S(Bars!D${D + 1}:Bars!D${D + 126})*SQRT(252)*100`, S.num2,
     'Annualised from 126 daily log returns. The denominator that makes returns comparable across calm and wild stocks.');
-  F('12-1 return %', `(Bars!C${B(21)}-Bars!C${B(252)})/Bars!C${B(252)}*100`, S.num2,
+  SF('12-1 return %', `(Bars!C${B(21)}-Bars!C${B(252)})/Bars!C${B(252)}*100`, S.num2,
     'A year of return ending one month ago. The recent month is skipped on purpose — over a year strength continues, over weeks it reverses.');
-  F('6M return %', `(Bars!C${B(0)}-Bars!C${B(126)})/Bars!C${B(126)}*100`, S.num2, '126 sessions.');
-  F('3M return %', `(Bars!C${B(0)}-Bars!C${B(63)})/Bars!C${B(63)}*100`, S.num2, '63 sessions.');
-  F('1M return %', `(Bars!C${B(0)}-Bars!C${B(21)})/Bars!C${B(21)}*100`, S.num2, '21 sessions. Used inverted.');
-  F('% from 52-week high', `(Bars!C${D + 1}-MAX(Bars!B${D + 1}:Bars!B${D + 252}))/MAX(Bars!B${D + 1}:Bars!B${D + 252})*100`, S.num2,
+  SF('6M return %', `(Bars!C${B(0)}-Bars!C${B(126)})/Bars!C${B(126)}*100`, S.num2, '126 sessions.');
+  SF('3M return %', `(Bars!C${B(0)}-Bars!C${B(63)})/Bars!C${B(63)}*100`, S.num2, '63 sessions.');
+  SF('1M return %', `(Bars!C${B(0)}-Bars!C${B(21)})/Bars!C${B(21)}*100`, S.num2, '21 sessions. Used inverted.');
+  SF('% from 52-week high', `(Bars!C${D + 1}-MAX(Bars!B${D + 1}:Bars!B${D + 252}))/MAX(Bars!B${D + 1}:Bars!B${D + 252})*100`, S.num2,
     'Against the highest intraday high of the last year, not the highest close.');
-  F('Positive months %',
+  SF('Positive months %',
     Array.from({ length: 12 }, (_, k) => `IF(Bars!C${D + 1 + k * 21}>Bars!C${D + 1 + (k + 1) * 21},1,0)`).join('+') + '/12*100',
     S.num2, 'Twelve 21-session blocks; how many finished above the block before.');
-  F('RSI 14', `Bars!L${D + 1}`, S.num2, 'Wilder smoothing, computed down the Bars sheet.');
-  F('Close vs 200-day MA %', `(Bars!C${D + 1}-Bars!F${D + 1})/Bars!F${D + 1}*100`, S.num2, 'Positive means above the average.');
-  F('Sessions since MA cross', `IFERROR(MATCH(-Bars!G${D + 1},Bars!G${D + 2}:Bars!G${n - 200 + D + 1},0),"none in range")`, S.plain,
+  SF('RSI 14', `Bars!L${D + 1}`, S.num2, 'Wilder smoothing, computed down the Bars sheet.');
+  SF('Close vs 200-day MA %', `(Bars!C${D + 1}-Bars!F${D + 1})/Bars!F${D + 1}*100`, S.num2, 'Positive means above the average.');
+  SF('Sessions since MA cross', `IFERROR(MATCH(-Bars!G${D + 1},Bars!G${D + 2}:Bars!G${n - 200 + D + 1},0),"none in range")`, S.plain,
     'How far back the 50-day last changed sides with the 200-day. Under 20 counts as a fresh cross.');
 
   f.push([]);
@@ -314,10 +400,10 @@ function buildModel(SYMBOL, bars, live, momentum) {
   const rowOf = {};                          // remember where each label landed
   f.forEach((row, i) => { if (row[0] && row[0].v) rowOf[row[0].v] = i + 1; });
   const V = (label) => `B${rowOf[label]}`;
-  F('12-1, risk-adjusted', `${V('12-1 return %')}/${V('Realised volatility %')}`, S.num3,
+  SF('12-1, risk-adjusted', `${V('12-1 return %')}/${V('Realised volatility %')}`, S.num3,
     'Return divided by its own volatility. Dimensionless — which is what lets a fixed scale mean anything.');
-  F('6M, risk-adjusted', `${V('6M return %')}/${V('Realised volatility %')}`, S.num3, '');
-  F('3M, risk-adjusted', `${V('3M return %')}/${V('Realised volatility %')}`, S.num3, '');
+  SF('6M, risk-adjusted', `${V('6M return %')}/${V('Realised volatility %')}`, S.num3, '');
+  SF('3M, risk-adjusted', `${V('3M return %')}/${V('Realised volatility %')}`, S.num3, '');
   f.forEach((row, i) => { if (row[0] && row[0].v) rowOf[row[0].v] = i + 1; });
 
   f.push([]);
@@ -394,6 +480,53 @@ function buildModel(SYMBOL, bars, live, momentum) {
   ]) sc.push([{ v: '• ' + line, s: S.note }]);
 
   // ---- assemble ------------------------------------------------------------
+  // ================= Sheet 4 — Signal ========================================
+  // The relationship the /signal page draws, in the workbook: does a fortnight's
+  // move in the momentum score say anything about the fortnight that follows?
+  //
+  // Every number here is a formula over the Bars sheet, including the
+  // correlation — so this is not a screenshot of the finding, it is the finding,
+  // and editing a close price moves it.
+  const R1 = 5, R2 = n + 4;                            // the Bars data rows
+  const DX = colOf(`Mom. Delta (${PAST_LABEL})`);
+  const DY = colOf(`Next ${PAST_LABEL} Return %`);
+  const RX = `Bars!$${DX}$${R1}:$${DX}$${R2}`;
+  const RY = `Bars!$${DY}$${R1}:$${DY}$${R2}`;
+  // A blank from IF(...,"") is text, not a number, and text is greater than any
+  // number in an Excel comparison — so every count has to be gated on ISNUMBER
+  // or the empty rows at each end quietly join the "positive" side.
+  const BOTH = `(ISNUMBER(${RX}))*(ISNUMBER(${RY}))`;
+
+  const sg = [];
+  sg.push([{ v: `${SYMBOL} — momentum delta against what happened next`, s: S.title }]);
+  sg.push([{ v: `Each point is one session: the ${PAST_LABEL} change in the momentum score, ` +
+    `against the return over the ${PAST_LABEL} that followed. Both columns live on the Bars sheet, ` +
+    'so this chart and every figure below it recalculate when a price does.', s: S.note }]);
+  sg.push([]);
+  const F = (label, formula, style, note) =>
+    sg.push([{ v: label, s: S.label }, { f: formula, s: style }, { v: note || '', s: S.note }]);
+  F('Observations', `SUMPRODUCT(${BOTH})`, S.plain,
+    'Sessions with both a delta behind them and a return ahead of them.');
+  F('Independent ones', `ROUNDDOWN(SUMPRODUCT(${BOTH})/${PAST_LAG},0)`, S.plain,
+    `Consecutive returns share ${PAST_LAG - 1} of their ${PAST_LAG} days, so the honest count is roughly one per window.`);
+  F('Correlation', `CORREL(${RX},${RY})`, S.num3,
+    'Between -1 and 1. Near zero means the delta told you nothing about the next fortnight.');
+  F('R squared', `RSQ(${RY},${RX})`, S.num3, 'The share of the next fortnight the delta explains.');
+  F('Slope', `SLOPE(${RY},${RX})`, S.num3, '% of return per point of momentum move.');
+  F('Mean next return %', `AVERAGE(${RY})`, S.num2, 'What the stock did over an average fortnight.');
+  F('Base rate', `SUMPRODUCT(${BOTH}*(${RY}>=0))/SUMPRODUCT(${BOTH})`, S.num3,
+    'How often the next fortnight was positive at all.');
+  F('Hit rate', `SUMPRODUCT(${BOTH}*(${RX}>=0)*(${RY}>=0))/SUMPRODUCT(${BOTH}*(${RX}>=0))`, S.num3,
+    'How often it was positive after the momentum score rose.');
+  F('Lift', `SUMPRODUCT(${BOTH}*(${RX}>=0)*(${RY}>=0))/SUMPRODUCT(${BOTH}*(${RX}>=0))` +
+    `-SUMPRODUCT(${BOTH}*(${RY}>=0))/SUMPRODUCT(${BOTH})`, S.num3,
+    'Hit rate minus base rate. This is the only one of the three worth reading — a stock that rises most fortnights hands a high hit rate to a signal that knows nothing.');
+  sg.push([]);
+  sg.push([{ v: 'A round cloud is the honest outcome, and the usual one. Across the whole ' +
+    'screener this relationship measures about -0.003, so expect the trendline to lie flat and ' +
+    'R squared to sit near zero. Read the lift rather than the hit rate, and remember the ' +
+    'independent count above rather than the raw one.', s: S.note }]);
+
   const sheets = [
     { name: 'Bars', xml: sheetXml(b, {
       widths: [12, 10, 10, 11, 10, 10, 12, 9, 9, 10, 10, 9, 11,
@@ -401,7 +534,9 @@ function buildModel(SYMBOL, bars, live, momentum) {
       freeze: 4 }) },
     { name: 'Factors', xml: sheetXml(f, { widths: [26, 14, 9, 9, 11, 8, 10, 70], tab: true }) },
     { name: 'Score', xml: sheetXml(sc, { widths: [24, 14, 78] }) },
+    { name: 'Signal', xml: sheetXml(sg, { widths: [22, 14, 78], drawing: 'rId1' }) },
   ];
+  const SIGNAL_SHEET = sheets.length;                  // 1-based, for the parts below
 
   const files = [
     { name: '[Content_Types].xml', data:
@@ -412,6 +547,8 @@ function buildModel(SYMBOL, bars, live, momentum) {
       '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
       sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') +
       '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' +
+      '<Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>' +
       '</Types>' },
     { name: '_rels/.rels', data:
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -433,6 +570,22 @@ function buildModel(SYMBOL, bars, live, momentum) {
       '</Relationships>' },
     { name: 'xl/styles.xml', data: STYLES },
     ...sheets.map((s, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: s.xml })),
+    // The Signal sheet -> its drawing -> the chart. Two more relationship parts,
+    // each naming the next thing down the chain.
+    { name: `xl/worksheets/_rels/sheet${SIGNAL_SHEET}.xml.rels`, data:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>' +
+      '</Relationships>' },
+    { name: 'xl/drawings/drawing1.xml', data: DRAWING_XML },
+    { name: 'xl/drawings/_rels/drawing1.xml.rels', data:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>' +
+      '</Relationships>' },
+    { name: 'xl/charts/chart1.xml', data: chartXml(
+      `${SYMBOL} — momentum delta (${PAST_LABEL}) against the next ${PAST_LABEL}`,
+      RX, RY, `Momentum delta (${PAST_LABEL}), points`, `Next ${PAST_LABEL} return, %`) },
   ];
 
 
