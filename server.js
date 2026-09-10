@@ -2777,7 +2777,6 @@ app.get('/api/history', requireAuth, route(async (req, res) => {
 // flag ages out on its own after REFRESH_STALE_MS. The cron job covers that
 // case instead, since it is the thing still awake.
 
-const REPORT_SCREEN_NAMES = 8;   // per screen, before it becomes "+n more"
 const REPORT_MOVERS = 5;
 
 function fmtDuration(ms) {
@@ -2812,9 +2811,6 @@ const escHtml = (t) => String(t == null ? '' : t)
 const signed = (n, d = 1) => (n == null || !isFinite(n) ? '—'
   : `${n >= 0 ? '+' : ''}${n.toFixed(d)}%`);
 
-// The 1-10 rating the table shows; older snapshots carry only the raw score.
-const rating = (x) => String(x.overallRating != null ? x.overallRating
-  : (x.overallScore != null ? Math.round(x.overallScore / 10) : '—'));
 
 // Everything the report says, gathered once so the text and HTML bodies cannot
 // disagree with each other.
@@ -2866,13 +2862,14 @@ async function buildRefreshReport(state, snap, kind = 'all') {
 
   return {
     kind, complete, rows, live, loaded, failed, missing, asOf, day, stats, modelWarning,
+    // The digest is the day's movers and nothing else. The screens and the
+    // highest-rated list were dropped in Sep 2026: both restate a standing
+    // rather than reporting what happened, and both are a click away on
+    // /analysis and the screener, where they are current rather than a
+    // snapshot of whenever the refresh happened to finish. Screens.run() over
+    // the whole universe went with them.
     top: movers.slice(0, REPORT_MOVERS),
     bottom: movers.slice(-REPORT_MOVERS).reverse(),
-    // Ranked on the 0-100 score because it separates names the 1-10 rating
-    // ties, but printed as the rating, which is what the table shows.
-    best: live.filter((x) => num(x.overallScore))
-      .sort((a, b) => b.overallScore - a.overallScore).slice(0, REPORT_MOVERS),
-    screens: Screens.run(live),
     actor: state.actor || 'unknown',
     startedAt: state.startedAt,
     duration: fmtDuration(Date.now() - state.startedAt),
@@ -2918,15 +2915,6 @@ function refreshReportBodies(r) {
   for (const x of r.top) t.push('  ' + signed(x.todayPct).padStart(7) + '  ' + x.symbol);
   if (r.top.length && r.bottom.length) t.push('  …');
   for (const x of r.bottom) t.push('  ' + signed(x.todayPct).padStart(7) + '  ' + x.symbol);
-  t.push('', 'Screens tonight');
-  for (const sc of Screens.SCREENS) {
-    const hits = r.screens[sc.id] || [];
-    const names = hits.slice(0, REPORT_SCREEN_NAMES).map((x) => x.symbol).join(', ');
-    const more = hits.length > REPORT_SCREEN_NAMES ? `, +${hits.length - REPORT_SCREEN_NAMES} more` : '';
-    t.push(`  ${sc.title} (${hits.length})` + (hits.length ? ': ' + names + more : ''));
-  }
-  t.push('', 'Highest overall');
-  for (const x of r.best) t.push('  ' + rating(x) + '  ' + x.symbol);
   if (url) t.push('', url);
 
   // --- html ---
@@ -2937,22 +2925,6 @@ function refreshReportBodies(r) {
   const chip = (x) => `<span style="display:inline-block;margin:0 10px 4px 0;font-size:13px">` +
     `<b>${escHtml(x.symbol)}</b> <span style="color:${x.todayPct >= 0 ? '#0f9d58' : '#c5221f'}">` +
     `${signed(x.todayPct)}</span></span>`;
-  const symLink = (x) => (url
-    ? `<a href="${url}/stock/${encodeURIComponent(x.symbol)}" style="color:#1a73e8;text-decoration:none">${escHtml(x.symbol)}</a>`
-    : escHtml(x.symbol));
-
-  const screenRows = Screens.SCREENS.map((sc) => {
-    const hits = r.screens[sc.id] || [];
-    const extra = hits.length > REPORT_SCREEN_NAMES
-      ? ` <span style="color:#999">+${hits.length - REPORT_SCREEN_NAMES} more</span>` : '';
-    const names = hits.length
-      ? hits.slice(0, REPORT_SCREEN_NAMES).map(symLink).join(', ') + extra
-      : '<span style="color:#999">nothing tonight</span>';
-    return `<tr><td style="${cell};white-space:nowrap;vertical-align:top">` +
-      `<b>${escHtml(sc.title)}</b> <span style="color:#999">${hits.length}</span></td>` +
-      `<td style="${cell}">${names}</td></tr>`;
-  }).join('');
-
   let problems = '';
   if (r.failed.length) {
     problems += `<p style="margin:14px 0 0;font-size:13px"><b style="color:#c5221f">` +
@@ -2983,11 +2955,6 @@ function refreshReportBodies(r) {
     '<h3 style="margin:22px 0 6px;font-size:14px">Movers today</h3>' +
     '<div>' + r.top.map(chip).join('') + '</div>' +
     '<div style="margin-top:4px">' + r.bottom.map(chip).join('') + '</div>' +
-    '<h3 style="margin:22px 0 6px;font-size:14px">Screens tonight</h3>' +
-    `<table style="border-collapse:collapse">${screenRows}</table>` +
-    '<h3 style="margin:22px 0 6px;font-size:14px">Highest overall</h3>' +
-    '<div>' + r.best.map((x) => `<span style="display:inline-block;margin:0 10px 4px 0;font-size:13px">` +
-      `<b>${escHtml(rating(x))}</b> ${symLink(x)}</span>`).join('') + '</div>' +
     '';
 
   const html = emailShell({
