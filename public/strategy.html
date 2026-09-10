@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Strategy backtest — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 60px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+    .aura { background:
+      radial-gradient(46vw 40vw at 6% -6%, rgba(52, 211, 153, 0.11), transparent 62%),
+      radial-gradient(50vw 44vw at 96% 4%, rgba(167, 139, 250, 0.11), transparent 64%); }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
+                   padding: 10px 20px 0; pointer-events: none; }
+    .island { pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content;
+      max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+
+    .head { display: flex; align-items: baseline; gap: 10px 14px; flex-wrap: wrap; margin: 14px 0 0; }
+    h1 { margin: 0; font-size: clamp(24px, 3vw, 32px); font-weight: 600;
+         letter-spacing: -0.035em; line-height: 1; }
+    .sub { font-size: 13px; color: var(--muted); }
+    .span { font-size: 12.5px; color: var(--faint); font-family: var(--mono); }
+
+    .panel { margin: 18px 0 0; }
+    .panel .core { padding: 16px 18px 18px; }
+    .ptitle { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+    .pnote { margin: 4px 0 12px; font-size: 12.5px; color: var(--muted); line-height: 1.5; max-width: 88ch; }
+
+    /* controls */
+    .ctl { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px 26px; }
+    .c { display: flex; flex-direction: column; gap: 6px; }
+    .c > .lbl { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+    .c .hint { font-size: 11px; color: var(--faint); line-height: 1.45; }
+    select {
+      width: 100%; padding: 8px 11px; border-radius: 10px; background: var(--surface-2);
+      border: 1px solid var(--hair); color: var(--text); font-family: var(--sans); font-size: 13px;
+      outline: none; cursor: pointer;
+    }
+    select:focus { border-color: var(--accent); }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip2 { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer;
+      font-family: var(--sans); font-size: 12.5px; transition: all 0.3s var(--ease); }
+    .chip2:hover { color: var(--text); border-color: var(--hair-2); }
+    .chip2.on { color: var(--text); border-color: var(--green); background: rgba(52, 211, 153, 0.13); }
+    .c input[type=range] { width: 100%; accent-color: var(--green); margin: 0; }
+    .c .val { font-family: var(--mono); font-size: 13px; color: var(--green); }
+    .rowline { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+
+    /* charts */
+    .chartbox { position: relative; width: 100%; }
+    .chartbox svg { width: 100%; height: auto; display: block; }
+    .eq-strat { fill: none; stroke: var(--green); stroke-width: 1.6; vector-effect: non-scaling-stroke;
+                stroke-linejoin: round; }
+    .eq-hold { fill: none; stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 5 4;
+               vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+    .dd-area { fill: var(--red); fill-opacity: 0.28; }
+    .ax { stroke: var(--hair-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
+    .tick { fill: var(--faint); font-family: var(--mono); font-size: 9px; }
+    .legend2 { display: flex; gap: 14px; flex-wrap: wrap; margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+    .legend2 i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 6px; }
+
+    /* stats */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .card2 { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--hair);
+             background: rgba(255, 255, 255, 0.02); }
+    .card2 .cv { font-family: var(--mono); font-size: 20px; font-weight: 600; }
+    .card2 .cl { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+                 color: var(--faint); margin-bottom: 4px; }
+    .card2 .cs { margin-top: 3px; font-size: 11px; color: var(--faint); line-height: 1.4; }
+    .good { color: var(--green); } .bad { color: var(--red); } .flat { color: var(--muted); }
+
+    table.cmp { border-collapse: collapse; width: 100%; max-width: 700px; }
+    table.cmp th, table.cmp td { padding: 8px 10px; text-align: right; font-family: var(--mono); font-size: 13px; }
+    table.cmp th { font-family: var(--sans); font-size: 10.5px; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--faint); font-weight: 500; border-bottom: 1px solid var(--hair); }
+    table.cmp th:first-child, table.cmp td:first-child { text-align: left; color: var(--muted); }
+    table.cmp tr.hold td { color: var(--faint); }
+
+    .warnbox { margin: 18px 0 0; padding: 13px 15px; border-radius: 12px;
+      border: 1px solid rgba(251, 191, 36, 0.28); background: rgba(251, 191, 36, 0.07);
+      font-size: 12.5px; line-height: 1.65; color: var(--muted); }
+    .warnbox b { color: var(--amber); }
+    .warnbox p { margin: 0 0 8px; } .warnbox p:last-child { margin: 0; }
+    .err { margin: 24px 0 0; padding: 14px 16px; border-radius: 14px;
+      border: 1px solid rgba(251, 113, 133, 0.3); background: rgba(251, 113, 133, 0.08);
+      color: var(--red); font-size: 13.5px; }
+    .loading { margin: 30px 0; color: var(--faint); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark"><span class="wordmark">Tickr Lab</span></span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <div class="head">
+      <h1>Strategy backtest</h1>
+      <span class="sub">Time-series momentum — hold what is trending, sized by its own volatility</span>
+      <span class="span" id="span"></span>
+    </div>
+
+    <div class="loading" id="loading">Loading…</div>
+    <div class="err" id="err" hidden></div>
+
+    <section class="bezel panel" id="pCtl" hidden><div class="core">
+      <div class="ptitle">The rule</div>
+      <p class="pnote">Long what has risen over the lookback, short what has fallen, each position sized so it carries the same volatility. Rebalanced monthly, the last month of the lookback skipped.</p>
+      <div class="ctl">
+        <div class="c">
+          <span class="lbl">Stocks</span>
+          <select id="uni"></select>
+          <span class="hint" id="uniHint"></span>
+        </div>
+        <div class="c">
+          <span class="lbl">Lookback</span>
+          <div class="chips" id="lbChips"></div>
+          <span class="hint">How far back the trend is measured. 252 sessions is the 12-month standard.</span>
+        </div>
+        <div class="c">
+          <span class="lbl">Direction</span>
+          <div class="chips" id="dirChips"></div>
+          <span class="hint">Long-only sits in cash instead of shorting a downtrend.</span>
+        </div>
+        <div class="c">
+          <span class="lbl">200-day filter</span>
+          <div class="chips" id="smaChips"></div>
+          <span class="hint">Require price on the right side of its 200-day average before taking the position.</span>
+        </div>
+        <div class="c">
+          <div class="rowline"><span class="lbl">Target volatility</span><span class="val" id="tvVal"></span></div>
+          <input type="range" id="tv" min="5" max="60" step="1" />
+          <span class="hint">Per position, annualised. Scales the whole result. <a href="#" id="matchVol" style="color:var(--green)">Match buy-and-hold</a> for a fair comparison.</span>
+        </div>
+        <div class="c">
+          <div class="rowline"><span class="lbl">Transaction cost</span><span class="val" id="csVal"></span></div>
+          <input type="range" id="cs" min="0" max="50" step="1" />
+          <span class="hint">Basis points charged against turnover, each way. Rebalancing a hundred names monthly is not free.</span>
+        </div>
+      </div>
+    </div></section>
+
+    <section class="bezel panel" id="pEq" hidden><div class="core">
+      <div class="ptitle">Growth of $1</div>
+      <p class="pnote" id="eqNote"></p>
+      <div class="legend2">
+        <span><i style="background:var(--green)"></i>Strategy</span>
+        <span><i style="background:var(--muted)"></i>Buy and hold, equal weight</span>
+      </div>
+      <div class="chartbox"><svg id="eq" viewBox="0 0 900 320" role="img"></svg></div>
+    </div></section>
+
+    <section class="bezel panel" id="pStats" hidden><div class="core">
+      <div class="ptitle">The account</div>
+      <p class="pnote" id="stNote"></p>
+      <div class="cards" id="cards"></div>
+    </div></section>
+
+    <section class="bezel panel" id="pDD" hidden><div class="core">
+      <div class="ptitle">Drawdown</div>
+      <p class="pnote">How far below its own high-water mark the strategy sat, month by month. Measured on month-ends, so an intra-month low can be worse than this shows.</p>
+      <div class="chartbox"><svg id="dd" viewBox="0 0 900 190" role="img"></svg></div>
+    </div></section>
+
+    <section class="bezel panel" id="pCmp" hidden><div class="core">
+      <div class="ptitle">Against simply owning them, and across the split</div>
+      <p class="pnote" id="cmpNote"></p>
+      <div id="cmp"></div>
+    </div></section>
+
+    <div class="warnbox" id="warn" hidden></div>
+  </main>
+
+  <script src="/strategy.js"></script>
+  <script>
+    let D = null, uni = 'all', lookback = 252, longOnly = true, sma = false, targetVol = 10, cost = 5;
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const pc = (v, d = 1) => (v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(d) + '%');
+    const n2 = (v, d = 2) => (v == null ? '—' : v.toFixed(d));
+
+    async function load() {
+      try {
+        const r = await fetch('/strategy-runs.json', { cache: 'no-store' });
+        if (r.status === 401) { location.href = '/login'; return; }
+        if (!r.ok) throw new Error('No strategy runs yet — run strategy-runs.js to build them.');
+        D = await r.json();
+        boot();
+      } catch (e) {
+        $('loading').hidden = true;
+        $('err').hidden = false; $('err').textContent = e.message;
+      }
+    }
+
+    function boot() {
+      $('loading').hidden = true;
+      $('span').textContent = `${D.months[0]} → ${D.months[D.months.length - 1]} · built ${(D.builtAt || '').slice(0, 10)}`;
+      $('uni').innerHTML = D.universes.map((u) =>
+        `<option value="${esc(u.id)}">${esc(u.label)} — ${u.n} ${u.n === 1 ? 'stock' : 'stocks'}</option>`).join('');
+      $('uni').value = uni;
+      $('uni').addEventListener('change', () => { uni = $('uni').value; render(); });
+
+      const lbs = [...new Set(D.variants.map((v) => v.lookback))].sort((a, b) => a - b);
+      $('lbChips').innerHTML = lbs.map((v) =>
+        `<button class="chip2" data-lb="${v}">${v}d</button>`).join('');
+      $('dirChips').innerHTML =
+        '<button class="chip2" data-dir="1">Long only</button><button class="chip2" data-dir="0">Long / short</button>';
+      $('smaChips').innerHTML =
+        '<button class="chip2" data-sma="0">Off</button><button class="chip2" data-sma="1">On</button>';
+
+      $('pCtl').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-lb],[data-dir],[data-sma]');
+        if (!b) return;
+        if (b.dataset.lb) lookback = Number(b.dataset.lb);
+        else if (b.dataset.dir) longOnly = b.dataset.dir === '1';
+        else if (b.dataset.sma) sma = b.dataset.sma === '1';
+        render();
+      });
+      $('tv').value = targetVol; $('cs').value = cost;
+      $('tv').addEventListener('input', () => { targetVol = Number($('tv').value); render(); });
+      $('cs').addEventListener('input', () => { cost = Number($('cs').value); render(); });
+      $('matchVol').addEventListener('click', (e) => {
+        e.preventDefault();
+        // Same volatility is the only comparison that means anything: a rule
+        // running at a third of the exposure will always look calmer and always
+        // earn less, and neither says whether the rule is any good.
+        const run = current(); if (!run) return;
+        const a = Strategy.summarise(run.r, run.t, 0, 1);
+        const h = Strategy.summarise(D.hold[uni], null, 0);
+        if (a.vol > 0 && h.vol > 0) {
+          targetVol = Math.max(5, Math.min(60, Math.round(D.fixed.targetVol * (h.vol / a.vol))));
+          $('tv').value = targetVol;
+        }
+        render();
+      });
+      for (const id of ['pCtl', 'pEq', 'pStats', 'pDD', 'pCmp', 'warn']) $(id).hidden = false;
+      renderWarning();
+      render();
+    }
+
+    const variantIndex = () => D.variants.findIndex((v) =>
+      v.lookback === lookback && !!v.longOnly === longOnly && !!v.sma === sma);
+    const current = () => {
+      const vi = variantIndex();
+      return vi < 0 ? null : D.runs.find((r) => r.u === uni && r.v === vi) || null;
+    };
+
+    function render() {
+      for (const b of document.querySelectorAll('[data-lb]')) b.classList.toggle('on', Number(b.dataset.lb) === lookback);
+      for (const b of document.querySelectorAll('[data-dir]')) b.classList.toggle('on', (b.dataset.dir === '1') === longOnly);
+      for (const b of document.querySelectorAll('[data-sma]')) b.classList.toggle('on', (b.dataset.sma === '1') === sma);
+      $('tvVal').textContent = targetVol + '%';
+      $('csVal').textContent = cost + ' bps';
+      const u = D.universes.find((x) => x.id === uni);
+      $('uniHint').textContent = `${u.n} ${u.n === 1 ? 'symbol' : 'symbols'}. A one-name universe is a single position, not a portfolio.`;
+
+      const run = current();
+      if (!run) { $('eqNote').textContent = 'That combination was not run.'; return; }
+      // The stored runs are at the grid's target volatility, and scaling is
+      // linear in the returns, so any target is a multiplier applied here.
+      const scale = targetVol / D.fixed.targetVol;
+      const s = Strategy.summarise(run.r, run.t, cost, scale);
+      const h = Strategy.summarise(D.hold[uni], null, 0);
+      drawEquity(s, h);
+      drawDrawdown(s);
+      renderCards(s, h, run, scale);
+      renderCompare(run, scale);
+    }
+
+    // ---- charts -------------------------------------------------------------
+    function niceTicks(lo, hi, want = 5) {
+      if (!(hi > lo)) return [lo];
+      const raw = (hi - lo) / want;
+      const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+      const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((v) => v >= raw) || mag * 10;
+      const out = [];
+      for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+      return out;
+    }
+
+    function drawEquity(s, h) {
+      const W = 900, H = 320, L = 54, R = 16, T = 14, B = 30;
+      const a = s.curve, b = h.curve;
+      const all = a.concat(b).filter((v) => v > 0);
+      // Log scale: an equity curve compounds, so equal vertical distances should
+      // mean equal percentage moves. On a linear axis the early years vanish.
+      const lo = Math.min(...all), hi = Math.max(...all);
+      const Y = (v) => T + (1 - (Math.log(Math.max(v, 1e-6)) - Math.log(lo)) / ((Math.log(hi) - Math.log(lo)) || 1)) * (H - T - B);
+      const X = (i) => L + (i / Math.max(1, a.length - 1)) * (W - L - R);
+      const path = (arr) => arr.map((v, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)).join('');
+
+      let g = '';
+      for (const t of [0.25, 0.5, 1, 2, 4, 8, 16, 32, 64].filter((v) => v >= lo * 0.9 && v <= hi * 1.1)) {
+        g += `<line class="ax" x1="${L}" y1="${Y(t).toFixed(1)}" x2="${W - R}" y2="${Y(t).toFixed(1)}" opacity="0.3"/>` +
+          `<text class="tick" x="${L - 8}" y="${(Y(t) + 3).toFixed(1)}" text-anchor="end">$${t}</text>`;
+      }
+      const step = Math.max(1, Math.floor(a.length / 8));
+      for (let i = 0; i < a.length; i += step) {
+        g += `<text class="tick" x="${X(i).toFixed(1)}" y="${H - 10}" text-anchor="middle">${esc(D.months[i] || '')}</text>`;
+      }
+      g += `<path class="eq-hold" d="${path(b)}"/><path class="eq-strat" d="${path(a)}"/>`;
+      $('eq').innerHTML = g;
+      $('eqNote').textContent =
+        `One dollar, compounded monthly, after ${cost} bps of cost on every unit of turnover. ` +
+        `Log scale, so equal heights are equal percentage moves.`;
+    }
+
+    function drawDrawdown(s) {
+      const W = 900, H = 190, L = 54, R = 16, T = 12, B = 26;
+      let peak = 0; const dd = s.curve.map((v) => { peak = Math.max(peak, v); return v / peak - 1; });
+      const lo = Math.min(-0.02, ...dd);
+      const Y = (v) => T + (v / lo) * (H - T - B);
+      const X = (i) => L + (i / Math.max(1, dd.length - 1)) * (W - L - R);
+      let g = '';
+      for (const t of niceTicks(lo, 0, 4)) {
+        g += `<line class="ax" x1="${L}" y1="${Y(t).toFixed(1)}" x2="${W - R}" y2="${Y(t).toFixed(1)}" opacity="0.3"/>` +
+          `<text class="tick" x="${L - 8}" y="${(Y(t) + 3).toFixed(1)}" text-anchor="end">${(t * 100).toFixed(0)}%</text>`;
+      }
+      g += `<path class="dd-area" d="M${X(0).toFixed(1)} ${Y(0).toFixed(1)}` +
+        dd.map((v, i) => `L${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join('') +
+        `L${X(dd.length - 1).toFixed(1)} ${Y(0).toFixed(1)}Z"/>`;
+      $('dd').innerHTML = g;
+    }
+
+    // ---- numbers ------------------------------------------------------------
+    function renderCards(s, h, run, scale) {
+      const card = (l, v, sub, k) =>
+        `<div class="card2"><div class="cl">${esc(l)}</div><div class="cv ${k || ''}">${esc(v)}</div>` +
+        `<div class="cs">${esc(sub)}</div></div>`;
+      const better = (a, b) => (a == null || b == null ? '' : a > b ? 'good' : a < b ? 'bad' : 'flat');
+      $('cards').innerHTML =
+        card('CAGR', pc(s.cagr), `hold ${pc(h.cagr)}`, better(s.cagr, h.cagr)) +
+        card('Sharpe', n2(s.sharpe), `hold ${n2(h.sharpe)}`, better(s.sharpe, h.sharpe)) +
+        card('Volatility', pc(s.vol), `hold ${pc(h.vol)}`, 'flat') +
+        card('Max drawdown', pc(s.maxDD), `hold ${pc(h.maxDD)}`, better(s.maxDD, h.maxDD)) +
+        card('Months up', s.hit == null ? '—' : (s.hit * 100).toFixed(0) + '%', `of ${s.months}`, 'flat') +
+        card('Worst month', pc(s.worst), `best ${pc(s.best)}`, 'flat') +
+        card('Turnover', s.turnover == null ? '—' : (s.turnover * 100).toFixed(0) + '%', 'of capital, a month', 'flat') +
+        card('vs hold', n2(Strategy.correlation(run.r, D.hold[uni])),
+          'monthly correlation', 'flat');
+      $('stNote').textContent =
+        `At ${targetVol}% target volatility per position and ${cost} bps of cost. ` +
+        (Math.abs(s.vol - h.vol) / (h.vol || 1) > 0.15
+          ? 'The two are running at different volatilities — use “Match buy-and-hold” before comparing returns.'
+          : 'The two are at comparable volatility, so the returns can be read against each other.');
+    }
+
+    function renderCompare(run, scale) {
+      const split = D.months.findIndex((m) => m >= '2020-01');
+      const seg = (from, to) => {
+        const r = run.r.slice(from, to), t = run.t.slice(from, to), hh = D.hold[uni].slice(from, to);
+        if (r.length < 12) return null;
+        return { s: Strategy.summarise(r, t, cost, scale), h: Strategy.summarise(hh, null, 0) };
+      };
+      const rows = [
+        ['Whole period', seg(0, D.months.length)],
+        ['2008 – 2019', seg(0, split < 0 ? D.months.length : split)],
+        ['2020 onward', split < 0 ? null : seg(split, D.months.length)],
+      ];
+      $('cmp').innerHTML =
+        '<table class="cmp"><thead><tr><th>period</th><th>CAGR</th><th>Sharpe</th><th>max DD</th><th>hold CAGR</th><th>hold Sharpe</th></tr></thead><tbody>' +
+        rows.map(([label, x]) => (x == null
+          ? `<tr><td>${esc(label)}</td><td colspan="5">—</td></tr>`
+          : `<tr><td>${esc(label)}</td><td>${pc(x.s.cagr)}</td><td>${n2(x.s.sharpe)}</td>` +
+            `<td>${pc(x.s.maxDD)}</td><td class="hold">${pc(x.h.cagr)}</td><td class="hold">${n2(x.h.sharpe)}</td></tr>`)).join('') +
+        '</tbody></table>';
+      $('cmpNote').textContent =
+        'Every result on this project has split at 2020 — nothing before it, everything after. ' +
+        'A strategy that only works in the second row has told you about the sample, not the market.';
+    }
+
+    function renderWarning() {
+      $('warn').innerHTML =
+        '<p><b>This is a backtest, and backtests flatter.</b> The universe is 116 stocks chosen because ' +
+        'they are worth following in 2026, so even the 33 deliberate laggards do not make it point-in-time — ' +
+        'nothing that went bankrupt or was acquired is in here at all, and those are the names a trend rule ' +
+        'would have been short.</p>' +
+        '<p><b>Volatility targeting assumes diversification this universe does not have.</b> Sizing each ' +
+        'position at target ÷ its own volatility gives equal risk per position only if the positions are ' +
+        'roughly independent. These are largely correlated US large caps, so the portfolio\'s realised ' +
+        'volatility lands well above the target — which is why the Volatility card is worth reading before ' +
+        'the CAGR one.</p>' +
+        '<p><b>The evidence base is futures, not single stocks.</b> The 12-month lookback and the skip month ' +
+        'come from research on 58 liquid futures contracts across asset classes. In individual equities the ' +
+        'case for time-series momentum is considerably weaker, and the recommended parameters are inherited ' +
+        'rather than measured here.</p>' +
+        '<p><b>No slippage, no borrow cost, no taxes.</b> The cost slider charges a flat spread against ' +
+        'turnover and nothing else. A short leg in particular is not free.</p>';
+    }
+
+    load();
+  </script>
+</body>
+</html>

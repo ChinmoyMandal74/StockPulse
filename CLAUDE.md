@@ -31,6 +31,9 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `public/app.css` | **Shared stylesheet** — tokens, atmosphere, bezel, buttons, table base, row card. Linked by all four pages |
 | `public/index.html` | Single-page frontend (no build step, vanilla JS, page-specific CSS inline) |
 | `public/analysis.html` | Signal screens at `/analysis` — see **Analysis screens** below |
+| `public/strategy.js` | **The backtest engine** — signal to position to daily P&L. Pure functions; `require`d by the runner and loaded by the page |
+| `strategy-runs.js` | Builds `public/strategy-runs.json`: every rule variant over every portfolio. Runs against the local copy |
+| `public/strategy.html` | The strategy backtest at `/strategy` — equity curve, drawdown, costs |
 | `public/indicators.js` | **Tunable short-horizon indicators, defined once** — loaded by `/lab`, `require`d by the server and the offline grid |
 | `lab-grid.js` | Builds `public/lab-grid.json`: the cross-sectional result for every parameter setting the lab can reach. Runs against the local copy, never Turso |
 | `public/lab.html` | The indicator lab at `/lab/<SYMBOL>` — sliders, a chart, and the universe-wide truth beside it |
@@ -627,6 +630,18 @@ So a single query has carried 441k full rows fine, and the failure came after **
   - **It deliberately omits `users`, `sessions` and `password_resets`** — password hashes and live session tokens have no business in an unencrypted file on a laptop — and `visitors`, `prefs`, `chat_usage` as personal and useless here. **It is not a backup.**
   - The schema is copied from `sqlite_master` rather than restated, so a column added upstream arrives without this file knowing about it. Dated tables re-pull `OVERLAP_DAYS` (10) on top of what is local, because the archive rewrites recent bars — a provisional close for a session still in progress is not final. A split rewrites a symbol's whole history, so **`--full` after a split**, the same repair path `backfill-bars.js --only` is for.
 - A full momentum backfill is **500.3s for 113 symbols**. The whole-universe cross-sectional query through `momentum_deltas` is **~3.8s**.
+
+## The strategy backtest
+`/strategy` is the first thing here that simulates a rule rather than measuring an association: signal, position, rebalance, equity curve. Reached from **Strategy** in the screener's bar. **The word "backtest" was freed for it** — what used to carry that name is now the forward-returns view.
+
+**Why a separate page from the lab.** The lab is per-symbol and asks whether an indicator is associated with what happens next. A portfolio is not about a symbol, and its outputs — equity curve, Sharpe, drawdown, turnover, correlation to holding — fit none of the lab's panels. Its controls are different too: sizing, rebalancing, filters, costs.
+
+- **The rule is Moskowitz–Ooi–Pedersen time-series momentum**: long what rose over the lookback, short what fell, each position sized `targetVol ÷ its own realised vol`, rebalanced monthly, the last month of the lookback skipped. Stock selection is a dropdown over **All plus every portfolio**, so a rule can be run on Mag 7 or on the Faded 33.
+- **The day is earned before the rebalance, and that was a bug first.** Rebalancing first decided a weight from today's close and then earned today's move with it. The sizing was the worse half — `vol[i]` contains the very return being earned, so a rule facing a gap sized itself down for a move it could not have seen. Measured on a synthetic series with a 48% gap landing on a rebalance day: **the wrong order booked 5.98%, the right one books 39.98%.** Note the direction — here the lookahead *understated* the return, which is why "does it look too good" is not a sufficient test for one.
+- **Monthly returns and turnover are shipped, not finished statistics.** That is what makes cost and target volatility sliders rather than assumptions: cost is charged against real turnover, and vol scaling is linear in the returns, so both apply after the fact. At a monthly rebalance across a hundred names, cost is often the difference between a positive and a negative result. Monthly rather than daily keeps the file at 783 KB; it costs drawdown resolution, and the page says so.
+- **"Match buy-and-hold" exists because a comparison at different exposures is meaningless.** The stored runs sit at ~29% gross exposure, so their raw CAGR looks terrible against a fully-invested benchmark while their drawdown looks wonderful. Neither number says anything until the volatilities match.
+- **A gap inside a listed life is carried forward; a symbol not yet listed stays null.** Without that a single missing print reads as a 100% loss and back again.
+- **The first result on this project that does not vanish before 2020.** At matched volatility, 116 stocks, 5 bps: CAGR **+16.7% against hold's +18.5%**, Sharpe **0.97 against 0.95**, max drawdown **−28.1% against −43.4%** — and in **2008–2019 alone, Sharpe 0.95 against hold's 0.84**. It earns that by sidestepping 2008, which is visible in the curve and is mechanically what a trend rule does. It is a *risk* result, not a return result, and it remains hostage to a universe with no bankruptcies in it.
 
 ## The indicator lab
 `/lab/<SYMBOL>` builds a short-horizon indicator, draws it under the price, and reports what it does — for that stock live, and for the whole universe from a precomputed grid. Reached from **Indicator lab** beside Signal study on the stock page.

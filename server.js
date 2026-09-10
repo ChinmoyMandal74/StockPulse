@@ -135,6 +135,15 @@ app.get('/signal/:symbol', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'signal.html'));
 }));
 
+// A real backtest: a rule, positions, and an equity curve. The runs are
+// precomputed offline (strategy-runs.js) because simulating 116 symbols across
+// 4,700 sessions is neither a browser nor a serverless job; this route only
+// serves the page, and the page reads the static results.
+app.get('/strategy', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  res.sendFile(path.join(__dirname, 'public', 'strategy.html'));
+}));
+
 // Build an indicator and watch what it does. The page computes everything
 // itself from the bars this ships, so a slider drag redraws without a request.
 app.get('/lab/:symbol', route(async (req, res) => {
@@ -179,7 +188,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       // no symbol in that path, so there is nothing to show
                       '/stock.html': '/',
                       // no symbol in that path either
-                      '/signal.html': '/', '/lab.html': '/' };
+                      '/signal.html': '/', '/lab.html': '/', '/strategy.html': '/strategy' };
 app.get(Object.keys(GATED_PAGES), (req, res) => res.redirect(GATED_PAGES[req.path]));
 
 app.use(express.static(path.join(__dirname, 'public')));
