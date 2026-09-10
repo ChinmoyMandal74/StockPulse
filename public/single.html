@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Single-stock strategy — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 60px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+    .aura { background:
+      radial-gradient(46vw 40vw at 6% -6%, rgba(34, 211, 238, 0.11), transparent 62%),
+      radial-gradient(50vw 44vw at 96% 4%, rgba(52, 211, 153, 0.10), transparent 64%); }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
+                   padding: 10px 20px 0; pointer-events: none; }
+    .island { pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content;
+      max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+
+    .head { display: flex; align-items: baseline; gap: 10px 14px; flex-wrap: wrap; margin: 14px 0 0; }
+    h1 { margin: 0; font-size: clamp(24px, 3vw, 32px); font-weight: 600;
+         letter-spacing: -0.035em; line-height: 1; }
+    .sub { font-size: 13px; color: var(--muted); }
+    .span { font-size: 12.5px; color: var(--faint); font-family: var(--mono); }
+
+    .panel { margin: 18px 0 0; }
+    .panel .core { padding: 16px 18px 18px; }
+    .ptitle { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+    .pnote { margin: 4px 0 12px; font-size: 12.5px; color: var(--muted); line-height: 1.5; max-width: 90ch; }
+
+    .ctl { display: grid; grid-template-columns: repeat(auto-fit, minmax(228px, 1fr)); gap: 15px 26px; }
+    .c { display: flex; flex-direction: column; gap: 6px; }
+    .c > .lbl { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+    .c .hint { font-size: 11px; color: var(--faint); line-height: 1.45; }
+    select {
+      width: 100%; padding: 8px 11px; border-radius: 10px; background: var(--surface-2);
+      border: 1px solid var(--hair); color: var(--text); font-family: var(--sans); font-size: 13px;
+      outline: none; cursor: pointer;
+    }
+    select:focus { border-color: var(--mom); }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip2 { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer;
+      font-family: var(--sans); font-size: 12.5px; transition: all 0.3s var(--ease); }
+    .chip2:hover { color: var(--text); border-color: var(--hair-2); }
+    .chip2.on { color: var(--text); border-color: var(--mom); background: rgba(34, 211, 238, 0.13); }
+    .c input[type=range] { width: 100%; accent-color: var(--mom); margin: 0; }
+    .c .val { font-family: var(--mono); font-size: 13px; color: var(--mom); }
+    .rowline { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+    .preset { color: var(--green); text-decoration: none; border-bottom: 1px solid rgba(52, 211, 153, 0.35); }
+    .preset:hover { border-bottom-color: var(--green); }
+
+    .chartbox { position: relative; width: 100%; }
+    .chartbox svg { width: 100%; height: auto; display: block; }
+    .ln-price { fill: none; stroke: var(--text); stroke-width: 1.4; vector-effect: non-scaling-stroke;
+                stroke-linejoin: round; }
+    .ln-sma { fill: none; stroke: var(--amber); stroke-width: 1.2; vector-effect: non-scaling-stroke;
+              stroke-linejoin: round; opacity: 0.85; }
+    .ln-strat { fill: none; stroke: var(--mom); stroke-width: 1.6; vector-effect: non-scaling-stroke;
+                stroke-linejoin: round; }
+    .ln-hold { fill: none; stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 5 4;
+               vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+    .band { fill: var(--green); fill-opacity: 0.10; }
+    .dd-strat { fill: var(--mom); fill-opacity: 0.24; }
+    .dd-hold { fill: none; stroke: var(--red); stroke-width: 1.1; stroke-dasharray: 4 3;
+               vector-effect: non-scaling-stroke; }
+    .ax { stroke: var(--hair-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
+    .tick { fill: var(--faint); font-family: var(--mono); font-size: 9px; }
+    .legend2 { display: flex; gap: 14px; flex-wrap: wrap; margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+    .legend2 i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 6px; }
+    .legend2 i.sw { height: 10px; width: 12px; border-radius: 2px; }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .card2 { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--hair);
+             background: rgba(255, 255, 255, 0.02); }
+    .card2 .cv { font-family: var(--mono); font-size: 20px; font-weight: 600; }
+    .card2 .cl { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+                 color: var(--faint); margin-bottom: 4px; }
+    .card2 .cs { margin-top: 3px; font-size: 11px; color: var(--faint); line-height: 1.4; }
+    .good { color: var(--green); } .bad { color: var(--red); } .flat { color: var(--muted); }
+
+    .sweepbar { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin: 0 0 10px; }
+    .verdict { font-size: 13px; color: var(--muted); line-height: 1.55; margin: 0 0 12px; max-width: 92ch; }
+    .verdict b { color: var(--text); }
+    .tblwrap { max-height: 460px; overflow: auto; border: 1px solid var(--hair); border-radius: 12px; }
+    table.sw { border-collapse: collapse; width: 100%; }
+    table.sw th, table.sw td { padding: 7px 10px; text-align: right; font-family: var(--mono);
+      font-size: 12.5px; white-space: nowrap; }
+    table.sw th { position: sticky; top: 0; z-index: 1; background: var(--surface-2);
+      font-family: var(--sans); font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase;
+      color: var(--faint); font-weight: 500; border-bottom: 1px solid var(--hair); cursor: pointer;
+      user-select: none; }
+    table.sw th:hover { color: var(--text); }
+    table.sw th.up::after { content: ' \\2191'; color: var(--mom); }
+    table.sw th.down::after { content: ' \\2193'; color: var(--mom); }
+    table.sw td:first-child, table.sw th:first-child { text-align: left; }
+    table.sw td.nm { text-align: left; font-family: var(--sans); color: var(--muted);
+      max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+    table.sw tbody tr { border-top: 1px solid rgba(255, 255, 255, 0.04); cursor: pointer; }
+    table.sw tbody tr:hover { background: rgba(255, 255, 255, 0.035); }
+    table.sw tbody tr.sel { background: rgba(34, 211, 238, 0.11); }
+    table.sw a.symlink { color: var(--text); text-decoration: none; }
+
+    table.cmp { border-collapse: collapse; width: 100%; max-width: 720px; }
+    table.cmp th, table.cmp td { padding: 8px 10px; text-align: right; font-family: var(--mono); font-size: 13px; }
+    table.cmp th { font-family: var(--sans); font-size: 10.5px; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--faint); font-weight: 500; border-bottom: 1px solid var(--hair); }
+    table.cmp th:first-child, table.cmp td:first-child { text-align: left; color: var(--muted); }
+
+    .warnbox { margin: 18px 0 0; padding: 13px 15px; border-radius: 12px;
+      border: 1px solid rgba(251, 191, 36, 0.28); background: rgba(251, 191, 36, 0.07);
+      font-size: 12.5px; line-height: 1.65; color: var(--muted); }
+    .warnbox b { color: var(--amber); }
+    .warnbox p { margin: 0 0 8px; } .warnbox p:last-child { margin: 0; }
+    .err { margin: 24px 0 0; padding: 14px 16px; border-radius: 14px;
+      border: 1px solid rgba(251, 113, 133, 0.3); background: rgba(251, 113, 133, 0.08);
+      color: var(--red); font-size: 13.5px; }
+    .loading { margin: 30px 0; color: var(--faint); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <a class="btn" href="/strategy">Portfolio strategy</a>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <div class="head">
+      <h1>Single-stock strategy</h1>
+      <span class="sub">One stock — when to hold it, and when to hold cash instead</span>
+      <span class="span" id="span"></span>
+    </div>
+
+    <div class="loading" id="loading">Loading prices — this page ships every symbol's full history so it can recompute exactly, so the first load is a moment…</div>
+    <div class="err" id="err" hidden></div>
+
+    <section class="bezel panel" id="pCtl" hidden><div class="core">
+      <div class="ptitle">The rule</div>
+      <p class="pnote">Hold the stock only when it has risen over the lookback <em>and</em> sits above its moving average; otherwise hold cash. Size the position by the stock's own volatility, so a calm stretch is a full position and a violent one is a fraction of it. This never picks between stocks — it decides how much of <em>one</em> stock to own. <a href="#" id="preset" class="preset">Set the published rule</a>.</p>
+      <div class="ctl">
+        <div class="c">
+          <span class="lbl">Stock</span>
+          <select id="sym"></select>
+          <span class="hint" id="symHint"></span>
+        </div>
+        <div class="c">
+          <span class="lbl">Lookback</span>
+          <div class="chips" id="lbChips"></div>
+          <span class="hint">Sessions of trend measured, ending the skip below. 252 is the 12-month standard.</span>
+        </div>
+        <div class="c">
+          <div class="rowline"><span class="lbl">Skip the last</span><span class="val" id="skVal"></span></div>
+          <input type="range" id="sk" min="0" max="42" step="1" />
+          <span class="hint">The most recent sessions are left out of the trend, because that is where short-term reversal lives.</span>
+        </div>
+        <div class="c">
+          <span class="lbl">Moving-average filter</span>
+          <div class="chips" id="smaChips"></div>
+          <span class="hint" id="smaHint">A second, independent condition. Both must agree before anything is held.</span>
+        </div>
+        <div class="c">
+          <div class="rowline"><span class="lbl">Target volatility</span><span class="val" id="tvVal"></span></div>
+          <input type="range" id="tv" min="5" max="80" step="1" />
+          <span class="hint">Annualised. Position = target &divide; the stock's own volatility, so risk per position is roughly constant. Applied <em>inside</em> the simulation, so the cap below is honoured at whatever you set — which is what the portfolio page cannot do. <a href="#" id="matchVol" class="preset">Match buy-and-hold</a> before reading the CAGR against it.</span>
+        </div>
+        <div class="c">
+          <div class="rowline"><span class="lbl">Volatility window</span><span class="val" id="vwVal"></span></div>
+          <input type="range" id="vw" min="10" max="90" step="1" />
+          <span class="hint">Sessions used to measure realised volatility. 20 reacts to a shock within a fortnight; 60 barely notices it.</span>
+        </div>
+        <div class="c">
+          <span class="lbl">Maximum position</span>
+          <div class="chips" id="mwChips"></div>
+          <span class="hint" id="mwHint">1&times; is the published form — no leverage, so the alternative to a full position is cash.</span>
+        </div>
+        <div class="c">
+          <span class="lbl">Rebalance</span>
+          <div class="chips" id="rbChips"></div>
+          <span class="hint">How often the position is resized on schedule.</span>
+        </div>
+        <div class="c">
+          <span class="lbl">Exit when the trend breaks</span>
+          <div class="chips" id="exChips"></div>
+          <span class="hint">Also trade the day the signal turns on or off, not only on the schedule. Without it a rule that should be in cash sits in a falling stock until the next rebalance.</span>
+        </div>
+        <div class="c">
+          <div class="rowline"><span class="lbl">Transaction cost</span><span class="val" id="csVal"></span></div>
+          <input type="range" id="cs" min="0" max="50" step="1" />
+          <span class="hint">Basis points against turnover, each way.</span>
+        </div>
+        <div class="c">
+          <div class="rowline"><span class="lbl">Yield on idle cash</span><span class="val" id="cyVal"></span></div>
+          <input type="range" id="cy" min="0" max="6" step="0.25" />
+          <span class="hint">Credited on the uninvested share, and subtracted from both Sharpes as the risk-free rate. Buy-and-hold is always fully invested, so it earns none.</span>
+        </div>
+      </div>
+    </div></section>
+
+    <section class="bezel panel" id="pPrice" hidden><div class="core">
+      <div class="ptitle">Price, and when the rule was in it</div>
+      <p class="pnote" id="prNote"></p>
+      <div class="legend2">
+        <span><i style="background:var(--text)"></i>Close</span>
+        <span><i style="background:var(--amber)"></i>Moving average</span>
+        <span><i class="sw" style="background:rgba(52,211,153,0.28)"></i>Holding the stock</span>
+      </div>
+      <div class="chartbox"><svg id="pr" viewBox="0 0 900 270" role="img"></svg></div>
+    </div></section>
+
+    <section class="bezel panel" id="pEq" hidden><div class="core">
+      <div class="ptitle">Growth of $1</div>
+      <p class="pnote" id="eqNote"></p>
+      <div class="legend2">
+        <span><i style="background:var(--mom)"></i>Strategy</span>
+        <span><i style="background:var(--muted)"></i>Buy and hold the same stock</span>
+      </div>
+      <div class="chartbox"><svg id="eq" viewBox="0 0 900 300" role="img"></svg></div>
+    </div></section>
+
+    <section class="bezel panel" id="pDD" hidden><div class="core">
+      <div class="ptitle">Drawdown</div>
+      <p class="pnote">How far below its own high-water mark each sat. Daily, not month-end — a single stock is small enough to measure properly, so this is the real intra-period low rather than an understatement.</p>
+      <div class="legend2">
+        <span><i class="sw" style="background:rgba(34,211,238,0.4)"></i>Strategy</span>
+        <span><i style="background:var(--red)"></i>Buy and hold</span>
+      </div>
+      <div class="chartbox"><svg id="dd" viewBox="0 0 900 190" role="img"></svg></div>
+    </div></section>
+
+    <section class="bezel panel" id="pStats" hidden><div class="core">
+      <div class="ptitle">The account</div>
+      <p class="pnote" id="stNote"></p>
+      <div class="cards" id="cards"></div>
+      <div style="margin-top:16px"><div class="ptitle">Across the split</div></div>
+      <div id="cmp"></div>
+    </div></section>
+
+    <section class="bezel panel" id="pSweep" hidden><div class="core">
+      <div class="ptitle">The same rule on every stock</div>
+      <p class="pnote">One stock is a handful of independent decisions, and the tickers people test this on are the ones that went up. So here is the identical rule, at the identical settings, on all of them — click a row to open it above.</p>
+      <div class="sweepbar">
+        <select id="pf" style="width:auto;min-width:190px"></select>
+        <span class="span" id="sweepTime"></span>
+      </div>
+      <p class="verdict" id="verdict"></p>
+      <div class="tblwrap"><table class="sw" id="swTable"></table></div>
+    </div></section>
+
+    <div class="warnbox" id="warn" hidden></div>
+  </main>
+
+  <script src="/strategy.js"></script>
+  <script>
+    // The engine is /strategy's, unchanged — one symbol is just a universe of
+    // one. A second implementation of "signal, size, rebalance" is exactly what
+    // this project keeps proving it cannot afford.
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const pc = (v, d = 1) => (v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(d) + '%');
+    const n2 = (v, d = 2) => (v == null ? '—' : v.toFixed(d));
+
+    // A hole longer than this is absent data, not a quiet stock — the same bound
+    // /strategy uses, and for the same reason: GPS has a 1,373-session gap that,
+    // carried flat, reads as zero volatility and blows the position size up.
+    const MAX_CARRY = 10;
+
+    let D = null;                  // the shipped prices
+    const SERIES = new Map();      // symbol -> closes on the shared date axis
+    let sym = null, pf = 'all';
+    let P = { lookback: 252, skip: 21, sma: true, smaWindow: 200, targetVol: 15, volWindow: 20,
+              maxWeight: 1, rebalance: 21, exitOnSignal: true, longOnly: true };
+    let cost = 5, cashYield = 4;
+    let sweepRows = null, sortKey = 'edge', sortDir = -1;
+    let timer = null;
+
+    async function load() {
+      try {
+        const r = await fetch('/single-closes.json', { cache: 'force-cache' });
+        if (r.status === 401) { location.href = '/login'; return; }
+        if (!r.ok) throw new Error('No price file yet — run: node --no-warnings single-data.js');
+        D = await r.json();
+        decodeAll();
+        boot();
+      } catch (e) {
+        $('loading').hidden = true;
+        $('err').hidden = false; $('err').textContent = e.message;
+      }
+    }
+
+    // Deltas in units of 1/scale, laid back onto the shared axis. Done once for
+    // every symbol because the sweep needs all of them anyway, and a lazy decode
+    // would only move the same work into the first slider drag.
+    function decodeAll() {
+      const N = D.dates.length;
+      for (const [s, c] of Object.entries(D.closes)) {
+        const arr = new Array(N).fill(null);
+        let acc = 0;
+        for (let k = 0; k < c.v.length; k++) {
+          const step = c.v[k];
+          if (step == null) continue;          // a missing print inside its life
+          acc += step;
+          arr[c.i + k] = acc / D.scale;
+        }
+        // Carry a short gap, blank a long one.
+        let last = null, run = 0;
+        for (let i = c.i; i < c.i + c.n; i++) {
+          if (arr[i] != null) { last = arr[i]; run = 0; continue; }
+          if (last == null) continue;
+          if (++run <= MAX_CARRY) arr[i] = last;
+        }
+        SERIES.set(s, arr);
+      }
+    }
+
+    function boot() {
+      $('loading').hidden = true;
+      $('span').textContent = `${D.dates[0]} → ${D.dates[D.dates.length - 1]} · ` +
+        `${Object.keys(D.closes).length} stocks · built ${(D.builtAt || '').slice(0, 10)}`;
+
+      const syms = Object.keys(D.closes).sort();
+      sym = syms.includes('AAPL') ? 'AAPL' : syms[0];
+      $('sym').innerHTML = syms.map((s) =>
+        `<option value="${esc(s)}">${esc(s)} — ${esc(D.closes[s].name || s)}</option>`).join('');
+      $('sym').value = sym;
+      $('sym').addEventListener('change', () => { sym = $('sym').value; render(); });
+
+      const pfs = [...new Set(Object.values(D.closes).flatMap((c) => c.p || []))].sort();
+      $('pf').innerHTML = `<option value="all">Every stock — ${syms.length}</option>` +
+        pfs.map((p) => {
+          const n = syms.filter((s) => (D.closes[s].p || []).includes(p)).length;
+          return `<option value="${esc(p)}">${esc(p)} — ${n}</option>`;
+        }).join('');
+      $('pf').addEventListener('change', () => { pf = $('pf').value; drawSweep(); });
+
+      $('lbChips').innerHTML = [21, 63, 126, 252].map((v) =>
+        `<button class="chip2" data-lb="${v}">${v}d</button>`).join('');
+      $('smaChips').innerHTML = '<button class="chip2" data-sma="0">Off</button>' +
+        [100, 150, 200].map((v) => `<button class="chip2" data-sma="${v}">${v}d</button>`).join('');
+      $('mwChips').innerHTML = [1, 2, 3].map((v) =>
+        `<button class="chip2" data-mw="${v}">${v}&times;</button>`).join('');
+      $('rbChips').innerHTML = [[1, 'Daily'], [5, 'Weekly'], [21, 'Monthly'], [63, 'Quarterly']]
+        .map(([v, l]) => `<button class="chip2" data-rb="${v}">${l}</button>`).join('');
+      $('exChips').innerHTML = '<button class="chip2" data-ex="0">No</button>' +
+        '<button class="chip2" data-ex="1">Yes</button>';
+
+      $('pCtl').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-lb],[data-sma],[data-mw],[data-rb],[data-ex]');
+        if (!b) return;
+        const d = b.dataset;
+        if (d.lb) P.lookback = Number(d.lb);
+        else if (d.sma !== undefined) { P.sma = d.sma !== '0'; if (d.sma !== '0') P.smaWindow = Number(d.sma); }
+        else if (d.mw) P.maxWeight = Number(d.mw);
+        else if (d.rb) P.rebalance = Number(d.rb);
+        else if (d.ex !== undefined) P.exitOnSignal = d.ex === '1';
+        render();
+      });
+
+      const slider = (id, fn) => {
+        $(id).addEventListener('input', () => { fn(Number($(id).value)); render(); });
+      };
+      $('sk').value = P.skip; $('tv').value = P.targetVol; $('vw').value = P.volWindow;
+      $('cs').value = cost; $('cy').value = cashYield;
+      slider('sk', (v) => { P.skip = v; });
+      slider('tv', (v) => { P.targetVol = v; });
+      slider('vw', (v) => { P.volWindow = v; });
+      slider('cs', (v) => { cost = v; });
+      slider('cy', (v) => { cashYield = v; });
+
+      // Solve for the target volatility that puts the rule at the same
+      // volatility as owning the stock outright. Bisection rather than algebra
+      // because the position cap makes the relationship non-linear — which is
+      // also why this cannot be done by scaling a result afterwards.
+      $('matchVol').addEventListener('click', (e) => {
+        e.preventDefault();
+        const keep = P.targetVol;
+        const volAt = (t) => { P.targetVol = t; const r = runOne(sym, false); return r ? r.s.vol : null; };
+        const base = runOne(sym, false);
+        if (!base) { P.targetVol = keep; return; }
+        const want = base.h.vol;
+        let lo = 1, hi = 80;
+        for (let k = 0; k < 20; k++) {
+          const mid = (lo + hi) / 2;
+          const v = volAt(mid);
+          if (v == null) break;
+          if (v < want) lo = mid; else hi = mid;
+        }
+        P.targetVol = Math.max(5, Math.min(80, Math.round((lo + hi) / 2)));
+        $('tv').value = P.targetVol;
+        render();
+      });
+
+      $('preset').addEventListener('click', (e) => {
+        e.preventDefault();
+        P = { lookback: 252, skip: 21, sma: true, smaWindow: 200, targetVol: 15, volWindow: 20,
+              maxWeight: 1, rebalance: 21, exitOnSignal: true, longOnly: true };
+        $('sk').value = 21; $('tv').value = 15; $('vw').value = 20;
+        render();
+      });
+
+      $('swTable').addEventListener('click', (e) => {
+        const th = e.target.closest('th[data-k]');
+        if (th) {
+          const k = th.dataset.k;
+          if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = k === 'symbol' ? 1 : -1; }
+          drawSweep();
+          return;
+        }
+        const tr = e.target.closest('tr[data-s]');
+        if (tr && !e.target.closest('a')) {
+          sym = tr.dataset.s; $('sym').value = sym; render();
+          $('pPrice').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+
+      for (const id of ['pCtl', 'pPrice', 'pEq', 'pDD', 'pStats', 'pSweep', 'warn']) $(id).hidden = false;
+      renderWarning();
+      render();
+    }
+
+    // ---- the simulation, for one symbol ---------------------------------------
+    // Everything on the page goes through this, so the detail view and the sweep
+    // cannot disagree about what a setting means.
+    function runOne(symbol, full) {
+      const closes = SERIES.get(symbol);
+      if (!closes) return null;
+      const series = [{ symbol, closes }];
+      const w = Strategy.targetWeights(closes, P);
+      const start = w.findIndex((x) => x != null);
+      if (start < 0) return null;
+      const out = Strategy.run(series, D.dates, P);
+      const hold = Strategy.buyHold(series, D.dates);
+      const end = D.dates.length;
+      // Both legs start where the RULE first becomes evaluable, so the two CAGRs
+      // cover the same window. Comparing a strategy's post-warm-up years against
+      // a benchmark's whole history is how a backtest flatters itself for free.
+      const cut = (a) => a.slice(start, end);
+      const opt = { ppy: 252, exp: cut(out.exposure), cashYield };
+      const s = Strategy.summarise(cut(out.ret), cut(out.turnover), cost, 1, opt);
+      const h = Strategy.summarise(cut(hold), null, 0, 1, { ppy: 252, cashYield });
+      if (s.months < 252) return null;                 // under a year proves nothing
+      // An entry is a move from flat into a position; that is what a "trade"
+      // means to someone counting them, not every resize.
+      const exp = cut(out.exposure);
+      let entries = 0;
+      for (let i = 1; i < exp.length; i++) if (exp[i - 1] === 0 && exp[i] > 0) entries++;
+      const base = { symbol, start, s, h, exp, years: s.months / 252, entries,
+        invested: Strategy.mean(exp),
+        edge: s.sharpe == null || h.sharpe == null ? null : s.sharpe - h.sharpe };
+      if (!full) return base;
+      return Object.assign(base, { ret: cut(out.ret), turn: cut(out.turnover),
+        hold: cut(hold), dates: cut(D.dates), closes: cut(closes) });
+    }
+
+    function render() {
+      for (const b of document.querySelectorAll('[data-lb]')) b.classList.toggle('on', Number(b.dataset.lb) === P.lookback);
+      for (const b of document.querySelectorAll('[data-sma]')) b.classList.toggle('on',
+        b.dataset.sma === '0' ? !P.sma : (P.sma && Number(b.dataset.sma) === P.smaWindow));
+      for (const b of document.querySelectorAll('[data-mw]')) b.classList.toggle('on', Number(b.dataset.mw) === P.maxWeight);
+      for (const b of document.querySelectorAll('[data-rb]')) b.classList.toggle('on', Number(b.dataset.rb) === P.rebalance);
+      for (const b of document.querySelectorAll('[data-ex]')) b.classList.toggle('on', (b.dataset.ex === '1') === P.exitOnSignal);
+      $('skVal').textContent = P.skip + 'd';
+      $('tvVal').textContent = P.targetVol + '%';
+      $('vwVal').textContent = P.volWindow + 'd';
+      $('csVal').textContent = cost + ' bps';
+      $('cyVal').textContent = String(cashYield).replace(/\.00$/, '') + '%';
+
+      const r = runOne(sym, true);
+      const c = D.closes[sym];
+      $('symHint').textContent = `${c.n.toLocaleString()} sessions from ${D.dates[c.i]}` +
+        ((c.p || []).length ? ` · ${c.p.join(', ')}` : '');
+
+      if (!r) {
+        $('prNote').textContent = 'Not enough history for these settings — the lookback plus the skip ' +
+          'has to fit inside the stock’s life before a first signal exists.';
+        for (const id of ['pr', 'eq', 'dd', 'cards', 'cmp']) $(id).innerHTML = '';
+        $('eqNote').textContent = ''; $('stNote').textContent = '';
+      } else {
+        drawPrice(r); drawEquity(r); drawDD(r); renderCards(r); renderSplit(r);
+      }
+      // The sweep is ~116 simulations, so it trails the detail view rather than
+      // holding a slider drag hostage to it.
+      clearTimeout(timer);
+      timer = setTimeout(runSweep, 140);
+    }
+
+    // ---- charts ---------------------------------------------------------------
+    function niceTicks(lo, hi, want = 5) {
+      if (!(hi > lo)) return [lo];
+      const raw = (hi - lo) / want;
+      const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+      const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((v) => v >= raw) || mag * 10;
+      const out = [];
+      for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+      return out;
+    }
+    const yearTicks = (dates, L, R, W) => {
+      const out = []; let seen = null;
+      for (let i = 0; i < dates.length; i++) {
+        const y = dates[i].slice(0, 4);
+        if (y !== seen) { seen = y; out.push({ i, y }); }
+      }
+      const step = Math.ceil(out.length / 9);
+      return out.filter((_, k) => k % step === 0)
+        .map((t) => ({ x: L + (t.i / Math.max(1, dates.length - 1)) * (W - L - R), y: t.y }));
+    };
+
+    function drawPrice(r) {
+      const W = 900, H = 270, L = 56, R = 14, T = 12, B = 26;
+      const px = r.closes.map((v) => (v == null ? null : v));
+      const sma = P.sma ? Strategy.smaSeries(SERIES.get(sym), P.smaWindow).slice(r.start) : null;
+      const vals = px.filter((v) => v != null && v > 0);
+      const lo = Math.min(...vals), hi = Math.max(...vals);
+      // Log above a 4x range, the same rule every other chart here follows: a
+      // stock that ran 100x flattens its first decade onto the floor otherwise.
+      const log = hi / lo > 4;
+      const f = (v) => (log ? Math.log(v) : v);
+      const y = (v) => T + (1 - (f(v) - f(lo)) / ((f(hi) - f(lo)) || 1)) * (H - T - B);
+      const x = (i) => L + (i / Math.max(1, px.length - 1)) * (W - L - R);
+      const path = (arr) => {
+        let d = '', pen = false;
+        for (let i = 0; i < arr.length; i++) {
+          const v = arr[i];
+          if (v == null || !(v > 0)) { pen = false; continue; }
+          d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1);
+          pen = true;
+        }
+        return d;
+      };
+      let g = '';
+      // Contiguous runs rather than a rect per session — 5,000 rects is a
+      // different page to scroll.
+      let from = -1;
+      for (let i = 0; i <= r.exp.length; i++) {
+        const on = i < r.exp.length && r.exp[i] > 0;
+        if (on && from < 0) from = i;
+        if (!on && from >= 0) {
+          g += `<rect class="band" x="${x(from).toFixed(1)}" y="${T}" ` +
+            `width="${Math.max(0.7, x(i - 1) - x(from)).toFixed(1)}" height="${H - T - B}"/>`;
+          from = -1;
+        }
+      }
+      for (const t of niceTicks(lo, hi, 4)) {
+        if (t <= 0) continue;
+        g += `<line class="ax" x1="${L}" y1="${y(t).toFixed(1)}" x2="${W - R}" y2="${y(t).toFixed(1)}" opacity="0.28"/>` +
+          `<text class="tick" x="${L - 7}" y="${(y(t) + 3).toFixed(1)}" text-anchor="end">$${t >= 100 ? t.toFixed(0) : t.toFixed(2)}</text>`;
+      }
+      for (const t of yearTicks(r.dates, L, R, W)) {
+        g += `<text class="tick" x="${t.x.toFixed(1)}" y="${H - 9}" text-anchor="middle">${t.y}</text>`;
+      }
+      if (sma) g += `<path class="ln-sma" d="${path(sma)}"/>`;
+      g += `<path class="ln-price" d="${path(px)}"/>`;
+      $('pr').innerHTML = g;
+      const nm = String(D.closes[sym].name || sym).replace(/\.$/, '');
+      $('prNote').textContent =
+        `${sym} — ${nm}. Shaded where the rule held a position; ` +
+        `it was in the stock ${(r.invested * 100).toFixed(0)}% of the time, across ${r.entries} separate entries ` +
+        `over ${r.years.toFixed(1)} years.` + (log ? ' Log scale.' : '');
+    }
+
+    function drawEquity(r) {
+      const W = 900, H = 300, L = 56, R = 14, T = 12, B = 26;
+      const a = r.s.curve, b = r.h.curve;
+      const all = a.concat(b).filter((v) => v > 0);
+      const lo = Math.min(...all), hi = Math.max(...all);
+      const y = (v) => T + (1 - (Math.log(Math.max(v, 1e-6)) - Math.log(lo)) / ((Math.log(hi) - Math.log(lo)) || 1)) * (H - T - B);
+      const x = (i) => L + (i / Math.max(1, a.length - 1)) * (W - L - R);
+      const path = (arr) => arr.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join('');
+      let g = '';
+      for (const t of [0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512].filter((v) => v >= lo * 0.85 && v <= hi * 1.15)) {
+        g += `<line class="ax" x1="${L}" y1="${y(t).toFixed(1)}" x2="${W - R}" y2="${y(t).toFixed(1)}" opacity="0.28"/>` +
+          `<text class="tick" x="${L - 7}" y="${(y(t) + 3).toFixed(1)}" text-anchor="end">$${t}</text>`;
+      }
+      for (const t of yearTicks(r.dates, L, R, W)) {
+        g += `<text class="tick" x="${t.x.toFixed(1)}" y="${H - 9}" text-anchor="middle">${t.y}</text>`;
+      }
+      g += `<path class="ln-hold" d="${path(b)}"/><path class="ln-strat" d="${path(a)}"/>`;
+      $('eq').innerHTML = g;
+      $('eqNote').textContent =
+        `One dollar in ${r.dates[0]}, after ${cost} bps on every unit of turnover` +
+        (cashYield ? ` and ${cashYield}% earned on cash` : ' and nothing earned on cash') +
+        `. Log scale, so equal heights are equal percentage moves. Both start the day the rule ` +
+        `first has enough history to act, so the two cover the same window.`;
+    }
+
+    function drawDD(r) {
+      const W = 900, H = 190, L = 56, R = 14, T = 12, B = 26;
+      const dd = (curve) => { let peak = 0; return curve.map((v) => { peak = Math.max(peak, v); return v / peak - 1; }); };
+      const A = dd(r.s.curve), Bv = dd(r.h.curve);
+      const lo = Math.min(-0.02, ...A, ...Bv);
+      const y = (v) => T + (v / lo) * (H - T - B);
+      const x = (i) => L + (i / Math.max(1, A.length - 1)) * (W - L - R);
+      let g = '';
+      for (const t of niceTicks(lo, 0, 4)) {
+        g += `<line class="ax" x1="${L}" y1="${y(t).toFixed(1)}" x2="${W - R}" y2="${y(t).toFixed(1)}" opacity="0.28"/>` +
+          `<text class="tick" x="${L - 7}" y="${(y(t) + 3).toFixed(1)}" text-anchor="end">${(t * 100).toFixed(0)}%</text>`;
+      }
+      g += `<path class="dd-strat" d="M${x(0).toFixed(1)} ${y(0).toFixed(1)}` +
+        A.map((v, i) => `L${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join('') +
+        `L${x(A.length - 1).toFixed(1)} ${y(0).toFixed(1)}Z"/>`;
+      g += `<path class="dd-hold" d="${Bv.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join('')}"/>`;
+      for (const t of yearTicks(r.dates, L, R, W)) {
+        g += `<text class="tick" x="${t.x.toFixed(1)}" y="${H - 9}" text-anchor="middle">${t.y}</text>`;
+      }
+      $('dd').innerHTML = g;
+    }
+
+    function renderCards(r) {
+      const card = (l, v, sub, k) =>
+        `<div class="card2"><div class="cl">${esc(l)}</div><div class="cv ${k || ''}">${esc(v)}</div>` +
+        `<div class="cs">${esc(sub)}</div></div>`;
+      const better = (a, b) => (a == null || b == null ? '' : a > b ? 'good' : a < b ? 'bad' : 'flat');
+      const s = r.s, h = r.h;
+      $('cards').innerHTML =
+        card('CAGR', pc(s.cagr), `hold ${pc(h.cagr)}`, better(s.cagr, h.cagr)) +
+        card('Sharpe', n2(s.sharpe), `hold ${n2(h.sharpe)}`, better(s.sharpe, h.sharpe)) +
+        card('Volatility', pc(s.vol), `hold ${pc(h.vol)}`, 'flat') +
+        card('Max drawdown', pc(s.maxDD), `hold ${pc(h.maxDD)}`, better(s.maxDD, h.maxDD)) +
+        card('Invested', (r.invested * 100).toFixed(0) + '%', 'of the time, on average', 'flat') +
+        card('Entries', String(r.entries), `${(r.entries / r.years).toFixed(1)} a year`, 'flat') +
+        card('Turnover', s.turnover == null ? '—' : (s.turnover * 100).toFixed(0) + '%', 'of capital, a month', 'flat') +
+        card('Total return', pc(s.total, 0), `hold ${pc(h.total, 0)}`, better(s.total, h.total));
+      $('stNote').textContent =
+        `${sym} over ${r.years.toFixed(1)} years from ${r.dates[0]}, at ${cost} bps and ` +
+        `${cashYield ? cashYield + '% on idle cash' : 'nothing on idle cash'}. ` +
+        (s.vol < h.vol * 0.9
+          ? 'It is running at lower volatility than the stock, so its CAGR is not comparable — use “Match ' +
+            'buy-and-hold”, or read Sharpe and drawdown instead.' +
+            (P.targetVol >= 80 && P.maxWeight === 1
+              ? ' At a 1× cap it may not be able to reach the stock’s volatility at all: it can never hold ' +
+                'more than the whole position, and it is in cash much of the time. Raising the maximum ' +
+                'position is what would close the gap.'
+              : '')
+          : 'The two are at comparable volatility, so the returns can be read against each other.');
+    }
+
+    function renderSplit(r) {
+      const split = r.dates.findIndex((d) => d >= '2020-01-01');
+      const seg = (from, to) => {
+        if (to - from < 252) return null;
+        const s = Strategy.summarise(r.ret.slice(from, to), r.turn.slice(from, to), cost, 1,
+          { ppy: 252, exp: r.exp.slice(from, to), cashYield });
+        const h = Strategy.summarise(r.hold.slice(from, to), null, 0, 1, { ppy: 252, cashYield });
+        return { s, h };
+      };
+      const rows = [
+        ['Whole period', seg(0, r.dates.length)],
+        ['Before 2020', seg(0, split < 0 ? r.dates.length : split)],
+        ['2020 onward', split < 0 ? null : seg(split, r.dates.length)],
+      ];
+      $('cmp').innerHTML =
+        '<table class="cmp"><thead><tr><th>period</th><th>CAGR</th><th>Sharpe</th><th>max DD</th>' +
+        '<th>hold CAGR</th><th>hold Sharpe</th><th>hold DD</th></tr></thead><tbody>' +
+        rows.map(([label, x]) => (x == null
+          ? `<tr><td>${esc(label)}</td><td colspan="6">too short</td></tr>`
+          : `<tr><td>${esc(label)}</td><td>${pc(x.s.cagr)}</td><td>${n2(x.s.sharpe)}</td><td>${pc(x.s.maxDD)}</td>` +
+            `<td>${pc(x.h.cagr)}</td><td>${n2(x.h.sharpe)}</td><td>${pc(x.h.maxDD)}</td></tr>`)).join('') +
+        '</tbody></table>';
+    }
+
+    // ---- the sweep ------------------------------------------------------------
+    function runSweep() {
+      const t0 = performance.now();
+      sweepRows = [];
+      for (const s of Object.keys(D.closes)) {
+        const r = runOne(s);
+        if (!r) continue;
+        sweepRows.push({
+          symbol: s, name: D.closes[s].name || s, p: D.closes[s].p || [],
+          years: r.years, cagr: r.s.cagr, hcagr: r.h.cagr, gap: r.s.cagr - r.h.cagr,
+          sharpe: r.s.sharpe, hsharpe: r.h.sharpe, edge: r.edge,
+          dd: r.s.maxDD, hdd: r.h.maxDD, ddcut: r.h.maxDD ? 1 - (r.s.maxDD / r.h.maxDD) : null,
+          invested: r.invested, entries: r.entries / r.years,
+        });
+      }
+      $('sweepTime').textContent = `${sweepRows.length} simulations in ${Math.round(performance.now() - t0)}ms`;
+      drawSweep();
+    }
+
+    const median = (a) => {
+      const v = a.filter((x) => x != null).sort((x, y) => x - y);
+      if (!v.length) return null;
+      const m = Math.floor(v.length / 2);
+      return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+    };
+
+    function drawSweep() {
+      if (!sweepRows) return;
+      const rows = sweepRows.filter((r) => pf === 'all' || r.p.includes(pf));
+      const beats = rows.filter((r) => r.edge != null && r.edge > 0).length;
+      const cuts = rows.filter((r) => r.ddcut != null && r.ddcut > 0).length;
+      $('verdict').innerHTML = rows.length === 0 ? 'No stock has enough history for these settings.' :
+        `On <b>${rows.length}</b> stock${rows.length === 1 ? '' : 's'}: beats simply holding on Sharpe in ` +
+        `<b>${beats}</b> of them (${(100 * beats / rows.length).toFixed(0)}%), and reduces the worst drawdown in ` +
+        `<b>${cuts}</b> (${(100 * cuts / rows.length).toFixed(0)}%). ` +
+        `Median CAGR against holding <b>${pc(median(rows.map((r) => r.gap)))}</b>, ` +
+        `median drawdown cut by <b>${pc(median(rows.map((r) => r.ddcut)), 0)}</b>, ` +
+        `median time invested <b>${(median(rows.map((r) => r.invested)) * 100).toFixed(0)}%</b>. ` +
+        `<b>Read the Sharpe columns, not the CAGR ones.</b> Sharpe is return over volatility, so it barely ` +
+        `moves when the rule runs at a fraction of the exposure — which it does, at the median time ` +
+        `invested above. The CAGR gap is mostly that gap in exposure, not a gap in skill; “Match ` +
+        `buy-and-hold” above makes it comparable, one stock at a time.`;
+
+      const cols = [
+        ['symbol', 'Stock', (r) => `<a class="symlink" href="/stock/${encodeURIComponent(r.symbol)}" target="_blank" rel="noopener">${esc(r.symbol)}</a>`],
+        ['name', '', (r) => esc(r.name), 'nm'],
+        ['years', 'Yrs', (r) => r.years.toFixed(1)],
+        ['cagr', 'CAGR', (r) => pc(r.cagr)],
+        ['hcagr', 'Hold', (r) => pc(r.hcagr)],
+        ['gap', 'Gap', (r) => pc(r.gap)],
+        ['sharpe', 'Sharpe', (r) => n2(r.sharpe)],
+        ['hsharpe', 'Hold', (r) => n2(r.hsharpe)],
+        ['edge', 'Edge', (r) => n2(r.edge)],
+        ['dd', 'Max DD', (r) => pc(r.dd, 0)],
+        ['hdd', 'Hold', (r) => pc(r.hdd, 0)],
+        ['ddcut', 'DD cut', (r) => pc(r.ddcut, 0)],
+        ['invested', 'In', (r) => (r.invested * 100).toFixed(0) + '%'],
+        ['entries', 'Trades/yr', (r) => r.entries.toFixed(1)],
+      ];
+      const sorted = rows.slice().sort((a, b) => {
+        const x = a[sortKey], y = b[sortKey];
+        if (x == null && y == null) return 0;
+        if (x == null) return 1;
+        if (y == null) return -1;
+        return (typeof x === 'string' ? x.localeCompare(y) : x - y) * sortDir;
+      });
+      const cls = (k) => (k === sortKey ? (sortDir > 0 ? ' class="up"' : ' class="down"') : '');
+      $('swTable').innerHTML =
+        '<thead><tr>' + cols.map(([k, l]) => `<th data-k="${k}"${cls(k)}>${esc(l)}</th>`).join('') + '</tr></thead>' +
+        '<tbody>' + sorted.map((r) =>
+          `<tr data-s="${esc(r.symbol)}"${r.symbol === sym ? ' class="sel"' : ''}>` +
+          cols.map(([, , fn, c]) => `<td${c ? ` class="${c}"` : ''}>${fn(r)}</td>`).join('') +
+          '</tr>').join('') + '</tbody>';
+    }
+
+    function renderWarning() {
+      $('warn').innerHTML =
+        '<p><b>One stock is a handful of decisions, not a sample.</b> Rebalanced monthly over eighteen years ' +
+        'the signal only changes state a few times a year, so a result rests on perhaps twenty independent ' +
+        'calls — and two or three of them (2008, 2020, 2022) will account for most of it. The table across ' +
+        'every stock is there because it is the only thing on this page with any breadth, and even it shares ' +
+        'one market history.</p>' +
+        '<p><b>Drawdown reduction is not evidence the rule works.</b> Any rule that sits in cash part of the ' +
+        'time cuts drawdown; that is arithmetic, not skill. The question is what it cost in return to buy ' +
+        'that, which is why CAGR, Sharpe and time-invested sit beside it.</p>' +
+        '<p><b>These 116 stocks are survivors.</b> Every one of them still trades in 2026, the 33 deliberate ' +
+        'laggards included. Nothing that went bankrupt or was acquired is here — and a trend rule that exits ' +
+        'a collapsing stock would have earned most of its keep on exactly those names. This backtest cannot ' +
+        'see its own best case, and it cannot see the delisting risk holding would have carried either.</p>' +
+        '<p><b>No slippage, no borrow, no taxes, and one price a day.</b> Cost is a flat spread on turnover. ' +
+        'Signals are computed on a close and the position is carried into the next session, so there is no ' +
+        'lookahead — but a real fill is not the close, and a stock gapping through a stop does not care what ' +
+        'the rule intended.</p>';
+    }
+
+    load();
+  </script>
+</body>
+</html>

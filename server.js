@@ -144,6 +144,15 @@ app.get('/strategy', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'strategy.html'));
 }));
 
+// The same rule on one stock at a time: when to own it, when to hold cash.
+// Unlike /strategy nothing is precomputed — the page ships every symbol's closes
+// and simulates in the browser, because the position cap is a nonlinearity and
+// cannot be applied by scaling a stored run after the fact.
+app.get('/single', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  res.sendFile(path.join(__dirname, 'public', 'single.html'));
+}));
+
 // Build an indicator and watch what it does. The page computes everything
 // itself from the bars this ships, so a slider drag redraws without a request.
 app.get('/lab/:symbol', route(async (req, res) => {
@@ -188,7 +197,8 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       // no symbol in that path, so there is nothing to show
                       '/stock.html': '/',
                       // no symbol in that path either
-                      '/signal.html': '/', '/lab.html': '/', '/strategy.html': '/strategy' };
+                      '/signal.html': '/', '/lab.html': '/', '/strategy.html': '/strategy',
+                      '/single.html': '/single' };
 app.get(Object.keys(GATED_PAGES), (req, res) => res.redirect(GATED_PAGES[req.path]));
 
 app.use(express.static(path.join(__dirname, 'public')));

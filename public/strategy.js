@@ -38,6 +38,12 @@
     longOnly: false,
     sma: false,        // require price above/below its 200-day average
     smaWindow: 200,
+    // Rebalance the moment a position should be on or off, in addition to the
+    // schedule. Without it a rule that turned to cash on day 2 of a period sits
+    // in a falling stock for the remaining 19 sessions, which is not what
+    // "exit when the trend breaks" means to anyone saying it out loud. Off by
+    // default so the stored portfolio grid keeps its meaning.
+    exitOnSignal: false,
   };
 
   const num = (v) => {
@@ -68,16 +74,30 @@
     return out;
   }
 
+  // A moving average over the last `window` CONSECUTIVE prints. A null restarts
+  // the window rather than ending the series.
+  //
+  // This returned all nulls the moment a series had a leading null, which is
+  // every symbol that listed after the start date — 115 of 116 here, and 49 of
+  // 116 in the portfolio grid's own window. Those symbols then failed the
+  // `sma[i] == null` guard in targetWeights on every session, so they held NO
+  // position in any +200D variant while still counting in the divisor. The
+  // filter was not selective, it was silently disqualifying most of the
+  // universe, and every +200D number published before this was wrong.
   function smaSeries(closes, window) {
     const n = closes.length;
     const out = new Array(n).fill(null);
-    let sum = 0;
+    let sum = 0, run = 0;
     for (let i = 0; i < n; i++) {
       const c = num(closes[i]);
-      if (c == null) return out;
-      sum += c;
-      if (i >= window) sum -= num(closes[i - window]);
-      if (i >= window - 1) out[i] = sum / window;
+      // A hole is absent data, so the average restarts from the next print
+      // rather than averaging across the gap.
+      if (c == null) { sum = 0; run = 0; continue; }
+      sum += c; run++;
+      // run > window means the last `window`+1 prints are consecutive, so the
+      // one leaving the window is non-null and safe to subtract.
+      if (run > window) { sum -= num(closes[i - window]); run = window; }
+      if (run === window) out[i] = sum / window;
     }
     return out;
   }
@@ -117,6 +137,8 @@
     }
     return w;
   }
+
+  const state = (w) => (w > 0 ? 1 : w < 0 ? -1 : 0);
 
   // Run the rule across a universe and return the portfolio's daily returns.
   //
@@ -159,13 +181,17 @@
         live++;
       }
       // Then rebalance on today's close, which takes effect tomorrow.
-      if (i % p.rebalance === 0) {
-        for (let k = 0; k < series.length; k++) {
-          const w = weights[k][i];
-          const want = w == null ? 0 : w;
-          out.turnover[i] += Math.abs(want - held[k]);
-          held[k] = want;
-        }
+      const scheduled = i % p.rebalance === 0;
+      for (let k = 0; k < series.length; k++) {
+        const w = weights[k][i];
+        const want = w == null ? 0 : w;
+        // A state change is in-or-out, not a change of size: re-sizing on every
+        // wobble of realised volatility would be a daily rebalance wearing a
+        // different name, and the turnover would say so.
+        const flipped = p.exitOnSignal && state(want) !== state(held[k]);
+        if (!scheduled && !flipped) continue;
+        out.turnover[i] += Math.abs(want - held[k]);
+        held[k] = want;
       }
       // Divided by the whole universe, not by the number of positions: capital
       // is committed to the universe, and a rule that is in cash for most names
@@ -240,10 +266,15 @@
   // sitting 87% in cash into a Sharpe of 2.79 — the T-bill's Sharpe, borrowed.
   // Sharpe is excess of cash by definition, and if the caller is willing to say
   // what cash pays then that is the rate the excess is measured against.
+  // `opts.ppy` is periods per year -- 12 for the monthly series the portfolio
+  // page ships, 252 for the daily series /single computes in the browser. It is
+  // the only thing that has to change to read a daily series, and getting it
+  // wrong scales every annualised number by sqrt(21).
   function summarise(ret, turn, costBps, scale, opts) {
     const k = scale == null ? 1 : scale;
     const o = opts || {};
-    const yieldPm = (o.cashYield || 0) / 100 / 12;    // annual %, charged monthly
+    const ppy = o.ppy || 12;
+    const yieldPm = (o.cashYield || 0) / 100 / ppy;   // annual %, charged per period
     const net = ret.map((r, i) => {
       const cost = turn && turn[i] ? turn[i] * k * (costBps || 0) / 10000 : 0;
       // Whatever is not invested sits in cash and earns. Capped at 1 because a
@@ -261,7 +292,7 @@
       const dd = eq / peak - 1;
       if (dd < maxDD) maxDD = dd;
     }
-    const years = net.length / 12;
+    const years = net.length / ppy;
     const m = mean(net), s = sd(net);
     // The same rate that was credited is the rate Sharpe is measured against, so
     // parking in cash cannot manufacture a ratio.
@@ -271,15 +302,17 @@
       months: net.length,
       total: eq - 1,
       cagr: years > 0 && eq > 0 ? Math.pow(eq, 1 / years) - 1 : null,
-      vol: s * Math.sqrt(12),
+      vol: s * Math.sqrt(ppy),
       // The epsilon is not decoration: a book sitting entirely in cash has a
       // constant monthly return, whose standard deviation is not exactly zero in
       // floating point but ~1e-19. Dividing an equally tiny excess by it printed
       // a Sharpe of 3.45 for a T-bill. No volatility means no ratio.
-      sharpe: s > 1e-12 ? (excess * 12) / (s * Math.sqrt(12)) : null,
+      sharpe: s > 1e-12 ? (excess * ppy) / (s * Math.sqrt(ppy)) : null,
       maxDD,
       hit: net.length ? net.filter((r) => r > 0).length / net.length : null,
-      turnover: turn ? mean(turn) * k : null,
+      // Turnover is reported per month whatever the period, because "how much
+      // of the book changes hands a month" is the question cost is judged by.
+      turnover: turn ? mean(turn) * k * (ppy / 12) : null,
       best: net.length ? Math.max(...net) : null,
       worst: net.length ? Math.min(...net) : null,
     };
