@@ -1,6 +1,6 @@
 // Every strategy variant, over every universe, run offline.
 //
-//   node --no-warnings strategy-runs.js            # rebuild public/strategy-*.json
+//   node --no-warnings strategy-runs.js            # rebuild private/strategy-*.json
 //   node --no-warnings strategy-runs.js --quick    # a couple of variants, for a smoke test
 //
 // A backtest across 116 symbols and 4,700 sessions cannot run in the browser
@@ -37,11 +37,11 @@
 const fs = require('fs');
 const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
-const S = require('./public/strategy.js');
+const S = require('./private/strategy.js');
 
 const QUICK = process.argv.includes('--quick');
 const DB = path.resolve('analysis.db');
-const OUT = path.resolve('public/strategy-index.json');
+const OUT = path.resolve('private/strategy-index.json');
 const FROM = '2008-01-01';
 
 // The knobs that change the RULE. Anything that merely scales the result —
@@ -186,7 +186,7 @@ for (const u of universes) {
   }
   const file = `strategy-u-${slug(u.id)}.json`;
   const body = JSON.stringify({ id: u.id, months, hold: hold[u.id], runs });
-  fs.writeFileSync(path.resolve('public', file), body);
+  fs.writeFileSync(path.resolve('private', file), body);
   bytes += Buffer.byteLength(body);
   biggest = Math.max(biggest, Buffer.byteLength(body));
   index.push({ id: u.id, label: u.label, n: u.symbols.length, file });
@@ -214,7 +214,7 @@ const pc = (v) => (v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(1
 const label = (v) => `${v.lookback}d${v.longOnly ? ' L' : ' L/S'}${v.sma ? ' +200D' : ''}` +
   ` ${v.maxWeight}x r${v.rebalance} v${v.volWindow}`;
 const all = universes[0].id;
-const allRuns = JSON.parse(fs.readFileSync(path.resolve('public', index[0].file), 'utf-8')).runs;
+const allRuns = JSON.parse(fs.readFileSync(path.resolve('private', index[0].file), 'utf-8')).runs;
 const bh = S.summarise(hold[all], null, 0);
 console.log(`\nAll (${universes[0].symbols.length} symbols), no costs — buy and hold: ` +
   `${pc(bh.cagr)} a year, max drawdown ${pc(bh.maxDD)}, Sharpe ${bh.sharpe == null ? '—' : bh.sharpe.toFixed(2)}`);

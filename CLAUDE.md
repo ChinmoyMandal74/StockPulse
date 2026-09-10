@@ -29,25 +29,25 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `set-password.js` | Local account admin — list accounts, set a password, change a role |
 | `momentum-model.js` | Writes an Excel model of the momentum score for one symbol — see **The Excel model** below |
 | `public/app.css` | **Shared stylesheet** — tokens, atmosphere, bezel, buttons, table base, row card. Linked by all four pages |
-| `public/index.html` | Single-page frontend (no build step, vanilla JS, page-specific CSS inline) |
-| `public/analysis.html` | Signal screens at `/analysis` — see **Analysis screens** below |
-| `public/strategy.js` | **The backtest engine** — signal to position to daily P&L. Pure functions; `require`d by the runner and loaded by the page |
-| `strategy-runs.js` | Builds `public/strategy-index.json` + one `strategy-u-*.json` per universe: every rule variant over every portfolio. Runs against the local copy |
-| `single-data.js` | Builds `public/single-closes.json`: every symbol's daily closes, delta-encoded, for `/single` to simulate in the browser |
-| `public/single.html` | The single-stock strategy at `/single` — one stock in or out, plus the same rule swept across all 116 |
-| `public/strategy.html` | The strategy backtest at `/strategy` — equity curve, drawdown, costs |
-| `public/indicators.js` | **Tunable short-horizon indicators, defined once** — loaded by `/lab`, `require`d by the server and the offline grid |
-| `lab-grid.js` | Builds `public/lab-grid.json`: the cross-sectional result for every parameter setting the lab can reach. Runs against the local copy, never Turso |
-| `public/lab.html` | The indicator lab at `/lab/<SYMBOL>` — sliders, a chart, and the universe-wide truth beside it |
-| `public/signal-stats.js` | **The statistics behind `/signal`** — correlation, fit, deciles, quadrants, effective n. Pure functions; `require`d by the server and loaded by the page, like `screens.js` |
-| `public/signal.html` | Signal study at `/signal/<SYMBOL>` — does a momentum move predict the next move in price |
-| `public/stock.html` | One stock in full at `/stock/<SYMBOL>` — chart, range buttons, every field |
-| `public/chat.html` | The assistant at `/chat` — any signed-in user, see **Chatbot** below |
-| `public/visitors.html` | Admin-only visitor log page at `/visitors` |
-| `public/users.html` | Admin-only account maintenance at `/users` — list and delete, no add |
-| `public/contact.html` | Signed-in contact form at `/contact` — subject + message, mailed to the owner |
-| `public/help.html` | User-facing help at `/help` — how scoring works, what each momentum factor means |
-| `public/screens.js` | **The seven analysis screens, defined once** — loaded by `analysis.html` and `require`d by `server.js` |
+| `private/index.html` | Single-page frontend (no build step, vanilla JS, page-specific CSS inline) |
+| `private/analysis.html` | Signal screens at `/analysis` — see **Analysis screens** below |
+| `private/strategy.js` | **The backtest engine** — signal to position to daily P&L. Pure functions; `require`d by the runner and loaded by the page |
+| `strategy-runs.js` | Builds `private/strategy-index.json` + one `strategy-u-*.json` per universe: every rule variant over every portfolio. Runs against the local copy |
+| `single-data.js` | Builds `private/single-closes.json`: every symbol's daily closes, delta-encoded, for `/single` to simulate in the browser |
+| `private/single.html` | The single-stock strategy at `/single` — one stock in or out, plus the same rule swept across all 116 |
+| `private/strategy.html` | The strategy backtest at `/strategy` — equity curve, drawdown, costs |
+| `private/indicators.js` | **Tunable short-horizon indicators, defined once** — loaded by `/lab`, `require`d by the server and the offline grid |
+| `lab-grid.js` | Builds `private/lab-grid.json`: the cross-sectional result for every parameter setting the lab can reach. Runs against the local copy, never Turso |
+| `private/lab.html` | The indicator lab at `/lab/<SYMBOL>` — sliders, a chart, and the universe-wide truth beside it |
+| `private/signal-stats.js` | **The statistics behind `/signal`** — correlation, fit, deciles, quadrants, effective n. Pure functions; `require`d by the server and loaded by the page, like `screens.js` |
+| `private/signal.html` | Signal study at `/signal/<SYMBOL>` — does a momentum move predict the next move in price |
+| `private/stock.html` | One stock in full at `/stock/<SYMBOL>` — chart, range buttons, every field |
+| `private/chat.html` | The assistant at `/chat` — any signed-in user, see **Chatbot** below |
+| `private/visitors.html` | Admin-only visitor log page at `/visitors` |
+| `private/users.html` | Admin-only account maintenance at `/users` — list and delete, no add |
+| `private/contact.html` | Signed-in contact form at `/contact` — subject + message, mailed to the owner |
+| `private/help.html` | User-facing help at `/help` — how scoring works, what each momentum factor means |
+| `private/screens.js` | **The seven analysis screens, defined once** — loaded by `analysis.html` and `require`d by `server.js` |
 | `.github/workflows/nightly-refresh.yml` | The 8PM Refresh all — see **The nightly job** below |
 | `public/favicon.svg` | Momentum-line mark, emerald on OLED black |
 | `portfolios.json`, `snapshot.json`, `profiles.json`, `names.json`, `visitors.log` | **Legacy.** Pre-migration backups only — nothing reads or writes them any more. Safe to delete once you trust the database. |
@@ -63,6 +63,24 @@ Everything goes through `db.js`. Tables: `portfolios`, `portfolio_tickers`, `nam
 - **`/api/visitors` aggregates in SQL** now (counts + `LIMIT 500`), instead of parsing the whole log into memory on every request.
 - **`/api/refresh-all` expires profiles, it does not delete them** (`expireProfiles()` sets `fetched_at = 0`). Deleting them used to strip sector, market cap and fundamentals out of the shared snapshot for the ten-odd minutes the backfill ran, so every other viewer saw the holes. `readProfiles()` treats `0` as "keep the values, drop the timestamp": the row still renders, and `ensureProfiles()` still re-pulls it. **The blob also carries a `fetchedAt`, so the column has to override it** — otherwise the stale copy inside the JSON makes an expired profile look fresh.
 - **Express 4 does not catch async handler rejections.** Every async route is wrapped in the `route()` helper near the top of `server.js`, which turns a database error into a 500 instead of a hung request. Any new async route must use it.
+
+## Serving and the gate
+**Two directories, and which one a file lives in decides whether a stranger can read it.**
+
+| | `public/` | `private/` |
+|---|---|---|
+| holds | `login.html`, `reset.html`, `app.css`, `favicon.svg`, `logo.png` | every other page, the shared JS modules, every research JSON |
+| served by | Vercel's CDN, without invoking the function | this Express app, behind `gateAssets` |
+| reachable signed out | yes, deliberately | no |
+
+- **`public/` is a Vercel static directory, and the CDN answers it before the function ever runs.** That is why `GATED_PAGES` — the redirect bouncing `/chat.html` to `/chat` — **had never once executed in production**. Every gated page answered 200 to anyone with the URL, as did `single-closes.json`, `lab-grid.json` and all sixteen `strategy-*.json` files: the whole price archive, with the portfolio names inside it. Locally it worked perfectly, which is exactly why it went unnoticed for so long. Confirmed by `X-Vercel-Cache: HIT` on `/single.html` against `MISS` on `/single`.
+- **The fix is the directory, not the code.** Everything requiring a session moved to `private/`, which the CDN knows nothing about, so the request falls through to the function and the guard actually decides. URLs did not change — `private/` is mounted at the root, after `public/`.
+- **Never put anything in `public/` that is not meant for a stranger.** There is no code path that can protect it.
+- **`gateAssets` guards only what `private/` actually holds**, matching a filename set read at boot, and calls `next()` for everything else. This is load-bearing: `app.use()` sees every request that reaches it and **every API route is registered below that line**, so the first version — which refused outright — swallowed `POST /api/login` and made signing in impossible. Not just the gated pages; the entire site. Caught by testing the signed-**in** path, which is the half that is easy to skip.
+- **A page request redirects to `/login`; an asset request answers 401 JSON.** Content negotiation cannot tell them apart — a browser's `fetch()` sends `Accept: */*` exactly like a navigation, so `req.accepts()` answered "html" for both and every data file got a redirect, which `fetch` follows, handing the page a login form and HTTP 200 where it expected JSON. `Sec-Fetch-Dest` is what a browser sets to say what a request is *for*; the file extension is the fallback for clients that omit it.
+- **`GET /api/health` is deliberately open and returns a count, nothing else.** `private/` is not a Vercel static directory, so if the platform ever stopped bundling it with the function every gated page would 404 and it would look like a routing bug. `{"ok":true,"assets":35}` says which it is.
+- **The offline builders write into `private/`** (`single-data.js`, `strategy-runs.js`, `lab-grid.js`), and `server.js`, `momentum-model.js`, `lab-grid.js` and `strategy-runs.js` all `require` the shared modules from there.
+- **The APIs were never affected** — `/api/stocks` 401s, `/api/visitors` 403s, and the pages were empty shells without a session. No user data or credentials were exposed. What was readable was the derived market data and the page source.
 
 ## Auth model
 The app is a **door**: the screener is shared, and accounts only decide who gets in.
@@ -202,7 +220,7 @@ Each group has a fixed colour used for the group header `th` and its row in the 
 - Scores `#a3e635` (group id `rank`) · Info `#7c9cff` · Chart `#a8a29e` · Short-term `#34d399` · Long-term `#a78bfa` · Forward `#fb923c`
 - Relative `#22d3ee` · Trend `#fbbf24` · Volume `#f472b6` · Size `#94a3b8` · Fundamentals `#fb7185`
 
-**To add a group:** append the id to `GROUPS`, give it a colour in `GROUP_COLORS` and a label in `GROUP_LABELS`, add the `th.group` banner with the right `colspan`, and tag every header/body cell with `class="grp-<id>"`. **The header cells and the body cells must be in the same order, and a group's columns must be contiguous** — a banner spans by `colspan`, so interleaving two groups puts every banner over the wrong columns and silently mismatches headers to values. Then mirror it in **three more places**: `GROUP_ORDER` and `FIELD_SPEC` in `public/rowcard.js`, and the palette copies at the top of `public/analysis.html`. `applyGroups()` and the columns menu pick it up with no further changes.
+**To add a group:** append the id to `GROUPS`, give it a colour in `GROUP_COLORS` and a label in `GROUP_LABELS`, add the `th.group` banner with the right `colspan`, and tag every header/body cell with `class="grp-<id>"`. **The header cells and the body cells must be in the same order, and a group's columns must be contiguous** — a banner spans by `colspan`, so interleaving two groups puts every banner over the wrong columns and silently mismatches headers to values. Then mirror it in **three more places**: `GROUP_ORDER` and `FIELD_SPEC` in `private/rowcard.js`, and the palette copies at the top of `private/analysis.html`. `applyGroups()` and the columns menu pick it up with no further changes.
 
 The **Scores** group (id `rank`, kept so saved prefs and `grp-rank` classes still resolve) carries the three score columns (Overall, Mom., Qual.) and **Info** the five metadata ones (Portfolios, Price, Sector, Market Cap, Next Earn) — they were one group until they were split, so scores and metadata collapse independently.
 
@@ -527,9 +545,9 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 - **Two ceilings:** `CHAT_DAILY_LIMIT` (60) for the owner, `CHAT_DAILY_LIMIT_MEMBER` (3) for everyone else. The owner pays for the key and does the prompt tuning; members get enough to be useful. **Keyed on the account**, so a shared login shares the allowance rather than multiplying it. With the current roster that caps daily exposure at 60 + 3 per member.
 - **Upstream errors are never echoed to the client** — the response body can restate the request, and the API key travels in the same headers.
 - Not streaming yet. Responses are a few seconds behind a "thinking" indicator; streaming is the obvious next step but could not be verified against Vercel from here.
-- `public/chat.html` carries a ~60-line markdown renderer for the reply (tables, lists, headings, bold/italic/code). **It escapes HTML before applying any markdown**, so nothing a model returns can inject markup.
+- `private/chat.html` carries a ~60-line markdown renderer for the reply (tables, lists, headings, bold/italic/code). **It escapes HTML before applying any markdown**, so nothing a model returns can inject markup.
 
-**Gated pages are no longer served raw.** `public/` is mounted wholesale, which used to hand out `/chat.html`, `/analysis.html` and `/visitors.html` at their file path and skip the guard. `GATED_PAGES` redirects those to the routed path.
+**Gated pages are no longer served raw** — see **Serving and the gate** above. The short version: they left `public/`, because nothing in `public/` can be protected.
 
 ## The signal study
 `/signal/<SYMBOL>` puts a momentum reading against what the price did next, one stock at a time. Reached from **Signal study** beside the Momentum model download on `/stock/<SYMBOL>` — both are "go deeper on this stock's momentum", so the row already existed.
@@ -734,7 +752,7 @@ It re-scores momentum **in the browser** — the screener, the nightly report, t
 - **The saved choice is a preset id plus, for Custom only, the map behind it.** A bad id falls back to Default.
 
 ## Analysis screens
-**The seven predicates live in `public/screens.js`, not in the page.** `analysis.html` loads it with a `<script>` tag and `server.js` `require`s it, so the nightly report and the page can never disagree about what "bouncing off the lows" means — the same reason `rowcard.js` exists. Only the *selection* is shared (which rows, in what order); the columns, the prose and the empty messages stay with whichever surface is drawing them. Verified equivalent against the live universe on extraction: all seven lists identical, order included.
+**The seven predicates live in `private/screens.js`, not in the page.** `analysis.html` loads it with a `<script>` tag and `server.js` `require`s it, so the nightly report and the page can never disagree about what "bouncing off the lows" means — the same reason `rowcard.js` exists. Only the *selection* is shared (which rows, in what order); the columns, the prose and the empty messages stay with whichever surface is drawing them. Verified equivalent against the live universe on extraction: all seven lists identical, order included.
 
 `/analysis` is seven filtered views built from the **raw fields, not the composite scores** — the scores already drive the table's ranking, and a screen that just re-sorts them adds nothing. Every threshold below was set by running the candidate against the live universe: a screen returning 0 names is a dead box, and one returning 25 of 69 is not a signal. **The hit counts in the table were measured at 69 symbols and the universe is now 116 — expect every one of them to be larger, and the 33 `Faded` names to crowd the bounce and value screens in particular.** Re-tune the thresholds against a fresh snapshot before reading anything into them.
 

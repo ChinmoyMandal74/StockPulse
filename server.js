@@ -7,6 +7,7 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 
 const app = express();
@@ -19,7 +20,7 @@ const TD_BASE = 'https://api.twelvedata.com';
 const store = require('./db');
 // The analysis screens, shared with public/analysis.html so the nightly report
 // and the page can never disagree about what "bouncing off the lows" means.
-const Screens = require('./public/screens.js');
+const Screens = require('./private/screens.js');
 // The Excel model of the momentum calculation, shared with the CLI in the same
 // file so the workbook served here and the one written locally are one thing.
 const { buildModel, momentumMap, MODEL_ROWS, MODEL_MIN_BARS } = require('./momentum-model.js');
@@ -27,9 +28,9 @@ const { buildModel, momentumMap, MODEL_ROWS, MODEL_MIN_BARS } = require('./momen
 // history and the live score can never drift into two different models.
 const Momentum = require('./momentum.js');
 // The arithmetic behind /signal, kept apart so it can be checked on its own.
-const Signal = require('./public/signal-stats.js');
+const Signal = require('./private/signal-stats.js');
 // Tunable indicators, shared with /lab and the offline grid.
-const Indicators = require('./public/indicators.js');
+const Indicators = require('./private/indicators.js');
 const {
   readPortfolios, writePortfolios,
   readNames, writeNames,
@@ -117,14 +118,14 @@ app.get(['/', '/index.html'], route(async (req, res, next) => {
 
 app.get('/analysis', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'analysis.html'));
+  res.sendFile(path.join(__dirname, 'private', 'analysis.html'));
 }));
 
 // One stock, in full. The symbol is read client-side from the path, so every
 // ticker serves the same file.
 app.get('/stock/:symbol', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'stock.html'));
+  res.sendFile(path.join(__dirname, 'private', 'stock.html'));
 }));
 
 // Open to any signed-in user, like /analysis and /chat — it explains the app to
@@ -132,7 +133,7 @@ app.get('/stock/:symbol', route(async (req, res) => {
 // Does a momentum move predict the next move in price? One symbol at a time.
 app.get('/signal/:symbol', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'signal.html'));
+  res.sendFile(path.join(__dirname, 'private', 'signal.html'));
 }));
 
 // A real backtest: a rule, positions, and an equity curve. The runs are
@@ -141,7 +142,7 @@ app.get('/signal/:symbol', route(async (req, res) => {
 // serves the page, and the page reads the static results.
 app.get('/strategy', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'strategy.html'));
+  res.sendFile(path.join(__dirname, 'private', 'strategy.html'));
 }));
 
 // The same rule on one stock at a time: when to own it, when to hold cash.
@@ -150,24 +151,24 @@ app.get('/strategy', route(async (req, res) => {
 // cannot be applied by scaling a stored run after the fact.
 app.get('/single', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'single.html'));
+  res.sendFile(path.join(__dirname, 'private', 'single.html'));
 }));
 
 // Build an indicator and watch what it does. The page computes everything
 // itself from the bars this ships, so a slider drag redraws without a request.
 app.get('/lab/:symbol', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'lab.html'));
+  res.sendFile(path.join(__dirname, 'private', 'lab.html'));
 }));
 
 app.get('/help', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'help.html'));
+  res.sendFile(path.join(__dirname, 'private', 'help.html'));
 }));
 
 app.get('/contact', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'contact.html'));
+  res.sendFile(path.join(__dirname, 'private', 'contact.html'));
 }));
 
 app.get('/reset', (req, res) => {
@@ -176,21 +177,47 @@ app.get('/reset', (req, res) => {
 
 app.get('/users', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
-  res.sendFile(path.join(__dirname, 'public', 'users.html'));
+  res.sendFile(path.join(__dirname, 'private', 'users.html'));
 }));
 
 app.get('/chat', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'chat.html'));
+  res.sendFile(path.join(__dirname, 'private', 'chat.html'));
 }));
+
+// Deliberately open, and it reveals only a count. private/ is not a Vercel
+// static directory, so if the platform ever stopped bundling it with the
+// function every gated page would 404 and it would look like a routing bug.
+// This says which it is. Counted at boot; the directory does not change while
+// the process runs.
+const PRIVATE_DIR = path.join(__dirname, 'private');
+// The exact filenames private/ holds, read once. This is what the guard below
+// matches against, so it can tell "a gated asset" from "a route defined further
+// down this file" without a syscall per request. private/ is flat and does not
+// change while the process runs.
+let PRIVATE_FILES = new Set();
+try { PRIVATE_FILES = new Set(fs.readdirSync(PRIVATE_DIR)); } catch { PRIVATE_FILES = new Set(); }
+const PRIVATE_ASSETS = PRIVATE_FILES.size;
+if (!PRIVATE_ASSETS) console.error('[assets] private/ is EMPTY or unreadable — every gated page will 404');
+
+app.get('/api/health', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: PRIVATE_ASSETS > 0, assets: PRIVATE_ASSETS });
+});
 
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-// public/ is served wholesale, which would otherwise hand out the gated pages
-// at their raw .html path and bypass the checks above. Bounce those to the
-// routed path, where the guard runs.
+// Bounce a gated page's raw .html path to its routed path, where the guard
+// runs, so each page has one canonical URL. This also covers the admin-only
+// pages: /users.html lands on /users, which checks isAdmin.
+//
+// NOTE THIS ONLY WORKS BECAUSE THE FILES LEFT public/. Vercel serves anything in
+// public/ straight from its CDN and never invokes the function, so while these
+// pages lived there this redirect had never once run in production — every
+// gated .html answered 200 to anyone with the URL, as did every research JSON
+// file. Locally it worked, which is exactly why it went unnoticed.
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/users.html': '/users', '/reset.html': '/reset',
                       '/contact.html': '/contact', '/help.html': '/help',
@@ -201,14 +228,50 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/single.html': '/single' };
 app.get(Object.keys(GATED_PAGES), (req, res) => res.redirect(GATED_PAGES[req.path]));
 
+// Open assets: the login and reset pages and what they need to render. Vercel
+// serves these from its CDN, which is fine — they are meant to be reachable
+// without a session. NOTHING ELSE BELONGS HERE.
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Everything else. private/ is not a Vercel static directory, so these requests
+// fall through to this function and this guard decides.
+//
+// A document request redirects to the sign-in page; anything else answers 401,
+// because the pages fetch their data with fetch() and already know to send you
+// to /login on a 401. Redirecting an XHR to an HTML page instead would hand the
+// caller a login form where it expected JSON.
+const gateAssets = route(async (req, res, next) => {
+  // GUARD ONLY WHAT private/ ACTUALLY HOLDS, and let everything else past.
+  // app.use() sees every request that reaches it, and every API route in this
+  // file is registered BELOW this line — so a version of this that refused
+  // outright swallowed POST /api/login and made signing in impossible. The
+  // whole site, not just the gated part. Matching against the real file list
+  // makes this middleware a no-op for anything that is a route.
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  const rel = req.path === '/' ? 'index.html' : req.path.replace(/^\/+/, '');
+  if (!PRIVATE_FILES.has(rel)) return next();
+  if (await isSignedIn(req)) return next();
+  // Content negotiation cannot make this call: a browser's fetch() sends
+  // `Accept: */*`, exactly like a navigation, so req.accepts() answers "html"
+  // for both and every data file got a redirect. fetch follows redirects, so
+  // the page received 200 and a login form where it expected JSON, and reported
+  // "no price file yet" instead of sending anyone to sign in. Sec-Fetch-Dest is
+  // set by the browser and says what the request is FOR; the extension is the
+  // fallback for anything that does not send it.
+  const ext = path.extname(req.path).toLowerCase();
+  const dest = String(req.get('sec-fetch-dest') || '').toLowerCase();
+  const isPage = dest ? dest === 'document' : (ext === '' || ext === '.html');
+  if (isPage) return res.redirect('/login');
+  res.status(401).json({ error: 'Sign in required' });
+});
+app.use(gateAssets, express.static(path.join(__dirname, 'private')));
 
 // Admin only, like /users. The data behind it (GET /api/visitors) has always
 // been guarded, so this only ever served an empty shell — but it was the one
 // page route that did not check, and GATED_PAGES funnels /visitors.html here.
 app.get('/visitors', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
-  res.sendFile(path.join(__dirname, 'public', 'visitors.html'));
+  res.sendFile(path.join(__dirname, 'private', 'visitors.html'));
 }));
 
 // ---- Admin auth (cookie-based, no DB) --------------------------------------

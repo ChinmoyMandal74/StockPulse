@@ -1,6 +1,6 @@
 // Every symbol's daily closes, on one date axis, for /single to run in the browser.
 //
-//   node --no-warnings single-data.js            # rebuild public/single-closes.json
+//   node --no-warnings single-data.js            # rebuild private/single-closes.json
 //   node --no-warnings single-data.js --stats    # report only, write nothing
 //
 // WHY SHIP THE PRICES RATHER THAN THE RESULTS, which is the opposite of what
@@ -39,7 +39,7 @@ const { DatabaseSync } = require('node:sqlite');
 
 const STATS = process.argv.includes('--stats');
 const DB = path.resolve('analysis.db');
-const OUT = path.resolve('public/single-closes.json');
+const OUT = path.resolve('private/single-closes.json');
 const FROM = '2007-01-01';
 
 if (!fs.existsSync(DB)) {

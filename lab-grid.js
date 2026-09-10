@@ -1,6 +1,6 @@
 // The cross-sectional truth for every parameter setting the lab can dial to.
 //
-//   node --no-warnings lab-grid.js            # rebuild public/lab-grid.json
+//   node --no-warnings lab-grid.js            # rebuild private/lab-grid.json
 //   node --no-warnings lab-grid.js --quick    # a coarse grid, for a smoke test
 //
 // The lab lets you tune an indicator against one stock and watch the statistics
@@ -27,11 +27,11 @@
 const fs = require('fs');
 const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
-const I = require('./public/indicators.js');
+const I = require('./private/indicators.js');
 
 const QUICK = process.argv.includes('--quick');
 const DB = path.resolve('analysis.db');
-const OUT = path.resolve('public/lab-grid.json');
+const OUT = path.resolve('private/lab-grid.json');
 
 // One grid per indicator, over the knobs that indicator actually has.
 const GRIDS = QUICK ? {

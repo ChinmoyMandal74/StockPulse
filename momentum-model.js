@@ -29,7 +29,7 @@ const ROWS = Math.max(280, Number(process.argv[3]) || 320);
 // Every horizon the screener's Past picker offers, taken from the module that
 // defines that picker rather than restated here — a workbook that disagreed
 // with the dropdown it is named after would be worse than one that omits it.
-const { PAST_PERIODS, DEFAULT_PAST } = require('./public/screens.js');
+const { PAST_PERIODS, DEFAULT_PAST } = require('./private/screens.js');
 const HORIZONS = PAST_PERIODS.map((p) => ({ id: p.id, lag: p.days, label: p.id.toUpperCase() }));
 
 // The fortnight still has a special place: it is what the screener ships as
