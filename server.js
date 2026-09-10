@@ -40,7 +40,7 @@ const {
 const PROFILE_TTL_MS = 24 * 60 * 60 * 1000; // refresh sector/market cap once a day
 // Publishing: set ADMIN_PASSWORD in .env to make the app read-only for the public.
 // The public sees a cached snapshot; only an admin (logged in with this password)
-// can add/remove tickers, refresh, Refresh All, and run backtests. When it's NOT
+// can add/remove tickers, refresh, Refresh All, and rewind the table. When it's NOT
 // set, the app is fully open (local dev) — every action is available with no login.
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const AUTH_REQUIRED = !!ADMIN_PASSWORD;
@@ -1787,7 +1787,7 @@ app.get('/api/status', requireAuth, route(async (req, res) => {
 
 // ---- API: stocks (the screener data) ---------------------------------------
 
-// Compute the full screener payload live from the API. Backtest mode (asOf set)
+// Compute the full screener payload live from the API. As-of mode (asOf set)
 // recomputes momentum as it looked on that date (plus forward returns); fundamentals
 // are skipped — they aren't point-in-time. Returns {ok, payload} or {ok:false, status, error}.
 async function computeStocks(asOf) {
@@ -1812,7 +1812,7 @@ async function computeStocks(asOf) {
 
   try {
     // Price and all the % / trend metrics come from one batched daily-close call.
-    // Live: last ~300 bars. Backtest: from ~430 days before asOf through today, so we
+    // Live: last ~300 bars. As-of: from ~430 days before asOf through today, so we
     // have a full year of history before the date AND the bars after it (forward returns).
     let rangeParam = '&outputsize=300';
     if (asOf) {
@@ -1846,7 +1846,7 @@ async function computeStocks(asOf) {
     const SIX_MONTH = 126;
     const ONE_YEAR = 252;
 
-    // Benchmark 3-month return (as of the chosen date, if backtesting).
+    // Benchmark 3-month return (as of the chosen date, if one is set).
     const spyFull = series[BENCHMARK]?.values;
     let spyThreeMonthPct;
     if (asOf && Array.isArray(spyFull)) {
@@ -1860,7 +1860,7 @@ async function computeStocks(asOf) {
       const s = series[sym] || {};
       const full = s.values;
 
-      // In backtest mode, slice the series to the as-of date and compute forward returns.
+      // With an as-of date, slice the series to it and compute the forward returns.
       let values = full;
       let fwd1M = null, fwd3M = null, fwd6M = null, fwdSince = null;
       if (asOf) {
@@ -2024,7 +2024,7 @@ async function computeStocks(asOf) {
       console.warn('momentum: could not score the earlier dates:', err.message);
     }
 
-    // Archive the bars we just fetched. Live pulls only — a backtest's range is
+    // Archive the bars we just fetched. Live pulls only — an as-of range is
     // truncated and would corrupt the history. Awaited rather than fired and
     // forgotten, because a serverless instance is free to stop the moment the
     // response is sent, but never allowed to fail the refresh: the archive is a
@@ -2069,7 +2069,7 @@ const barRow = (symbol, b) => {
            open: num(b.open), high: num(b.high), low: num(b.low), close, volume: num(b.volume) };
 };
 
-// Only ever called for a live pull. A backtest fetches a different, truncated
+// Only ever called for a live pull. An as-of pull fetches a different, truncated
 // range, and persisting from that path would poison the archive.
 async function persistBars(symbols, series) {
   const meta = await store.barsMaxDates();
@@ -2953,7 +2953,7 @@ function marketDay(rows) {
   return latest || new Date().toISOString().slice(0, 10);
 }
 
-// Everything that happens after a live, non-backtest recompute: cache it, record
+// Everything that happens after a live, non-as-of recompute: cache it, record
 // the day's fundamentals, move the shared flag on, and report when the run ends.
 // Shared by the admin's ?refresh=1 and the cron route so the two cannot drift.
 // `ctx` carries what an ordinary Refresh has no refresh_state row to hold: when
@@ -3128,21 +3128,22 @@ app.delete('/api/cron/refresh', route(async (req, res) => {
 app.get('/api/stocks', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store'); // never let the browser serve a stale copy
 
-  // Backtest mode: ?asOf=YYYY-MM-DD recomputes momentum as it looked on that date.
+  // ?asOf=YYYY-MM-DD recomputes momentum as it looked on that date and reports the
+  // returns since — a forward-returns view, not a backtest. The real one is /strategy.
   const asOfRaw = String(req.query.asOf || '').trim();
   const asOf = /^\d{4}-\d{2}-\d{2}$/.test(asOfRaw) ? asOfRaw : null;
-  // A live pull (recompute from the API) happens for a backtest or an explicit
+  // A live pull (recompute from the API) happens for an as-of date or an explicit
   // ?refresh=1 (the admin Refresh / Refresh All). Everything else serves the snapshot.
   const wantLive = !!asOf || req.query.refresh === '1';
 
   if (wantLive) {
     if (!(await isAdmin(req))) {
-      return res.status(403).json({ error: 'Admin only — log in to refresh or run a backtest.' });
+      return res.status(403).json({ error: 'Admin only — log in to refresh or rewind the table.' });
     }
     const startedAt = Date.now();
     const r = await computeStocks(asOf);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
-    // Cache the live (non-backtest) pull, record today's fundamentals, and move
+    // Cache the live (non-as-of) pull, record today's fundamentals, and move
     // the shared refresh flag on — the same tail the nightly job runs, so the
     // two callers cannot drift apart.
     if (!asOf) {

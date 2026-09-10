@@ -64,7 +64,7 @@ The app is a **door**: the screener is shared, and accounts only decide who gets
 
 - **Anonymous** → `/` redirects to `/login`; `/api/stocks` and `/api/portfolios` return 401.
 - **`member`** → sees the same shared screener, read-only (sort, collapse, export).
-- **`owner`** → everything: add/remove tickers, Refresh, Refresh all, backtest, visitor log, user management.
+- **`owner`** → everything: add/remove tickers, Refresh, Refresh all, the forward-returns view, visitor log, user management.
 - `ADMIN_PASSWORD` unset → fully open, everyone is admin (local dev). Set → sign-in required.
 
 Accounts live in Turso (`users`, `sessions`). Passwords are hashed with **`crypto.scrypt`** and a per-user random salt — no dependency needed. Sessions are random 32-byte tokens in the `sessions` table with a 30-day expiry, so a single session can be revoked; they are *not* the old deterministic HMAC cookie, which cannot work for more than one user.
@@ -129,7 +129,7 @@ Everything above the table is **one bar**. There is no separate masthead, no tab
 ├── header.bezel.bar          ← wordmark · portfolio picker · columns picker
 │                               · add-ticker field · as-of field · status
 │                               · Refresh · Export · ⋯ more menu
-├── #readonlyNote / #backtestBar / .error   (flex: none, shown conditionally)
+├── #readonlyNote / #fwdViewBar / .error    (flex: none, shown conditionally)
 └── .table-bezel (flex: 1, min-height: 0)
     └── .table-wrap           ← the only scroll container on the page
 ```
@@ -413,7 +413,7 @@ Which column groups a user has collapsed is stored per account in the `prefs` ta
 
 - **Server-side, not `localStorage`.** The choice belongs to the person, so it follows them to another browser or machine rather than belonging to a device and being shared by whoever sits at it.
 - **Keyed on the signed-in email**, falling back to `'admin'` for the legacy password cookie and for open mode, where there is no user row — the same convention `chat_usage` uses.
-- **`fwd` is never persisted.** It is derived state: `refresh()` sets it from whether a backtest is running, so saving it would only store a value the next load overwrites.
+- **`fwd` is never persisted.** It is derived state: `refresh()` sets it from whether an as-of date is set, so saving it would only store a value the next load overwrites.
 - **Prefs are awaited before the first render**, in the boot chain `checkAuth().then(loadPrefs).then(refresh)`. Applying them afterwards would paint the default layout and then visibly rearrange it.
 - **Writes are debounced 600ms** — the columns menu stays open while toggling, so changes arrive in bursts — and are suppressed until the load lands, or the defaults would be written back over the values being fetched.
 - **The server stores only what it understands.** `PUT` rebuilds the `collapsed` map from scratch against `/^[a-z]{1,16}$/`, so the endpoint cannot be used as free per-user storage and `__proto__` cannot get in.
@@ -479,7 +479,7 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 - **Writes are incremental, not wholesale.** `persistBars()` upserts only bars newer than the stored `max(d)` plus a `BAR_OVERLAP` of 5. Steady state is a handful of rows per symbol per refresh, not 300.
 - **The overlap is not decoration.** Twelve Data returns a bar for *today* while the market is open, with the current price as its close, so a mid-session refresh stores a provisional value. Re-upserting the recent window replaces it with the settled close. Measured drift on a real pull: 0.003–0.007%.
 - **Splits are detected, not ignored.** A split re-prices all of history, so a stored bar `SPLIT_PROBE_BARS` (60) back would silently disagree with the fetched one and leave a phantom cliff in any chart. `persistBars()` compares that one bar per symbol — one query for the whole universe, since US symbols share trading days — and rewrites the symbol in full when it differs by more than `SPLIT_TOLERANCE` (0.5%). Re-running `backfill-bars.js --only SYM` is the manual repair.
-- **Backtests must never write.** `computeStocks(asOf)` fetches a truncated range; persisting from it would corrupt the archive. Guarded by `if (!asOf)`, the same rule the snapshot uses.
+- **An as-of pull must never write.** `computeStocks(asOf)` fetches a truncated range; persisting from it would corrupt the archive. Guarded by `if (!asOf)`, the same rule the snapshot uses.
 - **A failed archive write never fails the refresh** — it is caught and logged. The screener is the product; the archive is a by-product.
 - `open` is stored although nothing reads it yet. `high`/`low` drive the 52-week range and `volume` the volume trend, so an archive without them could draw a chart but not reproduce the screener — which is the point of keeping it.
 
@@ -720,7 +720,7 @@ It re-scores momentum **in the browser** — the screener, the nightly report, t
 
 ## API patterns
 - `GET /api/stocks` — serves snapshot to public; `?refresh=1` recomputes live (admin only)
-- `GET /api/stocks?asOf=YYYY-MM-DD` — backtest mode (admin only)
+- `GET /api/stocks?asOf=YYYY-MM-DD` — the forward-returns view (admin only)
 - `POST /api/refresh-all` — expires the profile cache, forces re-pull (admin only); `DELETE` ends the refresh flag
 - `GET /api/status` — `{ refreshing }` only; polled by every open page during a refresh
 - `POST /api/cron/refresh` — the nightly job's one round (bearer `CRON_SECRET`, not admin); `?start=1` begins a run, `DELETE` ends one early

@@ -84,7 +84,7 @@ const SCHEMA = [
   `create index if not exists idx_visitors_ts on visitors (ts)`,
   // Accounts. The screener itself is shared — every signed-in user sees the same
   // data — so these exist purely to control who gets through the door.
-  // role: 'owner' can edit tickers / refresh / backtest; 'member' is read-only.
+  // role: 'owner' can edit tickers / refresh / rewind the table; 'member' is read-only.
   // failed_count + locked_until throttle password guessing against a known email.
   `create table if not exists users (
      id            integer primary key autoincrement,

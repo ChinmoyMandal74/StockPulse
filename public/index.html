@@ -85,7 +85,7 @@
     .picker-btn .chev { opacity: 0.5; transition: transform 0.5s var(--ease), opacity 0.5s var(--ease); }
     .picker[data-open="1"] .picker-btn { background: rgba(255, 255, 255, 0.085); border-color: var(--hair-2); }
     .picker[data-open="1"] .chev { transform: rotate(180deg); opacity: 1; }
-    /* backtest active: the bar itself should say you are off live data */
+    /* forward-returns view active: the bar itself should say you are off live data */
     #dateOpenBtn.on {
       color: var(--amber); border-color: rgba(251, 191, 36, 0.35);
       background: rgba(251, 191, 36, 0.12); width: auto; gap: 7px; padding: 0 11px;
@@ -241,7 +241,7 @@
     }
     .notice .ic { color: var(--faint); }
     .notice b { color: var(--text); font-weight: 600; }
-    #readonlyNote, #backtestBar, #refreshBar { margin-top: 8px; }
+    #readonlyNote, #fwdViewBar, #refreshBar { margin-top: 8px; }
     #refreshBar > .core {
       background:
         linear-gradient(100deg, rgba(52, 211, 153, 0.10), rgba(52, 211, 153, 0.02) 60%),
@@ -258,23 +258,23 @@
     }
     .ic.spin { animation: spin 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite; transform-origin: 50% 50%; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    #backtestBar > .core {
+    #fwdViewBar > .core {
       background:
         linear-gradient(100deg, rgba(251, 191, 36, 0.10), rgba(251, 191, 36, 0.02) 60%),
         var(--surface);
       color: #ddd0a8;
     }
-    #backtestBar .ic { color: var(--amber); }
-    #backtestBar b { color: var(--amber); font-weight: 600; }
-    #backtestBar button {
+    #fwdViewBar .ic { color: var(--amber); }
+    #fwdViewBar b { color: var(--amber); font-weight: 600; }
+    #fwdViewBar button {
       margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
       padding: 7px 14px; border-radius: 999px; cursor: pointer; line-height: 1;
       border: 1px solid rgba(251, 191, 36, 0.32); background: rgba(251, 191, 36, 0.12);
       color: var(--amber); font-size: 12px; font-weight: 500;
       transition: background 0.5s var(--ease), transform 0.35s var(--ease);
     }
-    #backtestBar button:hover { background: rgba(251, 191, 36, 0.2); }
-    #backtestBar button:active { transform: scale(0.97); }
+    #fwdViewBar button:hover { background: rgba(251, 191, 36, 0.2); }
+    #fwdViewBar button:active { transform: scale(0.97); }
 
     .error { margin-top: 8px; color: var(--red); font-size: 12.5px;
              display: flex; align-items: center; gap: 9px; }
@@ -566,15 +566,15 @@
           <div class="picker-menu" id="weightMenu" role="listbox" aria-label="Momentum weighting"></div>
         </div>
         <div class="picker admin-only" id="datePicker" data-open="0">
-          <button class="btn icon quiet" id="dateOpenBtn" title="Backtest: view the ranking as of a past date" aria-haspopup="dialog" aria-expanded="false" aria-label="Backtest date">
+          <button class="btn icon quiet" id="dateOpenBtn" title="Forward returns: view the ranking as of a past date, and what happened after it" aria-haspopup="dialog" aria-expanded="false" aria-label="Forward-returns date">
             <svg class="ic" aria-hidden="true"><use href="#i-calendar" /></svg>
           </button>
-          <div class="picker-menu" id="dateMenu" role="dialog" aria-label="Backtest date">
+          <div class="picker-menu" id="dateMenu" role="dialog" aria-label="Forward-returns date">
             <div class="picker-inner">
               <div class="formpanel">
                 <div class="fld">
                   <label for="asOfDate">Show the ranking as of</label>
-                  <input type="date" id="asOfDate" title="Backtest: view the momentum ranking as of a past date" aria-label="Backtest as-of date" />
+                  <input type="date" id="asOfDate" title="Forward returns: view the momentum ranking as of a past date" aria-label="Forward-returns as-of date" />
                 </div>
                 <button class="btn go" id="backToLive" style="display:none;padding:9px 15px">Back to live</button>
                 <p class="hint">Momentum and returns are recomputed as they looked on that date. Fundamentals are hidden — they are not point-in-time.</p>
@@ -703,7 +703,7 @@
       </div>
     </div>
 
-    <div class="bezel notice" id="backtestBar" style="display:none"></div>
+    <div class="bezel notice" id="fwdViewBar" style="display:none"></div>
 
     <div class="bezel notice" id="refreshBar" style="display:none"></div>
 
@@ -754,7 +754,7 @@
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="3">Long-term %</th>
-        <th class="group grp-fwd" data-group="fwd" colspan="4">Forward (backtest)</th>
+        <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
         <th class="group grp-rel" data-group="rel" colspan="4">Relative</th>
         <th class="group grp-trend" data-group="trend" colspan="4">Trend</th>
         <th class="group grp-vol" data-group="vol" colspan="1">Volume</th>
@@ -837,8 +837,8 @@
     let sortKey = 'overallScore';
     let sortDir = -1;          // -1 desc, 1 asc
     let lastUpdated = null;    // when /api/stocks was last pulled (live data)
-    let asOfDate = null;       // backtest: view momentum as of this past date (YYYY-MM-DD)
-    let isAdmin = true;        // may add/remove tickers, refresh, backtest (true = open/local or owner)
+    let asOfDate = null;       // forward-returns view: momentum as of this past date (YYYY-MM-DD)
+    let isAdmin = true;        // may add/remove tickers, refresh, rewind (true = open/local or owner)
     let authRequired = false;  // server has an ADMIN_PASSWORD set (published, sign-in required)
     let signedIn = true;       // has a live session (or the app is open/local)
     let currentUser = null;    // { email, role } once signed in
@@ -862,7 +862,7 @@
     };
     const collapsed = {};
     GROUPS.forEach((g) => (collapsed[g] = false));
-    collapsed.fwd = true; // forward-return columns appear only in backtest mode
+    collapsed.fwd = true; // forward-return columns appear only when an as-of date is set
 
     const PALETTE = ['#7c9cff', '#34d399', '#a78bfa', '#fb923c', '#fb7185', '#22d3ee', '#fbbf24', '#f472b6'];
     const colorFor = (name) => {
@@ -1266,7 +1266,7 @@
           ? `Historical — as of ${asOfDate}`
           : `Live — price as of ${s.latestDate || 'n/a'}, pulled ${updatedStr}`;
         const cacheTitle = asOfDate
-          ? 'Fundamentals are hidden in backtest mode (not point-in-time)'
+          ? 'Fundamentals are hidden in this view — they are not point-in-time'
           : (s.profileFetchedAt
               ? `Cached ${fmtDateTime(s.profileFetchedAt)} — auto-refreshes daily (Refresh All to force)`
               : 'Not fetched yet — backfills over the next refreshes');
@@ -1775,7 +1775,7 @@
     // belonging to a device and being shared by whoever sits at it.
     //
     // `fwd` is deliberately never persisted. It is derived state — refresh()
-    // sets it from whether a backtest is running — so saving it would only
+    // sets it from whether an as-of date is set — so saving it would only
     // store a value that the next load overwrites.
     let prefsReady = false;
     let prefsTimer = null;
@@ -1885,26 +1885,26 @@
     }
     function setError(msg) { $('error').textContent = msg || ''; }
 
-    // Backtest banner + button states reflecting whether an as-of date is active.
-    function updateBacktestUI() {
-      const bar = $('backtestBar');
+    // Forward-returns banner + button states, reflecting whether an as-of date is set.
+    function updateForwardViewUI() {
+      const bar = $('fwdViewBar');
       // The collapsed trigger has to carry the state now that the field is hidden.
       const btn = $('dateOpenBtn');
       btn.classList.toggle('on', !!asOfDate);
       btn.innerHTML = '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-calendar" /></svg>' +
         (asOfDate ? `<span>${asOfDate}</span>` : '');
       btn.title = asOfDate
-        ? `Backtest mode — showing the ranking as of ${asOfDate}`
-        : 'Backtest: view the ranking as of a past date';
+        ? `Forward returns — showing the ranking as of ${asOfDate}`
+        : 'Forward returns: view the ranking as of a past date';
       $('backToLive').style.display = asOfDate ? '' : 'none';
       if (asOfDate) {
         bar.style.display = '';
         bar.innerHTML =
           '<div class="core"><svg class="ic" aria-hidden="true"><use href="#i-clock" /></svg>' +
-          `<span><b>Backtest mode</b> — ranking &amp; returns are as of <b>${asOfDate}</b>. ` +
+          `<span><b>Forward returns</b> — the ranking is as of <b>${asOfDate}</b>. ` +
           `Fundamentals (Quality) are hidden (not point-in-time); the <b>Forward</b> columns show what happened next.</span>` +
-          '<button id="backtestClear"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to live</button></div>';
-        $('backtestClear').addEventListener('click', clearBacktest);
+          '<button id="fwdViewClear"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to live</button></div>';
+        $('fwdViewClear').addEventListener('click', clearForwardView);
         $('refreshAllBtn').disabled = true; // fundamentals backfill is a live-mode action
       } else {
         bar.style.display = 'none';
@@ -1913,13 +1913,13 @@
       }
     }
 
-    function clearBacktest() {
+    function clearForwardView() {
       asOfDate = null;
       $('asOfDate').value = '';
-      // Repaint the control immediately. updateBacktestUI() otherwise only runs
+      // Repaint the control immediately. updateForwardViewUI() otherwise only runs
       // after a successful refresh, so a slow or failed pull would leave the
-      // trigger and banner still claiming backtest mode.
-      updateBacktestUI();
+      // trigger and banner still claiming a past date.
+      updateForwardViewUI();
       refresh();
     }
 
@@ -1967,7 +1967,7 @@
       window.location.href = '/login';
     }
 
-    // live !== false → recompute from the API (admin Refresh / backtest) and save the
+    // live !== false → recompute from the API (admin Refresh / as-of date) and save the
     // snapshot; {live:false} just reads the saved snapshot (page load, public view).
     // ---- shared "being refreshed" notice ------------------------------------
     // A Refresh All re-pulls only a handful of companies per call, so it runs for
@@ -2051,7 +2051,7 @@
       $('refreshBtn').disabled = true;
       try {
         const params = new URLSearchParams();
-        if (asOfDate) params.set('asOf', asOfDate);   // backtest is always a live pull
+        if (asOfDate) params.set('asOf', asOfDate);   // an as-of date always needs a live pull
         else if (live) params.set('refresh', '1');    // admin refresh → recompute + save snapshot
         const qs = params.toString();
         const data = await api('GET', '/api/stocks' + (qs ? '?' + qs : ''));
@@ -2060,12 +2060,12 @@
         applyLens();
         portfolios = data.portfolios || [];
         if (activeTab !== 'All' && !portfolios.includes(activeTab)) activeTab = 'All';
-        collapsed.fwd = !asOfDate;      // forward-return columns only in backtest mode
-        updateBacktestUI();
+        collapsed.fwd = !asOfDate;      // forward-return columns only with an as-of date
+        updateForwardViewUI();
         render();
         renderRefreshNote(asOfDate ? null : (data.refreshing || null));
         if (asOfDate) {
-          setStatus(`Backtest — momentum as of ${asOfDate}`);
+          setStatus(`Forward returns — momentum as of ${asOfDate}`);
         } else if (!data.updatedAt) {
           setStatus(isAdmin ? 'No data yet — click ↻ Refresh to pull.' : 'No data available yet.');
         } else {
@@ -2352,7 +2352,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     // Interacting inside a form panel must not be treated as a click outside it.
     $('addMenu').addEventListener('click', (e) => e.stopPropagation());
     $('dateMenu').addEventListener('click', (e) => e.stopPropagation());
-    $('backToLive').addEventListener('click', () => { closePickers(); clearBacktest(); });
+    $('backToLive').addEventListener('click', () => { closePickers(); clearForwardView(); });
     document.addEventListener('click', (e) => {
       if (!PICKERS.some((p) => $(p.root).contains(e.target))) closePickers();
     });
