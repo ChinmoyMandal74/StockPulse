@@ -1,6 +1,6 @@
 // Every strategy variant, over every universe, run offline.
 //
-//   node --no-warnings strategy-runs.js            # rebuild public/strategy-runs.json
+//   node --no-warnings strategy-runs.js            # rebuild public/strategy-*.json
 //   node --no-warnings strategy-runs.js --quick    # a couple of variants, for a smoke test
 //
 // A backtest across 116 symbols and 4,700 sessions cannot run in the browser
@@ -22,6 +22,17 @@
 // between rebalances anyway. The one thing it costs is drawdown resolution: a
 // max drawdown measured on month-ends understates the intra-month low, and the
 // page says so.
+//
+// AVERAGE EXPOSURE IS STORED BESIDE THE RETURNS, and it is not decoration. A
+// long-only rule with a 200-day filter sits in cash for much of its life, and
+// cash pays. Charging it nothing understates the strategy by whatever bills
+// yielded, which over the last few years was several points a year. The page
+// turns that into a slider for the same reason cost is one: it is an assumption,
+// so it should be visible rather than baked in at zero.
+//
+// ONE FILE PER UNIVERSE, plus an index. The grid is 192 variants now, and
+// shipping every universe's copy of it would be a multi-megabyte download to
+// look at one entry in a dropdown. The page fetches the index, then a universe.
 
 const fs = require('fs');
 const path = require('path');
@@ -30,19 +41,30 @@ const S = require('./public/strategy.js');
 
 const QUICK = process.argv.includes('--quick');
 const DB = path.resolve('analysis.db');
-const OUT = path.resolve('public/strategy-runs.json');
+const OUT = path.resolve('public/strategy-index.json');
 const FROM = '2008-01-01';
 
 // The knobs that change the RULE. Anything that merely scales the result —
-// target volatility, transaction cost — is left to the page.
+// target volatility, transaction cost, the yield on idle cash — is left to the
+// page, because those are assumptions rather than rules and belong on a dial.
 const GRID = QUICK
-  ? { lookback: [252], longOnly: [false, true], sma: [false] }
+  ? { lookback: [252], longOnly: [false, true], sma: [false], maxWeight: [3], rebalance: [21], volWindow: [60] }
   : {
     lookback: [21, 63, 126, 252],   // 1, 3, 6, 12 months
     longOnly: [false, true],
     sma: [false, true],             // the 200-day dual-confirmation filter
+    // A cap of 1 is the published long-only formulation: vol targeting may only
+    // size a position DOWN, and the alternative to a full position is cash, not
+    // leverage. 3 lets the sizing lever a quiet name up, which is where a good
+    // deal of the vol-targeting literature's extra return actually comes from.
+    maxWeight: [1, 3],
+    // Daily is what the research specifies; monthly is what the turnover can
+    // bear. Both are here so the trade can be read off rather than argued about.
+    rebalance: [1, 5, 21],
+    // 20 sessions reacts to a vol spike within a fortnight; 60 barely notices it.
+    volWindow: [20, 60],
   };
-const FIXED = { skip: 21, volWindow: 60, rebalance: 21, targetVol: 10, maxWeight: 3 };
+const FIXED = { skip: 21, targetVol: 10 };
 
 if (!fs.existsSync(DB)) {
   console.error(`no local copy at ${DB} — run: node --use-system-ca analysis-db.js --full`);
@@ -62,16 +84,31 @@ for (const r of rows) {
   if (!bySym.has(r.symbol)) bySym.set(r.symbol, new Array(dates.length).fill(null));
   bySym.get(r.symbol)[at.get(r.d)] = Number(r.close);
 }
-// A gap inside a listed life is carried forward; a symbol simply not listed yet
-// stays null and contributes nothing. Without this a single missing print would
-// read as a 100% loss and back again.
+// A SHORT gap inside a listed life is carried forward; a symbol not listed yet,
+// and a hole longer than MAX_CARRY, stay null and contribute nothing. Without
+// any carry a single missing print reads as a 100% loss and back again. Without
+// the bound, GPS — which has a 1,373-session hole between 2019-11 and 2025-03 —
+// was held flat at $16.78 for five and a half years: realised volatility of
+// exactly zero, so the position was sized at the leverage cap, earned nothing
+// for the whole stretch, and then booked the entire re-listing as a single
+// +33% day. A hole is absent data, not a quiet stock.
+//
+// 10 is chosen to clear a foreign listing's holiday calendar and nothing more:
+// 005930 (Samsung) legitimately misses up to 6 consecutive US sessions over
+// Chuseok, and it is the only other symbol in the archive with a gap over one.
+const MAX_CARRY = 10;
+let carried = 0, blanked = 0;
 for (const [, arr] of bySym) {
-  let last = null, started = false;
+  let last = null, run = 0;
   for (let i = 0; i < arr.length; i++) {
-    if (arr[i] != null) { last = arr[i]; started = true; }
-    else if (started) arr[i] = last;
+    if (arr[i] != null) { last = arr[i]; run = 0; continue; }
+    if (last == null) continue;                       // not listed yet
+    if (++run <= MAX_CARRY) { arr[i] = last; carried++; }
+    else { blanked++; }
   }
 }
+console.log(`gaps: ${carried} sessions carried forward, ${blanked} left blank ` +
+  `(holes longer than ${MAX_CARRY} sessions)`);
 console.log(`${rows.length.toLocaleString()} bars, ${bySym.size} symbols, ` +
   `${dates.length.toLocaleString()} sessions ${dates[0]} → ${dates[dates.length - 1]}`);
 
@@ -99,27 +136,60 @@ const seriesFor = (u) => u.symbols.map((sym) => ({ symbol: sym, closes: bySym.ge
 const variants = [];
 for (const lookback of GRID.lookback) {
   for (const longOnly of GRID.longOnly) {
-    for (const sma of GRID.sma) variants.push({ ...FIXED, lookback, longOnly, sma });
+    for (const sma of GRID.sma) {
+      for (const maxWeight of GRID.maxWeight) {
+        for (const rebalance of GRID.rebalance) {
+          for (const volWindow of GRID.volWindow) {
+            variants.push({ ...FIXED, lookback, longOnly, sma, maxWeight, rebalance, volWindow });
+          }
+        }
+      }
+    }
   }
 }
 console.log(`${variants.length} variants x ${universes.length} universes = ` +
   `${variants.length * universes.length} runs`);
 
 const r4 = (x) => Math.round(x * 1e5) / 1e5;
-const hold = {}, runs = [];
+const r3 = (x) => Math.round(x * 1e4) / 1e4;
+
+// A portfolio name becomes a filename, so it has to survive being one.
+// Collisions are resolved rather than left to overwrite each other in silence.
+const used = new Set();
+function slug(id) {
+  const base = String(id).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'u';
+  let out = base;
+  let i = 2;
+  while (used.has(out)) out = `${base}-${i++}`;
+  used.add(out);
+  return out;
+}
+
+const hold = {}, index = [];
 let months = null;
 let done = 0;
+let bytes = 0, biggest = 0;
+const total = variants.length * universes.length;
 for (const u of universes) {
   const series = seriesFor(u);
-  const bh = S.toMonthly(dates, S.buyHold(series, dates), null);
+  const bh = S.toMonthly(dates, S.buyHold(series, dates), null, null);
   months = bh.months;
   hold[u.id] = bh.ret.map(r4);
+  const runs = [];
   for (let vi = 0; vi < variants.length; vi++) {
     const res = S.run(series, dates, variants[vi]);
-    const m = S.toMonthly(dates, res.ret, res.turnover);
-    runs.push({ u: u.id, v: vi, r: m.ret.map(r4), t: m.turn.map(r4) });
-    process.stdout.write(`\r  ${++done}/${variants.length * universes.length}`);
+    const m = S.toMonthly(dates, res.ret, res.turnover, res.exposure);
+    // e is average gross exposure over the month, which is what decides how much
+    // of the book sat in cash and was therefore earning the cash rate.
+    runs.push({ v: vi, r: m.ret.map(r4), t: m.turn.map(r4), e: m.exp.map(r3) });
+    process.stdout.write(`\r  ${++done}/${total}`);
   }
+  const file = `strategy-u-${slug(u.id)}.json`;
+  const body = JSON.stringify({ id: u.id, months, hold: hold[u.id], runs });
+  fs.writeFileSync(path.resolve('public', file), body);
+  bytes += Buffer.byteLength(body);
+  biggest = Math.max(biggest, Buffer.byteLength(body));
+  index.push({ id: u.id, label: u.label, n: u.symbols.length, file });
 }
 console.log('');
 
@@ -127,25 +197,29 @@ const payload = {
   builtAt: new Date().toISOString(),
   from: FROM,
   fixed: FIXED,
+  grid: GRID,
   months,
-  universes: universes.map((u) => ({ id: u.id, label: u.label, n: u.symbols.length })),
+  universes: index,
   variants,
-  hold,
-  runs,
 };
 fs.writeFileSync(OUT, JSON.stringify(payload));
-console.log(`\nwrote ${OUT}  (${(fs.statSync(OUT).size / 1024).toFixed(0)} KB) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+console.log(`\nwrote ${OUT} (${(fs.statSync(OUT).size / 1024).toFixed(0)} KB) + ${index.length} ` +
+  `universe files (${(bytes / 1024 / 1024).toFixed(1)} MB total, ` +
+  `${(biggest / 1024).toFixed(0)} KB the largest — and only one is ever fetched) ` +
+  `in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
 // What it found, at the defaults, so a run that produced nothing says so here
 // rather than leaving it to be discovered in the UI.
 const pc = (v) => (v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%');
-const label = (v) => `${v.lookback}d${v.longOnly ? ' long-only' : ' long/short'}${v.sma ? ' +200D' : ''}`;
+const label = (v) => `${v.lookback}d${v.longOnly ? ' L' : ' L/S'}${v.sma ? ' +200D' : ''}` +
+  ` ${v.maxWeight}x r${v.rebalance} v${v.volWindow}`;
 const all = universes[0].id;
+const allRuns = JSON.parse(fs.readFileSync(path.resolve('public', index[0].file), 'utf-8')).runs;
 const bh = S.summarise(hold[all], null, 0);
 console.log(`\nAll (${universes[0].symbols.length} symbols), no costs — buy and hold: ` +
   `${pc(bh.cagr)} a year, max drawdown ${pc(bh.maxDD)}, Sharpe ${bh.sharpe == null ? '—' : bh.sharpe.toFixed(2)}`);
-console.log(`\n${'variant'.padEnd(26)}${'CAGR'.padStart(9)}${'Sharpe'.padStart(9)}${'max DD'.padStart(10)}${'vs hold'.padStart(10)}`);
-const mine = runs.filter((r) => r.u === all)
+console.log(`\n${'variant (top 8 by Sharpe)'.padEnd(26)}${'CAGR'.padStart(9)}${'Sharpe'.padStart(9)}${'max DD'.padStart(10)}${'vs hold'.padStart(10)}`);
+const mine = allRuns
   .map((r) => ({ v: variants[r.v], s: S.summarise(r.r, r.t, 0), corr: S.correlation(r.r, hold[all]) }))
   .sort((a, b) => (b.s.sharpe || -9) - (a.s.sharpe || -9));
 for (const x of mine.slice(0, 8)) {

@@ -82,6 +82,14 @@
     return out;
   }
 
+  // Below this, annualised, a "volatility" is a data artefact rather than a calm
+  // stock — a run of carried-forward prints, or a series too short to have moved.
+  // Sizing at target/vol divides by it, so an unfloored near-zero produces a
+  // weight in the millions and the leverage cap silently becomes the position.
+  // The real fix is upstream (do not carry a long hole forward at all); this is
+  // the guard that makes the failure impossible rather than merely unlikely.
+  const MIN_VOL = 1;
+
   // The weight this symbol would carry on each session, before any rebalance
   // schedule is applied. `null` where the rule cannot be evaluated yet.
   function targetWeights(closes, p) {
@@ -91,7 +99,7 @@
     const sma = p.sma ? smaSeries(closes, p.smaWindow) : null;
     for (let i = 0; i < n; i++) {
       const end = i - p.skip, start = end - p.lookback;
-      if (start < 0 || vol[i] == null || !(vol[i] > 0)) continue;
+      if (start < 0 || vol[i] == null || !(vol[i] >= MIN_VOL)) continue;
       const a = num(closes[end]), b = num(closes[start]);
       if (a == null || b == null || b === 0) continue;
       const ret = (a - b) / b;
@@ -187,21 +195,28 @@
     return out;
   }
 
-  // Compound a daily series into calendar months, and sum turnover within each.
-  function toMonthly(dates, daily, turnover) {
-    const months = [], ret = [], turn = [];
-    let key = null, acc = 1, t = 0;
+  // Compound a daily series into calendar months, summing turnover within each
+  // and averaging exposure. Exposure is carried because a long-only rule spends
+  // much of its life in cash, and cash has a yield — ignoring it understates the
+  // strategy by whatever T-bills paid, which over 2023-2026 was not a rounding
+  // error.
+  function toMonthly(dates, daily, turnover, exposure) {
+    const months = [], ret = [], turn = [], exp = [];
+    let key = null, acc = 1, t = 0, e = 0, days = 0;
+    const flush = () => { months.push(key); ret.push(acc - 1); turn.push(t); exp.push(days ? e / days : 0); };
     for (let i = 0; i < dates.length; i++) {
       const m = dates[i].slice(0, 7);
       if (m !== key) {
-        if (key != null) { months.push(key); ret.push(acc - 1); turn.push(t); }
-        key = m; acc = 1; t = 0;
+        if (key != null) flush();
+        key = m; acc = 1; t = 0; e = 0; days = 0;
       }
       acc *= 1 + (daily[i] || 0);
       t += turnover ? (turnover[i] || 0) : 0;
+      e += exposure ? (exposure[i] || 0) : 0;
+      days++;
     }
-    if (key != null) { months.push(key); ret.push(acc - 1); turn.push(t); }
-    return { months, ret, turn };
+    if (key != null) flush();
+    return { months, ret, turn, exp };
   }
 
   // ---- reading the result ---------------------------------------------------
@@ -217,9 +232,26 @@
   // baked in: at a monthly rebalance across a hundred names, cost is frequently
   // the difference between a positive and a negative result, and it should be a
   // dial rather than an assumption.
-  function summarise(ret, turn, costBps, scale) {
+  //
+  // `cashYield` does TWO things, and both are required for it to be honest.
+  // It is credited on the uninvested share of the book (only when `exp` is
+  // given, so a fully-invested benchmark gets nothing), AND it is subtracted as
+  // the risk-free rate in the Sharpe ratio. Doing only the first turned a rule
+  // sitting 87% in cash into a Sharpe of 2.79 — the T-bill's Sharpe, borrowed.
+  // Sharpe is excess of cash by definition, and if the caller is willing to say
+  // what cash pays then that is the rate the excess is measured against.
+  function summarise(ret, turn, costBps, scale, opts) {
     const k = scale == null ? 1 : scale;
-    const net = ret.map((r, i) => r * k - (turn && turn[i] ? turn[i] * k * (costBps || 0) / 10000 : 0));
+    const o = opts || {};
+    const yieldPm = (o.cashYield || 0) / 100 / 12;    // annual %, charged monthly
+    const net = ret.map((r, i) => {
+      const cost = turn && turn[i] ? turn[i] * k * (costBps || 0) / 10000 : 0;
+      // Whatever is not invested sits in cash and earns. Capped at 1 because a
+      // levered position has no idle capital to lend, and floored at 0 because
+      // this does not model paying to borrow.
+      const idle = o.exp ? Math.max(0, 1 - Math.min(1, (o.exp[i] || 0) * k)) : 0;
+      return r * k - cost + idle * yieldPm;
+    });
     let eq = 1, peak = 1, maxDD = 0;
     const curve = [];
     for (const r of net) {
@@ -231,13 +263,20 @@
     }
     const years = net.length / 12;
     const m = mean(net), s = sd(net);
+    // The same rate that was credited is the rate Sharpe is measured against, so
+    // parking in cash cannot manufacture a ratio.
+    const excess = m - yieldPm;
     return {
       curve,
       months: net.length,
       total: eq - 1,
       cagr: years > 0 && eq > 0 ? Math.pow(eq, 1 / years) - 1 : null,
       vol: s * Math.sqrt(12),
-      sharpe: s > 0 ? (m * 12) / (s * Math.sqrt(12)) : null,
+      // The epsilon is not decoration: a book sitting entirely in cash has a
+      // constant monthly return, whose standard deviation is not exactly zero in
+      // floating point but ~1e-19. Dividing an equally tiny excess by it printed
+      // a Sharpe of 3.45 for a T-bill. No volatility means no ratio.
+      sharpe: s > 1e-12 ? (excess * 12) / (s * Math.sqrt(12)) : null,
       maxDD,
       hit: net.length ? net.filter((r) => r > 0).length / net.length : null,
       turnover: turn ? mean(turn) * k : null,
@@ -256,6 +295,6 @@
     return sxx > 0 && syy > 0 ? sxy / Math.sqrt(sxx * syy) : null;
   }
 
-  return { DEFAULTS, run, buyHold, toMonthly, summarise, correlation,
+  return { DEFAULTS, MIN_VOL, run, buyHold, toMonthly, summarise, correlation,
     targetWeights, volSeries, smaSeries, mean, sd };
 });

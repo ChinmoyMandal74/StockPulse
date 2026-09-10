@@ -47,6 +47,8 @@
     }
     select:focus { border-color: var(--accent); }
     .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .preset { color: var(--green); text-decoration: none; border-bottom: 1px solid rgba(52, 211, 153, 0.35); }
+    .preset:hover { border-bottom-color: var(--green); }
     .chip2 { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--hair);
       background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer;
       font-family: var(--sans); font-size: 12.5px; transition: all 0.3s var(--ease); }
@@ -124,7 +126,7 @@
 
     <section class="bezel panel" id="pCtl" hidden><div class="core">
       <div class="ptitle">The rule</div>
-      <p class="pnote">Long what has risen over the lookback, short what has fallen, each position sized so it carries the same volatility. Rebalanced monthly, the last month of the lookback skipped.</p>
+      <p class="pnote">Long what has risen over the lookback, short what has fallen, each position sized so it carries the same volatility. The last month of the lookback is skipped, because that is where reversal lives. <a href="#" id="preset" class="preset">Set the published long-only rule</a> — 12-month lookback, 200-day filter, no leverage, daily, 20-day vol.</p>
       <div class="ctl">
         <div class="c">
           <span class="lbl">Stocks</span>
@@ -147,14 +149,34 @@
           <span class="hint">Require price on the right side of its 200-day average before taking the position.</span>
         </div>
         <div class="c">
+          <span class="lbl">Leverage</span>
+          <div class="chips" id="mwChips"></div>
+          <span class="hint">1&times; is the published long-only form: sizing may only cut a position, and the alternative to a full one is cash. 3&times; lets a quiet name be levered up. <b>Expect almost no difference here</b> — at a 10% target these stocks are volatile enough that target&nbsp;&divide;&nbsp;vol lands under 1&times; on 99.2% of stock-days, so the cap rarely binds. It bites in a calmer universe, or at a higher target than the grid was run at.</span>
+        </div>
+        <div class="c">
+          <span class="lbl">Rebalance</span>
+          <div class="chips" id="rbChips"></div>
+          <span class="hint">How often positions are reset to their target. Daily is what the research specifies; it is also where the turnover goes — at matched volatility, daily turns over about 162% of capital a month against 44% for monthly. Daily only wins below about 3&nbsp;bps, which is near-free execution; weekly leads from there to 13&nbsp;bps, and monthly above that.</span>
+        </div>
+        <div class="c">
+          <span class="lbl">Volatility window</span>
+          <div class="chips" id="vwChips"></div>
+          <span class="hint">The window realised volatility is measured over, which sets position size. 20 sessions reacts to a shock within a fortnight; 60 barely notices it.</span>
+        </div>
+        <div class="c">
           <div class="rowline"><span class="lbl">Target volatility</span><span class="val" id="tvVal"></span></div>
           <input type="range" id="tv" min="5" max="60" step="1" />
-          <span class="hint">Per position, annualised. Scales the whole result. <a href="#" id="matchVol" style="color:var(--green)">Match buy-and-hold</a> for a fair comparison.</span>
+          <span class="hint">Per position, annualised. Scales the whole result. <a href="#" id="matchVol" style="color:var(--green)">Match buy-and-hold</a> for a fair comparison. Applied after the fact as a multiplier, so raising it does <em>not</em> re-apply the leverage cap — the cap belongs to the 10% the grid was run at.</span>
         </div>
         <div class="c">
           <div class="rowline"><span class="lbl">Transaction cost</span><span class="val" id="csVal"></span></div>
           <input type="range" id="cs" min="0" max="50" step="1" />
-          <span class="hint">Basis points charged against turnover, each way. Rebalancing a hundred names monthly is not free.</span>
+          <span class="hint">Basis points charged against turnover, each way. Rebalancing a hundred names daily is emphatically not free.</span>
+        </div>
+        <div class="c">
+          <div class="rowline"><span class="lbl">Yield on idle cash</span><span class="val" id="cyVal"></span></div>
+          <input type="range" id="cy" min="0" max="6" step="0.25" />
+          <span class="hint">A long-only rule sits in cash much of the time, and cash pays. Credited on whatever share of the book is uninvested — buy-and-hold gets none, being always fully invested — and subtracted from both as the risk-free rate in Sharpe, so parking in bills cannot manufacture a ratio.</span>
         </div>
       </div>
     </div></section>
@@ -192,7 +214,15 @@
 
   <script src="/strategy.js"></script>
   <script>
-    let D = null, uni = 'all', lookback = 252, longOnly = true, sma = false, targetVol = 10, cost = 5;
+    // D is the index — months, universes, the variant grid. U is the ONE
+    // universe currently on screen, fetched on demand: 192 variants x 15
+    // universes in a single file is several megabytes to look at one dropdown
+    // entry, and the page only ever draws one of them.
+    let D = null, U = null, uni = 'all';
+    let lookback = 252, longOnly = true, sma = false;
+    let maxWeight = 3, rebalance = 21, volWindow = 60;
+    let targetVol = 10, cost = 5, cashYield = 0;
+    const uCache = new Map();
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -201,15 +231,29 @@
 
     async function load() {
       try {
-        const r = await fetch('/strategy-runs.json', { cache: 'no-store' });
+        const r = await fetch('/strategy-index.json', { cache: 'no-store' });
         if (r.status === 401) { location.href = '/login'; return; }
         if (!r.ok) throw new Error('No strategy runs yet — run strategy-runs.js to build them.');
         D = await r.json();
+        await loadUniverse(uni);
         boot();
       } catch (e) {
         $('loading').hidden = true;
         $('err').hidden = false; $('err').textContent = e.message;
       }
+    }
+
+    // Fetched once each and kept, so flicking between universes is instant after
+    // the first look at each.
+    async function loadUniverse(id) {
+      if (uCache.has(id)) { U = uCache.get(id); return; }
+      const meta = D.universes.find((x) => x.id === id);
+      if (!meta) throw new Error(`No such universe: ${id}`);
+      const r = await fetch('/' + meta.file, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`Could not load ${meta.label} — ${meta.file} is missing.`);
+      const u = await r.json();
+      uCache.set(id, u);
+      U = u;
     }
 
     function boot() {
@@ -218,27 +262,56 @@
       $('uni').innerHTML = D.universes.map((u) =>
         `<option value="${esc(u.id)}">${esc(u.label)} — ${u.n} ${u.n === 1 ? 'stock' : 'stocks'}</option>`).join('');
       $('uni').value = uni;
-      $('uni').addEventListener('change', () => { uni = $('uni').value; render(); });
+      $('uni').addEventListener('change', async () => {
+        const want = $('uni').value;
+        $('uniHint').textContent = 'Loading…';
+        try { await loadUniverse(want); uni = want; } catch (e) {
+          $('uniHint').textContent = e.message; $('uni').value = uni; return;
+        }
+        render();
+      });
 
-      const lbs = [...new Set(D.variants.map((v) => v.lookback))].sort((a, b) => a - b);
-      $('lbChips').innerHTML = lbs.map((v) =>
+      // Every chip set is derived from the variants that were actually run, so
+      // the page cannot offer a setting the grid has no answer for.
+      const opts = (k) => [...new Set(D.variants.map((v) => v[k]))].sort((a, b) => a - b);
+      $('lbChips').innerHTML = opts('lookback').map((v) =>
         `<button class="chip2" data-lb="${v}">${v}d</button>`).join('');
+      $('mwChips').innerHTML = opts('maxWeight').map((v) =>
+        `<button class="chip2" data-mw="${v}">${v}&times;</button>`).join('');
+      const rbName = { 1: 'Daily', 5: 'Weekly', 21: 'Monthly' };
+      $('rbChips').innerHTML = opts('rebalance').map((v) =>
+        `<button class="chip2" data-rb="${v}">${rbName[v] || v + 'd'}</button>`).join('');
+      $('vwChips').innerHTML = opts('volWindow').map((v) =>
+        `<button class="chip2" data-vw="${v}">${v}d</button>`).join('');
       $('dirChips').innerHTML =
         '<button class="chip2" data-dir="1">Long only</button><button class="chip2" data-dir="0">Long / short</button>';
       $('smaChips').innerHTML =
         '<button class="chip2" data-sma="0">Off</button><button class="chip2" data-sma="1">On</button>';
 
       $('pCtl').addEventListener('click', (e) => {
-        const b = e.target.closest('[data-lb],[data-dir],[data-sma]');
+        const b = e.target.closest('[data-lb],[data-dir],[data-sma],[data-mw],[data-rb],[data-vw]');
         if (!b) return;
         if (b.dataset.lb) lookback = Number(b.dataset.lb);
         else if (b.dataset.dir) longOnly = b.dataset.dir === '1';
         else if (b.dataset.sma) sma = b.dataset.sma === '1';
+        else if (b.dataset.mw) maxWeight = Number(b.dataset.mw);
+        else if (b.dataset.rb) rebalance = Number(b.dataset.rb);
+        else if (b.dataset.vw) volWindow = Number(b.dataset.vw);
         render();
       });
-      $('tv').value = targetVol; $('cs').value = cost;
+      $('tv').value = targetVol; $('cs').value = cost; $('cy').value = cashYield;
       $('tv').addEventListener('input', () => { targetVol = Number($('tv').value); render(); });
       $('cs').addEventListener('input', () => { cost = Number($('cs').value); render(); });
+      $('cy').addEventListener('input', () => { cashYield = Number($('cy').value); render(); });
+      $('preset').addEventListener('click', (e) => {
+        e.preventDefault();
+        // The long-only formulation as published: 12-month lookback with the
+        // skip month, the 200-day average as a mandatory second condition, no
+        // leverage, rebalanced daily, volatility over 20 sessions.
+        lookback = 252; longOnly = true; sma = true;
+        maxWeight = 1; rebalance = 1; volWindow = 20;
+        render();
+      });
       $('matchVol').addEventListener('click', (e) => {
         e.preventDefault();
         // Same volatility is the only comparison that means anything: a rule
@@ -246,7 +319,7 @@
         // earn less, and neither says whether the rule is any good.
         const run = current(); if (!run) return;
         const a = Strategy.summarise(run.r, run.t, 0, 1);
-        const h = Strategy.summarise(D.hold[uni], null, 0);
+        const h = Strategy.summarise(U.hold, null, 0);
         if (a.vol > 0 && h.vol > 0) {
           targetVol = Math.max(5, Math.min(60, Math.round(D.fixed.targetVol * (h.vol / a.vol))));
           $('tv').value = targetVol;
@@ -259,18 +332,30 @@
     }
 
     const variantIndex = () => D.variants.findIndex((v) =>
-      v.lookback === lookback && !!v.longOnly === longOnly && !!v.sma === sma);
+      v.lookback === lookback && !!v.longOnly === longOnly && !!v.sma === sma &&
+      v.maxWeight === maxWeight && v.rebalance === rebalance && v.volWindow === volWindow);
     const current = () => {
       const vi = variantIndex();
-      return vi < 0 ? null : D.runs.find((r) => r.u === uni && r.v === vi) || null;
+      return vi < 0 ? null : U.runs.find((r) => r.v === vi) || null;
     };
+    // The strategy's own summary, with cost charged on turnover and the cash
+    // rate credited on whatever share of the book was not invested.
+    const stat = (run, scale, seg) => Strategy.summarise(
+      seg ? run.r.slice(seg[0], seg[1]) : run.r,
+      seg ? run.t.slice(seg[0], seg[1]) : run.t,
+      cost, scale, { exp: seg ? run.e.slice(seg[0], seg[1]) : run.e, cashYield });
 
     function render() {
       for (const b of document.querySelectorAll('[data-lb]')) b.classList.toggle('on', Number(b.dataset.lb) === lookback);
       for (const b of document.querySelectorAll('[data-dir]')) b.classList.toggle('on', (b.dataset.dir === '1') === longOnly);
       for (const b of document.querySelectorAll('[data-sma]')) b.classList.toggle('on', (b.dataset.sma === '1') === sma);
+      for (const b of document.querySelectorAll('[data-mw]')) b.classList.toggle('on', Number(b.dataset.mw) === maxWeight);
+      for (const b of document.querySelectorAll('[data-rb]')) b.classList.toggle('on', Number(b.dataset.rb) === rebalance);
+      for (const b of document.querySelectorAll('[data-vw]')) b.classList.toggle('on', Number(b.dataset.vw) === volWindow);
+      $('uni').value = uni;
       $('tvVal').textContent = targetVol + '%';
       $('csVal').textContent = cost + ' bps';
+      $('cyVal').textContent = cashYield.toFixed(2).replace(/\.?0+$/, '') + '%';
       const u = D.universes.find((x) => x.id === uni);
       $('uniHint').textContent = `${u.n} ${u.n === 1 ? 'symbol' : 'symbols'}. A one-name universe is a single position, not a portfolio.`;
 
@@ -279,8 +364,13 @@
       // The stored runs are at the grid's target volatility, and scaling is
       // linear in the returns, so any target is a multiplier applied here.
       const scale = targetVol / D.fixed.targetVol;
-      const s = Strategy.summarise(run.r, run.t, cost, scale);
-      const h = Strategy.summarise(D.hold[uni], null, 0);
+      const s = stat(run, scale);
+      // Buy and hold is fully invested by definition, so it is credited no cash
+      // yield — no `exp`, so nothing is paid on idle capital. But it is handed
+      // the same cashYield, because that is also the risk-free rate Sharpe is
+      // measured against, and the two Sharpes have to use the same one or the
+      // comparison is rigged.
+      const h = Strategy.summarise(U.hold, null, 0, 1, { cashYield });
       drawEquity(s, h);
       drawDrawdown(s);
       renderCards(s, h, run, scale);
@@ -356,10 +446,16 @@
         card('Months up', s.hit == null ? '—' : (s.hit * 100).toFixed(0) + '%', `of ${s.months}`, 'flat') +
         card('Worst month', pc(s.worst), `best ${pc(s.best)}`, 'flat') +
         card('Turnover', s.turnover == null ? '—' : (s.turnover * 100).toFixed(0) + '%', 'of capital, a month', 'flat') +
-        card('vs hold', n2(Strategy.correlation(run.r, D.hold[uni])),
+        // How much of the book was actually invested. A long-only rule behind a
+        // 200-day filter can spend most of its life near zero, and that single
+        // number explains more of a modest CAGR than anything else on the page.
+        card('Invested', (Strategy.mean(run.e) * scale * 100).toFixed(0) + '%',
+          'average gross exposure', 'flat') +
+        card('vs hold', n2(Strategy.correlation(run.r, U.hold)),
           'monthly correlation', 'flat');
       $('stNote').textContent =
-        `At ${targetVol}% target volatility per position and ${cost} bps of cost. ` +
+        `At ${targetVol}% target volatility per position, ${cost} bps of cost and ` +
+        `${cashYield ? cashYield + '% on idle cash' : 'nothing earned on idle cash'}. ` +
         (Math.abs(s.vol - h.vol) / (h.vol || 1) > 0.15
           ? 'The two are running at different volatilities — use “Match buy-and-hold” before comparing returns.'
           : 'The two are at comparable volatility, so the returns can be read against each other.');
@@ -368,9 +464,9 @@
     function renderCompare(run, scale) {
       const split = D.months.findIndex((m) => m >= '2020-01');
       const seg = (from, to) => {
-        const r = run.r.slice(from, to), t = run.t.slice(from, to), hh = D.hold[uni].slice(from, to);
-        if (r.length < 12) return null;
-        return { s: Strategy.summarise(r, t, cost, scale), h: Strategy.summarise(hh, null, 0) };
+        if (to - from < 12) return null;
+        return { s: stat(run, scale, [from, to]),
+          h: Strategy.summarise(U.hold.slice(from, to), null, 0, 1, { cashYield }) };
       };
       const rows = [
         ['Whole period', seg(0, D.months.length)],
@@ -405,7 +501,13 @@
         'case for time-series momentum is considerably weaker, and the recommended parameters are inherited ' +
         'rather than measured here.</p>' +
         '<p><b>No slippage, no borrow cost, no taxes.</b> The cost slider charges a flat spread against ' +
-        'turnover and nothing else. A short leg in particular is not free.</p>';
+        'turnover and nothing else. A short leg in particular is not free.</p>' +
+        '<p><b>Cost and cash yield are the two assumptions most often left out, and they pull opposite ' +
+        'ways.</b> Rebalancing daily rather than monthly roughly quadruples turnover, so a result quoted ' +
+        'at zero cost is quoting the most flattering possible version of the most expensive setting. ' +
+        'Against that, a long-only rule holding cash for half the sample earns something on it, and a ' +
+        'backtest crediting nothing understates it by a comparable amount. Both sliders start where they ' +
+        'do — 5 bps and 0% — so that neither is hidden.</p>';
     }
 
     load();
