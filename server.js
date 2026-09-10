@@ -1800,12 +1800,16 @@ app.post('/api/portfolios/:name/tickers', requireAdmin, route(async (req, res) =
   await writePortfolios(p);
 
   // Cache the company name once (1 credit) so refreshes stay history-only.
-  if (API_KEY && !(await readNames())[symbol]) {
-    const nm = await fetchName(symbol);
-    if (nm) await writeNames({ [symbol]: nm });
+  // It is returned as well: adding a ticker no longer triggers a price pull, so
+  // this lookup is the only thing that touches the symbol before the next
+  // Refresh, and a name coming back empty is the earliest hint of a typo.
+  let name_ = (await readNames())[symbol] || null;
+  if (API_KEY && !name_) {
+    name_ = await fetchName(symbol);
+    if (name_) await writeNames({ [symbol]: name_ });
   }
 
-  res.json({ portfolios: p });
+  res.json({ portfolios: p, name: name_ });
 }));
 
 // Remove a ticker from one portfolio.

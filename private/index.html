@@ -2168,6 +2168,47 @@
       }
     }
 
+    // Every portfolio mutation answers with the fresh name -> symbols map, so
+    // the table can be brought up to date from that alone.
+    //
+    // NO API PULL. Adding a ticker used to call refresh(), which sets
+    // ?refresh=1 and recomputes the entire universe from Twelve Data — roughly
+    // 560 credits and a wait, to reflect a change the server had already made
+    // and had already told us about. The membership, the badges, the tab counts
+    // and the purge warning all come out of this map. Only the price and
+    // fundamental columns need a pull, and that is what Refresh is for.
+    function applyPortfolioMap(map) {
+      if (!map) return;
+      portfolios = Object.keys(map);
+      const holders = new Map();
+      for (const name of portfolios) {
+        for (const sym of map[name] || []) {
+          if (!holders.has(sym)) holders.set(sym, []);
+          holders.get(sym).push(name);
+        }
+      }
+      // A symbol left in no portfolio has had its stored data purged server-side,
+      // so its row goes with it.
+      baseStocks = baseStocks.filter((r) => holders.has(r.symbol));
+      for (const r of baseStocks) r.portfolios = holders.get(r.symbol);
+      // A symbol that has never been through a refresh has no row yet. Give it
+      // the placeholder the `s.error` branch already renders: it IS in the
+      // portfolio, so it belongs in the table and in the count, and saying it
+      // has no data yet beats it silently not appearing. applyLens() skips
+      // error rows already, so nothing downstream needs to know.
+      for (const [sym, names] of holders) {
+        if (!baseStocks.some((r) => r.symbol === sym)) {
+          baseStocks.push({ symbol: sym, portfolios: names,
+            error: 'No data yet — click ↻ Refresh to pull it.' });
+        }
+      }
+      if (activeTab !== 'All' && !portfolios.includes(activeTab)) activeTab = 'All';
+      applyLens();
+      render();
+    }
+
+    const hasData = (symbol) => baseStocks.some((r) => r.symbol === symbol && !r.error);
+
     async function addTicker() {
       const symbol = $('symbolInput').value.trim().toUpperCase();
       if (!symbol) return $('symbolInput').focus();
@@ -2175,10 +2216,23 @@
       if (!target) { setError('Create a portfolio first (＋), then add tickers to it.'); return; }
       setError('');
       try {
-        await api('POST', `/api/portfolios/${encodeURIComponent(target)}/tickers`, { symbol });
+        const r = await api('POST', `/api/portfolios/${encodeURIComponent(target)}/tickers`, { symbol });
         $('symbolInput').value = '';
         if (activeTab === 'All' || activeTab === target) { /* keep view */ } else { activeTab = target; }
-        await refresh();
+        applyPortfolioMap(r && r.portfolios);
+        // Say plainly whether it still needs data. A symbol already held in
+        // another portfolio arrives complete; a new one is an empty row until
+        // the next pull, and leaving that unexplained looks like a failure.
+        setStatus(hasData(symbol)
+          ? `${symbol} added to ${target}.`
+          : `${symbol} added to ${target} — click ↻ Refresh to pull its data.`);
+        // The only check that happens before the next Refresh. A real ticker
+        // resolves to a company name for one credit; nothing coming back is
+        // usually a typo, and saying so now beats an error row tomorrow.
+        if (r && !r.name) {
+          setError(`No company name came back for ${symbol} — check the ticker. ` +
+            'It has been added either way; remove it with the × if it is wrong.');
+        }
         // Panel stays open for the next one.
         $('symbolInput').focus();
       } catch (err) { setError(err.message); }
@@ -2207,8 +2261,9 @@
         const r = activeTab === 'All'
           ? await api('DELETE', '/api/tickers/' + encodeURIComponent(symbol))
           : await api('DELETE', `/api/portfolios/${encodeURIComponent(activeTab)}/tickers/${encodeURIComponent(symbol)}`);
-        await refresh();
+        applyPortfolioMap(r && r.portfolios);
         notePurge(r && r.purged);
+        if (!r || !r.purged || !r.purged.length) setStatus(`${symbol} removed.`);
       } catch (err) { setError(err.message); }
     }
 
@@ -2217,9 +2272,10 @@
       if (!name) return;
       setError('');
       try {
-        await api('POST', '/api/portfolios', { name });
+        const r = await api('POST', '/api/portfolios', { name });
         activeTab = name;
-        await refresh();
+        applyPortfolioMap(r && r.portfolios);
+        setStatus(`Portfolio "${name}" created.`);
       } catch (err) { setError(err.message); }
     }
 
@@ -2230,9 +2286,10 @@
       if (!newName || newName === name) return;
       setError('');
       try {
-        await api('PUT', '/api/portfolios/' + encodeURIComponent(name), { newName });
+        const r = await api('PUT', '/api/portfolios/' + encodeURIComponent(name), { newName });
         if (activeTab === name) activeTab = newName;
-        await refresh();
+        applyPortfolioMap(r && r.portfolios);
+        setStatus(`Renamed to "${newName}".`);
       } catch (err) { setError(err.message); }
     }
 
@@ -2252,10 +2309,12 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       if (!window.confirm(`Delete portfolio "${activeTab}"? Its stocks stay in any other portfolios.${warn}`)) return;
       setError('');
       try {
+        const gone = activeTab;
         const r = await api('DELETE', '/api/portfolios/' + encodeURIComponent(activeTab));
         activeTab = 'All';
-        await refresh();
+        applyPortfolioMap(r && r.portfolios);
         notePurge(r && r.purged);
+        if (!r || !r.purged || !r.purged.length) setStatus(`Portfolio "${gone}" deleted.`);
       } catch (err) { setError(err.message); }
     }
 
