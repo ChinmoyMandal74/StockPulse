@@ -938,6 +938,33 @@ async function readFundamentals(symbol, since) {
   });
 }
 
+// Today's set beside the previous RECORDED set, which is what the refresh
+// report compares. Both in one round trip.
+//
+// "The previous recorded set" is not "yesterday": a row exists only for days a
+// Refresh all actually ran, so after a quiet weekend the comparison reaches
+// back further. The caller is given `prevDay` and prints it, because a change
+// "since yesterday" that is really since last Thursday would be a lie told by
+// omission.
+async function readFundamentalsPair(day) {
+  await init();
+  const cols = FUND_FIELDS.map(([c]) => c);
+  const r = await db.execute({
+    sql: `select symbol, d, ${cols.join(', ')} from fundamentals_history
+          where d = ? or d = (select max(d) from fundamentals_history where d < ?)`,
+    args: [day, day],
+  });
+  const curr = new Map(), prev = new Map();
+  let prevDay = null;
+  for (const row of r.rows) {
+    const out = { symbol: row.symbol };
+    for (const [c, f] of FUND_FIELDS) out[f] = row[c] == null ? null : Number(row[c]);
+    if (row.d === day) curr.set(row.symbol, out);
+    else { prev.set(row.symbol, out); prevDay = row.d; }
+  }
+  return { day, prevDay, curr, prev };
+}
+
 async function fundamentalsStats() {
   await init();
   const r = await db.execute(
@@ -1307,6 +1334,7 @@ module.exports = {
   writeFundamentals,
   readFundamentals,
   fundamentalsStats,
+  readFundamentalsPair,
   barsMaxDates,
   barsOn,
   upsertBars,

@@ -2779,6 +2779,124 @@ app.get('/api/history', requireAuth, route(async (req, res) => {
 
 const REPORT_MOVERS = 5;
 
+// ---- fundamentals that moved ------------------------------------------------
+// What a Refresh all can say that a price refresh cannot: the company numbers
+// changed. In practice that means a company reported.
+//
+// SIX FIELDS ARE DELIBERATELY NOT HERE — price, market cap, forward P/E, PEG,
+// FCF yield and net-cash %. Measured across the recorded history, each moves on
+// 79-100% of consecutive nights with a median of about 2%, because each is
+// divided by, or is, the price. They restate the day's price move, which the
+// movers list already gives, and including them would bury the real changes
+// under a hundred lines of noise. The fields below move on 1-5% of nights, and
+// when they move it is a step rather than a wobble: AVGO's revenue sat at
+// 75.46B for five recorded days and then went to 89.10B and stayed.
+//
+// Two derived signals were tried and rejected. Forward EPS revision, backed out
+// as relD(price) - relD(forward P/E), and share-count change as relD(market cap)
+// - relD(price). Both look clever and both measure the wrong thing: SNOW threw a
+// "+20.9% EPS revision" on a day its forward P/E was byte-identical, and the
+// share-count signal oscillated -20.9% then +22.1% on consecutive days. The
+// profile blob and the price are not sampled at the same instant, so the
+// subtraction reads that staleness, not the company.
+const FUND_MOVES = [
+  // Absolutes, compared as a relative change and printed before -> after.
+  { key: 'revenueTtm', label: 'revenue', kind: 'money' },
+  { key: 'grossProfitTtm', label: 'gross profit', kind: 'money' },
+  { key: 'netIncomeTtm', label: 'net income', kind: 'money',
+    flip: ['turned profitable', 'swung to a loss'] },
+  { key: 'fcfTtm', label: 'free cash flow', kind: 'money',
+    flip: ['turned cash-generative', 'swung to cash burn'] },
+  { key: 'netCash', label: 'net cash', kind: 'money',
+    flip: ['moved to net cash', 'moved to net debt'] },
+  // Already percentages, so the honest comparison is in POINTS. A margin going
+  // from 0.1% to 0.3% is "+200%" and means nothing; it is +0.2pt.
+  { key: 'grossMargin', label: 'gross margin', kind: 'pts' },
+  { key: 'profitMargin', label: 'profit margin', kind: 'pts' },
+  { key: 'fcfMargin', label: 'FCF margin', kind: 'pts' },
+  { key: 'revenueGrowthYoY', label: 'revenue growth', kind: 'pts' },
+  { key: 'earningsGrowthYoY', label: 'earnings growth', kind: 'pts' },
+  { key: 'roe', label: 'ROE', kind: 'pts' },
+  { key: 'shortPctFloat', label: 'short interest', kind: 'pts' },
+];
+// Sized against the recorded history: at these levels the whole universe yields
+// roughly seven field-moves a night, clustered into one or two companies, which
+// is a section worth reading rather than a wall.
+const FUND_MIN_REL = 0.05;    // 5% for an absolute
+const FUND_MIN_PTS = 1;       // one percentage point
+const FUND_MIN_BASE = 1e6;    // a base under a million makes a percentage silly
+const FUND_PTS_SCORE_CAP = 0.25;   // a point move never outranks a big absolute one
+const FUND_MAX_SYMBOLS = 10;
+const FUND_MAX_PER_SYMBOL = 6;
+
+// Currency-neutral on purpose: these are in the company's reporting currency,
+// and Samsung's revenue is not dollars.
+const fmtBig = (v) => {
+  if (v == null || !isFinite(v)) return '—';
+  const a = Math.abs(v), sign = v < 0 ? '-' : '';
+  if (a >= 1e12) return sign + (a / 1e12).toFixed(2) + 'T';
+  if (a >= 1e9) return sign + (a / 1e9).toFixed(2) + 'B';
+  if (a >= 1e6) return sign + (a / 1e6).toFixed(0) + 'M';
+  return sign + Math.round(a).toLocaleString();
+};
+const fmtPts = (v) => (v == null || !isFinite(v) ? '—' : v.toFixed(1));
+
+// One symbol's worth of change, or null when nothing cleared the bar.
+function fundamentalMovesFor(before, after) {
+  const out = [];
+  for (const spec of FUND_MOVES) {
+    const x = before[spec.key], y = after[spec.key];
+    if (x == null || y == null || !isFinite(x) || !isFinite(y) || x === y) continue;
+    if (spec.kind === 'money') {
+      const flipped = (x < 0) !== (y < 0);
+      if (Math.max(Math.abs(x), Math.abs(y)) < FUND_MIN_BASE) continue;
+      const rel = Math.abs(x) > 0 ? (y - x) / Math.abs(x) : null;
+      if (!flipped && (rel == null || Math.abs(rel) < FUND_MIN_REL)) continue;
+      // A sign change makes the percentage nonsense — net income going -29M to
+      // 59M is not "+302%", it is a company that started making money. Say that
+      // instead, and let it lead: it is the most important thing on the page.
+      const note = flipped
+        ? (spec.flip ? spec.flip[y > x ? 0 : 1] : 'changed sign')
+        : signed(rel * 100, 0);
+      out.push({ label: spec.label, text: `${fmtBig(x)} → ${fmtBig(y)} ${note}`,
+        score: flipped ? 100 : Math.abs(rel), up: y > x });
+    } else {
+      const d = y - x;
+      if (Math.abs(d) < FUND_MIN_PTS) continue;
+      // Capped, because a percentage-POINT move is not on the same scale as a
+      // relative one and the growth rates swing wildly: AVGO's earnings growth
+      // moved 128.6 points on the night its net income rose 31%, and without a
+      // cap the derived figure outranks the report it was derived from. Beyond
+      // about 25 points the field is a volatile growth rate rather than a
+      // margin, so the extra magnitude carries no extra meaning.
+      out.push({ label: spec.label,
+        text: `${fmtPts(x)} → ${fmtPts(y)} ${signed(d, 1)}pt`.replace('%pt', 'pt'),
+        score: Math.min(Math.abs(d) / 100, FUND_PTS_SCORE_CAP), up: d > 0 });
+    }
+  }
+  if (!out.length) return null;
+  out.sort((a, b) => b.score - a.score);
+  return out.slice(0, FUND_MAX_PER_SYMBOL);
+}
+
+// Every symbol whose company numbers moved since the previous recorded set.
+function fundamentalMoves(pair) {
+  if (!pair || !pair.prevDay || !pair.curr.size) return { prevDay: null, symbols: [], fresh: 0 };
+  const symbols = [];
+  let fresh = 0;
+  for (const [symbol, after] of pair.curr) {
+    const before = pair.prev.get(symbol);
+    // No earlier row means the ticker is new to the archive, not that
+    // everything about it changed overnight.
+    if (!before) { fresh++; continue; }
+    const moves = fundamentalMovesFor(before, after);
+    if (moves) symbols.push({ symbol, moves, score: moves[0].score });
+  }
+  symbols.sort((a, b) => b.score - a.score || a.symbol.localeCompare(b.symbol));
+  return { prevDay: pair.prevDay, symbols: symbols.slice(0, FUND_MAX_SYMBOLS),
+    total: symbols.length, fresh };
+}
+
 function fmtDuration(ms) {
   const sec = Math.max(0, Math.round(ms / 1000));
   if (sec < 60) return sec + 's';
@@ -2833,6 +2951,18 @@ async function buildRefreshReport(state, snap, kind = 'all') {
     console.warn('report: archive stats unavailable:', err.message);
   }
 
+  // Only a Refresh all re-pulls the profile cache, so only a Refresh all can
+  // have a fundamentals change to report. A plain Refresh reuses yesterday's
+  // profiles and would compare a number with itself.
+  let funds = { prevDay: null, symbols: [], total: 0, fresh: 0 };
+  if (kind === 'all') {
+    try {
+      funds = fundamentalMoves(await store.readFundamentalsPair(day));
+    } catch (err) {
+      console.warn('report: fundamentals comparison unavailable:', err.message);
+    }
+  }
+
   // Only surfaced when something is wrong: a line saying the model is fine,
   // every night, is a line nobody reads by the third email.
   let modelWarning = null;
@@ -2870,6 +3000,7 @@ async function buildRefreshReport(state, snap, kind = 'all') {
     // the whole universe went with them.
     top: movers.slice(0, REPORT_MOVERS),
     bottom: movers.slice(-REPORT_MOVERS).reverse(),
+    funds,
     actor: state.actor || 'unknown',
     startedAt: state.startedAt,
     duration: fmtDuration(Date.now() - state.startedAt),
@@ -2915,6 +3046,23 @@ function refreshReportBodies(r) {
   for (const x of r.top) t.push('  ' + signed(x.todayPct).padStart(7) + '  ' + x.symbol);
   if (r.top.length && r.bottom.length) t.push('  …');
   for (const x of r.bottom) t.push('  ' + signed(x.todayPct).padStart(7) + '  ' + x.symbol);
+  if (isAll && r.funds.prevDay) {
+    t.push('', `Fundamentals that moved  (against ${r.funds.prevDay}, the previous recorded set)`);
+    if (!r.funds.symbols.length) {
+      t.push('  Nothing moved enough to mention.');
+    } else {
+      for (const s of r.funds.symbols) {
+        t.push(`  ${s.symbol}`);
+        for (const m of s.moves) t.push(`      ${m.label}  ${m.text}`);
+      }
+      if (r.funds.total > r.funds.symbols.length) {
+        t.push(`  …and ${r.funds.total - r.funds.symbols.length} more`);
+      }
+    }
+    if (r.funds.fresh) t.push(`  ${r.funds.fresh} recorded for the first time, so nothing to compare.`);
+    t.push('  Price, market cap, forward P/E, PEG, FCF yield and net-cash % are left out —',
+      '  they move with the price every night rather than with the company.');
+  }
   if (url) t.push('', url);
 
   // --- html ---
@@ -2925,6 +3073,35 @@ function refreshReportBodies(r) {
   const chip = (x) => `<span style="display:inline-block;margin:0 10px 4px 0;font-size:13px">` +
     `<b>${escHtml(x.symbol)}</b> <span style="color:${x.todayPct >= 0 ? '#0f9d58' : '#c5221f'}">` +
     `${signed(x.todayPct)}</span></span>`;
+  // The section a Refresh all exists for: what changed about the companies,
+  // rather than about their prices.
+  let fundsBlock = '';
+  if (isAll && r.funds.prevDay) {
+    const rows = r.funds.symbols.map((s) => {
+      const items = s.moves.map((m) =>
+        `<div style="font-size:13px;margin:0 0 2px">` +
+        `<span style="color:#777">${escHtml(m.label)}</span> ` +
+        `<span style="color:${m.up ? '#0f9d58' : '#c5221f'}">${escHtml(m.text)}</span></div>`).join('');
+      return `<tr><td style="${cell};white-space:nowrap;vertical-align:top">` +
+        `<b>${escHtml(s.symbol)}</b></td><td style="${cell}">${items}</td></tr>`;
+    }).join('');
+    const more = r.funds.total > r.funds.symbols.length
+      ? `<p style="margin:6px 0 0;font-size:12px;color:#999">…and ${r.funds.total - r.funds.symbols.length} more.</p>` : '';
+    const first = r.funds.fresh
+      ? `<p style="margin:6px 0 0;font-size:12px;color:#999">${r.funds.fresh} recorded for the first time, so nothing to compare.</p>` : '';
+    fundsBlock =
+      '<h3 style="margin:22px 0 2px;font-size:14px">Fundamentals that moved</h3>' +
+      `<p style="margin:0 0 8px;font-size:12px;color:#999">Against ${escHtml(r.funds.prevDay)}, ` +
+      'the previous recorded set — not necessarily yesterday.</p>' +
+      (r.funds.symbols.length
+        ? `<table style="border-collapse:collapse">${rows}</table>`
+        : '<p style="margin:0;font-size:13px;color:#999">Nothing moved enough to mention.</p>') +
+      more + first +
+      '<p style="margin:8px 0 0;font-size:12px;color:#999">Price, market cap, forward P/E, PEG, ' +
+      'FCF yield and net-cash % are left out: they move with the price every night rather than ' +
+      'with the company.</p>';
+  }
+
   let problems = '';
   if (r.failed.length) {
     problems += `<p style="margin:14px 0 0;font-size:13px"><b style="color:#c5221f">` +
@@ -2955,6 +3132,7 @@ function refreshReportBodies(r) {
     '<h3 style="margin:22px 0 6px;font-size:14px">Movers today</h3>' +
     '<div>' + r.top.map(chip).join('') + '</div>' +
     '<div style="margin-top:4px">' + r.bottom.map(chip).join('') + '</div>' +
+    fundsBlock +
     '';
 
   const html = emailShell({
