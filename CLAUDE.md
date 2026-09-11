@@ -163,19 +163,23 @@ Everything above the table is **one bar**. There is no separate masthead, no tab
 - The bar stays on one line down to ~1280px; below that it wraps, which is intended.
 
 ### Dropdown menus
-Three menus share one controller. Only one is open at a time.
+Four menus share one controller. Only one is open at a time.
 
 | id | trigger | contents |
 |---|---|---|
 | `#picker` | portfolio name + count | All + every portfolio + "New portfolio" |
 | `#colPicker` | `Columns n/10` | multi-select column groups + Show all / Hide all |
+| `#researchPicker` | `Research` | Analysis, Strategy, Single + the three per-symbol pages |
 | `#morePicker` | `⋯` (admin only) | Rename/Delete portfolio, Change password, Sign out |
 
 - `openPicker(id)` opens one and closes the rest; `closePickers()` closes all. They close on outside click, Escape and resize.
 - `placeMenu()` clamps an opened menu inside the viewport — it shifts left of its trigger rather than overflowing, and never crosses the left gutter. Don't replace it with a static `left`/`right` anchor; no single anchor suits both triggers at every width.
 - `#morePicker` holds the *real* buttons (`#renameBtn`, `#deleteBtn`, `#changePwBtn`, `#logoutBtn`) restyled as `.pick` rows, so their existing listeners and disabled-state logic still apply. `#portfolioActions` and `#sessionActions` wrap the contextual rows with their separators so both hide together.
-- **`#stockLink` ("Stock") is the bar's door into `/stock/<SYMBOL>`.** It points at whatever row is currently on top — it is set from `sorted[0]` in `render()`, not from the ranking, so it follows the sort and the portfolio filter rather than quietly always meaning rank 1. Which stock it lands on matters little now the page has its own picker; the point is not having to hunt for a name to click first.
-- **Analysis, Visitor log, Refresh and Refresh all are top-level bar buttons**, not menu rows. Refresh and Refresh all are both labelled `.btn` pills — they run the same kind of action, so they carry the same weight; only their icons differ.
+- **`#researchPicker` ("Research") holds every page that studies the data** — Analysis, Strategy and Single, then a separator and the three per-symbol pages (Stock, Signal study, Indicator lab). It replaced four separate labelled buttons in Sep 2026: the bar already carried six pickers and eighteen buttons and wrapped below ~1280px, and four nav buttons was the largest block that could become one.
+  - **The three per-symbol rows open whatever is on top of the current view.** `researchSymbol` is set from `sorted[0]` in `render()`, not from the ranking, so it follows the sort and the portfolio filter rather than quietly always meaning rank 1. All three destinations carry their own symbol picker, so which one it lands on matters little — the point is not having to hunt for a name to click first. The menu names the stock it will open, because a link whose target moves should say where it is going.
+  - **With no rows at all the per-symbol half is replaced by a line explaining why**, rather than three links to `/stock/undefined`.
+  - **It uses `we()`, the page's top-level escaper.** The only `esc` here is scoped inside the CSV export — see the warning below; this is the third function that would have tripped over it.
+- **Ask, Visitor log, Refresh and Refresh all are top-level bar buttons**, not menu rows. Refresh and Refresh all are both labelled `.btn` pills — they run the same kind of action, so they carry the same weight; only their icons differ.
 - The column menu is rebuilt by `renderColumnMenu()` from inside `applyGroups()`, so the trigger count can't drift from the table state. It deliberately stays open while you toggle.
 - **Each menu row also carries a jump arrow** that scrolls that group into view — 47 columns across ~3,300px is more than a scrollbar should be asked to do, and the groups are how anyone thinks about the table anyway. The toggle and the jump are siblings in a `.pick-row`, because a button cannot nest inside a button. The arrow is disabled while its group is collapsed.
 - **`scrollToGroup()` works from `getBoundingClientRect()` plus the current `scrollLeft`, never `offsetLeft`.** A table cell's `offsetParent` here is `main.page`, not the table, so `offsetLeft` overstates by the table's own inset and lands the group ~29px *underneath* the frozen columns. It also subtracts the frozen block's measured width, or the target hides behind Symbol and Name.

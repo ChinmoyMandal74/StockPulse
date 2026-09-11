@@ -537,6 +537,9 @@
     <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3.6" y="5.2" width="16.8" height="13.6" rx="2.6"/><path d="M9.2 5.2v13.6M14.8 5.2v13.6"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.6 9.8 17.4 19 6.6"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15.2l5.5-5.7"/></symbol>
+    <symbol id="i-research" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.2"/><path d="M15.6 15.6 20 20"/></symbol>
+    <symbol id="i-scatter" viewBox="0 0 24 24"><path d="M4.5 4.5v15h15"/><circle cx="9" cy="15" r="1.2"/><circle cx="12.5" cy="10.5" r="1.2"/><circle cx="16.5" cy="13" r="1.2"/><circle cx="19" cy="7.5" r="1.2"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9"/><path d="M17 7h3"/><circle cx="15" cy="7" r="2"/><path d="M4 17h3"/><path d="M11 17h9"/><circle cx="9" cy="17" r="2"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.4a2.6 2.6 0 1 1 3.4 2.5c-.6.2-.9.7-.9 1.3v.5"/><path d="M12 17.1h.01"/></symbol>
     <symbol id="i-scales" viewBox="0 0 24 24"><path d="M12 4.4v15.2"/><path d="M6.6 19.6h10.8"/><path d="M4 9.2h16"/><path d="M4 9.2 1.8 14.2h4.4z"/><path d="M20 9.2 17.8 14.2h4.4z"/></symbol>
     <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3.6 19.2h16.8"/><path d="M4.4 14.6 9.6 9l3.6 3.4 6.2-6.8"/></symbol>
@@ -610,23 +613,23 @@
           <div class="row">
             <span class="bar-sep admin-only"></span>
             <span class="status" id="status"></span>
-            <a class="btn" href="/analysis" title="Signal screens: bases turning, new movers, earnings drift, value and risk">
-              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-columns" /></svg>Analysis
-            </a>
-            <a class="btn" href="/single" title="One stock at a time: when to hold it and when to hold cash">
-              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>Single
-            </a>
-            <a class="btn" href="/strategy" title="Backtest a trend-following rule across any portfolio, with costs">
-              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-strategy" /></svg>Strategy
-            </a>
+            <!-- Every page that studies the data, behind one trigger. This was
+                 four separate buttons (Analysis, Single, Strategy, Stock) in a bar
+                 that already carried six pickers and wrapped below ~1280px. The
+                 three per-symbol pages open whatever is on top of the current
+                 view; each has its own symbol picker, so which one barely
+                 matters — the point is not having to hunt for a name first. -->
+            <div class="picker" id="researchPicker" data-open="0">
+              <button class="btn picker-btn" id="researchBtn" aria-haspopup="menu" aria-expanded="false"
+                      title="Analysis, Strategy, Single, and the per-stock pages">
+                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-research" /></svg>
+                <span class="picker-label">Research</span>
+                <svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>
+              </button>
+              <div class="picker-menu" id="researchMenu" role="menu" aria-label="Research pages"></div>
+            </div>
             <a class="btn" href="/chat" title="Ask questions about this data">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chat" /></svg>Ask
-            </a>
-            <!-- A door into /stock/<SYMBOL>. Which stock barely matters now that
-                 the page has its own picker, so it opens the top of whatever is
-                 currently shown rather than asking anyone to choose first. -->
-            <a class="btn" id="stockLink" href="/stock/SPY">
-              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>Stock
             </a>
             <a class="btn icon quiet admin-only" href="/visitors" target="_blank" rel="noopener" style="display:none" title="Visitor log (admin only)" aria-label="Visitor log">
               <svg class="ic" aria-hidden="true"><use href="#i-users" /></svg>
@@ -1128,6 +1131,7 @@
       { root: 'colPicker', btn: 'colBtn', menu: 'colMenu' },
       { root: 'pastPicker', btn: 'pastBtn', menu: 'pastMenu' },
       { root: 'weightPicker', btn: 'weightBtn', menu: 'weightMenu' },
+      { root: 'researchPicker', btn: 'researchBtn', menu: 'researchMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
       { root: 'addPicker', btn: 'addOpenBtn', menu: 'addMenu' },
       { root: 'datePicker', btn: 'dateOpenBtn', menu: 'dateMenu' },
@@ -1156,6 +1160,38 @@
       });
     }
     const closePickers = () => openPicker(null);
+
+    // Which stock the per-symbol pages will open: the top row of the current
+    // view, so it follows the sort and the portfolio filter rather than quietly
+    // always meaning rank 1.
+    let researchSymbol = null;
+
+    function renderResearchMenu() {
+      const row = (href, icon, name, hint) =>
+        `<a class="pick" role="menuitem" href="${we(href)}">` +
+        `<svg class="ic ic-sm" aria-hidden="true"><use href="#${icon}" /></svg>` +
+        `<span class="nm">${we(name)}</span><span class="count">${we(hint)}</span></a>`;
+
+      const parts = [
+        row('/analysis', 'i-columns', 'Analysis', 'screens'),
+        row('/strategy', 'i-strategy', 'Strategy', 'portfolio backtest'),
+        row('/single', 'i-chart', 'Single', 'one stock, or cash'),
+      ];
+      if (researchSymbol) {
+        const sym = encodeURIComponent(researchSymbol);
+        parts.push('<div class="pick-sep"></div>',
+          `<div class="pick-hint" style="border-top:0;margin-top:0">Opens <b>${we(researchSymbol)}</b>, ` +
+          'the top of this view. Every one of these has its own symbol picker.</div>',
+          row('/stock/' + sym, 'i-chart', 'Stock', 'everything, one stock'),
+          row('/signal/' + sym, 'i-scatter', 'Signal study', 'does momentum predict'),
+          row('/lab/' + sym, 'i-sliders', 'Indicator lab', 'build an indicator'));
+      } else {
+        parts.push('<div class="pick-sep"></div>',
+          '<div class="pick-hint" style="border-top:0;margin-top:0">' +
+          'Add a ticker to reach the per-stock pages.</div>');
+      }
+      $('researchMenu').innerHTML = '<div class="picker-inner">' + parts.join('') + '</div>';
+    }
 
     function renderPicker() {
       const countAll = stocks.length;
@@ -1220,8 +1256,6 @@
       const rows = visibleStocks();
       markSortedColumn();
 
-      const stockLink = $('stockLink');
-      stockLink.style.display = rows.length ? '' : 'none';
 
       // Freshest data date among shown stocks, to flag any lagging behind it.
       const freshest = rows.reduce((m, s) => (s.latestDate && s.latestDate > m ? s.latestDate : m), '');
@@ -1231,6 +1265,8 @@
           ? 'No tickers yet — add one above.'
           : `No tickers in "${activeTab}" yet — add one above.`;
         tbody.innerHTML = `<tr><td class="empty" colspan="48">${msg}</td></tr>`;
+        researchSymbol = null;
+        renderResearchMenu();
         applyGroups();
         return;
       }
@@ -1245,13 +1281,8 @@
         return (av - bv) * sortDir;
       });
 
-      // The row actually on top, so the bar link follows the sort rather than
-      // quietly always meaning rank 1.
-      if (sorted[0]) {
-        stockLink.href = '/stock/' + encodeURIComponent(sorted[0].symbol);
-        stockLink.title = `Open ${sorted[0].symbol} in full — the top of this view. ` +
-          'Switch to any other stock from the symbol on that page.';
-      }
+      researchSymbol = sorted[0] ? sorted[0].symbol : null;
+      renderResearchMenu();
 
       tbody.innerHTML = sorted.map((s, i) => {
         const rmTitle = activeTab === 'All' ? 'Remove from all portfolios' : `Remove from ${activeTab}`;
