@@ -128,9 +128,9 @@
     td.act.a-hold { color: var(--muted); }
     td.act.a-avoid { color: color-mix(in srgb, var(--red) 70%, var(--muted)); }
     td.act.a-sell-immediately { color: var(--red); font-weight: 700; }
-    td.ctype { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+    td.ctype { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; cursor: pointer; }
     td.ctype .early { color: var(--amber); }
-    td.state { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+    td.state { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; cursor: pointer; }
     td.state.st-bad { color: color-mix(in srgb, var(--red) 75%, var(--muted)); }
     td.state.st-warn { color: var(--amber); }
     td.state.st-guard { color: var(--faint); font-size: 11px; }
@@ -1418,9 +1418,9 @@
           ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-rank ta-c lens-col')}
           ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank ta-c')}
           ${typeCell(s)}
-          ${stateCell(s.actionTrend, TREND_DANGER)}
-          ${stateCell(s.actionEntry, ENTRY_DANGER)}
-          ${stateCell(s.actionFund, FUND_DANGER)}
+          ${stateCell(s.actionTrend, TREND_DANGER, 'trend')}
+          ${stateCell(s.actionEntry, ENTRY_DANGER, 'entry')}
+          ${stateCell(s.actionFund, FUND_DANGER, 'fund')}
           ${guardsCell(s)}
           ${actionCell(s)}
           ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-pmom ta-l lens-col', deltaOf(s))}
@@ -1482,9 +1482,9 @@
 
     // Early is the case worth spotting, so it is the only type tinted.
     function typeCell(s) {
-      if (!s.companyType) return '<td class="ctype grp-act">—</td>';
+      if (!s.companyType) return '<td class="ctype grp-act" data-fam="type">—</td>';
       const cls = s.companyType === 'Early' ? ' class="early"' : '';
-      return `<td class="ctype grp-act"><span${cls}>${we(s.companyType)}</span></td>`;
+      return `<td class="ctype grp-act" data-fam="type"><span${cls}>${we(s.companyType)}</span></td>`;
     }
 
     // One word per family, muted unless it is a danger word — six coloured
@@ -1492,15 +1492,15 @@
     const TREND_DANGER = { Breakdown: 'st-bad', Downtrend: 'st-warn' };
     const ENTRY_DANGER = { Extended: 'st-warn' };
     const FUND_DANGER = { Weak: 'st-bad' };
-    function stateCell(v, danger) {
-      if (!v) return '<td class="state grp-act">—</td>';
+    function stateCell(v, danger, fam) {
+      if (!v) return `<td class="state grp-act" data-fam="${fam}">—</td>`;
       const cls = danger[v] ? ' ' + danger[v] : '';
-      return `<td class="state grp-act${cls}">${we(v)}</td>`;
+      return `<td class="state grp-act${cls}" data-fam="${fam}">${we(v)}</td>`;
     }
 
     // Blank for most rows on purpose: when Guards speaks, it matters.
     function guardsCell(s) {
-      return `<td class="state grp-act st-guard">${s.actionGuards ? we(s.actionGuards) : ''}</td>`;
+      return `<td class="state grp-act st-guard" data-fam="guards">${s.actionGuards ? we(s.actionGuards) : ''}</td>`;
     }
 
     // The flag — the ONE rule that fired — rides on the cell as its tooltip,
@@ -2668,13 +2668,16 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       }
       return h;
     }
-    function apStockHtml(s) {
-      const e = ActionRules.explain(s, ACTION_PANEL_CFG);
+    function apEstBar(e) {
+      if (e.estScore == null) return '';
       const estTip = e.typeParts ? e.typeParts.map((x) => `${x.label} ${x.earned}/${x.max}`).join(' · ') : '';
-      const est = e.estScore == null ? '' :
-        `<div class="ap-est"${attr(estTip)}>` +
+      return `<div class="ap-est"${attr(estTip)}>` +
         Array.from({ length: 7 }, (_, i) => `<i class="seg${i < e.estScore ? ' on' : ''}"></i>`).join('') +
         `<span>establishment ${e.estScore}/7 — ${we(e.type)} at ${ACTION_PANEL_CFG.company_type.score_cutoff}+</span></div>`;
+    }
+    function apStockHtml(s) {
+      const e = ActionRules.explain(s, ACTION_PANEL_CFG);
+      const est = apEstBar(e);
       const chips = [
         `<span class="ap-chip">Type <b>${we(e.type)}${e.pinned ? ' (pinned)' : ''}</b></span>`,
         `<span class="ap-chip">Trend <b>${we(e.states.trend)}</b></span>`,
@@ -2705,6 +2708,89 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         'The shaded zone on each track is what passes. Full prose in <a href="/help#rules" target="_blank" rel="noopener">Help §12</a>.</div>' +
         `<div class="ap-foot">${apBackSym ? `<button class="ap-link" data-ap-back>← Back to ${we(apBackSym)}</button>` : '<span></span>'}<span></span></div></div>`;
     }
+    // ---- the per-column panels -----------------------------------------
+    // Each state column is one condition family collapsed to a word on a
+    // priority ladder; clicking the cell shows that ladder — the lit word is
+    // the one the column carries, gauges under every rung. Guards differ and
+    // the panel says so: its checks are independent, so nothing is dimmed.
+    const FAM_TITLES = { type: 'Company type', trend: 'Trend', entry: 'Entry', fund: 'Fundamentals', guards: 'Guards' };
+    const AP_FAM_DOT = {
+      'Breakdown': 'bad', 'Downtrend': 'bad', 'No data': 'hold', 'Below 200D': 'hold',
+      'Near 200D': 'hold', 'Above 200D': 'good', 'Strong uptrend': 'good',
+      'Extended': 'bad', 'None': 'hold', 'Clean': 'good', 'Clean, near high': 'good',
+      'Weak': 'bad', 'OK': 'good', 'Strong': 'good', '—': 'hold',
+      'Thin history': 'bad', 'Earnings soon': 'bad',
+    };
+    const AP_FAM_TXT = { good: 'ap-act-buy', bad: 'ap-act-sell', hold: 'ap-act-hold' };
+    function apFamRung(g) {
+      const cls = ['ap-rung'];
+      if (g.fired) cls.push('fired');
+      if (!g.checked) cls.push('unchecked');
+      const dot = g.fired ? ' ' + (AP_FAM_DOT[g.label] || 'hold') : '';
+      return `<div class="${cls.join(' ')}"${g.checked ? '' : attr('Not checked — a state above already holds')}>` +
+        `<div class="ap-rung-head"><span class="dot${dot}"></span>` +
+        `<span class="fl">${we(g.label)}</span></div>` +
+        g.conds.map((c) => apCond(c, false)).join('') + '</div>';
+    }
+    function apFamilyHtml(s, fam) {
+      const e = ActionRules.explain(s, ACTION_PANEL_CFG);
+      let word, body, note = '';
+      if (fam === 'type') {
+        word = e.type + (e.pinned ? ' (pinned)' : '');
+        if (e.pinned) {
+          body = '';
+          note = `Pinned to ${we(e.type)} by a manual override — the establishment score is not consulted.`;
+        } else if (e.type === 'ETF') {
+          body = '';
+          note = 'Classified as an ETF — a portfolio tagged “ETF”, or no Quality rating and no forward P/E. ETFs walk the technical rules alone.';
+        } else {
+          const c = ACTION_PANEL_CFG.company_type;
+          body = apEstBar(e) + '<div style="margin-top:6px">' + e.typeParts.map((x) =>
+            `<div class="ap-cond${x.earned ? ' met' : ''}"><span class="tick">${x.earned ? '✓' : '✗'}</span>` +
+            `<span class="lb">${we(x.label)}</span><span class="val">${x.earned}/${x.max}</span></div>`).join('') + '</div>';
+          note = `Established at ${c.score_cutoff} or more of the 7 points; above ${we('$' + (c.mc_override / 1e9) + 'B')} it is Established regardless of score.`;
+        }
+      } else if (fam === 'guards') {
+        word = e.states.guards || 'None';
+        body = e.families.guards.map(apFamRung).join('');
+        note = e.states.guards
+          ? 'Guards are independent — any active one caps the verdict at Hold while it lasts.'
+          : 'No guards active — nothing is holding this stock back on timing.';
+      } else if (fam === 'fund' && e.type === 'ETF') {
+        word = '—';
+        body = '';
+        note = 'ETFs carry no fundamentals bucket — the technical rules alone decide.';
+      } else {
+        word = fam === 'trend' ? e.states.trend : fam === 'entry' ? e.states.entry : e.states.fund;
+        body = e.families[fam].map(apFamRung).join('');
+        note = 'First state that holds wins, top to bottom — the lit word is what the column shows.';
+      }
+      const wcls = AP_FAM_TXT[AP_FAM_DOT[word] || ''] || 'ap-act-hold';
+      return '<div class="ap-core">' +
+        `<div class="ap-head"><span class="ap-sym">${we(s.symbol)}</span>` +
+        `<span class="ap-verdict ${fam === 'type' || fam === 'guards' ? 'ap-act-hold' : wcls}" style="font-weight:600">${we(word)}</span>` +
+        '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>' +
+        `<div class="ap-chips"><span class="ap-chip">${we(FAM_TITLES[fam])} column</span>` +
+        `<span class="ap-chip">Type <b>${we(e.type)}</b></span>` +
+        `<span class="ap-chip">Action <b>${we(e.action)}</b></span></div>` +
+        body +
+        `<div class="ap-note">${note}</div>` +
+        '<div class="ap-foot"><button class="ap-link" data-ap-ladder>Full rule ladder</button>' +
+        '<button class="ap-link" data-ap-model>How is this computed?</button></div></div>';
+    }
+    function openFamilyPanel(sym, fam, anchor) {
+      const s = stocks.find((x) => x.symbol === sym);
+      if (!s) return;
+      closePickers(); hideTip(); hideRowCard();
+      apOpenFor = sym + '|' + fam; apBackSym = sym;
+      if (anchor) apAnchor = anchor;
+      apModelTab = s.companyType || 'Established';
+      apPanel.innerHTML = apFamilyHtml(s, fam);
+      apPlace(apAnchor);
+      apPanel.scrollTop = 0;
+      apWire();
+    }
+
     function apPlace(anchor) {
       apPanel.hidden = false;
       const w = apPanel.offsetWidth, h = apPanel.offsetHeight;
@@ -2721,6 +2807,8 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       if (m) m.addEventListener('click', () => openActionModel());
       const b = apPanel.querySelector('[data-ap-back]');
       if (b) b.addEventListener('click', () => openActionPanel(apBackSym, null));
+      const l = apPanel.querySelector('[data-ap-ladder]');
+      if (l) l.addEventListener('click', () => openActionPanel(apBackSym, null));
       apPanel.querySelectorAll('[data-ap-tab]').forEach((t) => t.addEventListener('click', () => {
         apModelTab = t.dataset.apTab;
         openActionModel();
@@ -2751,13 +2839,21 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     }
     apPanel.addEventListener('click', (e) => e.stopPropagation());
     $('tbody').addEventListener('click', (e) => {
-      const td = e.target.closest('td.act');
-      if (!td) return;
-      const sym = td.closest('tr')?.querySelector('td.sym')?.textContent.trim();
+      const act = e.target.closest('td.act');
+      const famTd = act ? null : e.target.closest('td[data-fam]');
+      if (!act && !famTd) return;
+      const cell = act || famTd;
+      const sym = cell.closest('tr')?.querySelector('td.sym')?.textContent.trim();
       if (!sym) return;
       e.stopPropagation();
-      if (apOpenFor === sym) closeActionPanel();
-      else openActionPanel(sym, td);
+      if (act) {
+        if (apOpenFor === sym) closeActionPanel();
+        else openActionPanel(sym, act);
+      } else {
+        const key = sym + '|' + famTd.dataset.fam;
+        if (apOpenFor === key) closeActionPanel();
+        else openFamilyPanel(sym, famTd.dataset.fam, famTd);
+      }
     });
 
     // ---- control sheet (below 768px the deck becomes a full-screen glass overlay) ----

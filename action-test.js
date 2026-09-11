@@ -317,14 +317,42 @@ console.log('\nTHE LADDER (explain / ladder)');
     const rr = randRow();
     for (const c of profiles) {
       const e = A.explain(rr, c);
-      if (e.mismatch) {
+      if (e.mismatch || e.familyMismatch) {
         bad++;
         if (!first) first = { row: rr, profile: c.profile, got: [e.action, e.flag], firedIndex: e.firedIndex };
       }
     }
   }
   if (first) console.log('  first mismatch:', JSON.stringify(first));
-  check('18,000 random row-x-profile evaluations: ladder and engine never disagree', bad, 0);
+  check('18,000 random row-x-profile evaluations: ladders, state families and engine never disagree', bad, 0);
+}
+
+
+console.log('\nTHE STATE LADDERS (per-column families)');
+{
+  const ex = (r, d, p) => A.explain(row(r, d || {}), cfg(p));
+  const lit = (rs) => { const g = rs.find((x) => x.fired); return g ? g.label : null; };
+  check('trend family lights the word the column shows',
+    lit(ex(EST, { vs200ma: 15 }).families.trend), 'Strong uptrend');
+  check('trend family dims the rungs below the lit one',
+    ex(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 }).families.trend
+      .some((g) => !g.checked), true);
+  check('entry family reads Clean, near high on the base row',
+    lit(ex(EST).families.entry), 'Clean, near high');
+  check('fund family reads Strong with every condition met',
+    (() => { const f = ex(EST).families.fund; const g = f.find((x) => x.fired);
+      return [g.label, g.conds.every((c) => c.met)]; })(), ['Strong', true]);
+  check('fund family swaps to the Quality gates when the composite is on',
+    (() => { const f = ex(EST, {}, { use_quality: true }).families.fund;
+      return f.find((x) => x.label === 'Strong').conds[0].label.indexOf('Quality') === 0; })(), true);
+  check('guards are independent, not first-match',
+    (() => { const g = ex(EST, { historyDays: 120, nextEarningsDate: '2026-09-14' }).families.guards;
+      return [g.length, g.every((x) => x.checked), g.filter((x) => x.fired).length]; })(),
+    [2, true, 2]);
+  check('ETF rows carry no fundamentals ladder',
+    ex(row(EST, { portfolios: ['ETFs'], qualityRating: null, forwardPe: null })).families.fund.length, 0);
+  check('no familyMismatch on the base rows',
+    [ex(EST).familyMismatch, ex(EARLY).familyMismatch], [false, false]);
 }
 
 console.log(`\n${n} checks, ${failed} failed`);
