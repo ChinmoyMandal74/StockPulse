@@ -31,9 +31,6 @@ const Momentum = require('./momentum.js');
 const Signal = require('./private/signal-stats.js');
 // Tunable indicators, shared with /lab and the offline grid.
 const Indicators = require('./private/indicators.js');
-// What to do with each stock. Shared with the browser, which re-scores under a
-// user's own preset without asking the server.
-const Action = require('./private/action.js');
 const {
   readPortfolios, writePortfolios,
   readNames, writeNames,
@@ -1606,35 +1603,6 @@ function curve(v, centre, scale) {
 // measured against a fixed scale — so this is a plain loop rather than the
 // two-pass ranking it used to be. It is kept as a function because both the live
 // pull and the fortnight-ago reconstruction go through it.
-// The house rule set, resolved once and reused for a whole pass. Read fresh at
-// the start of each refresh rather than cached for the process: Vercel shares
-// nothing between instances, so a cached copy would go stale the moment an admin
-// edited the rules on a different one.
-function applyAction(rows, houseParams) {
-  const p = Action.resolve(houseParams);
-  p.__resolved = true;
-  for (const row of rows) {
-    if (!row || row.error) continue;
-    const a = Action.score(row, p);
-    row.companyType = a.type;
-    row.action = a.action;
-    row.actionRank = a.rank;
-    row.actionFlags = a.flags;
-  }
-}
-
-// Read the house rules and apply them, tolerating a database that cannot
-// answer — a missing Action column is a worse outcome than a slightly stale one.
-async function scoreActionInto(rows) {
-  if (!Array.isArray(rows) || !rows.length) return;
-  try {
-    applyAction(rows, (await store.readActionRules()).params);
-  } catch (err) {
-    console.warn('action: house rules unavailable, using defaults:', err.message);
-    applyAction(rows, {});
-  }
-}
-
 function applyScores(rows) {
   rows.forEach((row) => {
     const sc = computeScores(row);
@@ -1898,44 +1866,6 @@ app.delete('/api/refresh-all', requireAdmin, route(async (req, res) => {
 
 // Cheap poll for viewers: is a refresh running? Deliberately not the whole
 // snapshot, since every open page hits this while one is in progress.
-// The house rule set behind the Action column, plus everything the editor
-// needs to render itself: the parameter list, its groups and the tier labels.
-// Any signed-in user may read it — it is what the shared column already shows.
-app.get('/api/action-rules', requireAuth, route(async (req, res) => {
-  const stored = await store.readActionRules();
-  res.set('Cache-Control', 'no-store');
-  res.json({
-    params: stored.params,
-    resolved: Action.resolve(stored.params),
-    updatedAt: stored.updatedAt,
-    updatedBy: stored.updatedBy,
-    defaults: Action.DEFAULTS,
-    meta: Action.PARAMS,
-    groups: Action.GROUP_LABELS,
-    tiers: Action.TIERS,
-  });
-}));
-
-// Admin only: this is the shared answer, not a preference.
-app.put('/api/action-rules', requireAdmin, route(async (req, res) => {
-  const incoming = req.body && req.body.params;
-  if (incoming != null && (typeof incoming !== 'object' || Array.isArray(incoming))) {
-    return res.status(400).json({ error: 'Expected a params object.' });
-  }
-  // Rebuilt from scratch against the known keys, bounded, and with the orderings
-  // repaired rather than rejected — an inverted pair does not error, it makes a
-  // tier unreachable, so silently accepting one would be worse than fixing it.
-  const { params, fixed } = Action.clean(incoming || {});
-  const stored = Action.diff(Object.assign({}, Action.DEFAULTS, params));
-  const who = await currentUser(req);
-  await store.writeActionRules(stored, who ? who.email : 'admin');
-
-  // Nothing to re-score: /api/stocks applies the house rules on the way out, so
-  // the next load already carries the new answer. Rewriting the 0.34 MB
-  // snapshot blob on every save would buy nothing and add a way to fail.
-  res.json({ ok: true, params: stored, resolved: Action.resolve(stored), fixed });
-}));
-
 app.get('/api/status', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({ refreshing: await readRefreshState() });
@@ -2151,10 +2081,6 @@ async function computeStocks(asOf) {
     // because momentum was ranked across the universe; it no longer is, so the
     // pass is here only because the rows are built by now anyway.
     applyScores(stocks);
-    // What to do with each, under the house rule set. Read per pass rather than
-    // cached: Vercel shares nothing between instances, so a process-level cache
-    // would serve stale rules after an admin edited them somewhere else.
-    await scoreActionInto(stocks);
 
     // …and again at each past horizon, for the Past Momentum column and the
     // direction arrow. Scored from the archive rather than from the series just
@@ -2769,19 +2695,6 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   // Which Past Momentum horizon the table is showing. An id from the known list
   // only — anything else is dropped and the default stands.
   if (Screens.PAST_PERIODS.some((x) => x.id === incoming.past)) out.past = String(incoming.past);
-  // Which Action rule set this user is looking at, and — only for their own —
-  // the overrides behind it. Stored as the DIFF from the code defaults, so
-  // improving a default still reaches anyone who once opened the editor; the
-  // whole set would pin all seventy thresholds to that day. Same rebuild-from-
-  // scratch discipline as the weights above.
-  if (incoming.actionPreset === 'mine' || incoming.actionPreset === 'house') {
-    out.actionPreset = incoming.actionPreset;
-  }
-  if (incoming.actionParams && typeof incoming.actionParams === 'object'
-      && !Array.isArray(incoming.actionParams)) {
-    const { params } = Action.clean(incoming.actionParams);
-    out.actionParams = Action.diff(Object.assign({}, Action.DEFAULTS, params));
-  }
   await store.writePrefs(await prefsKey(req), out);
   res.json({ ok: true });
 }));
@@ -3475,15 +3388,7 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
 
   // Public read: serve the saved snapshot — no API calls, no credits burned.
   const snap = await readSnapshot();
-  if (snap) {
-    // The Action is scored on the way out, not only when the snapshot is
-    // written. It costs about a millisecond for the whole universe and it means
-    // the column is never stale: a snapshot written before this feature existed
-    // still gets one, and an edit to the house rules shows up on the next load
-    // rather than after the nightly refresh.
-    await scoreActionInto(snap.stocks);
-    return res.json({ ...snap, fromSnapshot: true, refreshing: await readRefreshState() });
-  }
+  if (snap) return res.json({ ...snap, fromSnapshot: true, refreshing: await readRefreshState() });
 
   // No snapshot yet: an admin (or open/local mode) computes and seeds the first one.
   if (await isAdmin(req)) {

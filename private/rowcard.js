@@ -490,11 +490,6 @@
 
   // kind: 'overall' | 'momentum' | 'quality'. `pulled` is the "as of" line.
   // Returns null when there is nothing to explain, so a caller can skip showing.
-  // Rank 1..6 -> the words. Kept here so the tooltip can name the tier a stock
-  // would have reached before the overrides pulled it down.
-  const TIER_WORDS = ['Sell Immediately', 'Avoid', 'Hold', 'Buy with Risk', 'Buy', 'Strong Buy'];
-  const TIERS_LABEL = (r) => TIER_WORDS[Math.max(1, Math.min(6, r || 3)) - 1];
-
   function scoreTip(s, kind, opts) {
     const o = opts || {};
     const foot = o.pulled ? ` · pulled ${esc(o.pulled)}` : '';
@@ -505,49 +500,6 @@
       return `<div class="tip-head">Overall ${s.overallRating}/10 ` +
         `<span>· score ${s.overallScore}/100</span></div>` + rows +
         `<div class="tip-foot">${note}${foot}</div>`;
-    }
-
-    // What to do with the stock, and the whole derivation behind it. The detail
-    // is passed in rather than computed here: action.js is loaded by the
-    // screener but not by every page this module serves, and a tooltip is no
-    // place to discover a missing dependency.
-    if (kind === 'action') {
-      const a = o.action;
-      if (!a) return null;
-      const sign = (v) => (v > 0 ? '+' + v : String(v));
-      const line = (label, val, colour) =>
-        `<div class="tip-row"><span class="lbl">${esc(label)}</span>` +
-        `<span class="val" style="width:auto${colour ? ';color:' + colour : ''}">${esc(val)}</span></div>`;
-      const part = (label, v) => (v === 0 ? '' : line(label, sign(v), v > 0 ? 'var(--green)' : 'var(--red)'));
-      const T = a.tech, F = a.fund;
-      const techRows =
-        part('Moving-average cross', T.t1) + part('vs 200-day', T.t2) + part('vs 50-day', T.t3) +
-        part('RSI', T.t4) + part('Momentum delta', T.t5) + part('Momentum score', T.t6) +
-        part('Volume confirmation', T.t7) + part('From the 52-week high', T.t8);
-      const fundRows = a.type === 'Established'
-        ? part('Quality', F.fe1) + part('Earnings growth', F.fe2) + part('Revenue growth', F.fe3) +
-          part('PEG', F.fe4) + part('FCF margin', F.fe5) + part('Net cash', F.fe6)
-        : a.type === 'Early'
-          ? part('Revenue growth', F.ea1) + part('Gross margin', F.ea2) + part('Free cash flow', F.ea3) +
-            part('Profitable', F.ea4) + part('Short interest', F.ea5) + part('Quality', F.ea6)
-          : '';
-      const capped = a.rank !== a.baseRank;
-      return `<div class="tip-head">${esc(a.action)} ` +
-        `<span>· ${esc(a.type)}${a.type !== 'ETF' ? ` · establishment ${a.estScore}/7` : ''}</span></div>` +
-        (techRows ? '<div class="tip-sep"></div>' + techRows : '') +
-        line('Technical score', sign(T.total)) +
-        (fundRows ? '<div class="tip-sep"></div>' + fundRows : '') +
-        (a.type === 'ETF' ? '' : line('Fundamental score', sign(F.total))) +
-        '<div class="tip-sep"></div>' +
-        line('Composite', String(Math.round(a.composite * 100) / 100)) +
-        line('Before overrides', TIERS_LABEL(a.baseRank)) +
-        (capped ? line('After overrides', esc(a.action), 'var(--amber)') : '') +
-        `<div class="tip-foot">` +
-        (a.flags.length
-          ? `Held back by: ${esc(a.flags.join('; '))}. Overrides can only lower the answer, never raise it.`
-          : 'No override fired.') +
-        ` Scored under ${esc(o.actionSet || 'the house rules')}. A reading of today's numbers, not a forecast.` +
-        `${foot}</div>`;
     }
 
     const quality = kind === 'quality';
