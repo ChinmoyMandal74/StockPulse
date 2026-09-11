@@ -242,5 +242,90 @@ console.log('\nINTERMEDIATE STATES (the Action Model columns)');
       A.FUND_ORDER.includes('—')], [true, true, true]);
 }
 
+
+console.log('\nTHE LADDER (explain / ladder)');
+{
+  // The panel's rungs must fire exactly where the engine fires. Targeted rows
+  // first — one per interesting rule — then a random sweep across every field
+  // and several profiles, where any divergence sets `mismatch`.
+  const ex = (r, d, p) => A.explain(row(r, d || {}), cfg(p));
+  const fired = (e) => { const g = e.rungs[e.firedIndex]; return [e.mismatch, g.section, g.action, g.flag]; };
+
+  check('healthy Established base fires the Buy rung (vs200 +6 is under the Strong Buy bar)',
+    fired(ex(EST)), [false, 'setup', 'Buy', 'Buy: clean entry, fundamentals OK']);
+  check('strong uptrend near the high fires the Strong Buy rung',
+    fired(ex(EST, { vs200ma: 15, pctFromHigh: -5 })),
+    [false, 'setup', 'Strong Buy', 'Strong Buy: uptrend, clean entry, near high, strong fundamentals']);
+  check('breakdown row fires the top veto rung',
+    fired(ex(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 })), [false, 'veto', 'Sell Immediately', 'Breakdown']);
+  check('rungs below the fired one are marked unchecked',
+    ex(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 }).rungs.slice(1).every((g) => !g.checked), true);
+  check('deep-below-the-high BwR rung carries the failed drawdown as a met condition',
+    (() => { const e = ex(EST, { vs200ma: 6, pctFromHigh: -25, earningsGrowthYoY: 5, revenueGrowthYoY: 5, profitMargin: 3 });
+      const g = e.rungs[e.firedIndex];
+      return [e.mismatch, g.flag, g.conds[g.conds.length - 1].met]; })(),
+    [false, 'Buy with Risk: deep below the high', true]);
+  check('every condition on the fired rung is met (first-match honesty)',
+    (() => { const e = ex(EST); return e.rungs[e.firedIndex].conds.every((c) => c.met); })(), true);
+  check('ETF row walks the ETF ladder',
+    fired(ex(row(EST, { portfolios: ['ETFs'], qualityRating: null, forwardPe: null }), { pctFromHigh: -5, vs200ma: 15 })),
+    [false, 'setup', 'Strong Buy', 'Strong Buy: uptrend, clean entry, near high']);
+  check('typeParts sum to the establishment score',
+    (() => { const e = ex(EST); return e.typeParts.reduce((t, x) => t + x.earned, 0) === e.estScore; })(), true);
+  check('typeParts max out at 7', ex(EST).typeParts.reduce((t, x) => t + x.max, 0), 7);
+  check('gauges carry value, domain and passing band',
+    (() => { const e = ex(EST); const g = e.rungs[e.firedIndex].conds[0].gauge;
+      return [typeof g.value, g.domain.length, g.band.length]; })(), ['number', 2, 2]);
+  check('the model-level ladder has rungs for all three types',
+    ['Established', 'Early', 'ETF'].map((t) => A.ladder(t, cfg()).length > 0), [true, true, true]);
+  check('the abstract ladder never claims a condition is met',
+    A.ladder('Established', cfg()).every((g) => g.conds.every((c) => !c.met)), true);
+  check('gate off adds the mean-reversion rung, gate on omits it',
+    [A.ladder('Established', cfg({ trend_gate: { never_buy_below_200d: false } }))
+        .some((g) => g.flag === 'Buy with Risk: below 200D, mean-reversion mode'),
+      A.ladder('Established', cfg()).some((g) => g.flag === 'Buy with Risk: below 200D, mean-reversion mode')],
+    [true, false]);
+
+  // The sweep. A small LCG so the run is deterministic; each field is drawn
+  // from a range wide enough to hit every rule, with a blank chance so the
+  // null discipline is walked too.
+  let seed = 42;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const pick = (lo, hi, blank) => (rnd() < (blank == null ? 0.15 : blank) ? null : lo + rnd() * (hi - lo));
+  const randRow = () => ({
+    symbol: 'R', portfolios: rnd() < 0.1 ? ['ETFs'] : ['Watchlist'],
+    marketCap: pick(1e9, 400e9), netIncomeTtm: pick(-5e9, 20e9), profitMargin: pick(-30, 35),
+    fcfTtm: pick(-2e9, 10e9), fcfMargin: pick(-30, 30), forwardPe: pick(5, 80, 0.3),
+    roe: pick(-20, 40), qualityRating: pick(1, 10, 0.3),
+    earningsGrowthYoY: pick(-40, 60), revenueGrowthYoY: pick(-30, 60),
+    grossMargin: pick(10, 80), shortPctFloat: pick(0, 35),
+    vs200ma: pick(-35, 35), vs50ma: pick(-25, 25), rsi: pick(15, 90),
+    oneMonthPct: pick(-30, 35), threeMonthPct: pick(-45, 50), pctFromHigh: pick(-55, 0),
+    volTrend: pick(-25, 25), historyDays: pick(50, 600),
+    nextEarningsDate: rnd() < 0.5 ? '2026-09-' + (12 + Math.floor(rnd() * 18)) : '2026-10-20',
+    latestDate: '2026-09-11', momentumRating: pick(1, 10),
+  });
+  const profiles = [cfg(), cfg(null, 'Conservative'), cfg(null, 'Aggressive'),
+    cfg({ trend_gate: { never_buy_below_200d: false } }),
+    cfg({ fixes: { blank_trend_holds: false, weak_blocks_buy_with_risk: false } }),
+    cfg({ use_quality: true, use_momentum: true }),
+    cfg({ early: { allow_strong_buy: true, buy_requires: 'ok' } }),
+    cfg({ earnings: { enabled: false }, use_vol_trend: false }),
+    cfg({ whipsaw: { neutral_band_pct: 3 } })];
+  let bad = 0, first = null;
+  for (let i = 0; i < 2000; i++) {
+    const rr = randRow();
+    for (const c of profiles) {
+      const e = A.explain(rr, c);
+      if (e.mismatch) {
+        bad++;
+        if (!first) first = { row: rr, profile: c.profile, got: [e.action, e.flag], firedIndex: e.firedIndex };
+      }
+    }
+  }
+  if (first) console.log('  first mismatch:', JSON.stringify(first));
+  check('18,000 random row-x-profile evaluations: ladder and engine never disagree', bad, 0);
+}
+
 console.log(`\n${n} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);

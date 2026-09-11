@@ -277,17 +277,21 @@
 
     const mc = num(s.marketCap), ni = num(s.netIncomeTtm), pm = num(s.profitMargin);
     const fcf = num(s.fcfTtm), fm = num(s.fcfMargin), roe = num(s.roe);
-    let score = 0;
-    if (gte(mc, c.mc_big)) score += 2; else if (gte(mc, c.mc_mid)) score += 1;
-    if (gt(ni, 0)) score += gte(pm, c.pm_min) ? 2 : 1;
-    if (gt(fcf, 0) && gte(fm, c.fm_min)) score += 1;
-    if (gt(pe, 0) && lte(pe, c.pe_max)) score += 1;
-    // The seventh point: Quality when the composite is switched on, plain ROE
-    // when it is not — a raw stand-in for "consistently good business".
-    if (cfg.use_quality ? gte(q, c.quality_min) : gte(roe, c.roe_min)) score += 1;
-
+    // Each establishment point named, so the panel can show which were earned.
+    // Same arithmetic as before, just held in a list instead of an accumulator.
+    const parts = [
+      { label: 'Size', earned: gte(mc, c.mc_big) ? 2 : gte(mc, c.mc_mid) ? 1 : 0, max: 2 },
+      { label: 'Profitability', earned: gt(ni, 0) ? (gte(pm, c.pm_min) ? 2 : 1) : 0, max: 2 },
+      { label: 'Free cash flow', earned: gt(fcf, 0) && gte(fm, c.fm_min) ? 1 : 0, max: 1 },
+      { label: 'Priced on earnings', earned: gt(pe, 0) && lte(pe, c.pe_max) ? 1 : 0, max: 1 },
+      // The seventh point: Quality when the composite is switched on, plain ROE
+      // when it is not — a raw stand-in for "consistently good business".
+      { label: cfg.use_quality ? 'Quality' : 'ROE',
+        earned: (cfg.use_quality ? gte(q, c.quality_min) : gte(roe, c.roe_min)) ? 1 : 0, max: 1 },
+    ];
+    const score = parts.reduce((t, x) => t + x.earned, 0);
     const type = gte(mc, c.mc_override) || score >= c.score_cutoff ? 'Established' : 'Early';
-    return { type, estScore: score, pinned: false };
+    return { type, estScore: score, pinned: false, parts };
   }
 
   // ---- Step 2: the named conditions ------------------------------------------
@@ -305,6 +309,7 @@
 
     const d = {
       v200, v50, rsi, m1, m3, fh, dte,
+      vol, sf, hist,
       above200, below200,
       blankTrend: v200 == null,
       uptrend: above200 && gt(v50, cfg.entry.uptrend_vs50),
@@ -480,13 +485,204 @@
   // ---- the whole answer for one row ------------------------------------------
   function evaluate(stock, cfg) {
     const s = stock || {};
-    const { type, estScore, pinned } = classify(s, cfg);
+    const { type, estScore, pinned, parts } = classify(s, cfg);
     const d = definitions(s, cfg, type);
     const fund = fundamentals(s, cfg, type);
     const [action, flag] = type === 'ETF' ? etfRules(d, cfg)
       : type === 'Early' ? earlyRules(d, fund, cfg)
         : establishedRules(d, fund, cfg);
-    return { type, action, flag, fund, estScore, pinned, defs: d, states: states(d, fund) };
+    return { type, action, flag, fund, estScore, pinned, typeParts: parts || null,
+      defs: d, states: states(d, fund) };
+  }
+
+  // ---- Step 4: the ladder, as data --------------------------------------------
+  // explain() is what the per-stock panel draws: the SAME rule lists evaluate()
+  // walks, but as rungs — each rung one rule, each condition carrying the
+  // stock's value and the zone that passes, so the UI can draw a gauge instead
+  // of restating prose. Built from the same defs and fundamentals bucket, and
+  // the test suite sweeps random rows asserting that the first rung whose
+  // conditions all hold IS the rule evaluate() fired (`mismatch` marks any
+  // divergence) — so this description cannot drift from the engine without a
+  // test failing.
+  //
+  // Gauge shape: { value, unit, domain: [lo, hi], band: [lo, hi] } — the dot
+  // sits at value, the band is the zone that PASSES. A null value has no dot.
+  const DOMAINS = {
+    v200: [-40, 40], v50: [-30, 30], rsi: [0, 100], m1: [-40, 40], m3: [-60, 60],
+    fh: [-60, 0], vol: [-40, 40], sf: [0, 40], hist: [0, 400], dte: [0, 30],
+  };
+  const clampTo = (x, dom) => Math.max(dom[0], Math.min(dom[1], x));
+  function gauge(key, value, band, unit) {
+    const dom = DOMAINS[key];
+    return { value, unit: unit == null ? '%' : unit, domain: dom,
+      band: [clampTo(band[0], dom), clampTo(band[1], dom)] };
+  }
+  const n2 = (x) => (x > 0 ? '+' + x : String(x));
+  // Condition builders. `met` goes through the same blank-refusing comparison
+  // helpers the rules use, so a gauge can never disagree with its rule.
+  const cLT = (label, key, v, x, u) => ({ label, met: lt(v, x), gauge: gauge(key, v, [DOMAINS[key][0], x], u) });
+  const cGT = (label, key, v, x, u) => ({ label, met: gt(v, x), gauge: gauge(key, v, [x, DOMAINS[key][1]], u) });
+  const cBT = (label, key, v, lo, hi, u) => ({ label, met: between(v, lo, hi), gauge: gauge(key, v, [lo, hi], u) });
+  const cB = (label, met) => ({ label, met: !!met });
+  const anyOf = (label, conds) => ({ label, any: conds, met: conds.some((c) => c.met) });
+
+  function buildRungs(type, d, fund, cfg) {
+    const sl = cfg.stop_loss, en = cfg.entry, ex = cfg.exit, ch = cfg.chase;
+    const fundOK = fund === 'ok' || fund === 'strong';
+    const R = (section, action, flag, conds, fallback) => ({ section, action, flag, conds, fallback: !!fallback });
+    const clean = () => [
+      cBT(`vs 50D between ${n2(en.vs50_low)}% and ${n2(en.vs50_high)}%`, 'v50', d.v50, en.vs50_low, en.vs50_high),
+      cBT(`RSI between ${en.rsi_low} and ${en.rsi_high}`, 'rsi', d.rsi, en.rsi_low, en.rsi_high, ''),
+    ];
+    const band = cfg.whipsaw.neutral_band_pct;
+    const below200 = () => cLT(`vs 200D below ${n2(-band)}%`, 'v200', d.v200, -band);
+    // The "may buy" side of the line: met mirrors !d.below200 exactly, blanks
+    // and the neutral band included, which is what the rule actually tests.
+    const above200ish = () => ({ label: `vs 200D at or above ${n2(-band)}%`, met: !d.below200,
+      gauge: gauge('v200', d.v200, [-band, DOMAINS.v200[1]]) });
+    const distribution = () => [
+      { label: `Vol Trend above ${n2(ex.distribution_vol)}%` + (cfg.use_vol_trend ? '' : ' (check off)'),
+        met: cfg.use_vol_trend && gt(d.vol, ex.distribution_vol),
+        gauge: gauge('vol', d.vol, [ex.distribution_vol, DOMAINS.vol[1]]) },
+      cLT('1M return below 0%', 'm1', d.m1, 0),
+    ];
+    const extended = () => [anyOf('Any chase signal', [
+      cGT(`1M above ${n2(ch.max_1m)}%`, 'm1', d.m1, ch.max_1m),
+      cGT(`vs 50D above ${n2(ch.max_vs50)}%`, 'v50', d.v50, ch.max_vs50),
+      cGT(`RSI above ${ch.max_rsi}`, 'rsi', d.rsi, ch.max_rsi, ''),
+    ])];
+    const thin = () => R('cap', 'Hold', 'Thin history',
+      [cLT(`History under ${cfg.history.min_days} sessions`, 'hist', d.hist, cfg.history.min_days, 'd')]);
+    const earnings = () => R('cap', 'Hold', 'Earnings soon',
+      [{ label: `Earnings within ${cfg.earnings.blackout_days} days`, met: d.earningsSoon,
+        gauge: gauge('dte', d.dte, [0, cfg.earnings.blackout_days], 'd') }]);
+    const noTrend = () => R('cap', 'Hold', 'No trend data', [cB('No 200D average yet', d.blankTrend)]);
+    const mom = () => (cfg.use_momentum ? [cB(`Momentum rating at least ${en.momentum_min}`, d.momentumOk)] : []);
+    const nearHigh = () => cGT(`Within ${-en.near_high}% of the 52W high`, 'fh', d.fh, en.near_high);
+    const strongUp = () => cGT(`vs 200D above ${n2(en.strong_buy_vs200)}%`, 'v200', d.v200, en.strong_buy_vs200);
+    const shallow = () => cGT(`Drawdown shallower than ${-en.buy_max_drawdown}%`, 'fh', d.fh, en.buy_max_drawdown);
+
+    const r = [];
+    if (type === 'Established') {
+      r.push(R('veto', 'Sell Immediately', 'Breakdown', [
+        cLT(`vs 200D below ${n2(sl.established_vs200)}%`, 'v200', d.v200, sl.established_vs200),
+        anyOf('Still falling', [
+          cLT(`1M below ${n2(sl.confirm_1m)}%`, 'm1', d.m1, sl.confirm_1m),
+          cLT(`3M below ${n2(sl.confirm_3m)}%`, 'm3', d.m3, sl.confirm_3m),
+        ]),
+      ]));
+      r.push(R('veto', 'Avoid', 'Downtrend', [below200(), cLT('vs 50D below 0%', 'v50', d.v50, 0)]));
+      r.push(R('veto', 'Avoid', 'Weak fundamentals below 200D',
+        [below200(), cB('Fundamentals Weak', fund === 'weak')]));
+      r.push(R('veto', 'Avoid', 'Distribution deep in drawdown', distribution().concat([
+        cLT(`More than ${-ex.distribution_avoid_drawdown}% below the 52W high`, 'fh', d.fh, ex.distribution_avoid_drawdown),
+      ])));
+      if (cfg.trend_gate.never_buy_below_200d) r.push(R('cap', 'Hold', 'Below 200D', [below200()]));
+      if (cfg.fixes.blank_trend_holds) r.push(noTrend());
+      r.push(thin());
+      if (cfg.earnings.enabled) r.push(earnings());
+      r.push(R('cap', 'Hold', 'Extended — wait for a pullback', extended()));
+
+      r.push(R('setup', 'Strong Buy', 'Strong Buy: uptrend, clean entry, near high, strong fundamentals',
+        [strongUp()].concat(clean(), [nearHigh(), cB('Fundamentals Strong', fund === 'strong')], mom())));
+      r.push(R('setup', 'Buy', 'Buy: clean entry, fundamentals OK',
+        [above200ish()].concat(clean(), [cB('Fundamentals OK or Strong', fundOK), shallow()])));
+      if (!cfg.trend_gate.never_buy_below_200d) {
+        r.push(R('setup', 'Buy with Risk', 'Buy with Risk: below 200D, mean-reversion mode',
+          [below200()].concat(clean(), [cB('Fundamentals OK or Strong', fundOK)])));
+      }
+      r.push(R('setup', 'Buy with Risk', 'Buy with Risk: deep below the high',
+        [above200ish()].concat(clean(), [cB('Fundamentals OK or Strong', fundOK),
+          { label: `More than ${-en.buy_max_drawdown}% below the 52W high`, met: !d.shallowEnough,
+            gauge: gauge('fh', d.fh, [DOMAINS.fh[0], en.buy_max_drawdown]) }])));
+      const notOK = fund === 'none' || (fund === 'weak' && !cfg.fixes.weak_blocks_buy_with_risk);
+      r.push(R('setup', 'Buy with Risk', 'Buy with Risk: fundamentals not OK',
+        [above200ish()].concat(clean(), [cB('Fundamentals not OK', notOK)])));
+      if (!cfg.trend_gate.never_buy_below_200d) {
+        r.push(R('setup', 'Hold', 'Below 200D without fundamentals',
+          [below200()].concat(clean(), [cB('Fundamentals not OK', notOK)])));
+      }
+      if (cfg.fixes.weak_blocks_buy_with_risk) {
+        r.push(R('setup', 'Hold', 'Weak fundamentals',
+          clean().concat([cB('Fundamentals Weak', fund === 'weak')])));
+      }
+      r.push(R('setup', 'Hold', 'No clean entry', clean(), true));
+    } else if (type === 'Early') {
+      r.push(R('veto', 'Sell Immediately', 'Breakdown (early)', [
+        cLT(`vs 200D below ${n2(sl.early_vs200)}%`, 'v200', d.v200, sl.early_vs200),
+        cLT(`1M below ${n2(sl.early_confirm_1m)}%`, 'm1', d.m1, sl.early_confirm_1m),
+      ]));
+      r.push(R('veto', 'Sell Immediately', 'Weak fundamentals below 200D',
+        [below200(), cB('Fundamentals Weak', fund === 'weak')]));
+      r.push(R('veto', 'Avoid', 'Below 200D', [below200()]));
+      r.push(R('veto', 'Avoid', 'Distribution', distribution()));
+      r.push(R('veto', 'Avoid', 'Heavy short interest',
+        [cGT(`Short interest above ${ex.early_avoid_short_float}% of float`, 'sf', d.sf, ex.early_avoid_short_float)]));
+      if (cfg.fixes.blank_trend_holds) r.push(noTrend());
+      r.push(thin());
+      if (cfg.earnings.enabled) r.push(earnings());
+      r.push(R('cap', 'Hold', 'Extended — wait for a pullback', extended()));
+      r.push(R('cap', 'Hold', 'Weak fundamentals', [cB('Fundamentals Weak', fund === 'weak')]));
+
+      const needStrong = cfg.early.buy_requires !== 'ok';
+      const needCond = () => cB(needStrong ? 'Fundamentals Strong' : 'Fundamentals OK or Strong',
+        needStrong ? fund === 'strong' : fundOK);
+      if (cfg.early.allow_buy && cfg.early.allow_strong_buy) {
+        r.push(R('setup', 'Strong Buy', 'Strong Buy (early): enabled by profile',
+          [strongUp()].concat(clean(), [nearHigh(), cB('Fundamentals Strong', fund === 'strong'), shallow()], mom())));
+      }
+      if (cfg.early.allow_buy) {
+        r.push(R('setup', 'Buy', 'Buy (early): strong growth in an uptrend',
+          [strongUp()].concat(clean(), [needCond(), shallow()], mom())));
+      }
+      r.push(R('setup', 'Buy with Risk', 'Buy with Risk (early)',
+        clean().concat([cB('Fundamentals OK or Strong', fundOK)])));
+      r.push(R('setup', 'Hold', 'No clean entry', clean(), true));
+    } else {
+      r.push(R('veto', 'Sell Immediately', 'Breakdown', [
+        cLT(`vs 200D below ${n2(sl.established_vs200)}%`, 'v200', d.v200, sl.established_vs200),
+        anyOf('Still falling', [
+          cLT(`1M below ${n2(sl.confirm_1m)}%`, 'm1', d.m1, sl.confirm_1m),
+          cLT(`3M below ${n2(sl.confirm_3m)}%`, 'm3', d.m3, sl.confirm_3m),
+        ]),
+      ]));
+      r.push(R('veto', 'Avoid', 'Downtrend', [below200(), cLT('vs 50D below 0%', 'v50', d.v50, 0)]));
+      r.push(R('cap', 'Hold', 'Below 200D', [below200()]));
+      if (cfg.fixes.blank_trend_holds) r.push(noTrend());
+      r.push(thin());
+      r.push(R('cap', 'Hold', 'Extended — wait for a pullback', extended()));
+      r.push(R('setup', 'Strong Buy', 'Strong Buy: uptrend, clean entry, near high',
+        [strongUp()].concat(clean(), [nearHigh()], mom())));
+      r.push(R('setup', 'Buy', 'Buy: clean entry', clean()));
+      r.push(R('setup', 'Hold', 'No clean entry', clean(), true));
+    }
+    return r;
+  }
+
+  function explain(stock, cfg) {
+    const s = stock || {};
+    const res = evaluate(s, cfg);
+    const rungs = buildRungs(res.type, res.defs, res.fund, cfg);
+    let fired = -1;
+    for (let i = 0; i < rungs.length; i++) {
+      const g = rungs[i];
+      g.met = g.fallback || g.conds.every((c) => c.met);
+      if (fired < 0 && g.met) fired = i;
+    }
+    rungs.forEach((g, i) => { g.fired = i === fired; g.checked = i <= fired; });
+    const mismatch = fired < 0
+      || rungs[fired].action !== res.action || rungs[fired].flag !== res.flag;
+    return Object.assign({}, res, { rungs, firedIndex: fired, mismatch });
+  }
+
+  // The model-level reference: the same rungs with no stock behind them —
+  // labels and passing zones only, for the "How is this computed?" view.
+  function ladder(type, cfg) {
+    const d = definitions({}, cfg, type);
+    const rungs = buildRungs(type, d, null, cfg);
+    const strip = (c) => { c.met = false; if (c.any) c.any.forEach(strip); };
+    rungs.forEach((g) => { g.met = false; g.fired = false; g.checked = true; g.conds.forEach(strip); });
+    return rungs;
   }
 
   // One resolved config for a whole pass — what both the server and a browser
@@ -500,5 +696,6 @@
     ACTIONS, TYPES, DEFAULTS, PRESETS, TREND_ORDER, ENTRY_ORDER, FUND_ORDER,
     resolve, validate, diff, merge,
     classify, definitions, fundamentals, evaluate, apply, daysToEarnings,
+    explain, ladder,
   };
 });
