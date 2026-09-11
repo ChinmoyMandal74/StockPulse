@@ -121,7 +121,7 @@
     /* Action: two hues, not six. Most of the table sits on Hold, and the
        momentum arrow already made the argument — light every row and the
        column stops carrying information. Weight separates the extremes. */
-    td.act { font-family: var(--sans); font-size: 12px; white-space: nowrap; cursor: help; }
+    td.act { font-family: var(--sans); font-size: 12px; white-space: nowrap; cursor: pointer; }
     td.act.a-strong-buy { color: var(--green); font-weight: 700; }
     td.act.a-buy { color: var(--green); }
     td.act.a-buy-with-risk { color: color-mix(in srgb, var(--green) 55%, var(--muted)); }
@@ -526,6 +526,72 @@
       .status { flex: 1 1 100%; text-align: left; }
       .field input[type="text"] { width: 100px; }
     }
+
+    /* ---- Action ladder panel ------------------------------------------
+       Same glass language as the pickers; fixed and clamped rather than
+       anchored, because it opens from a table cell that scrolls. */
+    #actionPanel {
+      position: fixed; z-index: 44; width: 376px; max-width: calc(100vw - 20px);
+      max-height: min(78vh, 660px); overflow-y: auto; padding: 6px; border-radius: 20px;
+      background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+      backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
+      box-shadow: 0 34px 70px -24px rgba(0, 0, 0, 0.95);
+    }
+    #actionPanel .ap-core { background: rgba(10, 12, 17, 0.92); border-radius: 15px; padding: 12px; }
+    .ap-head { display: flex; align-items: baseline; gap: 8px; }
+    .ap-sym { font-family: var(--mono); font-weight: 700; font-size: 15px; letter-spacing: 0.04em; }
+    .ap-verdict { margin-left: auto; font-size: 12.5px; font-weight: 700; }
+    .ap-x { flex: none; background: none; border: none; color: var(--faint); cursor: pointer;
+      font-size: 13px; padding: 0 0 0 4px; font-family: var(--sans); }
+    .ap-x:hover { color: var(--text); }
+    .ap-est { display: flex; align-items: center; gap: 5px; margin: 8px 0 0; }
+    .ap-est .seg { width: 16px; height: 5px; border-radius: 2px; background: rgba(255, 255, 255, 0.09); }
+    .ap-est .seg.on { background: var(--accent); }
+    .ap-est span { font-size: 10.5px; color: var(--faint); margin-left: 3px; }
+    .ap-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 2px; }
+    .ap-chip { font-size: 10.5px; color: var(--muted); border: 1px solid var(--hair);
+      border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+    .ap-chip b { color: var(--text); font-weight: 600; }
+    .ap-sec { margin-top: 11px; font-size: 10px; letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase; }
+    .ap-rung { border: 1px solid transparent; border-radius: 12px; padding: 6px 9px 7px; margin-top: 5px; }
+    .ap-rung.fired { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.045); }
+    .ap-rung.unchecked { opacity: 0.38; }
+    .ap-rung-head { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+    .ap-rung-head .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, 0.14); flex: none; }
+    .ap-rung.fired .dot.good { background: var(--green); box-shadow: 0 0 8px rgba(52, 211, 153, 0.6); }
+    .ap-rung.fired .dot.mid { background: color-mix(in srgb, var(--green) 55%, var(--muted)); }
+    .ap-rung.fired .dot.hold { background: var(--muted); }
+    .ap-rung.fired .dot.bad { background: var(--red); box-shadow: 0 0 8px rgba(251, 113, 133, 0.6); }
+    .ap-rung-head .fl { color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ap-rung-head .ac { flex: none; font-size: 11px; font-weight: 600; color: var(--muted); }
+    .ap-act-buy { color: var(--green); }
+    .ap-act-bwr { color: color-mix(in srgb, var(--green) 55%, var(--muted)); }
+    .ap-act-hold { color: var(--muted); }
+    .ap-act-avoid { color: color-mix(in srgb, var(--red) 70%, var(--muted)); }
+    .ap-act-sell { color: var(--red); }
+    .ap-cond { display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 2px 6px; margin-top: 4px; }
+    .ap-cond .tick { font-size: 10px; text-align: center; color: var(--faint); }
+    .ap-cond.met .tick { color: var(--green); }
+    .ap-cond .lb { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ap-cond .val { font-family: var(--mono); font-size: 10.5px; color: var(--text); text-align: right;
+      font-variant-numeric: tabular-nums; }
+    .ap-gauge { grid-column: 2 / 4; position: relative; height: 6px; border-radius: 3px;
+      background: rgba(255, 255, 255, 0.06); margin: 1px 0 2px; }
+    .ap-gauge .zone { position: absolute; top: 0; bottom: 0; background: rgba(124, 156, 255, 0.28); border-radius: 3px; }
+    .ap-gauge .pt { position: absolute; top: 50%; width: 7px; height: 7px; border-radius: 50%;
+      transform: translate(-50%, -50%); background: var(--text); box-shadow: 0 0 0 2px rgba(5, 5, 5, 0.8); }
+    .ap-any { border-left: 2px solid var(--hair); margin-left: 6px; padding-left: 8px; }
+    .ap-note { font-size: 10px; color: var(--faint); margin-top: 8px; line-height: 1.5; }
+    .ap-note a { color: var(--accent); text-decoration: none; }
+    .ap-foot { display: flex; justify-content: space-between; align-items: center;
+      margin-top: 9px; border-top: 1px solid var(--hair); padding-top: 8px; }
+    .ap-link { background: none; border: none; color: var(--accent); font-size: 11px;
+      cursor: pointer; padding: 0; font-family: var(--sans); }
+    .ap-tabs { display: flex; gap: 4px; margin: 9px 0 0; }
+    .ap-tab { flex: 1; font-size: 11px; padding: 4px 0; border-radius: 9px; border: 1px solid var(--hair);
+      background: none; color: var(--muted); cursor: pointer; font-family: var(--sans);
+      transition: background 0.4s var(--ease), color 0.4s var(--ease); }
+    .ap-tab[data-on="1"] { color: var(--text); border-color: var(--hair-2); background: rgba(255, 255, 255, 0.06); }
   </style>
 </head>
 <body>
@@ -738,6 +804,7 @@
 
     <div id="tip"></div>
     <div id="rowcard"></div>
+    <div id="actionPanel" hidden></div>
 
     <dialog class="modal" id="pwDialog">
       <div class="core">
@@ -2532,9 +2599,166 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     $('backToLive').addEventListener('click', () => { closePickers(); clearForwardView(); });
     document.addEventListener('click', (e) => {
       if (!PICKERS.some((p) => $(p.root).contains(e.target))) closePickers();
+      if (!apPanel.contains(e.target)) closeActionPanel();
     });
     // acting on a more-menu item dismisses the menu
     $('moreMenu').addEventListener('click', () => closePickers());
+
+    // ---- Action ladder panel -------------------------------------------
+    // Click an Action cell and the panel walks the rule list for that row:
+    // the rung that fired lit, everything below it dimmed (first match wins,
+    // so those rules were never consulted), and every condition drawn as a
+    // small gauge — the passing zone shaded, a dot at the stock's value. It
+    // recomputes through ActionRules.explain(), the same engine the server
+    // scored the row with, so the panel cannot drift from the column.
+    const ACTION_PANEL_CFG = ActionRules.resolve(null, 'Balanced').cfg;
+    const apPanel = $('actionPanel');
+    let apOpenFor = null, apAnchor = null, apBackSym = null, apModelTab = 'Established';
+
+    const AP_ACT_CLS = {
+      'Strong Buy': 'ap-act-buy', 'Buy': 'ap-act-buy', 'Buy with Risk': 'ap-act-bwr',
+      'Hold': 'ap-act-hold', 'Avoid': 'ap-act-avoid', 'Sell Immediately': 'ap-act-sell',
+    };
+    const AP_DOT = {
+      'Strong Buy': 'good', 'Buy': 'good', 'Buy with Risk': 'mid',
+      'Hold': 'hold', 'Avoid': 'bad', 'Sell Immediately': 'bad',
+    };
+
+    function apFmt(v, unit) {
+      if (v == null) return '—';
+      const r = Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 10) / 10;
+      return (v > 0 && unit === '%' ? '+' : '') + r + (unit || '');
+    }
+    function apGauge(g) {
+      const [d0, d1] = g.domain;
+      const x = (v) => Math.max(0, Math.min(100, ((v - d0) / (d1 - d0)) * 100));
+      const z0 = x(g.band[0]), z1 = x(g.band[1]);
+      const dot = g.value == null ? '' : `<i class="pt" style="left:${x(g.value).toFixed(1)}%"></i>`;
+      return `<div class="ap-gauge"><i class="zone" style="left:${z0.toFixed(1)}%;width:${(z1 - z0).toFixed(1)}%"></i>${dot}</div>`;
+    }
+    function apCond(c, abstract) {
+      const tick = abstract ? '' : c.met ? '✓' : '✗';
+      if (c.any) {
+        return `<div class="ap-cond${c.met ? ' met' : ''}"><span class="tick">${tick}</span>` +
+          `<span class="lb">${we(c.label)}</span><span class="val"></span></div>` +
+          `<div class="ap-any">${c.any.map((a) => apCond(a, abstract)).join('')}</div>`;
+      }
+      const val = c.gauge && !abstract ? apFmt(c.gauge.value, c.gauge.unit) : '';
+      return `<div class="ap-cond${c.met ? ' met' : ''}"><span class="tick">${tick}</span>` +
+        `<span class="lb">${we(c.label)}</span><span class="val">${we(val)}</span>` +
+        (c.gauge ? apGauge(c.gauge) : '') + '</div>';
+    }
+    function apRung(g, abstract) {
+      const cls = ['ap-rung'];
+      if (g.fired) cls.push('fired');
+      if (!g.checked) cls.push('unchecked');
+      const dot = g.fired ? ' ' + (AP_DOT[g.action] || '') : '';
+      return `<div class="${cls.join(' ')}"${g.checked || abstract ? '' : attr('Not checked — a rule above already fired')}>` +
+        `<div class="ap-rung-head"><span class="dot${dot}"></span>` +
+        `<span class="fl"${attr(g.flag)}>${we(g.flag)}</span>` +
+        `<span class="ac ${AP_ACT_CLS[g.action] || ''}">${we(g.action)}</span></div>` +
+        g.conds.map((c) => apCond(c, abstract)).join('') + '</div>';
+    }
+    const AP_SECTIONS = [['veto', 'Vetoes — get out, stay out'], ['cap', 'Caps — wait'], ['setup', 'Setups — the buys']];
+    function apLadderHtml(rungs, abstract) {
+      let h = '';
+      for (const [id, label] of AP_SECTIONS) {
+        const rs = rungs.filter((g) => g.section === id);
+        if (rs.length) h += `<div class="ap-sec">${label}</div>` + rs.map((g) => apRung(g, abstract)).join('');
+      }
+      return h;
+    }
+    function apStockHtml(s) {
+      const e = ActionRules.explain(s, ACTION_PANEL_CFG);
+      const estTip = e.typeParts ? e.typeParts.map((x) => `${x.label} ${x.earned}/${x.max}`).join(' · ') : '';
+      const est = e.estScore == null ? '' :
+        `<div class="ap-est"${attr(estTip)}>` +
+        Array.from({ length: 7 }, (_, i) => `<i class="seg${i < e.estScore ? ' on' : ''}"></i>`).join('') +
+        `<span>establishment ${e.estScore}/7 — ${we(e.type)} at ${ACTION_PANEL_CFG.company_type.score_cutoff}+</span></div>`;
+      const chips = [
+        `<span class="ap-chip">Type <b>${we(e.type)}${e.pinned ? ' (pinned)' : ''}</b></span>`,
+        `<span class="ap-chip">Trend <b>${we(e.states.trend)}</b></span>`,
+        `<span class="ap-chip">Entry <b>${we(e.states.entry)}</b></span>`,
+        `<span class="ap-chip">Fundamentals <b>${we(e.states.fund)}</b></span>`,
+      ];
+      if (e.states.guards) chips.push(`<span class="ap-chip">Guards <b>${we(e.states.guards)}</b></span>`);
+      return '<div class="ap-core">' +
+        `<div class="ap-head"><span class="ap-sym">${we(s.symbol)}</span>` +
+        `<span class="ap-verdict ${AP_ACT_CLS[e.action] || ''}">${we(e.action)}</span>` +
+        '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>' +
+        est + `<div class="ap-chips">${chips.join('')}</div>` +
+        apLadderHtml(e.rungs, false) +
+        '<div class="ap-note">First match wins — the lit rule is the verdict, and everything below it was never checked. Thresholds are the fixed Balanced defaults.</div>' +
+        '<div class="ap-foot"><button class="ap-link" data-ap-model>How is this computed?</button><span></span></div></div>';
+    }
+    function apModelHtml() {
+      const tabs = ['Established', 'Early', 'ETF'].map((t) =>
+        `<button class="ap-tab" data-ap-tab="${t}" data-on="${t === apModelTab ? 1 : 0}">${t}</button>`).join('');
+      const rungs = ActionRules.ladder(apModelTab, ACTION_PANEL_CFG);
+      return '<div class="ap-core">' +
+        '<div class="ap-head"><span class="ap-sym">Action model</span>' +
+        '<span class="ap-verdict" style="color:var(--muted);font-weight:500">Balanced defaults</span>' +
+        '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>' +
+        `<div class="ap-tabs">${tabs}</div>` +
+        apLadderHtml(rungs, true) +
+        '<div class="ap-note">Rules run top to bottom; the first whose conditions all hold is the verdict. ' +
+        'The shaded zone on each track is what passes. Full prose in <a href="/help#rules" target="_blank" rel="noopener">Help §12</a>.</div>' +
+        `<div class="ap-foot">${apBackSym ? `<button class="ap-link" data-ap-back>← Back to ${we(apBackSym)}</button>` : '<span></span>'}<span></span></div></div>`;
+    }
+    function apPlace(anchor) {
+      apPanel.hidden = false;
+      const w = apPanel.offsetWidth, h = apPanel.offsetHeight;
+      const r = anchor && anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : null;
+      let left = r ? r.right - w : (window.innerWidth - w) / 2;
+      let top = r ? r.bottom + 8 : 56;
+      if (top + h > window.innerHeight - 10) top = Math.max(10, window.innerHeight - h - 10);
+      apPanel.style.left = Math.max(10, Math.min(left, window.innerWidth - w - 10)) + 'px';
+      apPanel.style.top = top + 'px';
+    }
+    function apWire() {
+      apPanel.querySelector('[data-ap-close]').addEventListener('click', closeActionPanel);
+      const m = apPanel.querySelector('[data-ap-model]');
+      if (m) m.addEventListener('click', () => openActionModel());
+      const b = apPanel.querySelector('[data-ap-back]');
+      if (b) b.addEventListener('click', () => openActionPanel(apBackSym, null));
+      apPanel.querySelectorAll('[data-ap-tab]').forEach((t) => t.addEventListener('click', () => {
+        apModelTab = t.dataset.apTab;
+        openActionModel();
+      }));
+    }
+    function openActionPanel(sym, anchor) {
+      const s = stocks.find((x) => x.symbol === sym);
+      if (!s || !s.action) return;
+      closePickers(); hideTip(); hideRowCard();
+      apOpenFor = sym; apBackSym = sym;
+      if (anchor) apAnchor = anchor;
+      apModelTab = s.companyType || 'Established';
+      apPanel.innerHTML = apStockHtml(s);
+      apPlace(apAnchor);
+      apPanel.scrollTop = 0;
+      apWire();
+    }
+    function openActionModel() {
+      apOpenFor = '#model';
+      apPanel.innerHTML = apModelHtml();
+      apPlace(apAnchor);
+      apPanel.scrollTop = 0;
+      apWire();
+    }
+    function closeActionPanel() {
+      apPanel.hidden = true;
+      apOpenFor = null; apAnchor = null; apBackSym = null;
+    }
+    apPanel.addEventListener('click', (e) => e.stopPropagation());
+    $('tbody').addEventListener('click', (e) => {
+      const td = e.target.closest('td.act');
+      if (!td) return;
+      const sym = td.closest('tr')?.querySelector('td.sym')?.textContent.trim();
+      if (!sym) return;
+      e.stopPropagation();
+      if (apOpenFor === sym) closeActionPanel();
+      else openActionPanel(sym, td);
+    });
 
     // ---- control sheet (below 768px the deck becomes a full-screen glass overlay) ----
     const menuBtn = $('menuBtn');
@@ -2545,11 +2769,12 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     menuBtn.addEventListener('click', () => setSheet(!document.body.classList.contains('sheet-open')));
     $('deck').addEventListener('click', (e) => { if (e.target === $('deck')) setSheet(false); });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { setSheet(false); closePickers(); hideTip(); hideRowCard(); }
+      if (e.key === 'Escape') { setSheet(false); closePickers(); hideTip(); hideRowCard(); closeActionPanel(); }
     });
     window.addEventListener('resize', () => {
       if (window.innerWidth > 768) setSheet(false);
       closePickers();
+      closeActionPanel();
     });
 
     // Boot: find out who we are, restore the saved column layout, then load the
