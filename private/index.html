@@ -118,6 +118,19 @@
     .jump:hover { background: rgba(255, 255, 255, 0.07); color: var(--text); }
     .jump:disabled { opacity: 0.25; cursor: default; }
     .jump:disabled:hover { background: none; color: var(--faint); }
+    /* Action: two hues, not six. Most of the table sits on Hold, and the
+       momentum arrow already made the argument — light every row and the
+       column stops carrying information. Weight separates the extremes. */
+    td.act { font-family: var(--sans); font-size: 12px; white-space: nowrap; cursor: help; }
+    td.act.a-strong-buy { color: var(--green); font-weight: 700; }
+    td.act.a-buy { color: var(--green); }
+    td.act.a-buy-with-risk { color: color-mix(in srgb, var(--green) 55%, var(--muted)); }
+    td.act.a-hold { color: var(--muted); }
+    td.act.a-avoid { color: color-mix(in srgb, var(--red) 70%, var(--muted)); }
+    td.act.a-sell-immediately { color: var(--red); font-weight: 700; }
+    td.ctype { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+    td.ctype .early { color: var(--amber); }
+
     .pick-hint {
       padding: 8px 12px 4px; font-size: 10.5px; line-height: 1.5;
       color: var(--faint); border-top: 1px solid var(--hair); margin-top: 4px;
@@ -759,7 +772,7 @@
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="name">Name</th>
         <th class="group grp-info" data-group="info" colspan="5">Info</th>
-        <th class="group grp-rank" data-group="rank" colspan="2">Scores</th>
+        <th class="group grp-rank" data-group="rank" colspan="4">Scores</th>
         <th class="group grp-pmom" data-group="pmom" colspan="3">Price Momentum</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
@@ -780,6 +793,8 @@
         <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
         <th class="grp-rank ta-c" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
         <th class="grp-rank ta-c" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all and Overall falls back to momentum. Hover a cell for the factor split and the confidence figure.">Qual.</th>
+        <th class="grp-rank left" data-key="companyType" title="Established, Early or ETF — decided from raw fundamentals (size, profitability, cash flow, sane pricing), because an early-stage company must be judged on different rules than an established one. Recomputed daily, so a company migrates the day it earns it.">Type</th>
+        <th class="grp-rank left" data-key="action" title="What the house rule set says to do with this stock today. First matching rule wins, and the tooltip on each cell names the one rule that fired. Loss-avoidance rules are checked before any buy rule, always. A consistent reading of today's numbers — not a prediction.">Action</th>
         <th class="grp-pmom ta-l" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
         <th class="grp-pmom ta-l" data-key="pastShown" id="thPast"
             title="The momentum score as it stood at the end of the chosen horizon. Change the horizon with the Past picker in the bar.">Past<br>Mom.</th>
@@ -831,6 +846,7 @@
   </main>
 
   <script src="/screens.js"></script>
+  <script src="/action.js"></script>
   <script src="/rowcard.js"></script>
   <script>
     // The universe exactly as the server scored it, and the view the chosen
@@ -846,7 +862,8 @@
     let activeTab = 'All';
     let sortKey = 'overallScore';
     let sortDir = -1;          // -1 desc, 1 asc
-    let lastUpdated = null;    // when /api/stocks was last pulled (live data)
+    let lastUpdated = null;
+    let actionProfileName = 'Balanced rules';    // when /api/stocks was last pulled (live data)
     let asOfDate = null;       // forward-returns view: momentum as of this past date (YYYY-MM-DD)
     let isAdmin = true;        // may add/remove tickers, refresh, rewind (true = open/local or owner)
     let authRequired = false;  // server has an ADMIN_PASSWORD set (published, sign-in required)
@@ -1272,7 +1289,10 @@
       }
 
       const valueFor = (x) => (sortKey === 'pastShown' ? pastOf(x)
-        : sortKey === 'deltaShown' ? deltaOf(x) : x[sortKey]);
+        : sortKey === 'deltaShown' ? deltaOf(x)
+        // Alphabetical would put Avoid above Buy; rank by the ladder instead.
+        : sortKey === 'action' ? (x.action ? ActionRules.ACTIONS.indexOf(x.action) : null)
+        : x[sortKey]);
       const sorted = [...rows].sort((a, b) => {
         const av = valueFor(a), bv = valueFor(b);
         if (av == null) return 1;
@@ -1319,6 +1339,8 @@
           ${earningsCell(s, cacheTitle)}
           ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-rank ta-c lens-col')}
           ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank ta-c')}
+          ${typeCell(s)}
+          ${actionCell(s)}
           ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-pmom ta-l lens-col', deltaOf(s))}
           ${pastCell(s)}
           ${deltaCell(s)}
@@ -1374,6 +1396,22 @@
       // Cheap when the cache is warm; kicks off the one fetch when it is not.
       paintSparklines();
       loadSparklines();
+    }
+
+    // Early is the case worth spotting, so it is the only type tinted.
+    function typeCell(s) {
+      if (!s.companyType) return '<td class="ctype grp-rank">—</td>';
+      const cls = s.companyType === 'Early' ? ' class="early"' : '';
+      return `<td class="ctype grp-rank"><span${cls}>${we(s.companyType)}</span></td>`;
+    }
+
+    // The flag — the ONE rule that fired — rides on the cell as its tooltip,
+    // so every verdict explains itself on hover with no extra chrome.
+    function actionCell(s) {
+      if (!s.action) return '<td class="act grp-rank">—</td>';
+      const cls = 'a-' + s.action.toLowerCase().replace(/ /g, '-');
+      const tip = `${s.actionFlag || s.action} · ${actionProfileName}`;
+      return `<td class="act grp-rank ${cls}"${attr(tip)}>${we(s.action)}</td>`;
     }
 
     // Mark whichever column the table is currently sorted by.
@@ -1468,6 +1506,12 @@
         ['Past Momentum', (s) => pastOf(s)],
         ['Momentum Delta', (s) => deltaOf(s)],
         ['Quality', (s) => s.qualityRating],
+        // The export names the profile that produced the verdicts, the way it
+        // already names the momentum weighting — a saved file that does not say
+        // how it was scored cannot be checked later.
+        ['Company Type', (s) => s.companyType],
+        [`Action (${actionProfileName})`, (s) => s.action],
+        ['Action Flag', (s) => s.actionFlag],
         ['Name', (s) => s.name],
         ['Portfolios', (s) => (s.portfolios || []).join('; ')],
         ['Price', (s) => s.price],
@@ -2094,6 +2138,9 @@
         const qs = params.toString();
         const data = await api('GET', '/api/stocks' + (qs ? '?' + qs : ''));
         lastUpdated = data.updatedAt;
+        if (data.actionProfile && data.actionProfile.name) {
+          actionProfileName = `${data.actionProfile.name} rules`;
+        }
         baseStocks = data.stocks || [];
         applyLens();
         portfolios = data.portfolios || [];
@@ -2177,6 +2224,9 @@
         }
 
         if (data) {
+          if (data.actionProfile && data.actionProfile.name) {
+            actionProfileName = `${data.actionProfile.name} rules`;
+          }
           lastUpdated = data.updatedAt;
           baseStocks = data.stocks || [];
           applyLens();

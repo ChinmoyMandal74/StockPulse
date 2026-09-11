@@ -31,6 +31,9 @@ const Momentum = require('./momentum.js');
 const Signal = require('./private/signal-stats.js');
 // Tunable indicators, shared with /lab and the offline grid.
 const Indicators = require('./private/indicators.js');
+// The Action rules — what to do with each stock. Shared with the browser so a
+// later personal profile can re-score locally without a second implementation.
+const Action = require('./private/action.js');
 const {
   readPortfolios, writePortfolios,
   readNames, writeNames,
@@ -1603,6 +1606,33 @@ function curve(v, centre, scale) {
 // measured against a fixed scale — so this is a plain loop rather than the
 // two-pass ranking it used to be. It is kept as a function because both the live
 // pull and the fortnight-ago reconstruction go through it.
+// Stamp Company Type / Action / Flag onto rows under the HOUSE profile, read
+// fresh each pass — Vercel shares nothing between instances, so a process
+// cache would serve stale rules after an admin edit elsewhere. A database
+// hiccup falls back to the Balanced defaults: a missing column would be worse
+// than a slightly stale one.
+async function scoreActionInto(rows) {
+  if (!Array.isArray(rows) || !rows.length) return null;
+  let house = { preset: 'Balanced', overrides: {} };
+  try {
+    house = await store.readActionRules();
+  } catch (err) {
+    console.warn('action: house profile unavailable, using Balanced defaults:', err.message);
+  }
+  const { cfg } = Action.resolve(house.overrides, house.preset);
+  cfg.__resolved = true;
+  const results = Action.apply(rows, cfg);
+  for (let i = 0; i < rows.length; i++) {
+    const r = results[i];
+    if (!r) continue;
+    rows[i].companyType = r.type;
+    rows[i].action = r.action;
+    rows[i].actionFlag = r.flag;
+  }
+  const modified = Object.keys(house.overrides || {}).length > 0;
+  return { name: house.preset + (modified ? ' (modified)' : ''), version: Action.DEFAULTS.version };
+}
+
 function applyScores(rows) {
   rows.forEach((row) => {
     const sc = computeScores(row);
@@ -1866,6 +1896,46 @@ app.delete('/api/refresh-all', requireAdmin, route(async (req, res) => {
 
 // Cheap poll for viewers: is a refresh running? Deliberately not the whole
 // snapshot, since every open page hits this while one is in progress.
+// The house Action profile plus everything an editor needs: defaults, the
+// preset diffs, and the label sets. Any signed-in user may read it — it is
+// what the shared column already shows them.
+app.get('/api/action-rules', requireAuth, route(async (req, res) => {
+  const house = await store.readActionRules();
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    preset: house.preset,
+    overrides: house.overrides,
+    updatedAt: house.updatedAt,
+    updatedBy: house.updatedBy,
+    defaults: Action.DEFAULTS,
+    presets: Action.PRESETS,
+    actions: Action.ACTIONS,
+    types: Action.TYPES,
+  });
+}));
+
+// Admin only — this is the shared answer, not a preference. Invalid input is
+// REJECTED with the validator's named reasons; unknown keys are reported back
+// as warnings but do not block the save.
+app.put('/api/action-rules', requireAdmin, route(async (req, res) => {
+  const preset = String(req.body?.preset || 'Balanced');
+  if (!Action.PRESETS[preset]) {
+    return res.status(400).json({ error: `Unknown preset "${preset}".` });
+  }
+  const incoming = req.body?.overrides;
+  if (incoming != null && (typeof incoming !== 'object' || Array.isArray(incoming))) {
+    return res.status(400).json({ error: 'Expected an overrides object.' });
+  }
+  const { cfg, unknown } = Action.resolve(incoming || {}, preset);
+  const check = Action.validate(cfg);
+  if (!check.ok) return res.status(400).json({ error: 'Profile rejected.', errors: check.errors });
+  // Stored as the diff against the chosen preset's resolved values.
+  const stored = Action.diff(cfg, Action.resolve(null, preset).cfg);
+  const who = await currentUser(req);
+  await store.writeActionRules(preset, stored, who ? who.email : 'admin');
+  res.json({ ok: true, preset, overrides: stored, unknown });
+}));
+
 app.get('/api/status', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({ refreshing: await readRefreshState() });
@@ -2081,6 +2151,7 @@ async function computeStocks(asOf) {
     // because momentum was ranked across the universe; it no longer is, so the
     // pass is here only because the rows are built by now anyway.
     applyScores(stocks);
+    await scoreActionInto(stocks);
 
     // …and again at each past horizon, for the Past Momentum column and the
     // direction arrow. Scored from the archive rather than from the series just
@@ -3388,7 +3459,14 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
 
   // Public read: serve the saved snapshot — no API calls, no credits burned.
   const snap = await readSnapshot();
-  if (snap) return res.json({ ...snap, fromSnapshot: true, refreshing: await readRefreshState() });
+  if (snap) {
+    // Scored on the way out, not only when the snapshot is written: ~1ms for
+    // the whole universe, and it means a snapshot written before this feature
+    // existed still carries the column, and a house-profile edit shows up on
+    // the next load rather than after the nightly refresh.
+    const actionProfile = await scoreActionInto(snap.stocks);
+    return res.json({ ...snap, actionProfile, fromSnapshot: true, refreshing: await readRefreshState() });
+  }
 
   // No snapshot yet: an admin (or open/local mode) computes and seeds the first one.
   if (await isAdmin(req)) {
