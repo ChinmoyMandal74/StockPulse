@@ -63,6 +63,14 @@
                                   ? { t: (s.nextEarningsEstimated ? '~' : '') + shortDate(s.nextEarningsDate), c: '' } : null],
     ['rank',  'Overall',        (s) => V.rating(s.overallRating)],
     ['rank',  'Qual.',          (s) => V.rating(s.qualityRating)],
+    ['act',   'Type',           (s) => V.text(s.companyType)],
+    ['act',   'Trend',          (s) => V.text(s.actionTrend)],
+    ['act',   'Entry',          (s) => V.text(s.actionEntry)],
+    ['act',   'Fundamentals',   (s) => V.text(s.actionFund)],
+    ['act',   'Guards',         (s) => V.text(s.actionGuards)],
+    ['act',   'Action',         (s) => s.action
+                                  ? { t: s.action, c: /Buy/.test(s.action) ? 'up' : /Sell|Avoid/.test(s.action) ? 'down' : '' } : null],
+    ['act',   'Why',            (s) => V.text(s.actionFlag)],
     ['pmom',  'Mom.',           (s) => V.rating(s.momentumRating)],
     ['pmom',  'Score',          (s) => (s.momentumScore == null ? null : { t: s.momentumScore.toFixed(1), c: '' })],
     // The card has no horizon picker, so it shows the default and says so
@@ -116,16 +124,16 @@
     ['fund',  'Short % float',  (s) => V.short(s.shortPctFloat)],
   ];
 
-  const GROUP_ORDER = ['info', 'rank', 'pmom', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
+  const GROUP_ORDER = ['info', 'rank', 'act', 'pmom', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
   // The palette lives here because this file already owns GROUP_ORDER and
   // FIELD_SPEC. index.html keeps its own copy — it also colours the table's
   // group banners and the columns menu — so those two must stay in step.
   const GROUP_COLORS = {
-    info: '#7c9cff', rank: '#a3e635', pmom: '#34d399', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
+    info: '#7c9cff', rank: '#a3e635', act: '#5eead4', pmom: '#34d399', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
     rel: '#22d3ee', trend: '#fbbf24', vol: '#f472b6', size: '#94a3b8', fund: '#fb7185',
   };
   const GROUP_LABELS = {
-    info: 'Info', rank: 'Scores', pmom: 'Price Momentum', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
+    info: 'Info', rank: 'Scores', act: 'Action Model', pmom: 'Price Momentum', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
     rel: 'Relative', trend: 'Trend', vol: 'Volume', size: 'Size', fund: 'Fundamentals',
   };
 

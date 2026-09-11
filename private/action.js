@@ -391,9 +391,14 @@
       // In mean-reversion mode (gate off) a below-200D clean entry still needs
       // fundamentals on its side; the brief allows Buy with Risk, no higher.
       if (!d.below200 || fund === 'ok' || fund === 'strong') {
+        // Two different roads lead here and the flag must name the right one:
+        // fundamentals that made no case, or good fundamentals refused a full
+        // Buy because the stock is too deep below its high.
         return ['Buy with Risk', d.below200
           ? 'Buy with Risk: below 200D, mean-reversion mode'
-          : 'Buy with Risk: fundamentals not OK'];
+          : (fund === 'ok' || fund === 'strong')
+            ? 'Buy with Risk: deep below the high'
+            : 'Buy with Risk: fundamentals not OK'];
       }
       return ['Hold', 'Below 200D without fundamentals'];
     }
@@ -442,6 +447,36 @@
     return ['Hold', 'No clean entry'];
   }
 
+  // ---- the intermediate states, one word per family --------------------------
+  // The table shows these beside the Action so the derivation reads left to
+  // right: Trend says whether you may, Entry whether now, Fundamentals how much
+  // conviction, Guards say wait. Each family's overlapping booleans collapse to
+  // ONE value — the trend ladder is priority-ordered exactly like the rules, so
+  // the word shown is always the most severe condition that holds.
+  const FUND_LABELS = { strong: 'Strong', ok: 'OK', weak: 'Weak', none: '—' };
+
+  function states(d, fund) {
+    const trend = d.blankTrend ? 'No data'
+      : d.breakdown ? 'Breakdown'
+        : d.downtrend ? 'Downtrend'
+          : d.below200 ? 'Below 200D'
+            : d.strongUptrend ? 'Strong uptrend'
+              : d.above200 ? 'Above 200D'
+                : 'Near 200D';           // inside the neutral band, or exactly on the line
+    const entry = d.extended ? 'Extended'
+      : d.cleanEntry ? (d.nearHigh ? 'Clean, near high' : 'Clean') : 'None';
+    const guards = [];
+    if (d.thinHistory) guards.push('Thin history');
+    if (d.earningsSoon) guards.push('Earnings ' + d.dte + 'd');
+    return { trend, entry, fund: FUND_LABELS[fund] || '—', guards: guards.join(' · ') };
+  }
+
+  // Severity ladders for sorting the state columns — alphabetical order would
+  // file Breakdown between Above and Clean, which helps nobody.
+  const TREND_ORDER = ['No data', 'Breakdown', 'Downtrend', 'Below 200D', 'Near 200D', 'Above 200D', 'Strong uptrend'];
+  const ENTRY_ORDER = ['Extended', 'None', 'Clean', 'Clean, near high'];
+  const FUND_ORDER = ['Weak', '—', 'OK', 'Strong'];
+
   // ---- the whole answer for one row ------------------------------------------
   function evaluate(stock, cfg) {
     const s = stock || {};
@@ -451,7 +486,7 @@
     const [action, flag] = type === 'ETF' ? etfRules(d, cfg)
       : type === 'Early' ? earlyRules(d, fund, cfg)
         : establishedRules(d, fund, cfg);
-    return { type, action, flag, fund, estScore, pinned, defs: d };
+    return { type, action, flag, fund, estScore, pinned, defs: d, states: states(d, fund) };
   }
 
   // One resolved config for a whole pass — what both the server and a browser
@@ -462,7 +497,7 @@
   }
 
   return {
-    ACTIONS, TYPES, DEFAULTS, PRESETS,
+    ACTIONS, TYPES, DEFAULTS, PRESETS, TREND_ORDER, ENTRY_ORDER, FUND_ORDER,
     resolve, validate, diff, merge,
     classify, definitions, fundamentals, evaluate, apply, daysToEarnings,
   };

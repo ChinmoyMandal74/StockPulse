@@ -130,11 +130,14 @@
     td.act.a-sell-immediately { color: var(--red); font-weight: 700; }
     td.ctype { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
     td.ctype .early { color: var(--amber); }
+    td.state { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+    td.state.st-bad { color: color-mix(in srgb, var(--red) 75%, var(--muted)); }
+    td.state.st-warn { color: var(--amber); }
+    td.state.st-guard { color: var(--faint); font-size: 11px; }
     /* A personal rule set must be visibly in play — same reason the weight
        lens marks its columns: nobody screenshots a verdict they tuned into
        existence without the page saying so. */
-    body.rulesed td.act, body.rulesed td.ctype,
-    body.rulesed th[data-key="action"], body.rulesed th[data-key="companyType"] {
+    body.rulesed td.grp-act, body.rulesed th.grp-act {
       background: rgba(34, 211, 238, 0.055);
     }
     body.rulesed #rulesBtn { border-color: var(--mom); }
@@ -791,7 +794,8 @@
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="name">Name</th>
         <th class="group grp-info" data-group="info" colspan="5">Info</th>
-        <th class="group grp-rank" data-group="rank" colspan="4">Scores</th>
+        <th class="group grp-rank" data-group="rank" colspan="2">Scores</th>
+        <th class="group grp-act" data-group="act" colspan="6">Action Model</th>
         <th class="group grp-pmom" data-group="pmom" colspan="3">Price Momentum</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
@@ -812,8 +816,12 @@
         <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
         <th class="grp-rank ta-c" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
         <th class="grp-rank ta-c" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all and Overall falls back to momentum. Hover a cell for the factor split and the confidence figure.">Qual.</th>
-        <th class="grp-rank left" data-key="companyType" title="Established, Early or ETF — decided from raw fundamentals (size, profitability, cash flow, sane pricing), because an early-stage company must be judged on different rules than an established one. Recomputed daily, so a company migrates the day it earns it.">Type</th>
-        <th class="grp-rank left" data-key="action" title="What the house rule set says to do with this stock today. First matching rule wins, and the tooltip on each cell names the one rule that fired. Loss-avoidance rules are checked before any buy rule, always. A consistent reading of today's numbers — not a prediction.">Action</th>
+        <th class="grp-act left" data-key="companyType" title="Established, Early or ETF — decided from raw fundamentals (size, profitability, cash flow, sane pricing), because an early-stage company must be judged on different rules than an established one. Recomputed daily, so a company migrates the day it earns it.">Type</th>
+        <th class="grp-act left" data-key="actionTrend" title="The price-trend reading, one word — the most severe condition that holds, on the same ladder the rules check: Breakdown → Downtrend → Below 200D → Above 200D → Strong uptrend. Trend answers whether you may.">Trend</th>
+        <th class="grp-act left" data-key="actionEntry" title="The timing reading: Clean (a base or shallow pullback with RSI 45–65), Clean near the high, Extended (up too far, too fast — do not chase), or None. Entry answers whether now.">Entry</th>
+        <th class="grp-act left" data-key="actionFund" title="The fundamentals bucket under this stock's rule set — Strong, OK, Weak, or — when the data makes no case either way. Established is judged on earnings, revenue, margins and cash flow; Early on growth, gross margin, burn and short interest. Fundamentals answer how much conviction.">Fund.</th>
+        <th class="grp-act left" data-key="actionGuards" title="Reasons to wait that override everything below a Sell: earnings within the blackout window, or too little price history to judge. Blank for most stocks — when this column speaks, it matters.">Guards</th>
+        <th class="grp-act left" data-key="action" title="What the house rule set says to do with this stock today. First matching rule wins, and the tooltip on each cell names the one rule that fired. Loss-avoidance rules are checked before any buy rule, always. A consistent reading of today's numbers — not a prediction.">Action</th>
         <th class="grp-pmom ta-l" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
         <th class="grp-pmom ta-l" data-key="pastShown" id="thPast"
             title="The momentum score as it stood at the end of the chosen horizon. Change the horizon with the Past picker in the bar.">Past<br>Mom.</th>
@@ -902,11 +910,11 @@
     let signedIn = true;       // has a live session (or the app is open/local)
     let currentUser = null;    // { email, role } once signed in
 
-    const GROUPS = ['info', 'rank', 'pmom', 'chart', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
+    const GROUPS = ['info', 'rank', 'act', 'pmom', 'chart', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
     const GROUP_COLORS = {
       // Warm neutral, and the only unused region of the palette: every other
       // group is a family of numbers, this one is a picture.
-      info: '#7c9cff', rank: '#a3e635', pmom: '#34d399', chart: '#a8a29e',
+      info: '#7c9cff', rank: '#a3e635', act: '#5eead4', pmom: '#34d399', chart: '#a8a29e',
       short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
       rel:  '#22d3ee', trend: '#fbbf24', vol:  '#f472b6',
       size: '#94a3b8', fund: '#fb7185',
@@ -914,7 +922,7 @@
     // Labels live here so adding a group later is: append to GROUPS, give it a
     // colour and a label, and tag the <th>/<td> cells with .grp-<id>.
     const GROUP_LABELS = {
-      info: 'Info', rank: 'Scores', pmom: 'Price Momentum', chart: 'Chart',
+      info: 'Info', rank: 'Scores', act: 'Action Model', pmom: 'Price Momentum', chart: 'Chart',
       short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
       rel: 'Relative', trend: 'Trend', vol: 'Volume',
       size: 'Size', fund: 'Fundamentals',
@@ -1412,7 +1420,7 @@
         const msg = activeTab === 'All'
           ? 'No tickers yet — add one above.'
           : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="48">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="52">${msg}</td></tr>`;
         researchSymbol = null;
         renderResearchMenu();
         applyGroups();
@@ -1423,6 +1431,9 @@
         : sortKey === 'deltaShown' ? deltaOf(x)
         // Alphabetical would put Avoid above Buy; rank by the ladder instead.
         : sortKey === 'action' ? (x.action ? ActionRules.ACTIONS.indexOf(x.action) : null)
+        : sortKey === 'actionTrend' ? (x.actionTrend ? ActionRules.TREND_ORDER.indexOf(x.actionTrend) : null)
+        : sortKey === 'actionEntry' ? (x.actionEntry ? ActionRules.ENTRY_ORDER.indexOf(x.actionEntry) : null)
+        : sortKey === 'actionFund' ? (x.actionFund ? ActionRules.FUND_ORDER.indexOf(x.actionFund) : null)
         : x[sortKey]);
       const sorted = [...rows].sort((a, b) => {
         const av = valueFor(a), bv = valueFor(b);
@@ -1443,7 +1454,7 @@
         if (s.error) {
           return `<tr style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="46">${s.error}</td>
+            <td class="na" colspan="50">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -1471,6 +1482,10 @@
           ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-rank ta-c lens-col')}
           ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank ta-c')}
           ${typeCell(s)}
+          ${stateCell(s.actionTrend, TREND_DANGER)}
+          ${stateCell(s.actionEntry, ENTRY_DANGER)}
+          ${stateCell(s.actionFund, FUND_DANGER)}
+          ${guardsCell(s)}
           ${actionCell(s)}
           ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-pmom ta-l lens-col', deltaOf(s))}
           ${pastCell(s)}
@@ -1531,18 +1546,34 @@
 
     // Early is the case worth spotting, so it is the only type tinted.
     function typeCell(s) {
-      if (!s.companyType) return '<td class="ctype grp-rank">—</td>';
+      if (!s.companyType) return '<td class="ctype grp-act">—</td>';
       const cls = s.companyType === 'Early' ? ' class="early"' : '';
-      return `<td class="ctype grp-rank"><span${cls}>${we(s.companyType)}</span></td>`;
+      return `<td class="ctype grp-act"><span${cls}>${we(s.companyType)}</span></td>`;
+    }
+
+    // One word per family, muted unless it is a danger word — six coloured
+    // columns would drown the verdict they exist to explain.
+    const TREND_DANGER = { Breakdown: 'st-bad', Downtrend: 'st-warn' };
+    const ENTRY_DANGER = { Extended: 'st-warn' };
+    const FUND_DANGER = { Weak: 'st-bad' };
+    function stateCell(v, danger) {
+      if (!v) return '<td class="state grp-act">—</td>';
+      const cls = danger[v] ? ' ' + danger[v] : '';
+      return `<td class="state grp-act${cls}">${we(v)}</td>`;
+    }
+
+    // Blank for most rows on purpose: when Guards speaks, it matters.
+    function guardsCell(s) {
+      return `<td class="state grp-act st-guard">${s.actionGuards ? we(s.actionGuards) : ''}</td>`;
     }
 
     // The flag — the ONE rule that fired — rides on the cell as its tooltip,
     // so every verdict explains itself on hover with no extra chrome.
     function actionCell(s) {
-      if (!s.action) return '<td class="act grp-rank">—</td>';
+      if (!s.action) return '<td class="act grp-act">—</td>';
       const cls = 'a-' + s.action.toLowerCase().replace(/ /g, '-');
       const tip = `${s.actionFlag || s.action} · ${actionLabel()}`;
-      return `<td class="act grp-rank ${cls}"${attr(tip)}>${we(s.action)}</td>`;
+      return `<td class="act grp-act ${cls}"${attr(tip)}>${we(s.action)}</td>`;
     }
 
     // Mark whichever column the table is currently sorted by.
@@ -1641,6 +1672,10 @@
         // already names the momentum weighting — a saved file that does not say
         // how it was scored cannot be checked later.
         ['Company Type', (s) => s.companyType],
+        ['Trend State', (s) => s.actionTrend],
+        ['Entry State', (s) => s.actionEntry],
+        ['Fundamentals Bucket', (s) => s.actionFund],
+        ['Guards', (s) => s.actionGuards],
         [`Action (${actionLabel()})`, (s) => s.action],
         ['Action Flag', (s) => s.actionFlag],
         ['Name', (s) => s.name],
@@ -1837,7 +1872,11 @@
         out = out.map((x) => {
           if (x.error) return x;
           const r = ActionRules.evaluate(x, cfg);
-          return Object.assign({}, x, { companyType: r.type, action: r.action, actionFlag: r.flag });
+          return Object.assign({}, x, {
+            companyType: r.type, action: r.action, actionFlag: r.flag,
+            actionTrend: r.states.trend, actionEntry: r.states.entry,
+            actionFund: r.states.fund, actionGuards: r.states.guards,
+          });
         });
       }
       stocks = out;

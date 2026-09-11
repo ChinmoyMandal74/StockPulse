@@ -569,9 +569,15 @@
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="rules"><div class="core">
       <div class="sec-h"><h2>12 · The Action column</h2></div>
-      <p>Two columns in the Scores group say what the rule set makes of each stock today:
-        <strong>Type</strong> (Established, Early or ETF) and <strong>Action</strong> (Strong Buy · Buy ·
-        Buy with Risk · Hold · Avoid · Sell Immediately). The model is a list of plain rules checked top
+      <p>The <strong>Action Model</strong> column group shows the whole derivation, left to right:
+        <strong>Type</strong> (Established, Early or ETF) · <strong>Trend</strong> (the price-trend
+        reading — Breakdown, Downtrend, Below 200D, Above 200D or Strong uptrend: whether you
+        <em>may</em>) · <strong>Entry</strong> (Clean, Clean near high, Extended or None: whether
+        <em>now</em>) · <strong>Fund.</strong> (Strong, OK, Weak, or — when the data makes no case:
+        how much <em>conviction</em>) · <strong>Guards</strong> (earnings soon, thin history — blank for
+        most stocks, and meaningful when it is not: <em>wait</em>) · and the
+        <strong>Action</strong> itself (Strong Buy · Buy · Buy with Risk · Hold · Avoid · Sell
+        Immediately). The group collapses as one unit from the Columns menu. The model is a list of plain rules checked top
         to bottom — <strong>the first rule that matches is the answer</strong>, and hovering an Action
         cell shows the one rule that fired. The Sell, Avoid and Hold rules always sit above the Buy
         rules, so no amount of good news can buy a stock whose trend is broken. Backtested over

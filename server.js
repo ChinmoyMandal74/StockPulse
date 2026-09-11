@@ -1628,6 +1628,10 @@ async function scoreActionInto(rows) {
     rows[i].companyType = r.type;
     rows[i].action = r.action;
     rows[i].actionFlag = r.flag;
+    rows[i].actionTrend = r.states.trend;
+    rows[i].actionEntry = r.states.entry;
+    rows[i].actionFund = r.states.fund;
+    rows[i].actionGuards = r.states.guards;
   }
   const modified = Object.keys(house.overrides || {}).length > 0;
   return { name: house.preset + (modified ? ' (modified)' : ''), version: Action.DEFAULTS.version };

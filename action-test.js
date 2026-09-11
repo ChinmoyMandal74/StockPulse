@@ -104,8 +104,9 @@ check('Strong Buy: everything aligned',
 check('Buy: clean entry, OK fundamentals, modest trend',
   run(row(EST, { earningsGrowthYoY: 5, revenueGrowthYoY: 5 })),
   ['Established', 'Buy', 'Buy: clean entry, fundamentals OK']);
-check('Buy refused deeper than max drawdown → Buy with Risk path',
-  run(row(EST, { earningsGrowthYoY: 5, revenueGrowthYoY: 5, pctFromHigh: -25 }))[1], 'Buy with Risk');
+check('Buy refused deeper than max drawdown → Buy with Risk, flag names the drawdown',
+  run(row(EST, { earningsGrowthYoY: 5, revenueGrowthYoY: 5, pctFromHigh: -25 })),
+  ['Established', 'Buy with Risk', 'Buy with Risk: deep below the high']);
 check('Buy with Risk: fundamentals made no case',
   run(row(EST, { earningsGrowthYoY: 5, revenueGrowthYoY: -1 })),
   ['Established', 'Buy with Risk', 'Buy with Risk: fundamentals not OK']);
@@ -217,6 +218,29 @@ check('diff() stores only what changed (profile at its default is itself omitted
 const before = JSON.stringify(A.DEFAULTS);
 A.resolve({ chase: { max_1m: 99 } });
 check('resolve() never mutates the defaults', JSON.stringify(A.DEFAULTS) === before, true);
+
+
+console.log('\nINTERMEDIATE STATES (the Action Model columns)');
+{
+  const st = (r, d, p) => A.evaluate(row(r, d || {}), cfg(p)).states;
+  check('healthy base row reads Above 200D / Clean near high / Strong / no guards',
+    st(EST), { trend: 'Above 200D', entry: 'Clean, near high', fund: 'Strong', guards: '' });
+  check('further from the high the entry drops the qualifier',
+    st(EST, { pctFromHigh: -15 }).entry, 'Clean');
+  check('breakdown row reads Breakdown even though below-200D is also true',
+    st(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 }).trend, 'Breakdown');
+  check('strong uptrend + near high reads as the setup it is',
+    st(EST, { vs200ma: 15, pctFromHigh: -5 }),
+    { trend: 'Strong uptrend', entry: 'Clean, near high', fund: 'Strong', guards: '' });
+  check('guards line up and join', st(EST, { historyDays: 120, nextEarningsDate: '2026-09-14' }).guards,
+    'Thin history · Earnings 3d');
+  check('blank trend reads No data', st(EST, { vs200ma: null }).trend, 'No data');
+  check('ETF fundamentals read as a dash, not Weak',
+    st(row(EST, { portfolios: ['ETFs'], qualityRating: null, forwardPe: null })).fund, '—');
+  check('severity ladders cover every state the engine emits',
+    [A.TREND_ORDER.includes('Breakdown'), A.ENTRY_ORDER.includes('Clean, near high'),
+      A.FUND_ORDER.includes('—')], [true, true, true]);
+}
 
 console.log(`\n${n} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);
