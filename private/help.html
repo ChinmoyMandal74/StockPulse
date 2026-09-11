@@ -146,6 +146,8 @@
           <span class="td">Refresh, Refresh all, and the nightly run</span></span></a></li>
         <li><a href="#account"><span class="no">11</span><span><span class="tt">Your account</span>
           <span class="td">What is remembered, and the emails you may get</span></span></a></li>
+        <li><a href="#rules"><span class="no">12</span><span><span class="tt">The Action column</span>
+          <span class="td">Company Type, the rule lists, and tuning them</span></span></a></li>
       </ul>
     </div></div>
 
@@ -154,8 +156,10 @@
       <div class="sec-h"><h2>1 · What this is</h2></div>
       <p>Tickr Lab watches a list of stocks and scores them on how their prices are behaving and how
         the underlying companies are doing. It is a <strong>screener</strong>: it narrows a list down to the
-        few names worth a closer look. It does not tell you what to buy, and it deliberately never
-        offers a verdict.</p>
+        few names worth a closer look. The assistant deliberately never offers a
+        verdict; the <strong>Action</strong> column does carry one, but it is the output of a plain
+        rule set you can read in full in <a href="#rules">section 12</a> — a consistent reading of
+        today's numbers, not a prediction.</p>
       <p>Stocks are grouped into <strong>portfolios</strong> — a stock can belong to several — and the
         picker at the top left switches between them. Prices update after each close; the company
         numbers behind Quality refresh about once a day.</p>
@@ -559,6 +563,97 @@
       <div class="note"><b>Something wrong, or a ticker you would like added?</b> Use
         <a href="/contact" style="color:var(--muted)">Contact</a> — it comes from your account, so a
         reply reaches you directly.</div>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="rules"><div class="core">
+      <div class="sec-h"><h2>12 · The Action column</h2></div>
+      <p>Two columns in the Scores group say what the rule set makes of each stock today:
+        <strong>Type</strong> (Established, Early or ETF) and <strong>Action</strong> (Strong Buy · Buy ·
+        Buy with Risk · Hold · Avoid · Sell Immediately). The model is a list of plain rules checked top
+        to bottom — <strong>the first rule that matches is the answer</strong>, and hovering an Action
+        cell shows the one rule that fired. The Sell, Avoid and Hold rules always sit above the Buy
+        rules, so no amount of good news can buy a stock whose trend is broken. Backtested over
+        307,875 stock-days since 2008, the tiers order <em>downside</em> correctly (the worst tenth of
+        3-month outcomes: about −12% for the Buy tiers against −25% for Sell Immediately, before and
+        after 2020 alike) — but median returns are flat across tiers. <strong>It manages risk; it does
+        not predict winners.</strong></p>
+
+      <h3>Company Type</h3>
+      <p>ETFs (no company financials) are scored on technicals alone. Everything else earns an
+        establishment score out of 7: market cap ≥ $100B <b>+2</b> (≥ $20B +1) · profitable <b>+1</b>,
+        with a margin ≥ 5% <b>+2</b> · positive free cash flow at a ≥ 5% margin <b>+1</b> · forward P/E
+        between 0 and 40 <b>+1</b> · ROE ≥ 10% <b>+1</b>. Score 5+ (or $200B of size on its own) is
+        <strong>Established</strong>; below that, <strong>Early</strong> — judged on growth, gross
+        margin, cash burn and short interest, never on P/E or earnings growth, which mean nothing
+        without earnings. A company migrates the day it earns it. A blank value never satisfies any
+        rule, in either direction.</p>
+
+      <h3>The rule lists (Balanced defaults)</h3>
+      <p><strong>Established:</strong> Sell Immediately on a breakdown (more than 10% below the 200-day
+        average and still falling: 1M &lt; −8% or 3M &lt; −15%) → Avoid in a downtrend, or below the
+        200-day with weak fundamentals, or on heavy-volume selling more than 30% off the high → Hold
+        if below the 200-day, no trend data yet, under 200 sessions of history, earnings within 7 days,
+        or extended (1M &gt; +25%, or &gt;15% above the 50-day, or RSI &gt; 72) → <em>then</em> Strong Buy
+        (&gt;10% above the 200-day, a clean entry — within −3%…+8% of the 50-day with RSI 45–65 —
+        near the high and strong fundamentals) → Buy (clean entry, decent fundamentals, less than 20%
+        off the high) → Buy with Risk (clean entry, fundamentals unproven but not weak) → Hold.</p>
+      <p><strong>Early:</strong> the same shape with a shorter leash — breakdown at −5%/−5%, weak
+        fundamentals below the 200-day is an immediate Sell, merely being below the 200-day is Avoid
+        rather than Hold, short interest above 25% is Avoid, and Buy needs strong growth (revenue
+        &gt; 30%, gross margin &gt; 50%, positive FCF) in a &gt;10% uptrend. Early is never Strong Buy
+        unless a profile enables it. <strong>ETF:</strong> the technical rules alone.</p>
+
+      <h3>House rules and your rules</h3>
+      <p>The <strong>Rules</strong> picker in the bar shows which profile you are on. The
+        <em>house</em> profile is the shared answer — every row, every export, edited only by the
+        owner. <em>My rules</em> is your own copy: pick a preset (<strong>Conservative</strong> —
+        tighter stops, longer earnings blackout, Early capped at Buy with Risk · <strong>Balanced</strong>
+        · <strong>Aggressive</strong> — looser stops, Early may Buy on decent fundamentals) and
+        optionally paste JSON overrides for any threshold. Your profile applies in your browser only,
+        the columns are tinted while it is active, and the CSV names whichever profile produced it.
+        Invalid profiles are rejected with the reason (for example an RSI band whose low is above its
+        high), never silently repaired.</p>
+
+      <h3>Every knob, with its default</h3>
+      <p class="small">Overrides are JSON fragments — only what should differ from the preset, e.g.
+        <code>{"chase": {"max_1m": 20}, "earnings": {"blackout_days": 10}}</code>.</p>
+      <table>
+        <tr><th>Group</th><th>Keys (default)</th></tr>
+        <tr><td><code>use_quality</code> / <code>use_momentum</code> / <code>use_vol_trend</code></td>
+          <td>false · false · true — whether the app's own composite scores participate. Off by design:
+          the rules read raw data.</td></tr>
+        <tr><td><code>company_type</code></td><td>mc_big 100e9 · mc_mid 20e9 · mc_override 200e9 ·
+          pm_min 5 · fm_min 5 · pe_max 40 · roe_min 10 · quality_min 7 · score_cutoff 5 ·
+          manual_overrides {} (pin a symbol: <code>{"JOBY": "Early"}</code>)</td></tr>
+        <tr><td><code>entry</code></td><td>vs50_low −3 · vs50_high 8 · rsi_low 45 · rsi_high 65 ·
+          near_high −10 · buy_max_drawdown −20 · strong_buy_vs200 10 · uptrend_vs50 −8 ·
+          momentum_min 7</td></tr>
+        <tr><td><code>stop_loss</code></td><td>established_vs200 −10 · confirm_1m −8 · confirm_3m −15 ·
+          early_vs200 −5 · early_confirm_1m −5</td></tr>
+        <tr><td><code>chase</code></td><td>max_1m 25 · max_vs50 15 · max_rsi 72</td></tr>
+        <tr><td><code>earnings</code></td><td>enabled true · blackout_days 7</td></tr>
+        <tr><td><code>history</code></td><td>min_days 200</td></tr>
+        <tr><td><code>exit</code></td><td>distribution_vol 10 · distribution_avoid_drawdown −30 ·
+          early_avoid_short_float 25</td></tr>
+        <tr><td><code>early</code></td><td>allow_buy true · allow_strong_buy false ·
+          buy_requires "strong"</td></tr>
+        <tr><td><code>trend_gate</code></td><td>never_buy_below_200d true (false = mean-reversion mode:
+          below the 200-day a clean entry with decent fundamentals can reach Buy with Risk, never
+          higher)</td></tr>
+        <tr><td><code>fund_established</code></td><td>strong {eg 15 · rg 10 · fcf_margin 10 · pm 15} ·
+          ok {eg 0 · rg 0} · weak: shrinking earnings <em>and</em> revenue, or a negative margin</td></tr>
+        <tr><td><code>fund_early</code></td><td>strong {rg 30 · gross_margin 50, plus positive FCF} ·
+          ok {rg 15 · gross_margin 25 · fcf_margin −20 · short_float 15} · weak {rg 5 ·
+          fcf_margin −20 · short_float 25}</td></tr>
+        <tr><td><code>whipsaw</code></td><td>neutral_band_pct 0 — inside the band a stock counts as
+          neither above nor below its 200-day, so the verdict stops flapping on the line</td></tr>
+        <tr><td><code>fixes</code></td><td>blank_trend_holds true · weak_blocks_buy_with_risk true —
+          two holes closed relative to the original brief; turning one off restores it</td></tr>
+      </table>
+      <p class="small">Rule <em>order</em> is not configurable, on purpose: whatever the thresholds,
+        the loss-avoidance rules are always checked first.</p>
       <a class="top" href="#top">↑ Contents</a>
     </div></section>
   </main>

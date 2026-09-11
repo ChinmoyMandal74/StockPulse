@@ -2766,6 +2766,24 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   // Which Past Momentum horizon the table is showing. An id from the known list
   // only — anything else is dropped and the default stands.
   if (Screens.PAST_PERIODS.some((x) => x.id === incoming.past)) out.past = String(incoming.past);
+  // The user's personal Action profile: which set they are viewing, a preset
+  // name, and ONLY their diff from it. Validated with the same engine the
+  // browser used, and stored only when it passes — same rebuild-from-scratch
+  // discipline as everything else in this row.
+  if (incoming.actionSource === 'mine' || incoming.actionSource === 'house') {
+    out.actionSource = incoming.actionSource;
+  }
+  if (typeof incoming.actionPreset === 'string' && Action.PRESETS[incoming.actionPreset]) {
+    out.actionPreset = incoming.actionPreset;
+  }
+  if (incoming.actionOverrides && typeof incoming.actionOverrides === 'object'
+      && !Array.isArray(incoming.actionOverrides)) {
+    const preset = out.actionPreset || 'Balanced';
+    const { cfg } = Action.resolve(incoming.actionOverrides, preset);
+    if (Action.validate(cfg).ok) {
+      out.actionOverrides = Action.diff(cfg, Action.resolve(null, preset).cfg);
+    }
+  }
   await store.writePrefs(await prefsKey(req), out);
   res.json({ ok: true });
 }));
