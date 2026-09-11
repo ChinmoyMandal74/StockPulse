@@ -276,17 +276,6 @@ const SCHEMA = [
   // A refresh runs for ten-odd minutes and every instance needs to know, so the
   // flag lives here rather than in a process variable — serverless instances
   // share nothing else. At most one row; its absence means "not refreshing".
-  // The HOUSE Action profile: the shared rule set every surface shows. One
-  // row, admin-edited. `data` holds { preset, overrides } where overrides is
-  // ONLY the diff from that preset — storing the full seventy values would pin
-  // them to the day the row was written, so a later improvement to a default
-  // would silently never arrive.
-  `create table if not exists action_rules (
-     id         integer primary key check (id = 1),
-     data       text not null,
-     updated_at integer not null,
-     updated_by text
-   )`,
   `create table if not exists refresh_state (
      id         integer primary key check (id = 1),
      started_at integer not null,
@@ -976,34 +965,6 @@ async function readFundamentalsPair(day) {
   return { day, prevDay, curr, prev };
 }
 
-// The house Action profile. A missing row means "Balanced, untouched", which
-// is also what a fresh install gets.
-async function readActionRules() {
-  await init();
-  const r = await db.execute('select data, updated_at, updated_by from action_rules where id = 1');
-  const row = r.rows[0];
-  const out = { preset: 'Balanced', overrides: {}, updatedAt: null, updatedBy: null };
-  if (!row) return out;
-  try {
-    const d = JSON.parse(row.data) || {};
-    if (typeof d.preset === 'string') out.preset = d.preset;
-    if (d.overrides && typeof d.overrides === 'object') out.overrides = d.overrides;
-  } catch { /* an unreadable row behaves as the defaults rather than an outage */ }
-  out.updatedAt = Number(row.updated_at) || null;
-  out.updatedBy = row.updated_by || null;
-  return out;
-}
-
-async function writeActionRules(preset, overrides, who) {
-  await init();
-  await db.execute({
-    sql: `insert into action_rules (id, data, updated_at, updated_by) values (1, ?, ?, ?)
-          on conflict(id) do update set data = excluded.data,
-            updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
-    args: [JSON.stringify({ preset, overrides: overrides || {} }), Date.now(), who || null],
-  });
-}
-
 async function fundamentalsStats() {
   await init();
   const r = await db.execute(
@@ -1374,8 +1335,6 @@ module.exports = {
   readFundamentals,
   fundamentalsStats,
   readFundamentalsPair,
-  readActionRules,
-  writeActionRules,
   barsMaxDates,
   barsOn,
   upsertBars,

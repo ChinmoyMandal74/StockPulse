@@ -611,20 +611,15 @@
         &gt; 30%, gross margin &gt; 50%, positive FCF) in a &gt;10% uptrend. Early is never Strong Buy
         unless a profile enables it. <strong>ETF:</strong> the technical rules alone.</p>
 
-      <h3>House rules and your rules</h3>
-      <p>The <strong>Rules</strong> picker in the bar shows which profile you are on. The
-        <em>house</em> profile is the shared answer — every row, every export, edited only by the
-        owner. <em>My rules</em> is your own copy: pick a preset (<strong>Conservative</strong> —
-        tighter stops, longer earnings blackout, Early capped at Buy with Risk · <strong>Balanced</strong>
-        · <strong>Aggressive</strong> — looser stops, Early may Buy on decent fundamentals) and
-        optionally paste JSON overrides for any threshold. Your profile applies in your browser only,
-        the columns are tinted while it is active, and the CSV names whichever profile produced it.
-        Invalid profiles are rejected with the reason (for example an RSI band whose low is above its
-        high), never silently repaired.</p>
+      <h3>One rule set, for now</h3>
+      <p>The thresholds below are the model's fixed defaults (the "Balanced" set). User-editable
+        profiles — presets, per-user overrides, an admin-edited house set — were built and then
+        deliberately shelved for now to keep the screener simple; the engine still reads every
+        threshold from configuration, so they can return without a rewrite. The CSV export carries
+        Type, the four state columns, Action and the flag naming the rule that fired.</p>
 
-      <h3>Every knob, with its default</h3>
-      <p class="small">Overrides are JSON fragments — only what should differ from the preset, e.g.
-        <code>{"chase": {"max_1m": 20}, "earnings": {"blackout_days": 10}}</code>.</p>
+      <h3>The thresholds (fixed defaults)</h3>
+
       <table>
         <tr><th>Group</th><th>Keys (default)</th></tr>
         <tr><td><code>use_quality</code> / <code>use_momentum</code> / <code>use_vol_trend</code></td>

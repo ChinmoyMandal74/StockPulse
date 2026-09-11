@@ -134,20 +134,6 @@
     td.state.st-bad { color: color-mix(in srgb, var(--red) 75%, var(--muted)); }
     td.state.st-warn { color: var(--amber); }
     td.state.st-guard { color: var(--faint); font-size: 11px; }
-    /* A personal rule set must be visibly in play — same reason the weight
-       lens marks its columns: nobody screenshots a verdict they tuned into
-       existence without the page saying so. */
-    body.rulesed td.grp-act, body.rulesed th.grp-act {
-      background: rgba(34, 211, 238, 0.055);
-    }
-    body.rulesed #rulesBtn { border-color: var(--mom); }
-    .rules-json { width: 100%; min-height: 130px; resize: vertical; padding: 8px 10px;
-      border-radius: 10px; background: var(--surface-2); border: 1px solid var(--hair);
-      color: var(--text); font-family: var(--mono); font-size: 11.5px; line-height: 1.5; }
-    .rules-json:focus { border-color: var(--mom); outline: none; }
-    .rules-note { padding: 6px 12px 8px; font-size: 11px; color: var(--faint); line-height: 1.5; }
-    .rules-note.err { color: var(--red); white-space: pre-wrap; }
-    .rules-form { padding: 4px 12px 10px; display: flex; flex-direction: column; gap: 8px; }
 
     .pick-hint {
       padding: 8px 12px 4px; font-size: 10.5px; line-height: 1.5;
@@ -600,10 +586,6 @@
           <button class="btn picker-btn" id="weightBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="weightMenu" role="listbox" aria-label="Momentum weighting"></div>
         </div>
-        <div class="picker" id="rulesPicker" data-open="0">
-          <button class="btn picker-btn" id="rulesBtn" aria-haspopup="dialog" aria-expanded="false"></button>
-          <div class="picker-menu" id="rulesMenu" role="dialog" aria-label="Action rules"></div>
-        </div>
         <div class="picker admin-only" id="datePicker" data-open="0">
           <button class="btn icon quiet" id="dateOpenBtn" title="Forward returns: view the ranking as of a past date, and what happened after it" aria-haspopup="dialog" aria-expanded="false" aria-label="Forward-returns date">
             <svg class="ic" aria-hidden="true"><use href="#i-calendar" /></svg>
@@ -889,21 +871,7 @@
     let activeTab = 'All';
     let sortKey = 'overallScore';
     let sortDir = -1;          // -1 desc, 1 asc
-    let lastUpdated = null;
-    let actionProfileName = 'Balanced rules';   // the HOUSE profile, from the payload
-    // The Rules picker's state: what the house set is (for the editor), the
-    // user's own profile, and which of the two this browser is showing.
-    let houseRules = null;                       // { preset, overrides } from /api/action-rules
-    let myRules = { preset: 'Balanced', overrides: {} };
-    let actionSource = 'house';
-
-    async function loadActionRules() {
-      try { houseRules = await api('GET', '/api/action-rules'); } catch (e) { /* menu-only data */ }
-    }
-
-    const mineLabel = () => myRules.preset +
-      (Object.keys(myRules.overrides || {}).length ? ' (modified)' : '') + ' (mine) rules';
-    const actionLabel = () => (actionSource === 'mine' ? mineLabel() : actionProfileName);    // when /api/stocks was last pulled (live data)
+    let lastUpdated = null;    // when /api/stocks was last pulled (live data)
     let asOfDate = null;       // forward-returns view: momentum as of this past date (YYYY-MM-DD)
     let isAdmin = true;        // may add/remove tickers, refresh, rewind (true = open/local or owner)
     let authRequired = false;  // server has an ADMIN_PASSWORD set (published, sign-in required)
@@ -1188,7 +1156,6 @@
       { root: 'colPicker', btn: 'colBtn', menu: 'colMenu' },
       { root: 'pastPicker', btn: 'pastBtn', menu: 'pastMenu' },
       { root: 'weightPicker', btn: 'weightBtn', menu: 'weightMenu' },
-      { root: 'rulesPicker', btn: 'rulesBtn', menu: 'rulesMenu' },
       { root: 'researchPicker', btn: 'researchBtn', menu: 'researchMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
       { root: 'addPicker', btn: 'addOpenBtn', menu: 'addMenu' },
@@ -1210,7 +1177,6 @@
 
     // Only one menu is ever open; pass null to close them all.
     function openPicker(id) {
-      if (id === 'rulesPicker') renderRulesMenu();
       PICKERS.forEach((p) => {
         const on = p.root === id;
         $(p.root).dataset.open = on ? '1' : '0';
@@ -1250,102 +1216,6 @@
           'Add a ticker to reach the per-stock pages.</div>');
       }
       $('researchMenu').innerHTML = '<div class="picker-inner">' + parts.join('') + '</div>';
-    }
-
-    // ---- the Rules picker -------------------------------------------------
-    // Trigger drawn on every render; the menu is built on open so a rebuild
-    // never replaces the textarea mid-edit.
-    function renderRulesTrigger() {
-      $('rulesBtn').innerHTML =
-        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>' +
-        '<span class="picker-label">Rules</span>' +
-        `<span class="count">${we(actionSource === 'mine' ? 'Mine' : 'House')}</span>` +
-        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
-      $('rulesBtn').title = actionSource === 'mine'
-        ? `Action scored under ${mineLabel()} — this browser only. The shared column, the CSV default and everything else stay on the house set.`
-        : `Action scored under the house rule set (${actionProfileName}).`;
-    }
-
-    // You edit whichever profile you are viewing. House is admin-only, which
-    // is what makes "shared" safe; your own is always yours.
-    function renderRulesMenu() {
-      const editingHouse = actionSource === 'house';
-      const canEdit = editingHouse ? isAdmin : true;
-      const cur = editingHouse
-        ? (houseRules || { preset: 'Balanced', overrides: {} })
-        : myRules;
-      const presets = Object.keys(ActionRules.PRESETS);
-      const viewRow = (id, name, sub2, on) =>
-        `<button class="pick ${on ? 'on' : ''}" data-rsrc="${id}" style="--tint:#22d3ee">` +
-        `<span class="nm">${we(name)}</span><span class="count">${we(sub2)}</span></button>`;
-      const overridesText = JSON.stringify(cur.overrides || {}, null, 2);
-      $('rulesMenu').innerHTML =
-        '<div class="picker-inner">' +
-        viewRow('house', 'House rules', actionProfileName.replace(' rules', ''), actionSource === 'house') +
-        viewRow('mine', 'My rules', myRules.preset +
-          (Object.keys(myRules.overrides || {}).length ? ' (modified)' : ''), actionSource === 'mine') +
-        '</div>' +
-        `<div class="rules-note">${editingHouse
-          ? (isAdmin
-            ? 'Editing the <b>house</b> profile — the shared answer on every row, every CSV and every screen. Saves apply on the next load.'
-            : 'The house profile is read-only. Switch to <b>My rules</b> to experiment; your copy changes nothing for anyone else.')
-          : 'Editing <b>your own</b> profile — applied in this browser only and marked on the column while active.'}</div>` +
-        '<div class="rules-form">' +
-        `<select id="rulesPreset"${canEdit ? '' : ' disabled'}>` +
-        presets.map((x) => `<option value="${we(x)}"${x === cur.preset ? ' selected' : ''}>${we(x)}</option>`).join('') +
-        '</select>' +
-        `<textarea id="rulesJson" class="rules-json" spellcheck="false"${canEdit ? '' : ' disabled'}>` +
-        we(overridesText) + '</textarea>' +
-        '<div class="rules-note" style="padding:0">Overrides as JSON — only what should differ from the ' +
-        'preset, e.g. {"chase": {"max_1m": 20}}. Every key and its default is listed on ' +
-        '<a href="/help#rules" style="color:var(--accent)">Help</a>. Invalid profiles are rejected with reasons.</div>' +
-        '<div class="rules-note err" id="rulesErr" style="padding:0"></div>' +
-        '</div>' +
-        '<div class="picker-inner" style="border-top:1px solid var(--hair)">' +
-        `<button class="pick" id="rulesSave"${canEdit ? '' : ' disabled'}>` +
-        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-check" /></svg>' +
-        `<span class="nm">Save ${editingHouse ? 'house profile' : 'my profile'}</span></button>` +
-        '</div>';
-    }
-
-    function wireRulesMenu() {
-      $('rulesMenu').addEventListener('click', async (e) => {
-        const src = e.target.closest('[data-rsrc]');
-        if (src) {
-          actionSource = src.dataset.rsrc;
-          renderRulesTrigger(); renderRulesMenu();
-          applyLens(); render(); savePrefs();
-          return;
-        }
-        if (!e.target.closest('#rulesSave')) return;
-        const err = $('rulesErr');
-        err.textContent = '';
-        let overrides;
-        try {
-          overrides = JSON.parse($('rulesJson').value || '{}');
-        } catch (ex) { err.textContent = 'Not valid JSON: ' + ex.message; return; }
-        const preset = $('rulesPreset').value;
-        // The same validator the server runs, so a rejection shows here
-        // before the request rather than as a failed save.
-        const { cfg, unknown } = ActionRules.resolve(overrides, preset);
-        const check = ActionRules.validate(cfg);
-        if (!check.ok) { err.textContent = 'Rejected:\n' + check.errors.join('\n'); return; }
-        if (actionSource === 'house') {
-          try {
-            const r = await api('PUT', '/api/action-rules', { preset, overrides });
-            houseRules = Object.assign({}, houseRules, { preset: r.preset, overrides: r.overrides });
-            await refresh({ live: false });      // the server re-scores on serve; pull it
-            setStatus(`House rules saved — ${preset}` +
-              (unknown.length ? ` (ignored unknown: ${unknown.join(', ')})` : ''));
-          } catch (ex) { err.textContent = ex.message; return; }
-        } else {
-          myRules = { preset, overrides: ActionRules.diff(cfg, ActionRules.resolve(null, preset).cfg) };
-          applyLens(); render(); savePrefs();
-          setStatus(`Your rules saved — ${mineLabel()}` +
-            (unknown.length ? ` (ignored unknown: ${unknown.join(', ')})` : ''));
-        }
-        renderRulesTrigger(); renderRulesMenu();
-      });
     }
 
     function renderPicker() {
@@ -1407,7 +1277,6 @@
       renderPicker();
       renderWeightTrigger();
       renderPastTrigger();
-      renderRulesTrigger();
       const tbody = $('tbody');
       const rows = visibleStocks();
       markSortedColumn();
@@ -1572,7 +1441,7 @@
     function actionCell(s) {
       if (!s.action) return '<td class="act grp-act">—</td>';
       const cls = 'a-' + s.action.toLowerCase().replace(/ /g, '-');
-      const tip = `${s.actionFlag || s.action} · ${actionLabel()}`;
+      const tip = s.actionFlag || s.action;
       return `<td class="act grp-act ${cls}"${attr(tip)}>${we(s.action)}</td>`;
     }
 
@@ -1676,7 +1545,7 @@
         ['Entry State', (s) => s.actionEntry],
         ['Fundamentals Bucket', (s) => s.actionFund],
         ['Guards', (s) => s.actionGuards],
-        [`Action (${actionLabel()})`, (s) => s.action],
+        ['Action', (s) => s.action],
         ['Action Flag', (s) => s.actionFlag],
         ['Name', (s) => s.name],
         ['Portfolios', (s) => (s.portfolios || []).join('; ')],
@@ -1863,25 +1732,8 @@
       let out = !lensOn()
         ? baseStocks
         : baseStocks.map((x) => (x.error ? x : Screens.applyWeights(x, w)));
-      // Under a personal profile the Action is recomputed here; the server,
-      // the snapshot and every other user stay on the house set. Same split
-      // the weight lens uses, for the same reason.
-      if (actionSource === 'mine') {
-        const { cfg } = ActionRules.resolve(myRules.overrides, myRules.preset);
-        cfg.__resolved = true;
-        out = out.map((x) => {
-          if (x.error) return x;
-          const r = ActionRules.evaluate(x, cfg);
-          return Object.assign({}, x, {
-            companyType: r.type, action: r.action, actionFlag: r.flag,
-            actionTrend: r.states.trend, actionEntry: r.states.entry,
-            actionFund: r.states.fund, actionGuards: r.states.guards,
-          });
-        });
-      }
       stocks = out;
       document.body.classList.toggle('lensed', lensOn());
-      document.body.classList.toggle('rulesed', actionSource === 'mine');
     }
 
     function setWeightPreset(id) {
@@ -2055,14 +1907,6 @@
         if (savedP && Screens.PAST_PERIODS.some((x) => x.id === savedP)) pastPeriod = savedP;
         const savedW = res && res.prefs && res.prefs.weights;
         if (savedW === 'custom' || Screens.WEIGHT_PRESETS.some((w) => w.id === savedW)) weightPreset = savedW;
-        const p2 = res && res.prefs;
-        if (p2 && (p2.actionSource === 'mine' || p2.actionSource === 'house')) actionSource = p2.actionSource;
-        if (p2 && typeof p2.actionPreset === 'string' && ActionRules.PRESETS[p2.actionPreset]) {
-          myRules.preset = p2.actionPreset;
-        }
-        if (p2 && p2.actionOverrides && typeof p2.actionOverrides === 'object') {
-          myRules.overrides = p2.actionOverrides;
-        }
         const saved = res && res.prefs && res.prefs.collapsed;
         if (saved) {
           for (const g of GROUPS) {
@@ -2086,8 +1930,7 @@
         const out = {};
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
-          prefs: { collapsed: out, weights: weightPreset, customWeights, past: pastPeriod,
-            actionSource, actionPreset: myRules.preset, actionOverrides: myRules.overrides },
+          prefs: { collapsed: out, weights: weightPreset, customWeights, past: pastPeriod },
         }).catch(() => {});
       }, 600);
     }
@@ -2331,9 +2174,6 @@
         const qs = params.toString();
         const data = await api('GET', '/api/stocks' + (qs ? '?' + qs : ''));
         lastUpdated = data.updatedAt;
-        if (data.actionProfile && data.actionProfile.name) {
-          actionProfileName = `${data.actionProfile.name} rules`;
-        }
         baseStocks = data.stocks || [];
         applyLens();
         portfolios = data.portfolios || [];
@@ -2417,9 +2257,6 @@
         }
 
         if (data) {
-          if (data.actionProfile && data.actionProfile.name) {
-            actionProfileName = `${data.actionProfile.name} rules`;
-          }
           lastUpdated = data.updatedAt;
           baseStocks = data.stocks || [];
           applyLens();
@@ -2719,8 +2556,8 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     // snapshot. Prefs are awaited before the first render — applying them after
     // would show the default layout and then visibly rearrange it.
     checkAuth()
-      .then(() => Promise.all([loadPrefs(), loadActionRules()]))
-      .then(() => { wireRulesMenu(); return refresh({ live: false }); });
+      .then(loadPrefs)
+      .then(() => refresh({ live: false }));
   </script>
 </body>
 </html>
