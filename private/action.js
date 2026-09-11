@@ -476,6 +476,18 @@
     return { trend, entry, fund: FUND_LABELS[fund] || '—', guards: guards.join(' · ') };
   }
 
+  // The trend word for one date, from raw readings — definitions() and
+  // states() on a minimal row, so a replayed history (the stock page's trend
+  // ribbon) walks the exact ladder the Trend column does. r carries
+  // { v200, v50, m1, m3 } in percent; type decides which breakdown
+  // thresholds apply (Early's shorter leash), and everything else stays
+  // blank, which the null discipline treats as "condition not met".
+  function trendAt(r, type, cfg) {
+    const d = definitions({ vs200ma: r.v200, vs50ma: r.v50,
+      oneMonthPct: r.m1, threeMonthPct: r.m3 }, cfg, type);
+    return states(d, 'none').trend;
+  }
+
   // Severity ladders for sorting the state columns — alphabetical order would
   // file Breakdown between Above and Clean, which helps nobody.
   const TREND_ORDER = ['No data', 'Breakdown', 'Downtrend', 'Below 200D', 'Near 200D', 'Above 200D', 'Strong uptrend'];
@@ -830,6 +842,6 @@
     ACTIONS, TYPES, DEFAULTS, PRESETS, TREND_ORDER, ENTRY_ORDER, FUND_ORDER,
     resolve, validate, diff, merge,
     classify, definitions, fundamentals, evaluate, apply, daysToEarnings,
-    explain, ladder,
+    explain, ladder, trendAt,
   };
 });

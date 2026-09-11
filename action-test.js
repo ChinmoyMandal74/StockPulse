@@ -355,5 +355,36 @@ console.log('\nTHE STATE LADDERS (per-column families)');
     [ex(EST).familyMismatch, ex(EARLY).familyMismatch], [false, false]);
 }
 
+
+console.log('\nTREND REPLAY (trendAt)');
+{
+  const c = cfg();
+  check('trendAt matches the evaluated column on the base row',
+    A.trendAt({ v200: 6, v50: 4, m1: 3, m3: 8 }, 'Established', c),
+    A.evaluate(EST, c).states.trend);
+  check('trendAt reads Breakdown with the Established confirms',
+    A.trendAt({ v200: -12, v50: -10, m1: -9, m3: 5 }, 'Established', c), 'Breakdown');
+  check('the Early leash is shorter — same readings, different word',
+    [A.trendAt({ v200: -7, v50: -1, m1: -6, m3: 0 }, 'Early', c),
+      A.trendAt({ v200: -7, v50: -1, m1: -6, m3: 0 }, 'Established', c)],
+    ['Breakdown', 'Downtrend']);
+  check('a blank 200D reads No data', A.trendAt({ v200: null, v50: 2, m1: 1, m3: 2 }, 'Established', c), 'No data');
+  check('a strong uptrend reads as one', A.trendAt({ v200: 14, v50: 3, m1: 2, m3: 9 }, 'Established', c), 'Strong uptrend');
+
+  // Property: for random readings, trendAt says exactly what the column says.
+  let seed2 = 7, bad2 = 0;
+  const rnd2 = () => (seed2 = (seed2 * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const pk = (lo, hi) => (rnd2() < 0.12 ? null : lo + rnd2() * (hi - lo));
+  for (let i = 0; i < 400; i++) {
+    const rr = row(rnd2() < 0.5 ? EST : EARLY, {
+      vs200ma: pk(-35, 35), vs50ma: pk(-25, 25),
+      oneMonthPct: pk(-30, 35), threeMonthPct: pk(-45, 50) });
+    const e = A.evaluate(rr, c);
+    const w = A.trendAt({ v200: rr.vs200ma, v50: rr.vs50ma, m1: rr.oneMonthPct, m3: rr.threeMonthPct }, e.type, c);
+    if (w !== e.states.trend) bad2++;
+  }
+  check('400 random readings: trendAt equals the column word', bad2, 0);
+}
+
 console.log(`\n${n} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);

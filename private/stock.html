@@ -213,6 +213,27 @@
     }
     /* Sits over the static change caption while hovering, so the top-left says
        one thing at a time. */
+    /* ---- trend ribbon --------------------------------------------------
+       The Trend column's word, per session, painted under the chart — the
+       same ladder the screener's column collapses by, replayed over the bars
+       on screen. Right margin matches the chart's 52px price axis, so the
+       strip lines up with the plot and the crosshair. */
+    #trendStrip { margin: 8px 52px 0 0; }
+    .tstrip { position: relative; height: 11px; border-radius: 4px; overflow: hidden;
+      background: rgba(255, 255, 255, 0.04); }
+    .tstrip i { position: absolute; top: 0; bottom: 0; }
+    .ts-breakdown { background: var(--red); }
+    .ts-downtrend { background: color-mix(in srgb, var(--red) 55%, var(--surface)); }
+    .ts-below-200d { background: color-mix(in srgb, var(--red) 26%, var(--surface)); }
+    .ts-near-200d { background: rgba(255, 255, 255, 0.10); }
+    .ts-above-200d { background: color-mix(in srgb, var(--green) 30%, var(--surface)); }
+    .ts-strong-uptrend { background: var(--green); }
+    .tlegend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px;
+      font-size: 10px; color: var(--faint); }
+    .tlegend .cap-t { letter-spacing: 0.1em; text-transform: uppercase; font-size: 9.5px; }
+    .tlegend .tl { display: inline-flex; align-items: center; gap: 5px; }
+    .tlegend .tl i { width: 10px; height: 5px; border-radius: 2px; display: inline-block; }
+
     #chart .readout {
       position: absolute; left: 9px; top: 8px; padding: 5px 10px; border-radius: 8px;
       background: rgba(13, 16, 23, 0.92); border: 1px solid var(--hair);
@@ -278,6 +299,7 @@
 
   <script src="/screens.js"></script>
   <script src="/rowcard.js"></script>
+  <script src="/action.js"></script>
   <script>
     const esc = (t) => String(t).replace(/[&<>"']/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -384,6 +406,57 @@
       return rows;
     }
 
+    // ---- trend ribbon builders ---------------------------------------
+    // The Trend column's ladder replayed over the padded series: one word per
+    // drawn bar, through ActionRules.trendAt — the engine's own definitions()
+    // and states(), so the ribbon can never disagree with the screener. The
+    // 50D/200D averages come from the same RowCard.sma the overlays draw, so
+    // a colour change on the strip lands exactly where the MA lines cross.
+    const TREND_CFG = ActionRules.resolve(null, 'Balanced').cfg;
+    const TS_CLS = {
+      'Breakdown': 'ts-breakdown', 'Downtrend': 'ts-downtrend',
+      'Below 200D': 'ts-below-200d', 'Near 200D': 'ts-near-200d',
+      'Above 200D': 'ts-above-200d', 'Strong uptrend': 'ts-strong-uptrend',
+    };
+    function trendSeries(all, from, type) {
+      const s200 = RowCard.sma(all, 200), s50 = RowCard.sma(all, 50);
+      const words = [];
+      for (let j = from; j < all.length; j++) {
+        const c = all[j];
+        const pct = (base) => (c != null && base != null && base > 0 ? (c / base - 1) * 100 : null);
+        words.push(ActionRules.trendAt({
+          v200: pct(s200[j]), v50: pct(s50[j]),
+          m1: j >= 21 ? pct(all[j - 21]) : null,
+          m3: j >= 63 ? pct(all[j - 63]) : null,
+        }, type, TREND_CFG));
+      }
+      return words;
+    }
+    function trendStripHtml(words) {
+      const n = words.length;
+      if (!n || !words.some((w) => TS_CLS[w])) return '';
+      // Runs of one word become one segment; boundaries sit at the midpoint
+      // between bars, the same linear mapping the crosshair uses. 'No data'
+      // stays unpainted — the track showing through is the honest picture.
+      let segs = '', a = 0;
+      for (let i = 1; i <= n; i++) {
+        if (i === n || words[i] !== words[a]) {
+          const cls = TS_CLS[words[a]];
+          if (cls) {
+            const L = a === 0 ? 0 : ((a - 0.5) / (n - 1)) * 100;
+            const R = i === n ? 100 : ((i - 0.5) / (n - 1)) * 100;
+            segs += `<i class="${cls}" style="left:${L.toFixed(2)}%;width:${(R - L).toFixed(2)}%" title="${esc(words[a])}"></i>`;
+          }
+          a = i;
+        }
+      }
+      const present = ['Strong uptrend', 'Above 200D', 'Near 200D', 'Below 200D', 'Downtrend', 'Breakdown']
+        .filter((w) => words.indexOf(w) >= 0)
+        .map((w) => `<span class="tl"><i class="${TS_CLS[w]}"></i>${esc(w)}</span>`);
+      return `<div class="tstrip">${segs}</div>` +
+        `<div class="tlegend"><span class="cap-t">Trend</span>${present.join('')}</div>`;
+    }
+
     function paintChart() {
       const box = document.getElementById('chart');
       if (!box) return;
@@ -482,8 +555,19 @@
           '<span class="xdate" hidden></span>' +
           '<span class="readout" hidden></span>';
 
+        // The trend ribbon under the plot. Thresholds follow the stock's
+        // current type (the classification is not replayable historically);
+        // the run-up the 200-day average needs is the MA_PAD already fetched.
+        const trend = trendSeries(all, from, (stock && stock.companyType) || 'Established');
+        const strip = document.getElementById('trendStrip');
+        if (strip) {
+          const html = trendStripHtml(trend);
+          strip.innerHTML = html;
+          strip.hidden = !html;
+        }
+
         // Everything the crosshair needs, kept for the pointer handler.
-        hover = { dates, closes, volumes, rsi, mom, panes: c.panes };
+        hover = { dates, closes, volumes, rsi, mom, trend, panes: c.panes };
       });
     }
 
@@ -542,6 +626,7 @@
                 title="The momentum score over time, 0-100 on the same fixed scale the table uses">MOM</button></span>
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
+          <div id="trendStrip" hidden></div>
         </section></div>
 
         <section class="bezel card"><div class="core">
@@ -747,7 +832,9 @@
           // the chart rather than in whatever order the fields were added.
           (mv == null ? '' : `<span class="k">Mom</span> <span class="v mom">${mv.toFixed(1)}</span>`) +
           (r == null ? '' : `<span class="k">RSI</span> <span class="v rsi">${r.toFixed(1)}</span>`) +
-          `<span class="k">Vol</span> <span class="v">${fmtVol(hover.volumes[i])}</span>`;
+          `<span class="k">Vol</span> <span class="v">${fmtVol(hover.volumes[i])}</span>` +
+          (hover.trend && hover.trend[i] && hover.trend[i] !== 'No data'
+            ? `<span class="k">Trend</span> <span class="v">${esc(hover.trend[i])}</span>` : '');
         out.hidden = false;
         chartEl.classList.add('hovering');
       });
