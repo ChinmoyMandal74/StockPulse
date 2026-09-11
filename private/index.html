@@ -118,6 +118,41 @@
     .jump:hover { background: rgba(255, 255, 255, 0.07); color: var(--text); }
     .jump:disabled { opacity: 0.25; cursor: default; }
     .jump:disabled:hover { background: none; color: var(--faint); }
+    /* Two hues, not six. Most of a 93-row table lands on Hold or Buy with Risk,
+       and the momentum arrow already made the argument: light every row and the
+       column stops carrying information. Weight separates the extremes. */
+    td.act { font-family: var(--sans); font-size: 12px; white-space: nowrap; }
+    td.act .v { font-weight: 500; }
+    .act-6 .v { color: var(--green); font-weight: 700; }
+    .act-5 .v { color: var(--green); }
+    .act-4 .v { color: color-mix(in srgb, var(--green) 62%, var(--muted)); }
+    .act-3 .v { color: var(--muted); }
+    .act-2 .v { color: color-mix(in srgb, var(--red) 70%, var(--muted)); }
+    .act-1 .v { color: var(--red); font-weight: 700; }
+    td.ctype { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+    td.ctype .early { color: var(--amber); }
+    /* The same loud marking the weight lens uses: a bent rule set must be
+       visible, or someone screenshots a verdict they tuned until it said that. */
+    body.actioned th.grp-rank.act-col, body.actioned td.act, body.actioned td.ctype {
+      background: rgba(34, 211, 238, 0.055);
+    }
+    body.actioned #actionBtn { border-color: var(--mom); color: var(--text); }
+
+    .rules { max-height: 60vh; overflow-y: auto; padding: 2px 2px 6px; }
+    .rules h4 { margin: 10px 10px 4px; font-size: 10px; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--faint); font-weight: 500; }
+    .rules .rl { display: grid; grid-template-columns: 1fr 86px; gap: 8px; align-items: center;
+      padding: 4px 10px; }
+    .rules .rl:hover { background: rgba(255, 255, 255, 0.04); }
+    .rules .rl .nmw { min-width: 0; }
+    .rules .rl .nm2 { font-size: 12.5px; color: var(--text); }
+    .rules .rl .mn { font-size: 10.5px; color: var(--faint); line-height: 1.35; }
+    .rules .rl input { width: 100%; padding: 4px 6px; border-radius: 7px; background: var(--surface-2);
+      border: 1px solid var(--hair); color: var(--text); font-family: var(--mono); font-size: 12px; }
+    .rules .rl input:focus { border-color: var(--mom); outline: none; }
+    .rules .rl input.chg { border-color: var(--mom); color: var(--mom); }
+    .rules-note { padding: 8px 12px; font-size: 11px; color: var(--faint); line-height: 1.5; }
+
     .pick-hint {
       padding: 8px 12px 4px; font-size: 10.5px; line-height: 1.5;
       color: var(--faint); border-top: 1px solid var(--hair); margin-top: 4px;
@@ -569,6 +604,10 @@
           <button class="btn picker-btn" id="weightBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="weightMenu" role="listbox" aria-label="Momentum weighting"></div>
         </div>
+        <div class="picker" id="actionPicker" data-open="0">
+          <button class="btn picker-btn" id="actionBtn" aria-haspopup="dialog" aria-expanded="false"></button>
+          <div class="picker-menu" id="actionMenu" role="dialog" aria-label="Action rules"></div>
+        </div>
         <div class="picker admin-only" id="datePicker" data-open="0">
           <button class="btn icon quiet" id="dateOpenBtn" title="Forward returns: view the ranking as of a past date, and what happened after it" aria-haspopup="dialog" aria-expanded="false" aria-label="Forward-returns date">
             <svg class="ic" aria-hidden="true"><use href="#i-calendar" /></svg>
@@ -759,7 +798,7 @@
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="name">Name</th>
         <th class="group grp-info" data-group="info" colspan="5">Info</th>
-        <th class="group grp-rank" data-group="rank" colspan="2">Scores</th>
+        <th class="group grp-rank" data-group="rank" colspan="4">Scores</th>
         <th class="group grp-pmom" data-group="pmom" colspan="3">Price Momentum</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
@@ -780,6 +819,8 @@
         <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
         <th class="grp-rank ta-c" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
         <th class="grp-rank ta-c" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all and Overall falls back to momentum. Hover a cell for the factor split and the confidence figure.">Qual.</th>
+        <th class="grp-rank left act-col" data-key="companyType" title="Established or Early, decided from size, profitability, free cash flow, a sane forward P/E and Quality — and an Early company is then scored on different fundamentals, because P/E and PEG mean nothing without earnings. ETFs are scored on technicals alone.">Type</th>
+        <th class="grp-rank left act-col" data-key="actionRank" title="What the rule set says to do with this stock today. Hover a cell for the whole derivation. It is a consistent reading of today's numbers, not a prediction — nothing in it has been shown to forecast a return.">Action</th>
         <th class="grp-pmom ta-l" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
         <th class="grp-pmom ta-l" data-key="pastShown" id="thPast"
             title="The momentum score as it stood at the end of the chosen horizon. Change the horizon with the Past picker in the bar.">Past<br>Mom.</th>
@@ -831,6 +872,7 @@
   </main>
 
   <script src="/screens.js"></script>
+  <script src="/action.js"></script>
   <script src="/rowcard.js"></script>
   <script>
     // The universe exactly as the server scored it, and the view the chosen
@@ -1132,6 +1174,7 @@
       { root: 'pastPicker', btn: 'pastBtn', menu: 'pastMenu' },
       { root: 'weightPicker', btn: 'weightBtn', menu: 'weightMenu' },
       { root: 'researchPicker', btn: 'researchBtn', menu: 'researchMenu' },
+      { root: 'actionPicker', btn: 'actionBtn', menu: 'actionMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
       { root: 'addPicker', btn: 'addOpenBtn', menu: 'addMenu' },
       { root: 'datePicker', btn: 'dateOpenBtn', menu: 'dateMenu' },
@@ -1152,6 +1195,7 @@
 
     // Only one menu is ever open; pass null to close them all.
     function openPicker(id) {
+      if (id === 'actionPicker') { actionDraft = null; renderActionMenu(); }
       PICKERS.forEach((p) => {
         const on = p.root === id;
         $(p.root).dataset.open = on ? '1' : '0';
@@ -1160,6 +1204,30 @@
       });
     }
     const closePickers = () => openPicker(null);
+
+    // ---- Action rules --------------------------------------------------------
+    // `actionMeta` is the house set and everything the editor needs to draw
+    // itself, fetched once at boot. `actionPreset` decides which set THIS user
+    // sees: the house answer the server already wrote onto every row, or their
+    // own, re-scored in the browser. The server, and therefore anything that
+    // reads the snapshot, always stays on the house set.
+    let actionMeta = null;
+    let actionPreset = 'house';
+    let myActionParams = null;          // the user's diff from the defaults
+    let actionDraft = null;             // what the editor is holding, unsaved
+
+    const houseParams = () => (actionMeta ? actionMeta.params : {});
+    const activeActionParams = () =>
+      ActionRules.resolve(actionPreset === 'mine' ? (myActionParams || {}) : houseParams());
+
+    async function loadActionRules() {
+      try {
+        actionMeta = await api('GET', '/api/action-rules');
+      } catch (e) {
+        /* the column still works: the server already wrote the house answer
+           onto every row, and only the editor needs the metadata. */
+      }
+    }
 
     // Which stock the per-symbol pages will open: the top row of the current
     // view, so it follows the sort and the portfolio filter rather than quietly
@@ -1191,6 +1259,143 @@
           'Add a ticker to reach the per-stock pages.</div>');
       }
       $('researchMenu').innerHTML = '<div class="picker-inner">' + parts.join('') + '</div>';
+    }
+
+    // Drawn on every render, like the weights trigger. The menu below is built
+    // on open instead: a rebuild mid-edit would replace the input under the
+    // cursor and lose the keystroke.
+    function renderActionTrigger() {
+      const mine = actionPreset === 'mine';
+      $('actionBtn').innerHTML =
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>' +
+        '<span class="picker-label">Action</span>' +
+        `<span class="count">${mine ? 'Mine' : 'House'}</span>` +
+        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
+      $('actionBtn').title = mine
+        ? 'Your own rule set, applied in this browser only. The shared column, and everything that reads it, stays on the house rules.'
+        : 'The house rule set — the shared answer, applied on the server. Admins can edit it here.';
+    }
+
+    // You edit whichever set you are looking at. House is admin-only, which is
+    // what makes "shared" safe; your own is always yours to change.
+    const editingHouse = () => actionPreset === 'house';
+    const canEdit = () => (editingHouse() ? isAdmin : true);
+
+    function renderActionMenu() {
+      if (!actionMeta) {
+        $('actionMenu').innerHTML =
+          '<div class="rules-note">Rule details could not be loaded. The Action column still ' +
+          'shows the house answer, which the server computed.</div>';
+        return;
+      }
+      if (!actionDraft) {
+        actionDraft = Object.assign({}, editingHouse() ? houseParams() : (myActionParams || {}));
+      }
+      const D = actionMeta.defaults;
+      const val = (k) => (actionDraft[k] !== undefined ? actionDraft[k] : D[k]);
+
+      const pick = (id, name, sub2, on) =>
+        `<button class="pick ${on ? 'on' : ''}" data-aset="${id}" style="--tint:#22d3ee">` +
+        `<span class="nm">${we(name)}</span><span class="count">${we(sub2)}</span></button>`;
+
+      const head = pick('house', 'House rules', 'shared', actionPreset === 'house') +
+        pick('mine', 'My rules', myActionParams && Object.keys(myActionParams).length
+          ? `${Object.keys(myActionParams).length} changed` : 'a copy to edit', actionPreset === 'mine');
+
+      const groups = {};
+      for (const m of actionMeta.meta) (groups[m.group] ||= []).push(m);
+      let body = '';
+      for (const g of Object.keys(actionMeta.groups)) {
+        if (!groups[g]) continue;
+        body += `<h4>${we(actionMeta.groups[g])}</h4>`;
+        for (const m of groups[g]) {
+          const v = val(m.key);
+          const changed = Number(v) !== Number(D[m.key]);
+          body += '<div class="rl">' +
+            `<span class="nmw"><span class="nm2">${we(m.label)}</span>` +
+            `<div class="mn">${we(m.meaning)}</div></span>` +
+            `<input type="number" data-akey="${we(m.key)}" value="${we(String(v))}" ` +
+            `step="${we(String(m.step))}" min="${we(String(m.min))}" max="${we(String(m.max))}" ` +
+            `class="${changed ? 'chg' : ''}"${canEdit() ? '' : ' disabled'} />` +
+            '</div>';
+        }
+      }
+
+      const changedN = Object.keys(actionDraft).filter((k) => Number(actionDraft[k]) !== Number(D[k])).length;
+      const note = editingHouse()
+        ? (isAdmin
+          ? 'Editing the <b>house</b> rules — the shared answer everyone sees, and the one the server writes onto every row. Saving re-scores the cached snapshot straight away.'
+          : 'The house rules are read-only. Switch to <b>My rules</b> to change anything; your copy affects only this browser.')
+        : 'Editing <b>your own</b> rules. They apply in this browser only — the shared column, the nightly email and the assistant stay on the house set.';
+
+      $('actionMenu').innerHTML =
+        '<div class="picker-inner">' + head + '</div>' +
+        `<div class="rules-note">${note}</div>` +
+        `<div class="rules">${body}</div>` +
+        '<div class="picker-inner" style="border-top:1px solid var(--hair)">' +
+        `<button class="pick" id="aSave"${canEdit() ? '' : ' disabled'}>` +
+        `<svg class="ic ic-sm" aria-hidden="true"><use href="#i-check" /></svg>` +
+        `<span class="nm">Save${changedN ? ` — ${changedN} changed` : ''}</span></button>` +
+        `<button class="pick" id="aReset"${canEdit() ? '' : ' disabled'}>` +
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>' +
+        '<span class="nm">Reset to defaults</span></button>' +
+        '</div>';
+    }
+
+    function wireActionMenu() {
+      const menu = $('actionMenu');
+      menu.addEventListener('click', async (e) => {
+        const set = e.target.closest('[data-aset]');
+        if (set) {
+          const want = set.dataset.aset;
+          if (want === 'mine' && !myActionParams) myActionParams = {};   // start from the defaults
+          actionPreset = want;
+          actionDraft = null;
+          renderActionTrigger(); renderActionMenu();
+          applyLens(); render(); savePrefs();
+          return;
+        }
+        if (e.target.closest('#aReset')) {
+          actionDraft = {};
+          renderActionMenu();
+          return;
+        }
+        if (e.target.closest('#aSave')) {
+          if (!canEdit()) return;
+          const clean = ActionRules.clean(actionDraft);
+          const stored = ActionRules.diff(Object.assign({}, ActionRules.DEFAULTS, clean.params));
+          if (editingHouse()) {
+            try {
+              const r = await api('PUT', '/api/action-rules', { params: stored });
+              actionMeta.params = r.params;
+              actionDraft = null;
+              // The server re-scored the stored snapshot, so pull it rather than
+              // guessing locally — one cheap request, and no chance of the table
+              // disagreeing with what everyone else will see.
+              await refresh({ live: false });
+              setStatus('House rules saved' +
+                (clean.fixed.length ? ` (${clean.fixed.length} value${clean.fixed.length === 1 ? '' : 's'} adjusted to keep the bands in order)` : ''));
+            } catch (err) { setError(err.message); return; }
+          } else {
+            myActionParams = stored;
+            actionDraft = null;
+            applyLens(); render(); savePrefs();
+            setStatus(`Your rules saved — ${Object.keys(stored).length} changed from the defaults` +
+              (clean.fixed.length ? `, ${clean.fixed.length} adjusted to keep the bands in order` : ''));
+          }
+          renderActionTrigger(); renderActionMenu();
+        }
+      });
+      // Typed values go into the draft, never straight into the live set: a
+      // half-typed "-" or "1e" would otherwise re-score the table mid-keystroke.
+      menu.addEventListener('input', (e) => {
+        const el = e.target.closest('[data-akey]');
+        if (!el) return;
+        const v = Number(el.value);
+        if (el.value === '' || !isFinite(v)) { delete actionDraft[el.dataset.akey]; return; }
+        actionDraft[el.dataset.akey] = v;
+        el.classList.toggle('chg', v !== Number(actionMeta.defaults[el.dataset.akey]));
+      });
     }
 
     function renderPicker() {
@@ -1252,6 +1457,7 @@
       renderPicker();
       renderWeightTrigger();
       renderPastTrigger();
+      renderActionTrigger();
       const tbody = $('tbody');
       const rows = visibleStocks();
       markSortedColumn();
@@ -1319,6 +1525,8 @@
           ${earningsCell(s, cacheTitle)}
           ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-rank ta-c lens-col')}
           ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank ta-c')}
+          ${typeCell(s)}
+          ${actionCell(s)}
           ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-pmom ta-l lens-col', deltaOf(s))}
           ${pastCell(s)}
           ${deltaCell(s)}
@@ -1376,6 +1584,25 @@
       loadSparklines();
     }
 
+    // Early is the one worth spotting, so it is the only one tinted; the other
+    // two are the unremarkable cases.
+    function typeCell(s) {
+      const t = s.companyType;
+      if (!t) return '<td class="ctype grp-rank">—</td>';
+      const cls = t === 'Early' ? ' class="early"' : '';
+      return `<td class="ctype grp-rank"><span${cls}>${we(t)}</span></td>`;
+    }
+
+    // Carries data-sym/data-kind so the existing .rating hover wiring picks it
+    // up — the tooltip is the established place for "why is this an 8".
+    function actionCell(s) {
+      if (!s.action) return '<td class="act grp-rank">—</td>';
+      const flags = (s.actionFlags || []).length
+        ? `<span class="count"> ${we(String(s.actionFlags.length))}</span>` : '';
+      return `<td class="act rating grp-rank act-${s.actionRank || 3}" ` +
+        `data-sym="${we(s.symbol)}" data-kind="action"><span class="v">${we(s.action)}</span>${flags}</td>`;
+    }
+
     // Mark whichever column the table is currently sorted by.
     function markSortedColumn() {
       document.querySelectorAll('th[data-key]').forEach((th) => {
@@ -1395,6 +1622,11 @@
       if (!s) return;
       const html = RowCard.scoreTip(s, el.dataset.kind, {
         pulled: lastUpdated ? fmtTime(lastUpdated) : null,
+        // Recomputed rather than read off the row: the tooltip shows the whole
+        // derivation, and only the four summary fields are stored.
+        action: el.dataset.kind === 'action' && typeof ActionRules !== 'undefined'
+          ? ActionRules.score(s, activeActionParams()) : null,
+        actionSet: actionPreset === 'mine' ? 'your rules' : 'the house rules',
       });
       if (!html) return;
       hideRowCard();
@@ -1468,6 +1700,12 @@
         ['Past Momentum', (s) => pastOf(s)],
         ['Momentum Delta', (s) => deltaOf(s)],
         ['Quality', (s) => s.qualityRating],
+        // The export names which rule set produced these, the way it already
+        // names the momentum weighting — a saved file that does not say how it
+        // was scored is a file nobody can check later.
+        ['Company Type', (s) => s.companyType],
+        [actionPreset === 'mine' ? 'Action (my rules)' : 'Action', (s) => s.action],
+        ['Action Flags', (s) => (s.actionFlags || []).join('; ')],
         ['Name', (s) => s.name],
         ['Portfolios', (s) => (s.portfolios || []).join('; ')],
         ['Price', (s) => s.price],
@@ -1650,10 +1888,26 @@
 
     function applyLens() {
       const w = activeWeights();
-      stocks = !lensOn()
+      let out = !lensOn()
         ? baseStocks
         : baseStocks.map((x) => (x.error ? x : Screens.applyWeights(x, w)));
+      // Under the user's own rule set the Action is recomputed here rather than
+      // on the server, so the table, the sort and the tooltip all read the same
+      // fields whichever set is in play and no cell renderer needs to know.
+      if (actionPreset === 'mine' && typeof ActionRules !== 'undefined') {
+        const p = ActionRules.resolve(myActionParams || {});
+        p.__resolved = true;
+        out = out.map((x) => {
+          if (x.error) return x;
+          const a = ActionRules.score(x, p);
+          return Object.assign({}, x, {
+            companyType: a.type, action: a.action, actionRank: a.rank, actionFlags: a.flags,
+          });
+        });
+      }
+      stocks = out;
       document.body.classList.toggle('lensed', lensOn());
+      document.body.classList.toggle('actioned', actionPreset === 'mine');
     }
 
     function setWeightPreset(id) {
@@ -1827,6 +2081,13 @@
         if (savedP && Screens.PAST_PERIODS.some((x) => x.id === savedP)) pastPeriod = savedP;
         const savedW = res && res.prefs && res.prefs.weights;
         if (savedW === 'custom' || Screens.WEIGHT_PRESETS.some((w) => w.id === savedW)) weightPreset = savedW;
+        const savedA = res && res.prefs && res.prefs.actionPreset;
+        if (savedA === 'mine' || savedA === 'house') actionPreset = savedA;
+        const savedAP = res && res.prefs && res.prefs.actionParams;
+        if (savedAP && typeof savedAP === 'object') myActionParams = savedAP;
+        // A preset with nothing behind it would silently be the house set under
+        // a different name.
+        if (actionPreset === 'mine' && !myActionParams) actionPreset = 'house';
         const saved = res && res.prefs && res.prefs.collapsed;
         if (saved) {
           for (const g of GROUPS) {
@@ -1850,7 +2111,8 @@
         const out = {};
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
-          prefs: { collapsed: out, weights: weightPreset, customWeights, past: pastPeriod },
+          prefs: { collapsed: out, weights: weightPreset, customWeights, past: pastPeriod,
+            actionPreset, actionParams: myActionParams || {} },
         }).catch(() => {});
       }, 600);
     }
@@ -2476,8 +2738,8 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     // snapshot. Prefs are awaited before the first render — applying them after
     // would show the default layout and then visibly rearrange it.
     checkAuth()
-      .then(loadPrefs)
-      .then(() => refresh({ live: false }));
+      .then(() => Promise.all([loadPrefs(), loadActionRules()]))
+      .then(() => { wireActionMenu(); return refresh({ live: false }); });
   </script>
 </body>
 </html>

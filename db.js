@@ -276,6 +276,19 @@ const SCHEMA = [
   // A refresh runs for ten-odd minutes and every instance needs to know, so the
   // flag lives here rather than in a process variable — serverless instances
   // share nothing else. At most one row; its absence means "not refreshing".
+  // The house Action rule set. One row, ever — this is the shared answer every
+  // surface shows, not a per-user preference; those live in `prefs`.
+  //
+  // `data` holds ONLY the parameters that differ from the code's defaults, not
+  // all seventy. Storing the full set would pin every threshold to whatever the
+  // defaults were the first time an admin opened the editor, so a later
+  // improvement to a default would silently never reach anyone.
+  `create table if not exists action_rules (
+     id         integer primary key check (id = 1),
+     data       text not null,
+     updated_at integer not null,
+     updated_by text
+   )`,
   `create table if not exists refresh_state (
      id         integer primary key check (id = 1),
      started_at integer not null,
@@ -965,6 +978,29 @@ async function readFundamentalsPair(day) {
   return { day, prevDay, curr, prev };
 }
 
+// The house rule set, as the stored diff from the code defaults. An empty
+// object means "the defaults", which is also what a fresh install returns.
+async function readActionRules() {
+  await init();
+  const r = await db.execute('select data, updated_at, updated_by from action_rules where id = 1');
+  const row = r.rows[0];
+  if (!row) return { params: {}, updatedAt: null, updatedBy: null };
+  let params = {};
+  try { params = JSON.parse(row.data) || {}; } catch { params = {}; }
+  return { params, updatedAt: Number(row.updated_at) || null, updatedBy: row.updated_by || null };
+}
+
+async function writeActionRules(params, who) {
+  await init();
+  await db.execute({
+    sql: `insert into action_rules (id, data, updated_at, updated_by) values (1, ?, ?, ?)
+          on conflict(id) do update set data = excluded.data,
+            updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    args: [JSON.stringify(params || {}), Date.now(), who || null],
+  });
+  return true;
+}
+
 async function fundamentalsStats() {
   await init();
   const r = await db.execute(
@@ -1335,6 +1371,8 @@ module.exports = {
   readFundamentals,
   fundamentalsStats,
   readFundamentalsPair,
+  readActionRules,
+  writeActionRules,
   barsMaxDates,
   barsOn,
   upsertBars,

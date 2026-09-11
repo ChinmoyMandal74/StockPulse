@@ -24,6 +24,8 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `momentum.js` | **Momentum scored from bars and nothing else** — no database, no API, no universe. Shared by the live refresh, the backfill and the chart |
 | `backfill-momentum.js` | One-off recompute of `momentum_history` from the archive; `--commit`, `--only`, `--from`, `--rebuild` |
 | `analysis-db.js` | **The local SQLite copy of the archive, for analysis.** `--full` rebuilds, no flag syncs, `--stats` reports. Never query Turso for research when this exists |
+| `private/action.js` | **The Action rules** — company type, technical and fundamental scores, tiers, overrides. Shared by the server and the browser |
+| `action-test.js` | Replays `stock_action_rules.xlsx` through `action.js` and asserts all 2,538 cached results |
 | `purge-orphans.js` | Deletes data for symbols in no portfolio; `--commit`, `--only`. Dry run by default |
 | `backfill-bars.js` | One-off deep pull of the daily bar archive; `--commit`, `--depth`, `--only` |
 | `set-password.js` | Local account admin — list accounts, set a password, change a role |
@@ -788,6 +790,29 @@ It re-scores momentum **in the browser** — the screener, the nightly report, t
   - **Each slider shows its renormalised share** (`25 → 23%`) because weights need not total 100, so a bare number means nothing on its own.
   - **Any page that writes prefs must hand back the parts it does not edit.** `/analysis` sending `collapsed: {}` silently reset every collapsed column group — it now returns what it was given.
 - **The saved choice is a preset id plus, for Custom only, the map behind it.** A bad id falls back to Default.
+
+## The Action column
+Two columns in the **Scores** group — `Company Type` and `Action` — saying what the rule set makes of each stock today. `private/action.js` holds the rules and is shared by the server and the browser, like `momentum.js` and `screens.js`.
+
+**It is a scoring model, not a measurement.** Nothing in it has been shown to predict a return; the research log records four framings that came back flat. The column is a consistent reading of today's numbers, and the tooltip says so in as many words.
+
+- **The rules came from a spreadsheet, and the spreadsheet is the test.** `stock_action_rules.xlsx` carries 93 rows whose results Excel itself cached, so the workbook is a fixture rather than documentation that can drift. **`node --no-warnings action-test.js`** replays every row and asserts every company type, sub-score, override, rank, action and flag — **2,538 assertions**. Run it after touching any rule. Verified to bite: moving `rsi_hi` from 65 to 60 produces 20 mismatches on exactly the rows it should. The workbook is committed for this reason; it is an authored spec, not generated output.
+  - Reading the workbook needed a **non-greedy** attribute match: a self-closing `<c r="F16" s="10"/>` lets `[^>]*` eat the trailing slash, the `/>` branch fails, and the `>(.*?)</c>` branch swallows the *next* cell — which silently shifts a row's columns by one. That produced 58 phantom mismatches before it was spotted; the first version of the extractor reported "Quality: 336".
+- **Early and Established are scored on different rules, not the same rules with different thresholds.** P/E, PEG and earnings growth mean nothing for a company without earnings, so the Early set never reads them — it reads revenue growth, gross margin, cash burn, short interest and Quality. ETFs are scored on technicals alone. Type is recomputed daily, so a company migrates once it turns profitable.
+- **A blank is not a zero.** A missing margin means "no information" and scores nothing; read as 0 it would score a penalty the company has not earned. Everything goes through `num()`, which is the job `ISNUMBER()` does in the sheet.
+- **The overrides are a floor, never a contribution.** `MIN()` against the base tier, so a stock cannot be talked into a Buy by accumulating small positives while its trend is broken. A hard sell outranks all of them. A stock below its 200-day is capped at Hold (Established) or Avoid (Early) — **that is a stated preference, not a finding**: measured on this archive, below-200D + low RSI returned +3.59% over 42 days against +4.15% for *above*-200D + low RSI, and the universe-wide lift was noise (t 0.57).
+
+### The house set, and your own
+**The house rule set lives in the `action_rules` table — one row, admin-editable, applied server-side**, so the shared column is one answer everybody sees. A user may keep **one preset of their own**, which is applied in the browser and changes nothing for anyone else. Same split the momentum weight lens uses, and for the same reason.
+
+- **Only the diff from the code defaults is stored**, in both the house row and `prefs`. Storing all seventy would pin every threshold to whatever the defaults were the day someone first opened the editor, so a later improvement would silently never reach them.
+- **`GET /api/stocks` scores the Action on the way out**, not only when the snapshot is written. It costs about a millisecond for the universe and means the column is never stale — a snapshot written before this feature existed still gets one, and a rules edit shows up on the next load rather than after the nightly refresh. `PUT` therefore does not rewrite the 0.34 MB snapshot blob.
+- **Validation repairs orderings, it does not just bound them.** `cleanWeights()` only needed per-field limits because weights are independent. Here `rsi_lo` must not exceed `rsi_hi`, and the tier ladders must descend — invert one and a band becomes *unreachable*, which shows as a column that can never say "Buy" and never explains why. `clean()` rebuilds from scratch against the known keys, clamps, then repairs the pairs and ladders and **reports what it repaired**.
+- **The editor edits whichever set you are viewing**, which is what makes "shared" safe: house is admin-only, your own is always yours. A bent rule set is marked the way the weight lens marks a bent weighting (`body.actioned`), or someone screenshots a verdict they tuned until it said that.
+- **Two hues, not six.** Green for the buys, red for Avoid and Sell, muted for Hold, with weight separating the extremes. The momentum arrow already made the argument: light every row and the column stops carrying information.
+- **The tooltip is the existing one.** The Action cell carries `data-sym`/`data-kind`, so the `.rating` hover wiring picks it up and `scoreTip(s, 'action')` shows the whole derivation. The detail is **passed in** rather than computed inside `rowcard.js`, which is loaded by pages that do not load `action.js`.
+- The CSV names the rule set in the header (`Action (my rules)`) exactly as it names the momentum weighting.
+- **The nightly email and the assistant are untouched.** `CHAT_FIELDS` is an allow-list, so the bot cannot see the column until it is added there — a decision deliberately left open, since the bot is built to refuse buy/sell verdicts and this column is one.
 
 ## Analysis screens
 **The seven predicates live in `private/screens.js`, not in the page.** `analysis.html` loads it with a `<script>` tag and `server.js` `require`s it, so the nightly report and the page can never disagree about what "bouncing off the lows" means — the same reason `rowcard.js` exists. Only the *selection* is shared (which rows, in what order); the columns, the prose and the empty messages stay with whichever surface is drawing them. Verified equivalent against the live universe on extraction: all seven lists identical, order included.
