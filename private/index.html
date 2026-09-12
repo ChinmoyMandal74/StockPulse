@@ -360,7 +360,7 @@
     body.lensed td.lens-col { background: rgba(124, 156, 255, 0.07); }
     body.lensed tbody tr:hover td.lens-col { background: rgba(124, 156, 255, 0.12); }
     body.lensed #weightBtn { border-color: var(--accent); color: var(--text); }
-    /* The Action rules profile: when it is not Balanced the six Action Model
+    /* The Advice rules profile: when it is not Balanced the six Advice
        columns are re-scored in the browser, and the tint says so — a changed
        verdict must not look like the shared Balanced one. */
     body.act-lensed td.grp-act { background: rgba(94, 234, 212, 0.06); }
@@ -660,7 +660,7 @@
         </div>
         <div class="picker" id="actPicker" data-open="0">
           <button class="btn picker-btn" id="actBtn" aria-haspopup="listbox" aria-expanded="false"></button>
-          <div class="picker-menu" id="actMenu" role="listbox" aria-label="Action rules profile"></div>
+          <div class="picker-menu" id="actMenu" role="listbox" aria-label="Advice rules profile"></div>
         </div>
         <div class="picker admin-only" id="datePicker" data-open="0">
           <button class="btn icon quiet" id="dateOpenBtn" title="Forward returns: view the ranking as of a past date, and what happened after it" aria-haspopup="dialog" aria-expanded="false" aria-label="Forward-returns date">
@@ -854,7 +854,7 @@
         <th rowspan="2" class="left frz frz1" data-key="name">Name</th>
         <th class="group grp-info" data-group="info" colspan="5">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="2">Scores</th>
-        <th class="group grp-act" data-group="act" colspan="6">Action Model</th>
+        <th class="group grp-act" data-group="act" colspan="6">Advice</th>
         <th class="group grp-pmom" data-group="pmom" colspan="3">Price Momentum</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
@@ -880,7 +880,7 @@
         <th class="grp-act left" data-key="actionEntry" title="The timing reading: Clean (a base or shallow pullback with RSI 45–65), Clean near the high, Extended (up too far, too fast — do not chase), or None. Entry answers whether now.">Entry</th>
         <th class="grp-act left" data-key="actionFund" title="The fundamentals bucket under this stock's rule set — Strong, OK, Weak, or — when the data makes no case either way. Established is judged on earnings, revenue, margins and cash flow; Early on growth, gross margin, burn and short interest. Fundamentals answer how much conviction.">Fund.</th>
         <th class="grp-act left" data-key="actionGuards" title="Reasons to wait that override everything below a Sell: earnings within the blackout window, or too little price history to judge. Blank for most stocks — when this column speaks, it matters.">Guards</th>
-        <th class="grp-act left" data-key="action" title="What the house rule set says to do with this stock today. First matching rule wins, and the tooltip on each cell names the one rule that fired. Loss-avoidance rules are checked before any buy rule, always. A consistent reading of today's numbers — not a prediction.">Action</th>
+        <th class="grp-act left" data-key="action" title="What the picked rules profile concludes for this stock today. First matching rule wins, and the tooltip on each cell names the one rule that fired. Loss-avoidance rules are checked before any buy rule, always. A mechanical reading of today's numbers under fixed rules — not a recommendation tailored to you, and not a prediction.">Advice</th>
         <th class="grp-pmom ta-l" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
         <th class="grp-pmom ta-l" data-key="pastShown" id="thPast"
             title="The momentum score as it stood at the end of the chosen horizon. Change the horizon with the Past picker in the bar.">Past<br>Mom.</th>
@@ -967,7 +967,7 @@
     // Labels live here so adding a group later is: append to GROUPS, give it a
     // colour and a label, and tag the <th>/<td> cells with .grp-<id>.
     const GROUP_LABELS = {
-      info: 'Info', rank: 'Scores', act: 'Action Model', pmom: 'Price Momentum', chart: 'Chart',
+      info: 'Info', rank: 'Scores', act: 'Advice', pmom: 'Price Momentum', chart: 'Chart',
       short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
       rel: 'Relative', trend: 'Trend', vol: 'Volume',
       size: 'Size', fund: 'Fundamentals',
@@ -1609,7 +1609,7 @@
     function exportExcel() {
       const rows = sortRows(visibleStocks());
 
-      // The seven Action Model columns name the profile that scored them,
+      // The seven Advice columns name the profile that scored them,
       // the way the momentum columns name the weighting.
       const actSuffix = actionPreset === 'balanced' ? '' : ` (${actionPresetDef().name})`;
       const cols = [
@@ -1627,8 +1627,8 @@
         [`Entry State${actSuffix}`, (s) => s.actionEntry],
         [`Fundamentals Bucket${actSuffix}`, (s) => s.actionFund],
         [`Guards${actSuffix}`, (s) => s.actionGuards],
-        [`Action${actSuffix}`, (s) => s.action],
-        [`Action Flag${actSuffix}`, (s) => s.actionFlag],
+        [`Advice${actSuffix}`, (s) => s.action],
+        [`Advice Reason${actSuffix}`, (s) => s.actionFlag],
         ['Name', (s) => s.name],
         ['Portfolios', (s) => (s.portfolios || []).join('; ')],
         ['Price', (s) => s.price],
@@ -1905,8 +1905,8 @@
         `<span class="count">${we(actionPresetDef().name)}</span>` +
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
       $('actBtn').title = on
-        ? `Action Model re-scored under ${actionPresetDef().name}. The nightly email, the CSV data and other viewers stay on Balanced.`
-        : 'Action rules profile — five fixed sets, no custom one. Click any Action cell to see the rules the picked profile applies.';
+        ? `Advice re-scored under ${actionPresetDef().name}. The nightly email, the CSV data and other viewers stay on Balanced.`
+        : 'Advice rules profile — five fixed sets, no custom one. Click any Advice cell to see the rules the picked profile applies.';
       document.body.classList.toggle('act-lensed', on);
     }
 
@@ -1920,7 +1920,7 @@
           '<svg class="ic tick" aria-hidden="true"><use href="#i-check" /></svg></button>').join('') +
         '<div class="pick-hint">Five fixed profiles — no custom set. Every profile moves thresholds only; ' +
         'the Sell/Avoid/Hold rules stay above every Buy rule in all of them. ' +
-        'Click any <b>Action</b> cell to see exactly the rules the picked profile applies.</div>' +
+        'Click any <b>Advice</b> cell to see exactly the rules the picked profile applies.</div>' +
         '</div>';
       $('actMenu').querySelectorAll('[data-actp]').forEach((b) => {
         b.addEventListener('click', (ev) => { ev.stopPropagation(); applyActionPreset(b.dataset.actp); });
@@ -2822,7 +2822,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         `<button class="ap-tab" data-ap-tab="${t}" data-on="${t === apModelTab ? 1 : 0}">${t}</button>`).join('');
       const rungs = ActionRules.ladder(apModelTab, actionCfg());
       return '<div class="ap-core">' +
-        '<div class="ap-head"><span class="ap-sym">Action model</span>' +
+        '<div class="ap-head"><span class="ap-sym">Advice model</span>' +
         `<span class="ap-verdict" style="color:var(--muted);font-weight:500">${we(actionPresetDef().name)} thresholds</span>` +
         '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>' +
         `<div class="ap-tabs">${tabs}</div>` +
@@ -2896,7 +2896,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         `<div class="ap-chips"><span class="ap-chip">${we(FAM_TITLES[fam])} column</span>` +
         `<span class="ap-chip">Rules <b>${we(actionPresetDef().name)}</b></span>` +
         `<span class="ap-chip">Type <b>${we(e.type)}</b></span>` +
-        `<span class="ap-chip">Action <b>${we(e.action)}</b></span></div>` +
+        `<span class="ap-chip">Advice <b>${we(e.action)}</b></span></div>` +
         body +
         `<div class="ap-note">${note}</div>` +
         '<div class="ap-foot"><button class="ap-link" data-ap-ladder>Full rule ladder</button>' +

@@ -797,7 +797,7 @@
         const th = !showTrendHold ? null
           : rulesMode === 'trend' ? trendHoldSeries(closes, trend)
             : modelHoldSeries(closes, verds);
-        const thLabel = rulesMode === 'trend' ? 'Trend-held' : `Model-held · ${rulesModeDef().name}`;
+        const thLabel = rulesMode === 'trend' ? 'Trend-held' : `Advice-held · ${rulesModeDef().name}`;
         paintCtx = { all, from, closes, dates, trend, rsiAll: rsiAllFull };
         const c = RowCard.chartSVG(closes, {
           volumes, ticks: 5, rsi, momentum: mom,

@@ -68,7 +68,7 @@
     ['act',   'Entry',          (s) => V.text(s.actionEntry)],
     ['act',   'Fundamentals',   (s) => V.text(s.actionFund)],
     ['act',   'Guards',         (s) => V.text(s.actionGuards)],
-    ['act',   'Action',         (s) => s.action
+    ['act',   'Advice',         (s) => s.action
                                   ? { t: s.action, c: /Buy/.test(s.action) ? 'up' : /Sell|Avoid/.test(s.action) ? 'down' : '' } : null],
     ['act',   'Why',            (s) => V.text(s.actionFlag)],
     ['pmom',  'Mom.',           (s) => V.rating(s.momentumRating)],
@@ -133,7 +133,7 @@
     rel: '#22d3ee', trend: '#fbbf24', vol: '#f472b6', size: '#94a3b8', fund: '#fb7185',
   };
   const GROUP_LABELS = {
-    info: 'Info', rank: 'Scores', act: 'Action Model', pmom: 'Price Momentum', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
+    info: 'Info', rank: 'Scores', act: 'Advice', pmom: 'Price Momentum', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
     rel: 'Relative', trend: 'Trend', vol: 'Volume', size: 'Size', fund: 'Fundamentals',
   };
 

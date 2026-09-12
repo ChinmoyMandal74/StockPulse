@@ -146,7 +146,7 @@
           <span class="td">Refresh, Refresh all, and the nightly run</span></span></a></li>
         <li><a href="#account"><span class="no">11</span><span><span class="tt">Your account</span>
           <span class="td">What is remembered, and the emails you may get</span></span></a></li>
-        <li><a href="#rules"><span class="no">12</span><span><span class="tt">The Action column</span>
+        <li><a href="#rules"><span class="no">12</span><span><span class="tt">The Advice column</span>
           <span class="td">Company Type, the rule lists, and tuning them</span></span></a></li>
       </ul>
     </div></div>
@@ -157,7 +157,7 @@
       <p>Tickr Lab watches a list of stocks and scores them on how their prices are behaving and how
         the underlying companies are doing. It is a <strong>screener</strong>: it narrows a list down to the
         few names worth a closer look. The assistant deliberately never offers a
-        verdict; the <strong>Action</strong> column does carry one, but it is the output of a plain
+        verdict; the <strong>Advice</strong> column does carry one, but it is the output of a plain
         rule set you can read in full in <a href="#rules">section 12</a> — a consistent reading of
         today's numbers, not a prediction.</p>
       <p>Stocks are grouped into <strong>portfolios</strong> — a stock can belong to several — and the
@@ -568,17 +568,19 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="rules"><div class="core">
-      <div class="sec-h"><h2>12 · The Action column</h2></div>
-      <p>The <strong>Action Model</strong> column group shows the whole derivation, left to right:
+      <div class="sec-h"><h2>12 · The Advice column</h2></div>
+      <p><em>&ldquo;Advice&rdquo; here means the output of the fixed rules described below — a mechanical
+        reading of the table, not a recommendation tailored to you.</em></p>
+      <p>The <strong>Advice</strong> column group shows the whole derivation, left to right:
         <strong>Type</strong> (Established, Early or ETF) · <strong>Trend</strong> (the price-trend
         reading — Breakdown, Downtrend, Below 200D, Above 200D or Strong uptrend: whether you
         <em>may</em>) · <strong>Entry</strong> (Clean, Clean near high, Extended or None: whether
         <em>now</em>) · <strong>Fund.</strong> (Strong, OK, Weak, or — when the data makes no case:
         how much <em>conviction</em>) · <strong>Guards</strong> (earnings soon, thin history — blank for
         most stocks, and meaningful when it is not: <em>wait</em>) · and the
-        <strong>Action</strong> itself (Strong Buy · Buy · Buy with Risk · Hold · Avoid · Sell
+        <strong>Advice</strong> itself (Strong Buy · Buy · Buy with Risk · Hold · Avoid · Sell
         Immediately). The group collapses as one unit from the Columns menu. The model is a list of plain rules checked top
-        to bottom — <strong>the first rule that matches is the answer</strong>, and hovering an Action
+        to bottom — <strong>the first rule that matches is the answer</strong>, and hovering an Advice
         cell shows the one rule that fired. The Sell, Avoid and Hold rules always sit above the Buy
         rules, so no amount of good news can buy a stock whose trend is broken. Backtested over
         307,875 stock-days since 2008, the tiers order <em>downside</em> correctly (the worst tenth of
@@ -612,7 +614,7 @@
         unless a profile enables it. <strong>ETF:</strong> the technical rules alone.</p>
 
       <h3>See the ladder for any stock</h3>
-      <p><strong>Click a stock's Action value</strong> to open the rule ladder for that row: every
+      <p><strong>Click a stock's Advice value</strong> to open the rule ladder for that row: every
         rule in the order the model walks them — vetoes, then caps, then the buy setups — with the
         rule that fired lit and everything below it dimmed, because a first-match model never reads
         past its answer. Each condition is drawn as a small track: the shaded zone is what passes,
@@ -657,9 +659,9 @@
 
       <h3>Five profiles, no custom set</h3>
       <p>The <strong>Rules</strong> picker in the bar chooses which of five fixed profiles scores
-        the Action Model columns on your screen. There is deliberately no custom profile — a
+        the Advice columns on your screen. There is deliberately no custom profile — a
         verdict should always be explainable by one named rule set, and the ladder panels do
-        exactly that: whichever profile you pick, clicking any Action cell (or any state cell)
+        exactly that: whichever profile you pick, clicking any Advice cell (or any state cell)
         shows the rules <em>that profile</em> applies, with its thresholds on the gauges. Your
         choice is saved to your account; the nightly email, the assistant and what other viewers
         see stay on Balanced, and the columns are tinted while you are off it.</p>
@@ -681,7 +683,7 @@
           flat-to-wrong — this profile shows you what that mode says; the data does not
           endorse it.</li>
       </ul>
-      <p>The CSV export names the profile in the Action column headers and the filename when it
+      <p>The CSV export names the profile in the Advice column headers and the filename when it
         is not Balanced, so a saved file always says how it was scored.</p>
 
       <h3>The thresholds (fixed defaults)</h3>
