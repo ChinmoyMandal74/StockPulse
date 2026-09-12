@@ -521,6 +521,19 @@
     return states(d, 'none').trend;
   }
 
+  // The technical verdict for one date — the ETF rule list (the all-technical
+  // one, exactly the framing action-backtest.js validated) over raw readings.
+  // Fundamentals have no history, so a replay that pretended to know them
+  // would be fiction; blanks satisfy nothing, and the ETF list never asks.
+  // Used by the stock page's model-hold replay.
+  function actionAt(r, cfg) {
+    const d = definitions({ vs200ma: r.v200, vs50ma: r.v50, rsi: r.rsi,
+      oneMonthPct: r.m1, threeMonthPct: r.m3, pctFromHigh: r.fh,
+      volTrend: r.vol, historyDays: r.hist }, cfg, 'ETF');
+    const [action, flag] = etfRules(d, cfg);
+    return { action, flag };
+  }
+
   // Severity ladders for sorting the state columns — alphabetical order would
   // file Breakdown between Above and Clean, which helps nobody.
   const TREND_ORDER = ['No data', 'Breakdown', 'Downtrend', 'Below 200D', 'Near 200D', 'Above 200D', 'Strong uptrend'];
@@ -875,6 +888,6 @@
     ACTIONS, TYPES, DEFAULTS, PRESETS, TREND_ORDER, ENTRY_ORDER, FUND_ORDER,
     resolve, validate, diff, merge,
     classify, definitions, fundamentals, evaluate, apply, daysToEarnings,
-    explain, ladder, trendAt,
+    explain, ladder, trendAt, actionAt,
   };
 });

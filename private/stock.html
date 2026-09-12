@@ -239,6 +239,19 @@
     .tlegend .thl i { background: none; height: 0; border-top: 2px dashed var(--text);
       border-radius: 0; opacity: 0.75; }
 
+    .rulespick { position: relative; display: inline-block; }
+    #rulesMenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 240px;
+      padding: 6px; border-radius: 16px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+      backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
+      box-shadow: 0 30px 60px -22px rgba(0, 0, 0, 0.95); }
+    #rulesMenu .inner { background: rgba(10, 12, 17, 0.92); border-radius: 11px; padding: 5px; }
+    #rulesMenu .inner > button { display: block; width: 100%; text-align: left; background: none; border: none;
+      color: var(--muted); font: 12px var(--sans); padding: 7px 9px; border-radius: 8px; cursor: pointer; }
+    #rulesMenu .inner > button:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+    #rulesMenu .inner > button.on { color: var(--text); background: rgba(255, 255, 255, 0.08); }
+    #rulesMenu .hint { font-size: 10px; color: var(--faint); padding: 6px 9px 4px; line-height: 1.5;
+      border-top: 1px solid var(--hair); margin-top: 4px; }
+
     /* The trend-hold line: hypothetical, so it is dashed. Its return for
        the drawn range rides as a tag at the line's end, in the axis gutter —
        where the eye lands following the line, priced like an axis label. */
@@ -350,6 +363,9 @@
     // The server clamps at its own ceiling, which only bites on Max, where 200
     // missing bars are invisible across twenty years.
     const MA_PAD = Math.max.apply(null, MAS.map((m) => m.len));
+    // The verdict replay reads the 252-session high beside the 200-day
+    // average, so the fetch pads by the larger of the two needs.
+    const REPLAY_PAD = 260;
     // On by default. RSI(14) rides on the same padding the averages need —
     // Wilder smoothing converges slowly, so a short warm-up would not match the
     // screener's own RSI column.
@@ -433,13 +449,38 @@
     // and states(), so the ribbon can never disagree with the screener. The
     // 50D/200D averages come from the same RowCard.sma the overlays draw, so
     // a colour change on the strip lands exactly where the MA lines cross.
-    const TREND_CFG = ActionRules.resolve(null, 'Balanced').cfg;
+    // The rules mode the dashed line trades. 'trend' is the plain hold of
+    // the green states; a profile id replays that profile's technical
+    // verdicts instead — enter on Buy or better, hold through Hold, exit on
+    // Avoid or Sell. A change here is a view control for this visit only:
+    // the stock page never writes prefs, because a page that writes prefs
+    // must hand back everything it does not edit.
+    const RULES_MODES = [
+      { id: 'trend', name: 'Trend only' },
+      { id: 'balanced', name: 'Balanced' },
+      { id: 'trend-rider', name: 'Trend Rider' },
+      { id: 'aggressive', name: 'Aggressive' },
+      { id: 'max-risk', name: 'Max Risk' },
+      { id: 'dip-buyer', name: 'Dip Buyer' },
+    ];
+    let rulesMode = 'trend';
+    const RULES_CFGS = {};
+    const rulesModeDef = () => RULES_MODES.find((x) => x.id === rulesMode) || RULES_MODES[0];
+    function rulesCfg() {
+      const name = rulesMode === 'trend' ? 'Balanced' : rulesModeDef().name;
+      if (!RULES_CFGS[name]) RULES_CFGS[name] = ActionRules.resolve(null, name).cfg;
+      return RULES_CFGS[name];
+    }
+    function setRulesMode(id) {
+      if (RULES_MODES.some((x) => x.id === id)) rulesMode = id;
+    }
     const TS_CLS = {
       'Breakdown': 'ts-breakdown', 'Downtrend': 'ts-downtrend',
       'Below 200D': 'ts-below-200d', 'Near 200D': 'ts-near-200d',
       'Above 200D': 'ts-above-200d', 'Strong uptrend': 'ts-strong-uptrend',
     };
-    function trendSeries(all, from, type) {
+    function trendSeries(all, from, type, cfg) {
+      const C = cfg || rulesCfg();
       const s200 = RowCard.sma(all, 200), s50 = RowCard.sma(all, 50);
       const words = [];
       for (let j = from; j < all.length; j++) {
@@ -449,7 +490,7 @@
           v200: pct(s200[j]), v50: pct(s50[j]),
           m1: j >= 21 ? pct(all[j - 21]) : null,
           m3: j >= 63 ? pct(all[j - 63]) : null,
-        }, type, TREND_CFG));
+        }, type, C));
       }
       return words;
     }
@@ -474,8 +515,9 @@
       const present = ['Strong uptrend', 'Above 200D', 'Near 200D', 'Below 200D', 'Downtrend', 'Breakdown']
         .filter((w) => words.indexOf(w) >= 0)
         .map((w) => `<span class="tl"><i class="${TS_CLS[w]}"></i>${esc(w)}</span>`);
+      const lbl = arguments.length > 2 && arguments[2] ? arguments[2] : 'Trend-held';
       const stat = th
-        ? `<span class="tl thl"><i></i>Trend-held ${th.endPct >= 0 ? '+' : ''}${th.endPct.toFixed(1)}%` +
+        ? `<span class="tl thl"><i></i>${esc(lbl)} ${th.endPct >= 0 ? '+' : ''}${th.endPct.toFixed(1)}%` +
           ` vs ${th.holdPct >= 0 ? '+' : ''}${th.holdPct.toFixed(1)}% hold · ${th.trips} round trip${th.trips === 1 ? '' : 's'}</span>`
         : '';
       return `<div class="tstrip">${segs}</div>` +
@@ -515,6 +557,57 @@
         holdPct: (closes[z] / closes[a] - 1) * 100 };
     }
 
+    // The model-hold replay: the picked profile's technical verdicts, walked
+    // as the recommendations they are — a Buy-or-better enters, Hold keeps
+    // whatever position stands, Avoid or Sell exits. Same one-day lag as the
+    // trend hold: day t's verdict is known at t's close and earns t -> t+1.
+    // It replays the all-technical rule list (the framing the action
+    // backtest validated), so the profiles differ here through their chase
+    // caps and stop widths; the fundamentals half, where Dip Buyer and the
+    // Early rules live, has no history to replay — blanks satisfy nothing.
+    const AP_TIER = { 'Sell Immediately': 0, 'Avoid': 1, 'Hold': 2, 'Buy with Risk': 3, 'Buy': 4, 'Strong Buy': 5 };
+    function verdictSeries(all, from, cfg, rsiAll) {
+      const s200 = RowCard.sma(all, 200), s50 = RowCard.sma(all, 50);
+      const out = [];
+      for (let j = from; j < all.length; j++) {
+        const c = all[j];
+        let hi = null;
+        for (let k = Math.max(0, j - 251); k <= j; k++) {
+          if (all[k] != null && (hi == null || all[k] > hi)) hi = all[k];
+        }
+        const pct = (base) => (c != null && base != null && base > 0 ? (c / base - 1) * 100 : null);
+        out.push(ActionRules.actionAt({
+          v200: pct(s200[j]), v50: pct(s50[j]), rsi: rsiAll ? rsiAll[j] : null,
+          m1: j >= 21 ? pct(all[j - 21]) : null,
+          m3: j >= 63 ? pct(all[j - 63]) : null,
+          fh: pct(hi),
+        }, cfg).action);
+      }
+      return out;
+    }
+    function modelHoldSeries(closes, verdicts) {
+      const n = closes.length;
+      const values = new Array(n).fill(null);
+      let a = 0;
+      while (a < n && closes[a] == null) a++;
+      if (a >= n - 1) return null;
+      let eq = closes[a], trips = 0, pos = false, z = a;
+      values[a] = eq;
+      for (let i = a + 1; i < n; i++) {
+        const t = AP_TIER[verdicts[i - 1]];
+        if (t >= 3) { if (!pos) { pos = true; trips++; } }
+        else if (t <= 1) pos = false;
+        if (closes[i] != null) {
+          if (pos && closes[i - 1] != null) eq *= closes[i] / closes[i - 1];
+          z = i;
+        }
+        values[i] = eq;
+      }
+      return { values, trips, anchor: a,
+        endPct: (values[z] / closes[a] - 1) * 100,
+        holdPct: (closes[z] / closes[a] - 1) * 100 };
+    }
+
     // The return tag at the line's end — where the eye lands after
     // following it. Clamped a hair inside the plot so a line ending on an
     // extreme cannot push its own label out of the box.
@@ -534,7 +627,7 @@
       box.dataset.range = range.id;
       box.classList.toggle('has-rsi', showRSI);
       box.classList.toggle('has-mom', showMom);
-      RowCard.loadHistory(SYMBOL, range.days + MA_PAD).then((data) => {
+      RowCard.loadHistory(SYMBOL, range.days + REPLAY_PAD).then((data) => {
         if (box.dataset.range !== range.id) return;      // a later click won
         const all = (data && data.closes) || [];
         box.classList.remove('up', 'down');
@@ -554,7 +647,8 @@
         const first = closes[0], last = closes[closes.length - 1];
         const chg = ((last - first) / first) * 100;
         box.classList.add(chg >= 0 ? 'up' : 'down');
-        const rsi = showRSI ? RowCard.rsiSeries(all, RSI_LEN).slice(from) : null;
+        const rsiAllFull = RowCard.rsiSeries(all, RSI_LEN);   // the replay reads it even when the pane is off
+        const rsi = showRSI ? rsiAllFull.slice(from) : null;
         // Momentum comes from the archive rather than being derived here: it
         // needs a year of run-up the chart window does not carry. Aligned to the
         // bars server-side, so it can be sliced the same way as everything else.
@@ -581,8 +675,11 @@
         // and the line must exist before the chart draws it. Thresholds
         // follow the stock's current type — the classification is not
         // replayable historically; today's rules, today's type, replayed.
-        const trend = trendSeries(all, from, (stock && stock.companyType) || 'Established');
-        const th = showTrendHold ? trendHoldSeries(closes, trend) : null;
+        const trend = trendSeries(all, from, (stock && stock.companyType) || 'Established', rulesCfg());
+        const th = !showTrendHold ? null
+          : rulesMode === 'trend' ? trendHoldSeries(closes, trend)
+            : modelHoldSeries(closes, verdictSeries(all, from, rulesCfg(), rsiAllFull));
+        const thLabel = rulesMode === 'trend' ? 'Trend-held' : `Model-held · ${rulesModeDef().name}`;
         const c = RowCard.chartSVG(closes, {
           volumes, ticks: 5, rsi, momentum: mom,
           overlays: series.map((x) => ({ values: x.values, cls: x.ma.cls }))
@@ -636,7 +733,7 @@
 
         const strip = document.getElementById('trendStrip');
         if (strip) {
-          const html = trendStripHtml(trend, th);
+          const html = trendStripHtml(trend, th, thLabel);
           strip.innerHTML = html;
           strip.hidden = !html;
         }
@@ -700,7 +797,10 @@
               <button class="rng mom-toggle${showMom ? ' on' : ''}" id="momBtn"
                 title="The momentum score over time, 0-100 on the same fixed scale the table uses">MOM</button>
               <button class="rng th-toggle${showTrendHold ? ' on' : ''}" id="thBtn"
-                title="What holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on">TREND</button></span>
+                title="What holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on">TREND</button>
+              <span class="rulespick"><button class="rng" id="rulesBtn"
+                title="Which rules the dashed line trades — the plain green-trend hold, or a profile's technical verdicts: enter on Buy or better, hold through Hold, exit on Avoid or Sell">Rules: Trend only</button>
+              <div id="rulesMenu" hidden></div></span></span>
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
           <div id="trendStrip" hidden></div>
@@ -920,6 +1020,27 @@
 
       chartEl.addEventListener('pointerleave', hideHover);
 
+      function renderRulesMenu() {
+        const m = document.getElementById('rulesMenu');
+        m.innerHTML = '<div class="inner">' + RULES_MODES.map((x) =>
+          `<button data-rm="${x.id}" class="${x.id === rulesMode ? 'on' : ''}">${esc(x.name)}</button>`).join('') +
+          '<div class="hint">Profiles replay the technical rules: in on Buy or better, held through Hold, out on ' +
+          'Avoid or Sell. Measured honestly: the profiles’ aggression lives mostly in the fundamentals half, ' +
+          'which has no history — so on most stocks the five replay nearly alike, and the comparison that ' +
+          'matters is <b>Trend only</b> against the verdict replay.</div></div>';
+        m.querySelectorAll('[data-rm]').forEach((btn) => btn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          setRulesMode(btn.dataset.rm);
+          document.getElementById('rulesBtn').textContent = 'Rules: ' + rulesModeDef().name;
+          m.hidden = true;
+          paintChart();
+        }));
+      }
+      document.addEventListener('click', (e) => {
+        const m = document.getElementById('rulesMenu');
+        if (m && !m.hidden && !e.target.closest('.rulespick')) m.hidden = true;
+      });
+
       document.querySelector('.ranges').addEventListener('click', (e) => {
         const b = e.target.closest('.rng');
         if (!b) return;
@@ -927,6 +1048,12 @@
           showMom = !showMom;
           b.classList.toggle('on', showMom);
           paintChart();
+          return;
+        }
+        if (b.id === 'rulesBtn') {
+          const m = document.getElementById('rulesMenu');
+          if (m.hidden) renderRulesMenu();
+          m.hidden = !m.hidden;
           return;
         }
         if (b.id === 'thBtn') {
