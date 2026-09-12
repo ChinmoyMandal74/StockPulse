@@ -262,19 +262,6 @@
     #whyBox .ww { color: var(--muted); min-width: 0; }
     #whyBox .why-note { margin-top: 10px; font-size: 11px; color: var(--faint); }
 
-    .rulespick { position: relative; display: inline-block; }
-    #rulesMenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 240px;
-      padding: 6px; border-radius: 16px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
-      backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
-      box-shadow: 0 30px 60px -22px rgba(0, 0, 0, 0.95); }
-    #rulesMenu .inner { background: rgba(10, 12, 17, 0.92); border-radius: 11px; padding: 5px; }
-    #rulesMenu .inner > button { display: block; width: 100%; text-align: left; background: none; border: none;
-      color: var(--muted); font: 12px var(--sans); padding: 7px 9px; border-radius: 8px; cursor: pointer; }
-    #rulesMenu .inner > button:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
-    #rulesMenu .inner > button.on { color: var(--text); background: rgba(255, 255, 255, 0.08); }
-    #rulesMenu .hint { font-size: 11px; color: var(--faint); padding: 6px 9px 4px; line-height: 1.5;
-      border-top: 1px solid var(--hair); margin-top: 4px; }
-
     /* The trend-hold line: hypothetical, so it is dashed. Its return for
        the drawn range rides as a tag at the line's end, in the axis gutter —
        where the eye lands following the line, priced like an axis label. */
@@ -485,34 +472,16 @@
     // and states(), so the ribbon can never disagree with the screener. The
     // 50D/200D averages come from the same RowCard.sma the overlays draw, so
     // a colour change on the strip lands exactly where the MA lines cross.
-    // The rules mode the dashed line trades. 'trend' is the plain hold of
-    // the green states; a profile id replays that profile's technical
-    // verdicts instead — enter on Buy or better, hold through Hold, exit on
-    // Avoid or Sell. A change here is a view control for this visit only:
-    // the stock page never writes prefs, because a page that writes prefs
-    // must hand back everything it does not edit.
-    const RULES_MODES = [
-      { id: 'trend', name: 'Trend only' },
-      { id: 'balanced', name: 'Balanced' },
-      { id: 'trend-rider', name: 'Trend Rider' },
-      { id: 'aggressive', name: 'Aggressive' },
-      { id: 'max-risk', name: 'Max Risk' },
-      { id: 'dip-buyer', name: 'Dip Buyer' },
-    ];
-    let rulesMode = 'trend';
-    const RULES_CFGS = {};
-    const rulesModeDef = () => RULES_MODES.find((x) => x.id === rulesMode) || RULES_MODES[0];
-    function rulesCfgFor(name) {
-      if (!RULES_CFGS[name]) RULES_CFGS[name] = ActionRules.resolve(null, name).cfg;
-      return RULES_CFGS[name];
-    }
-    function rulesCfg() {
-      return rulesCfgFor(rulesMode === 'trend' ? 'Balanced' : rulesModeDef().name);
-    }
+    // ONE rule for the dashed line, at the owner's instruction (2026-09-13):
+    // in while the trend reads Strong uptrend or Above 200D, out otherwise.
+    // The verdict replay came off the LINE because a full advice history is
+    // not honestly reconstructible — the line may only claim what the bars
+    // can prove. The Balanced verdicts stay as EXPLAINERS: the readout's
+    // Model row and the why card below, which answer "why does the model's
+    // advice differ from the trend" without pretending to be an equity curve.
+    const RULES_CFG = ActionRules.resolve(null, 'Balanced').cfg;
+    function rulesCfg() { return RULES_CFG; }
     let whyOpen = false, paintCtx = null;
-    function setRulesMode(id) {
-      if (RULES_MODES.some((x) => x.id === id)) rulesMode = id;
-    }
     const TS_CLS = {
       'Breakdown': 'ts-breakdown', 'Downtrend': 'ts-downtrend',
       'Below 200D': 'ts-below-200d', 'Near 200D': 'ts-near-200d',
@@ -834,17 +803,14 @@
         // follow the stock's current type — the classification is not
         // replayable historically; today's rules, today's type, replayed.
         // TREND off removes everything the trend machinery draws — the
-        // line, the ribbon, the legend, the why card and the Rules control.
-        const rp = document.querySelector('.rulespick');
-        if (rp) rp.hidden = !showTrendHold;
+        // line, the ribbon, the legend and the why card.
         const trend = showTrendHold
           ? trendSeries(all, from, (stock && stock.companyType) || 'Established', rulesCfg()) : null;
-        const verds = showTrendHold && rulesMode !== 'trend'
-          ? verdictSeries(all, from, rulesCfg(), rsiAllFull) : null;
-        const th = !showTrendHold ? null
-          : rulesMode === 'trend' ? trendHoldSeries(closes, trend)
-            : modelHoldSeries(closes, verds);
-        const thLabel = rulesMode === 'trend' ? 'Trend-held' : `Advice-held · ${rulesModeDef().name}`;
+        // The Balanced verdicts feed the readout's Model row and the why
+        // card only — never the line.
+        const verds = showTrendHold ? verdictSeries(all, from, rulesCfg(), rsiAllFull) : null;
+        const th = showTrendHold ? trendHoldSeries(closes, trend) : null;
+        const thLabel = 'Trend-held';
         paintCtx = { all, from, closes, dates, trend, rsiAll: rsiAllFull };
         const c = RowCard.chartSVG(closes, {
           volumes, ticks: 5, rsi, momentum: mom,
@@ -929,8 +895,8 @@
     function renderWhy() {
       const wb = document.getElementById('whyBox');
       if (!wb || !paintCtx || !showTrendHold || !paintCtx.trend) return;
-      const pName = rulesMode === 'trend' ? 'Balanced' : rulesModeDef().name;
-      const verds = verdictSeries(paintCtx.all, paintCtx.from, rulesCfgFor(pName), paintCtx.rsiAll);
+      const pName = 'Balanced';
+      const verds = verdictSeries(paintCtx.all, paintCtx.from, rulesCfg(), paintCtx.rsiAll);
       const cmp = compareRuns(paintCtx.closes, paintCtx.trend, verds);
       wb.innerHTML = whyHtml(cmp, paintCtx.dates, pName);
       wb.hidden = false;
@@ -992,10 +958,7 @@
               <button class="rng mom-toggle${showMom ? ' on' : ''}" id="momBtn"
                 title="The momentum score over time, 0-100 on the same fixed scale the table uses">MOM</button>
               <button class="rng th-toggle${showTrendHold ? ' on' : ''}" id="thBtn"
-                title="What holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on">TREND</button>
-              <span class="rulespick"><button class="rng" id="rulesBtn"
-                title="Which rules the dashed line trades — the plain green-trend hold, or a profile's technical verdicts: enter on Buy or better, hold through Hold, exit on Avoid or Sell">Rules: Trend only</button>
-              <div id="rulesMenu" hidden></div></span></span>
+                title="What holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on">TREND</button></span>
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
           <div id="trendStrip" hidden></div>
@@ -1228,27 +1191,6 @@
 
       chartEl.addEventListener('pointerleave', hideHover);
 
-      function renderRulesMenu() {
-        const m = document.getElementById('rulesMenu');
-        m.innerHTML = '<div class="inner">' + RULES_MODES.map((x) =>
-          `<button data-rm="${x.id}" class="${x.id === rulesMode ? 'on' : ''}">${esc(x.name)}</button>`).join('') +
-          '<div class="hint">Profiles replay the technical rules: in on Buy or better, held through Hold, out on ' +
-          'Avoid or Sell. Measured honestly: the profiles’ aggression lives mostly in the fundamentals half, ' +
-          'which has no history — so on most stocks the five replay nearly alike, and the comparison that ' +
-          'matters is <b>Trend only</b> against the verdict replay.</div></div>';
-        m.querySelectorAll('[data-rm]').forEach((btn) => btn.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          setRulesMode(btn.dataset.rm);
-          document.getElementById('rulesBtn').textContent = 'Rules: ' + rulesModeDef().name;
-          m.hidden = true;
-          paintChart();
-        }));
-      }
-      document.addEventListener('click', (e) => {
-        const m = document.getElementById('rulesMenu');
-        if (m && !m.hidden && !e.target.closest('.rulespick')) m.hidden = true;
-      });
-
       document.querySelector('.ranges').addEventListener('click', (e) => {
         const b = e.target.closest('.rng');
         if (!b) return;
@@ -1256,12 +1198,6 @@
           showMom = !showMom;
           b.classList.toggle('on', showMom);
           paintChart();
-          return;
-        }
-        if (b.id === 'rulesBtn') {
-          const m = document.getElementById('rulesMenu');
-          if (m.hidden) renderRulesMenu();
-          m.hidden = !m.hidden;
           return;
         }
         if (b.id === 'thBtn') {
