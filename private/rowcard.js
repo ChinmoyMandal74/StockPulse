@@ -71,6 +71,7 @@
     ['act',   'Advice',         (s) => s.action
                                   ? { t: s.action, c: /Buy/.test(s.action) ? 'up' : /Sell|Avoid/.test(s.action) ? 'down' : '' } : null],
     ['act',   'Why',            (s) => V.text(s.actionFlag)],
+    ['act',   'Yesterday',      (s) => (s.advicePrev && s.advicePrev !== s.action ? V.text(s.advicePrev) : null)],
     ['pmom',  'Mom.',           (s) => V.rating(s.momentumRating)],
     ['pmom',  'Score',          (s) => (s.momentumScore == null ? null : { t: s.momentumScore.toFixed(1), c: '' })],
     // The card has no horizon picker, so it shows the default and says so

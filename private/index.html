@@ -460,6 +460,11 @@
                 stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
     .momarrow.up { stroke: var(--green); transform: rotate(180deg); }
     .momarrow.down { stroke: var(--red); }
+    /* The Advice change marker: same chevron language, on the other side of
+       the word. It marks a verdict that moved since the previous session. */
+    .advchg { width: 11px; height: 11px; margin-right: 3px; vertical-align: -1px; }
+    .advchg.up { stroke: var(--green); transform: rotate(180deg); }
+    .advchg.down { stroke: var(--red); }
 
     /* the hover target */
     td.name { cursor: help; }
@@ -1520,8 +1525,14 @@
     function actionCell(s) {
       if (!s.action) return '<td class="act grp-act">—</td>';
       const cls = 'a-' + s.action.toLowerCase().replace(/ /g, '-');
-      const tip = s.actionFlag || s.action;
-      return `<td class="act grp-act ${cls}"${attr(tip)}>${we(s.action)}</td>`;
+      const changed = s.advicePrev && s.advicePrev !== s.action;
+      const up = changed && ActionRules.ACTIONS.indexOf(s.action) > ActionRules.ACTIONS.indexOf(s.advicePrev);
+      const tip = (s.actionFlag || s.action)
+        + (changed ? ` — was ${s.advicePrev} the previous trading day` : '');
+      const mark = changed
+        ? `<svg class="advchg ${up ? 'up' : 'down'}" aria-label="Advice ${up ? 'raised' : 'lowered'} since the previous trading day" role="img"><use href="#i-chevron" /></svg>`
+        : '';
+      return `<td class="act grp-act ${cls}"${attr(tip)}>${mark}${we(s.action)}</td>`;
     }
 
     // Mark whichever column the table is currently sorted by.
@@ -2733,6 +2744,14 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         rows[i].actionFund = r.states.fund;
         rows[i].actionGuards = r.states.guards;
       }
+      // Yesterday's verdict under the same profile, from the shipped
+      // previous-session technicals — so the change marker follows the
+      // picked rules rather than staying pinned to Balanced.
+      const prevRows = rows.map((r) => (r && !r.error && r.prevTech ? Object.assign({}, r, r.prevTech) : null));
+      const prevResults = ActionRules.apply(prevRows, actionCfg());
+      for (let i = 0; i < rows.length; i++) {
+        rows[i].advicePrev = prevResults[i] && results[i] ? prevResults[i].action : null;
+      }
     }
     const apPanel = $('actionPanel');
     let apOpenFor = null, apAnchor = null, apBackSym = null, apModelTab = 'Established';
@@ -2808,6 +2827,9 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         `<span class="ap-chip">Fundamentals <b>${we(e.states.fund)}</b></span>`,
       ];
       if (e.states.guards) chips.push(`<span class="ap-chip">Guards <b>${we(e.states.guards)}</b></span>`);
+      if (s.advicePrev && s.advicePrev !== e.action) {
+        chips.push(`<span class="ap-chip">Yesterday <b>${we(s.advicePrev)}</b></span>`);
+      }
       return '<div class="ap-core">' +
         `<div class="ap-head"><span class="ap-sym">${we(s.symbol)}</span>` +
         `<span class="ap-verdict ${AP_ACT_CLS[e.action] || ''}">${we(e.action)}</span>` +

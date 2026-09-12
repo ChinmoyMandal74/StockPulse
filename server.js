@@ -1626,6 +1626,14 @@ function scoreActionInto(rows) {
     rows[i].actionFund = r.states.fund;
     rows[i].actionGuards = r.states.guards;
   }
+  // Yesterday's verdict: yesterday's technicals over today's cached
+  // fundamentals, through the same engine. The table's change marker and the
+  // refresh reports both read the difference.
+  const prevRows = rows.map((r) => (r && !r.error && r.prevTech ? Object.assign({}, r, r.prevTech) : null));
+  const prevResults = Action.apply(prevRows, ACTION_CFG);
+  for (let i = 0; i < rows.length; i++) {
+    rows[i].advicePrev = prevResults[i] && results[i] ? prevResults[i].action : null;
+  }
 }
 
 function applyScores(rows) {
@@ -2083,6 +2091,21 @@ async function computeStocks(asOf) {
         macdLine: mac ? mac.line : null,
         macdSignal: mac ? mac.signal : null,
         volTrend: volumeTrendPct(values),
+        // Yesterday's technical readings — the same fields, one bar back — so
+        // the Advice can be re-evaluated as of the previous trading day.
+        // Fundamentals are day-cached steps and stand for both days, the same
+        // carry-forward the stock page's trend ribbon uses. Costs nothing:
+        // the bars are already in hand.
+        prevTech: (() => {
+          if (!ok || values.length < 2) return null;
+          const pv = values.slice(1);
+          return {
+            latestDate: pv[0].datetime, historyDays: pv.length,
+            oneMonthPct: pctChange(pv, ONE_MONTH), threeMonthPct: pctChange(pv, THREE_MONTH),
+            pctFromHigh: pctFromHigh(pv, 252), vs50ma: pctVsMA(pv, 50), vs200ma: pctVsMA(pv, 200),
+            rsi: rsi(pv, 14), volTrend: volumeTrendPct(pv),
+          };
+        })(),
         // Momentum inputs. All derived from the same daily bars, so they cost
         // no additional API credits.
         mom12_1: windowReturn(values, ONE_YEAR, ONE_MONTH), // 12 months, skipping the last
@@ -3025,6 +3048,17 @@ async function buildRefreshReport(state, snap, kind = 'all') {
   const num = (n) => n != null && isFinite(n);
   const movers = live.filter((x) => num(x.todayPct)).sort((a, b) => b.todayPct - a.todayPct);
 
+  // Advice that changed since the previous trading day — the one thing in the
+  // report that is a verdict moving rather than a number moving. Biggest tier
+  // jumps first.
+  const tier = (a) => Action.ACTIONS.indexOf(a);
+  const advice = live
+    .filter((x) => x.action && x.advicePrev && x.advicePrev !== x.action)
+    .map((x) => ({ symbol: x.symbol, from: x.advicePrev, to: x.action, flag: x.actionFlag || '',
+      up: tier(x.action) > tier(x.advicePrev) }))
+    .sort((a, b) => (Math.abs(tier(b.to) - tier(b.from)) - Math.abs(tier(a.to) - tier(a.from)))
+      || a.symbol.localeCompare(b.symbol));
+
   return {
     kind, complete, rows, live, loaded, failed, missing, asOf, day, stats, modelWarning,
     // The digest is the day's movers and nothing else. The screens and the
@@ -3035,6 +3069,7 @@ async function buildRefreshReport(state, snap, kind = 'all') {
     // the whole universe went with them.
     top: movers.slice(0, REPORT_MOVERS),
     bottom: movers.slice(-REPORT_MOVERS).reverse(),
+    advice,
     funds,
     actor: state.actor || 'unknown',
     startedAt: state.startedAt,
@@ -3081,6 +3116,9 @@ function refreshReportBodies(r) {
   for (const x of r.top) t.push('  ' + signed(x.todayPct).padStart(7) + '  ' + x.symbol);
   if (r.top.length && r.bottom.length) t.push('  …');
   for (const x of r.bottom) t.push('  ' + signed(x.todayPct).padStart(7) + '  ' + x.symbol);
+  t.push('', 'Advice changes  (vs the previous trading day)');
+  if (!(r.advice || []).length) t.push('  none — every verdict held');
+  else for (const x of r.advice) t.push(`  ${x.symbol.padEnd(6)} ${x.from} → ${x.to}   ${x.flag}`);
   if (isAll && r.funds.prevDay) {
     t.push('', `Fundamentals that moved  (against ${r.funds.prevDay}, the previous recorded set)`);
     if (!r.funds.symbols.length) {
@@ -3167,6 +3205,18 @@ function refreshReportBodies(r) {
     '<h3 style="margin:22px 0 6px;font-size:14px">Movers today</h3>' +
     '<div>' + r.top.map(chip).join('') + '</div>' +
     '<div style="margin-top:4px">' + r.bottom.map(chip).join('') + '</div>' +
+    (() => {
+      const aCell = 'padding:3px 12px 3px 0;vertical-align:top;font-size:13px';
+      const rowsH = (r.advice || []).map((x) =>
+        `<tr><td style="${aCell};font-weight:600;white-space:nowrap">${x.symbol}</td>` +
+        `<td style="${aCell};white-space:nowrap;color:${x.up ? '#0f766e' : '#b91c1c'}">${x.from} → ${x.to}</td>` +
+        `<td style="${aCell};color:#666">${x.flag}</td></tr>`).join('');
+      return '<h3 style="margin:22px 0 6px;font-size:14px">Advice changes</h3>' +
+        (rowsH
+          ? `<table cellpadding="0" cellspacing="0">${rowsH}</table>` +
+            '<p style="margin:6px 0 0;font-size:12px;color:#999">Against the previous trading day, on the Balanced rules.</p>'
+          : '<p style="margin:0;font-size:13px;color:#666">None — every verdict held from the previous trading day.</p>');
+    })() +
     fundsBlock +
     '';
 
