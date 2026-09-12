@@ -3169,6 +3169,12 @@ async function buildRefreshReport(state, snap, kind = 'all') {
 
 function refreshReportBodies(r) {
   const url = APP_URL || '';
+  // Every ticker in the mail links to its stock page. Colour inherited and no
+  // underline, so the layout reads exactly as before — the symbol is simply
+  // clickable. Without APP_URL there is nothing to link to, so plain text.
+  const symLink = (sym) => (url
+    ? `<a href="${url}/stock/${encodeURIComponent(sym)}" style="color:inherit;text-decoration:none">${escHtml(sym)}</a>`
+    : escHtml(sym));
   const line = (k, v) => k.padEnd(14) + v;
   const isAll = r.kind === 'all';
   const runName = isAll ? 'Refresh all' : 'Refresh';
@@ -3239,7 +3245,7 @@ function refreshReportBodies(r) {
   const kv = (k, v) => `<tr><td style="${cell};color:#777;white-space:nowrap">${escHtml(k)}</td>` +
     `<td style="${cell}">${escHtml(v)}</td></tr>`;
   const chip = (x) => `<span style="display:inline-block;margin:0 10px 4px 0;font-size:13px">` +
-    `<b>${escHtml(x.symbol)}</b> <span style="color:${x.todayPct >= 0 ? '#0f9d58' : '#c5221f'}">` +
+    `<b>${symLink(x.symbol)}</b> <span style="color:${x.todayPct >= 0 ? '#0f9d58' : '#c5221f'}">` +
     `${signed(x.todayPct)}</span></span>`;
   // The section a Refresh all exists for: what changed about the companies,
   // rather than about their prices.
@@ -3251,7 +3257,7 @@ function refreshReportBodies(r) {
         `<span style="color:#777">${escHtml(m.label)}</span> ` +
         `<span style="color:${m.up ? '#0f9d58' : '#c5221f'}">${escHtml(m.text)}</span></div>`).join('');
       return `<tr><td style="${cell};white-space:nowrap;vertical-align:top">` +
-        `<b>${escHtml(s.symbol)}</b></td><td style="${cell}">${items}</td></tr>`;
+        `<b>${symLink(s.symbol)}</b></td><td style="${cell}">${items}</td></tr>`;
     }).join('');
     const more = r.funds.total > r.funds.symbols.length
       ? `<p style="margin:6px 0 0;font-size:12px;color:#999">…and ${r.funds.total - r.funds.symbols.length} more.</p>` : '';
@@ -3303,7 +3309,7 @@ function refreshReportBodies(r) {
     (() => {
       const aCell = 'padding:3px 12px 3px 0;vertical-align:top;font-size:13px';
       const rowsH = (r.advice || []).map((x) =>
-        `<tr><td style="${aCell};font-weight:600;white-space:nowrap">${x.symbol}</td>` +
+        `<tr><td style="${aCell};font-weight:600;white-space:nowrap">${symLink(x.symbol)}</td>` +
         `<td style="${aCell};white-space:nowrap;color:${x.up ? '#0f766e' : '#b91c1c'}">${x.from} → ${x.to}</td>` +
         `<td style="${aCell};color:#666">${x.flag}</td></tr>` +
         ((x.news || []).length
