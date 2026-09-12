@@ -1935,6 +1935,18 @@
       render();
       renderActMenu();
       savePrefs();
+      // An open panel must follow the switch, not keep showing the old
+      // profile's ladder until someone happens to reopen it.
+      if (apOpenFor === '#model') openActionModel();
+      else if (apOpenFor && apOpenFor.indexOf('|') > 0) {
+        const [sym, fam] = apOpenFor.split('|');
+        apOpenFor = null;                 // openFamilyPanel toggles on equality
+        openFamilyPanel(sym, fam, null);
+      } else if (apOpenFor) {
+        const sym = apOpenFor;
+        apOpenFor = null;
+        openActionPanel(sym, null);
+      }
     }
 
     // Just the numbers beside each slider, so a drag stays cheap.
@@ -2789,6 +2801,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       const e = ActionRules.explain(s, actionCfg());
       const est = apEstBar(e);
       const chips = [
+        `<span class="ap-chip">Rules <b>${we(actionPresetDef().name)}</b></span>`,
         `<span class="ap-chip">Type <b>${we(e.type)}${e.pinned ? ' (pinned)' : ''}</b></span>`,
         `<span class="ap-chip">Trend <b>${we(e.states.trend)}</b></span>`,
         `<span class="ap-chip">Entry <b>${we(e.states.entry)}</b></span>`,
@@ -2881,6 +2894,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         `<span class="ap-verdict ${fam === 'type' || fam === 'guards' ? 'ap-act-hold' : wcls}" style="font-weight:600">${we(word)}</span>` +
         '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>' +
         `<div class="ap-chips"><span class="ap-chip">${we(FAM_TITLES[fam])} column</span>` +
+        `<span class="ap-chip">Rules <b>${we(actionPresetDef().name)}</b></span>` +
         `<span class="ap-chip">Type <b>${we(e.type)}</b></span>` +
         `<span class="ap-chip">Action <b>${we(e.action)}</b></span></div>` +
         body +
