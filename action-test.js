@@ -420,5 +420,36 @@ console.log('\nTHE FIVE PROFILES (picker presets)');
     run(row(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 }), null, 'Dip Buyer')[1], 'Sell Immediately');
 }
 
+
+console.log('\nTREND TIMELINE (trendTimeline)');
+{
+  const c = cfg();
+  // Oldest-first synthetic: flat, rise, crash — then flipped to newest-first,
+  // the shape the archive reader hands the server.
+  const of = [];
+  let px = 100;
+  for (let i = 0; i < 250; i++) of.push(px);
+  for (let i = 0; i < 150; i++) { px *= 1.004; of.push(px); }
+  for (let i = 0; i < 80; i++) { px *= 0.985; of.push(px); }
+  const closes = of.slice().reverse();
+  const dates = closes.map((_, j) => 'D' + String(closes.length - j).padStart(4, '0'));
+  const tl = A.trendTimeline(closes, dates, 'Established', c, 252);
+  check('a timeline comes back as dated runs', typeof tl === 'string' && tl.includes(' → '), true);
+  const runs = tl.split(' → ');
+  check('runs are compressed — a year of days becomes a handful of states', runs.length <= 10, true);
+  check('the walk passes through the ladder in order',
+    ['Strong uptrend', 'Breakdown'].every((w) => tl.includes(w)), true);
+  check('the last run is the current state (matches trendAt at the newest bar)',
+    runs[runs.length - 1].endsWith((() => {
+      const pct = (b) => (b > 0 ? (closes[0] / b - 1) * 100 : null);
+      const sma = (len) => closes.slice(0, len).reduce((x, y) => x + y, 0) / len;
+      return A.trendAt({ v200: pct(sma(200)), v50: pct(sma(50)),
+        m1: pct(closes[21]), m3: pct(closes[63]) }, 'Established', c);
+    })()), true);
+  check('dates come out oldest first', runs[0].slice(0, 5) <= runs[runs.length - 1].slice(0, 5), true);
+  check('a series too short for a 200D returns null',
+    A.trendTimeline(closes.slice(0, 150), dates.slice(0, 150), 'Established', c, 252), null);
+}
+
 console.log(`\n${n} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);

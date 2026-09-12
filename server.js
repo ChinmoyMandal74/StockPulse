@@ -2155,6 +2155,13 @@ async function computeStocks(asOf) {
         row.momentumScorePrev = base ? base.score : null;
         row.momentumChange = (!base || row.momentumScore == null)
           ? null : Math.round((row.momentumScore - base.score) * 10) / 10;
+        // The trend ribbon's year, as dated runs — bar-derived, so honestly
+        // replayable, and computed from the window this pass already read.
+        const tb = (pastMomentum.lastBars || {})[row.symbol];
+        row.trendTimeline = Array.isArray(tb)
+          ? Action.trendTimeline(tb.map((x) => x.close), tb.map((x) => x.datetime),
+            row.companyType || 'Established', ACTION_CFG, 252)
+          : null;
       }
     } catch (err) {
       console.warn('momentum: could not score the earlier dates:', err.message);
@@ -2304,6 +2311,7 @@ const CHAT_FIELDS = [
   ['action', 'the Advice column: what the fixed Balanced rules conclude — Strong Buy / Buy / Buy with Risk / Hold / Avoid / Sell Immediately'],
   ['actionFlag', 'the ONE rule that fired — the stated reason for that advice'],
   ['advicePrev', 'the advice as of the previous trading day; a difference from action means it changed today'],
+  ['trendTimeline', 'the trend state over the last ~12 months as dated runs, oldest first — "date state → date state", each date the session that state began. Replayed from the bars under the current Balanced rules and the stock\'s current type, so it is exact where full advice history would not be'],
   ['todayPct', 'return today, %'],
   ['oneWeekPct', 'return over 1 week, %'],
   ['twoWeekPct', 'return over 2 weeks, %'],
@@ -3500,6 +3508,7 @@ async function pastMomentum(symbols) {
   const T0 = Date.now();
   const since = new Date(Date.now() - PAST_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
   const bars = await store.readBarsFor(symbols, since);
+  pastMomentum.lastBars = bars;   // the trend timeline rides this same read
   const T1 = Date.now();
   const out = {};
   for (const p of PAST_PERIODS) {

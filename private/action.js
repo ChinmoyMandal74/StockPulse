@@ -534,6 +534,41 @@
     return { action, flag };
   }
 
+  // The Trend word replayed over roughly the last year of NEWEST-FIRST bars
+  // and compressed to its runs — "2025-11-03 Above 200D -> 2026-01-15 Strong
+  // uptrend", each date the session that state began, oldest first, the last
+  // run being the current state. Bar-derived only, which is why this history
+  // is honestly replayable when the full Advice history is not; thresholds
+  // are today's rules and the stock's current type — the ribbon's semantics.
+  function trendTimeline(closes, dates, type, cfg, maxSessions) {
+    const n = Array.isArray(closes) ? closes.length : 0;
+    if (n < 210) return null;
+    const span = Math.min(maxSessions || 252, n - 200);
+    const smaAt = (j, len) => {
+      if (j + len > n) return null;
+      let sum = 0;
+      for (let k = j; k < j + len; k++) {
+        const v = closes[k];
+        if (v == null) return null;
+        sum += v;
+      }
+      return sum / len;
+    };
+    const runs = [];
+    for (let j = span - 1; j >= 0; j--) {          // oldest replayed session first
+      const c = closes[j];
+      const pct = (b) => (c != null && b != null && b > 0 ? (c / b - 1) * 100 : null);
+      const w = trendAt({
+        v200: pct(smaAt(j, 200)), v50: pct(smaAt(j, 50)),
+        m1: j + 21 < n ? pct(closes[j + 21]) : null,
+        m3: j + 63 < n ? pct(closes[j + 63]) : null,
+      }, type, cfg);
+      if (!runs.length || runs[runs.length - 1].w !== w) runs.push({ d: dates[j], w });
+    }
+    if (!runs.length) return null;
+    return runs.map((r) => `${r.d} ${r.w}`).join(' → ');
+  }
+
   // Severity ladders for sorting the state columns — alphabetical order would
   // file Breakdown between Above and Clean, which helps nobody.
   const TREND_ORDER = ['No data', 'Breakdown', 'Downtrend', 'Below 200D', 'Near 200D', 'Above 200D', 'Strong uptrend'];
@@ -888,6 +923,6 @@
     ACTIONS, TYPES, DEFAULTS, PRESETS, TREND_ORDER, ENTRY_ORDER, FUND_ORDER,
     resolve, validate, diff, merge,
     classify, definitions, fundamentals, evaluate, apply, daysToEarnings,
-    explain, ladder, trendAt, actionAt,
+    explain, ladder, trendAt, actionAt, trendTimeline,
   };
 });
