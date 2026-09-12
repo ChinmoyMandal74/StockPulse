@@ -234,7 +234,15 @@
     .tlegend .tl { display: inline-flex; align-items: center; gap: 5px; }
     .tlegend .tl i { width: 10px; height: 5px; border-radius: 2px; display: inline-block; }
 
-    /* The trend-hold line: hypothetical, so it is dashed. */
+    /* The trend-hold line: hypothetical, so it is dashed. Its return for
+       the drawn range rides as a tag at the line's end, in the axis gutter —
+       where the eye lands following the line, priced like an axis label. */
+    #chart .thend { position: absolute; right: 2px; transform: translateY(-50%);
+      font-family: var(--mono); font-size: 10px; font-variant-numeric: tabular-nums;
+      padding: 1px 5px; border-radius: 6px; background: var(--surface);
+      border: 1px dashed var(--hair-2); white-space: nowrap; }
+    #chart .thend.pos { color: var(--green); }
+    #chart .thend.neg { color: var(--red); }
     #chart .ov.th-ln { stroke: var(--text); stroke-dasharray: 5 4; opacity: 0.75; }
     #chart .cap.th { left: 9px; top: 46px; font-size: 10px; color: var(--muted); }
     #chart .cap.th i { display: inline-block; width: 11px; height: 0;
@@ -501,6 +509,19 @@
         holdPct: (closes[z] / closes[a] - 1) * 100 };
     }
 
+    // The return tag at the line's end — where the eye lands after
+    // following it. Clamped a hair inside the plot so a line ending on an
+    // extreme cannot push its own label out of the box.
+    function thEndTag(th, priceAt) {
+      if (!th || !th.values.length) return '';
+      const last = th.values[th.values.length - 1];
+      if (last == null) return '';
+      const f = Math.max(0.02, Math.min(0.98, priceAt(last)));
+      const sign = th.endPct >= 0 ? '+' : '';
+      return `<span class="thend ${th.endPct >= 0 ? 'pos' : 'neg'}" style="top:${atY(f)}"` +
+        ` title="Trend-held return over this range — the dashed line's end">${sign}${th.endPct.toFixed(1)}%</span>`;
+    }
+
     function paintChart() {
       const box = document.getElementById('chart');
       if (!box) return;
@@ -582,6 +603,7 @@
           `<span class="cap chg">${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%${c.log ? ' · log scale' : ''}</span>` +
           (th ? `<span class="cap th"><i></i>Trend-held ${th.endPct >= 0 ? '+' : ''}${th.endPct.toFixed(1)}%` +
             ` vs ${th.holdPct >= 0 ? '+' : ''}${th.holdPct.toFixed(1)}% hold · ${th.trips} round trip${th.trips === 1 ? '' : 's'}</span>` : '') +
+          thEndTag(th, (v) => c.panes.price.at(v)) +
           `<span class="cap ma">${series.map((x) =>
             `<i class="${x.ma.cls}"></i>${x.ma.len}-day`).join('')}</span>` +
           (c.panes.momentum
