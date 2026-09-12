@@ -360,6 +360,12 @@
     body.lensed td.lens-col { background: rgba(124, 156, 255, 0.07); }
     body.lensed tbody tr:hover td.lens-col { background: rgba(124, 156, 255, 0.12); }
     body.lensed #weightBtn { border-color: var(--accent); color: var(--text); }
+    /* The Action rules profile: when it is not Balanced the six Action Model
+       columns are re-scored in the browser, and the tint says so — a changed
+       verdict must not look like the shared Balanced one. */
+    body.act-lensed td.grp-act { background: rgba(94, 234, 212, 0.06); }
+    body.act-lensed tbody tr:hover td.grp-act { background: rgba(94, 234, 212, 0.1); }
+    body.act-lensed #actBtn { border-color: rgba(94, 234, 212, 0.5); color: var(--text); }
     /* the custom-weight sliders */
     .picker-inner.wide { width: 340px; max-width: calc(100vw - 24px); }
     /* With eight sliders open the four preset descriptions push Copy Default
@@ -651,6 +657,10 @@
         <div class="picker" id="weightPicker" data-open="0">
           <button class="btn picker-btn" id="weightBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="weightMenu" role="listbox" aria-label="Momentum weighting"></div>
+        </div>
+        <div class="picker" id="actPicker" data-open="0">
+          <button class="btn picker-btn" id="actBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="picker-menu" id="actMenu" role="listbox" aria-label="Action rules profile"></div>
         </div>
         <div class="picker admin-only" id="datePicker" data-open="0">
           <button class="btn icon quiet" id="dateOpenBtn" title="Forward returns: view the ranking as of a past date, and what happened after it" aria-haspopup="dialog" aria-expanded="false" aria-label="Forward-returns date">
@@ -1223,6 +1233,7 @@
       { root: 'colPicker', btn: 'colBtn', menu: 'colMenu' },
       { root: 'pastPicker', btn: 'pastBtn', menu: 'pastMenu' },
       { root: 'weightPicker', btn: 'weightBtn', menu: 'weightMenu' },
+      { root: 'actPicker', btn: 'actBtn', menu: 'actMenu' },
       { root: 'researchPicker', btn: 'researchBtn', menu: 'researchMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
       { root: 'addPicker', btn: 'addOpenBtn', menu: 'addMenu' },
@@ -1343,6 +1354,7 @@
     function render() {
       renderPicker();
       renderWeightTrigger();
+      renderActTrigger();
       renderPastTrigger();
       const tbody = $('tbody');
       const rows = visibleStocks();
@@ -1597,6 +1609,9 @@
     function exportExcel() {
       const rows = sortRows(visibleStocks());
 
+      // The seven Action Model columns name the profile that scored them,
+      // the way the momentum columns name the weighting.
+      const actSuffix = actionPreset === 'balanced' ? '' : ` (${actionPresetDef().name})`;
       const cols = [
         ['Symbol', (s) => s.symbol],
         ['Overall', (s) => s.overallRating],
@@ -1607,13 +1622,13 @@
         // The export names the profile that produced the verdicts, the way it
         // already names the momentum weighting — a saved file that does not say
         // how it was scored cannot be checked later.
-        ['Company Type', (s) => s.companyType],
-        ['Trend State', (s) => s.actionTrend],
-        ['Entry State', (s) => s.actionEntry],
-        ['Fundamentals Bucket', (s) => s.actionFund],
-        ['Guards', (s) => s.actionGuards],
-        ['Action', (s) => s.action],
-        ['Action Flag', (s) => s.actionFlag],
+        [`Company Type${actSuffix}`, (s) => s.companyType],
+        [`Trend State${actSuffix}`, (s) => s.actionTrend],
+        [`Entry State${actSuffix}`, (s) => s.actionEntry],
+        [`Fundamentals Bucket${actSuffix}`, (s) => s.actionFund],
+        [`Guards${actSuffix}`, (s) => s.actionGuards],
+        [`Action${actSuffix}`, (s) => s.action],
+        [`Action Flag${actSuffix}`, (s) => s.actionFlag],
         ['Name', (s) => s.name],
         ['Portfolios', (s) => (s.portfolios || []).join('; ')],
         ['Price', (s) => s.price],
@@ -1693,7 +1708,8 @@
       const tab = String(activeTab).replace(/[^A-Za-z0-9._-]+/g, '_');
       a.href = url;
       const lens = weightPreset === 'default' ? '' : `-${weightPreset}`;
-      a.download = `stock-screener-${tab}${lens}-${date}.csv`;
+      const rules = actionPreset === 'balanced' ? '' : `-${actionPreset}`;
+      a.download = `stock-screener-${tab}${lens}${rules}-${date}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1881,6 +1897,46 @@
         : `Momentum re-scored under ${weightLabel()}. The nightly email and the assistant stay on Default.`;
     }
 
+    function renderActTrigger() {
+      const on = actionPreset !== 'balanced';
+      $('actBtn').innerHTML =
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-sliders" /></svg>' +
+        '<span class="picker-label">Rules</span>' +
+        `<span class="count">${we(actionPresetDef().name)}</span>` +
+        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
+      $('actBtn').title = on
+        ? `Action Model re-scored under ${actionPresetDef().name}. The nightly email, the CSV data and other viewers stay on Balanced.`
+        : 'Action rules profile — five fixed sets, no custom one. Click any Action cell to see the rules the picked profile applies.';
+      document.body.classList.toggle('act-lensed', on);
+    }
+
+    function renderActMenu() {
+      $('actMenu').innerHTML =
+        '<div class="picker-inner">' +
+        ACTION_PRESETS.map((x) =>
+          `<button class="pick ${x.id === actionPreset ? 'on' : ''}" data-actp="${x.id}" role="option" ` +
+          `aria-selected="${x.id === actionPreset}">` +
+          `<span class="nm">${we(x.name)}<em>${we(x.note)}</em></span>` +
+          '<svg class="ic tick" aria-hidden="true"><use href="#i-check" /></svg></button>').join('') +
+        '<div class="pick-hint">Five fixed profiles — no custom set. Every profile moves thresholds only; ' +
+        'the Sell/Avoid/Hold rules stay above every Buy rule in all of them. ' +
+        'Click any <b>Action</b> cell to see exactly the rules the picked profile applies.</div>' +
+        '</div>';
+      $('actMenu').querySelectorAll('[data-actp]').forEach((b) => {
+        b.addEventListener('click', (ev) => { ev.stopPropagation(); applyActionPreset(b.dataset.actp); });
+      });
+    }
+
+    function applyActionPreset(id) {
+      if (id === actionPreset) return;
+      setActionPreset(id);
+      scoreActionRows(baseStocks);
+      applyLens();
+      render();
+      renderActMenu();
+      savePrefs();
+    }
+
     // Just the numbers beside each slider, so a drag stays cheap.
     function refreshSliderReadouts() {
       const shares = Screens.weightShares(customWeights || Screens.defaultWeights());
@@ -1972,6 +2028,8 @@
         if (savedC) customWeights = Object.assign(Screens.defaultWeights(), savedC);
         const savedP = res && res.prefs && res.prefs.past;
         if (savedP && Screens.PAST_PERIODS.some((x) => x.id === savedP)) pastPeriod = savedP;
+        const savedA = res && res.prefs && res.prefs.action;
+        if (savedA && ACTION_PRESETS.some((x) => x.id === savedA)) actionPreset = savedA;
         const savedW = res && res.prefs && res.prefs.weights;
         if (savedW === 'custom' || Screens.WEIGHT_PRESETS.some((w) => w.id === savedW)) weightPreset = savedW;
         const saved = res && res.prefs && res.prefs.collapsed;
@@ -1997,7 +2055,7 @@
         const out = {};
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
-          prefs: { collapsed: out, weights: weightPreset, customWeights, past: pastPeriod },
+          prefs: { collapsed: out, weights: weightPreset, customWeights, past: pastPeriod, action: actionPreset },
         }).catch(() => {});
       }, 600);
     }
@@ -2242,6 +2300,7 @@
         const data = await api('GET', '/api/stocks' + (qs ? '?' + qs : ''));
         lastUpdated = data.updatedAt;
         baseStocks = data.stocks || [];
+        scoreActionRows(baseStocks);
         applyLens();
         portfolios = data.portfolios || [];
         if (activeTab !== 'All' && !portfolios.includes(activeTab)) activeTab = 'All';
@@ -2326,6 +2385,7 @@
         if (data) {
           lastUpdated = data.updatedAt;
           baseStocks = data.stocks || [];
+          scoreActionRows(baseStocks);
           applyLens();
           portfolios = data.portfolios || [];
           if (activeTab !== 'All' && !portfolios.includes(activeTab)) activeTab = 'All';
@@ -2588,6 +2648,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         // Built on open rather than on every render: a rebuild mid-drag would
         // replace the slider under the cursor and kill the gesture.
         if (opening && p.root === 'weightPicker') renderWeightMenu();
+        if (opening && p.root === 'actPicker') renderActMenu();
         if (opening && p.root === 'pastPicker') renderPastMenu();
         openPicker(opening ? p.root : null);
         if (opening && p.root === 'addPicker') setTimeout(() => $('symbolInput').focus(), 60);
@@ -2611,7 +2672,56 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     // small gauge — the passing zone shaded, a dot at the stock's value. It
     // recomputes through ActionRules.explain(), the same engine the server
     // scored the row with, so the panel cannot drift from the column.
-    const ACTION_PANEL_CFG = ActionRules.resolve(null, 'Balanced').cfg;
+    // ---- the Action rules profile ---------------------------------------
+    // Five fixed profiles, no custom set — deliberately: a verdict is always
+    // explainable by one profile name plus the ladder panel, which draws
+    // whichever profile is active. The choice is a per-user pref; the
+    // snapshot, the nightly report, the assistant and the CSV's underlying
+    // data all stay on Balanced, exactly like the weight lens.
+    const ACTION_PRESETS = [
+      { id: 'balanced', name: 'Balanced',
+        note: 'The defaults — loss-avoidance first.' },
+      { id: 'trend-rider', name: 'Trend Rider',
+        note: 'Buys strength sooner, holds it longer. The exits stay tight.' },
+      { id: 'aggressive', name: 'Aggressive',
+        note: 'More rope everywhere: wider stops, more chase, shorter blackout.' },
+      { id: 'max-risk', name: 'Max Risk',
+        note: 'The far end: widest stops, chase caps nearly off. Still never buys below the 200D.' },
+      { id: 'dip-buyer', name: 'Dip Buyer',
+        note: 'May buy below the 200D, capped at Buy with Risk. The research log does not endorse it.' },
+    ];
+    let actionPreset = 'balanced';
+    const ACTION_CFGS = {};
+    const actionPresetDef = () => ACTION_PRESETS.find((x) => x.id === actionPreset) || ACTION_PRESETS[0];
+    function actionCfg() {
+      const name = actionPresetDef().name;
+      if (!ACTION_CFGS[name]) {
+        const c = ActionRules.resolve(null, name).cfg;
+        c.__resolved = true;
+        ACTION_CFGS[name] = c;
+      }
+      return ACTION_CFGS[name];
+    }
+    function setActionPreset(id) {
+      if (ACTION_PRESETS.some((x) => x.id === id)) actionPreset = id;
+    }
+    // The same fields the server stamps for Balanced, re-stamped under the
+    // active profile — one code path for all five, and for Balanced it is
+    // verified equal to the server row for row.
+    function scoreActionRows(rows) {
+      const results = ActionRules.apply(rows, actionCfg());
+      for (let i = 0; i < rows.length; i++) {
+        const r = results[i];
+        if (!r) continue;
+        rows[i].companyType = r.type;
+        rows[i].action = r.action;
+        rows[i].actionFlag = r.flag;
+        rows[i].actionTrend = r.states.trend;
+        rows[i].actionEntry = r.states.entry;
+        rows[i].actionFund = r.states.fund;
+        rows[i].actionGuards = r.states.guards;
+      }
+    }
     const apPanel = $('actionPanel');
     let apOpenFor = null, apAnchor = null, apBackSym = null, apModelTab = 'Established';
 
@@ -2673,10 +2783,10 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       const estTip = e.typeParts ? e.typeParts.map((x) => `${x.label} ${x.earned}/${x.max}`).join(' · ') : '';
       return `<div class="ap-est"${attr(estTip)}>` +
         Array.from({ length: 7 }, (_, i) => `<i class="seg${i < e.estScore ? ' on' : ''}"></i>`).join('') +
-        `<span>establishment ${e.estScore}/7 — ${we(e.type)} at ${ACTION_PANEL_CFG.company_type.score_cutoff}+</span></div>`;
+        `<span>establishment ${e.estScore}/7 — ${we(e.type)} at ${actionCfg().company_type.score_cutoff}+</span></div>`;
     }
     function apStockHtml(s) {
-      const e = ActionRules.explain(s, ACTION_PANEL_CFG);
+      const e = ActionRules.explain(s, actionCfg());
       const est = apEstBar(e);
       const chips = [
         `<span class="ap-chip">Type <b>${we(e.type)}${e.pinned ? ' (pinned)' : ''}</b></span>`,
@@ -2691,16 +2801,16 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>' +
         est + `<div class="ap-chips">${chips.join('')}</div>` +
         apLadderHtml(e.rungs, false) +
-        '<div class="ap-note">First match wins — the lit rule is the verdict, and everything below it was never checked. Thresholds are the fixed Balanced defaults.</div>' +
+        `<div class="ap-note">First match wins — the lit rule is the verdict, and everything below it was never checked. Thresholds: the ${we(actionPresetDef().name)} profile.</div>` +
         '<div class="ap-foot"><button class="ap-link" data-ap-model>How is this computed?</button><span></span></div></div>';
     }
     function apModelHtml() {
       const tabs = ['Established', 'Early', 'ETF'].map((t) =>
         `<button class="ap-tab" data-ap-tab="${t}" data-on="${t === apModelTab ? 1 : 0}">${t}</button>`).join('');
-      const rungs = ActionRules.ladder(apModelTab, ACTION_PANEL_CFG);
+      const rungs = ActionRules.ladder(apModelTab, actionCfg());
       return '<div class="ap-core">' +
         '<div class="ap-head"><span class="ap-sym">Action model</span>' +
-        '<span class="ap-verdict" style="color:var(--muted);font-weight:500">Balanced defaults</span>' +
+        `<span class="ap-verdict" style="color:var(--muted);font-weight:500">${we(actionPresetDef().name)} thresholds</span>` +
         '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>' +
         `<div class="ap-tabs">${tabs}</div>` +
         apLadderHtml(rungs, true) +
@@ -2733,7 +2843,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         g.conds.map((c) => apCond(c, false)).join('') + '</div>';
     }
     function apFamilyHtml(s, fam) {
-      const e = ActionRules.explain(s, ACTION_PANEL_CFG);
+      const e = ActionRules.explain(s, actionCfg());
       let word, body, note = '';
       if (fam === 'type') {
         word = e.type + (e.pinned ? ' (pinned)' : '');
@@ -2744,7 +2854,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
           body = '';
           note = 'Classified as an ETF — a portfolio tagged “ETF”, or no Quality rating and no forward P/E. ETFs walk the technical rules alone.';
         } else {
-          const c = ACTION_PANEL_CFG.company_type;
+          const c = actionCfg().company_type;
           body = apEstBar(e) + '<div style="margin-top:6px">' + e.typeParts.map((x) =>
             `<div class="ap-cond${x.earned ? ' met' : ''}"><span class="tick">${x.earned ? '✓' : '✗'}</span>` +
             `<span class="lb">${we(x.label)}</span><span class="val">${x.earned}/${x.max}</span></div>`).join('') + '</div>';

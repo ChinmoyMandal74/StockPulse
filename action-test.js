@@ -211,8 +211,8 @@ check('a bad manual-override type is rejected',
 check('unknown keys are reported by name',
   A.resolve({ entry: { rsi_lo: 45 }, banana: 1 }).unknown, ['entry.rsi_lo', 'banana']);
 check('the defaults themselves validate', A.validate(cfg()).ok, true);
-check('every preset validates', ['Conservative', 'Balanced', 'Aggressive']
-  .map((p) => A.validate(cfg(null, p)).ok), [true, true, true]);
+check('every preset validates', Object.keys(A.PRESETS)
+  .map((p) => A.validate(cfg(null, p)).ok), Object.keys(A.PRESETS).map(() => true));
 check('diff() stores only what changed (profile at its default is itself omitted)',
   A.diff(cfg({ chase: { max_1m: 30 } })), { chase: { max_1m: 30 } });
 const before = JSON.stringify(A.DEFAULTS);
@@ -306,6 +306,7 @@ console.log('\nTHE LADDER (explain / ladder)');
     latestDate: '2026-09-11', momentumRating: pick(1, 10),
   });
   const profiles = [cfg(), cfg(null, 'Conservative'), cfg(null, 'Aggressive'),
+    cfg(null, 'Trend Rider'), cfg(null, 'Max Risk'), cfg(null, 'Dip Buyer'),
     cfg({ trend_gate: { never_buy_below_200d: false } }),
     cfg({ fixes: { blank_trend_holds: false, weak_blocks_buy_with_risk: false } }),
     cfg({ use_quality: true, use_momentum: true }),
@@ -324,7 +325,7 @@ console.log('\nTHE LADDER (explain / ladder)');
     }
   }
   if (first) console.log('  first mismatch:', JSON.stringify(first));
-  check('18,000 random row-x-profile evaluations: ladders, state families and engine never disagree', bad, 0);
+  check('24,000 random row-x-profile evaluations: ladders, state families and engine never disagree', bad, 0);
 }
 
 
@@ -384,6 +385,39 @@ console.log('\nTREND REPLAY (trendAt)');
     if (w !== e.states.trend) bad2++;
   }
   check('400 random readings: trendAt equals the column word', bad2, 0);
+}
+
+
+console.log('\nTHE FIVE PROFILES (picker presets)');
+{
+  // Trend Rider: chases further, exits unchanged.
+  check('Trend Rider buys what Balanced calls Extended',
+    [run(row(EST, { oneMonthPct: 28 }))[1], run(row(EST, { oneMonthPct: 28 }), null, 'Trend Rider')[1]],
+    ['Hold', 'Buy']);
+  check('Trend Rider keeps the Balanced stop — breakdown still sells',
+    run(row(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 }), null, 'Trend Rider'),
+    ['Established', 'Sell Immediately', 'Breakdown']);
+  check('Trend Rider lets Early reach Strong Buy on strong fundamentals',
+    run(row(EARLY, { revenueGrowthYoY: 40, grossMargin: 60, fcfTtm: 100e6, pctFromHigh: -5 }),
+      null, 'Trend Rider')[1], 'Strong Buy');
+
+  // Max Risk: the widest everything, still above the 200D only.
+  check('Max Risk softens the Balanced breakdown to a downtrend Avoid (the veto below it)',
+    [run(row(EST, { vs200ma: -17, vs50ma: -2, oneMonthPct: -10 }))[1],
+      run(row(EST, { vs200ma: -17, vs50ma: -2, oneMonthPct: -10 }), null, 'Max Risk')[1]],
+    ['Sell Immediately', 'Avoid']);
+  check('Max Risk buys deep in a drawdown where Balanced caps at Buy with Risk',
+    [run(row(EST, { pctFromHigh: -25 }))[1], run(row(EST, { pctFromHigh: -25 }), null, 'Max Risk')[1]],
+    ['Buy with Risk', 'Buy']);
+  check('Max Risk still never buys below the 200D',
+    run(row(EST, { vs200ma: -3, vs50ma: 1 }), null, 'Max Risk')[1], 'Hold');
+
+  // Dip Buyer: the gate flips, the stops do not.
+  check('Dip Buyer turns a below-200D clean entry into Buy with Risk',
+    [run(row(EST, { vs200ma: -4, vs50ma: 1 }))[1], run(row(EST, { vs200ma: -4, vs50ma: 1 }), null, 'Dip Buyer')],
+    ['Hold', ['Established', 'Buy with Risk', 'Buy with Risk: below 200D, mean-reversion mode']]);
+  check('Dip Buyer keeps the Balanced stop — a real breakdown still sells',
+    run(row(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 }), null, 'Dip Buyer')[1], 'Sell Immediately');
 }
 
 console.log(`\n${n} checks, ${failed} failed`);

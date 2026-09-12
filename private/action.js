@@ -141,7 +141,13 @@
     output: { emit_flags: true },
   };
 
-  // ---- presets: diffs over Balanced, exactly as the brief specifies ---------
+  // ---- presets: diffs over Balanced -----------------------------------------
+  // Conservative/Balanced/Aggressive are the brief's originals; Trend Rider,
+  // Max Risk and Dip Buyer are the owner's additions (2026-09-12). Every one
+  // is a fixed named diff — there is deliberately NO custom profile, so a
+  // verdict is always explainable by one name plus the ladder panel. The
+  // picker shows five (Conservative stays for the offline tools); the vetoes'
+  // position in the lists is structural and no preset can reorder them.
   const PRESETS = {
     Balanced: {},
     Conservative: {
@@ -150,11 +156,38 @@
       earnings: { blackout_days: 10 },
       early: { allow_buy: false },              // Early caps at Buy with Risk
     },
+    // Buys strength sooner and holds it longer — entry-side aggression ONLY.
+    // The stops, the drawdown limits and the blackout all stay Balanced:
+    // let winners run, still cut losers fast.
+    'Trend Rider': {
+      chase: { max_1m: 40, max_vs50: 20, max_rsi: 78 },
+      early: { allow_strong_buy: true },
+    },
     Aggressive: {
       stop_loss: { established_vs200: -15, early_vs200: -8 },
       chase: { max_1m: 35 },
       earnings: { blackout_days: 3 },
       early: { buy_requires: 'ok' },            // Early may reach Buy with OK fundamentals
+    },
+    // The far end of the trend ladder: Aggressive with everything turned
+    // further. Still never buys below the 200D — that is Dip Buyer's job.
+    'Max Risk': {
+      stop_loss: { established_vs200: -20, confirm_1m: -12, confirm_3m: -25,
+        early_vs200: -10, early_confirm_1m: -8 },
+      chase: { max_1m: 45, max_vs50: 22, max_rsi: 80 },
+      entry: { buy_max_drawdown: -30 },
+      earnings: { blackout_days: 2 },
+      early: { allow_strong_buy: true, buy_requires: 'ok' },
+    },
+    // The one orthogonal profile: flips the trend gate, so a clean entry
+    // below the 200D with OK fundamentals earns Buy with Risk instead of
+    // Hold. The stops stay Balanced — Breakdown still sells, so the knife-
+    // catch has a floor. The research log tested buy-the-lower-side three
+    // ways on this universe and it came back flat-to-wrong; this profile
+    // exists to show what the model says in that mode, not to endorse it.
+    'Dip Buyer': {
+      trend_gate: { never_buy_below_200d: false },
+      entry: { buy_max_drawdown: -35 },
     },
   };
 

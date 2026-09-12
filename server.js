@@ -2721,6 +2721,11 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   // Which Past Momentum horizon the table is showing. An id from the known list
   // only — anything else is dropped and the default stands.
   if (Screens.PAST_PERIODS.some((x) => x.id === incoming.past)) out.past = String(incoming.past);
+  // Which Action rules profile the table shows: an id from the fixed five
+  // only. There is deliberately no custom profile, so there is nothing
+  // free-form to store; the snapshot itself always stays on Balanced.
+  const ACTION_PROFILE_IDS = ['balanced', 'trend-rider', 'aggressive', 'max-risk', 'dip-buyer'];
+  if (ACTION_PROFILE_IDS.includes(incoming.action)) out.action = String(incoming.action);
   await store.writePrefs(await prefsKey(req), out);
   res.json({ ok: true });
 }));
