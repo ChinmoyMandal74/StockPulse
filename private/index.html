@@ -121,16 +121,16 @@
     /* Action: two hues, not six. Most of the table sits on Hold, and the
        momentum arrow already made the argument — light every row and the
        column stops carrying information. Weight separates the extremes. */
-    td.act { font-family: var(--sans); font-size: 12px; white-space: nowrap; cursor: pointer; }
+    td.act { font-family: var(--sans); font-size: 12px; white-space: nowrap; cursor: pointer; text-align: left; }
     td.act.a-strong-buy { color: var(--green); font-weight: 700; }
     td.act.a-buy { color: var(--green); }
     td.act.a-buy-with-risk { color: color-mix(in srgb, var(--green) 55%, var(--muted)); }
     td.act.a-hold { color: var(--muted); }
     td.act.a-avoid { color: color-mix(in srgb, var(--red) 70%, var(--muted)); }
     td.act.a-sell-immediately { color: var(--red); font-weight: 700; }
-    td.ctype { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; cursor: pointer; }
+    td.ctype { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; cursor: pointer; text-align: left; }
     td.ctype .early { color: var(--amber); }
-    td.state { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; cursor: pointer; }
+    td.state { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; cursor: pointer; text-align: left; }
     td.state.st-bad { color: color-mix(in srgb, var(--red) 75%, var(--muted)); }
     td.state.st-warn { color: var(--amber); }
     td.state.st-guard { color: var(--faint); font-size: 11px; }
