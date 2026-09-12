@@ -3135,6 +3135,20 @@ async function buildRefreshReport(state, snap, kind = 'all') {
     .sort((a, b) => (Math.abs(tier(b.to) - tier(b.from)) - Math.abs(tier(a.to) - tier(a.from)))
       || a.symbol.localeCompare(b.symbol));
 
+  // A Refresh all pairs each changed verdict with its freshest stored
+  // headlines — a flip raises "what happened?", and this is where it gets
+  // answered. Stored rows only, never a fetch on the report path (the same
+  // run's earlier rounds have usually topped these up minutes before); a
+  // symbol with nothing recent simply shows none.
+  if (kind === 'all') {
+    const since = new Date(Date.now() - 3 * 86400000).toISOString();
+    for (const x of advice) {
+      try {
+        x.news = (await store.readNews(x.symbol, 4)).filter((h) => h.published_at >= since).slice(0, 2);
+      } catch { x.news = []; }
+    }
+  }
+
   return {
     kind, complete, rows, live, loaded, failed, missing, asOf, day, stats, modelWarning,
     // The digest is the day's movers and nothing else. The screens and the
@@ -3194,7 +3208,12 @@ function refreshReportBodies(r) {
   for (const x of r.bottom) t.push('  ' + signed(x.todayPct).padStart(7) + '  ' + x.symbol);
   t.push('', 'Advice changes  (vs the previous trading day)');
   if (!(r.advice || []).length) t.push('  none — every verdict held');
-  else for (const x of r.advice) t.push(`  ${x.symbol.padEnd(6)} ${x.from} → ${x.to}   ${x.flag}`);
+  else {
+    for (const x of r.advice) {
+      t.push(`  ${x.symbol.padEnd(6)} ${x.from} → ${x.to}   ${x.flag}`);
+      for (const h of x.news || []) t.push(`         · ${h.headline}${h.source ? ' — ' + h.source : ''}`);
+    }
+  }
   if (isAll && r.funds.prevDay) {
     t.push('', `Fundamentals that moved  (against ${r.funds.prevDay}, the previous recorded set)`);
     if (!r.funds.symbols.length) {
@@ -3286,11 +3305,19 @@ function refreshReportBodies(r) {
       const rowsH = (r.advice || []).map((x) =>
         `<tr><td style="${aCell};font-weight:600;white-space:nowrap">${x.symbol}</td>` +
         `<td style="${aCell};white-space:nowrap;color:${x.up ? '#0f766e' : '#b91c1c'}">${x.from} → ${x.to}</td>` +
-        `<td style="${aCell};color:#666">${x.flag}</td></tr>`).join('');
+        `<td style="${aCell};color:#666">${x.flag}</td></tr>` +
+        ((x.news || []).length
+          ? `<tr><td></td><td colspan="2" style="padding:0 12px 7px 0;font-size:12px;color:#888">` +
+            x.news.map((h) => (/^https?:\/\//i.test(h.url || '')
+              ? `<a href="${escHtml(h.url)}" style="color:#556a8a;text-decoration:none">${escHtml(h.headline)}</a>`
+              : escHtml(h.headline))
+              + (h.source ? ` <span style="color:#aaa">— ${escHtml(h.source)}</span>` : '')).join('<br>') +
+            '</td></tr>'
+          : '')).join('');
       return '<h3 style="margin:22px 0 6px;font-size:14px">Advice changes</h3>' +
         (rowsH
           ? `<table cellpadding="0" cellspacing="0">${rowsH}</table>` +
-            '<p style="margin:6px 0 0;font-size:12px;color:#999">Against the previous trading day, on the Balanced rules.</p>'
+            '<p style="margin:6px 0 0;font-size:12px;color:#999">Against the previous trading day, on the Balanced rules. Headlines are the newest stored for each changed symbol.</p>'
           : '<p style="margin:0;font-size:13px;color:#666">None — every verdict held from the previous trading day.</p>');
     })() +
     fundsBlock +
