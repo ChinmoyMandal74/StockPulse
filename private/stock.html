@@ -240,6 +240,27 @@
     .tlegend .thl { color: var(--muted); margin-left: auto; }
     .tlegend .thl i { background: none; height: 0; border-top: 2px dashed var(--text);
       border-radius: 0; opacity: 0.75; }
+    .tlegend .why-link { background: none; border: none; color: var(--accent); cursor: pointer;
+      font: 11.5px var(--sans); padding: 0; }
+    .tlegend .why-link:hover { text-decoration: underline; }
+    /* The "why do these differ" card: the ranked stretches where one rule was
+       in and the other was not, each named by the model's own flag. */
+    #whyBox { margin: 10px 52px 0 0; }
+    #whyBox .why-head { display: flex; align-items: baseline; gap: 6px; font-size: 13px; color: var(--muted); }
+    #whyBox .why-head b { color: var(--text); font-weight: 600; }
+    #whyBox .why-x { margin-left: auto; background: none; border: none; color: var(--faint);
+      cursor: pointer; font-size: 13px; padding: 0 0 0 6px; font-family: var(--sans); }
+    #whyBox .why-x:hover { color: var(--text); }
+    #whyBox .why-verdict { margin-top: 7px; font-size: 13px; color: var(--text); line-height: 1.65; max-width: 1000px; }
+    #whyBox .why-sub { margin-top: 11px; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
+    #whyBox .why-run { display: flex; gap: 14px; align-items: baseline; padding: 6px 0 5px;
+      border-top: 1px solid var(--hair); margin-top: 5px; font-size: 12.5px; }
+    #whyBox .wd { font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+    #whyBox .wp { font-family: var(--mono); min-width: 68px; text-align: right; font-variant-numeric: tabular-nums; }
+    #whyBox .wp.pos { color: var(--green); }
+    #whyBox .wp.neg { color: var(--red); }
+    #whyBox .ww { color: var(--muted); min-width: 0; }
+    #whyBox .why-note { margin-top: 10px; font-size: 11px; color: var(--faint); }
 
     .rulespick { position: relative; display: inline-block; }
     #rulesMenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 240px;
@@ -468,11 +489,14 @@
     let rulesMode = 'trend';
     const RULES_CFGS = {};
     const rulesModeDef = () => RULES_MODES.find((x) => x.id === rulesMode) || RULES_MODES[0];
-    function rulesCfg() {
-      const name = rulesMode === 'trend' ? 'Balanced' : rulesModeDef().name;
+    function rulesCfgFor(name) {
       if (!RULES_CFGS[name]) RULES_CFGS[name] = ActionRules.resolve(null, name).cfg;
       return RULES_CFGS[name];
     }
+    function rulesCfg() {
+      return rulesCfgFor(rulesMode === 'trend' ? 'Balanced' : rulesModeDef().name);
+    }
+    let whyOpen = false, paintCtx = null;
     function setRulesMode(id) {
       if (RULES_MODES.some((x) => x.id === id)) rulesMode = id;
     }
@@ -522,8 +546,10 @@
         ? `<span class="tl thl"><i></i>${esc(lbl)} ${th.endPct >= 0 ? '+' : ''}${th.endPct.toFixed(1)}%` +
           ` vs ${th.holdPct >= 0 ? '+' : ''}${th.holdPct.toFixed(1)}% hold · ${th.trips} round trip${th.trips === 1 ? '' : 's'}</span>`
         : '';
+      const why = arguments.length > 3 && arguments[3] && th
+        ? '<button class="tl why-link" data-why>Why do these differ?</button>' : '';
       return `<div class="tstrip">${segs}</div>` +
-        `<div class="tlegend"><span class="cap-t">Trend</span>${present.join('')}${stat}</div>`;
+        `<div class="tlegend"><span class="cap-t">Trend</span>${present.join('')}${stat}${why}</div>`;
     }
 
     // What holding only the green states returns, as an equity line in price
@@ -578,29 +604,45 @@
           if (all[k] != null && (hi == null || all[k] > hi)) hi = all[k];
         }
         const pct = (base) => (c != null && base != null && base > 0 ? (c / base - 1) * 100 : null);
-        out.push(ActionRules.actionAt({
+        const v = ActionRules.actionAt({
           v200: pct(s200[j]), v50: pct(s50[j]), rsi: rsiAll ? rsiAll[j] : null,
           m1: j >= 21 ? pct(all[j - 21]) : null,
           m3: j >= 63 ? pct(all[j - 63]) : null,
           fh: pct(hi),
-        }, cfg).action);
+        }, cfg);
+        out.push({ a: v.action, f: v.flag });
       }
       return out;
     }
-    function modelHoldSeries(closes, verdicts) {
+    // Day-by-day position under the verdict machine — position for the
+    // return into day i comes from day i-1's verdict, the same lag as
+    // everything else. One copy, used by the line, the hover readout and the
+    // why comparison, so they cannot disagree.
+    function modelPositions(verds) {
+      const n = verds.length, pos = new Array(n).fill(false);
+      let inPos = false;
+      for (let i = 1; i < n; i++) {
+        const t = AP_TIER[verds[i - 1].a];
+        if (t >= 3) inPos = true;
+        else if (t <= 1) inPos = false;
+        pos[i] = inPos;
+      }
+      return pos;
+    }
+    function modelHoldSeries(closes, verds) {
+      if (!verds) return null;
       const n = closes.length;
+      const pos = modelPositions(verds);
       const values = new Array(n).fill(null);
       let a = 0;
       while (a < n && closes[a] == null) a++;
       if (a >= n - 1) return null;
-      let eq = closes[a], trips = 0, pos = false, z = a;
+      let eq = closes[a], trips = 0, z = a;
       values[a] = eq;
       for (let i = a + 1; i < n; i++) {
-        const t = AP_TIER[verdicts[i - 1]];
-        if (t >= 3) { if (!pos) { pos = true; trips++; } }
-        else if (t <= 1) pos = false;
+        if (pos[i] && !pos[i - 1]) trips++;
         if (closes[i] != null) {
-          if (pos && closes[i - 1] != null) eq *= closes[i] / closes[i - 1];
+          if (pos[i] && closes[i - 1] != null) eq *= closes[i] / closes[i - 1];
           z = i;
         }
         values[i] = eq;
@@ -608,6 +650,73 @@
       return { values, trips, anchor: a,
         endPct: (values[z] / closes[a] - 1) * 100,
         holdPct: (closes[z] / closes[a] - 1) * 100 };
+    }
+
+    // Why the two rules differ, as data: their day-by-day positions diffed,
+    // the disagreement stretches ranked by what the price did during each,
+    // and every stretch named by the flag that kept the other rule out.
+    function compareRuns(closes, words, verds) {
+      const n = closes.length;
+      const pT = new Array(n).fill(false);
+      for (let i = 1; i < n; i++) pT[i] = !!TH_GREEN[words[i - 1]];
+      const pM = modelPositions(verds);
+      const ret = (i) => (closes[i] != null && closes[i - 1] != null ? closes[i] / closes[i - 1] : 1);
+      let eT = 1, eM = 1, tD = 0, mD = 0;
+      for (let i = 1; i < n; i++) {
+        if (pT[i]) { eT *= ret(i); tD++; }
+        if (pM[i]) { eM *= ret(i); mD++; }
+      }
+      const runs = [];
+      let a = -1, kind = null;
+      for (let i = 1; i <= n; i++) {
+        const k = i < n ? (pT[i] === pM[i] ? null : pT[i] ? 'trend' : 'model') : null;
+        if (k !== kind) {
+          if (kind) runs.push({ kind, a, b: i - 1 });
+          a = i; kind = k;
+        }
+      }
+      let refused = 1, held = 1;
+      for (const r of runs) {
+        let g = 1;
+        for (let i = r.a; i <= r.b; i++) g *= ret(i);
+        r.pct = (g - 1) * 100;
+        r.days = r.b - r.a + 1;
+        r.why = r.kind === 'trend' ? (verds[r.a - 1] ? verds[r.a - 1].f : '') : (words[r.a - 1] || '');
+        if (r.kind === 'trend') refused *= g; else held *= g;
+      }
+      runs.sort((x, y) => Math.abs(y.pct) - Math.abs(x.pct));
+      return { runs, tPct: (eT - 1) * 100, mPct: (eM - 1) * 100, tDays: tD, mDays: mD,
+        refusedPct: (refused - 1) * 100, heldPct: (held - 1) * 100 };
+    }
+    function whyHtml(cmp, dates, name) {
+      const pn = (x) => (x >= 0 ? '+' : '') + x.toFixed(1) + '%';
+      // The verdict sentence is templated from the two measured buckets —
+      // prose from numbers, never numbers from prose.
+      const sents = [];
+      if (Math.abs(cmp.refusedPct) >= 5) {
+        sents.push(cmp.refusedPct >= 0
+          ? `Most of the gap is entry friction: the trend rule boards the first day back above the 200D, while ${esc(name)} waited for a clean entry through moves worth ${pn(cmp.refusedPct)} compounded.`
+          : `The trend rule's eager re-entries cost it ${pn(cmp.refusedPct)} compounded in stretches ${esc(name)} refused to enter.`);
+      }
+      if (Math.abs(cmp.heldPct) >= 5) {
+        sents.push(cmp.heldPct >= 0
+          ? `${esc(name)} gained ${pn(cmp.heldPct)} compounded holding through grey stretches the trend rule sat out.`
+          : `${esc(name)} gave back ${pn(cmp.heldPct)} compounded holding through drops the trend rule sidestepped.`);
+      }
+      if (!sents.length) sents.push('The two rules barely disagreed over this range.');
+      const rows = cmp.runs.slice(0, 5).map((r) =>
+        `<div class="why-run"><span class="wd">${esc(dates[r.a])} → ${esc(dates[r.b])} · ${r.days}d</span>` +
+        `<span class="wp ${r.pct >= 0 ? 'pos' : 'neg'}">${pn(r.pct)}</span>` +
+        `<span class="ww">${r.kind === 'trend'
+          ? `Trend in — ${esc(name)} out: ${esc(r.why)}`
+          : `${esc(name)} in, trend out — holding through: ${esc(r.why)}`}</span></div>`).join('');
+      return '<div class="core">' +
+        `<div class="why-head"><b>Trend only ${pn(cmp.tPct)}</b>&nbsp;(${cmp.tDays}d in) · ` +
+        `<b>${esc(name)} ${pn(cmp.mPct)}</b>&nbsp;(${cmp.mDays}d in)` +
+        '<button class="why-x" data-why-close aria-label="Close">✕</button></div>' +
+        `<div class="why-verdict">${sents.join(' ')}</div>` +
+        (rows ? `<div class="why-sub">Largest disagreements — one rule in, the other out</div>${rows}` : '') +
+        '<div class="why-note">Zero costs, next-session execution, the model replayed on technicals alone — the flags are its own words. Same range as the chart above.</div></div>';
     }
 
     // The return tag at the line's end — where the eye lands after
@@ -677,11 +786,19 @@
         // and the line must exist before the chart draws it. Thresholds
         // follow the stock's current type — the classification is not
         // replayable historically; today's rules, today's type, replayed.
-        const trend = trendSeries(all, from, (stock && stock.companyType) || 'Established', rulesCfg());
+        // TREND off removes everything the trend machinery draws — the
+        // line, the ribbon, the legend, the why card and the Rules control.
+        const rp = document.querySelector('.rulespick');
+        if (rp) rp.hidden = !showTrendHold;
+        const trend = showTrendHold
+          ? trendSeries(all, from, (stock && stock.companyType) || 'Established', rulesCfg()) : null;
+        const verds = showTrendHold && rulesMode !== 'trend'
+          ? verdictSeries(all, from, rulesCfg(), rsiAllFull) : null;
         const th = !showTrendHold ? null
           : rulesMode === 'trend' ? trendHoldSeries(closes, trend)
-            : modelHoldSeries(closes, verdictSeries(all, from, rulesCfg(), rsiAllFull));
+            : modelHoldSeries(closes, verds);
         const thLabel = rulesMode === 'trend' ? 'Trend-held' : `Model-held · ${rulesModeDef().name}`;
+        paintCtx = { all, from, closes, dates, trend, rsiAll: rsiAllFull };
         const c = RowCard.chartSVG(closes, {
           volumes, ticks: 5, rsi, momentum: mom,
           overlays: series.map((x) => ({ values: x.values, cls: x.ma.cls }))
@@ -735,14 +852,43 @@
 
         const strip = document.getElementById('trendStrip');
         if (strip) {
-          const html = trendStripHtml(trend, th, thLabel);
+          const html = showTrendHold ? trendStripHtml(trend, th, thLabel, true) : '';
           strip.innerHTML = html;
           strip.hidden = !html;
+          const wl = strip.querySelector('[data-why]');
+          if (wl) wl.addEventListener('click', toggleWhy);
+        }
+        const wb = document.getElementById('whyBox');
+        if (wb) {
+          if (!showTrendHold) whyOpen = false;
+          if (whyOpen) renderWhy();          // a repaint means a new range or rule set
+          else { wb.hidden = true; wb.innerHTML = ''; }
         }
 
         // Everything the crosshair needs, kept for the pointer handler.
-        hover = { dates, closes, volumes, rsi, mom, trend, th: th ? th.values : null, panes: c.panes };
+        hover = { dates, closes, volumes, rsi, mom, trend, th: th ? th.values : null,
+          verd: verds, pM: verds ? modelPositions(verds) : null, panes: c.panes };
       });
+    }
+
+    function toggleWhy() {
+      whyOpen = !whyOpen;
+      const wb = document.getElementById('whyBox');
+      if (!whyOpen) { if (wb) { wb.hidden = true; wb.innerHTML = ''; } return; }
+      renderWhy();
+    }
+    // In 'Trend only' mode the comparison runs against Balanced — the
+    // question "why do these differ" needs a second rule to differ from.
+    function renderWhy() {
+      const wb = document.getElementById('whyBox');
+      if (!wb || !paintCtx || !showTrendHold || !paintCtx.trend) return;
+      const pName = rulesMode === 'trend' ? 'Balanced' : rulesModeDef().name;
+      const verds = verdictSeries(paintCtx.all, paintCtx.from, rulesCfgFor(pName), paintCtx.rsiAll);
+      const cmp = compareRuns(paintCtx.closes, paintCtx.trend, verds);
+      wb.innerHTML = whyHtml(cmp, paintCtx.dates, pName);
+      wb.hidden = false;
+      const x = wb.querySelector('[data-why-close]');
+      if (x) x.addEventListener('click', toggleWhy);
     }
 
     (async () => {
@@ -806,6 +952,7 @@
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
           <div id="trendStrip" hidden></div>
+          <div id="whyBox" class="bezel" hidden></div>
         </section></div>
 
         <section class="bezel card"><div class="core">
@@ -1015,7 +1162,14 @@
           (hover.trend && hover.trend[i] && hover.trend[i] !== 'No data'
             ? `<span class="k">Trend</span> <span class="v">${esc(hover.trend[i])}</span>` : '') +
           (hover.th && hover.th[i] != null
-            ? `<span class="k">If held</span> <span class="v">${RowCard.fmtPrice(hover.th[i])}</span>` : '');
+            ? `<span class="k">If held</span> <span class="v">${RowCard.fmtPrice(hover.th[i])}</span>` : '') +
+          (hover.verd && hover.pM && i > 0 ? (() => {
+            const inT = hover.trend && (hover.trend[i - 1] === 'Strong uptrend' || hover.trend[i - 1] === 'Above 200D');
+            const inM = hover.pM[i];
+            if (inT && !inM) return `<span class="k">Model</span> <span class="v" style="color:var(--amber)">out — ${esc(hover.verd[i - 1].f)}</span>`;
+            if (!inT && inM) return `<span class="k">Model</span> <span class="v">in — holding through ${esc(hover.trend[i] || '')}</span>`;
+            return '';
+          })() : '');
         out.hidden = false;
         chartEl.classList.add('hovering');
       });
