@@ -234,6 +234,14 @@
     .tlegend .tl { display: inline-flex; align-items: center; gap: 5px; }
     .tlegend .tl i { width: 10px; height: 5px; border-radius: 2px; display: inline-block; }
 
+    /* The trend-hold line: hypothetical, so it is dashed. */
+    #chart .ov.th-ln { stroke: var(--text); stroke-dasharray: 5 4; opacity: 0.75; }
+    #chart .cap.th { left: 9px; top: 46px; font-size: 10px; color: var(--muted); }
+    #chart .cap.th i { display: inline-block; width: 11px; height: 0;
+      border-top: 2px dashed var(--text); vertical-align: middle; margin-right: 5px; opacity: 0.75; }
+    .th-toggle.on { background: rgba(233, 236, 242, 0.12); color: var(--text);
+      border-color: var(--hair-2); }
+
     #chart .readout {
       position: absolute; left: 9px; top: 8px; padding: 5px 10px; border-radius: 8px;
       background: rgba(13, 16, 23, 0.92); border: 1px solid var(--hair);
@@ -246,8 +254,8 @@
     #chart .readout .v.rsi { color: var(--accent-2); }
     #chart .readout .v.mom { color: var(--mom); }
     /* the captions the readout replaces */
-    #chart.hovering .cap.chg, #chart.hovering .cap.ma { opacity: 0; }
-    #chart .cap.chg, #chart .cap.ma { transition: opacity 0.2s var(--ease); }
+    #chart.hovering .cap.chg, #chart.hovering .cap.ma, #chart.hovering .cap.th { opacity: 0; }
+    #chart .cap.chg, #chart .cap.ma, #chart .cap.th { transition: opacity 0.2s var(--ease); }
 
     #chart .axis { position: absolute; left: 0; right: 52px; bottom: 3px; height: 12px;
                    pointer-events: none; }
@@ -342,6 +350,9 @@
     // — not an indicator you go looking for. RSI and volume describe how a move
     // happened; this says what the move is currently worth.
     let showMom = true;
+    // The trend-hold overlay: in only through the green trend states. On by
+    // default — it is the question the ribbon exists to raise.
+    let showTrendHold = true;
     let stock = null;
 
     const curSym = (c) => ({ USD: '$', EUR: '€', GBP: '£', JPY: '¥', KRW: '₩', INR: '₹' }[c] || '');
@@ -457,6 +468,39 @@
         `<div class="tlegend"><span class="cap-t">Trend</span>${present.join('')}</div>`;
     }
 
+    // What holding only the green states returns, as an equity line in price
+    // units. The word at day t is known at t's close, so a green t earns the
+    // t -> t+1 move — the signal acts at the close it appears on, never a day
+    // it did not yet exist (the look-ahead discipline the strategy backtest
+    // learned the hard way). Anchored to the price where the ribbon starts,
+    // so the gap between the two lines IS the verdict and the flat shelves
+    // are the stretches in cash. Pure price: no costs, nothing earned in
+    // cash, no dividends — the round-trip count is the tell for what costs
+    // would take, and /single is the full instrument.
+    const TH_GREEN = { 'Strong uptrend': 1, 'Above 200D': 1 };
+    function trendHoldSeries(closes, words) {
+      const n = closes.length;
+      const values = new Array(n).fill(null);
+      let a = 0;
+      while (a < n && (words[a] === 'No data' || closes[a] == null)) a++;
+      if (a >= n - 1) return null;
+      let eq = closes[a], trips = 0, inPos = false, z = a;
+      values[a] = eq;
+      for (let i = a + 1; i < n; i++) {
+        const held = !!TH_GREEN[words[i - 1]];
+        if (held && !inPos) trips++;
+        inPos = held;
+        if (closes[i] != null) {
+          if (held && closes[i - 1] != null) eq *= closes[i] / closes[i - 1];
+          z = i;
+        }
+        values[i] = eq;
+      }
+      return { values, trips, anchor: a,
+        endPct: (values[z] / closes[a] - 1) * 100,
+        holdPct: (closes[z] / closes[a] - 1) * 100 };
+    }
+
     function paintChart() {
       const box = document.getElementById('chart');
       if (!box) return;
@@ -506,9 +550,16 @@
         box.classList.toggle('has-mom', mom != null);
         const rsiNow = rsi ? [...rsi].reverse().find((v) => v != null) ?? null : null;
         const momNow = mom ? [...mom].reverse().find((v) => v != null) ?? null : null;
+        // The ribbon's words drive both the strip and the trend-hold line,
+        // and the line must exist before the chart draws it. Thresholds
+        // follow the stock's current type — the classification is not
+        // replayable historically; today's rules, today's type, replayed.
+        const trend = trendSeries(all, from, (stock && stock.companyType) || 'Established');
+        const th = showTrendHold ? trendHoldSeries(closes, trend) : null;
         const c = RowCard.chartSVG(closes, {
           volumes, ticks: 5, rsi, momentum: mom,
-          overlays: series.map((x) => ({ values: x.values, cls: x.ma.cls })),
+          overlays: series.map((x) => ({ values: x.values, cls: x.ma.cls }))
+            .concat(th ? [{ values: th.values, cls: 'th-ln' }] : []),
         });
 
         // Axis labels are HTML rather than SVG text: the chart stretches with
@@ -529,6 +580,8 @@
 
         box.innerHTML = c.svg +
           `<span class="cap chg">${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%${c.log ? ' · log scale' : ''}</span>` +
+          (th ? `<span class="cap th"><i></i>Trend-held ${th.endPct >= 0 ? '+' : ''}${th.endPct.toFixed(1)}%` +
+            ` vs ${th.holdPct >= 0 ? '+' : ''}${th.holdPct.toFixed(1)}% hold · ${th.trips} round trip${th.trips === 1 ? '' : 's'}</span>` : '') +
           `<span class="cap ma">${series.map((x) =>
             `<i class="${x.ma.cls}"></i>${x.ma.len}-day`).join('')}</span>` +
           (c.panes.momentum
@@ -555,10 +608,6 @@
           '<span class="xdate" hidden></span>' +
           '<span class="readout" hidden></span>';
 
-        // The trend ribbon under the plot. Thresholds follow the stock's
-        // current type (the classification is not replayable historically);
-        // the run-up the 200-day average needs is the MA_PAD already fetched.
-        const trend = trendSeries(all, from, (stock && stock.companyType) || 'Established');
         const strip = document.getElementById('trendStrip');
         if (strip) {
           const html = trendStripHtml(trend);
@@ -567,7 +616,7 @@
         }
 
         // Everything the crosshair needs, kept for the pointer handler.
-        hover = { dates, closes, volumes, rsi, mom, trend, panes: c.panes };
+        hover = { dates, closes, volumes, rsi, mom, trend, th: th ? th.values : null, panes: c.panes };
       });
     }
 
@@ -623,7 +672,9 @@
               ).join('')}
               <button class="rng rsi-toggle${showRSI ? ' on' : ''}" id="rsiBtn">RSI</button>
               <button class="rng mom-toggle${showMom ? ' on' : ''}" id="momBtn"
-                title="The momentum score over time, 0-100 on the same fixed scale the table uses">MOM</button></span>
+                title="The momentum score over time, 0-100 on the same fixed scale the table uses">MOM</button>
+              <button class="rng th-toggle${showTrendHold ? ' on' : ''}" id="thBtn"
+                title="What holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on">TREND</button></span>
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
           <div id="trendStrip" hidden></div>
@@ -834,7 +885,9 @@
           (r == null ? '' : `<span class="k">RSI</span> <span class="v rsi">${r.toFixed(1)}</span>`) +
           `<span class="k">Vol</span> <span class="v">${fmtVol(hover.volumes[i])}</span>` +
           (hover.trend && hover.trend[i] && hover.trend[i] !== 'No data'
-            ? `<span class="k">Trend</span> <span class="v">${esc(hover.trend[i])}</span>` : '');
+            ? `<span class="k">Trend</span> <span class="v">${esc(hover.trend[i])}</span>` : '') +
+          (hover.th && hover.th[i] != null
+            ? `<span class="k">If held</span> <span class="v">${RowCard.fmtPrice(hover.th[i])}</span>` : '');
         out.hidden = false;
         chartEl.classList.add('hovering');
       });
@@ -847,6 +900,12 @@
         if (b.id === 'momBtn') {
           showMom = !showMom;
           b.classList.toggle('on', showMom);
+          paintChart();
+          return;
+        }
+        if (b.id === 'thBtn') {
+          showTrendHold = !showTrendHold;
+          b.classList.toggle('on', showTrendHold);
           paintChart();
           return;
         }
