@@ -12,7 +12,9 @@
   <link rel="stylesheet" href="/app.css" />
   <style>
     body { min-height: 100dvh; padding: 0 0 60px; overflow-x: clip; }
-    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+    /* Full width: the chart is the page, and an 18-year ribbon deserves
+       every pixel. Prose keeps its own readable measure below. */
+    .page { position: relative; z-index: 1; max-width: none; margin: 0 auto; padding: 0 32px; }
     .aura {
       background:
         radial-gradient(46vw 40vw at 6% -6%, rgba(52, 211, 153, 0.12), transparent 62%),
@@ -95,7 +97,7 @@
     /* Full card width, as asked. The usual 70-80ch reading limit is dropped
        here on purpose: this is four or five sentences read once, not prose you
        work down, and the surrounding cards already run the full width. */
-    .about { margin: 0; font-size: 13.5px; line-height: 1.7; color: var(--muted); }
+    .about { margin: 0; font-size: 14px; line-height: 1.7; color: var(--muted); max-width: 1100px; }
 
     /* The same primary button the screener uses for Export to Excel: both hand
        you a spreadsheet, so they should not look like different kinds of action.
@@ -113,7 +115,7 @@
                 text-transform: uppercase; color: var(--muted); }
     .ranges { margin-left: auto; display: flex; gap: 5px; }
     .rng {
-      padding: 5px 12px; border-radius: 999px; cursor: pointer; font-size: 11.5px;
+      padding: 5px 12px; border-radius: 999px; cursor: pointer; font-size: 12.5px;
       font-family: var(--sans); border: 1px solid var(--hair); color: var(--muted);
       background: rgba(255, 255, 255, 0.03);
       transition: background 0.4s var(--ease), color 0.4s var(--ease), border-color 0.4s var(--ease);
@@ -137,13 +139,13 @@
     .rng.mom-toggle:disabled { opacity: 0.35; cursor: not-allowed; }
     .cap.mom { color: var(--mom); }
     .mom-lbl { position: absolute; right: 56px; transform: translateY(-50%);
-               font-family: var(--mono); font-size: 9px; color: var(--faint); }
-    #chart .cap { font-size: 11px; }
-    #chart .cap.chg { font-size: 15px; }
+               font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+    #chart .cap { font-size: 12.5px; }
+    #chart .cap.chg { font-size: 17px; }
     /* Pane labels sit against the geometry the chart reports, not a guessed
        percentage — turning RSI on moves the volume band down. */
     #chart .cap.vol, #chart .cap.rsi {
-      left: 9px; bottom: auto; font-size: 9.5px;
+      left: 9px; bottom: auto; font-size: 11px;
       text-transform: uppercase; letter-spacing: 0.12em;
       transform: translateY(-125%);
     }
@@ -152,7 +154,7 @@
        overbought line, below the oversold one, as a terminal draws them. */
     #chart .rsi-zone {
       position: absolute; left: 50%; pointer-events: none;
-      font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 500;
+      font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 500;
       text-shadow: 0 0 4px rgba(10, 12, 17, 0.95), 0 0 2px rgba(10, 12, 17, 0.95);
     }
     #chart .rsi-zone.hi { color: var(--red); transform: translate(-50%, -118%); }
@@ -160,14 +162,14 @@
 
     #chart .rsi-lbl {
       position: absolute; right: 56px; transform: translateY(-50%);
-      font-family: var(--mono); font-size: 9px; color: var(--faint);
+      font-family: var(--mono); font-size: 10.5px; color: var(--faint);
       pointer-events: none;
       text-shadow: 0 0 4px rgba(10, 12, 17, 0.95), 0 0 2px rgba(10, 12, 17, 0.95);
     }
     .rsi-toggle.on { background: rgba(167, 139, 250, 0.14);
                      border-color: rgba(167, 139, 250, 0.4); color: var(--accent-2); }
     /* legend: a swatch per average, in that average's own colour */
-    #chart .cap.ma { left: 9px; top: 30px; font-size: 10px; color: var(--faint);
+    #chart .cap.ma { left: 9px; top: 32px; font-size: 11.5px; color: var(--faint);
                      display: flex; gap: 12px; }
     #chart .cap.ma i { display: inline-block; width: 10px; height: 2px;
                        margin-right: 5px; vertical-align: 3px; border-radius: 1px; }
@@ -185,7 +187,7 @@
                     pointer-events: none; }
     #chart .ytick {
       position: absolute; right: 0; transform: translateY(-50%);
-      padding-left: 8px; font-family: var(--mono); font-size: 10px;
+      padding-left: 8px; font-family: var(--mono); font-size: 11.5px;
       color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap;
     }
     /* The ticks come back low-to-high, so the FIRST is the bottom of the axis
@@ -208,7 +210,7 @@
     #chart .xdate {
       position: absolute; bottom: 0; padding: 2px 7px; border-radius: 6px;
       background: var(--surface-2); border: 1px solid var(--hair);
-      font-family: var(--mono); font-size: 9.5px; color: var(--text);
+      font-family: var(--mono); font-size: 11px; color: var(--text);
       white-space: nowrap; pointer-events: none;
     }
     /* Sits over the static change caption while hovering, so the top-left says
@@ -229,8 +231,8 @@
     .ts-above-200d { background: color-mix(in srgb, var(--green) 30%, var(--surface)); }
     .ts-strong-uptrend { background: var(--green); }
     .tlegend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px;
-      font-size: 10px; color: var(--faint); }
-    .tlegend .cap-t { letter-spacing: 0.1em; text-transform: uppercase; font-size: 9.5px; }
+      font-size: 11.5px; color: var(--faint); }
+    .tlegend .cap-t { letter-spacing: 0.1em; text-transform: uppercase; font-size: 10.5px; }
     .tlegend .tl { display: inline-flex; align-items: center; gap: 5px; }
     .tlegend .tl i { width: 10px; height: 5px; border-radius: 2px; display: inline-block; }
     /* The trend-hold verdict lives here, under the chart, not over the plot —
@@ -249,14 +251,14 @@
       color: var(--muted); font: 12px var(--sans); padding: 7px 9px; border-radius: 8px; cursor: pointer; }
     #rulesMenu .inner > button:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
     #rulesMenu .inner > button.on { color: var(--text); background: rgba(255, 255, 255, 0.08); }
-    #rulesMenu .hint { font-size: 10px; color: var(--faint); padding: 6px 9px 4px; line-height: 1.5;
+    #rulesMenu .hint { font-size: 11px; color: var(--faint); padding: 6px 9px 4px; line-height: 1.5;
       border-top: 1px solid var(--hair); margin-top: 4px; }
 
     /* The trend-hold line: hypothetical, so it is dashed. Its return for
        the drawn range rides as a tag at the line's end, in the axis gutter —
        where the eye lands following the line, priced like an axis label. */
     #chart .thend { position: absolute; right: 2px; transform: translateY(-50%);
-      font-family: var(--mono); font-size: 10px; font-variant-numeric: tabular-nums;
+      font-family: var(--mono); font-size: 11.5px; font-variant-numeric: tabular-nums;
       padding: 1px 5px; border-radius: 6px; background: var(--surface);
       border: 1px dashed var(--hair-2); white-space: nowrap; }
     #chart .thend.pos { color: var(--green); }
@@ -268,10 +270,10 @@
     #chart .readout {
       position: absolute; left: 9px; top: 8px; padding: 5px 10px; border-radius: 8px;
       background: rgba(13, 16, 23, 0.92); border: 1px solid var(--hair);
-      font-family: var(--mono); font-size: 11px; white-space: nowrap;
-      pointer-events: none; display: flex; gap: 6px; align-items: baseline;
+      font-family: var(--mono); font-size: 12.5px; white-space: nowrap;
+      pointer-events: none; display: flex; gap: 7px; align-items: baseline;
     }
-    #chart .readout .k { color: var(--faint); font-size: 9.5px;
+    #chart .readout .k { color: var(--faint); font-size: 10.5px;
                          text-transform: uppercase; letter-spacing: 0.1em; }
     #chart .readout .v { color: var(--text); }
     #chart .readout .v.rsi { color: var(--accent-2); }
@@ -284,7 +286,7 @@
                    pointer-events: none; }
     #chart .axis .tick {
       position: absolute; transform: translateX(-50%); white-space: nowrap;
-      font-family: var(--mono); font-size: 9.5px; color: var(--faint);
+      font-family: var(--mono); font-size: 11px; color: var(--faint);
     }
     /* the end labels would otherwise hang off the edges */
     #chart .axis .tick:first-child { transform: none; }
@@ -295,8 +297,8 @@
     /* the shared sections, wider than the card's three columns */
     .fields { column-count: 4; column-gap: 26px; }
     .fields .rc-sec { margin-bottom: 14px; }
-    .fields .rc-row { line-height: 1.9; font-size: 12.5px; }
-    .fields .rc-v { font-size: 12px; }
+    .fields .rc-row { line-height: 1.9; font-size: 13px; }
+    .fields .rc-v { font-size: 12.5px; }
     @media (max-width: 1000px) { .fields { column-count: 2; } }
     @media (max-width: 620px)  { .fields { column-count: 1; } }
 
