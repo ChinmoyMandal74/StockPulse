@@ -171,6 +171,24 @@ const SCHEMA = [
   // the running model's is how a forgotten MODEL_VERSION bump gets caught.
   `create index if not exists idx_momentum_d on momentum_history (d)`,
 
+  // Per-stock headlines: headline, source, url, timestamp — never bodies.
+  // A cache of a feed, like profiles: prune-and-refill, nothing precious.
+  // news_state is the fetch clock per symbol, separate so a symbol whose
+  // feed returned nothing is still marked fetched and does not retry forever.
+  `create table if not exists news (
+    id text primary key,
+    symbol text not null,
+    published_at text not null,
+    source text,
+    headline text not null,
+    url text not null
+  )`,
+  `create index if not exists idx_news_symbol on news (symbol, published_at)`,
+  `create table if not exists news_state (
+    symbol text primary key,
+    fetched_at integer not null
+  )`,
+
   // Past momentum, momentum delta, and the price return beside them.
   //
   // A VIEW, not columns. Past momentum at a horizon IS the stored score N
@@ -720,7 +738,7 @@ async function momentumStats(model) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'momentum_history', 'fundamentals_history', 'profiles', 'names'];
+const SYMBOL_TABLES = ['bars', 'momentum_history', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state'];
 
 // Remove a symbol from the database entirely.
 //
@@ -1292,6 +1310,55 @@ async function clearVisitors() {
   return Number(before.rows[0].c || 0);
 }
 
+// ---- news ------------------------------------------------------------------
+// writeNews replaces a symbol's stored headlines wholesale (they arrive as a
+// full de-duplicated set from the provider) and stamps the fetch clock in the
+// same batch, then prunes anything older than keepDays. One batch, so a
+// half-written set cannot survive a failure.
+async function writeNews(symbol, items, keepDays = 21) {
+  await init();
+  const cutoff = new Date(Date.now() - keepDays * 86400000).toISOString();
+  const stmts = [
+    { sql: 'delete from news where symbol = ?', args: [symbol] },
+    ...items.map((x) => ({
+      sql: 'insert or replace into news (id, symbol, published_at, source, headline, url) values (?, ?, ?, ?, ?, ?)',
+      args: [crypto.createHash('sha256').update(x.url).digest('hex').slice(0, 32),
+        symbol, x.published_at, x.source || null, x.headline, x.url],
+    })),
+    { sql: 'delete from news where symbol = ? and published_at < ?', args: [symbol, cutoff] },
+    { sql: 'insert or replace into news_state (symbol, fetched_at) values (?, ?)', args: [symbol, Date.now()] },
+  ];
+  await db.batch(stmts, 'write');
+}
+
+async function readNews(symbol, limit = 12) {
+  await init();
+  const r = await db.execute({
+    sql: 'select published_at, source, headline, url from news where symbol = ? order by published_at desc limit ?',
+    args: [symbol, limit],
+  });
+  return r.rows.map((x) => ({ published_at: x.published_at, source: x.source, headline: x.headline, url: x.url }));
+}
+
+// The screener's one-per-symbol read: the newest stored headline everywhere,
+// one query, the sparklines pattern.
+async function readLatestNews() {
+  await init();
+  const r = await db.execute(
+    `select n.symbol, n.published_at, n.source, n.headline, n.url
+     from news n join (select symbol, max(published_at) m from news group by symbol) x
+       on n.symbol = x.symbol and n.published_at = x.m
+     group by n.symbol`);
+  return r.rows.map((x) => ({ symbol: x.symbol, published_at: x.published_at,
+    source: x.source, headline: x.headline, url: x.url }));
+}
+
+async function readNewsState() {
+  await init();
+  const r = await db.execute('select symbol, fetched_at from news_state');
+  return Object.fromEntries(r.rows.map((x) => [x.symbol, Number(x.fetched_at)]));
+}
+
 module.exports = {
   db,
   init,
@@ -1347,6 +1414,7 @@ module.exports = {
   readMomentumModel,
   momentumModelStatus,
   purgeSymbol,
+  writeNews, readNews, readLatestNews, readNewsState,
   symbolsWithData,
   countSymbolRows,
   SYMBOL_TABLES,

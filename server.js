@@ -34,6 +34,7 @@ const Indicators = require('./private/indicators.js');
 // The Action rules — what to do with each stock. Shared with the browser so a
 // later personal profile can re-score locally without a second implementation.
 const Action = require('./private/action.js');
+const News = require('./news.js');
 const {
   readPortfolios, writePortfolios,
   readNames, writeNames,
@@ -2756,6 +2757,81 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
 // Closes for the whole universe, for the table's sparklines. One query rather
 // than 69, and loaded after the table paints — a decoration must not make the
 // data wait on it.
+// ---- news --------------------------------------------------------------
+// Headlines per stock, from a swappable provider (news.js): Finnhub when
+// FINNHUB_API_KEY is set, else Google News RSS, keyless. NEWS_PROVIDER=off
+// kills the feature — routes serve empty, the pages show their quiet states.
+// Only headline / source / url / timestamp are stored, never bodies.
+const NEWS_OFF = String(process.env.NEWS_PROVIDER || '').toLowerCase() === 'off';
+const FINNHUB_KEY = process.env.FINNHUB_API_KEY || '';
+const NEWS_TTL_MS = 6 * 3600 * 1000;   // a visited stock page refetches after this
+const NEWS_TOPUP_PER_REFRESH = 12;     // stalest symbols topped up per refresh
+
+async function fetchNewsItems(symbol, name) {
+  const signal = AbortSignal.timeout(6000);
+  if (FINNHUB_KEY) {
+    const res = await fetch(News.finnhubUrl(symbol, FINNHUB_KEY, News.KEEP_DAYS), { signal });
+    if (!res.ok) throw new Error('news provider ' + res.status);
+    return News.dedupe(News.normFinnhub(await res.json()));
+  }
+  const res = await fetch(News.googleRssUrl(name, symbol), {
+    signal, headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TickrLab/1.0)' },
+  });
+  if (!res.ok) throw new Error('news provider ' + res.status);
+  return News.dedupe(News.parseGoogleRss(await res.text()));
+}
+
+async function refreshNewsFor(symbol, name) {
+  const items = await fetchNewsItems(symbol, name);
+  await store.writeNews(symbol, items, News.KEEP_DAYS);
+  return items.length;
+}
+
+// Coverage without a schedule: every refresh tops up the few stalest
+// symbols, never-fetched first, so the nightly job's ~20 rounds cycle the
+// whole universe inside one night and no single call does bulk work.
+// Fire-and-forget — headlines are a by-product, and the archive rule
+// applies: a failed news write never fails a refresh.
+function topUpNews(rows) {
+  if (NEWS_OFF) return;
+  (async () => {
+    const live = (rows || []).filter((r) => r && !r.error && r.symbol);
+    if (!live.length) return;
+    const state = await store.readNewsState();
+    const pick = News.pickStalest(live.map((r) => r.symbol), state, NEWS_TOPUP_PER_REFRESH);
+    const byId = Object.fromEntries(live.map((r) => [r.symbol, r]));
+    await Promise.allSettled(pick.map((sym) => refreshNewsFor(sym, byId[sym] && byId[sym].name)));
+  })().catch((err) => console.warn('news top-up skipped:', err.message));
+}
+
+// Stored-or-fetch for one symbol — the stock page's card. Six-hour TTL, so a
+// visited page stays fresh with no schedule at all; on a provider failure
+// the stored set is served, because stale beats nothing.
+app.get('/api/news', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!symbol) return res.status(400).json({ error: 'symbol required' });
+  if (NEWS_OFF) return res.json({ symbol, items: [] });
+  const state = await store.readNewsState();
+  if (!state[symbol] || Date.now() - state[symbol] > NEWS_TTL_MS) {
+    try {
+      const snap = await readSnapshot();
+      const row = ((snap && snap.stocks) || []).find((x) => x.symbol === symbol);
+      await refreshNewsFor(symbol, row && row.name);
+    } catch (err) {
+      console.warn('news fetch failed for ' + symbol + ':', err.message);
+    }
+  }
+  res.json({ symbol, items: await store.readNews(symbol, 12) });
+}));
+
+// One newest headline per symbol, for the screener's hover card. Stored
+// rows only — this path never calls anything external.
+app.get('/api/news/latest', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ items: NEWS_OFF ? [] : await store.readLatestNews() });
+}));
+
 app.get('/api/sparklines', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const days = Math.min(400, Math.max(20, Number(req.query.days) || 90));
@@ -3275,6 +3351,10 @@ async function finishLiveRefresh(payload, ctx = {}) {
   await writeSnapshot({ ...payload, snapshotAt: payload.updatedAt });
   const rows = payload.stocks || [];
   const loaded = rows.filter((x) => x.profileFetchedAt != null).length;
+
+  // Headlines ride along: the stalest few symbols get their news topped up
+  // on every refresh, so coverage accrues without a schedule of its own.
+  topUpNews(rows);
 
   // Snapshot the day's fundamentals — but only during a Refresh all, which is
   // when the profile cache has actually been re-pulled. An ordinary price

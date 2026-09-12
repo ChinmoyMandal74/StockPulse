@@ -23,3 +23,6 @@ momentum-model-*.xlsx
 analysis.db
 analysis.db-wal
 analysis.db-shm
+
+.vercel
+.env*

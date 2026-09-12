@@ -318,6 +318,19 @@
     /* the shared sections, wider than the card's three columns */
     .fields { column-count: 4; column-gap: 26px; }
     .fields .rc-sec { margin-bottom: 14px; }
+    /* ---- news card ------------------------------------------------- */
+    #newsList { font-size: 13px; }
+    #newsList .msg { color: var(--faint); font-size: 12.5px; padding: 4px 0; }
+    .news-item { display: flex; gap: 14px; align-items: baseline; padding: 7px 0;
+      border-top: 1px solid var(--hair); }
+    .news-item:first-child { border-top: 0; }
+    .news-item .nd { font-family: var(--mono); font-size: 11px; color: var(--faint);
+      white-space: nowrap; min-width: 52px; }
+    .news-item .ns { font-size: 11.5px; color: var(--muted); white-space: nowrap;
+      max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+    .news-item a { color: var(--text); text-decoration: none; min-width: 0; }
+    .news-item a:hover { text-decoration: underline; }
+
     .fields .rc-row { line-height: 1.9; font-size: 13px; }
     .fields .rc-v { font-size: 12.5px; }
     @media (max-width: 1000px) { .fields { column-count: 2; } }
@@ -732,6 +745,40 @@
         ` title="Trend-held return over this range — the dashed line's end">${sign}${th.endPct.toFixed(1)}%</span>`;
     }
 
+    // ---- news renderers (extracted for the headless test) --------------
+    // Date, source, headline linking out in a new tab. Headlines are third-
+    // party text: everything is escaped, and the href is vetted to http(s).
+    function newsAge(iso) {
+      const d = Date.now() - Date.parse(iso);
+      if (!isFinite(d)) return '';
+      const days = Math.floor(d / 86400000);
+      if (days <= 0) return 'today';
+      if (days === 1) return '1d ago';
+      return days + 'd ago';
+    }
+    function renderNewsList(items) {
+      const ok = (items || []).filter((x) => x && x.headline && /^https?:\/\//i.test(x.url || ''));
+      if (!ok.length) return '<div class="msg">No stored headlines yet — they accrue as refreshes run.</div>';
+      return ok.slice(0, 10).map((x) =>
+        `<div class="news-item"><span class="nd">${esc(newsAge(x.published_at))}</span>` +
+        `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.headline)}</a>` +
+        `<span class="ns">${esc(x.source || '')}</span></div>`).join('');
+    }
+    // ---- end news renderers ---------------------------------------------
+
+    async function loadNews() {
+      const box = document.getElementById('newsList');
+      if (!box) return;
+      try {
+        const res = await fetch(`/api/news?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'news unavailable');
+        box.innerHTML = renderNewsList(data.items);
+      } catch (err) {
+        box.innerHTML = '<div class="msg">Headlines unavailable right now.</div>';
+      }
+    }
+
     function paintChart() {
       const box = document.getElementById('chart');
       if (!box) return;
@@ -954,6 +1001,11 @@
           <div id="trendStrip" hidden></div>
           <div id="whyBox" class="bezel" hidden></div>
         </section></div>
+
+        <section class="bezel card"><div class="core">
+          <div class="sec-h"><h2>News</h2></div>
+          <div id="newsList"><div class="msg">Loading headlines…</div></div>
+        </div></section>
 
         <section class="bezel card"><div class="core">
           <div class="sec-h"><h2>Everything the screener knows</h2>
@@ -1236,6 +1288,7 @@
         paintChart();
       });
       paintChart();
+      loadNews();          // after the chart: a decoration must not make the data wait
     })();
   </script>
   <div id="tip"></div>

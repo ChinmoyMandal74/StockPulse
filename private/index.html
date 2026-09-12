@@ -1495,6 +1495,7 @@
       // Cheap when the cache is warm; kicks off the one fetch when it is not.
       paintSparklines();
       loadSparklines();
+        loadLatestNews();
     }
 
     // Early is the case worth spotting, so it is the only type tinted.
@@ -2278,6 +2279,25 @@
       }, 30000);
     }
     function stopRefreshPoll() { clearInterval(refreshPoll); refreshPoll = null; }
+
+    // ---- latest headline per symbol -----------------------------------------
+    // One stored-only query after the table paints (the sparklines rule: a
+    // decoration must not make the data wait). Injected onto the rows, where
+    // the hover card's field spec picks it up; never a table column.
+    let newsLoaded = false;
+    async function loadLatestNews() {
+      if (newsLoaded) return;
+      newsLoaded = true;
+      try {
+        const data = await api('GET', '/api/news/latest');
+        const byId = {};
+        for (const x of (data.items || [])) byId[x.symbol] = x;
+        for (const s of baseStocks) if (byId[s.symbol]) s.newsLatest = byId[s.symbol];
+        for (const s of stocks) if (byId[s.symbol]) s.newsLatest = byId[s.symbol];
+      } catch (e) {
+        newsLoaded = false;   // a later refresh may succeed
+      }
+    }
 
     // ---- sparklines ---------------------------------------------------------
     // Fetched once, after the table has painted, and the generated markup is

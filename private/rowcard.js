@@ -59,6 +59,14 @@
     ['info',  'Price',          (s) => ok(s.price) ? { t: curSym(s.currency) + s.price.toFixed(1), c: '' } : null],
     ['info',  'Sector',         (s) => V.text(s.sector)],
     ['info',  'Market Cap',     (s) => V.money(s.marketCap, s.currency)],
+    ['info',  'News',           (s) => {
+                                  const n = s.newsLatest;
+                                  if (!n || !n.headline) return null;
+                                  const days = Math.floor((Date.now() - Date.parse(n.published_at)) / 86400000);
+                                  const age = !isFinite(days) ? '' : days <= 0 ? 'today' : days + 'd';
+                                  const h = n.headline.length > 64 ? n.headline.slice(0, 63) + '…' : n.headline;
+                                  return { t: (age ? age + ' · ' : '') + h, c: '' };
+                                }],
     ['info',  'Next Earn',      (s) => s.nextEarningsDate
                                   ? { t: (s.nextEarningsEstimated ? '~' : '') + shortDate(s.nextEarningsDate), c: '' } : null],
     ['rank',  'Overall',        (s) => V.rating(s.overallRating)],
