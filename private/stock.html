@@ -233,6 +233,11 @@
     .tlegend .cap-t { letter-spacing: 0.1em; text-transform: uppercase; font-size: 9.5px; }
     .tlegend .tl { display: inline-flex; align-items: center; gap: 5px; }
     .tlegend .tl i { width: 10px; height: 5px; border-radius: 2px; display: inline-block; }
+    /* The trend-hold verdict lives here, under the chart, not over the plot —
+       three caption lines stacked on the price was unreadable. */
+    .tlegend .thl { color: var(--muted); margin-left: auto; }
+    .tlegend .thl i { background: none; height: 0; border-top: 2px dashed var(--text);
+      border-radius: 0; opacity: 0.75; }
 
     /* The trend-hold line: hypothetical, so it is dashed. Its return for
        the drawn range rides as a tag at the line's end, in the axis gutter —
@@ -244,9 +249,6 @@
     #chart .thend.pos { color: var(--green); }
     #chart .thend.neg { color: var(--red); }
     #chart .ov.th-ln { stroke: var(--text); stroke-dasharray: 5 4; opacity: 0.75; }
-    #chart .cap.th { left: 9px; top: 46px; font-size: 10px; color: var(--muted); }
-    #chart .cap.th i { display: inline-block; width: 11px; height: 0;
-      border-top: 2px dashed var(--text); vertical-align: middle; margin-right: 5px; opacity: 0.75; }
     .th-toggle.on { background: rgba(233, 236, 242, 0.12); color: var(--text);
       border-color: var(--hair-2); }
 
@@ -262,8 +264,8 @@
     #chart .readout .v.rsi { color: var(--accent-2); }
     #chart .readout .v.mom { color: var(--mom); }
     /* the captions the readout replaces */
-    #chart.hovering .cap.chg, #chart.hovering .cap.ma, #chart.hovering .cap.th { opacity: 0; }
-    #chart .cap.chg, #chart .cap.ma, #chart .cap.th { transition: opacity 0.2s var(--ease); }
+    #chart.hovering .cap.chg, #chart.hovering .cap.ma { opacity: 0; }
+    #chart .cap.chg, #chart .cap.ma { transition: opacity 0.2s var(--ease); }
 
     #chart .axis { position: absolute; left: 0; right: 52px; bottom: 3px; height: 12px;
                    pointer-events: none; }
@@ -451,7 +453,7 @@
       }
       return words;
     }
-    function trendStripHtml(words) {
+    function trendStripHtml(words, th) {
       const n = words.length;
       if (!n || !words.some((w) => TS_CLS[w])) return '';
       // Runs of one word become one segment; boundaries sit at the midpoint
@@ -472,8 +474,12 @@
       const present = ['Strong uptrend', 'Above 200D', 'Near 200D', 'Below 200D', 'Downtrend', 'Breakdown']
         .filter((w) => words.indexOf(w) >= 0)
         .map((w) => `<span class="tl"><i class="${TS_CLS[w]}"></i>${esc(w)}</span>`);
+      const stat = th
+        ? `<span class="tl thl"><i></i>Trend-held ${th.endPct >= 0 ? '+' : ''}${th.endPct.toFixed(1)}%` +
+          ` vs ${th.holdPct >= 0 ? '+' : ''}${th.holdPct.toFixed(1)}% hold · ${th.trips} round trip${th.trips === 1 ? '' : 's'}</span>`
+        : '';
       return `<div class="tstrip">${segs}</div>` +
-        `<div class="tlegend"><span class="cap-t">Trend</span>${present.join('')}</div>`;
+        `<div class="tlegend"><span class="cap-t">Trend</span>${present.join('')}${stat}</div>`;
     }
 
     // What holding only the green states returns, as an equity line in price
@@ -601,8 +607,6 @@
 
         box.innerHTML = c.svg +
           `<span class="cap chg">${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%${c.log ? ' · log scale' : ''}</span>` +
-          (th ? `<span class="cap th"><i></i>Trend-held ${th.endPct >= 0 ? '+' : ''}${th.endPct.toFixed(1)}%` +
-            ` vs ${th.holdPct >= 0 ? '+' : ''}${th.holdPct.toFixed(1)}% hold · ${th.trips} round trip${th.trips === 1 ? '' : 's'}</span>` : '') +
           thEndTag(th, (v) => c.panes.price.at(v)) +
           `<span class="cap ma">${series.map((x) =>
             `<i class="${x.ma.cls}"></i>${x.ma.len}-day`).join('')}</span>` +
@@ -632,7 +636,7 @@
 
         const strip = document.getElementById('trendStrip');
         if (strip) {
-          const html = trendStripHtml(trend);
+          const html = trendStripHtml(trend, th);
           strip.innerHTML = html;
           strip.hidden = !html;
         }
