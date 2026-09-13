@@ -116,6 +116,18 @@
     .row .val { font: 600 26px var(--mono); width: 150px; text-align: right;
                 font-variant-numeric: tabular-nums; }
     .row .val.pos { color: var(--green); } .row .val.neg { color: var(--red); }
+    /* the comparison column: present, deliberately quieter than the ranked one */
+    .row .cmp { font: 500 24px var(--mono); width: 168px; text-align: right;
+                font-variant-numeric: tabular-nums; color: var(--faint); }
+    .row .cmp.pos { color: var(--green); opacity: 0.58; }
+    .row .cmp.neg { color: var(--red); opacity: 0.58; }
+    .rowhead { display: flex; align-items: center; gap: 20px; margin-bottom: 4px;
+               font: 600 15px var(--mono); text-transform: uppercase; letter-spacing: 0.16em;
+               color: var(--faint); }
+    .rowhead .sym { width: 138px; }
+    .rowhead .bar-rail { flex: 1; }
+    .rowhead .val { width: 150px; text-align: right; }
+    .rowhead .cmp { width: 168px; text-align: right; }
 
     /* advice-change rows */
     .chg { display: flex; align-items: center; gap: 20px; padding: 18px 22px;
@@ -253,6 +265,20 @@
           <option value="w1" selected>Week</option>
           <option value="w2">2 weeks</option>
           <option value="m1">1 month</option>
+          <option value="m3">3 months</option>
+          <option value="m6">6 months</option>
+          <option value="y1">1 year</option>
+        </select>
+        <label>Compare with (optional)</label>
+        <select id="movCmp">
+          <option value="" selected>Nothing — one column</option>
+          <option value="d">Day</option>
+          <option value="w1">Week</option>
+          <option value="w2">2 weeks</option>
+          <option value="m1">1 month</option>
+          <option value="m3">3 months</option>
+          <option value="m6">6 months</option>
+          <option value="y1">1 year</option>
         </select>
         <label>How many</label>
         <select id="movCount">
@@ -384,10 +410,13 @@
     // Gainers and losers are separate cards on purpose — the owner's call:
     // a mixed |move| list buries the story either half tells alone.
     const MOV_PERIODS = {
-      d: ['todayPct', 'today'],
-      w1: ['oneWeekPct', 'this week'],
-      w2: ['twoWeekPct', 'past two weeks'],
-      m1: ['oneMonthPct', 'past month'],
+      d: ['todayPct', 'today', 'today'],
+      w1: ['oneWeekPct', 'this week', '1 week'],
+      w2: ['twoWeekPct', 'past two weeks', '2 weeks'],
+      m1: ['oneMonthPct', 'past month', '1 month'],
+      m3: ['threeMonthPct', 'past three months', '3 months'],
+      m6: ['sixMonthPct', 'past six months', '6 months'],
+      y1: ['oneYearPct', 'past year', '1 year'],
     };
     function movScopeRows() {
       const scope = $('movScope').value || 'All';
@@ -400,7 +429,12 @@
       return { rows: stocks.filter((s) => (s.portfolios || []).includes(scope)), label: scope };
     }
     function tplMovers() {
-      const [field, periodLabel] = MOV_PERIODS[$('movPeriod').value] || MOV_PERIODS.w1;
+      const perKey = $('movPeriod').value;
+      const [field, periodLabel, shortLabel] = MOV_PERIODS[perKey] || MOV_PERIODS.w1;
+      // The comparison is context, never the ranking: picking the same window
+      // twice would only print a column against itself, so it is ignored.
+      const cmpKey = $('movCmp').value;
+      const cmp = cmpKey && cmpKey !== perKey ? MOV_PERIODS[cmpKey] : null;
       const n = Number($('movCount').value) || 10;
       const dir = $('movDir').value;                 // 'up' | 'down' | 'both'
       const both = dir === 'both';
@@ -414,14 +448,22 @@
           : up ? b[field] - a[field] : a[field] - b[field]))
         .slice(0, n);
       const max = Math.max(...rows.map((s) => Math.abs(s[field])), 0.01);
+      const head = cmp
+        ? '<div class="rowhead"><span class="sym"></span><span class="bar-rail"></span>' +
+          `<span class="val">${esc(shortLabel)}</span><span class="cmp">${esc(cmp[2])}</span></div>`
+        : '';
       const body = rows.length
-        ? `<div class="rows">${rows.map((s) => {
+        ? `<div class="rows">${head}${rows.map((s) => {
             const w = Math.max(6, Math.round(Math.abs(s[field]) / max * 100));
             const neg = both ? s[field] < 0 : !up;   // each row by its own sign when mixed
+            const c = cmp ? s[cmp[0]] : null;
             return `<div class="row"><span class="sym">${esc(s.symbol)}</span>` +
               `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
-              `<span class="val ${neg ? 'neg' : 'pos'}">${pct(s[field])}</span></div>`;
-          }).join('')}</div>`
+              `<span class="val ${neg ? 'neg' : 'pos'}">${pct(s[field])}</span>` +
+              (cmp ? `<span class="cmp ${c == null ? '' : c < 0 ? 'neg' : 'pos'}">${pct(c)}</span>` : '') +
+              '</div>';
+          }).join('')}</div>` +
+          (cmp ? `<p class="s-sub" style="font-size:18px;margin-top:22px">Ranked on ${esc(periodLabel)}; the right column is the same stock over the ${esc(cmp[1].replace(/^(this|past) /, ''))}, for context.</p>` : '')
         : `<p class="s-empty">Nothing in ${esc(scope.label)} moved ${both ? 'at all' : (up ? 'up' : 'down')} ${esc(periodLabel)} \u2014 which is its own kind of story.</p>`;
       const title = both
         ? 'The biggest<br><span class="dim">moves</span>'
@@ -923,7 +965,7 @@
     }
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
-    ['movPeriod', 'movCount', 'movDir', 'movScope'].forEach((id) =>
+    ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movScope'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'movers') render(); }));
     ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'chart') render(); }));
