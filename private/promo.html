@@ -92,6 +92,11 @@
     .lg img { position: absolute; inset: 0; width: 100%; height: 100%;
               object-fit: contain; padding: 7px; box-sizing: border-box; background: #fff; }
     .lg img[hidden] { display: none; }
+    /* a lifted mark sits on glass like everything else on the card; the
+       white tile survives only for marks too dark to float on black */
+    .lg.flat { background: rgba(255, 255, 255, 0.055); border-color: var(--hair); }
+    .lg.flat span { visibility: hidden; }
+    .lg.flat img { background: transparent; padding: 9px; }
 
     /* rows shared by list templates */
     .rows { display: flex; flex-direction: column; gap: 16px; margin-top: 40px; }
@@ -179,6 +184,7 @@
   </div>
 
   <script src="/action.js"></script>
+  <script src="/logofx.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
@@ -223,8 +229,18 @@
     }
     function wireLogos() {
       document.querySelectorAll('#stage img[data-lg]').forEach((img) => {
-        img.addEventListener('load', () => { img.hidden = false; });
-        img.src = '/api/logo/' + encodeURIComponent(img.dataset.lg);
+        const sym = img.dataset.lg;
+        if (!window.LogoFX) {   // module failed to load: today's look, not a blank
+          img.addEventListener('load', () => { img.hidden = false; });
+          img.src = '/api/logo/' + encodeURIComponent(sym);
+          return;
+        }
+        LogoFX.clean(sym).then((r) => {
+          const tile = img.closest('.lg');
+          if (r.flat && tile) tile.classList.add('flat');
+          img.src = r.flat ? r.url : ('/api/logo/' + encodeURIComponent(sym));
+          img.hidden = false;
+        }).catch(() => { /* no stored mark — the letter tile stays */ });
       });
     }
     const pct = (n, d = 1) => (n == null ? '—' : (n >= 0 ? '+' : '') + n.toFixed(d) + '%');

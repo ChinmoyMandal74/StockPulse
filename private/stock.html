@@ -36,6 +36,7 @@
     .colo { width: 34px; height: 34px; flex: none; align-self: center;
             padding: 3px; border-radius: 9px; background: #fff; object-fit: contain;
             border: 1px solid var(--hair-2); }
+    .colo.flat { background: rgba(255, 255, 255, 0.06); border-color: var(--hair); padding: 4px; }
     h1 { margin: 0; font-size: clamp(28px, 3.4vw, 38px); font-weight: 600;
          letter-spacing: -0.035em; line-height: 1; font-family: var(--mono); }
     .co { font-size: 15px; color: var(--muted); letter-spacing: -0.01em; }
@@ -359,6 +360,7 @@
   <script src="/rowcard.js"></script>
   <script src="/action.js"></script>
   <script src="/track.js"></script>
+  <script src="/logofx.js"></script>
   <script>
     const esc = (t) => String(t).replace(/[&<>"']/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1024,7 +1026,13 @@
       // on load — a symbol the store has no mark for 404s and simply never
       // appears, which beats a broken-image glyph in the masthead.
       const coLogo = document.getElementById('coLogo');
-      if (coLogo) {
+      if (coLogo && window.LogoFX) {
+        LogoFX.clean(stock.symbol).then((r) => {
+          if (r.flat) { coLogo.classList.add('flat'); coLogo.src = r.url; }
+          else coLogo.src = '/api/logo/' + encodeURIComponent(stock.symbol);
+          coLogo.hidden = false;
+        }).catch(() => { /* no mark — the tile never appears */ });
+      } else if (coLogo) {
         coLogo.addEventListener('load', () => { coLogo.hidden = false; });
         coLogo.src = '/api/logo/' + encodeURIComponent(stock.symbol);
       }
