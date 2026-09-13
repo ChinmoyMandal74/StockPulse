@@ -342,7 +342,20 @@ let ready = null;
 async function init() {
   if (!ready) {
     ready = (async () => {
-      for (const stmt of SCHEMA) await db.execute(stmt);
+      for (const stmt of SCHEMA) {
+        try {
+          await db.execute(stmt);
+        } catch (err) {
+          // Cold instances race the momentum_deltas drop-then-create: Vercel
+          // runs ONE request per instance, so a page load fans several
+          // requests onto several instances initializing at the same moment,
+          // and every loser's CREATE VIEW sees the winner's — same code,
+          // same definition, so "already exists" IS the desired state. Took
+          // /api/stocks down on 2026-09-14: every losing instance kept its
+          // rejected init and answered 500 until recycled.
+          if (!/already exists/i.test(err.message || '')) throw err;
+        }
+      }
       for (const stmt of ADDED_COLUMNS) {
         try {
           await db.execute(stmt);
@@ -350,7 +363,12 @@ async function init() {
           if (!/duplicate column/i.test(err.message || '')) throw err;
         }
       }
-    })();
+    })().catch((err) => {
+      // Never cache a failed init: the next request retries instead of the
+      // instance serving 500s for the rest of its life.
+      ready = null;
+      throw err;
+    });
   }
   return ready;
 }
