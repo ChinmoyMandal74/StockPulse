@@ -3313,7 +3313,8 @@ function symbolSeries(bars, symbols, dates) {
 app.get('/api/basket', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const rawName = String(req.query.name || '').trim();
-  const days = Math.min(400, Math.max(21, Number(req.query.days) || 253));
+  // Floor of 5, a trading week: the promo studio's shortest chart window.
+  const days = Math.min(400, Math.max(5, Number(req.query.days) || 253));
   const portfolios = await readPortfolios();
   const all = getUniverse(portfolios);
   let symbols;

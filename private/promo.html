@@ -218,6 +218,7 @@
         </select>
         <label>Window</label>
         <select id="chtWin">
+          <option value="w1">Past week</option>
           <option value="m1">Past month</option>
           <option value="m3">Past three months</option>
           <option value="m6" selected>Past six months</option>
@@ -457,8 +458,9 @@
     // each symbol's series normalised to its own first close, so the
     // equal-weight line for any subset is just the mean of the lines drawn —
     // the chart can never disagree with its own legend. Cached per window.
-    const CHART_WINDOWS = { m1: [21, 'past month'], m3: [63, 'past three months'],
-                            m6: [126, 'past six months'], y1: [253, 'past year'] };
+    const CHART_WINDOWS = { w1: [5, 'past week'], m1: [21, 'past month'],
+                            m3: [63, 'past three months'], m6: [126, 'past six months'],
+                            y1: [253, 'past year'] };
     const CHART_PALETTE = ['#34d399', '#22d3ee', '#a78bfa', '#fbbf24', '#fb923c',
                            '#f472b6', '#a3e635', '#60a5fa'];
     const chartCache = {};
