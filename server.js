@@ -3224,6 +3224,80 @@ app.get('/api/sparklines', requireAuth, route(async (req, res) => {
 // archive only — no API call, so it costs nothing and works for every signed-in
 // user. Fetched per symbol on hover and cached in the browser rather than
 // shipping all 69 series with the table, most of which are never looked at.
+// ---- logos ------------------------------------------------------------
+// The admin's "Refresh logos" button. Fetches only symbols with no row yet
+// (the whole point: after new tickers are added, one click tops up just the
+// newcomers), LOGO_BATCH at a time so a serverless call never runs long —
+// the client loops while `remaining` is positive. Refused while a Refresh
+// All runs: a logo lookup is 1 Twelve Data credit and a live round already
+// spends most of the minute's 610. A provider with no mark for a symbol
+// still gets a row (null data), so ETFs are attempted once, not forever.
+const LOGO_BATCH = 24;
+app.post('/api/logos/refresh', requireAdmin, route(async (req, res) => {
+  if (!API_KEY) return res.status(503).json({ error: 'TWELVE_DATA_API_KEY is unset.' });
+  if (await readRefreshState()) {
+    return res.status(409).json({ error: 'A Refresh All is running — logos share its credit budget. Try again after it finishes.' });
+  }
+  const universe = getUniverse(await readPortfolios());
+  const have = await store.readLogoStates();
+  const force = !!(req.body && req.body.force);
+  const missing = universe.filter((sym) => (force ? true : !(sym in have)));
+  const batch = missing.slice(0, LOGO_BATCH);
+
+  const rows = [];
+  const empty = [];
+  // Small parallel waves: 24 symbols is ~48 requests, and sequential would
+  // flirt with the function timeout for no reason.
+  const WAVE = 6;
+  for (let i = 0; i < batch.length; i += WAVE) {
+    await Promise.all(batch.slice(i, i + WAVE).map(async (sym) => {
+      try {
+        const meta = await fetchJson(`${TD_BASE}/logo?symbol=${encodeURIComponent(sym)}&apikey=${API_KEY}`);
+        const url = meta && typeof meta.url === 'string' && /^https:\/\//.test(meta.url) ? meta.url : null;
+        if (!url) { rows.push({ symbol: sym }); empty.push(sym); return; }
+        const img = await fetch(url);
+        if (!img.ok) { rows.push({ symbol: sym }); empty.push(sym); return; }
+        const mime = String(img.headers.get('content-type') || 'image/jpeg').split(';')[0];
+        const buf = Buffer.from(await img.arrayBuffer());
+        // A mark the size of a page is not a mark — cap at 1MB, well past any
+        // real logo, so one odd response cannot bloat the table.
+        if (!buf.length || buf.length > 1024 * 1024 || !mime.startsWith('image/')) {
+          rows.push({ symbol: sym }); empty.push(sym); return;
+        }
+        rows.push({ symbol: sym, mime, data: buf.toString('base64') });
+      } catch {
+        // Not even an attempted row: a transient failure should retry on the
+        // next click rather than being remembered as "no mark exists".
+      }
+    }));
+  }
+  if (rows.length) await store.writeLogos(rows);
+  const fetched = rows.filter((r) => r.data).length;
+  if (fetched || empty.length) logAct(req, 'refresh', `logos:+${fetched}`);
+  res.json({
+    ok: true,
+    fetched,
+    empty,
+    remaining: Math.max(0, missing.length - batch.length),
+    total: universe.length,
+  });
+}));
+
+// Serves the stored bytes. Long cache: a logo changes on the timescale of a
+// rebrand, and the admin's force refresh rewrites the row when one does.
+app.get('/api/logo/:symbol', requireAuth, route(async (req, res) => {
+  const symbol = String(req.params.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  const logo = await store.readLogo(symbol);
+  if (!logo) return res.status(404).json({ error: 'No logo stored for that symbol.' });
+  res.set('Content-Type', logo.mime);
+  res.set('Cache-Control', 'private, max-age=86400');
+  res.send(Buffer.from(logo.data, 'base64'));
+}));
+
 app.get('/api/history', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();

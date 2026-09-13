@@ -105,6 +105,17 @@ const SCHEMA = [
   // picker. NOT in prefs: three pages debounce-write prefs under the
   // hand-back-what-you-don't-edit rule, and a page bug there must not be
   // able to wipe someone's portfolios.
+  // Company logos, fetched on the admin's "Refresh logos" click and stored
+  // as base64 bytes: a serverless filesystem cannot keep files, and the whole
+  // universe is well under a megabyte. A row with null data means the fetch
+  // was attempted and the provider has no mark (ETFs, mostly) — attempted is
+  // what stops the button re-trying them on every click.
+  `create table if not exists logos (
+     symbol     text primary key,
+     mime       text,
+     data       text,
+     fetched_at integer
+   )`,
   `create table if not exists user_portfolios (
      user_key text not null,
      name     text not null,
@@ -832,7 +843,7 @@ async function momentumStats(model) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'momentum_history', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state'];
+const SYMBOL_TABLES = ['bars', 'momentum_history', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'logos'];
 
 // Remove a symbol from the database entirely.
 //
@@ -1317,6 +1328,32 @@ async function pruneActivity(days = 60) {
   await db.execute({ sql: 'delete from activity where ts < ?', args: [cutoff] });
 }
 
+// ---- logos ------------------------------------------------------------------
+async function readLogoStates() {
+  await init();
+  const r = await db.execute('select symbol, data is not null as has from logos');
+  const out = {};
+  for (const row of r.rows) out[row.symbol] = !!Number(row.has);
+  return out;
+}
+
+async function readLogo(symbol) {
+  await init();
+  const r = await db.execute({ sql: 'select mime, data from logos where symbol = ?', args: [String(symbol).toUpperCase()] });
+  const row = r.rows[0];
+  return row && row.data ? { mime: row.mime || 'image/jpeg', data: row.data } : null;
+}
+
+async function writeLogos(rows) {
+  await init();
+  if (!rows || !rows.length) return;
+  await db.batch(rows.map((r) => ({
+    sql: `insert into logos (symbol, mime, data, fetched_at) values (?, ?, ?, ?)
+          on conflict(symbol) do update set mime = excluded.mime, data = excluded.data, fetched_at = excluded.fetched_at`,
+    args: [r.symbol, r.mime ?? null, r.data ?? null, Date.now()],
+  })), 'write');
+}
+
 // ---- member portfolios ------------------------------------------------------
 // Ordered like the shared portfolios: position is an explicit column because
 // the picker renders in saved order and insertion order does not survive the
@@ -1622,6 +1659,7 @@ module.exports = {
   readActivityStats,
   clearActivity,
   pruneActivity,
+  readLogoStates, readLogo, writeLogos,
   readUserPortfolios,
   writeUserPortfolios,
   listAllUserPortfolios,
