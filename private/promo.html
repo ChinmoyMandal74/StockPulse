@@ -152,6 +152,14 @@
     .feat h3 { margin: 2px 0 4px; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
     .feat p { margin: 0; font-size: 17.5px; color: var(--muted); line-height: 1.45; }
 
+    /* chart legend */
+    .chipL { display: inline-flex; align-items: center; gap: 10px; padding: 8px 18px;
+             border-radius: 999px; border: 1px solid var(--hair-2);
+             background: rgba(255, 255, 255, 0.03);
+             font: 600 20px var(--mono); color: var(--text); letter-spacing: -0.01em; }
+    .chipL .cdot { width: 12px; height: 12px; border-radius: 50%; }
+    .chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+
     /* announcement */
     .ann-kick { font-size: 19px; font-weight: 600; letter-spacing: 0.26em; text-transform: uppercase;
                 color: var(--green); }
@@ -201,6 +209,38 @@
         <select id="movScope"><option value="All">All screened</option></select>
       </div>
 
+      <div id="chtBox">
+        <label>Chart</label>
+        <select id="chtMode">
+          <option value="list" selected>A list vs the whole screen</option>
+          <option value="leaders">The leaders in a list</option>
+          <option value="stock">One stock</option>
+        </select>
+        <label>Window</label>
+        <select id="chtWin">
+          <option value="m1">Past month</option>
+          <option value="m3">Past three months</option>
+          <option value="m6" selected>Past six months</option>
+          <option value="y1">Past year</option>
+        </select>
+        <div id="chtScopeWrap">
+          <label>Within</label>
+          <select id="chtScope"><option value="All">All screened</option></select>
+        </div>
+        <div id="chtLinesWrap">
+          <label>How many lines</label>
+          <select id="chtLines">
+            <option value="3">Top 3</option>
+            <option value="5" selected>Top 5</option>
+            <option value="8">Top 8</option>
+          </select>
+        </div>
+        <div id="chtSymWrap">
+          <label>Stock</label>
+          <select id="chtSym"></select>
+        </div>
+      </div>
+
       <div id="annBox">
         <label>Kicker (small line above)</label>
         <input type="text" id="annKick" value="From the Lab" maxlength="40" />
@@ -241,6 +281,7 @@
       { id: 'breakout', name: 'Breakout radar', note: 'Fresh 3-month highs, volume-checked' },
       { id: 'stance', name: 'Where the market stands', note: 'The universe by trend state' },
       { id: 'intro', name: 'Introducing Tickr Lab', note: 'The feature card — what the app is' },
+      { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
     ];
     let tpl = 'movers';
@@ -411,6 +452,175 @@
         `<div class="rows" style="margin-top:34px">${rows}</div></div></div>` + chromeFoot();
     }
 
+    // ---- the chart card ---------------------------------------------------
+    // ONE fetch per window serves every mode: /api/basket?name=All returns
+    // each symbol's series normalised to its own first close, so the
+    // equal-weight line for any subset is just the mean of the lines drawn —
+    // the chart can never disagree with its own legend. Cached per window.
+    const CHART_WINDOWS = { m1: [21, 'past month'], m3: [63, 'past three months'],
+                            m6: [126, 'past six months'], y1: [253, 'past year'] };
+    const CHART_PALETTE = ['#34d399', '#22d3ee', '#a78bfa', '#fbbf24', '#fb923c',
+                           '#f472b6', '#a3e635', '#60a5fa'];
+    const chartCache = {};
+    let chartPending = null;
+    function chartData(days) {
+      if (chartCache[days]) return chartCache[days];
+      if (chartPending === days) return null;
+      chartPending = days;
+      fetch(`/api/basket?name=All&days=${days}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => { chartCache[days] = d; chartPending = null; if (tpl === 'chart') render(); })
+        .catch(() => { chartPending = null; });
+      return null;
+    }
+
+    // Presentation attributes, not classes: this markup also travels through
+    // the PNG export, where only inlined styles and attributes survive.
+    function lineChart(dates, lines, opts) {
+      const W = 952, H = (opts && opts.h) || 590, PL = 92, PR = 132, PT = 20, PB = 46;
+      const toPct = (S) => S.map((v) => (v == null ? null : (v - 1) * 100));
+      const L = lines.map((l) => ({ ...l, P: toPct(l.S) }));
+      const vals = [].concat(...L.map((l) => l.P)).filter((v) => v != null);
+      if (!vals.length || dates.length < 2) return '<p class="s-empty">No stored history for this window.</p>';
+      let lo = Math.min(...vals, 0), hi = Math.max(...vals, 0);
+      const pad = Math.max(1.5, (hi - lo) * 0.1); lo -= pad; hi += pad;
+      const x = (i) => PL + (i / (dates.length - 1)) * (W - PL - PR);
+      const y = (v) => PT + (1 - (v - lo) / (hi - lo)) * (H - PT - PB);
+      const path = (P) => {
+        let d = '', pen = false;
+        for (let i = 0; i < P.length; i++) {
+          if (P[i] == null) { pen = false; continue; }
+          d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(P[i]).toFixed(1);
+          pen = true;
+        }
+        return d;
+      };
+      let grid = '';
+      for (let g = 0; g <= 4; g++) {
+        const v = lo + (g / 4) * (hi - lo);
+        grid += `<line x1="${PL}" y1="${y(v).toFixed(1)}" x2="${W - PR}" y2="${y(v).toFixed(1)}" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>` +
+          `<text x="${PL - 16}" y="${(y(v) + 7).toFixed(1)}" text-anchor="end" font-size="19" fill="#7d8797" font-family="Geist Mono, monospace">${v.toFixed(0)}%</text>`;
+      }
+      if (lo < 0 && hi > 0) {
+        grid += `<line x1="${PL}" y1="${y(0).toFixed(1)}" x2="${W - PR}" y2="${y(0).toFixed(1)}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>`;
+      }
+      let area = '';
+      const hero = L.find((l) => l.fill);
+      if (hero) {
+        const first = hero.P.findIndex((v) => v != null);
+        let last = -1;
+        for (let i = hero.P.length - 1; i >= 0 && last < 0; i--) if (hero.P[i] != null) last = i;
+        if (first >= 0 && last > first) {
+          area = `<defs><linearGradient id="pfill" x1="0" y1="0" x2="0" y2="1">` +
+            `<stop offset="0%" stop-color="${hero.color}" stop-opacity="0.30"/>` +
+            `<stop offset="100%" stop-color="${hero.color}" stop-opacity="0"/></linearGradient></defs>` +
+            `<path d="${path(hero.P)}L${x(last).toFixed(1)} ${(H - PB).toFixed(1)}L${x(first).toFixed(1)} ${(H - PB).toFixed(1)}Z" fill="url(#pfill)" stroke="none"/>`;
+        }
+      }
+      const strokes = L.map((l) =>
+        `<path d="${path(l.P)}" fill="none" stroke="${l.color}" stroke-width="${l.width || 2}" stroke-linejoin="round" stroke-linecap="round" opacity="${l.dim ? 0.7 : 1}"/>`).join('');
+      const tags = L.map((l) => {
+        let last = null, li = -1;
+        for (let i = l.P.length - 1; i >= 0 && last == null; i--) { last = l.P[i]; li = i; }
+        if (last == null) return '';
+        const ty = Math.max(PT + 14, Math.min(H - PB, y(last) + 7));
+        return `<text x="${W - PR + 14}" y="${ty.toFixed(1)}" font-size="24" font-weight="600" fill="${l.color}" font-family="Geist Mono, monospace">${(last >= 0 ? '+' : '') + last.toFixed(1)}%</text>`;
+      }).join('');
+      const d0 = dates[0], d1 = dates[dates.length - 1];
+      const axis = `<text x="${PL}" y="${H - 10}" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">${esc(d0)}</text>` +
+        `<text x="${W - PR}" y="${H - 10}" text-anchor="end" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">${esc(d1)}</text>`;
+      return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:26px" role="img" aria-label="chart">` +
+        area + grid + strokes + tags + axis + '</svg>';
+    }
+
+    function chartLegend(items) {
+      return `<div class="chips">${items.map((it) =>
+        `<span class="chipL" style="border-color:${it.color}33"><span class="cdot" style="background:${it.color}"></span>` +
+        `${esc(it.label)}</span>`).join('')}</div>`;
+    }
+
+    function chartScopeSymbols(scope) {
+      if (scope === 'All') return { syms: stocks.map((s) => s.symbol), label: `all ${stocks.length} screened` };
+      if (scope.startsWith('my:')) {
+        const nm = scope.slice(3);
+        return { syms: (myLists[nm] || []).slice(), label: nm };
+      }
+      return { syms: stocks.filter((s) => (s.portfolios || []).includes(scope)).map((s) => s.symbol), label: scope };
+    }
+
+    function tplChart() {
+      const winKey = $('chtWin').value;
+      const [days, winLabel] = CHART_WINDOWS[winKey] || CHART_WINDOWS.m6;
+      const mode = $('chtMode').value;
+      const d = chartData(days);
+      if (!d || !d.dates || !d.dates.length) {
+        return chromeTop() +
+          '<div class="s-body"><div><span class="s-kick">Reading the archive</span>' +
+          '<h2 class="s-title">Drawing<br><span class="dim">the chart\u2026</span></h2></div></div>' + chromeFoot();
+      }
+      const series = d.series || {};
+      const mean = (syms) => {
+        const use = syms.filter((x) => series[x]);
+        if (!use.length) return null;
+        return d.dates.map((_, i) => {
+          let sum = 0, n = 0;
+          for (const x of use) { const v = series[x][i]; if (v != null) { sum += v; n++; } }
+          return n ? sum / n : null;
+        });
+      };
+      const endOf = (S) => { for (let i = S.length - 1; i >= 0; i--) if (S[i] != null) return (S[i] - 1) * 100; return null; };
+      let lines = [], legend = [], kick = '', title = '', note = '';
+
+      if (mode === 'stock') {
+        const sym = $('chtSym').value || (stocks[0] && stocks[0].symbol);
+        const row = stocks.find((r) => r.symbol === sym);
+        const S = series[sym];
+        if (!S) return chromeTop() + `<div class="s-body"><div><p class="s-empty">No stored history for ${esc(sym)} in this window.</p></div></div>` + chromeFoot();
+        lines = [{ color: '#34d399', S, width: 4, fill: true },
+                 { color: '#7c9cff', S: mean(stocks.map((r) => r.symbol)), width: 2, dim: true }];
+        legend = [{ color: '#34d399', label: esc(sym) }, { color: '#7c9cff', label: 'All screened' }];
+        kick = `${esc(sym)} \u00b7 ${esc(winLabel)}`;
+        title = `${esc(sym)}<br><span class="dim">${esc((row && row.name) || '')}</span>`;
+        note = 'Price only, rebased to the start of the window \u2014 no dividends, no positions.';
+      } else if (mode === 'leaders') {
+        const scope = chartScopeSymbols($('chtScope').value);
+        const n = Number($('chtLines').value) || 5;
+        const ranked = scope.syms.filter((x) => series[x])
+          .map((x) => ({ sym: x, S: series[x], end: endOf(series[x]) }))
+          .filter((r) => r.end != null)
+          .sort((a, b) => b.end - a.end)
+          .slice(0, n);
+        if (!ranked.length) return chromeTop() + `<div class="s-body"><div><p class="s-empty">Nothing in ${esc(scope.label)} has history for this window.</p></div></div>` + chromeFoot();
+        lines = ranked.map((r, i) => ({ color: CHART_PALETTE[i % CHART_PALETTE.length], S: r.S, width: 3 }));
+        legend = ranked.map((r, i) => ({ color: CHART_PALETTE[i % CHART_PALETTE.length], label: `${r.sym} ${pct(r.end)}` }));
+        kick = `${esc(scope.label)} \u00b7 ${esc(winLabel)}`;
+        title = `The leaders<br><span class="dim">${esc(scope.label)}</span>`;
+        note = 'Each line is one stock, rebased to the start of the window. Ranked on the window, not a forecast.';
+      } else {
+        const scope = chartScopeSymbols($('chtScope').value);
+        const basket = mean(scope.syms);
+        if (!basket) return chromeTop() + `<div class="s-body"><div><p class="s-empty">Nothing in ${esc(scope.label)} has history for this window.</p></div></div>` + chromeFoot();
+        const all = mean(stocks.map((r) => r.symbol));
+        const same = $('chtScope').value === 'All';
+        lines = same ? [{ color: '#34d399', S: basket, width: 4, fill: true }]
+          : [{ color: '#34d399', S: basket, width: 4, fill: true }, { color: '#7c9cff', S: all, width: 2, dim: true }];
+        legend = same ? [{ color: '#34d399', label: 'All screened' }]
+          : [{ color: '#34d399', label: esc(scope.label) }, { color: '#7c9cff', label: 'All screened' }];
+        kick = `${esc(scope.label)} \u00b7 ${esc(winLabel)}`;
+        title = same ? `The whole<br><span class="dim">screen</span>`
+          : `${esc(scope.label)}<br><span class="dim">vs the whole screen</span>`;
+        note = 'Equal dollars at the window start, held \u2014 a reading of the list, not an account.';
+      }
+
+      return chromeTop() +
+        `<div class="s-body"><div><span class="s-kick">${kick}</span>` +
+        `<h2 class="s-title">${title}</h2>` +
+        lineChart(d.dates, lines, { h: size.id === 'story' ? 780 : size.id === 'square' ? 470 : 590 }) +
+        chartLegend(legend) +
+        `<p class="s-sub" style="font-size:17px;margin-top:18px">${note}</p>` +
+        '</div></div>' + chromeFoot();
+    }
+
     function tplAnnounce() {
       const kick = $('annKick').value.trim();
       const head = $('annHead').value.trim() || 'Say something';
@@ -425,7 +635,7 @@
 
     // ---- render ------------------------------------------------------------
     const BUILDERS = { movers: tplMovers, advice: tplAdvice, breakout: tplBreakout,
-                       stance: tplStance, intro: tplIntro, announce: tplAnnounce };
+                       stance: tplStance, intro: tplIntro, chart: tplChart, announce: tplAnnounce };
     function render() {
       const stage = $('stage');
       stage.style.height = size.h + 'px';
@@ -434,6 +644,11 @@
       fit();
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
       $('movBox').style.display = tpl === 'movers' ? 'block' : 'none';
+      $('chtBox').style.display = tpl === 'chart' ? 'block' : 'none';
+      const cm = $('chtMode').value;
+      $('chtScopeWrap').style.display = cm === 'stock' ? 'none' : 'block';
+      $('chtLinesWrap').style.display = cm === 'leaders' ? 'block' : 'none';
+      $('chtSymWrap').style.display = cm === 'stock' ? 'block' : 'none';
     }
     function fit() {
       const deck = document.querySelector('.deck');
@@ -458,6 +673,8 @@
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
     ['movPeriod', 'movCount', 'movDir', 'movScope'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'movers') render(); }));
+    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'chart') render(); }));
     $('reloadBtn').addEventListener('click', () => load(true));
 
     // ---- Download PNG -----------------------------------------------------
@@ -599,6 +816,10 @@
           portfolioNames.map((nm) => `<option value="${esc(nm)}">${esc(nm)}</option>`).join('') +
           Object.keys(myLists).map((nm) => `<option value="my:${esc(nm)}">${esc(nm)} (personal)</option>`).join('');
         if ([...$('movScope').options].some((o) => o.value === keep)) $('movScope').value = keep;
+        $('chtScope').innerHTML = $('movScope').innerHTML;
+        $('chtSym').innerHTML = stocks.slice()
+          .sort((a, b) => a.symbol.localeCompare(b.symbol))
+          .map((r) => `<option value="${esc(r.symbol)}">${esc(r.symbol)}</option>`).join('');
         paintControls();
         render();
         if (reload) $('reloadBtn').textContent = 'Re-pulled ✓';
