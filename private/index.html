@@ -122,6 +122,8 @@
        momentum arrow already made the argument — light every row and the
        column stops carrying information. Weight separates the extremes. */
     td.act { font-family: var(--sans); font-size: 12px; white-space: nowrap; cursor: pointer; text-align: left; }
+    /* TMP-5COLS */
+    td.tmpav { font-size: 11px; opacity: 0.85; cursor: default; }
     td.act.a-strong-buy { color: var(--green); font-weight: 700; }
     td.act.a-buy { color: var(--green); }
     td.act.a-buy-with-risk { color: color-mix(in srgb, var(--green) 55%, var(--muted)); }
@@ -859,7 +861,7 @@
         <th rowspan="2" class="left frz frz1" data-key="name">Name</th>
         <th class="group grp-info" data-group="info" colspan="5">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="2">Scores</th>
-        <th class="group grp-act" data-group="act" colspan="6">Advice</th>
+        <th class="group grp-act" data-group="act" colspan="11">Advice</th>
         <th class="group grp-pmom" data-group="pmom" colspan="3">Price Momentum</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
@@ -886,6 +888,12 @@
         <th class="grp-act left" data-key="actionFund" title="The fundamentals bucket under this stock's rule set — Strong, OK, Weak, or — when the data makes no case either way. Established is judged on earnings, revenue, margins and cash flow; Early on growth, gross margin, burn and short interest. Fundamentals answer how much conviction.">Fund.</th>
         <th class="grp-act left" data-key="actionGuards" title="Reasons to wait that override everything below a Sell: earnings within the blackout window, or too little price history to judge. Blank for most stocks — when this column speaks, it matters.">Guards</th>
         <th class="grp-act left" data-key="action" title="What the picked rules profile concludes for this stock today. First matching rule wins, and the tooltip on each cell names the one rule that fired. Loss-avoidance rules are checked before any buy rule, always. A mechanical reading of today's numbers under fixed rules — not a recommendation tailored to you, and not a prediction.">Advice</th>
+        <!-- TMP-5COLS: temporary inspection columns, owner 2026-09-13 -->
+        <th class="grp-act left" title="TEMPORARY — the Advice under the Balanced profile">Balanced</th>
+        <th class="grp-act left" title="TEMPORARY — the Advice under Trend Rider (looser chases, tight stops)">T.Rider</th>
+        <th class="grp-act left" title="TEMPORARY — the Advice under Aggressive (wider stops, more chase)">Aggr.</th>
+        <th class="grp-act left" title="TEMPORARY — the Advice under Max Risk (widest everything above the 200D)">MaxRisk</th>
+        <th class="grp-act left" title="TEMPORARY — the Advice under Dip Buyer (may buy below the 200D)">DipBuy</th>
         <th class="grp-pmom ta-l" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
         <th class="grp-pmom ta-l" data-key="pastShown" id="thPast"
             title="The momentum score as it stood at the end of the chosen horizon. Change the horizon with the Past picker in the bar.">Past<br>Mom.</th>
@@ -1373,7 +1381,7 @@
         const msg = activeTab === 'All'
           ? 'No tickers yet — add one above.'
           : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="52">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="57">${msg}</td></tr>`;
         researchSymbol = null;
         renderResearchMenu();
         applyGroups();
@@ -1407,7 +1415,7 @@
         if (s.error) {
           return `<tr style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="50">${s.error}</td>
+            <td class="na" colspan="55">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -1440,6 +1448,7 @@
           ${stateCell(s.actionFund, FUND_DANGER, 'fund')}
           ${guardsCell(s)}
           ${actionCell(s)}
+          ${adviceByCell(s, 'Balanced')}${adviceByCell(s, 'Trend Rider')}${adviceByCell(s, 'Aggressive')}${adviceByCell(s, 'Max Risk')}${adviceByCell(s, 'Dip Buyer')}
           ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-pmom ta-l lens-col', deltaOf(s))}
           ${pastCell(s)}
           ${deltaCell(s)}
@@ -1523,6 +1532,15 @@
 
     // The flag — the ONE rule that fired — rides on the cell as its tooltip,
     // so every verdict explains itself on hover with no extra chrome.
+    // TMP-5COLS: temporary side-by-side profile columns. Not in the CSV,
+    // the hover card or anywhere else, and sorting is deliberately absent.
+    function adviceByCell(s, name) {
+      const v = s.adviceBy && s.adviceBy[name];
+      if (!v) return '<td class="act grp-act tmpav">—</td>';
+      const cls = 'a-' + v.a.toLowerCase().replace(/ /g, '-');
+      return `<td class="act grp-act tmpav ${cls}"${attr(v.f)}>${we(v.a)}</td>`;
+    }
+
     function actionCell(s) {
       if (!s.action) return '<td class="act grp-act">—</td>';
       const cls = 'a-' + s.action.toLowerCase().replace(/ /g, '-');
@@ -2370,7 +2388,7 @@
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     function showLoading(msg) {
-      $('tbody').innerHTML = `<tr><td class="empty" colspan="48">${msg}</td></tr>`;
+      $('tbody').innerHTML = `<tr><td class="empty" colspan="53">${msg}</td></tr>`;
     }
 
     // Clear the cache, then keep re-pulling until EVERY ticker's fundamentals are
@@ -2771,6 +2789,19 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       const prevResults = ActionRules.apply(prevRows, actionCfg());
       for (let i = 0; i < rows.length; i++) {
         rows[i].advicePrev = prevResults[i] && results[i] ? prevResults[i].action : null;
+      }
+      // TMP-5COLS: every profile's verdict per row, for the inspection
+      // columns. ~5ms for the universe; remove with the columns.
+      for (const name of ['Balanced', 'Trend Rider', 'Aggressive', 'Max Risk', 'Dip Buyer']) {
+        if (!ACTION_CFGS[name]) {
+          const c = ActionRules.resolve(null, name).cfg;
+          c.__resolved = true;
+          ACTION_CFGS[name] = c;
+        }
+        const rp = ActionRules.apply(rows, ACTION_CFGS[name]);
+        for (let i = 0; i < rows.length; i++) {
+          (rows[i].adviceBy ||= {})[name] = rp[i] ? { a: rp[i].action, f: rp[i].flag } : null;
+        }
       }
     }
     const apPanel = $('actionPanel');
