@@ -144,6 +144,17 @@
     .stackbar { display: flex; height: 26px; border-radius: 999px; overflow: hidden; margin-top: 40px; }
     .stackbar div { height: 100%; }
 
+    /* the introduction card */
+    .feat { display: flex; align-items: flex-start; gap: 22px; padding: 20px 24px;
+            border: 1px solid var(--hair); border-radius: 18px;
+            background: rgba(255, 255, 255, 0.028); }
+    .feat .fi { width: 54px; height: 54px; flex: none; border-radius: 15px; display: grid;
+                place-items: center; border: 1px solid; }
+    .feat .fi svg { width: 27px; height: 27px; stroke: currentColor; fill: none;
+                    stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .feat h3 { margin: 2px 0 4px; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+    .feat p { margin: 0; font-size: 17.5px; color: var(--muted); line-height: 1.45; }
+
     /* announcement */
     .ann-kick { font-size: 19px; font-weight: 600; letter-spacing: 0.26em; text-transform: uppercase;
                 color: var(--green); }
@@ -213,6 +224,7 @@
       { id: 'advice', name: 'The rules changed their mind', note: 'Today’s advice changes, rule named' },
       { id: 'breakout', name: 'Breakout radar', note: 'Fresh 3-month highs, volume-checked' },
       { id: 'stance', name: 'Where the market stands', note: 'The universe by trend state' },
+      { id: 'intro', name: 'Introducing Tickr Lab', note: 'The feature card — what the app is' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
     ];
     let tpl = 'movers';
@@ -333,6 +345,40 @@
         '</div></div>' + chromeFoot();
     }
 
+    // The introduction: what the app is, in five honest rows. Wording stays
+    // inside the house line — it screens and explains, it never recommends.
+    const INTRO_ICONS = {
+      screen: '<path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/>',
+      rules: '<path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16.6" r="2.6"/><path d="M18 14v-1.6M18 20.8v-1.6"/>',
+      trend: '<path d="M3 19.6h18"/><path d="M4.6 15.2 9.4 9.8l3.4 2.6 6-7"/>',
+      ask: '<path d="M12 20.4c4.6 0 8.4-3 8.4-7.2S16.6 6 12 6 3.6 9 3.6 13.2c0 1.9.8 3.6 2.1 4.9L5 21z"/><path d="M8.6 12h6.8M8.6 14.8h4.2"/>',
+      guest: '<circle cx="12" cy="8.6" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/>',
+    };
+    function tplIntro() {
+      const n = stocks.length || 93;
+      const feats = [
+        ['screen', 'var(--green)', `${n} stocks, screened nightly`,
+          'Momentum and quality scored on a fixed scale after every close — a 7 means the same thing in any market.'],
+        ['rules', 'var(--accent)', 'Advice that shows its work',
+          'Five fixed rule profiles side by side, and every verdict names the ONE rule that fired. Click it, see the ladder.'],
+        ['trend', 'var(--amber)', 'Twenty years of receipts',
+          'Trend ribbons, backtests and a signal lab over the full bar archive — measured, not asserted.'],
+        ['ask', 'var(--accent-2)', 'Ask in plain English',
+          'An assistant that answers from the same table you see — and says so when the data cannot answer.'],
+        ['guest', 'var(--red)', 'Try it in one click',
+          'A guest preview with real stocks and every feature live. No account, no card.'],
+      ];
+      const rows = (size.id === 'square' ? feats.slice(0, 4) : feats).map(([ic, tint, h, p]) =>
+        `<div class="feat"><span class="fi" style="color:${tint};border-color:color-mix(in srgb, ${tint} 40%, transparent);background:color-mix(in srgb, ${tint} 9%, transparent)">` +
+        `<svg viewBox="0 0 24 24" aria-hidden="true">${INTRO_ICONS[ic]}</svg></span>` +
+        `<span><h3>${esc(h)}</h3><p>${esc(p)}</p></span></div>`).join('');
+      return chromeTop() +
+        '<div class="s-body"><div><span class="s-kick">Introducing</span>' +
+        '<h2 class="s-title">Tickr Lab</h2>' +
+        '<p class="s-sub">A momentum screener that shows its work — every score, every verdict, every rule, explained on click.</p>' +
+        `<div class="rows" style="margin-top:34px">${rows}</div></div></div>` + chromeFoot();
+    }
+
     function tplAnnounce() {
       const kick = $('annKick').value.trim();
       const head = $('annHead').value.trim() || 'Say something';
@@ -347,7 +393,7 @@
 
     // ---- render ------------------------------------------------------------
     const BUILDERS = { movers: tplMovers, advice: tplAdvice, breakout: tplBreakout,
-                       stance: tplStance, announce: tplAnnounce };
+                       stance: tplStance, intro: tplIntro, announce: tplAnnounce };
     function render() {
       const stage = $('stage');
       stage.style.height = size.h + 'px';
