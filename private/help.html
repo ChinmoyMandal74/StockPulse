@@ -661,34 +661,28 @@
         blocking flag on any day the two disagree. Switching the TREND toggle off removes all of
         it — the line, the ribbon, the legend and the card.</p>
 
-      <h3>Five profiles, no custom set</h3>
-      <p>The <strong>Rules</strong> picker in the bar chooses which of five fixed profiles scores
-        the Advice columns on your screen. There is deliberately no custom profile — a
-        verdict should always be explainable by one named rule set, and the ladder panels do
-        exactly that: whichever profile you pick, clicking any Advice cell (or any state cell)
-        shows the rules <em>that profile</em> applies, with its thresholds on the gauges. Your
-        choice is saved to your account; the nightly email, the assistant and what other viewers
-        see stay on Balanced, and the columns are tinted while you are off it.</p>
+      <h3>Five profiles, side by side — no custom set</h3>
+      <p>The <strong>Rules</strong> picker chooses which advice columns the table shows.
+        <strong>Balanced is always the first column</strong> — it is the shared measurement every
+        other surface uses — and the other four profiles can be added beside it to compare their
+        verdicts row by row. Each column carries its own colours, its own change chevron against
+        that profile's previous trading day, and its own reason on hover; clicking a cell opens
+        the rule ladder under that column's profile. There is deliberately no custom profile — a
+        verdict should always be explainable by one named rule set.</p>
       <ul>
-        <li><strong>Balanced</strong> — the defaults below. Loss-avoidance first.</li>
+        <li><strong>Balanced</strong> — the defaults below. Loss-avoidance first. Always shown.</li>
         <li><strong>Trend Rider</strong> — buys strength sooner and holds it longer: chase caps
-          loosen (1M +40%, RSI 78) and Early can reach Strong Buy. The stops stay Balanced —
-          let winners run, still cut losers fast.</li>
+          loosen (1M +40%, RSI 78) and Early can reach Strong Buy. The stops stay Balanced.</li>
         <li><strong>Aggressive</strong> — more rope everywhere: stops widen to −15% (Early −8%),
-          chase to +35%, the earnings blackout shrinks to 3 days, and Early reaches Buy on OK
-          fundamentals.</li>
-        <li><strong>Max Risk</strong> — the far end of the trend ladder: stops at −20% with
-          −12/−25 confirms, chase caps nearly off (+45%, RSI 80), Buy allowed to −30% below the
-          high. Still never buys below the 200-day.</li>
+          chase to +35%, blackout 3 days, Early reaches Buy on OK fundamentals.</li>
+        <li><strong>Max Risk</strong> — the far end: stops at −20% with −12/−25 confirms, chase
+          caps nearly off, Buy allowed to −30% below the high. Still never buys below the 200-day.</li>
         <li><strong>Dip Buyer</strong> — the one different opinion: a clean entry below the
-          200-day with OK fundamentals earns Buy with Risk instead of Hold, and drawdowns to
-          −35% qualify. The stops stay Balanced, so Breakdown still sells. Honesty note: the
-          buy-the-lower-side idea has been tested three ways on this universe and came back
-          flat-to-wrong — this profile shows you what that mode says; the data does not
-          endorse it.</li>
+          200-day with OK fundamentals earns Buy with Risk instead of Hold. Stops stay Balanced.
+          The research log does not endorse the mode; this column shows what it says anyway.</li>
       </ul>
-      <p>The CSV export names the profile in the Advice column headers and the filename when it
-        is not Balanced, so a saved file always says how it was scored.</p>
+      <p>The CSV export always carries the Balanced advice — the shared measurement — whatever
+        columns are on screen.</p>
       <h3>When the advice changes</h3>
       <p>A small green or red chevron before the Advice word marks a verdict that moved since the
         previous trading session — yesterday's technical readings walked through the same rules,

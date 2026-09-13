@@ -122,8 +122,7 @@
        momentum arrow already made the argument — light every row and the
        column stops carrying information. Weight separates the extremes. */
     td.act { font-family: var(--sans); font-size: 12px; white-space: nowrap; cursor: pointer; text-align: left; }
-    /* TMP-5COLS */
-    td.tmpav { font-size: 11px; opacity: 0.85; cursor: default; }
+    td.av-col { font-size: 11.5px; }
     td.act.a-strong-buy { color: var(--green); font-weight: 700; }
     td.act.a-buy { color: var(--green); }
     td.act.a-buy-with-risk { color: color-mix(in srgb, var(--green) 55%, var(--muted)); }
@@ -365,9 +364,16 @@
     /* The Advice rules profile: when it is not Balanced the six Advice
        columns are re-scored in the browser, and the tint says so — a changed
        verdict must not look like the shared Balanced one. */
-    body.act-lensed td.grp-act { background: rgba(94, 234, 212, 0.06); }
-    body.act-lensed tbody tr:hover td.grp-act { background: rgba(94, 234, 212, 0.1); }
-    body.act-lensed #actBtn { border-color: rgba(94, 234, 212, 0.5); color: var(--text); }
+    /* Non-Balanced advice columns carry the tint — the shared measurement
+       stays plain, the what-if columns say what they are. */
+    td.avx { background: rgba(94, 234, 212, 0.05); }
+    tbody tr:hover td.avx { background: rgba(94, 234, 212, 0.09); }
+    /* The optional profile columns hide by body class, header and cells
+       together, so no header rebuild is ever needed. */
+    body.hide-av-trend-rider .av-trend-rider { display: none; }
+    body.hide-av-aggressive .av-aggressive { display: none; }
+    body.hide-av-max-risk .av-max-risk { display: none; }
+    body.hide-av-dip-buyer .av-dip-buyer { display: none; }
     /* the custom-weight sliders */
     .picker-inner.wide { width: 340px; max-width: calc(100vw - 24px); }
     /* With eight sliders open the four preset descriptions push Copy Default
@@ -861,7 +867,7 @@
         <th rowspan="2" class="left frz frz1" data-key="name">Name</th>
         <th class="group grp-info" data-group="info" colspan="5">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="2">Scores</th>
-        <th class="group grp-act" data-group="act" colspan="11">Advice</th>
+        <th class="group grp-act" data-group="act" colspan="10">Advice</th>
         <th class="group grp-pmom" data-group="pmom" colspan="3">Price Momentum</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
@@ -887,13 +893,11 @@
         <th class="grp-act left" data-key="actionEntry" title="The timing reading: Clean (a base or shallow pullback with RSI 45–65), Clean near the high, Extended (up too far, too fast — do not chase), or None. Entry answers whether now.">Entry</th>
         <th class="grp-act left" data-key="actionFund" title="The fundamentals bucket under this stock's rule set — Strong, OK, Weak, or — when the data makes no case either way. Established is judged on earnings, revenue, margins and cash flow; Early on growth, gross margin, burn and short interest. Fundamentals answer how much conviction.">Fund.</th>
         <th class="grp-act left" data-key="actionGuards" title="Reasons to wait that override everything below a Sell: earnings within the blackout window, or too little price history to judge. Blank for most stocks — when this column speaks, it matters.">Guards</th>
-        <th class="grp-act left" data-key="action" title="What the picked rules profile concludes for this stock today. First matching rule wins, and the tooltip on each cell names the one rule that fired. Loss-avoidance rules are checked before any buy rule, always. A mechanical reading of today's numbers under fixed rules — not a recommendation tailored to you, and not a prediction.">Advice</th>
-        <!-- TMP-5COLS: temporary inspection columns, owner 2026-09-13 -->
-        <th class="grp-act left" title="TEMPORARY — the Advice under the Balanced profile">Balanced</th>
-        <th class="grp-act left" title="TEMPORARY — the Advice under Trend Rider (looser chases, tight stops)">T.Rider</th>
-        <th class="grp-act left" title="TEMPORARY — the Advice under Aggressive (wider stops, more chase)">Aggr.</th>
-        <th class="grp-act left" title="TEMPORARY — the Advice under Max Risk (widest everything above the 200D)">MaxRisk</th>
-        <th class="grp-act left" title="TEMPORARY — the Advice under Dip Buyer (may buy below the 200D)">DipBuy</th>
+        <th class="grp-act left av-col av-balanced" data-key="av:Balanced" title="What the Balanced rules — the defaults every shared surface uses — conclude for this stock today. Always shown; add more profiles under Rules. First matching rule wins, and each cell's tooltip names the rule that fired.">Balanced</th>
+        <th class="grp-act left av-col avx av-trend-rider" data-key="av:Trend Rider" title="Trend Rider's advice: chases further (1M +40%, RSI 78), Early may reach Strong Buy, exits stay Balanced.">Trend Rider</th>
+        <th class="grp-act left av-col avx av-aggressive" data-key="av:Aggressive" title="Aggressive's advice: stops widen to −15% (Early −8%), chase to +35%, blackout 3 days, Early reaches Buy on OK fundamentals.">Aggressive</th>
+        <th class="grp-act left av-col avx av-max-risk" data-key="av:Max Risk" title="Max Risk's advice: widest stops (−20%), chase caps nearly off, Buy to −30% below the high. Still never buys below the 200D.">Max Risk</th>
+        <th class="grp-act left av-col avx av-dip-buyer" data-key="av:Dip Buyer" title="Dip Buyer's advice: may buy below the 200D (capped at Buy with Risk). The research log does not endorse the mode.">Dip Buyer</th>
         <th class="grp-pmom ta-l" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
         <th class="grp-pmom ta-l" data-key="pastShown" id="thPast"
             title="The momentum score as it stood at the end of the chosen horizon. Change the horizon with the Past picker in the bar.">Past<br>Mom.</th>
@@ -1381,7 +1385,7 @@
         const msg = activeTab === 'All'
           ? 'No tickers yet — add one above.'
           : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="57">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="56">${msg}</td></tr>`;
         researchSymbol = null;
         renderResearchMenu();
         applyGroups();
@@ -1391,7 +1395,10 @@
       const valueFor = (x) => (sortKey === 'pastShown' ? pastOf(x)
         : sortKey === 'deltaShown' ? deltaOf(x)
         // Alphabetical would put Avoid above Buy; rank by the ladder instead.
-        : sortKey === 'action' ? (x.action ? ActionRules.ACTIONS.indexOf(x.action) : null)
+        : sortKey.startsWith('av:') ? (() => {
+          const v = x.adviceBy && x.adviceBy[sortKey.slice(3)];
+          return v ? ActionRules.ACTIONS.indexOf(v.a) : null;
+        })()
         : sortKey === 'actionTrend' ? (x.actionTrend ? ActionRules.TREND_ORDER.indexOf(x.actionTrend) : null)
         : sortKey === 'actionEntry' ? (x.actionEntry ? ActionRules.ENTRY_ORDER.indexOf(x.actionEntry) : null)
         : sortKey === 'actionFund' ? (x.actionFund ? ActionRules.FUND_ORDER.indexOf(x.actionFund) : null)
@@ -1415,7 +1422,7 @@
         if (s.error) {
           return `<tr style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="55">${s.error}</td>
+            <td class="na" colspan="54">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -1447,8 +1454,7 @@
           ${stateCell(s.actionEntry, ENTRY_DANGER, 'entry')}
           ${stateCell(s.actionFund, FUND_DANGER, 'fund')}
           ${guardsCell(s)}
-          ${actionCell(s)}
-          ${adviceByCell(s, 'Balanced')}${adviceByCell(s, 'Trend Rider')}${adviceByCell(s, 'Aggressive')}${adviceByCell(s, 'Max Risk')}${adviceByCell(s, 'Dip Buyer')}
+          ${adviceCell(s, 'Balanced')}${adviceCell(s, 'Trend Rider')}${adviceCell(s, 'Aggressive')}${adviceCell(s, 'Max Risk')}${adviceCell(s, 'Dip Buyer')}
           ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-pmom ta-l lens-col', deltaOf(s))}
           ${pastCell(s)}
           ${deltaCell(s)}
@@ -1532,26 +1538,24 @@
 
     // The flag — the ONE rule that fired — rides on the cell as its tooltip,
     // so every verdict explains itself on hover with no extra chrome.
-    // TMP-5COLS: temporary side-by-side profile columns. Not in the CSV,
-    // the hover card or anywhere else, and sorting is deliberately absent.
-    function adviceByCell(s, name) {
+    // One advice column per profile, Balanced always first and always shown.
+    // Every column carries the full kit the single column had: colours, the
+    // firing rule as tooltip, and its own change chevron against THAT
+    // profile's previous-session verdict. Clicking a cell opens the ladder
+    // under the column's own profile.
+    function adviceCell(s, name) {
+      const slug = 'av-' + name.toLowerCase().replace(/ /g, '-');
+      const extra = name === 'Balanced' ? '' : ' avx';
       const v = s.adviceBy && s.adviceBy[name];
-      if (!v) return '<td class="act grp-act tmpav">—</td>';
+      if (!v) return `<td class="act grp-act av-col ${slug}${extra}">—</td>`;
       const cls = 'a-' + v.a.toLowerCase().replace(/ /g, '-');
-      return `<td class="act grp-act tmpav ${cls}"${attr(v.f)}>${we(v.a)}</td>`;
-    }
-
-    function actionCell(s) {
-      if (!s.action) return '<td class="act grp-act">—</td>';
-      const cls = 'a-' + s.action.toLowerCase().replace(/ /g, '-');
-      const changed = s.advicePrev && s.advicePrev !== s.action;
-      const up = changed && ActionRules.ACTIONS.indexOf(s.action) > ActionRules.ACTIONS.indexOf(s.advicePrev);
-      const tip = (s.actionFlag || s.action)
-        + (changed ? ` — was ${s.advicePrev} the previous trading day` : '');
+      const changed = v.prev && v.prev !== v.a;
+      const up = changed && ActionRules.ACTIONS.indexOf(v.a) > ActionRules.ACTIONS.indexOf(v.prev);
+      const tip = (v.f || v.a) + (changed ? ` — was ${v.prev} the previous trading day` : '');
       const mark = changed
         ? `<svg class="advchg ${up ? 'up' : 'down'}" aria-label="Advice ${up ? 'raised' : 'lowered'} since the previous trading day" role="img"><use href="#i-chevron" /></svg>`
         : '';
-      return `<td class="act grp-act ${cls}"${attr(tip)}>${mark}${we(s.action)}</td>`;
+      return `<td class="act grp-act av-col ${slug}${extra} ${cls}" data-av="${we(name)}"${attr(tip)}>${mark}${we(v.a)}</td>`;
     }
 
     // Mark whichever column the table is currently sorted by.
@@ -1639,9 +1643,6 @@
     function exportExcel() {
       const rows = sortRows(visibleStocks());
 
-      // The seven Advice columns name the profile that scored them,
-      // the way the momentum columns name the weighting.
-      const actSuffix = actionPreset === 'balanced' ? '' : ` (${actionPresetDef().name})`;
       const cols = [
         ['Symbol', (s) => s.symbol],
         ['Overall', (s) => s.overallRating],
@@ -1652,13 +1653,13 @@
         // The export names the profile that produced the verdicts, the way it
         // already names the momentum weighting — a saved file that does not say
         // how it was scored cannot be checked later.
-        [`Company Type${actSuffix}`, (s) => s.companyType],
-        [`Trend State${actSuffix}`, (s) => s.actionTrend],
-        [`Entry State${actSuffix}`, (s) => s.actionEntry],
-        [`Fundamentals Bucket${actSuffix}`, (s) => s.actionFund],
-        [`Guards${actSuffix}`, (s) => s.actionGuards],
-        [`Advice${actSuffix}`, (s) => s.action],
-        [`Advice Reason${actSuffix}`, (s) => s.actionFlag],
+        ['Company Type', (s) => s.companyType],
+        ['Trend State', (s) => s.actionTrend],
+        ['Entry State', (s) => s.actionEntry],
+        ['Fundamentals Bucket', (s) => s.actionFund],
+        ['Guards', (s) => s.actionGuards],
+        ['Advice', (s) => s.action],
+        ['Advice Reason', (s) => s.actionFlag],
         ['Name', (s) => s.name],
         ['Portfolios', (s) => (s.portfolios || []).join('; ')],
         ['Price', (s) => s.price],
@@ -1738,8 +1739,7 @@
       const tab = String(activeTab).replace(/[^A-Za-z0-9._-]+/g, '_');
       a.href = url;
       const lens = weightPreset === 'default' ? '' : `-${weightPreset}`;
-      const rules = actionPreset === 'balanced' ? '' : `-${actionPreset}`;
-      a.download = `stock-screener-${tab}${lens}${rules}-${date}.csv`;
+      a.download = `stock-screener-${tab}${lens}-${date}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1766,6 +1766,7 @@
       });
       renderColumnMenu();
       updateStickyOffsets();
+      applyAdviceCols();
     }
     // ---- getting around a 48-column table ------------------------------------
     const tableWrap = () => document.querySelector('.table-wrap');
@@ -1928,56 +1929,55 @@
     }
 
     function renderActTrigger() {
-      const on = actionPreset !== 'balanced';
+      const n = 1 + extraProfiles.length;
       $('actBtn').innerHTML =
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-sliders" /></svg>' +
         '<span class="picker-label">Rules</span>' +
-        `<span class="count">${we(actionPresetDef().name)}</span>` +
+        `<span class="count">${n}/5</span>` +
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
-      $('actBtn').title = on
-        ? `Advice re-scored under ${actionPresetDef().name}. The nightly email, the CSV data and other viewers stay on Balanced.`
-        : 'Advice rules profile — five fixed sets, no custom one. Click any Advice cell to see the rules the picked profile applies.';
-      document.body.classList.toggle('act-lensed', on);
+      $('actBtn').title = 'Which advice columns to show: Balanced always, plus any of the four ' +
+        'profiles side by side. Click any advice cell to see the rules that column applies.';
+    }
+
+    // Header and cells hide together by body class, so the table never needs
+    // its headers rebuilt; only the group banner's span is recounted.
+    function applyAdviceCols() {
+      for (const name of ADVICE_OPTIONAL) {
+        document.body.classList.toggle('hide-av-' + avSlug(name), !extraProfiles.includes(name));
+      }
+      const banner = document.querySelector('th[data-group="act"]');
+      if (banner) banner.colSpan = 6 + extraProfiles.length;
+      renderActTrigger();
     }
 
     function renderActMenu() {
       $('actMenu').innerHTML =
         '<div class="picker-inner">' +
-        ACTION_PRESETS.map((x) =>
-          `<button class="pick ${x.id === actionPreset ? 'on' : ''}" data-actp="${x.id}" role="option" ` +
-          `aria-selected="${x.id === actionPreset}">` +
-          `<span class="nm">${we(x.name)}<em>${we(x.note)}</em></span>` +
+        `<button class="pick on" disabled style="opacity:0.75;cursor:default" role="option" aria-selected="true">` +
+        `<span class="nm">Balanced<em>Always shown — the shared measurement every other surface uses.</em></span>` +
+        '<svg class="ic tick" aria-hidden="true"><use href="#i-check" /></svg></button>' +
+        ADVICE_OPTIONAL.map((name) =>
+          `<button class="pick ${extraProfiles.includes(name) ? 'on' : ''}" data-avp="${we(name)}" role="option" ` +
+          `aria-selected="${extraProfiles.includes(name)}">` +
+          `<span class="nm">${we(name)}<em>${we(AV_NOTES[name])}</em></span>` +
           '<svg class="ic tick" aria-hidden="true"><use href="#i-check" /></svg></button>').join('') +
-        '<div class="pick-hint">Five fixed profiles — no custom set. Every profile moves thresholds only; ' +
-        'the Sell/Avoid/Hold rules stay above every Buy rule in all of them. ' +
-        'Click any <b>Advice</b> cell to see exactly the rules the picked profile applies.</div>' +
+        '<div class="pick-hint">Pick the profiles to compare, side by side. Every one is a fixed rule set — ' +
+        'no custom profiles — and the Sell/Avoid/Hold rules sit above every Buy rule in all of them. ' +
+        'Click any advice cell for that column\u2019s ladder.</div>' +
         '</div>';
-      $('actMenu').querySelectorAll('[data-actp]').forEach((b) => {
-        b.addEventListener('click', (ev) => { ev.stopPropagation(); applyActionPreset(b.dataset.actp); });
+      $('actMenu').querySelectorAll('[data-avp]').forEach((b) => {
+        b.addEventListener('click', (ev) => {
+          ev.stopPropagation();                       // the menu stays open while toggling
+          const name = b.dataset.avp;
+          extraProfiles = ADVICE_OPTIONAL.filter((x) =>
+            (x === name) !== extraProfiles.includes(x));
+          applyAdviceCols();
+          renderActMenu();
+          savePrefs();
+        });
       });
     }
 
-    function applyActionPreset(id) {
-      if (id === actionPreset) return;
-      setActionPreset(id);
-      scoreActionRows(baseStocks);
-      applyLens();
-      render();
-      renderActMenu();
-      savePrefs();
-      // An open panel must follow the switch, not keep showing the old
-      // profile's ladder until someone happens to reopen it.
-      if (apOpenFor === '#model') openActionModel();
-      else if (apOpenFor && apOpenFor.indexOf('|') > 0) {
-        const [sym, fam] = apOpenFor.split('|');
-        apOpenFor = null;                 // openFamilyPanel toggles on equality
-        openFamilyPanel(sym, fam, null);
-      } else if (apOpenFor) {
-        const sym = apOpenFor;
-        apOpenFor = null;
-        openActionPanel(sym, null);
-      }
-    }
 
     // Just the numbers beside each slider, so a drag stays cheap.
     function refreshSliderReadouts() {
@@ -2070,8 +2070,10 @@
         if (savedC) customWeights = Object.assign(Screens.defaultWeights(), savedC);
         const savedP = res && res.prefs && res.prefs.past;
         if (savedP && Screens.PAST_PERIODS.some((x) => x.id === savedP)) pastPeriod = savedP;
-        const savedA = res && res.prefs && res.prefs.action;
-        if (savedA && ACTION_PRESETS.some((x) => x.id === savedA)) actionPreset = savedA;
+        const savedAv = res && res.prefs && res.prefs.advices;
+        if (Array.isArray(savedAv)) {
+          extraProfiles = ADVICE_OPTIONAL.filter((n) => savedAv.includes(avSlug(n)));
+        }
         const savedW = res && res.prefs && res.prefs.weights;
         if (savedW === 'custom' || Screens.WEIGHT_PRESETS.some((w) => w.id === savedW)) weightPreset = savedW;
         const saved = res && res.prefs && res.prefs.collapsed;
@@ -2097,7 +2099,8 @@
         const out = {};
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
-          prefs: { collapsed: out, weights: weightPreset, customWeights, past: pastPeriod, action: actionPreset },
+          prefs: { collapsed: out, weights: weightPreset, customWeights, past: pastPeriod,
+            advices: extraProfiles.map(avSlug) },
         }).catch(() => {});
       }, 600);
     }
@@ -2388,7 +2391,7 @@
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     function showLoading(msg) {
-      $('tbody').innerHTML = `<tr><td class="empty" colspan="53">${msg}</td></tr>`;
+      $('tbody').innerHTML = `<tr><td class="empty" colspan="52">${msg}</td></tr>`;
     }
 
     // Clear the cache, then keep re-pulling until EVERY ticker's fundamentals are
@@ -2739,23 +2742,25 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     // whichever profile is active. The choice is a per-user pref; the
     // snapshot, the nightly report, the assistant and the CSV's underlying
     // data all stay on Balanced, exactly like the weight lens.
-    const ACTION_PRESETS = [
-      { id: 'balanced', name: 'Balanced',
-        note: 'The defaults — loss-avoidance first.' },
-      { id: 'trend-rider', name: 'Trend Rider',
-        note: 'Buys strength sooner, holds it longer. The exits stay tight.' },
-      { id: 'aggressive', name: 'Aggressive',
-        note: 'More rope everywhere: wider stops, more chase, shorter blackout.' },
-      { id: 'max-risk', name: 'Max Risk',
-        note: 'The far end: widest stops, chase caps nearly off. Still never buys below the 200D.' },
-      { id: 'dip-buyer', name: 'Dip Buyer',
-        note: 'May buy below the 200D, capped at Buy with Risk. The research log does not endorse it.' },
-    ];
-    let actionPreset = 'balanced';
+    const ADVICE_PROFILES = ['Balanced', 'Trend Rider', 'Aggressive', 'Max Risk', 'Dip Buyer'];
+    const ADVICE_OPTIONAL = ADVICE_PROFILES.slice(1);
+    const AV_NOTES = {
+      'Trend Rider': 'Buys strength sooner, holds it longer. The exits stay tight.',
+      'Aggressive': 'More rope everywhere: wider stops, more chase, shorter blackout.',
+      'Max Risk': 'The far end: widest stops, chase caps nearly off. Still never buys below the 200D.',
+      'Dip Buyer': 'May buy below the 200D, capped at Buy with Risk. The research log does not endorse it.',
+    };
+    const avSlug = (name) => name.toLowerCase().replace(/ /g, '-');
+    // Which optional profiles show as columns beside Balanced (canonical
+    // order, saved to prefs). Balanced itself is not optional: the shared
+    // measurement is always the first column.
+    let extraProfiles = [];
+    // Which profile an open ladder panel is explaining — set by the advice
+    // cell that was clicked; the state cells always open under Balanced,
+    // since the four state columns are pinned to the shared rules.
+    let panelProfile = 'Balanced';
     const ACTION_CFGS = {};
-    const actionPresetDef = () => ACTION_PRESETS.find((x) => x.id === actionPreset) || ACTION_PRESETS[0];
-    function actionCfg() {
-      const name = actionPresetDef().name;
+    function cfgFor(name) {
       if (!ACTION_CFGS[name]) {
         const c = ActionRules.resolve(null, name).cfg;
         c.__resolved = true;
@@ -2763,47 +2768,39 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       }
       return ACTION_CFGS[name];
     }
-    function setActionPreset(id) {
-      if (ACTION_PRESETS.some((x) => x.id === id)) actionPreset = id;
+    function actionCfg() { return cfgFor(panelProfile); }
+    function setPanelProfile(name) {
+      if (ADVICE_PROFILES.includes(name)) panelProfile = name;
     }
-    // The same fields the server stamps for Balanced, re-stamped under the
-    // active profile — one code path for all five, and for Balanced it is
-    // verified equal to the server row for row.
     function scoreActionRows(rows) {
-      const results = ActionRules.apply(rows, actionCfg());
-      for (let i = 0; i < rows.length; i++) {
-        const r = results[i];
-        if (!r) continue;
-        rows[i].companyType = r.type;
-        rows[i].action = r.action;
-        rows[i].actionFlag = r.flag;
-        rows[i].actionTrend = r.states.trend;
-        rows[i].actionEntry = r.states.entry;
-        rows[i].actionFund = r.states.fund;
-        rows[i].actionGuards = r.states.guards;
-      }
-      // Yesterday's verdict under the same profile, from the shipped
-      // previous-session technicals — so the change marker follows the
-      // picked rules rather than staying pinned to Balanced.
+      // Balanced fields verbatim (server parity — hover card, CSV and the
+      // four state columns read them), then every profile's verdict with its
+      // own previous-session verdict for the per-column chevrons. Ten engine
+      // passes over the universe, ~10ms.
       const prevRows = rows.map((r) => (r && !r.error && r.prevTech ? Object.assign({}, r, r.prevTech) : null));
-      const prevResults = ActionRules.apply(prevRows, actionCfg());
-      for (let i = 0; i < rows.length; i++) {
-        rows[i].advicePrev = prevResults[i] && results[i] ? prevResults[i].action : null;
-      }
-      // TMP-5COLS: every profile's verdict per row, for the inspection
-      // columns. ~5ms for the universe; remove with the columns.
-      for (const name of ['Balanced', 'Trend Rider', 'Aggressive', 'Max Risk', 'Dip Buyer']) {
-        if (!ACTION_CFGS[name]) {
-          const c = ActionRules.resolve(null, name).cfg;
-          c.__resolved = true;
-          ACTION_CFGS[name] = c;
-        }
-        const rp = ActionRules.apply(rows, ACTION_CFGS[name]);
+      for (const name of ADVICE_PROFILES) {
+        const cfg = cfgFor(name);
+        const results = ActionRules.apply(rows, cfg);
+        const prevResults = ActionRules.apply(prevRows, cfg);
         for (let i = 0; i < rows.length; i++) {
-          (rows[i].adviceBy ||= {})[name] = rp[i] ? { a: rp[i].action, f: rp[i].flag } : null;
+          const r = results[i];
+          (rows[i].adviceBy ||= {})[name] = r
+            ? { a: r.action, f: r.flag, prev: prevResults[i] ? prevResults[i].action : null }
+            : null;
+          if (name === 'Balanced' && r) {
+            rows[i].companyType = r.type;
+            rows[i].action = r.action;
+            rows[i].actionFlag = r.flag;
+            rows[i].actionTrend = r.states.trend;
+            rows[i].actionEntry = r.states.entry;
+            rows[i].actionFund = r.states.fund;
+            rows[i].actionGuards = r.states.guards;
+            rows[i].advicePrev = prevResults[i] ? prevResults[i].action : null;
+          }
         }
       }
     }
+
     const apPanel = $('actionPanel');
     let apOpenFor = null, apAnchor = null, apBackSym = null, apModelTab = 'Established';
 
@@ -2871,7 +2868,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       const e = ActionRules.explain(s, actionCfg());
       const est = apEstBar(e);
       const chips = [
-        `<span class="ap-chip">Rules <b>${we(actionPresetDef().name)}</b></span>`,
+        `<span class="ap-chip">Rules <b>${we(panelProfile)}</b></span>`,
         `<span class="ap-chip">Type <b>${we(e.type)}${e.pinned ? ' (pinned)' : ''}</b></span>`,
         `<span class="ap-chip">Trend <b>${we(e.states.trend)}</b></span>`,
         `<span class="ap-chip">Entry <b>${we(e.states.entry)}</b></span>`,
@@ -2887,7 +2884,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>' +
         est + `<div class="ap-chips">${chips.join('')}</div>` +
         apLadderHtml(e.rungs, false) +
-        `<div class="ap-note">First match wins — the lit rule is the verdict, and everything below it was never checked. Thresholds: the ${we(actionPresetDef().name)} profile.</div>` +
+        `<div class="ap-note">First match wins — the lit rule is the verdict, and everything below it was never checked. Thresholds: the ${we(panelProfile)} profile.</div>` +
         '<div class="ap-foot"><button class="ap-link" data-ap-model>How is this computed?</button><span></span></div></div>';
     }
     function apModelHtml() {
@@ -2896,7 +2893,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       const rungs = ActionRules.ladder(apModelTab, actionCfg());
       return '<div class="ap-core">' +
         '<div class="ap-head"><span class="ap-sym">Advice model</span>' +
-        `<span class="ap-verdict" style="color:var(--muted);font-weight:500">${we(actionPresetDef().name)} thresholds</span>` +
+        `<span class="ap-verdict" style="color:var(--muted);font-weight:500">${we(panelProfile)} thresholds</span>` +
         '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>' +
         `<div class="ap-tabs">${tabs}</div>` +
         apLadderHtml(rungs, true) +
@@ -2967,7 +2964,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         `<span class="ap-verdict ${fam === 'type' || fam === 'guards' ? 'ap-act-hold' : wcls}" style="font-weight:600">${we(word)}</span>` +
         '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>' +
         `<div class="ap-chips"><span class="ap-chip">${we(FAM_TITLES[fam])} column</span>` +
-        `<span class="ap-chip">Rules <b>${we(actionPresetDef().name)}</b></span>` +
+        `<span class="ap-chip">Rules <b>${we(panelProfile)}</b></span>` +
         `<span class="ap-chip">Type <b>${we(e.type)}</b></span>` +
         `<span class="ap-chip">Advice <b>${we(e.action)}</b></span></div>` +
         body +
@@ -3011,11 +3008,11 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         openActionModel();
       }));
     }
-    function openActionPanel(sym, anchor) {
+    function openActionPanel(sym, anchor, key) {
       const s = stocks.find((x) => x.symbol === sym);
       if (!s || !s.action) return;
       closePickers(); hideTip(); hideRowCard();
-      apOpenFor = sym; apBackSym = sym;
+      apOpenFor = key || (sym + '|av|' + panelProfile); apBackSym = sym;
       if (anchor) apAnchor = anchor;
       apModelTab = s.companyType || 'Established';
       apPanel.innerHTML = apStockHtml(s);
@@ -3044,12 +3041,14 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       if (!sym) return;
       e.stopPropagation();
       if (act) {
-        if (apOpenFor === sym) closeActionPanel();
-        else openActionPanel(sym, act);
+        const prof = act.dataset.av || 'Balanced';
+        const key = sym + '|av|' + prof;
+        if (apOpenFor === key) closeActionPanel();
+        else { setPanelProfile(prof); openActionPanel(sym, act, key); }
       } else {
         const key = sym + '|' + famTd.dataset.fam;
         if (apOpenFor === key) closeActionPanel();
-        else openFamilyPanel(sym, famTd.dataset.fam, famTd);
+        else { setPanelProfile('Balanced'); openFamilyPanel(sym, famTd.dataset.fam, famTd); }
       }
     });
 
