@@ -44,6 +44,16 @@
     .panel textarea { min-height: 84px; }
     .panel input:focus-visible, .panel textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     #annBox { display: none; }
+    #movBox { display: none; }
+    .panel select {
+      width: 100%; box-sizing: border-box; appearance: none; -webkit-appearance: none;
+      padding: 9px 30px 9px 11px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      color: var(--text); font: 500 12.5px var(--sans);
+      background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa3b2' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+    }
+    .panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .hint { font-size: 10.5px; color: var(--faint); line-height: 1.55; margin-top: 14px; }
     .panel .btn { margin-top: 12px; width: 100%; justify-content: center; }
 
@@ -167,6 +177,29 @@
       <label>Template</label>
       <div class="tpl" id="tplList"></div>
 
+      <div id="movBox">
+        <label>Time window</label>
+        <select id="movPeriod">
+          <option value="d">Day</option>
+          <option value="w1" selected>Week</option>
+          <option value="w2">2 weeks</option>
+          <option value="m1">1 month</option>
+        </select>
+        <label>How many</label>
+        <select id="movCount">
+          <option value="5">Top 5</option>
+          <option value="10" selected>Top 10</option>
+          <option value="15">Top 15</option>
+        </select>
+        <label>Direction</label>
+        <select id="movDir">
+          <option value="up" selected>Gainers</option>
+          <option value="down">Losers</option>
+        </select>
+        <label>Within</label>
+        <select id="movScope"><option value="All">All screened</option></select>
+      </div>
+
       <div id="annBox">
         <label>Kicker (small line above)</label>
         <input type="text" id="annKick" value="From the Lab" maxlength="40" />
@@ -202,7 +235,7 @@
       { id: 'story', label: 'Story 9:16', w: 1080, h: 1920 },
     ];
     const TPLS = [
-      { id: 'movers', name: 'Movers of the week', note: 'The 10 biggest one-week moves' },
+      { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'advice', name: 'The rules changed their mind', note: 'Today’s advice changes, rule named' },
       { id: 'breakout', name: 'Breakout radar', note: 'Fresh 3-month highs, volume-checked' },
       { id: 'stance', name: 'Where the market stands', note: 'The universe by trend state' },
@@ -213,6 +246,8 @@
     let size = SIZES[0];
     let stocks = [];
     let loadedAt = null;
+    let myLists = {};        // the admin's own portfolios, for the scope picker
+    let portfolioNames = [];
 
     // ---- shared chrome ---------------------------------------------------
     const dateStr = () => new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -232,20 +267,46 @@
     const pct = (n, d = 1) => (n == null ? '—' : (n >= 0 ? '+' : '') + n.toFixed(d) + '%');
 
     // ---- templates ---------------------------------------------------------
+    // Gainers and losers are separate cards on purpose — the owner's call:
+    // a mixed |move| list buries the story either half tells alone.
+    const MOV_PERIODS = {
+      d: ['todayPct', 'today'],
+      w1: ['oneWeekPct', 'this week'],
+      w2: ['twoWeekPct', 'past two weeks'],
+      m1: ['oneMonthPct', 'past month'],
+    };
+    function movScopeRows() {
+      const scope = $('movScope').value || 'All';
+      if (scope === 'All') return { rows: stocks, label: `all ${stocks.length} screened` };
+      if (scope.startsWith('my:')) {
+        const nm = scope.slice(3);
+        const set = new Set(myLists[nm] || []);
+        return { rows: stocks.filter((s) => set.has(s.symbol)), label: nm };
+      }
+      return { rows: stocks.filter((s) => (s.portfolios || []).includes(scope)), label: scope };
+    }
     function tplMovers() {
-      const rows = stocks.filter((s) => s.oneWeekPct != null)
-        .sort((a, b) => Math.abs(b.oneWeekPct) - Math.abs(a.oneWeekPct)).slice(0, size.id === 'story' ? 13 : 10);
-      const max = Math.max(...rows.map((s) => Math.abs(s.oneWeekPct)), 1);
+      const [field, periodLabel] = MOV_PERIODS[$('movPeriod').value] || MOV_PERIODS.w1;
+      const n = Number($('movCount').value) || 10;
+      const up = $('movDir').value !== 'down';
+      const scope = movScopeRows();
+      const rows = scope.rows
+        .filter((s) => s[field] != null && (up ? s[field] > 0 : s[field] < 0))
+        .sort((a, b) => (up ? b[field] - a[field] : a[field] - b[field]))
+        .slice(0, n);
+      const max = Math.max(...rows.map((s) => Math.abs(s[field])), 0.01);
+      const body = rows.length
+        ? `<div class="rows">${rows.map((s) => {
+            const w = Math.max(6, Math.round(Math.abs(s[field]) / max * 100));
+            return `<div class="row"><span class="sym">${esc(s.symbol)}</span>` +
+              `<span class="bar-rail"><span class="bar${up ? '' : ' neg'}" style="width:${w}%;display:block"></span></span>` +
+              `<span class="val ${up ? 'pos' : 'neg'}">${pct(s[field])}</span></div>`;
+          }).join('')}</div>`
+        : `<p class="s-empty">Nothing in ${esc(scope.label)} closed ${up ? 'up' : 'down'} ${esc(periodLabel)} \u2014 which is its own kind of story.</p>`;
       return chromeTop() +
-        '<div class="s-body"><div><span class="s-kick">This week on the screen</span>' +
-        '<h2 class="s-title">The biggest<br><span class="dim">moves</span></h2>' +
-        `<div class="rows">${rows.map((s) => {
-          const w = Math.max(6, Math.round(Math.abs(s.oneWeekPct) / max * 100));
-          const neg = s.oneWeekPct < 0;
-          return `<div class="row"><span class="sym">${esc(s.symbol)}</span>` +
-            `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
-            `<span class="val ${neg ? 'neg' : 'pos'}">${pct(s.oneWeekPct)}</span></div>`;
-        }).join('')}</div></div></div>` + chromeFoot();
+        `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 ${esc(periodLabel)}</span>` +
+        `<h2 class="s-title">Top ${up ? 'gainers' : 'losers'}<br><span class="dim">${esc(periodLabel)}</span></h2>` +
+        body + '</div></div>' + chromeFoot();
     }
 
     const ACT_CLS = { 'Strong Buy': 'a-strong', 'Buy': 'a-buy', 'Buy with Risk': 'a-bwr',
@@ -362,6 +423,7 @@
         `<div class="s-in">${BUILDERS[tpl]()}</div>`;
       fit();
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
+      $('movBox').style.display = tpl === 'movers' ? 'block' : 'none';
     }
     function fit() {
       const deck = document.querySelector('.deck');
@@ -384,6 +446,8 @@
     }
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
+    ['movPeriod', 'movCount', 'movDir', 'movScope'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'movers') render(); }));
     $('reloadBtn').addEventListener('click', () => load(true));
 
     // ---- Download PNG -----------------------------------------------------
@@ -515,6 +579,16 @@
         const data = await fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json());
         stocks = (data.stocks || []).filter((s) => !s.error);
         loadedAt = data.updatedAt || null;
+        portfolioNames = data.portfolios || [];
+        try {
+          const mine = await fetch('/api/my/portfolios', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { portfolios: {} }));
+          myLists = mine.portfolios || {};
+        } catch { myLists = {}; }
+        const keep = $('movScope').value;
+        $('movScope').innerHTML = '<option value="All">All screened</option>' +
+          portfolioNames.map((nm) => `<option value="${esc(nm)}">${esc(nm)}</option>`).join('') +
+          Object.keys(myLists).map((nm) => `<option value="my:${esc(nm)}">${esc(nm)} (personal)</option>`).join('');
+        if ([...$('movScope').options].some((o) => o.value === keep)) $('movScope').value = keep;
         paintControls();
         render();
         if (reload) $('reloadBtn').textContent = 'Re-pulled ✓';
