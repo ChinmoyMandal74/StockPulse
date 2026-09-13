@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Cards — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <script src="/wmark.js" defer></script>
+  <style>
+    /* The member room for the same cards the studio draws: controls in a bar
+       above, one card below, one shape (the 4:5 post). No crop guide and no
+       size picker — this is a way to read the screener, not a design tool. */
+    body { min-height: 100dvh; padding: 0 0 60px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 6% -8%, rgba(52, 211, 153, 0.11), transparent 62%),
+        radial-gradient(50vw 42vw at 96% 4%, rgba(124, 156, 255, 0.10), transparent 64%); }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 16px 20px 0; pointer-events: none; }
+    .island { pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair);
+      box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+
+    h1 { margin: 26px 0 0; font-size: clamp(24px, 3vw, 32px); font-weight: 600; letter-spacing: -0.035em; }
+    .lede { margin: 8px 0 20px; font-size: 12.5px; max-width: 68ch; }
+
+    /* the control bar */
+    .bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 14px;
+           padding: 16px 18px; margin-bottom: 18px; }
+    .fld { display: flex; flex-direction: column; gap: 5px; }
+    .fld label { font-size: 9.5px; font-weight: 500; text-transform: uppercase;
+                 letter-spacing: 0.16em; color: var(--faint); }
+    .bar select {
+      appearance: none; -webkit-appearance: none; cursor: pointer;
+      padding: 8px 30px 8px 12px; border-radius: 10px; min-width: 148px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      color: var(--text); font: 500 12.5px var(--sans);
+      background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa3b2' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+    }
+    .bar select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .bar .spacer { flex: 1 1 0; }
+    #dlBtn { align-self: flex-end; }
+    #dlMsg { width: 100%; margin: 2px 0 0; font-size: 11px; color: var(--faint); }
+
+    /* the card, scaled to the column */
+    .stagewrap { display: flex; justify-content: center; }
+    #stage { width: 1080px; height: 1350px; position: relative; overflow: hidden;
+             background: #050505; transform-origin: top left; border-radius: 22px;
+             font-family: var(--sans); color: var(--text);
+             box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.9); }
+    #stage .s-aura { position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(70% 52% at 8% -6%, rgba(52, 211, 153, 0.16), transparent 62%),
+        radial-gradient(76% 55% at 100% 2%, rgba(124, 156, 255, 0.14), transparent 64%),
+        radial-gradient(60% 40% at 50% 110%, rgba(167, 139, 250, 0.12), transparent 70%); }
+    #stage .s-in { position: relative; display: flex; flex-direction: column;
+                   height: 100%; padding: 56px 64px 48px; box-sizing: border-box; }
+
+    .err { color: var(--red); padding: 30px; font-size: 13px; }
+    @media (max-width: 768px) { .page { padding: 0 14px; } .bar select { min-width: 132px; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4.4v10.2"/><path d="m7.8 10.6 4.2 4.2 4.2-4.2"/><path d="M4.6 18.6h14.8"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <h1>Cards</h1>
+    <p class="lede">The screener, summarised — tonight's movers, a chart, and what the rules read.
+      Save any card as an image to keep or share; every one carries the date it was built and the
+      note that these are mechanical readings, not advice.</p>
+
+    <section class="bezel bar-shell"><div class="core bar" id="bar"></div></section>
+
+    <div class="stagewrap"><div id="stagewrap"><div id="stage"></div></div></div>
+  </main>
+
+  <script src="/action.js"></script>
+  <script src="/cards.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    // One shape here, deliberately: the 4:5 post. The studio keeps the other
+    // two, because choosing an aspect ratio is a publishing decision.
+    const SIZE = { id: 'portrait', w: 1080, h: 1350 };
+    // Three cards, not eight — the explainers and the announcement are the
+    // brand's own voice and stay with the owner.
+    const KINDS = [
+      { id: 'movers', name: 'Movers' },
+      { id: 'chart', name: 'Chart' },
+      { id: 'advboard', name: 'Advice' },
+    ];
+    let kind = 'movers';
+    let stocks = [];
+    let myLists = {};
+    let portfolioNames = [];
+
+    // ---- the control bar, rebuilt per card kind --------------------------
+    const S = (id, label, options, cur) =>
+      `<div class="fld"><label for="${id}">${esc(label)}</label><select id="${id}">` +
+      options.map(([v, t]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(t)}</option>`).join('') +
+      '</select></div>';
+
+    const scopeOptions = () => [['All', 'All screened']]
+      .concat(portfolioNames.map((n) => [n, n]))
+      .concat(Object.keys(myLists).map((n) => ['my:' + n, n + ' (yours)']));
+    const symOptions = () => stocks.slice().sort((a, b) => a.symbol.localeCompare(b.symbol))
+      .map((s) => [s.symbol, s.symbol + (s.name ? ' — ' + s.name : '')]);
+    const PERIODS = [['d', 'Day'], ['w1', 'Week'], ['w2', '2 weeks'], ['m1', '1 month'],
+                     ['m3', '3 months'], ['m6', '6 months'], ['y1', '1 year']];
+
+    // Control values survive a rebuild of the bar, so switching cards and
+    // coming back does not reset what you picked.
+    const state = {
+      movPeriod: 'w1', movCmp: '', movCount: '10', movDir: 'up', movScope: 'All',
+      chtMode: 'list', chtWin: 'm6', chtScope: 'All', chtLines: '5', chtSym: '',
+      advMode: 'board', advTier: 'Strong Buy', advSym: '', advScope: 'All', advProf: 'Balanced',
+    };
+
+    function barHtml() {
+      let f = S('kind', 'Card', KINDS.map((k) => [k.id, k.name]), kind);
+      if (kind === 'movers') {
+        f += S('movPeriod', 'Time window', PERIODS, state.movPeriod);
+        f += S('movCmp', 'Compare with', [['', 'Nothing']].concat(PERIODS), state.movCmp);
+        f += S('movDir', 'Direction', [['up', 'Gainers'], ['down', 'Losers'], ['both', 'Either way']], state.movDir);
+        f += S('movCount', 'How many', [['5', 'Top 5'], ['10', 'Top 10'], ['15', 'Top 15']], state.movCount);
+        f += S('movScope', 'Within', scopeOptions(), state.movScope);
+      } else if (kind === 'chart') {
+        f += S('chtMode', 'Chart', [['list', 'A list vs the screen'], ['leaders', 'The leaders in a list'],
+                                    ['stock', 'One stock']], state.chtMode);
+        f += S('chtWin', 'Window', [['w1', 'Past week'], ['m1', 'Past month'], ['m3', 'Past three months'],
+                                    ['m6', 'Past six months'], ['y1', 'Past year']], state.chtWin);
+        if (state.chtMode === 'stock') f += S('chtSym', 'Stock', symOptions(), state.chtSym);
+        else f += S('chtScope', 'Within', scopeOptions(), state.chtScope);
+        if (state.chtMode === 'leaders') f += S('chtLines', 'How many lines',
+          [['3', 'Top 3'], ['5', 'Top 5'], ['8', 'Top 8']], state.chtLines);
+      } else {
+        f += S('advMode', 'Show', [['board', "Tonight's board"], ['firing', "What's firing"],
+                                   ['changed', 'What changed'], ['profiles', 'Five profiles, one stock'],
+                                   ['tier', 'Everything at one verdict']], state.advMode);
+        if (state.advMode === 'profiles') f += S('advSym', 'Stock', symOptions(), state.advSym);
+        else {
+          if (state.advMode === 'tier') f += S('advTier', 'Verdict',
+            ActionRules.ACTIONS.slice().reverse().map((a) => [a, a]), state.advTier);
+          f += S('advScope', 'Within', scopeOptions(), state.advScope);
+          f += S('advProf', 'Rules', Cards.ADV_PROFILES.map((n) => [n, n]), state.advProf);
+        }
+      }
+      return f + '<span class="spacer"></span>' +
+        '<button class="btn btn-primary" id="dlBtn" title="Save this card as an image">' +
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-download" /></svg>Save image</button>' +
+        '<p id="dlMsg"></p>';
+    }
+
+    function wireBar() {
+      $('kind').addEventListener('change', () => { kind = $('kind').value; paint(); });
+      Object.keys(state).forEach((id) => {
+        const el = $(id);
+        if (!el) return;
+        el.addEventListener('change', () => { state[id] = el.value; paint(); });
+      });
+      $('dlBtn').addEventListener('click', downloadPng);
+    }
+
+    // ---- the archive read the chart card needs ---------------------------
+    const chartCache = {};
+    let chartPending = null;
+    function getBasket(days) {
+      if (chartCache[days]) return chartCache[days];
+      if (chartPending === days) return null;
+      chartPending = days;
+      fetch(`/api/basket?name=All&days=${days}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => { chartCache[days] = d; chartPending = null; if (kind === 'chart') paint(); })
+        .catch(() => { chartPending = null; });
+      return null;
+    }
+
+    function paint() {
+      $('bar').innerHTML = barHtml();
+      wireBar();
+      $('stage').innerHTML = '<div class="s-aura"></div>' +
+        `<div class="s-in">${Cards.build(kind, { stocks, myLists, size: SIZE, opts: state, getBasket })}</div>`;
+      fit();
+    }
+    function fit() {
+      const w = document.querySelector('.page').clientWidth;
+      const s = Math.min(w / SIZE.w, 1);
+      $('stage').style.transform = `scale(${s})`;
+      $('stagewrap').style.width = SIZE.w * s + 'px';
+      $('stagewrap').style.height = SIZE.h * s + 'px';
+    }
+    window.addEventListener('resize', fit);
+
+    // ---- save as an image (the studio's exporter, same technique) --------
+    let fontCssPromise = null;
+    function ensureFontCss() {
+      if (fontCssPromise) return fontCssPromise;
+      fontCssPromise = (async () => {
+        const link = document.querySelector('link[href*="fonts.googleapis.com/css2"]');
+        if (!link) return '';
+        const css = await fetch(link.href).then((r) => r.text());
+        const urls = [...new Set([...css.matchAll(/url\((https:[^)]+)\)/g)].map((m) => m[1]))];
+        const data = {};
+        await Promise.all(urls.map(async (u) => {
+          const buf = await fetch(u).then((r) => r.arrayBuffer());
+          let bin = '';
+          const bytes = new Uint8Array(buf);
+          for (let i = 0; i < bytes.length; i += 0x8000) {
+            bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+          }
+          data[u] = 'data:font/woff2;base64,' + btoa(bin);
+        }));
+        let out = css.replace(/url\((https:[^)]+)\)/g, (m, u) => (data[u] ? `url(${data[u]})` : m));
+        return out.replace(/@font-face\s*\{[^}]*url\(https:[^}]*\}/g, '');
+      })().catch(() => '');
+      return fontCssPromise;
+    }
+    const INLINE_PROPS = [
+      'display', 'position', 'top', 'right', 'bottom', 'left', 'z-index', 'box-sizing',
+      'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
+      'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+      'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+      'flex-direction', 'flex-wrap', 'flex-grow', 'flex-shrink', 'flex-basis',
+      'align-items', 'align-self', 'justify-content', 'gap', 'row-gap', 'column-gap',
+      'grid-template-columns', 'grid-template-rows', 'place-items', 'order',
+      'overflow', 'overflow-x', 'overflow-y', 'visibility', 'opacity',
+      'font-family', 'font-size', 'font-weight', 'font-style', 'font-variant-numeric',
+      'letter-spacing', 'line-height', 'text-align', 'text-transform', 'text-decoration-line',
+      'white-space', 'word-break', 'text-overflow', 'vertical-align', 'color',
+      'background-color', 'background-image', 'background-repeat', 'background-position',
+      'background-size', 'background-clip',
+      'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+      'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
+      'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+      'border-top-left-radius', 'border-top-right-radius',
+      'border-bottom-left-radius', 'border-bottom-right-radius',
+      'box-shadow', 'transform', 'transform-origin', 'filter',
+      'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'fill',
+    ];
+    function inlineStyles(src, dst) {
+      const cs = getComputedStyle(src);
+      let text = '';
+      for (const prop of INLINE_PROPS) {
+        const v = cs.getPropertyValue(prop);
+        if (v && v !== 'none' || prop === 'display') text += `${prop}:${v};`;
+      }
+      dst.setAttribute('style', text);
+      const sk = src.children, dk = dst.children;
+      for (let i = 0; i < sk.length; i++) inlineStyles(sk[i], dk[i]);
+    }
+    async function downloadPng() {
+      const btn = $('dlBtn'), msg = $('dlMsg');
+      btn.disabled = true;
+      msg.textContent = 'Rendering…';
+      try {
+        const fontCss = await ensureFontCss();
+        const stage = $('stage');
+        const clone = stage.cloneNode(true);
+        inlineStyles(stage, clone);
+        clone.style.transform = 'none';
+        clone.style.width = SIZE.w + 'px';
+        clone.style.height = SIZE.h + 'px';
+        const xhtml = new XMLSerializer().serializeToString(clone);
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE.w}" height="${SIZE.h}">` +
+          `<foreignObject width="100%" height="100%"><style>${fontCss}</style>` +
+          `<div xmlns="http://www.w3.org/1999/xhtml">${xhtml}</div></foreignObject></svg>`;
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = () => reject(new Error('the browser refused to rasterise the card'));
+          img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        });
+        await new Promise((r) => setTimeout(r, 120));
+        const cv = document.createElement('canvas');
+        cv.width = SIZE.w; cv.height = SIZE.h;
+        cv.getContext('2d').drawImage(img, 0, 0, SIZE.w, SIZE.h);
+        const blob = await new Promise((resolve, reject) =>
+          cv.toBlob((b) => (b ? resolve(b) : reject(new Error('canvas export failed'))), 'image/png'));
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `tickrlab-${kind}-${new Date().toISOString().slice(0, 10)}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        msg.textContent = 'Saved ' + a.download;
+      } catch (err) {
+        msg.textContent = 'Could not save: ' + err.message + '. A screenshot still works.';
+      }
+      btn.disabled = false;
+    }
+
+    Cards.injectStyle();
+    (async () => {
+      try {
+        const data = await fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json());
+        if (data.error) throw new Error(data.error);
+        stocks = (data.stocks || []).filter((s) => !s.error);
+        portfolioNames = data.portfolios || [];
+        try {
+          const mine = await fetch('/api/my/portfolios', { cache: 'no-store' })
+            .then((r) => (r.ok ? r.json() : { portfolios: {} }));
+          myLists = mine.portfolios || {};
+        } catch { myLists = {}; }
+        if (stocks.length) { state.chtSym = stocks[0].symbol; state.advSym = stocks[0].symbol; }
+        paint();
+      } catch (err) {
+        document.querySelector('.stagewrap').innerHTML =
+          `<div class="err">Could not load: ${esc(err.message)} <a href="/" style="color:var(--accent)">Back to the screener</a>.</div>`;
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -196,6 +196,16 @@ app.get('/portfolio/:name', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'private', 'basket.html'));
 }));
 
+// The member room for the shared card builders — three of them, one shape.
+// The promo studio at /promo stays the owner's superset: the explainers and
+// the announcement card are the brand's own voice.
+app.get('/cards', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'cards');
+  res.sendFile(path.join(__dirname, 'private', 'cards.html'));
+}));
+
 app.get('/help', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   logAct(req, 'page', 'help');
@@ -260,6 +270,7 @@ app.get('/login', (req, res) => {
 // file. Locally it worked, which is exactly why it went unnoticed.
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
+                      '/cards.html': '/cards',
                       '/users.html': '/users', '/reset.html': '/reset',
                       '/contact.html': '/contact', '/help.html': '/help',
                       // no symbol in that path, so there is nothing to show

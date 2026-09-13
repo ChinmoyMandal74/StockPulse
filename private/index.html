@@ -1474,6 +1474,10 @@
         `<span class="nm">${we(name)}</span><span class="count">${we(hint)}</span></a>`;
 
       const parts = [
+        // Cards leads: it is the one row here that summarises rather than
+        // studies, and it is where a member first sees the data as a picture.
+        row('/cards', 'i-chart', 'Cards', 'the screen, summarised'),
+        '<div class="pick-sep"></div>',
         row('/analysis', 'i-columns', 'Analysis', 'screens'),
         row('/strategy', 'i-strategy', 'Strategy', 'portfolio backtest'),
         row('/single', 'i-chart', 'Single', 'one stock, or cash'),
