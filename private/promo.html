@@ -179,10 +179,12 @@
       <label>Size</label>
       <div class="sizes" id="sizeList"></div>
 
+      <button class="btn" id="dlBtn" title="Render this card to a PNG at its exact pixel size">Download PNG</button>
+      <p class="hint" id="dlMsg"></p>
       <button class="btn" id="reloadBtn">Re-pull tonight's data</button>
-      <p class="hint">Screenshot tip: the artboard keeps a fixed 1080-wide layout at every size,
-        so crops line up post after post. Nothing here recommends — cards report what the
-        screen and the rules did, which is the house line.</p>
+      <p class="hint">Download gives the exact artboard — 1080 wide at every size, no cropping,
+        no browser chrome. Nothing here recommends — cards report what the screen and the
+        rules did, which is the house line.</p>
     </aside>
 
     <main class="deck"><div id="stageWrap"><div id="stage"></div></div></main>
@@ -383,6 +385,99 @@
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
     $('reloadBtn').addEventListener('click', () => load(true));
+
+    // ---- Download PNG -----------------------------------------------------
+    // The artboard becomes an SVG foreignObject with every computed style
+    // inlined (a serialized SVG document sees none of the page's
+    // stylesheets), the Google fonts are fetched once and embedded as data
+    // URIs (external refs inside an SVG-as-image are silently dropped), and
+    // the result is painted onto a canvas at the card's TRUE pixel size —
+    // 1080 wide, no screenshot, no scale wobble. Any failure falls back to
+    // a message; the screenshot path always remains.
+    let fontCssPromise = null;
+    function ensureFontCss() {
+      if (fontCssPromise) return fontCssPromise;
+      fontCssPromise = (async () => {
+        const link = document.querySelector('link[href*="fonts.googleapis.com/css2"]');
+        if (!link) return '';
+        const css = await fetch(link.href).then((r) => r.text());
+        const urls = [...css.matchAll(/url\((https:[^)]+)\)/g)].map((m) => m[1]);
+        const uniq = [...new Set(urls)];
+        const data = {};
+        await Promise.all(uniq.map(async (u) => {
+          const buf = await fetch(u).then((r) => r.arrayBuffer());
+          let bin = '';
+          const bytes = new Uint8Array(buf);
+          for (let i = 0; i < bytes.length; i += 0x8000) {
+            bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+          }
+          data[u] = 'data:font/woff2;base64,' + btoa(bin);
+        }));
+        return css.replace(/url\((https:[^)]+)\)/g, (m, u) => `url(${data[u] || u})`);
+      })().catch(() => '');
+      return fontCssPromise;
+    }
+
+    function inlineStyles(src, dst) {
+      const cs = getComputedStyle(src);
+      let text = '';
+      for (let i = 0; i < cs.length; i++) {
+        const prop = cs[i];
+        text += `${prop}:${cs.getPropertyValue(prop)};`;
+      }
+      dst.setAttribute('style', text);
+      const sk = src.children, dk = dst.children;
+      for (let i = 0; i < sk.length; i++) inlineStyles(sk[i], dk[i]);
+    }
+
+    async function downloadPng() {
+      const btn = $('dlBtn'), msg = $('dlMsg');
+      btn.disabled = true;
+      msg.textContent = 'Rendering\u2026';
+      try {
+        const fontCss = await ensureFontCss();
+        const stage = $('stage');
+        const clone = stage.cloneNode(true);
+        inlineStyles(stage, clone);
+        // the on-screen stage is scaled to fit the window; the export is not
+        clone.style.transform = 'none';
+        clone.style.width = '1080px';
+        clone.style.height = size.h + 'px';
+        const xhtml = new XMLSerializer().serializeToString(clone);
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="${size.h}">` +
+          `<foreignObject width="100%" height="100%"><style>${fontCss}</style>` +
+          `<div xmlns="http://www.w3.org/1999/xhtml">${xhtml}</div></foreignObject></svg>`;
+        const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = () => reject(new Error('The browser refused to rasterise the card.'));
+          img.src = url;
+        });
+        // fonts inside an SVG image can settle a beat after onload
+        await new Promise((r) => setTimeout(r, 120));
+        const cv = document.createElement('canvas');
+        cv.width = 1080; cv.height = size.h;
+        const cx = cv.getContext('2d');
+        cx.drawImage(img, 0, 0, 1080, size.h);
+        URL.revokeObjectURL(url);
+        const blob = await new Promise((resolve, reject) =>
+          cv.toBlob((b) => (b ? resolve(b) : reject(new Error('Canvas export failed.'))), 'image/png'));
+        const a = document.createElement('a');
+        const date = new Date().toISOString().slice(0, 10);
+        a.href = URL.createObjectURL(blob);
+        a.download = `tickrlab-${tpl}-${size.id}-${date}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        msg.textContent = `Saved ${a.download} (1080\u00d7${size.h}).`;
+      } catch (err) {
+        msg.textContent = 'Could not render: ' + err.message + ' A screenshot of the artboard still works.';
+      }
+      btn.disabled = false;
+    }
+    $('dlBtn').addEventListener('click', downloadPng);
 
     async function load(reload) {
       try {
