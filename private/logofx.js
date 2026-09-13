@@ -82,5 +82,9 @@
     return pr;
   }
 
-  window.LogoFX = { clean };
+  // After an admin replaces a mark, the in-page cache must forget the old
+  // processing or the studio keeps painting the stale one until a reload.
+  function bust(symbol) { cache.delete(symbol); }
+
+  window.LogoFX = { clean, bust };
 })();

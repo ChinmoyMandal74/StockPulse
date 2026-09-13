@@ -3292,6 +3292,40 @@ app.post('/api/logos/refresh', requireAdmin, route(async (req, res) => {
   });
 }));
 
+// Replace one symbol's logo from a URL the admin supplies — the fix for a
+// stale mark at the bulk provider (AMD's was years old): re-fetching from
+// the same source re-fetches the same staleness, so the override IS the
+// tool. Admin-only, https only, image/* only, capped at 2MB; the fetched
+// bytes are stored, never the URL, so the mark cannot rot with a remote
+// host. Wikipedia's press-kit marks are the intended diet.
+app.post('/api/logos/set', requireAdmin, route(async (req, res) => {
+  const symbol = String(req.body?.symbol || '').trim().toUpperCase();
+  const url = String(req.body?.url || '').trim();
+  if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if (!getUniverse(await readPortfolios()).includes(symbol)) {
+    return res.status(404).json({ error: `${symbol} is not in the universe.` });
+  }
+  if (!/^https:\/\/.+/.test(url)) return res.status(400).json({ error: 'An https image URL is required.' });
+  let img;
+  try {
+    // Wikimedia (the intended source) refuses anonymous fetchers without a
+    // User-Agent — their published policy, not a quirk.
+    img = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'TickrLab/1.0 (logo fetch; contact via tickrlab.com)' } });
+  } catch {
+    return res.status(502).json({ error: 'Could not reach that URL.' });
+  }
+  if (!img.ok) return res.status(502).json({ error: `That URL answered ${img.status}.` });
+  const mime = String(img.headers.get('content-type') || '').split(';')[0];
+  if (!mime.startsWith('image/')) return res.status(400).json({ error: `That URL serves ${mime || 'no content type'}, not an image.` });
+  const buf = Buffer.from(await img.arrayBuffer());
+  if (!buf.length || buf.length > 2 * 1024 * 1024) {
+    return res.status(400).json({ error: 'Image is empty or over 2MB.' });
+  }
+  await store.writeLogos([{ symbol, mime, data: buf.toString('base64') }]);
+  logAct(req, 'refresh', 'logo-set:' + symbol);
+  res.json({ ok: true, symbol, mime, bytes: buf.length });
+}));
+
 // Serves the stored bytes. Long cache: a logo changes on the timescale of a
 // rebrand, and the admin's force refresh rewrites the row when one does.
 app.get('/api/logo/:symbol', requireAuth, route(async (req, res) => {

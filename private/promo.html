@@ -181,6 +181,12 @@
       <label>Size</label>
       <div class="sizes" id="sizeList"></div>
 
+      <label>Fix a logo (stale at the provider?)</label>
+      <input type="text" id="fixSym" placeholder="Symbol, e.g. AMD" maxlength="15" style="margin-bottom:6px" />
+      <input type="text" id="fixUrl" placeholder="https:// image URL (Wikipedia works well)" />
+      <button class="btn" id="fixBtn" style="margin-top:8px">Replace logo</button>
+      <p class="hint" id="fixMsg" style="margin-top:6px"></p>
+
       <button class="btn" id="reloadBtn">Re-pull tonight's data</button>
       <p class="hint">Screenshot tip: the artboard keeps a fixed 1080-wide layout at every size,
         so crops line up post after post. Nothing here recommends — cards report what the
@@ -373,6 +379,28 @@
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
     $('reloadBtn').addEventListener('click', () => load(true));
+
+    // The stale-mark fix: paste the current logo's URL, the server fetches
+    // and stores the bytes, the card repaints with it immediately.
+    $('fixBtn').addEventListener('click', async () => {
+      const symbol = $('fixSym').value.trim().toUpperCase();
+      const url = $('fixUrl').value.trim();
+      $('fixMsg').textContent = 'Fetching…';
+      try {
+        const res = await fetch('/api/logos/set', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symbol, url }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not replace it.');
+        if (window.LogoFX && LogoFX.bust) LogoFX.bust(symbol);
+        $('fixMsg').textContent = `${symbol}: replaced (${data.mime}, ${(data.bytes / 1024).toFixed(0)}KB).`;
+        render();
+      } catch (err) {
+        $('fixMsg').textContent = err.message;
+      }
+    });
 
     async function load(reload) {
       try {
