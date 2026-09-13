@@ -151,6 +151,14 @@ Sent through **Resend** over plain `fetch` — a REST call does not justify a fo
 - Admin-only endpoint: `GET /api/visitors` — returns summary + last 500 entries
 - Admin-only page: `/visitors` — same visual system as the screener
 
+## Activity logging
+**Who did what, fact-only — the `activity` table** (`ts`, `user`, `kind`, `detail`, `ip`), separate from `visitors` on purpose: that one is the anonymous front-door knock, this one is a known account doing a thing. Facts, never content — a chat row says `asked`, not the question. Viewed at **`/activity`** (admin only, linked from the bar and from `/visitors`), which shows per-user and per-kind rollups plus the filterable 500-row tail, and carries a **Clear log** button (`DELETE /api/activity`, confirm-with-count like the visitor one). Pruned to `ACTIVITY_KEEP_DAYS` (60) during every refresh, fire-and-forget.
+
+- **Two halves.** Server routes call `logAct(req, kind, detail)` (fire-and-forget, never blocks the action): `page` (every gated page, symbol included), `login` (password / account / signup / guest), `chat` `asked`, `refresh` (plain / all / as-of — a Refresh All logs ONCE at its POST; its `?refresh=1` rounds are skipped via `opts.running`), `portfolio` CRUD, `model`, `contact`, `account` (logout / password-changed / reset). The client half is **`private/track.js`** (`window.track(kind, detail)`), loaded by the screener and the stock page for what the server never sees: `sort`, `tab`, `picker` (columns / weights / past / rules), `export` (the CSV is fully client-side), `panel` (ladder opens), `chart` (ranges, MA / RSI / Mom / Trend toggles, why-card).
+- **The beacon batches** — events queue and flush as one `sendBeacon('/api/activity')` every ~20s, on a full queue and on `pagehide` — so a sorting session is one Turso write, not thirty. `POST /api/activity` (any signed-in user, guests included) allowlists the six client kinds (`CLIENT_ACT_KINDS`), clamps details to 80 printable chars and caps a batch at 50, so it cannot become free-form storage — the prefs-PUT rule.
+- **Guests are the point.** The shared `st_guest` token cannot tell two guests apart, so the guest door also sets **`st_gid`** — a random id used ONLY as the log key (`guest-<id>`), kept if already present so a returning guest stays one trail. Deliberately noise-free: no `/api/status` polls, no sparkline/news fetches, no hovers, no refresh-all rounds, no cron.
+- Verified on introduction with an admin walk + guest walk against a local boot: junk kinds dropped, oversize details clamped, guest 403 on GET/DELETE, anonymous 401, clear removed all rows.
+
 ## Frontend layout
 Everything above the table is **one bar**. There is no separate masthead, no tab rail, no chip row — they were merged to reclaim vertical space (the table used to start ~685px down; it now starts ~91px down).
 

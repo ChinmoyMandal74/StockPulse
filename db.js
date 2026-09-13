@@ -82,6 +82,22 @@ const SCHEMA = [
      user_email text
    )`,
   `create index if not exists idx_visitors_ts on visitors (ts)`,
+  // Who did what, fact-only: one row per meaningful action, from server
+  // routes and the batched client beacon. Facts, never content (a chat row
+  // says 'asked', not the question). Pruned to ~60 days on refresh — a
+  // sense-of-usage tool, not an audit archive. 'user' is the account email,
+  // 'admin' for the legacy password cookie, or 'guest-<id>' (the st_gid
+  // cookie) so one guest's walk can be followed.
+  `create table if not exists activity (
+     id     integer primary key autoincrement,
+     ts     text not null,
+     user   text,
+     kind   text not null,
+     detail text,
+     ip     text
+   )`,
+  `create index if not exists idx_activity_ts on activity (ts)`,
+  `create index if not exists idx_activity_user on activity (user)`,
   // Accounts. The screener itself is shared — every signed-in user sees the same
   // data — so these exist purely to control who gets through the door.
   // role: 'owner' can edit tickers / refresh / rewind the table; 'member' is read-only.
@@ -1201,6 +1217,65 @@ async function readVisitorStats(limit = 500) {
   };
 }
 
+// ---- activity ---------------------------------------------------------------
+// One batch regardless of row count: the client beacon delivers bursts (a
+// sorting session arrives as one array), and a batch keeps that one write.
+async function logActivity(rows) {
+  await init();
+  if (!rows || !rows.length) return;
+  await db.batch(rows.map((r) => ({
+    sql: 'insert into activity (ts, user, kind, detail, ip) values (?, ?, ?, ?, ?)',
+    args: [r.ts, r.user ?? null, r.kind, r.detail ?? null, r.ip ?? null],
+  })), 'write');
+}
+
+// Aggregated in SQL like the visitor stats — per-user and per-kind rollups
+// plus the raw tail, which is what makes the page explorable.
+async function readActivityStats(limit = 500) {
+  await init();
+  const today = new Date().toISOString().slice(0, 10);
+  const [agg, users, kinds, recent] = await Promise.all([
+    db.execute({
+      sql: `select count(*) as total,
+                   sum(case when ts like ? then 1 else 0 end) as today_count,
+                   count(distinct case when ts like ? then user end) as users_today
+            from activity`,
+      args: [today + '%', today + '%'],
+    }),
+    db.execute('select user, count(*) as c, max(ts) as last from activity group by user order by c desc limit 50'),
+    db.execute('select kind, count(*) as c from activity group by kind order by c desc'),
+    db.execute({ sql: 'select ts, user, kind, detail, ip from activity order by id desc limit ?', args: [limit] }),
+  ]);
+  const a = agg.rows[0] || {};
+  return {
+    total: Number(a.total || 0),
+    todayCount: Number(a.today_count || 0),
+    usersToday: Number(a.users_today || 0),
+    users: users.rows.map((r) => ({ user: r.user, count: Number(r.c), last: r.last })),
+    kinds: kinds.rows.map((r) => ({ kind: r.kind, count: Number(r.c) })),
+    entries: recent.rows.map((r) => ({ ts: r.ts, user: r.user, kind: r.kind, detail: r.detail, ip: r.ip })),
+  };
+}
+
+// Wipes the log, like clearVisitors — the autoincrement resets too.
+async function clearActivity() {
+  await init();
+  const before = await db.execute('select count(*) as c from activity');
+  await db.batch([
+    { sql: 'delete from activity', args: [] },
+    { sql: "delete from sqlite_sequence where name = 'activity'", args: [] },
+  ], 'write');
+  return Number(before.rows[0].c || 0);
+}
+
+// Rides the refresh, fire-and-forget: this log answers "how is it being
+// used lately", so rows past the window are weight, not signal.
+async function pruneActivity(days = 60) {
+  await init();
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+  await db.execute({ sql: 'delete from activity where ts < ?', args: [cutoff] });
+}
+
 // ---- accounts -------------------------------------------------------------
 // scrypt ships with Node, so accounts need no dependency. Defined here rather
 // than in server.js so set-password.js hashes identically — two copies of a
@@ -1425,6 +1500,10 @@ module.exports = {
   db,
   init,
   clearVisitors,
+  logActivity,
+  readActivityStats,
+  clearActivity,
+  pruneActivity,
   hashPassword,
   newSalt,
   verifyPassword,

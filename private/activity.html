@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Visitor Log — Tickr Lab</title>
+  <title>Activity Log — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -15,8 +15,8 @@
     .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
     .aura {
       background:
-        radial-gradient(46vw 40vw at 4% -8%, rgba(124, 156, 255, 0.13), transparent 62%),
-        radial-gradient(50vw 42vw at 98% 4%, rgba(167, 139, 250, 0.11), transparent 64%); }
+        radial-gradient(46vw 40vw at 4% -8%, rgba(52, 211, 153, 0.11), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
 
     .bezel { border-radius: 26px; }
     .bezel > .core { border-radius: 20px; }
@@ -50,12 +50,12 @@
       font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em;
       color: var(--muted); box-shadow: var(--inset);
     }
-    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
     h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600;
          line-height: 0.94; letter-spacing: -0.045em; }
     h1 .w2 { background: linear-gradient(100deg, #9aa4b6 10%, #5d6474 92%);
              -webkit-background-clip: text; background-clip: text; color: transparent; }
-    .lede { margin: 16px 0 0; max-width: 52ch; font-size: 13px; line-height: 1.65; }
+    .lede { margin: 16px 0 0; max-width: 56ch; font-size: 13px; line-height: 1.65; }
     .masthead { margin: 34px 0 22px; }
 
     /* stat bento */
@@ -65,45 +65,70 @@
     .k { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
     .val { margin-top: 12px; font-family: var(--mono); font-size: 34px; font-weight: 500;
            letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
-    .stat:nth-child(1) .val { color: var(--accent); }
-    .stat:nth-child(2) .val { color: var(--green); }
+    .stat:nth-child(1) .val { color: var(--green); }
+    .stat:nth-child(2) .val { color: var(--accent); }
     .stat:nth-child(3) .val { color: var(--accent-2); }
-    @media (max-width: 768px) { .who { max-width: 30vw; } }
 
-    .table-wrap { max-height: calc(100dvh - 420px); min-height: 260px;
-      scrollbar-color: rgba(255, 255, 255, 0.16) transparent; scrollbar-width: thin; }
+    /* the two rollups, side by side */
+    .rollups { display: grid; grid-template-columns: 3fr 2fr; gap: 14px; margin-bottom: 16px; }
+    .roll > .core { padding: 4px 0 8px; }
+    .roll h2 { margin: 14px 20px 6px; font-size: 10px; font-weight: 500; text-transform: uppercase;
+               letter-spacing: 0.2em; color: var(--faint); }
+    .roll .table-wrap { max-height: 300px; }
+
+    .table-wrap { scrollbar-color: rgba(255, 255, 255, 0.16) transparent; scrollbar-width: thin; }
     .table-wrap::-webkit-scrollbar { width: 11px; height: 11px; }
     .table-wrap::-webkit-scrollbar-thumb {
       background: rgba(255, 255, 255, 0.14);
       border: 3px solid var(--surface); background-clip: padding-box; }
-    table { font-size: 12.5px; }
+    .tail-wrap { max-height: calc(100dvh - 420px); min-height: 300px; }
+    table { font-size: 12.5px; width: 100%; }
     thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-2); }
     th, td { text-align: left; padding: 8px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); }
     th { border-bottom: 1px solid var(--hair); }
+    td.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    th.n { text-align: right; }
     tbody tr { animation: rowIn 0.5s var(--ease-soft) both;
                animation-delay: calc(min(var(--i, 0), 24) * 14ms); }
     .ts { font-family: var(--mono); font-size: 11.5px; white-space: nowrap; letter-spacing: -0.02em; }
-    .ip { font-family: var(--mono); font-size: 11.5px; color: var(--accent); letter-spacing: -0.01em; }
     .who { font-family: var(--mono); font-size: 11.5px; color: var(--green); white-space: nowrap;
-           max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
-    .who.dash { color: var(--faint); }
-    .ua { color: var(--muted); max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ref { color: var(--muted); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+           max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+    .who.guest { color: var(--amber); }
+    .kind { font-family: var(--mono); font-size: 11px; color: var(--accent); text-transform: uppercase;
+            letter-spacing: 0.08em; white-space: nowrap; }
+    .det { font-family: var(--mono); font-size: 11.5px; color: var(--muted); max-width: 380px;
+           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ip { font-family: var(--mono); font-size: 11.5px; color: var(--faint); white-space: nowrap; }
     .dash { color: var(--faint); }
     .error { display: flex; align-items: center; gap: 10px; color: var(--red); padding: 28px; font-size: 13px; }
     .error a { color: var(--accent); text-decoration: none; }
     .error a:hover { text-decoration: underline; }
     .note { margin: 14px 4px 0; }
 
-    @media (max-width: 900px) { .stat { grid-column: span 12; } }
+    /* the user filter above the tail */
+    .tail-bar { display: flex; align-items: center; justify-content: space-between;
+                gap: 12px; margin: 4px 4px 10px; }
+    .tail-bar h2 { margin: 0; font-size: 10px; font-weight: 500; text-transform: uppercase;
+                   letter-spacing: 0.2em; color: var(--faint); }
+    select {
+      appearance: none; -webkit-appearance: none;
+      font: 500 12px var(--sans); color: var(--text);
+      background: rgba(255, 255, 255, 0.05); border: 1px solid var(--hair);
+      border-radius: 999px; padding: 6px 30px 6px 14px; cursor: pointer;
+      background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa3b2' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+    }
+    select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    @media (max-width: 900px) { .stat { grid-column: span 12; } .rollups { grid-template-columns: 1fr; } }
     @media (max-width: 768px) {
       .page { padding: 0 16px; }
       .hide-sm { display: none !important; }
       h1 { font-size: clamp(32px, 11vw, 44px); }
       .stats { grid-template-columns: 1fr; }
       .stat { grid-column: span 1; }
-      .table-wrap { max-height: calc(100dvh - 340px); }
-      .ua, .ref { max-width: 46vw; }
+      .tail-wrap { max-height: calc(100dvh - 340px); }
+      .det { max-width: 42vw; }
     }
   </style>
 </head>
@@ -114,9 +139,9 @@
   <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
     <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
     <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M15.4 20v-1.8a3.6 3.6 0 0 0-3.6-3.6H6.4a3.6 3.6 0 0 0-3.6 3.6V20"/><circle cx="9.1" cy="7.6" r="3.4"/><path d="M21.2 20v-1.8a3.6 3.6 0 0 0-2.7-3.5"/><path d="M15.5 4.4a3.4 3.4 0 0 1 0 6.5"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.6 6.6h14.8"/><path d="M9.6 6.6V4.9a1.3 1.3 0 0 1 1.3-1.3h2.2a1.3 1.3 0 0 1 1.3 1.3v1.7"/><path d="M6.9 6.6 7.8 19a1.5 1.5 0 0 0 1.5 1.4h5.4A1.5 1.5 0 0 0 16.2 19l.9-12.4"/></symbol>
     <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.6 21 19.4H3L12 4.6Z"/><path d="M12 10.4v3.8M12 17.1v.1"/></symbol>
-    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.6-6.4 4.8 12.8L17 12h4"/></symbol>
   </svg>
 
   <div class="island-wrap">
@@ -129,10 +154,10 @@
       <a class="btn" href="/">
         <svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener
       </a>
-      <a class="btn" href="/activity" title="What every user is doing, fact by fact">
-        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-pulse" /></svg><span class="hide-sm">Activity log</span>
+      <a class="btn" href="/visitors" title="The anonymous front-door log — every page knock">
+        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-users" /></svg><span class="hide-sm">Visitor log</span>
       </a>
-      <button class="btn danger" id="clearBtn" style="display:none" title="Delete every entry in the visitor log">
+      <button class="btn danger" id="clearBtn" style="display:none" title="Delete every entry in the activity log">
         <svg class="ic ic-sm" aria-hidden="true"><use href="#i-trash" /></svg>Clear log
       </button>
     </nav>
@@ -141,8 +166,10 @@
   <main class="page">
     <header class="masthead reveal">
       <span class="eyebrow"><span class="pip"></span>Admin</span>
-      <h1><span class="w1">Visitor</span> <span class="w2">Log</span></h1>
-      <p class="lede">Every request the screener has served, newest first — timestamp, source address, client and referrer.</p>
+      <h1><span class="w1">Activity</span> <span class="w2">Log</span></h1>
+      <p class="lede">Who did what, newest first — pages opened, questions asked, sorts, pickers,
+        exports and chart toggles, for every account and every guest. Facts only: a chat row says a
+        question was asked, never what it said.</p>
     </header>
 
     <div id="main">
@@ -165,6 +192,38 @@
     }
 
     let lastTotal = 0;
+    let allEntries = [];
+    let userFilter = '';
+
+    function whoCell(u) {
+      if (!u) return '<td class="who dash">—</td>';
+      const cls = /^guest-/.test(u) ? 'who guest' : 'who';
+      return `<td class="${cls}">${esc(u)}</td>`;
+    }
+
+    // The tail repaints client-side from the already-fetched 500 rows, so the
+    // user filter costs nothing and needs no request.
+    function tailHtml() {
+      const rows = userFilter ? allEntries.filter((e) => e.user === userFilter) : allEntries;
+      if (!rows.length) {
+        return '<div class="empty">Nothing logged' + (userFilter ? ' for this user in the recent tail.' : ' yet.') + '</div>';
+      }
+      let html = '<div class="table-wrap tail-wrap"><table>' +
+        '<thead><tr><th>Time</th><th>User</th><th>Kind</th><th>Detail</th><th class="hide-sm">IP</th></tr></thead><tbody>';
+      rows.forEach((e, i) => {
+        const ts = new Date(e.ts).toLocaleString();
+        html += `<tr style="--i:${i}"><td class="ts">${esc(ts)}</td>${whoCell(e.user)}` +
+          `<td class="kind">${esc(e.kind)}</td>` +
+          (e.detail ? `<td class="det" title="${esc(e.detail)}">${esc(e.detail)}</td>` : '<td class="det dash">—</td>') +
+          `<td class="ip hide-sm">${esc(e.ip || '—')}</td></tr>`;
+      });
+      return html + '</tbody></table></div>';
+    }
+
+    function paintTail() {
+      const box = document.getElementById('tailBox');
+      if (box) box.innerHTML = tailHtml();
+    }
 
     async function load() {
       const main = document.getElementById('main');
@@ -178,39 +237,56 @@
           revealAll();
           return;
         }
-        const data = await fetch('/api/visitors').then(r => r.json());
-        const { total, todayCount, uniqueIps, uniqueUsers, entries } = data;
+        const data = await fetch('/api/activity').then(r => r.json());
+        const { total, todayCount, usersToday, users, kinds, entries } = data;
         lastTotal = total;
+        allEntries = entries || [];
         document.getElementById('clearBtn').style.display = total > 0 ? '' : 'none';
 
         let html = `
           <div class="stats">
-            <div class="stat bezel reveal"><div class="core"><div class="k">Total visits</div><div class="val">${total.toLocaleString()}</div></div></div>
+            <div class="stat bezel reveal"><div class="core"><div class="k">Total events</div><div class="val">${total.toLocaleString()}</div></div></div>
             <div class="stat bezel reveal" style="--d:90ms"><div class="core"><div class="k">Today</div><div class="val">${todayCount.toLocaleString()}</div></div></div>
-            <div class="stat bezel reveal" style="--d:150ms"><div class="core"><div class="k">Signed-in users</div><div class="val">${(uniqueUsers ?? 0).toLocaleString()}</div></div></div>
+            <div class="stat bezel reveal" style="--d:150ms"><div class="core"><div class="k">Users today</div><div class="val">${(usersToday ?? 0).toLocaleString()}</div></div></div>
           </div>`;
 
-        if (entries.length === 0) {
-          html += '<div class="bezel reveal"><div class="core"><div class="empty">No visits logged yet.</div></div></div>';
-        } else {
-          html += `<div class="bezel reveal" style="--d:210ms"><div class="core"><div class="table-wrap"><table>
-            <thead><tr><th>Time</th><th>User</th><th>IP</th><th>User agent</th><th>Referrer</th></tr></thead>
-            <tbody>`;
-          entries.forEach((e, i) => {
-            const ts = new Date(e.ts).toLocaleString();
-            const ua = e.ua ? `<td class="ua" title="${esc(e.ua)}">${esc(e.ua)}</td>` : '<td class="ua dash">—</td>';
-            const ref = e.ref ? `<td class="ref" title="${esc(e.ref)}">${esc(e.ref)}</td>` : '<td class="ref dash">—</td>';
-            // Null means the visit predates accounts, or was an ADMIN_PASSWORD
-            // login, which has no account behind it.
-            const who = e.user
-              ? `<td class="who">${esc(e.user)}</td>`
-              : '<td class="who dash" title="Before accounts existed, or an ADMIN_PASSWORD login">—</td>';
-            html += `<tr style="--i:${i}"><td class="ts">${esc(ts)}</td>${who}<td class="ip">${esc(e.ip || '—')}</td>${ua}${ref}</tr>`;
-          });
-          html += '</tbody></table></div></div></div>';
-          if (total > 500) html += `<p class="note">Showing the most recent 500 of ${total.toLocaleString()} visits.</p>`;
+        if (!total) {
+          html += '<div class="bezel reveal"><div class="core"><div class="empty">Nothing logged yet — ' +
+            'rows appear as people use the app.</div></div></div>';
+          main.innerHTML = html;
+          revealAll();
+          return;
         }
+
+        // The two rollups: who is active, and which features get used.
+        html += '<div class="rollups">';
+        html += '<div class="roll bezel reveal"><div class="core"><h2>By user</h2><div class="table-wrap"><table>' +
+          '<thead><tr><th>User</th><th class="n">Events</th><th>Last seen</th></tr></thead><tbody>' +
+          (users || []).map((u, i) =>
+            `<tr style="--i:${i}">${whoCell(u.user)}<td class="n">${Number(u.count).toLocaleString()}</td>` +
+            `<td class="ts">${esc(u.last ? new Date(u.last).toLocaleString() : '—')}</td></tr>`).join('') +
+          '</tbody></table></div></div></div>';
+        html += '<div class="roll bezel reveal" style="--d:90ms"><div class="core"><h2>By kind</h2><div class="table-wrap"><table>' +
+          '<thead><tr><th>Kind</th><th class="n">Events</th></tr></thead><tbody>' +
+          (kinds || []).map((k, i) =>
+            `<tr style="--i:${i}"><td class="kind">${esc(k.kind)}</td><td class="n">${Number(k.count).toLocaleString()}</td></tr>`).join('') +
+          '</tbody></table></div></div></div>';
+        html += '</div>';
+
+        // The raw tail, filterable by user.
+        const opts = ['<option value="">Everyone</option>'].concat(
+          (users || []).map((u) => `<option value="${esc(u.user || '')}">${esc(u.user || '—')}</option>`));
+        html += '<div class="bezel reveal" style="--d:150ms"><div class="core" style="padding-top:14px">' +
+          `<div class="tail-bar"><h2>Recent activity</h2><select id="userSel" aria-label="Filter by user">${opts.join('')}</select></div>` +
+          '<div id="tailBox"></div></div></div>';
+        if (total > 500) html += `<p class="note">The tail shows the most recent 500 of ${total.toLocaleString()} events; the rollups above count everything.</p>`;
+
         main.innerHTML = html;
+        paintTail();
+        const sel = document.getElementById('userSel');
+        sel.value = userFilter;
+        if (sel.value !== userFilter) { userFilter = ''; sel.value = ''; paintTail(); }
+        sel.addEventListener('change', () => { userFilter = sel.value; paintTail(); });
         revealAll();
       } catch (err) {
         main.innerHTML = '<div class="bezel reveal"><div class="core"><div class="error">' +
@@ -224,13 +300,14 @@
       // Irreversible, so name the number being destroyed rather than asking a
       // vague "are you sure".
       if (!window.confirm(
-        `Delete all ${lastTotal.toLocaleString()} visitor log entries?\n\nThis cannot be undone.`)) return;
+        `Delete all ${lastTotal.toLocaleString()} activity log entries?\n\nThis cannot be undone.`)) return;
       const btn = document.getElementById('clearBtn');
       btn.disabled = true;
       try {
-        const res = await fetch('/api/visitors', { method: 'DELETE' });
+        const res = await fetch('/api/activity', { method: 'DELETE' });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Could not clear the log.');
+        userFilter = '';
         await load();          // repaint from the now-empty table
       } catch (err) {
         window.alert(err.message);

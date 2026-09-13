@@ -123,12 +123,14 @@ app.get(['/', '/index.html'], route(async (req, res, next) => {
   };
   // Fire and forget: a logging failure must never block the page load.
   store.logVisit(entry).catch(() => { /* ignore */ });
+  logAct(req, 'page', 'screener');
   next();
 }));
 
 app.get('/analysis', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'analysis');
   res.sendFile(path.join(__dirname, 'private', 'analysis.html'));
 }));
 
@@ -139,6 +141,7 @@ app.get('/stock/:symbol', route(async (req, res) => {
   if ((await isGuest(req)) && !guestSet.has(String(req.params.symbol || '').toUpperCase())) {
     return res.redirect('/');
   }
+  logAct(req, 'page', 'stock:' + String(req.params.symbol || '').toUpperCase().slice(0, 12));
   res.sendFile(path.join(__dirname, 'private', 'stock.html'));
 }));
 
@@ -148,6 +151,7 @@ app.get('/stock/:symbol', route(async (req, res) => {
 app.get('/signal/:symbol', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'signal:' + String(req.params.symbol || '').toUpperCase().slice(0, 12));
   res.sendFile(path.join(__dirname, 'private', 'signal.html'));
 }));
 
@@ -158,6 +162,7 @@ app.get('/signal/:symbol', route(async (req, res) => {
 app.get('/strategy', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'strategy');
   res.sendFile(path.join(__dirname, 'private', 'strategy.html'));
 }));
 
@@ -168,6 +173,7 @@ app.get('/strategy', route(async (req, res) => {
 app.get('/single', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'single');
   res.sendFile(path.join(__dirname, 'private', 'single.html'));
 }));
 
@@ -176,17 +182,20 @@ app.get('/single', route(async (req, res) => {
 app.get('/lab/:symbol', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'lab:' + String(req.params.symbol || '').toUpperCase().slice(0, 12));
   res.sendFile(path.join(__dirname, 'private', 'lab.html'));
 }));
 
 app.get('/help', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
+  logAct(req, 'page', 'help');
   res.sendFile(path.join(__dirname, 'private', 'help.html'));
 }));
 
 app.get('/contact', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'contact');
   res.sendFile(path.join(__dirname, 'private', 'contact.html'));
 }));
 
@@ -202,6 +211,7 @@ app.get('/users', route(async (req, res) => {
 app.get('/chat', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'chat');
   res.sendFile(path.join(__dirname, 'private', 'chat.html'));
 }));
 
@@ -239,6 +249,7 @@ app.get('/login', (req, res) => {
 // gated .html answered 200 to anyone with the URL, as did every research JSON
 // file. Locally it worked, which is exactly why it went unnoticed.
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
+                      '/activity.html': '/activity',
                       '/users.html': '/users', '/reset.html': '/reset',
                       '/contact.html': '/contact', '/help.html': '/help',
                       // no symbol in that path, so there is nothing to show
@@ -297,6 +308,12 @@ app.use(gateAssets, express.static(path.join(__dirname, 'private')));
 app.get('/visitors', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'private', 'visitors.html'));
+}));
+
+// Admin only, like /visitors — what every user is doing, fact by fact.
+app.get('/activity', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  res.sendFile(path.join(__dirname, 'private', 'activity.html'));
 }));
 
 // ---- Admin auth (cookie-based, no DB) --------------------------------------
@@ -426,6 +443,37 @@ const requireAuth = route(async (req, res, next) => {
   if (await isSignedIn(req)) return next();
   res.status(401).json({ error: 'Please sign in.' });
 });
+
+// ---- activity log -----------------------------------------------------
+// Who did what, fact-only. Fire-and-forget like the visitor log: a logging
+// failure must never block or slow the action it describes. The key is the
+// account email; 'admin' for the legacy password cookie; a guest is
+// 'guest-<id>' from the st_gid cookie (set by the guest door below) so one
+// guest's walk can be followed — the shared st_guest token cannot tell two
+// guests apart.
+const ACTIVITY_KEEP_DAYS = 60;
+const GUEST_ID_COOKIE = 'st_gid';
+async function actKey(req) {
+  const who = await currentUser(req);
+  if (who) return who.email;
+  if (await isAdmin(req)) return AUTH_REQUIRED ? 'admin' : 'open';
+  if (await isGuest(req)) {
+    const gid = String(parseCookies(req)[GUEST_ID_COOKIE] || '').replace(/[^a-f0-9]/gi, '').slice(0, 12);
+    return 'guest-' + (gid || 'anon');
+  }
+  return null;
+}
+function logAct(req, kind, detail, userKey) {
+  Promise.resolve(userKey !== undefined ? userKey : actKey(req))
+    .then((user) => store.logActivity([{
+      ts: new Date().toISOString(),
+      user,
+      kind: String(kind).slice(0, 16),
+      detail: detail == null ? null : String(detail).slice(0, 80),
+      ip: req.ip || null,
+    }]))
+    .catch(() => { /* never blocks the action */ });
+}
 
 app.get('/api/me', route(async (req, res) => {
   const u = await currentUser(req);
@@ -570,6 +618,7 @@ app.post('/api/register', route(async (req, res) => {
   const token = crypto.randomBytes(32).toString('hex');
   await store.createSession(token, Number(user.id), Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   setSessionCookie(res, token);
+  logAct(req, 'login', 'signup', email);
   res.json({ ok: true, user: { email, role } });
 
   // After the response: the account is made and the session is set, so a slow
@@ -598,6 +647,7 @@ app.post('/api/login', route(async (req, res) => {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       secure: req.secure, // set only over HTTPS (true behind an HTTPS proxy)
     });
+    logAct(req, 'login', 'password', AUTH_REQUIRED ? 'admin' : 'open');
     return res.json({ ok: true, admin: true });
   }
 
@@ -622,11 +672,13 @@ app.post('/api/login', route(async (req, res) => {
   const token = crypto.randomBytes(32).toString('hex');
   await store.createSession(token, Number(user.id), Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   setSessionCookie(res, token);
+  logAct(req, 'login', 'account', user.email);
   res.json({ ok: true, admin: user.role === 'owner', user: { email: user.email, role: user.role } });
 }));
 
 app.post('/api/logout', route(async (req, res) => {
   const token = parseCookies(req)[SESSION_COOKIE];
+  logAct(req, 'account', 'logout');
   if (token) await store.deleteSession(token);
   res.clearCookie(SESSION_COOKIE);
   res.clearCookie(ADMIN_COOKIE);
@@ -644,6 +696,21 @@ app.post('/api/guest', route(async (req, res) => {
     secure: process.env.NODE_ENV === 'production',
     maxAge: GUEST_HOURS * 60 * 60 * 1000,
   });
+  // The st_guest token is shared by every guest on purpose; this second
+  // cookie is a random id used ONLY as the activity-log key, so one guest's
+  // walk is one trail. Kept if it already exists — a returning guest stays
+  // the same trail.
+  let gid = String(parseCookies(req)['st_gid'] || '').replace(/[^a-f0-9]/gi, '').slice(0, 12);
+  if (!gid) {
+    gid = crypto.randomBytes(6).toString('hex');
+    res.cookie('st_gid', gid, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: GUEST_HOURS * 60 * 60 * 1000,
+    });
+  }
+  logAct(req, 'login', 'guest', 'guest-' + gid);
   res.json({ ok: true });
 }));
 
@@ -664,6 +731,7 @@ app.post('/api/password', requireAuth, route(async (req, res) => {
     return res.status(401).json({ error: 'Current password is incorrect.' });
   }
   await store.setPassword(Number(user.id), next);
+  logAct(req, 'account', 'password-changed', me.email);
   res.clearCookie(SESSION_COOKIE);
   res.json({ ok: true });
 }));
@@ -899,6 +967,7 @@ app.post('/api/contact', requireMember, route(async (req, res) => {
     }),
   });
   if (!ok) return res.status(502).json({ error: 'Could not send that just now. Try again shortly.' });
+  logAct(req, 'contact', 'sent');
   res.json({ ok: true });
 }));
 
@@ -959,6 +1028,7 @@ app.post('/api/reset', route(async (req, res) => {
   // setPassword also clears the lockout counter and drops every session for the
   // account — a reset usually means someone else may have had access.
   await store.setPassword(userId, password);
+  logAct(req, 'account', 'reset', null); // token flow — no session to name
   res.json({ ok: true });
 }));
 
@@ -1832,6 +1902,7 @@ app.post('/api/portfolios', requireAdmin, route(async (req, res) => {
   }
   p[name] = [];
   await writePortfolios(p);
+  logAct(req, 'portfolio', 'create:' + name.slice(0, 40));
   res.json({ portfolios: p });
 }));
 
@@ -1852,6 +1923,7 @@ app.put('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
   const rebuilt = {};
   for (const [k, v] of Object.entries(p)) rebuilt[k === oldName ? newName : k] = v;
   await writePortfolios(rebuilt);
+  logAct(req, 'portfolio', 'rename:' + oldName.slice(0, 30) + '>' + newName.slice(0, 30));
   res.json({ portfolios: rebuilt });
 }));
 
@@ -1891,6 +1963,7 @@ app.delete('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
   const before = getUniverse(p);
   delete p[name];
   await writePortfolios(p);
+  logAct(req, 'portfolio', 'delete:' + name.slice(0, 40));
   res.json({ portfolios: p, purged: await purgeDropped(before) });
 }));
 
@@ -1918,6 +1991,7 @@ app.post('/api/portfolios/:name/tickers', requireAdmin, route(async (req, res) =
     if (name_) await writeNames({ [symbol]: name_ });
   }
 
+  logAct(req, 'portfolio', 'add:' + symbol + '>' + name.slice(0, 40));
   res.json({ portfolios: p, name: name_ });
 }));
 
@@ -1930,6 +2004,7 @@ app.delete('/api/portfolios/:name/tickers/:symbol', requireAdmin, route(async (r
   const before = getUniverse(p);
   p[name] = p[name].filter((s) => s !== symbol);
   await writePortfolios(p);
+  logAct(req, 'portfolio', 'remove:' + symbol + '<' + name.slice(0, 40));
   res.json({ portfolios: p, purged: await purgeDropped(before) });
 }));
 
@@ -1940,6 +2015,7 @@ app.delete('/api/tickers/:symbol', requireAdmin, route(async (req, res) => {
   const before = getUniverse(p);
   for (const name of Object.keys(p)) p[name] = p[name].filter((s) => s !== symbol);
   await writePortfolios(p);
+  logAct(req, 'portfolio', 'remove:' + symbol);
   res.json({ portfolios: p, purged: await purgeDropped(before) });
 }));
 
@@ -1951,6 +2027,7 @@ app.delete('/api/tickers/:symbol', requireAdmin, route(async (req, res) => {
 // shared snapshot for the ten-odd minutes it ran, and every other viewer saw
 // the holes. The old values stay visible and are replaced one by one.
 app.post('/api/refresh-all', requireAdmin, route(async (req, res) => {
+  logAct(req, 'refresh', 'all');
   const expired = await expireProfiles();
   const total = getUniverse(await readPortfolios()).length;
   const who = await currentUser(req);
@@ -2556,6 +2633,7 @@ app.post('/api/chat', requireMember, route(async (req, res) => {
       error: `You have used your ${quota.limit} questions for today. The allowance resets at midnight UTC.`,
     });
   }
+  logAct(req, 'chat', 'asked'); // the fact only — never the question
 
   const snap = await readSnapshot();
   const stocks = (snap && snap.stocks) || [];
@@ -2664,6 +2742,7 @@ app.get('/api/model', requireAuth, route(async (req, res) => {
   if ((await isGuest(req)) && !guestSet.has(symbol)) {
     return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   }
+  logAct(req, 'model', symbol);
 
   const rows = await store.readBars(symbol, MODEL_ROWS);
   if (rows.length < MODEL_MIN_BARS) {
@@ -3535,6 +3614,7 @@ async function finishLiveRefresh(payload, ctx = {}) {
   // Headlines ride along: the stalest few symbols get their news topped up
   // on every refresh, so coverage accrues without a schedule of its own.
   topUpNews(rows);
+  store.pruneActivity(ACTIVITY_KEEP_DAYS).catch(() => { /* the bars rule */ });
 
   // Snapshot the day's fundamentals — but only during a Refresh all, which is
   // when the profile cache has actually been re-pulled. An ordinary price
@@ -3733,6 +3813,10 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     }
     const startedAt = Date.now();
     const opts = asOf ? {} : await liveRefreshOpts();
+    // A running Refresh All logs once at its POST; its rounds pass through
+    // here too and would be a dozen rows of noise for one action.
+    if (asOf) logAct(req, 'refresh', 'as-of:' + asOf);
+    else if (!opts.running) logAct(req, 'refresh', 'plain');
     const r = await computeStocks(asOf, opts);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
     if (!asOf && opts.running && !opts.archivePrices) await store.markRefreshPrices();
@@ -3777,6 +3861,38 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     return res.json(r.payload);
   }
   return res.json({ stocks: [], portfolios: Object.keys(await readPortfolios()), asOf: null, updatedAt: null, fromSnapshot: true, empty: true });
+}));
+
+// The activity log's own three routes, beside the visitor log they mirror.
+app.get('/api/activity', requireAdmin, route(async (req, res) => {
+  res.json(await store.readActivityStats(500));
+}));
+
+// Wipe it. Irreversible — the client confirms with the count first.
+app.delete('/api/activity', requireAdmin, route(async (req, res) => {
+  const removed = await store.clearActivity();
+  res.json({ ok: true, removed });
+}));
+
+// The client half: batched UI facts (sorts, picker changes, chart toggles)
+// the server never sees, delivered by sendBeacon from track.js. Kinds are
+// allowlisted and details clamped, so this cannot become free-form storage;
+// guests are welcome — a guest's walk is the most valuable trace the log
+// produces. requireAuth already admits the guest cookie.
+const CLIENT_ACT_KINDS = new Set(['sort', 'tab', 'picker', 'export', 'panel', 'chart']);
+app.post('/api/activity', requireAuth, route(async (req, res) => {
+  const events = Array.isArray(req.body && req.body.events) ? req.body.events.slice(0, 50) : [];
+  const user = await actKey(req);
+  const ts = new Date().toISOString();
+  const rows = [];
+  for (const e of events) {
+    const kind = String((e && e.k) || '');
+    if (!CLIENT_ACT_KINDS.has(kind)) continue;
+    const detail = String((e && e.d) || '').replace(/[^\x20-\x7e]/g, '').slice(0, 80);
+    rows.push({ ts, user, kind, detail: detail || null, ip: req.ip || null });
+  }
+  if (rows.length) store.logActivity(rows).catch(() => { /* fire and forget */ });
+  res.json({ ok: true, accepted: rows.length });
 }));
 
 // Wipe the log. Irreversible — the client confirms before calling this.

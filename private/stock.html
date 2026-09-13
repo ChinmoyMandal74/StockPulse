@@ -354,6 +354,7 @@
   <script src="/screens.js"></script>
   <script src="/rowcard.js"></script>
   <script src="/action.js"></script>
+  <script src="/track.js"></script>
   <script>
     const esc = (t) => String(t).replace(/[&<>"']/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -886,6 +887,7 @@
 
     function toggleWhy() {
       whyOpen = !whyOpen;
+      window.track && track('chart', 'why:' + (whyOpen ? 'open' : 'close'));
       const wb = document.getElementById('whyBox');
       if (!whyOpen) { if (wb) { wb.hidden = true; wb.innerHTML = ''; } return; }
       renderWhy();
@@ -1196,18 +1198,21 @@
         if (!b) return;
         if (b.id === 'momBtn') {
           showMom = !showMom;
+          window.track && track('chart', 'pane:mom:' + (showMom ? 'on' : 'off'));
           b.classList.toggle('on', showMom);
           paintChart();
           return;
         }
         if (b.id === 'thBtn') {
           showTrendHold = !showTrendHold;
+          window.track && track('chart', 'trend:' + (showTrendHold ? 'on' : 'off'));
           b.classList.toggle('on', showTrendHold);
           paintChart();
           return;
         }
         if (b.id === 'rsiBtn') {
           showRSI = !showRSI;
+          window.track && track('chart', 'pane:rsi:' + (showRSI ? 'on' : 'off'));
           b.classList.toggle('on', showRSI);
           paintChart();
           return;
@@ -1215,11 +1220,13 @@
         if (b.dataset.ma) {
           const m = MAS.find((x) => String(x.len) === b.dataset.ma);
           m.on = !m.on;
+          window.track && track('chart', 'ma:' + m.len + ':' + (m.on ? 'on' : 'off'));
           b.classList.toggle('on', m.on);
           paintChart();
           return;
         }
         range = RANGES.find((r) => r.id === b.dataset.r) || RANGES[0];
+        window.track && track('chart', 'range:' + range.id);
         document.querySelectorAll('.rng[data-r]').forEach((x) => x.classList.toggle('on', x.dataset.r === range.id));
         paintChart();
       });

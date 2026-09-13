@@ -624,6 +624,7 @@
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.6v11.8"/><path d="M7.6 11.2 12 15.6l4.4-4.4"/><path d="M4.6 19.6h14.8"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.6" y="10.4" width="14.8" height="10" rx="3"/><path d="M8.4 10.4V7.6a3.6 3.6 0 0 1 7.2 0v2.8"/></symbol>
     <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14.6 4.6h3.2a2 2 0 0 1 2 2v10.8a2 2 0 0 1-2 2h-3.2"/><path d="M9.4 8.2 5.6 12l3.8 3.8"/><path d="M5.6 12h9"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.6-6.4 4.8 12.8L17 12h4"/></symbol>
     <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9.4" cy="8.4" r="3.6"/><path d="M3 20c0-3.3 2.9-5.4 6.4-5.4S15.8 16.7 15.8 20"/><path d="M16.4 5.4a3.6 3.6 0 0 1 0 6"/><path d="M18.2 14.9c1.9.8 3.2 2.5 3.2 5.1"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.6v12.8M5.6 12h12.8"/></symbol>
     <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4.6 19.4h3.2L19 8.2a2.3 2.3 0 0 0-3.2-3.2L4.6 16.2v3.2Z"/><path d="M14.8 6 18 9.2"/></symbol>
@@ -739,6 +740,9 @@
             </a>
             <a class="btn icon quiet admin-only" href="/visitors" target="_blank" rel="noopener" style="display:none" title="Visitor log (admin only)" aria-label="Visitor log">
               <svg class="ic" aria-hidden="true"><use href="#i-users" /></svg>
+            </a>
+            <a class="btn icon quiet admin-only" href="/activity" target="_blank" rel="noopener" style="display:none" title="Activity log (admin only)" aria-label="Activity log">
+              <svg class="ic" aria-hidden="true"><use href="#i-pulse" /></svg>
             </a>
             <button class="btn admin-only" id="refreshBtn" title="Re-pull prices and recompute the ranking">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Refresh
@@ -951,6 +955,7 @@
   <script src="/screens.js"></script>
   <script src="/action.js"></script>
   <script src="/rowcard.js"></script>
+  <script src="/track.js"></script>
   <script>
     // The universe exactly as the server scored it, and the view the chosen
     // weighting produces. Everything on the page reads `stocks`, so a lens
@@ -1344,6 +1349,7 @@
       $('pickerMenu').querySelectorAll('.pick[data-tab]').forEach((b) => {
         b.addEventListener('click', () => {
           activeTab = b.dataset.tab;
+          window.track && track('tab', activeTab);
           closePickers();
           render();
         });
@@ -1642,6 +1648,7 @@
     }
 
     function exportExcel() {
+      window.track && track('export', 'csv');
       const rows = sortRows(visibleStocks());
 
       const cols = [
@@ -1884,6 +1891,7 @@
     function setPastPeriod(id) {
       if (id === pastPeriod) return;
       pastPeriod = id;
+      window.track && track('picker', 'past:' + id);
       render();
       renderPastMenu();
       savePrefs();
@@ -1972,6 +1980,7 @@
           const name = b.dataset.avp;
           extraProfiles = ADVICE_OPTIONAL.filter((x) =>
             (x === name) !== extraProfiles.includes(x));
+          window.track && track('picker', 'rules:' + (extraProfiles.includes(name) ? '+' : '-') + name);
           applyAdviceCols();
           renderActMenu();
           savePrefs();
@@ -2020,7 +2029,11 @@
         '<a href="/help#weights" style="color:var(--muted)">What does each factor mean?</a></div></div>';
 
       $('weightMenu').querySelectorAll('[data-weight]').forEach((b) => {
-        b.addEventListener('click', (ev) => { ev.stopPropagation(); setWeightPreset(b.dataset.weight); });
+        b.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          window.track && track('picker', 'weights:' + b.dataset.weight);
+          setWeightPreset(b.dataset.weight);
+        });
       });
       $('weightMenu').querySelectorAll('[data-wkey]').forEach((inp) => {
         inp.addEventListener('input', () => {
@@ -2046,7 +2059,11 @@
       placeMenu($('weightPicker'), $('weightMenu'));
     }
 
-    function toggleGroup(id) { collapsed[id] = !collapsed[id]; applyGroups(); savePrefs(); }
+    function toggleGroup(id) {
+      collapsed[id] = !collapsed[id];
+      window.track && track('picker', 'columns:' + id + (collapsed[id] ? ':off' : ':on'));
+      applyGroups(); savePrefs();
+    }
     function setAllGroups(show) {
       GROUPS.forEach((id) => (collapsed[id] = !show));
       applyGroups();
@@ -2640,6 +2657,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         const key = th.dataset.key;
         if (sortKey === key) sortDir *= -1;
         else { sortKey = key; sortDir = -1; }
+        window.track && track('sort', key + (sortDir < 0 ? ':desc' : ':asc'));
         render();
       });
     });
@@ -2989,6 +3007,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     function openFamilyPanel(sym, fam, anchor) {
       const s = stocks.find((x) => x.symbol === sym);
       if (!s) return;
+      window.track && track('panel', fam + ':' + sym);
       closePickers(); hideTip(); hideRowCard();
       apOpenFor = sym + '|' + fam; apBackSym = sym;
       if (anchor) apAnchor = anchor;
@@ -3025,6 +3044,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     function openActionPanel(sym, anchor, key) {
       const s = stocks.find((x) => x.symbol === sym);
       if (!s || !s.action) return;
+      window.track && track('panel', 'advice:' + sym + ':' + panelProfile);
       closePickers(); hideTip(); hideRowCard();
       apOpenFor = key || (sym + '|av|' + panelProfile); apBackSym = sym;
       if (anchor) apAnchor = anchor;
