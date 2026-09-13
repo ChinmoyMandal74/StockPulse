@@ -3283,13 +3283,54 @@ app.post('/api/logos/refresh', requireAdmin, route(async (req, res) => {
   if (rows.length) await store.writeLogos(rows);
   const fetched = rows.filter((r) => r.data).length;
   if (fetched || empty.length) logAct(req, 'refresh', `logos:+${fetched}`);
-  res.json({
-    ok: true,
-    fetched,
-    empty,
-    remaining: Math.max(0, missing.length - batch.length),
-    total: universe.length,
-  });
+  const remaining = Math.max(0, missing.length - batch.length);
+  res.json({ ok: true, fetched, empty, remaining, total: universe.length });
+
+  // The receipt, once per completing run: the button loops batches, so the
+  // email goes out only from the call that finishes the run AND did work —
+  // intermediate batches still have `remaining`, and a no-op click fetched
+  // nothing. It reports the WHOLE store's state rather than one batch's,
+  // which is the number the admin actually wants. After the response, with
+  // the rejection swallowed — the standing mail rule.
+  if (remaining === 0 && rows.length && MAIL_READY) {
+    (async () => {
+      const states = await store.readLogoStates();
+      const withMark = universe.filter((sym) => states[sym]).length;
+      const noMark = universe.filter((sym) => sym in states && !states[sym]);
+      const to = await operatorEmail();
+      if (!to) return;
+      const lines = [
+        `Fetched in the finishing batch: ${fetched}`,
+        `Universe: ${universe.length} symbols`,
+        `With a stored mark: ${withMark}`,
+        `No mark at the provider: ${noMark.length}${noMark.length ? ` (${noMark.join(', ')})` : ''}`,
+      ];
+      const rowsHtml = lines.map((l) => {
+        const [k, v] = l.split(/: (.+)/);
+        return `<tr><td style="padding:3px 14px 3px 0;font-size:14px;color:${MC.mute};white-space:nowrap">${mailEsc(k)}</td>` +
+          `<td style="padding:3px 0;font-size:14px;color:${MC.ink}">${mailEsc(v)}</td></tr>`;
+      }).join('');
+      const note = 'Sent when a "Refresh logos" run completes. Symbols with no mark were attempted once ' +
+        'and will not retry on their own — the Fix a logo form on /promo replaces any of them from a URL.';
+      await sendMail({
+        to,
+        subject: `Logos refreshed: ${withMark}/${universe.length} have a mark`,
+        text: textShell({
+          heading: 'Logo refresh finished',
+          intro: 'The logo store is topped up.',
+          lines,
+          note,
+        }),
+        html: emailShell({
+          heading: 'Logo refresh finished',
+          intro: 'The logo store is topped up.',
+          body: `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px">${rowsHtml}</table>` +
+            (APP_URL ? mailButton(`${APP_URL}/promo`, 'Open the promo studio') : ''),
+          note,
+        }),
+      });
+    })().catch((err) => console.warn('logo report: could not send (refresh unaffected):', err.message));
+  }
 }));
 
 // Replace one symbol's logo from a URL the admin supplies — the fix for a
