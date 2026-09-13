@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/app.css" />
+  <script src="/wmark.js" defer></script>
   <style>
     body {
       height: 100dvh;
@@ -776,10 +777,6 @@
           </div>
         </div>
 
-        <button class="btn btn-primary" id="exportBtn" title="Export the current view to a CSV file (opens in Excel)">
-          <span class="lbl">Export to Excel</span>
-          <span class="nub"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-download" /></svg></span>
-        </button>
         <button class="btn icon quiet" id="loginBtn" style="display:none" title="Sign in" aria-label="Sign in">
           <svg class="ic" aria-hidden="true"><use href="#i-lock" /></svg>
         </button>
@@ -842,7 +839,7 @@
     <div class="bezel notice" id="readonlyNote" style="display:none">
       <div class="core">
         <svg class="ic" aria-hidden="true"><use href="#i-lock" /></svg>
-        <span><b>Read-only view.</b> The data updates when the site owner refreshes. You can sort, collapse column groups and export.</span>
+        <span><b>Read-only view.</b> The data updates when the site owner refreshes. You can sort, collapse column groups and keep your own portfolios.</span>
       </div>
     </div>
 
@@ -1858,113 +1855,6 @@
       });
     }
 
-    function exportExcel() {
-      window.track && track('export', 'csv');
-      const rows = sortRows(visibleStocks());
-
-      const cols = [
-        ['Symbol', (s) => s.symbol],
-        ['Overall', (s) => s.overallRating],
-        ['Momentum', (s) => s.momentumRating],
-        ['Past Momentum', (s) => pastOf(s)],
-        ['Momentum Delta', (s) => deltaOf(s)],
-        ['Quality', (s) => s.qualityRating],
-        // The export names the profile that produced the verdicts, the way it
-        // already names the momentum weighting — a saved file that does not say
-        // how it was scored cannot be checked later.
-        ['Company Type', (s) => s.companyType],
-        ['Trend State', (s) => s.actionTrend],
-        ['Entry State', (s) => s.actionEntry],
-        ['Fundamentals Bucket', (s) => s.actionFund],
-        ['Guards', (s) => s.actionGuards],
-        ['Advice', (s) => s.action],
-        ['Advice Reason', (s) => s.actionFlag],
-        ['Name', (s) => s.name],
-        ['Portfolios', (s) => (s.portfolios || []).join('; ')],
-        ['Price', (s) => s.price],
-        ['Currency', (s) => s.currency],
-        ['Sector', (s) => s.sector],
-        ['Market Cap', (s) => s.marketCap],
-        ['Last Earnings', (s) => s.lastEarningsDate],
-        ['Last Surprise %', (s) => s.lastSurprise],
-        ['Next Earnings', (s) => s.nextEarningsDate],
-        ['Next Est?', (s) => (s.nextEarningsEstimated ? 'estimated' : '')],
-        ['Today %', (s) => s.todayPct],
-        ['Yesterday %', (s) => s.yesterdayPct],
-        ['1W %', (s) => s.oneWeekPct],
-        ['2W %', (s) => s.twoWeekPct],
-        ['1M %', (s) => s.oneMonthPct],
-        ['3M %', (s) => s.threeMonthPct],
-        ['6M %', (s) => s.sixMonthPct],
-        ['1Y %', (s) => s.oneYearPct],
-        ['Fwd +1M %', (s) => s.fwd1M],
-        ['Fwd +3M %', (s) => s.fwd3M],
-        ['Fwd +6M %', (s) => s.fwd6M],
-        ['Fwd Since %', (s) => s.fwdSince],
-        ['RS vs S&P %', (s) => s.relStrength],
-        ['% from 52W High', (s) => s.pctFromHigh],
-        ['RSI', (s) => s.rsi],
-        ['vs 50D MA %', (s) => s.vs50ma],
-        ['vs 200D MA %', (s) => s.vs200ma],
-        ['MA Cross', (s) => (s.maBullish == null ? '' : (s.maBullish ? 'Golden' : 'Death') + (s.maCrossDays != null ? ` (${s.maCrossDays}d)` : ''))],
-        ['MACD Hist', (s) => s.macdHist],
-        ['Vol Trend %', (s) => s.volTrend],
-        ['Earnings Growth %', (s) => s.earningsGrowthYoY],
-        ['Revenue Growth %', (s) => s.revenueGrowthYoY],
-        ['Profit Margin %', (s) => s.profitMargin],
-        ['ROE %', (s) => s.roe],
-        ['Forward P/E', (s) => s.forwardPe],
-        ['PEG', (s) => s.peg],
-        ['Short % Float', (s) => s.shortPctFloat],
-        ['History Days', (s) => s.historyDays],
-        ['Latest Data', (s) => s.latestDate],
-        // Appended rather than slotted in, so saved exports keep their column order.
-        ['Revenue TTM', (s) => s.revenueTtm],
-        ['Gross Profit TTM', (s) => s.grossProfitTtm],
-        ['Gross Margin %', (s) => s.grossMargin],
-        ['Net Income TTM', (s) => s.netIncomeTtm],
-        ['FCF TTM', (s) => s.fcfTtm],
-        ['FCF Margin %', (s) => s.fcfMargin],
-        ['Net Cash', (s) => s.netCash],
-        ['% from 52W Low', (s) => s.pctFromLow],
-        ['52W Range Pos %', (s) => s.range52Pos],
-      ];
-
-      const esc = (v) => {
-        if (v == null || v === '') return '';
-        let str = (typeof v === 'number' && isFinite(v)) ? (Math.round(v * 100) / 100).toString() : String(v);
-        if (/[",\n]/.test(str)) str = '"' + str.replace(/"/g, '""') + '"';
-        return str;
-      };
-
-      // A file outlives the session that made it. Rather than add a comment row —
-      // which would change the shape every parser expects — the three columns the
-      // lens actually alters name the weighting in their own headers.
-      const lensName = Screens.presetById(weightPreset);
-      const head = cols.map((c) => {
-        if (lensName.id === 'default') return c[0];
-        return /^(Overall|Momentum)$/.test(c[0]) ? `${c[0]} (${lensName.label})` : c[0];
-      }).map((h) => (/^(Past Momentum|Momentum Delta)$/.test(h)
-        // The horizon travels with the file: these two mean nothing without it.
-        ? `${h} (${Screens.pastById(pastPeriod).label})` : h));
-      const lines = [head.map((h) => esc(h)).join(',')];
-      for (const s of rows) lines.push(cols.map((c) => esc(c[1](s))).join(','));
-      const csv = '﻿' + lines.join('\r\n'); // BOM so Excel reads UTF-8
-
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const date = new Date().toISOString().slice(0, 10);
-      const tab = String(activeTab).replace(/[^A-Za-z0-9._-]+/g, '_');
-      a.href = url;
-      const lens = weightPreset === 'default' ? '' : `-${weightPreset}`;
-      a.download = `stock-screener-${tab}${lens}-${date}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-
     // Show/hide every cell (group header + detail headers + body cells) per group.
     function applyGroups() {
       // The horizon picker drives the Price Momentum columns, so it follows them
@@ -2929,7 +2819,6 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       }
     });
 
-    $('exportBtn').addEventListener('click', exportExcel);
     $('loginBtn').addEventListener('click', doLogin);
     $('logoutBtn').addEventListener('click', doLogout);
     $('symbolInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTicker(); });

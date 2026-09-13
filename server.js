@@ -3985,7 +3985,7 @@ app.delete('/api/activity', requireAdmin, route(async (req, res) => {
 // allowlisted and details clamped, so this cannot become free-form storage;
 // guests are welcome — a guest's walk is the most valuable trace the log
 // produces. requireAuth already admits the guest cookie.
-const CLIENT_ACT_KINDS = new Set(['sort', 'tab', 'picker', 'export', 'panel', 'chart']);
+const CLIENT_ACT_KINDS = new Set(['sort', 'tab', 'picker', 'panel', 'chart']);
 app.post('/api/activity', requireAuth, route(async (req, res) => {
   const events = Array.isArray(req.body && req.body.events) ? req.body.events.slice(0, 50) : [];
   const user = await actKey(req);

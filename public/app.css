@@ -125,6 +125,11 @@ body {
 .ic-sm { width: 13px; height: 13px; stroke-width: 1.5; }
 #sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 
+/* The identity watermark (wmark.js). z-index above the grain (60): a
+   screenshot of anything — menus, panels, tooltips — carries the mark.
+   pointer-events: none, so it can never intercept a click. */
+.wmark { position: fixed; inset: 0; z-index: 70; pointer-events: none; background-repeat: repeat; }
+
 /* ==========================================================================
    Double-bezel primitive
    ========================================================================== */
