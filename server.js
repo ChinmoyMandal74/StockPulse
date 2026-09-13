@@ -1478,6 +1478,38 @@ function avgVolume(values, period, offset = 0) {
 }
 
 // Volume trend: 5-day average volume vs its 20-day average, as a % (rising = positive).
+// Today's volume against its own prior 20 sessions — the breakout marker's
+// denominator, matching the 2026-09-14 volume study exactly (>=1.5x is the
+// confirmed kind whose sign survived the 2020 split; the 200D upcross got
+// nothing from volume, which is why the marker rides fresh highs only).
+function volumeX(values) {
+  if (!values || values.length < 22) return null;
+  const v0 = Number(values[0]?.volume);
+  if (!isFinite(v0) || v0 <= 0) return null;
+  let sum = 0, n = 0;
+  for (let i = 1; i <= 20; i++) {
+    const v = Number(values[i]?.volume);
+    if (isFinite(v) && v > 0) { sum += v; n++; }
+  }
+  if (n < 15) return null;
+  return Math.round((v0 / (sum / n)) * 100) / 100;
+}
+
+// The first close above the prior 60 sessions' high — the study's E60 event,
+// on today's bar. False the day after: a stock riding its highs re-arms only
+// after slipping back under them, which is what keeps the marker an event.
+function fresh3mHigh(values) {
+  if (!values || values.length < 62) return null;
+  const c0 = Number(values[0]?.close), c1 = Number(values[1]?.close);
+  if (!isFinite(c0) || !isFinite(c1)) return null;
+  let hi = -Infinity;
+  for (let i = 1; i <= 60; i++) {
+    const c = Number(values[i]?.close);
+    if (isFinite(c) && c > hi) hi = c;
+  }
+  return c0 > hi && c1 <= hi;
+}
+
 function volumeTrendPct(values) {
   const a5 = avgVolume(values, 5);
   const a20 = avgVolume(values, 20);
@@ -1811,6 +1843,14 @@ function scoreActionInto(rows) {
     rows[i].actionEntry = r.states.entry;
     rows[i].actionFund = r.states.fund;
     rows[i].actionGuards = r.states.guards;
+    // Risk to exit under Balanced — how far the price can fall before these
+    // same rules flip to Avoid or worse. Engine-computed (exitDistance), so
+    // the hover card and the ladder panel cannot drift apart on it.
+    rows[i].actionRisk = Action.exitDistance({
+      v200: rows[i].vs200ma, v50: rows[i].vs50ma, rsi: rows[i].rsi,
+      m1: rows[i].oneMonthPct, m3: rows[i].threeMonthPct, fh: rows[i].pctFromHigh,
+      vol: rows[i].volTrend, hist: rows[i].historyDays,
+    }, ACTION_CFG);
   }
   // Yesterday's verdict: yesterday's technicals over today's cached
   // fundamentals, through the same engine. The table's change marker and the
@@ -2380,6 +2420,8 @@ async function computeStocks(asOf, opts = {}) {
         macdLine: mac ? mac.line : null,
         macdSignal: mac ? mac.signal : null,
         volTrend: volumeTrendPct(values),
+        volX: volumeX(values),             // today's volume / its prior 20-day average
+        fresh3mHigh: fresh3mHigh(values),  // first close above the prior 3-month high
         // Yesterday's technical readings — the same fields, one bar back — so
         // the Advice can be re-evaluated as of the previous trading day.
         // Fundamentals are day-cached steps and stand for both days, the same

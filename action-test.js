@@ -451,5 +451,50 @@ console.log('\nTREND TIMELINE (trendTimeline)');
     A.trendTimeline(closes.slice(0, 150), dates.slice(0, 150), 'Established', c, 252), null);
 }
 
+// ---- exitDistance: the risk-to-exit gauge -----------------------------------
+{
+  const c = cfg();
+  const scale = (p, k) => (p == null ? null : ((1 + p / 100) * (1 - k) - 1) * 100);
+  let sd = 424242;
+  const rr = (lo, hi) => lo + ((sd = (sd * 1103515245 + 12345) % 2147483648) / 2147483648) * (hi - lo);
+  const base = { v200: 20, v50: 8, rsi: 60, m1: 5, m3: 15, fh: -3, vol: 10, hist: 400 };
+  const rk = A.exitDistance(base, c);
+  check('a healthy uptrend has a positive exit distance', !!rk && rk.drop > 0, true);
+  if (rk) {
+    const k = rk.drop / 100;
+    const dropped = { v200: scale(base.v200, k), v50: scale(base.v50, k),
+      m1: scale(base.m1, k), m3: scale(base.m3, k), fh: scale(base.fh, k),
+      rsi: base.rsi, vol: base.vol, hist: base.hist };
+    check('at the reported drop the verdict IS an exit',
+      A.ACTIONS.indexOf(A.actionAt(dropped, c).action) <= 1, true);
+    const kLess = Math.max(0, (rk.drop - 0.5) / 100);
+    const before = { v200: scale(base.v200, kLess), v50: scale(base.v50, kLess),
+      m1: scale(base.m1, kLess), m3: scale(base.m3, kLess), fh: scale(base.fh, kLess),
+      rsi: base.rsi, vol: base.vol, hist: base.hist };
+    check('one step less is not yet an exit',
+      A.ACTIONS.indexOf(A.actionAt(before, c).action) > 1, true);
+    check('the fired rule is named', typeof rk.flag === 'string' && rk.flag.length > 0, true);
+  }
+  const bust = { v200: -30, v50: -15, rsi: 25, m1: -12, m3: -25, fh: -45, vol: -20, hist: 400 };
+  const rb = A.exitDistance(bust, c);
+  check('an already-exited row reads zero distance', !!rb && rb.drop === 0, true);
+  // random sweep: whenever a distance is reported, that drop must actually exit
+  let holds = 0, tried = 0;
+  for (let i = 0; i < 500; i++) {
+    const r = { v200: rr(-40, 60), v50: rr(-25, 30), rsi: rr(15, 85),
+      m1: rr(-25, 30), m3: rr(-40, 60), fh: rr(-60, 0), vol: rr(-50, 80), hist: 400 };
+    const d = A.exitDistance(r, c);
+    if (!d || d.drop === 0) continue;
+    tried++;
+    const k = d.drop / 100;
+    const at = A.actionAt({ v200: scale(r.v200, k), v50: scale(r.v50, k),
+      m1: scale(r.m1, k), m3: scale(r.m3, k), fh: scale(r.fh, k),
+      rsi: r.rsi, vol: r.vol, hist: r.hist }, c);
+    if (A.ACTIONS.indexOf(at.action) <= 1) holds++;
+  }
+  check(`the reported drop exits on every random row that reported one (${tried} rows)`,
+    holds === tried, true);
+}
+
 console.log(`\n${n} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);

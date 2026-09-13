@@ -479,6 +479,13 @@
     #myPop .pick { width: 100%; }
     #myPop .pick .count { margin-left: auto; }
     #myPop .pop-hint { padding: 7px 12px 8px; font-size: 11px; line-height: 1.5; color: var(--faint); }
+    .state .bo { margin-left: 5px; font-size: 7px; vertical-align: 2px; color: var(--faint); }
+    .state .bo.on { color: var(--amber); }
+    .ap-risk { margin: 12px 14px 2px; padding: 10px 12px; border-radius: 12px;
+               border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.025);
+               font-size: 12px; line-height: 1.55; color: var(--muted); }
+    .ap-risk b { color: var(--text); }
+    .ap-risk-note { display: block; margin-top: 5px; font-size: 10.5px; color: var(--faint); }
     .badge {
       margin: 0 4px 0 0;
       background: color-mix(in srgb, currentColor 12%, transparent); }
@@ -1666,7 +1673,7 @@
           ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank ta-c')}
           ${typeCell(s)}
           ${stateCell(s.actionTrend, TREND_DANGER, 'trend')}
-          ${stateCell(s.actionEntry, ENTRY_DANGER, 'entry')}
+          ${entryCell(s)}
           ${stateCell(s.actionFund, FUND_DANGER, 'fund')}
           ${guardsCell(s)}
           ${adviceCell(s, 'Balanced')}${adviceCell(s, 'Trend Rider')}${adviceCell(s, 'Aggressive')}${adviceCell(s, 'Max Risk')}${adviceCell(s, 'Dip Buyer')}
@@ -1740,6 +1747,28 @@
     const TREND_DANGER = { Breakdown: 'st-bad', Downtrend: 'st-warn' };
     const ENTRY_DANGER = { Extended: 'st-warn' };
     const FUND_DANGER = { Weak: 'st-bad' };
+    // The volume study's one sentence, where it applies: today is the first
+    // close above the prior 3-month high. Confirmed (>=1.5x its own 20-day
+    // volume) was the only sign to survive the 2020 split; quiet showed no
+    // edge. A marker, deliberately NOT a rule input — the panel says so too.
+    function breakoutNote(s) {
+      if (!s.fresh3mHigh) return null;
+      if (s.volX == null) return 'First close above the prior 3-month high today.';
+      return s.volX >= 1.5
+        ? `3-month-high breakout today on ${s.volX}\u00d7 average volume \u2014 the confirmed kind (measured: it beat quiet breakouts in both eras).`
+        : `3-month-high breakout today on ${s.volX}\u00d7 average volume \u2014 the quiet kind the volume study found no edge in.`;
+    }
+    function entryCell(s) {
+      const v = s.actionEntry;
+      const note = breakoutNote(s);
+      const t = note ? ` title="${note}"` : '';
+      if (!v) return `<td class="state grp-act" data-fam="entry"${t}>\u2014</td>`;
+      const cls = ENTRY_DANGER[v] ? ' ' + ENTRY_DANGER[v] : '';
+      const mark = s.fresh3mHigh
+        ? `<span class="bo${s.volX != null && s.volX >= 1.5 ? ' on' : ''}" aria-hidden="true">\u25cf</span>` : '';
+      return `<td class="state grp-act${cls}" data-fam="entry"${t}>${we(v)}${mark}</td>`;
+    }
+
     function stateCell(v, danger, fam) {
       if (!v) return `<td class="state grp-act" data-fam="${fam}">—</td>`;
       const cls = danger[v] ? ' ' + danger[v] : '';
@@ -2997,6 +3026,31 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         Array.from({ length: 7 }, (_, i) => `<i class="seg${i < e.estScore ? ' on' : ''}"></i>`).join('') +
         `<span>establishment ${e.estScore}/7 — ${we(e.type)} at ${actionCfg().company_type.score_cutoff}+</span></div>`;
     }
+    // Risk to exit, under whichever profile the panel is open on — the honest
+    // half of the infographic's risk/reward: the reward half needs a forecast,
+    // the risk half is arithmetic on the rules themselves.
+    function apRiskHtml(s, act) {
+      if (s.error) return '';
+      const rk = ActionRules.exitDistance({ v200: s.vs200ma, v50: s.vs50ma, rsi: s.rsi,
+        m1: s.oneMonthPct, m3: s.threeMonthPct, fh: s.pctFromHigh,
+        vol: s.volTrend, hist: s.historyDays }, actionCfg());
+      // drop 0 with a verdict still above Avoid is not a contradiction — the
+      // gauge is technical-only, so it means fundamentals are doing the
+      // holding. Said exactly that way.
+      const held = rk && rk.drop === 0 && act && ActionRules.ACTIONS.indexOf(act) > 1;
+      const body = rk == null
+        ? 'no technical sell or avoid rule can be reached by price alone within \u221260%.'
+        : held
+          ? 'the technical rules alone already read <b>' + we(rk.action) + '</b> (\u201c' + we(rk.flag) +
+            '\u201d) \u2014 fundamentals are what hold this profile\u2019s verdict at <b>' + we(act) + '</b>.'
+        : rk.drop === 0
+          ? 'already at an exit \u2014 these rules read the stock as <b>' + we(rk.action) + '</b> today.'
+          : 'a further <b>\u2212' + rk.drop.toFixed(1) + '%</b> flips this profile to <b>' + we(rk.action) +
+            '</b> \u2014 \u201c' + we(rk.flag) + '\u201d fires.';
+      return '<div class="ap-risk"><b>Risk to exit</b> \u00b7 ' + body +
+        '<span class="ap-risk-note">Technical rules only; moving averages, RSI and fundamentals held at today\u2019s values \u2014 a gauge of where the rules stand, not a stop order.</span></div>';
+    }
+
     function apStockHtml(s) {
       const e = ActionRules.explain(s, actionCfg());
       const est = apEstBar(e);
@@ -3018,6 +3072,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         est + `<div class="ap-chips">${chips.join('')}</div>` +
         apLadderHtml(e.rungs, false) +
         `<div class="ap-note">First match wins — the lit rule is the verdict, and everything below it was never checked. Thresholds: the ${we(panelProfile)} profile.</div>` +
+        apRiskHtml(s, e.action) +
         '<div class="ap-foot"><button class="ap-link" data-ap-model>How is this computed?</button><span></span></div></div>';
     }
     function apModelHtml() {
@@ -3102,6 +3157,10 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         `<span class="ap-chip">Advice <b>${we(e.action)}</b></span></div>` +
         body +
         `<div class="ap-note">${note}</div>` +
+        (fam === 'entry' && breakoutNote(s)
+          ? '<div class="ap-risk"><b>Context</b> \u00b7 ' + breakoutNote(s) +
+            '<span class="ap-risk-note">Measured, not a rule input \u2014 no rule reads volume.</span></div>'
+          : '') +
         '<div class="ap-foot"><button class="ap-link" data-ap-ladder>Full rule ladder</button>' +
         '<button class="ap-link" data-ap-model>How is this computed?</button></div></div>';
     }

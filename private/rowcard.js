@@ -80,6 +80,15 @@
                                   ? { t: s.action, c: /Buy/.test(s.action) ? 'up' : /Sell|Avoid/.test(s.action) ? 'down' : '' } : null],
     ['act',   'Why',            (s) => V.text(s.actionFlag)],
     ['act',   'Yesterday',      (s) => (s.advicePrev && s.advicePrev !== s.action ? V.text(s.advicePrev) : null)],
+    // The honest half of risk/reward: how far the Balanced rules let it fall.
+    ['act',   'Risk to exit',   (s) => (s.actionRisk == null ? null
+                                  : s.actionRisk.drop === 0
+                                    ? { t: 'technicals at ' + s.actionRisk.action, c: 'warn' }
+                                    : { t: '\u2212' + s.actionRisk.drop.toFixed(1) + '% to ' + s.actionRisk.action, c: '' })],
+    // Only on the day it happens; >=1.5x is the study's confirmed kind.
+    ['act',   'Breakout',       (s) => (!s.fresh3mHigh ? null
+                                  : { t: '3M high' + (s.volX != null ? ' \u00b7 ' + s.volX + '\u00d7 avg volume' : ''),
+                                      c: s.volX != null && s.volX >= 1.5 ? 'pos' : '' })],
     ['pmom',  'Mom.',           (s) => V.rating(s.momentumRating)],
     ['pmom',  'Score',          (s) => (s.momentumScore == null ? null : { t: s.momentumScore.toFixed(1), c: '' })],
     // The card has no horizon picker, so it shows the default and says so

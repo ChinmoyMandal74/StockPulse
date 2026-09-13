@@ -534,6 +534,37 @@
     return { action, flag };
   }
 
+  // How far can the price fall before these same rules flip to an exit?
+  // The infographic asks for risk/reward; the reward half needs a forecast,
+  // which this product refuses — the risk half is arithmetic on the rules
+  // themselves. Simulates a one-day decline in 0.5% steps and re-evaluates
+  // the ALL-TECHNICAL rule list (the same list the backtest replays) until
+  // the verdict reaches Avoid or worse; returns the first such drop with the
+  // rule that fires there. Honest limits, held deliberately: moving
+  // averages, RSI, volume and every fundamental stay at today's values (a
+  // fast fall barely moves a 200-day average; the rest is unknowable), so
+  // this is a gauge of where the rules stand, not a stop-loss order.
+  const EXIT_TIER = 1;                      // Avoid and below are exits
+  function exitDistance(r, cfg) {
+    const scale = (p, k) => (p == null ? null : ((1 + p / 100) * (1 - k) - 1) * 100);
+    const now = actionAt(r, cfg);
+    if (ACTIONS.indexOf(now.action) <= EXIT_TIER) {
+      return { drop: 0, action: now.action, flag: now.flag };
+    }
+    for (let i = 1; i <= 120; i++) {
+      const k = i * 0.005;
+      const at = actionAt({
+        v200: scale(r.v200, k), v50: scale(r.v50, k),
+        m1: scale(r.m1, k), m3: scale(r.m3, k), fh: scale(r.fh, k),
+        rsi: r.rsi, vol: r.vol, hist: r.hist,
+      }, cfg);
+      if (ACTIONS.indexOf(at.action) <= EXIT_TIER) {
+        return { drop: Math.round(k * 1000) / 10, action: at.action, flag: at.flag };
+      }
+    }
+    return null;                            // no technical exit inside -60%
+  }
+
   // The Trend word replayed over roughly the last year of NEWEST-FIRST bars
   // and compressed to its runs — "2025-11-03 Above 200D -> 2026-01-15 Strong
   // uptrend", each date the session that state began, oldest first, the last
@@ -923,6 +954,6 @@
     ACTIONS, TYPES, DEFAULTS, PRESETS, TREND_ORDER, ENTRY_ORDER, FUND_ORDER,
     resolve, validate, diff, merge,
     classify, definitions, fundamentals, evaluate, apply, daysToEarnings,
-    explain, ladder, trendAt, actionAt, trendTimeline,
+    explain, ladder, trendAt, actionAt, trendTimeline, exitDistance,
   };
 });
