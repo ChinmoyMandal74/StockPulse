@@ -1517,9 +1517,14 @@
       $('pickerBtn').title = `Showing ${activeLabel} — click to switch portfolio`;
 
       const item = (name, c, n) =>
+        '<div class="pick-row">' +
         `<button class="pick ${activeTab === name ? 'on' : ''}" data-tab="${name}" role="option" ` +
         `aria-selected="${activeTab === name}" style="--tint:${c}">` +
-        dot(c) + `<span class="nm">${name}</span><span class="count">${n}</span></button>`;
+        dot(c) + `<span class="nm">${name}</span><span class="count">${n}</span></button>` +
+        `<a class="jump" href="/portfolio/${encodeURIComponent(name)}" target="_blank" rel="noopener" ` +
+        `title="Open ${we(name)} aggregated ↗" style="transform:none">` +
+        '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-chart" /></svg></a>' +
+        '</div>';
 
       const parts = [item('All', ALL_TINT, countAll)];
       for (const name of portfolios) parts.push(item(name, colorFor(name), countFor(name)));
@@ -1535,6 +1540,9 @@
             `<button class="pick ${activeTab === t ? 'on' : ''}" data-tab="${we(t)}" role="option" ` +
             `aria-selected="${activeTab === t}" style="--tint:${MY_TINT}">` +
             dot(MY_TINT) + `<span class="nm">${we(name)}</span><span class="count">${countMine(name)}</span></button>` +
+            `<a class="jump" href="/portfolio/${encodeURIComponent(MY_PREFIX + name)}" target="_blank" rel="noopener" ` +
+            `title="Open ${we(name)} aggregated ↗" style="transform:none">` +
+            '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-chart" /></svg></a>' +
             `<button class="jump" data-myren="${we(name)}" title="Rename ${we(name)}" style="transform:none">` +
             '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-pencil" /></svg></button>' +
             `<button class="jump" data-mydel="${we(name)}" title="Delete ${we(name)}" style="transform:none">` +

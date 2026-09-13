@@ -186,6 +186,16 @@ app.get('/lab/:symbol', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'private', 'lab.html'));
 }));
 
+// One portfolio, aggregated — the basket page. Works for shared portfolios
+// and a member's own lists ('my:' prefix); a screener view, deliberately not
+// a tracker: there are no positions anywhere in this product.
+app.get('/portfolio/:name', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'basket:' + String(req.params.name || '').slice(0, 30));
+  res.sendFile(path.join(__dirname, 'private', 'basket.html'));
+}));
+
 app.get('/help', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   logAct(req, 'page', 'help');
@@ -3380,6 +3390,99 @@ app.get('/api/logo/:symbol', requireAuth, route(async (req, res) => {
   res.set('Content-Type', logo.mime);
   res.set('Cache-Control', 'private, max-age=86400');
   res.send(Buffer.from(logo.data, 'base64'));
+}));
+
+// ---- the basket curve ---------------------------------------------------
+// Equal dollars at the window start, held — an index of mean(close/start)
+// per session, which is the honest convention for a LIST (no positions
+// exist to weight by). The benchmark is the whole universe on the same
+// convention: SPY is deliberately not archived, and "did my list beat my
+// own screener" is the better question anyway. One readBarsFor covers both
+// curves, since the basket is a subset of the universe (~23k rows at 1Y,
+// the measured 2s query's little sibling).
+function equalWeightIndex(bars, symbols, dates) {
+  const maps = [];
+  for (const sym of symbols) {
+    const arr = bars[sym];
+    if (!arr || !arr.length) continue;
+    const m = new Map();
+    for (const b of arr) if (b.close > 0) m.set(b.d, b.close);
+    if (m.size) maps.push(m);
+  }
+  const start = dates[0];
+  const active = [];
+  for (const m of maps) {
+    // a symbol must exist at the window start or it distorts the index the
+    // day it lists; excluded symbols are counted for the caption
+    let base = m.get(start);
+    if (base == null) {
+      // no bar exactly at the window start: use the newest close before it
+      let bd = null;
+      for (const [d, c] of m) if (d < start && (bd == null || d > bd)) { bd = d; base = c; }
+    }
+    if (base == null) continue;
+    active.push({ m, base, last: base });
+  }
+  const out = [];
+  for (const d of dates) {
+    let sum = 0;
+    for (const a of active) {
+      const c = a.m.get(d);
+      if (c != null) a.last = c;
+      sum += a.last / a.base;
+    }
+    out.push(active.length ? Math.round((sum / active.length) * 10000) / 10000 : null);
+  }
+  return { index: out, used: active.length, of: maps.length };
+}
+
+app.get('/api/basket', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const rawName = String(req.query.name || '').trim();
+  const days = Math.min(400, Math.max(21, Number(req.query.days) || 253));
+  const portfolios = await readPortfolios();
+  const all = getUniverse(portfolios);
+  let symbols;
+  let label = rawName;
+  if (rawName.startsWith('my:')) {
+    const mine = await store.readUserPortfolios(await prefsKey(req));
+    const nm = rawName.slice(3);
+    if (!(nm in mine)) return res.status(404).json({ error: 'No such personal portfolio.' });
+    const uni = new Set(all);
+    symbols = mine[nm].filter((x) => uni.has(x));
+    label = nm;
+  } else if (rawName === 'All') {
+    symbols = all;
+  } else if (rawName in portfolios) {
+    symbols = portfolios[rawName];
+  } else {
+    return res.status(404).json({ error: 'No such portfolio.' });
+  }
+  if (!symbols.length) {
+    return res.json({ label, mine: rawName.startsWith('my:'), symbols: [], dates: [], basket: null, universe: null });
+  }
+
+  const since = new Date(Date.now() - Math.round(days * 1.55 + 14) * 86400000)
+    .toISOString().slice(0, 10);
+  const bars = await store.readBarsFor(all, since);
+
+  // The date axis is every session anyone traded, oldest first, trimmed to
+  // the asked-for window — US names dominate, so this is the US calendar.
+  const dateSet = new Set();
+  for (const sym of all) for (const b of bars[sym] || []) dateSet.add(b.d);
+  const dates = [...dateSet].sort().slice(-days);
+  if (!dates.length) return res.json({ label, mine: rawName.startsWith('my:'), symbols, dates: [], basket: null, universe: null });
+
+  const basket = equalWeightIndex(bars, symbols, dates);
+  const universe = equalWeightIndex(bars, all, dates);
+  res.json({
+    label,
+    mine: rawName.startsWith('my:'),
+    symbols,
+    dates,
+    basket: basket.index, basketUsed: basket.used, basketOf: symbols.length,
+    universe: universe.index, universeUsed: universe.used, universeOf: all.length,
+  });
 }));
 
 app.get('/api/history', requireAuth, route(async (req, res) => {

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Portfolio — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <script src="/wmark.js" defer></script>
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 6% -8%, rgba(52, 211, 153, 0.12), transparent 62%),
+        radial-gradient(50vw 42vw at 96% 4%, rgba(124, 156, 255, 0.11), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 16px 20px 0; pointer-events: none; }
+    .island { pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair);
+      box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+
+    .head { display: flex; align-items: baseline; gap: 12px 16px; flex-wrap: wrap; margin: 26px 0 4px; }
+    h1 { margin: 0; font-size: clamp(26px, 3.4vw, 36px); font-weight: 600; letter-spacing: -0.035em; }
+    h1 .kind { color: var(--faint); font-weight: 400; }
+    .chip { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px;
+            border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+            font-size: 11.5px; color: var(--muted); }
+    .lede { margin: 8px 0 20px; font-size: 12.5px; }
+
+    .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    .card > .core { padding: 20px 22px 18px; }
+    .card h2 { margin: 0 0 4px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+               letter-spacing: 0.14em; color: var(--muted); }
+    .card .note { font-size: 11px; color: var(--faint); line-height: 1.5; }
+
+    /* the curve */
+    .ranges { display: flex; gap: 6px; margin: 10px 0 4px; }
+    .rng { padding: 5px 13px; border-radius: 999px; cursor: pointer; font: 500 11.5px var(--sans);
+           border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03); color: var(--muted); }
+    .rng.on { color: var(--text); border-color: rgba(52, 211, 153, 0.45); background: rgba(52, 211, 153, 0.08); }
+    #chartBox { position: relative; margin-top: 8px; }
+    #chartBox svg { display: block; width: 100%; height: auto; }
+    .lgd { display: flex; gap: 18px; margin-top: 10px; font: 500 12px var(--sans); color: var(--muted); }
+    .lgd span::before { content: ''; display: inline-block; width: 16px; height: 3px; border-radius: 2px;
+                        margin-right: 7px; vertical-align: 3px; background: var(--c); }
+
+    /* stance */
+    .stack { display: flex; height: 18px; border-radius: 999px; overflow: hidden; margin: 12px 0 12px; }
+    .stack div { height: 100%; }
+    .tags { display: flex; flex-wrap: wrap; gap: 8px 16px; font: 500 12px var(--sans); }
+    .tags b { font-family: var(--mono); }
+    .chgline { margin-top: 12px; font-size: 12.5px; color: var(--muted); line-height: 1.7; }
+    .chgline .mono { font-family: var(--mono); }
+    .pos { color: var(--green); } .neg { color: var(--red); } .amb { color: var(--amber); }
+
+    /* returns table */
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    th, td { text-align: right; padding: 9px 12px; font-size: 13px;
+             border-bottom: 1px solid rgba(255, 255, 255, 0.045); }
+    th { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint);
+         font-weight: 500; }
+    th:first-child, td:first-child { text-align: left; }
+    td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    td:first-child { font-family: var(--sans); color: var(--muted); }
+    tbody tr:last-child td { border-bottom: none; }
+
+    .empty, .error { padding: 32px; font-size: 13px; color: var(--muted); }
+    .error { color: var(--red); }
+    @media (max-width: 768px) { .page { padding: 0 16px; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <div id="main"><div class="empty">Loading…</div></div>
+  </main>
+
+  <script src="/screens.js"></script>
+  <script src="/action.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const NAME = decodeURIComponent(location.pathname.split('/portfolio/')[1] || '');
+    const RANGES = [
+      { id: '1M', days: 21 }, { id: '3M', days: 63 }, { id: '6M', days: 126 }, { id: '1Y', days: 253 },
+    ];
+    let range = RANGES[3];
+    let rows = [];           // snapshot rows in this basket
+    let allRows = [];        // the whole visible snapshot, for context means
+    let curve = null;        // /api/basket payload for the current range
+    const curveCache = {};
+
+    const pct = (n, d = 1) => (n == null || !isFinite(n) ? '—' : (n >= 0 ? '+' : '') + n.toFixed(d) + '%');
+    const cls = (n) => (n == null ? '' : n >= 0 ? 'pos' : 'neg');
+    const mean = (arr) => {
+      const xs = arr.filter((x) => x != null && isFinite(x));
+      return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+    };
+
+    // ---- the dual-line chart, hand-rolled: two normalised series in % -----
+    function chartSvg(dates, a, b) {
+      const W = 1000, H = 340, PL = 64, PR = 20, PT = 14, PB = 30;
+      const toPct = (arr) => arr.map((v) => (v == null ? null : (v - 1) * 100));
+      const A = toPct(a), B = toPct(b);
+      const vals = A.concat(B).filter((v) => v != null);
+      if (!vals.length) return '<div class="empty">No history for this window.</div>';
+      let lo = Math.min(...vals, 0), hi = Math.max(...vals, 0);
+      const pad = Math.max(1, (hi - lo) * 0.08); lo -= pad; hi += pad;
+      const x = (i) => PL + (i / Math.max(1, dates.length - 1)) * (W - PL - PR);
+      const y = (v) => PT + (1 - (v - lo) / (hi - lo)) * (H - PT - PB);
+      const path = (S) => {
+        let d = '', pen = false;
+        for (let i = 0; i < S.length; i++) {
+          if (S[i] == null) { pen = false; continue; }
+          d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(S[i]).toFixed(1);
+          pen = true;
+        }
+        return d;
+      };
+      // four gridlines, evenly spaced, plus the zero line when it is inside
+      let grid = '';
+      for (let g = 0; g <= 4; g++) {
+        const v = lo + (g / 4) * (hi - lo);
+        grid += `<line x1="${PL}" y1="${y(v)}" x2="${W - PR}" y2="${y(v)}" stroke="rgba(255,255,255,0.06)"/>` +
+          `<text x="${PL - 10}" y="${y(v) + 4}" text-anchor="end" font-size="13" fill="#7d8797" font-family="Geist Mono, monospace">${v.toFixed(0)}%</text>`;
+      }
+      if (lo < 0 && hi > 0) grid += `<line x1="${PL}" y1="${y(0)}" x2="${W - PR}" y2="${y(0)}" stroke="rgba(255,255,255,0.14)"/>`;
+      const d0 = dates[0] || '', d1 = dates[dates.length - 1] || '';
+      const endTag = (S, color) => {
+        let last = null;
+        for (let i = S.length - 1; i >= 0 && last == null; i--) last = S[i];
+        if (last == null) return '';
+        return `<text x="${W - PR}" y="${Math.max(14, Math.min(H - PB - 4, y(last) - 6))}" text-anchor="end" font-size="14" font-weight="600" fill="${color}" font-family="Geist Mono, monospace">${(last >= 0 ? '+' : '') + last.toFixed(1)}%</text>`;
+      };
+      return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Basket vs universe">` + grid +
+        `<path d="${path(B)}" fill="none" stroke="#7c9cff" stroke-width="2" opacity="0.65"/>` +
+        `<path d="${path(A)}" fill="none" stroke="#34d399" stroke-width="2.6"/>` +
+        endTag(A, '#34d399') + endTag(B, '#7c9cff') +
+        `<text x="${PL}" y="${H - 8}" font-size="12" fill="#7d8797" font-family="Geist Mono, monospace">${esc(d0)}</text>` +
+        `<text x="${W - PR}" y="${H - 8}" text-anchor="end" font-size="12" fill="#7d8797" font-family="Geist Mono, monospace">${esc(d1)}</text></svg>`;
+    }
+
+    const TREND_TINT = { 'Strong uptrend': '#34d399', 'Above 200D': '#a3e635', 'Below 200D': '#fbbf24',
+                         'Downtrend': '#fb923c', 'Breakdown': '#fb7185', 'No data': '#7d8797' };
+    function stanceHtml() {
+      const order = ActionRules.TREND_ORDER;
+      const counts = order.map((t) => rows.filter((s) => s.actionTrend === t).length);
+      const total = counts.reduce((x, y) => x + y, 0) || 1;
+      const stack = order.map((t, i) => counts[i]
+        ? `<div style="width:${counts[i] / total * 100}%;background:${TREND_TINT[t] || '#7d8797'}"></div>` : '').join('');
+      const tags = order.map((t, i) => counts[i]
+        ? `<span style="color:${TREND_TINT[t] || '#7d8797'}">${esc(t)} <b>${counts[i]}</b></span>` : '').join('');
+      const above = rows.filter((s) => s.vs200ma != null && s.vs200ma > 0).length;
+      const advice = {};
+      rows.forEach((s) => { if (s.action) advice[s.action] = (advice[s.action] || 0) + 1; });
+      const advLine = ActionRules.ACTIONS.slice().reverse().filter((a) => advice[a])
+        .map((a) => `${esc(a)} <b>${advice[a]}</b>`).join(' · ');
+      const changes = rows.filter((s) => s.advicePrev && s.action && s.advicePrev !== s.action);
+      const chg = changes.length
+        ? changes.map((s) => `<span class="mono">${esc(s.symbol)}</span> ${esc(s.advicePrev)} → <b>${esc(s.action)}</b>`).join(' · ')
+        : 'none — every verdict in this list held today';
+      return '<section class="bezel card"><div class="core"><h2>Stance</h2>' +
+        `<div class="stack">${stack}</div><div class="tags">${tags}</div>` +
+        `<p class="chgline">${above}/${rows.length} above their 200-day. Advice (Balanced): ${advLine || '—'}.</p>` +
+        `<p class="chgline">Changed since the last session: ${chg}.</p>` +
+        '</div></section>';
+    }
+
+    function returnsHtml() {
+      const HZ = [['1W', 'oneWeekPct'], ['1M', 'oneMonthPct'], ['3M', 'threeMonthPct'],
+                  ['6M', 'sixMonthPct'], ['1Y', 'oneYearPct']];
+      const cells = (rs) => HZ.map(([, f]) => {
+        const m = mean(rs.map((s) => s[f]));
+        return `<td class="${cls(m)}">${pct(m)}</td>`;
+      }).join('');
+      const diff = HZ.map(([, f]) => {
+        const a = mean(rows.map((s) => s[f])), b = mean(allRows.map((s) => s[f]));
+        const d = a != null && b != null ? a - b : null;
+        return `<td class="${cls(d)}">${pct(d)}</td>`;
+      }).join('');
+      return '<section class="bezel card"><div class="core"><h2>Returns, next to the whole screen</h2>' +
+        `<table><thead><tr><th></th>${HZ.map(([h]) => `<th>${h}</th>`).join('')}</tr></thead><tbody>` +
+        `<tr><td>This list (mean of ${rows.length})</td>${cells(rows)}</tr>` +
+        `<tr><td>All ${allRows.length} screened</td>${cells(allRows)}</tr>` +
+        `<tr><td>Difference</td>${diff}</tr>` +
+        '</tbody></table>' +
+        '<p class="note" style="margin-top:10px">Mean of each stock’s own return per horizon — an equal-weight reading, not an account.</p>' +
+        '</div></section>';
+    }
+
+    function curveCard() {
+      const rngBtns = RANGES.map((r) =>
+        `<button class="rng ${range.id === r.id ? 'on' : ''}" data-r="${r.id}">${r.id}</button>`).join('');
+      let body = '<div class="empty">Loading the curve…</div>';
+      let cap = '';
+      if (curve && curve.dates && curve.dates.length) {
+        body = chartSvg(curve.dates, curve.basket || [], curve.universe || []);
+        const skipped = curve.basketOf - curve.basketUsed;
+        cap = `Equal dollars at the window start, held — a reading of the LIST, not an account.` +
+          (skipped > 0 ? ` ${skipped} symbol${skipped > 1 ? 's' : ''} had no history at the start and sat out.` : '');
+      } else if (curve) {
+        body = '<div class="empty">No stored history for this window yet.</div>';
+      }
+      return '<section class="bezel card"><div class="core"><h2>The basket, as one line</h2>' +
+        `<div class="ranges" id="rngRow">${rngBtns}</div>` +
+        `<div id="chartBox">${body}</div>` +
+        '<div class="lgd"><span style="--c:#34d399">This list</span><span style="--c:#7c9cff">All screened, same convention</span></div>' +
+        (cap ? `<p class="note" style="margin-top:10px">${cap}</p>` : '') +
+        '</div></section>';
+    }
+
+    function paint() {
+      const main = $('main');
+      if (!rows.length) {
+        main.innerHTML = `<div class="head"><h1>${esc(curve ? curve.label : NAME)}</h1></div>` +
+          '<div class="bezel card"><div class="core"><div class="empty">This portfolio has no stocks with data yet.</div></div></div>';
+        return;
+      }
+      const sectors = new Set(rows.map((s) => s.sector).filter(Boolean));
+      main.innerHTML =
+        `<div class="head"><h1>${esc(curve ? curve.label : NAME)} <span class="kind">${curve && curve.mine ? '· personal' : ''}</span></h1>` +
+        `<span class="chip">${rows.length} stocks</span><span class="chip">${sectors.size} sector${sectors.size === 1 ? '' : 's'}</span></div>` +
+        '<p class="lede">A screener’s view of the list as one thing — descriptive throughout, positions nowhere.</p>' +
+        `<div class="grid">${curveCard()}${stanceHtml()}${returnsHtml()}</div>`;
+      const rr = $('rngRow');
+      if (rr) rr.querySelectorAll('[data-r]').forEach((b) => b.addEventListener('click', () => {
+        range = RANGES.find((r) => r.id === b.dataset.r) || range;
+        loadCurve();
+      }));
+    }
+
+    async function loadCurve() {
+      const key = range.id;
+      if (curveCache[key]) { curve = curveCache[key]; paint(); return; }
+      curve = null; paint();
+      try {
+        const r = await fetch(`/api/basket?name=${encodeURIComponent(NAME)}&days=${range.days}`, { cache: 'no-store' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not load the curve.');
+        curveCache[key] = d;
+        curve = d;
+      } catch (err) {
+        curve = { dates: [], label: NAME, error: err.message };
+      }
+      paint();
+    }
+
+    (async () => {
+      try {
+        const [snap, bk] = await Promise.all([
+          fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json()),
+          fetch(`/api/basket?name=${encodeURIComponent(NAME)}&days=${range.days}`, { cache: 'no-store' }).then(async (r) => {
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.error || 'No such portfolio.');
+            return d;
+          }),
+        ]);
+        allRows = (snap.stocks || []).filter((s) => !s.error);
+        const set = new Set(bk.symbols || []);
+        rows = allRows.filter((s) => set.has(s.symbol));
+        curveCache[range.id] = bk;
+        curve = bk;
+        document.title = `${bk.label} — Tickr Lab`;
+        paint();
+      } catch (err) {
+        $('main').innerHTML = `<div class="bezel card"><div class="core"><div class="error">${esc(err.message)} <a href="/" style="color:var(--accent)">Back to the screener</a>.</div></div></div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
