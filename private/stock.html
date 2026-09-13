@@ -33,6 +33,9 @@
     /* masthead — the chips sit on this row rather than claiming one of their
        own, which was costing a 26px band plus 30px of margins above the chart */
     .head { display: flex; align-items: baseline; gap: 10px 14px; flex-wrap: wrap; margin: 12px 0 0; }
+    .colo { width: 34px; height: 34px; flex: none; align-self: center;
+            padding: 3px; border-radius: 9px; background: #fff; object-fit: contain;
+            border: 1px solid var(--hair-2); }
     h1 { margin: 0; font-size: clamp(28px, 3.4vw, 38px); font-weight: 600;
          letter-spacing: -0.035em; line-height: 1; font-family: var(--mono); }
     .co { font-size: 15px; color: var(--muted); letter-spacing: -0.01em; }
@@ -932,6 +935,7 @@
 
       document.getElementById('page').innerHTML = `
         <div class="head">
+          <img id="coLogo" class="colo" alt="" hidden />
           <h1 class="sympick">
             <button id="symBtn" aria-expanded="false" aria-haspopup="listbox"
                     title="Pick another stock">${esc(stock.symbol)}<svg class="caret ic" aria-hidden="true"><use href="#i-chevron" /></svg></button>
@@ -1016,6 +1020,14 @@
       // filter over symbol and name. A plain navigation rather than swapping the
       // page in place: back and forward keep working, and the per-symbol history
       // fetch dominates the timing anyway.
+      // The masthead logo: set the src only after wiring load/error, reveal
+      // on load — a symbol the store has no mark for 404s and simply never
+      // appears, which beats a broken-image glyph in the masthead.
+      const coLogo = document.getElementById('coLogo');
+      if (coLogo) {
+        coLogo.addEventListener('load', () => { coLogo.hidden = false; });
+        coLogo.src = '/api/logo/' + encodeURIComponent(stock.symbol);
+      }
       const symBtn = document.getElementById('symBtn');
       const symMenu = document.getElementById('symMenu');
       const symFilter = document.getElementById('symFilter');
