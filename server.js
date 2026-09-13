@@ -249,7 +249,7 @@ app.get('/login', (req, res) => {
 // gated .html answered 200 to anyone with the URL, as did every research JSON
 // file. Locally it worked, which is exactly why it went unnoticed.
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
-                      '/activity.html': '/activity',
+                      '/activity.html': '/activity', '/promo.html': '/promo',
                       '/users.html': '/users', '/reset.html': '/reset',
                       '/contact.html': '/contact', '/help.html': '/help',
                       // no symbol in that path, so there is nothing to show
@@ -314,6 +314,15 @@ app.get('/visitors', route(async (req, res) => {
 app.get('/activity', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'private', 'activity.html'));
+}));
+
+// The promo studio: fixed marketing-card templates rendered from tonight's
+// data in the site's own theme, for manual screenshotting. Admin only — it
+// is a marketing tool, not a member surface.
+app.get('/promo', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'promo');
+  res.sendFile(path.join(__dirname, 'private', 'promo.html'));
 }));
 
 // ---- Admin auth (cookie-based, no DB) --------------------------------------

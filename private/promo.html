@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Promo Studio — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The studio: controls on the left, the card stage on the right. The
+       stage is a REAL 1080px-wide artboard scaled to fit the window, so the
+       aspect and framing of every screenshot are identical forever. */
+    body { min-height: 100dvh; overflow: hidden; }
+    .studio { position: relative; z-index: 1; display: flex; height: 100dvh; }
+
+    .panel { width: 320px; flex: none; padding: 18px; overflow-y: auto;
+             border-right: 1px solid var(--hair); background: rgba(9, 11, 15, 0.6); }
+    .panel h1 { margin: 4px 0 2px; font-size: 19px; font-weight: 600; letter-spacing: -0.03em; }
+    .panel .sub { font-size: 11.5px; color: var(--faint); line-height: 1.5; margin: 0 0 16px; }
+    .panel label { display: block; font-size: 10px; font-weight: 500; text-transform: uppercase;
+                   letter-spacing: 0.16em; color: var(--faint); margin: 14px 0 6px; }
+    .tpl { display: flex; flex-direction: column; gap: 6px; }
+    .tpl button { text-align: left; padding: 9px 12px; border-radius: 12px; cursor: pointer;
+                  border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+                  color: var(--muted); font: 500 12.5px var(--sans);
+                  transition: background 0.3s var(--ease), color 0.3s var(--ease), border-color 0.3s var(--ease); }
+    .tpl button em { display: block; font-style: normal; font-size: 10.5px; color: var(--faint); margin-top: 2px; }
+    .tpl button.on { color: var(--text); border-color: rgba(52, 211, 153, 0.4);
+                     background: rgba(52, 211, 153, 0.07); }
+    .sizes { display: flex; gap: 6px; }
+    .sizes button { flex: 1; padding: 7px 0; border-radius: 10px; cursor: pointer;
+                    border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+                    color: var(--muted); font: 500 11px var(--sans); }
+    .sizes button.on { color: var(--text); border-color: rgba(124, 156, 255, 0.4);
+                       background: rgba(124, 156, 255, 0.08); }
+    .panel input[type="text"], .panel textarea {
+      width: 100%; box-sizing: border-box; padding: 9px 11px; border-radius: 10px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      color: var(--text); font: 400 12.5px var(--sans); resize: vertical; }
+    .panel textarea { min-height: 84px; }
+    .panel input:focus-visible, .panel textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    #annBox { display: none; }
+    .hint { font-size: 10.5px; color: var(--faint); line-height: 1.55; margin-top: 14px; }
+    .panel .btn { margin-top: 12px; width: 100%; justify-content: center; }
+
+    .deck { flex: 1; display: grid; place-items: center; overflow: auto; padding: 24px; }
+
+    /* ---- the artboard -------------------------------------------------- */
+    #stageWrap { flex: none; }
+    #stage { width: 1080px; position: relative; overflow: hidden; background: #050505;
+             transform-origin: top left; font-family: var(--sans); color: var(--text); }
+    #stage .s-aura { position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(70% 52% at 8% -6%, rgba(52, 211, 153, 0.16), transparent 62%),
+        radial-gradient(76% 55% at 100% 2%, rgba(124, 156, 255, 0.14), transparent 64%),
+        radial-gradient(60% 40% at 50% 110%, rgba(167, 139, 250, 0.12), transparent 70%); }
+    #stage .s-in { position: relative; display: flex; flex-direction: column;
+                   height: 100%; padding: 56px 64px 48px; box-sizing: border-box; }
+
+    /* chrome shared by every card, so the family is unmistakable */
+    .s-top { display: flex; align-items: center; gap: 16px; }
+    .s-glyph { width: 52px; height: 52px; border-radius: 16px; display: inline-flex;
+               align-items: center; justify-content: center; color: var(--green);
+               background: linear-gradient(160deg, rgba(52, 211, 153, 0.22), rgba(52, 211, 153, 0.05));
+               border: 1px solid rgba(52, 211, 153, 0.3); }
+    .s-glyph svg { width: 30px; height: 30px; stroke: currentColor; fill: none;
+                   stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .s-word { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; }
+    .s-date { margin-left: auto; font: 500 17px var(--mono); color: var(--faint);
+              padding: 8px 18px; border: 1px solid var(--hair); border-radius: 999px; }
+    .s-kick { margin: 44px 0 0; font-size: 17px; font-weight: 600; letter-spacing: 0.24em;
+              text-transform: uppercase; color: var(--green); }
+    .s-title { margin: 10px 0 0; font-size: 66px; font-weight: 800; line-height: 1.02;
+               letter-spacing: -0.045em; }
+    .s-title .dim { color: var(--faint); }
+    .s-sub { margin: 16px 0 0; font-size: 20px; color: var(--muted); line-height: 1.5; max-width: 40ch; }
+    .s-body { flex: 1; display: flex; flex-direction: column; justify-content: center; min-height: 0; }
+    .s-foot { display: flex; align-items: center; gap: 14px; font: 500 16px var(--mono);
+              color: var(--faint); border-top: 1px solid var(--hair); padding-top: 26px; }
+    .s-foot b { color: var(--muted); font-weight: 600; }
+    .s-foot .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+
+    /* logo tile with a letter behind it: a symbol without a mark still reads */
+    .lg { position: relative; width: 62px; height: 62px; flex: none; border-radius: 15px;
+          background: #fff; border: 1px solid var(--hair-2); overflow: hidden; }
+    .lg span { position: absolute; inset: 0; display: grid; place-items: center;
+               font: 700 26px var(--sans); color: #0a0c11; }
+    .lg img { position: absolute; inset: 0; width: 100%; height: 100%;
+              object-fit: contain; padding: 7px; box-sizing: border-box; background: #fff; }
+    .lg img[hidden] { display: none; }
+
+    /* rows shared by list templates */
+    .rows { display: flex; flex-direction: column; gap: 16px; margin-top: 40px; }
+    .row { display: flex; align-items: center; gap: 20px; }
+    .row .sym { font: 600 26px var(--mono); width: 118px; letter-spacing: -0.02em; }
+    .row .bar-rail { flex: 1; height: 40px; border-radius: 11px; background: rgba(255, 255, 255, 0.045);
+                     overflow: hidden; }
+    .row .bar { height: 100%; border-radius: 11px;
+                background: linear-gradient(90deg, rgba(52, 211, 153, 0.35), var(--green)); }
+    .row .bar.neg { background: linear-gradient(90deg, rgba(251, 113, 133, 0.35), var(--red)); }
+    .row .val { font: 600 26px var(--mono); width: 150px; text-align: right;
+                font-variant-numeric: tabular-nums; }
+    .row .val.pos { color: var(--green); } .row .val.neg { color: var(--red); }
+
+    /* advice-change rows */
+    .chg { display: flex; align-items: center; gap: 20px; padding: 18px 22px;
+           border: 1px solid var(--hair); border-radius: 18px; background: rgba(255, 255, 255, 0.028); }
+    .chg .sym { font: 600 25px var(--mono); width: 108px; }
+    .chg .walk { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 700; }
+    .chg .walk .arr { color: var(--faint); font-weight: 400; }
+    .chg .why { margin-left: auto; max-width: 300px; text-align: right;
+                font-size: 15.5px; color: var(--faint); line-height: 1.35; }
+    .a-strong, .a-buy { color: var(--green); } .a-bwr { color: var(--amber); }
+    .a-hold { color: var(--muted); } .a-avoid, .a-sell { color: var(--red); }
+
+    /* breakout rows */
+    .bo-badge { font: 600 17px var(--mono); padding: 8px 16px; border-radius: 999px; }
+    .bo-badge.on { color: var(--amber); border: 1px solid rgba(251, 191, 36, 0.45);
+                   background: rgba(251, 191, 36, 0.09); }
+    .bo-badge.off { color: var(--faint); border: 1px solid var(--hair); }
+
+    /* stance bands */
+    .band { display: flex; align-items: center; gap: 20px; margin-top: 18px; }
+    .band .k { width: 250px; font-size: 22px; font-weight: 600; }
+    .band .rail { flex: 1; height: 38px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); overflow: hidden; }
+    .band .fill { height: 100%; border-radius: 10px; opacity: 0.85; }
+    .band .n { width: 64px; text-align: right; font: 600 26px var(--mono); }
+    .stackbar { display: flex; height: 26px; border-radius: 999px; overflow: hidden; margin-top: 40px; }
+    .stackbar div { height: 100%; }
+
+    /* announcement */
+    .ann-kick { font-size: 19px; font-weight: 600; letter-spacing: 0.26em; text-transform: uppercase;
+                color: var(--green); }
+    .ann-head { margin: 18px 0 0; font-size: 86px; font-weight: 800; line-height: 1.03;
+                letter-spacing: -0.05em; white-space: pre-wrap; }
+    .ann-body { margin: 30px 0 0; font-size: 27px; line-height: 1.55; color: var(--muted);
+                max-width: 34ch; white-space: pre-wrap; }
+
+    .s-empty { margin-top: 60px; font-size: 30px; color: var(--muted); line-height: 1.5; max-width: 30ch; }
+    .err { color: var(--red); padding: 40px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div class="studio">
+    <aside class="panel">
+      <h1>Promo Studio</h1>
+      <p class="sub">Pick a template, screenshot the card, post it. Every card renders from
+        tonight's data in the site's own theme, at a fixed artboard size.</p>
+
+      <label>Template</label>
+      <div class="tpl" id="tplList"></div>
+
+      <div id="annBox">
+        <label>Kicker (small line above)</label>
+        <input type="text" id="annKick" value="From the Lab" maxlength="40" />
+        <label>Headline</label>
+        <textarea id="annHead" maxlength="90">Guest access is live</textarea>
+        <label>Body</label>
+        <textarea id="annBody" maxlength="280">Try the screener on five real stocks — no account, no card, one click.</textarea>
+      </div>
+
+      <label>Size</label>
+      <div class="sizes" id="sizeList"></div>
+
+      <button class="btn" id="reloadBtn">Re-pull tonight's data</button>
+      <p class="hint">Screenshot tip: the artboard keeps a fixed 1080-wide layout at every size,
+        so crops line up post after post. Nothing here recommends — cards report what the
+        screen and the rules did, which is the house line.</p>
+    </aside>
+
+    <main class="deck"><div id="stageWrap"><div id="stage"></div></div></main>
+  </div>
+
+  <script src="/action.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    const SIZES = [
+      { id: 'portrait', label: 'Post 4:5', w: 1080, h: 1350 },
+      { id: 'square', label: 'Square', w: 1080, h: 1080 },
+      { id: 'story', label: 'Story 9:16', w: 1080, h: 1920 },
+    ];
+    const TPLS = [
+      { id: 'movers', name: 'Movers of the week', note: 'The 10 biggest one-week moves' },
+      { id: 'advice', name: 'The rules changed their mind', note: 'Today’s advice changes, rule named' },
+      { id: 'breakout', name: 'Breakout radar', note: 'Fresh 3-month highs, volume-checked' },
+      { id: 'stance', name: 'Where the market stands', note: 'The universe by trend state' },
+      { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
+    ];
+    let tpl = 'movers';
+    let size = SIZES[0];
+    let stocks = [];
+    let loadedAt = null;
+
+    // ---- shared chrome ---------------------------------------------------
+    const dateStr = () => new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    function chromeTop() {
+      return '<div class="s-top">' +
+        '<span class="s-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">' +
+        '<path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></svg></span>' +
+        '<span class="s-word">Tickr Lab</span>' +
+        `<span class="s-date">${esc(dateStr())}</span></div>`;
+    }
+    function chromeFoot() {
+      const n = stocks.length || '—';
+      return `<div class="s-foot"><b>tickrlab.com</b><span class="dot"></span>` +
+        `<span>${n} stocks screened nightly</span><span class="dot"></span>` +
+        '<span>Mechanical readings — not investment advice</span></div>';
+    }
+    // The letter shows instantly; the mark covers it if one is stored.
+    function logoTile(sym) {
+      return `<span class="lg"><span>${esc(String(sym).slice(0, 1))}</span>` +
+        `<img alt="" hidden loading="eager" data-lg="${esc(sym)}" /></span>`;
+    }
+    function wireLogos() {
+      document.querySelectorAll('#stage img[data-lg]').forEach((img) => {
+        img.addEventListener('load', () => { img.hidden = false; });
+        img.src = '/api/logo/' + encodeURIComponent(img.dataset.lg);
+      });
+    }
+    const pct = (n, d = 1) => (n == null ? '—' : (n >= 0 ? '+' : '') + n.toFixed(d) + '%');
+
+    // ---- templates ---------------------------------------------------------
+    function tplMovers() {
+      const rows = stocks.filter((s) => s.oneWeekPct != null)
+        .sort((a, b) => Math.abs(b.oneWeekPct) - Math.abs(a.oneWeekPct)).slice(0, size.id === 'story' ? 13 : 10);
+      const max = Math.max(...rows.map((s) => Math.abs(s.oneWeekPct)), 1);
+      return chromeTop() +
+        '<div class="s-body"><div><span class="s-kick">This week on the screen</span>' +
+        '<h2 class="s-title">The biggest<br><span class="dim">moves</span></h2>' +
+        `<div class="rows">${rows.map((s) => {
+          const w = Math.max(6, Math.round(Math.abs(s.oneWeekPct) / max * 100));
+          const neg = s.oneWeekPct < 0;
+          return `<div class="row">${logoTile(s.symbol)}<span class="sym">${esc(s.symbol)}</span>` +
+            `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
+            `<span class="val ${neg ? 'neg' : 'pos'}">${pct(s.oneWeekPct)}</span></div>`;
+        }).join('')}</div></div></div>` + chromeFoot();
+    }
+
+    const ACT_CLS = { 'Strong Buy': 'a-strong', 'Buy': 'a-buy', 'Buy with Risk': 'a-bwr',
+                      'Hold': 'a-hold', 'Avoid': 'a-avoid', 'Sell Immediately': 'a-sell' };
+    function tplAdvice() {
+      const tier = (a) => ActionRules.ACTIONS.indexOf(a);
+      const rows = stocks.filter((s) => s.advicePrev && s.action && s.advicePrev !== s.action)
+        .sort((a, b) => Math.abs(tier(b.action) - tier(b.advicePrev)) - Math.abs(tier(a.action) - tier(a.advicePrev)))
+        .slice(0, size.id === 'story' ? 9 : 7);
+      const body = rows.length
+        ? `<div class="rows">${rows.map((s) =>
+            `<div class="chg">${logoTile(s.symbol)}<span class="sym">${esc(s.symbol)}</span>` +
+            `<span class="walk"><span class="${ACT_CLS[s.advicePrev] || ''}">${esc(s.advicePrev)}</span>` +
+            `<span class="arr">→</span>` +
+            `<span class="${ACT_CLS[s.action] || ''}">${esc(s.action)}</span></span>` +
+            `<span class="why">${esc(s.actionFlag || '')}</span></div>`).join('')}</div>`
+        : '<p class="s-empty">Every verdict held today. The rules only speak when the tape moves — quiet is an answer too.</p>';
+      return chromeTop() +
+        '<div class="s-body"><div><span class="s-kick">Fixed rules, re-run nightly</span>' +
+        '<h2 class="s-title">The rules changed<br><span class="dim">their mind</span></h2>' +
+        '<p class="s-sub">Same mechanical rule set as yesterday — only the prices changed. The rule that fired is named on every line.</p>' +
+        body + '</div></div>' + chromeFoot();
+    }
+
+    function tplBreakout() {
+      const rows = stocks.filter((s) => s.fresh3mHigh)
+        .sort((a, b) => (b.volX || 0) - (a.volX || 0)).slice(0, size.id === 'story' ? 10 : 8);
+      const body = rows.length
+        ? `<div class="rows">${rows.map((s) =>
+            `<div class="chg">${logoTile(s.symbol)}<span class="sym">${esc(s.symbol)}</span>` +
+            `<span style="font-size:22px;font-weight:600">first close above its 3-month high</span>` +
+            `<span class="bo-badge ${s.volX != null && s.volX >= 1.5 ? 'on' : 'off'}" style="margin-left:auto">` +
+            `${s.volX != null ? s.volX.toFixed(1) + '× volume' : 'volume n/a'}</span></div>`).join('')}</div>` +
+          '<p class="s-sub" style="margin-top:28px">Amber = at least 1.5× its own 20-day volume — the confirmed kind. Quiet breakouts are listed too; we measured, they earn no badge.</p>'
+        : '<p class="s-empty">No stock crossed its 3-month high today. Scarcity is the point — this card only speaks when something breaks out.</p>';
+      return chromeTop() +
+        '<div class="s-body"><div><span class="s-kick">Measured on 20 years of bars</span>' +
+        '<h2 class="s-title">Breakout<br><span class="dim">radar</span></h2>' +
+        body + '</div></div>' + chromeFoot();
+    }
+
+    const TREND_TINT = ['#34d399', '#a3e635', '#fbbf24', '#fb923c', '#fb7185'];
+    function tplStance() {
+      const order = ActionRules.TREND_ORDER.filter((t) => t !== 'No data');
+      const counts = order.map((t) => stocks.filter((s) => s.actionTrend === t).length);
+      const total = counts.reduce((a, b) => a + b, 0) || 1;
+      const max = Math.max(...counts, 1);
+      return chromeTop() +
+        '<div class="s-body"><div><span class="s-kick">Every stock, one trend word</span>' +
+        '<h2 class="s-title">Where the market<br><span class="dim">stands</span></h2>' +
+        `<div class="stackbar">${order.map((t, i) =>
+          counts[i] ? `<div style="width:${counts[i] / total * 100}%;background:${TREND_TINT[i % TREND_TINT.length]}"></div>` : '').join('')}</div>` +
+        `<div style="margin-top:26px">${order.map((t, i) =>
+          `<div class="band"><span class="k" style="color:${TREND_TINT[i % TREND_TINT.length]}">${esc(t)}</span>` +
+          `<span class="rail"><span class="fill" style="display:block;width:${Math.max(3, counts[i] / max * 100)}%;background:${TREND_TINT[i % TREND_TINT.length]}"></span></span>` +
+          `<span class="n">${counts[i]}</span></div>`).join('')}</div>` +
+        '<p class="s-sub" style="margin-top:30px">Trend is read off the 200-day and 50-day averages — the same words the screener sorts by.</p>' +
+        '</div></div>' + chromeFoot();
+    }
+
+    function tplAnnounce() {
+      const kick = $('annKick').value.trim();
+      const head = $('annHead').value.trim() || 'Say something';
+      const body = $('annBody').value.trim();
+      return chromeTop() +
+        '<div class="s-body"><div>' +
+        (kick ? `<div class="ann-kick">${esc(kick)}</div>` : '') +
+        `<h2 class="ann-head">${esc(head)}</h2>` +
+        (body ? `<p class="ann-body">${esc(body)}</p>` : '') +
+        '</div></div>' + chromeFoot();
+    }
+
+    // ---- render ------------------------------------------------------------
+    const BUILDERS = { movers: tplMovers, advice: tplAdvice, breakout: tplBreakout,
+                       stance: tplStance, announce: tplAnnounce };
+    function render() {
+      const stage = $('stage');
+      stage.style.height = size.h + 'px';
+      stage.innerHTML = '<div class="s-aura"></div>' +
+        `<div class="s-in">${BUILDERS[tpl]()}</div>`;
+      wireLogos();
+      fit();
+      $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
+    }
+    function fit() {
+      const deck = document.querySelector('.deck');
+      const s = Math.min((deck.clientWidth - 48) / 1080, (deck.clientHeight - 48) / size.h, 1);
+      $('stage').style.transform = `scale(${s})`;
+      $('stageWrap').style.width = 1080 * s + 'px';
+      $('stageWrap').style.height = size.h * s + 'px';
+    }
+    window.addEventListener('resize', fit);
+
+    function paintControls() {
+      $('tplList').innerHTML = TPLS.map((t) =>
+        `<button class="${tpl === t.id ? 'on' : ''}" data-t="${t.id}">${esc(t.name)}<em>${esc(t.note)}</em></button>`).join('');
+      $('tplList').querySelectorAll('[data-t]').forEach((b) =>
+        b.addEventListener('click', () => { tpl = b.dataset.t; paintControls(); render(); }));
+      $('sizeList').innerHTML = SIZES.map((z) =>
+        `<button class="${size.id === z.id ? 'on' : ''}" data-z="${z.id}">${esc(z.label)}</button>`).join('');
+      $('sizeList').querySelectorAll('[data-z]').forEach((b) =>
+        b.addEventListener('click', () => { size = SIZES.find((z) => z.id === b.dataset.z); paintControls(); render(); }));
+    }
+    ['annKick', 'annHead', 'annBody'].forEach((id) =>
+      $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
+    $('reloadBtn').addEventListener('click', () => load(true));
+
+    async function load(reload) {
+      try {
+        const me = await fetch('/api/me', { cache: 'no-store' }).then((r) => r.json());
+        if (!me.admin) {
+          document.querySelector('.deck').innerHTML =
+            '<div class="err">Admin access required. <a href="/" style="color:var(--accent)">Back to the screener</a>.</div>';
+          return;
+        }
+        const data = await fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json());
+        stocks = (data.stocks || []).filter((s) => !s.error);
+        loadedAt = data.updatedAt || null;
+        paintControls();
+        render();
+        if (reload) $('reloadBtn').textContent = 'Re-pulled ✓';
+      } catch (err) {
+        document.querySelector('.deck').innerHTML = `<div class="err">Failed to load: ${esc(err.message)}</div>`;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>
