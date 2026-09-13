@@ -308,6 +308,15 @@ const SCHEMA = [
 // exists", so each is attempted and a duplicate-column error is ignored.
 const ADDED_COLUMNS = [
   'alter table visitors add column user_email text',
+  // Earnings dates and the last surprise, recorded from 2026-09-13. Two
+  // consumers were waiting on these: the advice-history replay (the
+  // "Earnings soon" blackout is the one input the archive could not
+  // reconstruct) and the PEAD study the research log has wanted for months
+  // ("they are already in the profile payload... and currently discarded").
+  'alter table fundamentals_history add column next_earnings_date text',
+  'alter table fundamentals_history add column next_earnings_estimated integer',
+  'alter table fundamentals_history add column last_earnings_date text',
+  'alter table fundamentals_history add column last_surprise real',
 ];
 
 let ready = null;
@@ -922,17 +931,36 @@ const FUND_FIELDS = [
 // for a dozen-odd rounds and calls this on each, so the upsert matters: later
 // rounds carry more populated profiles and should replace what earlier ones
 // wrote, not sit alongside it.
+// The earnings fields ride beside FUND_FIELDS rather than inside it: the
+// refresh report's moved-fields comparison iterates FUND_FIELDS numerically,
+// and a date does not belong in that pipeline. Written, never compared.
+const FUND_EXTRAS = [
+  ['next_earnings_date', 'nextEarningsDate', 'text'],
+  ['next_earnings_estimated', 'nextEarningsEstimated', 'bool'],
+  ['last_earnings_date', 'lastEarningsDate', 'text'],
+  ['last_surprise', 'lastSurprise', 'num'],
+];
+
 async function writeFundamentals(day, rows) {
   await init();
   if (!rows || !rows.length) return 0;
-  const cols = FUND_FIELDS.map(([c]) => c);
+  const cols = FUND_FIELDS.map(([c]) => c).concat(FUND_EXTRAS.map(([c]) => c));
   const num = (v) => (v == null || !isFinite(v) ? null : Number(v));
+  const extra = (r, f, kind) => {
+    const v = r[f];
+    if (v == null) return null;
+    if (kind === 'text') return String(v);
+    if (kind === 'bool') return v ? 1 : 0;
+    return num(v);
+  };
   const stmts = rows.map((r) => ({
     sql: `insert into fundamentals_history (symbol, d, ${cols.join(', ')})
           values (?, ?, ${cols.map(() => '?').join(', ')})
           on conflict(symbol, d) do update set
             ${cols.map((c) => `${c} = excluded.${c}`).join(', ')}`,
-    args: [r.symbol, day, ...FUND_FIELDS.map(([, f]) => num(r[f]))],
+    args: [r.symbol, day,
+      ...FUND_FIELDS.map(([, f]) => num(r[f])),
+      ...FUND_EXTRAS.map(([, f, kind]) => extra(r, f, kind))],
   }));
   for (let i = 0; i < stmts.length; i += BAR_CHUNK) {
     await db.batch(stmts.slice(i, i + BAR_CHUNK), 'write');
