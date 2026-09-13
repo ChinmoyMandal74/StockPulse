@@ -195,6 +195,7 @@
         <select id="movDir">
           <option value="up" selected>Gainers</option>
           <option value="down">Losers</option>
+          <option value="both">Biggest moves (either way)</option>
         </select>
         <label>Within</label>
         <select id="movScope"><option value="All">All screened</option></select>
@@ -288,24 +289,33 @@
     function tplMovers() {
       const [field, periodLabel] = MOV_PERIODS[$('movPeriod').value] || MOV_PERIODS.w1;
       const n = Number($('movCount').value) || 10;
-      const up = $('movDir').value !== 'down';
+      const dir = $('movDir').value;                 // 'up' | 'down' | 'both'
+      const both = dir === 'both';
+      const up = dir !== 'down';
       const scope = movScopeRows();
       const rows = scope.rows
-        .filter((s) => s[field] != null && (up ? s[field] > 0 : s[field] < 0))
-        .sort((a, b) => (up ? b[field] - a[field] : a[field] - b[field]))
+        .filter((s) => s[field] != null && (both || (up ? s[field] > 0 : s[field] < 0)))
+        // 'both' ranks by SIZE of move, so a -9% sits beside a +9%; the
+        // single-direction cards rank by the move itself
+        .sort((a, b) => (both ? Math.abs(b[field]) - Math.abs(a[field])
+          : up ? b[field] - a[field] : a[field] - b[field]))
         .slice(0, n);
       const max = Math.max(...rows.map((s) => Math.abs(s[field])), 0.01);
       const body = rows.length
         ? `<div class="rows">${rows.map((s) => {
             const w = Math.max(6, Math.round(Math.abs(s[field]) / max * 100));
+            const neg = both ? s[field] < 0 : !up;   // each row by its own sign when mixed
             return `<div class="row"><span class="sym">${esc(s.symbol)}</span>` +
-              `<span class="bar-rail"><span class="bar${up ? '' : ' neg'}" style="width:${w}%;display:block"></span></span>` +
-              `<span class="val ${up ? 'pos' : 'neg'}">${pct(s[field])}</span></div>`;
+              `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
+              `<span class="val ${neg ? 'neg' : 'pos'}">${pct(s[field])}</span></div>`;
           }).join('')}</div>`
-        : `<p class="s-empty">Nothing in ${esc(scope.label)} closed ${up ? 'up' : 'down'} ${esc(periodLabel)} \u2014 which is its own kind of story.</p>`;
+        : `<p class="s-empty">Nothing in ${esc(scope.label)} moved ${both ? 'at all' : (up ? 'up' : 'down')} ${esc(periodLabel)} \u2014 which is its own kind of story.</p>`;
+      const title = both
+        ? 'The biggest<br><span class="dim">moves</span>'
+        : `Top ${up ? 'gainers' : 'losers'}<br><span class="dim">${esc(periodLabel)}</span>`;
       return chromeTop() +
         `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 ${esc(periodLabel)}</span>` +
-        `<h2 class="s-title">Top ${up ? 'gainers' : 'losers'}<br><span class="dim">${esc(periodLabel)}</span></h2>` +
+        `<h2 class="s-title">${title}</h2>` +
         body + '</div></div>' + chromeFoot();
     }
 
