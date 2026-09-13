@@ -92,17 +92,10 @@
     .s-foot .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
 
 
-    /* the ticker monogram: the owner retired logos — marks aged badly and
-       sat on white boxes; a typographic tile is unambiguous and always ours */
-    .lg { width: 62px; height: 62px; flex: none; border-radius: 15px; display: grid;
-          place-items: center; background: rgba(255, 255, 255, 0.05);
-          border: 1px solid var(--hair-2);
-          font: 700 24px var(--mono); color: var(--green); letter-spacing: -0.02em; }
-
     /* rows shared by list templates */
     .rows { display: flex; flex-direction: column; gap: 16px; margin-top: 40px; }
     .row { display: flex; align-items: center; gap: 20px; }
-    .row .sym { font: 600 26px var(--mono); width: 118px; letter-spacing: -0.02em; }
+    .row .sym { font: 600 27px var(--mono); width: 138px; letter-spacing: -0.02em; }
     .row .bar-rail { flex: 1; height: 40px; border-radius: 11px; background: rgba(255, 255, 255, 0.045);
                      overflow: hidden; }
     .row .bar { height: 100%; border-radius: 11px;
@@ -115,7 +108,7 @@
     /* advice-change rows */
     .chg { display: flex; align-items: center; gap: 20px; padding: 18px 22px;
            border: 1px solid var(--hair); border-radius: 18px; background: rgba(255, 255, 255, 0.028); }
-    .chg .sym { font: 600 25px var(--mono); width: 108px; }
+    .chg .sym { font: 600 26px var(--mono); width: 128px; }
     .chg .walk { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 700; }
     .chg .walk .arr { color: var(--faint); font-weight: 400; }
     .chg .why { margin-left: auto; max-width: 300px; text-align: right;
@@ -234,12 +227,6 @@
         `<span>${n} stocks screened nightly</span><span class="dot"></span>` +
         '<span>Mechanical readings — not investment advice</span></div>';
     }
-    // The monogram: up to four ticker letters, sized down as they grow.
-    function logoTile(sym) {
-      const t = String(sym).slice(0, 4);
-      const fs = t.length <= 2 ? 24 : t.length === 3 ? 19 : 15;
-      return `<span class="lg" style="font-size:${fs}px">${esc(t)}</span>`;
-    }
     const pct = (n, d = 1) => (n == null ? '—' : (n >= 0 ? '+' : '') + n.toFixed(d) + '%');
 
     // ---- templates ---------------------------------------------------------
@@ -253,7 +240,7 @@
         `<div class="rows">${rows.map((s) => {
           const w = Math.max(6, Math.round(Math.abs(s.oneWeekPct) / max * 100));
           const neg = s.oneWeekPct < 0;
-          return `<div class="row">${logoTile(s.symbol)}<span class="sym">${esc(s.symbol)}</span>` +
+          return `<div class="row"><span class="sym">${esc(s.symbol)}</span>` +
             `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
             `<span class="val ${neg ? 'neg' : 'pos'}">${pct(s.oneWeekPct)}</span></div>`;
         }).join('')}</div></div></div>` + chromeFoot();
@@ -268,7 +255,7 @@
         .slice(0, size.id === 'story' ? 9 : 7);
       const body = rows.length
         ? `<div class="rows">${rows.map((s) =>
-            `<div class="chg">${logoTile(s.symbol)}<span class="sym">${esc(s.symbol)}</span>` +
+            `<div class="chg"><span class="sym">${esc(s.symbol)}</span>` +
             `<span class="walk"><span class="${ACT_CLS[s.advicePrev] || ''}">${esc(s.advicePrev)}</span>` +
             `<span class="arr">→</span>` +
             `<span class="${ACT_CLS[s.action] || ''}">${esc(s.action)}</span></span>` +
@@ -286,7 +273,7 @@
         .sort((a, b) => (b.volX || 0) - (a.volX || 0)).slice(0, size.id === 'story' ? 10 : 8);
       const body = rows.length
         ? `<div class="rows">${rows.map((s) =>
-            `<div class="chg">${logoTile(s.symbol)}<span class="sym">${esc(s.symbol)}</span>` +
+            `<div class="chg"><span class="sym">${esc(s.symbol)}</span>` +
             `<span style="font-size:22px;font-weight:600">first close above its 3-month high</span>` +
             `<span class="bo-badge ${s.volX != null && s.volX >= 1.5 ? 'on' : 'off'}" style="margin-left:auto">` +
             `${s.volX != null ? s.volX.toFixed(1) + '× volume' : 'volume n/a'}</span></div>`).join('')}</div>` +
