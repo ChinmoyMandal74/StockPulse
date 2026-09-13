@@ -1034,9 +1034,20 @@ app.post('/api/reset', route(async (req, res) => {
 
 // Owner-only: see who has an account, and revoke one.
 app.get('/api/users', requireAdmin, route(async (req, res) => {
-  res.json({ users: await store.listUsers() });
+  // The review half of member portfolios: each account row on /users shows
+  // what its owner has built. Rows under a key with no account (the legacy
+  // 'admin' key) still surface, so nothing is invisible to review.
+  const [users, allMine] = await Promise.all([store.listUsers(), store.listAllUserPortfolios()]);
+  const byUser = {};
+  for (const r of allMine) (byUser[r.user] ||= []).push({ name: r.name, symbols: r.symbols });
+  const emails = new Set(users.map((u) => u.email));
+  const orphaned = Object.keys(byUser).filter((k) => !emails.has(k))
+    .map((k) => ({ user: k, portfolios: byUser[k] }));
+  return res.json({
+    users: users.map((u) => ({ ...u, portfolios: byUser[u.email] || [] })),
+    otherPortfolios: orphaned,
+  });
 }));
-
 app.delete('/api/users/:id', requireAdmin, route(async (req, res) => {
   const id = Number(req.params.id);
   const users = await store.listUsers();
@@ -1886,6 +1897,72 @@ function computeScores(m) {
 }
 
 // ---- API: portfolios (management) ------------------------------------------
+
+// ---- member portfolios ------------------------------------------------
+// A member's own lists: named filters over the shared snapshot. The one
+// invariant, enforced HERE and nowhere softer: a member can only reference
+// stocks the system already has — every incoming symbol is checked against
+// the live universe and anything else is silently dropped, so this can
+// never become a way to add a ticker. Keyed like prefs (email, else
+// 'admin'); guests are blocked by requireMember and have no key to write.
+const MY_PORTFOLIOS_MAX = 10;
+const MY_NAME_MAX = 40;
+
+function cleanMyPortfolios(raw, universe) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [rawName, rawSyms] of Object.entries(raw)) {
+    if (Object.keys(out).length >= MY_PORTFOLIOS_MAX) break;
+    const name = String(rawName).trim().slice(0, MY_NAME_MAX);
+    if (!name || out[name]) continue;
+    const seen = new Set();
+    const syms = [];
+    for (const x of Array.isArray(rawSyms) ? rawSyms : []) {
+      const sym = String(x).trim().toUpperCase();
+      if (sym && universe.has(sym) && !seen.has(sym)) { seen.add(sym); syms.push(sym); }
+    }
+    out[name] = syms;
+  }
+  return out;
+}
+
+app.get('/api/my/portfolios', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const mine = await store.readUserPortfolios(await prefsKey(req));
+  // Filtered to the live universe on the way out too — a symbol dropped
+  // since the last write must never render as a phantom row count.
+  const universe = new Set(getUniverse(await readPortfolios()));
+  for (const name of Object.keys(mine)) mine[name] = mine[name].filter((x) => universe.has(x));
+  res.json({ portfolios: mine, max: MY_PORTFOLIOS_MAX });
+}));
+
+app.put('/api/my/portfolios', requireMember, route(async (req, res) => {
+  const key = await prefsKey(req);
+  const universe = new Set(getUniverse(await readPortfolios()));
+  const next = cleanMyPortfolios(req.body && req.body.portfolios, universe);
+  const prev = await store.readUserPortfolios(key);
+  await store.writeUserPortfolios(key, next);
+
+  // The activity log gets the DIFF, not the blob — one compact row per
+  // portfolio that changed, capped so a bulk edit cannot flood the table.
+  const rows = [];
+  const ts = new Date().toISOString();
+  const push = (detail) => { if (rows.length < 10) rows.push({ ts, user: key, kind: 'myportfolio', detail, ip: req.ip || null }); };
+  for (const name of Object.keys(next)) {
+    if (!(name in prev)) { push(('create:' + name + ' +' + next[name].length).slice(0, 80)); continue; }
+    const was = new Set(prev[name]);
+    const now = new Set(next[name]);
+    const added = next[name].filter((x) => !was.has(x));
+    const removed = prev[name].filter((x) => !now.has(x));
+    if (added.length || removed.length) {
+      push((name + (added.length ? ' +' + added.join(',') : '') + (removed.length ? ' -' + removed.join(',') : '')).slice(0, 80));
+    }
+  }
+  for (const name of Object.keys(prev)) if (!(name in next)) push(('delete:' + name).slice(0, 80));
+  if (rows.length) store.logActivity(rows).catch(() => { /* fire and forget */ });
+
+  res.json({ ok: true, portfolios: next, max: MY_PORTFOLIOS_MAX });
+}));
 
 app.get('/api/portfolios', requireMember, route(async (req, res) => {
   res.json({ portfolios: await readPortfolios() });

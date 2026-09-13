@@ -148,13 +148,14 @@
           <div class="val">${v}</div><div class="lbl">${l}</div></div></div>`).join('');
 
       $('out').innerHTML = `<table><thead><tr>
-          <th>Email</th><th>Role</th><th>Joined</th><th>Last sign-in</th><th></th>
-        </tr></thead><tbody>${users.map((u) => row(u, owners)).join('')}</tbody></table>`;
+          <th>Email</th><th>Role</th><th>Joined</th><th>Last sign-in</th><th>Portfolios</th><th></th>
+        </tr></thead><tbody>${users.map((u) => row(u, owners)).join('')}</tbody></table>` +
+        otherPortfoliosHtml(data.otherPortfolios || []);
 
       // Why a button may be disabled, said once rather than per row.
       const onlyOwner = owners === 1;
       $('note').innerHTML =
-        'Deleting an account removes its sessions, saved column layout and chat usage, and signs it out everywhere. ' +
+        'Deleting an account removes its sessions, saved column layout, personal portfolios and chat usage, and signs it out everywhere. ' +
         (onlyOwner ? 'The only owner cannot be removed, and nor can the account you are signed in as.'
                    : 'You cannot remove the account you are signed in as.');
     }
@@ -171,9 +172,28 @@
             ${u.lockedUntil ? `<div class="locked">locked until ${esc(new Date(u.lockedUntil).toLocaleTimeString())}</div>` : ''}</td>
         <td class="when">${esc(when(u.createdAt))}</td>
         <td class="when">${esc(when(u.lastSignIn))}</td>
+        ${pfCell(u.portfolios)}
         <td class="act"><button class="del" data-id="${u.id}" data-email="${esc(u.email)}"
             ${blocked ? 'disabled' : ''}>Delete</button></td>
       </tr>`;
+    }
+
+    // The review column: what this account has built, at a glance, with the
+    // full symbol lists in the tooltip — a read-only glance is the whole job.
+    function pfCell(pfs) {
+      if (!pfs || !pfs.length) return '<td class="when">—</td>';
+      const label = pfs.map((p) => `${p.name} (${p.symbols.length})`).join(', ');
+      const detail = pfs.map((p) => `${p.name}: ${p.symbols.join(', ') || 'empty'}`).join(' · ');
+      return `<td class="when" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(detail)}">${esc(label)}</td>`;
+    }
+
+    // Personal portfolios saved under a key with no account row — the legacy
+    // 'admin' cookie is the usual one. Surfaced so nothing escapes review.
+    function otherPortfoliosHtml(list) {
+      if (!list.length) return '';
+      return '<p class="lede" style="padding:14px 18px;margin:0">' + list.map((o) =>
+        `<strong>${esc(o.user)}</strong> (no account row): ` +
+        esc(o.portfolios.map((p) => `${p.name} (${p.symbols.length})`).join(', '))).join('<br>') + '</p>';
     }
 
     $('out').addEventListener('click', async (e) => {

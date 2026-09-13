@@ -98,6 +98,20 @@ const SCHEMA = [
    )`,
   `create index if not exists idx_activity_ts on activity (ts)`,
   `create index if not exists idx_activity_user on activity (user)`,
+  // A member's own portfolios: named FILTERS over the shared snapshot, never
+  // new data — every symbol must already be in the universe, enforced by the
+  // route. symbols is a JSON array in the row: whole-collection replaces at
+  // tens of rows, the house write pattern, and no join needed to render a
+  // picker. NOT in prefs: three pages debounce-write prefs under the
+  // hand-back-what-you-don't-edit rule, and a page bug there must not be
+  // able to wipe someone's portfolios.
+  `create table if not exists user_portfolios (
+     user_key text not null,
+     name     text not null,
+     position integer not null,
+     symbols  text not null,
+     primary key (user_key, name)
+   )`,
   // Accounts. The screener itself is shared — every signed-in user sees the same
   // data — so these exist purely to control who gets through the door.
   // role: 'owner' can edit tickers / refresh / rewind the table; 'member' is read-only.
@@ -836,6 +850,12 @@ async function purgeSymbol(symbol) {
     if (n) removed[table] = n;
     total += n;
   }
+  // Member lists hold JSON arrays, so they cannot ride SYMBOL_TABLES; counted
+  // as rows edited, not rows deleted, and never fatal to the purge.
+  try {
+    const n = await removeSymbolFromUserPortfolios(sym);
+    if (n) removed.user_portfolios = n;
+  } catch { /* the sweep can catch it later */ }
   return { symbol: sym, removed, total };
 }
 
@@ -1294,6 +1314,72 @@ async function pruneActivity(days = 60) {
   await db.execute({ sql: 'delete from activity where ts < ?', args: [cutoff] });
 }
 
+// ---- member portfolios ------------------------------------------------------
+// Ordered like the shared portfolios: position is an explicit column because
+// the picker renders in saved order and insertion order does not survive the
+// round trip.
+async function readUserPortfolios(userKey) {
+  await init();
+  const r = await db.execute({
+    sql: 'select name, symbols from user_portfolios where user_key = ? order by position',
+    args: [userKey],
+  });
+  const out = {};
+  for (const row of r.rows) {
+    try { out[row.name] = JSON.parse(row.symbols); } catch { out[row.name] = []; }
+  }
+  return out;
+}
+
+// Whole-collection replace inside one batch — the same semantics every other
+// collection write here has, and fine at a ten-portfolio cap.
+async function writeUserPortfolios(userKey, map) {
+  await init();
+  const stmts = [{ sql: 'delete from user_portfolios where user_key = ?', args: [userKey] }];
+  let pos = 0;
+  for (const [name, symbols] of Object.entries(map || {})) {
+    stmts.push({
+      sql: 'insert into user_portfolios (user_key, name, position, symbols) values (?, ?, ?, ?)',
+      args: [userKey, name, pos++, JSON.stringify(symbols)],
+    });
+  }
+  await db.batch(stmts, 'write');
+}
+
+// The admin review read: every account's portfolios in one query, attached to
+// /api/users by email so /users can show them beside the delete button.
+async function listAllUserPortfolios() {
+  await init();
+  const r = await db.execute('select user_key, name, symbols from user_portfolios order by user_key, position');
+  return r.rows.map((row) => {
+    let symbols = [];
+    try { symbols = JSON.parse(row.symbols); } catch { /* leave empty */ }
+    return { user: row.user_key, name: row.name, symbols };
+  });
+}
+
+// A dropped ticker leaves member portfolios too. Reads also filter to the
+// live universe, so this is hygiene rather than correctness — but a stored
+// symbol that no longer exists would silently come back if the ticker were
+// ever re-added, which is not what anyone meant by their saved list.
+async function removeSymbolFromUserPortfolios(symbol) {
+  await init();
+  const sym = String(symbol).toUpperCase();
+  const r = await db.execute('select user_key, name, symbols from user_portfolios');
+  let touched = 0;
+  for (const row of r.rows) {
+    let arr;
+    try { arr = JSON.parse(row.symbols); } catch { continue; }
+    if (!Array.isArray(arr) || !arr.includes(sym)) continue;
+    await db.execute({
+      sql: 'update user_portfolios set symbols = ? where user_key = ? and name = ?',
+      args: [JSON.stringify(arr.filter((x) => x !== sym)), row.user_key, row.name],
+    });
+    touched++;
+  }
+  return touched;
+}
+
 // ---- accounts -------------------------------------------------------------
 // scrypt ships with Node, so accounts need no dependency. Defined here rather
 // than in server.js so set-password.js hashes identically — two copies of a
@@ -1398,6 +1484,7 @@ async function deleteUser(id) {
   if (email) {
     stmts.push({ sql: 'delete from prefs where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from chat_usage where user_key = ?', args: [email] });
+    stmts.push({ sql: 'delete from user_portfolios where user_key = ?', args: [email] });
   }
   await db.batch(stmts, 'write');
 }
@@ -1522,6 +1609,10 @@ module.exports = {
   readActivityStats,
   clearActivity,
   pruneActivity,
+  readUserPortfolios,
+  writeUserPortfolios,
+  listAllUserPortfolios,
+  removeSymbolFromUserPortfolios,
   hashPassword,
   newSalt,
   verifyPassword,
