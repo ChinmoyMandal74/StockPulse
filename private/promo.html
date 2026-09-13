@@ -154,6 +154,65 @@
     .feat h3 { margin: 2px 0 4px; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
     .feat p { margin: 0; font-size: 17.5px; color: var(--muted); line-height: 1.45; }
 
+    /* ---- explainer slide grammars ------------------------------------- */
+    /* dots make a card read as one of a set, which is the whole point of a
+       carousel; everything else here is a diagram drawn in plain CSS */
+    .dots { display: flex; gap: 10px; margin-top: 30px; }
+    .dots i { width: 11px; height: 11px; border-radius: 50%;
+              background: rgba(255, 255, 255, 0.16); }
+    .dots i.on { background: var(--green); }
+
+    .flow { display: flex; flex-direction: column; gap: 14px; margin-top: 34px; }
+    .flowrow { display: flex; align-items: center; gap: 18px; }
+    .flowrow .fk { width: 210px; font: 600 23px var(--sans); color: var(--muted); }
+    .flowrow .fq { flex: 1; font-size: 21px; color: var(--faint); }
+    .flowrow .fv { font: 700 26px var(--mono); padding: 9px 20px; border-radius: 12px;
+                   border: 1px solid var(--hair-2); background: rgba(255, 255, 255, 0.04); }
+    .flowend { margin-top: 26px; padding: 24px 28px; border-radius: 20px;
+               border: 1px solid rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.08); }
+    .flowend .fl { font-size: 18px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--green); }
+    .flowend .fa { margin-top: 8px; font: 800 46px var(--sans); letter-spacing: -0.03em; }
+    .flowend .fw { margin-top: 6px; font-size: 21px; color: var(--muted); }
+
+    .rungs { display: flex; flex-direction: column; gap: 10px; margin-top: 30px; }
+    .rung { display: flex; align-items: center; gap: 16px; padding: 15px 22px;
+            border-radius: 15px; border: 1px solid var(--hair);
+            background: rgba(255, 255, 255, 0.022); }
+    .rung .rs { width: 92px; font: 600 15px var(--mono); text-transform: uppercase;
+                letter-spacing: 0.12em; color: var(--faint); }
+    .rung .rf { font: 600 24px var(--sans); }
+    .rung .ra { margin-left: auto; font: 700 22px var(--mono); color: var(--muted); }
+    .rung.lit { border-color: rgba(52, 211, 153, 0.5); background: rgba(52, 211, 153, 0.1); }
+    .rung.lit .rf, .rung.lit .ra { color: var(--green); }
+    .rung.past { opacity: 0.5; }
+    .rung.never { opacity: 0.3; }
+    .rung.never .ra { font-size: 18px; }
+
+    .tiers { display: flex; gap: 8px; margin-top: 34px; }
+    .tier { flex: 1; padding: 18px 12px; border-radius: 14px; text-align: center;
+            border: 1px solid var(--hair-2); }
+    .tier b { display: block; font-size: 19px; font-weight: 700; }
+    .tier span { display: block; margin-top: 6px; font-size: 15px; color: var(--faint); }
+
+    .mock { margin-top: 32px; padding: 26px; border-radius: 20px;
+            border: 1px solid var(--hair-2); background: rgba(255, 255, 255, 0.025); }
+    .mockrow { display: flex; align-items: center; gap: 20px; padding: 16px 18px;
+               border-radius: 12px; background: rgba(255, 255, 255, 0.03); font: 600 24px var(--mono); }
+    .mockrow + .mockrow { margin-top: 8px; }
+    .mockrow .star { width: 46px; height: 46px; border-radius: 12px; display: grid;
+                     place-items: center; font-size: 26px; color: var(--amber);
+                     border: 2px solid var(--amber); }
+    .mockrow .mg { margin-left: auto; color: var(--green); }
+    .mockcap { margin-top: 18px; font-size: 19px; color: var(--faint); }
+
+    .stmts { display: flex; flex-direction: column; gap: 16px; margin-top: 32px; }
+    .stmt { display: flex; gap: 20px; align-items: flex-start; padding: 22px 26px;
+            border-radius: 18px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.022); }
+    .stmt .x { font: 700 30px var(--sans); color: var(--red); line-height: 1; }
+    .stmt .y { font: 700 30px var(--sans); color: var(--green); line-height: 1; }
+    .stmt b { display: block; font-size: 26px; font-weight: 700; }
+    .stmt span { display: block; margin-top: 5px; font-size: 19px; color: var(--muted); line-height: 1.45; }
+
     /* chart legend */
     .chipL { display: inline-flex; align-items: center; gap: 10px; padding: 8px 18px;
              border-radius: 999px; border: 1px solid var(--hair-2);
@@ -244,6 +303,14 @@
         </div>
       </div>
 
+      <div id="intBox">
+        <label>Topic</label>
+        <select id="intTopic"></select>
+        <label>Slide</label>
+        <select id="intSlide"></select>
+        <p class="hint" style="margin-top:8px">Download each slide in turn — they post as one carousel.</p>
+      </div>
+
       <div id="annBox">
         <label>Kicker (small line above)</label>
         <input type="text" id="annKick" value="From the Lab" maxlength="40" />
@@ -284,7 +351,7 @@
       { id: 'advice', name: 'The rules changed their mind', note: 'Today’s advice changes, rule named' },
       { id: 'breakout', name: 'Breakout radar', note: 'Fresh 3-month highs, volume-checked' },
       { id: 'stance', name: 'Where the market stands', note: 'The universe by trend state' },
-      { id: 'intro', name: 'Introducing Tickr Lab', note: 'The feature card — what the app is' },
+      { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
     ];
     let tpl = 'movers';
@@ -421,38 +488,217 @@
         '</div></div>' + chromeFoot();
     }
 
-    // The introduction: what the app is, in five honest rows. Wording stays
-    // inside the house line — it screens and explains, it never recommends.
+    // ---- Intro: explainer carousels ---------------------------------------
+    // A topic is a list of slides and a slide is a kind plus its payload, so
+    // adding an explainer is data, never layout. Every slide carries the same
+    // frame — kicker, title, body, dot row — which is what makes a set read
+    // as a set. Wording stays inside the house line throughout: it screens
+    // and explains, it never recommends.
     const INTRO_ICONS = {
       screen: '<path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/>',
       rules: '<path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16.6" r="2.6"/><path d="M18 14v-1.6M18 20.8v-1.6"/>',
       trend: '<path d="M3 19.6h18"/><path d="M4.6 15.2 9.4 9.8l3.4 2.6 6-7"/>',
       ask: '<path d="M12 20.4c4.6 0 8.4-3 8.4-7.2S16.6 6 12 6 3.6 9 3.6 13.2c0 1.9.8 3.6 2.1 4.9L5 21z"/><path d="M8.6 12h6.8M8.6 14.8h4.2"/>',
       guest: '<circle cx="12" cy="8.6" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/>',
+      star: '<path d="M12 4.4l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.5 5-.7L12 4.4Z"/>',
+      list: '<path d="M4 6h16M4 12h16M4 18h10"/>',
+      chart: '<path d="M4 19V5M4 19h16"/><path d="M7.5 15.5 11 11l3 2.4 4.4-5.6"/>',
     };
-    function tplIntro() {
-      const n = stocks.length || 93;
-      const feats = [
-        ['screen', 'var(--green)', `${n} stocks, screened nightly`,
-          'Momentum and quality scored on a fixed scale after every close — a 7 means the same thing in any market.'],
-        ['rules', 'var(--accent)', 'Advice that shows its work',
-          'Five fixed rule profiles side by side, and every verdict names the ONE rule that fired. Click it, see the ladder.'],
-        ['trend', 'var(--amber)', 'Twenty years of receipts',
-          'Trend ribbons, backtests and a signal lab over the full bar archive — measured, not asserted.'],
-        ['ask', 'var(--accent-2)', 'Ask in plain English',
-          'An assistant that answers from the same table you see — and says so when the data cannot answer.'],
-        ['guest', 'var(--red)', 'Try it in one click',
-          'A guest preview with real stocks and every feature live. No account, no card.'],
-      ];
-      const rows = (size.id === 'square' ? feats.slice(0, 4) : feats).map(([ic, tint, h, p]) =>
+
+    // One resolved rule set for the explainers, and one real row to explain
+    // with: a live Buy beats a mock-up, and the ladder below is that row's
+    // own rungs rather than an illustration.
+    let introCfg = null;
+    const introRules = () => (introCfg = introCfg || ActionRules.resolve({}).cfg);
+    function introRow() {
+      const pick = (a) => stocks.find((s) => s.action === a && s.actionFlag && s.actionTrend);
+      return pick('Buy') || pick('Strong Buy') || pick('Buy with Risk') || pick('Hold')
+        || stocks.find((s) => s.action) || null;
+    }
+
+    const TOPICS = [
+      {
+        id: 'what', name: 'What Tickr Lab is',
+        slides: [
+          { kind: 'cover', kick: 'Introducing', title: 'Tickr Lab',
+            sub: 'A momentum screener that shows its work — every score, every verdict, every rule, explained on click.' },
+          { kind: 'steps', kick: 'The short version', title: 'Five things<br><span class="dim">it does</span>',
+            rows: [
+              ['screen', 'var(--green)', 'Screened nightly', 'Momentum and quality scored on a fixed scale after every close — a 7 means the same thing in any market.'],
+              ['rules', 'var(--accent)', 'Advice that shows its work', 'Five fixed rule profiles side by side, and every verdict names the ONE rule that fired.'],
+              ['trend', 'var(--amber)', 'Twenty years of receipts', 'Trend ribbons, backtests and a signal lab over the full bar archive — measured, not asserted.'],
+              ['ask', 'var(--accent-2)', 'Ask in plain English', 'An assistant that answers from the same table you see — and says so when the data cannot answer.'],
+              ['guest', 'var(--red)', 'Try it in one click', 'A guest preview with real stocks and every feature live. No account, no card.'],
+            ] },
+          { kind: 'close' },
+        ],
+      },
+      {
+        id: 'advice', name: 'How Advice works',
+        slides: [
+          { kind: 'cover', kick: 'How it works', title: 'Advice,<br><span class="dim">explained</span>',
+            sub: 'Not a score, not a black box: four readings collapse to one word, and the rule that decided it is always named.' },
+          { kind: 'flow' },
+          { kind: 'ladder' },
+          { kind: 'tiers', kick: 'The whole vocabulary', title: 'Six words,<br><span class="dim">nothing else</span>',
+            note: 'The Sell, Avoid and Hold rules sit ABOVE every Buy rule in the source. Loss avoidance is the order of the list, not a setting.' },
+          { kind: 'close' },
+        ],
+      },
+      {
+        id: 'nope', name: 'What we don’t do',
+        slides: [
+          { kind: 'cover', kick: 'Where we draw the line', title: 'What this<br><span class="dim">is not</span>',
+            sub: 'A screener can describe. It cannot know what happens next — and most of the industry pretends otherwise.' },
+          { kind: 'stmts', kick: 'Four refusals', title: 'On purpose',
+            rows: [
+              ['x', 'No “stocks to buy”', 'The rules read the tape and say what they read. Nobody here is telling you what to own.'],
+              ['x', 'No price targets', 'A target is a forecast wearing a decimal point. We do not have one and will not invent one.'],
+              ['x', 'No portfolio tracking', 'No shares, no cost basis, no “you are up 4%”. Lists are lists.'],
+              ['y', 'Only what we measured', 'Five research ideas were tested and four came back flat. That is written down in the app.'],
+            ] },
+          { kind: 'close' },
+        ],
+      },
+      {
+        id: 'lists', name: 'Build your own lists',
+        slides: [
+          { kind: 'cover', kick: 'Make it yours', title: 'Your own<br><span class="dim">portfolios</span>',
+            sub: 'Star the rows you care about, then read the whole list as one line. Two clicks, no spreadsheet.' },
+          { kind: 'mock' },
+          { kind: 'steps', kick: 'Three steps', title: 'Star,<br><span class="dim">name, watch</span>',
+            rows: [
+              ['star', 'var(--amber)', 'Star a row', 'Every row in the screener carries a star. Click it and pick a list — or make one on the spot.'],
+              ['list', 'var(--accent)', 'Name your list', 'Up to ten of them, private to your account, following you between machines.'],
+              ['chart', 'var(--green)', 'Read it as one line', 'The portfolio page draws your list against the whole screen, with every stock on the same chart.'],
+            ] },
+          { kind: 'close' },
+        ],
+      },
+    ];
+    const topicById = (id) => TOPICS.find((t) => t.id === id) || TOPICS[0];
+
+    function dotRow(n, at) {
+      return `<div class="dots">${Array.from({ length: n },
+        (_, i) => `<i class="${i === at ? 'on' : ''}"></i>`).join('')}</div>`;
+    }
+
+    function slideSteps(sl) {
+      const rows = (size.id === 'square' ? sl.rows.slice(0, 4) : sl.rows);
+      return `<div class="rows" style="margin-top:34px">${rows.map(([ic, tint, h, p]) =>
         `<div class="feat"><span class="fi" style="color:${tint};border-color:color-mix(in srgb, ${tint} 40%, transparent);background:color-mix(in srgb, ${tint} 9%, transparent)">` +
         `<svg viewBox="0 0 24 24" aria-hidden="true">${INTRO_ICONS[ic]}</svg></span>` +
-        `<span><h3>${esc(h)}</h3><p>${esc(p)}</p></span></div>`).join('');
+        `<span><h3>${h}</h3><p>${p}</p></span></div>`).join('')}</div>`;
+    }
+
+    function slideFlow() {
+      const r = introRow();
+      if (!r) return '<p class="s-empty">No scored rows yet.</p>';
+      const rows = [
+        ['Company type', 'How established is it?', r.companyType || '—'],
+        ['Trend', 'May I own this at all?', r.actionTrend || '—'],
+        ['Entry', 'Is now a sane moment?', r.actionEntry || '—'],
+        ['Fundamentals', 'How much conviction?', r.actionFund || '—'],
+        ['Guards', 'Any reason to wait?', r.actionGuards || 'clear'],
+      ];
+      return `<div class="flow">${rows.map(([k, q, v]) =>
+        `<div class="flowrow"><span class="fk">${esc(k)}</span><span class="fq">${esc(q)}</span>` +
+        `<span class="fv">${esc(v)}</span></div>`).join('')}</div>` +
+        `<div class="flowend"><div class="fl">${esc(r.symbol)} reads</div>` +
+        `<div class="fa">${esc(r.action)}</div>` +
+        `<div class="fw">because “${esc(r.actionFlag || '')}” fired first</div></div>`;
+    }
+
+    function slideLadder() {
+      const r = introRow();
+      if (!r) return '<p class="s-empty">No scored rows yet.</p>';
+      let e;
+      try { e = ActionRules.explain(r, introRules()); } catch (err) { e = null; }
+      if (!e || !e.rungs) return '<p class="s-empty">The ladder is unavailable for this row.</p>';
+      const firedAt = e.rungs.findIndex((g) => g.fired);
+      const cap = size.id === 'square' ? 6 : size.id === 'story' ? 11 : 8;
+      let show = e.rungs;
+      if (show.length > cap) {
+        const from = Math.max(0, Math.min(firedAt - cap + 3, show.length - cap));
+        show = show.slice(from, from + cap);
+      }
+      const SEC = { veto: 'veto', cap: 'cap', setup: 'setup' };
+      return `<div class="rungs">${show.map((g) => {
+        const i = e.rungs.indexOf(g);
+        const cls = g.fired ? 'lit' : (firedAt >= 0 && i < firedAt) ? 'past' : 'never';
+        const right = g.fired ? g.action : (cls === 'past' ? 'not met' : 'never checked');
+        return `<div class="rung ${cls}"><span class="rs">${esc(SEC[g.section] || g.section)}</span>` +
+          `<span class="rf">${esc(g.flag)}</span><span class="ra">${esc(right)}</span></div>`;
+      }).join('')}</div>` +
+        `<p class="s-sub" style="font-size:18px;margin-top:20px">First match wins, so everything under the lit rung was never consulted — that is why one rule can always be named. This is ${esc(r.symbol)}, tonight.</p>`;
+    }
+
+    const TIER_DEF = [
+      ['Sell', 'var(--red)', 'get out'],
+      ['Avoid', 'var(--red)', 'not now'],
+      ['Hold', 'var(--muted)', 'sit still'],
+      ['Buy w/ Risk', 'var(--amber)', 'eyes open'],
+      ['Buy', 'var(--green)', 'clean'],
+      ['Strong Buy', 'var(--green)', 'everything lines up'],
+    ];
+    function slideTiers(sl) {
+      return `<div class="tiers">${TIER_DEF.map(([n, c, w]) =>
+        `<div class="tier" style="border-color:color-mix(in srgb, ${c} 40%, transparent);background:color-mix(in srgb, ${c} 8%, transparent)">` +
+        `<b style="color:${c}">${esc(n)}</b><span>${esc(w)}</span></div>`).join('')}</div>` +
+        `<p class="s-sub" style="margin-top:30px">${esc(sl.note || '')}</p>`;
+    }
+
+    function slideMock() {
+      const rows = stocks.slice(0, 3).map((s) => s.symbol);
+      while (rows.length < 3) rows.push('—');
+      return '<div class="mock">' +
+        rows.map((sym, i) =>
+          `<div class="mockrow">${i === 0 ? '<span class="star">★</span>' : '<span class="star" style="border-color:var(--hair-2);color:var(--faint)">☆</span>'}` +
+          `<span>${esc(sym)}</span><span class="mg">${i === 0 ? 'in 2 of your lists' : ''}</span></div>`).join('') +
+        '<p class="mockcap">The star sits beside every ticker in the screener. Click it, tick a list, done — the row shows which of your lists it belongs to.</p>' +
+        '</div>';
+    }
+
+    function slideStmts(sl) {
+      return `<div class="stmts">${sl.rows.map(([k, h, p]) =>
+        `<div class="stmt"><span class="${k}">${k === 'x' ? '✕' : '✓'}</span>` +
+        `<span><b>${esc(h)}</b><span>${esc(p)}</span></span></div>`).join('')}</div>`;
+    }
+
+    function slideClose() {
+      const n = stocks.length || 93;
+      return '<div class="flowend" style="margin-top:40px">' +
+        '<div class="fl">No account needed</div>' +
+        '<div class="fa">Try it free</div>' +
+        `<div class="fw">Five real stocks, every feature live, one click on the login page.</div></div>` +
+        `<p class="s-sub" style="margin-top:34px">${n} stocks screened nightly at tickrlab.com — the whole thing is one page and a set of rules that explain themselves.</p>`;
+    }
+
+    function tplIntro() {
+      const topic = topicById($('intTopic').value);
+      const idx = Math.min(Number($('intSlide').value) || 0, topic.slides.length - 1);
+      const sl = topic.slides[idx];
+      const kick = sl.kick || (sl.kind === 'close' ? 'Start here'
+        : sl.kind === 'flow' ? 'Four readings, one word'
+        : sl.kind === 'ladder' ? 'One rule decides' : topic.name);
+      const title = sl.title || (sl.kind === 'close' ? 'See it<br><span class="dim">on real data</span>'
+        : sl.kind === 'flow' ? 'How a verdict<br><span class="dim">gets made</span>'
+        : sl.kind === 'ladder' ? 'The rule that<br><span class="dim">fired</span>'
+        : sl.kind === 'mock' ? 'One click<br><span class="dim">per stock</span>' : topic.name);
+      const body =
+        sl.kind === 'steps' ? slideSteps(sl)
+        : sl.kind === 'flow' ? slideFlow()
+        : sl.kind === 'ladder' ? slideLadder()
+        : sl.kind === 'tiers' ? slideTiers(sl)
+        : sl.kind === 'mock' ? slideMock()
+        : sl.kind === 'stmts' ? slideStmts(sl)
+        : sl.kind === 'close' ? slideClose()
+        : (sl.sub ? `<p class="s-sub" style="font-size:26px;margin-top:26px">${sl.sub}</p>` : '');
       return chromeTop() +
-        '<div class="s-body"><div><span class="s-kick">Introducing</span>' +
-        '<h2 class="s-title">Tickr Lab</h2>' +
-        '<p class="s-sub">A momentum screener that shows its work — every score, every verdict, every rule, explained on click.</p>' +
-        `<div class="rows" style="margin-top:34px">${rows}</div></div></div>` + chromeFoot();
+        `<div class="s-body"><div><span class="s-kick">${esc(kick)}</span>` +
+        `<h2 class="s-title">${title}</h2>${body}` +
+        dotRow(topic.slides.length, idx) +
+        '</div></div>' + chromeFoot();
     }
 
     // ---- the chart card ---------------------------------------------------
@@ -649,6 +895,7 @@
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
       $('movBox').style.display = tpl === 'movers' ? 'block' : 'none';
       $('chtBox').style.display = tpl === 'chart' ? 'block' : 'none';
+      $('intBox').style.display = tpl === 'intro' ? 'block' : 'none';
       const cm = $('chtMode').value;
       $('chtScopeWrap').style.display = cm === 'stock' ? 'none' : 'block';
       $('chtLinesWrap').style.display = cm === 'leaders' ? 'block' : 'none';
@@ -679,6 +926,25 @@
       $(id).addEventListener('change', () => { if (tpl === 'movers') render(); }));
     ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'chart') render(); }));
+
+    function paintSlideList(keepAt) {
+      const topic = topicById($('intTopic').value);
+      const at = Math.min(keepAt || 0, topic.slides.length - 1);
+      $('intSlide').innerHTML = topic.slides.map((sl, i) =>
+        `<option value="${i}">${i + 1}. ${esc(sl.kind === 'cover' ? 'Cover'
+          : sl.kind === 'close' ? 'Try it free'
+          : sl.kind === 'steps' ? 'Steps'
+          : sl.kind === 'flow' ? 'The four readings'
+          : sl.kind === 'ladder' ? 'The rule ladder'
+          : sl.kind === 'tiers' ? 'The six verdicts'
+          : sl.kind === 'mock' ? 'The star'
+          : sl.kind === 'stmts' ? 'The refusals' : sl.kind)}</option>`).join('');
+      $('intSlide').value = String(at);
+    }
+    $('intTopic').innerHTML = TOPICS.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+    paintSlideList(0);
+    $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
+    $('intSlide').addEventListener('change', () => { if (tpl === 'intro') render(); });
     $('reloadBtn').addEventListener('click', () => load(true));
 
     // ---- Download PNG -----------------------------------------------------
