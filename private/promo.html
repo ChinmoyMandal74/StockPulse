@@ -47,7 +47,14 @@
     .hint { font-size: 10.5px; color: var(--faint); line-height: 1.55; margin-top: 14px; }
     .panel .btn { margin-top: 12px; width: 100%; justify-content: center; }
 
-    .deck { flex: 1; display: grid; place-items: center; overflow: auto; padding: 24px; }
+    /* The deck is deliberately NOT the card's black: the artboard edge has
+       to be findable, or a screenshot is guesswork. The dashed guide sits
+       OUTSIDE the stage (outline + offset), so cropping at the card edge
+       never captures it. */
+    .deck { flex: 1; display: grid; place-items: center; overflow: auto; padding: 28px;
+            background: #10141c; }
+    #stage { outline: 2px dashed rgba(124, 156, 255, 0.55); outline-offset: 7px;
+             box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.9); }
 
     /* ---- the artboard -------------------------------------------------- */
     #stageWrap { flex: none; }
