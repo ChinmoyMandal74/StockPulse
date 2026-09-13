@@ -79,16 +79,18 @@
                    height: 100%; padding: 56px 64px 48px; box-sizing: border-box; }
 
     /* chrome shared by every card, so the family is unmistakable */
-    .s-top { display: flex; align-items: center; gap: 16px; }
-    .s-glyph { width: 52px; height: 52px; border-radius: 16px; display: inline-flex;
+    /* The masthead carries the brand at thumbnail size — a feed shrinks a
+       1080 card to a few hundred pixels, where 30px type stops reading. */
+    .s-top { display: flex; align-items: center; gap: 20px; }
+    .s-glyph { width: 68px; height: 68px; border-radius: 21px; display: inline-flex;
                align-items: center; justify-content: center; color: var(--green);
                background: linear-gradient(160deg, rgba(52, 211, 153, 0.22), rgba(52, 211, 153, 0.05));
                border: 1px solid rgba(52, 211, 153, 0.3); }
-    .s-glyph svg { width: 30px; height: 30px; stroke: currentColor; fill: none;
-                   stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-    .s-word { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; }
-    .s-date { margin-left: auto; font: 500 17px var(--mono); color: var(--faint);
-              padding: 8px 18px; border: 1px solid var(--hair); border-radius: 999px; }
+    .s-glyph svg { width: 40px; height: 40px; stroke: currentColor; fill: none;
+                   stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .s-word { font-size: 44px; font-weight: 700; letter-spacing: -0.035em; }
+    .s-date { margin-left: auto; font: 500 24px var(--mono); color: var(--muted);
+              padding: 11px 24px; border: 1px solid var(--hair-2); border-radius: 999px; }
     .s-kick { margin: 44px 0 0; font-size: 17px; font-weight: 600; letter-spacing: 0.24em;
               text-transform: uppercase; color: var(--green); }
     .s-title { margin: 10px 0 0; font-size: 66px; font-weight: 800; line-height: 1.02;
@@ -96,7 +98,7 @@
     .s-title .dim { color: var(--faint); }
     .s-sub { margin: 16px 0 0; font-size: 20px; color: var(--muted); line-height: 1.5; max-width: 40ch; }
     .s-body { flex: 1; display: flex; flex-direction: column; justify-content: center; min-height: 0; }
-    .s-foot { display: flex; align-items: center; gap: 14px; font: 500 16px var(--mono);
+    .s-foot { display: flex; align-items: center; gap: 15px; font: 500 18px var(--mono);
               color: var(--faint); border-top: 1px solid var(--hair); padding-top: 26px; }
     .s-foot b { color: var(--muted); font-weight: 600; }
     .s-foot .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
