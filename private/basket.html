@@ -33,6 +33,32 @@
     .head { display: flex; align-items: baseline; gap: 12px 16px; flex-wrap: wrap; margin: 26px 0 4px; }
     h1 { margin: 0; font-size: clamp(26px, 3.4vw, 36px); font-weight: 600; letter-spacing: -0.035em; }
     h1 .kind { color: var(--faint); font-weight: 400; }
+    .ppick { position: relative; }
+    #pfBtn { display: inline-flex; align-items: center; gap: 9px; cursor: pointer;
+             margin: 0; padding: 2px 8px 2px 2px; border: 0; background: none; border-radius: 10px;
+             font: inherit; color: inherit; letter-spacing: inherit;
+             transition: background 0.35s var(--ease); }
+    #pfBtn:hover, #pfBtn[aria-expanded="true"] { background: rgba(255, 255, 255, 0.05); }
+    #pfBtn .caret { width: 16px; height: 16px; color: var(--faint); flex: none;
+                    stroke: currentColor; fill: none; stroke-width: 1.6;
+                    stroke-linecap: round; stroke-linejoin: round;
+                    transition: transform 0.4s var(--ease); }
+    #pfBtn[aria-expanded="true"] .caret { transform: rotate(180deg); }
+    #pfMenu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 46; display: none;
+              min-width: 250px; max-height: 55vh; overflow-y: auto; padding: 6px;
+              border-radius: 16px; border: 1px solid var(--hair-2);
+              background: rgba(9, 11, 15, 0.9);
+              backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+              box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+    #pfMenu.open { display: block; }
+    #pfMenu a { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+                border-radius: 10px; font: 500 13px var(--sans); color: var(--muted);
+                text-decoration: none; }
+    #pfMenu a:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+    #pfMenu a.on { color: var(--text); background: rgba(52, 211, 153, 0.08); }
+    #pfMenu a .n { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+    #pfMenu .sep { height: 1px; margin: 5px 8px; background: var(--hair); }
+    #pfMenu .pdot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
     .chip { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px;
             border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
             font-size: 11.5px; color: var(--muted); }
@@ -119,6 +145,8 @@
     let allRows = [];        // the whole visible snapshot, for context means
     let curve = null;        // /api/basket payload for the current range
     const curveCache = {};
+    let sharedNames = [];    // from the snapshot payload
+    let myNames = [];        // the member's own lists
 
     const pct = (n, d = 1) => (n == null || !isFinite(n) ? '—' : (n >= 0 ? '+' : '') + n.toFixed(d) + '%');
     const cls = (n) => (n == null ? '' : n >= 0 ? 'pos' : 'neg');
@@ -247,8 +275,21 @@
         return;
       }
       const sectors = new Set(rows.map((s) => s.sector).filter(Boolean));
+      const menuRow = (target, label, personal, on) =>
+        `<a href="/portfolio/${encodeURIComponent(target)}" class="${on ? 'on' : ''}">` +
+        `<span class="pdot" style="background:${personal ? 'var(--green)' : 'var(--accent)'}"></span>` +
+        `${esc(label)}${personal ? '<span class="n">personal</span>' : ''}</a>`;
+      const menu =
+        menuRow('All', 'All', false, NAME === 'All') +
+        sharedNames.map((n) => menuRow(n, n, false, NAME === n)).join('') +
+        (myNames.length ? '<div class="sep"></div>' +
+          myNames.map((n) => menuRow('my:' + n, n, true, NAME === 'my:' + n)).join('') : '');
       main.innerHTML =
-        `<div class="head"><h1>${esc(curve ? curve.label : NAME)} <span class="kind">${curve && curve.mine ? '· personal' : ''}</span></h1>` +
+        `<div class="head"><h1 class="ppick">` +
+        `<button id="pfBtn" aria-expanded="false" aria-haspopup="listbox" title="Pick another portfolio">` +
+        `${esc(curve ? curve.label : NAME)}<svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9.4 6 6 6-6"/></svg></button>` +
+        `<div id="pfMenu">${menu}</div>` +
+        `</h1><span class="kind" style="font-size:15px">${curve && curve.mine ? '· personal' : ''}</span>` +
         `<span class="chip">${rows.length} stocks</span><span class="chip">${sectors.size} sector${sectors.size === 1 ? '' : 's'}</span></div>` +
         '<p class="lede">A screener’s view of the list as one thing — descriptive throughout, positions nowhere.</p>' +
         `<div class="grid">${curveCard()}${stanceHtml()}${returnsHtml()}</div>`;
@@ -257,7 +298,29 @@
         range = RANGES.find((r) => r.id === b.dataset.r) || range;
         loadCurve();
       }));
+      const pb = $('pfBtn'), pm = $('pfMenu');
+      if (pb && pm) {
+        pb.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const open = pm.classList.toggle('open');
+          pb.setAttribute('aria-expanded', String(open));
+          if (open) {
+            const cur = pm.querySelector('a.on');
+            if (cur) cur.scrollIntoView({ block: 'center' });
+          }
+        });
+        pm.addEventListener('click', (e) => e.stopPropagation());
+      }
     }
+    document.addEventListener('click', () => {
+      const pm = $('pfMenu'), pb = $('pfBtn');
+      if (pm && pm.classList.contains('open')) { pm.classList.remove('open'); if (pb) pb.setAttribute('aria-expanded', 'false'); }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const pm = $('pfMenu'), pb = $('pfBtn');
+      if (pm) { pm.classList.remove('open'); if (pb) pb.setAttribute('aria-expanded', 'false'); }
+    });
 
     async function loadCurve() {
       const key = range.id;
@@ -277,14 +340,19 @@
 
     (async () => {
       try {
-        const [snap, bk] = await Promise.all([
+        const [snap, bk, mine] = await Promise.all([
           fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json()),
           fetch(`/api/basket?name=${encodeURIComponent(NAME)}&days=${range.days}`, { cache: 'no-store' }).then(async (r) => {
             const d = await r.json();
             if (!r.ok) throw new Error(d.error || 'No such portfolio.');
             return d;
           }),
+          fetch('/api/my/portfolios', { cache: 'no-store' })
+            .then((r) => (r.ok ? r.json() : { portfolios: {} }))
+            .catch(() => ({ portfolios: {} })),
         ]);
+        sharedNames = snap.portfolios || [];
+        myNames = Object.keys(mine.portfolios || {});
         allRows = (snap.stocks || []).filter((s) => !s.error);
         const set = new Set(bk.symbols || []);
         rows = allRows.filter((s) => set.has(s.symbol));
