@@ -25,6 +25,17 @@
    and /users the readout was the only element this changes. */
 [hidden] { display: none !important; }
 
+/* Native <option> lists do not inherit a page's styling: Chromium paints the
+   popup from the SELECT's own background, so our translucent chrome
+   (rgba(255,255,255,.04)) resolved to near-white over the default and the
+   text vanished. color-scheme: dark alone does not cover it — the options
+   need an opaque colour of their own. One rule here rather than in each of
+   the five pages that carry a select. */
+select option, select optgroup {
+  background-color: #0d1017;   /* --surface-2, literal: this cascades into a UA-drawn popup */
+  color: #e9ecf2;              /* --text */
+}
+
 :root {
   color-scheme: dark;
 
