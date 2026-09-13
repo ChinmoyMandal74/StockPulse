@@ -31,12 +31,13 @@
          letter-spacing: -0.035em; line-height: 1.05; }
     .lede { margin: 10px 0 22px; max-width: 70ch; }
 
-    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
     .stat > .core { padding: 18px 20px; }
     .stat .val { font-family: var(--mono); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
     .stat:nth-child(1) .val { color: var(--accent); }
     .stat:nth-child(2) .val { color: var(--green); }
     .stat:nth-child(3) .val { color: var(--accent-2); }
+    .stat:nth-child(4) .val { color: var(--amber); }
     .stat .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em;
                  color: var(--faint); margin-top: 6px; }
     @media (max-width: 700px) { .stats { grid-template-columns: 1fr; } }
@@ -55,6 +56,12 @@
             border: 1px solid; font-size: 10.5px; font-weight: 500; }
     .role.owner { color: var(--amber); border-color: rgba(251, 191, 36, 0.4);
                   background: rgba(251, 191, 36, 0.1); }
+    .role.pending { color: var(--amber); border-color: rgba(251, 191, 36, 0.4); margin-left: 6px; }
+    .approve { font: 600 12px var(--sans); color: var(--green); background: rgba(52, 211, 153, 0.08);
+               border: 1px solid rgba(52, 211, 153, 0.35); border-radius: 999px; padding: 5px 14px;
+               cursor: pointer; transition: background 0.3s var(--ease); }
+    .approve:hover { background: rgba(52, 211, 153, 0.16); }
+    .approve:disabled { opacity: 0.4; cursor: default; }
     .role.member { color: var(--muted); border-color: var(--hair);
                    background: rgba(255, 255, 255, 0.03); }
     .you { margin-left: 8px; font-size: 10.5px; color: var(--faint); }
@@ -97,8 +104,8 @@
   <main class="page">
     <h1>Users</h1>
     <p class="lede">
-      Everyone with an account. Accounts are created by signing up, not here — this page only
-      shows who exists and lets you remove someone.
+      Everyone with an account. Accounts are created by signing up, not here — new registrations
+      wait as <b>pending</b> until you approve them, and this page is where that happens.
     </p>
 
     <div class="stats" id="stats"></div>
@@ -140,10 +147,12 @@
       const owners = users.filter((u) => u.role === 'owner').length;
       const active = users.filter((u) => u.activeSessions > 0).length;
 
+      const pending = users.filter((u) => u.status === 'pending').length;
       $('stats').innerHTML = [
         [users.length, 'Accounts'],
         [owners, owners === 1 ? 'Owner' : 'Owners'],
         [active, 'Signed in now'],
+        [pending, 'Awaiting approval'],
       ].map(([v, l]) => `<div class="bezel stat"><div class="core">
           <div class="val">${v}</div><div class="lbl">${l}</div></div></div>`).join('');
 
@@ -155,6 +164,7 @@
       // Why a button may be disabled, said once rather than per row.
       const onlyOwner = owners === 1;
       $('note').innerHTML =
+        'New registrations wait here as <b>pending</b> until approved — they cannot sign in before that, and Delete is how a request is declined. ' +
         'Deleting an account removes its sessions, saved column layout, personal portfolios and chat usage, and signs it out everywhere. ' +
         (onlyOwner ? 'The only owner cannot be removed, and nor can the account you are signed in as.'
                    : 'You cannot remove the account you are signed in as.');
@@ -169,11 +179,14 @@
       return `<tr>
         <td class="email">${u.activeSessions > 0 ? '<span class="dot" title="Signed in"></span>' : ''}${esc(u.email)}${isMe ? '<span class="you">you</span>' : ''}</td>
         <td><span class="role ${u.role === 'owner' ? 'owner' : 'member'}">${esc(u.role)}</span>
+            ${u.status === 'pending' ? '<span class="role pending">pending</span>' : ''}
             ${u.lockedUntil ? `<div class="locked">locked until ${esc(new Date(u.lockedUntil).toLocaleTimeString())}</div>` : ''}</td>
         <td class="when">${esc(when(u.createdAt))}</td>
         <td class="when">${esc(when(u.lastSignIn))}</td>
         ${pfCell(u.portfolios)}
-        <td class="act"><button class="del" data-id="${u.id}" data-email="${esc(u.email)}"
+        <td class="act">${u.status === 'pending'
+              ? `<button class="approve" data-approve="${u.id}" data-email="${esc(u.email)}">Approve</button> `
+              : ''}<button class="del" data-id="${u.id}" data-email="${esc(u.email)}"
             ${blocked ? 'disabled' : ''}>Delete</button></td>
       </tr>`;
     }
@@ -197,6 +210,21 @@
     }
 
     $('out').addEventListener('click', async (e) => {
+      const ap = e.target.closest('.approve');
+      if (ap && !ap.disabled) {
+        ap.disabled = true;
+        $('err').textContent = '';
+        try {
+          const res = await fetch(`/api/users/${encodeURIComponent(ap.dataset.approve)}/approve`, { method: 'POST' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Could not approve.');
+          await load();   // the badge and button repaint from the fresh list
+        } catch (err) {
+          $('err').textContent = err.message;
+          ap.disabled = false;
+        }
+        return;
+      }
       const b = e.target.closest('.del');
       if (!b || b.disabled) return;
       const email = b.dataset.email;

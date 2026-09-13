@@ -512,28 +512,28 @@ async function sendSignupNotice(email, role) {
       `<tr><td style="padding:3px 14px 3px 0;font-size:14px;color:${MC.mute};white-space:nowrap">${mailEsc(k)}</td>` +
       `<td style="padding:3px 0;font-size:14px;color:${MC.ink}">${mailEsc(v)}</td></tr>`).join('');
 
-    const note = 'Sign-up is open, so anyone with the link can create an account. ' +
-      'Replying to this email answers the new member directly.';
+    const note = 'New accounts cannot sign in until you approve them on the accounts page. ' +
+      'Replying to this email answers the applicant directly.';
 
     return await sendMail({
       to,
       // The address came from the form, but it has just been used to create an
       // account, so a reply reaches the person who typed it.
       replyTo: email,
-      subject: `New sign-up: ${email}`,
+      subject: `Approval needed: ${email}`,
       text: textShell({
-        heading: 'New sign-up',
-        intro: `${email} just created an account.`,
+        heading: 'New sign-up awaiting approval',
+        intro: `${email} registered and is waiting to be let in.`,
         lines: [`Role: ${role}`, `Joined: ${fmtClock(Date.now())}`, `Accounts now: ${total}`]
-          .concat(APP_URL ? ['', `${APP_URL}/users`] : []),
+          .concat(APP_URL ? ['', `Approve or remove: ${APP_URL}/users`] : []),
         note,
       }),
       html: emailShell({
-        heading: 'New sign-up',
-        intro: `${email} just created an account.`,
+        heading: 'New sign-up awaiting approval',
+        intro: `${email} registered and is waiting to be let in.`,
         body: `<table role="presentation" cellpadding="0" cellspacing="0" border="0" ` +
           `style="margin-top:18px">${rows}</table>` +
-          (APP_URL ? mailButton(`${APP_URL}/users`, 'Manage accounts') : ''),
+          (APP_URL ? mailButton(`${APP_URL}/users`, 'Review & approve') : ''),
         note,
       }),
     });
@@ -613,19 +613,30 @@ app.post('/api/register', route(async (req, res) => {
   const salt = newSalt();
   const passwordHash = await hashPassword(password, salt);
   const role = (await store.countUsers()) === 0 ? 'owner' : 'member';
-  const user = await store.createUser({ email, passwordHash, salt, role });
+  // Every member starts PENDING and cannot sign in until the owner approves
+  // (the first account bootstraps the instance, so it alone skips the gate).
+  // No session is created for a pending account, and getSessionUser refuses
+  // pending rows besides — approval is enforced, not decoration.
+  const status = role === 'owner' ? 'active' : 'pending';
+  const user = await store.createUser({ email, passwordHash, salt, role, status });
+  logAct(req, 'login', 'signup', email);
+
+  if (status === 'pending') {
+    res.json({ ok: true, pending: true });
+    // The sign-up notice to the operator is the approval request; the welcome
+    // waits until approval, when it is true.
+    sendSignupNotice(email, role).catch(() => {});
+    return;
+  }
 
   const token = crypto.randomBytes(32).toString('hex');
   await store.createSession(token, Number(user.id), Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   setSessionCookie(res, token);
-  logAct(req, 'login', 'signup', email);
   res.json({ ok: true, user: { email, role } });
 
   // After the response: the account is made and the session is set, so a slow
-  // or failing mail provider must not hold up the sign-up or fail it. The two
-  // notes go to different people and neither depends on the other.
+  // or failing mail provider must not hold up the sign-up or fail it.
   sendWelcome(email, role).catch(() => {});
-  sendSignupNotice(email, role).catch(() => {});
 }));
 
 // Sign in with an account. Passing only a password (no email) still works and
@@ -669,6 +680,11 @@ app.post('/api/login', route(async (req, res) => {
   }
 
   await store.clearLoginFailures(Number(user.id));
+  if ((user.status || 'active') === 'pending') {
+    return res.status(403).json({
+      error: 'Your account is awaiting approval by the owner — you will get an email when it is ready.',
+    });
+  }
   const token = crypto.randomBytes(32).toString('hex');
   await store.createSession(token, Number(user.id), Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   setSessionCookie(res, token);
@@ -1048,6 +1064,19 @@ app.get('/api/users', requireAdmin, route(async (req, res) => {
     otherPortfolios: orphaned,
   });
 }));
+// Approve a pending registration. Flips the status, then sends the welcome
+// that registration held back — at approval it is finally true. Idempotent:
+// approving an active account answers ok and sends nothing twice.
+app.post('/api/users/:id/approve', requireAdmin, route(async (req, res) => {
+  const r = await store.approveUser(Number(req.params.id));
+  if (!r) return res.status(404).json({ error: 'No such account.' });
+  if (r.wasPending) {
+    logAct(req, 'account', 'approved:' + r.email);
+    sendWelcome(r.email, 'member').catch(() => {});
+  }
+  res.json({ ok: true, approved: r.wasPending });
+}));
+
 app.delete('/api/users/:id', requireAdmin, route(async (req, res) => {
   const id = Number(req.params.id);
   const users = await store.listUsers();

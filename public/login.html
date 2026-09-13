@@ -188,7 +188,7 @@
       $('tabRegister').setAttribute('aria-selected', String(reg));
       $('submit').textContent = reg ? 'Create account' : 'Sign in';
       $('lede').textContent = reg
-        ? 'Create an account to view the screener.'
+        ? 'Create an account — new members are approved by the owner.'
         : 'Sign in to view the screener.';
       $('pwHint').style.display = reg ? '' : 'none';
       $('codeField').style.display = reg && signupCodeRequired ? '' : 'none';
@@ -218,6 +218,14 @@
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+        if (mode === 'register' && data.pending) {
+          // The account exists but the owner has not let it in yet — say so
+          // here rather than bouncing to a page that would refuse them.
+          setMsg('Account created. The owner has been asked to approve it — ' +
+            'you will get a welcome email when you are in.', 'ok');
+          $('submit').disabled = false;
+          return;
+        }
         setMsg(mode === 'register' ? 'Account created — taking you in…' : 'Signed in — taking you in…', 'ok');
         window.location.href = '/';
       } catch (err) {

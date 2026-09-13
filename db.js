@@ -350,6 +350,9 @@ const ADDED_COLUMNS = [
   // One Refresh All pulls prices ONCE; this stamp is how later rounds know
   // the pull already happened and spend their whole minute on profiles.
   'alter table refresh_state add column prices_at integer',
+  // Registration approval (2026-09-14): new members are 'pending' until the
+  // owner approves. The default backfills every existing account as active.
+  "alter table users add column status text not null default 'active'",
 ];
 
 let ready = null;
@@ -1434,14 +1437,23 @@ async function findUserByEmail(email) {
   return r.rows[0] || null;
 }
 
-async function createUser({ email, passwordHash, salt, role }) {
+async function createUser({ email, passwordHash, salt, role, status = 'active' }) {
   await init();
   await db.execute({
-    sql: `insert into users (email, password_hash, salt, role, created_at)
-          values (?, ?, ?, ?, ?)`,
-    args: [String(email).trim().toLowerCase(), passwordHash, salt, role, new Date().toISOString()],
+    sql: `insert into users (email, password_hash, salt, role, created_at, status)
+          values (?, ?, ?, ?, ?, ?)`,
+    args: [String(email).trim().toLowerCase(), passwordHash, salt, role, new Date().toISOString(), status],
   });
   return findUserByEmail(email);
+}
+
+// Approval flips pending to active; the route sends the welcome on success.
+async function approveUser(id) {
+  await init();
+  const r = await db.execute({ sql: 'select email, status from users where id = ?', args: [id] });
+  if (!r.rows.length) return null;
+  await db.execute({ sql: "update users set status = 'active' where id = ?", args: [id] });
+  return { email: r.rows[0].email, wasPending: r.rows[0].status === 'pending' };
 }
 
 // Includes enough for a maintenance screen to be useful: who is actually
@@ -1450,7 +1462,7 @@ async function createUser({ email, passwordHash, salt, role }) {
 async function listUsers() {
   await init();
   const r = await db.execute({
-    sql: `select u.id, u.email, u.role, u.created_at, u.locked_until,
+    sql: `select u.id, u.email, u.role, u.created_at, u.locked_until, u.status,
                  (select count(*) from sessions s
                    where s.user_id = u.id and s.expires_at > ?) as active,
                  (select max(s.created_at) from sessions s where s.user_id = u.id) as last_seen
@@ -1461,6 +1473,7 @@ async function listUsers() {
     id: Number(u.id),
     email: u.email,
     role: u.role,
+    status: u.status || 'active',
     createdAt: u.created_at,
     activeSessions: Number(u.active || 0),
     lastSignIn: u.last_seen || null,
@@ -1523,7 +1536,7 @@ async function getSessionUser(token) {
   const r = await db.execute({
     sql: `select u.id, u.email, u.role, s.expires_at
           from sessions s join users u on u.id = s.user_id
-          where s.token = ?`,
+          where s.token = ? and u.status <> 'pending'`,
     args: [token],
   });
   const row = r.rows[0];
@@ -1621,6 +1634,7 @@ module.exports = {
   countUsers,
   findUserByEmail,
   createUser,
+  approveUser,
   listUsers,
   deleteUser,
   noteLoginFailure,
