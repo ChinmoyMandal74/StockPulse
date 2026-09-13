@@ -366,6 +366,7 @@
         <select id="advMode">
           <option value="board" selected>Tonight's board</option>
           <option value="firing">What's firing</option>
+          <option value="changed">What changed</option>
           <option value="profiles">Five profiles, one stock</option>
           <option value="tier">Everything at one verdict</option>
         </select>
@@ -613,6 +614,21 @@
       advCache[profile] = out;
       return out;
     }
+    // Yesterday's verdicts under any profile: the snapshot carries prevTech
+    // (the technical readings one bar back) on every row, so the same engine
+    // re-run over those inputs gives the previous night's answer — the same
+    // second pass the screener's change chevrons use.
+    const advPrevCache = {};
+    function advScoredPrev(profile) {
+      if (advPrevCache[profile]) return advPrevCache[profile];
+      const prevRows = stocks.map((s) => (s && s.prevTech ? Object.assign({}, s, s.prevTech) : null));
+      const res = ActionRules.apply(prevRows, {}, profile === 'Balanced' ? undefined : profile);
+      const out = {};
+      stocks.forEach((s, i) => { if (res[i]) out[s.symbol] = res[i]; });
+      advPrevCache[profile] = out;
+      return out;
+    }
+
     function advScope() {
       const v = $('advScope').value || 'All';
       if (v === 'All') return { rows: stocks, label: 'the whole screen' };
@@ -651,6 +667,45 @@
             `<div class="frule"><span class="fn">\u00d7${n}</span><span class="ft">${esc(flag)}</span>` +
             `<span class="fs">${Math.round(n / rows.length * 100)}% of the list</span></div>`).join('')}</div>` +
           '<p class="s-sub" style="font-size:19px;margin-top:26px">Every verdict names the one rule that fired first. Counting those rules says what kind of market this is \u2014 not what happens next.</p>' +
+          '</div></div>' + chromeFoot();
+      }
+
+      if (mode === 'changed') {
+        const prev = advScoredPrev(profile);
+        const tierOf = (a) => ActionRules.ACTIONS.indexOf(a);
+        const changes = rows
+          .map((s) => ({ sym: s.symbol, from: (prev[s.symbol] || {}).action, to: verdict(s), flag: flagOf(s) }))
+          .filter((c) => c.from && c.to && c.from !== c.to);
+        if (!changes.length) {
+          return chromeTop() +
+            `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}${esc(prof)}</span>` +
+            '<h2 class="s-title">Every verdict<br><span class="dim">held</span></h2>' +
+            '<p class="s-empty">Nothing in this list changed its reading since the last session. The rules only speak when the tape moves \u2014 a quiet night is an answer too.</p>' +
+            '</div></div>' + chromeFoot();
+        }
+        const ups = changes.filter((c) => tierOf(c.to) > tierOf(c.from)).length;
+        const downs = changes.length - ups;
+        // Grouped by the rule that TOOK OVER: the flag determines the rung,
+        // so every row under one heading arrived at the same verdict.
+        const byFlag = {};
+        changes.forEach((c) => {
+          const k = c.flag || '\u2014';
+          (byFlag[k] = byFlag[k] || { n: 0, action: c.to, syms: [] }).n++;
+          byFlag[k].syms.push(c.sym);
+        });
+        const top = Object.entries(byFlag).sort((a, b) => b[1].n - a[1].n)
+          .slice(0, size.id === 'story' ? 8 : size.id === 'square' ? 4 : 6);
+        return chromeTop() +
+          `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}${esc(prof)} \u00b7 since the last session</span>` +
+          '<h2 class="s-title">What changed<br><span class="dim">tonight</span></h2>' +
+          `<div style="margin-top:32px">${top.map(([flag, g]) =>
+            `<div class="frule"><span class="fn" style="color:${ADV_TINT[g.action] || 'var(--green)'}">\u00d7${g.n}</span>` +
+            `<span class="ft">${esc(flag)}<span style="display:block;font-size:18px;font-weight:500;color:var(--faint);margin-top:4px">` +
+            `now ${esc(g.action)} \u00b7 ${esc(g.syms.slice(0, 5).join(', '))}${g.syms.length > 5 ? ` +${g.syms.length - 5}` : ''}</span></span>` +
+            '</div>').join('')}</div>` +
+          `<p class="s-sub" style="font-size:19px;margin-top:26px">${changes.length} of ${rows.length} verdicts moved \u2014 ` +
+          `<span style="color:var(--green)">${ups} up</span>, <span style="color:var(--red)">${downs} down</span>. ` +
+          'Same rules as yesterday; only the prices changed.</p>' +
           '</div></div>' + chromeFoot();
       }
 
