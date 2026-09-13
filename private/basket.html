@@ -109,15 +109,6 @@
             transition: background 0.3s var(--ease), border-color 0.3s var(--ease); }
     .mini:hover { background: rgba(255, 255, 255, 0.05); border-color: var(--hair-2); }
     .mini .mh { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-    .mini .mlg { position: relative; width: 24px; height: 24px; flex: none; border-radius: 7px;
-                 background: #fff; border: 1px solid var(--hair-2); overflow: hidden; }
-    .mini .mlg span { position: absolute; inset: 0; display: grid; place-items: center;
-                      font: 700 11px var(--sans); color: #0a0c11; }
-    .mini .mlg img { position: absolute; inset: 0; width: 100%; height: 100%;
-                     object-fit: contain; padding: 2px; box-sizing: border-box; }
-    .mini .mlg img[hidden] { display: none; }
-    .mini .mlg.flat { background: rgba(255, 255, 255, 0.07); border-color: var(--hair); }
-    .mini .mlg.flat span { visibility: hidden; }
     .mini .msym { font: 600 13px var(--mono); color: var(--text); }
     .mini .mval { margin-left: auto; font: 600 12.5px var(--mono); font-variant-numeric: tabular-nums; }
     .mini svg { display: block; width: 100%; height: 58px; }
@@ -156,7 +147,6 @@
     <div id="main"><div class="empty">Loading…</div></div>
   </main>
 
-  <script src="/logofx.js"></script>
   <script src="/screens.js"></script>
   <script src="/action.js"></script>
   <script>
@@ -334,9 +324,7 @@
       const grid = !showMinis ? '' :
         `<div class="minis">${items.map((it) =>
           `<a class="mini" href="/stock/${encodeURIComponent(it.sym)}" target="_blank" rel="noopener">` +
-          `<span class="mh"><span class="mlg"><span>${esc(it.sym.slice(0, 1))}</span>` +
-          `<img alt="" hidden data-mlg="${esc(it.sym)}" /></span>` +
-          `<span class="msym">${esc(it.sym)}</span>` +
+          `<span class="mh"><span class="msym">${esc(it.sym)}</span>` +
           `<span class="mval ${cls(it.end)}">${pct(it.end)}</span></span>` +
           miniSvg(it.S) + '</a>').join('')}</div>`;
       return '<section class="bezel card"><div class="core">' +
@@ -350,15 +338,6 @@
     function wireMinis() {
       const t = $('miniToggle');
       if (t) t.addEventListener('click', () => { showMinis = !showMinis; paint(); });
-      if (!window.LogoFX) return;
-      document.querySelectorAll('img[data-mlg]').forEach((img) => {
-        LogoFX.clean(img.dataset.mlg).then((r) => {
-          const tile = img.closest('.mlg');
-          if (r.flat && tile) tile.classList.add('flat');
-          img.src = r.flat ? r.url : ('/api/logo/' + encodeURIComponent(img.dataset.mlg));
-          img.hidden = false;
-        }).catch(() => { /* letter tile stays */ });
-      });
     }
 
     function paint() {

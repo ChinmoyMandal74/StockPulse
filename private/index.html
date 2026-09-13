@@ -816,10 +816,6 @@
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>
                   <span class="nm">Promo studio</span>
                 </a>
-                <button class="pick" id="logoBtn" title="Fetch company logos for any symbols that lack one (1 API credit each; new tickers only)">
-                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-download" /></svg>
-                  <span class="nm">Refresh logos</span>
-                </button>
               </div>
               <div id="sessionActions" style="display:none">
                 <div class="pick-sep" id="sessionSep"></div>
@@ -2817,35 +2813,6 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     window.addEventListener('scroll', () => { hideTip(); hideRowCard(); }, true);
 
     $('addBtn').addEventListener('click', addTicker);
-    // Fetch-missing-only, batched server-side; this loop just keeps clicking
-    // until the server says nothing remains, so adding 100 tickers is still
-    // one button press. The 409 while a Refresh All runs is surfaced as-is.
-    let logoBusy = false;
-    $('logoBtn').addEventListener('click', async () => {
-      if (logoBusy) return;
-      logoBusy = true;
-      closePickers();
-      let fetched = 0;
-      const empties = [];
-      try {
-        for (let round = 0; round < 20; round++) {
-          setStatus(`Logos: fetching… ${fetched} so far`);
-          const res = await api('POST', '/api/logos/refresh');
-          fetched += res.fetched || 0;
-          (res.empty || []).forEach((x) => empties.push(x));
-          if (!res.remaining) {
-            setStatus(`Logos: ${fetched} fetched` +
-              (empties.length ? `; no mark available for ${empties.join(', ')}` : '') +
-              (fetched || empties.length ? '.' : ' — every symbol already has one.'));
-            break;
-          }
-        }
-      } catch (err) {
-        setStatus(`Logos: ${err.message}`);
-      }
-      logoBusy = false;
-    });
-
     $('renameBtn').addEventListener('click', () => renamePortfolio());
     $('deleteBtn').addEventListener('click', deletePortfolio);
     $('refreshBtn').addEventListener('click', refresh);

@@ -91,19 +91,13 @@
     .s-foot b { color: var(--muted); font-weight: 600; }
     .s-foot .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
 
-    /* logo tile with a letter behind it: a symbol without a mark still reads */
-    .lg { position: relative; width: 62px; height: 62px; flex: none; border-radius: 15px;
-          background: #fff; border: 1px solid var(--hair-2); overflow: hidden; }
-    .lg span { position: absolute; inset: 0; display: grid; place-items: center;
-               font: 700 26px var(--sans); color: #0a0c11; }
-    .lg img { position: absolute; inset: 0; width: 100%; height: 100%;
-              object-fit: contain; padding: 7px; box-sizing: border-box; background: #fff; }
-    .lg img[hidden] { display: none; }
-    /* a lifted mark sits on glass like everything else on the card; the
-       white tile survives only for marks too dark to float on black */
-    .lg.flat { background: rgba(255, 255, 255, 0.055); border-color: var(--hair); }
-    .lg.flat span { visibility: hidden; }
-    .lg.flat img { background: transparent; padding: 9px; }
+
+    /* the ticker monogram: the owner retired logos — marks aged badly and
+       sat on white boxes; a typographic tile is unambiguous and always ours */
+    .lg { width: 62px; height: 62px; flex: none; border-radius: 15px; display: grid;
+          place-items: center; background: rgba(255, 255, 255, 0.05);
+          border: 1px solid var(--hair-2);
+          font: 700 24px var(--mono); color: var(--green); letter-spacing: -0.02em; }
 
     /* rows shared by list templates */
     .rows { display: flex; flex-direction: column; gap: 16px; margin-top: 40px; }
@@ -192,12 +186,6 @@
       <label>Size</label>
       <div class="sizes" id="sizeList"></div>
 
-      <label>Fix a logo (stale at the provider?)</label>
-      <input type="text" id="fixSym" placeholder="Symbol, e.g. AMD" maxlength="15" style="margin-bottom:6px" />
-      <input type="text" id="fixUrl" placeholder="https:// image URL (Wikipedia works well)" />
-      <button class="btn" id="fixBtn" style="margin-top:8px">Replace logo</button>
-      <p class="hint" id="fixMsg" style="margin-top:6px"></p>
-
       <button class="btn" id="reloadBtn">Re-pull tonight's data</button>
       <p class="hint">Screenshot tip: the artboard keeps a fixed 1080-wide layout at every size,
         so crops line up post after post. Nothing here recommends — cards report what the
@@ -208,7 +196,6 @@
   </div>
 
   <script src="/action.js"></script>
-  <script src="/logofx.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
@@ -247,26 +234,11 @@
         `<span>${n} stocks screened nightly</span><span class="dot"></span>` +
         '<span>Mechanical readings — not investment advice</span></div>';
     }
-    // The letter shows instantly; the mark covers it if one is stored.
+    // The monogram: up to four ticker letters, sized down as they grow.
     function logoTile(sym) {
-      return `<span class="lg"><span>${esc(String(sym).slice(0, 1))}</span>` +
-        `<img alt="" hidden loading="eager" data-lg="${esc(sym)}" /></span>`;
-    }
-    function wireLogos() {
-      document.querySelectorAll('#stage img[data-lg]').forEach((img) => {
-        const sym = img.dataset.lg;
-        if (!window.LogoFX) {   // module failed to load: today's look, not a blank
-          img.addEventListener('load', () => { img.hidden = false; });
-          img.src = '/api/logo/' + encodeURIComponent(sym);
-          return;
-        }
-        LogoFX.clean(sym).then((r) => {
-          const tile = img.closest('.lg');
-          if (r.flat && tile) tile.classList.add('flat');
-          img.src = r.flat ? r.url : ('/api/logo/' + encodeURIComponent(sym));
-          img.hidden = false;
-        }).catch(() => { /* no stored mark — the letter tile stays */ });
-      });
+      const t = String(sym).slice(0, 4);
+      const fs = t.length <= 2 ? 24 : t.length === 3 ? 19 : 15;
+      return `<span class="lg" style="font-size:${fs}px">${esc(t)}</span>`;
     }
     const pct = (n, d = 1) => (n == null ? '—' : (n >= 0 ? '+' : '') + n.toFixed(d) + '%');
 
@@ -399,7 +371,6 @@
       stage.style.height = size.h + 'px';
       stage.innerHTML = '<div class="s-aura"></div>' +
         `<div class="s-in">${BUILDERS[tpl]()}</div>`;
-      wireLogos();
       fit();
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
     }
@@ -425,28 +396,6 @@
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
     $('reloadBtn').addEventListener('click', () => load(true));
-
-    // The stale-mark fix: paste the current logo's URL, the server fetches
-    // and stores the bytes, the card repaints with it immediately.
-    $('fixBtn').addEventListener('click', async () => {
-      const symbol = $('fixSym').value.trim().toUpperCase();
-      const url = $('fixUrl').value.trim();
-      $('fixMsg').textContent = 'Fetching…';
-      try {
-        const res = await fetch('/api/logos/set', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbol, url }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Could not replace it.');
-        if (window.LogoFX && LogoFX.bust) LogoFX.bust(symbol);
-        $('fixMsg').textContent = `${symbol}: replaced (${data.mime}, ${(data.bytes / 1024).toFixed(0)}KB).`;
-        render();
-      } catch (err) {
-        $('fixMsg').textContent = err.message;
-      }
-    });
 
     async function load(reload) {
       try {
