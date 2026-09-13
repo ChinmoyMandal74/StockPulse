@@ -166,6 +166,38 @@
     .feat h3 { margin: 2px 0 4px; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
     .feat p { margin: 0; font-size: 17.5px; color: var(--muted); line-height: 1.45; }
 
+    /* ---- the advice board ---------------------------------------------- */
+    .abar { display: flex; height: 34px; border-radius: 999px; overflow: hidden; margin-top: 36px; }
+    .abar div { height: 100%; }
+    .atally { display: flex; flex-direction: column; gap: 12px; margin-top: 28px; }
+    .arow { display: flex; align-items: center; gap: 20px; }
+    .arow .an { width: 300px; font: 700 27px var(--sans); }
+    .arow .arail { flex: 1; height: 30px; border-radius: 9px; background: rgba(255, 255, 255, 0.04); overflow: hidden; }
+    .arow .afill { height: 100%; border-radius: 9px; opacity: 0.85; }
+    .arow .ac { width: 92px; text-align: right; font: 700 30px var(--mono); font-variant-numeric: tabular-nums; }
+    .arow .ap { width: 92px; text-align: right; font: 500 21px var(--mono); color: var(--faint); }
+
+    .frule { display: flex; align-items: baseline; gap: 20px; padding: 17px 24px;
+             border-radius: 15px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.024); }
+    .frule + .frule { margin-top: 11px; }
+    .frule .fn { font: 700 30px var(--mono); width: 84px; color: var(--green); }
+    .frule .ft { font-size: 25px; font-weight: 600; }
+    .frule .fs { margin-left: auto; font: 500 19px var(--mono); color: var(--faint); }
+
+    .pcard { display: flex; align-items: center; gap: 22px; padding: 20px 26px;
+             border-radius: 17px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.024); }
+    .pcard + .pcard { margin-top: 12px; }
+    .pcard .pn { width: 240px; font: 600 25px var(--sans); color: var(--muted); }
+    .pcard .pv { font: 800 30px var(--sans); letter-spacing: -0.02em; width: 250px; }
+    .pcard .pw { margin-left: auto; text-align: right; font-size: 19px; color: var(--faint); max-width: 330px; line-height: 1.35; }
+
+    .vrow { display: flex; align-items: center; gap: 20px; padding: 15px 22px;
+            border-radius: 14px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.024); }
+    .vrow + .vrow { margin-top: 10px; }
+    .vrow .vs { font: 700 28px var(--mono); width: 150px; }
+    .vrow .vw { font-size: 21px; color: var(--muted); }
+    .vrow .vp { margin-left: auto; font: 600 23px var(--mono); }
+
     /* ---- explainer slide grammars ------------------------------------- */
     /* dots make a card read as one of a set, which is the whole point of a
        carousel; everything else here is a diagram drawn in plain CSS */
@@ -329,6 +361,32 @@
         </div>
       </div>
 
+      <div id="advBox">
+        <label>Show</label>
+        <select id="advMode">
+          <option value="board" selected>Tonight's board</option>
+          <option value="firing">What's firing</option>
+          <option value="profiles">Five profiles, one stock</option>
+          <option value="tier">Everything at one verdict</option>
+        </select>
+        <div id="advTierWrap">
+          <label>Verdict</label>
+          <select id="advTier"></select>
+        </div>
+        <div id="advSymWrap">
+          <label>Stock</label>
+          <select id="advSym"></select>
+        </div>
+        <div id="advScopeWrap">
+          <label>Within</label>
+          <select id="advScope"><option value="All">All screened</option></select>
+        </div>
+        <div id="advProfWrap">
+          <label>Rules</label>
+          <select id="advProf"></select>
+        </div>
+      </div>
+
       <div id="intBox">
         <label>Topic</label>
         <select id="intTopic"></select>
@@ -374,6 +432,7 @@
     const TPLS = [
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
+      { id: 'advboard', name: 'Advice', note: 'What the rules read, four ways' },
       { id: 'advice', name: 'The rules changed their mind', note: 'Today’s advice changes, rule named' },
       { id: 'breakout', name: 'Breakout radar', note: 'Fresh 3-month highs, volume-checked' },
       { id: 'stance', name: 'Where the market stands', note: 'The universe by trend state' },
@@ -529,6 +588,128 @@
           `<span class="rail"><span class="fill" style="display:block;width:${Math.max(3, counts[i] / max * 100)}%;background:${TREND_TINT[i % TREND_TINT.length]}"></span></span>` +
           `<span class="n">${counts[i]}</span></div>`).join('')}</div>` +
         '<p class="s-sub" style="margin-top:30px">Trend is read off the 200-day and 50-day averages — the same words the screener sorts by.</p>' +
+        '</div></div>' + chromeFoot();
+    }
+
+    // ---- the Advice cards ---------------------------------------------------
+    // Four readings of the same thing: the tally, the rules doing the talking,
+    // one stock through every profile, and the roll-call at a chosen verdict.
+    // All of it reports what a published mechanical rule said — the verdict
+    // always travels with the rule that produced it, which is the whole
+    // difference between this and a tip sheet.
+    const ADV_PROFILES = ['Balanced', 'Trend Rider', 'Aggressive', 'Max Risk', 'Dip Buyer'];
+    const ADV_TINT = {
+      'Strong Buy': '#34d399', 'Buy': '#a3e635', 'Buy with Risk': '#fbbf24',
+      'Hold': '#9aa3b2', 'Avoid': '#fb923c', 'Sell Immediately': '#fb7185',
+    };
+    const advCache = {};
+    // Scored in the browser through the same engine the server uses, so a
+    // card can show any profile without a round trip.
+    function advScored(profile) {
+      if (advCache[profile]) return advCache[profile];
+      const res = ActionRules.apply(stocks, {}, profile === 'Balanced' ? undefined : profile);
+      const out = {};
+      stocks.forEach((s, i) => { if (res[i]) out[s.symbol] = res[i]; });
+      advCache[profile] = out;
+      return out;
+    }
+    function advScope() {
+      const v = $('advScope').value || 'All';
+      if (v === 'All') return { rows: stocks, label: 'the whole screen' };
+      if (v.startsWith('my:')) {
+        const nm = v.slice(3);
+        const set = new Set(myLists[nm] || []);
+        return { rows: stocks.filter((s) => set.has(s.symbol)), label: nm };
+      }
+      return { rows: stocks.filter((s) => (s.portfolios || []).includes(v)), label: v };
+    }
+
+    function tplAdvBoard() {
+      const mode = $('advMode').value;
+      const profile = $('advProf').value || 'Balanced';
+      const scored = advScored(profile);
+      const scope = advScope();
+      const verdict = (s) => (scored[s.symbol] || {}).action || null;
+      const flagOf = (s) => (scored[s.symbol] || {}).flag || null;
+      const rows = scope.rows.filter((s) => verdict(s));
+      const prof = profile === 'Balanced' ? '' : ` \u00b7 ${profile} rules`;
+
+      if (!rows.length) {
+        return chromeTop() + `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}${esc(prof)}</span>` +
+          '<h2 class="s-title">Nothing<br><span class="dim">scored yet</span></h2></div></div>' + chromeFoot();
+      }
+
+      if (mode === 'firing') {
+        const tally = {};
+        rows.forEach((s) => { const f = flagOf(s); if (f) tally[f] = (tally[f] || 0) + 1; });
+        const top = Object.entries(tally).sort((a, b) => b[1] - a[1])
+          .slice(0, size.id === 'story' ? 9 : size.id === 'square' ? 5 : 7);
+        return chromeTop() +
+          `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}${esc(prof)}</span>` +
+          '<h2 class="s-title">What the rules<br><span class="dim">are saying</span></h2>' +
+          `<div style="margin-top:34px">${top.map(([flag, n]) =>
+            `<div class="frule"><span class="fn">\u00d7${n}</span><span class="ft">${esc(flag)}</span>` +
+            `<span class="fs">${Math.round(n / rows.length * 100)}% of the list</span></div>`).join('')}</div>` +
+          '<p class="s-sub" style="font-size:19px;margin-top:26px">Every verdict names the one rule that fired first. Counting those rules says what kind of market this is \u2014 not what happens next.</p>' +
+          '</div></div>' + chromeFoot();
+      }
+
+      if (mode === 'profiles') {
+        const sym = $('advSym').value || rows[0].symbol;
+        const row = stocks.find((r) => r.symbol === sym);
+        if (!row) return chromeTop() + '<div class="s-body"><div><p class="s-empty">Pick a stock.</p></div></div>' + chromeFoot();
+        const reads = ADV_PROFILES.map((pn) => {
+          const r = advScored(pn)[sym];
+          return { pn, action: r ? r.action : null, flag: r ? r.flag : null };
+        }).filter((r) => r.action);
+        const agree = new Set(reads.map((r) => r.action)).size === 1;
+        return chromeTop() +
+          `<div class="s-body"><div><span class="s-kick">${esc(sym)} \u00b7 five rule sets</span>` +
+          `<h2 class="s-title">${agree ? 'All five<br><span class="dim">agree</span>' : 'Where the rules<br><span class="dim">disagree</span>'}</h2>` +
+          `<div style="margin-top:32px">${reads.map((r) =>
+            `<div class="pcard"><span class="pn">${esc(r.pn)}</span>` +
+            `<span class="pv" style="color:${ADV_TINT[r.action] || 'var(--text)'}">${esc(r.action)}</span>` +
+            `<span class="pw">${esc(r.flag || '')}</span></div>`).join('')}</div>` +
+          `<p class="s-sub" style="font-size:19px;margin-top:26px">Same stock, same night, five fixed rule sets \u2014 ${agree ? 'and this time they all read it the same way.' : 'and they do not agree. Each names the rule that decided it, so the disagreement is readable rather than mysterious.'}</p>` +
+          '</div></div>' + chromeFoot();
+      }
+
+      if (mode === 'tier') {
+        const want = $('advTier').value || 'Strong Buy';
+        const hits = rows.filter((s) => verdict(s) === want)
+          .slice(0, size.id === 'story' ? 11 : size.id === 'square' ? 6 : 8);
+        const tint = ADV_TINT[want] || 'var(--text)';
+        const body = hits.length
+          ? `<div style="margin-top:32px">${hits.map((s) =>
+              `<div class="vrow"><span class="vs">${esc(s.symbol)}</span>` +
+              `<span class="vw">${esc(flagOf(s) || '')}</span>` +
+              `<span class="vp" style="color:${tint}">${esc(s.actionTrend || '')}</span></div>`).join('')}</div>`
+          : `<p class="s-empty">Nothing in ${esc(scope.label)} reads ${esc(want)} tonight.</p>`;
+        return chromeTop() +
+          `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}${esc(prof)}</span>` +
+          `<h2 class="s-title" style="color:${tint}">${esc(want)}</h2>` +
+          `<p class="s-sub">What the ${esc(profile)} rules read as ${esc(want)} tonight, each with the rule that decided it.</p>` +
+          body +
+          '<p class="s-sub" style="font-size:18px;margin-top:24px">A mechanical reading of one table, not a recommendation tailored to anyone.</p>' +
+          '</div></div>' + chromeFoot();
+      }
+
+      // the board
+      const order = ActionRules.ACTIONS.slice().reverse();
+      const counts = order.map((a) => rows.filter((s) => verdict(s) === a).length);
+      const total = counts.reduce((x, y) => x + y, 0) || 1;
+      const max = Math.max(...counts, 1);
+      const bull = counts[0] + counts[1] + counts[2];
+      return chromeTop() +
+        `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}${esc(prof)}</span>` +
+        '<h2 class="s-title">Where the rules<br><span class="dim">stand tonight</span></h2>' +
+        `<div class="abar">${order.map((a, i) => counts[i]
+          ? `<div style="width:${counts[i] / total * 100}%;background:${ADV_TINT[a]}"></div>` : '').join('')}</div>` +
+        `<div class="atally">${order.map((a, i) =>
+          `<div class="arow"><span class="an" style="color:${ADV_TINT[a]}">${esc(a)}</span>` +
+          `<span class="arail"><span class="afill" style="display:block;width:${Math.max(2, counts[i] / max * 100)}%;background:${ADV_TINT[a]}"></span></span>` +
+          `<span class="ac">${counts[i]}</span><span class="ap">${Math.round(counts[i] / total * 100)}%</span></div>`).join('')}</div>` +
+        `<p class="s-sub" style="font-size:19px;margin-top:28px">${bull} of ${total} clear the buy rules tonight. A reading of the tape by fixed rules \u2014 it says what is, never what is next.</p>` +
         '</div></div>' + chromeFoot();
     }
 
@@ -928,7 +1109,8 @@
 
     // ---- render ------------------------------------------------------------
     const BUILDERS = { movers: tplMovers, advice: tplAdvice, breakout: tplBreakout,
-                       stance: tplStance, intro: tplIntro, chart: tplChart, announce: tplAnnounce };
+                       stance: tplStance, intro: tplIntro, chart: tplChart,
+                       advboard: tplAdvBoard, announce: tplAnnounce };
     function render() {
       const stage = $('stage');
       stage.style.height = size.h + 'px';
@@ -939,6 +1121,12 @@
       $('movBox').style.display = tpl === 'movers' ? 'block' : 'none';
       $('chtBox').style.display = tpl === 'chart' ? 'block' : 'none';
       $('intBox').style.display = tpl === 'intro' ? 'block' : 'none';
+      $('advBox').style.display = tpl === 'advboard' ? 'block' : 'none';
+      const am = $('advMode').value;
+      $('advTierWrap').style.display = am === 'tier' ? 'block' : 'none';
+      $('advSymWrap').style.display = am === 'profiles' ? 'block' : 'none';
+      $('advScopeWrap').style.display = am === 'profiles' ? 'none' : 'block';
+      $('advProfWrap').style.display = am === 'profiles' ? 'none' : 'block';
       const cm = $('chtMode').value;
       $('chtScopeWrap').style.display = cm === 'stock' ? 'none' : 'block';
       $('chtLinesWrap').style.display = cm === 'leaders' ? 'block' : 'none';
@@ -986,6 +1174,12 @@
     }
     $('intTopic').innerHTML = TOPICS.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
     paintSlideList(0);
+    $('advTier').innerHTML = ActionRules.ACTIONS.slice().reverse()
+      .map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
+    $('advProf').innerHTML = ADV_PROFILES.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    ['advMode', 'advTier', 'advSym', 'advScope', 'advProf'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'advboard') render(); }));
+
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
     $('intSlide').addEventListener('change', () => { if (tpl === 'intro') render(); });
     $('reloadBtn').addEventListener('click', () => load(true));
@@ -1133,6 +1327,8 @@
         $('chtSym').innerHTML = stocks.slice()
           .sort((a, b) => a.symbol.localeCompare(b.symbol))
           .map((r) => `<option value="${esc(r.symbol)}">${esc(r.symbol)}</option>`).join('');
+        $('advScope').innerHTML = $('movScope').innerHTML;
+        $('advSym').innerHTML = $('chtSym').innerHTML;
         paintControls();
         render();
         if (reload) $('reloadBtn').textContent = 'Re-pulled ✓';
