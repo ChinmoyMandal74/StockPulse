@@ -68,10 +68,16 @@ const ANALYST_ENABLED = process.env.ENABLE_ANALYST === 'true';
 // credits are the binding constraint after all — two refresh rounds inside one
 // minute are refused. The cap below keeps a single round inside the budget, and
 // the rest fill in on later refreshes, then cache for a day.
-// The real ceilings are elsewhere: Twelve Data rejects a batched time_series of
-// more than 120 symbols (HTTP 414), and SPY is appended as the benchmark, so the
-// universe cannot exceed 119 tickers without chunking that call.
+// The price fetch is CHUNKED (<=120 symbols a call — the API's hard batch
+// cap), so the universe is no longer bound by it. What binds now, measured
+// 2026-09-13 off Api-Credits-Request: 610 credits/minute, a cold profile is
+// 80 (statistics 50 + profile 10 + earnings 20) and prices are 1/symbol —
+// so an archive-priced round affords 7 profiles, and a round that also
+// pulls prices sizes its profile batch down to fit (see liveRefreshOpts).
 const MAX_PROFILE_FETCHES_PER_CALL = ANALYST_ENABLED ? 4 : 6;
+const PROFILE_CAP_ARCHIVE_ROUND = ANALYST_ENABLED ? 4 : 7;   // 7 x 80 = 560 <= 610
+const CREDITS_PER_MINUTE = 610;
+const CREDITS_PER_PROFILE = 80;
 const SYMBOL_RE = /^[A-Z0-9.\-]{1,12}$/;
 
 // Registration gate. When SIGNUP_CODE is set, a new account must supply it —
@@ -1197,7 +1203,7 @@ async function fetchProfile(symbol) {
 }
 
 // Ensure sector/fundamentals are cached and fresh for the given symbols.
-async function ensureProfiles(symbols) {
+async function ensureProfiles(symbols, cap) {
   const profiles = await readProfiles();
   const now = Date.now();
   const stale = symbols.filter((s) => {
@@ -1205,7 +1211,7 @@ async function ensureProfiles(symbols) {
     if (!p || !p.fetchedAt) return true; // never fetched
     return now - p.fetchedAt > PROFILE_TTL_MS; // otherwise refresh once a day
   });
-  const batch = stale.slice(0, MAX_PROFILE_FETCHES_PER_CALL);
+  const batch = stale.slice(0, cap || MAX_PROFILE_FETCHES_PER_CALL);
   if (batch.length && API_KEY) {
     const results = await Promise.all(
       batch.map((s) => fetchProfile(s).then((r) => ({ s, r })))
@@ -1979,7 +1985,7 @@ app.get('/api/status', requireAuth, route(async (req, res) => {
 // Compute the full screener payload live from the API. As-of mode (asOf set)
 // recomputes momentum as it looked on that date (plus forward returns); fundamentals
 // are skipped — they aren't point-in-time. Returns {ok, payload} or {ok:false, status, error}.
-async function computeStocks(asOf) {
+async function computeStocks(asOf, opts = {}) {
   if (!API_KEY) {
     return { ok: false, status: 500, error: 'TWELVE_DATA_API_KEY is not set. Copy .env.example to .env and add your key.' };
   }
@@ -1995,36 +2001,66 @@ async function computeStocks(asOf) {
   // strength, without adding it to any portfolio or the output rows.
   const BENCHMARK = 'SPY';
   const fetchSymbols = symbols.includes(BENCHMARK) ? symbols : [...symbols, BENCHMARK];
-  const symbolParam = encodeURIComponent(fetchSymbols.join(','));
   const names = await readNames();
-  const profiles = asOf ? {} : await ensureProfiles(symbols); // no point-in-time fundamentals
+  const profiles = asOf ? {} : await ensureProfiles(symbols, opts.profileCap); // no point-in-time fundamentals
 
   try {
-    // Price and all the % / trend metrics come from one batched daily-close call.
-    // Live: last ~300 bars. As-of: from ~430 days before asOf through today, so we
-    // have a full year of history before the date AND the bars after it (forward returns).
-    let rangeParam = '&outputsize=300';
-    if (asOf) {
-      const start = new Date(asOf);
-      start.setDate(start.getDate() - 430); // ~1 year of history before the as-of date
-      const daysBack = Math.round((Date.now() - start.getTime()) / 86400000);
-      const needed = Math.ceil(daysBack * 0.72) + 60; // approx trading days in range + buffer
-      // Twelve Data batch limit: symbols × outputsize ≤ 100000.
-      const maxPerSymbol = Math.floor(90000 / fetchSymbols.length);
-      const outSize = Math.min(Math.max(needed, 300), maxPerSymbol, 5000);
-      rangeParam = `&start_date=${start.toISOString().slice(0, 10)}&outputsize=${outSize}`;
+    let series;
+    if (opts.archivePrices && !asOf) {
+      // A Refresh All round after the first: prices come from the archive the
+      // first round just wrote — zero credits — leaving the whole minute for
+      // profiles. SPY alone is fetched live (1 credit): the benchmark is
+      // deliberately not archived, since it belongs to no portfolio and the
+      // orphan sweep would collect it.
+      const since = new Date(Date.now() - 470 * 86400000).toISOString().slice(0, 10);
+      const bars = await store.readBarsFullFor(symbols, since);
+      series = {};
+      for (const sym of symbols) series[sym] = { values: bars[sym] || [] };
+      const spyRaw = await fetchJson(
+        `${TD_BASE}/time_series?symbol=${BENCHMARK}&interval=1day&outputsize=300&apikey=${API_KEY}`
+      );
+      if (spyRaw && spyRaw.status === 'error') {
+        const code = spyRaw.code === 429 ? 429 : 502;
+        return { ok: false, status: code, error: `Twelve Data: ${spyRaw.message}` };
+      }
+      series[BENCHMARK] = spyRaw;
+      console.log(`prices: archive (${symbols.length} symbols), SPY live`);
+    } else {
+      // Live prices, CHUNKED: the API rejects a batch over 120 symbols, so
+      // past that the pull is several calls in the same minute — 1 credit per
+      // symbol regardless of chunking (measured), so the cost is symbols, not
+      // calls. Live: last ~300 bars. As-of: from ~430 days before asOf through
+      // today, so there is a year of history before the date AND the bars
+      // after it (forward returns).
+      series = {};
+      const CHUNK = 120;
+      for (let i = 0; i < fetchSymbols.length; i += CHUNK) {
+        const chunk = fetchSymbols.slice(i, i + CHUNK);
+        let rangeParam = '&outputsize=300';
+        if (asOf) {
+          const start = new Date(asOf);
+          start.setDate(start.getDate() - 430); // ~1 year of history before the as-of date
+          const daysBack = Math.round((Date.now() - start.getTime()) / 86400000);
+          const needed = Math.ceil(daysBack * 0.72) + 60; // approx trading days in range + buffer
+          // Twelve Data batch limit: symbols × outputsize ≤ 100000.
+          const maxPerSymbol = Math.floor(90000 / chunk.length);
+          const outSize = Math.min(Math.max(needed, 300), maxPerSymbol, 5000);
+          rangeParam = `&start_date=${start.toISOString().slice(0, 10)}&outputsize=${outSize}`;
+        }
+        const raw = await fetchJson(
+          `${TD_BASE}/time_series?symbol=${encodeURIComponent(chunk.join(','))}&interval=1day${rangeParam}&apikey=${API_KEY}`
+        );
+        // A top-level error (bad key, rate limit) comes back as {status:"error"}.
+        if (raw && raw.status === 'error') {
+          const code = raw.code === 429 ? 429 : 502;
+          return { ok: false, status: code, error: `Twelve Data: ${raw.message}` };
+        }
+        Object.assign(series, normalizeBySymbol(raw, chunk));
+      }
+      if (fetchSymbols.length > CHUNK) {
+        console.log(`prices: live, ${Math.ceil(fetchSymbols.length / CHUNK)} chunks for ${fetchSymbols.length} symbols`);
+      }
     }
-    const seriesRaw = await fetchJson(
-      `${TD_BASE}/time_series?symbol=${symbolParam}&interval=1day${rangeParam}&apikey=${API_KEY}`
-    );
-
-    // A top-level error (bad key, rate limit) comes back as {status:"error"}.
-    if (seriesRaw && seriesRaw.status === 'error') {
-      const code = seriesRaw.code === 429 ? 429 : 502;
-      return { ok: false, status: code, error: `Twelve Data: ${seriesRaw.message}` };
-    }
-
-    const series = normalizeBySymbol(seriesRaw, fetchSymbols);
 
     // Trading-day approximations: ~5 ≈ 1W, ~10 ≈ 2W, ~21 ≈ 1M, ~63 ≈ 3M, ~126 ≈ 6M, ~252 ≈ 1Y.
     const TODAY = 1;
@@ -2241,7 +2277,7 @@ async function computeStocks(asOf) {
     // forgotten, because a serverless instance is free to stop the moment the
     // response is sent, but never allowed to fail the refresh: the archive is a
     // by-product, and the screener must still work if it breaks.
-    if (!asOf) {
+    if (!asOf && !opts.archivePrices) {
       try {
         const b = await persistBars(symbols, series);
         if (b.inserted) {
@@ -3637,6 +3673,22 @@ async function pastMomentum(symbols) {
 // — start once, then a round per call — because that loop is the one proven
 // against the rate limits, and no serverless function can hold the twelve
 // minutes it takes.
+// How this live pass sources prices and how many profiles it may pull.
+// One Refresh All pulls prices ONCE (its first round archives them and
+// stamps prices_at); every later round reads the archive and spends the
+// whole minute on profiles — 7 x 80 = 560 of the 610. A pass that fetches
+// prices sizes its profile batch so prices + profiles fit the same minute.
+async function liveRefreshOpts() {
+  const running = await readRefreshState();
+  const archivePrices = !!(running && running.pricesAt);
+  const n = getUniverse(await readPortfolios()).length + 1;   // + SPY
+  const profileCap = ANALYST_ENABLED ? MAX_PROFILE_FETCHES_PER_CALL
+    : archivePrices ? PROFILE_CAP_ARCHIVE_ROUND
+      : Math.max(1, Math.min(PROFILE_CAP_ARCHIVE_ROUND,
+        Math.floor((CREDITS_PER_MINUTE - n) / CREDITS_PER_PROFILE)));
+  return { archivePrices, profileCap, running };
+}
+
 app.post('/api/cron/refresh', route(async (req, res) => {
   if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
   if (!API_KEY) return res.status(500).json({ error: 'No API key configured.' });
@@ -3648,8 +3700,10 @@ app.post('/api/cron/refresh', route(async (req, res) => {
     console.log(`cron: refresh all started — ${expired} profiles expired, ${total} symbols`);
   }
 
-  const r = await computeStocks(null);
+  const opts = await liveRefreshOpts();
+  const r = await computeStocks(null, opts);
   if (!r.ok) return res.status(r.status).json({ error: r.error });
+  if (opts.running && !opts.archivePrices) await store.markRefreshPrices();
   res.json({ ok: true, ...(await finishLiveRefresh(r.payload)) });
 }));
 
@@ -3678,8 +3732,10 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
       return res.status(403).json({ error: 'Admin only — log in to refresh or rewind the table.' });
     }
     const startedAt = Date.now();
-    const r = await computeStocks(asOf);
+    const opts = asOf ? {} : await liveRefreshOpts();
+    const r = await computeStocks(asOf, opts);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
+    if (!asOf && opts.running && !opts.archivePrices) await store.markRefreshPrices();
     // Cache the live (non-as-of) pull, record today's fundamentals, and move
     // the shared refresh flag on — the same tail the nightly job runs, so the
     // two callers cannot drift apart.

@@ -317,6 +317,9 @@ const ADDED_COLUMNS = [
   'alter table fundamentals_history add column next_earnings_estimated integer',
   'alter table fundamentals_history add column last_earnings_date text',
   'alter table fundamentals_history add column last_surprise real',
+  // One Refresh All pulls prices ONCE; this stamp is how later rounds know
+  // the pull already happened and spend their whole minute on profiles.
+  'alter table refresh_state add column prices_at integer',
 ];
 
 let ready = null;
@@ -551,7 +554,7 @@ async function archiveStats(day) {
 // null when nothing is running, so callers can spread it straight into a payload.
 async function readRefreshState() {
   await init();
-  const r = await db.execute('select started_at, updated_at, loaded, total, actor from refresh_state where id = 1');
+  const r = await db.execute('select started_at, updated_at, loaded, total, actor, prices_at from refresh_state where id = 1');
   if (!r.rows.length) return null;
   const row = r.rows[0];
   if (Date.now() - Number(row.updated_at) > REFRESH_STALE_MS) return null;
@@ -560,7 +563,15 @@ async function readRefreshState() {
     loaded: row.loaded == null ? null : Number(row.loaded),
     total: row.total == null ? null : Number(row.total),
     actor: row.actor || null,
+    pricesAt: row.prices_at == null ? null : Number(row.prices_at),
   };
+}
+
+// Stamped by the round that pulled prices live, so every later round in the
+// same run reads the archive instead of the API.
+async function markRefreshPrices() {
+  await init();
+  await db.execute({ sql: 'update refresh_state set prices_at = ? where id = 1', args: [Date.now()] });
 }
 
 // ---- daily bars -----------------------------------------------------------
@@ -661,6 +672,29 @@ async function readCloses(symbols, since) {
 // date: the refresh only fetches ~300 bars per symbol, and scoring six months
 // ago needs 274 of run-up on top of the 126 you are stepping back, so anything
 // past about a month has to come from the archive rather than the pull.
+// Full bars for many symbols at once, newest-first per symbol, in the exact
+// shape a live time_series fetch has — so a Refresh All's later rounds can
+// rebuild every row from the archive the first round just wrote, for zero
+// API credits. ~96k rows at 300 symbols; the 50k-row read measures 2.0s.
+async function readBarsFullFor(symbols, since) {
+  await init();
+  if (!symbols || !symbols.length) return {};
+  const r = await db.execute({
+    sql: `select symbol, d, open, high, low, close, volume from bars
+          where symbol in (${symbols.map(() => '?').join(',')}) and d >= ?
+          order by symbol, d desc`,
+    args: [...symbols, since],
+  });
+  const out = {};
+  for (const row of r.rows) {
+    (out[row.symbol] ||= []).push({
+      datetime: row.d,
+      open: row.open, high: row.high, low: row.low, close: row.close, volume: row.volume,
+    });
+  }
+  return out;
+}
+
 async function readBarsFor(symbols, since) {
   await init();
   if (!symbols || !symbols.length) return {};
@@ -1442,6 +1476,7 @@ module.exports = {
   readMomentumModel,
   momentumModelStatus,
   purgeSymbol,
+  markRefreshPrices, readBarsFullFor,
   writeNews, readNews, readLatestNews, readNewsState,
   symbolsWithData,
   countSymbolRows,

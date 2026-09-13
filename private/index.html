@@ -2424,9 +2424,9 @@
         // needed scale with the universe. This used to be a flat 15, which at 84
         // symbols left one round of slack — so a single refused round ended the
         // run a round early and it stopped at 78 of 84 with no explanation.
-        const PROFILES_PER_ROUND = 6;
+        const PROFILES_PER_ROUND = 7;   // archive-priced rounds afford 7 x 80 credits; the first (price) round pulls fewer
         const universe = Number(started && started.total) || 0;
-        const budget = Math.ceil((universe || 84) / PROFILES_PER_ROUND) + 4;
+        const budget = Math.ceil((universe || 84) / PROFILES_PER_ROUND) + 6;
         // A round the rate limiter refuses fetched nothing, so it must not spend
         // the budget for a round that would have. It gets its own allowance.
         const REFUSALS_ALLOWED = 8;
