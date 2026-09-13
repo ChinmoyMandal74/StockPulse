@@ -968,6 +968,7 @@
     let lastUpdated = null;    // when /api/stocks was last pulled (live data)
     let asOfDate = null;       // forward-returns view: momentum as of this past date (YYYY-MM-DD)
     let isAdmin = true;        // may add/remove tickers, refresh, rewind (true = open/local or owner)
+    let isGuest = false;       // the login page's guest cookie — filtered preview, no account
     let authRequired = false;  // server has an ADMIN_PASSWORD set (published, sign-in required)
     let signedIn = true;       // has a live session (or the app is open/local)
     let currentUser = null;    // { email, role } once signed in
@@ -2219,14 +2220,27 @@
         authRequired = !!me.authRequired;
         signedIn = me.signedIn !== false;
         currentUser = me.user || null;
+        isGuest = !!me.guest;
       } catch {
-        isAdmin = true; authRequired = false; signedIn = true; currentUser = null;
+        isAdmin = true; authRequired = false; signedIn = true; currentUser = null; isGuest = false;
       }
       applyAdminUI();
     }
 
     function applyAdminUI() {
       document.querySelectorAll('.admin-only').forEach((el) => { el.style.display = isAdmin ? '' : 'none'; });
+      // A guest sees no doors that lead to 403s: the research menu and the
+      // assistant hide, and the read-only note says what this view is. The
+      // real limits live on the server; this is only the furniture.
+      if (isGuest) {
+        const rp = $('researchPicker');
+        if (rp) rp.style.display = 'none';
+        const ask = document.querySelector('a.btn[href="/chat"]');
+        if (ask) ask.style.display = 'none';
+        const note = $('readonlyNote').querySelector('span');
+        if (note) note.innerHTML = '<b>Guest preview.</b> A handful of stocks with every feature live — ' +
+          'the full screener, research pages and assistant need an account.';
+      }
       $('adminActions').style.display = isAdmin ? '' : 'none';
       // Signing in is its own page now, so this button is only a nudge back to
       // the door — it appears if a session lapsed while the tab was open.

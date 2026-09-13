@@ -134,6 +134,7 @@
 
       <p class="forgot" id="forgotWrap">
         <button type="button" id="forgotBtn">Forgot your password?</button>
+        <button type="button" id="guestBtn">Try as guest — no account needed</button>
       </p>
 
       <div class="msg" id="msg"><svg class="ic" aria-hidden="true"><use href="#i-warn" /></svg><span id="msgText"></span></div>
@@ -222,6 +223,19 @@
       } catch (err) {
         setMsg(err.message);
         $('submit').disabled = false;
+      }
+    });
+
+    // The guest door: one click, a filtered preview, no account. The limit
+    // (a handful of stocks) is enforced server-side; this button is just the
+    // handle.
+    $('guestBtn').addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/guest', { method: 'POST' });
+        if (!res.ok) throw new Error('Guest access is unavailable right now.');
+        window.location.href = '/';
+      } catch (err) {
+        setMsg(err.message);
       }
     });
 

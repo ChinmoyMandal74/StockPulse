@@ -122,6 +122,7 @@ app.get(['/', '/index.html'], route(async (req, res, next) => {
 
 app.get('/analysis', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'private', 'analysis.html'));
 }));
 
@@ -129,6 +130,9 @@ app.get('/analysis', route(async (req, res) => {
 // ticker serves the same file.
 app.get('/stock/:symbol', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
+  if ((await isGuest(req)) && !guestSet.has(String(req.params.symbol || '').toUpperCase())) {
+    return res.redirect('/');
+  }
   res.sendFile(path.join(__dirname, 'private', 'stock.html'));
 }));
 
@@ -137,6 +141,7 @@ app.get('/stock/:symbol', route(async (req, res) => {
 // Does a momentum move predict the next move in price? One symbol at a time.
 app.get('/signal/:symbol', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'private', 'signal.html'));
 }));
 
@@ -146,6 +151,7 @@ app.get('/signal/:symbol', route(async (req, res) => {
 // serves the page, and the page reads the static results.
 app.get('/strategy', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'private', 'strategy.html'));
 }));
 
@@ -155,6 +161,7 @@ app.get('/strategy', route(async (req, res) => {
 // cannot be applied by scaling a stored run after the fact.
 app.get('/single', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'private', 'single.html'));
 }));
 
@@ -162,6 +169,7 @@ app.get('/single', route(async (req, res) => {
 // itself from the bars this ships, so a slider drag redraws without a request.
 app.get('/lab/:symbol', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'private', 'lab.html'));
 }));
 
@@ -172,6 +180,7 @@ app.get('/help', route(async (req, res) => {
 
 app.get('/contact', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'private', 'contact.html'));
 }));
 
@@ -186,6 +195,7 @@ app.get('/users', route(async (req, res) => {
 
 app.get('/chat', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'private', 'chat.html'));
 }));
 
@@ -254,7 +264,12 @@ const gateAssets = route(async (req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
   const rel = req.path === '/' ? 'index.html' : req.path.replace(/^\/+/, '');
   if (!PRIVATE_FILES.has(rel)) return next();
-  if (await isSignedIn(req)) return next();
+  if (await isSignedIn(req)) {
+    if (GUEST_BLOCKED_ASSET.test(rel) && (await isGuest(req))) {
+      return res.status(403).json({ error: 'Not on the guest preview.' });
+    }
+    return next();
+  }
   // Content negotiation cannot make this call: a browser's fetch() sends
   // `Accept: */*`, exactly like a navigation, so req.accepts() answers "html"
   // for both and every data file got a redirect. fetch follows redirects, so
@@ -354,8 +369,47 @@ async function isAdmin(req) {
 async function isSignedIn(req) {
   if (!AUTH_REQUIRED) return true;
   if (await isAdmin(req)) return true;
-  return !!(await currentUser(req));
+  if (await currentUser(req)) return true;
+  // The guest cookie opens the door too; what a guest may SEE is decided
+  // per route, never here.
+  const tok = parseCookies(req)[GUEST_COOKIE];
+  return !!tok && safeEqual(tok, guestToken());
 }
+
+// ---- guest access -----------------------------------------------------
+// "Try as guest" on the login page: a deterministic HMAC cookie, no account,
+// no sessions row, 24 hours. Guests see GUEST_SYMBOLS and nothing else, and
+// every limit is enforced HERE, on the server — a limit enforced in the
+// browser is not a limit (the CDN incident's lesson). The token is shared by
+// design; it grants only this filtered read-only view, and rotating
+// ADMIN_PASSWORD revokes every outstanding guest cookie at once.
+const GUEST_COOKIE = 'st_guest';
+const GUEST_HOURS = 24;
+const GUEST_SYMBOLS = String(process.env.GUEST_SYMBOLS || 'NVDA,JPM,PTON,JOBY,DELL')
+  .split(',').map((x) => x.trim().toUpperCase()).filter(Boolean);
+const guestSet = new Set(GUEST_SYMBOLS);
+const guestToken = () =>
+  crypto.createHmac('sha256', ADMIN_PASSWORD || 'open').update('guest-access-v1').digest('hex');
+async function isGuest(req) {
+  if (!AUTH_REQUIRED) return false;               // open mode is already open
+  const tok = parseCookies(req)[GUEST_COOKIE];
+  if (!tok || !safeEqual(tok, guestToken())) return false;
+  if (await isAdmin(req)) return false;
+  return !(await currentUser(req));               // a real login outranks the guest cookie
+}
+// The research data — every close, every stored run — is exactly what the
+// guest view exists to not hand out, and so are the pages built on it.
+const GUEST_BLOCKED_ASSET =
+  /^(strategy-.*\.json|single-closes\.json|lab-grid\.json|chat\.html|analysis\.html|signal\.html|lab\.html|strategy\.html|single\.html|contact\.html)$/;
+
+// Signed in with a real account — the guest preview stops here.
+const requireMember = route(async (req, res, next) => {
+  if (!(await isSignedIn(req))) return res.status(401).json({ error: 'Please sign in.' });
+  if (await isGuest(req)) {
+    return res.status(403).json({ error: 'Not on the guest preview — create an account for the full screener.' });
+  }
+  next();
+});
 
 const requireAdmin = route(async (req, res, next) => {
   if (await isAdmin(req)) return next();
@@ -371,6 +425,7 @@ app.get('/api/me', route(async (req, res) => {
   const u = await currentUser(req);
   const admin = await isAdmin(req);
   res.json({
+    guest: await isGuest(req),
     admin,
     authRequired: AUTH_REQUIRED,
     signedIn: await isSignedIn(req),
@@ -569,6 +624,20 @@ app.post('/api/logout', route(async (req, res) => {
   if (token) await store.deleteSession(token);
   res.clearCookie(SESSION_COOKIE);
   res.clearCookie(ADMIN_COOKIE);
+  res.clearCookie(GUEST_COOKIE);
+  res.json({ ok: true });
+}));
+
+// The guest door. No body, no password: the button on the login page is the
+// whole ceremony. 24 hours, then the cookie lapses on its own.
+app.post('/api/guest', route(async (req, res) => {
+  if (!AUTH_REQUIRED) return res.json({ ok: true });
+  res.cookie(GUEST_COOKIE, guestToken(), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: GUEST_HOURS * 60 * 60 * 1000,
+  });
   res.json({ ok: true });
 }));
 
@@ -780,7 +849,7 @@ async function operatorEmail() {
 // Signed-in only, so every sender is a known account and there is no honeypot
 // or captcha to build. The address is not typed by anyone — it comes off the
 // session — which is what makes the Reply-To below safe.
-app.post('/api/contact', requireAuth, route(async (req, res) => {
+app.post('/api/contact', requireMember, route(async (req, res) => {
   if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
 
   // Newlines stripped, not escaped: a CR or LF in a header is how a subject
@@ -1742,7 +1811,7 @@ function computeScores(m) {
 
 // ---- API: portfolios (management) ------------------------------------------
 
-app.get('/api/portfolios', requireAuth, route(async (req, res) => {
+app.get('/api/portfolios', requireMember, route(async (req, res) => {
   res.json({ portfolios: await readPortfolios() });
 }));
 
@@ -2425,7 +2494,7 @@ function chatRules(asOf, count) {
   ].join('\n');
 }
 
-app.post('/api/chat', requireAuth, route(async (req, res) => {
+app.post('/api/chat', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!ANTHROPIC_KEY) {
     return res.status(503).json({ error: 'The assistant is not configured: ANTHROPIC_API_KEY is unset.' });
@@ -2515,6 +2584,10 @@ app.post('/api/chat', requireAuth, route(async (req, res) => {
 app.get('/api/stock', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  const guest = await isGuest(req);
+  if (guest && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
   const snap = await readSnapshot();
   const stocks = (snap && snap.stocks) || [];
   const stock = stocks.find((x) => String(x.symbol).toUpperCase() === symbol);
@@ -2537,6 +2610,7 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     // mind; the filter box does the rest.
     universe: stocks
       .filter((x) => !x.error)
+      .filter((x) => !guest || guestSet.has(String(x.symbol).toUpperCase()))
       .map((x) => ({ symbol: x.symbol, name: x.name || '' }))
       .sort((a, b) => a.symbol.localeCompare(b.symbol)),
     updatedAt: snap.updatedAt || null,
@@ -2551,6 +2625,9 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
 app.get('/api/model', requireAuth, route(async (req, res) => {
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
   if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
 
   const rows = await store.readBars(symbol, MODEL_ROWS);
   if (rows.length < MODEL_MIN_BARS) {
@@ -2575,7 +2652,7 @@ app.get('/api/model', requireAuth, route(async (req, res) => {
 // next. The indicator itself is computed in the browser from the sliders —
 // a round trip per drag would make the control feel like a query, and the
 // arithmetic is the same module either way.
-app.get('/api/lab', requireAuth, route(async (req, res) => {
+app.get('/api/lab', requireMember, route(async (req, res) => {
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
   if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
 
@@ -2653,7 +2730,7 @@ const RSI_BANDS = [
   { id: 'ob', label: '> 70', lo: 70, hi: null },
 ];
 
-app.get('/api/signal', requireAuth, route(async (req, res) => {
+app.get('/api/signal', requireMember, route(async (req, res) => {
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
   if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
   const h = SIGNAL_HORIZONS[String(req.query.horizon || '2w')] || SIGNAL_HORIZONS['2w'];
@@ -2736,10 +2813,14 @@ async function prefsKey(req) {
 
 app.get('/api/prefs', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
+  // A guest has no user row, so prefsKey() would fall through to the 'admin'
+  // key — the owner's saved layout. Guests get defaults and store nothing.
+  if (await isGuest(req)) return res.json({ prefs: {} });
   res.json({ prefs: await store.readPrefs(await prefsKey(req)) });
 }));
 
 app.put('/api/prefs', requireAuth, route(async (req, res) => {
+  if (await isGuest(req)) return res.status(403).json({ error: 'Not on the guest preview.' });
   const incoming = req.body && req.body.prefs;
   if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
     return res.status(400).json({ error: 'Expected a prefs object.' });
@@ -2832,6 +2913,9 @@ app.get('/api/news', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
   if (!symbol) return res.status(400).json({ error: 'symbol required' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
   if (NEWS_OFF) return res.json({ symbol, items: [] });
   const state = await store.readNewsState();
   if (!state[symbol] || Date.now() - state[symbol] > NEWS_TTL_MS) {
@@ -2850,14 +2934,17 @@ app.get('/api/news', requireAuth, route(async (req, res) => {
 // rows only — this path never calls anything external.
 app.get('/api/news/latest', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ items: NEWS_OFF ? [] : await store.readLatestNews() });
+  let items = NEWS_OFF ? [] : await store.readLatestNews();
+  if (await isGuest(req)) items = items.filter((x) => guestSet.has(String(x.symbol).toUpperCase()));
+  res.json({ items });
 }));
 
 app.get('/api/sparklines', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const days = Math.min(400, Math.max(20, Number(req.query.days) || 90));
   const snap = await readSnapshot();
-  const symbols = ((snap && snap.stocks) || []).filter((x) => !x.error).map((x) => x.symbol);
+  let symbols = ((snap && snap.stocks) || []).filter((x) => !x.error).map((x) => x.symbol);
+  if (await isGuest(req)) symbols = symbols.filter((x) => guestSet.has(String(x).toUpperCase()));
   if (!symbols.length) return res.json({ closes: {}, days });
   // A calendar cutoff rather than a row limit: one query for every symbol, and
   // US tickers share trading days so they come back the same length.
@@ -2878,6 +2965,9 @@ app.get('/api/history', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
   if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
   // Floor of 2, not 20: the shortest range on the stock page is a trading
   // week. Ceiling is the archive's depth, about 20 years.
   const days = Math.min(5200, Math.max(2, Number(req.query.days) || 260));
@@ -3610,6 +3700,16 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     // existed still carries the column, and a house-profile edit shows up on
     // the next load rather than after the nightly refresh.
     scoreActionInto(snap.stocks);
+    if (await isGuest(req)) {
+      // The guest preview: the picked handful, and only portfolio names that
+      // still contain one of them. Filtered here, never in the browser.
+      const stocks = snap.stocks.filter((x) => guestSet.has(String(x.symbol).toUpperCase()));
+      const names = new Set();
+      for (const x of stocks) for (const pn of (x.portfolios || [])) names.add(pn);
+      return res.json({ ...snap, stocks,
+        portfolios: (snap.portfolios || []).filter((pn) => names.has(pn)),
+        fromSnapshot: true, guest: true, refreshing: null });
+    }
     return res.json({ ...snap, fromSnapshot: true, refreshing: await readRefreshState() });
   }
 
