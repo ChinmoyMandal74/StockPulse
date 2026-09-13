@@ -3343,9 +3343,18 @@ app.get('/api/basket', requireMember, route(async (req, res) => {
 
   // The date axis is every session anyone traded, oldest first, trimmed to
   // the asked-for window — US names dominate, so this is the US calendar.
-  const dateSet = new Set();
-  for (const sym of all) for (const b of bars[sym] || []) dateSet.add(b.d);
-  const dates = [...dateSet].sort().slice(-days);
+  // Sessions only the foreign listings traded are dropped: 005930 keeps the
+  // Korean calendar, so a US holiday would otherwise enter the axis with one
+  // symbol on it — harmless over a year, a visible step at a five-day window.
+  // The test is data-driven (half of the busiest day's coverage), so it needs
+  // no calendar and no hardcoded holidays.
+  const perDate = new Map();
+  for (const sym of all) for (const b of bars[sym] || []) perDate.set(b.d, (perDate.get(b.d) || 0) + 1);
+  const busiest = Math.max(0, ...perDate.values());
+  const dates = [...perDate.keys()]
+    .filter((d) => perDate.get(d) >= busiest * 0.5)
+    .sort()
+    .slice(-days);
   if (!dates.length) return res.json({ label, mine: rawName.startsWith('my:'), symbols, dates: [], basket: null, universe: null });
 
   const basket = equalWeightIndex(bars, symbols, dates);
