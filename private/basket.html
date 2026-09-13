@@ -101,6 +101,32 @@
     td:first-child { font-family: var(--sans); color: var(--muted); }
     tbody tr:last-child td { border-bottom: none; }
 
+    /* small multiples: each stock's own line, same window */
+    .minis { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+             gap: 12px; margin-top: 14px; }
+    .mini { display: block; padding: 12px 14px 8px; border-radius: 14px; text-decoration: none;
+            border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.025);
+            transition: background 0.3s var(--ease), border-color 0.3s var(--ease); }
+    .mini:hover { background: rgba(255, 255, 255, 0.05); border-color: var(--hair-2); }
+    .mini .mh { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .mini .mlg { position: relative; width: 24px; height: 24px; flex: none; border-radius: 7px;
+                 background: #fff; border: 1px solid var(--hair-2); overflow: hidden; }
+    .mini .mlg span { position: absolute; inset: 0; display: grid; place-items: center;
+                      font: 700 11px var(--sans); color: #0a0c11; }
+    .mini .mlg img { position: absolute; inset: 0; width: 100%; height: 100%;
+                     object-fit: contain; padding: 2px; box-sizing: border-box; }
+    .mini .mlg img[hidden] { display: none; }
+    .mini .mlg.flat { background: rgba(255, 255, 255, 0.07); border-color: var(--hair); }
+    .mini .mlg.flat span { visibility: hidden; }
+    .mini .msym { font: 600 13px var(--mono); color: var(--text); }
+    .mini .mval { margin-left: auto; font: 600 12.5px var(--mono); font-variant-numeric: tabular-nums; }
+    .mini svg { display: block; width: 100%; height: 58px; }
+    .toggle { margin-left: auto; padding: 5px 14px; border-radius: 999px; cursor: pointer;
+              border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+              color: var(--muted); font: 500 11.5px var(--sans); }
+    .toggle:hover { color: var(--text); }
+    .cardhead { display: flex; align-items: center; }
+
     .empty, .error { padding: 32px; font-size: 13px; color: var(--muted); }
     .error { color: var(--red); }
     @media (max-width: 768px) { .page { padding: 0 16px; } }
@@ -130,6 +156,7 @@
     <div id="main"><div class="empty">Loading…</div></div>
   </main>
 
+  <script src="/logofx.js"></script>
   <script src="/screens.js"></script>
   <script src="/action.js"></script>
   <script>
@@ -147,6 +174,7 @@
     const curveCache = {};
     let sharedNames = [];    // from the snapshot payload
     let myNames = [];        // the member's own lists
+    let showMinis = null;    // null until the first paint decides the default
 
     const pct = (n, d = 1) => (n == null || !isFinite(n) ? '—' : (n >= 0 ? '+' : '') + n.toFixed(d) + '%');
     const cls = (n) => (n == null ? '' : n >= 0 ? 'pos' : 'neg');
@@ -267,6 +295,72 @@
         '</div></section>';
     }
 
+    function miniSvg(series) {
+      const W = 220, H = 58, P = 3;
+      const pts = series.map((v, i) => (v == null ? null : [i, (v - 1) * 100]));
+      const vals = pts.filter(Boolean).map((p) => p[1]);
+      if (!vals.length) return '';
+      let lo = Math.min(...vals, 0), hi = Math.max(...vals, 0);
+      if (hi - lo < 0.5) { hi += 0.25; lo -= 0.25; }
+      const x = (i) => P + (i / Math.max(1, series.length - 1)) * (W - 2 * P);
+      const y = (v) => P + (1 - (v - lo) / (hi - lo)) * (H - 2 * P);
+      let d = '', pen = false;
+      for (const pt of pts) {
+        if (!pt) { pen = false; continue; }
+        d += (pen ? 'L' : 'M') + x(pt[0]).toFixed(1) + ' ' + y(pt[1]).toFixed(1);
+        pen = true;
+      }
+      const end = vals[vals.length - 1];
+      const color = end >= 0 ? '#34d399' : '#fb7185';
+      const zero = (lo < 0 && hi > 0)
+        ? `<line x1="0" y1="${y(0)}" x2="${W}" y2="${y(0)}" stroke="rgba(255,255,255,0.08)"/>` : '';
+      return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${zero}` +
+        `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.8"/></svg>`;
+    }
+
+    function minisCard() {
+      const series = (curve && curve.series) || {};
+      const items = (curve && curve.symbols || [])
+        .filter((sym) => series[sym])
+        .map((sym) => {
+          const S = series[sym];
+          let last = null;
+          for (let i = S.length - 1; i >= 0 && last == null; i--) last = S[i];
+          return { sym, S, end: last == null ? null : (last - 1) * 100 };
+        })
+        .sort((a, b) => (b.end ?? -1e9) - (a.end ?? -1e9));
+      if (!items.length) return '';
+      if (showMinis == null) showMinis = items.length <= 30;   // All stays light by default
+      const grid = !showMinis ? '' :
+        `<div class="minis">${items.map((it) =>
+          `<a class="mini" href="/stock/${encodeURIComponent(it.sym)}" target="_blank" rel="noopener">` +
+          `<span class="mh"><span class="mlg"><span>${esc(it.sym.slice(0, 1))}</span>` +
+          `<img alt="" hidden data-mlg="${esc(it.sym)}" /></span>` +
+          `<span class="msym">${esc(it.sym)}</span>` +
+          `<span class="mval ${cls(it.end)}">${pct(it.end)}</span></span>` +
+          miniSvg(it.S) + '</a>').join('')}</div>`;
+      return '<section class="bezel card"><div class="core">' +
+        `<div class="cardhead"><h2>Each stock, same window</h2>` +
+        `<button class="toggle" id="miniToggle">${showMinis ? 'Hide' : `Show ${items.length} charts`}</button></div>` +
+        grid +
+        (showMinis ? '<p class="note" style="margin-top:12px">Each line is that stock on its own — normalised to its first close in the window, sorted by return. Click through for the full page.</p>' : '') +
+        '</div></section>';
+    }
+
+    function wireMinis() {
+      const t = $('miniToggle');
+      if (t) t.addEventListener('click', () => { showMinis = !showMinis; paint(); });
+      if (!window.LogoFX) return;
+      document.querySelectorAll('img[data-mlg]').forEach((img) => {
+        LogoFX.clean(img.dataset.mlg).then((r) => {
+          const tile = img.closest('.mlg');
+          if (r.flat && tile) tile.classList.add('flat');
+          img.src = r.flat ? r.url : ('/api/logo/' + encodeURIComponent(img.dataset.mlg));
+          img.hidden = false;
+        }).catch(() => { /* letter tile stays */ });
+      });
+    }
+
     function paint() {
       const main = $('main');
       if (!rows.length) {
@@ -292,7 +386,8 @@
         `</h1><span class="kind" style="font-size:15px">${curve && curve.mine ? '· personal' : ''}</span>` +
         `<span class="chip">${rows.length} stocks</span><span class="chip">${sectors.size} sector${sectors.size === 1 ? '' : 's'}</span></div>` +
         '<p class="lede">A screener’s view of the list as one thing — descriptive throughout, positions nowhere.</p>' +
-        `<div class="grid">${curveCard()}${stanceHtml()}${returnsHtml()}</div>`;
+        `<div class="grid">${curveCard()}${minisCard()}${stanceHtml()}${returnsHtml()}</div>`;
+      wireMinis();
       const rr = $('rngRow');
       if (rr) rr.querySelectorAll('[data-r]').forEach((b) => b.addEventListener('click', () => {
         range = RANGES.find((r) => r.id === b.dataset.r) || range;

@@ -3436,6 +3436,29 @@ function equalWeightIndex(bars, symbols, dates) {
   return { index: out, used: active.length, of: maps.length };
 }
 
+// Each stock's own line for the small-multiples grid: normalised to ITS OWN
+// first close in the window (each mini answers "what did this stock do", not
+// "what did it contribute"), forward-filled through gaps, null before it has
+// data so a late listing starts where it starts instead of drawing a lie.
+function symbolSeries(bars, symbols, dates) {
+  const out = {};
+  for (const sym of symbols) {
+    const arr = bars[sym];
+    if (!arr || !arr.length) continue;
+    const m = new Map();
+    for (const b of arr) if (b.close > 0) m.set(b.d, b.close);
+    let base = null, last = null;
+    const series = dates.map((d) => {
+      const c = m.get(d);
+      if (c != null) { if (base == null) base = c; last = c; }
+      if (base == null || last == null) return null;
+      return Math.round((last / base) * 1000) / 1000;
+    });
+    if (base != null) out[sym] = series;
+  }
+  return out;
+}
+
 app.get('/api/basket', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const rawName = String(req.query.name || '').trim();
@@ -3482,6 +3505,7 @@ app.get('/api/basket', requireMember, route(async (req, res) => {
     dates,
     basket: basket.index, basketUsed: basket.used, basketOf: symbols.length,
     universe: universe.index, universeUsed: universe.used, universeOf: all.length,
+    series: symbolSeries(bars, symbols, dates),
   });
 }));
 
