@@ -77,6 +77,10 @@
       return { rows, label };
     }
     const movScopeRows = () => scopeOf('movScope', 'movSector');
+    // A feed reads a company name faster than a ticker, and the screener now
+    // carries one. The ticker remains the fallback for a row without a name.
+    const movLabel = (x) => x.shortName || x.name || x.symbol;
+
     function tplMovers() {
       const perKey = O.movPeriod;
       const [field, periodLabel, shortLabel] = MOV_PERIODS[perKey] || MOV_PERIODS.w1;
@@ -109,7 +113,7 @@
           `<div class="mcol"><div class="mch ${neg ? 'neg' : 'pos'}">${esc(title)}</div>` +
           (list.length ? list.map((x) => {
             const w = Math.max(6, Math.round(Math.abs(x[field]) / mx * 100));
-            return `<div class="mrow"><span class="ms">${esc(x.symbol)}</span>` +
+            return `<div class="mrow"><span class="ms">${esc(movLabel(x))}</span>` +
               `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
               `<span class="mv ${neg ? 'neg' : 'pos'}">${pct(x[field])}</span></div>`;
           }).join('') : '<div class="mnone">nothing moved that way</div>') +
@@ -129,7 +133,7 @@
         .slice(0, n);
       const max = Math.max(...rows.map((s) => Math.abs(s[field])), 0.01);
       const head = cmp
-        ? '<div class="rowhead"><span class="sym"></span><span class="bar-rail"></span>' +
+        ? '<div class="rowhead"><span class="nm2"></span><span class="bar-rail"></span>' +
           `<span class="val">${esc(shortLabel)}</span><span class="cmp">${esc(cmp[2])}</span></div>`
         : '';
       const body = rows.length
@@ -137,7 +141,7 @@
             const w = Math.max(6, Math.round(Math.abs(s[field]) / max * 100));
             const neg = both ? s[field] < 0 : !up;   // each row by its own sign when mixed
             const c = cmp ? s[cmp[0]] : null;
-            return `<div class="row"><span class="sym">${esc(s.symbol)}</span>` +
+            return `<div class="row"><span class="nm2">${esc(movLabel(s))}</span>` +
               `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
               `<span class="val ${neg ? 'neg' : 'pos'}">${pct(s[field])}</span>` +
               (cmp ? `<span class="cmp ${c == null ? '' : c < 0 ? 'neg' : 'pos'}">${pct(c)}</span>` : '') +
@@ -1158,6 +1162,11 @@
     .rowhead { display: flex; align-items: center; gap: 20px; margin-bottom: 4px;
                font: 600 15px var(--mono); text-transform: uppercase; letter-spacing: 0.16em;
                color: var(--faint); }
+    .row .nm2 { font: 600 24px var(--sans); width: 330px; letter-spacing: -0.02em;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sz-story .row .nm2 { font-size: 30px; width: 390px; }
+    .rowhead .nm2 { width: 330px; }
+    .sz-story .rowhead .nm2 { width: 390px; }
     .rowhead .sym { width: 138px; }
     .rowhead .bar-rail { flex: 1; }
     .rowhead .val { width: 150px; text-align: right; }
@@ -1170,7 +1179,8 @@
            padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--hair); }
     .mch.pos { color: var(--green); } .mch.neg { color: var(--red); }
     .mrow { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
-    .mrow .ms { font: 600 24px var(--mono); width: 108px; letter-spacing: -0.02em; }
+    .mrow .ms { font: 600 20px var(--sans); width: 168px; letter-spacing: -0.015em;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .mrow .bar-rail { flex: 1; height: 30px; border-radius: 9px;
                       background: rgba(255, 255, 255, 0.045); overflow: hidden; }
     .mrow .mv { font: 600 23px var(--mono); width: 122px; text-align: right;
