@@ -2458,6 +2458,11 @@ async function computeStocks(asOf, opts = {}) {
 
   try {
     let series;
+    // Which symbols this round actually priced live — null means all of them.
+    // The archive write needs to know: re-persisting bars that came OUT of the
+    // archive is a no-op upsert of the overlap window for every unpriced
+    // symbol, every round.
+    let pricedLive = null;
     if (opts.archivePrices && !asOf) {
       // A Refresh All round after the first: prices come from the archive the
       // first round just wrote — zero credits — leaving the whole minute for
@@ -2485,9 +2490,17 @@ async function computeStocks(asOf, opts = {}) {
       // today, so there is a year of history before the date AND the bars
       // after it (forward returns).
       series = {};
+      // Only this round's slice is pulled live; everything else in the universe
+      // comes off the archive below, so a universe too big to price inside one
+      // minute is paced across rounds rather than having its round refused.
+      const liveSet = opts.priceSlice ? new Set(opts.priceSlice) : null;
+      pricedLive = opts.priceSlice ? opts.priceSlice.slice() : null;
+      const toFetch = liveSet
+        ? fetchSymbols.filter((x) => x === BENCHMARK || liveSet.has(x))
+        : fetchSymbols;
       const CHUNK = 120;
-      for (let i = 0; i < fetchSymbols.length; i += CHUNK) {
-        const chunk = fetchSymbols.slice(i, i + CHUNK);
+      for (let i = 0; i < toFetch.length; i += CHUNK) {
+        const chunk = toFetch.slice(i, i + CHUNK);
         let rangeParam = '&outputsize=300';
         if (asOf) {
           const start = new Date(asOf);
@@ -2509,8 +2522,20 @@ async function computeStocks(asOf, opts = {}) {
         }
         Object.assign(series, normalizeBySymbol(raw, chunk));
       }
-      if (fetchSymbols.length > CHUNK) {
-        console.log(`prices: live, ${Math.ceil(fetchSymbols.length / CHUNK)} chunks for ${fetchSymbols.length} symbols`);
+      // Whatever this round did not price comes off the archive, so the
+      // snapshot is still complete — those rows simply carry the close they
+      // already had until their own slice comes round.
+      if (liveSet) {
+        const rest = symbols.filter((x) => !liveSet.has(x));
+        if (rest.length) {
+          const since = new Date(Date.now() - 470 * 86400000).toISOString().slice(0, 10);
+          const bars = await store.readBarsFullFor(rest, since);
+          for (const sym of rest) series[sym] = { values: bars[sym] || [] };
+        }
+        console.log(`prices: live ${liveSet.size}/${symbols.length} this round, ` +
+          `${rest.length} from the archive`);
+      } else if (fetchSymbols.length > CHUNK) {
+        console.log(`prices: live, ${Math.ceil(toFetch.length / CHUNK)} chunks for ${toFetch.length} symbols`);
       }
     }
 
@@ -2736,7 +2761,7 @@ async function computeStocks(asOf, opts = {}) {
     // by-product, and the screener must still work if it breaks.
     if (!asOf && !opts.archivePrices) {
       try {
-        const b = await persistBars(symbols, series);
+        const b = await persistBars(pricedLive || symbols, series);
         if (b.inserted) {
           console.log(`bars: +${b.inserted} rows across ${b.symbols} symbols` +
                       (b.rewritten ? `, ${b.rewritten} rewritten in full` : ''));
@@ -4268,12 +4293,57 @@ async function pastMomentum(symbols) {
 async function liveRefreshOpts() {
   const running = await readRefreshState();
   const archivePrices = !!(running && running.pricesAt);
-  const n = getUniverse(await readPortfolios()).length + 1;   // + SPY
-  const profileCap = ANALYST_ENABLED ? MAX_PROFILE_FETCHES_PER_CALL
-    : archivePrices ? PROFILE_CAP_ARCHIVE_ROUND
-      : Math.max(1, Math.min(PROFILE_CAP_ARCHIVE_ROUND,
-        Math.floor((CREDITS_PER_MINUTE - n) / CREDITS_PER_PROFILE)));
-  return { archivePrices, profileCap, running };
+  const universe = getUniverse(await readPortfolios());
+  const n = universe.length + 1;   // + SPY
+  if (archivePrices || ANALYST_ENABLED) {
+    return {
+      archivePrices,
+      profileCap: ANALYST_ENABLED ? MAX_PROFILE_FETCHES_PER_CALL : PROFILE_CAP_ARCHIVE_ROUND,
+      running,
+    };
+  }
+
+  // A PRICE round. Prices are 1 credit a symbol, so the whole universe stopped
+  // fitting inside one minute at 530 symbols — and the failure was not graceful:
+  // the round was refused outright and a Refresh All could never get past its
+  // first one. The pull is paced instead. `priced` says how far the run got;
+  // this round takes the next slice, anything outside it comes from the archive
+  // (yesterday's close, replaced when its own slice comes round), and only the
+  // round that reaches the end stamps prices_at.
+  const done = (running && running.priced) || 0;
+  const left = Math.max(0, universe.length - done);
+  // SPY is fetched live on every round, priced or archived, so it is always
+  // one credit off the top.
+  const priceBudget = CREDITS_PER_MINUTE - 1;
+  const priceCap = Math.min(left || universe.length, priceBudget);
+  const slice = universe.slice(done, done + priceCap);
+  const spent = slice.length + 1;
+  const profileCap = Math.max(0, Math.min(PROFILE_CAP_ARCHIVE_ROUND,
+    Math.floor((CREDITS_PER_MINUTE - spent) / CREDITS_PER_PROFILE)));
+  return {
+    archivePrices,
+    profileCap,
+    running,
+    // null means "price everything", which is what a plain Refresh outside a
+    // run wants and what a universe under the ceiling gets anyway.
+    priceSlice: slice.length === universe.length ? null : slice,
+    pricedAfter: done + slice.length,
+    priceTotal: universe.length,
+  };
+}
+
+// A price round just finished. Move the run's marker on, and only stamp
+// prices_at — which flips every later round to the archive — once the last
+// symbol has actually been priced. Both callers go through here so the two
+// cannot drift apart, the same rule finishLiveRefresh follows.
+async function notePriceRound(opts) {
+  if (!opts || !opts.running || opts.archivePrices) return;
+  if (opts.priceSlice) {
+    await store.markPriced(opts.pricedAfter);
+    if (opts.pricedAfter >= opts.priceTotal) await store.markRefreshPrices();
+    return;
+  }
+  await store.markRefreshPrices();
 }
 
 app.post('/api/cron/refresh', route(async (req, res) => {
@@ -4290,7 +4360,7 @@ app.post('/api/cron/refresh', route(async (req, res) => {
   const opts = await liveRefreshOpts();
   const r = await computeStocks(null, opts);
   if (!r.ok) return res.status(r.status).json({ error: r.error });
-  if (opts.running && !opts.archivePrices) await store.markRefreshPrices();
+  await notePriceRound(opts);
   res.json({ ok: true, ...(await finishLiveRefresh(r.payload)) });
 }));
 
@@ -4326,7 +4396,7 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     else if (!opts.running) logAct(req, 'refresh', 'plain');
     const r = await computeStocks(asOf, opts);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
-    if (!asOf && opts.running && !opts.archivePrices) await store.markRefreshPrices();
+    if (!asOf) await notePriceRound(opts);
     // Cache the live (non-as-of) pull, record today's fundamentals, and move
     // the shared refresh flag on — the same tail the nightly job runs, so the
     // two callers cannot drift apart.

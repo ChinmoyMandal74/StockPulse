@@ -363,6 +363,11 @@ const SCHEMA = [
 // exists", so each is attempted and a duplicate-column error is ignored.
 const ADDED_COLUMNS = [
   'alter table visitors add column user_email text',
+  // How many symbols of this run have had their prices pulled live. Prices are
+  // 1 credit each, so above ~530 symbols the whole universe does not fit in one
+  // minute and the round is refused outright — the pull is paced across rounds
+  // instead, and this is how a stateless function knows where it got to.
+  'alter table refresh_state add column priced integer',
   // Earnings dates and the last surprise, recorded from 2026-09-13. Two
   // consumers were waiting on these: the advice-history replay (the
   // "Earnings soon" blackout is the one input the archive could not
@@ -589,6 +594,26 @@ async function writeProfiles(map) {
 // ten-odd minutes the backfill takes. Keeping the values and clearing only the
 // timestamp means each one is replaced in place as its fresh copy lands, so the
 // snapshot never regresses.
+// The rotation. A full sweep re-pulls every profile at 80 credits a symbol,
+// which at 1,000 symbols is 80,000 credits and two and a half hours — for
+// fields that move on 1-5% of nights, and that move as a step when they do.
+// Expiring the OLDEST slice instead spreads the same work over the rotation
+// window, and the fetched_at values fan out on their own after the first pass.
+// A symbol with no profile at all is not here to be expired: ensureProfiles
+// already treats a missing one as stale, so a newly added ticker is never
+// waiting on its turn in the rotation.
+async function expireOldestProfiles(limit) {
+  await init();
+  const n = Math.max(1, Math.floor(limit) || 1);
+  const r = await db.execute({
+    sql: `update profiles set fetched_at = 0
+           where symbol in (select symbol from profiles
+                             where fetched_at > 0 order by fetched_at asc limit ?)`,
+    args: [n],
+  });
+  return r.rowsAffected ?? 0;
+}
+
 async function expireProfiles() {
   await init();
   const r = await db.execute('update profiles set fetched_at = 0');
@@ -665,7 +690,7 @@ async function archiveStats(day) {
 // null when nothing is running, so callers can spread it straight into a payload.
 async function readRefreshState() {
   await init();
-  const r = await db.execute('select started_at, updated_at, loaded, total, actor, prices_at from refresh_state where id = 1');
+  const r = await db.execute('select started_at, updated_at, loaded, total, actor, prices_at, priced from refresh_state where id = 1');
   if (!r.rows.length) return null;
   const row = r.rows[0];
   if (Date.now() - Number(row.updated_at) > REFRESH_STALE_MS) return null;
@@ -675,14 +700,24 @@ async function readRefreshState() {
     total: row.total == null ? null : Number(row.total),
     actor: row.actor || null,
     pricesAt: row.prices_at == null ? null : Number(row.prices_at),
+    priced: row.priced == null ? 0 : Number(row.priced),
   };
 }
 
-// Stamped by the round that pulled prices live, so every later round in the
-// same run reads the archive instead of the API.
+// Stamped by the round that FINISHED pulling prices, so every later round in
+// the same run reads the archive instead of the API.
 async function markRefreshPrices() {
   await init();
   await db.execute({ sql: 'update refresh_state set prices_at = ? where id = 1', args: [Date.now()] });
+}
+
+// How far through the price pull this run is. Advanced by each price round;
+// once it reaches the universe size the caller stamps prices_at and every
+// later round is an archive round.
+async function markPriced(n) {
+  await init();
+  await db.execute({ sql: 'update refresh_state set priced = ?, updated_at = ? where id = 1',
+    args: [n, Date.now()] });
 }
 
 // ---- the NASDAQ reference list --------------------------------------------
@@ -1784,6 +1819,8 @@ module.exports = {
   readShortNames,
   readNamesFull,
   writeShortName,
+  markPriced,
+  expireOldestProfiles,
   writeNasdaqExchange,
   readNasdaqListings,
   nasdaqMeta,
