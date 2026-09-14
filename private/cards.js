@@ -760,6 +760,115 @@
 
     // ---- render ------------------------------------------------------------
 
+    // ---- Range -----------------------------------------------------------
+    // Where each stock sits between its own 52-week low and high. A ranking
+    // of "% from the high" is the obvious card and throws away half the
+    // story; a track per stock carries the fall AND the recovery at once,
+    // which is why it is the default rather than the ranking.
+    function rangeScope() { return scopeOf('rngScope', 'rngSector'); }
+
+    function tplRange() {
+      const mode = O.rngMode || 'track';
+      const scope = rangeScope();
+      const n = Math.min(Number(O.rngCount) || 8, size.id === 'story' ? 14 : 10);
+      const has = (x) => x.range52Pos != null && x.pctFromHigh != null && x.pctFromLow != null;
+      const rows = scope.rows.filter(has);
+      if (!rows.length) {
+        return chromeTop() + `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}</span>` +
+          '<h2 class="s-title">No range<br><span class="dim">to read</span></h2>' +
+          `<p class="s-empty">Nothing in ${esc(scope.label)} has a 52-week range stored yet.</p>` +
+          '</div></div>' + chromeFoot();
+      }
+
+      // ---- the spread: how the whole list is distributed through its ranges
+      if (mode === 'spread') {
+        const bands = [
+          ['Top fifth \u2014 at the highs', 80, 100, '#34d399'],
+          ['Upper middle', 60, 80, '#a3e635'],
+          ['Middle', 40, 60, '#9aa3b2'],
+          ['Lower middle', 20, 40, '#fb923c'],
+          ['Bottom fifth \u2014 at the lows', 0, 20, '#fb7185'],
+        ];
+        const total = rows.length;
+        const counts = bands.map(([, lo, hi]) =>
+          rows.filter((x) => x.range52Pos >= lo && (hi === 100 ? x.range52Pos <= 100 : x.range52Pos < hi)).length);
+        const mx = Math.max(...counts, 1);
+        return chromeTop() +
+          `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 52-week range</span>` +
+          '<h2 class="s-title">Where the year<br><span class="dim">sits</span></h2>' +
+          `<div class="atally" style="margin-top:34px">${bands.map(([label, , , tint], i) =>
+            `<div class="arow"><span class="an" style="color:${tint}">${esc(label)}</span>` +
+            `<span class="arail"><span class="afill" style="display:block;width:${Math.max(2, counts[i] / mx * 100)}%;background:${tint}"></span></span>` +
+            `<span class="ac">${counts[i]}</span><span class="ap">${Math.round(counts[i] / total * 100)}%</span></div>`).join('')}</div>` +
+          `<p class="s-sub" style="font-size:19px;margin-top:28px">${counts[0]} of ${total} sit in the top fifth of their own 52-week range, ` +
+          `${counts[4]} in the bottom. Each stock measured against its own year, not against each other.</p>` +
+          '</div></div>' + chromeFoot();
+      }
+
+      // ---- a plain ranking on one of the three readings
+      if (mode === 'rank') {
+        const MEASURES = {
+          high: ['pctFromHigh', 'from the 52-week high', false],
+          low:  ['pctFromLow', 'off the 52-week low', true],
+          pos:  ['range52Pos', 'position in the 52-week range', true],
+        };
+        const [field, label, bigFirst] = MEASURES[O.rngMeasure] || MEASURES.high;
+        const list = rows.slice()
+          .sort((a, b) => (bigFirst ? b[field] - a[field] : a[field] - b[field]))
+          .slice(0, n);
+        // One recovery of +1900% would leave every other bar invisible, so
+        // the bars are drawn on a log scale while the printed number stays
+        // the true one. The caption says so rather than leaving it implied.
+        const wide = Math.max(...list.map((x) => Math.abs(x[field]))) > 200;
+        const scale = (v) => {
+          const a = Math.abs(v);
+          if (!wide) return a / Math.max(...list.map((x) => Math.abs(x[field])), 1e-9);
+          return Math.log10(1 + a) / Math.log10(1 + Math.max(...list.map((x) => Math.abs(x[field])), 1));
+        };
+        return chromeTop() +
+          `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 52-week range</span>` +
+          `<h2 class="s-title">${O.rngMeasure === 'low' ? 'Furthest off' : O.rngMeasure === 'pos' ? 'Highest in' : 'Furthest from'}` +
+          `<br><span class="dim">${esc(label.replace(/^(from|off|position in) the /, ''))}</span></h2>` +
+          `<div class="rows">${list.map((x) => {
+            const v = x[field];
+            const w = Math.max(5, Math.round(scale(v) * 100));
+            const neg = v < 0;
+            return `<div class="row"><span class="sym">${esc(x.symbol)}</span>` +
+              `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
+              `<span class="val ${neg ? 'neg' : 'pos'}">${pct(v)}</span></div>`;
+          }).join('')}</div>` +
+          `<p class="s-sub" style="font-size:18px;margin-top:22px">${esc(label[0].toUpperCase() + label.slice(1))}` +
+          (wide ? ', bars on a log scale so one outlier does not flatten the rest' : '') +
+          '. Each measured against its own year.</p>' +
+          '</div></div>' + chromeFoot();
+      }
+
+      // ---- the track: the whole year in one row per stock
+      const top = O.rngDir !== 'low';
+      const list = rows.slice()
+        .sort((a, b) => (top ? b.range52Pos - a.range52Pos : a.range52Pos - b.range52Pos))
+        .slice(0, n);
+      return chromeTop() +
+        `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 52-week range</span>` +
+        `<h2 class="s-title">${top ? 'Pressed against<br><span class="dim">their highs</span>' : 'Down at<br><span class="dim">their lows</span>'}</h2>` +
+        `<div class="tracks">${list.map((x) => {
+          const p = Math.max(0, Math.min(100, x.range52Pos));
+          const tint = p >= 66 ? '#34d399' : p >= 33 ? '#fbbf24' : '#fb7185';
+          return '<div class="trk">' +
+            `<span class="ts">${esc(x.symbol)}</span>` +
+            '<span class="trail">' +
+            `<span class="tfill" style="width:${p}%;background:linear-gradient(90deg, rgba(255,255,255,0.05), ${tint})"></span>` +
+            `<span class="tdot" style="left:${p}%;background:${tint}"></span></span>` +
+            `<span class="tlo">${pct(x.pctFromLow)}</span>` +
+            `<span class="thi">${pct(x.pctFromHigh)}</span>` +
+            '</div>';
+        }).join('')}</div>` +
+        '<div class="tkey"><span>left edge \u00b7 the 52-week low</span><span>right edge \u00b7 the high</span></div>' +
+        '<p class="s-sub" style="font-size:18px;margin-top:16px">Each track is one stock\u2019s own year: the marker is where it trades now, ' +
+        'the first number is how far it has come off its low, the second how far it still sits below its high.</p>' +
+        '</div></div>' + chromeFoot();
+    }
+
     // ---- Sparklines ------------------------------------------------------
     // The leaders in a list, each as its own small chart. The big Chart card
     // overlays lines to compare them; this one separates them so each shape
@@ -1053,7 +1162,7 @@
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard, advice: tplAdvice,
     breakout: tplBreakout, stance: tplStance, intro: tplIntro, announce: tplAnnounce,
-    fund: tplFund, sparks: tplSparks, avatar: tplAvatar,
+    fund: tplFund, sparks: tplSparks, range: tplRange, avatar: tplAvatar,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -1315,6 +1424,25 @@
     .sz-story .spkt svg { flex: 1; height: auto; min-height: 90px; }
     .sz-story .spkt .ss { font-size: 30px; }
     .sz-story .spkt .sv { font-size: 25px; }
+
+    /* the 52-week track: one row carries the fall and the recovery at once */
+    .tracks { display: flex; flex-direction: column; gap: 18px; margin-top: 34px; }
+    .trk { display: grid; grid-template-columns: 118px 1fr 118px 118px; align-items: center; gap: 16px; }
+    .trk .ts { font: 700 25px var(--mono); letter-spacing: -0.02em; }
+    .trk .trail { position: relative; height: 16px; border-radius: 999px;
+                  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--hair); }
+    .trk .tfill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
+    .trk .tdot { position: absolute; top: 50%; width: 22px; height: 22px; border-radius: 50%;
+                 transform: translate(-50%, -50%); border: 3px solid #050505; }
+    .trk .tlo { font: 600 21px var(--mono); text-align: right; color: var(--green); }
+    .trk .thi { font: 600 21px var(--mono); text-align: right; color: var(--red); }
+    .tkey { display: flex; justify-content: space-between; margin-top: 16px;
+            font: 500 16px var(--mono); color: var(--faint); }
+    .sz-story .tracks { flex: 1; justify-content: space-evenly; }
+    .sz-story .trk { grid-template-columns: 140px 1fr 132px 132px; }
+    .sz-story .trk .ts { font-size: 30px; }
+    .sz-story .trk .trail { height: 20px; }
+    .sz-story .trk .tlo, .sz-story .trk .thi { font-size: 25px; }
 
     /* sparklines: one small chart per stock, each reading on its own */
     .spk { display: grid; gap: 16px; margin-top: 32px; }

@@ -198,6 +198,42 @@
         <select id="spkSector"><option value="All">All sectors</option></select>
       </div>
 
+      <div id="rngBox">
+        <label>Show</label>
+        <select id="rngMode">
+          <option value="track" selected>In their range</option>
+          <option value="rank">A ranking</option>
+          <option value="spread">The spread</option>
+        </select>
+        <div id="rngDirWrap">
+          <label>Which end</label>
+          <select id="rngDir">
+            <option value="high" selected>Nearest their highs</option>
+            <option value="low">Nearest their lows</option>
+          </select>
+        </div>
+        <div id="rngMeasureWrap">
+          <label>Measure</label>
+          <select id="rngMeasure">
+            <option value="high" selected>% from the 52-week high</option>
+            <option value="low">% off the 52-week low</option>
+            <option value="pos">Position in the range</option>
+          </select>
+        </div>
+        <div id="rngCountWrap">
+          <label>How many</label>
+          <select id="rngCount">
+            <option value="5">5</option>
+            <option value="8" selected>8</option>
+            <option value="10">10</option>
+          </select>
+        </div>
+        <label>Within</label>
+        <select id="rngScope"><option value="All">All screened</option></select>
+        <label>Sector</label>
+        <select id="rngSector"><option value="All">All sectors</option></select>
+      </div>
+
       <div id="advBox">
         <label>Show</label>
         <select id="advMode">
@@ -343,6 +379,7 @@
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
+      { id: 'range', name: 'Range', note: 'Where each stock sits in its 52-week range' },
       { id: 'advboard', name: 'Advice', note: 'What the rules read, four ways' },
       { id: 'fund', name: 'Fundamentals', note: 'Size, margins, growth \u2014 four ways' },
       { id: 'advice', name: 'The rules changed their mind', note: 'Today’s advice changes, rule named' },
@@ -382,6 +419,7 @@
     const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movScope', 'movSector',
       'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector',
       'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector',
+      'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector',
       'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector',
       'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
@@ -410,6 +448,11 @@
       $('intBox').style.display = tpl === 'intro' ? 'block' : 'none';
       $('advBox').style.display = tpl === 'advboard' ? 'block' : 'none';
       $('spkBox').style.display = tpl === 'sparks' ? 'block' : 'none';
+      $('rngBox').style.display = tpl === 'range' ? 'block' : 'none';
+      const rm = $('rngMode').value;
+      $('rngDirWrap').style.display = rm === 'track' ? 'block' : 'none';
+      $('rngMeasureWrap').style.display = rm === 'rank' ? 'block' : 'none';
+      $('rngCountWrap').style.display = rm === 'spread' ? 'none' : 'block';
       $('fundBox').style.display = tpl === 'fund' ? 'block' : 'none';
       const fm = $('fundMode').value;
       $('fundMetricWrap').style.display = fm === 'rank' ? 'block' : 'none';
@@ -459,6 +502,8 @@
       $(id).addEventListener('change', () => { if (tpl === 'chart') render(); }));
     ['spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'sparks') render(); }));
+    ['rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'range') render(); }));
 
     const CARD_TOPICS = Cards.topics();
     const cardTopic = (id) => CARD_TOPICS.find((t) => t.id === id) || CARD_TOPICS[0];
@@ -741,13 +786,14 @@
         $('advScope').innerHTML = $('movScope').innerHTML;
         $('advSym').innerHTML = $('chtSym').innerHTML;
         $('spkScope').innerHTML = $('movScope').innerHTML;
+        $('rngScope').innerHTML = $('movScope').innerHTML;
         $('fundScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         // one sector list, built from the rows themselves so it can never
         // offer a sector nothing is in
         const secOpts = '<option value="All">All sectors</option>' +
           Cards.sectors(stocks).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-        ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector'].forEach((id) => {
+        ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector', 'rngSector'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = secOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
