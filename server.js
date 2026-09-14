@@ -270,6 +270,7 @@ app.get('/login', (req, res) => {
 // file. Locally it worked, which is exactly why it went unnoticed.
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
+                      '/admin.html': '/admin',
                       '/cards.html': '/cards',
                       '/users.html': '/users', '/reset.html': '/reset',
                       '/contact.html': '/contact', '/help.html': '/help',
@@ -322,6 +323,16 @@ const gateAssets = route(async (req, res, next) => {
   res.status(401).json({ error: 'Sign in required' });
 });
 app.use(gateAssets, express.static(path.join(__dirname, 'private')));
+
+// The admin console: one door in the screener's bar instead of a dozen, and
+// the home of everything that is not a description of the table in front of
+// you. Admin only — the screener keeps the research menu for members, who
+// cannot come here.
+app.get('/admin', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'admin');
+  res.sendFile(path.join(__dirname, 'private', 'admin.html'));
+}));
 
 // Admin only, like /users. The data behind it (GET /api/visitors) has always
 // been guarded, so this only ever served an empty shell — but it was the one

@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Admin — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 90px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(124, 156, 255, 0.13), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(52, 211, 153, 0.10), transparent 64%); }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 16px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
+      padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+
+    h1 { margin: 22px 0 0; font-size: clamp(26px, 3vw, 34px); font-weight: 600;
+         letter-spacing: -0.035em; line-height: 1.05; }
+    .lede { margin: 10px 0 0; max-width: 74ch; color: var(--muted); }
+
+    /* ---- the jump bar: every section is one click from the top --------- */
+    .jumps { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 26px; }
+    .jump {
+      display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03); color: var(--muted);
+      font-size: 12.5px; font-weight: 500; text-decoration: none; cursor: pointer;
+      transition: color .25s var(--ease), border-color .25s var(--ease), background .25s var(--ease);
+    }
+    .jump:hover { color: var(--text); border-color: var(--hair-2); background: rgba(255, 255, 255, 0.06); }
+    .jump .ic { color: var(--faint); }
+    .jump:hover .ic { color: var(--accent); }
+
+    /* ---- a section ------------------------------------------------------ */
+    section { scroll-margin-top: 84px; margin-bottom: 20px; }
+    .sec-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px; padding: 0 4px; }
+    .sec-head h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.18em;
+                   text-transform: uppercase; color: var(--faint); }
+    .sec-head p { margin: 0; font-size: 12.5px; color: var(--faint); }
+    .card > .core { padding: 8px; }
+
+    /* ---- rows: the links ------------------------------------------------ */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 6px; }
+    .row {
+      display: flex; align-items: flex-start; gap: 13px; padding: 14px 15px; border-radius: 13px;
+      border: 1px solid transparent; text-decoration: none; color: var(--text); text-align: left;
+      background: none; font: inherit; cursor: pointer; width: 100%;
+      transition: background .25s var(--ease), border-color .25s var(--ease), transform .25s var(--ease);
+    }
+    .row:hover { background: rgba(255, 255, 255, 0.045); border-color: var(--hair); }
+    .row:active { transform: translateY(1px); }
+    .row .ic { margin-top: 1px; color: var(--accent); flex: none; }
+    .row.warm .ic { color: var(--green); }
+    .row.hot .ic { color: var(--amber); }
+    .row .txt { min-width: 0; }
+    .row .nm { display: block; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
+    .row .hint { display: block; margin-top: 3px; font-size: 11.5px; color: var(--faint); line-height: 1.45; }
+
+    /* ---- inline forms inside a card ------------------------------------- */
+    .form { padding: 14px 15px; }
+    .form .lbl { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.16em;
+                 color: var(--faint); margin-bottom: 7px; }
+    .form .line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    input[type="text"], input[type="date"], select {
+      box-sizing: border-box; padding: 9px 12px; border-radius: 10px; min-width: 0;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      color: var(--text); font: 500 13px var(--sans);
+    }
+    input[type="text"] { font-family: var(--mono); text-transform: uppercase; width: 120px; }
+    select { cursor: pointer; }
+    input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .said { margin: 9px 0 0; font-size: 12px; color: var(--muted); min-height: 1.2em; }
+    .said.bad { color: var(--red); }
+    .said.good { color: var(--green); }
+
+    /* ---- the weights editor --------------------------------------------- */
+    .presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; }
+    .preset { text-align: left; padding: 13px 15px; border-radius: 13px; cursor: pointer;
+              border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.025); color: var(--text);
+              font: inherit; transition: border-color .25s var(--ease), background .25s var(--ease); }
+    .preset:hover { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.05); }
+    .preset.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    .preset .nm { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; }
+    .preset .nm .chk { opacity: 0; color: var(--accent); }
+    .preset.on .nm .chk { opacity: 1; }
+    .preset em { display: block; margin-top: 4px; font-size: 11.5px; font-style: normal;
+                 color: var(--faint); line-height: 1.45; }
+
+    .sliders { margin-top: 12px; padding: 14px 15px 4px; border-top: 1px solid var(--hair); }
+    .wrow { display: grid; grid-template-columns: 1fr 210px 42px 46px; align-items: center;
+            gap: 12px; padding: 7px 0; }
+    .wrow .wn { font-size: 13px; }
+    .wrow .wv { font: 600 13px var(--mono); text-align: right; }
+    .wrow .ws { font: 500 12px var(--mono); text-align: right; color: var(--faint); }
+    .wrow input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+    @media (max-width: 720px) { .wrow { grid-template-columns: 1fr 58px 46px; }
+                                .wrow input[type="range"] { grid-column: 1 / -1; } }
+    .wfoot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+             padding: 12px 0 14px; font-size: 11.5px; color: var(--faint); }
+
+    .note { margin: 6px 4px 0; font-size: 11.5px; color: var(--faint); line-height: 1.6; max-width: 82ch; }
+    .note a { color: var(--muted); }
+    @media (max-width: 640px) { .page { padding: 0 18px; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20.4 12a8.4 8.4 0 1 1-2.5-6"/><path d="M18.4 3.4V6h-2.6"/></symbol>
+    <symbol id="i-refresh-all" viewBox="0 0 24 24"><path d="M20.4 12a8.4 8.4 0 1 1-2.5-6"/><path d="M18.4 3.4V6h-2.6"/><path d="M12 8.6v3.6l2.4 1.4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.6v12.8"/><path d="M5.6 12h12.8"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.6" y="5.2" width="16.8" height="15.2" rx="2.4"/><path d="M3.6 10h16.8"/><path d="M8.4 3.6v3.2"/><path d="M15.6 3.6v3.2"/></symbol>
+    <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3.4" y="4.4" width="17.2" height="15.2" rx="2.2"/><path d="M9.2 4.4v15.2"/><path d="M14.8 4.4v15.2"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3.4 17.6 9 12l3.6 2.7L20.6 6.2"/><path d="M15.2 6.2h5.4v5.4"/></symbol>
+    <symbol id="i-strategy" viewBox="0 0 24 24"><path d="M3.6 20.4V3.6"/><path d="M3.6 20.4h16.8"/><path d="M7.4 16.6v-4"/><path d="M11.6 16.6V8.4"/><path d="M15.8 16.6v-6.2"/><path d="M20 16.6V6"/></symbol>
+    <symbol id="i-scatter" viewBox="0 0 24 24"><path d="M3.6 20.4V3.6"/><path d="M3.6 20.4h16.8"/><circle cx="8.4" cy="15.4" r="1.4"/><circle cx="12.6" cy="10.6" r="1.4"/><circle cx="16.8" cy="13" r="1.4"/><circle cx="17.6" cy="7.2" r="1.4"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7.2h16"/><path d="M4 16.8h16"/><circle cx="9.2" cy="7.2" r="2.2"/><circle cx="15.4" cy="16.8" r="2.2"/></symbol>
+    <symbol id="i-scales" viewBox="0 0 24 24"><path d="M12 4.4v15.2"/><path d="M6.6 19.6h10.8"/><path d="M4 9.6h16"/><path d="M4 9.6 6.8 15h-5.6Z"/><path d="M20 9.6 22.8 15h-5.6Z"/></symbol>
+    <symbol id="i-research" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.6"/><path d="M15.8 15.8 20.4 20.4"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9.4" cy="8.4" r="3.4"/><path d="M3.6 19.4c0-3.2 2.6-5.4 5.8-5.4s5.8 2.2 5.8 5.4"/><path d="M16.4 5.4a3.4 3.4 0 0 1 0 6.6"/><path d="M18 14.4c1.7.7 2.8 2.3 2.8 4.2"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3.4 12h3.8l2-5.2 3.4 10.4 2.2-5.2h5.8"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.4V12l3 1.8"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M9.8 9.6a2.3 2.3 0 0 1 4.4.8c0 1.6-2.2 2-2.2 3.4"/><path d="M12 17.1h.01"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.4" y="5.4" width="17.2" height="13.2" rx="2.4"/><path d="m3.8 7.4 7.4 5.2a1.4 1.4 0 0 0 1.6 0l7.4-5.2"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20.4 12.6c0 3.9-3.8 7-8.4 7-1 0-2-.15-2.9-.42L4 20.4l1.3-3.5A6.6 6.6 0 0 1 3.6 12.6c0-3.9 3.8-7 8.4-7s8.4 3.1 8.4 7Z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.8 4.4 4.4L19 7.6"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 4 2.5 5.1 5.6.8-4 3.9 1 5.6L12 16.8 6.9 19.4l1-5.6-4-3.9 5.6-.8Z"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark"><span class="wordmark">Tickr Lab</span></span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <h1>Admin</h1>
+    <p class="lede">Everything that used to crowd the screener's bar, in one place. The table keeps
+      only the controls that describe what it is showing — portfolio, columns, sector, horizon, rules.</p>
+
+    <nav class="jumps" aria-label="Sections">
+      <a class="jump" href="#data"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Data</a>
+      <a class="jump" href="#research"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-research" /></svg>Research</a>
+      <a class="jump" href="#scoring"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>Scoring</a>
+      <a class="jump" href="#studio"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-star" /></svg>Studio</a>
+      <a class="jump" href="#people"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-users" /></svg>People &amp; logs</a>
+      <a class="jump" href="#reference"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-help" /></svg>Reference</a>
+    </nav>
+
+    <!-- ================= data ================= -->
+    <section id="data">
+      <div class="sec-head"><h2>Data</h2><p>Pulling prices, adding tickers, looking at a past date.</p></div>
+      <div class="bezel card"><div class="core">
+        <div class="grid">
+          <!-- Both refreshes RUN ON THE SCREENER, which owns the round loop, the
+               progress banner and the table it is refreshing. A second copy of
+               that loop here is exactly the drift this codebase keeps avoiding,
+               so these are deep links that start it there. -->
+          <a class="row warm" href="/?do=refresh">
+            <svg class="ic" aria-hidden="true"><use href="#i-refresh" /></svg>
+            <span class="txt"><span class="nm">Refresh prices</span>
+              <span class="hint">Re-pull today's bars and recompute the ranking. Seconds. Opens the screener and runs there.</span></span>
+          </a>
+          <a class="row hot" href="/?do=refreshall">
+            <svg class="ic" aria-hidden="true"><use href="#i-refresh-all" /></svg>
+            <span class="txt"><span class="nm">Refresh all</span>
+              <span class="hint">Expire the company cache and re-pull everything, paced around the rate limit. Several minutes — leave the tab open.</span></span>
+          </a>
+        </div>
+
+        <div class="form">
+          <span class="lbl">Add a ticker</span>
+          <div class="line">
+            <input type="text" id="sym" placeholder="TSLA" maxlength="12" autocomplete="off" aria-label="Ticker symbol" />
+            <select id="addTo" aria-label="Portfolio to add to"></select>
+            <button class="btn btn-primary" id="addBtn">
+              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>Add</button>
+          </div>
+          <p class="said" id="addSaid"></p>
+        </div>
+
+        <div class="form">
+          <span class="lbl">Forward returns — the ranking as of a past date</span>
+          <div class="line">
+            <input type="date" id="asOf" aria-label="As-of date" />
+            <button class="btn" id="asOfGo">
+              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-calendar" /></svg>Open that view</button>
+          </div>
+          <p class="said" id="asOfSaid">Momentum and returns are recomputed as they looked on that date, and the
+            Forward columns show what happened next. Fundamentals are hidden — they are not point-in-time.</p>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ================= research ================= -->
+    <section id="research">
+      <div class="sec-head"><h2>Research</h2><p>The pages that study the data rather than list it.</p></div>
+      <div class="bezel card"><div class="core">
+        <div class="grid">
+          <a class="row" href="/cards"><svg class="ic" aria-hidden="true"><use href="#i-chart" /></svg>
+            <span class="txt"><span class="nm">Cards</span><span class="hint">The screen, summarised as a post-shaped picture.</span></span></a>
+          <a class="row" href="/analysis"><svg class="ic" aria-hidden="true"><use href="#i-columns" /></svg>
+            <span class="txt"><span class="nm">Analysis</span><span class="hint">Seven screens over the raw fields, not the scores.</span></span></a>
+          <a class="row" href="/strategy"><svg class="ic" aria-hidden="true"><use href="#i-strategy" /></svg>
+            <span class="txt"><span class="nm">Strategy</span><span class="hint">A trend rule over a whole portfolio: equity, drawdown, costs.</span></span></a>
+          <a class="row" href="/single"><svg class="ic" aria-hidden="true"><use href="#i-chart" /></svg>
+            <span class="txt"><span class="nm">Single</span><span class="hint">One stock in or out, plus the same rule swept across everything.</span></span></a>
+        </div>
+
+        <div class="form">
+          <span class="lbl">Per-stock pages</span>
+          <div class="line">
+            <select id="symPick" aria-label="Symbol"></select>
+          </div>
+          <div class="grid" style="margin-top:8px">
+            <a class="row" id="goStock" href="/"><svg class="ic" aria-hidden="true"><use href="#i-chart" /></svg>
+              <span class="txt"><span class="nm">Stock</span><span class="hint">Everything about one stock: chart, ribbon, every field.</span></span></a>
+            <a class="row" id="goSignal" href="/"><svg class="ic" aria-hidden="true"><use href="#i-scatter" /></svg>
+              <span class="txt"><span class="nm">Signal study</span><span class="hint">Does a momentum move predict the next move in price.</span></span></a>
+            <a class="row" id="goLab" href="/"><svg class="ic" aria-hidden="true"><use href="#i-sliders" /></svg>
+              <span class="txt"><span class="nm">Indicator lab</span><span class="hint">Build a short-horizon indicator and see what it does.</span></span></a>
+          </div>
+          <p class="said" id="symSaid">Each of these carries its own symbol picker, so this only decides where you land.</p>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ================= scoring ================= -->
+    <section id="scoring">
+      <div class="sec-head"><h2>Scoring</h2><p>How momentum is weighted on the screener.</p></div>
+      <div class="bezel card"><div class="core">
+        <div class="form">
+          <span class="lbl">Momentum weighting</span>
+          <div class="presets" id="presets"></div>
+          <div id="sliderBox"></div>
+          <p class="said" id="wSaid"></p>
+        </div>
+      </div></div>
+      <p class="note">This changes the Momentum and Overall columns on the screener and on
+        <a href="/analysis">/analysis</a>, and therefore the sort — the two score columns are tinted while a
+        non-default weighting is in force. The nightly email, the assistant and the stored snapshot always stay on
+        Default, so the shared score remains one comparable measurement.
+        <a href="/help#weights">What does each factor mean?</a></p>
+    </section>
+
+    <!-- ================= studio ================= -->
+    <section id="studio">
+      <div class="sec-head"><h2>Studio</h2><p>Making something postable out of tonight's data.</p></div>
+      <div class="bezel card"><div class="core">
+        <div class="grid">
+          <a class="row" href="/promo"><svg class="ic" aria-hidden="true"><use href="#i-star" /></svg>
+            <span class="txt"><span class="nm">Promo studio</span><span class="hint">Every card template, three artboard sizes, PNG and video export.</span></span></a>
+          <a class="row" href="/cards"><svg class="ic" aria-hidden="true"><use href="#i-chart" /></svg>
+            <span class="txt"><span class="nm">Member cards</span><span class="hint">The three-card room members see. Worth checking after a card change.</span></span></a>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ================= people ================= -->
+    <section id="people">
+      <div class="sec-head"><h2>People &amp; logs</h2><p>Who is here, and what everyone is doing.</p></div>
+      <div class="bezel card"><div class="core">
+        <div class="grid">
+          <a class="row" href="/users"><svg class="ic" aria-hidden="true"><use href="#i-users" /></svg>
+            <span class="txt"><span class="nm">Users</span><span class="hint">Approve a registration, review member portfolios, delete an account.</span></span></a>
+          <a class="row" href="/visitors"><svg class="ic" aria-hidden="true"><use href="#i-pulse" /></svg>
+            <span class="txt"><span class="nm">Visitor log</span><span class="hint">Every anonymous knock at the front door.</span></span></a>
+          <a class="row" href="/activity"><svg class="ic" aria-hidden="true"><use href="#i-clock" /></svg>
+            <span class="txt"><span class="nm">Activity log</span><span class="hint">What each signed-in account and guest actually did. Facts, never content.</span></span></a>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ================= reference ================= -->
+    <section id="reference">
+      <div class="sec-head"><h2>Reference</h2><p>The pages every signed-in user can reach too.</p></div>
+      <div class="bezel card"><div class="core">
+        <div class="grid">
+          <a class="row" href="/help"><svg class="ic" aria-hidden="true"><use href="#i-help" /></svg>
+            <span class="txt"><span class="nm">Help</span><span class="hint">How the scores, the advice and the freshness actually work.</span></span></a>
+          <a class="row" href="/chat"><svg class="ic" aria-hidden="true"><use href="#i-chat" /></svg>
+            <span class="txt"><span class="nm">Ask</span><span class="hint">Questions about the screener data, answered from the table.</span></span></a>
+          <a class="row" href="/contact"><svg class="ic" aria-hidden="true"><use href="#i-mail" /></svg>
+            <span class="txt"><span class="nm">Contact</span><span class="hint">The form members use to reach you.</span></span></a>
+        </div>
+      </div></div>
+    </section>
+  </main>
+
+  <script src="/screens.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    async function api(method, url, body) {
+      const res = await fetch(url, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      return data;
+    }
+    const say = (id, msg, kind) => {
+      const el = $(id);
+      el.textContent = msg;
+      el.className = 'said' + (kind ? ' ' + kind : '');
+    };
+
+    // ---- portfolios: the add-ticker target and the symbol list -------------
+    let portfolios = {};
+    function paintPortfolios() {
+      const names = Object.keys(portfolios);
+      $('addTo').innerHTML = names.map((n) => `<option value="${we(n)}">${we(n)}</option>`).join('')
+        || '<option value="">No portfolios yet</option>';
+      // Every symbol the screener covers, once, alphabetically — the per-stock
+      // pages need a name to open and this page has no "top of the table" the
+      // screener's own menu could borrow.
+      const syms = [...new Set(names.flatMap((n) => portfolios[n] || []))].sort();
+      $('symPick').innerHTML = syms.map((s) => `<option value="${we(s)}">${we(s)}</option>`).join('')
+        || '<option value="">No tickers yet</option>';
+      paintSymbolLinks();
+    }
+    function paintSymbolLinks() {
+      const s = $('symPick').value;
+      const enc = encodeURIComponent(s || '');
+      $('goStock').href = s ? '/stock/' + enc : '/';
+      $('goSignal').href = s ? '/signal/' + enc : '/';
+      $('goLab').href = s ? '/lab/' + enc : '/';
+    }
+    $('symPick').addEventListener('change', paintSymbolLinks);
+
+    async function addTicker() {
+      const symbol = $('sym').value.trim().toUpperCase();
+      const target = $('addTo').value;
+      if (!symbol) return $('sym').focus();
+      if (!target) return say('addSaid', 'Make a portfolio on the screener first.', 'bad');
+      $('addBtn').disabled = true;
+      say('addSaid', 'Adding…');
+      try {
+        const r = await api('POST', `/api/portfolios/${encodeURIComponent(target)}/tickers`, { symbol });
+        portfolios = r.portfolios || portfolios;
+        paintPortfolios();
+        $('sym').value = '';
+        $('sym').focus();
+        // A name coming back empty is the earliest hint of a typo: adding a
+        // ticker does not pull prices, so this lookup is the only thing that
+        // touches the symbol before the next refresh.
+        say('addSaid', r.name
+          ? `${symbol} — ${r.name} — added to "${target}". Run Refresh to pull its prices.`
+          : `${symbol} added to "${target}", but the feed returned no company name. Check the spelling.`,
+          r.name ? 'good' : 'bad');
+      } catch (err) {
+        say('addSaid', err.message, 'bad');
+      } finally {
+        $('addBtn').disabled = false;
+      }
+    }
+    $('addBtn').addEventListener('click', addTicker);
+    $('sym').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTicker(); });
+
+    // ---- the forward-returns view lives on the screener --------------------
+    $('asOfGo').addEventListener('click', () => {
+      const v = $('asOf').value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return say('asOfSaid', 'Pick a date first.', 'bad');
+      location.href = '/?asOf=' + encodeURIComponent(v);
+    });
+
+    // ---- the momentum weighting -------------------------------------------
+    // The EDITOR is here and nowhere else. The screener scores the table from
+    // whatever is saved and /analysis reads it too, but neither edits it: two
+    // editors would double the work and drift apart, which is the same rule
+    // that kept this in one place when it lived in the screener's bar.
+    let prefs = {};                    // everything this page does not edit, kept verbatim
+    let preset = 'default';
+    let custom = null;
+
+    function presetRows() {
+      return Screens.WEIGHT_PRESETS.concat([{ id: 'custom', label: 'Custom',
+        note: 'Your own weighting — set it with the sliders below.' }]);
+    }
+    function paintPresets() {
+      $('presets').innerHTML = presetRows().map((w) =>
+        `<button class="preset ${w.id === preset ? 'on' : ''}" data-w="${we(w.id)}" aria-pressed="${w.id === preset}">` +
+        `<span class="nm"><svg class="ic ic-sm chk" aria-hidden="true"><use href="#i-check" /></svg>${we(w.label)}</span>` +
+        `<em>${we(w.note)}</em></button>`).join('');
+      $('presets').querySelectorAll('[data-w]').forEach((b) =>
+        b.addEventListener('click', () => setPreset(b.dataset.w)));
+    }
+    function paintSliders() {
+      if (preset !== 'custom') { $('sliderBox').innerHTML = ''; return; }
+      const w = custom || Screens.defaultWeights();
+      $('sliderBox').innerHTML = '<div class="sliders">' +
+        Screens.FACTORS.map((f) =>
+          `<label class="wrow" data-wrow="${we(f.key)}"><span class="wn">${we(f.label)}</span>` +
+          `<input type="range" min="0" max="${Screens.MAX_WEIGHT}" step="1" value="${w[f.key] ?? 0}" data-wkey="${we(f.key)}" />` +
+          `<span class="wv">${w[f.key] ?? 0}</span><span class="ws"></span></label>`).join('') +
+        '<div class="wfoot"><button class="btn" id="wReset">Copy Default</button>' +
+        '<span>Weights need not total 100 — the second number is each factor\'s share once the rest are counted.</span>' +
+        '</div></div>';
+      $('sliderBox').querySelectorAll('[data-wkey]').forEach((inp) =>
+        inp.addEventListener('input', () => {
+          custom = Object.assign({}, custom || Screens.defaultWeights(), { [inp.dataset.wkey]: Number(inp.value) });
+          paintShares();
+          save();
+        }));
+      $('wReset').addEventListener('click', () => {
+        custom = Screens.defaultWeights();
+        paintSliders();
+        save();
+      });
+      paintShares();
+    }
+    // Just the numbers beside each slider, so a drag stays cheap.
+    function paintShares() {
+      const shares = Screens.weightShares(custom || Screens.defaultWeights());
+      $('sliderBox').querySelectorAll('[data-wrow]').forEach((row) => {
+        const k = row.dataset.wrow;
+        row.querySelector('.wv').textContent = (custom || Screens.defaultWeights())[k];
+        row.querySelector('.ws').textContent = shares[k] + '%';
+      });
+    }
+    function setPreset(id) {
+      if (id === preset) return;
+      preset = id;
+      if (id === 'custom' && !custom) custom = Screens.defaultWeights();
+      paintPresets();
+      paintSliders();
+      save();
+    }
+
+    // A drag fires on every step, so the write waits for the hand to stop.
+    let saveTimer = null;
+    function save() {
+      clearTimeout(saveTimer);
+      say('wSaid', 'Saving…');
+      saveTimer = setTimeout(async () => {
+        try {
+          // Hand back everything this page does not edit. A prefs PUT replaces
+          // the whole row, so sending only the weighting would silently reset
+          // the saved column layout, the Past horizon and the advice columns —
+          // which is exactly how /analysis once wiped every collapsed group.
+          await api('PUT', '/api/prefs', {
+            prefs: Object.assign({}, prefs, { weights: preset, customWeights: custom }),
+          });
+          const label = preset === 'custom' ? 'Custom' : Screens.presetById(preset).label;
+          // A screener tab that was already open still holds the old weighting
+          // and would write it back on its next pref change, so say plainly
+          // that it needs a reload rather than letting the two disagree.
+          say('wSaid', `Saved — reload the screener and it will score on ${label}.`, 'good');
+        } catch (err) {
+          say('wSaid', 'Could not save: ' + err.message, 'bad');
+        }
+      }, 400);
+    }
+
+    // ---- boot ---------------------------------------------------------------
+    (async function boot() {
+      try {
+        const r = await api('GET', '/api/portfolios');
+        portfolios = r.portfolios || {};
+        paintPortfolios();
+      } catch (err) {
+        say('addSaid', 'Could not read the portfolios: ' + err.message, 'bad');
+      }
+      try {
+        const r = await api('GET', '/api/prefs');
+        prefs = (r && r.prefs) || {};
+        const c = Screens.cleanWeights(prefs.customWeights);
+        if (c) custom = Object.assign(Screens.defaultWeights(), c);
+        const w = prefs.weights;
+        if (w === 'custom' || Screens.WEIGHT_PRESETS.some((x) => x.id === w)) preset = w;
+      } catch (err) { /* the editor still works; the first save writes the rest */ }
+      paintPresets();
+      paintSliders();
+      const label = preset === 'custom' ? 'Custom' : Screens.presetById(preset).label;
+      say('wSaid', `The screener is scoring on ${label}.`);
+      // the as-of field is a date, and a date in the future has no ranking
+      $('asOf').max = new Date().toISOString().slice(0, 10);
+    })();
+  </script>
+</body>
+</html>

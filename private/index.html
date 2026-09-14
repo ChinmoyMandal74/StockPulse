@@ -86,13 +86,6 @@
     .picker-btn .chev { opacity: 0.5; transition: transform 0.5s var(--ease), opacity 0.5s var(--ease); }
     .picker[data-open="1"] .picker-btn { background: rgba(255, 255, 255, 0.085); border-color: var(--hair-2); }
     .picker[data-open="1"] .chev { transform: rotate(180deg); opacity: 1; }
-    /* forward-returns view active: the bar itself should say you are off live data */
-    #dateOpenBtn.on {
-      color: var(--amber); border-color: rgba(251, 191, 36, 0.35);
-      background: rgba(251, 191, 36, 0.12); width: auto; gap: 7px; padding: 0 11px;
-      font-family: var(--mono); font-size: 11.5px;
-    }
-
     .picker-menu {
       position: absolute; top: calc(100% + 8px); left: 0; z-index: 30;
       min-width: 236px; max-width: calc(100vw - 24px); max-height: 62vh; overflow-y: auto;
@@ -165,41 +158,6 @@
     .pick-danger:hover { color: var(--red); background: rgba(251, 113, 133, 0.1); }
     .pick-sep { height: 1px; margin: 5px 9px; background: var(--hair); }
     /* add-ticker panel, inside a picker menu */
-    .formpanel { padding: 4px 5px 6px; }
-    .formpanel label { display: block; margin: 0 0 5px; font-size: 9.5px; font-weight: 500;
-                      text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
-    .formpanel .fld { margin-bottom: 10px; }
-    .formpanel input[type="text"], .formpanel select {
-      width: 100%; padding: 9px 11px; border-radius: 11px; outline: none;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
-      color: var(--text); font-size: 13px; box-shadow: var(--inset);
-      transition: border-color 0.5s var(--ease), background 0.5s var(--ease);
-    }
-    .formpanel input[type="text"] {
-      font-family: var(--mono); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
-    }
-    .formpanel input[type="text"]::placeholder {
-      font-family: var(--sans); font-weight: 400; letter-spacing: -0.01em;
-      text-transform: none; color: var(--faint);
-    }
-    .formpanel input:focus, .formpanel select:focus { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.055); }
-    .formpanel select {
-      appearance: none; -webkit-appearance: none; cursor: pointer; font-family: var(--sans);
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b94a4' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9.5 12 15.5 18 9.5'/%3E%3C/svg%3E");
-      background-repeat: no-repeat; background-position: right 9px center; background-size: 13px;
-    }
-    .formpanel select option { background: #0d1017; color: var(--text); }
-    .formpanel input[type="date"] {
-      width: 100%; padding: 9px 11px; border-radius: 11px; outline: none;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
-      color: var(--text); font-family: var(--mono); font-size: 13px; box-shadow: var(--inset);
-      transition: border-color 0.5s var(--ease), background 0.5s var(--ease);
-    }
-    .formpanel input[type="date"]:focus { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.055); }
-    .formpanel input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; cursor: pointer; }
-    .formpanel .go { width: 100%; justify-content: center; margin-top: 2px; }
-    .formpanel .hint { margin: 8px 1px 0; font-size: 10.5px; color: var(--faint); line-height: 1.5; }
-    .pick-foot { display: flex; gap: 6px; padding: 1px 4px 3px; }
     .pick-mini {
       flex: 1; padding: 7px 10px; border-radius: 10px; cursor: pointer;
       border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
@@ -357,11 +315,23 @@
     body.lensed th[data-key="overallScore"],
     body.lensed th[data-key="momentumScore"],
     body.lensed th.lens-col { color: var(--accent); }
+    /* The weighting chip: the bar's whole remaining say in the matter, shown
+       only while a non-default weighting is tinting the two score columns. */
+    .lenschip {
+      display: inline-flex; align-items: center; gap: 7px; flex: none;
+      padding: 7px 12px; border-radius: 999px; font-size: 11.5px; font-weight: 500;
+      color: var(--text); border: 1px solid var(--accent);
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+    }
+    .lenschip .ic { color: var(--accent); }
+    /* A pull is running somewhere — the buttons that used to grey out are on
+       /admin now, so the cursor is what is left to say so. */
+    body.pulling { cursor: progress; }
+
     /* A tint down the whole column, not a border per cell: a bottom rule on
        every row draws a line between each pair of them and reads as a ladder. */
     body.lensed td.lens-col { background: rgba(124, 156, 255, 0.07); }
     body.lensed tbody tr:hover td.lens-col { background: rgba(124, 156, 255, 0.12); }
-    body.lensed #weightBtn { border-color: var(--accent); color: var(--text); }
     /* The Advice rules profile: when it is not Balanced the six Advice
        columns are re-scored in the browser, and the tint says so — a changed
        verdict must not look like the shared Balanced one. */
@@ -381,29 +351,6 @@
        below the fold. The labels alone are enough once you are editing. */
     .picker-inner.wide .pick .nm em { display: none; }
     .picker-inner.wide .pick { padding-top: 6px; padding-bottom: 6px; }
-    .wsliders { padding: 4px 2px 2px; }
-    .wrow { display: grid; grid-template-columns: 1fr 96px 22px 30px; align-items: center;
-            gap: 8px; padding: 4px 10px; cursor: pointer; }
-    .wrow:hover { background: rgba(255, 255, 255, 0.04); border-radius: 8px; }
-    .wn { font-size: 11.5px; color: var(--muted); white-space: nowrap;
-          overflow: hidden; text-overflow: ellipsis; }
-    .wv { font-family: var(--mono); font-size: 11px; color: var(--text); text-align: right; }
-    .ws { font-family: var(--mono); font-size: 10px; color: var(--faint); text-align: right; }
-    .wrow input[type="range"] {
-      -webkit-appearance: none; appearance: none; width: 100%; height: 3px; cursor: pointer;
-      background: rgba(255, 255, 255, 0.14); border-radius: 999px; outline: none;
-    }
-    .wrow input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none; appearance: none; width: 12px; height: 12px;
-      border-radius: 50%; background: var(--accent); border: 0; cursor: pointer;
-    }
-    .wrow input[type="range"]::-moz-range-thumb {
-      width: 12px; height: 12px; border-radius: 50%; background: var(--accent);
-      border: 0; cursor: pointer;
-    }
-    .wfoot { display: flex; align-items: center; gap: 10px; padding: 8px 10px 2px; }
-    .wfoot span { font-size: 10.5px; line-height: 1.5; color: var(--faint); }
-    body.lensed #weightBtn .count { color: var(--accent); }
     .pick .nm em { display: block; font-style: normal; font-size: 10.5px;
                    color: var(--faint); margin-top: 2px; white-space: normal; }
 
@@ -676,6 +623,7 @@
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.9 13.6A8 8 0 1 1 18.1 7.3"/><path d="M18.7 3.2v4.4h-4.4"/></symbol>
     <symbol id="i-refresh-all" viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-13.6 5.7"/><path d="M4 12a8 8 0 0 1 13.6-5.7"/><path d="M17.6 2.6v4h-4"/><path d="M6.4 21.4v-4h4"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.6v11.8"/><path d="M7.6 11.2 12 15.6l4.4-4.4"/><path d="M4.6 19.6h14.8"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.4 19.4 6v5.6c0 4.2-3 7.5-7.4 9-4.4-1.5-7.4-4.8-7.4-9V6Z"/><path d="m9.2 12 2 2 3.6-3.8"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.6" y="10.4" width="14.8" height="10" rx="3"/><path d="M8.4 10.4V7.6a3.6 3.6 0 0 1 7.2 0v2.8"/></symbol>
     <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14.6 4.6h3.2a2 2 0 0 1 2 2v10.8a2 2 0 0 1-2 2h-3.2"/><path d="M9.4 8.2 5.6 12l3.8 3.8"/><path d="M5.6 12h9"/></symbol>
     <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.6-6.4 4.8 12.8L17 12h4"/></symbol>
@@ -729,52 +677,16 @@
           <button class="btn picker-btn" id="pastBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="pastMenu" role="listbox" aria-label="Past momentum horizon"></div>
         </div>
-        <div class="picker" id="weightPicker" data-open="0">
-          <button class="btn picker-btn" id="weightBtn" aria-haspopup="listbox" aria-expanded="false"></button>
-          <div class="picker-menu" id="weightMenu" role="listbox" aria-label="Momentum weighting"></div>
-        </div>
         <div class="picker" id="actPicker" data-open="0">
           <button class="btn picker-btn" id="actBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="actMenu" role="listbox" aria-label="Advice rules profile"></div>
         </div>
-        <div class="picker admin-only" id="datePicker" data-open="0">
-          <button class="btn icon quiet" id="dateOpenBtn" title="Forward returns: view the ranking as of a past date, and what happened after it" aria-haspopup="dialog" aria-expanded="false" aria-label="Forward-returns date">
-            <svg class="ic" aria-hidden="true"><use href="#i-calendar" /></svg>
-          </button>
-          <div class="picker-menu" id="dateMenu" role="dialog" aria-label="Forward-returns date">
-            <div class="picker-inner">
-              <div class="formpanel">
-                <div class="fld">
-                  <label for="asOfDate">Show the ranking as of</label>
-                  <input type="date" id="asOfDate" title="Forward returns: view the momentum ranking as of a past date" aria-label="Forward-returns as-of date" />
-                </div>
-                <button class="btn go" id="backToLive" style="display:none;padding:9px 15px">Back to live</button>
-                <p class="hint">Momentum and returns are recomputed as they looked on that date. Fundamentals are hidden — they are not point-in-time.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="picker admin-only" id="addPicker" data-open="0">
-          <button class="btn icon quiet" id="addOpenBtn" title="Add a ticker" aria-haspopup="dialog" aria-expanded="false" aria-label="Add a ticker">
-            <svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>
-          </button>
-          <div class="picker-menu" id="addMenu" role="dialog" aria-label="Add a ticker">
-            <div class="picker-inner">
-              <div class="formpanel">
-                <div class="fld">
-                  <label for="symbolInput">Ticker</label>
-                  <input type="text" id="symbolInput" placeholder="e.g. TSLA" maxlength="12" autocomplete="off" aria-label="Ticker symbol" />
-                </div>
-                <div class="fld">
-                  <label for="addTarget">Add to portfolio</label>
-                  <select id="addTarget" aria-label="Portfolio to add to"></select>
-                </div>
-                <button class="btn btn-primary go" id="addBtn" style="padding:9px 15px"><span class="lbl">Add ticker</span></button>
-                <p class="hint">The panel stays open so you can add several in a row.</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <!-- The forward-returns VIEW still belongs to this page: it is a mode of
+             the table, with its own banner and its own column group. Only the
+             control left — /admin sets the date and links here with ?asOf=. The
+             field stays as the one place that date is held, so every reader of
+             it below is unchanged. -->
+        <input type="date" id="asOfDate" hidden aria-hidden="true" tabindex="-1" />
 
         <!-- display:contents on desktop, a full-screen glass sheet below 768px -->
         <div class="deck" id="deck">
@@ -787,7 +699,7 @@
                  three per-symbol pages open whatever is on top of the current
                  view; each has its own symbol picker, so which one barely
                  matters — the point is not having to hunt for a name first. -->
-            <div class="picker" id="researchPicker" data-open="0">
+            <div class="picker member-only" id="researchPicker" data-open="0">
               <button class="btn picker-btn" id="researchBtn" aria-haspopup="menu" aria-expanded="false"
                       title="Analysis, Strategy, Single, and the per-stock pages">
                 <svg class="ic ic-sm" aria-hidden="true"><use href="#i-research" /></svg>
@@ -796,21 +708,20 @@
               </button>
               <div class="picker-menu" id="researchMenu" role="menu" aria-label="Research pages"></div>
             </div>
+            <!-- Shown only while a weighting other than Default is in force, so
+                 the tinted score columns are never unexplained now that the
+                 picker that used to say so has moved to the console. -->
+            <span class="lenschip" id="lensChip" style="display:none"></span>
             <a class="btn" href="/chat" title="Ask questions about this data">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chat" /></svg>Ask
             </a>
-            <a class="btn icon quiet admin-only" href="/visitors" target="_blank" rel="noopener" style="display:none" title="Visitor log (admin only)" aria-label="Visitor log">
-              <svg class="ic" aria-hidden="true"><use href="#i-users" /></svg>
+            <!-- One door instead of a dozen: refresh, add a ticker, the logs,
+                 the research pages, the studio and the weighting all live on
+                 /admin now. Everything left in this bar describes what the
+                 table in front of you is showing. -->
+            <a class="btn admin-only" href="/admin" style="display:none" title="Refresh, tickers, research, scoring, logs and the studio">
+              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-shield" /></svg>Admin
             </a>
-            <a class="btn icon quiet admin-only" href="/activity" target="_blank" rel="noopener" style="display:none" title="Activity log (admin only)" aria-label="Activity log">
-              <svg class="ic" aria-hidden="true"><use href="#i-pulse" /></svg>
-            </a>
-            <button class="btn admin-only" id="refreshBtn" title="Re-pull prices and recompute the ranking">
-              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Refresh
-            </button>
-            <button class="btn admin-only" id="refreshAllBtn" title="Refresh all: clear the cached sector / fundamentals data and re-pull everything fresh">
-              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh-all" /></svg>Refresh all
-            </button>
           </div>
         </div>
 
@@ -832,17 +743,6 @@
               </div>
               <!-- Account maintenance: rare, so it lives in the menu rather than
                    taking a slot in a bar that already wraps around 1100px. -->
-              <div id="adminActions" style="display:none">
-                <div class="pick-sep"></div>
-                <a class="pick" href="/users">
-                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-users" /></svg>
-                  <span class="nm">Users</span>
-                </a>
-                <a class="pick" href="/promo" target="_blank" rel="noopener" title="Marketing cards rendered from tonight's data — screenshot and post">
-                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>
-                  <span class="nm">Promo studio</span>
-                </a>
-              </div>
               <div id="sessionActions" style="display:none">
                 <div class="pick-sep" id="sessionSep"></div>
                 <div class="pick" id="whoami" style="display:none;cursor:default;color:var(--faint);font-family:var(--mono);font-size:11px"></div>
@@ -1479,12 +1379,9 @@
       { root: 'colPicker', btn: 'colBtn', menu: 'colMenu' },
       { root: 'secPicker', btn: 'secBtn', menu: 'secMenu' },
       { root: 'pastPicker', btn: 'pastBtn', menu: 'pastMenu' },
-      { root: 'weightPicker', btn: 'weightBtn', menu: 'weightMenu' },
       { root: 'actPicker', btn: 'actBtn', menu: 'actMenu' },
       { root: 'researchPicker', btn: 'researchBtn', menu: 'researchMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
-      { root: 'addPicker', btn: 'addOpenBtn', menu: 'addMenu' },
-      { root: 'datePicker', btn: 'dateOpenBtn', menu: 'dateMenu' },
     ];
 
     // Keep an opened menu inside the viewport: shift it left of its trigger when it
@@ -1644,13 +1541,6 @@
           b.addEventListener('click', (ev) => { ev.stopPropagation(); closePickers(); myDelete(b.dataset.mydel); }));
       }
 
-      // Add-target dropdown
-      const sel = $('addTarget');
-      sel.innerHTML = portfolios.length
-        ? portfolios.map((n) => `<option value="${n}">${n}</option>`).join('')
-        : '<option value="">(create a portfolio first)</option>';
-      if (activeTab !== 'All' && portfolios.includes(activeTab)) sel.value = activeTab;
-
       // Rename/Delete only apply to a specific portfolio
       const showPortfolioActions = activeTab !== 'All' && isAdmin && !isMyTab(activeTab);
       $('portfolioActions').style.display = showPortfolioActions ? '' : 'none';
@@ -1756,7 +1646,7 @@
       renderPicker();
       renderSectorTrigger();
       renderChangedChip();
-      renderWeightTrigger();
+      renderLensChip();
       renderActTrigger();
       renderPastTrigger();
       const tbody = $('tbody');
@@ -2159,25 +2049,6 @@
       document.body.classList.toggle('lensed', lensOn());
     }
 
-    function setWeightPreset(id) {
-      if (id === weightPreset) return;
-      weightPreset = id;
-      if (id === 'custom' && !customWeights) customWeights = Screens.defaultWeights();
-      applyLens();
-      render();
-      renderWeightMenu();
-      savePrefs();
-    }
-
-    // Re-scoring 84 rows and rebuilding the table takes ~80ms, which is far too
-    // slow to do on every step of a drag. The numbers beside the slider update
-    // immediately; the table catches up when the hand pauses.
-    let lensTimer = null;
-    function scheduleLensRedraw() {
-      clearTimeout(lensTimer);
-      lensTimer = setTimeout(() => { applyLens(); render(); }, 120);
-    }
-
     // A local escaper: the only `esc` on this page is scoped inside the CSV
     // export, and reaching for it here throws and takes render() down with it.
     const we = (t) => String(t == null ? '' : t)
@@ -2227,15 +2098,19 @@
       });
     }
 
-    function renderWeightTrigger() {
-      $('weightBtn').innerHTML =
+    // The weighting is EDITED on /admin and only read here. What the bar still
+    // owes the reader is why two score columns are tinted, so a chip appears
+    // for exactly as long as a non-default weighting is in force and says
+    // nothing the rest of the time.
+    function renderLensChip() {
+      const chip = $('lensChip');
+      chip.style.display = lensOn() ? '' : 'none';
+      if (!lensOn()) return;
+      chip.innerHTML =
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>' +
-        '<span class="picker-label">Weights</span>' +
-        `<span class="count">${we(weightLabel())}</span>` +
-        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
-      $('weightBtn').title = !lensOn()
-        ? 'Momentum weighting — the one every other page uses'
-        : `Momentum re-scored under ${weightLabel()}. The nightly email and the assistant stay on Default.`;
+        `<span>Weights: ${we(weightLabel())}</span>`;
+      chip.title = `Momentum and Overall are re-scored under ${weightLabel()}, so the sort follows it. ` +
+        'The nightly email, the assistant and the stored snapshot stay on Default. Change it on /admin.';
     }
 
     function renderActTrigger() {
@@ -2289,76 +2164,6 @@
       });
     }
 
-
-    // Just the numbers beside each slider, so a drag stays cheap.
-    function refreshSliderReadouts() {
-      const shares = Screens.weightShares(customWeights || Screens.defaultWeights());
-      $('weightMenu').querySelectorAll('[data-wrow]').forEach((row) => {
-        const k = row.dataset.wrow;
-        row.querySelector('.wv').textContent = customWeights[k];
-        row.querySelector('.ws').textContent = shares[k] + '%';
-      });
-    }
-
-    function renderWeightMenu() {
-      const rows = Screens.WEIGHT_PRESETS.concat([{ id: 'custom', label: 'Custom',
-        note: 'Your own weighting — set it with the sliders below.' }]);
-      const sliders = weightPreset !== 'custom' ? '' :
-        '<div class="pick-sep"></div><div class="wsliders">' +
-        Screens.FACTORS.map((f) => {
-          const v = (customWeights || Screens.defaultWeights())[f.key] ?? 0;
-          return `<label class="wrow" data-wrow="${f.key}">` +
-            `<span class="wn">${we(f.label)}</span>` +
-            `<input type="range" min="0" max="${Screens.MAX_WEIGHT}" step="1" value="${v}" data-wkey="${f.key}" />` +
-            `<span class="wv">${v}</span><span class="ws"></span></label>`;
-        }).join('') +
-        '<div class="wfoot"><button class="pick-mini" id="wReset">Copy Default</button>' +
-        '<span>Weights need not total 100 — the second number is each factor\'s ' +
-        'share once the rest are counted.</span></div></div>';
-
-      $('weightMenu').innerHTML =
-        `<div class="picker-inner${weightPreset === 'custom' ? ' wide' : ''}">` +
-        rows.map((w) =>
-          `<button class="pick ${w.id === weightPreset ? 'on' : ''}" data-weight="${w.id}" role="option" ` +
-          `aria-selected="${w.id === weightPreset}">` +
-          `<span class="nm">${we(w.label)}<em>${we(w.note)}</em></span>` +
-          '<svg class="ic ic-sm chk" aria-hidden="true"><use href="#i-check" /></svg></button>').join('') +
-        sliders +
-        '<div class="pick-sep"></div>' +
-        '<div class="pick-hint">Changes the Momentum, Overall and Rank columns on this page only. ' +
-        'The nightly email, the assistant and /analysis keep their own setting.<br>' +
-        '<a href="/help#weights" style="color:var(--muted)">What does each factor mean?</a></div></div>';
-
-      $('weightMenu').querySelectorAll('[data-weight]').forEach((b) => {
-        b.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          window.track && track('picker', 'weights:' + b.dataset.weight);
-          setWeightPreset(b.dataset.weight);
-        });
-      });
-      $('weightMenu').querySelectorAll('[data-wkey]').forEach((inp) => {
-        inp.addEventListener('input', () => {
-          customWeights = Object.assign({}, customWeights || Screens.defaultWeights(),
-            { [inp.dataset.wkey]: Number(inp.value) });
-          refreshSliderReadouts();
-          scheduleLensRedraw();
-          savePrefs();
-        });
-      });
-      const reset = $('wReset');
-      if (reset) {
-        reset.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          customWeights = Screens.defaultWeights();
-          renderWeightMenu();
-          applyLens();
-          render();
-          savePrefs();
-        });
-      }
-      if (weightPreset === 'custom') refreshSliderReadouts();
-      placeMenu($('weightPicker'), $('weightMenu'));
-    }
 
     function toggleGroup(id) {
       collapsed[id] = !collapsed[id];
@@ -2492,18 +2297,19 @@
     }
     function setError(msg) { $('error').textContent = msg || ''; }
 
+    // The refresh buttons live on /admin now, so disabling them became a flag.
+    // The screener still has to know a pull is in flight — refreshAll() drives
+    // a loop of rounds and must not have a second one started on top of it —
+    // and the cursor is what is left to say so.
+    let pulling = false;
+    function setPulling(b) {
+      pulling = b;
+      document.body.classList.toggle('pulling', b);
+    }
+
     // Forward-returns banner + button states, reflecting whether an as-of date is set.
     function updateForwardViewUI() {
       const bar = $('fwdViewBar');
-      // The collapsed trigger has to carry the state now that the field is hidden.
-      const btn = $('dateOpenBtn');
-      btn.classList.toggle('on', !!asOfDate);
-      btn.innerHTML = '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-calendar" /></svg>' +
-        (asOfDate ? `<span>${asOfDate}</span>` : '');
-      btn.title = asOfDate
-        ? `Forward returns — showing the ranking as of ${asOfDate}`
-        : 'Forward returns: view the ranking as of a past date';
-      $('backToLive').style.display = asOfDate ? '' : 'none';
       if (asOfDate) {
         bar.style.display = '';
         bar.innerHTML =
@@ -2512,11 +2318,9 @@
           `Fundamentals (Quality) are hidden (not point-in-time); the <b>Forward</b> columns show what happened next.</span>` +
           '<button id="fwdViewClear"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to live</button></div>';
         $('fwdViewClear').addEventListener('click', clearForwardView);
-        $('refreshAllBtn').disabled = true; // fundamentals backfill is a live-mode action
       } else {
         bar.style.display = 'none';
         bar.innerHTML = '';
-        $('refreshAllBtn').disabled = false;
       }
     }
 
@@ -2547,6 +2351,7 @@
 
     function applyAdminUI() {
       document.querySelectorAll('.admin-only').forEach((el) => { el.style.display = isAdmin ? '' : 'none'; });
+      document.querySelectorAll('.member-only').forEach((el) => { el.style.display = isAdmin ? 'none' : ''; });
       // A guest sees no doors that lead to 403s: the research menu and the
       // assistant hide, and the read-only note says what this view is. The
       // real limits live on the server; this is only the furniture.
@@ -2559,7 +2364,6 @@
         if (note) note.innerHTML = '<b>Guest preview.</b> A handful of stocks with every feature live — ' +
           'the full screener, research pages and assistant need an account.';
       }
-      $('adminActions').style.display = isAdmin ? '' : 'none';
       // Signing in is its own page now, so this button is only a nudge back to
       // the door — it appears if a session lapsed while the tab was open.
       $('loginBtn').style.display = (authRequired && !signedIn) ? '' : 'none';
@@ -2687,7 +2491,7 @@
       const live = opts.live !== false;
       setError('');
       setStatus('Loading…');
-      $('refreshBtn').disabled = true;
+      setPulling(true);
       try {
         const params = new URLSearchParams();
         if (asOfDate) params.set('asOf', asOfDate);   // an as-of date always needs a live pull
@@ -2717,7 +2521,7 @@
         setError(err.message);
         setStatus('');
       } finally {
-        $('refreshBtn').disabled = false;
+        setPulling(false);
       }
     }
 
@@ -2730,7 +2534,8 @@
     // loaded (paced around the API rate limit). Shows progress; renders only when done.
     async function refreshAll() {
       setError('');
-      const busy = (b) => { $('refreshBtn').disabled = b; $('refreshAllBtn').disabled = b; $('addBtn').disabled = b; };
+      if (pulling) return;          // one loop at a time, whatever started it
+      const busy = setPulling;
       busy(true);
       refreshingHere = true;   // this tab drives it, so don't also poll for it
       try {
@@ -2842,35 +2647,6 @@
     }
 
     const hasData = (symbol) => baseStocks.some((r) => r.symbol === symbol && !r.error);
-
-    async function addTicker() {
-      const symbol = $('symbolInput').value.trim().toUpperCase();
-      if (!symbol) return $('symbolInput').focus();
-      const target = $('addTarget').value;
-      if (!target) { setError('Create a portfolio first (＋), then add tickers to it.'); return; }
-      setError('');
-      try {
-        const r = await api('POST', `/api/portfolios/${encodeURIComponent(target)}/tickers`, { symbol });
-        $('symbolInput').value = '';
-        if (activeTab === 'All' || activeTab === target) { /* keep view */ } else { activeTab = target; }
-        applyPortfolioMap(r && r.portfolios);
-        // Say plainly whether it still needs data. A symbol already held in
-        // another portfolio arrives complete; a new one is an empty row until
-        // the next pull, and leaving that unexplained looks like a failure.
-        setStatus(hasData(symbol)
-          ? `${symbol} added to ${target}.`
-          : `${symbol} added to ${target} — click ↻ Refresh to pull its data.`);
-        // The only check that happens before the next Refresh. A real ticker
-        // resolves to a company name for one credit; nothing coming back is
-        // usually a typo, and saying so now beats an error row tomorrow.
-        if (r && !r.name) {
-          setError(`No company name came back for ${symbol} — check the ticker. ` +
-            'It has been added either way; remove it with the × if it is wrong.');
-        }
-        // Panel stays open for the next one.
-        $('symbolInput').focus();
-      } catch (err) { setError(err.message); }
-    }
 
     // True when removing the symbol here leaves it in no portfolio at all, which
     // is exactly when the server purges its stored data.
@@ -3000,16 +2776,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     document.querySelector('.table-wrap').addEventListener('scroll', () => { hideTip(); hideRowCard(); });
     window.addEventListener('scroll', () => { hideTip(); hideRowCard(); }, true);
 
-    $('addBtn').addEventListener('click', addTicker);
     $('deleteBtn').addEventListener('click', deletePortfolio);
-    $('refreshBtn').addEventListener('click', refresh);
-    $('refreshAllBtn').addEventListener('click', refreshAll);
-    $('asOfDate').addEventListener('change', (e) => {
-      const v = e.target.value; // '' when cleared
-      asOfDate = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
-      closePickers();
-      refresh();
-    });
     // ---- change password ----
     function pwNote(text, kind) {
       const n = $('pwNote');
@@ -3049,7 +2816,6 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
 
     $('loginBtn').addEventListener('click', doLogin);
     $('logoutBtn').addEventListener('click', doLogout);
-    $('symbolInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTicker(); });
 
     // ---- entry choreography: heavy fade-up as each block enters the viewport ----
     if ('IntersectionObserver' in window) {
@@ -3071,18 +2837,12 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         const opening = $(p.root).dataset.open !== '1';
         // Built on open rather than on every render: a rebuild mid-drag would
         // replace the slider under the cursor and kill the gesture.
-        if (opening && p.root === 'weightPicker') renderWeightMenu();
         if (opening && p.root === 'actPicker') renderActMenu();
         if (opening && p.root === 'secPicker') renderSectorMenu();
         if (opening && p.root === 'pastPicker') renderPastMenu();
         openPicker(opening ? p.root : null);
-        if (opening && p.root === 'addPicker') setTimeout(() => $('symbolInput').focus(), 60);
       });
     });
-    // Interacting inside a form panel must not be treated as a click outside it.
-    $('addMenu').addEventListener('click', (e) => e.stopPropagation());
-    $('dateMenu').addEventListener('click', (e) => e.stopPropagation());
-    $('backToLive').addEventListener('click', () => { closePickers(); clearForwardView(); });
     document.addEventListener('click', (e) => {
       if (!PICKERS.some((p) => $(p.root).contains(e.target))) closePickers();
       if (!apPanel.contains(e.target)) closeActionPanel();
@@ -3471,12 +3231,34 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       closeActionPanel();
     });
 
+    // What the console asked for on the way in. Both refreshes and the
+    // forward-returns view stay here because the round loop, the progress
+    // banner and the table being refreshed all live on this page — /admin is
+    // the door, not a second copy of the machine.
+    const entry = new URLSearchParams(location.search);
+    const wantAsOf = entry.get('asOf');
+    const wantDo = entry.get('do');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(wantAsOf || '')) {
+      asOfDate = wantAsOf;
+      $('asOfDate').value = wantAsOf;
+    }
+    // Take the instruction out of the address bar, or a reload runs it again —
+    // a second Refresh all is ten minutes and several hundred API credits.
+    if (wantAsOf || wantDo) history.replaceState(null, '', location.pathname);
+
     // Boot: find out who we are, restore the saved column layout, then load the
     // snapshot. Prefs are awaited before the first render — applying them after
     // would show the default layout and then visibly rearrange it.
     checkAuth()
       .then(() => Promise.all([loadPrefs(), loadMyPortfolios()]))
-      .then(() => refresh({ live: false }));
+      .then(() => refresh({ live: false }))
+      .then(() => {
+        // The server refuses either of these to anyone else; this only stops a
+        // member's browser from asking and being told no.
+        if (!isAdmin) return;
+        if (wantDo === 'refresh') refresh();
+        else if (wantDo === 'refreshall') refreshAll();
+      });
   </script>
 </body>
 </html>
