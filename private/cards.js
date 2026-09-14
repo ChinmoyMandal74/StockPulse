@@ -68,12 +68,41 @@
       // The comparison is context, never the ranking: picking the same window
       // twice would only print a column against itself, so it is ignored.
       const cmpKey = O.movCmp;
-      const cmp = cmpKey && cmpKey !== perKey ? MOV_PERIODS[cmpKey] : null;
+      const cmp = cmpKey && cmpKey !== perKey && O.movDir !== 'split'
+        ? MOV_PERIODS[cmpKey] : null;
       const n = Number(O.movCount) || 10;
-      const dir = O.movDir;                 // 'up' | 'down' | 'both'
+      const dir = O.movDir;                 // 'up' | 'down' | 'both' | 'split'
+      const split = dir === 'split';
       const both = dir === 'both';
       const up = dir !== 'down';
       const scope = movScopeRows();
+
+      // Both, side by side: two rankings on one card rather than one mixed
+      // list. The bars share a scale across the columns, so a +9% and a -9%
+      // draw the same length and the two halves stay comparable.
+      if (split) {
+        const cap = size.id === 'story' ? 9 : size.id === 'square' ? 5 : 7;
+        const k = Math.min(n, cap);
+        const ups = scope.rows.filter((x) => x[field] > 0)
+          .sort((a, b) => b[field] - a[field]).slice(0, k);
+        const downs = scope.rows.filter((x) => x[field] < 0)
+          .sort((a, b) => a[field] - b[field]).slice(0, k);
+        const mx = Math.max(...ups.concat(downs).map((x) => Math.abs(x[field])), 0.01);
+        const col = (title, list, neg) =>
+          `<div class="mcol"><div class="mch ${neg ? 'neg' : 'pos'}">${esc(title)}</div>` +
+          (list.length ? list.map((x) => {
+            const w = Math.max(6, Math.round(Math.abs(x[field]) / mx * 100));
+            return `<div class="mrow"><span class="ms">${esc(x.symbol)}</span>` +
+              `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
+              `<span class="mv ${neg ? 'neg' : 'pos'}">${pct(x[field])}</span></div>`;
+          }).join('') : '<div class="mnone">nothing moved that way</div>') +
+          '</div>';
+        return chromeTop() +
+          `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 ${esc(periodLabel)}</span>` +
+          '<h2 class="s-title">Up and down<br><span class="dim">' + esc(periodLabel) + '</span></h2>' +
+          `<div class="twocol">${col('Gainers', ups, false)}${col('Losers', downs, true)}</div>` +
+          '</div></div>' + chromeFoot();
+      }
       const rows = scope.rows
         .filter((s) => s[field] != null && (both || (up ? s[field] > 0 : s[field] < 0)))
         // 'both' ranks by SIZE of move, so a -9% sits beside a +9%; the
@@ -798,6 +827,21 @@
     .rowhead .bar-rail { flex: 1; }
     .rowhead .val { width: 150px; text-align: right; }
     .rowhead .cmp { width: 168px; text-align: right; }
+
+    /* movers, side by side: two rankings sharing one bar scale */
+    .twocol { display: flex; gap: 40px; margin-top: 34px; }
+    .mcol { flex: 1; min-width: 0; }
+    .mch { font: 600 17px var(--mono); text-transform: uppercase; letter-spacing: 0.18em;
+           padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--hair); }
+    .mch.pos { color: var(--green); } .mch.neg { color: var(--red); }
+    .mrow { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+    .mrow .ms { font: 600 24px var(--mono); width: 108px; letter-spacing: -0.02em; }
+    .mrow .bar-rail { flex: 1; height: 30px; border-radius: 9px;
+                      background: rgba(255, 255, 255, 0.045); overflow: hidden; }
+    .mrow .mv { font: 600 23px var(--mono); width: 122px; text-align: right;
+                font-variant-numeric: tabular-nums; }
+    .mrow .mv.pos { color: var(--green); } .mrow .mv.neg { color: var(--red); }
+    .mnone { font-size: 19px; color: var(--faint); padding: 10px 0; }
 
     /* advice-change rows */
     .chg { display: flex; align-items: center; gap: 20px; padding: 18px 22px;

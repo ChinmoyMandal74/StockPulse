@@ -152,7 +152,8 @@
       if (kind === 'movers') {
         f += S('movPeriod', 'Time window', PERIODS, state.movPeriod);
         f += S('movCmp', 'Compare with', [['', 'Nothing']].concat(PERIODS), state.movCmp);
-        f += S('movDir', 'Direction', [['up', 'Gainers'], ['down', 'Losers'], ['both', 'Either way']], state.movDir);
+        f += S('movDir', 'Direction', [['up', 'Gainers'], ['down', 'Losers'],
+                                       ['both', 'Either way'], ['split', 'Side by side']], state.movDir);
         f += S('movCount', 'How many', [['5', 'Top 5'], ['10', 'Top 10'], ['15', 'Top 15']], state.movCount);
         f += S('movScope', 'Within', scopeOptions(), state.movScope);
       } else if (kind === 'chart') {
