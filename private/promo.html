@@ -255,6 +255,7 @@
       { id: 'stance', name: 'Where the market stands', note: 'The universe by trend state' },
       { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
+      { id: 'avatar', name: 'Profile picture', note: 'The mark alone — pick Square, then download' },
     ];
     let tpl = 'movers';
     let size = SIZES[0];
@@ -328,7 +329,14 @@
       $('tplList').innerHTML = TPLS.map((t) =>
         `<button class="${tpl === t.id ? 'on' : ''}" data-t="${t.id}">${esc(t.name)}<em>${esc(t.note)}</em></button>`).join('');
       $('tplList').querySelectorAll('[data-t]').forEach((b) =>
-        b.addEventListener('click', () => { tpl = b.dataset.t; paintControls(); render(); }));
+        b.addEventListener('click', () => {
+          tpl = b.dataset.t;
+          // an avatar is square by definition; the other cards keep whatever
+          // shape was already picked
+          if (tpl === 'avatar') size = SIZES.find((z) => z.id === 'square') || size;
+          paintControls();
+          render();
+        }));
       $('sizeList').innerHTML = SIZES.map((z) =>
         `<button class="${size.id === z.id ? 'on' : ''}" data-z="${z.id}">${esc(z.label)}</button>`).join('');
       $('sizeList').querySelectorAll('[data-z]').forEach((b) =>

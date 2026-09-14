@@ -727,9 +727,22 @@
 
     // ---- render ------------------------------------------------------------
 
+  // The profile picture: the mark alone, full bleed, no header and no
+  // footer — a bio avatar is shown at about a hundred pixels in a circle,
+  // where a wordmark is mush and only a shape survives. Everything stays
+  // inside the middle 70%, which is what the circle crop keeps.
+  function tplAvatar() {
+    return '<div class="avatarFull">' +
+      '<div class="avGlow"></div>' +
+      '<svg viewBox="0 0 24 24" class="avMark" aria-hidden="true">' +
+      '<path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></svg>' +
+      '</div>';
+  }
+
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard, advice: tplAdvice,
     breakout: tplBreakout, stance: tplStance, intro: tplIntro, announce: tplAnnounce,
+    avatar: tplAvatar,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -929,6 +942,16 @@
                 letter-spacing: -0.05em; white-space: pre-wrap; }
     .ann-body { margin: 30px 0 0; font-size: 27px; line-height: 1.55; color: var(--muted);
                 max-width: 34ch; white-space: pre-wrap; }
+
+    /* the avatar card: negative margins undo the stage's padding, since a
+       profile picture bleeds to every edge */
+    .avatarFull { position: absolute; inset: 0; margin: -56px -64px -48px; display: grid;
+                  place-items: center; }
+    .avGlow { position: absolute; width: 76%; aspect-ratio: 1; border-radius: 50%;
+              background: radial-gradient(circle, rgba(52, 211, 153, 0.22), transparent 62%); }
+    .avMark { position: relative; width: 46%; height: 46%; stroke: #34d399; fill: none;
+              stroke-width: 1.45; stroke-linecap: round; stroke-linejoin: round;
+              filter: drop-shadow(0 0 26px rgba(52, 211, 153, 0.5)); }
 
     .s-empty { margin-top: 60px; font-size: 30px; color: var(--muted); line-height: 1.5; max-width: 30ch; }`;
 
