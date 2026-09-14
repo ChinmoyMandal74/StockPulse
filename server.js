@@ -1178,6 +1178,7 @@ async function fetchProfile(symbol) {
   const enc = encodeURIComponent(symbol);
   const out = {
     sector: null,
+    industry: null,
     marketCap: null,
     forwardPe: null,
     peg: null,
@@ -1219,6 +1220,12 @@ async function fetchProfile(symbol) {
       out.fetchOk = false;
     } else if (p) {
       if (p.sector) out.sector = p.sector;
+      // The finer cut, in the same response and previously discarded: Twelve
+      // Data returns a Morningstar-style industry ("Banks - Diversified",
+      // "Semiconductors") beside the sector. Not GICS — that taxonomy is
+      // licensed and this API does not carry it — but it costs no credits,
+      // since the call is charged whether one field is read or six.
+      if (p.industry) out.industry = p.industry;
       // Everything below was already in this response and being discarded. The
       // call costs the same whether one field is read or five, so these are
       // free — but they are kept out of the snapshot and out of the assistant's
@@ -2390,6 +2397,7 @@ async function computeStocks(asOf, opts = {}) {
         name: names[sym] || null,
         portfolios: membershipOf(sym, portfolios),
         sector: prof.sector || null,
+        industry: prof.industry || null,
         marketCap: prof.marketCap || null,
         forwardPe: prof.forwardPe ?? null,
         peg: prof.peg ?? null,

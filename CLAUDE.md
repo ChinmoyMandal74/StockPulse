@@ -247,6 +247,8 @@ The **Scores** group (id `rank`, kept so saved prefs and `grp-rank` classes stil
 
 The **Size** group carries the absolute-size columns — Revenue TTM, Gross Profit TTM, Gross Margin, Net Income TTM, FCF TTM, FCF Margin, Net Cash. Every one comes out of the `/statistics` call `fetchProfile()` already makes, so the group costs **no extra API credits**.
 
+**Industry sits beside Sector** (2026-09-14): Twelve Data's `/profile` returns both and only the sector was being kept, though the call is charged the same either way — so the finer cut cost nothing to add. It is **Twelve Data's own (Morningstar-style) taxonomy, not GICS**: values read "Banks - Diversified", "Semiconductors", "REIT - Industrial". Checked against the GICS sheet on 2026-09-14 — the API carries no GICS field, code or endpoint (`/sectors`, `/industries`, `/classification`, `/gics` all 404). At the SECTOR level the two are a rename apart and map one-to-one (Basic Materials→Materials, Consumer Cyclical→Consumer Discretionary, Consumer Defensive→Consumer Staples, Healthcare→Health Care, Financial Services→Financials, Technology→Information Technology; the other five already match). Below that they do not map, and GICS company assignments are licensed S&P/MSCI data — approximating them from another vendor's judgement would be a wrong answer wearing the standard's labels. **The column is empty until each profile is next re-pulled** (24h TTL, so a nightly Refresh All fills it).
+
 The **Info** banner spans eight columns — Overall, Mom., Qual., Portfolios, Price, Sector, Market Cap, Next Earn — and all eight collapse together.
 
 ### Sparklines

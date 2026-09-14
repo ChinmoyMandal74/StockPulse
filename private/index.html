@@ -499,6 +499,9 @@
     .chgFilter:disabled { opacity: 0.45; cursor: default; }
     /* and the rows themselves, so a change is visible while browsing too */
     tr.chgRow td.frz0 { box-shadow: inset 3px 0 0 var(--amber); }
+    /* Industry names run long ("Farm & Heavy Construction Machinery"), so the
+       column truncates and the full text sits in the tooltip. */
+    td.industry { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .badge {
       margin: 0 4px 0 0;
       background: color-mix(in srgb, currentColor 12%, transparent); }
@@ -916,7 +919,7 @@
       <tr>
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="name">Name</th>
-        <th class="group grp-info" data-group="info" colspan="5">Info</th>
+        <th class="group grp-info" data-group="info" colspan="6">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="2">Scores</th>
         <th class="group grp-act" data-group="act" colspan="10">Advice</th>
         <th class="group grp-pmom" data-group="pmom" colspan="3">Price Momentum</th>
@@ -935,6 +938,7 @@
         <th class="left grp-info">Portfolios</th>
         <th class="grp-info" data-key="price">Price</th>
         <th class="left grp-info" data-key="sector">Sector</th>
+        <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — Twelve Data's own taxonomy, not GICS.">Industry</th>
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
         <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
         <th class="grp-rank ta-c" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
@@ -1744,7 +1748,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="56">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="57">${msg}</td></tr>`;
         researchSymbol = null;
         renderResearchMenu();
         applyGroups();
@@ -1781,7 +1785,7 @@
         if (s.error) {
           return `<tr style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="54">${s.error}</td>
+            <td class="na" colspan="55">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -1804,6 +1808,7 @@
           <td class="left grp-info">${badges(s.portfolios)}${myBadges(s.symbol)}</td>
           <td class="grp-info"${attr(liveTitle)}>${price != null ? curSym(s.currency) + price : '—'}</td>
           <td class="name left grp-info"${attr(cacheTitle)}>${s.sector || '—'}</td>
+          <td class="name left grp-info industry"${attr(s.industry || cacheTitle)}>${s.industry ? we(s.industry) : '—'}</td>
           <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
           ${earningsCell(s, cacheTitle)}
           ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-rank ta-c lens-col')}
@@ -2689,7 +2694,7 @@
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     function showLoading(msg) {
-      $('tbody').innerHTML = `<tr><td class="empty" colspan="52">${msg}</td></tr>`;
+      $('tbody').innerHTML = `<tr><td class="empty" colspan="53">${msg}</td></tr>`;
     }
 
     // Clear the cache, then keep re-pulling until EVERY ticker's fundamentals are

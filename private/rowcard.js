@@ -58,6 +58,7 @@
     ['info',  'Portfolios',     (s) => V.text((s.portfolios || []).join(', '))],
     ['info',  'Price',          (s) => ok(s.price) ? { t: curSym(s.currency) + s.price.toFixed(1), c: '' } : null],
     ['info',  'Sector',         (s) => V.text(s.sector)],
+    ['info',  'Industry',       (s) => V.text(s.industry)],
     ['info',  'Market Cap',     (s) => V.money(s.marketCap, s.currency)],
     ['info',  'News',           (s) => {
                                   const n = s.newsLatest;
