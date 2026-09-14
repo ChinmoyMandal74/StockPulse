@@ -397,6 +397,9 @@
     function render() {
       const stage = $('stage');
       stage.style.height = size.h + 'px';
+      // the card's own styles key off the shape it is being drawn into
+      stage.classList.remove('sz-portrait', 'sz-square', 'sz-story');
+      stage.classList.add('sz-' + size.id);
       stage.innerHTML = '<div class="s-aura"></div>' +
         `<div class="s-in">${buildCard()}</div>`;
       fit();

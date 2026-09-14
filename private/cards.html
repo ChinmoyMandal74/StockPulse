@@ -218,6 +218,7 @@
     function paint() {
       $('bar').innerHTML = barHtml();
       wireBar();
+      $('stage').classList.add('sz-' + SIZE.id);
       $('stage').innerHTML = '<div class="s-aura"></div>' +
         `<div class="s-in">${Cards.build(kind, { stocks, myLists, size: SIZE, opts: state, getBasket })}</div>`;
       fit();

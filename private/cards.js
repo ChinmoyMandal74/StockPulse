@@ -740,7 +740,7 @@
       return chromeTop() +
         `<div class="s-body"><div><span class="s-kick">${kick}</span>` +
         `<h2 class="s-title">${title}</h2>` +
-        lineChart(d.dates, lines, { h: size.id === 'story' ? 780 : size.id === 'square' ? 470 : 590 }) +
+        lineChart(d.dates, lines, { h: size.id === 'story' ? 1020 : size.id === 'square' ? 470 : 590 }) +
         chartLegend(legend) +
         `<p class="s-sub" style="font-size:17px;margin-top:18px">${note}</p>` +
         '</div></div>' + chromeFoot();
@@ -994,7 +994,7 @@
   // three runaway growth rates would otherwise press every other dot into a
   // band a few pixels tall.
   function scatterSvg(pts, q) {
-    const W = 952, H = size.id === 'story' ? 720 : size.id === 'square' ? 470 : 600;
+    const W = 952, H = size.id === 'story' ? 1000 : size.id === 'square' ? 470 : 600;
     const PL = 96, PR = 30, PT = 24, PB = 60;
     const span = (vals) => {
       const a = vals.slice().sort((m, n) => m - n);
@@ -1275,6 +1275,46 @@
                 letter-spacing: -0.05em; white-space: pre-wrap; }
     .ann-body { margin: 30px 0 0; font-size: 27px; line-height: 1.55; color: var(--muted);
                 max-width: 34ch; white-space: pre-wrap; }
+
+    /* ---- the story shape fills, rather than centring a post inside it ---
+       A 9:16 card is 570px taller than a 4:5 one. Centring the same block in
+       it leaves a third of the frame empty at each end, so on a story the
+       content column takes the full height and the list, grid or tally grows
+       into the space instead. Type steps up too: a story is read full-screen
+       on a phone, where a post is read in a scrolling feed. */
+    .sz-story .s-body > div { display: flex; flex-direction: column; height: 100%; }
+    .sz-story .s-kick { font-size: 21px; margin-top: 30px; }
+    .sz-story .s-title { font-size: 84px; }
+    .sz-story .s-sub { font-size: 25px; max-width: 34ch; }
+    .sz-story .s-foot { font-size: 20px; }
+    .sz-story .s-empty { font-size: 36px; }
+
+    /* the lists spread through the space rather than bunching at the top */
+    .sz-story .rows, .sz-story .atally, .sz-story .stmts, .sz-story .flow,
+    .sz-story .rungs { flex: 1; justify-content: space-evenly; }
+    .sz-story .twocol { flex: 1; }
+    .sz-story .row .sym { font-size: 32px; width: 168px; }
+    .sz-story .row .val { font-size: 31px; width: 178px; }
+    .sz-story .row .cmp { font-size: 28px; width: 190px; }
+    .sz-story .row .bar-rail { height: 50px; }
+    .sz-story .arow .an { font-size: 32px; width: 350px; }
+    .sz-story .arow .ac { font-size: 36px; }
+    .sz-story .arow .arail { height: 38px; }
+    .sz-story .frule .ft { font-size: 29px; }
+    .sz-story .frule .fn { font-size: 35px; }
+    .sz-story .pcard .pv { font-size: 35px; }
+    .sz-story .feat h3 { font-size: 28px; }
+    .sz-story .feat p { font-size: 21px; }
+    .sz-story .ftile .fv { font-size: 44px; }
+
+    /* the sparkline grid stretches its rows, and the shapes stretch with
+       them — the sparklines are drawn with preserveAspectRatio="none", so a
+       taller tile is a taller chart rather than a distorted one */
+    .sz-story .spk { flex: 1; grid-auto-rows: 1fr; gap: 20px; }
+    .sz-story .spkt { display: flex; flex-direction: column; }
+    .sz-story .spkt svg { flex: 1; height: auto; min-height: 90px; }
+    .sz-story .spkt .ss { font-size: 30px; }
+    .sz-story .spkt .sv { font-size: 25px; }
 
     /* sparklines: one small chart per stock, each reading on its own */
     .spk { display: grid; gap: 16px; margin-top: 32px; }
