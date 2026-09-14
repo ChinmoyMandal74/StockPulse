@@ -153,12 +153,39 @@
           : up ? b[field] - a[field] : a[field] - b[field]))
         .slice(0, n);
       const max = Math.max(...rows.map((s) => Math.abs(s[field])), 0.01);
+      // A card is a fixed artboard and cannot scroll: a list too tall for it
+      // does not clip, it sits on top of the masthead, because .s-body
+      // centres its content. So the rhythm steps down until the ranking
+      // fits — the same problem the side-by-side card solved with `dense`,
+      // which the ranked list turned out to need too the moment a verdict
+      // line could appear under every name. ROOM is the artboard minus the
+      // chrome, the kicker, the title and the list's own top margin, with
+      // headroom left over because these are estimates and a wrapped title
+      // is not.
+      const ROOM = { portrait: 840, square: 580, story: 1330 };
+      const RHYTHM = [
+        { cls: '', row: advOf ? 42 : 40, gap: 16 },
+        { cls: ' tight', row: advOf ? 36 : 32, gap: 11 },
+        { cls: ' tighter', row: advOf ? 32 : 26, gap: 8 },
+      ];
+      // the comparison column brings a header row and a caption with it
+      const room = (ROOM[size.id] || ROOM.portrait) - (cmp ? 140 : 0);
+      const fits = (r, k) => Math.max(0, k * r.row + (k - 1) * r.gap) <= room;
+      const rhythm = RHYTHM.find((r) => fits(r, rows.length)) || RHYTHM[RHYTHM.length - 1];
+      // Even the tightest rhythm has a ceiling. A square artboard cannot hold
+      // fifteen rows, a comparison column AND a verdict under every name at
+      // any size still legible once a feed has shrunk the card — so the list
+      // is trimmed rather than painted over the masthead, the same per-shape
+      // cap the side-by-side card takes. The rows are sorted by the move, so
+      // what goes is always the smallest of them, and the title says "Top
+      // gainers" rather than a count, so nothing on the card becomes untrue.
+      while (rows.length > 3 && !fits(rhythm, rows.length)) rows.pop();
       const head = cmp
         ? '<div class="rowhead"><span class="nm2"></span><span class="bar-rail"></span>' +
           `<span class="val">${esc(shortLabel)}</span><span class="cmp">${esc(cmp[2])}</span></div>`
         : '';
       const body = rows.length
-        ? `<div class="rows">${head}${rows.map((s) => {
+        ? `<div class="rows${rhythm.cls}">${head}${rows.map((s) => {
             const w = Math.max(6, Math.round(Math.abs(s[field]) / max * 100));
             const neg = both ? s[field] < 0 : !up;   // each row by its own sign when mixed
             const c = cmp ? s[cmp[0]] : null;
@@ -174,19 +201,20 @@
               (cmp ? `<span class="cmp ${c == null ? '' : c < 0 ? 'neg' : 'pos'}">${pct(c)}</span>` : '') +
               '</div>';
           }).join('')}</div>` +
-          (() => {
-            const notes = [];
-            if (cmp) notes.push(`Ranked on ${esc(periodLabel)}; the right column is the same stock over the ${esc(cmp[1].replace(/^(this|past) /, ''))}, for context.`);
-            if (advOf) notes.push(`The word under each name is tonight’s reading from the ${esc(advProf)} rule set — a mechanical verdict that always travels with the rule that produced it, never a recommendation.`);
-            return notes.length
-              ? `<p class="s-sub" style="font-size:18px;margin-top:22px">${notes.join(' ')}</p>` : '';
-          })()
+          (cmp ? `<p class="s-sub" style="font-size:18px;margin-top:22px">Ranked on ${esc(periodLabel)}; the right column is the same stock over the ${esc(cmp[1].replace(/^(this|past) /, ''))}, for context.</p>` : '')
         : `<p class="s-empty">Nothing in ${esc(scope.label)} moved ${both ? 'at all' : (up ? 'up' : 'down')} ${esc(periodLabel)} \u2014 which is its own kind of story.</p>`;
       const title = both
         ? 'The biggest<br><span class="dim">moves</span>'
         : `Top ${up ? 'gainers' : 'losers'}<br><span class="dim">${esc(periodLabel)}</span>`;
+      // The rule set is named in the kicker rather than in a paragraph: a
+      // verdict without the rules behind it is the tip sheet this product
+      // refuses to be, and the attribution has to survive on a card where
+      // five more lines of prose would push the ranking over the masthead.
+      // The footer carries the standing disclaimer either way.
+      const kick = `${esc(scope.label)} \u00b7 ${esc(periodLabel)}` +
+        (advOf ? ` \u00b7 ${esc(advProf)} rules` : '');
       return chromeTop() +
-        `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 ${esc(periodLabel)}</span>` +
+        `<div class="s-body"><div><span class="s-kick">${kick}</span>` +
         `<h2 class="s-title">${title}</h2>` +
         body + '</div></div>' + chromeFoot();
     }
@@ -1215,6 +1243,33 @@
                                          white-space: nowrap; }
     .row .nm2 .av { font: 700 14px var(--sans); letter-spacing: 0.1em; text-transform: uppercase; }
     .sz-story .row .nm2 .av { font-size: 17px; }
+    /* Two steps down, chosen in the builder from the row count and the
+       artboard. Everything shrinks together — bar, name, number — because a
+       ranking with a shorter bar and the same 26px number reads as a
+       mistake rather than as a denser card. */
+    .rows.tight { gap: 11px; margin-top: 30px; }
+    .rows.tight .row { gap: 16px; }
+    .rows.tight .row .bar-rail { height: 32px; border-radius: 9px; }
+    .rows.tight .row .nm2, .rows.tight .rowhead .nm2 { width: 300px; }
+    .rows.tight .row .nm2 { font-size: 21px; }
+    .rows.tight .row .nm2 .av { font-size: 12px; }
+    .rows.tight .row .val, .rows.tight .rowhead .val { width: 132px; }
+    .rows.tight .row .val { font-size: 23px; }
+    .rows.tight .row .cmp, .rows.tight .rowhead .cmp { width: 148px; }
+    .rows.tight .row .cmp { font-size: 21px; }
+    .rows.tight .rowhead { font-size: 13px; }
+
+    .rows.tighter { gap: 8px; margin-top: 24px; }
+    .rows.tighter .row { gap: 13px; }
+    .rows.tighter .row .bar-rail { height: 26px; border-radius: 8px; }
+    .rows.tighter .row .nm2, .rows.tighter .rowhead .nm2 { width: 262px; }
+    .rows.tighter .row .nm2 { font-size: 18px; }
+    .rows.tighter .row .nm2 .av { font-size: 11px; letter-spacing: 0.08em; }
+    .rows.tighter .row .val, .rows.tighter .rowhead .val { width: 114px; }
+    .rows.tighter .row .val { font-size: 20px; }
+    .rows.tighter .row .cmp, .rows.tighter .rowhead .cmp { width: 128px; }
+    .rows.tighter .row .cmp { font-size: 18px; }
+    .rows.tighter .rowhead { font-size: 12px; }
     .rowhead .nm2 { width: 330px; }
     .sz-story .rowhead .nm2 { width: 390px; }
     .rowhead .sym { width: 138px; }
