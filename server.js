@@ -271,6 +271,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin',
+                      '/nasdaq.html': '/nasdaq',
                       '/cards.html': '/cards',
                       '/users.html': '/users', '/reset.html': '/reset',
                       '/contact.html': '/contact', '/help.html': '/help',
@@ -323,6 +324,15 @@ const gateAssets = route(async (req, res, next) => {
   res.status(401).json({ error: 'Sign in required' });
 });
 app.use(gateAssets, express.static(path.join(__dirname, 'private')));
+
+// The NASDAQ reference list. Admin only, and deliberately a page of its own:
+// it is a different vendor's view of a different universe, and the whole point
+// is that it never touches the screener.
+app.get('/nasdaq', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'nasdaq');
+  res.sendFile(path.join(__dirname, 'private', 'nasdaq.html'));
+}));
 
 // The admin console: one door in the screener's bar instead of a dozen, and
 // the home of everything that is not a description of the table in front of
@@ -2130,6 +2140,113 @@ app.put('/api/my/portfolios', requireMember, route(async (req, res) => {
   if (rows.length) store.logActivity(rows).catch(() => { /* fire and forget */ });
 
   res.json({ ok: true, portfolios: next, max: MY_PORTFOLIOS_MAX });
+}));
+
+// ---- the NASDAQ reference list --------------------------------------------
+// A free, keyless listing of every US-listed company with a market cap beside
+// it — the one thing Twelve Data will not sell on this plan at a sane price
+// (/market_cap is Ultra-only; /statistics is 50 credits a symbol, so sweeping
+// NYSE + NASDAQ would be ~287,000 credits and eight hours).
+//
+// It is REFERENCE DATA, kept in its own table, on its own page, and joined to
+// nothing. NASDAQ's sector and industry are a third taxonomy that agrees with
+// neither GICS nor the Twelve Data values the screener shows, and its market
+// cap is a snapshot from a different vendor on a different clock. Used as a
+// place to go looking for a ticker, it costs nothing and answers well; mixed
+// into the screener it would put two vendors' judgements in one column.
+const NASDAQ_EXCHANGES = ['NASDAQ', 'NYSE', 'AMEX'];
+// The endpoint wants a browser-shaped User-Agent, and the failure mode is the
+// nasty one: given a bot-shaped agent it does not answer 403, it simply never
+// replies. Measured — an honest "TickrLab/1.0" agent hung until a 20s abort,
+// the agent below answered 200 in 296ms. So a timeout is not belt-and-braces
+// here, it is the difference between an error and a serverless function
+// sitting on its hands until the platform kills it.
+const NASDAQ_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+const NASDAQ_TIMEOUT_MS = 20000;
+
+// "$4.95" / "-4.808%" / "5,100,765,000,000" / "" all arrive as strings.
+function nasdaqNum(v) {
+  if (v == null) return null;
+  const t = String(v).replace(/[$,%\s]/g, '').replace(/,/g, '');
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+const nasdaqText = (v) => {
+  const t = String(v == null ? '' : v).trim();
+  return t ? t.slice(0, 120) : null;
+};
+
+async function fetchNasdaqExchange(exchange) {
+  const url = 'https://api.nasdaq.com/api/screener/stocks' +
+    `?tableonly=true&limit=25000&download=true&exchange=${encodeURIComponent(exchange)}`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), NASDAQ_TIMEOUT_MS);
+  let body;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': NASDAQ_UA,
+        Accept: 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: ac.signal,
+    });
+    if (!res.ok) throw new Error(`NASDAQ returned ${res.status}`);
+    body = await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+  const rows = (body && body.data && body.data.rows) || [];
+  if (!rows.length) throw new Error('NASDAQ returned no rows');
+  return rows.map((r) => ({
+    symbol: String(r.symbol || '').trim().toUpperCase().slice(0, 20),
+    // The API does not say which exchange a row came from, so the request does.
+    exchange,
+    name: nasdaqText(r.name),
+    last_sale: nasdaqNum(r.lastsale),
+    net_change: nasdaqNum(r.netchange),
+    pct_change: nasdaqNum(r.pctchange),
+    market_cap: nasdaqNum(r.marketCap),
+    country: nasdaqText(r.country),
+    ipo_year: nasdaqNum(r.ipoyear),
+    volume: nasdaqNum(r.volume),
+    sector: nasdaqText(r.sector),
+    industry: nasdaqText(r.industry),
+    // stored as the path it arrives as; the page makes the link
+    url: nasdaqText(r.url),
+  })).filter((r) => r.symbol);
+}
+
+// The whole list, for a page that filters in the browser. ~7,100 rows and
+// about 1.2 MB — heavy for a table row, trivial for one admin page load, and
+// it makes every filter on it instant.
+app.get('/api/nasdaq', requireAdmin, route(async (req, res) => {
+  const [rows, meta] = await Promise.all([store.readNasdaqListings(), store.nasdaqMeta()]);
+  res.json({ rows, meta, exchanges: NASDAQ_EXCHANGES });
+}));
+
+// ONE exchange per request. The largest is 4,130 rows, and a serverless
+// function is not awake long enough to pull and store all three — the same
+// reason Refresh all is a loop of rounds driven by the browser.
+app.post('/api/nasdaq/refresh', requireAdmin, route(async (req, res) => {
+  const exchange = String(req.body?.exchange || '').toUpperCase();
+  if (!NASDAQ_EXCHANGES.includes(exchange)) {
+    return res.status(400).json({ error: 'Unknown exchange.' });
+  }
+  const t0 = Date.now();
+  let rows;
+  try {
+    rows = await fetchNasdaqExchange(exchange);
+  } catch (err) {
+    // Never echo an upstream body: it can restate the request.
+    console.error('nasdaq fetch failed:', exchange, err.message);
+    return res.status(502).json({ error: `Could not reach NASDAQ for ${exchange}.` });
+  }
+  const n = await store.writeNasdaqExchange(exchange, rows);
+  logAct(req, 'refresh', 'nasdaq:' + exchange);
+  res.json({ exchange, rows: n, ms: Date.now() - t0, meta: await store.nasdaqMeta() });
 }));
 
 // Maintain one display name. An empty value clears the override and hands

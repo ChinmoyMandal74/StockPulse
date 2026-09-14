@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>NASDAQ listings — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 70px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1480px; margin: 0 auto; padding: 0 28px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(124, 156, 255, 0.13), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(52, 211, 153, 0.10), transparent 64%); }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 16px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
+      padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+
+    h1 { margin: 22px 0 0; font-size: clamp(26px, 3vw, 34px); font-weight: 600;
+         letter-spacing: -0.035em; line-height: 1.05; }
+    .lede { margin: 10px 0 20px; max-width: 86ch; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+    .lede b { color: var(--text); font-weight: 600; }
+
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+    .stat > .core { padding: 16px 18px; }
+    .stat .val { font-family: var(--mono); font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+    .stat:nth-child(1) .val { color: var(--accent); }
+    .stat:nth-child(2) .val { color: var(--green); }
+    .stat:nth-child(3) .val { color: var(--accent-2); }
+    .stat:nth-child(4) .val { color: var(--amber); font-size: 15px; }
+    .stat .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em;
+                 color: var(--faint); margin-top: 6px; }
+    @media (max-width: 860px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+
+    /* ---- controls ------------------------------------------------------ */
+    .bar > .core { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; }
+    input[type="search"], select {
+      box-sizing: border-box; padding: 8px 11px; border-radius: 10px; min-width: 0;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      color: var(--text); font: 500 12.5px var(--sans);
+    }
+    select { cursor: pointer; max-width: 220px; }
+    select option { background: #0d1017; color: var(--text); }
+    input[type="search"] { width: 190px; font-family: var(--mono); }
+    input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .spacer { flex: 1 1 0; }
+    .said { font-size: 12px; color: var(--faint); font-family: var(--mono); }
+    .said.bad { color: var(--red); }
+    .said.good { color: var(--green); }
+    .toggle { display: inline-flex; align-items: center; gap: 7px; padding: 8px 12px; border-radius: 10px;
+              border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03); color: var(--muted);
+              font-size: 12.5px; font-weight: 500; cursor: pointer; }
+    .toggle.on { color: var(--text); border-color: var(--accent);
+                 background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+    /* ---- table --------------------------------------------------------- */
+    .tbl > .core { padding: 0; overflow: hidden; }
+    .wrap { max-height: calc(100dvh - 330px); overflow: auto; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    th, td { padding: 7px 12px; text-align: right; white-space: nowrap;
+             border-bottom: 1px solid rgba(255, 255, 255, 0.045); font-size: 12.5px; }
+    th { position: sticky; top: 0; z-index: 2; background: var(--surface-2); cursor: pointer;
+         font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+         color: var(--faint); user-select: none; }
+    th:hover { color: var(--text); }
+    th.sorted { color: var(--accent); }
+    th .ar { opacity: 0.8; }
+    td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    td.l, th.l { text-align: left; }
+    td.l.nm { font-family: var(--sans); max-width: 300px; overflow: hidden;
+              text-overflow: ellipsis; color: var(--muted); }
+    td.l.tx { font-family: var(--sans); max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+    tbody tr:hover td { background: rgba(255, 255, 255, 0.035); }
+    td.sym a { color: var(--text); font-weight: 600; text-decoration: none; }
+    td.sym a:hover { text-decoration: underline; }
+    td.pos { color: var(--green); } td.neg { color: var(--red); }
+    .held { display: inline-block; margin-left: 7px; padding: 1px 6px; border-radius: 999px;
+            font: 600 9.5px var(--sans); letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--green); border: 1px solid rgba(52, 211, 153, 0.4);
+            background: rgba(52, 211, 153, 0.1); }
+    .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+            padding: 12px 14px; font-size: 12px; color: var(--faint); }
+    .empty { padding: 40px 20px; text-align: center; color: var(--faint); font-family: var(--sans); }
+    .note { margin: 12px 4px 0; font-size: 11.5px; color: var(--faint); line-height: 1.6; max-width: 92ch; }
+    @media (max-width: 640px) { .page { padding: 0 14px; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.4 19.4 6v5.6c0 4.2-3 7.5-7.4 9-4.4-1.5-7.4-4.8-7.4-9V6Z"/><path d="m9.2 12 2 2 3.6-3.8"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20.4 12a8.4 8.4 0 1 1-2.5-6"/><path d="M18.4 3.4V6h-2.6"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 4 2.5 5.1 5.6.8-4 3.9 1 5.6L12 16.8 6.9 19.4l1-5.6-4-3.9 5.6-.8Z"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark"><span class="wordmark">Tickr Lab</span></span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-shield" /></svg>Admin</a>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <h1>NASDAQ listings</h1>
+    <p class="lede">Every US-listed company NASDAQ publishes, with a market cap beside it —
+      <b>reference data, joined to nothing</b>. It exists so a candidate ticker can be found; adding one to the
+      screener is still a deliberate act, and the screener's own sector, industry and fundamentals keep coming
+      from Twelve Data. NASDAQ's sector and industry here are a third taxonomy that agrees with neither GICS nor
+      the values on the screener, so read them as this vendor's opinion rather than as the same field.</p>
+
+    <div class="stats">
+      <div class="bezel stat"><div class="core"><div class="val" id="sTotal">—</div><div class="lbl">Listings stored</div></div></div>
+      <div class="bezel stat"><div class="core"><div class="val" id="sBig">—</div><div class="lbl">Above $100M</div></div></div>
+      <div class="bezel stat"><div class="core"><div class="val" id="sShown">—</div><div class="lbl">Matching the filter</div></div></div>
+      <div class="bezel stat"><div class="core"><div class="val" id="sWhen">never</div><div class="lbl">Last pulled</div></div></div>
+    </div>
+
+    <div class="bezel bar"><div class="core">
+      <input type="search" id="q" placeholder="Symbol or name" aria-label="Search symbol or name" />
+      <select id="fEx" aria-label="Exchange"><option value="">All exchanges</option></select>
+      <select id="fCap" aria-label="Minimum market cap">
+        <option value="0">Any market cap</option>
+        <option value="100000000" selected>$100M and up</option>
+        <option value="1000000000">$1B and up</option>
+        <option value="10000000000">$10B and up</option>
+        <option value="50000000000">$50B and up</option>
+      </select>
+      <select id="fSec" aria-label="Sector"><option value="">All sectors</option></select>
+      <select id="fInd" aria-label="Industry"><option value="">All industries</option></select>
+      <select id="fIpo" aria-label="Listed before">
+        <option value="">Any listing year</option>
+        <option value="2010">Listed 2010 or earlier</option>
+        <option value="2000">Listed 2000 or earlier</option>
+        <option value="1990">Listed 1990 or earlier</option>
+      </select>
+      <button class="toggle" id="fNew" aria-pressed="false">Not in my screener</button>
+      <span class="spacer"></span>
+      <span class="said" id="said"></span>
+      <button class="btn btn-primary" id="refreshBtn">
+        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Refresh from NASDAQ</button>
+    </div></div>
+
+    <div class="bezel tbl" style="margin-top:10px"><div class="core">
+      <div class="wrap">
+        <table>
+          <thead><tr id="head"></tr></thead>
+          <tbody id="body"></tbody>
+        </table>
+      </div>
+      <div class="foot">
+        <span id="count">—</span>
+        <button class="btn" id="more" style="display:none">Show 500 more</button>
+      </div>
+    </div></div>
+
+    <p class="note">Market cap here is a snapshot from NASDAQ on their clock, not the point-in-time figure the
+      screener records — treat it as a way to sort a long list, not as a measurement. Rows carrying no market cap
+      at all are recent listings and fund-shaped instruments; they sit at the bottom of a cap sort and are hidden
+      by any floor above zero. A refresh replaces one exchange at a time, so a delisting leaves with its
+      exchange's next pull.</p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    async function api(method, url, body) {
+      const res = await fetch(url, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      return data;
+    }
+    const say = (msg, kind) => { $('said').textContent = msg || ''; $('said').className = 'said' + (kind ? ' ' + kind : ''); };
+
+    const money = (n) => {
+      if (n == null) return '—';
+      const a = Math.abs(n);
+      if (a >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T';
+      if (a >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+      if (a >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
+      return '$' + Math.round(n).toLocaleString();
+    };
+    const num = (n) => (n == null ? '—' : Math.round(n).toLocaleString());
+    const pct = (n) => (n == null ? '—' : (n >= 0 ? '+' : '') + n.toFixed(2) + '%');
+    const price = (n) => (n == null ? '—' : '$' + n.toFixed(2));
+
+    let rows = [];
+    let mine = new Set();          // symbols already in a screener portfolio
+    let sortKey = 'market_cap';
+    let sortDir = -1;
+    let shown = 500;
+
+    // Column order is the reading order of the question this page answers:
+    // which ticker, what is it, how big, how it trades, what it is, how old.
+    const COLS = [
+      ['symbol', 'Symbol', 'l'],
+      ['name', 'Name', 'l nm'],
+      ['exchange', 'Exch', 'l'],
+      ['market_cap', 'Market cap', ''],
+      ['last_sale', 'Last', ''],
+      ['pct_change', 'Chg', ''],
+      ['volume', 'Volume', ''],
+      ['sector', 'Sector (NASDAQ)', 'l tx'],
+      ['industry', 'Industry (NASDAQ)', 'l tx'],
+      ['ipo_year', 'IPO', ''],
+      ['country', 'Country', 'l tx'],
+    ];
+
+    function paintHead() {
+      $('head').innerHTML = COLS.map(([k, label, cls]) =>
+        `<th class="${cls}${sortKey === k ? ' sorted' : ''}" data-k="${k}">${we(label)}` +
+        (sortKey === k ? `<span class="ar"> ${sortDir < 0 ? '↓' : '↑'}</span>` : '') +
+        '</th>').join('');
+      $('head').querySelectorAll('[data-k]').forEach((th) =>
+        th.addEventListener('click', () => {
+          const k = th.dataset.k;
+          // A new column starts on the end people actually want first: biggest
+          // for a number, A-Z for a word.
+          if (sortKey === k) sortDir = -sortDir;
+          else { sortKey = k; sortDir = ['symbol', 'name', 'exchange', 'sector', 'industry', 'country'].includes(k) ? 1 : -1; }
+          shown = 500;
+          paint();
+        }));
+    }
+
+    function filtered() {
+      const q = $('q').value.trim().toUpperCase();
+      const ex = $('fEx').value;
+      const cap = Number($('fCap').value) || 0;
+      const sec = $('fSec').value;
+      const ind = $('fInd').value;
+      const ipo = Number($('fIpo').value) || 0;
+      const onlyNew = $('fNew').classList.contains('on');
+      return rows.filter((r) => {
+        if (cap && !(r.market_cap >= cap)) return false;
+        if (ex && r.exchange !== ex) return false;
+        if (sec && r.sector !== sec) return false;
+        if (ind && r.industry !== ind) return false;
+        if (ipo && !(r.ipo_year && r.ipo_year <= ipo)) return false;
+        if (onlyNew && mine.has(r.symbol)) return false;
+        if (q && !(r.symbol.includes(q) || String(r.name || '').toUpperCase().includes(q))) return false;
+        return true;
+      });
+    }
+
+    function paint() {
+      paintHead();
+      const list = filtered().slice().sort((a, b) => {
+        const x = a[sortKey], y = b[sortKey];
+        // Blanks sort last whichever way the column is pointing: a null is
+        // missing data, not a small number, and it should never top a ranking.
+        if (x == null && y == null) return 0;
+        if (x == null) return 1;
+        if (y == null) return -1;
+        if (typeof x === 'string' || typeof y === 'string') {
+          return String(x).localeCompare(String(y)) * sortDir;
+        }
+        return (x - y) * sortDir;
+      });
+      $('sShown').textContent = list.length.toLocaleString();
+      const page = list.slice(0, shown);
+      $('body').innerHTML = page.length ? page.map((r) => {
+        const chg = r.pct_change;
+        return '<tr>' +
+          `<td class="l sym"><a href="https://www.nasdaq.com/market-activity/stocks/${encodeURIComponent(r.symbol.toLowerCase())}" target="_blank" rel="noopener">${we(r.symbol)}</a>` +
+          (mine.has(r.symbol) ? '<span class="held">held</span>' : '') + '</td>' +
+          `<td class="l nm" title="${we(r.name || '')}">${we(r.name || '—')}</td>` +
+          `<td class="l">${we(r.exchange || '—')}</td>` +
+          `<td>${money(r.market_cap)}</td>` +
+          `<td>${price(r.last_sale)}</td>` +
+          `<td class="${chg == null ? '' : chg < 0 ? 'neg' : 'pos'}">${pct(chg)}</td>` +
+          `<td>${num(r.volume)}</td>` +
+          `<td class="l tx" title="${we(r.sector || '')}">${we(r.sector || '—')}</td>` +
+          `<td class="l tx" title="${we(r.industry || '')}">${we(r.industry || '—')}</td>` +
+          `<td>${r.ipo_year || '—'}</td>` +
+          `<td class="l tx">${we(r.country || '—')}</td>` +
+          '</tr>';
+      }).join('') : `<tr><td class="empty" colspan="${COLS.length}">Nothing matches — widen the filter${rows.length ? '' : ', or pull the list with Refresh from NASDAQ'}.</td></tr>`;
+      $('count').textContent = list.length
+        ? `Showing ${page.length.toLocaleString()} of ${list.length.toLocaleString()} matching · ${rows.length.toLocaleString()} stored`
+        : `${rows.length.toLocaleString()} stored`;
+      $('more').style.display = page.length < list.length ? '' : 'none';
+    }
+
+    // The pickers only ever offer values that are actually present, so a
+    // choice can never produce an empty table by itself.
+    function paintFilters() {
+      const fill = (id, vals, label) => {
+        const keep = $(id).value;
+        $(id).innerHTML = `<option value="">${label}</option>` +
+          vals.map((v) => `<option value="${we(v)}">${we(v)}</option>`).join('');
+        if (vals.includes(keep)) $(id).value = keep;
+      };
+      const uniq = (f) => [...new Set(rows.map(f).filter(Boolean))].sort();
+      fill('fEx', uniq((r) => r.exchange), 'All exchanges');
+      fill('fSec', uniq((r) => r.sector), 'All sectors');
+      fill('fInd', uniq((r) => r.industry), 'All industries');
+    }
+
+    function paintStats(meta) {
+      $('sTotal').textContent = rows.length.toLocaleString();
+      $('sBig').textContent = rows.filter((r) => r.market_cap >= 1e8).length.toLocaleString();
+      const at = meta && meta.fetchedAt;
+      $('sWhen').textContent = at
+        ? new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+        : 'never';
+    }
+
+    // ---- the refresh: one exchange per request ----------------------------
+    // Three requests rather than one, because the largest exchange is 4,130
+    // rows and a serverless function is not awake long enough for all three.
+    // The same reason Refresh all is a loop of rounds driven by the browser.
+    let busy = false;
+    async function refreshAll() {
+      if (busy) return;
+      busy = true;
+      $('refreshBtn').disabled = true;
+      let done = 0, total = 0, meta = null;
+      try {
+        const list = (window.__exchanges || ['NASDAQ', 'NYSE', 'AMEX']);
+        for (const ex of list) {
+          say(`Pulling ${ex}…`);
+          const r = await api('POST', '/api/nasdaq/refresh', { exchange: ex });
+          done++; total += r.rows; meta = r.meta;
+          say(`${ex}: ${r.rows.toLocaleString()} rows in ${(r.ms / 1000).toFixed(1)}s (${done}/${list.length})`, 'good');
+        }
+        await load();
+        say(`Pulled ${total.toLocaleString()} listings across ${done} exchanges.`, 'good');
+      } catch (err) {
+        // A part-finished pull is not a failure to hide: whatever landed is
+        // stored per exchange, so say how far it got.
+        say(`Stopped after ${done} of 3: ${err.message}`, 'bad');
+        await load().catch(() => {});
+      } finally {
+        busy = false;
+        $('refreshBtn').disabled = false;
+      }
+    }
+
+    async function load() {
+      const d = await api('GET', '/api/nasdaq');
+      rows = d.rows || [];
+      window.__exchanges = d.exchanges;
+      paintFilters();
+      paintStats(d.meta);
+      paint();
+    }
+
+    (async function boot() {
+      ['q', 'fEx', 'fCap', 'fSec', 'fInd', 'fIpo'].forEach((id) =>
+        $(id).addEventListener('input', () => { shown = 500; paint(); }));
+      $('fNew').addEventListener('click', () => {
+        const on = !$('fNew').classList.contains('on');
+        $('fNew').classList.toggle('on', on);
+        $('fNew').setAttribute('aria-pressed', String(on));
+        shown = 500;
+        paint();
+      });
+      $('more').addEventListener('click', () => { shown += 500; paint(); });
+      $('refreshBtn').addEventListener('click', refreshAll);
+
+      // Which symbols are already in the screener — used only to MARK rows and
+      // to filter them out while hunting for candidates. Nothing flows the
+      // other way: no NASDAQ value is ever written into the screener.
+      try {
+        const p = await api('GET', '/api/portfolios');
+        mine = new Set(Object.values(p.portfolios || {}).flat());
+      } catch (e) { /* the page still works without the badges */ }
+
+      try {
+        await load();
+        if (!rows.length) say('Nothing stored yet — pull the list with Refresh from NASDAQ.', 'bad');
+      } catch (err) {
+        say(err.message, 'bad');
+      }
+    })();
+  </script>
+</body>
+</html>

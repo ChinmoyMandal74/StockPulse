@@ -332,6 +332,31 @@ const SCHEMA = [
      total      integer,
      actor      text
    )`,
+
+  // Every US listing NASDAQ publishes, as a REFERENCE LIST and nothing more.
+  // It is deliberately not joined to anything: the screener's universe, its
+  // sectors and its industries come from Twelve Data, and NASDAQ's taxonomy is
+  // a third one that agrees with neither GICS nor Twelve Data. Mixing them
+  // would put two vendors' judgements in one column. This table exists so a
+  // candidate ticker can be FOUND; adding it is still a deliberate act.
+  `create table if not exists nasdaq_listings (
+     symbol     text primary key,
+     exchange   text,
+     name       text,
+     last_sale  real,
+     net_change real,
+     pct_change real,
+     market_cap real,
+     country    text,
+     ipo_year   integer,
+     volume     integer,
+     sector     text,
+     industry   text,
+     url        text,
+     fetched_at integer not null
+   )`,
+  // The one question this table is for — "what is above N" — is a range scan.
+  'create index if not exists idx_nasdaq_cap on nasdaq_listings(market_cap)',
 ];
 
 // Columns added after a table shipped. SQLite has no "add column if not
@@ -658,6 +683,81 @@ async function readRefreshState() {
 async function markRefreshPrices() {
   await init();
   await db.execute({ sql: 'update refresh_state set prices_at = ? where id = 1', args: [Date.now()] });
+}
+
+// ---- the NASDAQ reference list --------------------------------------------
+
+// 13 columns against SQLite's 999-parameter ceiling puts a multi-row insert at
+// 76; 70 leaves room. One statement per 70 rows rather than one per row is the
+// same reasoning as writeMomentum — 4,130 statements is 4,130 to parse.
+const NASDAQ_CHUNK = 70;
+const NASDAQ_COLS = ['symbol', 'exchange', 'name', 'last_sale', 'net_change', 'pct_change',
+  'market_cap', 'country', 'ipo_year', 'volume', 'sector', 'industry', 'url', 'fetched_at'];
+
+// One exchange replaced wholesale, which is how a delisting leaves. Per
+// exchange rather than per pull so the refresh can run in three requests: the
+// largest is 4,130 rows and a serverless function is not awake for long.
+async function writeNasdaqExchange(exchange, rows) {
+  await init();
+  const at = Date.now();
+  await db.execute({ sql: 'delete from nasdaq_listings where exchange = ?', args: [exchange] });
+  if (!rows || !rows.length) return 0;
+  const placeholders = `(${NASDAQ_COLS.map(() => '?').join(', ')})`;
+  const stmts = [];
+  for (let i = 0; i < rows.length; i += NASDAQ_CHUNK) {
+    const slice = rows.slice(i, i + NASDAQ_CHUNK);
+    const args = [];
+    for (const r of slice) {
+      for (const c of NASDAQ_COLS) args.push(c === 'fetched_at' ? at : (r[c] ?? null));
+    }
+    stmts.push({
+      sql: `insert into nasdaq_listings (${NASDAQ_COLS.join(', ')})
+            values ${slice.map(() => placeholders).join(', ')}
+            on conflict(symbol) do update set
+              ${NASDAQ_COLS.filter((c) => c !== 'symbol').map((c) => `${c} = excluded.${c}`).join(', ')}`,
+      args,
+    });
+  }
+  // The bar-archive rule: libSQL takes a whole batch in one round trip, but
+  // not an arbitrarily large one.
+  for (let i = 0; i < stmts.length; i += 40) await db.batch(stmts.slice(i, i + 40), 'write');
+  return rows.length;
+}
+
+async function readNasdaqListings() {
+  await init();
+  // `url` is stored but not selected: every one of the 7,136 is exactly
+  // /market-activity/stocks/<lowercase symbol>, checked, so shipping it is
+  // 277 KB of something the page can derive.
+  const r = await db.execute(
+    `select symbol, exchange, name, last_sale, net_change, pct_change, market_cap,
+            country, ipo_year, volume, sector, industry
+       from nasdaq_listings order by market_cap desc`);
+  // Named, not spread: a libSQL Row answers to its column names but spreads
+  // to POSITIONAL keys, so `{ ...row }` hands the client {0: 'AAPL', 1: ...}
+  // and every field on the page reads undefined.
+  return r.rows.map((x) => ({
+    symbol: x.symbol, exchange: x.exchange, name: x.name,
+    last_sale: x.last_sale, net_change: x.net_change, pct_change: x.pct_change,
+    market_cap: x.market_cap, country: x.country, ipo_year: x.ipo_year,
+    volume: x.volume, sector: x.sector, industry: x.industry,
+  }));
+}
+
+// Counts and the clock, for a page that has to say how stale it is before it
+// is worth reading.
+async function nasdaqMeta() {
+  await init();
+  const r = await db.execute(
+    `select exchange, count(*) as n, max(fetched_at) as at from nasdaq_listings group by exchange`);
+  const byExchange = {};
+  let total = 0, at = 0;
+  for (const row of r.rows) {
+    byExchange[row.exchange || '?'] = { rows: Number(row.n), fetchedAt: Number(row.at) || 0 };
+    total += Number(row.n);
+    if (Number(row.at) > at) at = Number(row.at);
+  }
+  return { total, fetchedAt: at || null, byExchange };
 }
 
 // ---- daily bars -----------------------------------------------------------
@@ -1684,6 +1784,9 @@ module.exports = {
   readShortNames,
   readNamesFull,
   writeShortName,
+  writeNasdaqExchange,
+  readNasdaqListings,
+  nasdaqMeta,
   readProfile,
   readProfiles,
   writeProfiles,

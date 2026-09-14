@@ -138,6 +138,7 @@
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M9.8 9.6a2.3 2.3 0 0 1 4.4.8c0 1.6-2.2 2-2.2 3.4"/><path d="M12 17.1h.01"/></symbol>
     <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.4" y="5.4" width="17.2" height="13.2" rx="2.4"/><path d="m3.8 7.4 7.4 5.2a1.4 1.4 0 0 0 1.6 0l7.4-5.2"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20.4 12.6c0 3.9-3.8 7-8.4 7-1 0-2-.15-2.9-.42L4 20.4l1.3-3.5A6.6 6.6 0 0 1 3.6 12.6c0-3.9 3.8-7 8.4-7s8.4 3.1 8.4 7Z"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.6h11.4"/><path d="M9 12h11.4"/><path d="M9 17.4h11.4"/><path d="M4.6 6.6h.01"/><path d="M4.6 12h.01"/><path d="M4.6 17.4h.01"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.8 4.4 4.4L19 7.6"/></symbol>
     <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 4 2.5 5.1 5.6.8-4 3.9 1 5.6L12 16.8 6.9 19.4l1-5.6-4-3.9 5.6-.8Z"/></symbol>
   </svg>
@@ -159,9 +160,10 @@
       <a class="jump" href="#data"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Data</a>
       <a class="jump" href="#research"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-research" /></svg>Research</a>
       <a class="jump" href="#scoring"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>Scoring</a>
+      <a class="jump" href="#listings"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-list" /></svg>Reference</a>
       <a class="jump" href="#studio"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-star" /></svg>Studio</a>
       <a class="jump" href="#people"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-users" /></svg>People &amp; logs</a>
-      <a class="jump" href="#reference"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-help" /></svg>Reference</a>
+      <a class="jump" href="#reference"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-help" /></svg>Help &amp; contact</a>
     </nav>
 
     <!-- ================= data ================= -->
@@ -260,6 +262,23 @@
         <a href="/help#weights">What does each factor mean?</a></p>
     </section>
 
+    <!-- ================= reference data ================= -->
+    <section id="listings">
+      <div class="sec-head"><h2>Reference data</h2><p>Other people's lists, kept at arm's length from ours.</p></div>
+      <div class="bezel card"><div class="core">
+        <div class="grid">
+          <a class="row warm" href="/nasdaq"><svg class="ic" aria-hidden="true"><use href="#i-list" /></svg>
+            <span class="txt"><span class="nm">NASDAQ listings</span>
+              <span class="hint">Every US-listed company with a market cap beside it — free, keyless, and joined to nothing. Where to go looking for a candidate ticker.</span></span></a>
+        </div>
+      </div></div>
+      <p class="note">Twelve Data will not sell this on the current plan at a sane price: <code>/market_cap</code> is
+        Ultra-only and <code>/statistics</code> is 50 credits a symbol, so sweeping NYSE and NASDAQ would be about
+        287,000 credits and eight hours. NASDAQ publishes the same thing for nothing. It lives in its own table on
+        its own page and is never joined to the screener — its sector and industry are a third taxonomy, and its
+        market cap is a different vendor's snapshot on a different clock.</p>
+    </section>
+
     <!-- ================= studio ================= -->
     <section id="studio">
       <div class="sec-head"><h2>Studio</h2><p>Making something postable out of tonight's data.</p></div>
@@ -290,7 +309,7 @@
 
     <!-- ================= reference ================= -->
     <section id="reference">
-      <div class="sec-head"><h2>Reference</h2><p>The pages every signed-in user can reach too.</p></div>
+      <div class="sec-head"><h2>Help &amp; contact</h2><p>The pages every signed-in user can reach too.</p></div>
       <div class="bezel card"><div class="core">
         <div class="grid">
           <a class="row" href="/help"><svg class="ic" aria-hidden="true"><use href="#i-help" /></svg>
