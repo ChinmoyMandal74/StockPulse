@@ -437,8 +437,15 @@
        click that removes everything else. Amber when armed, because the rows
        it leaves are the ones the rules just moved. */
     /* a picker that is filtering says so, the way the weight lens does */
-    #secBtn.on { color: var(--accent); border-color: rgba(124, 156, 255, 0.45);
+    #secBtn.on, #indBtn.on { color: var(--accent); border-color: rgba(124, 156, 255, 0.45);
                  background: rgba(124, 156, 255, 0.09); }
+    /* Industry names run long — "Farm & Heavy Construction Machinery" is one
+       of ours — so the trigger truncates rather than stretching the bar past
+       the width where it wraps onto a second line. */
+    #indBtn .count { max-width: 148px; overflow: hidden; text-overflow: ellipsis;
+                     white-space: nowrap; display: inline-block; vertical-align: -3px; }
+    /* and the menu itself, which is a list of them */
+    #indMenu .pick .nm { white-space: normal; }
     .chgFilter { gap: 7px; white-space: nowrap; }
     .chgFilter .n { font-family: var(--mono); font-weight: 600; }
     .chgFilter.on { color: var(--amber); border-color: rgba(251, 191, 36, 0.45);
@@ -623,6 +630,7 @@
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.9 13.6A8 8 0 1 1 18.1 7.3"/><path d="M18.7 3.2v4.4h-4.4"/></symbol>
     <symbol id="i-refresh-all" viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-13.6 5.7"/><path d="M4 12a8 8 0 0 1 13.6-5.7"/><path d="M17.6 2.6v4h-4"/><path d="M6.4 21.4v-4h4"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.6v11.8"/><path d="M7.6 11.2 12 15.6l4.4-4.4"/><path d="M4.6 19.6h14.8"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3.6 8.4 4.2-8.4 4.2-8.4-4.2Z"/><path d="m3.6 12 8.4 4.2 8.4-4.2"/><path d="m3.6 16.2 8.4 4.2 8.4-4.2"/></symbol>
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.4 19.4 6v5.6c0 4.2-3 7.5-7.4 9-4.4-1.5-7.4-4.8-7.4-9V6Z"/><path d="m9.2 12 2 2 3.6-3.8"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.6" y="10.4" width="14.8" height="10" rx="3"/><path d="M8.4 10.4V7.6a3.6 3.6 0 0 1 7.2 0v2.8"/></symbol>
     <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14.6 4.6h3.2a2 2 0 0 1 2 2v10.8a2 2 0 0 1-2 2h-3.2"/><path d="M9.4 8.2 5.6 12l3.8 3.8"/><path d="M5.6 12h9"/></symbol>
@@ -672,6 +680,10 @@
         <div class="picker" id="secPicker" data-open="0">
           <button class="btn picker-btn" id="secBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="secMenu" role="listbox" aria-label="Sector"></div>
+        </div>
+        <div class="picker" id="indPicker" data-open="0">
+          <button class="btn picker-btn" id="indBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="picker-menu" id="indMenu" role="listbox" aria-label="Industry"></div>
         </div>
         <div class="picker" id="pastPicker" data-open="0">
           <button class="btn picker-btn" id="pastBtn" aria-haspopup="listbox" aria-expanded="false"></button>
@@ -1378,6 +1390,7 @@
       { root: 'picker', btn: 'pickerBtn', menu: 'pickerMenu' },
       { root: 'colPicker', btn: 'colBtn', menu: 'colMenu' },
       { root: 'secPicker', btn: 'secBtn', menu: 'secMenu' },
+      { root: 'indPicker', btn: 'indBtn', menu: 'indMenu' },
       { root: 'pastPicker', btn: 'pastBtn', menu: 'pastMenu' },
       { root: 'actPicker', btn: 'actBtn', menu: 'actMenu' },
       { root: 'researchPicker', btn: 'researchBtn', menu: 'researchMenu' },
@@ -1555,6 +1568,10 @@
     // once would answer none of them.
     let changedOnly = false;
     let sectorFilter = 'All';
+    // The finer cut, and it lives INSIDE the sector: an industry belongs to
+    // exactly one, so the menu only ever offers what the current sector holds
+    // and a sector change drops an industry that is no longer in scope.
+    let industryFilter = 'All';
     const adviceMoved = (s) => !!(s && s.advicePrev && s.action && s.advicePrev !== s.action);
 
     // Tab and sector together decide what the view is ABOUT; the changed
@@ -1572,6 +1589,7 @@
         }
       }
       if (sectorFilter !== 'All') rows = rows.filter((s) => s.sector === sectorFilter);
+      if (industryFilter !== 'All') rows = rows.filter((s) => s.industry === industryFilter);
       return rows;
     }
 
@@ -1584,10 +1602,7 @@
     // holding nothing here is not offered, and the one in force is kept on
     // the list even at zero so it can always be switched off again.
     function renderSectorMenu() {
-      const inTab = activeTab === 'All' ? stocks
-        : isMyTab(activeTab)
-          ? stocks.filter((s) => (myPortfolios[myTabName(activeTab)] || []).includes(s.symbol))
-          : stocks.filter((s) => (s.portfolios || []).includes(activeTab));
+      const inTab = tabStocks();
       const counts = {};
       inTab.forEach((s) => { if (s.sector) counts[s.sector] = (counts[s.sector] || 0) + 1; });
       const names = Object.keys(counts).sort();
@@ -1604,10 +1619,81 @@
         b.addEventListener('click', () => {
           sectorFilter = b.dataset.sec;
           window.track && track('picker', 'sector:' + sectorFilter);
+          // An industry sits inside exactly one sector, so one left over from
+          // the previous choice would filter the table down to nothing and
+          // look like a bug. Dropped only when it really is out of scope, so
+          // clearing the sector keeps an industry that still applies.
+          if (industryFilter !== 'All' && !scopedStocks().some((x) => x.industry === industryFilter)) {
+            industryFilter = 'All';
+          }
           closePickers();
           render();
         });
       });
+    }
+
+    // Everything in the tab, before either classification filter — the common
+    // starting point for both menus, so a count in one can never describe a
+    // different population from a count in the other.
+    function tabStocks() {
+      if (activeTab === 'All') return stocks;
+      if (isMyTab(activeTab)) {
+        const set = new Set(myPortfolios[myTabName(activeTab)] || []);
+        return stocks.filter((s) => set.has(s.symbol));
+      }
+      return stocks.filter((s) => (s.portfolios || []).includes(activeTab));
+    }
+
+    // The industries present in the current tab AND the current sector. The
+    // taxonomy nests, so offering "Banks - Diversified" while Technology is
+    // selected would offer a guaranteed-empty table.
+    function renderIndustryMenu() {
+      const inScope = tabStocks().filter((s) => sectorFilter === 'All' || s.sector === sectorFilter);
+      const counts = {};
+      inScope.forEach((s) => { if (s.industry) counts[s.industry] = (counts[s.industry] || 0) + 1; });
+      const names = Object.keys(counts).sort();
+      if (industryFilter !== 'All' && !counts[industryFilter]) names.push(industryFilter);
+      const row = (val, label, n) =>
+        `<button class="pick ${industryFilter === val ? 'on' : ''}" data-ind="${we(val)}" role="option" ` +
+        `aria-selected="${industryFilter === val}"><span class="nm">${we(label)}</span>` +
+        `<span class="count">${n}</span></button>`;
+      // The field arrives one profile at a time, as each company's cache
+      // expires and is re-pulled — so for a while most rows have no industry,
+      // and a menu whose counts do not add up to the total should say why
+      // rather than look like it is losing rows.
+      const blank = inScope.filter((x) => !x.industry).length;
+      const note = !names.length
+        ? 'No industry recorded here yet — it arrives as each company profile is next re-pulled.'
+        : blank
+          ? `${blank} of these ${blank === 1 ? 'has' : 'have'} no industry recorded yet — the field fills in ` +
+            'as each company profile is next re-pulled, so these counts grow.'
+          : '';
+      $('indMenu').innerHTML = '<div class="picker-inner">' +
+        row('All', 'All industries', inScope.length) +
+        names.map((n) => row(n, n, counts[n] || 0)).join('') +
+        (note ? `<div class="pick-sep"></div><div class="pick-hint">${we(note)}</div>` : '') +
+        '</div>';
+      $('indMenu').querySelectorAll('[data-ind]').forEach((b) => {
+        b.addEventListener('click', () => {
+          industryFilter = b.dataset.ind;
+          window.track && track('picker', 'industry:' + industryFilter);
+          closePickers();
+          render();
+        });
+      });
+    }
+
+    function renderIndustryTrigger() {
+      const on = industryFilter !== 'All';
+      $('indBtn').innerHTML =
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-layers" /></svg>' +
+        '<span class="picker-label">Industry</span>' +
+        `<span class="count">${on ? we(industryFilter) : 'All'}</span>` +
+        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
+      $('indBtn').classList.toggle('on', on);
+      $('indBtn').title = on
+        ? `Showing ${industryFilter} only — open to change or clear`
+        : 'Filter the table to one industry — the finer cut inside the sector, from the same profile data. Not GICS.';
     }
 
     function renderSectorTrigger() {
@@ -1645,6 +1731,7 @@
     function render() {
       renderPicker();
       renderSectorTrigger();
+      renderIndustryTrigger();
       renderChangedChip();
       renderLensChip();
       renderActTrigger();
@@ -1659,11 +1746,15 @@
 
       if (rows.length === 0) {
         const tabName = activeTab === 'All' ? 'the screen' : `"${isMyTab(activeTab) ? myTabName(activeTab) : activeTab}"`;
-        const where = sectorFilter === 'All' ? tabName : `${sectorFilter} in ${tabName}`;
+        // Name the narrowest filter in force: it is the one that emptied the
+        // table, and the one to clear first.
+        const narrowest = industryFilter !== 'All' ? industryFilter
+          : sectorFilter !== 'All' ? sectorFilter : 'All';
+        const where = narrowest === 'All' ? tabName : `${narrowest} in ${tabName}`;
         const msg = changedOnly
           ? `Every verdict in ${where} held since the previous session — nothing changed to show.`
-          : sectorFilter !== 'All'
-            ? `Nothing in ${where} — clear the sector filter to see the rest.`
+          : narrowest !== 'All'
+            ? `Nothing in ${where} — clear the ${industryFilter !== 'All' ? 'industry' : 'sector'} filter to see the rest.`
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
@@ -2839,6 +2930,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         // replace the slider under the cursor and kill the gesture.
         if (opening && p.root === 'actPicker') renderActMenu();
         if (opening && p.root === 'secPicker') renderSectorMenu();
+        if (opening && p.root === 'indPicker') renderIndustryMenu();
         if (opening && p.root === 'pastPicker') renderPastMenu();
         openPicker(opening ? p.root : null);
       });
