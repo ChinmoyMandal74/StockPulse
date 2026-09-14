@@ -194,6 +194,63 @@
         </div>
       </div>
 
+      <div id="fundBox">
+        <label>Show</label>
+        <select id="fundMode">
+          <option value="rank" selected>A ranking</option>
+          <option value="quad">Growth against margin</option>
+          <option value="shape">What the screen is made of</option>
+          <option value="one">One company, in full</option>
+        </select>
+        <div id="fundMetricWrap">
+          <label>Measure</label>
+          <select id="fundMetric">
+            <optgroup label="Size">
+              <option value="rev" selected>Revenue</option>
+              <option value="gp">Gross profit</option>
+              <option value="ni">Net income</option>
+              <option value="fcf">Free cash flow</option>
+              <option value="cash">Net cash</option>
+              <option value="cap">Market cap</option>
+            </optgroup>
+            <optgroup label="Margins &amp; growth">
+              <option value="gm">Gross margin</option>
+              <option value="pm">Profit margin</option>
+              <option value="fm">FCF margin</option>
+              <option value="rg">Revenue growth</option>
+              <option value="eg">Earnings growth</option>
+              <option value="roe">Return on equity</option>
+            </optgroup>
+            <optgroup label="Valuation">
+              <option value="pe">Forward P/E</option>
+              <option value="peg">PEG</option>
+              <option value="fy">FCF yield</option>
+              <option value="ncp">Net cash, % of cap</option>
+              <option value="shrt">Short interest</option>
+            </optgroup>
+          </select>
+          <label>Which end</label>
+          <select id="fundDir">
+            <option value="high" selected>Biggest</option>
+            <option value="low">Smallest</option>
+          </select>
+          <label>How many</label>
+          <select id="fundCount">
+            <option value="5">Top 5</option>
+            <option value="10" selected>Top 10</option>
+            <option value="15">Top 15</option>
+          </select>
+        </div>
+        <div id="fundSymWrap">
+          <label>Stock</label>
+          <select id="fundSym"></select>
+        </div>
+        <div id="fundScopeWrap">
+          <label>Within</label>
+          <select id="fundScope"><option value="All">All screened</option></select>
+        </div>
+      </div>
+
       <div id="intBox">
         <label>Topic</label>
         <select id="intTopic"></select>
@@ -251,6 +308,7 @@
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'advboard', name: 'Advice', note: 'What the rules read, four ways' },
+      { id: 'fund', name: 'Fundamentals', note: 'Size, margins, growth \u2014 four ways' },
       { id: 'advice', name: 'The rules changed their mind', note: 'Today’s advice changes, rule named' },
       { id: 'breakout', name: 'Breakout radar', note: 'Fresh 3-month highs, volume-checked' },
       { id: 'stance', name: 'Where the market stands', note: 'The universe by trend state' },
@@ -285,6 +343,7 @@
     const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movScope',
       'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym',
       'advMode', 'advTier', 'advSym', 'advScope', 'advProf',
+      'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
       const o = {};
@@ -307,6 +366,11 @@
       $('chtBox').style.display = tpl === 'chart' ? 'block' : 'none';
       $('intBox').style.display = tpl === 'intro' ? 'block' : 'none';
       $('advBox').style.display = tpl === 'advboard' ? 'block' : 'none';
+      $('fundBox').style.display = tpl === 'fund' ? 'block' : 'none';
+      const fm = $('fundMode').value;
+      $('fundMetricWrap').style.display = fm === 'rank' ? 'block' : 'none';
+      $('fundSymWrap').style.display = fm === 'one' ? 'block' : 'none';
+      $('fundScopeWrap').style.display = fm === 'one' ? 'none' : 'block';
       const am = $('advMode').value;
       $('advTierWrap').style.display = am === 'tier' ? 'block' : 'none';
       $('advSymWrap').style.display = am === 'profiles' ? 'block' : 'none';
@@ -373,6 +437,8 @@
     $('advProf').innerHTML = Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
     ['advMode', 'advTier', 'advSym', 'advScope', 'advProf'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'advboard') render(); }));
+    ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'fund') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
     $('intSlide').addEventListener('change', () => { if (tpl === 'intro') render(); });
@@ -628,6 +694,8 @@
           .map((r) => `<option value="${esc(r.symbol)}">${esc(r.symbol)}</option>`).join('');
         $('advScope').innerHTML = $('movScope').innerHTML;
         $('advSym').innerHTML = $('chtSym').innerHTML;
+        $('fundScope').innerHTML = $('movScope').innerHTML;
+        $('fundSym').innerHTML = $('chtSym').innerHTML;
         paintControls();
         render();
         if (reload) $('reloadBtn').textContent = 'Re-pulled ✓';

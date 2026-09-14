@@ -758,6 +758,222 @@
 
     // ---- render ------------------------------------------------------------
 
+  // ---- the Fundamentals cards --------------------------------------------
+  // Four readings of the company data: a ranking on one measure, the shape
+  // of the whole screen, growth against margin as a picture, and one company
+  // in full. Size and Fundamentals are the same card — an absolute is just a
+  // metric whose units are money.
+  const FUND_METRICS = {
+    rev:   ['revenueTtm', 'Revenue', 'money'],
+    gp:    ['grossProfitTtm', 'Gross profit', 'money'],
+    ni:    ['netIncomeTtm', 'Net income', 'money'],
+    fcf:   ['fcfTtm', 'Free cash flow', 'money'],
+    cash:  ['netCash', 'Net cash', 'money'],
+    cap:   ['marketCap', 'Market cap', 'money'],
+    gm:    ['grossMargin', 'Gross margin', 'pct'],
+    pm:    ['profitMargin', 'Profit margin', 'pct'],
+    fm:    ['fcfMargin', 'FCF margin', 'pct'],
+    rg:    ['revenueGrowthYoY', 'Revenue growth', 'pct'],
+    eg:    ['earningsGrowthYoY', 'Earnings growth', 'pct'],
+    roe:   ['roe', 'Return on equity', 'pct'],
+    pe:    ['forwardPe', 'Forward P/E', 'ratio'],
+    peg:   ['peg', 'PEG', 'ratio'],
+    fy:    ['fcfYield', 'FCF yield', 'pct'],
+    ncp:   ['netCashPct', 'Net cash, % of cap', 'pct'],
+    shrt:  ['shortPctFloat', 'Short interest', 'pct'],
+  };
+  const MONEY_KEYS = new Set(['rev', 'gp', 'ni', 'fcf', 'cash', 'cap']);
+  function fmtMoney(v) {
+    if (v == null || !isFinite(v)) return '\u2014';
+    const a = Math.abs(v), sign = v < 0 ? '-' : '';
+    if (a >= 1e12) return sign + (a / 1e12).toFixed(2) + 'T';
+    if (a >= 1e9) return sign + (a / 1e9).toFixed(1) + 'B';
+    if (a >= 1e6) return sign + (a / 1e6).toFixed(0) + 'M';
+    return sign + a.toFixed(0);
+  }
+  const fmtMetric = (v, kind) => (v == null || !isFinite(v) ? '\u2014'
+    : kind === 'money' ? fmtMoney(v)
+    : kind === 'ratio' ? v.toFixed(1)
+    : v.toFixed(1) + '%');
+
+  function fundScope() {
+    const v = O.fundScope || 'All';
+    if (v === 'All') return { rows: stocks, label: 'the whole screen' };
+    if (v.startsWith('my:')) {
+      const nm = v.slice(3);
+      const set = new Set(myLists[nm] || []);
+      return { rows: stocks.filter((x) => set.has(x.symbol)), label: nm };
+    }
+    return { rows: stocks.filter((x) => (x.portfolios || []).includes(v)), label: v };
+  }
+
+  function tplFund() {
+    const mode = O.fundMode || 'rank';
+    const scope = fundScope();
+
+    // ---- one company, in full
+    if (mode === 'one') {
+      const sym = O.fundSym || (stocks[0] && stocks[0].symbol);
+      const r = stocks.find((x) => x.symbol === sym);
+      if (!r) return chromeTop() + '<div class="s-body"><div><p class="s-empty">Pick a stock.</p></div></div>' + chromeFoot();
+      const tiles = [
+        ['Revenue', fmtMoney(r.revenueTtm), 'ttm'],
+        ['Gross margin', fmtMetric(r.grossMargin, 'pct'), 'of revenue'],
+        ['Profit margin', fmtMetric(r.profitMargin, 'pct'), 'of revenue'],
+        ['Net income', fmtMoney(r.netIncomeTtm), 'ttm'],
+        ['Free cash flow', fmtMoney(r.fcfTtm), 'ttm'],
+        ['FCF margin', fmtMetric(r.fcfMargin, 'pct'), 'of revenue'],
+        ['Revenue growth', fmtMetric(r.revenueGrowthYoY, 'pct'), 'year on year'],
+        ['Net cash', fmtMoney(r.netCash), 'cash less debt'],
+        ['Forward P/E', fmtMetric(r.forwardPe, 'ratio'), 'on estimates'],
+      ];
+      const neg = (v) => (typeof v === 'string' && v.startsWith('-') ? ' neg' : '');
+      return chromeTop() +
+        `<div class="s-body"><div><span class="s-kick">${esc(r.sector || 'The numbers')} \u00b7 trailing twelve months</span>` +
+        `<h2 class="s-title">${esc(r.symbol)}<br><span class="dim">${esc(r.name || '')}</span></h2>` +
+        `<div class="fgrid">${tiles.map(([k, v, note]) =>
+          `<div class="ftile"><div class="fk">${esc(k)}</div>` +
+          `<div class="fv${neg(v)}">${esc(v)}</div><div class="fn2">${esc(note)}</div></div>`).join('')}</div>` +
+        `<p class="s-sub" style="font-size:18px;margin-top:24px">Quality ${r.qualityRating != null ? r.qualityRating + '/10' : 'not scored'} \u00b7 ` +
+        'reported figures, not estimates of what comes next.</p>' +
+        '</div></div>' + chromeFoot();
+    }
+
+    // ---- the shape of the screen
+    if (mode === 'shape') {
+      const rows = scope.rows;
+      const bands = [
+        ['Profitable', (x) => x.netIncomeTtm != null && x.netIncomeTtm > 0, 'var(--green)', 'netIncomeTtm'],
+        ['Cash generative', (x) => x.fcfTtm != null && x.fcfTtm > 0, '#a3e635', 'fcfTtm'],
+        ['More cash than debt', (x) => x.netCash != null && x.netCash > 0, '#22d3ee', 'netCash'],
+        ['Gross margin over 50%', (x) => x.grossMargin != null && x.grossMargin > 50, 'var(--accent-2)', 'grossMargin'],
+        ['Growing revenue', (x) => x.revenueGrowthYoY != null && x.revenueGrowthYoY > 0, 'var(--amber)', 'revenueGrowthYoY'],
+      ];
+      return chromeTop() +
+        `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 reported figures</span>` +
+        '<h2 class="s-title">What the screen<br><span class="dim">is made of</span></h2>' +
+        `<div class="atally" style="margin-top:34px">${bands.map(([label, test, tint, key]) => {
+          const known = rows.filter((x) => x[key] != null);
+          const n = known.filter(test).length;
+          const d = known.length || 1;
+          return `<div class="arow"><span class="an" style="color:${tint}">${esc(label)}</span>` +
+            `<span class="arail"><span class="afill" style="display:block;width:${Math.max(2, n / d * 100)}%;background:${tint}"></span></span>` +
+            `<span class="ac">${n}</span><span class="ap">${Math.round(n / d * 100)}%</span></div>`;
+        }).join('')}</div>` +
+        '<p class="s-sub" style="font-size:19px;margin-top:28px">Counted out of the companies that report each figure. Facts about businesses, not opinions about prices.</p>' +
+        '</div></div>' + chromeFoot();
+    }
+
+    // ---- growth against margin
+    if (mode === 'quad') {
+      const pts = scope.rows
+        .filter((x) => x.revenueGrowthYoY != null && x.profitMargin != null)
+        .map((x) => ({ sym: x.symbol, x: x.revenueGrowthYoY, y: x.profitMargin }));
+      if (pts.length < 3) return chromeTop() + `<div class="s-body"><div><p class="s-empty">Not enough reported figures in ${esc(scope.label)} to plot.</p></div></div>` + chromeFoot();
+      const q = {
+        gp: pts.filter((p) => p.x > 0 && p.y > 0).length,
+        gl: pts.filter((p) => p.x > 0 && p.y <= 0).length,
+        sp: pts.filter((p) => p.x <= 0 && p.y > 0).length,
+        sl: pts.filter((p) => p.x <= 0 && p.y <= 0).length,
+      };
+      return chromeTop() +
+        `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 growth against margin</span>` +
+        '<h2 class="s-title">Who grows,<br><span class="dim">who earns</span></h2>' +
+        scatterSvg(pts, q) +
+        `<p class="s-sub" style="font-size:18px;margin-top:20px">${q.gp} of ${pts.length} are growing revenue AND profitable. ` +
+        'Each dot is one company: revenue growth across, profit margin up. Reported figures, no forecasts.</p>' +
+        '</div></div>' + chromeFoot();
+    }
+
+    // ---- the ranking
+    const key = FUND_METRICS[O.fundMetric] ? O.fundMetric : 'rev';
+    const [field, label, kind] = FUND_METRICS[key];
+    const top = O.fundDir !== 'low';
+    const n = Number(O.fundCount) || 10;
+    let rows = scope.rows.filter((x) => x[field] != null && isFinite(x[field]));
+    // A negative multiple is arithmetic, not cheapness: the same reason the
+    // Quality score refuses a P/E or a PEG from a loss-maker.
+    if ((key === 'pe' || key === 'peg') ) rows = rows.filter((x) => x[field] > 0);
+    // Net cash means nothing for a bank, and neither does gross margin — a
+    // lender has no cost of goods, which is why JPM reports exactly 100%.
+    if (key === 'cash' || key === 'ncp' || key === 'gm') {
+      rows = rows.filter((x) => x.sector !== 'Financial Services');
+    }
+    // Everything absolute is in the reporting currency, so a single foreign
+    // reporter would top the list for the wrong reason. Silent when the
+    // screen is all-USD, which it is.
+    if (MONEY_KEYS.has(key)) rows = rows.filter((x) => !x.currency || x.currency === 'USD');
+    rows = rows.sort((a, b) => (top ? b[field] - a[field] : a[field] - b[field])).slice(0, n);
+    if (!rows.length) {
+      return chromeTop() + `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}</span>` +
+        `<h2 class="s-title">${esc(label)}</h2><p class="s-empty">Nothing in ${esc(scope.label)} reports this yet.</p></div></div>` + chromeFoot();
+    }
+    const mx = Math.max(...rows.map((x) => Math.abs(x[field])), 1e-9);
+    return chromeTop() +
+      `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 reported figures</span>` +
+      `<h2 class="s-title">${top ? 'Biggest' : 'Smallest'}<br><span class="dim">${esc(label.toLowerCase())}</span></h2>` +
+      `<div class="rows">${rows.map((x) => {
+        const v = x[field];
+        const w = Math.max(5, Math.round(Math.abs(v) / mx * 100));
+        const neg = v < 0;
+        return `<div class="row"><span class="sym">${esc(x.symbol)}</span>` +
+          `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
+          `<span class="val ${neg ? 'neg' : 'pos'}">${esc(fmtMetric(v, kind))}</span></div>`;
+      }).join('')}</div>` +
+      `<p class="s-sub" style="font-size:18px;margin-top:22px">${esc(label)}${kind === 'money' ? ', trailing twelve months' : ''} \u2014 ` +
+      'as reported. A fact about the business, not a view on the price.</p>' +
+      '</div></div>' + chromeFoot();
+  }
+
+  // The quadrant plot. Axes cover the middle 96% and the strays are pinned to
+  // the edge in amber and counted, the same treatment the signal study uses:
+  // three runaway growth rates would otherwise press every other dot into a
+  // band a few pixels tall.
+  function scatterSvg(pts, q) {
+    const W = 952, H = size.id === 'story' ? 720 : size.id === 'square' ? 470 : 600;
+    const PL = 96, PR = 30, PT = 24, PB = 60;
+    const span = (vals) => {
+      const a = vals.slice().sort((m, n) => m - n);
+      const lo = a[Math.floor(a.length * 0.02)], hi = a[Math.ceil(a.length * 0.98) - 1];
+      return [Math.min(lo, 0), Math.max(hi, 0)];
+    };
+    let [x0, x1] = span(pts.map((p) => p.x));
+    let [y0, y1] = span(pts.map((p) => p.y));
+    const padX = (x1 - x0) * 0.08 || 1, padY = (y1 - y0) * 0.08 || 1;
+    x0 -= padX; x1 += padX; y0 -= padY; y1 += padY;
+    const X = (v) => PL + (Math.min(Math.max(v, x0), x1) - x0) / (x1 - x0) * (W - PL - PR);
+    const Y = (v) => PT + (1 - (Math.min(Math.max(v, y0), y1) - y0) / (y1 - y0)) * (H - PT - PB);
+    const zx = X(0), zy = Y(0);
+    const stray = (p) => p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1;
+    // the eight furthest from the origin carry their ticker; labelling 140
+    // dots is mush
+    const named = pts.slice().sort((a, b) =>
+      (Math.abs(b.x) / (x1 - x0) + Math.abs(b.y) / (y1 - y0)) -
+      (Math.abs(a.x) / (x1 - x0) + Math.abs(a.y) / (y1 - y0))).slice(0, 8);
+    const isNamed = new Set(named.map((p) => p.sym));
+    const dots = pts.map((p) => {
+      const s2 = stray(p);
+      const c = s2 ? '#fbbf24' : (p.x > 0 && p.y > 0) ? '#34d399' : (p.y <= 0) ? '#fb7185' : '#7c9cff';
+      return `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="${isNamed.has(p.sym) ? 9 : 6.5}" fill="${c}" opacity="${s2 ? 1 : 0.72}"/>`;
+    }).join('');
+    const labels = named.map((p) =>
+      `<text x="${(X(p.x) + 13).toFixed(1)}" y="${(Y(p.y) + 6).toFixed(1)}" font-size="19" font-weight="600" fill="#e9ecf2" font-family="Geist Mono, monospace">${esc(p.sym)}</text>`).join('');
+    const quad = (tx, ty, anchor, text, tint) =>
+      `<text x="${tx}" y="${ty}" text-anchor="${anchor}" font-size="18" font-weight="600" fill="${tint}" font-family="Geist, sans-serif" opacity="0.85">${esc(text)}</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:26px" role="img" aria-label="growth against margin">` +
+      `<rect x="${zx}" y="${PT}" width="${W - PR - zx}" height="${zy - PT}" fill="rgba(52,211,153,0.05)"/>` +
+      `<line x1="${PL}" y1="${zy.toFixed(1)}" x2="${W - PR}" y2="${zy.toFixed(1)}" stroke="rgba(255,255,255,0.22)"/>` +
+      `<line x1="${zx.toFixed(1)}" y1="${PT}" x2="${zx.toFixed(1)}" y2="${H - PB}" stroke="rgba(255,255,255,0.22)"/>` +
+      dots + labels +
+      quad(W - PR - 8, PT + 24, 'end', `growing & profitable \u00b7 ${q.gp}`, '#34d399') +
+      quad(W - PR - 8, H - PB - 12, 'end', `growing & losing \u00b7 ${q.gl}`, '#fb7185') +
+      quad(PL + 8, PT + 24, 'start', `shrinking & profitable \u00b7 ${q.sp}`, '#7c9cff') +
+      quad(PL + 8, H - PB - 12, 'start', `shrinking & losing \u00b7 ${q.sl}`, '#94a3b8') +
+      `<text x="${W - PR}" y="${H - 16}" text-anchor="end" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">revenue growth \u2192</text>` +
+      `<text x="20" y="${PT + 14}" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">\u2191 profit margin</text>` +
+      '</svg>';
+  }
+
   // The profile picture: the mark alone, full bleed, no header and no
   // footer — a bio avatar is shown at about a hundred pixels in a circle,
   // where a wordmark is mush and only a shape survives. Everything stays
@@ -773,7 +989,7 @@
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard, advice: tplAdvice,
     breakout: tplBreakout, stance: tplStance, intro: tplIntro, announce: tplAnnounce,
-    avatar: tplAvatar,
+    fund: tplFund, avatar: tplAvatar,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -995,6 +1211,17 @@
                 letter-spacing: -0.05em; white-space: pre-wrap; }
     .ann-body { margin: 30px 0 0; font-size: 27px; line-height: 1.55; color: var(--muted);
                 max-width: 34ch; white-space: pre-wrap; }
+
+    /* one company, in full: a grid of reported figures */
+    .fgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 34px; }
+    .ftile { padding: 20px 22px; border-radius: 17px; border: 1px solid var(--hair);
+             background: rgba(255, 255, 255, 0.024); }
+    .ftile .fk { font-size: 15px; font-weight: 500; text-transform: uppercase;
+                 letter-spacing: 0.14em; color: var(--faint); }
+    .ftile .fv { margin-top: 10px; font: 700 38px var(--mono); letter-spacing: -0.03em;
+                 color: var(--green); }
+    .ftile .fv.neg { color: var(--red); }
+    .ftile .fn2 { margin-top: 5px; font-size: 15px; color: var(--faint); }
 
     /* the avatar card: negative margins undo the stage's padding, since a
        profile picture bleeds to every edge */
