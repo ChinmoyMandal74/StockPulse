@@ -219,10 +219,11 @@
         <button id="motOn">Animate</button>
         <button id="motReplay" title="Play it again">Replay</button>
       </div>
-      <p class="hint" style="margin-top:6px">Animate, then screen-record the card (Win+G) for a reel.
-        Downloads stay still whichever is picked.</p>
+      <p class="hint" style="margin-top:6px">Animate previews the motion. Export video renders it to
+        an MP4 \u2014 no screen recorder, no editor.</p>
 
       <button class="btn" id="dlBtn" title="Render this card to a PNG at its exact pixel size">Download PNG</button>
+      <button class="btn" id="vidBtn" title="Render the animation to a video file">Export video</button>
       <p class="hint" id="dlMsg"></p>
       <button class="btn" id="reloadBtn">Re-pull tonight's data</button>
       <p class="hint">Download gives the exact artboard — 1080 wide at every size, no cropping,
@@ -450,6 +451,113 @@
       for (let i = 0; i < sk.length; i++) inlineStyles(sk[i], dk[i]);
     }
 
+    // One rasteriser, two exporters: the still takes a single shot of the
+    // card as it stands, the video takes eighty of them along the timeline.
+    async function shoot(fontCss, mime, quality) {
+      const stage = $('stage');
+      const clone = stage.cloneNode(true);
+      inlineStyles(stage, clone);
+      // the on-screen stage is scaled to fit the window; the export is not
+      clone.style.transform = 'none';
+      clone.style.width = '1080px';
+      clone.style.height = size.h + 'px';
+      const xhtml = new XMLSerializer().serializeToString(clone);
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="${size.h}">` +
+        `<foreignObject width="100%" height="100%"><style>${fontCss}</style>` +
+        `<div xmlns="http://www.w3.org/1999/xhtml">${xhtml}</div></foreignObject></svg>`;
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error('The browser refused to rasterise the card.'));
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      });
+      await new Promise((r) => requestAnimationFrame(r));
+      const cv = document.createElement('canvas');
+      cv.width = 1080; cv.height = size.h;
+      cv.getContext('2d').drawImage(img, 0, 0, 1080, size.h);
+      return new Promise((resolve, reject) =>
+        cv.toBlob((b) => (b ? resolve(b) : reject(new Error('Canvas export failed.'))), mime, quality));
+    }
+
+    // ---- Export video -----------------------------------------------------
+    // The animation is rendered frame by frame OFFLINE — each frame seeks the
+    // real Animation objects to one instant and photographs the card — then
+    // the frames are played into a MediaRecorder at the right pace. Rendering
+    // a frame costs about a tenth of a second, far slower than real time,
+    // which is exactly why the two passes are separate: the recording sees a
+    // steady 20fps regardless of how long the drawing took.
+    const VID_FPS = 20, VID_HOLD = 1400;
+    function videoMime() {
+      const want = ['video/mp4;codecs=avc1.42E01E', 'video/mp4',
+                    'video/webm;codecs=vp9', 'video/webm'];
+      return want.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || null;
+    }
+    async function exportVideo() {
+      const btn = $('vidBtn'), msg = $('dlMsg'), stage = $('stage');
+      const mime = videoMime();
+      if (!mime) { msg.textContent = 'This browser cannot record video; Animate + a screen recorder still works.'; return; }
+      btn.disabled = true;
+      $('dlBtn').disabled = true;
+      try {
+        const fontCss = await ensureFontCss();
+        const total = Math.round((Cards.MOTION_MS + VID_HOLD) / 1000 * VID_FPS);
+        const frames = [];
+        for (let i = 0; i < total; i++) {
+          Cards.freezeAt(stage, i * (1000 / VID_FPS));
+          // JPEG, not PNG: eighty full-size PNGs is a third of a gigabyte in
+          // memory, and the frames are about to be video-compressed anyway.
+          frames.push(await shoot(fontCss, 'image/jpeg', 0.94));
+          msg.textContent = `Rendering frame ${i + 1} of ${total}\u2026`;
+        }
+        msg.textContent = 'Recording\u2026';
+        const cv = document.createElement('canvas');
+        cv.width = 1080; cv.height = size.h;
+        const cx = cv.getContext('2d');
+        const stream = cv.captureStream(0);
+        const track = stream.getVideoTracks()[0];
+        const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 9e6 });
+        const chunks = [];
+        rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+        const done = new Promise((r) => { rec.onstop = r; });
+        const first = await createImageBitmap(frames[0]);
+        cx.drawImage(first, 0, 0);
+        first.close();
+        rec.start();
+        // A deadline loop rather than a sleep per frame: sleeps drift, and a
+        // drifting frame clock shows up as stutter in the finished file.
+        const t0 = performance.now();
+        for (let i = 0; i < frames.length; i++) {
+          const bmp = await createImageBitmap(frames[i]);
+          cx.drawImage(bmp, 0, 0);
+          bmp.close();
+          track.requestFrame();
+          const due = t0 + (i + 1) * (1000 / VID_FPS);
+          const wait = due - performance.now();
+          if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+        }
+        rec.stop();
+        await done;
+        const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm';
+        const blob = new Blob(chunks, { type: mime });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `tickrlab-${tpl}-${size.id}-${new Date().toISOString().slice(0, 10)}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+        msg.textContent = `Saved ${a.download} \u00b7 ${(blob.size / 1048576).toFixed(1)}MB, ` +
+          `${(frames.length / VID_FPS).toFixed(1)}s at ${VID_FPS}fps.`;
+      } catch (err) {
+        msg.textContent = 'Could not export video: ' + err.message;
+      }
+      Cards.unfreeze(stage);
+      render();
+      btn.disabled = false;
+      $('dlBtn').disabled = false;
+    }
+    $('vidBtn').addEventListener('click', exportVideo);
+
     async function downloadPng() {
       const btn = $('dlBtn'), msg = $('dlMsg');
       btn.disabled = true;
@@ -461,34 +569,10 @@
         // frame happened to be on, so the still is always taken still.
         const wasMoving = stage.classList.contains('motion');
         if (wasMoving) {
-          stage.classList.remove('motion');
+          Cards.unfreeze(stage);
           await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         }
-        const clone = stage.cloneNode(true);
-        inlineStyles(stage, clone);
-        // the on-screen stage is scaled to fit the window; the export is not
-        clone.style.transform = 'none';
-        clone.style.width = '1080px';
-        clone.style.height = size.h + 'px';
-        const xhtml = new XMLSerializer().serializeToString(clone);
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="${size.h}">` +
-          `<foreignObject width="100%" height="100%"><style>${fontCss}</style>` +
-          `<div xmlns="http://www.w3.org/1999/xhtml">${xhtml}</div></foreignObject></svg>`;
-        const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-        const img = new Image();
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = () => reject(new Error('The browser refused to rasterise the card.'));
-          img.src = url;
-        });
-        // fonts inside an SVG image can settle a beat after onload
-        await new Promise((r) => setTimeout(r, 120));
-        const cv = document.createElement('canvas');
-        cv.width = 1080; cv.height = size.h;
-        const cx = cv.getContext('2d');
-        cx.drawImage(img, 0, 0, 1080, size.h);
-        const blob = await new Promise((resolve, reject) =>
-          cv.toBlob((b) => (b ? resolve(b) : reject(new Error('Canvas export failed.'))), 'image/png'));
+        const blob = await shoot(fontCss, 'image/png');
         const a = document.createElement('a');
         const date = new Date().toISOString().slice(0, 10);
         a.href = URL.createObjectURL(blob);

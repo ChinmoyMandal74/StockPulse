@@ -964,26 +964,32 @@
     ` { animation: cRise .55s ${(0.28 + i * 0.06).toFixed(2)}s cubic-bezier(.22,1,.36,1) both; }`).join('\n');
 
   // Numbers land by counting, which is the difference between a screenshot
-  // that moves and something that reads as video. The final frame restores
-  // the exact original text, so no rounding drift survives the animation.
-  function countUp(root) {
+  // that moves and something that reads as video. The whole timeline is a
+  // pure function of elapsed milliseconds — the live preview walks it with
+  // rAF and the video exporter samples it frame by frame, so the two cannot
+  // disagree. The original text is stashed on the element the first time it
+  // is read, since later frames overwrite it.
+  const NUM_DELAY = 320, NUM_DUR = 950;
+  const MOTION_MS = 2600;                 // the animation's own length
+  function numberTargets(root) {
+    const out = [];
     root.querySelectorAll('.val, .cmp, .ac, .fn, .n, .fa').forEach((el) => {
-      const raw = el.textContent;
+      if (el.dataset.raw == null) el.dataset.raw = el.textContent;
+      const raw = el.dataset.raw;
       const m = /^(\D*)(-?\d[\d,]*(?:\.\d+)?)(.*)$/.exec(raw.trim());
       if (!m) return;
       const target = parseFloat(m[2].replace(/,/g, ''));
       if (!isFinite(target)) return;
-      const dec = (m[2].split('.')[1] || '').length;
-      const pre = m[1], post = m[3];
-      const t0 = performance.now(), delay = 320, dur = 950;
-      el.textContent = pre + (0).toFixed(dec) + post;
-      const step = (t) => {
-        const p = Math.max(0, Math.min(1, (t - t0 - delay) / dur));
-        if (p >= 1) { el.textContent = raw; return; }
-        el.textContent = pre + (target * (1 - Math.pow(1 - p, 3))).toFixed(dec) + post;
-        requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
+      out.push({ el, raw, pre: m[1], target,
+        dec: (m[2].split('.')[1] || '').length, post: m[3] });
+    });
+    return out;
+  }
+  function setNumbersAt(list, t) {
+    const p = Math.max(0, Math.min(1, (t - NUM_DELAY) / NUM_DUR));
+    const e = 1 - Math.pow(1 - p, 3);
+    list.forEach((n) => {
+      n.el.textContent = p >= 1 ? n.raw : n.pre + (n.target * e).toFixed(n.dec) + n.post;
     });
   }
 
@@ -995,7 +1001,39 @@
     root.classList.remove('motion');
     void root.offsetWidth;
     root.classList.add('motion');
-    countUp(root);
+    const list = numberTargets(root);
+    const t0 = performance.now();
+    const step = (t) => {
+      const el = t - t0;
+      setNumbersAt(list, el);
+      if (el < NUM_DELAY + NUM_DUR) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  // The exporter's half: pin every animation to one instant so the card can
+  // be photographed at that instant. CSS animations are real Animation
+  // objects, so seeking them is exact rather than a re-implementation.
+  function freezeAt(root, t) {
+    if (!root) return;
+    if (!root.classList.contains('motion')) root.classList.add('motion');
+    root.getAnimations({ subtree: true }).forEach((a) => {
+      try {
+        a.pause();
+        const end = (a.effect && a.effect.getComputedTiming().endTime) || t;
+        a.currentTime = Math.min(t, end);
+      } catch (e) { /* an animation that will not seek is left where it is */ }
+    });
+    setNumbersAt(numberTargets(root), t);
+  }
+  function unfreeze(root) {
+    if (!root) return;
+    root.getAnimations({ subtree: true }).forEach((a) => { try { a.cancel(); } catch (e) {} });
+    root.classList.remove('motion');
+    root.querySelectorAll('[data-raw]').forEach((el) => {
+      el.textContent = el.dataset.raw;
+      delete el.dataset.raw;
+    });
   }
 
   function injectStyle() {
@@ -1007,7 +1045,7 @@
   }
 
   window.Cards = {
-    STYLE, MOTION, injectStyle, motion,
+    STYLE, MOTION, injectStyle, motion, freezeAt, unfreeze, MOTION_MS,
     ids: Object.keys(BUILDERS),
     ADV_PROFILES,
     MOV_PERIODS,
