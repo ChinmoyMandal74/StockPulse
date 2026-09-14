@@ -78,8 +78,16 @@
     }
     const movScopeRows = () => scopeOf('movScope', 'movSector');
     // A feed reads a company name faster than a ticker, and the screener now
-    // carries one. The ticker remains the fallback for a row without a name.
-    const movLabel = (x) => x.shortName || x.name || x.symbol;
+    // carries one. Every card labels by it, falling back to the full name and
+    // then the ticker. The CHART is the deliberate exception: its legend
+    // chips and end tags sit in inches of space beside a drawn line, where a
+    // four-letter code is the only thing that fits.
+    const nameOf = (x) => (x && (x.shortName || x.name || x.symbol)) || '';
+    const symOf = (sym) => {
+      const r = stocks.find((x) => x.symbol === sym);
+      return r ? nameOf(r) : sym;
+    };
+    const movLabel = nameOf;
 
     function tplMovers() {
       const perKey = O.movPeriod;
@@ -258,7 +266,7 @@
           `<div style="margin-top:32px">${top.map(([flag, g]) =>
             `<div class="frule"><span class="fn" style="color:${ADV_TINT[g.action] || 'var(--green)'}">\u00d7${g.n}</span>` +
             `<span class="ft">${esc(flag)}<span style="display:block;font-size:18px;font-weight:500;color:var(--faint);margin-top:4px">` +
-            `now ${esc(g.action)} \u00b7 ${esc(g.syms.slice(0, 5).join(', '))}${g.syms.length > 5 ? ` +${g.syms.length - 5}` : ''}</span></span>` +
+            `now ${esc(g.action)} \u00b7 ${esc(g.syms.slice(0, 3).map(symOf).join(', '))}${g.syms.length > 3 ? ` +${g.syms.length - 3}` : ''}</span></span>` +
             '</div>').join('')}</div>` +
           `<p class="s-sub" style="font-size:19px;margin-top:26px">${changes.length} of ${rows.length} verdicts moved \u2014 ` +
           `<span style="color:var(--green)">${ups} up</span>, <span style="color:var(--red)">${downs} down</span>. ` +
@@ -276,7 +284,7 @@
         }).filter((r) => r.action);
         const agree = new Set(reads.map((r) => r.action)).size === 1;
         return chromeTop() +
-          `<div class="s-body"><div><span class="s-kick">${esc(sym)} \u00b7 five rule sets</span>` +
+          `<div class="s-body"><div><span class="s-kick">${esc(symOf(sym))} \u00b7 five rule sets</span>` +
           `<h2 class="s-title">${agree ? 'All five<br><span class="dim">agree</span>' : 'Where the rules<br><span class="dim">disagree</span>'}</h2>` +
           `<div style="margin-top:32px">${reads.map((r) =>
             `<div class="pcard"><span class="pn">${esc(r.pn)}</span>` +
@@ -293,7 +301,7 @@
         const tint = ADV_TINT[want] || 'var(--text)';
         const body = hits.length
           ? `<div style="margin-top:32px">${hits.map((s) =>
-              `<div class="vrow"><span class="vs">${esc(s.symbol)}</span>` +
+              `<div class="vrow"><span class="vs">${esc(nameOf(s))}</span>` +
               `<span class="vw">${esc(flagOf(s) || '')}</span>` +
               `<span class="vp" style="color:${tint}">${esc(s.actionTrend || '')}</span></div>`).join('')}</div>`
           : `<p class="s-empty">Nothing in ${esc(scope.label)} reads ${esc(want)} tonight.</p>`;
@@ -441,7 +449,7 @@
       return `<div class="flow">${rows.map(([k, q, v]) =>
         `<div class="flowrow"><span class="fk">${esc(k)}</span><span class="fq">${esc(q)}</span>` +
         `<span class="fv">${esc(v)}</span></div>`).join('')}</div>` +
-        `<div class="flowend"><div class="fl">${esc(r.symbol)} reads</div>` +
+        `<div class="flowend"><div class="fl">${esc(nameOf(r))} reads</div>` +
         `<div class="fa">${esc(r.action)}</div>` +
         `<div class="fw">because “${esc(r.actionFlag || '')}” fired first</div></div>`;
     }
@@ -467,7 +475,7 @@
         return `<div class="rung ${cls}"><span class="rs">${esc(SEC[g.section] || g.section)}</span>` +
           `<span class="rf">${esc(g.flag)}</span><span class="ra">${esc(right)}</span></div>`;
       }).join('')}</div>` +
-        `<p class="s-sub" style="font-size:18px;margin-top:20px">First match wins, so everything under the lit rung was never consulted — that is why one rule can always be named. This is ${esc(r.symbol)}, tonight.</p>`;
+        `<p class="s-sub" style="font-size:18px;margin-top:20px">First match wins, so everything under the lit rung was never consulted — that is why one rule can always be named. This is ${esc(nameOf(r))}, tonight.</p>`;
     }
 
     const TIER_DEF = [
@@ -781,7 +789,7 @@
             const v = x[field];
             const w = Math.max(5, Math.round(scale(v) * 100));
             const neg = v < 0;
-            return `<div class="row"><span class="sym">${esc(x.symbol)}</span>` +
+            return `<div class="row"><span class="nm2">${esc(nameOf(x))}</span>` +
               `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
               `<span class="val ${neg ? 'neg' : 'pos'}">${pct(v)}</span></div>`;
           }).join('')}</div>` +
@@ -803,7 +811,7 @@
           const p = Math.max(0, Math.min(100, x.range52Pos));
           const tint = p >= 66 ? '#34d399' : p >= 33 ? '#fbbf24' : '#fb7185';
           return '<div class="trk">' +
-            `<span class="ts">${esc(x.symbol)}</span>` +
+            `<span class="ts">${esc(nameOf(x))}</span>` +
             '<span class="trail">' +
             `<span class="tfill" style="width:${p}%;background:linear-gradient(90deg, rgba(255,255,255,0.05), ${tint})"></span>` +
             `<span class="tdot" style="left:${p}%;background:${tint}"></span></span>` +
@@ -861,7 +869,7 @@
           const S = series[x.symbol];
           let last = null;
           for (let i = S.length - 1; i >= 0 && last == null; i--) last = S[i];
-          return { sym: x.symbol, S, end: last == null ? null : (last - 1) * 100 };
+          return { sym: x.symbol, label: nameOf(x), S, end: last == null ? null : (last - 1) * 100 };
         })
         .filter((x) => x.end != null)
         .sort((a, b) => (best ? b.end - a.end : a.end - b.end))
@@ -879,7 +887,7 @@
         `<div class="spk" style="grid-template-columns:repeat(${cols},1fr)">${items.map((it) => {
           const color = it.end >= 0 ? '#34d399' : '#fb7185';
           return '<div class="spkt">' +
-            `<div class="sh"><span class="ss">${esc(it.sym)}</span>` +
+            `<div class="sh"><span class="ss">${esc(it.label || it.sym)}</span>` +
             `<span class="sv ${it.end >= 0 ? 'pos' : 'neg'}">${pct(it.end)}</span></div>` +
             sparkSvg(it.S, color) + '</div>';
         }).join('')}</div>` +
@@ -951,7 +959,7 @@
       const neg = (v) => (typeof v === 'string' && v.startsWith('-') ? ' neg' : '');
       return chromeTop() +
         `<div class="s-body"><div><span class="s-kick">${esc(r.sector || 'The numbers')} \u00b7 trailing twelve months</span>` +
-        `<h2 class="s-title">${esc(r.symbol)}<br><span class="dim">${esc(r.name || '')}</span></h2>` +
+        `<h2 class="s-title">${esc(nameOf(r))}<br><span class="dim">${esc(r.symbol)}</span></h2>` +
         `<div class="fgrid">${tiles.map(([k, v, note]) =>
           `<div class="ftile"><div class="fk">${esc(k)}</div>` +
           `<div class="fv${neg(v)}">${esc(v)}</div><div class="fn2">${esc(note)}</div></div>`).join('')}</div>` +
@@ -989,7 +997,7 @@
     if (mode === 'quad') {
       const pts = scope.rows
         .filter((x) => x.revenueGrowthYoY != null && x.profitMargin != null)
-        .map((x) => ({ sym: x.symbol, x: x.revenueGrowthYoY, y: x.profitMargin }));
+        .map((x) => ({ sym: x.symbol, label: nameOf(x), x: x.revenueGrowthYoY, y: x.profitMargin }));
       if (pts.length < 3) return chromeTop() + `<div class="s-body"><div><p class="s-empty">Not enough reported figures in ${esc(scope.label)} to plot.</p></div></div>` + chromeFoot();
       const q = {
         gp: pts.filter((p) => p.x > 0 && p.y > 0).length,
@@ -1037,7 +1045,7 @@
         const v = x[field];
         const w = Math.max(5, Math.round(Math.abs(v) / mx * 100));
         const neg = v < 0;
-        return `<div class="row"><span class="sym">${esc(x.symbol)}</span>` +
+        return `<div class="row"><span class="nm2">${esc(nameOf(x))}</span>` +
           `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
           `<span class="val ${neg ? 'neg' : 'pos'}">${esc(fmtMetric(v, kind))}</span></div>`;
       }).join('')}</div>` +
@@ -1066,7 +1074,7 @@
     const Y = (v) => PT + (1 - (Math.min(Math.max(v, y0), y1) - y0) / (y1 - y0)) * (H - PT - PB);
     const zx = X(0), zy = Y(0);
     const stray = (p) => p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1;
-    // the eight furthest from the origin carry their ticker; labelling 140
+    // the eight furthest from the origin carry their name; labelling 140
     // dots is mush
     const named = pts.slice().sort((a, b) =>
       (Math.abs(b.x) / (x1 - x0) + Math.abs(b.y) / (y1 - y0)) -
@@ -1077,8 +1085,15 @@
       const c = s2 ? '#fbbf24' : (p.x > 0 && p.y > 0) ? '#34d399' : (p.y <= 0) ? '#fb7185' : '#7c9cff';
       return `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="${isNamed.has(p.sym) ? 9 : 6.5}" fill="${c}" opacity="${s2 ? 1 : 0.72}"/>`;
     }).join('');
-    const labels = named.map((p) =>
-      `<text x="${(X(p.x) + 13).toFixed(1)}" y="${(Y(p.y) + 6).toFixed(1)}" font-size="19" font-weight="600" fill="#e9ecf2" font-family="Geist Mono, monospace">${esc(p.sym)}</text>`).join('');
+    // A name is many times wider than a ticker, so a label on a dot in the
+    // right half is drawn back towards the middle instead of off the edge,
+    // and a very long one is clipped rather than allowed to cross the chart.
+    const labels = named.map((p) => {
+      const cx = X(p.x), right = cx > PL + (W - PL - PR) * 0.55;
+      const full = p.label || p.sym;
+      const txt = full.length > 22 ? full.slice(0, 21) + '…' : full;
+      return `<text x="${(cx + (right ? -13 : 13)).toFixed(1)}" y="${(Y(p.y) + 6).toFixed(1)}" text-anchor="${right ? 'end' : 'start'}" font-size="18" font-weight="600" fill="#e9ecf2" font-family="Geist, sans-serif">${esc(txt)}</text>`;
+    }).join('');
     const quad = (tx, ty, anchor, text, tint) =>
       `<text x="${tx}" y="${ty}" text-anchor="${anchor}" font-size="18" font-weight="600" fill="${tint}" font-family="Geist, sans-serif" opacity="0.85">${esc(text)}</text>`;
     return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:26px" role="img" aria-label="growth against margin">` +
@@ -1234,7 +1249,8 @@
     .vrow { display: flex; align-items: center; gap: 20px; padding: 15px 22px;
             border-radius: 14px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.024); }
     .vrow + .vrow { margin-top: 10px; }
-    .vrow .vs { font: 700 28px var(--mono); width: 150px; }
+    .vrow .vs { font: 700 25px var(--sans); width: 290px; letter-spacing: -0.02em;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .vrow .vw { font-size: 21px; color: var(--muted); }
     .vrow .vp { margin-left: auto; font: 600 23px var(--mono); }
 
@@ -1350,13 +1366,14 @@
     .sz-story .spk { flex: 1; grid-auto-rows: 1fr; gap: 20px; }
     .sz-story .spkt { display: flex; flex-direction: column; }
     .sz-story .spkt svg { flex: 1; height: auto; min-height: 90px; }
-    .sz-story .spkt .ss { font-size: 30px; }
+    .sz-story .spkt .ss { font-size: 24px; }
     .sz-story .spkt .sv { font-size: 25px; }
 
     /* the 52-week track: one row carries the fall and the recovery at once */
     .tracks { display: flex; flex-direction: column; gap: 18px; margin-top: 34px; }
-    .trk { display: grid; grid-template-columns: 118px 1fr 118px 118px; align-items: center; gap: 16px; }
-    .trk .ts { font: 700 25px var(--mono); letter-spacing: -0.02em; }
+    .trk { display: grid; grid-template-columns: 250px 1fr 108px 108px; align-items: center; gap: 16px; }
+    .trk .ts { font: 600 23px var(--sans); letter-spacing: -0.02em;
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .trk .trail { position: relative; height: 16px; border-radius: 999px;
                   background: rgba(255, 255, 255, 0.05); border: 1px solid var(--hair); }
     .trk .tfill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
@@ -1367,7 +1384,7 @@
     .tkey { display: flex; justify-content: space-between; margin-top: 16px;
             font: 500 16px var(--mono); color: var(--faint); }
     .sz-story .tracks { flex: 1; justify-content: space-evenly; }
-    .sz-story .trk { grid-template-columns: 140px 1fr 132px 132px; }
+    .sz-story .trk { grid-template-columns: 300px 1fr 120px 120px; }
     .sz-story .trk .ts { font-size: 30px; }
     .sz-story .trk .trail { height: 20px; }
     .sz-story .trk .tlo, .sz-story .trk .thi { font-size: 25px; }
@@ -1377,7 +1394,8 @@
     .spkt { padding: 16px 18px 12px; border-radius: 16px; border: 1px solid var(--hair);
             background: rgba(255, 255, 255, 0.024); }
     .spkt .sh { display: flex; align-items: baseline; gap: 10px; }
-    .spkt .ss { font: 700 25px var(--mono); letter-spacing: -0.02em; }
+    .spkt .ss { font: 600 20px var(--sans); letter-spacing: -0.02em; min-width: 0;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .spkt .sv { margin-left: auto; font: 600 21px var(--mono); font-variant-numeric: tabular-nums; }
     .spkt .sv.pos { color: var(--green); } .spkt .sv.neg { color: var(--red); }
     .spkt svg { display: block; width: 100%; height: 78px; margin-top: 10px; }
