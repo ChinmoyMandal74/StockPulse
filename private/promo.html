@@ -132,6 +132,8 @@
         </select>
         <label>Within</label>
         <select id="movScope"><option value="All">All screened</option></select>
+        <label>Sector</label>
+        <select id="movSector"><option value="All">All sectors</option></select>
       </div>
 
       <div id="chtBox">
@@ -152,6 +154,8 @@
         <div id="chtScopeWrap">
           <label>Within</label>
           <select id="chtScope"><option value="All">All screened</option></select>
+          <label>Sector</label>
+          <select id="chtSector"><option value="All">All sectors</option></select>
         </div>
         <div id="chtLinesWrap">
           <label>How many lines</label>
@@ -187,6 +191,8 @@
         <div id="advScopeWrap">
           <label>Within</label>
           <select id="advScope"><option value="All">All screened</option></select>
+          <label>Sector</label>
+          <select id="advSector"><option value="All">All sectors</option></select>
         </div>
         <div id="advProfWrap">
           <label>Rules</label>
@@ -248,6 +254,8 @@
         <div id="fundScopeWrap">
           <label>Within</label>
           <select id="fundScope"><option value="All">All screened</option></select>
+          <label>Sector</label>
+          <select id="fundSector"><option value="All">All sectors</option></select>
         </div>
       </div>
 
@@ -340,10 +348,10 @@
 
     // Every control's value, by id — the module reads no DOM, so the studio
     // hands it the panel's state and gets a card back.
-    const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movScope',
-      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym',
-      'advMode', 'advTier', 'advSym', 'advScope', 'advProf',
-      'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope',
+    const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movScope', 'movSector',
+      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector',
+      'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector',
+      'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
       const o = {};
@@ -409,9 +417,9 @@
     }
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
-    ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movScope'].forEach((id) =>
+    ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movScope', 'movSector'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'movers') render(); }));
-    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym'].forEach((id) =>
+    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'chart') render(); }));
 
     const CARD_TOPICS = Cards.topics();
@@ -435,9 +443,9 @@
     $('advTier').innerHTML = ActionRules.ACTIONS.slice().reverse()
       .map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
     $('advProf').innerHTML = Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    ['advMode', 'advTier', 'advSym', 'advScope', 'advProf'].forEach((id) =>
+    ['advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'advboard') render(); }));
-    ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope'].forEach((id) =>
+    ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'fund') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
@@ -696,6 +704,15 @@
         $('advSym').innerHTML = $('chtSym').innerHTML;
         $('fundScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
+        // one sector list, built from the rows themselves so it can never
+        // offer a sector nothing is in
+        const secOpts = '<option value="All">All sectors</option>' +
+          Cards.sectors(stocks).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+        ['movSector', 'chtSector', 'advSector', 'fundSector'].forEach((id) => {
+          const keep = $(id).value;
+          $(id).innerHTML = secOpts;
+          if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
+        });
         paintControls();
         render();
         if (reload) $('reloadBtn').textContent = 'Re-pulled ✓';

@@ -134,6 +134,8 @@
     const scopeOptions = () => [['All', 'All screened']]
       .concat(portfolioNames.map((n) => [n, n]))
       .concat(Object.keys(myLists).map((n) => ['my:' + n, n + ' (yours)']));
+    const sectorOptions = () => [['All', 'All sectors']]
+      .concat(Cards.sectors(stocks).map((n) => [n, n]));
     const symOptions = () => stocks.slice().sort((a, b) => a.symbol.localeCompare(b.symbol))
       .map((s) => [s.symbol, s.symbol + (s.name ? ' — ' + s.name : '')]);
     const PERIODS = [['d', 'Day'], ['w1', 'Week'], ['w2', '2 weeks'], ['m1', '1 month'],
@@ -142,9 +144,10 @@
     // Control values survive a rebuild of the bar, so switching cards and
     // coming back does not reset what you picked.
     const state = {
-      movPeriod: 'w1', movCmp: '', movCount: '10', movDir: 'up', movScope: 'All',
-      chtMode: 'list', chtWin: 'm6', chtScope: 'All', chtLines: '5', chtSym: '',
+      movPeriod: 'w1', movCmp: '', movCount: '10', movDir: 'up', movScope: 'All', movSector: 'All',
+      chtMode: 'list', chtWin: 'm6', chtScope: 'All', chtLines: '5', chtSym: '', chtSector: 'All',
       advMode: 'board', advTier: 'Strong Buy', advSym: '', advScope: 'All', advProf: 'Balanced',
+      advSector: 'All',
     };
 
     function barHtml() {
@@ -156,13 +159,17 @@
                                        ['both', 'Either way'], ['split', 'Side by side']], state.movDir);
         f += S('movCount', 'How many', [['5', 'Top 5'], ['10', 'Top 10'], ['15', 'Top 15']], state.movCount);
         f += S('movScope', 'Within', scopeOptions(), state.movScope);
+        f += S('movSector', 'Sector', sectorOptions(), state.movSector);
       } else if (kind === 'chart') {
         f += S('chtMode', 'Chart', [['list', 'A list vs the screen'], ['leaders', 'The leaders in a list'],
                                     ['stock', 'One stock']], state.chtMode);
         f += S('chtWin', 'Window', [['w1', 'Past week'], ['m1', 'Past month'], ['m3', 'Past three months'],
                                     ['m6', 'Past six months'], ['y1', 'Past year']], state.chtWin);
         if (state.chtMode === 'stock') f += S('chtSym', 'Stock', symOptions(), state.chtSym);
-        else f += S('chtScope', 'Within', scopeOptions(), state.chtScope);
+        else {
+          f += S('chtScope', 'Within', scopeOptions(), state.chtScope);
+          f += S('chtSector', 'Sector', sectorOptions(), state.chtSector);
+        }
         if (state.chtMode === 'leaders') f += S('chtLines', 'How many lines',
           [['3', 'Top 3'], ['5', 'Top 5'], ['8', 'Top 8']], state.chtLines);
       } else {
@@ -174,6 +181,7 @@
           if (state.advMode === 'tier') f += S('advTier', 'Verdict',
             ActionRules.ACTIONS.slice().reverse().map((a) => [a, a]), state.advTier);
           f += S('advScope', 'Within', scopeOptions(), state.advScope);
+          f += S('advSector', 'Sector', sectorOptions(), state.advSector);
           f += S('advProf', 'Rules', Cards.ADV_PROFILES.map((n) => [n, n]), state.advProf);
         }
       }

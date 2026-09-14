@@ -52,16 +52,31 @@
       m6: ['sixMonthPct', 'past six months', '6 months'],
       y1: ['oneYearPct', 'past year', '1 year'],
     };
-    function movScopeRows() {
-      const scope = O.movScope || 'All';
-      if (scope === 'All') return { rows: stocks, label: 'the whole screen' };
-      if (scope.startsWith('my:')) {
-        const nm = scope.slice(3);
+    // Every card answers "which stocks?" the same way — a list, then
+    // optionally a sector — so it is answered in one place. The label is
+    // built here too, since a card whose kicker disagreed with its rows
+    // would be worse than no kicker at all.
+    function scopeOf(scopeKey, sectorKey) {
+      const v = O[scopeKey] || 'All';
+      let rows, label;
+      if (v === 'All') { rows = stocks; label = 'the whole screen'; }
+      else if (v.startsWith('my:')) {
+        const nm = v.slice(3);
         const set = new Set(myLists[nm] || []);
-        return { rows: stocks.filter((s) => set.has(s.symbol)), label: nm };
+        rows = stocks.filter((x) => set.has(x.symbol));
+        label = nm;
+      } else {
+        rows = stocks.filter((x) => (x.portfolios || []).includes(v));
+        label = v;
       }
-      return { rows: stocks.filter((s) => (s.portfolios || []).includes(scope)), label: scope };
+      const sec = O[sectorKey] || 'All';
+      if (sec && sec !== 'All') {
+        rows = rows.filter((x) => x.sector === sec);
+        label = v === 'All' ? sec : `${label} \u00b7 ${sec}`;
+      }
+      return { rows, label };
     }
+    const movScopeRows = () => scopeOf('movScope', 'movSector');
     function tplMovers() {
       const perKey = O.movPeriod;
       const [field, periodLabel, shortLabel] = MOV_PERIODS[perKey] || MOV_PERIODS.w1;
@@ -234,16 +249,7 @@
       return out;
     }
 
-    function advScope() {
-      const v = O.advScope || 'All';
-      if (v === 'All') return { rows: stocks, label: 'the whole screen' };
-      if (v.startsWith('my:')) {
-        const nm = v.slice(3);
-        const set = new Set(myLists[nm] || []);
-        return { rows: stocks.filter((s) => set.has(s.symbol)), label: nm };
-      }
-      return { rows: stocks.filter((s) => (s.portfolios || []).includes(v)), label: v };
-    }
+    const advScope = () => scopeOf('advScope', 'advSector');
 
     function tplAdvBoard() {
       const mode = O.advMode;
@@ -662,13 +668,9 @@
         `${esc(it.label)}</span>`).join('')}</div>`;
     }
 
-    function chartScopeSymbols(scope) {
-      if (scope === 'All') return { syms: stocks.map((s) => s.symbol), label: 'the whole screen' };
-      if (scope.startsWith('my:')) {
-        const nm = scope.slice(3);
-        return { syms: (myLists[nm] || []).slice(), label: nm };
-      }
-      return { syms: stocks.filter((s) => (s.portfolios || []).includes(scope)).map((s) => s.symbol), label: scope };
+    function chartScopeSymbols() {
+      const sc = scopeOf('chtScope', 'chtSector');
+      return { syms: sc.rows.map((x) => x.symbol), label: sc.label };
     }
 
     function tplChart() {
@@ -706,7 +708,7 @@
         title = `${esc(sym)}<br><span class="dim">${esc((row && row.name) || '')}</span>`;
         note = 'Price only, rebased to the start of the window \u2014 no dividends, no positions.';
       } else if (mode === 'leaders') {
-        const scope = chartScopeSymbols(O.chtScope);
+        const scope = chartScopeSymbols();
         const n = Number(O.chtLines) || 5;
         const ranked = scope.syms.filter((x) => series[x])
           .map((x) => ({ sym: x, S: series[x], end: endOf(series[x]) }))
@@ -720,7 +722,7 @@
         title = `The leaders<br><span class="dim">${esc(scope.label)}</span>`;
         note = 'Each line is one stock, rebased to the start of the window. Ranked on the window, not a forecast.';
       } else {
-        const scope = chartScopeSymbols(O.chtScope);
+        const scope = chartScopeSymbols();
         const basket = mean(scope.syms);
         if (!basket) return chromeTop() + `<div class="s-body"><div><p class="s-empty">Nothing in ${esc(scope.label)} has history for this window.</p></div></div>` + chromeFoot();
         const all = mean(stocks.map((r) => r.symbol));
@@ -796,16 +798,7 @@
     : kind === 'ratio' ? v.toFixed(1)
     : v.toFixed(1) + '%');
 
-  function fundScope() {
-    const v = O.fundScope || 'All';
-    if (v === 'All') return { rows: stocks, label: 'the whole screen' };
-    if (v.startsWith('my:')) {
-      const nm = v.slice(3);
-      const set = new Set(myLists[nm] || []);
-      return { rows: stocks.filter((x) => set.has(x.symbol)), label: nm };
-    }
-    return { rows: stocks.filter((x) => (x.portfolios || []).includes(v)), label: v };
-  }
+  const fundScope = () => scopeOf('fundScope', 'fundSector');
 
   function tplFund() {
     const mode = O.fundMode || 'rank';
@@ -1352,6 +1345,8 @@
     ids: Object.keys(BUILDERS),
     ADV_PROFILES,
     MOV_PERIODS,
+    // the sectors actually present, so a picker can never offer an empty one
+    sectors: (rows) => [...new Set((rows || []).map((x) => x.sector).filter(Boolean))].sort(),
     CHART_WINDOWS,
     // shape only — the host builds its own slide picker from this
     topics: () => TOPICS.map((t) => ({ id: t.id, name: t.name, slides: t.slides.map((sl) => sl.kind) })),
