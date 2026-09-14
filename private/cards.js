@@ -604,11 +604,13 @@
           area = `<defs><linearGradient id="pfill" x1="0" y1="0" x2="0" y2="1">` +
             `<stop offset="0%" stop-color="${hero.color}" stop-opacity="0.30"/>` +
             `<stop offset="100%" stop-color="${hero.color}" stop-opacity="0"/></linearGradient></defs>` +
-            `<path d="${path(hero.P)}L${x(last).toFixed(1)} ${(H - PB).toFixed(1)}L${x(first).toFixed(1)} ${(H - PB).toFixed(1)}Z" fill="url(#pfill)" stroke="none"/>`;
+            `<path class="carea" d="${path(hero.P)}L${x(last).toFixed(1)} ${(H - PB).toFixed(1)}L${x(first).toFixed(1)} ${(H - PB).toFixed(1)}Z" fill="url(#pfill)" stroke="none"/>`;
         }
       }
+      // pathLength="1" normalises the geometry, so one dash rule draws any
+      // line in Motion without measuring it — see the motion styles below.
       const strokes = L.map((l) =>
-        `<path d="${path(l.P)}" fill="none" stroke="${l.color}" stroke-width="${l.width || 2}" stroke-linejoin="round" stroke-linecap="round" opacity="${l.dim ? 0.7 : 1}"/>`).join('');
+        `<path class="cl" pathLength="1" d="${path(l.P)}" fill="none" stroke="${l.color}" stroke-width="${l.width || 2}" stroke-linejoin="round" stroke-linecap="round" opacity="${l.dim ? 0.7 : 1}"/>`).join('');
       const tags = L.map((l) => {
         let last = null, li = -1;
         for (let i = l.P.length - 1; i >= 0 && last == null; i--) { last = l.P[i]; li = i; }
@@ -930,16 +932,82 @@
 
     .s-empty { margin-top: 60px; font-size: 30px; color: var(--muted); line-height: 1.5; max-width: 30ch; }`;
 
+  // ---- Motion -----------------------------------------------------------
+  // A card is a still by default; Motion makes it perform for three seconds
+  // so a screen recording is a finished reel. Everything is CSS on the same
+  // markup — no second renderer, and the PNG export is untouched because the
+  // host strips the class before it serialises.
+  const STAGGER = ['.rows > *', '.atally > *', '.flow > *', '.rungs > *', '.stmts > *',
+                   '.tiers > *', '.frule', '.pcard', '.vrow', '.band', '.feat', '.mockrow'];
+  const MOTION = `
+@keyframes cRise { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+@keyframes cFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes cDraw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.motion .s-top { animation: cFade .55s cubic-bezier(.22,1,.36,1) both; }
+.motion .s-kick { animation: cRise .5s .1s cubic-bezier(.22,1,.36,1) both; }
+.motion .s-title { animation: cRise .65s .18s cubic-bezier(.22,1,.36,1) both; }
+.motion .s-sub, .motion .mockcap { animation: cFade .7s .75s ease both; }
+.motion .s-empty { animation: cRise .6s .3s cubic-bezier(.22,1,.36,1) both; }
+.motion .dots, .motion .chips, .motion .s-foot { animation: cFade .7s 1.15s ease both; }
+.motion .rowhead { animation: cFade .5s .25s ease both; }
+.motion .bar, .motion .afill, .motion .band .fill {
+  transform-origin: left center; animation: cGrow .85s .3s cubic-bezier(.22,1,.36,1) both; }
+.motion .abar, .motion .stackbar { transform-origin: left center; animation: cGrow .9s .25s cubic-bezier(.22,1,.36,1) both; }
+.motion .flowend { animation: cRise .6s 1s cubic-bezier(.22,1,.36,1) both; }
+.motion .mock { animation: cFade .6s .25s ease both; }
+.motion .cl { stroke-dasharray: 1; animation: cDraw 1.5s .3s cubic-bezier(.33,.9,.5,1) both; }
+.motion .carea { animation: cFade .8s 1.2s ease both; }
+.motion svg text { animation: cFade .6s 1.35s ease both; }
+` + Array.from({ length: 18 }, (_, i) =>
+    `.motion ${STAGGER.map((sel) => `${sel}:nth-child(${i + 1})`).join(', .motion ')}` +
+    ` { animation: cRise .55s ${(0.28 + i * 0.06).toFixed(2)}s cubic-bezier(.22,1,.36,1) both; }`).join('\n');
+
+  // Numbers land by counting, which is the difference between a screenshot
+  // that moves and something that reads as video. The final frame restores
+  // the exact original text, so no rounding drift survives the animation.
+  function countUp(root) {
+    root.querySelectorAll('.val, .cmp, .ac, .fn, .n, .fa').forEach((el) => {
+      const raw = el.textContent;
+      const m = /^(\D*)(-?\d[\d,]*(?:\.\d+)?)(.*)$/.exec(raw.trim());
+      if (!m) return;
+      const target = parseFloat(m[2].replace(/,/g, ''));
+      if (!isFinite(target)) return;
+      const dec = (m[2].split('.')[1] || '').length;
+      const pre = m[1], post = m[3];
+      const t0 = performance.now(), delay = 320, dur = 950;
+      el.textContent = pre + (0).toFixed(dec) + post;
+      const step = (t) => {
+        const p = Math.max(0, Math.min(1, (t - t0 - delay) / dur));
+        if (p >= 1) { el.textContent = raw; return; }
+        el.textContent = pre + (target * (1 - Math.pow(1 - p, 3))).toFixed(dec) + post;
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  // Restarting means removing the class, forcing a reflow and putting it
+  // back: without the reflow the browser coalesces the two changes and
+  // nothing replays.
+  function motion(root) {
+    if (!root) return;
+    root.classList.remove('motion');
+    void root.offsetWidth;
+    root.classList.add('motion');
+    countUp(root);
+  }
+
   function injectStyle() {
     if (document.getElementById('cards-style')) return;
     const el = document.createElement('style');
     el.id = 'cards-style';
-    el.textContent = STYLE;
+    el.textContent = STYLE + MOTION;
     document.head.appendChild(el);
   }
 
   window.Cards = {
-    STYLE, injectStyle,
+    STYLE, MOTION, injectStyle, motion,
     ids: Object.keys(BUILDERS),
     ADV_PROFILES,
     MOV_PERIODS,
