@@ -486,6 +486,16 @@
                font-size: 12px; line-height: 1.55; color: var(--muted); }
     .ap-risk b { color: var(--text); }
     .ap-risk-note { display: block; margin-top: 5px; font-size: 10.5px; color: var(--faint); }
+    /* The changed-advice filter: a count you can read without hunting, and a
+       click that removes everything else. Amber when armed, because the rows
+       it leaves are the ones the rules just moved. */
+    .chgFilter { gap: 7px; white-space: nowrap; }
+    .chgFilter .n { font-family: var(--mono); font-weight: 600; }
+    .chgFilter.on { color: var(--amber); border-color: rgba(251, 191, 36, 0.45);
+                    background: rgba(251, 191, 36, 0.1); }
+    .chgFilter:disabled { opacity: 0.45; cursor: default; }
+    /* and the rows themselves, so a change is visible while browsing too */
+    tr.chgRow td.frz0 { box-shadow: inset 3px 0 0 var(--amber); }
     .badge {
       margin: 0 4px 0 0;
       background: color-mix(in srgb, currentColor 12%, transparent); }
@@ -691,6 +701,8 @@
           <button class="btn picker-btn" id="pickerBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="pickerMenu" role="listbox" aria-label="Portfolio"></div>
         </div>
+        <button class="btn chgFilter" id="chgBtn" style="display:none"
+                title="Show only the stocks whose Balanced advice moved since the previous session"></button>
         <div class="picker" id="colPicker" data-open="0">
           <button class="btn picker-btn" id="colBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="colMenu" role="listbox" aria-multiselectable="true" aria-label="Column groups"></div>
@@ -1597,17 +1609,51 @@
     }
 
     // ---- table ----
+    // "Changed" means the BALANCED verdict moved since the previous session
+    // — the shared measurement the emails and the reports use. The per-column
+    // chevrons stay profile-specific; one filter answering five questions at
+    // once would answer none of them.
+    let changedOnly = false;
+    const adviceMoved = (s) => !!(s && s.advicePrev && s.action && s.advicePrev !== s.action);
+
     function visibleStocks() {
-      if (activeTab === 'All') return stocks;
-      if (isMyTab(activeTab)) {
-        const set = new Set(myPortfolios[myTabName(activeTab)] || []);
-        return stocks.filter((s) => set.has(s.symbol));
+      let rows = stocks;
+      if (activeTab !== 'All') {
+        if (isMyTab(activeTab)) {
+          const set = new Set(myPortfolios[myTabName(activeTab)] || []);
+          rows = stocks.filter((s) => set.has(s.symbol));
+        } else {
+          rows = stocks.filter((s) => (s.portfolios || []).includes(activeTab));
+        }
       }
-      return stocks.filter((s) => (s.portfolios || []).includes(activeTab));
+      return changedOnly ? rows.filter(adviceMoved) : rows;
+    }
+
+    // The count is of the CURRENT tab, so filtering inside a portfolio says
+    // how many moved in that portfolio rather than across the screen.
+    function renderChangedChip() {
+      const btn = $('chgBtn');
+      if (!btn) return;
+      const scope = activeTab === 'All' ? stocks
+        : isMyTab(activeTab)
+          ? stocks.filter((s) => (myPortfolios[myTabName(activeTab)] || []).includes(s.symbol))
+          : stocks.filter((s) => (s.portfolios || []).includes(activeTab));
+      const n = scope.filter(adviceMoved).length;
+      const any = scope.some((s) => s.advicePrev);
+      btn.style.display = any ? '' : 'none';      // hidden until a refresh has stored yesterday
+      btn.disabled = n === 0 && !changedOnly;
+      btn.classList.toggle('on', changedOnly);
+      btn.innerHTML = '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh-all" /></svg>' +
+        `<span>Changed</span><span class="n">${n}</span>`;
+      btn.title = n
+        ? (changedOnly ? 'Showing only the changed rows — click to show everything again'
+          : `${n} verdict${n === 1 ? '' : 's'} moved since the previous session — click to show only those`)
+        : 'Every verdict held since the previous session';
     }
 
     function render() {
       renderPicker();
+      renderChangedChip();
       renderWeightTrigger();
       renderActTrigger();
       renderPastTrigger();
@@ -1620,9 +1666,12 @@
       const freshest = rows.reduce((m, s) => (s.latestDate && s.latestDate > m ? s.latestDate : m), '');
 
       if (rows.length === 0) {
-        const msg = activeTab === 'All'
-          ? 'No tickers yet — add one above.'
-          : `No tickers in "${activeTab}" yet — add one above.`;
+        const where = activeTab === 'All' ? 'the screen' : `"${isMyTab(activeTab) ? myTabName(activeTab) : activeTab}"`;
+        const msg = changedOnly
+          ? `Every verdict in ${where} held since the previous session — nothing changed to show.`
+          : activeTab === 'All'
+            ? 'No tickers yet — add one above.'
+            : `No tickers in "${activeTab}" yet — add one above.`;
         tbody.innerHTML = `<tr><td class="empty" colspan="56">${msg}</td></tr>`;
         researchSymbol = null;
         renderResearchMenu();
@@ -1677,7 +1726,7 @@
               ? `Cached ${fmtDateTime(s.profileFetchedAt)} — auto-refreshes daily (Refresh All to force)`
               : 'Not fetched yet — backfills over the next refreshes');
         const fwdTitle = 'Forward return after the as-of date (what happened next)';
-        return `<tr style="--i:${i}">
+        return `<tr style="--i:${i}"${adviceMoved(s) ? ' class="chgRow"' : ''}>
           ${symbolCell(s, freshest)}
           <td class="name left frz frz1"><a class="namelink" href="/stock/${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener" title="Open ${s.symbol} in full ↗">${s.name || ''}</a></td>
           <td class="left grp-info">${badges(s.portfolios)}${myBadges(s.symbol)}</td>
@@ -2796,6 +2845,12 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         if (!r || !r.purged || !r.purged.length) setStatus(`Portfolio "${gone}" deleted.`);
       } catch (err) { setError(err.message); }
     }
+
+    $('chgBtn').addEventListener('click', () => {
+      changedOnly = !changedOnly;
+      window.track && track('picker', 'changed:' + (changedOnly ? 'on' : 'off'));
+      render();
+    });
 
     // Sorting
     document.querySelectorAll('th[data-key]').forEach((th) => {
