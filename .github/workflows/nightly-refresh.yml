@@ -61,7 +61,10 @@ jobs:
           echo "APP_URL     = ${APP_URL}"
           echo "CRON_SECRET = ${#CRON_SECRET} characters"
 
-          MAX_ROUNDS=60        # 7 profiles a round after the price round; 60 covers ~400 symbols
+          MAX_ROUNDS=60        # 7 profiles a round after the price rounds. The nightly run
+                               # rotates a seventh of the profiles, so 60 covers ~2,800
+                               # symbols; it is a full sweep (FUND_ROTATION_DAYS=1) that
+                               # would need more, and that is not what this job does.
           GAP=62               # the pacing the browser loop uses, unchanged
           STAGNANT_LIMIT=3     # rounds without progress before giving up
 

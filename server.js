@@ -42,7 +42,16 @@ const {
   readSnapshot, writeSnapshot,
   beginRefresh, noteRefreshProgress, endRefresh, readRefreshState,
 } = store;
-const PROFILE_TTL_MS = 24 * 60 * 60 * 1000; // refresh sector/market cap once a day
+// How long a cached profile stays fresh — and therefore how often a symbol's
+// fundamentals are re-pulled. It was 24 hours, which meant every profile in the
+// universe was stale every night: at 80 credits a symbol that is 80,000 credits
+// and two and a half hours at 1,000 symbols, spent on twelve fields that move
+// on 1-5% of nights and move as a STEP when they do (AVGO's revenue sat at
+// 75.46B for five recorded days, went to 89.10B, and stayed). A week spreads
+// the same work over seven nights for a seventh of the nightly bill. Set
+// FUND_ROTATION_DAYS=1 to go back to re-pulling everything every night.
+const FUND_ROTATION_DAYS = Math.max(1, Number(process.env.FUND_ROTATION_DAYS) || 7);
+const PROFILE_TTL_MS = FUND_ROTATION_DAYS * 24 * 60 * 60 * 1000;
 // Publishing: set ADMIN_PASSWORD in .env to make the app read-only for the public.
 // The public sees a cached snapshot; only an admin (logged in with this password)
 // can add/remove tickers, refresh, Refresh All, and rewind the table. When it's NOT
@@ -4351,10 +4360,18 @@ app.post('/api/cron/refresh', route(async (req, res) => {
   if (!API_KEY) return res.status(500).json({ error: 'No API key configured.' });
 
   if (req.query.start === '1' || req.body?.start === true) {
-    const expired = await expireProfiles();
     const total = getUniverse(await readPortfolios()).length;
+    // ?full=1 forces the old behaviour — every profile re-pulled tonight. The
+    // default rotates: the oldest slice is expired so it comes up for renewal,
+    // and the TTL leaves the rest alone. After the first week the fetched_at
+    // values have fanned out and the rotation keeps itself spread.
+    const full = req.query.full === '1' || req.body?.full === true;
+    const expired = full
+      ? await expireProfiles()
+      : await store.expireOldestProfiles(Math.ceil(total / FUND_ROTATION_DAYS));
     await beginRefresh(String(req.body?.actor || 'nightly job').slice(0, 80), total);
-    console.log(`cron: refresh all started — ${expired} profiles expired, ${total} symbols`);
+    console.log(`cron: refresh all started — ${expired} profiles expired ` +
+      `(${full ? 'full sweep' : `1/${FUND_ROTATION_DAYS} rotation`}), ${total} symbols`);
   }
 
   const opts = await liveRefreshOpts();
