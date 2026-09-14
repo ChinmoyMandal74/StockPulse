@@ -154,64 +154,6 @@
         body + '</div></div>' + chromeFoot();
     }
 
-    const ACT_CLS = { 'Strong Buy': 'a-strong', 'Buy': 'a-buy', 'Buy with Risk': 'a-bwr',
-                      'Hold': 'a-hold', 'Avoid': 'a-avoid', 'Sell Immediately': 'a-sell' };
-    function tplAdvice() {
-      const tier = (a) => ActionRules.ACTIONS.indexOf(a);
-      const rows = stocks.filter((s) => s.advicePrev && s.action && s.advicePrev !== s.action)
-        .sort((a, b) => Math.abs(tier(b.action) - tier(b.advicePrev)) - Math.abs(tier(a.action) - tier(a.advicePrev)))
-        .slice(0, size.id === 'story' ? 9 : 7);
-      const body = rows.length
-        ? `<div class="rows">${rows.map((s) =>
-            `<div class="chg"><span class="sym">${esc(s.symbol)}</span>` +
-            `<span class="walk"><span class="${ACT_CLS[s.advicePrev] || ''}">${esc(s.advicePrev)}</span>` +
-            `<span class="arr">→</span>` +
-            `<span class="${ACT_CLS[s.action] || ''}">${esc(s.action)}</span></span>` +
-            `<span class="why">${esc(s.actionFlag || '')}</span></div>`).join('')}</div>`
-        : '<p class="s-empty">Every verdict held today. The rules only speak when the tape moves — quiet is an answer too.</p>';
-      return chromeTop() +
-        '<div class="s-body"><div><span class="s-kick">Fixed rules, re-run nightly</span>' +
-        '<h2 class="s-title">The rules changed<br><span class="dim">their mind</span></h2>' +
-        '<p class="s-sub">Same mechanical rule set as yesterday — only the prices changed. The rule that fired is named on every line.</p>' +
-        body + '</div></div>' + chromeFoot();
-    }
-
-    function tplBreakout() {
-      const rows = stocks.filter((s) => s.fresh3mHigh)
-        .sort((a, b) => (b.volX || 0) - (a.volX || 0)).slice(0, size.id === 'story' ? 10 : 8);
-      const body = rows.length
-        ? `<div class="rows">${rows.map((s) =>
-            `<div class="chg"><span class="sym">${esc(s.symbol)}</span>` +
-            `<span style="font-size:22px;font-weight:600">first close above its 3-month high</span>` +
-            `<span class="bo-badge ${s.volX != null && s.volX >= 1.5 ? 'on' : 'off'}" style="margin-left:auto">` +
-            `${s.volX != null ? s.volX.toFixed(1) + '× volume' : 'volume n/a'}</span></div>`).join('')}</div>` +
-          '<p class="s-sub" style="margin-top:28px">Amber = at least 1.5× its own 20-day volume — the confirmed kind. Quiet breakouts are listed too; we measured, they earn no badge.</p>'
-        : '<p class="s-empty">No stock crossed its 3-month high today. Scarcity is the point — this card only speaks when something breaks out.</p>';
-      return chromeTop() +
-        '<div class="s-body"><div><span class="s-kick">Measured on 20 years of bars</span>' +
-        '<h2 class="s-title">Breakout<br><span class="dim">radar</span></h2>' +
-        body + '</div></div>' + chromeFoot();
-    }
-
-    const TREND_TINT = ['#34d399', '#a3e635', '#fbbf24', '#fb923c', '#fb7185'];
-    function tplStance() {
-      const order = ActionRules.TREND_ORDER.filter((t) => t !== 'No data');
-      const counts = order.map((t) => stocks.filter((s) => s.actionTrend === t).length);
-      const total = counts.reduce((a, b) => a + b, 0) || 1;
-      const max = Math.max(...counts, 1);
-      return chromeTop() +
-        '<div class="s-body"><div><span class="s-kick">Every stock, one trend word</span>' +
-        '<h2 class="s-title">Where the market<br><span class="dim">stands</span></h2>' +
-        `<div class="stackbar">${order.map((t, i) =>
-          counts[i] ? `<div style="width:${counts[i] / total * 100}%;background:${TREND_TINT[i % TREND_TINT.length]}"></div>` : '').join('')}</div>` +
-        `<div style="margin-top:26px">${order.map((t, i) =>
-          `<div class="band"><span class="k" style="color:${TREND_TINT[i % TREND_TINT.length]}">${esc(t)}</span>` +
-          `<span class="rail"><span class="fill" style="display:block;width:${Math.max(3, counts[i] / max * 100)}%;background:${TREND_TINT[i % TREND_TINT.length]}"></span></span>` +
-          `<span class="n">${counts[i]}</span></div>`).join('')}</div>` +
-        '<p class="s-sub" style="margin-top:30px">Trend is read off the 200-day and 50-day averages — the same words the screener sorts by.</p>' +
-        '</div></div>' + chromeFoot();
-    }
-
     // ---- the Advice cards ---------------------------------------------------
     // Four readings of the same thing: the tally, the rules doing the talking,
     // one stock through every profile, and the roll-call at a chosen verdict.
@@ -1160,8 +1102,8 @@
   }
 
   const BUILDERS = {
-    movers: tplMovers, chart: tplChart, advboard: tplAdvBoard, advice: tplAdvice,
-    breakout: tplBreakout, stance: tplStance, intro: tplIntro, announce: tplAnnounce,
+    movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
+    intro: tplIntro, announce: tplAnnounce,
     fund: tplFund, sparks: tplSparks, range: tplRange, avatar: tplAvatar,
   };
 
@@ -1240,32 +1182,6 @@
     .twocol.dense .mrow .ms { font-size: 21px; width: 92px; }
     .twocol.dense .mrow .bar-rail { height: 24px; border-radius: 7px; }
     .twocol.dense .mrow .mv { font-size: 20px; width: 104px; }
-
-    /* advice-change rows */
-    .chg { display: flex; align-items: center; gap: 20px; padding: 18px 22px;
-           border: 1px solid var(--hair); border-radius: 18px; background: rgba(255, 255, 255, 0.028); }
-    .chg .sym { font: 600 26px var(--mono); width: 128px; }
-    .chg .walk { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 700; }
-    .chg .walk .arr { color: var(--faint); font-weight: 400; }
-    .chg .why { margin-left: auto; max-width: 300px; text-align: right;
-                font-size: 15.5px; color: var(--faint); line-height: 1.35; }
-    .a-strong, .a-buy { color: var(--green); } .a-bwr { color: var(--amber); }
-    .a-hold { color: var(--muted); } .a-avoid, .a-sell { color: var(--red); }
-
-    /* breakout rows */
-    .bo-badge { font: 600 17px var(--mono); padding: 8px 16px; border-radius: 999px; }
-    .bo-badge.on { color: var(--amber); border: 1px solid rgba(251, 191, 36, 0.45);
-                   background: rgba(251, 191, 36, 0.09); }
-    .bo-badge.off { color: var(--faint); border: 1px solid var(--hair); }
-
-    /* stance bands */
-    .band { display: flex; align-items: center; gap: 20px; margin-top: 18px; }
-    .band .k { width: 250px; font-size: 22px; font-weight: 600; }
-    .band .rail { flex: 1; height: 38px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); overflow: hidden; }
-    .band .fill { height: 100%; border-radius: 10px; opacity: 0.85; }
-    .band .n { width: 64px; text-align: right; font: 600 26px var(--mono); }
-    .stackbar { display: flex; height: 26px; border-radius: 999px; overflow: hidden; margin-top: 40px; }
-    .stackbar div { height: 100%; }
 
     /* the introduction card */
     .feat { display: flex; align-items: flex-start; gap: 22px; padding: 20px 24px;
@@ -1498,7 +1414,7 @@
 .motion .rowhead { animation: cFade .5s .25s ease both; }
 .motion .bar, .motion .afill, .motion .band .fill {
   transform-origin: left center; animation: cGrow .85s .3s cubic-bezier(.22,1,.36,1) both; }
-.motion .abar, .motion .stackbar { transform-origin: left center; animation: cGrow .9s .25s cubic-bezier(.22,1,.36,1) both; }
+.motion .abar { transform-origin: left center; animation: cGrow .9s .25s cubic-bezier(.22,1,.36,1) both; }
 .motion .flowend { animation: cRise .6s 1s cubic-bezier(.22,1,.36,1) both; }
 .motion .mock { animation: cFade .6s .25s ease both; }
 .motion .cl { stroke-dasharray: 1; animation: cDraw 1.5s .3s cubic-bezier(.33,.9,.5,1) both; }
