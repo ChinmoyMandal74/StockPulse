@@ -132,6 +132,19 @@
           `<div class="twocol${dense}">${col('Gainers', ups, false)}${col('Losers', downs, true)}</div>` +
           '</div></div>' + chromeFoot();
       }
+      // The verdict beside the move. Off unless a rule set is picked, and
+      // the card names which one: "Strong Buy" means nothing without the
+      // rules behind it, which is the line this whole product is built on.
+      // Only the single-column layouts carry it — the side-by-side card
+      // already runs two rankings in half the width apiece, and a verdict on
+      // every row there would bury the moves it exists to show.
+      const advPick = O.movAdv && O.movAdv !== 'off' ? O.movAdv : null;
+      const advProf = advPick ? (ADV_PROFILES.indexOf(advPick) >= 0 ? advPick : 'Balanced') : null;
+      const advOf = advProf ? advScored(advProf) : null;
+      // A row with no verdict — an ETF, or one the rules cannot score —
+      // simply has no second line, rather than an em-dash under its name.
+      const advWord = (s) => (advOf && (advOf[s.symbol] || {}).action) || null;
+
       const rows = scope.rows
         .filter((s) => s[field] != null && (both || (up ? s[field] > 0 : s[field] < 0)))
         // 'both' ranks by SIZE of move, so a -9% sits beside a +9%; the
@@ -149,13 +162,25 @@
             const w = Math.max(6, Math.round(Math.abs(s[field]) / max * 100));
             const neg = both ? s[field] < 0 : !up;   // each row by its own sign when mixed
             const c = cmp ? s[cmp[0]] : null;
-            return `<div class="row"><span class="nm2">${esc(movLabel(s))}</span>` +
+            const av = advWord(s);
+            const label = advOf
+              ? `<span class="nm2 stack"><span class="nn">${esc(movLabel(s))}</span>` +
+                (av ? `<span class="av" style="color:${ADV_TINT[av] || 'var(--muted)'}">${esc(av)}</span>` : '') +
+                '</span>'
+              : `<span class="nm2">${esc(movLabel(s))}</span>`;
+            return `<div class="row">${label}` +
               `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
               `<span class="val ${neg ? 'neg' : 'pos'}">${pct(s[field])}</span>` +
               (cmp ? `<span class="cmp ${c == null ? '' : c < 0 ? 'neg' : 'pos'}">${pct(c)}</span>` : '') +
               '</div>';
           }).join('')}</div>` +
-          (cmp ? `<p class="s-sub" style="font-size:18px;margin-top:22px">Ranked on ${esc(periodLabel)}; the right column is the same stock over the ${esc(cmp[1].replace(/^(this|past) /, ''))}, for context.</p>` : '')
+          (() => {
+            const notes = [];
+            if (cmp) notes.push(`Ranked on ${esc(periodLabel)}; the right column is the same stock over the ${esc(cmp[1].replace(/^(this|past) /, ''))}, for context.`);
+            if (advOf) notes.push(`The word under each name is tonight’s reading from the ${esc(advProf)} rule set — a mechanical verdict that always travels with the rule that produced it, never a recommendation.`);
+            return notes.length
+              ? `<p class="s-sub" style="font-size:18px;margin-top:22px">${notes.join(' ')}</p>` : '';
+          })()
         : `<p class="s-empty">Nothing in ${esc(scope.label)} moved ${both ? 'at all' : (up ? 'up' : 'down')} ${esc(periodLabel)} \u2014 which is its own kind of story.</p>`;
       const title = both
         ? 'The biggest<br><span class="dim">moves</span>'
@@ -1180,6 +1205,16 @@
     .row .nm2 { font: 600 24px var(--sans); width: 330px; letter-spacing: -0.02em;
                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sz-story .row .nm2 { font-size: 30px; width: 390px; }
+    /* The verdict rides UNDER the name rather than taking a column of its
+       own: at "Sell Immediately" a column would cost ~170px, and with the
+       comparison column on there is not that much left to give. Stacked, it
+       costs nothing horizontally and about 2px of row height. */
+    .row .nm2.stack { display: flex; flex-direction: column; justify-content: center;
+                      gap: 1px; line-height: 1.08; }
+    .row .nm2.stack .nn, .row .nm2 .av { overflow: hidden; text-overflow: ellipsis;
+                                         white-space: nowrap; }
+    .row .nm2 .av { font: 700 14px var(--sans); letter-spacing: 0.1em; text-transform: uppercase; }
+    .sz-story .row .nm2 .av { font-size: 17px; }
     .rowhead .nm2 { width: 330px; }
     .sz-story .rowhead .nm2 { width: 390px; }
     .rowhead .sym { width: 138px; }

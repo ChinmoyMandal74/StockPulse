@@ -130,6 +130,10 @@
           <option value="both">Biggest moves (either way)</option>
           <option value="split">Both, side by side</option>
         </select>
+        <div id="movAdvWrap">
+          <label>Advice</label>
+          <select id="movAdv"></select>
+        </div>
         <label>Within</label>
         <select id="movScope"><option value="All">All screened</option></select>
         <label>Sector</label>
@@ -413,7 +417,7 @@
 
     // Every control's value, by id — the module reads no DOM, so the studio
     // hands it the panel's state and gets a card back.
-    const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movScope', 'movSector',
+    const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector',
       'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector',
       'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector',
       'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector',
@@ -441,6 +445,8 @@
       if (motionOn) Cards.motion(stage);
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
       $('movBox').style.display = tpl === 'movers' ? 'block' : 'none';
+      // two rankings in half the width apiece leaves no room for a verdict
+      $('movAdvWrap').style.display = $('movDir').value === 'split' ? 'none' : 'block';
       $('chtBox').style.display = tpl === 'chart' ? 'block' : 'none';
       $('intBox').style.display = tpl === 'intro' ? 'block' : 'none';
       $('advBox').style.display = tpl === 'advboard' ? 'block' : 'none';
@@ -493,7 +499,9 @@
     }
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
-    ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movScope', 'movSector'].forEach((id) =>
+    $('movAdv').innerHTML = '<option value="off" selected>Don’t show</option>' +
+      Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}">${esc(n)} rules</option>`).join('');
+    ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'movers') render(); }));
     ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'chart') render(); }));
