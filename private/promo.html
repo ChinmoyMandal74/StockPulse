@@ -171,6 +171,33 @@
         </div>
       </div>
 
+      <div id="spkBox">
+        <label>Window</label>
+        <select id="spkWin">
+          <option value="w1">Past week</option>
+          <option value="m1">Past month</option>
+          <option value="m3">Past three months</option>
+          <option value="m6" selected>Past six months</option>
+          <option value="y1">Past year</option>
+        </select>
+        <label>Which end</label>
+        <select id="spkDir">
+          <option value="best" selected>Leaders</option>
+          <option value="worst">Laggards</option>
+        </select>
+        <label>How many</label>
+        <select id="spkCount">
+          <option value="4">4</option>
+          <option value="6">6</option>
+          <option value="9" selected>9</option>
+          <option value="12">12</option>
+        </select>
+        <label>Within</label>
+        <select id="spkScope"><option value="All">All screened</option></select>
+        <label>Sector</label>
+        <select id="spkSector"><option value="All">All sectors</option></select>
+      </div>
+
       <div id="advBox">
         <label>Show</label>
         <select id="advMode">
@@ -315,6 +342,7 @@
     const TPLS = [
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
+      { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
       { id: 'advboard', name: 'Advice', note: 'What the rules read, four ways' },
       { id: 'fund', name: 'Fundamentals', note: 'Size, margins, growth \u2014 four ways' },
       { id: 'advice', name: 'The rules changed their mind', note: 'Today’s advice changes, rule named' },
@@ -341,7 +369,10 @@
       chartPending = days;
       fetch(`/api/basket?name=All&days=${days}`, { cache: 'no-store' })
         .then((r) => r.json())
-        .then((d) => { chartCache[days] = d; chartPending = null; if (tpl === 'chart') render(); })
+        .then((d) => {
+          chartCache[days] = d; chartPending = null;
+          if (tpl === 'chart' || tpl === 'sparks') render();
+        })
         .catch(() => { chartPending = null; });
       return null;
     }
@@ -350,6 +381,7 @@
     // hands it the panel's state and gets a card back.
     const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movScope', 'movSector',
       'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector',
+      'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector',
       'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector',
       'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
@@ -374,6 +406,7 @@
       $('chtBox').style.display = tpl === 'chart' ? 'block' : 'none';
       $('intBox').style.display = tpl === 'intro' ? 'block' : 'none';
       $('advBox').style.display = tpl === 'advboard' ? 'block' : 'none';
+      $('spkBox').style.display = tpl === 'sparks' ? 'block' : 'none';
       $('fundBox').style.display = tpl === 'fund' ? 'block' : 'none';
       const fm = $('fundMode').value;
       $('fundMetricWrap').style.display = fm === 'rank' ? 'block' : 'none';
@@ -421,6 +454,8 @@
       $(id).addEventListener('change', () => { if (tpl === 'movers') render(); }));
     ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'chart') render(); }));
+    ['spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'sparks') render(); }));
 
     const CARD_TOPICS = Cards.topics();
     const cardTopic = (id) => CARD_TOPICS.find((t) => t.id === id) || CARD_TOPICS[0];
@@ -702,13 +737,14 @@
           .map((r) => `<option value="${esc(r.symbol)}">${esc(r.symbol)}</option>`).join('');
         $('advScope').innerHTML = $('movScope').innerHTML;
         $('advSym').innerHTML = $('chtSym').innerHTML;
+        $('spkScope').innerHTML = $('movScope').innerHTML;
         $('fundScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         // one sector list, built from the rows themselves so it can never
         // offer a sector nothing is in
         const secOpts = '<option value="All">All sectors</option>' +
           Cards.sectors(stocks).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-        ['movSector', 'chtSector', 'advSector', 'fundSector'].forEach((id) => {
+        ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = secOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;

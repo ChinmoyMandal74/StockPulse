@@ -760,6 +760,77 @@
 
     // ---- render ------------------------------------------------------------
 
+    // ---- Sparklines ------------------------------------------------------
+    // The leaders in a list, each as its own small chart. The big Chart card
+    // overlays lines to compare them; this one separates them so each shape
+    // reads on its own — which is the version that survives being scrolled
+    // past at thumbnail size. Same archive read as the Chart card, so
+    // switching between them costs nothing.
+    function sparkSvg(S, color) {
+      const W = 240, H = 74, P = 4;
+      const pts = S.map((v, i) => (v == null ? null : [i, (v - 1) * 100])).filter(Boolean);
+      if (pts.length < 2) return '';
+      const vals = pts.map((p) => p[1]);
+      let lo = Math.min(...vals), hi = Math.max(...vals);
+      if (hi - lo < 0.6) { hi += 0.3; lo -= 0.3; }
+      const x = (i) => P + (i / Math.max(1, S.length - 1)) * (W - 2 * P);
+      const y = (v) => P + (1 - (v - lo) / (hi - lo)) * (H - 2 * P);
+      let d = '';
+      pts.forEach((p, k) => { d += (k ? 'L' : 'M') + x(p[0]).toFixed(1) + ' ' + y(p[1]).toFixed(1); });
+      const area = d + `L${x(pts[pts.length - 1][0]).toFixed(1)} ${H - P}L${x(pts[0][0]).toFixed(1)} ${H - P}Z`;
+      const zero = (lo < 0 && hi > 0)
+        ? `<line x1="0" y1="${y(0).toFixed(1)}" x2="${W}" y2="${y(0).toFixed(1)}" stroke="rgba(255,255,255,0.13)" stroke-width="1"/>` : '';
+      const wash = color === '#34d399' ? 'rgba(52,211,153,0.13)' : 'rgba(251,113,133,0.13)';
+      return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` + zero +
+        `<path d="${area}" fill="${wash}" stroke="none"/>` +
+        `<path class="cl" pathLength="1" d="${d}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+    }
+
+    function tplSparks() {
+      const [days, winLabel] = CHART_WINDOWS[O.spkWin] || CHART_WINDOWS.m6;
+      const d = getBasket(days);
+      if (!d || !d.dates || !d.dates.length) {
+        return chromeTop() +
+          '<div class="s-body"><div><span class="s-kick">Reading the archive</span>' +
+          '<h2 class="s-title">Drawing<br><span class="dim">the shapes\u2026</span></h2></div></div>' + chromeFoot();
+      }
+      const series = d.series || {};
+      const scope = scopeOf('spkScope', 'spkSector');
+      const best = O.spkDir !== 'worst';
+      const n = Math.min(Number(O.spkCount) || 9, size.id === 'story' ? 15 : 12);
+      const items = scope.rows
+        .filter((x) => series[x.symbol])
+        .map((x) => {
+          const S = series[x.symbol];
+          let last = null;
+          for (let i = S.length - 1; i >= 0 && last == null; i--) last = S[i];
+          return { sym: x.symbol, S, end: last == null ? null : (last - 1) * 100 };
+        })
+        .filter((x) => x.end != null)
+        .sort((a, b) => (best ? b.end - a.end : a.end - b.end))
+        .slice(0, n);
+      if (!items.length) {
+        return chromeTop() + `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}</span>` +
+          `<h2 class="s-title">No history<br><span class="dim">to draw</span></h2>` +
+          `<p class="s-empty">Nothing in ${esc(scope.label)} has stored prices for this window yet.</p>` +
+          '</div></div>' + chromeFoot();
+      }
+      const cols = items.length <= 4 ? 2 : 3;
+      return chromeTop() +
+        `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 ${esc(winLabel)}</span>` +
+        `<h2 class="s-title">${best ? 'The leaders' : 'The laggards'}<br><span class="dim">${esc(winLabel)}</span></h2>` +
+        `<div class="spk" style="grid-template-columns:repeat(${cols},1fr)">${items.map((it) => {
+          const color = it.end >= 0 ? '#34d399' : '#fb7185';
+          return '<div class="spkt">' +
+            `<div class="sh"><span class="ss">${esc(it.sym)}</span>` +
+            `<span class="sv ${it.end >= 0 ? 'pos' : 'neg'}">${pct(it.end)}</span></div>` +
+            sparkSvg(it.S, color) + '</div>';
+        }).join('')}</div>` +
+        '<p class="s-sub" style="font-size:18px;margin-top:22px">Each shape is that stock alone, rebased to the start of the window ' +
+        '\u2014 the heights are not comparable between tiles, the shapes are. Ranked on the window, not a forecast.</p>' +
+        '</div></div>' + chromeFoot();
+    }
+
   // ---- the Fundamentals cards --------------------------------------------
   // Four readings of the company data: a ranking on one measure, the shape
   // of the whole screen, growth against margin as a picture, and one company
@@ -982,7 +1053,7 @@
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard, advice: tplAdvice,
     breakout: tplBreakout, stance: tplStance, intro: tplIntro, announce: tplAnnounce,
-    fund: tplFund, avatar: tplAvatar,
+    fund: tplFund, sparks: tplSparks, avatar: tplAvatar,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -1204,6 +1275,16 @@
                 letter-spacing: -0.05em; white-space: pre-wrap; }
     .ann-body { margin: 30px 0 0; font-size: 27px; line-height: 1.55; color: var(--muted);
                 max-width: 34ch; white-space: pre-wrap; }
+
+    /* sparklines: one small chart per stock, each reading on its own */
+    .spk { display: grid; gap: 16px; margin-top: 32px; }
+    .spkt { padding: 16px 18px 12px; border-radius: 16px; border: 1px solid var(--hair);
+            background: rgba(255, 255, 255, 0.024); }
+    .spkt .sh { display: flex; align-items: baseline; gap: 10px; }
+    .spkt .ss { font: 700 25px var(--mono); letter-spacing: -0.02em; }
+    .spkt .sv { margin-left: auto; font: 600 21px var(--mono); font-variant-numeric: tabular-nums; }
+    .spkt .sv.pos { color: var(--green); } .spkt .sv.neg { color: var(--red); }
+    .spkt svg { display: block; width: 100%; height: 78px; margin-top: 10px; }
 
     /* one company, in full: a grid of reported figures */
     .fgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 34px; }
