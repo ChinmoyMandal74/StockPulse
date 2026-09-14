@@ -814,10 +814,6 @@
           <div class="picker-menu" id="moreMenu" role="menu" aria-label="More actions">
             <div class="picker-inner">
               <div id="portfolioActions" style="display:none">
-                <button class="pick" id="renameBtn">
-                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-pencil" /></svg>
-                  <span class="nm">Rename portfolio</span>
-                </button>
                 <button class="pick pick-danger" id="deleteBtn">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-trash" /></svg>
                   <span class="nm">Delete portfolio</span>
@@ -1536,7 +1532,10 @@
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
       $('pickerBtn').title = `Showing ${activeLabel} — click to switch portfolio`;
 
-      const item = (name, c, n) =>
+      // A portfolio's own row is where renaming belongs — the same place a
+      // personal list already carries its pencil. "All" is not a portfolio,
+      // so it gets no pencil.
+      const item = (name, c, n, renamable) =>
         '<div class="pick-row">' +
         `<button class="pick ${activeTab === name ? 'on' : ''}" data-tab="${name}" role="option" ` +
         `aria-selected="${activeTab === name}" style="--tint:${c}">` +
@@ -1544,10 +1543,14 @@
         `<a class="jump" href="/portfolio/${encodeURIComponent(name)}" target="_blank" rel="noopener" ` +
         `title="Open ${we(name)} aggregated ↗" style="transform:none">` +
         '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-chart" /></svg></a>' +
+        (renamable && isAdmin
+          ? `<button class="jump" data-pfren="${we(name)}" title="Rename ${we(name)}" style="transform:none">` +
+            '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-pencil" /></svg></button>'
+          : '') +
         '</div>';
 
       const parts = [item('All', ALL_TINT, countAll)];
-      for (const name of portfolios) parts.push(item(name, colorFor(name), countFor(name)));
+      for (const name of portfolios) parts.push(item(name, colorFor(name), countFor(name), true));
       // The personal section: the member's own lists under the shared ones,
       // each with rename and delete beside it (siblings in a .pick-row — a
       // button cannot nest inside a button, the columns-menu lesson).
@@ -1590,6 +1593,12 @@
         });
       });
       if (isAdmin) $('newTab').addEventListener('click', () => { closePickers(); newPortfolio(); });
+      $('pickerMenu').querySelectorAll('[data-pfren]').forEach((b) =>
+        b.addEventListener('click', (ev) => {
+          ev.stopPropagation();          // renaming must not also switch tab
+          closePickers();
+          renamePortfolio(b.dataset.pfren);
+        }));
       if (myEnabled()) {
         $('myNewTab').addEventListener('click', () => {
           closePickers();
@@ -2935,7 +2944,6 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     window.addEventListener('scroll', () => { hideTip(); hideRowCard(); }, true);
 
     $('addBtn').addEventListener('click', addTicker);
-    $('renameBtn').addEventListener('click', () => renamePortfolio());
     $('deleteBtn').addEventListener('click', deletePortfolio);
     $('refreshBtn').addEventListener('click', refresh);
     $('refreshAllBtn').addEventListener('click', refreshAll);
