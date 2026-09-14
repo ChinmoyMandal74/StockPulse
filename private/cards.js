@@ -689,9 +689,11 @@
     }
 
     function tplAnnounce() {
-      const kick = O.annKick.trim();
-      const head = O.annHead.trim() || 'Say something';
-      const body = O.annBody.trim();
+      // The contract is "the host hands over control values"; a missing one
+      // should draw an empty field, not throw and blank the card.
+      const kick = String(O.annKick || '').trim();
+      const head = String(O.annHead || '').trim() || 'Say something';
+      const body = String(O.annBody || '').trim();
       return chromeTop() +
         '<div class="s-body"><div>' +
         (kick ? `<div class="ann-kick">${esc(kick)}</div>` : '') +
