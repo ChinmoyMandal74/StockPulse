@@ -501,6 +501,12 @@
     tr.chgRow td.frz0 { box-shadow: inset 3px 0 0 var(--amber); }
     /* Industry names run long ("Farm & Heavy Construction Machinery"), so the
        column truncates and the full text sits in the tooltip. */
+    td.shortname { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .snEdit { margin-left: 6px; padding: 0; border: 0; background: none; cursor: pointer;
+              color: transparent; vertical-align: -2px;
+              transition: color 0.3s var(--ease); }
+    tr:hover .snEdit { color: var(--faint); }
+    .snEdit:hover { color: var(--text); }
     td.industry { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .badge {
       margin: 0 4px 0 0;
@@ -919,6 +925,7 @@
       <tr>
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="name">Name</th>
+        <th rowspan="2" class="left" data-key="shortName" title="What a person would call it — shortened from the legal name by rule, and editable by the owner.">Short name</th>
         <th class="group grp-info" data-group="info" colspan="6">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="2">Scores</th>
         <th class="group grp-act" data-group="act" colspan="10">Advice</th>
@@ -1299,6 +1306,18 @@
       const title = `MACD ${line} vs signal ${sig} (12/26/9) · histogram = MACD − signal`;
       return `<td class="${cls}" style="color:${color}"${attr(title)}>${h.toFixed(2)}</td>`;
     }
+    // The display name, with the owner's pencil beside it. The pencil is the
+    // whole maintenance story: a name typed here is kept forever, and an
+    // empty one hands the symbol back to the rule.
+    function shortNameCell(s) {
+      const v = s.shortName || '';
+      const pencil = isAdmin
+        ? `<button class="snEdit" data-sn="${s.symbol}" title="Edit the display name for ${s.symbol}">` +
+          '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-pencil" /></svg></button>'
+        : '';
+      return `<td class="name left shortname"${attr(s.name || '')}>${we(v)}${pencil}</td>`;
+    }
+
     function badges(names) {
       return (names || [])
         .map((n) => `<span class="badge" style="color:${colorFor(n)};border-color:${colorFor(n)}">${n}</span>`)
@@ -1748,7 +1767,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="57">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="58">${msg}</td></tr>`;
         researchSymbol = null;
         renderResearchMenu();
         applyGroups();
@@ -1785,7 +1804,7 @@
         if (s.error) {
           return `<tr style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="55">${s.error}</td>
+            <td class="na" colspan="56">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -1805,6 +1824,7 @@
         return `<tr style="--i:${i}"${adviceMoved(s) ? ' class="chgRow"' : ''}>
           ${symbolCell(s, freshest)}
           <td class="name left frz frz1"><a class="namelink" href="/stock/${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener" title="Open ${s.symbol} in full ↗">${s.name || ''}</a></td>
+          ${shortNameCell(s)}
           <td class="left grp-info">${badges(s.portfolios)}${myBadges(s.symbol)}</td>
           <td class="grp-info"${attr(liveTitle)}>${price != null ? curSym(s.currency) + price : '—'}</td>
           <td class="name left grp-info"${attr(cacheTitle)}>${s.sector || '—'}</td>
@@ -2694,7 +2714,7 @@
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     function showLoading(msg) {
-      $('tbody').innerHTML = `<tr><td class="empty" colspan="53">${msg}</td></tr>`;
+      $('tbody').innerHTML = `<tr><td class="empty" colspan="54">${msg}</td></tr>`;
     }
 
     // Clear the cache, then keep re-pulling until EVERY ticker's fundamentals are
@@ -2922,6 +2942,29 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         if (!r || !r.purged || !r.purged.length) setStatus(`Portfolio "${gone}" deleted.`);
       } catch (err) { setError(err.message); }
     }
+
+    // Editing is a prompt rather than an inline field: it happens rarely, on
+    // one cell, and a prompt cannot be left half-finished in the table.
+    $('tbody').addEventListener('click', async (e) => {
+      const b = e.target.closest('.snEdit');
+      if (!b) return;
+      e.stopPropagation();
+      const sym = b.dataset.sn;
+      const row = stocks.find((x) => x.symbol === sym);
+      if (!row) return;
+      const next = window.prompt(
+        `Display name for ${sym}\n\nFull name: ${row.name || '—'}\nLeave empty to go back to the derived name.`,
+        row.shortName || '');
+      if (next === null) return;
+      try {
+        const r = await api('PUT', '/api/shortname', { symbol: sym, name: next.trim() });
+        row.shortName = r.shortName;
+        setStatus(next.trim() ? `${sym} shows as "${r.shortName}".` : `${sym} back to the derived name.`);
+        render();
+      } catch (err) {
+        setStatus(`Could not save: ${err.message}`);
+      }
+    });
 
     $('chgBtn').addEventListener('click', () => {
       changedOnly = !changedOnly;

@@ -1174,6 +1174,57 @@ function analystConsensus(c) {
 // (/recommendations, /price_target) for one symbol. Best-effort: any field stays
 // null if the endpoint errors or omits it. The analyst/fundamentals endpoints
 // require a Twelve Data Pro+ plan, so they're gated behind FUNDAMENTALS_ENABLED.
+// ---- short names ----------------------------------------------------------
+// The feed has one name field and it is the legal one: "Space Exploration
+// Technologies Corp. Class A", "SK hynix Inc. American Depositary Receipt".
+// These rules strip the furniture — instrument and share-class suffixes
+// first, then the incorporation word, then a trailing Holding(s) — leaving
+// what a person would actually say. Applied in a loop because the tails
+// stack, and every step keeps the previous value if it would empty the name.
+//
+// ETF is deliberately NOT stripped: for a fund the instrument IS the product,
+// so "VanEck Semiconductor ETF" is already its short name.
+const SHORT_TAILS = [
+  /\s*\b(?:Class|Series)\s+[A-Z]\b\s*$/,
+  /\s*\b(?:Common\s+Stock|Ordinary\s+Shares?|Depositary\s+Shares?|American\s+Depositary\s+Receipts?|Depositary\s+Receipts?|SP\s+ADR|ADR|ADS)\b\s*$/i,
+  /\s*,?\s*\b(?:Incorporated|Inc|Corporation|Corp|Company|Co|Limited|Ltd|LLC|LP|PLC|NV|SA|AG|SE)\b\.?\s*$/i,
+];
+function deriveShortName(full) {
+  let n = String(full || '').trim();
+  if (!n) return null;
+  const tidy = (x) => x.replace(/[\s,.&\-]+$/, '').trim();
+  for (let pass = 0; pass < 6; pass++) {
+    const before = n;
+    for (const re of SHORT_TAILS) {
+      const cut = tidy(n.replace(re, ''));
+      if (cut.length >= 2) n = cut;
+    }
+    if (n === before) break;
+  }
+  // "Alibaba Group Holding" -> "Alibaba Group", but never down to nothing
+  const noHold = tidy(n.replace(/\s*\bHoldings?\b\s*$/i, ''));
+  if (noHold.length >= 2) n = noHold;
+  const noThe = n.replace(/^The\s+/i, '').trim();
+  if (noThe.length >= 2) n = noThe;
+  return n || String(full || '').trim() || null;
+}
+
+// Stamps the display name onto rows being served from the snapshot. One
+// query covers both columns, and the rule fills in wherever no override was
+// typed — so improving the rule improves every untouched name at once.
+async function stampShortNames(rows) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  try {
+    const nm = await store.readNamesFull();
+    for (const r of rows) {
+      if (!r || !r.symbol) continue;
+      const e = nm[r.symbol];
+      if (!r.name && e && e.name) r.name = e.name;
+      r.shortName = (e && e.short) || deriveShortName(r.name || (e && e.name)) || null;
+    }
+  } catch { /* a display name must never fail a page */ }
+}
+
 async function fetchProfile(symbol) {
   const enc = encodeURIComponent(symbol);
   const out = {
@@ -2070,6 +2121,18 @@ app.put('/api/my/portfolios', requireMember, route(async (req, res) => {
   res.json({ ok: true, portfolios: next, max: MY_PORTFOLIOS_MAX });
 }));
 
+// Maintain one display name. An empty value clears the override and hands
+// the symbol back to the rule, which is the only way to undo a bad edit.
+app.put('/api/shortname', requireAdmin, route(async (req, res) => {
+  const symbol = String(req.body?.symbol || '').trim().toUpperCase();
+  if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  const raw = String(req.body?.name || '').trim().slice(0, 40);
+  await store.writeShortName(symbol, raw || null);
+  logAct(req, 'portfolio', 'shortname:' + symbol);
+  const names = await readNames();
+  res.json({ ok: true, symbol, shortName: raw || deriveShortName(names[symbol]) || null, custom: !!raw });
+}));
+
 app.get('/api/portfolios', requireMember, route(async (req, res) => {
   res.json({ portfolios: await readPortfolios() });
 }));
@@ -2262,6 +2325,7 @@ async function computeStocks(asOf, opts = {}) {
   const BENCHMARK = 'SPY';
   const fetchSymbols = symbols.includes(BENCHMARK) ? symbols : [...symbols, BENCHMARK];
   const names = await readNames();
+  const shortOverrides = await store.readShortNames();
   const profiles = asOf ? {} : await ensureProfiles(symbols, opts.profileCap); // no point-in-time fundamentals
 
   try {
@@ -2395,6 +2459,8 @@ async function computeStocks(asOf, opts = {}) {
       const row = {
         symbol: sym,
         name: names[sym] || null,
+        // an override if the admin set one, otherwise shortened by rule
+        shortName: shortOverrides[sym] || deriveShortName(names[sym]) || null,
         portfolios: membershipOf(sym, portfolios),
         sector: prof.sector || null,
         industry: prof.industry || null,
@@ -4153,6 +4219,11 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     // existed still carries the column, and a house-profile edit shows up on
     // the next load rather than after the nightly refresh.
     scoreActionInto(snap.stocks);
+    // Display names are stamped on the way out for the same reason the Advice
+    // columns are: they derive from data we already hold, so a snapshot
+    // written before the field existed still carries it, and an override
+    // typed a moment ago shows without waiting for a refresh.
+    await stampShortNames(snap.stocks);
     if (await isGuest(req)) {
       // The guest preview: the picked handful, and only portfolio names that
       // still contain one of them. Filtered here, never in the browser.

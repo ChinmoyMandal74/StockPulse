@@ -353,6 +353,11 @@ const ADDED_COLUMNS = [
   // Registration approval (2026-09-14): new members are 'pending' until the
   // owner approves. The default backfills every existing account as active.
   "alter table users add column status text not null default 'active'",
+  // The display name, when the legal one will not fit. Only OVERRIDES live
+  // here: an untouched symbol has no row value and is shortened by rule at
+  // serve time, so improving the rule improves every name that was never
+  // edited, and an edited one is never quietly overwritten.
+  'alter table names add column short_name text',
 ];
 
 let ready = null;
@@ -451,6 +456,36 @@ async function readNames() {
   const out = {};
   for (const row of r.rows) out[row.symbol] = row.name;
   return out;
+}
+
+// Admin overrides only — a null clears one and hands the symbol back to the
+// rule. writeNames() upserts the name column alone, so a company renaming
+// itself cannot wipe an override.
+// Both columns in one read: the snapshot path stamps display names onto
+// every row it serves, so this runs on each screener load.
+async function readNamesFull() {
+  await init();
+  const r = await db.execute('select symbol, name, short_name from names');
+  const out = {};
+  for (const row of r.rows) out[row.symbol] = { name: row.name, short: row.short_name };
+  return out;
+}
+
+async function readShortNames() {
+  await init();
+  const r = await db.execute('select symbol, short_name from names where short_name is not null');
+  const out = {};
+  for (const row of r.rows) out[row.symbol] = row.short_name;
+  return out;
+}
+
+async function writeShortName(symbol, value) {
+  await init();
+  await db.execute({
+    sql: `insert into names (symbol, short_name) values (?, ?)
+          on conflict(symbol) do update set short_name = excluded.short_name`,
+    args: [String(symbol).toUpperCase(), value || null],
+  });
 }
 
 async function writeNames(map) {
@@ -1646,6 +1681,9 @@ module.exports = {
   writePortfolios,
   readNames,
   writeNames,
+  readShortNames,
+  readNamesFull,
+  writeShortName,
   readProfile,
   readProfiles,
   writeProfiles,
