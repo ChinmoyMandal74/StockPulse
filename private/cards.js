@@ -81,8 +81,10 @@
       // list. The bars share a scale across the columns, so a +9% and a -9%
       // draw the same length and the two halves stay comparable.
       if (split) {
-        const cap = size.id === 'story' ? 9 : size.id === 'square' ? 5 : 7;
+        const cap = size.id === 'story' ? 20 : 15;
         const k = Math.min(n, cap);
+        // Past ten a side the rows tighten rather than overflow the card.
+        const dense = k > 10 ? ' dense' : '';
         const ups = scope.rows.filter((x) => x[field] > 0)
           .sort((a, b) => b[field] - a[field]).slice(0, k);
         const downs = scope.rows.filter((x) => x[field] < 0)
@@ -100,7 +102,7 @@
         return chromeTop() +
           `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 ${esc(periodLabel)}</span>` +
           '<h2 class="s-title">Up and down<br><span class="dim">' + esc(periodLabel) + '</span></h2>' +
-          `<div class="twocol">${col('Gainers', ups, false)}${col('Losers', downs, true)}</div>` +
+          `<div class="twocol${dense}">${col('Gainers', ups, false)}${col('Losers', downs, true)}</div>` +
           '</div></div>' + chromeFoot();
       }
       const rows = scope.rows
@@ -842,6 +844,13 @@
                 font-variant-numeric: tabular-nums; }
     .mrow .mv.pos { color: var(--green); } .mrow .mv.neg { color: var(--red); }
     .mnone { font-size: 19px; color: var(--faint); padding: 10px 0; }
+    /* a long list tightens instead of running off the card */
+    .twocol.dense { gap: 30px; margin-top: 26px; }
+    .twocol.dense .mch { font-size: 15px; padding-bottom: 9px; margin-bottom: 10px; }
+    .twocol.dense .mrow { gap: 11px; margin-bottom: 8px; }
+    .twocol.dense .mrow .ms { font-size: 21px; width: 92px; }
+    .twocol.dense .mrow .bar-rail { height: 24px; border-radius: 7px; }
+    .twocol.dense .mrow .mv { font-size: 20px; width: 104px; }
 
     /* advice-change rows */
     .chg { display: flex; align-items: center; gap: 20px; padding: 18px 22px;
