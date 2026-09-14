@@ -809,9 +809,9 @@
     .row .sym { font: 600 27px var(--mono); width: 138px; letter-spacing: -0.02em; }
     .row .bar-rail { flex: 1; height: 40px; border-radius: 11px; background: rgba(255, 255, 255, 0.045);
                      overflow: hidden; }
-    .row .bar { height: 100%; border-radius: 11px;
+    .row .bar, .mrow .bar { height: 100%; border-radius: 11px;
                 background: linear-gradient(90deg, rgba(52, 211, 153, 0.35), var(--green)); }
-    .row .bar.neg { background: linear-gradient(90deg, rgba(251, 113, 133, 0.35), var(--red)); }
+    .row .bar.neg, .mrow .bar.neg { background: linear-gradient(90deg, rgba(251, 113, 133, 0.35), var(--red)); }
     .row .val { font: 600 26px var(--mono); width: 150px; text-align: right;
                 font-variant-numeric: tabular-nums; }
     .row .val.pos { color: var(--green); } .row .val.neg { color: var(--red); }
