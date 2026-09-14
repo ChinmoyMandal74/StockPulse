@@ -489,6 +489,9 @@
     /* The changed-advice filter: a count you can read without hunting, and a
        click that removes everything else. Amber when armed, because the rows
        it leaves are the ones the rules just moved. */
+    /* a picker that is filtering says so, the way the weight lens does */
+    #secBtn.on { color: var(--accent); border-color: rgba(124, 156, 255, 0.45);
+                 background: rgba(124, 156, 255, 0.09); }
     .chgFilter { gap: 7px; white-space: nowrap; }
     .chgFilter .n { font-family: var(--mono); font-weight: 600; }
     .chgFilter.on { color: var(--amber); border-color: rgba(251, 191, 36, 0.45);
@@ -706,6 +709,10 @@
         <div class="picker" id="colPicker" data-open="0">
           <button class="btn picker-btn" id="colBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="colMenu" role="listbox" aria-multiselectable="true" aria-label="Column groups"></div>
+        </div>
+        <div class="picker" id="secPicker" data-open="0">
+          <button class="btn picker-btn" id="secBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="picker-menu" id="secMenu" role="listbox" aria-label="Sector"></div>
         </div>
         <div class="picker" id="pastPicker" data-open="0">
           <button class="btn picker-btn" id="pastBtn" aria-haspopup="listbox" aria-expanded="false"></button>
@@ -1441,6 +1448,7 @@
     const PICKERS = [
       { root: 'picker', btn: 'pickerBtn', menu: 'pickerMenu' },
       { root: 'colPicker', btn: 'colBtn', menu: 'colMenu' },
+      { root: 'secPicker', btn: 'secBtn', menu: 'secMenu' },
       { root: 'pastPicker', btn: 'pastBtn', menu: 'pastMenu' },
       { root: 'weightPicker', btn: 'weightBtn', menu: 'weightMenu' },
       { root: 'actPicker', btn: 'actBtn', menu: 'actMenu' },
@@ -1614,9 +1622,14 @@
     // chevrons stay profile-specific; one filter answering five questions at
     // once would answer none of them.
     let changedOnly = false;
+    let sectorFilter = 'All';
     const adviceMoved = (s) => !!(s && s.advicePrev && s.action && s.advicePrev !== s.action);
 
-    function visibleStocks() {
+    // Tab and sector together decide what the view is ABOUT; the changed
+    // filter then narrows it. Both the table and the Changed count read this,
+    // so the number on the chip can never describe a different set of rows
+    // from the one on screen.
+    function scopedStocks() {
       let rows = stocks;
       if (activeTab !== 'All') {
         if (isMyTab(activeTab)) {
@@ -1626,7 +1639,56 @@
           rows = stocks.filter((s) => (s.portfolios || []).includes(activeTab));
         }
       }
+      if (sectorFilter !== 'All') rows = rows.filter((s) => s.sector === sectorFilter);
+      return rows;
+    }
+
+    function visibleStocks() {
+      const rows = scopedStocks();
       return changedOnly ? rows.filter(adviceMoved) : rows;
+    }
+
+    // The sectors present in the CURRENT tab, each with its count — a sector
+    // holding nothing here is not offered, and the one in force is kept on
+    // the list even at zero so it can always be switched off again.
+    function renderSectorMenu() {
+      const inTab = activeTab === 'All' ? stocks
+        : isMyTab(activeTab)
+          ? stocks.filter((s) => (myPortfolios[myTabName(activeTab)] || []).includes(s.symbol))
+          : stocks.filter((s) => (s.portfolios || []).includes(activeTab));
+      const counts = {};
+      inTab.forEach((s) => { if (s.sector) counts[s.sector] = (counts[s.sector] || 0) + 1; });
+      const names = Object.keys(counts).sort();
+      if (sectorFilter !== 'All' && !counts[sectorFilter]) names.push(sectorFilter);
+      const row = (val, label, n) =>
+        `<button class="pick ${sectorFilter === val ? 'on' : ''}" data-sec="${we(val)}" role="option" ` +
+        `aria-selected="${sectorFilter === val}"><span class="nm">${we(label)}</span>` +
+        `<span class="count">${n}</span></button>`;
+      $('secMenu').innerHTML = '<div class="picker-inner">' +
+        row('All', 'All sectors', inTab.length) +
+        names.map((n) => row(n, n, counts[n] || 0)).join('') +
+        '</div>';
+      $('secMenu').querySelectorAll('[data-sec]').forEach((b) => {
+        b.addEventListener('click', () => {
+          sectorFilter = b.dataset.sec;
+          window.track && track('picker', 'sector:' + sectorFilter);
+          closePickers();
+          render();
+        });
+      });
+    }
+
+    function renderSectorTrigger() {
+      const on = sectorFilter !== 'All';
+      $('secBtn').innerHTML =
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-columns" /></svg>' +
+        '<span class="picker-label">Sector</span>' +
+        `<span class="count">${on ? we(sectorFilter) : 'All'}</span>` +
+        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
+      $('secBtn').classList.toggle('on', on);
+      $('secBtn').title = on
+        ? `Showing ${sectorFilter} only — open to change or clear`
+        : 'Filter the table to one sector';
     }
 
     // The count is of the CURRENT tab, so filtering inside a portfolio says
@@ -1634,10 +1696,7 @@
     function renderChangedChip() {
       const btn = $('chgBtn');
       if (!btn) return;
-      const scope = activeTab === 'All' ? stocks
-        : isMyTab(activeTab)
-          ? stocks.filter((s) => (myPortfolios[myTabName(activeTab)] || []).includes(s.symbol))
-          : stocks.filter((s) => (s.portfolios || []).includes(activeTab));
+      const scope = scopedStocks();
       const n = scope.filter(adviceMoved).length;
       const any = scope.some((s) => s.advicePrev);
       btn.style.display = any ? '' : 'none';      // hidden until a refresh has stored yesterday
@@ -1653,6 +1712,7 @@
 
     function render() {
       renderPicker();
+      renderSectorTrigger();
       renderChangedChip();
       renderWeightTrigger();
       renderActTrigger();
@@ -1666,12 +1726,15 @@
       const freshest = rows.reduce((m, s) => (s.latestDate && s.latestDate > m ? s.latestDate : m), '');
 
       if (rows.length === 0) {
-        const where = activeTab === 'All' ? 'the screen' : `"${isMyTab(activeTab) ? myTabName(activeTab) : activeTab}"`;
+        const tabName = activeTab === 'All' ? 'the screen' : `"${isMyTab(activeTab) ? myTabName(activeTab) : activeTab}"`;
+        const where = sectorFilter === 'All' ? tabName : `${sectorFilter} in ${tabName}`;
         const msg = changedOnly
           ? `Every verdict in ${where} held since the previous session — nothing changed to show.`
-          : activeTab === 'All'
-            ? 'No tickers yet — add one above.'
-            : `No tickers in "${activeTab}" yet — add one above.`;
+          : sectorFilter !== 'All'
+            ? `Nothing in ${where} — clear the sector filter to see the rest.`
+            : activeTab === 'All'
+              ? 'No tickers yet — add one above.'
+              : `No tickers in "${activeTab}" yet — add one above.`;
         tbody.innerHTML = `<tr><td class="empty" colspan="56">${msg}</td></tr>`;
         researchSymbol = null;
         renderResearchMenu();
@@ -2945,6 +3008,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         // replace the slider under the cursor and kill the gesture.
         if (opening && p.root === 'weightPicker') renderWeightMenu();
         if (opening && p.root === 'actPicker') renderActMenu();
+        if (opening && p.root === 'secPicker') renderSectorMenu();
         if (opening && p.root === 'pastPicker') renderPastMenu();
         openPicker(opening ? p.root : null);
         if (opening && p.root === 'addPicker') setTimeout(() => $('symbolInput').focus(), 60);
