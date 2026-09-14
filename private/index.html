@@ -499,11 +499,13 @@
     .chgFilter:disabled { opacity: 0.45; cursor: default; }
     /* and the rows themselves, so a change is visible while browsing too */
     tr.chgRow td.frz0 { box-shadow: inset 3px 0 0 var(--amber); }
-    /* Industry names run long ("Farm & Heavy Construction Machinery"), so the
-       column truncates and the full text sits in the tooltip. */
-    td.shortname { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .snEdit { margin-left: 6px; padding: 0; border: 0; background: none; cursor: pointer;
-              color: transparent; vertical-align: -2px;
+    /* The frozen name column: the link ellipsizes, the pencil sits beside it.
+       Width comes from .frz1 above, not from here — this cell IS that column
+       now that Name has gone, and two different widths would fight. */
+    td.shortname .snw { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    td.shortname .namelink { flex: 1 1 auto; min-width: 0; }
+    .snEdit { flex: none; padding: 0; border: 0; background: none; cursor: pointer;
+              line-height: 0; color: transparent;
               transition: color 0.3s var(--ease); }
     tr:hover .snEdit { color: var(--faint); }
     .snEdit:hover { color: var(--text); }
@@ -1317,9 +1319,13 @@
       // The full legal name is the tooltip now that it has no column of its
       // own, and this cell inherits the link into the stock page.
       const full = s.name && s.name !== v ? `${s.name} · open ${s.symbol} in full ↗` : `Open ${s.symbol} in full ↗`;
+      // The link is display:block inside a frozen cell so it can ellipsize,
+      // which put the pencil on a line of its own and doubled every row. The
+      // flex wrapper keeps them side by side: the name takes the slack and
+      // truncates, the pencil never shrinks.
       return `<td class="name left frz frz1 shortname"${attr(full)}>` +
-        `<a class="namelink" href="/stock/${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener">${we(v)}</a>` +
-        `${pencil}</td>`;
+        `<span class="snw"><a class="namelink" href="/stock/${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener">${we(v)}</a>` +
+        `${pencil}</span></td>`;
     }
 
     function badges(names) {
