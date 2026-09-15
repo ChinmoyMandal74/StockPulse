@@ -9,6 +9,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { AsyncLocalStorage } = require('async_hooks');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -269,7 +270,7 @@ app.get('/login', (req, res) => {
 // file. Locally it worked, which is exactly why it went unnoticed.
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
-                      '/admin.html': '/admin',
+                      '/admin.html': '/admin', '/refreshes.html': '/refreshes',
                       '/nasdaq.html': '/nasdaq',
                       '/cards.html': '/cards',
                       '/users.html': '/users', '/reset.html': '/reset',
@@ -349,6 +350,13 @@ app.get('/admin', route(async (req, res) => {
 app.get('/visitors', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'private', 'visitors.html'));
+}));
+
+// Admin only: every refresh run, manual or scheduled, with its rounds.
+app.get('/refreshes', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'refreshes');
+  res.sendFile(path.join(__dirname, 'private', 'refreshes.html'));
 }));
 
 // Admin only, like /visitors — what every user is doing, fact by fact.
@@ -1433,6 +1441,8 @@ async function fetchProfile(symbol) {
       /* leave price target null */
     }
   }
+  const m = creditMeter.getStore();
+  if (m) { if (out.fetchOk) m.profiles++; else m.profileFails++; }
   return out;
 }
 
@@ -1485,8 +1495,26 @@ function normalizeBySymbol(data, symbols) {
   return data || {};
 }
 
+// Credits are measured, not estimated: Twelve Data states each call's cost in
+// Api-Credits-Request. A refresh round runs inside creditMeter.run(), and every
+// call it makes — prices, SPY, each profile's four endpoints — adds its cost to
+// that round's tally. Outside a metered round the store is undefined and this
+// does nothing.
+const creditMeter = new AsyncLocalStorage();
+async function metered(fn) {
+  const m = { credits: 0, profiles: 0, profileFails: 0 };
+  const t0 = Date.now();
+  const r = await creditMeter.run(m, fn);
+  return { r, m, ms: Date.now() - t0 };
+}
+
 async function fetchJson(url) {
   const res = await fetch(url);
+  const m = creditMeter.getStore();
+  if (m) {
+    const c = Number(res.headers.get('api-credits-request'));
+    if (Number.isFinite(c)) m.credits += c;
+  }
   return res.json();
 }
 
@@ -2218,17 +2246,34 @@ app.post('/api/nasdaq/refresh', requireAdmin, route(async (req, res) => {
     return res.status(400).json({ error: 'Unknown exchange.' });
   }
   const t0 = Date.now();
+  // Three requests, one run: the first starts it, the page passes its id on.
+  const idx = NASDAQ_EXCHANGES.indexOf(exchange);
+  let runId = Number(req.body?.runId) || null;
+  if (!runId) {
+    const who = await currentUser(req);
+    runId = await trackSafe(store.startRun({ kind: 'nasdaq', trigger: 'manual', actor: who ? who.email : null,
+      total: NASDAQ_EXCHANGES.length, targets: NASDAQ_EXCHANGES.length }));
+  }
   let rows;
   try {
     rows = await fetchNasdaqExchange(exchange);
   } catch (err) {
     // Never echo an upstream body: it can restate the request.
     console.error('nasdaq fetch failed:', exchange, err.message);
-    return res.status(502).json({ error: `Could not reach NASDAQ for ${exchange}.` });
+    const msg = `Could not reach NASDAQ for ${exchange}.`;
+    await trackSafe(store.noteRound(runId, { ms: Date.now() - t0, priceSource: exchange, loaded: idx,
+      total: NASDAQ_EXCHANGES.length, error: msg }));
+    await trackSafe(store.finishRun(runId, { status: 'failed', error: msg }));
+    return res.status(502).json({ error: msg, runId });
   }
   const n = await store.writeNasdaqExchange(exchange, rows);
   logAct(req, 'refresh', 'nasdaq:' + exchange);
-  res.json({ exchange, rows: n, ms: Date.now() - t0, meta: await store.nasdaqMeta() });
+  await trackSafe(store.noteRound(runId, { ms: Date.now() - t0,
+    priceSource: `${exchange} \u00b7 ${n.toLocaleString()} rows`, loaded: idx + 1, total: NASDAQ_EXCHANGES.length }));
+  if (req.body?.last === true || idx === NASDAQ_EXCHANGES.length - 1) {
+    await trackSafe(store.finishRun(runId, { status: 'complete', loaded: idx + 1, total: NASDAQ_EXCHANGES.length }));
+  }
+  res.json({ exchange, rows: n, ms: Date.now() - t0, runId, meta: await store.nasdaqMeta() });
 }));
 
 // Maintain one display name. An empty value clears the override and hands
@@ -2454,18 +2499,22 @@ app.post('/api/refresh-all', requireAdmin, route(async (req, res) => {
     }
     logAct(req, 'refresh', 'missing:' + plan.gaps.length);
     const expired = await store.expireProfilesFor(plan.gaps.filter((g) => g.hasRow).map((g) => g.symbol));
-    await beginRefresh(who ? who.email : null, plan.total, 'missing');
+    const runId = await trackSafe(store.startRun({ kind: 'missing', trigger: 'manual',
+      actor: who ? who.email : null, total: plan.total, targets: plan.gaps.length }));
+    await beginRefresh(who ? who.email : null, plan.total, 'missing', runId);
     // No stock without bars means no price pull at all: every round reads the
     // archive and spends its whole minute on the gaps.
     if (!plan.noBars.length) await store.markRefreshPrices();
-    return res.json({ ok: true, mode: 'missing', expired, total: plan.total,
+    return res.json({ ok: true, mode: 'missing', runId, expired, total: plan.total,
       targets: plan.gaps.length, noBars: plan.noBars.length, rounds: plan.rounds });
   }
   logAct(req, 'refresh', 'all');
   const expired = await expireProfiles();
   const total = getUniverse(await readPortfolios()).length;
-  await beginRefresh(who ? who.email : null, total);
-  res.json({ ok: true, expired, total });
+  const runId = await trackSafe(store.startRun({ kind: 'all', trigger: 'manual',
+    actor: who ? who.email : null, total, targets: total }));
+  await beginRefresh(who ? who.email : null, total, null, runId);
+  res.json({ ok: true, runId, expired, total });
 }));
 
 // The client calls this when its backfill loop finishes or gives up, so the
@@ -2479,7 +2528,9 @@ app.delete('/api/refresh-all', requireAdmin, route(async (req, res) => {
   //
   // endRefresh() returns the run only to whoever actually cleared the flag, so a
   // run that already finished naturally and reported cannot report twice.
-  const reported = await sendRefreshReport(await endRefresh(), 'all');
+  const cleared = await endRefresh();
+  if (cleared) await closeRun(cleared, 'incomplete');
+  const reported = await sendRefreshReport(cleared, 'all');
   res.json({ ok: true, reported });
 }));
 
@@ -4003,10 +4054,9 @@ function refreshReportBodies(r) {
 // refresh round that happened to finish the run.
 async function sendRefreshReport(state, kind = 'all') {
   if (!state) return false;          // nothing was cleared — someone else reported this run
-  if (!MAIL_READY) return false;
+  // A tracked run keeps its report on /refreshes even when mail is not set up.
+  if (!MAIL_READY && !state.runId) return false;
   try {
-    const to = await operatorEmail();
-    if (!to) return false;
     const r = await buildRefreshReport(state, await readSnapshot(), kind);
     r.mode = state.mode || null;
     if (r.mode === 'missing') {
@@ -4023,9 +4073,20 @@ async function sendRefreshReport(state, kind = 'all') {
       ? `[Tickr Lab] Refresh all — ${r.loaded.length}/${r.live.length}` + (r.complete ? '' : ' incomplete')
       : `[Tickr Lab] Refresh — ${r.live.length} symbols as of ${r.asOf || 'n/a'}` +
         (r.failed.length ? `, ${r.failed.length} failed` : '');
-    const ok = await sendMail({ to, subject, text, html });
-    console.log(`report: ${kind === 'all' ? 'refresh all' : 'refresh'} summary ` +
-      `${ok ? 'sent to ' + to : 'could not be sent'}`);
+    let ok = false;
+    const to = MAIL_READY ? await operatorEmail() : null;
+    if (to) {
+      ok = await sendMail({ to, subject, text, html });
+      console.log(`report: ${kind === 'all' ? 'refresh all' : 'refresh'} summary ` +
+        `${ok ? 'sent to ' + to : 'could not be sent'}`);
+    }
+    if (state.runId) {
+      await trackSafe(store.setRunReport(state.runId, {
+        sent: ok, html,
+        failed: r.failed.map((x) => x.symbol),
+        stillMissing: r.stillGaps ? r.stillGaps.map((g) => g.symbol) : null,
+      }));
+    }
     return ok;
   } catch (err) {
     console.warn('report: refresh summary failed (refresh unaffected):', err.message);
@@ -4058,6 +4119,7 @@ async function finishLiveRefresh(payload, ctx = {}) {
   // on every refresh, so coverage accrues without a schedule of its own.
   topUpNews(rows);
   store.pruneActivity(ACTIVITY_KEEP_DAYS).catch(() => { /* the bars rule */ });
+  store.pruneRuns().catch(() => { /* the bars rule */ });
 
   // Snapshot the day's fundamentals — but only during a Refresh all, which is
   // when the profile cache has actually been re-pulled. An ordinary price
@@ -4088,7 +4150,10 @@ async function finishLiveRefresh(payload, ctx = {}) {
   if (running) {
     if (covered) {
       const cleared = await endRefresh();
-      if (cleared) await sendRefreshReport(cleared, 'all');
+      if (cleared) {
+        await closeRun(cleared, 'complete', { loaded, total: rows.length });
+        await sendRefreshReport(cleared, 'all');
+      }
     } else {
       await noteRefreshProgress(loaded, rows.length);
     }
@@ -4097,8 +4162,9 @@ async function finishLiveRefresh(payload, ctx = {}) {
     // that was abandoned and has since aged out, so the next Refresh all starts
     // from a clean flag. It returns the stale run, which is deliberately not
     // reported — a run nobody finished has nothing to say.
-    await endRefresh();
-    await sendRefreshReport({ startedAt: ctx.startedAt, actor: ctx.actor }, 'plain');
+    const stale = await endRefresh();
+    if (stale) await closeRun(stale, 'abandoned');
+    await sendRefreshReport({ startedAt: ctx.startedAt, actor: ctx.actor, runId: ctx.runId }, 'plain');
   }
   return { loaded, total: rows.length, done: running ? covered : true };
 }
@@ -4205,11 +4271,178 @@ async function notePriceRound(opts) {
   await store.markRefreshPrices();
 }
 
+// ---- refresh run tracking --------------------------------------------------
+// Tracking is a by-product, like the bar archive: a failed write is logged and
+// swallowed, and never fails the refresh it describes.
+async function trackSafe(p) {
+  try { return await p; } catch (err) {
+    console.warn('runs: tracking write failed (refresh unaffected):', err.message);
+    return null;
+  }
+}
+
+async function recordRound(runId, opts, m, ms, extra = {}) {
+  if (!runId) return;
+  const priceSource = opts.archivePrices ? 'archive' : opts.priceSlice ? 'slice' : 'live';
+  const pricedLive = opts.archivePrices ? 0 : opts.priceSlice ? opts.priceSlice.length : (extra.rows || 0);
+  await trackSafe(store.noteRound(runId, {
+    ms, credits: m.credits, profiles: m.profiles, profileFails: m.profileFails,
+    priceSource, pricedLive, loaded: extra.loaded, total: extra.total,
+    error: extra.error, refused: extra.refused,
+  }));
+}
+
+// A live run just ended — naturally, by giving up, or by Stop.
+async function closeRun(state, status, extra = {}) {
+  if (!state || !state.runId) return;
+  await trackSafe(store.finishRun(state.runId, {
+    status, loaded: extra.loaded ?? state.loaded, total: extra.total ?? state.total,
+  }));
+}
+
+// The day a moment belongs to, in New York — the nightly job's clock.
+function nyDay(ms) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+}
+function nyHour(ms) {
+  return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York',
+    hour: 'numeric', hourCycle: 'h23' }).format(new Date(ms)));
+}
+const NIGHTLY_KINDS = new Set(['nightly', 'nightly-full']);
+
+// One verdict per New York day for the nightly job: ok, running, missed,
+// pending (today, before 5 PM), untracked (before recording began), or the
+// run's own status (incomplete, failed, abandoned, stopped).
+function nightVerdicts(runs, days = 14, now = Date.now()) {
+  const firstTracked = runs.reduce((mn, x) => Math.min(mn, x.startedAt), Infinity);
+  const firstDay = Number.isFinite(firstTracked) ? nyDay(firstTracked) : null;
+  const out = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const day = nyDay(now - i * 86400000);
+    const night = runs.filter((x) => NIGHTLY_KINDS.has(x.kind) && nyDay(x.startedAt) === day)
+      .sort((a, b) => b.startedAt - a.startedAt)[0] || null;
+    let verdict;
+    if (night) verdict = night.status === 'complete' ? 'ok' : night.status;
+    else if (i === 0 && nyHour(now) < 17) verdict = 'pending';
+    else if (!firstDay || day < firstDay) verdict = 'untracked';
+    else verdict = 'missed';
+    out.push({ day, verdict, runId: night ? night.id : null });
+  }
+  return out;
+}
+
+app.get('/api/refresh-runs', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const days = Math.min(90, Math.max(1, Number(req.query.days) || 90));
+  const runs = await store.readRuns(Date.now() - days * 86400000);
+  const state = await readRefreshState();
+  const live = state && state.runId ? await store.readRun(state.runId) : null;
+  if (live) {
+    delete live.reportHtml;
+    live.mode = state.mode || null;
+    live.pricesAt = state.pricesAt || null;
+  }
+  res.json({ runs, live, nights: nightVerdicts(runs), now: Date.now() });
+}));
+
+// The slower half of the page: how fresh the stored data is right now.
+app.get('/api/refresh-runs/health', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const universe = getUniverse(await readPortfolios());
+  const profiles = await readProfiles();
+  const now = Date.now();
+  const ages = { day: 0, three: 0, week: 0, older: 0, none: 0 };
+  for (const s of universe) {
+    const p = profiles[s];
+    if (!p || !p.fetchedAt) { ages.none++; continue; }
+    const d = (now - p.fetchedAt) / 86400000;
+    if (d < 1) ages.day++; else if (d < 3) ages.three++; else if (d < 7) ages.week++; else ages.older++;
+  }
+  let stats = { barRows: null, barsThrough: null };
+  try { stats = await store.archiveStats(nyDay(now)); } catch { /* shown as unknown */ }
+  res.json({
+    universe: universe.length,
+    ages,
+    gaps: profileGaps(universe, profiles).length,
+    barsThrough: stats.barsThrough,
+    rotationDays: FUND_ROTATION_DAYS,
+  });
+}));
+
+app.get('/api/refresh-runs/:id', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const run = await store.readRun(Number(req.params.id) || 0);
+  if (!run) return res.status(404).json({ error: 'No such run.' });
+  res.json(run);
+}));
+
+// Stop the live run. The flag is cleared at once, the run is marked stopped
+// and reported, and the loop driving it — a browser tab or the nightly job —
+// is answered `stopped` on its next round without spending anything.
+app.post('/api/refresh-runs/stop', requireAdmin, route(async (req, res) => {
+  const cleared = await endRefresh();
+  if (!cleared) return res.json({ ok: true, stopped: false });
+  await closeRun(cleared, 'stopped');
+  logAct(req, 'refresh', 'stop');
+  const reported = await sendRefreshReport(cleared, 'all');
+  res.json({ ok: true, stopped: true, runId: cleared.runId || null, reported });
+}));
+
+// The missed-night alarm. Called once a day by a Vercel cron (vercel.json),
+// deliberately NOT by GitHub: the failure it exists to catch is GitHub's
+// scheduler not firing at all, and a watchdog on the same scheduler would
+// miss the same night. Mails only when something is wrong; ?dry=1 reports the
+// verdict without mailing.
+app.get('/api/cron/watchdog', route(async (req, res) => {
+  if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
+  const now = Date.now();
+  const runs = await store.readRuns(now - 3 * 86400000);
+  const today = nightVerdicts(runs, 1, now)[0];
+  const bad = !['ok', 'running', 'pending', 'untracked'].includes(today.verdict);
+  let mailed = false;
+  if (bad && req.query.dry !== '1' && MAIL_READY) {
+    const to = await operatorEmail();
+    if (to) {
+      const words = {
+        missed: 'did not run', incomplete: 'stopped short', failed: 'failed',
+        abandoned: 'was abandoned partway', stopped: 'was stopped',
+      };
+      const what = words[today.verdict] || today.verdict;
+      const heading = `Nightly refresh ${what}`;
+      const intro = today.verdict === 'missed'
+        ? `No nightly refresh started on ${today.day} (New York). GitHub's scheduler sometimes skips a run; ` +
+          'the data on the site is from the previous refresh.'
+        : `The nightly refresh on ${today.day} (New York) ${what}. Some data may not have been updated.`;
+      const link = APP_URL ? `${APP_URL}/refreshes` : '';
+      const html = emailShell({
+        heading, intro,
+        body: '<p style="margin:0 0 14px;font-size:14px;line-height:1.6">Open the refresh runs page to see ' +
+          'what happened, then run Fill missing or Refresh all from the admin console if needed.</p>' +
+          (link ? mailButton(link, 'Open refresh runs') : ''),
+        note: 'Sent by the daily check that watches the nightly job.',
+      });
+      const text = textShell({ heading, intro, lines: link ? [link] : [],
+        note: 'Sent by the daily check that watches the nightly job.' });
+      mailed = await sendMail({ to, subject: `[Tickr Lab] ${heading} — ${today.day}`, text, html });
+    }
+  }
+  console.log(`watchdog: ${today.day} ${today.verdict}${mailed ? ' — alert mailed' : ''}`);
+  res.json({ ok: true, ...today, alert: bad, mailed });
+}));
+
 app.post('/api/cron/refresh', route(async (req, res) => {
   if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
   if (!API_KEY) return res.status(500).json({ error: 'No API key configured.' });
 
-  if (req.query.start === '1' || req.body?.start === true) {
+  let cronRunId = null;
+  const starting = req.query.start === '1' || req.body?.start === true;
+  const askedRun = Number(req.body?.runId) || null;
+  if (!starting && askedRun && (await trackSafe(store.runStatus(askedRun))) === 'stopped') {
+    // Stopped from /refreshes: tell the job it is done, and spend nothing.
+    return res.json({ ok: true, done: true, stopped: true, runId: askedRun });
+  }
+  if (starting) {
     const total = getUniverse(await readPortfolios()).length;
     // ?full=1 forces the old behaviour — every profile re-pulled tonight. The
     // default rotates: the oldest slice is expired so it comes up for renewal,
@@ -4229,23 +4462,37 @@ app.post('/api/cron/refresh', route(async (req, res) => {
     const expired = gapped + (full
       ? await expireProfiles()
       : await store.expireOldestProfiles(Math.ceil(total / FUND_ROTATION_DAYS)));
-    await beginRefresh(String(req.body?.actor || 'nightly job').slice(0, 80), total);
+    const actor = String(req.body?.actor || 'nightly job').slice(0, 80);
+    // workflow_dispatch is a person pressing Run; the two crons are the schedule.
+    const trigger = req.body?.trigger === 'manual' ? 'manual' : 'scheduled';
+    const runUrl = String(req.body?.runUrl || '');
+    cronRunId = await trackSafe(store.startRun({ kind: full ? 'nightly-full' : 'nightly', trigger, actor,
+      total, targets: expired, link: /^https:\/\/github\.com\//.test(runUrl) ? runUrl.slice(0, 300) : null }));
+    await beginRefresh(actor, total, null, cronRunId);
     console.log(`cron: refresh all started — ${expired} profiles expired ` +
       `(${full ? 'full sweep' : `1/${FUND_ROTATION_DAYS} rotation`}), ${total} symbols`);
   }
 
   const opts = await liveRefreshOpts();
-  const r = await computeStocks(null, opts);
-  if (!r.ok) return res.status(r.status).json({ error: r.error });
+  const runId = cronRunId || (opts.running && opts.running.runId) || askedRun;
+  const { r, m, ms } = await metered(() => computeStocks(null, opts));
+  if (!r.ok) {
+    await recordRound(runId, opts, m, ms, { error: r.error, refused: r.status === 429 });
+    return res.status(r.status).json({ error: r.error, runId });
+  }
   await notePriceRound(opts);
-  res.json({ ok: true, ...(await finishLiveRefresh(r.payload)) });
+  const fin = await finishLiveRefresh(r.payload);
+  await recordRound(runId, opts, m, ms, { loaded: fin.loaded, total: fin.total, rows: r.payload.stocks.length });
+  res.json({ ok: true, runId, ...fin });
 }));
 
 // Lets the job clean up after itself when it gives up, and report what it got.
 // Same idempotency as everywhere else: only the caller that clears the flag mails.
 app.delete('/api/cron/refresh', route(async (req, res) => {
   if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
-  res.json({ ok: true, reported: await sendRefreshReport(await endRefresh()) });
+  const cleared = await endRefresh();
+  if (cleared) await closeRun(cleared, 'incomplete');
+  res.json({ ok: true, reported: await sendRefreshReport(cleared) });
 }));
 
 // Snapshot: the public sees the last computed data (no live API calls). Admin
@@ -4271,19 +4518,42 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     // here too and would be a dozen rows of noise for one action.
     if (asOf) logAct(req, 'refresh', 'as-of:' + asOf);
     else if (!opts.running) logAct(req, 'refresh', 'plain');
-    const r = await computeStocks(asOf, opts);
-    if (!r.ok) return res.status(r.status).json({ error: r.error });
-    if (!asOf) await notePriceRound(opts);
-    // Cache the live (non-as-of) pull, record today's fundamentals, and move
-    // the shared refresh flag on — the same tail the nightly job runs, so the
-    // two callers cannot drift apart.
-    if (!asOf) {
-      const who = await currentUser(req);
-      await finishLiveRefresh(r.payload, {
-        startedAt, actor: who ? who.email : 'admin (legacy login)',
-      });
+    if (asOf) {
+      const r = await computeStocks(asOf, opts);
+      if (!r.ok) return res.status(r.status).json({ error: r.error });
+      return res.json({ ...r.payload, refreshing: await readRefreshState() });
     }
-    return res.json({ ...r.payload, refreshing: await readRefreshState() });
+
+    // Which run this round belongs to. The loop passes its run id: a run
+    // stopped from /refreshes answers `stopped` here and costs nothing, and
+    // a round whose flag aged out still lands on the run that started it. No
+    // run at all means a plain Refresh, which is a run of one round.
+    const who = await currentUser(req);
+    const actor = who ? who.email : 'admin (legacy login)';
+    const asked = Number(req.query.run) || null;
+    if (asked && (await trackSafe(store.runStatus(asked))) === 'stopped') {
+      return res.json({ stopped: true, runId: asked, refreshing: await readRefreshState() });
+    }
+    let runId = (opts.running && opts.running.runId) || asked;
+    const plainRun = !runId && !opts.running;
+    if (plainRun) {
+      const total = getUniverse(await readPortfolios()).length;
+      runId = await trackSafe(store.startRun({ kind: 'refresh', trigger: 'manual', actor, total, targets: total }));
+    }
+    const { r, m, ms } = await metered(() => computeStocks(null, opts));
+    if (!r.ok) {
+      await recordRound(runId, opts, m, ms, { error: r.error, refused: r.status === 429 });
+      if (plainRun) await trackSafe(store.finishRun(runId, { status: 'failed', error: r.error }));
+      return res.status(r.status).json({ error: r.error });
+    }
+    await notePriceRound(opts);
+    // Cache the live pull, record today's fundamentals, and move the shared
+    // refresh flag on — the same tail the nightly job runs, so the two callers
+    // cannot drift apart.
+    const fin = await finishLiveRefresh(r.payload, { startedAt, actor, runId: plainRun ? runId : null });
+    await recordRound(runId, opts, m, ms, { loaded: fin.loaded, total: fin.total, rows: r.payload.stocks.length });
+    if (plainRun) await trackSafe(store.finishRun(runId, { status: 'complete', loaded: fin.loaded, total: fin.total }));
+    return res.json({ ...r.payload, runId, refreshing: await readRefreshState() });
   }
 
   // Public read: serve the saved snapshot — no API calls, no credits burned.

@@ -336,12 +336,15 @@
       if (busy) return;
       busy = true;
       $('refreshBtn').disabled = true;
-      let done = 0, total = 0, meta = null;
+      let done = 0, total = 0, meta = null, runId = null;
       try {
         const list = (window.__exchanges || ['NASDAQ', 'NYSE', 'AMEX']);
         for (const ex of list) {
           say(`Pulling ${ex}…`);
-          const r = await api('POST', '/api/nasdaq/refresh', { exchange: ex });
+          // one run on /refreshes for the three pulls: the first call starts it
+          const r = await api('POST', '/api/nasdaq/refresh',
+            { exchange: ex, runId, last: done === list.length - 1 });
+          runId = r.runId || runId;
           done++; total += r.rows; meta = r.meta;
           say(`${ex}: ${r.rows.toLocaleString()} rows in ${(r.ms / 1000).toFixed(1)}s (${done}/${list.length})`, 'good');
         }

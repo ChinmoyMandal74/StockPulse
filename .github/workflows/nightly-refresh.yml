@@ -97,11 +97,20 @@ jobs:
           GAP=62               # the pacing the browser loop uses, unchanged
           STAGNANT_LIMIT=3     # rounds without progress before giving up
 
+          # Every call names the run it belongs to, so a Stop on /refreshes
+          # ends the job on its next round. The start call records how the job
+          # was triggered and links back to this Actions run.
+          RUN_ID=""
+          TRIGGER=$([ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && echo manual || echo scheduled)
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           call() {             # $1 = query string
+            body=$(jq -nc --arg actor "nightly job (GitHub Actions)" --arg trigger "$TRIGGER" \
+              --arg runUrl "$RUN_URL" --arg runId "$RUN_ID" \
+              '{actor:$actor, trigger:$trigger, runUrl:$runUrl} + (if $runId == "" then {} else {runId:($runId|tonumber)} end)')
             curl -sS -m 180 -X POST "${APP_URL}/api/cron/refresh$1" \
               -H "authorization: Bearer ${CRON_SECRET}" \
               -H 'content-type: application/json' \
-              -d '{"actor":"nightly job (GitHub Actions)"}'
+              -d "$body"
           }
 
           finish() {           # clear the flag and report whatever was gathered
@@ -111,6 +120,7 @@ jobs:
 
           echo "Starting Refresh all against ${APP_URL}"
           resp=$(call '?start=1')
+          RUN_ID=$(printf '%s' "$resp" | jq -r '.runId // empty' 2>/dev/null)
           last=-1
           stagnant=0
 
@@ -118,6 +128,11 @@ jobs:
             done=$(printf '%s' "$resp" | jq -r '.done // empty' 2>/dev/null)
             loaded=$(printf '%s' "$resp" | jq -r '.loaded // empty' 2>/dev/null)
             total=$(printf '%s' "$resp" | jq -r '.total // empty' 2>/dev/null)
+
+            if [ "$(printf '%s' "$resp" | jq -r '.stopped // empty' 2>/dev/null)" = "true" ]; then
+              echo "Stopped from the refresh runs page — ending here."
+              exit 0
+            fi
 
             if [ -z "$loaded" ]; then
               # A rate limit or a cold start, not a reason to abandon the night.

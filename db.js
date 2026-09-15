@@ -228,6 +228,51 @@ const SCHEMA = [
      actor      text
    )`,
 
+  // Every refresh run, manual or scheduled — the history /refreshes reads.
+  // refresh_state is the live flag and is deleted when a run ends; this is
+  // what is left afterwards. One row per run, written at the start and
+  // updated every round; the rounds themselves in refresh_rounds.
+  `create table if not exists refresh_runs (
+     id            integer primary key autoincrement,
+     kind          text not null,
+     trigger       text not null,
+     actor         text,
+     started_at    integer not null,
+     updated_at    integer not null,
+     ended_at      integer,
+     status        text not null default 'running',
+     total         integer,
+     targets       integer,
+     loaded        integer,
+     rounds        integer not null default 0,
+     refused       integer not null default 0,
+     credits       integer not null default 0,
+     profiles      integer not null default 0,
+     prices_live   integer not null default 0,
+     error         text,
+     failed_symbols text,
+     still_missing text,
+     report_sent   integer,
+     report_html   text,
+     link          text
+   )`,
+  `create index if not exists idx_refresh_runs_started on refresh_runs(started_at)`,
+  `create table if not exists refresh_rounds (
+     run_id        integer not null,
+     n             integer not null,
+     at            integer not null,
+     ms            integer,
+     credits       integer,
+     profiles      integer,
+     profile_fails integer,
+     price_source  text,
+     priced_live   integer,
+     loaded        integer,
+     total         integer,
+     error         text,
+     primary key (run_id, n)
+   )`,
+
   // Every US listing NASDAQ publishes, as a REFERENCE LIST and nothing more.
   // It is deliberately not joined to anything: the screener's universe, its
   // sectors and its industries come from Twelve Data, and NASDAQ's taxonomy is
@@ -279,6 +324,8 @@ const ADDED_COLUMNS = [
   // nightly rotation), 'missing' for Fill missing, which re-pulls only the
   // stocks whose company data is absent, failed or older than a field.
   'alter table refresh_state add column mode text',
+  // The refresh_runs row this live run writes its rounds to.
+  'alter table refresh_state add column run_id integer',
   // Registration approval (2026-09-14): new members are 'pending' until the
   // owner approves. The default backfills every existing account as active.
   "alter table users add column status text not null default 'active'",
@@ -544,19 +591,19 @@ async function expireProfiles() {
 // admin closing the tab mid-backfill from pinning the banner up forever.
 const REFRESH_STALE_MS = 4 * 60 * 1000;
 
-async function beginRefresh(actor, total, mode) {
+async function beginRefresh(actor, total, mode, runId) {
   await init();
   const now = Date.now();
   // prices_at and priced are reset too: a row left by an earlier run must not
   // tell this one its prices were already pulled.
   await db.execute({
-    sql: `insert into refresh_state (id, started_at, updated_at, loaded, total, actor, mode, prices_at, priced)
-          values (1, ?, ?, 0, ?, ?, ?, null, 0)
+    sql: `insert into refresh_state (id, started_at, updated_at, loaded, total, actor, mode, prices_at, priced, run_id)
+          values (1, ?, ?, 0, ?, ?, ?, null, 0, ?)
           on conflict(id) do update set
             started_at = excluded.started_at, updated_at = excluded.updated_at,
             loaded = 0, total = excluded.total, actor = excluded.actor,
-            mode = excluded.mode, prices_at = null, priced = 0`,
-    args: [now, now, total ?? null, actor || null, mode || null],
+            mode = excluded.mode, prices_at = null, priced = 0, run_id = excluded.run_id`,
+    args: [now, now, total ?? null, actor || null, mode || null, runId ?? null],
   });
 }
 
@@ -579,7 +626,7 @@ async function noteRefreshProgress(loaded, total) {
 async function endRefresh() {
   await init();
   const r = await db.execute(
-    'select started_at, updated_at, loaded, total, actor, mode from refresh_state where id = 1');
+    'select started_at, updated_at, loaded, total, actor, mode, run_id from refresh_state where id = 1');
   const del = await db.execute('delete from refresh_state where id = 1');
   if (!r.rows.length || (del.rowsAffected ?? 0) < 1) return null;
   const row = r.rows[0];
@@ -590,7 +637,161 @@ async function endRefresh() {
     total: row.total == null ? null : Number(row.total),
     actor: row.actor || null,
     mode: row.mode || null,
+    runId: row.run_id == null ? null : Number(row.run_id),
   };
+}
+
+// ---- refresh run history ----------------------------------------------------
+
+// A run still marked running with no update for this long is over: rounds are
+// 62s apart and a nightly round may take up to 180s, so six minutes of silence
+// means the tab closed or the job died.
+const RUN_ABANDON_MS = 6 * 60 * 1000;
+
+async function startRun({ kind, trigger, actor, total, targets, link }) {
+  await init();
+  const now = Date.now();
+  const r = await db.execute({
+    sql: `insert into refresh_runs (kind, trigger, actor, started_at, updated_at, total, targets, link)
+          values (?, ?, ?, ?, ?, ?, ?, ?) returning id`,
+    args: [kind, trigger, actor || null, now, now, total ?? null, targets ?? null, link || null],
+  });
+  return Number(r.rows[0].id);
+}
+
+// One round: its own row, and the run's running totals moved on.
+async function noteRound(runId, rd) {
+  if (!runId) return;
+  await init();
+  const now = Date.now();
+  await db.batch([
+    {
+      sql: `insert into refresh_rounds (run_id, n, at, ms, credits, profiles, profile_fails,
+              price_source, priced_live, loaded, total, error)
+            select ?, coalesce(max(n), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+              from refresh_rounds where run_id = ?`,
+      args: [runId, now, rd.ms ?? null, rd.credits ?? 0, rd.profiles ?? 0, rd.profileFails ?? 0,
+        rd.priceSource || null, rd.pricedLive ?? 0, rd.loaded ?? null, rd.total ?? null,
+        rd.error ? String(rd.error).slice(0, 300) : null, runId],
+    },
+    {
+      sql: `update refresh_runs set rounds = rounds + 1, credits = credits + ?,
+              profiles = profiles + ?, prices_live = prices_live + ?, refused = refused + ?,
+              loaded = coalesce(?, loaded), total = coalesce(?, total), updated_at = ?
+            where id = ?`,
+      args: [rd.credits ?? 0, rd.profiles ?? 0, rd.pricedLive ?? 0, rd.refused ? 1 : 0,
+        rd.loaded ?? null, rd.total ?? null, now, runId],
+    },
+  ], 'write');
+}
+
+// Close a run. Only a run still running is closed, so a Stop is never
+// overwritten by the client's give-up that arrives a moment later.
+async function finishRun(runId, { status, error, loaded, total } = {}) {
+  if (!runId) return false;
+  await init();
+  const now = Date.now();
+  const r = await db.execute({
+    sql: `update refresh_runs set status = ?, ended_at = ?, updated_at = ?,
+            error = coalesce(?, error), loaded = coalesce(?, loaded), total = coalesce(?, total)
+          where id = ? and status = 'running'`,
+    args: [status, now, now, error ? String(error).slice(0, 300) : null,
+      loaded ?? null, total ?? null, runId],
+  });
+  return (r.rowsAffected ?? 0) > 0;
+}
+
+// The report for a run, kept whether or not mail went out, plus the lists the
+// page shows without opening it.
+async function setRunReport(runId, { sent, html, failed, stillMissing }) {
+  if (!runId) return;
+  await init();
+  await db.execute({
+    sql: `update refresh_runs set report_sent = ?, report_html = ?,
+            failed_symbols = ?, still_missing = ? where id = ?`,
+    args: [sent ? 1 : 0, html || null, JSON.stringify(failed || []),
+      stillMissing == null ? null : JSON.stringify(stillMissing), runId],
+  });
+}
+
+async function runStatus(runId) {
+  if (!runId) return null;
+  await init();
+  const r = await db.execute({ sql: 'select status from refresh_runs where id = ?', args: [runId] });
+  return r.rows.length ? r.rows[0].status : null;
+}
+
+const RUN_COLS = `id, kind, trigger, actor, started_at, updated_at, ended_at, status, total, targets,
+  loaded, rounds, refused, credits, profiles, prices_live, error, failed_symbols, still_missing,
+  report_sent, link`;
+
+function runFromRow(row) {
+  const num = (v) => (v == null ? null : Number(v));
+  const arr = (v) => { try { return v ? JSON.parse(v) : null; } catch { return null; } };
+  return {
+    id: Number(row.id), kind: row.kind, trigger: row.trigger, actor: row.actor || null,
+    startedAt: num(row.started_at), updatedAt: num(row.updated_at), endedAt: num(row.ended_at),
+    status: row.status, total: num(row.total), targets: num(row.targets), loaded: num(row.loaded),
+    rounds: num(row.rounds), refused: num(row.refused), credits: num(row.credits),
+    profiles: num(row.profiles), pricesLive: num(row.prices_live), error: row.error || null,
+    failedSymbols: arr(row.failed_symbols), stillMissing: arr(row.still_missing),
+    reportSent: row.report_sent == null ? null : !!Number(row.report_sent), link: row.link || null,
+  };
+}
+
+// Anything left running and silent is marked abandoned first, so every reader
+// sees the same outcome without a job having to sweep for it.
+async function sweepAbandoned() {
+  await init();
+  const cutoff = Date.now() - RUN_ABANDON_MS;
+  await db.execute({
+    sql: `update refresh_runs set status = 'abandoned', ended_at = updated_at
+          where status = 'running' and updated_at < ?`,
+    args: [cutoff],
+  });
+}
+
+async function readRuns(sinceMs) {
+  await sweepAbandoned();
+  const r = await db.execute({
+    sql: `select ${RUN_COLS} from refresh_runs where started_at >= ? order by started_at desc limit 1000`,
+    args: [sinceMs || 0],
+  });
+  return r.rows.map(runFromRow);
+}
+
+async function readRun(id) {
+  await sweepAbandoned();
+  const r = await db.execute({
+    sql: `select ${RUN_COLS}, report_html from refresh_runs where id = ?`, args: [id],
+  });
+  if (!r.rows.length) return null;
+  const run = runFromRow(r.rows[0]);
+  run.reportHtml = r.rows[0].report_html || null;
+  const rr = await db.execute({
+    sql: `select n, at, ms, credits, profiles, profile_fails, price_source, priced_live, loaded, total, error
+            from refresh_rounds where run_id = ? order by n`,
+    args: [id],
+  });
+  const num = (v) => (v == null ? null : Number(v));
+  run.roundsDetail = rr.rows.map((x) => ({
+    n: num(x.n), at: num(x.at), ms: num(x.ms), credits: num(x.credits), profiles: num(x.profiles),
+    profileFails: num(x.profile_fails), priceSource: x.price_source || null,
+    pricedLive: num(x.priced_live), loaded: num(x.loaded), total: num(x.total), error: x.error || null,
+  }));
+  return run;
+}
+
+// 90 days of runs, 30 of round detail — a few hundred small rows either way.
+async function pruneRuns(runDays = 90, roundDays = 30) {
+  await init();
+  const now = Date.now();
+  await db.batch([
+    { sql: 'delete from refresh_rounds where at < ?', args: [now - roundDays * 86400000] },
+    { sql: 'delete from refresh_rounds where run_id in (select id from refresh_runs where started_at < ?)',
+      args: [now - runDays * 86400000] },
+    { sql: 'delete from refresh_runs where started_at < ?', args: [now - runDays * 86400000] },
+  ], 'write');
 }
 
 // Counts for the nightly report: how much of the archive exists, and whether
@@ -611,7 +812,7 @@ async function archiveStats(day) {
 // null when nothing is running, so callers can spread it straight into a payload.
 async function readRefreshState() {
   await init();
-  const r = await db.execute('select started_at, updated_at, loaded, total, actor, prices_at, priced, mode from refresh_state where id = 1');
+  const r = await db.execute('select started_at, updated_at, loaded, total, actor, prices_at, priced, mode, run_id from refresh_state where id = 1');
   if (!r.rows.length) return null;
   const row = r.rows[0];
   if (Date.now() - Number(row.updated_at) > REFRESH_STALE_MS) return null;
@@ -623,6 +824,7 @@ async function readRefreshState() {
     pricesAt: row.prices_at == null ? null : Number(row.prices_at),
     priced: row.priced == null ? 0 : Number(row.priced),
     mode: row.mode || null,
+    runId: row.run_id == null ? null : Number(row.run_id),
   };
 }
 
@@ -1571,6 +1773,14 @@ module.exports = {
   markPriced,
   expireOldestProfiles,
   expireProfilesFor,
+  startRun,
+  noteRound,
+  finishRun,
+  setRunReport,
+  runStatus,
+  readRuns,
+  readRun,
+  pruneRuns,
   writeNasdaqExchange,
   readNasdaqListings,
   nasdaqMeta,

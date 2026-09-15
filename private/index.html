@@ -3114,6 +3114,9 @@
         // run a round early and it stopped at 78 of 84 with no explanation.
         const PROFILES_PER_ROUND = 7;   // archive-priced rounds afford 7 x 80 credits; the first (price) round pulls fewer
         const universe = Number(started && started.total) || 0;
+        // Every round names its run, so a Stop on /refreshes ends this loop
+        // on its next round instead of it carrying on as plain refreshes.
+        const runQ = started && started.runId ? '&run=' + started.runId : '';
         // Fill missing sizes its budget from the stocks it targets, not the universe.
         const work = fill ? (Number(started.targets) || 0) : (universe || 84);
         const budget = Math.ceil(work / PROFILES_PER_ROUND) + 6;
@@ -3129,13 +3132,17 @@
 
         while (rounds < budget && refusals < REFUSALS_ALLOWED) {
           try {
-            data = await api('GET', '/api/stocks?refresh=1');
+            data = await api('GET', '/api/stocks?refresh=1' + runQ);
           } catch (e) {
             refusals++;
             setStatus('Rate limited — waiting a minute…');
             showLoading('Waiting for the API rate limit to reset… (resumes automatically)');
             await sleep(62000);
             continue;
+          }
+          if (data && data.stopped) {
+            setStatus('Stopped from the Refresh runs page.');
+            break;
           }
           rounds++;
           const total = data.stocks.length;
@@ -3150,7 +3157,10 @@
           await sleep(62000); // let the per-minute credit budget recover before the next batch
         }
 
-        if (data) {
+        if (data && data.stopped) {
+          await refresh({ live: false });
+          setStatus('Stopped from the Refresh runs page — showing what was pulled.');
+        } else if (data) {
           lastUpdated = data.updatedAt;
           baseStocks = data.stocks || [];
           scoreActionRows(baseStocks);

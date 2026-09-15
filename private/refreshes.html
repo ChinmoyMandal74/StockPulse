@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Refresh Runs — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(251, 191, 36, 0.08), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair);
+      box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    h1 .w2 { background: linear-gradient(100deg, #9aa4b6 10%, #5d6474 92%);
+             -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lede { margin: 16px 0 0; max-width: 62ch; font-size: 13px; line-height: 1.65; }
+    .masthead { margin: 34px 0 22px; }
+
+    .k { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .muted { color: var(--muted); }
+    .faint { color: var(--faint); }
+    .block { margin-bottom: 16px; }
+    .core.pad { padding: 20px 22px; }
+
+    /* ---- the live run ---- */
+    #live .core { padding: 20px 22px; border: 1px solid rgba(124, 156, 255, 0.25); }
+    .live-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .live-head h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+    .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--accent);
+             box-shadow: 0 0 0 0 rgba(124, 156, 255, 0.6); animation: pulse 1.8s var(--ease) infinite; }
+    @keyframes pulse { 70% { box-shadow: 0 0 0 10px rgba(124, 156, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(124, 156, 255, 0); } }
+    .live-head .spacer { flex: 1; }
+    .bar { height: 10px; border-radius: 99px; background: rgba(255, 255, 255, 0.06); overflow: hidden; margin: 16px 0 10px; }
+    .bar > i { display: block; height: 100%; border-radius: 99px;
+               background: linear-gradient(90deg, var(--accent), var(--green)); transition: width .6s var(--ease); }
+    .facts { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 12.5px; }
+    .facts b { color: var(--text); font-weight: 600; }
+    .btn.danger { color: var(--red); border-color: rgba(251, 113, 133, 0.35); }
+    .btn.danger:hover { background: rgba(251, 113, 133, 0.12); }
+
+    /* ---- health ---- */
+    .tiles { display: grid; grid-template-columns: 1fr 1.25fr 1.25fr; gap: 14px; }
+    .tile .core { padding: 18px 20px; height: 100%; box-sizing: border-box; }
+    .tile .big { margin-top: 10px; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+    .tile .sub { margin-top: 6px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .nights { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 5px; margin-top: 14px; max-width: 360px; }
+    .night { width: 100%; aspect-ratio: 1; height: auto; border-radius: 7px; border: 1px solid var(--hair);
+             background: rgba(255, 255, 255, 0.04); cursor: default; padding: 0; }
+    .night.v-ok { background: rgba(52, 211, 153, 0.55); border-color: rgba(52, 211, 153, 0.7); }
+    .night.v-running { background: rgba(124, 156, 255, 0.55); }
+    .night.v-pending { background: rgba(255, 255, 255, 0.08); border-style: dashed; }
+    .night.v-missed, .night.v-failed, .night.v-abandoned { background: rgba(251, 113, 133, 0.6); border-color: rgba(251, 113, 133, 0.8); }
+    .night.v-incomplete, .night.v-stopped { background: rgba(251, 191, 36, 0.55); border-color: rgba(251, 191, 36, 0.75); }
+    .night.v-untracked { opacity: 0.35; }
+    .night[data-run] { cursor: pointer; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; font-size: 11px; color: var(--faint); }
+    .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+    .ages { display: flex; height: 12px; border-radius: 99px; overflow: hidden; margin-top: 14px; background: rgba(255,255,255,.05); }
+    .ages span { display: block; height: 100%; }
+    .tile a { color: var(--accent); text-decoration: none; }
+    .tile a:hover { text-decoration: underline; }
+
+    /* ---- trends ---- */
+    .trends { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .chart { width: 100%; height: 150px; display: block; margin-top: 12px; }
+    .chart text { fill: var(--faint); font: 10px var(--mono); }
+
+    /* ---- history ---- */
+    .hist-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 4px 10px; }
+    .hist-bar h2 { margin: 0 auto 0 0; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    select {
+      appearance: none; -webkit-appearance: none; font: 500 12px var(--sans); color: var(--text);
+      background: rgba(255, 255, 255, 0.05); border: 1px solid var(--hair); border-radius: 999px;
+      padding: 6px 30px 6px 14px; cursor: pointer;
+      background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa3b2' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+    }
+    select option { background: #0d1017; }
+    .table-wrap { max-height: calc(100dvh - 260px); min-height: 240px; overflow: auto; }
+    table { font-size: 12.5px; width: 100%; border-collapse: collapse; }
+    thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-2); }
+    th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); white-space: nowrap; }
+    th { border-bottom: 1px solid var(--hair); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; color: var(--faint); }
+    td.n, th.n { text-align: right; }
+    td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    tbody tr { cursor: pointer; }
+    tbody tr:hover td { background: rgba(255, 255, 255, 0.03); }
+    .who { font-family: var(--mono); font-size: 11.5px; color: var(--muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px;
+             font-size: 11px; font-weight: 500; border: 1px solid var(--hair-2); }
+    .s-complete { color: var(--green); border-color: rgba(52, 211, 153, 0.4); }
+    .s-running { color: var(--accent); border-color: rgba(124, 156, 255, 0.45); }
+    .s-incomplete, .s-stopped { color: var(--amber); border-color: rgba(251, 191, 36, 0.4); }
+    .s-failed, .s-abandoned { color: var(--red); border-color: rgba(251, 113, 133, 0.45); }
+    .kindtag { font-weight: 600; }
+    .trig { font-size: 11px; color: var(--faint); }
+    .empty { padding: 26px; color: var(--muted); font-size: 13px; }
+    .error { color: var(--red); padding: 22px; font-size: 13px; }
+
+    /* ---- one run ---- */
+    dialog.run { width: min(980px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 0;
+                 background: transparent; color: var(--text); overflow: hidden; outline: none; }
+    dialog.run::backdrop { background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); }
+    dialog.run .core { padding: 22px 24px; max-height: calc(100dvh - 60px); overflow: auto; }
+    .run-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .run-head h2 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+    .run-head .spacer { flex: 1; }
+    .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+    .cell { padding: 12px 14px; border-radius: 13px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair); }
+    .cell .v { margin-top: 6px; font-family: var(--mono); font-size: 17px; }
+    .lists p { margin: 8px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--muted); }
+    .lists b { color: var(--text); }
+    .rounds td { padding: 6px 10px; font-size: 12px; }
+    iframe.report { width: 100%; height: 520px; border: 0; border-radius: 12px; background: #fff; margin-top: 10px; }
+    .sec-t { margin: 20px 0 4px; }
+
+    @media (max-width: 900px) { .tiles, .trends { grid-template-columns: 1fr; } .grid4 { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 768px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.4 19.2 6v5.6c0 4.3-3 8-7.2 9-4.2-1-7.2-4.7-7.2-9V6z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.4 11.2A7.4 7.4 0 0 0 6.2 7"/><path d="M4.6 4.6V8.4h3.8"/><path d="M4.6 12.8A7.4 7.4 0 0 0 17.8 17"/><path d="M19.4 19.4v-3.8h-3.8"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6.4" y="6.4" width="11.2" height="11.2" rx="2"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.4 6.4l11.2 11.2M17.6 6.4 6.4 17.6"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <a class="btn hide-sm" href="/">Screener</a>
+      <button class="btn" id="reloadBtn"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Reload</button>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Admin</span>
+      <h1><span class="w1">Refresh</span> <span class="w2">Runs</span></h1>
+      <p class="lede">Every refresh — the nightly job, Refresh all, Fill missing, a plain price Refresh and the
+        NASDAQ list — with its rounds, the credits it actually spent (as Twelve Data reports them) and the
+        report it produced. Runs are kept 90 days, round detail 30.</p>
+    </header>
+
+    <div id="live" class="bezel block" hidden><div class="core"></div></div>
+
+    <div class="tiles block">
+      <div class="bezel tile"><div class="core" id="tLast"><span class="k">Last nightly</span><div class="big faint">…</div></div></div>
+      <div class="bezel tile"><div class="core" id="tNights"><span class="k">Last 14 nights</span></div></div>
+      <div class="bezel tile"><div class="core" id="tFresh"><span class="k">Company data freshness</span><div class="sub">Checking…</div></div></div>
+    </div>
+
+    <div class="trends block">
+      <div class="bezel"><div class="core pad"><span class="k">Nightly run time</span><span class="faint" style="font-size:11px"> · last 30 nightly runs, minutes</span>
+        <svg class="chart" id="cDur" viewBox="0 0 560 150" preserveAspectRatio="none"></svg></div></div>
+      <div class="bezel"><div class="core pad"><span class="k">Credits per day</span><span class="faint" style="font-size:11px" id="cCredNote"> · last 30 days</span>
+        <svg class="chart" id="cCred" viewBox="0 0 560 150" preserveAspectRatio="none"></svg>
+        <div class="legend" id="credLegend"></div></div></div>
+    </div>
+
+    <div class="hist-bar">
+      <h2>History</h2>
+      <select id="fKind" aria-label="Type"><option value="">All types</option></select>
+      <select id="fTrig" aria-label="Trigger"><option value="">Manual and scheduled</option>
+        <option value="manual">Manual</option><option value="scheduled">Scheduled</option></select>
+      <select id="fStatus" aria-label="Outcome"><option value="">Every outcome</option></select>
+    </div>
+    <div class="bezel"><div class="core" style="padding:0">
+      <div class="table-wrap" id="histWrap"><div class="empty">Loading…</div></div>
+    </div></div>
+  </main>
+
+  <dialog class="run" id="runDlg"><div class="bezel"><div class="core" id="runBody"></div></div></dialog>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    async function api(method, url, body) {
+      const res = await fetch(url, { method, cache: 'no-store',
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      return data;
+    }
+
+    const KINDS = {
+      nightly: 'Nightly', 'nightly-full': 'Nightly full', all: 'Refresh all', missing: 'Fill missing',
+      refresh: 'Refresh', nasdaq: 'NASDAQ list',
+    };
+    const KIND_COLORS = { nightly: '#34d399', 'nightly-full': '#22d3ee', all: '#fbbf24', missing: '#a78bfa',
+      refresh: '#7c9cff', nasdaq: '#f472b6' };
+    const STATUSES = ['complete', 'running', 'incomplete', 'stopped', 'failed', 'abandoned'];
+    const VERDICT_WORDS = { ok: 'ran', running: 'running now', pending: 'not yet (runs 4:15 PM ET)',
+      missed: 'did not run', incomplete: 'stopped short', stopped: 'was stopped', failed: 'failed',
+      abandoned: 'abandoned partway', untracked: 'before tracking began' };
+    const CREDITS_PER_MINUTE = 610;
+    const PROFILES_PER_ROUND = 7;
+
+    const fmtDur = (ms) => {
+      if (ms == null || !isFinite(ms)) return '—';
+      const s = Math.max(0, Math.round(ms / 1000));
+      if (s < 60) return s + 's';
+      const m = Math.floor(s / 60);
+      if (m < 60) return m + 'm ' + String(s % 60).padStart(2, '0') + 's';
+      return Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm';
+    };
+    const fmtWhen = (ms) => new Date(ms).toLocaleString(undefined,
+      { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const fmtNum = (n) => (n == null ? '—' : Number(n).toLocaleString());
+    const durationOf = (r, now) => (r.status === 'running' ? now : (r.endedAt || r.updatedAt)) - r.startedAt;
+    const badge = (st) => `<span class="badge s-${we(st)}">${we(st)}</span>`;
+
+    // What a run did, in the unit that suits its kind.
+    function workOf(r) {
+      if (r.kind === 'nasdaq') return `${fmtNum(r.loaded)}/${fmtNum(r.total)} exchanges`;
+      if (r.kind === 'refresh') return `${fmtNum(r.pricesLive)} priced`;
+      const t = r.targets != null ? r.targets : r.total;
+      return `${fmtNum(r.profiles)}${t != null ? ' / ' + fmtNum(t) : ''} profiles`;
+    }
+
+    let runs = [];
+    let live = null;
+    let serverNow = Date.now();
+    let pollTimer = null;
+
+    // ---- live ----------------------------------------------------------------
+    function paintLive() {
+      const box = $('live');
+      if (!live) { box.hidden = true; return; }
+      box.hidden = false;
+      const r = live;
+      const now = Date.now();
+      const isMissing = r.kind === 'missing';
+      // Progress: the stocks this run set out to pull. The universe coverage
+      // (loaded/total) would start Fill missing most of the way along.
+      const target = r.targets != null ? r.targets : r.total;
+      const done = isMissing || /nightly/.test(r.kind) ? r.profiles : r.loaded;
+      const pct = target ? Math.min(100, Math.round((done / target) * 100)) : 0;
+      const last = (r.roundsDetail || [])[r.roundsDetail.length - 1];
+      const left = Math.max(0, (target || 0) - (done || 0));
+      const eta = left ? Math.ceil(left / PROFILES_PER_ROUND) * 62000 : 0;
+      box.querySelector('.core').innerHTML =
+        '<div class="live-head"><span class="pulse"></span>' +
+        `<h2>${we(KINDS[r.kind] || r.kind)} running</h2>` +
+        `<span class="muted">${r.trigger === 'scheduled' ? 'scheduled' : 'started by ' + we(r.actor || 'admin')} · ${fmtWhen(r.startedAt)}</span>` +
+        '<span class="spacer"></span>' +
+        (r.link ? `<a class="btn" href="${we(r.link)}" target="_blank" rel="noopener">GitHub run ↗</a>` : '') +
+        '<button class="btn danger" id="stopBtn"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-stop" /></svg>Stop</button></div>' +
+        `<div class="bar"><i style="width:${pct}%"></i></div>` +
+        '<div class="facts">' +
+        `<span><b>${fmtNum(done)}</b> of ${fmtNum(target)} ${r.kind === 'nasdaq' ? 'exchanges' : 'profiles'} · ${pct}%</span>` +
+        `<span>round <b>${fmtNum(r.rounds)}</b>${left ? ` · about <b>${Math.ceil(left / PROFILES_PER_ROUND)}</b> to go (~${fmtDur(eta)})` : ''}</span>` +
+        `<span>running <b>${fmtDur(now - r.startedAt)}</b></span>` +
+        `<span><b>${fmtNum(r.credits)}</b> credits so far</span>` +
+        (last ? `<span>last round <b>${fmtNum(last.credits)}</b> / ${CREDITS_PER_MINUTE} credits${last.error ? ' · <span style="color:var(--red)">' + we(last.error) + '</span>' : ''}</span>` : '') +
+        '</div>';
+      $('stopBtn').addEventListener('click', stopLive);
+    }
+
+    async function stopLive() {
+      if (!confirm('Stop this run? Whatever has been pulled so far is kept, the report goes out, and the ' +
+        'loop driving it (a screener tab or the nightly job) ends on its next round.')) return;
+      $('stopBtn').disabled = true;
+      try {
+        await api('POST', '/api/refresh-runs/stop');
+      } catch (e) { alert('Could not stop: ' + e.message); }
+      load();
+    }
+
+    // ---- health ----------------------------------------------------------------
+    function paintNights(nights) {
+      const lastNight = runs.find((r) => /^nightly/.test(r.kind));
+      const tl = $('tLast');
+      if (!lastNight) {
+        tl.innerHTML = '<span class="k">Last nightly</span><div class="big faint">None recorded yet</div>' +
+          '<div class="sub">Tracking starts with the next run.</div>';
+      } else {
+        const color = lastNight.status === 'complete' ? 'var(--green)'
+          : ['incomplete', 'stopped'].includes(lastNight.status) ? 'var(--amber)'
+          : lastNight.status === 'running' ? 'var(--accent)' : 'var(--red)';
+        tl.innerHTML = '<span class="k">Last nightly</span>' +
+          `<div class="big" style="color:${color}">${lastNight.status === 'complete' ? '✓ ' : ''}${we(lastNight.status)}</div>` +
+          `<div class="sub">${fmtWhen(lastNight.startedAt)} · ${fmtDur(durationOf(lastNight, Date.now()))} · ` +
+          `${workOf(lastNight)} · ${fmtNum(lastNight.credits)} credits</div>`;
+        tl.style.cursor = 'pointer';
+        tl.onclick = () => openRun(lastNight.id);
+      }
+      const bad = nights.filter((n) => ['missed', 'failed', 'abandoned', 'incomplete', 'stopped'].includes(n.verdict));
+      $('tNights').innerHTML = '<span class="k">Last 14 nights</span>' +
+        '<div class="nights">' + nights.map((n) =>
+          `<button class="night v-${n.verdict}" ${n.runId ? `data-run="${n.runId}"` : ''} ` +
+          `title="${we(n.day + ' — ' + (VERDICT_WORDS[n.verdict] || n.verdict))}" aria-label="${we(n.day + ' ' + n.verdict)}"></button>`).join('') +
+        '</div>' +
+        `<div class="sub">${bad.length ? `<span style="color:var(--red)">${bad.length} night${bad.length === 1 ? '' : 's'} with a problem</span>`
+          : 'No problems recorded.'} Each day is judged in New York time.</div>` +
+        '<div class="legend"><span><i style="background:rgba(52,211,153,.6)"></i>ran</span>' +
+        '<span><i style="background:rgba(251,191,36,.6)"></i>short / stopped</span>' +
+        '<span><i style="background:rgba(251,113,133,.6)"></i>missed / failed</span>' +
+        '<span><i style="background:rgba(255,255,255,.12)"></i>not tracked</span></div>';
+      $('tNights').querySelectorAll('[data-run]').forEach((b) => b.addEventListener('click', () => openRun(Number(b.dataset.run))));
+    }
+
+    async function loadHealth() {
+      try {
+        const h = await api('GET', '/api/refresh-runs/health');
+        const a = h.ages;
+        const seg = [
+          [a.day, '#34d399', 'under a day'], [a.three, '#7c9cff', '1–3 days'],
+          [a.week, '#a78bfa', '3–7 days'], [a.older, '#fbbf24', 'over a week'], [a.none, '#fb7185', 'not pulled'],
+        ];
+        $('tFresh').innerHTML = '<span class="k">Company data freshness</span>' +
+          '<div class="ages">' + seg.filter(([n]) => n).map(([n, c, l]) =>
+            `<span style="width:${(n / h.universe) * 100}%;background:${c}" title="${n} ${l}"></span>`).join('') + '</div>' +
+          '<div class="legend">' + seg.filter(([n]) => n).map(([n, c, l]) =>
+            `<span><i style="background:${c}"></i>${n} ${l}</span>`).join('') + '</div>' +
+          `<div class="sub">${h.gaps ? `<b style="color:var(--amber)">${h.gaps}</b> with missing company data — ` +
+            '<a href="/admin#data">Fill missing</a>.' : 'Nothing missing.'} ` +
+          `Rotation renews every ${h.rotationDays} days. Prices through <span class="mono">${we(h.barsThrough || '—')}</span>.</div>`;
+      } catch (e) {
+        $('tFresh').innerHTML = '<span class="k">Company data freshness</span><div class="sub">Unavailable: ' + we(e.message) + '</div>';
+      }
+    }
+
+    // ---- trends ----------------------------------------------------------------
+    function paintTrends() {
+      const W = 560, H = 150, P = 18;
+      // nightly duration
+      const nightly = runs.filter((r) => /^nightly/.test(r.kind) && r.status !== 'running').slice(0, 30).reverse();
+      const durs = nightly.map((r) => durationOf(r, Date.now()) / 60000);
+      const dmax = Math.max(10, ...durs);
+      const bw = nightly.length ? (W - P) / nightly.length : 0;
+      $('cDur').innerHTML = nightly.length
+        ? `<text x="0" y="10">${Math.round(dmax)}m</text><line x1="${P}" x2="${W}" y1="${H - 14}" y2="${H - 14}" stroke="rgba(255,255,255,.1)"/>` +
+          nightly.map((r, i) => {
+            const h = (durs[i] / dmax) * (H - 30);
+            const c = r.status === 'complete' ? '#34d399' : ['incomplete', 'stopped'].includes(r.status) ? '#fbbf24' : '#fb7185';
+            return `<rect x="${P + i * bw + 2}" y="${H - 14 - h}" width="${Math.max(2, bw - 4)}" height="${h}" rx="2" fill="${c}" opacity=".8">` +
+              `<title>${we(fmtWhen(r.startedAt))} — ${fmtDur(durationOf(r, Date.now()))}, ${we(r.status)}</title></rect>`;
+          }).join('')
+        : `<text x="${W / 2}" y="${H / 2}" text-anchor="middle">No nightly runs recorded yet</text>`;
+
+      // credits per day, stacked by kind
+      const days = [];
+      for (let i = 29; i >= 0; i--) days.push(new Date(Date.now() - i * 86400000).toLocaleDateString('en-CA'));
+      const byDay = Object.fromEntries(days.map((d) => [d, {}]));
+      for (const r of runs) {
+        const d = new Date(r.startedAt).toLocaleDateString('en-CA');
+        if (byDay[d]) byDay[d][r.kind] = (byDay[d][r.kind] || 0) + (r.credits || 0);
+      }
+      const totals = days.map((d) => Object.values(byDay[d]).reduce((a, b) => a + b, 0));
+      const cmax = Math.max(1000, ...totals);
+      const cw = (W - P) / days.length;
+      const kinds = Object.keys(KINDS).filter((k) => runs.some((r) => r.kind === k && r.credits));
+      $('cCred').innerHTML = `<text x="0" y="10">${cmax >= 1000 ? Math.round(cmax / 1000) + 'k' : cmax}</text>` +
+        `<line x1="${P}" x2="${W}" y1="${H - 14}" y2="${H - 14}" stroke="rgba(255,255,255,.1)"/>` +
+        days.map((d, i) => {
+          let y = H - 14;
+          return kinds.map((k) => {
+            const v = byDay[d][k] || 0;
+            if (!v) return '';
+            const h = (v / cmax) * (H - 30);
+            y -= h;
+            return `<rect x="${P + i * cw + 1.5}" y="${y}" width="${Math.max(2, cw - 3)}" height="${h}" fill="${KIND_COLORS[k]}" opacity=".85">` +
+              `<title>${d} — ${KINDS[k]}: ${fmtNum(v)} credits</title></rect>`;
+          }).join('');
+        }).join('');
+      const total30 = totals.reduce((a, b) => a + b, 0);
+      $('cCredNote').textContent = ` · last 30 days · ${fmtNum(total30)} total`;
+      $('credLegend').innerHTML = kinds.map((k) => `<span><i style="background:${KIND_COLORS[k]}"></i>${KINDS[k]}</span>`).join('');
+    }
+
+    // ---- history ---------------------------------------------------------------
+    function paintFilters() {
+      const keepK = $('fKind').value, keepS = $('fStatus').value;
+      const kinds = [...new Set(runs.map((r) => r.kind))];
+      $('fKind').innerHTML = '<option value="">All types</option>' +
+        Object.keys(KINDS).filter((k) => kinds.includes(k)).map((k) => `<option value="${k}">${KINDS[k]}</option>`).join('');
+      $('fKind').value = kinds.includes(keepK) ? keepK : '';
+      const sts = STATUSES.filter((s) => runs.some((r) => r.status === s));
+      $('fStatus').innerHTML = '<option value="">Every outcome</option>' + sts.map((s) => `<option value="${s}">${s}</option>`).join('');
+      $('fStatus').value = sts.includes(keepS) ? keepS : '';
+    }
+
+    function paintHistory() {
+      const k = $('fKind').value, t = $('fTrig').value, s = $('fStatus').value;
+      const rows = runs.filter((r) => (!k || r.kind === k) && (!t || r.trigger === t) && (!s || r.status === s));
+      if (!runs.length) {
+        $('histWrap').innerHTML = '<div class="empty">No runs recorded yet. The next refresh of any kind — including ' +
+          "tonight's nightly job — will appear here.</div>";
+        return;
+      }
+      if (!rows.length) { $('histWrap').innerHTML = '<div class="empty">No runs match these filters.</div>'; return; }
+      const now = Date.now();
+      $('histWrap').innerHTML = '<table><thead><tr><th>Started</th><th>Type</th><th>Trigger</th>' +
+        '<th class="n">Took</th><th class="n">Work</th><th class="n">Rounds</th><th class="n">Credits</th><th>Outcome</th></tr></thead><tbody>' +
+        rows.map((r) =>
+          `<tr data-id="${r.id}"><td class="mono">${fmtWhen(r.startedAt)}</td>` +
+          `<td class="kindtag" style="color:${KIND_COLORS[r.kind] || 'inherit'}">${we(KINDS[r.kind] || r.kind)}</td>` +
+          `<td><span class="trig">${r.trigger === 'scheduled' ? 'scheduled' : 'manual'}</span> <span class="who">${we(r.trigger === 'scheduled' ? '' : (r.actor || ''))}</span></td>` +
+          `<td class="n">${fmtDur(durationOf(r, now))}</td><td class="n">${workOf(r)}</td>` +
+          `<td class="n">${fmtNum(r.rounds)}${r.refused ? ` <span style="color:var(--red)" title="rounds refused by the rate limit">(${r.refused}✕)</span>` : ''}</td>` +
+          `<td class="n">${fmtNum(r.credits)}</td><td>${badge(r.status)}</td></tr>`).join('') +
+        '</tbody></table>';
+      $('histWrap').querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', () => openRun(Number(tr.dataset.id))));
+    }
+    ['fKind', 'fTrig', 'fStatus'].forEach((id) => $(id).addEventListener('change', paintHistory));
+
+    // ---- one run -----------------------------------------------------------------
+    function roundsChart(rs) {
+      const W = 900, H = 170, P = 34;
+      if (!rs.length) return '<p class="faint" style="font-size:12.5px">No rounds recorded.</p>';
+      const cmax = Math.max(CREDITS_PER_MINUTE, ...rs.map((x) => x.credits || 0));
+      const lmax = Math.max(1, ...rs.map((x) => x.total || 0));
+      const bw = (W - P) / rs.length;
+      const y610 = H - 16 - (CREDITS_PER_MINUTE / cmax) * (H - 30);
+      const pts = rs.filter((x) => x.loaded != null).map((x) => {
+        const i = rs.indexOf(x);
+        return `${P + i * bw + bw / 2},${H - 16 - (x.loaded / lmax) * (H - 30)}`;
+      });
+      return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:170px">` +
+        `<line x1="${P}" x2="${W}" y1="${y610}" y2="${y610}" stroke="#fb7185" stroke-dasharray="4 4" opacity=".6"/>` +
+        `<text x="0" y="${y610 + 3}">610</text>` +
+        rs.map((x, i) => {
+          const h = ((x.credits || 0) / cmax) * (H - 30);
+          const fill = x.error ? '#fb7185' : x.priceSource === 'archive' ? '#a78bfa' : '#7c9cff';
+          return `<rect x="${P + i * bw + 1.5}" y="${H - 16 - h}" width="${Math.max(2, bw - 3)}" height="${Math.max(h, x.error ? 3 : 0)}" rx="2" fill="${fill}" opacity=".85">` +
+            `<title>Round ${x.n}: ${fmtNum(x.credits)} credits, ${fmtNum(x.profiles)} profiles, prices ${we(x.priceSource || '—')}${x.error ? ' — ' + we(x.error) : ''}</title></rect>`;
+        }).join('') +
+        (pts.length > 1 ? `<polyline points="${pts.join(' ')}" fill="none" stroke="#34d399" stroke-width="2" vector-effect="non-scaling-stroke"/>` : '') +
+        `<text x="0" y="${H - 4}">r1</text><text x="${W - 30}" y="${H - 4}">r${rs.length}</text></svg>` +
+        '<div class="legend"><span><i style="background:#7c9cff"></i>credits, price round</span>' +
+        '<span><i style="background:#a78bfa"></i>credits, archive round</span><span><i style="background:#fb7185"></i>refused / error</span>' +
+        '<span><i style="background:#34d399"></i>profiles loaded (universe)</span><span>dashed: the 610/minute limit</span></div>';
+    }
+
+    async function openRun(id) {
+      const dlg = $('runDlg');
+      $('runBody').innerHTML = '<div class="empty">Loading…</div>';
+      if (!dlg.open) dlg.showModal();
+      try {
+        const r = await api('GET', '/api/refresh-runs/' + id);
+        const rs = r.roundsDetail || [];
+        const lists = [];
+        if (r.error) lists.push(`<p><b style="color:var(--red)">Error:</b> ${we(r.error)}</p>`);
+        if (r.failedSymbols && r.failedSymbols.length) lists.push(`<p><b>Failed (${r.failedSymbols.length}):</b> ${we(r.failedSymbols.join(', '))}</p>`);
+        if (r.stillMissing) lists.push(`<p><b>Still missing (${r.stillMissing.length}):</b> ${r.stillMissing.length ? we(r.stillMissing.join(', ')) : 'none'}</p>`);
+        $('runBody').innerHTML =
+          '<div class="run-head">' +
+          `<h2 style="color:${KIND_COLORS[r.kind] || 'inherit'}">${we(KINDS[r.kind] || r.kind)}</h2>${badge(r.status)}` +
+          `<span class="muted">${r.trigger === 'scheduled' ? 'scheduled' : 'manual · ' + we(r.actor || '')} · run #${r.id}</span>` +
+          '<span class="spacer"></span>' +
+          (r.link ? `<a class="btn" href="${we(r.link)}" target="_blank" rel="noopener">GitHub run ↗</a>` : '') +
+          '<button class="btn" id="dlgClose" aria-label="Close"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-x" /></svg></button></div>' +
+          '<div class="grid4">' +
+          `<div class="cell"><span class="k">Started</span><div class="v" style="font-size:14px">${fmtWhen(r.startedAt)}</div></div>` +
+          `<div class="cell"><span class="k">Took</span><div class="v">${fmtDur(durationOf(r, Date.now()))}</div></div>` +
+          `<div class="cell"><span class="k">Work</span><div class="v" style="font-size:14px">${workOf(r)}</div></div>` +
+          `<div class="cell"><span class="k">Credits</span><div class="v">${fmtNum(r.credits)}</div></div>` +
+          `<div class="cell"><span class="k">Rounds</span><div class="v">${fmtNum(r.rounds)}${r.refused ? ` <span style="color:var(--red);font-size:12px">${r.refused} refused</span>` : ''}</div></div>` +
+          `<div class="cell"><span class="k">Prices live</span><div class="v">${fmtNum(r.pricesLive)}</div></div>` +
+          `<div class="cell"><span class="k">Coverage</span><div class="v">${fmtNum(r.loaded)}/${fmtNum(r.total)}</div></div>` +
+          `<div class="cell"><span class="k">Report email</span><div class="v" style="font-size:14px">${r.reportSent == null ? '—' : r.reportSent ? 'sent' : 'not sent'}</div></div>` +
+          '</div>' +
+          (lists.length ? '<div class="lists">' + lists.join('') + '</div>' : '') +
+          '<div class="k sec-t">Rounds</div>' + roundsChart(rs) +
+          (rs.length ? '<details style="margin-top:10px"><summary class="faint" style="cursor:pointer;font-size:12px">Round table</summary>' +
+            '<table class="rounds"><thead><tr><th class="n">#</th><th>At</th><th class="n">Took</th><th class="n">Credits</th>' +
+            '<th class="n">Profiles</th><th>Prices</th><th class="n">Coverage</th><th>Error</th></tr></thead><tbody>' +
+            rs.map((x) => `<tr><td class="n">${x.n}</td><td class="mono">${new Date(x.at).toLocaleTimeString()}</td>` +
+              `<td class="n">${fmtDur(x.ms)}</td><td class="n">${fmtNum(x.credits)}</td>` +
+              `<td class="n">${fmtNum(x.profiles)}${x.profileFails ? ` <span style="color:var(--red)">+${x.profileFails}✕</span>` : ''}</td>` +
+              `<td>${we(x.priceSource || '—')}${x.pricedLive ? ` (${fmtNum(x.pricedLive)})` : ''}</td>` +
+              `<td class="n">${x.loaded == null ? '—' : fmtNum(x.loaded) + '/' + fmtNum(x.total)}</td>` +
+              `<td style="color:var(--red)">${we(x.error || '')}</td></tr>`).join('') +
+            '</tbody></table></details>' : '') +
+          '<div class="k sec-t">Report</div>' +
+          (r.reportHtml
+            ? '<iframe class="report" sandbox="" id="reportFrame" title="The report for this run"></iframe>'
+            : '<p class="faint" style="font-size:12.5px">No report stored for this run' +
+              (r.status === 'running' ? ' yet — it is written when the run ends.' : '.') + '</p>');
+        if (r.reportHtml) $('reportFrame').srcdoc = r.reportHtml;
+        $('dlgClose').addEventListener('click', () => dlg.close());
+      } catch (e) {
+        $('runBody').innerHTML = `<div class="error">Could not load run: ${we(e.message)}</div>`;
+      }
+    }
+    $('runDlg').addEventListener('click', (e) => { if (e.target === $('runDlg')) $('runDlg').close(); });
+
+    // ---- load ------------------------------------------------------------------
+    async function load() {
+      try {
+        const d = await api('GET', '/api/refresh-runs');
+        runs = d.runs || [];
+        live = d.live || null;
+        serverNow = d.now || Date.now();
+        paintLive();
+        paintNights(d.nights || []);
+        paintTrends();
+        paintFilters();
+        paintHistory();
+      } catch (e) {
+        $('histWrap').innerHTML = `<div class="error">Could not load runs: ${we(e.message)}</div>`;
+      }
+      clearTimeout(pollTimer);
+      // Rounds are a minute apart; ten seconds is plenty while one runs.
+      pollTimer = setTimeout(() => { if (!document.hidden) load(); else load(); }, live ? 10000 : 60000);
+    }
+    $('reloadBtn').addEventListener('click', () => { load(); loadHealth(); });
+    load();
+    loadHealth();
+  </script>
+</body>
+</html>
