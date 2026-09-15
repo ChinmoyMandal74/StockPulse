@@ -1281,6 +1281,37 @@ function emptyProfile() {
     fcfTtm: null,
     netCash: null,
     shortPctFloat: null,
+    // Everything below arrives in the SAME /statistics response as the fields
+    // above and was being discarded (2026-09-15). The call is charged whether
+    // one field is read or sixty, so none of this costs a credit — it only
+    // needed columns. What is deliberately still dropped is what the bar
+    // archive already gives us exactly: beta, the 52-week high/low/change, the
+    // 50- and 200-day averages and the average volumes.
+    sharesOutstanding: null,   // the share count itself: buybacks and dilution
+    floatShares: null,
+    totalCash: null,           // stored beside netCash, which hides the two sides
+    totalDebt: null,
+    debtToEquity: null,
+    currentRatio: null,
+    enterpriseValue: null,
+    trailingPe: null,
+    priceToBook: null,
+    priceToSales: null,
+    evToEbitda: null,
+    ebitda: null,
+    operatingCashFlowTtm: null,
+    operatingMargin: null,
+    roa: null,
+    dilutedEpsTtm: null,
+    bookValuePerShare: null,
+    divYield: null,            // forward, as a percentage
+    divRate: null,
+    payoutRatio: null,
+    exDivDate: null,
+    shortRatio: null,
+    shortPctOutstanding: null,
+    insiderPct: null,
+    institutionPct: null,
     lastEarningsDate: null,
     lastSurprise: null,
     nextEarningsDate: null,
@@ -1382,6 +1413,49 @@ async function fetchProfile(symbol) {
       if (ss && ss.shares_short != null && ss.float_shares) {
         out.shortPctFloat = (ss.shares_short / ss.float_shares) * 100; // short interest as % of float
       }
+
+      // The rest of the same payload. `pc` turns the feed's fractions into
+      // percentages, the convention every other percentage column here uses.
+      const nn = (v) => (v == null || !isFinite(Number(v)) ? null : Number(v));
+      const pc = (v) => (nn(v) == null ? null : nn(v) * 100);
+      if (vm) {
+        out.enterpriseValue = nn(vm.enterprise_value);
+        out.trailingPe = nn(vm.trailing_pe);
+        out.priceToBook = nn(vm.price_to_book_mrq);
+        out.priceToSales = nn(vm.price_to_sales_ttm);
+        out.evToEbitda = nn(vm.enterprise_to_ebitda);
+      }
+      if (fin) {
+        out.operatingMargin = pc(fin.operating_margin);
+        out.roa = pc(fin.return_on_assets_ttm);
+      }
+      if (inc) {
+        out.ebitda = nn(inc.ebitda);
+        out.dilutedEpsTtm = nn(inc.diluted_eps_ttm);
+      }
+      if (bs) {
+        out.totalCash = nn(bs.total_cash_mrq);
+        out.totalDebt = nn(bs.total_debt_mrq);
+        out.debtToEquity = nn(bs.total_debt_to_equity_mrq);
+        out.currentRatio = nn(bs.current_ratio_mrq);
+        out.bookValuePerShare = nn(bs.book_value_per_share_mrq);
+      }
+      if (cf) out.operatingCashFlowTtm = nn(cf.operating_cash_flow_ttm);
+      if (ss) {
+        out.sharesOutstanding = nn(ss.shares_outstanding);
+        out.floatShares = nn(ss.float_shares);
+        out.shortRatio = nn(ss.short_ratio);
+        out.shortPctOutstanding = pc(ss.short_percent_of_shares_outstanding);
+        out.insiderPct = pc(ss.percent_held_by_insiders);
+        out.institutionPct = pc(ss.percent_held_by_institutions);
+      }
+      const dv = st?.statistics?.dividends_and_splits;
+      if (dv) {
+        out.divYield = pc(dv.forward_annual_dividend_yield);
+        out.divRate = nn(dv.forward_annual_dividend_rate);
+        out.payoutRatio = pc(dv.payout_ratio);
+        out.exDivDate = dv.ex_dividend_date || null;
+      }
     } catch {
       out.fetchOk = false;
       /* leave fundamentals null */
@@ -1394,6 +1468,20 @@ async function fetchProfile(symbol) {
       const today = new Date().toISOString().slice(0, 10);
       const reported = arr.find((x) => x.eps_actual != null && x.date <= today) || arr.find((x) => x.eps_actual != null);
       const upcoming = arr.filter((x) => x.date > today).sort((a, b) => a.date.localeCompare(b.date))[0];
+      // Every quarter the call returned, not just the latest surprise — the
+      // same 20 credits either way, and a reported quarter never changes, so
+      // the table only ever grows sideways. Rides on the profile object and is
+      // stripped before the profile is cached (it is not a profile field).
+      out.earningsRows = arr
+        .filter((x) => x && x.date && (x.eps_actual != null || x.eps_estimate != null))
+        .map((x) => ({
+          date: x.date,
+          epsEstimate: x.eps_estimate == null ? null : Number(x.eps_estimate),
+          epsActual: x.eps_actual == null ? null : Number(x.eps_actual),
+          surprise: x.difference == null ? null : Number(x.difference),
+          surprisePrc: x.surprise_prc == null ? null : Number(x.surprise_prc),
+          time: x.time || null,
+        }));
       if (reported) {
         out.lastEarningsDate = reported.date;
         out.lastSurprise = reported.surprise_prc ?? null;
@@ -1465,8 +1553,18 @@ async function ensureProfiles(symbols, cap) {
     const results = await Promise.all(
       batch.map((s) => fetchProfile(s).then((r) => ({ s, r })))
     );
+    // One write for the whole round rather than one per symbol.
+    const quarters = [];
     for (const { s, r } of results) {
-      const { fetchOk, ...vals } = r;
+      for (const q of (r.earningsRows || [])) quarters.push({ symbol: s, ...q });
+    }
+    if (quarters.length) {
+      // An earnings write never fails a refresh — the bars rule.
+      try { await store.writeEarnings(quarters); }
+      catch (err) { console.warn('earnings history skipped:', err.message); }
+    }
+    for (const { s, r } of results) {
+      const { fetchOk, earningsRows, ...vals } = r;
       if (fetchOk) {
         profiles[s] = { ...vals, fetchedAt: now };
         continue;
@@ -3049,6 +3147,31 @@ async function computeStocks(asOf, opts = {}) {
         netIncomeTtm: prof.netIncomeTtm ?? null,
         fcfTtm: prof.fcfTtm ?? null,
         netCash: prof.netCash ?? null,
+        totalCash: prof.totalCash ?? null,
+        totalDebt: prof.totalDebt ?? null,
+        ebitda: prof.ebitda ?? null,
+        operatingCashFlowTtm: prof.operatingCashFlowTtm ?? null,
+        enterpriseValue: prof.enterpriseValue ?? null,
+        trailingPe: prof.trailingPe ?? null,
+        priceToBook: prof.priceToBook ?? null,
+        priceToSales: prof.priceToSales ?? null,
+        evToEbitda: prof.evToEbitda ?? null,
+        operatingMargin: prof.operatingMargin ?? null,
+        roa: prof.roa ?? null,
+        dilutedEpsTtm: prof.dilutedEpsTtm ?? null,
+        bookValuePerShare: prof.bookValuePerShare ?? null,
+        debtToEquity: prof.debtToEquity ?? null,
+        currentRatio: prof.currentRatio ?? null,
+        divYield: prof.divYield ?? null,
+        divRate: prof.divRate ?? null,
+        payoutRatio: prof.payoutRatio ?? null,
+        exDivDate: prof.exDivDate ?? null,
+        sharesOutstanding: prof.sharesOutstanding ?? null,
+        floatShares: prof.floatShares ?? null,
+        shortRatio: prof.shortRatio ?? null,
+        shortPctOutstanding: prof.shortPctOutstanding ?? null,
+        insiderPct: prof.insiderPct ?? null,
+        institutionPct: prof.institutionPct ?? null,
         // Derived here rather than read from the feed. financials.profit_margin
         // is wrong for loss-makers with small revenue (+45% for a company
         // losing $878M), and gross_margin uses a different basis than
@@ -4118,6 +4241,16 @@ const FUND_MOVES = [
   { key: 'earningsGrowthYoY', label: 'earnings growth', kind: 'pts' },
   { key: 'roe', label: 'ROE', kind: 'pts' },
   { key: 'shortPctFloat', label: 'short interest', kind: 'pts' },
+  // Added 2026-09-15 with the wider recording. Deliberately NOT every new
+  // field: anything divided by the price (trailing P/E, P/B, P/S, EV/EBITDA,
+  // dividend yield) moves every night and would restate the price move, the
+  // same reason the six original price-driven fields are left out.
+  { key: 'sharesOutstanding', label: 'share count', kind: 'money' },
+  { key: 'totalDebt', label: 'total debt', kind: 'money' },
+  { key: 'ebitda', label: 'EBITDA', kind: 'money' },
+  { key: 'operatingCashFlowTtm', label: 'operating cash flow', kind: 'money' },
+  { key: 'operatingMargin', label: 'operating margin', kind: 'pts' },
+  { key: 'roa', label: 'ROA', kind: 'pts' },
 ];
 // Sized against the recorded history: at these levels the whole universe yields
 // roughly seven field-moves a night, clustered into one or two companies, which

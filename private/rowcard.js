@@ -50,6 +50,13 @@
     peg: (n) => ok(n) ? { t: n.toFixed(2), c: (n > 0 && n <= 1) ? 'pos' : n >= 2 ? 'neg' : '' } : null,
     short: (n) => ok(n) ? { t: n.toFixed(1) + '%', c: n >= 20 ? 'neg' : n >= 10 ? 'warn' : '' } : null,
     macd: (n) => ok(n) ? { t: n.toFixed(2), c: n >= 0 ? 'pos' : 'neg' } : null,
+    count: (n) => {
+      if (!ok(n)) return null;
+      const a = Math.abs(n);
+      const t = a >= 1e12 ? (n / 1e12).toFixed(2) + 'T' : a >= 1e9 ? (n / 1e9).toFixed(2) + 'B'
+        : a >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : Math.round(n).toLocaleString();
+      return { t, c: '' };
+    },
     text: (t) => (t ? { t: String(t), c: '' } : null),
   };
 
@@ -134,6 +141,10 @@
     ['size',  'FCF TTM',        (s) => V.money(s.fcfTtm, s.currency)],
     ['size',  'FCF margin',     (s) => V.lvl(s.fcfMargin)],
     ['size',  'Net cash',       (s) => V.signedMoney(s.netCash, s.currency)],
+    ['size',  'Cash',           (s) => V.money(s.totalCash, s.currency)],
+    ['size',  'Debt',           (s) => V.money(s.totalDebt, s.currency)],
+    ['size',  'EBITDA',         (s) => V.money(s.ebitda, s.currency)],
+    ['size',  'Operating cash', (s) => V.money(s.operatingCashFlowTtm, s.currency)],
     ['fund',  'Earn grth Q YoY',(s) => V.pct(s.earningsGrowthYoY)],
     ['fund',  'Rev grth Q YoY', (s) => V.pct(s.revenueGrowthYoY)],
     ['fund',  'Profit margin',  (s) => V.pct(s.profitMargin)],
@@ -141,19 +152,38 @@
     ['fund',  'Fwd P/E',        (s) => V.num(s.forwardPe)],
     ['fund',  'PEG',            (s) => V.peg(s.peg)],
     ['fund',  'Short % float',  (s) => V.short(s.shortPctFloat)],
+    ['fund',  'Trailing P/E',   (s) => V.num(s.trailingPe)],
+    ['fund',  'P/B',            (s) => V.num(s.priceToBook)],
+    ['fund',  'P/S',            (s) => V.num(s.priceToSales)],
+    ['fund',  'EV/EBITDA',      (s) => V.num(s.evToEbitda)],
+    ['fund',  'Operating margin',(s) => V.pct(s.operatingMargin)],
+    ['fund',  'ROA',            (s) => V.pct(s.roa)],
+    ['fund',  'EPS TTM',        (s) => V.num(s.dilutedEpsTtm, 2)],
+    ['fund',  'Debt / equity',  (s) => V.num(s.debtToEquity)],
+    ['fund',  'Current ratio',  (s) => V.num(s.currentRatio)],
+    ['fund',  'Dividend yield', (s) => V.lvl(s.divYield)],
+    ['fund',  'Payout ratio',   (s) => V.lvl(s.payoutRatio)],
+    ['fund',  'Ex-dividend',    (s) => (s.exDivDate ? { t: shortDate(s.exDivDate), c: '' } : null)],
+    ['own',   'Shares out',     (s) => V.count(s.sharesOutstanding)],
+    ['own',   'Float',          (s) => V.count(s.floatShares)],
+    ['own',   'Book value/share',(s) => V.num(s.bookValuePerShare, 2)],
+    ['own',   'Short ratio',    (s) => V.num(s.shortRatio)],
+    ['own',   'Short % out',    (s) => V.short(s.shortPctOutstanding)],
+    ['own',   'Insiders',       (s) => V.lvl(s.insiderPct)],
+    ['own',   'Institutions',   (s) => V.lvl(s.institutionPct)],
   ];
 
-  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
+  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund', 'own'];
   // The palette lives here because this file already owns GROUP_ORDER and
   // FIELD_SPEC. index.html keeps its own copy — it also colours the table's
   // group banners and the columns menu — so those two must stay in step.
   const GROUP_COLORS = {
     info: '#7c9cff', rank: '#a3e635', act: '#5eead4', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
-    rel: '#22d3ee', trend: '#fbbf24', vol: '#f472b6', size: '#94a3b8', fund: '#fb7185',
+    rel: '#22d3ee', trend: '#fbbf24', vol: '#f472b6', size: '#94a3b8', fund: '#fb7185', own: '#f0abfc',
   };
   const GROUP_LABELS = {
     info: 'Info', rank: 'Scores', act: 'Advice', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
-    rel: 'Relative', trend: 'Trend', vol: 'Volume', size: 'Size', fund: 'Fundamentals',
+    rel: 'Relative', trend: 'Trend', vol: 'Volume', size: 'Size', fund: 'Fundamentals', own: 'Ownership',
   };
 
   // ---- price history -------------------------------------------------------

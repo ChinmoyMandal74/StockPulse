@@ -130,6 +130,22 @@ const SCHEMA = [
    )`,
   // One-time markers (key -> value), so a seed runs once rather than
   // re-appearing after the owner deletes what it created.
+  // Reported quarters: estimate, actual and the surprise, from the /earnings
+  // call the profile pull already makes (8 quarters, 20 credits, previously
+  // reduced to one number). A reported quarter does not change, so this is an
+  // append in practice and an upsert in code — the row is rewritten only if
+  // the feed revises it. Keyed on the report date.
+  `create table if not exists earnings_history (
+     symbol       text not null,
+     d            text not null,
+     eps_estimate real,
+     eps_actual   real,
+     surprise     real,
+     surprise_prc real,
+     reported     text,
+     fetched_at   integer,
+     primary key (symbol, d)
+   )`,
   `create table if not exists app_meta (
      key   text primary key,
      value text
@@ -391,6 +407,38 @@ const ADDED_COLUMNS = [
   'alter table fundamentals_history add column next_earnings_estimated integer',
   'alter table fundamentals_history add column last_earnings_date text',
   'alter table fundamentals_history add column last_surprise real',
+  // The rest of what /statistics returns, recorded from 2026-09-15. They ride
+  // in the same response as the original eighteen and were simply discarded,
+  // so recording them costs no credits — and a day not recorded is gone for
+  // good, which is the whole argument for keeping them. Every one is a point-
+  // in-time snapshot the API cannot hand back later. Left out on purpose:
+  // beta, the 52-week extremes and the moving averages, all of which the bar
+  // archive reproduces exactly.
+  'alter table fundamentals_history add column shares_outstanding real',
+  'alter table fundamentals_history add column float_shares real',
+  'alter table fundamentals_history add column total_cash real',
+  'alter table fundamentals_history add column total_debt real',
+  'alter table fundamentals_history add column debt_to_equity real',
+  'alter table fundamentals_history add column current_ratio real',
+  'alter table fundamentals_history add column enterprise_value real',
+  'alter table fundamentals_history add column trailing_pe real',
+  'alter table fundamentals_history add column price_to_book real',
+  'alter table fundamentals_history add column price_to_sales real',
+  'alter table fundamentals_history add column ev_to_ebitda real',
+  'alter table fundamentals_history add column ebitda real',
+  'alter table fundamentals_history add column operating_cash_flow_ttm real',
+  'alter table fundamentals_history add column operating_margin real',
+  'alter table fundamentals_history add column roa_ttm real',
+  'alter table fundamentals_history add column diluted_eps_ttm real',
+  'alter table fundamentals_history add column book_value_per_share real',
+  'alter table fundamentals_history add column div_yield real',
+  'alter table fundamentals_history add column div_rate real',
+  'alter table fundamentals_history add column payout_ratio real',
+  'alter table fundamentals_history add column short_ratio real',
+  'alter table fundamentals_history add column short_pct_outstanding real',
+  'alter table fundamentals_history add column insider_pct real',
+  'alter table fundamentals_history add column institution_pct real',
+  'alter table fundamentals_history add column ex_div_date text',
   // One Refresh All pulls prices ONCE; this stamp is how later rounds know
   // the pull already happened and spend their whole minute on profiles.
   'alter table refresh_state add column prices_at integer',
@@ -553,6 +601,45 @@ async function writePortfolios(obj) {
   }
   stmts.push({ sql: UNIVERSE_FROM_PORTFOLIOS, args: [Date.now()] });
   await db.batch(stmts, 'write');
+}
+
+// ---- earnings history -----------------------------------------------------
+
+// One batch for a whole refresh round rather than one write per symbol. Rows
+// the feed has not revised are rewritten with identical values, which costs a
+// statement and keeps the code a single upsert.
+async function writeEarnings(rows) {
+  await init();
+  const list = (rows || []).filter((r) => r && r.symbol && r.date);
+  if (!list.length) return 0;
+  const now = Date.now();
+  const num = (v) => (v == null || !isFinite(Number(v)) ? null : Number(v));
+  await db.batch(list.map((r) => ({
+    sql: `insert into earnings_history (symbol, d, eps_estimate, eps_actual, surprise, surprise_prc, reported, fetched_at)
+          values (?, ?, ?, ?, ?, ?, ?, ?)
+          on conflict(symbol, d) do update set
+            eps_estimate = excluded.eps_estimate, eps_actual = excluded.eps_actual,
+            surprise = excluded.surprise, surprise_prc = excluded.surprise_prc,
+            reported = excluded.reported, fetched_at = excluded.fetched_at`,
+    args: [String(r.symbol).toUpperCase(), r.date, num(r.epsEstimate), num(r.epsActual),
+      num(r.surprise), num(r.surprisePrc), r.time || null, now],
+  })), 'write');
+  return list.length;
+}
+
+// Every stored quarter for one symbol, newest first — for the stock page and
+// the post-earnings-drift study the research log has been waiting on.
+async function readEarnings(symbol) {
+  await init();
+  const r = await db.execute({
+    sql: `select d, eps_estimate, eps_actual, surprise, surprise_prc, reported
+            from earnings_history where symbol = ? order by d desc`,
+    args: [String(symbol).toUpperCase()],
+  });
+  return r.rows.map((x) => ({
+    date: x.d, epsEstimate: x.eps_estimate, epsActual: x.eps_actual,
+    surprise: x.surprise, surprisePrc: x.surprise_prc, time: x.reported,
+  }));
 }
 
 // ---- company names --------------------------------------------------------
@@ -1227,7 +1314,8 @@ async function readBarsFor(symbols, since) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state'];
+const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state',
+  'earnings_history'];
 
 // Remove a symbol from the database entirely.
 //
@@ -1306,6 +1394,30 @@ const FUND_FIELDS = [
   ['net_cash_pct', 'netCashPct'],
   ['roe', 'roe'],
   ['short_pct_float', 'shortPctFloat'],
+  ['shares_outstanding', 'sharesOutstanding'],
+  ['float_shares', 'floatShares'],
+  ['total_cash', 'totalCash'],
+  ['total_debt', 'totalDebt'],
+  ['debt_to_equity', 'debtToEquity'],
+  ['current_ratio', 'currentRatio'],
+  ['enterprise_value', 'enterpriseValue'],
+  ['trailing_pe', 'trailingPe'],
+  ['price_to_book', 'priceToBook'],
+  ['price_to_sales', 'priceToSales'],
+  ['ev_to_ebitda', 'evToEbitda'],
+  ['ebitda', 'ebitda'],
+  ['operating_cash_flow_ttm', 'operatingCashFlowTtm'],
+  ['operating_margin', 'operatingMargin'],
+  ['roa_ttm', 'roa'],
+  ['diluted_eps_ttm', 'dilutedEpsTtm'],
+  ['book_value_per_share', 'bookValuePerShare'],
+  ['div_yield', 'divYield'],
+  ['div_rate', 'divRate'],
+  ['payout_ratio', 'payoutRatio'],
+  ['short_ratio', 'shortRatio'],
+  ['short_pct_outstanding', 'shortPctOutstanding'],
+  ['insider_pct', 'insiderPct'],
+  ['institution_pct', 'institutionPct'],
 ];
 
 // One set per symbol per day, enforced by the primary key. A Refresh all runs
@@ -1316,6 +1428,7 @@ const FUND_FIELDS = [
 // refresh report's moved-fields comparison iterates FUND_FIELDS numerically,
 // and a date does not belong in that pipeline. Written, never compared.
 const FUND_EXTRAS = [
+  ['ex_div_date', 'exDivDate', 'text'],
   ['next_earnings_date', 'nextEarningsDate', 'text'],
   ['next_earnings_estimated', 'nextEarningsEstimated', 'bool'],
   ['last_earnings_date', 'lastEarningsDate', 'text'],
@@ -2171,6 +2284,8 @@ module.exports = {
   removeFromUniverse,
   writePortfolios,
   readNames,
+  writeEarnings,
+  readEarnings,
   writeNames,
   readShortNames,
   readNamesFull,
