@@ -422,10 +422,6 @@
     tbody tr:hover td.avx { background: rgba(94, 234, 212, 0.09); }
     /* The optional profile columns hide by body class, header and cells
        together, so no header rebuild is ever needed. */
-    body.hide-av-trend-rider .av-trend-rider { display: none; }
-    body.hide-av-aggressive .av-aggressive { display: none; }
-    body.hide-av-max-risk .av-max-risk { display: none; }
-    body.hide-av-dip-buyer .av-dip-buyer { display: none; }
     /* the custom-weight sliders */
     .picker-inner.wide { width: 340px; max-width: calc(100vw - 24px); }
     /* With eight sliders open the four preset descriptions push Copy Default
@@ -780,10 +776,6 @@
         <button class="btn chgFilter" id="chgBtn" style="display:none"
                 title="Show only the stocks whose Balanced advice moved since the previous session"></button>
         <button class="btn picker-btn" id="fltBtn" aria-pressed="false"></button>
-        <div class="picker" id="actPicker" data-open="0">
-          <button class="btn picker-btn" id="actBtn" aria-haspopup="listbox" aria-expanded="false"></button>
-          <div class="picker-menu" id="actMenu" role="listbox" aria-label="Advice rules profile"></div>
-        </div>
         <!-- The promo studio, open to every account since 2026-09-15 (the
              Announcement template stays the owner's). Hidden for guests. -->
         <a class="btn" id="promoLink" href="/promo" target="_blank" rel="noopener"
@@ -971,7 +963,7 @@
         <th class="grp-act left" data-key="actionEntry" title="The timing reading: Clean (a base or shallow pullback with RSI 45–65), Clean near the high, Extended (up too far, too fast — do not chase), or None. Entry answers whether now.">Entry</th>
         <th class="grp-act left" data-key="actionFund" title="The fundamentals bucket under this stock's rule set — Strong, OK, Weak, or — when the data makes no case either way. Established is judged on earnings, revenue, margins and cash flow; Early on growth, gross margin, burn and short interest. Fundamentals answer how much conviction.">Fund.</th>
         <th class="grp-act left" data-key="actionGuards" title="Reasons to wait that override everything below a Sell: earnings within the blackout window, or too little price history to judge. Blank for most stocks — when this column speaks, it matters.">Guards</th>
-        <th class="grp-act left av-col av-balanced" data-key="av:Balanced" title="What the Balanced rules — the defaults every shared surface uses — conclude for this stock today. Always shown; add more profiles under Rules. First matching rule wins, and each cell's tooltip names the rule that fired.">Balanced</th>
+        <th class="grp-act left av-col av-balanced" data-key="av:Balanced" title="What the Balanced rules — the defaults every shared surface uses — conclude for this stock today. The other four profiles sit beside it. First matching rule wins, and each cell's tooltip names the rule that fired.">Balanced</th>
         <th class="grp-act left av-col avx av-trend-rider" data-key="av:Trend Rider" title="Trend Rider's advice: chases further (1M +40%, RSI 78), Early may reach Strong Buy, exits stay Balanced.">Trend Rider</th>
         <th class="grp-act left av-col avx av-aggressive" data-key="av:Aggressive" title="Aggressive's advice: stops widen to −15% (Early −8%), chase to +35%, blackout 3 days, Early reaches Buy on OK fundamentals.">Aggressive</th>
         <th class="grp-act left av-col avx av-max-risk" data-key="av:Max Risk" title="Max Risk's advice: widest stops (−20%), chase caps nearly off, Buy to −30% below the high. Still never buys below the 200D.">Max Risk</th>
@@ -1458,7 +1450,6 @@
       { root: 'secPicker', btn: 'secBtn', menu: 'secMenu' },
       { root: 'indPicker', btn: 'indBtn', menu: 'indMenu' },
       { root: 'advPicker', btn: 'advBtn', menu: 'advMenu' },
-      { root: 'actPicker', btn: 'actBtn', menu: 'actMenu' },
       { root: 'researchPicker', btn: 'researchBtn', menu: 'researchMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
     ];
@@ -1979,10 +1970,6 @@
       if (!cell) return false;
       const grp = [...cell.classList].find((c) => c.startsWith('grp-'));
       if (grp && collapsed[grp.slice(4)]) return true;
-      if (k.startsWith('av:')) {
-        const name = k.slice(3);
-        return name !== 'Balanced' && !extraProfiles.includes(name);
-      }
       return false;
     }
 
@@ -2368,7 +2355,6 @@
       renderAdviceTrigger();
       renderChangedChip();
       renderLensChip();
-      renderActTrigger();
       const tbody = $('tbody');
       const rows = visibleStocks();
       markSortedColumn();
@@ -2720,56 +2706,12 @@
         'The nightly email, the assistant and the stored snapshot stay on Default. Change it on /admin.';
     }
 
-    function renderActTrigger() {
-      const n = 1 + extraProfiles.length;
-      $('actBtn').innerHTML =
-        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-sliders" /></svg>' +
-        '<span class="picker-label">Rules</span>' +
-        `<span class="count">${n}/5</span>` +
-        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
-      $('actBtn').title = 'Which advice columns to show: Balanced always, plus any of the four ' +
-        'profiles side by side. Click any advice cell to see the rules that column applies.';
-    }
-
-    // Header and cells hide together by body class, so the table never needs
-    // its headers rebuilt; only the group banner's span is recounted.
+    // The five advice columns are permanent members of the Advice group since
+    // 2026-09-15 — the Rules picker that toggled four of them was removed, and
+    // choosing columns is the job of personal column views. What is left of
+    // this function is the per-render hook the filter summary hangs off.
     function applyAdviceCols() {
-      for (const name of ADVICE_OPTIONAL) {
-        document.body.classList.toggle('hide-av-' + avSlug(name), !extraProfiles.includes(name));
-      }
-      const banner = document.querySelector('th[data-group="act"]');
-      if (banner) banner.colSpan = 6 + extraProfiles.length;
-      renderActTrigger();
       renderFilterBar();
-    }
-
-    function renderActMenu() {
-      $('actMenu').innerHTML =
-        '<div class="picker-inner">' +
-        `<button class="pick on" disabled style="opacity:0.75;cursor:default" role="option" aria-selected="true">` +
-        `<span class="nm">Balanced<em>Always shown — the shared measurement every other surface uses.</em></span>` +
-        '<svg class="ic tick" aria-hidden="true"><use href="#i-check" /></svg></button>' +
-        ADVICE_OPTIONAL.map((name) =>
-          `<button class="pick ${extraProfiles.includes(name) ? 'on' : ''}" data-avp="${we(name)}" role="option" ` +
-          `aria-selected="${extraProfiles.includes(name)}">` +
-          `<span class="nm">${we(name)}<em>${we(AV_NOTES[name])}</em></span>` +
-          '<svg class="ic tick" aria-hidden="true"><use href="#i-check" /></svg></button>').join('') +
-        '<div class="pick-hint">Pick the profiles to compare, side by side. Every one is a fixed rule set — ' +
-        'no custom profiles — and the Sell/Avoid/Hold rules sit above every Buy rule in all of them. ' +
-        'Click any advice cell for that column\u2019s ladder.</div>' +
-        '</div>';
-      $('actMenu').querySelectorAll('[data-avp]').forEach((b) => {
-        b.addEventListener('click', (ev) => {
-          ev.stopPropagation();                       // the menu stays open while toggling
-          const name = b.dataset.avp;
-          extraProfiles = ADVICE_OPTIONAL.filter((x) =>
-            (x === name) !== extraProfiles.includes(x));
-          window.track && track('picker', 'rules:' + (extraProfiles.includes(name) ? '+' : '-') + name);
-          applyAdviceCols();
-          renderActMenu();
-          savePrefs();
-        });
-      });
     }
 
 
@@ -2800,10 +2742,6 @@
         const res = await api('GET', '/api/prefs');
         const savedC = res && res.prefs && Screens.cleanWeights(res.prefs.customWeights);
         if (savedC) customWeights = Object.assign(Screens.defaultWeights(), savedC);
-        const savedAv = res && res.prefs && res.prefs.advices;
-        if (Array.isArray(savedAv)) {
-          extraProfiles = ADVICE_OPTIONAL.filter((n) => savedAv.includes(avSlug(n)));
-        }
         if (res && res.prefs && res.prefs.tickerOff === true) tickerOff = true;
         if (res && res.prefs && res.prefs.filterRow === true) {
           filterRowOn = true;
@@ -2835,7 +2773,7 @@
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
           prefs: { collapsed: out, weights: weightPreset, customWeights,
-            advices: extraProfiles.map(avSlug), filterRow: filterRowOn, tickerOff },
+            filterRow: filterRowOn, tickerOff },
         }).catch(() => {});
       }, 600);
     }
@@ -3623,7 +3561,6 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         const opening = $(p.root).dataset.open !== '1';
         // Built on open rather than on every render: a rebuild mid-drag would
         // replace the slider under the cursor and kill the gesture.
-        if (opening && p.root === 'actPicker') renderActMenu();
         if (opening && p.root === 'secPicker') renderSectorMenu();
         if (opening && p.root === 'indPicker') renderIndustryMenu();
         if (opening && p.root === 'advPicker') renderAdviceMenu();
@@ -3652,18 +3589,6 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     // snapshot, the nightly report, the assistant and the CSV's underlying
     // data all stay on Balanced, exactly like the weight lens.
     const ADVICE_PROFILES = ['Balanced', 'Trend Rider', 'Aggressive', 'Max Risk', 'Dip Buyer'];
-    const ADVICE_OPTIONAL = ADVICE_PROFILES.slice(1);
-    const AV_NOTES = {
-      'Trend Rider': 'Buys strength sooner, holds it longer. The exits stay tight.',
-      'Aggressive': 'More rope everywhere: wider stops, more chase, shorter blackout.',
-      'Max Risk': 'The far end: widest stops, chase caps nearly off. Still never buys below the 200D.',
-      'Dip Buyer': 'May buy below the 200D, capped at Buy with Risk. The research log does not endorse it.',
-    };
-    const avSlug = (name) => name.toLowerCase().replace(/ /g, '-');
-    // Which optional profiles show as columns beside Balanced (canonical
-    // order, saved to prefs). Balanced itself is not optional: the shared
-    // measurement is always the first column.
-    let extraProfiles = [];
     // Which profile an open ladder panel is explaining — set by the advice
     // cell that was clicked; the state cells always open under Balanced,
     // since the four state columns are pinned to the shared rules.
