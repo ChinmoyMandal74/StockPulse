@@ -134,6 +134,14 @@ const SCHEMA = [
      key   text primary key,
      value text
    )`,
+  // The stocks the screener tracks (2026-09-15). Until then the universe was
+  // the union of the admin portfolios, so deleting a portfolio deleted every
+  // stock only it held — and their data. Portfolios are groupings now; a stock
+  // leaves the screener only by being removed from here.
+  `create table if not exists universe (
+     symbol   text primary key,
+     added_at integer
+   )`,
   `create table if not exists user_portfolios (
      user_key text not null,
      name     text not null,
@@ -427,6 +435,10 @@ async function init() {
           if (!/duplicate column/i.test(err.message || '')) throw err;
         }
       }
+      // Every portfolio member belongs to the universe. Idempotent, so it is
+      // safe on every cold start and needs no marker: it is what carried the
+      // 271 portfolio stocks into the table on the first boot after it existed.
+      await db.execute({ sql: UNIVERSE_FROM_PORTFOLIOS, args: [Date.now()] });
     })().catch((err) => {
       // Never cache a failed init: the next request retries instead of the
       // instance serving 500s for the rest of its life.
@@ -470,10 +482,50 @@ async function readPortfolios() {
   return out;
 }
 
+const UNIVERSE_FROM_PORTFOLIOS =
+  'insert or ignore into universe (symbol, added_at) select distinct symbol, ? from portfolio_tickers';
+
+// The stocks the screener tracks: the universe table, plus any portfolio
+// member not yet in it (belt and braces — writePortfolios keeps them in step).
+// Ordered by when each joined.
+async function readUniverse() {
+  await init();
+  const [u, tk] = await Promise.all([
+    db.execute('select symbol from universe order by added_at, rowid'),
+    db.execute('select distinct symbol from portfolio_tickers'),
+  ]);
+  const out = u.rows.map((r) => r.symbol);
+  const seen = new Set(out);
+  for (const r of tk.rows) if (!seen.has(r.symbol)) { seen.add(r.symbol); out.push(r.symbol); }
+  return out;
+}
+
+async function addToUniverse(symbol) {
+  await init();
+  const r = await db.execute({ sql: 'insert or ignore into universe (symbol, added_at) values (?, ?)',
+    args: [String(symbol).toUpperCase(), Date.now()] });
+  return Number(r.rowsAffected || 0) > 0;
+}
+
+// Out of the screener: the universe row and every portfolio membership, in one
+// batch, so the union in readUniverse() cannot bring it straight back. The
+// caller purges its data.
+async function removeFromUniverse(symbol) {
+  await init();
+  const sym = String(symbol).toUpperCase();
+  await db.batch([
+    { sql: 'delete from portfolio_tickers where symbol = ?', args: [sym] },
+    { sql: 'delete from universe where symbol = ?', args: [sym] },
+  ], 'write');
+}
+
 async function writePortfolios(obj) {
   await init();
   const clean = normalize(obj);
   const stmts = [
+    // Before the memberships are replaced, every current member is recorded in
+    // the universe — so deleting a portfolio can never drop a stock with it.
+    { sql: UNIVERSE_FROM_PORTFOLIOS, args: [Date.now()] },
     { sql: 'delete from portfolio_tickers', args: [] },
     { sql: 'delete from portfolios', args: [] },
   ];
@@ -487,6 +539,7 @@ async function writePortfolios(obj) {
       });
     });
   }
+  stmts.push({ sql: UNIVERSE_FROM_PORTFOLIOS, args: [Date.now()] });
   await db.batch(stmts, 'write');
 }
 
@@ -2100,6 +2153,9 @@ module.exports = {
   getSessionUser,
   deleteSession,
   readPortfolios,
+  readUniverse,
+  addToUniverse,
+  removeFromUniverse,
   writePortfolios,
   readNames,
   writeNames,

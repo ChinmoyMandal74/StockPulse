@@ -1171,20 +1171,11 @@ app.delete('/api/users/:id', requireAdmin, route(async (req, res) => {
 
 // ---- Portfolio helpers (persistence lives in db.js) ------------------------
 
-// Deduped union of every portfolio's symbols.
-function getUniverse(portfolios) {
-  const seen = new Set();
-  const list = [];
-  for (const syms of Object.values(portfolios)) {
-    for (const s of syms) {
-      if (!seen.has(s)) {
-        seen.add(s);
-        list.push(s);
-      }
-    }
-  }
-  return list;
-}
+// The stocks the screener tracks. Its own table since 2026-09-15 — it was the
+// union of the portfolios, which made deleting a portfolio delete its stocks.
+// Portfolios are groupings now: only removing a stock from the universe takes
+// it (and its data) out of the screener.
+const readUniverse = () => store.readUniverse();
 
 // Which portfolios contain a given symbol.
 function membershipOf(symbol, portfolios) {
@@ -2358,14 +2349,14 @@ app.get('/api/my/portfolios', requireMember, route(async (req, res) => {
   const mine = await store.readUserPortfolios(await prefsKey(req));
   // Filtered to the live universe on the way out too — a symbol dropped
   // since the last write must never render as a phantom row count.
-  const universe = new Set(getUniverse(await readPortfolios()));
+  const universe = new Set((await readUniverse()));
   for (const name of Object.keys(mine)) mine[name] = mine[name].filter((x) => universe.has(x));
   res.json({ portfolios: mine, max: MY_PORTFOLIOS_MAX });
 }));
 
 app.put('/api/my/portfolios', requireMember, route(async (req, res) => {
   const key = await prefsKey(req);
-  const universe = new Set(getUniverse(await readPortfolios()));
+  const universe = new Set((await readUniverse()));
   const next = cleanMyPortfolios(req.body && req.body.portfolios, universe);
   const prev = await store.readUserPortfolios(key);
   await store.writeUserPortfolios(key, next);
@@ -2528,7 +2519,49 @@ app.put('/api/shortname', requireAdmin, route(async (req, res) => {
 }));
 
 app.get('/api/portfolios', requireMember, route(async (req, res) => {
-  res.json({ portfolios: await readPortfolios() });
+  res.json(await portfolioAnswer());
+}));
+
+// Every portfolio edit answers with both, so a page can reconcile its rows
+// (the universe) and its badges (the portfolios) from one response.
+async function portfolioAnswer(extra = {}) {
+  const [portfolios, universe] = await Promise.all([readPortfolios(), readUniverse()]);
+  return { portfolios, universe, ...extra };
+}
+
+// Cache the company name once (1 credit) so refreshes stay history-only.
+// It is returned as well: adding a ticker does not trigger a price pull, so
+// this lookup is the only thing that touches the symbol before the next
+// Refresh, and a name coming back empty is the earliest hint of a typo.
+async function nameForNewTicker(symbol) {
+  let name = (await readNames())[symbol] || null;
+  if (API_KEY && !name) {
+    name = await fetchName(symbol);
+    if (name) await writeNames({ [symbol]: name });
+  }
+  return name;
+}
+
+// Add a stock to the screener, optionally into a portfolio as well.
+app.post('/api/universe', requireAdmin, route(async (req, res) => {
+  const symbol = String(req.body?.symbol || '').trim().toUpperCase();
+  const pname = String(req.body?.portfolio || '').trim();
+  if (!symbol) return res.status(400).json({ error: 'Symbol is required.' });
+  if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Invalid symbol format.' });
+  const already = (await readUniverse()).includes(symbol);
+  if (pname) {
+    const p = await readPortfolios();
+    if (!(pname in p)) return res.status(404).json({ error: 'Portfolio not found.' });
+    if (p[pname].includes(symbol)) return res.status(409).json({ error: `${symbol} is already in "${pname}".` });
+    p[pname].push(symbol);
+    await writePortfolios(p);
+  } else if (already) {
+    return res.status(409).json({ error: `${symbol} is already in the screener.` });
+  }
+  await store.addToUniverse(symbol);
+  const name = await nameForNewTicker(symbol);
+  logAct(req, 'portfolio', ('add:' + symbol + (pname ? '>' + pname : '')).slice(0, 80));
+  res.json(await portfolioAnswer({ name, added: !already }));
 }));
 
 // Create an empty portfolio.
@@ -2543,7 +2576,7 @@ app.post('/api/portfolios', requireAdmin, route(async (req, res) => {
   p[name] = [];
   await writePortfolios(p);
   logAct(req, 'portfolio', 'create:' + name.slice(0, 40));
-  res.json({ portfolios: p });
+  res.json(await portfolioAnswer());
 }));
 
 // Rename a portfolio (preserves order + membership).
@@ -2564,50 +2597,23 @@ app.put('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
   for (const [k, v] of Object.entries(p)) rebuilt[k === oldName ? newName : k] = v;
   await writePortfolios(rebuilt);
   logAct(req, 'portfolio', 'rename:' + oldName.slice(0, 30) + '>' + newName.slice(0, 30));
-  res.json({ portfolios: rebuilt });
+  res.json(await portfolioAnswer());
 }));
 
-// Delete a portfolio (its stocks remain in any other portfolios).
-// A symbol dropped from the last portfolio holding it takes its data with it:
-// bars, momentum history, fundamentals history, the cached profile and the
-// name. Anything still in another portfolio is untouched, which is why this
-// compares the universe before and after rather than trusting the route.
-//
-// Bars and momentum come back by themselves — a re-pull is one credit and
-// momentum is computed from bars — but fundamentals history cannot be
-// rebuilt at all, so re-adding a ticker starts that series over. The counts are
-// logged for exactly that reason: this is not a reversible operation.
-async function purgeDropped(before) {
-  const after = new Set(getUniverse(await readPortfolios()));
-  const gone = before.filter((s) => !after.has(s));
-  const purged = [];
-  for (const symbol of gone) {
-    try {
-      const r = await store.purgeSymbol(symbol);
-      purged.push(r);
-      console.log(`purged ${r.symbol}: ${r.total.toLocaleString()} rows — ` +
-        (Object.entries(r.removed).map(([t, n]) => `${t} ${n.toLocaleString()}`).join(', ') || 'nothing stored'));
-    } catch (err) {
-      // Losing the portfolio edit because the cleanup failed would be worse
-      // than leaving rows behind; purge-orphans.js sweeps them up later.
-      console.warn(`purge ${symbol} failed (the ticker was still removed):`, err.message);
-    }
-  }
-  return purged;
-}
-
+// Delete a portfolio. Its stocks stay in the screener: the universe is its own
+// table, and writePortfolios() records every member there before the
+// memberships are replaced. Nothing is purged.
 app.delete('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
   const name = decodeURIComponent(req.params.name);
   const p = await readPortfolios();
   if (!(name in p)) return res.status(404).json({ error: 'Portfolio not found.' });
-  const before = getUniverse(p);
   delete p[name];
   await writePortfolios(p);
   logAct(req, 'portfolio', 'delete:' + name.slice(0, 40));
-  res.json({ portfolios: p, purged: await purgeDropped(before) });
+  res.json(await portfolioAnswer({ purged: [] }));
 }));
 
-// Add a ticker to a portfolio.
+// Add a ticker to a portfolio (and so to the screener, if it is new).
 app.post('/api/portfolios/:name/tickers', requireAdmin, route(async (req, res) => {
   const name = decodeURIComponent(req.params.name);
   const symbol = String(req.body?.symbol || '').trim().toUpperCase();
@@ -2620,43 +2626,45 @@ app.post('/api/portfolios/:name/tickers', requireAdmin, route(async (req, res) =
   }
   p[name].push(symbol);
   await writePortfolios(p);
-
-  // Cache the company name once (1 credit) so refreshes stay history-only.
-  // It is returned as well: adding a ticker no longer triggers a price pull, so
-  // this lookup is the only thing that touches the symbol before the next
-  // Refresh, and a name coming back empty is the earliest hint of a typo.
-  let name_ = (await readNames())[symbol] || null;
-  if (API_KEY && !name_) {
-    name_ = await fetchName(symbol);
-    if (name_) await writeNames({ [symbol]: name_ });
-  }
-
+  const name_ = await nameForNewTicker(symbol);
   logAct(req, 'portfolio', 'add:' + symbol + '>' + name.slice(0, 40));
-  res.json({ portfolios: p, name: name_ });
+  res.json(await portfolioAnswer({ name: name_ }));
 }));
 
-// Remove a ticker from one portfolio.
+// Take a ticker out of one portfolio. It stays in the screener.
 app.delete('/api/portfolios/:name/tickers/:symbol', requireAdmin, route(async (req, res) => {
   const name = decodeURIComponent(req.params.name);
   const symbol = String(req.params.symbol || '').trim().toUpperCase();
   const p = await readPortfolios();
   if (!(name in p)) return res.status(404).json({ error: 'Portfolio not found.' });
-  const before = getUniverse(p);
   p[name] = p[name].filter((s) => s !== symbol);
   await writePortfolios(p);
   logAct(req, 'portfolio', 'remove:' + symbol + '<' + name.slice(0, 40));
-  res.json({ portfolios: p, purged: await purgeDropped(before) });
+  res.json(await portfolioAnswer({ purged: [] }));
 }));
 
-// Remove a ticker from every portfolio (used by the "All" view).
+// Remove a stock from the screener: out of the universe and every portfolio,
+// and its data with it — bars, fundamentals history, the cached profile, the
+// name and its headlines. Bars come back for a credit; FUNDAMENTALS HISTORY
+// CANNOT BE REBUILT (the API only returns today's numbers), so re-adding the
+// ticker starts that series over. The counts are returned for that reason.
 app.delete('/api/tickers/:symbol', requireAdmin, route(async (req, res) => {
   const symbol = String(req.params.symbol || '').trim().toUpperCase();
-  const p = await readPortfolios();
-  const before = getUniverse(p);
-  for (const name of Object.keys(p)) p[name] = p[name].filter((s) => s !== symbol);
-  await writePortfolios(p);
+  if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Invalid symbol format.' });
+  await store.removeFromUniverse(symbol);
   logAct(req, 'portfolio', 'remove:' + symbol);
-  res.json({ portfolios: p, purged: await purgeDropped(before) });
+  const purged = [];
+  try {
+    const r = await store.purgeSymbol(symbol);
+    purged.push(r);
+    console.log(`purged ${r.symbol}: ${r.total.toLocaleString()} rows — ` +
+      (Object.entries(r.removed).map(([t, n]) => `${t} ${n.toLocaleString()}`).join(', ') || 'nothing stored'));
+  } catch (err) {
+    // Losing the removal because the cleanup failed would be worse than
+    // leaving rows behind; purge-orphans.js sweeps them up later.
+    console.warn(`purge ${symbol} failed (the ticker was still removed):`, err.message);
+  }
+  res.json(await portfolioAnswer({ purged }));
 }));
 
 // Expire the per-symbol profile cache (sector / fundamentals / analyst) so the
@@ -2689,7 +2697,7 @@ function profileGaps(universe, profiles) {
 // that also prices any stock with no bars at all (a new ticker) at 1 credit
 // each, sizing its profile batch down to fit the same minute.
 async function missingPlan() {
-  const universe = getUniverse(await readPortfolios());
+  const universe = (await readUniverse());
   const gaps = profileGaps(universe, await readProfiles());
   const dates = await store.barsMaxDates();
   const noBars = universe.filter((s) => !dates.has(s));
@@ -2749,7 +2757,7 @@ app.post('/api/refresh-all', requireAdmin, route(async (req, res) => {
   }
   logAct(req, 'refresh', 'all');
   const expired = await expireProfiles();
-  const total = getUniverse(await readPortfolios()).length;
+  const total = (await readUniverse()).length;
   const runId = await trackSafe(store.startRun({ kind: 'all', trigger: 'manual',
     actor: who ? who.email : null, total, targets: total }));
   await beginRefresh(who ? who.email : null, total, null, runId);
@@ -2793,7 +2801,7 @@ async function computeStocks(asOf, opts = {}) {
 
   const portfolios = await readPortfolios();
   const portfolioNames = Object.keys(portfolios);
-  const symbols = getUniverse(portfolios);
+  const symbols = await readUniverse();
   if (symbols.length === 0) {
     return { ok: true, payload: { stocks: [], portfolios: portfolioNames, asOf, updatedAt: new Date().toISOString() } };
   }
@@ -3915,7 +3923,7 @@ app.get('/api/basket', requireMember, route(async (req, res) => {
   // Floor of 5, a trading week: the promo studio's shortest chart window.
   const days = Math.min(400, Math.max(5, Number(req.query.days) || 253));
   const portfolios = await readPortfolios();
-  const all = getUniverse(portfolios);
+  const all = await readUniverse();
   let symbols;
   let label = rawName;
   if (rawName.startsWith('my:')) {
@@ -4596,7 +4604,7 @@ async function trendBars(symbols) {
 async function liveRefreshOpts() {
   const running = await readRefreshState();
   const archivePrices = !!(running && running.pricesAt);
-  const universe = getUniverse(await readPortfolios());
+  const universe = (await readUniverse());
   const n = universe.length + 1;   // + SPY
   // Fill missing prices ONLY the stocks with no bars at all, in its first
   // round; everything else comes off the archive. notePriceRound then stamps
@@ -4749,7 +4757,7 @@ app.get('/api/news-runs', requireAdmin, route(async (req, res) => {
   const [runs, state, holdings, portfolios] = await Promise.all([
     store.readNewsRuns(now - days * 86400000), store.readNewsState(), store.newsHoldings(), readPortfolios(),
   ]);
-  const universe = getUniverse(portfolios);
+  const universe = await readUniverse();
   const fetched = { day: 0, week: 0, older: 0, never: 0 };
   let stalest = null;
   for (const s of universe) {
@@ -4796,7 +4804,7 @@ app.get('/api/refresh-runs', requireAdmin, route(async (req, res) => {
 // The slower half of the page: how fresh the stored data is right now.
 app.get('/api/refresh-runs/health', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  const universe = getUniverse(await readPortfolios());
+  const universe = (await readUniverse());
   const profiles = await readProfiles();
   const now = Date.now();
   const ages = { day: 0, three: 0, week: 0, older: 0, none: 0 };
@@ -4932,7 +4940,7 @@ app.all('/api/cron/intraday', route(async (req, res) => {
   if (dry) return res.json({ ok: true, ran: false, wouldRun: true, ny: clock.label, market, dry });
 
   const startedAt = Date.now();
-  const total = getUniverse(await readPortfolios()).length;
+  const total = (await readUniverse()).length;
   const runId = await trackSafe(store.startRun({ kind: 'intraday', trigger: 'scheduled', actor, total, targets: total }));
   const opts = await liveRefreshOpts();
   const { r, m, ms } = await metered(() => computeStocks(null, opts));
@@ -4962,7 +4970,7 @@ app.post('/api/cron/refresh', route(async (req, res) => {
     return res.json({ ok: true, done: true, stopped: true, runId: askedRun });
   }
   if (starting) {
-    const total = getUniverse(await readPortfolios()).length;
+    const total = (await readUniverse()).length;
     // ?full=1 forces the old behaviour — every profile re-pulled tonight. The
     // default rotates: the oldest slice is expired so it comes up for renewal,
     // and the TTL leaves the rest alone. After the first week the fetched_at
@@ -4973,7 +4981,7 @@ app.post('/api/cron/refresh', route(async (req, res) => {
     // among fetched_at > 0, so these are not counted against the rotation.
     let gapped = 0;
     if (!full) {
-      const universe = getUniverse(await readPortfolios());
+      const universe = (await readUniverse());
       const gaps = profileGaps(universe, await readProfiles());
       gapped = await store.expireProfilesFor(gaps.filter((g) => g.hasRow).map((g) => g.symbol));
       if (gaps.length) console.log(`cron: ${gaps.length} stocks with missing company data queued first`);
@@ -5056,7 +5064,7 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     let runId = (opts.running && opts.running.runId) || asked;
     const plainRun = !runId && !opts.running;
     if (plainRun) {
-      const total = getUniverse(await readPortfolios()).length;
+      const total = (await readUniverse()).length;
       runId = await trackSafe(store.startRun({ kind: 'refresh', trigger: 'manual', actor, total, targets: total }));
     }
     const { r, m, ms } = await metered(() => computeStocks(null, opts));
@@ -5088,6 +5096,11 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     // written before the field existed still carries it, and an override
     // typed a moment ago shows without waiting for a refresh.
     await stampShortNames(snap.stocks);
+    // Memberships too: portfolios are edited between refreshes (a deleted one
+    // must not linger on every row until the next refresh rewrites the snapshot).
+    const pf = await readPortfolios();
+    snap.portfolios = Object.keys(pf);
+    for (const x of snap.stocks) x.portfolios = membershipOf(x.symbol, pf);
     if (await isGuest(req)) {
       // The guest preview: the picked handful, and only portfolio names that
       // still contain one of them. Filtered here, never in the browser.

@@ -2312,7 +2312,7 @@
     // One row of the table. Pulled out of render() so a window repaint can
     // build a slice of rows without rebuilding the page around them.
     function rowHtml(s, i, freshest) {
-        const rmTitle = activeTab === 'All' ? 'Remove from all portfolios' : `Remove from ${activeTab}`;
+        const rmTitle = activeTab === 'All' ? 'Remove from the screener' : `Remove from ${activeTab}`;
         const removeBtn = isAdmin
           ? `<td><button class="remove" data-remove="${s.symbol}" title="${rmTitle}" aria-label="${rmTitle}"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-x" /></svg></button></td>`
           : '<td></td>';
@@ -2647,22 +2647,20 @@
       actions: (s) => (isAdmin ? [{
         id: 'remove',
         danger: true,
-        label: activeTab === 'All' ? 'Remove from all portfolios' : `Remove from ${activeTab}`,
+        label: activeTab === 'All' ? 'Remove from the screener' : `Remove from ${activeTab}`,
       }] : []),
       onAction: (id, s) => {
         if (id !== 'remove') return;
-        // Dropping a ticker from the last portfolio holding it now deletes its
-        // stored data too, and the fundamentals history among that cannot be
-        // rebuilt — so the confirmation names that rather than only asking about
-        // the list. Removing it from one of several portfolios is still trivially
-        // undone by adding it back, and still does not ask.
+        // Removing from the All view takes the stock out of the screener and
+        // deletes its stored data, and the fundamentals history among that
+        // cannot be rebuilt — so it asks. Taking it out of one portfolio only
+        // changes the grouping, is undone by adding it back, and does not ask.
         if (lastHome(s.symbol) &&
-            !window.confirm(`Remove ${s.symbol} from ${activeTab === 'All' ? 'every portfolio' : `"${activeTab}"`}?
+            !window.confirm(`Remove ${s.symbol} from the screener?
 
 ` +
-              'It is in no other portfolio, so its stored price history, momentum ' +
-              'history and fundamentals history will be deleted. The fundamentals ' +
-              'history cannot be rebuilt.')) return;
+              'It leaves every portfolio too, and its stored price history and ' +
+              'fundamentals history are deleted. The fundamentals history cannot be rebuilt.')) return;
         removeTicker(s.symbol);
       },
     });
@@ -3871,7 +3869,7 @@
     // and had already told us about. The membership, the badges, the tab counts
     // and the purge warning all come out of this map. Only the price and
     // fundamental columns need a pull, and that is what Refresh is for.
-    function applyPortfolioMap(map) {
+    function applyPortfolioMap(map, universe) {
       if (!map) return;
       portfolios = Object.keys(map);
       const holders = new Map();
@@ -3881,18 +3879,22 @@
           holders.get(sym).push(name);
         }
       }
-      // A symbol left in no portfolio has had its stored data purged server-side,
-      // so its row goes with it.
-      baseStocks = baseStocks.filter((r) => holders.has(r.symbol));
-      for (const r of baseStocks) r.portfolios = holders.get(r.symbol);
+      // The rows are the universe, not the portfolios (2026-09-15): a stock in
+      // no portfolio stays in the table. Only a stock removed from the screener
+      // (its data purged server-side) loses its row. An answer without a
+      // universe falls back to the portfolio members.
+      const inScreener = new Set(universe || holders.keys());
+      for (const sym of holders.keys()) inScreener.add(sym);
+      baseStocks = baseStocks.filter((r) => inScreener.has(r.symbol));
+      for (const r of baseStocks) r.portfolios = holders.get(r.symbol) || [];
       // A symbol that has never been through a refresh has no row yet. Give it
       // the placeholder the `s.error` branch already renders: it IS in the
       // portfolio, so it belongs in the table and in the count, and saying it
       // has no data yet beats it silently not appearing. applyLens() skips
       // error rows already, so nothing downstream needs to know.
-      for (const [sym, names] of holders) {
+      for (const sym of inScreener) {
         if (!baseStocks.some((r) => r.symbol === sym)) {
-          baseStocks.push({ symbol: sym, portfolios: names,
+          baseStocks.push({ symbol: sym, portfolios: holders.get(sym) || [],
             error: 'No data yet — click ↻ Refresh to pull it.' });
         }
       }
@@ -3903,12 +3905,11 @@
 
     const hasData = (symbol) => baseStocks.some((r) => r.symbol === symbol && !r.error);
 
-    // True when removing the symbol here leaves it in no portfolio at all, which
-    // is exactly when the server purges its stored data.
-    function lastHome(symbol) {
-      const row = stocks.find((x) => x.symbol === symbol);
-      const holders = (row && row.portfolios) || [];
-      return activeTab === 'All' ? holders.length > 0 : holders.length <= 1;
+    // True when this removal takes the stock out of the screener, which is when
+    // the server purges its stored data: only from the All view. Taking it out
+    // of a portfolio leaves it in the screener.
+    function lastHome() {
+      return activeTab === 'All';
     }
 
     // What the server reports having deleted, said plainly. A silent purge of
@@ -3926,7 +3927,7 @@
         const r = activeTab === 'All'
           ? await api('DELETE', '/api/tickers/' + encodeURIComponent(symbol))
           : await api('DELETE', `/api/portfolios/${encodeURIComponent(activeTab)}/tickers/${encodeURIComponent(symbol)}`);
-        applyPortfolioMap(r && r.portfolios);
+        applyPortfolioMap(r && r.portfolios, r && r.universe);
         notePurge(r && r.purged);
         if (!r || !r.purged || !r.purged.length) setStatus(`${symbol} removed.`);
       } catch (err) { setError(err.message); }
@@ -3939,7 +3940,7 @@
       try {
         const r = await api('POST', '/api/portfolios', { name });
         activeTab = name;
-        applyPortfolioMap(r && r.portfolios);
+        applyPortfolioMap(r && r.portfolios, r && r.universe);
         setStatus(`Portfolio "${name}" created.`);
       } catch (err) { setError(err.message); }
     }
@@ -3953,31 +3954,22 @@
       try {
         const r = await api('PUT', '/api/portfolios/' + encodeURIComponent(name), { newName });
         if (activeTab === name) activeTab = newName;
-        applyPortfolioMap(r && r.portfolios);
+        applyPortfolioMap(r && r.portfolios, r && r.universe);
         setStatus(`Renamed to "${newName}".`);
       } catch (err) { setError(err.message); }
     }
 
     async function deletePortfolio() {
       if (activeTab === 'All') return;
-      // Name the ones that are about to lose their data, since "they stay in any
-      // other portfolios" is only reassuring for the ones that do.
-      const orphaned = stocks
-        .filter((x) => (x.portfolios || []).length === 1 && x.portfolios[0] === activeTab)
-        .map((x) => x.symbol);
-      const warn = orphaned.length
-        ? `
-
-${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portfolio, ` +
-          'so their stored history will be deleted. Fundamentals history cannot be rebuilt.'
-        : '';
-      if (!window.confirm(`Delete portfolio "${activeTab}"? Its stocks stay in any other portfolios.${warn}`)) return;
+      // Since the universe became its own table, deleting a portfolio removes
+      // the grouping only: every stock stays in the screener with its data.
+      if (!window.confirm(`Delete portfolio "${activeTab}"? Only the grouping goes — its stocks stay in the screener with all their data.`)) return;
       setError('');
       try {
         const gone = activeTab;
         const r = await api('DELETE', '/api/portfolios/' + encodeURIComponent(activeTab));
         activeTab = 'All';
-        applyPortfolioMap(r && r.portfolios);
+        applyPortfolioMap(r && r.portfolios, r && r.universe);
         notePurge(r && r.purged);
         if (!r || !r.purged || !r.purged.length) setStatus(`Portfolio "${gone}" deleted.`);
       } catch (err) { setError(err.message); }

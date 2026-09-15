@@ -388,7 +388,7 @@
       // other way: no NASDAQ value is ever written into the screener.
       try {
         const p = await api('GET', '/api/portfolios');
-        mine = new Set(Object.values(p.portfolios || {}).flat());
+        mine = new Set((p.universe || []).concat(Object.values(p.portfolios || {}).flat()));
       } catch (e) { /* the page still works without the badges */ }
 
       try {

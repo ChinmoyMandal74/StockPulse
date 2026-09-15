@@ -39,13 +39,14 @@ async function countFor(symbol) {
 }
 
 (async () => {
-  const portfolios = await store.readPortfolios();
-  const universe = new Set(Object.values(portfolios).flat());
+  // The universe table, not the portfolios: since 2026-09-15 a stock in no
+  // portfolio is still in the screener, and sweeping it would destroy its data.
+  const universe = new Set(await store.readUniverse());
   const stored = await store.symbolsWithData();
   let orphans = stored.filter((s) => !universe.has(s));
   if (ONLY.length) orphans = orphans.filter((s) => ONLY.includes(s));
 
-  console.log(`portfolios hold        : ${universe.size} symbols`);
+  console.log(`universe holds         : ${universe.size} symbols`);
   console.log(`database holds data for: ${stored.length} symbols`);
   console.log(`orphaned               : ${orphans.length}` +
     (ONLY.length ? ` (filtered to ${ONLY.join(', ')})` : ''));

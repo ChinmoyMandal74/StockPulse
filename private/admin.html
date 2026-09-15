@@ -212,7 +212,7 @@
           <span class="lbl">Add a ticker</span>
           <div class="line">
             <input type="text" id="sym" placeholder="TSLA" maxlength="12" autocomplete="off" aria-label="Ticker symbol" />
-            <select id="addTo" aria-label="Portfolio to add to"></select>
+            <select id="addTo" aria-label="Also add to a portfolio (optional)"></select>
             <button class="btn btn-primary" id="addBtn">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>Add</button>
           </div>
@@ -401,14 +401,16 @@
 
     // ---- portfolios: the add-ticker target and the symbol list -------------
     let portfolios = {};
+    let universe = [];
     function paintPortfolios() {
       const names = Object.keys(portfolios);
-      $('addTo').innerHTML = names.map((n) => `<option value="${we(n)}">${we(n)}</option>`).join('')
-        || '<option value="">No portfolios yet</option>';
+      // A stock joins the screener on its own; a portfolio is optional grouping.
+      $('addTo').innerHTML = '<option value="">No portfolio — screener only</option>' +
+        names.map((n) => `<option value="${we(n)}">Also add to ${we(n)}</option>`).join('');
       // Every symbol the screener covers, once, alphabetically — the per-stock
       // pages need a name to open and this page has no "top of the table" the
       // screener's own menu could borrow.
-      const syms = [...new Set(names.flatMap((n) => portfolios[n] || []))].sort();
+      const syms = [...new Set(universe.concat(names.flatMap((n) => portfolios[n] || [])))].sort();
       $('symPick').innerHTML = syms.map((s) => `<option value="${we(s)}">${we(s)}</option>`).join('')
         || '<option value="">No tickers yet</option>';
       paintSymbolLinks();
@@ -425,21 +427,22 @@
       const symbol = $('sym').value.trim().toUpperCase();
       const target = $('addTo').value;
       if (!symbol) return $('sym').focus();
-      if (!target) return say('addSaid', 'Make a portfolio on the screener first.', 'bad');
       $('addBtn').disabled = true;
       say('addSaid', 'Adding…');
       try {
-        const r = await api('POST', `/api/portfolios/${encodeURIComponent(target)}/tickers`, { symbol });
+        const r = await api('POST', '/api/universe', { symbol, portfolio: target || undefined });
         portfolios = r.portfolios || portfolios;
+        universe = r.universe || universe;
         paintPortfolios();
         $('sym').value = '';
         $('sym').focus();
         // A name coming back empty is the earliest hint of a typo: adding a
         // ticker does not pull prices, so this lookup is the only thing that
         // touches the symbol before the next refresh.
+        const where = target ? (r.added ? `added to the screener and to "${target}"` : `added to "${target}"`) : 'added to the screener';
         say('addSaid', r.name
-          ? `${symbol} — ${r.name} — added to "${target}". Run Refresh to pull its prices.`
-          : `${symbol} added to "${target}", but the feed returned no company name. Check the spelling.`,
+          ? `${symbol} — ${r.name} — ${where}. Run Fill missing or Refresh to pull its data.`
+          : `${symbol} ${where}, but the feed returned no company name. Check the spelling.`,
           r.name ? 'good' : 'bad');
       } catch (err) {
         say('addSaid', err.message, 'bad');
@@ -550,6 +553,7 @@
       try {
         const r = await api('GET', '/api/portfolios');
         portfolios = r.portfolios || {};
+        universe = r.universe || [];
         paintPortfolios();
       } catch (err) {
         say('addSaid', 'Could not read the portfolios: ' + err.message, 'bad');

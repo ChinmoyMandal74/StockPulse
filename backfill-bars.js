@@ -67,12 +67,11 @@ async function pool(items, size, fn) {
     process.exit(1);
   }
 
-  const portfolios = await store.readPortfolios();
-  const all = [...new Set(Object.values(portfolios).flat().map((x) => String(x).trim().toUpperCase()))];
+  const all = [...new Set((await store.readUniverse()).map((x) => String(x).trim().toUpperCase()))];
   const symbols = ONLY.length ? all.filter((s) => ONLY.includes(s)) : all;
   if (ONLY.length) {
     const missing = ONLY.filter((s) => !all.includes(s));
-    if (missing.length) console.log(`note: not in any portfolio, skipping — ${missing.join(', ')}`);
+    if (missing.length) console.log(`note: not in the screener, skipping — ${missing.join(', ')}`);
   }
 
   const before = await store.barsStats();
