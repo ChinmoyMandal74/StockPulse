@@ -53,7 +53,8 @@
       y1: ['oneYearPct', 'past year', '1 year'],
     };
     // Every card answers "which stocks?" the same way — a list, then
-    // optionally a sector — so it is answered in one place. The label is
+    // optionally a sector, then optionally an industry inside it — so it is
+    // answered in one place. The label is
     // built here too, since a card whose kicker disagreed with its rows
     // would be worse than no kicker at all.
     function scopeOf(scopeKey, sectorKey) {
@@ -70,10 +71,15 @@
         label = v;
       }
       const sec = O[sectorKey] || 'All';
-      if (sec && sec !== 'All') {
-        rows = rows.filter((x) => x.sector === sec);
-        label = v === 'All' ? sec : `${label} \u00b7 ${sec}`;
-      }
+      // The industry control sits under each sector one and shares its
+      // prefix (movSector -> movIndustry). A host without it filters nothing.
+      const ind = O[sectorKey.replace(/Sector$/, 'Industry')] || 'All';
+      if (sec && sec !== 'All') rows = rows.filter((x) => x.sector === sec);
+      if (ind && ind !== 'All') rows = rows.filter((x) => x.industry === ind);
+      // The kicker names the narrowest cut: an industry already implies its
+      // sector, and "Technology · Semiconductors" costs width a card lacks.
+      const cut = ind && ind !== 'All' ? ind : sec && sec !== 'All' ? sec : null;
+      if (cut) label = v === 'All' ? cut : `${label} \u00b7 ${cut}`;
       return { rows, label };
     }
     const movScopeRows = () => scopeOf('movScope', 'movSector');
@@ -1632,6 +1638,10 @@
     MOV_PERIODS,
     // the sectors actually present, so a picker can never offer an empty one
     sectors: (rows) => [...new Set((rows || []).map((x) => x.sector).filter(Boolean))].sort(),
+    // the industries present, inside one sector when one is given
+    industries: (rows, sector) => [...new Set((rows || [])
+      .filter((x) => !sector || sector === 'All' || x.sector === sector)
+      .map((x) => x.industry).filter(Boolean))].sort(),
     CHART_WINDOWS,
     // shape only — the host builds its own slide picker from this
     topics: () => TOPICS.map((t) => ({ id: t.id, name: t.name, slides: t.slides.map((sl) => sl.kind) })),

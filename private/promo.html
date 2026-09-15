@@ -139,6 +139,8 @@
         <select id="movScope"><option value="All">All screened</option></select>
         <label>Sector</label>
         <select id="movSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="movIndustry"><option value="All">All industries</option></select>
       </div>
 
       <div id="chtBox">
@@ -161,6 +163,8 @@
           <select id="chtScope"><option value="All">All screened</option></select>
           <label>Sector</label>
           <select id="chtSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="chtIndustry"><option value="All">All industries</option></select>
         </div>
         <div id="chtLinesWrap">
           <label>How many lines</label>
@@ -201,6 +205,8 @@
         <select id="spkScope"><option value="All">All screened</option></select>
         <label>Sector</label>
         <select id="spkSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="spkIndustry"><option value="All">All industries</option></select>
       </div>
 
       <div id="rngBox">
@@ -237,6 +243,8 @@
         <select id="rngScope"><option value="All">All screened</option></select>
         <label>Sector</label>
         <select id="rngSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="rngIndustry"><option value="All">All industries</option></select>
       </div>
 
       <div id="advBox">
@@ -261,6 +269,8 @@
           <select id="advScope"><option value="All">All screened</option></select>
           <label>Sector</label>
           <select id="advSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="advIndustry"><option value="All">All industries</option></select>
         </div>
         <div id="advProfWrap">
           <label>Rules</label>
@@ -324,6 +334,8 @@
           <select id="fundScope"><option value="All">All screened</option></select>
           <label>Sector</label>
           <select id="fundSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="fundIndustry"><option value="All">All industries</option></select>
         </div>
       </div>
 
@@ -423,12 +435,12 @@
 
     // Every control's value, by id — the module reads no DOM, so the studio
     // hands it the panel's state and gets a card back.
-    const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector',
-      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector',
-      'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector',
-      'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector',
-      'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector',
-      'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector',
+    const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry',
+      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector', 'chtIndustry',
+      'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry',
+      'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry',
+      'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry',
+      'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
       const o = {};
@@ -439,7 +451,28 @@
       stocks, myLists, size, opts: controlOpts(), getBasket,
     });
 
+    // Each Industry picker offers only what its Sector picker's choice holds
+    // (an industry belongs to one sector), and drops a choice the new sector
+    // does not contain. Run at the top of every render, so it has already
+    // happened by the time a card reads the controls.
+    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund'];
+    const industryFor = {};
+    function syncIndustries(force) {
+      INDUSTRY_PREFIXES.forEach((p) => {
+        const sec = $(p + 'Sector').value || 'All';
+        if (!force && industryFor[p] === sec) return;
+        industryFor[p] = sec;
+        const el = $(p + 'Industry');
+        const keep = el.value;
+        const names = Cards.industries(stocks, sec);
+        el.innerHTML = '<option value="All">All industries</option>' +
+          names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+        el.value = names.includes(keep) ? keep : 'All';
+      });
+    }
+
     function render() {
+      syncIndustries(false);
       const stage = $('stage');
       stage.style.height = size.h + 'px';
       // the card's own styles key off the shape it is being drawn into
@@ -507,13 +540,13 @@
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
     $('movAdv').innerHTML = '<option value="off" selected>Don’t show</option>' +
       Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}">${esc(n)} rules</option>`).join('');
-    ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector'].forEach((id) =>
+    ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'movers') render(); }));
-    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector'].forEach((id) =>
+    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector', 'chtIndustry'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'chart') render(); }));
-    ['spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector'].forEach((id) =>
+    ['spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'sparks') render(); }));
-    ['rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector'].forEach((id) =>
+    ['rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'range') render(); }));
 
     const CARD_TOPICS = Cards.topics();
@@ -537,9 +570,9 @@
     $('advTier').innerHTML = ActionRules.ACTIONS.slice().reverse()
       .map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
     $('advProf').innerHTML = Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    ['advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector'].forEach((id) =>
+    ['advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'advboard') render(); }));
-    ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector'].forEach((id) =>
+    ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'fund') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
@@ -811,6 +844,7 @@
           $(id).innerHTML = secOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
         });
+        syncIndustries(true);
         paintControls();
         render();
         if (reload) $('reloadBtn').textContent = 'Re-pulled ✓';
