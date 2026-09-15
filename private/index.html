@@ -1089,6 +1089,7 @@
   <script src="/action.js"></script>
   <script src="/rowcard.js"></script>
   <script src="/track.js"></script>
+  <script src="/refresh-loop.js"></script>
   <script>
     // The universe exactly as the server scored it, and the view the chosen
     // weighting produces. Everything on the page reads `stocks`, so a lens
@@ -3810,75 +3811,37 @@
     // only the stocks with absent, failed or outdated company data.
     async function refreshAll(mode) {
       const fill = mode === 'missing';
+      const label = fill ? 'Filling missing company data' : 'Loading all data';
       setError('');
       if (pulling) return;          // one loop at a time, whatever started it
-      const busy = setPulling;
-      busy(true);
+      setPulling(true);
       refreshingHere = true;   // this tab drives it, so don't also poll for it
       try {
         setStatus(fill ? 'Finding stocks with missing company data…' : 'Expiring cached company data…');
         showLoading(fill ? 'Finding stocks with missing company data…'
           : 'Expiring cached company data and re-pulling it…');
-        const started = await api('POST', '/api/refresh-all' + (fill ? '?mode=missing' : ''));
-        if (fill && started && started.nothing) {
-          setStatus('Nothing missing — every stock has complete company data.');
-          render();
-          return;
-        }
-
-        // The server fetches PROFILES_PER_ROUND symbols per call, so the rounds
-        // needed scale with the universe. This used to be a flat 15, which at 84
-        // symbols left one round of slack — so a single refused round ended the
-        // run a round early and it stopped at 78 of 84 with no explanation.
-        const PROFILES_PER_ROUND = 7;   // archive-priced rounds afford 7 x 80 credits; the first (price) round pulls fewer
-        const universe = Number(started && started.total) || 0;
-        // Every round names its run, so a Stop on /refreshes ends this loop
-        // on its next round instead of it carrying on as plain refreshes.
-        const runQ = started && started.runId ? '&run=' + started.runId : '';
-        // Fill missing sizes its budget from the stocks it targets, not the universe.
-        const work = fill ? (Number(started.targets) || 0) : (universe || 84);
-        const budget = Math.ceil(work / PROFILES_PER_ROUND) + 6;
-        // A round the rate limiter refuses fetched nothing, so it must not spend
-        // the budget for a round that would have. It gets its own allowance.
-        const REFUSALS_ALLOWED = 8;
-
-        let data = null;
-        let lastLoaded = -1;
-        let stagnant = 0;
-        let rounds = 0;
-        let refusals = 0;
-
-        while (rounds < budget && refusals < REFUSALS_ALLOWED) {
-          try {
-            data = await api('GET', '/api/stocks?refresh=1' + runQ);
-          } catch (e) {
-            refusals++;
+        // The rounds, their pacing and budget live in refresh-loop.js, shared
+        // with /refreshes; this page only draws the progress and the result.
+        const r = await RefreshLoop.run(fill ? 'missing' : 'all', api, {
+          onRound: ({ loaded, total, data }) => {
+            renderRefreshNote(data.refreshing || null);
+            setStatus(`${label}… ${loaded}/${total}`);
+            showLoading(`${label} — fundamentals ${loaded} of ${total} loaded.<br>This can take a few minutes due to API rate limits. Please wait…`);
+          },
+          onWait: (why) => {
+            if (why !== 'refused') return;
             setStatus('Rate limited — waiting a minute…');
             showLoading('Waiting for the API rate limit to reset… (resumes automatically)');
-            await sleep(62000);
-            continue;
-          }
-          if (data && data.stopped) {
-            setStatus('Stopped from the Refresh runs page.');
-            break;
-          }
-          rounds++;
-          const total = data.stocks.length;
-          const loaded = data.stocks.filter((s) => s.profileFetchedAt != null).length;
-          renderRefreshNote(data.refreshing || null);
-          if (total === 0 || loaded >= total) break; // everything fetched
-          setStatus(`${fill ? 'Filling missing data' : 'Loading all data'}… ${loaded}/${total}`);
-          showLoading(`${fill ? 'Filling missing company data' : 'Loading all data'} — fundamentals ${loaded} of ${total} loaded.<br>This can take a few minutes due to API rate limits. Please wait…`);
-          if (loaded === lastLoaded) stagnant++; else stagnant = 0;
-          lastLoaded = loaded;
-          if (stagnant >= 3) break; // no further progress — stop waiting
-          await sleep(62000); // let the per-minute credit budget recover before the next batch
-        }
-
-        if (data && data.stopped) {
+          },
+        });
+        if (r.outcome === 'nothing') {
+          setStatus('Nothing missing — every stock has complete company data.');
+          render();
+        } else if (r.outcome === 'stopped') {
           await refresh({ live: false });
           setStatus('Stopped from the Refresh runs page — showing what was pulled.');
-        } else if (data) {
+        } else if (r.data) {
+          const data = r.data;
           lastUpdated = data.updatedAt;
           baseStocks = data.stocks || [];
           scoreActionRows(baseStocks);
@@ -3886,19 +3849,16 @@
           portfolios = data.portfolios || [];
           if (!tabExists(activeTab)) activeTab = 'All';
           render();
-          const freshest = stocks.reduce((m, s) => (s.latestDate && s.latestDate > m ? s.latestDate : m), '');
+          const freshest = stocks.reduce((m, x) => (x.latestDate && x.latestDate > m ? x.latestDate : m), '');
           setStatus(`Updated ${fmtTime(data.updatedAt)}${freshest ? ' · as of ' + freshest : ''}`);
         }
       } catch (err) {
         setError(err.message);
         setStatus('');
       } finally {
-        // Whether it finished or gave up, drop the shared flag so no one is left
-        // watching a notice for work that has stopped.
-        try { await api('DELETE', '/api/refresh-all'); } catch (e) { /* it ages out anyway */ }
         refreshingHere = false;
         renderRefreshNote(null);
-        busy(false);
+        setPulling(false);
       }
     }
 

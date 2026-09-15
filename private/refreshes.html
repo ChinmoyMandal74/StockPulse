@@ -57,6 +57,11 @@
 
     /* ---- the live run ---- */
     #live .core { padding: 20px 22px; border: 1px solid rgba(124, 156, 255, 0.25); }
+    #drive .core { padding: 14px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      border: 1px solid rgba(52, 211, 153, 0.3); font-size: 13px; color: var(--muted); }
+    #drive .core b { color: var(--text); }
+    #drive.warn .core { border-color: rgba(251, 191, 36, 0.4); }
+    #drive.bad .core { border-color: rgba(251, 113, 133, 0.45); }
     .live-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .live-head h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
     .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--accent);
@@ -187,6 +192,7 @@
         report it produced. Runs are kept 90 days, round detail 30.</p>
     </header>
 
+    <div id="drive" class="bezel block" hidden><div class="core" id="driveText"></div></div>
     <div id="live" class="bezel block" hidden><div class="core"></div></div>
 
     <div class="tiles block">
@@ -217,6 +223,7 @@
 
   <dialog class="run" id="runDlg"><div class="bezel"><div class="core" id="runBody"></div></div></dialog>
 
+  <script src="/refresh-loop.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const we = (t) => String(t == null ? '' : t)
@@ -571,8 +578,76 @@
       pollTimer = setTimeout(() => { if (!document.hidden) load(); else load(); }, live ? 10000 : 60000);
     }
     $('reloadBtn').addEventListener('click', () => { load(); loadHealth(); });
+    // ---- running a refresh from here ------------------------------------------
+    // The admin console's Refresh prices / Refresh all / Fill missing open this
+    // page with ?do=, and this tab drives the run through refresh-loop.js — the
+    // same loop the screener uses. The instruction is stripped from the address
+    // first: a reload that re-ran a Refresh all would be minutes and hundreds of
+    // credits.
+    let driving = false;
+    function drive(text, kind) {
+      $('drive').hidden = !text;
+      $('drive').className = 'bezel block' + (kind ? ' ' + kind : '');
+      $('driveText').innerHTML = text || '';
+    }
+    window.addEventListener('beforeunload', (e) => {
+      if (!driving) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
+
+    async function startFromConsole(what) {
+      const d = await api('GET', '/api/refresh-runs').catch(() => null);
+      if (d && d.live) {
+        drive(`<b>A refresh is already running</b> (${we(KINDS[d.live.kind] || d.live.kind)}) — not starting another. ` +
+          'Its progress is below; Stop it first if you meant to replace it.', 'warn');
+        return;
+      }
+      driving = true;
+      try {
+        if (what === 'refresh') {
+          drive('<b>Refreshing prices…</b> about ten seconds.');
+          const data = await RefreshLoop.runPlain(api);
+          drive(`<b>Prices refreshed</b> — ${(data.stocks || []).length} stocks, as of ${new Date(data.updatedAt).toLocaleTimeString()}.`);
+        } else {
+          const fill = what === 'refreshmissing';
+          const name = fill ? 'Fill missing' : 'Refresh all';
+          drive(`<b>Starting ${name}…</b> Keep this tab open until it finishes — this tab is what runs it.`);
+          const r = await RefreshLoop.run(fill ? 'missing' : 'all', api, {
+            onStart: () => load(),
+            onRound: ({ loaded, total, rounds }) => {
+              drive(`<b>${name} is running in this tab</b> — keep it open. Round ${rounds}, ` +
+                `${loaded} of ${total} profiles loaded; the next round starts in about a minute.`);
+              load();
+            },
+            onWait: (why) => {
+              if (why === 'refused') drive(`<b>${name}:</b> the API refused a round (rate limit) — retrying in a minute.`, 'warn');
+            },
+          });
+          const said = {
+            done: [`<b>${name} finished.</b> Every stock has its company data. The report email is on its way.`, ''],
+            nothing: ['<b>Nothing missing</b> — every stock already has complete company data. Nothing was started.', ''],
+            stopped: [`<b>${name} was stopped.</b> What was pulled is kept, and the report says how far it got.`, 'warn'],
+            gaveup: [`<b>${name} ended before every stock loaded</b> — see the run below for the rounds and what is left.`, 'warn'],
+          }[r.outcome];
+          drive(said[0], said[1]);
+        }
+      } catch (e) {
+        drive(`<b>The refresh could not run:</b> ${we(e.message)}`, 'bad');
+      } finally {
+        driving = false;
+        load();
+        loadHealth();
+      }
+    }
+
     load();
     loadHealth();
+    const doWhat = new URLSearchParams(location.search).get('do');
+    if (['refresh', 'refreshall', 'refreshmissing'].includes(doWhat)) {
+      history.replaceState(null, '', location.pathname);
+      startFromConsole(doWhat);
+    }
     const deepRun = Number(new URLSearchParams(location.search).get('run'));
     if (deepRun) openRun(deepRun);
   </script>

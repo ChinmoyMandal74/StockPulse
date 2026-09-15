@@ -171,16 +171,17 @@
       <div class="sec-head"><h2>Data</h2><p>Pulling prices, adding tickers, looking at a past date.</p></div>
       <div class="bezel card"><div class="core">
         <div class="grid">
-          <!-- Both refreshes RUN ON THE SCREENER, which owns the round loop, the
-               progress banner and the table it is refreshing. A second copy of
-               that loop here is exactly the drift this codebase keeps avoiding,
+          <!-- The refreshes run on /refreshes (since 2026-09-15), which shows the
+               run as it happens; the round loop itself is refresh-loop.js, shared
+               with the screener, so there is still one copy of it. Earlier note:
+               A second copy of that loop here is exactly the drift this codebase keeps avoiding,
                so these are deep links that start it there. -->
-          <a class="row warm" href="/?do=refresh">
+          <a class="row warm" href="/refreshes?do=refresh">
             <svg class="ic" aria-hidden="true"><use href="#i-refresh" /></svg>
             <span class="txt"><span class="nm">Refresh prices</span>
               <span class="hint">Re-pull today's bars and recompute the ranking. Seconds. Opens the screener and runs there.</span></span>
           </a>
-          <a class="row hot" href="/?do=refreshall">
+          <a class="row hot" href="/refreshes?do=refreshall">
             <svg class="ic" aria-hidden="true"><use href="#i-refresh-all" /></svg>
             <span class="txt"><span class="nm">Refresh all</span>
               <span class="hint">Re-pull every company profile, not just the night's rotation. Paced around the rate limit and much longer than the nightly job — leave the tab open.</span></span>
@@ -200,7 +201,7 @@
             <span class="txt"><span class="nm">Refresh runs</span>
               <span class="hint">Every refresh, manual or nightly: what is running now, whether last night ran, rounds, credits and the report for each.</span></span>
           </a>
-          <a class="row" id="fillRow" href="/?do=refreshmissing">
+          <a class="row" id="fillRow" href="/refreshes?do=refreshmissing">
             <svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>
             <span class="txt"><span class="nm">Fill missing</span>
               <span class="hint" id="fillHint">Re-pull only the stocks whose company data is missing, failed, or older than a field the app now stores. Checking…</span></span>
