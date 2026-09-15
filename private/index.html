@@ -979,9 +979,8 @@
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="shortName" title="What a person would call it — shortened from the legal name by rule, and editable by the owner. The full legal name is in the tooltip on each row.">Name</th>
         <th class="group grp-info" data-group="info" colspan="6">Info</th>
-        <th class="group grp-rank" data-group="rank" colspan="2">Scores</th>
+        <th class="group grp-rank" data-group="rank" colspan="3">Scores</th>
         <th class="group grp-act" data-group="act" colspan="10">Advice</th>
-        <th class="group grp-pmom" data-group="pmom" colspan="1">Price Momentum</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="3">Long-term %</th>
@@ -1001,6 +1000,7 @@
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
         <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
         <th class="grp-rank ta-c" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
+        <th class="grp-rank ta-c" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
         <th class="grp-rank ta-c" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all and Overall falls back to momentum. Hover a cell for the factor split and the confidence figure.">Qual.</th>
         <th class="grp-act left" data-key="companyType" title="Established, Early or ETF — decided from raw fundamentals (size, profitability, cash flow, sane pricing), because an early-stage company must be judged on different rules than an established one. Recomputed daily, so a company migrates the day it earns it.">Type</th>
         <th class="grp-act left" data-key="actionTrend" title="The price-trend reading, one word — the most severe condition that holds, on the same ladder the rules check: Breakdown → Downtrend → Below 200D → Above 200D → Strong uptrend. Trend answers whether you may.">Trend</th>
@@ -1012,7 +1012,6 @@
         <th class="grp-act left av-col avx av-aggressive" data-key="av:Aggressive" title="Aggressive's advice: stops widen to −15% (Early −8%), chase to +35%, blackout 3 days, Early reaches Buy on OK fundamentals.">Aggressive</th>
         <th class="grp-act left av-col avx av-max-risk" data-key="av:Max Risk" title="Max Risk's advice: widest stops (−20%), chase caps nearly off, Buy to −30% below the high. Still never buys below the 200D.">Max Risk</th>
         <th class="grp-act left av-col avx av-dip-buyer" data-key="av:Dip Buyer" title="Dip Buyer's advice: may buy below the 200D (capped at Buy with Risk). The research log does not endorse the mode.">Dip Buyer</th>
-        <th class="grp-pmom ta-l" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
         <th class="grp-chart" data-col="spark90" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
         <th class="grp-short" data-key="todayPct">Today</th>
         <th class="grp-short" data-key="yesterdayPct">YDAY</th>
@@ -1094,11 +1093,11 @@
     let signedIn = true;       // has a live session (or the app is open/local)
     let currentUser = null;    // { email, role } once signed in
 
-    const GROUPS = ['info', 'rank', 'act', 'pmom', 'chart', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
+    const GROUPS = ['info', 'rank', 'act', 'chart', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund'];
     const GROUP_COLORS = {
       // Warm neutral, and the only unused region of the palette: every other
       // group is a family of numbers, this one is a picture.
-      info: '#7c9cff', rank: '#a3e635', act: '#5eead4', pmom: '#34d399', chart: '#a8a29e',
+      info: '#7c9cff', rank: '#a3e635', act: '#5eead4', chart: '#a8a29e',
       short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
       rel:  '#22d3ee', trend: '#fbbf24', vol:  '#f472b6',
       size: '#94a3b8', fund: '#fb7185',
@@ -1106,7 +1105,7 @@
     // Labels live here so adding a group later is: append to GROUPS, give it a
     // colour and a label, and tag the <th>/<td> cells with .grp-<id>.
     const GROUP_LABELS = {
-      info: 'Info', rank: 'Scores', act: 'Advice', pmom: 'Price Momentum', chart: 'Chart',
+      info: 'Info', rank: 'Scores', act: 'Advice', chart: 'Chart',
       short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
       rel: 'Relative', trend: 'Trend', vol: 'Volume',
       size: 'Size', fund: 'Fundamentals',
@@ -2296,6 +2295,7 @@
           <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
           ${earningsCell(s, cacheTitle)}
           ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-rank ta-c lens-col')}
+          ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-rank ta-c lens-col')}
           ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank ta-c')}
           ${typeCell(s)}
           ${stateCell(s.actionTrend, TREND_DANGER, 'trend')}
@@ -2303,7 +2303,6 @@
           ${stateCell(s.actionFund, FUND_DANGER, 'fund')}
           ${guardsCell(s)}
           ${adviceCell(s, 'Balanced')}${adviceCell(s, 'Trend Rider')}${adviceCell(s, 'Aggressive')}${adviceCell(s, 'Max Risk')}${adviceCell(s, 'Dip Buyer')}
-          ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-pmom ta-l lens-col')}
           <td class="spark grp-chart" data-spark="${s.symbol}">${sparkCache[s.symbol] || ''}</td>
           ${pctCell(s.todayPct, 'grp-short', liveTitle)}
           ${pctCell(s.yesterdayPct, 'grp-short', liveTitle)}
