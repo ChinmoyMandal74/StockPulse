@@ -598,6 +598,27 @@
     dialog.modal .note.err { color: var(--red); }
     dialog.modal .note.ok { color: var(--green); }
 
+    /* ---- column views ------------------------------------------------------ */
+    .vw-lock { color: var(--faint); margin-left: 2px; }
+    .pick-hint.vw-h { text-transform: uppercase; letter-spacing: 0.16em; font-size: 9.5px; color: var(--faint); padding-top: 6px; }
+    .vw-lockbox { cursor: default; opacity: 0.8; }
+    #sortNote { white-space: nowrap; }
+    dialog.modal#viewDialog { width: min(640px, calc(100vw - 32px)); }
+    #viewDialog .vd-tools { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
+    #viewDialog .vd-tools input { flex: 1; }
+    #viewDialog .vd-count { font-size: 12px; color: var(--muted); white-space: nowrap; font-family: var(--mono); }
+    #viewDialog .vd-list { max-height: min(46vh, 440px); overflow: auto; padding-right: 4px;
+      border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
+    #viewDialog .vd-group { padding: 10px 0 6px; }
+    #viewDialog .vd-group + .vd-group { border-top: 1px solid rgba(255, 255, 255, 0.04); }
+    #viewDialog label.vd-gh, #viewDialog label.vd-col { display: flex; align-items: center; gap: 8px; margin: 0;
+      text-transform: none; letter-spacing: 0; cursor: pointer; }
+    #viewDialog label.vd-gh { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--tint, var(--muted)); margin-bottom: 6px; }
+    #viewDialog .vd-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 12px; padding-left: 22px; }
+    #viewDialog label.vd-col { font-size: 12.5px; color: var(--text); padding: 3px 0; }
+    #viewDialog input[type="checkbox"] { width: auto; padding: 0; margin: 0; box-shadow: none; accent-color: var(--accent); flex: none; }
+
     /* ==========================================================================
        Responsive collapse
        ========================================================================== */
@@ -755,8 +776,9 @@
 
         <div class="picker" id="colPicker" data-open="0">
           <button class="btn picker-btn" id="colBtn" aria-haspopup="listbox" aria-expanded="false"></button>
-          <div class="picker-menu" id="colMenu" role="listbox" aria-multiselectable="true" aria-label="Column groups"></div>
+          <div class="picker-menu" id="colMenu" role="listbox" aria-multiselectable="true" aria-label="Column views"></div>
         </div>
+        <span class="lenschip" id="sortNote" hidden></span>
         <div class="picker" id="picker" data-open="0">
           <button class="btn picker-btn" id="pickerBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="pickerMenu" role="listbox" aria-label="Portfolio"></div>
@@ -885,6 +907,7 @@
       </div>
     </div>
 
+    <style id="viewStyle"></style>
     <div class="bezel notice" id="fwdViewBar" style="display:none"></div>
 
     <div class="bezel notice" id="fltBar" hidden></div>
@@ -897,6 +920,27 @@
     <div id="rowcard"></div>
     <div id="actionPanel" hidden></div>
     <div id="myPop" hidden></div>
+
+    <dialog class="modal" id="viewDialog">
+      <div class="core">
+        <h2 id="vdTitle">New view</h2>
+        <p class="sub" id="vdSub">Tick the columns this view shows. Symbol and Name are always shown, and the columns keep the table's order.</p>
+        <div class="row-f">
+          <label for="vdName">Name</label>
+          <input type="text" id="vdName" maxlength="40" autocomplete="off" />
+        </div>
+        <div class="vd-tools">
+          <input type="search" id="vdSearch" placeholder="Find a column…" autocomplete="off" aria-label="Find a column" />
+          <span class="vd-count" id="vdCount"></span>
+        </div>
+        <div class="vd-list" id="vdList"></div>
+        <div class="note" id="vdNote"></div>
+        <div class="actions">
+          <button type="button" class="btn" id="vdCancel">Cancel</button>
+          <button type="button" class="btn btn-primary" id="vdSave" style="padding:9px 15px"><span class="lbl">Save view</span></button>
+        </div>
+      </div>
+    </dialog>
 
     <dialog class="modal" id="pwDialog">
       <div class="core">
@@ -969,7 +1013,7 @@
         <th class="grp-act left av-col avx av-max-risk" data-key="av:Max Risk" title="Max Risk's advice: widest stops (−20%), chase caps nearly off, Buy to −30% below the high. Still never buys below the 200D.">Max Risk</th>
         <th class="grp-act left av-col avx av-dip-buyer" data-key="av:Dip Buyer" title="Dip Buyer's advice: may buy below the 200D (capped at Buy with Risk). The research log does not endorse the mode.">Dip Buyer</th>
         <th class="grp-pmom ta-l" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
-        <th class="grp-chart" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
+        <th class="grp-chart" data-col="spark90" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
         <th class="grp-short" data-key="todayPct">Today</th>
         <th class="grp-short" data-key="yesterdayPct">YDAY</th>
         <th class="grp-short" data-key="oneWeekPct">1W</th>
@@ -1968,6 +2012,7 @@
     function filterHidden(k) {
       const cell = fltCell[k];
       if (!cell) return false;
+      if (viewActive() && VIEW_COLS.some((c) => c.id === k)) return !viewHasCol(k);
       const grp = [...cell.classList].find((c) => c.startsWith('grp-'));
       if (grp && collapsed[grp.slice(4)]) return true;
       return false;
@@ -2222,7 +2267,7 @@
           ? `<td><button class="remove" data-remove="${s.symbol}" title="${rmTitle}" aria-label="${rmTitle}"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-x" /></svg></button></td>`
           : '<td></td>';
         if (s.error) {
-          return `<tr style="--i:${i}">
+          return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
             <td class="na" colspan="53">${s.error}</td>
             ${removeBtn}
@@ -2358,6 +2403,7 @@
       const tbody = $('tbody');
       const rows = visibleStocks();
       markSortedColumn();
+      renderSortNote();
       fltShown = rows.length;
       renderFilterTrigger();
       fillFilterSelects();
@@ -2580,8 +2626,15 @@
     // scales with how many rows are on screen, and the only part a window
     // repaint needs to redo.
     function hideCollapsedCells() {
+      const v = activeView();
       GROUPS.forEach((id) => {
-        const hide = collapsed[id];
+        // In a view, whole groups are not collapsed — the view hides columns
+        // one by one — except a group none of whose columns are in it, whose
+        // banner would otherwise sit over nothing. Forward returns keep their
+        // own rule: shown only in the forward-returns view.
+        const hide = v
+          ? (id === 'fwd' ? collapsed.fwd : !VIEW_COLS.some((c) => c.group === id && v.columns.includes(c.id)))
+          : collapsed[id];
         document.querySelectorAll('.grp-' + id).forEach((el) => { el.style.display = hide ? 'none' : ''; });
       });
     }
@@ -2601,6 +2654,7 @@
           hdr.style.borderBottom = `1px solid color-mix(in srgb, ${c} 45%, transparent)`;
         }
       });
+      applyView();
       renderColumnMenu();
       updateStickyOffsets();
       applyAdviceCols();
@@ -2743,6 +2797,7 @@
         const savedC = res && res.prefs && Screens.cleanWeights(res.prefs.customWeights);
         if (savedC) customWeights = Object.assign(Screens.defaultWeights(), savedC);
         if (res && res.prefs && res.prefs.tickerOff === true) tickerOff = true;
+        if (res && res.prefs && /^(standard|[a-z0-9]{8})$/.test(String(res.prefs.activeView || ''))) activeViewId = res.prefs.activeView;
         if (res && res.prefs && res.prefs.filterRow === true) {
           filterRowOn = true;
           document.body.classList.add('filtering');
@@ -2773,54 +2828,309 @@
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
           prefs: { collapsed: out, weights: weightPreset, customWeights,
-            filterRow: filterRowOn, tickerOff },
+            filterRow: filterRowOn, tickerOff, activeView: activeViewId },
         }).catch(() => {});
       }, 600);
     }
 
-    // Multi-select column-group menu. Rebuilt on every applyGroups() so the trigger
-    // count and the row states stay in step; the menu stays open while toggling.
+    // ---- column views -----------------------------------------------------------
+    // A view is a named set of columns, switched with one click. Standard is the
+    // full table, grouped, collapsed from this same menu as before. Starter
+    // views are shared by everyone and edited only by the owner (a lock says
+    // so); members keep up to ten of their own. Columns keep the table's order
+    // (v1): a view hides columns rather than rebuilding the table, through
+    // nth-child rules in #viewStyle, which the windowed rows and the filter
+    // row pick up without any per-cell work.
+    let VIEW_COLS = [];   // [{ id, label, group, idx }] — row-2 headers in order, forward returns excluded
+    let views = { shared: [], mine: [], max: 10, canEditShared: false, canEditMine: false };
+    let activeViewId = 'standard';
+    let viewEdit = null;  // { scope: 'mine' | 'shared', id, selected: Set }
+
+    function buildViewCols() {
+      const r2 = [...document.querySelectorAll('thead tr:nth-child(2) > th')];
+      VIEW_COLS = r2.map((th, idx) => ({
+        id: th.dataset.col || th.dataset.fkey || th.dataset.key || null,
+        label: headerText(th),
+        group: ([...th.classList].find((c) => c.startsWith('grp-')) || '').slice(4),
+        idx,
+      })).filter((c) => c.id && c.group !== 'fwd');
+    }
+    const findView = (id) => views.shared.find((v) => v.id === id) || views.mine.find((v) => v.id === id) || null;
+    const activeView = () => (activeViewId === 'standard' ? null : findView(activeViewId));
+    const viewActive = () => !!activeView();
+    const viewHasCol = (id) => { const v = activeView(); return !v || v.columns.includes(id); };
+    const isSharedView = (id) => views.shared.some((v) => v.id === id);
+    const knownCols = (v) => v.columns.filter((id) => VIEW_COLS.some((c) => c.id === id));
+
+    async function loadViews() {
+      try {
+        const d = await api('GET', '/api/views');
+        views = { shared: d.shared || [], mine: d.mine || [], max: d.max || 10,
+          canEditShared: !!d.canEditShared, canEditMine: !!d.canEditMine };
+      } catch (e) { /* Standard still works */ }
+      if (activeViewId !== 'standard' && !findView(activeViewId)) activeViewId = 'standard';
+    }
+
+    // The hide rules for the active view, and each group banner spanning only
+    // the columns it still has. Body cells sit two after their header (Symbol
+    // and Name come first); the filter row is built in the body's order.
+    function applyView() {
+      const v = activeView();
+      const rules = [];
+      if (v) {
+        const want = new Set(v.columns);
+        for (const c of VIEW_COLS) {
+          if (want.has(c.id)) continue;
+          rules.push(`thead tr:nth-child(2) > th:nth-child(${c.idx + 1})`,
+            `#tbody > tr:not(.padrow):not(.errrow) > td:nth-child(${c.idx + 3})`,
+            `thead tr.filterrow > th:nth-child(${c.idx + 3})`);
+        }
+      }
+      $('viewStyle').textContent = rules.length ? rules.join(',\n') + ' { display: none; }' : '';
+      document.body.classList.toggle('viewing', !!v);
+      GROUPS.forEach((g) => {
+        const hdr = document.querySelector(`th.group[data-group="${g}"]`);
+        if (!hdr) return;
+        if (!hdr.dataset.span) hdr.dataset.span = hdr.getAttribute('colspan');
+        if (!v || g === 'fwd') { hdr.colSpan = Number(hdr.dataset.span); return; }
+        hdr.colSpan = Math.max(1, VIEW_COLS.filter((c) => c.group === g && v.columns.includes(c.id)).length);
+      });
+    }
+
+    function renderSortNote() {
+      const note = $('sortNote');
+      const col = VIEW_COLS.find((c) => c.id === sortKey);
+      const off = viewActive() && col && !viewHasCol(sortKey);
+      note.hidden = !off;
+      if (off) {
+        note.textContent = `Sorted by ${col.label} — not in this view`;
+        note.title = 'The sort still applies. Pick another column header, or add this column to the view.';
+      }
+    }
+
+    function setActiveView(id) {
+      activeViewId = id === 'standard' || findView(id) ? id : 'standard';
+      window.track && track('picker', 'view:' + (activeViewId === 'standard' ? 'standard' : (findView(activeViewId) || {}).name));
+      savePrefs();
+      closePickers();
+      render();
+      paintWindow(true);
+    }
+
     function renderColumnMenu() {
+      const v = activeView();
       const shown = GROUPS.filter((id) => !collapsed[id]).length;
+      const lockIc = '<svg class="ic ic-sm vw-lock" aria-hidden="true"><use href="#i-lock" /></svg>';
+      const locked = v && isSharedView(v.id) && !views.canEditShared;
       $('colBtn').innerHTML =
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-columns" /></svg>' +
-        '<span class="picker-label">Columns</span>' +
-        `<span class="count">${shown}/${GROUPS.length}</span>` +
+        '<span class="picker-label">View</span>' +
+        `<span class="count">${v ? we(v.name) : `Standard · ${shown}/${GROUPS.length}`}</span>` +
+        (locked ? lockIc : '') +
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
-      $('colBtn').title = `${shown} of ${GROUPS.length} column groups shown`;
+      $('colBtn').title = v
+        ? `${v.name}: ${knownCols(v).length} columns${locked ? ' — a starter view, not editable' : ''}`
+        : `Standard: ${shown} of ${GROUPS.length} column groups shown`;
 
-      const rows = GROUPS.map((id) => {
-        const on = !collapsed[id];
-        const c = GROUP_COLORS[id] || 'var(--accent)';
-        const dot = `<span class="tdot" style="background:${c};${on ? `box-shadow:0 0 10px ${c}` : 'opacity:.35'}"></span>`;
-        // A button cannot nest inside a button, so the toggle and the jump are
-        // siblings in a flex row rather than one control doing two jobs.
+      const tool = (attr, icon, title) =>
+        `<button class="jump" ${attr} title="${we(title)}" aria-label="${we(title)}" style="transform:none">` +
+        `<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#${icon}" /></svg></button>`;
+      const viewRow = (x, scope) => {
+        const on = activeViewId === x.id;
+        const editable = scope === 'mine' ? views.canEditMine : views.canEditShared;
+        const tools = editable
+          ? tool(`data-vedit="${x.id}" data-vscope="${scope}"`, 'i-pencil', `Edit ${x.name}`) +
+            tool(`data-vdel="${x.id}" data-vscope="${scope}"`, 'i-trash', `Delete ${x.name}`)
+          : `<span class="jump vw-lockbox" title="A starter view — only the owner can change it" aria-label="Not editable">` +
+            '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-lock" /></svg></span>' +
+            (views.canEditMine ? tool(`data-vcopy="${x.id}"`, 'i-plus', `Copy ${x.name} to your views`) : '');
         return '<div class="pick-row">' +
-          `<button class="pick ${on ? 'on' : ''}" data-group="${id}" role="option" ` +
-          `aria-selected="${on}" style="--tint:${c}">` + dot +
-          `<span class="nm">${GROUP_LABELS[id] || id}</span>` +
-          '<svg class="ic ic-sm chk" aria-hidden="true"><use href="#i-check" /></svg></button>' +
-          `<button class="jump" data-jump="${id}" ${on ? '' : 'disabled'} ` +
-          `title="Scroll to ${GROUP_LABELS[id] || id}" aria-label="Scroll to ${GROUP_LABELS[id] || id}">` +
-          '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg></button>' +
-          '</div>';
-      });
-      $('colMenu').innerHTML = '<div class="picker-inner">' + rows.join('') +
-        '<div class="pick-sep"></div><div class="pick-foot">' +
-        '<button class="pick-mini" data-all="1">Show all</button>' +
-        '<button class="pick-mini" data-all="0">Hide all</button></div>' +
-        '<div class="pick-hint">arrow keys scroll the table · shift for a page · home / end for the row ends</div>' +
-        '</div>';
+          `<button class="pick ${on ? 'on' : ''}" data-view="${x.id}" role="option" aria-selected="${on}">` +
+          `<span class="nm">${we(x.name)}</span><span class="count">${knownCols(x).length}</span></button>` +
+          tools + '</div>';
+      };
 
-      $('colMenu').querySelectorAll('.pick[data-group]').forEach((b) => {
+      let html = '<div class="picker-inner">' +
+        `<button class="pick ${v ? '' : 'on'}" data-view="standard" role="option" aria-selected="${!v}">` +
+        '<span class="nm">Standard<em>Every column, grouped</em></span></button>' +
+        '<div class="pick-sep"></div><div class="pick-hint vw-h">Starter views</div>' +
+        (views.shared.length ? views.shared.map((x) => viewRow(x, 'shared')).join('') : '<div class="pick-hint">None yet.</div>') +
+        (views.canEditShared ? '<button class="pick" data-vnew="shared"><span class="nm">+ New starter view</span></button>' : '');
+      if (views.canEditMine) {
+        html += '<div class="pick-sep"></div><div class="pick-hint vw-h">Your views</div>' +
+          views.mine.map((x) => viewRow(x, 'mine')).join('') +
+          (views.mine.length < views.max
+            ? '<button class="pick" data-vnew="mine"><span class="nm">+ New view</span></button>'
+            : `<div class="pick-hint">You have ${views.max} views — delete one to add another.</div>`);
+      }
+      if (!v) {
+        const rows = GROUPS.map((id) => {
+          const on = !collapsed[id];
+          const c = GROUP_COLORS[id] || 'var(--accent)';
+          const dot = `<span class="tdot" style="background:${c};${on ? `box-shadow:0 0 10px ${c}` : 'opacity:.35'}"></span>`;
+          // A button cannot nest inside a button, so the toggle and the jump are
+          // siblings in a flex row rather than one control doing two jobs.
+          return '<div class="pick-row">' +
+            `<button class="pick ${on ? 'on' : ''}" data-group="${id}" role="option" ` +
+            `aria-selected="${on}" style="--tint:${c}">` + dot +
+            `<span class="nm">${GROUP_LABELS[id] || id}</span>` +
+            '<svg class="ic ic-sm chk" aria-hidden="true"><use href="#i-check" /></svg></button>' +
+            `<button class="jump" data-jump="${id}" ${on ? '' : 'disabled'} ` +
+            `title="Scroll to ${GROUP_LABELS[id] || id}" aria-label="Scroll to ${GROUP_LABELS[id] || id}">` +
+            '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg></button>' +
+            '</div>';
+        });
+        html += '<div class="pick-sep"></div><div class="pick-hint vw-h">Column groups</div>' + rows.join('') +
+          '<div class="pick-foot">' +
+          '<button class="pick-mini" data-all="1">Show all</button>' +
+          '<button class="pick-mini" data-all="0">Hide all</button></div>';
+      } else {
+        html += '<div class="pick-sep"></div><div class="pick-hint">Symbol and Name are always shown. ' +
+          'Pick Standard to show or hide whole groups.</div>';
+      }
+      html += '<div class="pick-hint">arrow keys scroll the table · shift for a page · home / end for the row ends</div></div>';
+      $('colMenu').innerHTML = html;
+
+      const menu = $('colMenu');
+      menu.querySelectorAll('.pick[data-view]').forEach((b) =>
+        b.addEventListener('click', (e) => { e.stopPropagation(); setActiveView(b.dataset.view); }));
+      menu.querySelectorAll('[data-vnew]').forEach((b) =>
+        b.addEventListener('click', (e) => { e.stopPropagation(); closePickers(); openViewEditor(b.dataset.vnew, null, null); }));
+      menu.querySelectorAll('[data-vedit]').forEach((b) =>
+        b.addEventListener('click', (e) => { e.stopPropagation(); closePickers(); openViewEditor(b.dataset.vscope, b.dataset.vedit, null); }));
+      menu.querySelectorAll('[data-vcopy]').forEach((b) =>
+        b.addEventListener('click', (e) => { e.stopPropagation(); closePickers(); openViewEditor('mine', null, b.dataset.vcopy); }));
+      menu.querySelectorAll('[data-vdel]').forEach((b) =>
+        b.addEventListener('click', (e) => { e.stopPropagation(); deleteView(b.dataset.vscope, b.dataset.vdel); }));
+      menu.querySelectorAll('.pick[data-group]').forEach((b) => {
         b.addEventListener('click', (e) => { e.stopPropagation(); toggleGroup(b.dataset.group); });
       });
-      $('colMenu').querySelectorAll('.pick-mini[data-all]').forEach((b) => {
+      menu.querySelectorAll('.pick-mini[data-all]').forEach((b) => {
         b.addEventListener('click', (e) => { e.stopPropagation(); setAllGroups(b.dataset.all === '1'); });
       });
-      $('colMenu').querySelectorAll('.jump[data-jump]').forEach((b) => {
+      menu.querySelectorAll('.jump[data-jump]').forEach((b) => {
         b.addEventListener('click', (e) => { e.stopPropagation(); scrollToGroup(b.dataset.jump); });
       });
+    }
+
+    // ---- the view editor -----------------------------------------------------------
+    function currentVisibleCols() {
+      const v = activeView();
+      if (v) return knownCols(v);
+      return VIEW_COLS.filter((c) => !collapsed[c.group]).map((c) => c.id);
+    }
+
+    function newViewId() {
+      const a = new Uint8Array(8);
+      crypto.getRandomValues(a);
+      return [...a].map((x) => 'abcdefghijklmnopqrstuvwxyz0123456789'[x % 36]).join('');
+    }
+
+    function vdNote(text, kind) {
+      const n = $('vdNote');
+      n.className = 'note' + (text ? ' show ' + (kind || 'err') : '');
+      n.textContent = text || '';
+    }
+
+    function openViewEditor(scope, id, copyFrom) {
+      const src = id ? findView(id) : copyFrom ? findView(copyFrom) : null;
+      const start = src ? knownCols(src) : currentVisibleCols();
+      viewEdit = { scope, id: id || null, selected: new Set(start) };
+      $('vdTitle').textContent = id ? `Edit “${src.name}”`
+        : scope === 'shared' ? 'New starter view' : copyFrom ? 'Copy to your views' : 'New view';
+      $('vdSub').textContent = (scope === 'shared'
+        ? 'A starter view: every account sees it and only you can change it. '
+        : '') + 'Tick the columns this view shows. Symbol and Name are always shown, and the columns keep the table\u2019s order.';
+      $('vdName').value = id ? src.name : copyFrom ? `${src.name} (copy)` : '';
+      $('vdSearch').value = '';
+      vdNote('');
+      paintViewList();
+      $('viewDialog').showModal();
+      $('vdName').focus();
+    }
+
+    function paintViewList() {
+      const q = $('vdSearch').value.trim().toLowerCase();
+      const html = GROUPS.filter((g) => g !== 'fwd').map((g) => {
+        const cols = VIEW_COLS.filter((c) => c.group === g &&
+          (!q || c.label.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)));
+        if (!cols.length) return '';
+        const all = cols.every((c) => viewEdit.selected.has(c.id));
+        return `<div class="vd-group"><label class="vd-gh" style="--tint:${GROUP_COLORS[g] || 'var(--muted)'}">` +
+          `<input type="checkbox" data-vgroup="${g}" ${all ? 'checked' : ''} /> ${we(GROUP_LABELS[g] || g)}</label>` +
+          '<div class="vd-cols">' + cols.map((c) =>
+            `<label class="vd-col"><input type="checkbox" data-vcol="${we(c.id)}" ${viewEdit.selected.has(c.id) ? 'checked' : ''} />` +
+            `${we(c.label)}</label>`).join('') + '</div></div>';
+      }).join('');
+      $('vdList').innerHTML = html || '<div class="pick-hint">No column matches that.</div>';
+      const n = viewEdit.selected.size;
+      $('vdCount').textContent = `${n} column${n === 1 ? '' : 's'}`;
+    }
+
+    async function saveViewEdit() {
+      const name = $('vdName').value.trim();
+      if (!name) return vdNote('Give the view a name.');
+      if (!viewEdit.selected.size) return vdNote('Pick at least one column.');
+      const scope = viewEdit.scope;
+      const list = (scope === 'shared' ? views.shared : views.mine).map((v) => ({ ...v }));
+      if (list.some((v) => v.name.toLowerCase() === name.toLowerCase() && v.id !== viewEdit.id)) {
+        return vdNote(`There is already a view called “${name}”.`);
+      }
+      const columns = VIEW_COLS.map((c) => c.id).filter((cid) => viewEdit.selected.has(cid));
+      let id = viewEdit.id;
+      if (id) {
+        const i = list.findIndex((v) => v.id === id);
+        if (i >= 0) list[i] = { ...list[i], name, columns };
+      } else {
+        id = newViewId();
+        list.push({ id, name, columns });
+      }
+      $('vdSave').disabled = true;
+      try {
+        const d = await api('PUT', '/api/views/' + scope, { views: list });
+        if (scope === 'shared') views.shared = d.shared || []; else views.mine = d.mine || [];
+        const saved = (scope === 'shared' ? views.shared : views.mine).find((v) => v.name.toLowerCase() === name.toLowerCase());
+        $('viewDialog').close();
+        if (saved) setActiveView(saved.id); else render();
+      } catch (e) {
+        vdNote(e.message);
+      } finally {
+        $('vdSave').disabled = false;
+      }
+    }
+
+    async function deleteView(scope, id) {
+      const v = findView(id);
+      if (!v) return;
+      const who = scope === 'shared' ? ' It is a starter view: it disappears for every account.' : '';
+      if (!confirm(`Delete the view “${v.name}”?${who}`)) return;
+      const list = (scope === 'shared' ? views.shared : views.mine).filter((x) => x.id !== id);
+      try {
+        const d = await api('PUT', '/api/views/' + scope, { views: list });
+        if (scope === 'shared') views.shared = d.shared || []; else views.mine = d.mine || [];
+        if (activeViewId === id) setActiveView('standard'); else renderColumnMenu();
+      } catch (e) {
+        alert('Could not delete the view: ' + e.message);
+      }
+    }
+
+    function wireViewEditor() {
+      $('vdSearch').addEventListener('input', paintViewList);
+      $('vdList').addEventListener('change', (e) => {
+        const el = e.target;
+        if (el.dataset.vcol) {
+          if (el.checked) viewEdit.selected.add(el.dataset.vcol); else viewEdit.selected.delete(el.dataset.vcol);
+        } else if (el.dataset.vgroup) {
+          const q = $('vdSearch').value.trim().toLowerCase();
+          VIEW_COLS.filter((c) => c.group === el.dataset.vgroup &&
+            (!q || c.label.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)))
+            .forEach((c) => (el.checked ? viewEdit.selected.add(c.id) : viewEdit.selected.delete(c.id)));
+        }
+        paintViewList();
+      });
+      $('vdCancel').addEventListener('click', () => $('viewDialog').close());
+      $('vdSave').addEventListener('click', saveViewEdit);
+      $('vdName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveViewEdit(); } });
     }
 
     // Pin the 2nd header row exactly below the 1st (heights vary with wrapped labels).
@@ -3472,7 +3782,9 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       $('tkPause').title = tickerPaused ? 'Resume the headlines' : 'Pause the headlines';
       $('tkPause').querySelector('use').setAttribute('href', tickerPaused ? '#i-play' : '#i-pause');
     });
+    buildViewCols();
     buildFilterRow();
+    wireViewEditor();
     $('fltBtn').addEventListener('click', () => setFilterRow(!filterRowOn));
 
     $('chgBtn').addEventListener('click', () => {
@@ -3979,6 +4291,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     // would show the default layout and then visibly rearrange it.
     checkAuth()
       .then(() => Promise.all([loadPrefs(), loadMyPortfolios()]))
+      .then(loadViews)
       .then(() => refresh({ live: false }))
       .then(() => {
         // The server refuses either of these to anyone else; this only stops a

@@ -2131,6 +2131,82 @@ function cleanMyPortfolios(raw, universe) {
   return out;
 }
 
+// ---- column views ------------------------------------------------------------
+// A view is a named set of screener columns (Symbol and Name are always shown,
+// so they are not listed). Starter views are shared: every account sees them,
+// only the owner edits them. Members keep up to VIEWS_MAX of their own. The
+// server does not know the screener's column list — it checks the SHAPE of
+// each id and the page ignores ids it does not recognise — so adding a column
+// never needs a matching edit here.
+const VIEWS_MAX = 10;
+const VIEW_COLUMNS_MAX = 80;
+const VIEW_ID_RE = /^[a-z0-9]{8}$/;
+const VIEW_COL_RE = /^[A-Za-z0-9:_ \-]{1,40}$/;
+const STARTER_VIEWS = [
+  { id: 'strtrend', name: 'Trend & momentum', columns: ['overallScore', 'price', 'todayPct', 'oneWeekPct', 'oneMonthPct',
+    'threeMonthPct', 'sixMonthPct', 'oneYearPct', 'momentumScore', 'spark90', 'actionTrend', 'actionEntry',
+    'vs50ma', 'vs200ma', 'maCrossRank', 'rsi', 'pctFromHigh', 'volTrend'] },
+  { id: 'strfunda', name: 'Fundamentals', columns: ['overallScore', 'price', 'sector', 'industry', 'marketCap', 'nextEarningsDate',
+    'qualityScore', 'revenueTtm', 'grossMargin', 'netIncomeTtm', 'fcfMargin', 'netCash', 'earningsGrowthYoY',
+    'revenueGrowthYoY', 'profitMargin', 'roe', 'forwardPe', 'peg'] },
+  { id: 'stradvic', name: 'Advice', columns: ['overallScore', 'price', 'todayPct', 'oneMonthPct', 'companyType', 'actionTrend',
+    'actionEntry', 'actionFund', 'actionGuards', 'av:Balanced', 'av:Trend Rider', 'av:Aggressive', 'av:Max Risk',
+    'av:Dip Buyer'] },
+];
+
+function cleanViews(input) {
+  const out = [];
+  const names = new Set();
+  const ids = new Set();
+  for (const v of Array.isArray(input) ? input : []) {
+    if (out.length >= VIEWS_MAX || !v || typeof v !== 'object') break;
+    const name = String(v.name || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40);
+    if (!name || names.has(name.toLowerCase())) continue;
+    const cols = [];
+    for (const c of Array.isArray(v.columns) ? v.columns : []) {
+      const id = String(c);
+      if (VIEW_COL_RE.test(id) && !cols.includes(id)) cols.push(id);
+      if (cols.length >= VIEW_COLUMNS_MAX) break;
+    }
+    if (!cols.length) continue;
+    let id = VIEW_ID_RE.test(String(v.id || '')) ? String(v.id) : '';
+    while (!id || ids.has(id)) id = crypto.randomBytes(6).toString('base64url').toLowerCase().replace(/[^a-z0-9]/g, '').padEnd(8, '0').slice(0, 8);
+    names.add(name.toLowerCase());
+    ids.add(id);
+    out.push({ id, name, columns: cols });
+  }
+  return out;
+}
+
+app.get('/api/views', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  await store.seedSharedViewsOnce(STARTER_VIEWS);
+  const guest = await isGuest(req);
+  const [shared, mine] = await Promise.all([
+    store.readViews('shared'),
+    guest ? Promise.resolve([]) : store.readViews(await prefsKey(req)),
+  ]);
+  res.json({ shared, mine, max: VIEWS_MAX, canEditShared: await isAdmin(req), canEditMine: !guest });
+}));
+
+app.put('/api/views/mine', requireMember, route(async (req, res) => {
+  const key = await prefsKey(req);
+  const mine = cleanViews(req.body && req.body.views);
+  // an id may not shadow a shared view's, or the active-view pref could not tell them apart
+  const sharedIds = new Set((await store.readViews('shared')).map((v) => v.id));
+  for (const v of mine) if (sharedIds.has(v.id)) v.id = crypto.randomBytes(6).toString('hex').slice(0, 8);
+  await store.writeViews(key, mine);
+  logAct(req, 'view', 'mine:' + mine.length);
+  res.json({ ok: true, mine, max: VIEWS_MAX });
+}));
+
+app.put('/api/views/shared', requireAdmin, route(async (req, res) => {
+  const shared = cleanViews(req.body && req.body.views);
+  await store.writeViews('shared', shared);
+  logAct(req, 'view', 'shared:' + shared.length);
+  res.json({ ok: true, shared });
+}));
+
 app.get('/api/my/portfolios', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const mine = await store.readUserPortfolios(await prefsKey(req));
@@ -3371,6 +3447,8 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   if (incoming.filterRow === true) out.filterRow = true;
   // The news ticker is on by default; only hiding it is stored.
   if (incoming.tickerOff === true) out.tickerOff = true;
+  // Which column view the screener opens in: 'standard' or a view's id.
+  if (/^(standard|[a-z0-9]{8})$/.test(String(incoming.activeView || ''))) out.activeView = String(incoming.activeView);
   await store.writePrefs(await prefsKey(req), out);
   res.json({ ok: true });
 }));

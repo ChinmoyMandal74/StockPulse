@@ -102,6 +102,26 @@ const SCHEMA = [
   // picker. NOT in prefs: three pages debounce-write prefs under the
   // hand-back-what-you-don't-edit rule, and a page bug there must not be
   // able to wipe someone's portfolios.
+  // Column views: a named set of screener columns. scope is 'shared' for the
+  // starter views every account sees and only the owner edits, or the
+  // account's key (email, else 'admin') for its own. Own table rather than
+  // prefs, for the reason user_portfolios is: three pages write prefs, and a
+  // bug there must not be able to wipe someone's views.
+  `create table if not exists column_views (
+     id         text primary key,
+     scope      text not null,
+     name       text not null,
+     position   integer not null,
+     columns    text not null,
+     updated_at integer
+   )`,
+  `create index if not exists idx_column_views_scope on column_views(scope, position)`,
+  // One-time markers (key -> value), so a seed runs once rather than
+  // re-appearing after the owner deletes what it created.
+  `create table if not exists app_meta (
+     key   text primary key,
+     value text
+   )`,
   `create table if not exists user_portfolios (
      user_key text not null,
      name     text not null,
@@ -1522,6 +1542,44 @@ async function pruneActivity(days = 60) {
 // Ordered like the shared portfolios: position is an explicit column because
 // the picker renders in saved order and insertion order does not survive the
 // round trip.
+// ---- column views -----------------------------------------------------------
+async function readViews(scope) {
+  await init();
+  const r = await db.execute({
+    sql: 'select id, name, columns from column_views where scope = ? order by position',
+    args: [scope],
+  });
+  return r.rows.map((x) => {
+    let columns = [];
+    try { columns = JSON.parse(x.columns); } catch { /* an unreadable row is an empty view */ }
+    return { id: x.id, name: x.name, columns };
+  });
+}
+
+// Whole-collection replace per scope, in one batch — the user_portfolios shape.
+async function writeViews(scope, views) {
+  await init();
+  const now = Date.now();
+  const stmts = [{ sql: 'delete from column_views where scope = ?', args: [scope] }];
+  (views || []).forEach((v, i) => stmts.push({
+    sql: 'insert into column_views (id, scope, name, position, columns, updated_at) values (?, ?, ?, ?, ?, ?)',
+    args: [v.id, scope, v.name, i, JSON.stringify(v.columns), now],
+  }));
+  await db.batch(stmts, 'write');
+}
+
+// Writes the starter views once, ever. The marker is what stops them coming
+// back after the owner deletes one.
+async function seedSharedViewsOnce(views) {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'views_seeded'");
+  if (r.rows.length) return false;
+  const have = await db.execute("select count(*) as n from column_views where scope = 'shared'");
+  if (!Number(have.rows[0].n)) await writeViews('shared', views);
+  await db.execute({ sql: "insert or replace into app_meta (key, value) values ('views_seeded', ?)", args: [String(Date.now())] });
+  return true;
+}
+
 async function readUserPortfolios(userKey) {
   await init();
   const r = await db.execute({
@@ -1699,6 +1757,7 @@ async function deleteUser(id) {
     stmts.push({ sql: 'delete from prefs where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from chat_usage where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from user_portfolios where user_key = ?', args: [email] });
+    stmts.push({ sql: 'delete from column_views where scope = ?', args: [email] });
   }
   await db.batch(stmts, 'write');
 }
@@ -2008,6 +2067,9 @@ module.exports = {
   expireOldestProfiles,
   expireProfilesFor,
   tableStats,
+  readViews,
+  writeViews,
+  seedSharedViewsOnce,
   snapshotUpdatedAt,
   closesBefore,
   readRecentNews,

@@ -193,12 +193,26 @@
 
       <p>There are 49 columns, arranged into groups you can collapse: <em>Info</em>, <em>Scores</em>,
         <em>Price Momentum</em>, <em>Chart</em>, <em>Short-term %</em>, <em>Long-term %</em>,
-        <em>Relative</em>, <em>Trend</em>, <em>Volume</em>, <em>Size</em> and <em>Fundamentals</em>. The <strong>Columns</strong> menu
-        turns whole groups on and off, and remembers your choice against your account.</p>
+        <em>Relative</em>, <em>Trend</em>, <em>Volume</em>, <em>Size</em> and <em>Fundamentals</em>. The <strong>View</strong> menu
+        (top left) decides what the table shows. <b>Standard</b> is every column, grouped, and lets you switch whole
+        groups on and off; your choice is remembered against your account.</p>
 
+      <h3>Column views</h3>
+      <p>A <b>view</b> is a named set of columns you can switch to with one click from the View menu. Symbol and Name are
+        always shown, and the columns keep the table's order.</p>
+      <ul>
+        <li><b>Starter views</b> (Trend &amp; momentum, Fundamentals, Advice) are shared by everyone. The lock beside
+          them means only the site owner can change them — use the <b>+</b> beside one to copy it into your own views
+          and change the copy.</li>
+        <li><b>Your views</b>: <b>+ New view</b> opens a list of every column with a search box; tick what you want, name
+          it and save. It starts from whatever the table is showing, so trimming is quicker than building. The pencil
+          edits a view, the bin deletes it. Up to ten.</li>
+        <li>The view you last used is the one the screener opens in. Filters on a column the view hides still apply
+          (the filter strip marks them), and if the table is sorted by a hidden column a note beside the menu says so.</li>
+      </ul>
       <h3>Getting around</h3>
       <ul>
-        <li>Each row in the Columns menu has a <b>jump arrow</b> that scrolls that group into view —
+        <li>In Standard, each group in the View menu has a <b>jump arrow</b> that scrolls that group into view —
           faster than dragging a scrollbar across 3,400 pixels.</li>
         <li><span class="kbd">←</span> <span class="kbd">→</span> scroll the table sideways,
           <span class="kbd">Shift</span> with them moves a page at a time, and
@@ -635,7 +649,7 @@
         how much <em>conviction</em>) · <strong>Guards</strong> (earnings soon, thin history — blank for
         most stocks, and meaningful when it is not: <em>wait</em>) · and the
         <strong>Advice</strong> itself (Strong Buy · Buy · Buy with Risk · Hold · Avoid · Sell
-        Immediately). The group collapses as one unit from the Columns menu. The model is a list of plain rules checked top
+        Immediately). The group collapses as one unit from the View menu in Standard. The model is a list of plain rules checked top
         to bottom — <strong>the first rule that matches is the answer</strong>, and hovering an Advice
         cell shows the one rule that fired. The Sell, Avoid and Hold rules always sit above the Buy
         rules, so no amount of good news can buy a stock whose trend is broken. Backtested over
@@ -720,7 +734,7 @@
       <p>The Advice group carries <strong>all five profiles as columns</strong>, so their verdicts can be
         compared row by row. <strong>Balanced is always the first</strong> — it is the shared measurement
         every other surface uses — and Trend Rider, Aggressive, Max Risk and Dip Buyer sit beside it.
-        Collapse the Advice group from the Columns menu when you do not need them. Each column carries its own colours, its own change chevron against
+        Collapse the Advice group from the View menu (Standard), or use a view that leaves them out. Each column carries its own colours, its own change chevron against
         that profile's previous trading day, and its own reason on hover; clicking a cell opens
         the rule ladder under that column's profile. There is deliberately no custom profile — a
         verdict should always be explainable by one named rule set.</p>
