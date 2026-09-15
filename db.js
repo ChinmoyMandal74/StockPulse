@@ -273,6 +273,40 @@ const SCHEMA = [
      primary key (run_id, n)
    )`,
 
+  // The news job's log: one row per batch of headline fetches (a refresh
+  // round's top-up, or a stock page fetching stale headlines), one row per
+  // symbol inside it. The /news-runs page reads these.
+  `create table if not exists news_runs (
+     id             integer primary key autoincrement,
+     trigger        text not null,
+     actor          text,
+     refresh_run_id integer,
+     provider       text,
+     started_at     integer not null,
+     ended_at       integer,
+     status         text not null default 'running',
+     attempted      integer not null default 0,
+     ok             integer not null default 0,
+     failed         integer not null default 0,
+     items          integer not null default 0,
+     added          integer not null default 0,
+     ms             integer,
+     error          text
+   )`,
+  `create index if not exists idx_news_runs_started on news_runs(started_at)`,
+  `create table if not exists news_run_items (
+     run_id  integer not null,
+     symbol  text not null,
+     at      integer not null,
+     ok      integer not null,
+     items   integer,
+     added   integer,
+     stored  integer,
+     ms      integer,
+     error   text,
+     primary key (run_id, symbol)
+   )`,
+
   // Every US listing NASDAQ publishes, as a REFERENCE LIST and nothing more.
   // It is deliberately not joined to anything: the screener's universe, its
   // sectors and its industries come from Twelve Data, and NASDAQ's taxonomy is
@@ -1719,20 +1753,146 @@ async function clearVisitors() {
 // full de-duplicated set from the provider) and stamps the fetch clock in the
 // same batch, then prunes anything older than keepDays. One batch, so a
 // half-written set cannot survive a failure.
+// Returns { added, stored }: how many of these headlines were not already
+// held for the symbol, and how many it holds afterwards. The first and last
+// statements of the same batch read both, so the log costs no extra trip.
 async function writeNews(symbol, items, keepDays = 21) {
   await init();
   const cutoff = new Date(Date.now() - keepDays * 86400000).toISOString();
+  const idOf = (x) => crypto.createHash('sha256').update(x.url).digest('hex').slice(0, 32);
   const stmts = [
+    { sql: 'select id from news where symbol = ?', args: [symbol] },
     { sql: 'delete from news where symbol = ?', args: [symbol] },
     ...items.map((x) => ({
       sql: 'insert or replace into news (id, symbol, published_at, source, headline, url) values (?, ?, ?, ?, ?, ?)',
-      args: [crypto.createHash('sha256').update(x.url).digest('hex').slice(0, 32),
-        symbol, x.published_at, x.source || null, x.headline, x.url],
+      args: [idOf(x), symbol, x.published_at, x.source || null, x.headline, x.url],
     })),
     { sql: 'delete from news where symbol = ? and published_at < ?', args: [symbol, cutoff] },
     { sql: 'insert or replace into news_state (symbol, fetched_at) values (?, ?)', args: [symbol, Date.now()] },
+    { sql: 'select count(*) as n from news where symbol = ?', args: [symbol] },
   ];
-  await db.batch(stmts, 'write');
+  const res = await db.batch(stmts, 'write');
+  const had = new Set((res[0].rows || []).map((r) => r.id));
+  const added = new Set(items.map(idOf).filter((id) => !had.has(id))).size;
+  const stored = Number(res[res.length - 1].rows[0].n);
+  return { added, stored };
+}
+
+// ---- the news job's log ---------------------------------------------------------
+
+// A batch is a dozen fetches with a 6-second timeout each, so one still
+// "running" after three minutes did not finish — on serverless that usually
+// means the instance was frozen after the response went out.
+const NEWS_RUN_ABANDON_MS = 3 * 60 * 1000;
+
+async function startNewsRun({ trigger, actor, refreshRunId, provider, attempted }) {
+  await init();
+  const r = await db.execute({
+    sql: `insert into news_runs (trigger, actor, refresh_run_id, provider, started_at, attempted)
+          values (?, ?, ?, ?, ?, ?) returning id`,
+    args: [trigger, actor || null, refreshRunId || null, provider || null, Date.now(), attempted || 0],
+  });
+  return Number(r.rows[0].id);
+}
+
+async function noteNewsItem(runId, { symbol, ok, items, added, stored, ms, error }) {
+  if (!runId) return;
+  await init();
+  await db.execute({
+    sql: `insert or replace into news_run_items (run_id, symbol, at, ok, items, added, stored, ms, error)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [runId, symbol, Date.now(), ok ? 1 : 0, items ?? null, added ?? null, stored ?? null,
+      ms ?? null, error ? String(error).slice(0, 300) : null],
+  });
+}
+
+async function finishNewsRun(runId, { status, ok, failed, items, added, ms, error }) {
+  if (!runId) return;
+  await init();
+  await db.execute({
+    sql: `update news_runs set status = ?, ended_at = ?, ok = ?, failed = ?, items = ?, added = ?, ms = ?,
+            error = ? where id = ? and status = 'running'`,
+    args: [status, Date.now(), ok || 0, failed || 0, items || 0, added || 0, ms ?? null,
+      error ? String(error).slice(0, 300) : null, runId],
+  });
+}
+
+const NEWS_RUN_COLS = `n.id, n.trigger, n.actor, n.refresh_run_id, n.provider, n.started_at, n.ended_at,
+  n.status, n.attempted, n.ok, n.failed, n.items, n.added, n.ms, n.error, r.kind as refresh_kind`;
+
+function newsRunFromRow(x) {
+  const num = (v) => (v == null ? null : Number(v));
+  return {
+    id: Number(x.id), trigger: x.trigger, actor: x.actor || null, refreshRunId: num(x.refresh_run_id),
+    refreshKind: x.refresh_kind || null, provider: x.provider || null, startedAt: num(x.started_at),
+    endedAt: num(x.ended_at), status: x.status, attempted: num(x.attempted), ok: num(x.ok),
+    failed: num(x.failed), items: num(x.items), added: num(x.added), ms: num(x.ms), error: x.error || null,
+  };
+}
+
+async function sweepNewsAbandoned() {
+  await init();
+  await db.execute({
+    sql: `update news_runs set status = 'abandoned'
+          where status = 'running' and started_at < ?`,
+    args: [Date.now() - NEWS_RUN_ABANDON_MS],
+  });
+}
+
+async function readNewsRuns(sinceMs) {
+  await sweepNewsAbandoned();
+  const r = await db.execute({
+    sql: `select ${NEWS_RUN_COLS} from news_runs n left join refresh_runs r on r.id = n.refresh_run_id
+          where n.started_at >= ? order by n.started_at desc limit 2000`,
+    args: [sinceMs || 0],
+  });
+  return r.rows.map(newsRunFromRow);
+}
+
+async function readNewsRun(id) {
+  await sweepNewsAbandoned();
+  const r = await db.execute({
+    sql: `select ${NEWS_RUN_COLS} from news_runs n left join refresh_runs r on r.id = n.refresh_run_id where n.id = ?`,
+    args: [id],
+  });
+  if (!r.rows.length) return null;
+  const run = newsRunFromRow(r.rows[0]);
+  const it = await db.execute({
+    sql: `select symbol, at, ok, items, added, stored, ms, error from news_run_items
+          where run_id = ? order by ok asc, symbol`,
+    args: [id],
+  });
+  const num = (v) => (v == null ? null : Number(v));
+  run.symbols = it.rows.map((x) => ({ symbol: x.symbol, at: num(x.at), ok: !!Number(x.ok), items: num(x.items),
+    added: num(x.added), stored: num(x.stored), ms: num(x.ms), error: x.error || null }));
+  return run;
+}
+
+// What the headline archive holds right now, for the page's health strip.
+async function newsHoldings() {
+  await init();
+  const r = await db.batch([
+    { sql: 'select count(*) as n, count(distinct symbol) as syms, max(published_at) as newest from news', args: [] },
+    { sql: 'select symbol, count(*) as n from news group by symbol', args: [] },
+  ], 'read');
+  return {
+    headlines: Number(r[0].rows[0].n),
+    symbolsWithNews: Number(r[0].rows[0].syms),
+    newestPublished: r[0].rows[0].newest || null,
+    perSymbol: Object.fromEntries(r[1].rows.map((x) => [x.symbol, Number(x.n)])),
+  };
+}
+
+// 30 days of batches, 14 of per-symbol detail.
+async function pruneNewsRuns(runDays = 30, itemDays = 14) {
+  await init();
+  const now = Date.now();
+  await db.batch([
+    { sql: 'delete from news_run_items where at < ?', args: [now - itemDays * 86400000] },
+    { sql: 'delete from news_run_items where run_id in (select id from news_runs where started_at < ?)',
+      args: [now - runDays * 86400000] },
+    { sql: 'delete from news_runs where started_at < ?', args: [now - runDays * 86400000] },
+  ], 'write');
 }
 
 async function readNews(symbol, limit = 12) {
@@ -1802,6 +1962,13 @@ module.exports = {
   expireOldestProfiles,
   expireProfilesFor,
   tableStats,
+  startNewsRun,
+  noteNewsItem,
+  finishNewsRun,
+  readNewsRuns,
+  readNewsRun,
+  newsHoldings,
+  pruneNewsRuns,
   startRun,
   noteRound,
   finishRun,

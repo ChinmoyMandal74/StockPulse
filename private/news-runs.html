@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>News Runs — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(244, 114, 182, 0.08), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: #f472b6; box-shadow: 0 0 8px #f472b6; }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    h1 .w2 { background: linear-gradient(100deg, #9aa4b6 10%, #5d6474 92%);
+             -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lede { margin: 16px 0 0; max-width: 64ch; font-size: 13px; line-height: 1.65; }
+    .masthead { margin: 34px 0 22px; }
+
+    .k { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .muted { color: var(--muted); }
+    .faint { color: var(--faint); }
+    .block { margin-bottom: 16px; }
+    .off { padding: 14px 18px; border-radius: 14px; border: 1px solid rgba(251, 191, 36, 0.35);
+           background: rgba(251, 191, 36, 0.08); color: var(--amber); font-size: 13px; margin-bottom: 16px; }
+
+    .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .tile .core { padding: 18px 20px; height: 100%; box-sizing: border-box; }
+    .tile .big { margin-top: 10px; font-family: var(--mono); font-size: 28px; font-weight: 500; letter-spacing: -0.03em; }
+    .tile .big small { font-size: 13px; color: var(--faint); letter-spacing: 0; font-family: var(--sans); }
+    .tile .sub { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.55; }
+    .ages { display: flex; height: 12px; border-radius: 99px; overflow: hidden; margin-top: 14px; background: rgba(255,255,255,.05); }
+    .ages span { display: block; height: 100%; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; font-size: 11px; color: var(--faint); }
+    .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+    .chart { width: 100%; height: 150px; display: block; margin-top: 12px; }
+    .chart text { fill: var(--faint); font: 10px var(--mono); }
+    .core.pad { padding: 20px 22px; }
+
+    .hist-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 4px 10px; }
+    .hist-bar h2 { margin: 0 auto 0 0; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    select {
+      appearance: none; -webkit-appearance: none; font: 500 12px var(--sans); color: var(--text);
+      background: rgba(255, 255, 255, 0.05); border: 1px solid var(--hair); border-radius: 999px;
+      padding: 6px 30px 6px 14px; cursor: pointer;
+      background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa3b2' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+    }
+    select option { background: #0d1017; }
+    .table-wrap { max-height: calc(100dvh - 260px); min-height: 240px; overflow: auto; }
+    table { font-size: 12.5px; width: 100%; border-collapse: collapse; }
+    thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-2); }
+    th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); white-space: nowrap; }
+    th { border-bottom: 1px solid var(--hair); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; color: var(--faint); }
+    td.n, th.n { text-align: right; }
+    td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    #histWrap tbody tr { cursor: pointer; }
+    #histWrap tbody tr:hover td { background: rgba(255, 255, 255, 0.03); }
+    .who { font-family: var(--mono); font-size: 11.5px; color: var(--muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+    .badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 500; border: 1px solid var(--hair-2); }
+    .s-complete { color: var(--green); border-color: rgba(52, 211, 153, 0.4); }
+    .s-running { color: var(--accent); border-color: rgba(124, 156, 255, 0.45); }
+    .s-partial { color: var(--amber); border-color: rgba(251, 191, 36, 0.4); }
+    .s-failed, .s-abandoned { color: var(--red); border-color: rgba(251, 113, 133, 0.45); }
+    .trig { font-weight: 600; }
+    .t-refresh { color: #7c9cff; }
+    .t-page { color: #f472b6; }
+    .empty { padding: 26px; color: var(--muted); font-size: 13px; }
+    .error { color: var(--red); padding: 22px; font-size: 13px; }
+    td a, .sub a { color: var(--accent); text-decoration: none; }
+    td a:hover, .sub a:hover { text-decoration: underline; }
+    .bad { color: var(--red); }
+
+    dialog.run { width: min(900px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 0;
+                 background: transparent; color: var(--text); overflow: hidden; outline: none; }
+    dialog.run::backdrop { background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); }
+    dialog.run .core { padding: 22px 24px; max-height: calc(100dvh - 60px); overflow: auto; }
+    .run-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .run-head h2 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+    .run-head .spacer { flex: 1; }
+    .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+    .cell { padding: 12px 14px; border-radius: 13px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair); }
+    .cell .v { margin-top: 6px; font-family: var(--mono); font-size: 17px; }
+    .sym td { padding: 7px 12px; }
+    td.err { white-space: normal; color: var(--red); max-width: 320px; }
+
+    @media (max-width: 900px) { .tiles { grid-template-columns: 1fr; } .grid4 { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 768px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.9 13.6A8 8 0 1 1 18.1 7.3"/><path d="M18.7 3.2v4.4h-4.4"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.4 6.4l11.2 11.2M17.6 6.4 6.4 17.6"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <a class="btn hide-sm" href="/refreshes">Refresh runs</a>
+      <button class="btn" id="reloadBtn"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Reload</button>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Admin</span>
+      <h1><span class="w1">News</span> <span class="w2">Runs</span></h1>
+      <p class="lede" id="lede">Every batch of headline fetches. Each refresh round tops up the stocks whose headlines are
+        oldest, and opening a stock page fetches its headlines when they are stale. Batches are kept 30 days,
+        per-stock detail 14.</p>
+    </header>
+
+    <div id="offNote" class="off" hidden>News is switched off (NEWS_PROVIDER=off) — nothing is being fetched.</div>
+
+    <div class="tiles block">
+      <div class="bezel tile"><div class="core" id="tCover"><span class="k">Coverage</span><div class="sub">Loading…</div></div></div>
+      <div class="bezel tile"><div class="core" id="tHeld"><span class="k">Headlines stored</span></div></div>
+      <div class="bezel tile"><div class="core" id="tWeek"><span class="k">Last 7 days</span></div></div>
+    </div>
+
+    <div class="bezel block"><div class="core pad"><span class="k">Stock fetches per day</span>
+      <span class="faint" style="font-size:11px" id="chartNote"> · last 14 days</span>
+      <svg class="chart" id="chart" viewBox="0 0 560 150" preserveAspectRatio="none"></svg>
+      <div class="legend"><span><i style="background:#34d399"></i>fetched</span><span><i style="background:#fb7185"></i>failed</span>
+        <span><i style="background:#f472b6"></i>new headlines (line)</span></div>
+    </div></div>
+
+    <div class="hist-bar">
+      <h2>History</h2>
+      <select id="fTrig" aria-label="Trigger"><option value="">Every trigger</option>
+        <option value="refresh">Refresh rounds</option><option value="page">Stock pages</option></select>
+      <select id="fStatus" aria-label="Outcome"><option value="">Every outcome</option>
+        <option value="complete">complete</option><option value="partial">partial</option>
+        <option value="failed">failed</option><option value="abandoned">abandoned</option><option value="running">running</option></select>
+    </div>
+    <div class="bezel"><div class="core" style="padding:0">
+      <div class="table-wrap" id="histWrap"><div class="empty">Loading…</div></div>
+    </div></div>
+  </main>
+
+  <dialog class="run" id="runDlg"><div class="bezel"><div class="core" id="runBody"></div></div></dialog>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    async function api(url) {
+      const res = await fetch(url, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      return data;
+    }
+    const REFRESH_KINDS = { nightly: 'Nightly', 'nightly-full': 'Nightly full', all: 'Refresh all',
+      missing: 'Fill missing', refresh: 'Refresh' };
+    const fmtNum = (n) => (n == null ? '—' : Number(n).toLocaleString());
+    const fmtWhen = (ms) => new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const fmtMs = (ms) => (ms == null ? '—' : ms < 1000 ? ms + ' ms' : (ms / 1000).toFixed(1) + 's');
+    const ago = (ms) => {
+      const h = (Date.now() - ms) / 3600000;
+      return h < 1 ? Math.max(1, Math.round(h * 60)) + ' min ago' : h < 48 ? Math.round(h) + ' h ago' : Math.round(h / 24) + ' days ago';
+    };
+    const badge = (st) => `<span class="badge s-${we(st)}">${we(st)}</span>`;
+    const triggerLabel = (r) => r.trigger === 'page' ? 'Stock page'
+      : (REFRESH_KINDS[r.refreshKind] ? REFRESH_KINDS[r.refreshKind] + ' round' : 'Refresh round');
+
+    let runs = [];
+
+    function paintHealth(h) {
+      $('offNote').hidden = !h.off;
+      const f = h.fetched;
+      const seg = [[f.day, '#34d399', 'under a day'], [f.week, '#7c9cff', '1–7 days'],
+        [f.older, '#fbbf24', 'over a week'], [f.never, '#fb7185', 'never fetched']];
+      const rounds = Math.ceil(h.universe / h.perRefresh);
+      $('tCover').innerHTML = '<span class="k">Coverage</span>' +
+        `<div class="big">${fmtNum(f.day)}<small> of ${fmtNum(h.universe)} fetched in the last day</small></div>` +
+        '<div class="ages">' + seg.filter(([n]) => n).map(([n, c, l]) =>
+          `<span style="width:${(n / Math.max(1, h.universe)) * 100}%;background:${c}" title="${n} ${l}"></span>`).join('') + '</div>' +
+        '<div class="legend">' + seg.filter(([n]) => n).map(([n, c, l]) => `<span><i style="background:${c}"></i>${n} ${l}</span>`).join('') + '</div>' +
+        `<div class="sub">Stalest: ${h.stalest ? `<a href="/stock/${encodeURIComponent(h.stalest.symbol)}" target="_blank" rel="noopener">${we(h.stalest.symbol)}</a>, ${ago(h.stalest.at)}` : '—'}. ` +
+        `${h.perRefresh} stocks per refresh round, so a full pass takes ~${rounds} rounds. Provider: ${we(h.provider === 'finnhub' ? 'Finnhub' : 'Google News RSS')}.</div>`;
+      $('tHeld').innerHTML = '<span class="k">Headlines stored</span>' +
+        `<div class="big">${fmtNum(h.headlines)}</div>` +
+        `<div class="sub">${fmtNum(h.symbolsWithNews)} of ${fmtNum(h.universe)} stocks have at least one. ` +
+        `Kept ${h.keepDays} days, up to ${h.maxPerSymbol} a stock. Newest published ${h.newestPublished ? ago(Date.parse(h.newestPublished)) : '—'}.` +
+        (h.emptyFeeds.length ? `<br><span title="${we(h.emptyFeeds.join(', '))}">${h.emptyFeeds.length} fetched but empty` +
+          ` (${we(h.emptyFeeds.slice(0, 6).join(', '))}${h.emptyFeeds.length > 6 ? '…' : ''})</span>` : '') + '</div>';
+    }
+
+    function paintWeek() {
+      const since = Date.now() - 7 * 86400000;
+      const wk = runs.filter((r) => r.startedAt >= since);
+      const ok = wk.reduce((a, r) => a + (r.ok || 0), 0);
+      const failed = wk.reduce((a, r) => a + (r.failed || 0), 0);
+      const added = wk.reduce((a, r) => a + (r.added || 0), 0);
+      const abandoned = wk.filter((r) => r.status === 'abandoned').length;
+      const rate = ok + failed ? Math.round((failed / (ok + failed)) * 100) : 0;
+      $('tWeek').innerHTML = '<span class="k">Last 7 days</span>' +
+        `<div class="big">${fmtNum(wk.length)}<small> batches</small></div>` +
+        `<div class="sub">${fmtNum(ok)} stock fetches, <span class="${failed ? 'bad' : ''}">${fmtNum(failed)} failed (${rate}%)</span>, ` +
+        `${fmtNum(added)} new headlines.` +
+        (abandoned ? `<br><span class="bad">${abandoned} batch${abandoned === 1 ? '' : 'es'} never finished</span> — the server stopped before the fetches did.` : '') +
+        '</div>';
+    }
+
+    function paintChart() {
+      const W = 560, H = 150, P = 20;
+      const days = [];
+      for (let i = 13; i >= 0; i--) days.push(new Date(Date.now() - i * 86400000).toLocaleDateString('en-CA'));
+      const agg = Object.fromEntries(days.map((d) => [d, { ok: 0, failed: 0, added: 0 }]));
+      for (const r of runs) {
+        const d = new Date(r.startedAt).toLocaleDateString('en-CA');
+        if (agg[d]) { agg[d].ok += r.ok || 0; agg[d].failed += r.failed || 0; agg[d].added += r.added || 0; }
+      }
+      const max = Math.max(12, ...days.map((d) => agg[d].ok + agg[d].failed));
+      const amax = Math.max(1, ...days.map((d) => agg[d].added));
+      const bw = (W - P) / days.length;
+      const pts = days.map((d, i) => `${P + i * bw + bw / 2},${H - 16 - (agg[d].added / amax) * (H - 32)}`);
+      $('chart').innerHTML = `<text x="0" y="10">${max}</text>` +
+        `<line x1="${P}" x2="${W}" y1="${H - 16}" y2="${H - 16}" stroke="rgba(255,255,255,.1)"/>` +
+        days.map((d, i) => {
+          const a = agg[d];
+          const hOk = (a.ok / max) * (H - 32), hBad = (a.failed / max) * (H - 32);
+          const x = P + i * bw + 3, w = Math.max(2, bw - 6);
+          return `<rect x="${x}" y="${H - 16 - hOk}" width="${w}" height="${hOk}" rx="2" fill="#34d399" opacity=".75"><title>${d}: ${a.ok} fetched, ${a.failed} failed, ${a.added} new</title></rect>` +
+            (hBad ? `<rect x="${x}" y="${H - 16 - hOk - hBad}" width="${w}" height="${hBad}" rx="2" fill="#fb7185" opacity=".85"/>` : '');
+        }).join('') +
+        `<polyline points="${pts.join(' ')}" fill="none" stroke="#f472b6" stroke-width="2" vector-effect="non-scaling-stroke"/>` +
+        `<text x="${P}" y="${H - 3}">${days[0].slice(5)}</text><text x="${W - 32}" y="${H - 3}">${days[days.length - 1].slice(5)}</text>`;
+      const total = days.reduce((a, d) => a + agg[d].added, 0);
+      $('chartNote').textContent = ` · last 14 days · ${fmtNum(total)} new headlines`;
+    }
+
+    function paintHistory() {
+      const t = $('fTrig').value, s = $('fStatus').value;
+      const rows = runs.filter((r) => (!t || r.trigger === t) && (!s || r.status === s));
+      if (!runs.length) {
+        $('histWrap').innerHTML = '<div class="empty">No news batches recorded yet. The next refresh round, or opening a stock ' +
+          'page whose headlines are more than six hours old, will appear here.</div>';
+        return;
+      }
+      if (!rows.length) { $('histWrap').innerHTML = '<div class="empty">No batches match these filters.</div>'; return; }
+      $('histWrap').innerHTML = '<table><thead><tr><th>Started</th><th>Trigger</th><th>Who</th>' +
+        '<th class="n">Stocks</th><th class="n">Headlines</th><th class="n">New</th><th class="n">Took</th><th>Outcome</th></tr></thead><tbody>' +
+        rows.map((r) => `<tr data-id="${r.id}"><td class="mono">${fmtWhen(r.startedAt)}</td>` +
+          `<td class="trig t-${we(r.trigger)}">${we(triggerLabel(r))}</td>` +
+          `<td class="who">${we(r.actor || '')}</td>` +
+          `<td class="n">${fmtNum(r.ok)}/${fmtNum(r.attempted)}${r.failed ? ` <span class="bad">(${r.failed}✕)</span>` : ''}</td>` +
+          `<td class="n">${fmtNum(r.items)}</td><td class="n">${fmtNum(r.added)}</td>` +
+          `<td class="n">${fmtMs(r.ms)}</td><td>${badge(r.status)}</td></tr>`).join('') +
+        '</tbody></table>';
+      $('histWrap').querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', () => openRun(Number(tr.dataset.id))));
+    }
+    ['fTrig', 'fStatus'].forEach((id) => $(id).addEventListener('change', paintHistory));
+
+    async function openRun(id) {
+      const dlg = $('runDlg');
+      $('runBody').innerHTML = '<div class="empty">Loading…</div>';
+      if (!dlg.open) dlg.showModal();
+      try {
+        const r = await api('/api/news-runs/' + id);
+        $('runBody').innerHTML = '<div class="run-head">' +
+          `<h2 class="t-${we(r.trigger)}">${we(triggerLabel(r))}</h2>${badge(r.status)}` +
+          `<span class="muted">${we(r.actor || '')} · batch #${r.id}</span><span class="spacer"></span>` +
+          (r.refreshRunId ? `<a class="btn" href="/refreshes?run=${r.refreshRunId}">Its refresh run</a>` : '') +
+          '<button class="btn" id="dlgClose" aria-label="Close"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-x" /></svg></button></div>' +
+          '<div class="grid4">' +
+          `<div class="cell"><span class="k">Started</span><div class="v" style="font-size:14px">${fmtWhen(r.startedAt)}</div></div>` +
+          `<div class="cell"><span class="k">Stocks</span><div class="v">${fmtNum(r.ok)}/${fmtNum(r.attempted)}</div></div>` +
+          `<div class="cell"><span class="k">Headlines · new</span><div class="v">${fmtNum(r.items)} · ${fmtNum(r.added)}</div></div>` +
+          `<div class="cell"><span class="k">Took</span><div class="v">${fmtMs(r.ms)}</div></div>` +
+          '</div>' +
+          (r.error ? `<p class="bad" style="font-size:12.5px">First error: ${we(r.error)}</p>` : '') +
+          (r.symbols && r.symbols.length
+            ? '<table class="sym"><thead><tr><th>Stock</th><th>Result</th><th class="n">Fetched</th><th class="n">New</th>' +
+              '<th class="n">Stored now</th><th class="n">Took</th><th>Error</th></tr></thead><tbody>' +
+              r.symbols.map((x) => `<tr><td><a href="/stock/${encodeURIComponent(x.symbol)}" target="_blank" rel="noopener">${we(x.symbol)}</a></td>` +
+                `<td>${x.ok ? '<span style="color:var(--green)">ok</span>' : '<span class="bad">failed</span>'}</td>` +
+                `<td class="n">${fmtNum(x.items)}</td><td class="n">${fmtNum(x.added)}</td><td class="n">${fmtNum(x.stored)}</td>` +
+                `<td class="n">${fmtMs(x.ms)}</td><td class="err">${we(x.error || '')}</td></tr>`).join('') +
+              '</tbody></table>'
+            : '<p class="faint" style="font-size:12.5px">No per-stock detail (kept 14 days).</p>');
+        $('dlgClose').addEventListener('click', () => dlg.close());
+      } catch (e) {
+        $('runBody').innerHTML = `<div class="error">Could not load batch: ${we(e.message)}</div>`;
+      }
+    }
+    $('runDlg').addEventListener('click', (e) => { if (e.target === $('runDlg')) $('runDlg').close(); });
+
+    async function load() {
+      try {
+        const d = await api('/api/news-runs');
+        runs = d.runs || [];
+        paintHealth(d.health);
+        paintWeek();
+        paintChart();
+        paintHistory();
+      } catch (e) {
+        $('histWrap').innerHTML = `<div class="error">Could not load the news log: ${we(e.message)}</div>`;
+      }
+    }
+    $('reloadBtn').addEventListener('click', load);
+    load();
+    setInterval(load, 60000);
+  </script>
+</body>
+</html>

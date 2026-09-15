@@ -554,6 +554,8 @@
     $('reloadBtn').addEventListener('click', () => { load(); loadHealth(); });
     load();
     loadHealth();
+    const deepRun = Number(new URLSearchParams(location.search).get('run'));
+    if (deepRun) openRun(deepRun);
   </script>
 </body>
 </html>

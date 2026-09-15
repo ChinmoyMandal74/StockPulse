@@ -271,6 +271,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
+                      '/news-runs.html': '/news-runs',
                       '/nasdaq.html': '/nasdaq',
                       '/cards.html': '/cards',
                       '/users.html': '/users', '/reset.html': '/reset',
@@ -350,6 +351,13 @@ app.get('/admin', route(async (req, res) => {
 app.get('/visitors', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'private', 'visitors.html'));
+}));
+
+// Admin only: the news job's log — every batch of headline fetches.
+app.get('/news-runs', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'news-runs');
+  res.sendFile(path.join(__dirname, 'private', 'news-runs.html'));
 }));
 
 // Admin only: every table in the database, with its row and column count.
@@ -3389,10 +3397,45 @@ async function fetchNewsItems(symbol, name) {
   return News.dedupe(News.parseGoogleRss(await res.text()));
 }
 
+const NEWS_PROVIDER_NAME = FINNHUB_KEY ? 'finnhub' : 'google';
+
 async function refreshNewsFor(symbol, name) {
   const items = await fetchNewsItems(symbol, name);
-  await store.writeNews(symbol, items, News.KEEP_DAYS);
-  return items.length;
+  const w = await store.writeNews(symbol, items, News.KEEP_DAYS);
+  return { items: items.length, added: w.added, stored: w.stored };
+}
+
+// One logged batch of headline fetches. Every symbol's outcome is written as
+// it lands, and the batch is closed with its totals: complete, partial (some
+// failed) or failed (all did). Logging is a by-product — trackSafe swallows
+// its failures, and a batch that never closes is swept to abandoned.
+async function runNewsBatch(picks, meta) {
+  if (!picks.length) return null;
+  const runId = await trackSafe(store.startNewsRun({ ...meta, provider: NEWS_PROVIDER_NAME, attempted: picks.length }));
+  const t0 = Date.now();
+  const results = await Promise.all(picks.map(async ({ symbol, name }) => {
+    const s0 = Date.now();
+    try {
+      const r = await refreshNewsFor(symbol, name);
+      await trackSafe(store.noteNewsItem(runId, { symbol, ok: true, ...r, ms: Date.now() - s0 }));
+      return { ok: true, ...r };
+    } catch (err) {
+      await trackSafe(store.noteNewsItem(runId, { symbol, ok: false, ms: Date.now() - s0, error: err.message }));
+      return { ok: false, error: err.message };
+    }
+  }));
+  const ok = results.filter((x) => x.ok);
+  const failed = results.length - ok.length;
+  await trackSafe(store.finishNewsRun(runId, {
+    status: failed === 0 ? 'complete' : ok.length === 0 ? 'failed' : 'partial',
+    ok: ok.length, failed,
+    items: ok.reduce((a, x) => a + x.items, 0),
+    added: ok.reduce((a, x) => a + x.added, 0),
+    ms: Date.now() - t0,
+    error: failed ? results.find((x) => !x.ok).error : null,
+  }));
+  store.pruneNewsRuns().catch(() => { /* the bars rule */ });
+  return { runId, results };
 }
 
 // Coverage without a schedule: every refresh tops up the few stalest
@@ -3400,7 +3443,7 @@ async function refreshNewsFor(symbol, name) {
 // whole universe inside one night and no single call does bulk work.
 // Fire-and-forget — headlines are a by-product, and the archive rule
 // applies: a failed news write never fails a refresh.
-function topUpNews(rows) {
+function topUpNews(rows, ctx = {}) {
   if (NEWS_OFF) return;
   (async () => {
     const live = (rows || []).filter((r) => r && !r.error && r.symbol);
@@ -3408,7 +3451,9 @@ function topUpNews(rows) {
     const state = await store.readNewsState();
     const pick = News.pickStalest(live.map((r) => r.symbol), state, NEWS_TOPUP_PER_REFRESH);
     const byId = Object.fromEntries(live.map((r) => [r.symbol, r]));
-    await Promise.allSettled(pick.map((sym) => refreshNewsFor(sym, byId[sym] && byId[sym].name)));
+    await runNewsBatch(pick.map((sym) => ({ symbol: sym, name: byId[sym] && byId[sym].name })), {
+      trigger: 'refresh', actor: ctx.actor || null, refreshRunId: ctx.refreshRunId || null,
+    });
   })().catch((err) => console.warn('news top-up skipped:', err.message));
 }
 
@@ -3428,7 +3473,12 @@ app.get('/api/news', requireAuth, route(async (req, res) => {
     try {
       const snap = await readSnapshot();
       const row = ((snap && snap.stocks) || []).find((x) => x.symbol === symbol);
-      await refreshNewsFor(symbol, row && row.name);
+      const who = await currentUser(req);
+      const out = await runNewsBatch([{ symbol, name: row && row.name }], {
+        trigger: 'page', actor: who ? who.email : ((await isGuest(req)) ? 'guest' : 'admin'),
+      });
+      const r = out && out.results[0];
+      if (r && !r.ok) console.warn('news fetch failed for ' + symbol + ':', r.error);
     } catch (err) {
       console.warn('news fetch failed for ' + symbol + ':', err.message);
     }
@@ -4124,7 +4174,6 @@ async function finishLiveRefresh(payload, ctx = {}) {
 
   // Headlines ride along: the stalest few symbols get their news topped up
   // on every refresh, so coverage accrues without a schedule of its own.
-  topUpNews(rows);
   store.pruneActivity(ACTIVITY_KEEP_DAYS).catch(() => { /* the bars rule */ });
   store.pruneRuns().catch(() => { /* the bars rule */ });
 
@@ -4134,6 +4183,12 @@ async function finishLiveRefresh(payload, ctx = {}) {
   // same numbers under a new date and invent movement that never happened.
   // readRefreshState() is non-null only while a Refresh all runs.
   const running = await readRefreshState();
+  // Read after the run state so the news batch can name the refresh run it
+  // rode on — a plain Refresh passes its own run id in ctx.
+  topUpNews(rows, {
+    refreshRunId: (running && running.runId) || ctx.runId || null,
+    actor: (running && running.actor) || ctx.actor || null,
+  });
   if (running) {
     try {
       // Rows whose profile has not come back yet are skipped rather than
@@ -4352,6 +4407,44 @@ app.get('/api/db-stats', requireAdmin, route(async (req, res) => {
   }
   dbStatsCache = await store.tableStats();
   res.json({ ...dbStatsCache, cached: false });
+}));
+
+// The news job's log and the archive's current state.
+app.get('/api/news-runs', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const days = Math.min(30, Math.max(1, Number(req.query.days) || 30));
+  const now = Date.now();
+  const [runs, state, holdings, portfolios] = await Promise.all([
+    store.readNewsRuns(now - days * 86400000), store.readNewsState(), store.newsHoldings(), readPortfolios(),
+  ]);
+  const universe = getUniverse(portfolios);
+  const fetched = { day: 0, week: 0, older: 0, never: 0 };
+  let stalest = null;
+  for (const s of universe) {
+    const t = state[s];
+    if (!t) { fetched.never++; continue; }
+    const d = (now - t) / 86400000;
+    if (d < 1) fetched.day++; else if (d < 7) fetched.week++; else fetched.older++;
+    if (!stalest || t < stalest.at) stalest = { symbol: s, at: t };
+  }
+  const emptyFeeds = universe.filter((s) => state[s] && !holdings.perSymbol[s]);
+  res.json({
+    runs, now,
+    health: {
+      off: NEWS_OFF, provider: NEWS_PROVIDER_NAME, perRefresh: NEWS_TOPUP_PER_REFRESH,
+      ttlHours: NEWS_TTL_MS / 3600000, keepDays: News.KEEP_DAYS, maxPerSymbol: News.MAX_PER_SYMBOL,
+      universe: universe.length, fetched, stalest,
+      headlines: holdings.headlines, symbolsWithNews: holdings.perSymbol ? Object.keys(holdings.perSymbol).filter((s) => universe.includes(s)).length : 0,
+      newestPublished: holdings.newestPublished, emptyFeeds,
+    },
+  });
+}));
+
+app.get('/api/news-runs/:id', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const run = await store.readNewsRun(Number(req.params.id) || 0);
+  if (!run) return res.status(404).json({ error: 'No such news run.' });
+  res.json(run);
 }));
 
 app.get('/api/refresh-runs', requireAdmin, route(async (req, res) => {
