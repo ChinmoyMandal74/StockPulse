@@ -293,7 +293,7 @@ async function init() {
         try {
           await db.execute(stmt);
         } catch (err) {
-          // Cold instances race the momentum_deltas drop-then-create: Vercel
+          // Cold instances race any drop-then-create in the schema: Vercel
           // runs ONE request per instance, so a page load fans several
           // requests onto several instances initializing at the same moment,
           // and every loser's CREATE VIEW sees the winner's — same code,
@@ -619,7 +619,7 @@ async function markPriced(n) {
 
 // 13 columns against SQLite's 999-parameter ceiling puts a multi-row insert at
 // 76; 70 leaves room. One statement per 70 rows rather than one per row is the
-// same reasoning as writeMomentum — 4,130 statements is 4,130 to parse.
+// same reasoning the bar archive follows — 4,130 statements is 4,130 to parse.
 const NASDAQ_CHUNK = 70;
 const NASDAQ_COLS = ['symbol', 'exchange', 'name', 'last_sale', 'net_change', 'pct_change',
   'market_cap', 'country', 'ipo_year', 'volume', 'sector', 'industry', 'url', 'fetched_at'];
@@ -784,7 +784,7 @@ async function readCloses(symbols, since) {
 }
 
 // Bars for many symbols at once, newest first, with the high — which readCloses
-// drops and `% from 52-week high` needs. Used to re-score momentum at a past
+// drops and `% from 52-week high` needs. Used for the trend ribbon's year at a
 // date: the refresh only fetches ~300 bars per symbol, and scoring six months
 // ago needs 274 of run-up on top of the 126 you are stepping back, so anything
 // past about a month has to come from the archive rather than the pull.

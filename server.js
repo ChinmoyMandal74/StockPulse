@@ -2692,8 +2692,13 @@ async function computeStocks(asOf, opts = {}) {
       const bars = await trendBars(stocks.map((r) => r.symbol));
       for (const row of stocks) {
         const tb = bars[row.symbol];
+        // `x.d`, not `x.datetime` — readBarsFor returns { d, high, close }. The
+        // old code asked for .datetime and got undefined for every date, so the
+        // assistant has been reading "undefined Strong uptrend -> undefined
+        // Above 200D" for as long as the timeline has existed. It never failed,
+        // it just quietly said nothing.
         row.trendTimeline = Array.isArray(tb)
-          ? Action.trendTimeline(tb.map((x) => x.close), tb.map((x) => x.datetime),
+          ? Action.trendTimeline(tb.map((x) => x.close), tb.map((x) => x.d),
             row.companyType || 'Established', ACTION_CFG, 252)
           : null;
       }

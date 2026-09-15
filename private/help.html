@@ -207,23 +207,16 @@
       </ul>
 
       <h3>Price Momentum</h3>
-      <p>Three columns that describe the momentum score and how it has moved:</p>
-      <ul>
-        <li><b>Mom.</b> — the score now, 1 to 10.</li>
-        <li><b>Past Mom.</b> — the same score as it stood at the end of a horizon you choose, on the
-          0–100 scale. The <b>Past</b> picker in the bar offers one week, two weeks, one month, three
-          months and six months.</li>
-        <li><b>Mom. Delta</b> — now minus then, in score points. Positive means the stock has
-          strengthened <em>against the fixed scale</em>, not merely against its neighbours.</li>
-      </ul>
-      <p>The Delta is only coloured, and the arrow beside Mom. only appears, once the move clears a
-        threshold that <strong>scales with the horizon</strong>. The median name travels about three
-        points in a week and fifteen in six months, so a single fixed cut-off would mark half the
-        table at one horizon and nearly all of it at another.</p>
+      <p>One column: <b>Mom.</b>, the momentum score now, 1 to 10. It is measured against a fixed
+        scale rather than against the rest of the list, so a 7 means the same thing in a weak quarter
+        as a strong one, and adding a ticker does not move anybody else's number.</p>
 
-      <div class="note"><b>These read across time, which is only meaningful because the score is
-        absolute.</b> While momentum was ranked against the list, a change could come from a ticker
-        being added rather than from the stock. Now it cannot.</div>
+      <div class="note"><b>The Past Mom. and Mom. Delta columns were retired in September 2026</b>,
+        along with the chevron that marked a move and the two screens built on it. Five separate
+        tests found the change in the score predicted nothing about what happened next — the
+        strongest of them read <em>r = −0.003</em> against the following fortnight across 264,290
+        stock-fortnights. The score stays because it describes where a stock stands today, which it
+        does well; what went is the claim that its movement told you anything.</div>
 
       <h3>What is hiding behind a cell</h3>
       <ul>
@@ -233,9 +226,6 @@
           weight and how this stock scored on it.</li>
         <li>The <b>90d</b> column is a sparkline of the last 90 sessions. Read the shape, not the
           level — each line is scaled to its own high and low, so two lines are not comparable.</li>
-        <li>A small <b>chevron</b> beside the Momentum rating means the score has moved further than
-          the chosen horizon's threshold: green improving, red fading. No chevron means the move was
-          inside the noise for that horizon.</li>
       </ul>
       <a class="top" href="#top">↑ Contents</a>
     </div></section>
@@ -464,8 +454,6 @@
       <table>
         <thead><tr><th>Screen</th><th>What it looks for</th></tr></thead>
         <tbody>
-          <tr><td>Momentum improving</td><td>Momentum score up 5 points or more over a fortnight</td></tr>
-          <tr><td>Momentum fading</td><td>Down 5 points or more — a high rating that is slipping</td></tr>
           <tr><td>Bouncing off the lows</td><td>Low in its 52-week range, but up over both the last month and the last fortnight</td></tr>
           <tr><td>Just started moving</td><td>Up more than 5% in a fortnight while still negative over three months</td></tr>
           <tr><td>Drifting after a beat</td><td>Beat consensus by more than 10% and reported within three weeks</td></tr>

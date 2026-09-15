@@ -478,10 +478,6 @@
   // exists at all. Only the markup is shared; each page owns its own hover
   // wiring, since one hovers table cells and the other a chip and a card row.
 
-  // Defined in screens.js, which the server can require and every page loads —
-  // the arrow, the sentence describing it and the two momentum screens all read
-  // one number. The fallback only matters if that script fails to load.
-
   function factorRow(b) {
     if (b.sub == null) {
       return `<div class="tip-row off"><span class="lbl">${esc(b.label)} <em>${b.weight}%</em></span>` +

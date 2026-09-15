@@ -424,7 +424,7 @@
             rows: [
               ['screen', 'var(--green)', 'Screened nightly', 'Momentum and quality scored on a fixed scale after every close — a 7 means the same thing in any market.'],
               ['rules', 'var(--accent)', 'Advice that shows its work', 'Five fixed rule profiles side by side, and every verdict names the ONE rule that fired.'],
-              ['trend', 'var(--amber)', 'Twenty years of receipts', 'Trend ribbons, backtests and a signal lab over the full bar archive — measured, not asserted.'],
+              ['trend', 'var(--amber)', 'Twenty years of receipts', 'Trend ribbons, backtests and an indicator lab over the full bar archive — measured, not asserted.'],
               ['ask', 'var(--accent-2)', 'Ask in plain English', 'An assistant that answers from the same table you see — and says so when the data cannot answer.'],
               ['guest', 'var(--red)', 'Try it in one click', 'A guest preview with real stocks and every feature live. No account, no card.'],
             ] },
@@ -1108,7 +1108,7 @@
   }
 
   // The quadrant plot. Axes cover the middle 96% and the strays are pinned to
-  // the edge in amber and counted, the same treatment the signal study uses:
+  // the edge in amber and counted, the same treatment the indicator lab uses:
   // three runaway growth rates would otherwise press every other dot into a
   // band a few pixels tall.
   function scatterSvg(pts, q) {
