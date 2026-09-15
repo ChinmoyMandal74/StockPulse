@@ -386,6 +386,11 @@
     tbody tr {
       animation: rowIn 0.5s var(--ease-soft) both;
       animation-delay: calc(min(var(--i, 0), 24) * 15ms); }
+    /* The two spacer rows that hold the scrollbar at its true length while only
+       the visible slice of rows exists. They are furniture, not data. */
+    tr.padrow, tr.padrow td { padding: 0; border: 0; background: none; }
+    tr.padrow { animation: none; }
+    tbody.nostagger tr { animation: none; }
     .name { color: var(--muted); }
     .warn { cursor: help; display: inline-block; vertical-align: -2px; margin-left: 3px; }
     td.rating { cursor: help; font-size: 13px; }
@@ -1675,64 +1680,9 @@
         : 'Every verdict held since the previous session';
     }
 
-    function render() {
-      renderPicker();
-      renderSectorTrigger();
-      renderIndustryTrigger();
-      renderChangedChip();
-      renderLensChip();
-      renderActTrigger();
-      const tbody = $('tbody');
-      const rows = visibleStocks();
-      markSortedColumn();
-
-
-      // Freshest data date among shown stocks, to flag any lagging behind it.
-      const freshest = rows.reduce((m, s) => (s.latestDate && s.latestDate > m ? s.latestDate : m), '');
-
-      if (rows.length === 0) {
-        const tabName = activeTab === 'All' ? 'the screen' : `"${isMyTab(activeTab) ? myTabName(activeTab) : activeTab}"`;
-        // Name the narrowest filter in force: it is the one that emptied the
-        // table, and the one to clear first.
-        const narrowest = industryFilter !== 'All' ? industryFilter
-          : sectorFilter !== 'All' ? sectorFilter : 'All';
-        const where = narrowest === 'All' ? tabName : `${narrowest} in ${tabName}`;
-        const msg = changedOnly
-          ? `Every verdict in ${where} held since the previous session — nothing changed to show.`
-          : narrowest !== 'All'
-            ? `Nothing in ${where} — clear the ${industryFilter !== 'All' ? 'industry' : 'sector'} filter to see the rest.`
-            : activeTab === 'All'
-              ? 'No tickers yet — add one above.'
-              : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="55">${msg}</td></tr>`;
-        researchSymbol = null;
-        renderResearchMenu();
-        applyGroups();
-        return;
-      }
-
-      const valueFor = (x) => (
-        // Alphabetical would put Avoid above Buy; rank by the ladder instead.
-        sortKey.startsWith('av:') ? (() => {
-          const v = x.adviceBy && x.adviceBy[sortKey.slice(3)];
-          return v ? ActionRules.ACTIONS.indexOf(v.a) : null;
-        })()
-        : sortKey === 'actionTrend' ? (x.actionTrend ? ActionRules.TREND_ORDER.indexOf(x.actionTrend) : null)
-        : sortKey === 'actionEntry' ? (x.actionEntry ? ActionRules.ENTRY_ORDER.indexOf(x.actionEntry) : null)
-        : sortKey === 'actionFund' ? (x.actionFund ? ActionRules.FUND_ORDER.indexOf(x.actionFund) : null)
-        : x[sortKey]);
-      const sorted = [...rows].sort((a, b) => {
-        const av = valueFor(a), bv = valueFor(b);
-        if (av == null) return 1;
-        if (bv == null) return -1;
-        if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
-        return (av - bv) * sortDir;
-      });
-
-      researchSymbol = sorted[0] ? sorted[0].symbol : null;
-      renderResearchMenu();
-
-      tbody.innerHTML = sorted.map((s, i) => {
+    // One row of the table. Pulled out of render() so a window repaint can
+    // build a slice of rows without rebuilding the page around them.
+    function rowHtml(s, i, freshest) {
         const rmTitle = activeTab === 'All' ? 'Remove from all portfolios' : `Remove from ${activeTab}`;
         const removeBtn = isAdmin
           ? `<td><button class="remove" data-remove="${s.symbol}" title="${rmTitle}" aria-label="${rmTitle}"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-x" /></svg></button></td>`
@@ -1813,8 +1763,43 @@
           ${shortCell(s.shortPctFloat, 'grp-fund', cacheTitle)}
           ${removeBtn}
         </tr>`;
-      }).join('');
+    }
 
+    // ---- windowed rows ------------------------------------------------------
+    // The screener builds ~58 cells of HTML per row through a stack of
+    // formatting helpers, and at 1,000 rows that string-building alone measured
+    // ~1.1s of a 1.6s render — the dominant cost, well ahead of the DOM write
+    // (283ms) and the column pass (177ms). So only the rows that can actually
+    // be seen are built. Two spacer rows hold the scrollbar at its true length,
+    // which works because every row is exactly one line: 37px, measured rather
+    // than assumed.
+    const ROW_H = 37;
+    const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
+    const PAD_SPAN = 58;        // a spacer spans the widest a body row gets
+    let winRows = [];           // the full sorted list this is a window onto
+    let winFresh = '';
+    let winFrom = -1, winTo = -1;
+
+    function paintWindow(full) {
+      const tbody = $('tbody');
+      const wrap = document.querySelector('.table-wrap');
+      const n = winRows.length;
+      if (!n) return;
+      const top = wrap ? wrap.scrollTop : 0;
+      const h = wrap ? wrap.clientHeight : 900;
+      const first = Math.max(0, Math.floor(top / ROW_H) - OVERSCAN);
+      const last = Math.min(n, Math.ceil((top + h) / ROW_H) + OVERSCAN);
+      if (!full && first === winFrom && last === winTo) return;
+      winFrom = first; winTo = last;
+      const pad = (px) => (px > 0
+        ? `<tr class="padrow" aria-hidden="true" style="height:${px}px"><td colspan="${PAD_SPAN}"></td></tr>` : '');
+      // The stagger is for a table you can take in at a glance. Replaying it on
+      // every scroll would strobe, so it runs only on a real render.
+      tbody.classList.toggle('nostagger', !full);
+      if (!full) hideTip();     // the cell the tooltip belongs to may be about to go
+      tbody.innerHTML = pad(first * ROW_H) +
+        winRows.slice(first, last).map((s, i) => rowHtml(s, first + i, winFresh)).join('') +
+        pad((n - last) * ROW_H);
       tbody.querySelectorAll('[data-remove]').forEach((btn) => {
         btn.addEventListener('click', () => removeTicker(btn.dataset.remove));
       });
@@ -1822,6 +1807,72 @@
         el.addEventListener('mouseenter', () => showTip(el));
         el.addEventListener('mouseleave', hideTip);
       });
+      // Only the per-cell half of applyGroups: the header styling, the column
+      // menu and the sticky offsets have not changed just because you scrolled.
+      hideCollapsedCells();
+      paintSparklines();
+    }
+
+    function render() {
+      renderPicker();
+      renderSectorTrigger();
+      renderIndustryTrigger();
+      renderChangedChip();
+      renderLensChip();
+      renderActTrigger();
+      const tbody = $('tbody');
+      const rows = visibleStocks();
+      markSortedColumn();
+
+
+      // Freshest data date among shown stocks, to flag any lagging behind it.
+      const freshest = rows.reduce((m, s) => (s.latestDate && s.latestDate > m ? s.latestDate : m), '');
+
+      if (rows.length === 0) {
+        const tabName = activeTab === 'All' ? 'the screen' : `"${isMyTab(activeTab) ? myTabName(activeTab) : activeTab}"`;
+        // Name the narrowest filter in force: it is the one that emptied the
+        // table, and the one to clear first.
+        const narrowest = industryFilter !== 'All' ? industryFilter
+          : sectorFilter !== 'All' ? sectorFilter : 'All';
+        const where = narrowest === 'All' ? tabName : `${narrowest} in ${tabName}`;
+        const msg = changedOnly
+          ? `Every verdict in ${where} held since the previous session — nothing changed to show.`
+          : narrowest !== 'All'
+            ? `Nothing in ${where} — clear the ${industryFilter !== 'All' ? 'industry' : 'sector'} filter to see the rest.`
+            : activeTab === 'All'
+              ? 'No tickers yet — add one above.'
+              : `No tickers in "${activeTab}" yet — add one above.`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="55">${msg}</td></tr>`;
+        researchSymbol = null;
+        renderResearchMenu();
+        applyGroups();
+        return;
+      }
+
+      const valueFor = (x) => (
+        // Alphabetical would put Avoid above Buy; rank by the ladder instead.
+        sortKey.startsWith('av:') ? (() => {
+          const v = x.adviceBy && x.adviceBy[sortKey.slice(3)];
+          return v ? ActionRules.ACTIONS.indexOf(v.a) : null;
+        })()
+        : sortKey === 'actionTrend' ? (x.actionTrend ? ActionRules.TREND_ORDER.indexOf(x.actionTrend) : null)
+        : sortKey === 'actionEntry' ? (x.actionEntry ? ActionRules.ENTRY_ORDER.indexOf(x.actionEntry) : null)
+        : sortKey === 'actionFund' ? (x.actionFund ? ActionRules.FUND_ORDER.indexOf(x.actionFund) : null)
+        : x[sortKey]);
+      const sorted = [...rows].sort((a, b) => {
+        const av = valueFor(a), bv = valueFor(b);
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
+        return (av - bv) * sortDir;
+      });
+
+      researchSymbol = sorted[0] ? sorted[0].symbol : null;
+      renderResearchMenu();
+
+      winRows = sorted;
+      winFresh = freshest;
+      paintWindow(true);
 
       applyGroups();
       // Cheap when the cache is warm; kicks off the one fetch when it is not.
@@ -1980,13 +2031,22 @@
     }
 
     // Show/hide every cell (group header + detail headers + body cells) per group.
+    // The per-cell half. It is the only part of the column pass whose cost
+    // scales with how many rows are on screen, and the only part a window
+    // repaint needs to redo.
+    function hideCollapsedCells() {
+      GROUPS.forEach((id) => {
+        const hide = collapsed[id];
+        document.querySelectorAll('.grp-' + id).forEach((el) => { el.style.display = hide ? 'none' : ''; });
+      });
+    }
+
     function applyGroups() {
       // The horizon picker drives the Price Momentum columns, so it follows them
       // in and out of view. Collapsing a group runs through here rather than
       // render(), which is why the trigger is redrawn from both.
+      hideCollapsedCells();
       GROUPS.forEach((id) => {
-        const hide = collapsed[id];
-        document.querySelectorAll('.grp-' + id).forEach((el) => { el.style.display = hide ? 'none' : ''; });
         const hdr = document.querySelector('th.group[data-group="' + id + '"]');
         const c = GROUP_COLORS[id];
         if (hdr && c) {
@@ -3231,6 +3291,22 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
     // Take the instruction out of the address bar, or a reload runs it again —
     // a second Refresh all is ten minutes and several hundred API credits.
     if (wantAsOf || wantDo) history.replaceState(null, '', location.pathname);
+
+    // Scrolling the table is what moves the window. Throttled to a frame: a
+    // scroll fires far faster than anything can usefully repaint, and the
+    // overscan means most frames decide there is nothing to do and return.
+    (() => {
+      const wrap = document.querySelector('.table-wrap');
+      if (!wrap) return;
+      let queued = false;
+      wrap.addEventListener('scroll', () => {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(() => { queued = false; paintWindow(false); });
+      }, { passive: true });
+      // A taller viewport needs more rows than the last paint built.
+      window.addEventListener('resize', () => paintWindow(true));
+    })();
 
     // Boot: find out who we are, restore the saved column layout, then load the
     // snapshot. Prefs are awaited before the first render — applying them after
