@@ -3694,11 +3694,17 @@ async function runNewsBatch(picksIn, meta) {
 // Coverage without a schedule: every refresh tops up the few stalest
 // symbols, never-fetched first, so the nightly job's ~20 rounds cycle the
 // whole universe inside one night and no single call does bulk work.
-// Fire-and-forget — headlines are a by-product, and the archive rule
-// applies: a failed news write never fails a refresh.
+// Headlines are a by-product, and the archive rule applies: a failed news
+// write never fails a refresh (the promise never rejects).
+// Returns the batch as a promise, and the caller must AWAIT it before the
+// response goes out. On Vercel the function is frozen the moment it responds:
+// a fire-and-forget batch had its fetches suspended mid-flight, and when the
+// instance next woke minutes later every 6-second abort timer fired at once —
+// on 2026-09-15 two batches "took" 54s and 279s for refreshes that finished in
+// 19s, all 24 fetches "aborted due to timeout". Started early, awaited last.
 function topUpNews(rows, ctx = {}) {
-  if (NEWS_OFF) return;
-  (async () => {
+  if (NEWS_OFF) return Promise.resolve();
+  return (async () => {
     const live = (rows || []).filter((r) => r && !r.error && r.symbol);
     if (!live.length) return;
     const state = await store.readNewsState();
@@ -4508,7 +4514,7 @@ async function finishLiveRefresh(payload, ctx = {}) {
   const running = await readRefreshState();
   // Read after the run state so the news batch can name the refresh run it
   // rode on — a plain Refresh passes its own run id in ctx.
-  topUpNews(rows, {
+  const newsBatch = topUpNews(rows, {
     refreshRunId: (running && running.runId) || ctx.runId || null,
     actor: (running && running.actor) || ctx.actor || null,
   });
@@ -4551,6 +4557,9 @@ async function finishLiveRefresh(payload, ctx = {}) {
     if (stale) await closeRun(stale, 'abandoned');
     await sendRefreshReport({ startedAt: ctx.startedAt, actor: ctx.actor, runId: ctx.runId }, 'plain');
   }
+  // The headlines top-up started above runs alongside everything since; it has
+  // to finish before the response does, or the platform freezes it mid-fetch.
+  await newsBatch;
   return { loaded, total: rows.length, done: running ? covered : true };
 }
 
