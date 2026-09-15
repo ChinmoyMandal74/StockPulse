@@ -218,7 +218,25 @@
     }
     .notice .ic { color: var(--faint); }
     .notice b { color: var(--text); font-weight: 600; }
-    #readonlyNote, #fwdViewBar, #refreshBar { margin-top: 8px; }
+    #readonlyNote, #fwdViewBar, #refreshBar, #fltBar { margin-top: 8px; }
+    /* The column-filter summary. Compact, because it sits above the table on
+       every screen while a filter is on — including filters on columns that
+       are currently hidden, which is exactly when it earns its place. */
+    #fltBar > .core { padding: 7px 14px; gap: 6px 10px; }
+    #fltBar .fchip { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+      padding: 2px 4px 2px 9px; border-radius: 999px; border: 1px solid var(--hair-2);
+      font-size: 11.5px; color: var(--muted); }
+    #fltBar .fchip code { font-family: var(--mono); color: var(--text); }
+    #fltBar .fchip.hid { border-style: dashed; }
+    #fltBar .fchip.bad { border-color: rgba(251, 113, 133, 0.5); color: var(--red); }
+    #fltBar .fchip button { border: 0; background: none; color: var(--faint); cursor: pointer;
+      padding: 0 3px; line-height: 1; display: inline-flex; }
+    #fltBar .fchip button:hover { color: var(--text); }
+    #fltBar .fact { margin-left: auto; display: inline-flex; gap: 6px; }
+    #fltBar .fact button { padding: 5px 11px; border-radius: 999px; cursor: pointer; line-height: 1;
+      border: 1px solid var(--hair-2); background: rgba(255, 255, 255, 0.04);
+      color: var(--text); font: inherit; font-size: 11.5px; }
+    #fltBar .fact button:hover { background: rgba(255, 255, 255, 0.09); }
     #refreshBar > .core {
       background:
         linear-gradient(100deg, rgba(52, 211, 153, 0.10), rgba(52, 211, 153, 0.02) 60%),
@@ -281,6 +299,26 @@
     thead th { position: sticky; z-index: 4; background: var(--surface); }
     thead tr:first-child th { top: 0; }
     thead tr:nth-child(2) th { top: var(--h1, 28px); }
+    /* The filter row: a third sticky header row, shown only on request. Its
+       cells carry the classes of the header above them, so collapsing a group
+       or hiding an advice column takes the filter cell along. */
+    thead tr.filterrow { display: none; }
+    body.filtering thead tr.filterrow { display: table-row; }
+    thead tr.filterrow th { top: calc(var(--h1, 28px) + var(--h2, 28px)); padding: 3px 3px 4px;
+      border-bottom: 1px solid var(--hair-2); cursor: default; }
+    /* size=1 and min-width 0: an input must never be what widens a column */
+    .flt { display: block; width: 100%; min-width: 0; box-sizing: border-box; margin: 0;
+      font: 400 11px/1.2 var(--mono); letter-spacing: 0; text-transform: none; color: var(--text);
+      background: rgba(255, 255, 255, 0.035); border: 1px solid var(--hair); border-radius: 6px;
+      padding: 3px 5px; outline: none; }
+    select.flt { font-family: var(--sans); padding: 2px 1px; cursor: pointer; }
+    select.flt option { background: #0d1017; color: var(--text); }
+    .flt::placeholder { color: var(--faint); opacity: 0.55; }
+    .flt:focus { border-color: rgba(124, 156, 255, 0.55); }
+    .flt.on { border-color: rgba(124, 156, 255, 0.55); background: rgba(124, 156, 255, 0.12); }
+    .flt.bad { border-color: rgba(251, 113, 133, 0.6); background: rgba(251, 113, 133, 0.08); }
+    #fltBtn.on { color: var(--accent); border-color: rgba(124, 156, 255, 0.45);
+                 background: rgba(124, 156, 255, 0.09); }
     thead th[rowspan], thead tr:nth-child(2) th { border-bottom: 1px solid var(--hair-2); }
     /* Freeze the left columns (Symbol … Name) while scrolling horizontally. */
     .frz { position: sticky; background: var(--surface); z-index: 3; }
@@ -658,6 +696,7 @@
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15.2l5.5-5.7"/></symbol>
     <symbol id="i-research" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.2"/><path d="M15.6 15.6 20 20"/></symbol>
     <symbol id="i-scatter" viewBox="0 0 24 24"><path d="M4.5 4.5v15h15"/><circle cx="9" cy="15" r="1.2"/><circle cx="12.5" cy="10.5" r="1.2"/><circle cx="16.5" cy="13" r="1.2"/><circle cx="19" cy="7.5" r="1.2"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5.5h16l-6.2 7.2v5.4l-3.6 1.9v-7.3z"/></symbol>
     <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9"/><path d="M17 7h3"/><circle cx="15" cy="7" r="2"/><path d="M4 17h3"/><path d="M11 17h9"/><circle cx="9" cy="17" r="2"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.4a2.6 2.6 0 1 1 3.4 2.5c-.6.2-.9.7-.9 1.3v.5"/><path d="M12 17.1h.01"/></symbol>
     <symbol id="i-scales" viewBox="0 0 24 24"><path d="M12 4.4v15.2"/><path d="M6.6 19.6h10.8"/><path d="M4 9.2h16"/><path d="M4 9.2 1.8 14.2h4.4z"/><path d="M20 9.2 17.8 14.2h4.4z"/></symbol>
@@ -690,6 +729,7 @@
           <button class="btn picker-btn" id="indBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="indMenu" role="listbox" aria-label="Industry"></div>
         </div>
+        <button class="btn picker-btn" id="fltBtn" aria-pressed="false"></button>
         <div class="picker" id="actPicker" data-open="0">
           <button class="btn picker-btn" id="actBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="actMenu" role="listbox" aria-label="Advice rules profile"></div>
@@ -795,6 +835,8 @@
 
     <div class="bezel notice" id="fwdViewBar" style="display:none"></div>
 
+    <div class="bezel notice" id="fltBar" hidden></div>
+
     <div class="bezel notice" id="refreshBar" style="display:none"></div>
 
     <div class="error" id="error"></div>
@@ -856,7 +898,7 @@
         <th rowspan="2"></th>
       </tr>
       <tr>
-        <th class="left grp-info">Portfolios</th>
+        <th class="left grp-info" data-fkey="portfolios">Portfolios</th>
         <th class="grp-info" data-key="price">Price</th>
         <th class="left grp-info" data-key="sector">Sector</th>
         <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — Twelve Data's own taxonomy, not GICS.">Industry</th>
@@ -1545,9 +1587,379 @@
       return rows;
     }
 
-    function visibleStocks() {
+    // Before the column filters: what the filter row narrows, and the "of N"
+    // its summary reports against.
+    function prefilterStocks() {
       const rows = scopedStocks();
       return changedOnly ? rows.filter(adviceMoved) : rows;
+    }
+
+    function visibleStocks() {
+      const rows = prefilterStocks();
+      const act = activeColFilters();
+      return act.length
+        ? rows.filter((x) => act.every((k) => fltCompiled[k](filterValue(x, k))))
+        : rows;
+    }
+
+    // ---- the filter row ------------------------------------------------------
+    // One box under every column, shown only when asked for (the Filter button,
+    // remembered per account). Filters AND across columns and are deliberately
+    // NOT saved: a filter that silently survives a reload is a table missing
+    // rows for no visible reason. A filter on a column that is then hidden
+    // keeps working, and the summary bar says so.
+    //
+    // Grammar, numbers: 5 (at least 5) · >5 >=5 <5 <=5 =5 !=5 · 2..8 · ..8 ·
+    // 2B / 500M / 10K / 1.2T · % $ and commas ignored. Text: contains ·
+    // =exact · !not · a|b (either). Lists: a dropdown of what is present.
+    let filterRowOn = false;
+    let colFilters = {};        // key -> what the user typed or picked
+    let fltCompiled = {};       // key -> predicate, or false when not understood
+    const fltLabel = {};        // key -> the column's header text
+    const fltCell = {};         // key -> its filter cell, for the hidden check
+    let fltTimer = null;
+    const RATING_FOR = { overallScore: 'overallRating', qualityScore: 'qualityRating', momentumScore: 'momentumRating' };
+    const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios']);
+    const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank']);
+    const BOUND_KEYS = new Set(['sector', 'industry']);   // write the bar pickers' state
+    const BLANK = '\u2014 blank';
+
+    function maCrossWord(x) {
+      if (x.maBullish == null) return null;
+      const fresh = x.maCrossDays != null && x.maCrossDays <= 20;
+      return x.maBullish ? (fresh ? 'Golden cross' : 'Bullish') : (fresh ? 'Death cross' : 'Bearish');
+    }
+
+    // What a filter reads: the value the cell SHOWS, in the unit it shows it —
+    // the 1-10 rating rather than the score behind it, days to earnings rather
+    // than a date, the MA cross as its word.
+    function filterValue(x, key) {
+      if (key.startsWith('av:')) {
+        const v = x.adviceBy && x.adviceBy[key.slice(3)];
+        return v ? v.a : null;
+      }
+      if (RATING_FOR[key]) return x[RATING_FOR[key]];
+      if (key === 'maCrossRank') return maCrossWord(x);
+      if (key === 'shortName') return [x.shortName, x.name].filter(Boolean).join(' \u00b7 ');
+      if (key === 'portfolios') {
+        return (x.portfolios || []).concat(
+          Object.keys(myPortfolios).filter((n) => (myPortfolios[n] || []).includes(x.symbol))).join(' \u00b7 ');
+      }
+      if (key === 'nextEarningsDate') {
+        return x.nextEarningsDate ? Math.round((new Date(x.nextEarningsDate) - new Date()) / 86400000) : null;
+      }
+      return x[key];
+    }
+
+    function filterKind(key) {
+      if (BOUND_KEYS.has(key)) return 'bound';
+      if (key.startsWith('av:') || CAT_KEYS.has(key)) return 'cat';
+      if (TEXT_KEYS.has(key)) return 'text';
+      return 'num';
+    }
+
+    function parseNumTerm(t) {
+      const m = /^([-+]?\d*\.?\d+)([kmbt])?$/i.exec(String(t).replace(/[\s,$%]/g, ''));
+      if (!m) return null;
+      const mult = { k: 1e3, m: 1e6, b: 1e9, t: 1e12 }[(m[2] || '').toLowerCase()] || 1;
+      const dec = (m[1].split('.')[1] || '').length;
+      return { n: parseFloat(m[1]) * mult, tol: (0.5 * Math.pow(10, -dec)) * mult };
+    }
+
+    // null = empty (no filter), false = not understood, else a predicate.
+    // Blanks never pass a number filter in either direction.
+    function compileNum(src) {
+      const s = String(src || '').trim();
+      if (!s) return null;
+      const num = (f) => (v) => v != null && v !== '' && isFinite(v) && f(Number(v));
+      const range = /^(.*?)\.\.(.*)$/.exec(s);
+      if (range) {
+        const lo = range[1].trim() ? parseNumTerm(range[1]) : { n: -Infinity };
+        const hi = range[2].trim() ? parseNumTerm(range[2]) : { n: Infinity };
+        if (!lo || !hi) return false;
+        return num((v) => v >= lo.n && v <= hi.n);
+      }
+      const m = /^(>=|<=|!=|=>|=<|>|<|=|\u2265|\u2264)?\s*(.+)$/.exec(s);
+      const t = m && parseNumTerm(m[2]);
+      if (!t) return false;
+      const n = t.n;
+      switch (m[1]) {
+        case '>': return num((v) => v > n);
+        case '<': return num((v) => v < n);
+        case '<=': case '=<': case '\u2264': return num((v) => v <= n);
+        // "=" matches at the precision typed, so =61 finds an RSI of 61.2
+        case '=': return num((v) => Math.abs(v - n) < t.tol);
+        case '!=': return num((v) => Math.abs(v - n) >= t.tol);
+        default: return num((v) => v >= n);       // bare, >=, => and \u2265: at least
+      }
+    }
+
+    function compileText(src) {
+      const s = String(src || '').trim().toLowerCase();
+      if (!s) return null;
+      const terms = s.split('|').map((x) => x.trim()).filter(Boolean);
+      const neg = terms.filter((x) => x[0] === '!').map((x) => x.slice(1)).filter(Boolean);
+      const pos = terms.filter((x) => x[0] !== '!');
+      if (!neg.length && !pos.length) return false;
+      return (v) => {
+        const hay = v == null ? '' : String(v).toLowerCase();
+        if (neg.some((x) => hay.includes(x))) return false;
+        if (!pos.length) return true;
+        return pos.some((x) => (x[0] === '=' ? hay === x.slice(1).trim()
+          || hay.split(' \u00b7 ').includes(x.slice(1).trim()) : hay.includes(x)));
+      };
+    }
+
+    function compileFilter(key, src) {
+      const k = filterKind(key);
+      if (k === 'num') return compileNum(src);
+      if (k === 'text') return compileText(src);
+      if (k === 'cat') {
+        if (!src) return null;
+        return src === BLANK ? (v) => v == null || v === '' : (v) => v === src;
+      }
+      return null;
+    }
+
+    function activeColFilters() {
+      return Object.keys(colFilters).filter((k) => fltCompiled[k]);
+    }
+
+    function setColFilter(key, val) {
+      if (val === '' || val == null) { delete colFilters[key]; delete fltCompiled[key]; }
+      else { colFilters[key] = val; fltCompiled[key] = compileFilter(key, val); }
+    }
+
+    // Sector and Industry cells are the bar's own pickers in another place:
+    // one piece of state, so the two can never disagree.
+    function setSectorFilter(v) {
+      sectorFilter = v;
+      if (industryFilter !== 'All' && !scopedStocks().some((x) => x.industry === industryFilter)) {
+        industryFilter = 'All';
+      }
+    }
+
+    function headerText(th) {
+      const c = th.cloneNode(true);
+      c.querySelectorAll('br').forEach((b) => b.replaceWith(' '));
+      return c.textContent.replace(/\s+/g, ' ').trim();
+    }
+
+    // Built once from the header itself: each row-1 cell that spans both rows
+    // is one column, each group banner stands for the row-2 cells of its
+    // group. Every filter cell copies its header's classes, which is what lets
+    // hideCollapsedCells(), the advice-column toggles and the frozen offsets
+    // treat it like any other cell in that column.
+    function buildFilterRow() {
+      const heads = document.querySelectorAll('thead tr');
+      const r1 = heads[0], r2 = heads[1];
+      const r2cells = [...r2.children];
+      const cols = [];
+      for (const th of r1.children) {
+        if (th.hasAttribute('rowspan')) cols.push(th);
+        else if (th.dataset.group) cols.push(...r2cells.filter((c) => c.classList.contains('grp-' + th.dataset.group)));
+      }
+      const tr = document.createElement('tr');
+      tr.className = 'filterrow';
+      for (const th of cols) {
+        const cell = document.createElement('th');
+        cell.className = th.className.replace(/\bgroup\b/, '').trim();
+        const key = th.dataset.fkey || th.dataset.key;
+        if (key) {
+          const kind = filterKind(key);
+          const label = headerText(th);
+          fltLabel[key] = label;
+          fltCell[key] = cell;
+          if (kind === 'num' || kind === 'text') {
+            const ph = kind === 'text' ? 'filter' : '\u2265';
+            const help = kind === 'text'
+              ? `Filter ${label}: text it contains \u00b7 =exact \u00b7 !not \u00b7 a|b for either. Esc clears.`
+              : `Filter ${label}: 5 means at least 5 \u00b7 >5 <5 <=5 =5 !=5 \u00b7 2..8 for a range \u00b7 ` +
+                `2B 500M 10K for big numbers \u00b7 blanks never match. Esc clears.` +
+                (key === 'nextEarningsDate' ? ' Counts DAYS until the report: ..14 is within two weeks.' : '') +
+                (RATING_FOR[key] ? ' Reads the 1\u201310 rating shown.' : '');
+            cell.innerHTML = `<input class="flt" size="1" data-fk="${we(key)}" placeholder="${ph}" ` +
+              `aria-label="${we('Filter ' + label)}" title="${we(help)}" autocomplete="off" spellcheck="false">`;
+          } else {
+            cell.innerHTML = `<select class="flt" data-fk="${we(key)}" aria-label="${we('Filter ' + label)}" ` +
+              `title="${we('Filter ' + label + (kind === 'bound' ? ' \u2014 the same filter as the ' + label + ' picker in the bar' : ''))}"></select>`;
+          }
+        }
+        tr.appendChild(cell);
+      }
+      r2.after(tr);
+
+      tr.addEventListener('input', (e) => {
+        const el = e.target;
+        if (!el.matches('input.flt')) return;
+        setColFilter(el.dataset.fk, el.value);
+        el.classList.toggle('bad', fltCompiled[el.dataset.fk] === false);
+        el.classList.toggle('on', !!fltCompiled[el.dataset.fk]);
+        clearTimeout(fltTimer);
+        fltTimer = setTimeout(applyColFilters, 160);
+      });
+      tr.addEventListener('change', (e) => {
+        const el = e.target;
+        if (!el.matches('select.flt')) return;
+        const k = el.dataset.fk;
+        if (k === 'sector') setSectorFilter(el.value || 'All');
+        else if (k === 'industry') industryFilter = el.value || 'All';
+        else setColFilter(k, el.value);
+        window.track && track('picker', 'filter:' + k);
+        applyColFilters();
+      });
+      tr.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || !e.target.matches('.flt')) return;
+        e.stopPropagation();
+        clearFilterKey(e.target.dataset.fk);
+      });
+    }
+
+    function applyColFilters() {
+      clearTimeout(fltTimer);
+      // The matches belong at the top; a scroll position from a longer list
+      // would open on an empty stretch of the new one.
+      const wrap = document.querySelector('.table-wrap');
+      if (wrap) wrap.scrollTop = 0;
+      render();
+    }
+
+    function clearFilterKey(k) {
+      if (k === 'sector') setSectorFilter('All');
+      else if (k === 'industry') industryFilter = 'All';
+      else setColFilter(k, '');
+      syncFilterInputs();
+      applyColFilters();
+    }
+
+    function clearAllColFilters() {
+      colFilters = {};
+      fltCompiled = {};
+      syncFilterInputs();
+      window.track && track('picker', 'filter:clear');
+      applyColFilters();
+    }
+
+    function syncFilterInputs() {
+      document.querySelectorAll('tr.filterrow input.flt').forEach((el) => {
+        const k = el.dataset.fk;
+        const v = colFilters[k] || '';
+        if (el.value !== v) el.value = v;
+        el.classList.toggle('bad', fltCompiled[k] === false);
+        el.classList.toggle('on', !!fltCompiled[k]);
+      });
+    }
+
+    // The dropdowns offer what is present in the tab (and, for industry, the
+    // sector) with counts — rebuilt each render, but never under the pointer.
+    function fillFilterSelects() {
+      if (!filterRowOn) return;
+      const inTab = tabStocks();
+      const ladder = (k) => (k === 'actionTrend' ? ActionRules.TREND_ORDER
+        : k === 'actionEntry' ? ActionRules.ENTRY_ORDER
+        : k === 'actionFund' ? ActionRules.FUND_ORDER
+        : k.startsWith('av:') ? ActionRules.ACTIONS : null);
+      document.querySelectorAll('tr.filterrow select.flt').forEach((el) => {
+        if (el === document.activeElement) return;
+        const k = el.dataset.fk;
+        const pool = k === 'industry'
+          ? inTab.filter((s) => sectorFilter === 'All' || s.sector === sectorFilter)
+          : inTab;
+        const counts = new Map();
+        let blank = 0;
+        for (const s of pool) {
+          const v = filterValue(s, k);
+          if (v == null || v === '') blank++;
+          else counts.set(v, (counts.get(v) || 0) + 1);
+        }
+        const cur = k === 'sector' ? (sectorFilter === 'All' ? '' : sectorFilter)
+          : k === 'industry' ? (industryFilter === 'All' ? '' : industryFilter)
+          : (colFilters[k] || '');
+        let names = [...counts.keys()];
+        const order = ladder(k);
+        names.sort(order ? (a, b) => order.indexOf(a) - order.indexOf(b) : (a, b) => String(a).localeCompare(String(b)));
+        if (cur && cur !== BLANK && !counts.has(cur)) names.push(cur);
+        const opt = (v, label) => `<option value="${we(v)}"${v === cur ? ' selected' : ''}>${we(label)}</option>`;
+        const html = opt('', 'All') +
+          names.map((n) => opt(n, `${n} (${counts.get(n) || 0})`)).join('') +
+          (!BOUND_KEYS.has(k) && (blank || cur === BLANK) ? opt(BLANK, `${BLANK} (${blank})`) : '');
+        if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
+        el.value = cur;
+        el.classList.toggle('on', !!cur);
+      });
+    }
+
+    function filterHidden(k) {
+      const cell = fltCell[k];
+      if (!cell) return false;
+      const grp = [...cell.classList].find((c) => c.startsWith('grp-'));
+      if (grp && collapsed[grp.slice(4)]) return true;
+      if (k.startsWith('av:')) {
+        const name = k.slice(3);
+        return name !== 'Balanced' && !extraProfiles.includes(name);
+      }
+      return false;
+    }
+
+    function renderFilterTrigger() {
+      const n = activeColFilters().length;
+      $('fltBtn').innerHTML =
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-filter" /></svg>' +
+        '<span class="picker-label">Filter</span>' +
+        (n ? `<span class="count">${n}</span>` : '');
+      $('fltBtn').classList.toggle('on', filterRowOn || n > 0);
+      $('fltBtn').setAttribute('aria-pressed', String(filterRowOn));
+      $('fltBtn').title = filterRowOn
+        ? 'Hide the filter row' + (n ? ` \u2014 the ${n} filter${n === 1 ? '' : 's'} in force keep${n === 1 ? 's' : ''} applying` : '')
+        : 'Show a filter box under every column' + (n ? ` \u2014 ${n} in force` : '');
+    }
+
+    // Redrawn from applyAdviceCols(), which every render and every column
+    // toggle reaches — hiding a column changes what the bar has to say.
+    let fltShown = 0;
+    function renderFilterBar() {
+      const shown = fltShown;
+      const bar = $('fltBar');
+      const keys = Object.keys(colFilters);
+      if (!keys.length) { bar.hidden = true; bar.innerHTML = ''; return; }
+      const total = prefilterStocks().length;
+      const chips = keys.map((k) => {
+        const bad = fltCompiled[k] === false;
+        const hid = filterHidden(k);
+        const kind = filterKind(k);
+        const raw = String(colFilters[k]).trim();
+        // a bare number means "at least", so the chip says so
+        const shownVal = kind === 'cat' ? '= ' + raw
+          : kind === 'num' && /^[-+]?[\d.]/.test(raw) && !raw.includes('..') ? '≥ ' + raw : raw;
+        return `<span class="fchip${bad ? ' bad' : ''}${hid ? ' hid' : ''}"` +
+          (hid ? ' title="This column is hidden, and the filter still applies"' : '') +
+          (bad ? ' title="Not understood, so not applied \u2014 hover the box for the grammar"' : '') + '>' +
+          `<b>${we(fltLabel[k] || k)}</b> <code>${we(shownVal)}</code>` +
+          (hid ? ' <em>hidden column</em>' : '') + (bad ? ' <em>not understood</em>' : '') +
+          `<button data-fclear="${we(k)}" aria-label="${we('Clear the ' + (fltLabel[k] || k) + ' filter')}">` +
+          '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-x" /></svg></button></span>';
+      }).join('');
+      bar.hidden = false;
+      bar.innerHTML = '<div class="core"><svg class="ic" aria-hidden="true"><use href="#i-filter" /></svg>' +
+        `<span><b>${shown}</b> of ${total} rows</span>` + chips +
+        '<span class="fact">' +
+        (filterRowOn ? '' : '<button data-fshow="1">Show filter row</button>') +
+        '<button data-fclearall="1">Clear filters</button></span></div>';
+      bar.querySelectorAll('[data-fclear]').forEach((b) =>
+        b.addEventListener('click', () => clearFilterKey(b.dataset.fclear)));
+      const all = bar.querySelector('[data-fclearall]');
+      if (all) all.addEventListener('click', clearAllColFilters);
+      const show = bar.querySelector('[data-fshow]');
+      if (show) show.addEventListener('click', () => setFilterRow(true));
+    }
+
+    function setFilterRow(on) {
+      filterRowOn = !!on;
+      document.body.classList.toggle('filtering', filterRowOn);
+      window.track && track('picker', 'filterrow:' + (filterRowOn ? 'on' : 'off'));
+      savePrefs();
+      render();
+      updateStickyOffsets();
     }
 
     // The sectors present in the CURRENT tab, each with its count — a sector
@@ -1787,8 +2199,9 @@
       if (!n) return;
       const top = wrap ? wrap.scrollTop : 0;
       const h = wrap ? wrap.clientHeight : 900;
-      const first = Math.max(0, Math.floor(top / ROW_H) - OVERSCAN);
       const last = Math.min(n, Math.ceil((top + h) / ROW_H) + OVERSCAN);
+      const first = Math.max(0, Math.min(Math.floor(top / ROW_H) - OVERSCAN,
+        last - Math.ceil(h / ROW_H) - 2 * OVERSCAN));
       if (!full && first === winFrom && last === winTo) return;
       winFrom = first; winTo = last;
       const pad = (px) => (px > 0
@@ -1823,6 +2236,9 @@
       const tbody = $('tbody');
       const rows = visibleStocks();
       markSortedColumn();
+      fltShown = rows.length;
+      renderFilterTrigger();
+      fillFilterSelects();
 
 
       // Freshest data date among shown stocks, to flag any lagging behind it.
@@ -1835,7 +2251,9 @@
         const narrowest = industryFilter !== 'All' ? industryFilter
           : sectorFilter !== 'All' ? sectorFilter : 'All';
         const where = narrowest === 'All' ? tabName : `${narrowest} in ${tabName}`;
-        const msg = changedOnly
+        const msg = activeColFilters().length && prefilterStocks().length
+          ? 'Nothing matches the column filters \u2014 loosen one, or Clear filters in the bar above the table.'
+          : changedOnly
           ? `Every verdict in ${where} held since the previous session — nothing changed to show.`
           : narrowest !== 'All'
             ? `Nothing in ${where} — clear the ${industryFilter !== 'All' ? 'industry' : 'sector'} filter to see the rest.`
@@ -2181,6 +2599,7 @@
       const banner = document.querySelector('th[data-group="act"]');
       if (banner) banner.colSpan = 6 + extraProfiles.length;
       renderActTrigger();
+      renderFilterBar();
     }
 
     function renderActMenu() {
@@ -2244,6 +2663,10 @@
         if (Array.isArray(savedAv)) {
           extraProfiles = ADVICE_OPTIONAL.filter((n) => savedAv.includes(avSlug(n)));
         }
+        if (res && res.prefs && res.prefs.filterRow === true) {
+          filterRowOn = true;
+          document.body.classList.add('filtering');
+        }
         const savedW = res && res.prefs && res.prefs.weights;
         if (savedW === 'custom' || Screens.WEIGHT_PRESETS.some((w) => w.id === savedW)) weightPreset = savedW;
         const saved = res && res.prefs && res.prefs.collapsed;
@@ -2270,7 +2693,7 @@
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
           prefs: { collapsed: out, weights: weightPreset, customWeights,
-            advices: extraProfiles.map(avSlug) },
+            advices: extraProfiles.map(avSlug), filterRow: filterRowOn },
         }).catch(() => {});
       }, 600);
     }
@@ -2325,6 +2748,8 @@
       const root = document.documentElement.style;
       const firstRow = document.querySelector('thead tr:first-child');
       if (firstRow) root.setProperty('--h1', firstRow.offsetHeight + 'px');
+      const secondRow = document.querySelector('thead tr:nth-child(2)');
+      if (secondRow) root.setProperty('--h2', secondRow.offsetHeight + 'px');
       // Cumulative left offsets for the frozen columns (Symbol, Name), measured
       // from their header cells.
       let acc = 0;
@@ -2796,6 +3221,9 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         setStatus(`Could not save: ${err.message}`);
       }
     });
+
+    buildFilterRow();
+    $('fltBtn').addEventListener('click', () => setFilterRow(!filterRowOn));
 
     $('chgBtn').addEventListener('click', () => {
       changedOnly = !changedOnly;

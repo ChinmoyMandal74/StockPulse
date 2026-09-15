@@ -222,6 +222,7 @@
     // not edit it, so it must hand back exactly what it was given — writing an
     // empty map here would quietly reset every collapsed column group.
     let savedCollapsed = {};
+    let savedPrefs = {};     // everything else in the row, handed back untouched
 
     (async () => {
       let data;
@@ -240,6 +241,7 @@
       try {
         const pr = await (await fetch('/api/prefs', { cache: 'no-store' })).json();
         if (pr && pr.prefs) {
+          savedPrefs = pr.prefs;
           if (pr.prefs.collapsed && typeof pr.prefs.collapsed === 'object') savedCollapsed = pr.prefs.collapsed;
           customWeights = Screens.cleanWeights(pr.prefs.customWeights);
           if (customWeights) customWeights = Object.assign(Screens.defaultWeights(), customWeights);
@@ -298,7 +300,8 @@
         // Both the column layout and the slider set go back untouched: this page
         // selects a weighting, it does not edit either, and dropping them from
         // the payload would erase them.
-        body: JSON.stringify({ prefs: { collapsed: savedCollapsed, weights: id, customWeights } }),
+        body: JSON.stringify({ prefs: Object.assign({}, savedPrefs,
+          { collapsed: savedCollapsed, weights: id, customWeights }) }),
       }).catch(() => { /* a lens that fails to persist still works today */ });
     }
 

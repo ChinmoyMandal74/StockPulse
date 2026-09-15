@@ -3204,6 +3204,9 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   if (Array.isArray(incoming.advices)) {
     out.advices = ADVICE_COL_IDS.filter((id) => incoming.advices.includes(id));
   }
+  // Whether the screener's filter row is shown. The filters themselves are
+  // never stored — only whether the row is open.
+  if (incoming.filterRow === true) out.filterRow = true;
   await store.writePrefs(await prefsKey(req), out);
   res.json({ ok: true });
 }));
