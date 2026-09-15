@@ -2199,7 +2199,10 @@ function cleanViews(input) {
 // page ignores what it does not know, the views rule. The seven /analysis
 // screens are here, translated into filter-row grammar.
 const SCREENS_MAX = 60;
-const SCREEN_FILTER_VAL_RE = /^[^\u0000-\u001f<>]{1,80}$/;
+// Any printable text. The grammar itself uses < and > (">=3", "<20") and every
+// value is escaped where the page shows it; excluding < and > here once
+// stripped the filters out of every screen that went through a save.
+const SCREEN_FILTER_VAL_RE = /^[^\u0000-\u001f]{1,80}$/;
 const ADVICE_COLS = ['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'actionGuards',
   'av:Balanced', 'av:Trend Rider', 'av:Aggressive', 'av:Max Risk', 'av:Dip Buyer'];
 const sc = (id, group, name, description, def) => ({ id, group, name, description, def });
