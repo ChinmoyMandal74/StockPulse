@@ -20,9 +20,6 @@
 
 const crypto = require('crypto');
 const { createClient } = require('@tursodatabase/serverless/compat');
-// The scoring model's version, so momentum reads can filter on it without
-// every caller having to remember to pass one.
-const { MODEL_VERSION: MOMENTUM_MODEL } = require('./momentum.js');
 
 const url = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
@@ -168,108 +165,6 @@ const SCHEMA = [
   // rather than 365 blobs to parse. Adding a field later is an ALTER in
   // ADDED_COLUMNS, the same as any other table.
   //
-  // The scores are deliberately absent. They are model output, not measurement:
-  // momentum was rewritten once already, and a series that mixes two scoring
-  // regimes compares nothing to nothing.
-  // Momentum per symbol per day. Unlike fundamentals_history this is a *cache*,
-  // not a record: every value is a pure function of bars we already keep, so if
-  // the model changes the right move is to bump `model`, delete and recompute.
-  // That is exactly why the scores were kept out of fundamentals_history — there
-  // they would have been unreproducible, here they are not.
-  //
-  // The eight sub-scores are stored beside the composite so any weighting can be
-  // replayed over history, which is the whole point of keeping them at all: the
-  // score is one opinion, the sub-scores are the measurements behind it.
-  `create table if not exists momentum_history (
-     symbol      text not null,
-     d           text not null,
-     model       integer not null,
-     score       real not null,
-     mom121      real,
-     ret6m       real,
-     ret3m       real,
-     from_high   real,
-     trend       real,
-     consistency real,
-     revers1m    real,
-     rsi         real,
-     primary key (symbol, d)
-   )`,
-
-  // What actually produced the rows in momentum_history. One row, ever. The
-  // fingerprint is derived from the scoring code itself, so comparing it with
-  // the running model's is how a forgotten MODEL_VERSION bump gets caught.
-  `create index if not exists idx_momentum_d on momentum_history (d)`,
-
-  // Per-stock headlines: headline, source, url, timestamp — never bodies.
-  // A cache of a feed, like profiles: prune-and-refill, nothing precious.
-  // news_state is the fetch clock per symbol, separate so a symbol whose
-  // feed returned nothing is still marked fetched and does not retry forever.
-  `create table if not exists news (
-    id text primary key,
-    symbol text not null,
-    published_at text not null,
-    source text,
-    headline text not null,
-    url text not null
-  )`,
-  `create index if not exists idx_news_symbol on news (symbol, published_at)`,
-  `create table if not exists news_state (
-    symbol text primary key,
-    fetched_at integer not null
-  )`,
-
-  // Past momentum, momentum delta, and the price return beside them.
-  //
-  // A VIEW, not columns. Past momentum at a horizon IS the stored score N
-  // trading days back — verified against the app's own numbers across 72
-  // symbol-horizon pairs, gap 0.000 — so materialising it would put copies of a
-  // number beside the number itself on 270,000 rows, free to drift from it and
-  // needing a rewrite on every model change. The view costs nothing, cannot
-  // disagree with the score, and reads like a table for analysis.
-  //
-  // LAG counts rows, and there is one row per symbol per trading day, so an
-  // offset of 10 rows is the fortnight the app means. Partitioned by model as
-  // well as symbol so a window can never step across a scoring change.
-  //
-  // ret_2w and fwd_ret_2w answer two different questions and are easy to
-  // confuse. ret_2w covers the SAME fortnight as delta_2w, so the two move
-  // together largely by construction — the score is built out of returns.
-  // fwd_ret_2w is the next fortnight, which nothing in the score has seen, and
-  // is therefore the only one of the pair a backtest can honestly use.
-  //
-  // Dropped and recreated on every init so the definition can never lag the
-  // code that documents it; a view carries no data, so this is free.
-  `drop view if exists momentum_deltas`,
-  `create view momentum_deltas as
-   select symbol, d, model, score, close,
-     lag(score, 5)   over w as past_1w,
-     lag(score, 10)  over w as past_2w,
-     lag(score, 21)  over w as past_1m,
-     lag(score, 63)  over w as past_3m,
-     lag(score, 126) over w as past_6m,
-     score - lag(score, 5)   over w as delta_1w,
-     score - lag(score, 10)  over w as delta_2w,
-     score - lag(score, 21)  over w as delta_1m,
-     score - lag(score, 63)  over w as delta_3m,
-     score - lag(score, 126) over w as delta_6m,
-     (close - lag(close, 10) over w) / lag(close, 10) over w * 100  as ret_2w,
-     (lead(close, 10) over w - close) / close * 100                 as fwd_ret_2w,
-     (lead(close, 21) over w - close) / close * 100                 as fwd_ret_1m,
-     (lead(close, 63) over w - close) / close * 100                 as fwd_ret_3m
-   from (
-     select h.symbol, h.d, h.model, h.score, b.close
-     from momentum_history h
-     join bars b on b.symbol = h.symbol and b.d = h.d
-   )
-   window w as (partition by symbol, model order by d)`,
-
-  `create table if not exists momentum_model (
-     id          integer primary key check (id = 1),
-     model       integer not null,
-     fingerprint text not null,
-     computed_at text not null
-   )`,
   `create table if not exists fundamentals_history (
      symbol              text not null,
      d                   text not null,
@@ -932,77 +827,9 @@ async function readBarsFor(symbols, since) {
   return out;
 }
 
-// Upsert momentum rows. Chunked because a backfill writes a quarter of a
-// million of them and one statement per row would be a quarter of a million
-// round trips.
-const MOMENTUM_COLS = ['mom121', 'ret6m', 'ret3m', 'from_high', 'trend', 'consistency', 'revers1m', 'rsi'];
-
-// One multi-row INSERT per chunk rather than a batch of single-row statements:
-// a batch of 400 reset the connection outright, and even when it did not it is
-// 400 statements to parse instead of one. 12 columns a row against SQLite's
-// 999-parameter ceiling puts the chunk at 60 with room to spare.
-const MOMENTUM_CHUNK = 60;
-
-async function writeMomentum(rows) {
-  await init();
-  if (!rows || !rows.length) return 0;
-  const cols = ['symbol', 'd', 'model', 'score', ...MOMENTUM_COLS];
-  const placeholders = `(${cols.map(() => '?').join(', ')})`;
-  let n = 0;
-  for (let i = 0; i < rows.length; i += MOMENTUM_CHUNK) {
-    const slice = rows.slice(i, i + MOMENTUM_CHUNK);
-    const args = [];
-    for (const r of slice) for (const c of cols) args.push(r[c] ?? null);
-    await db.execute({
-      sql: `insert into momentum_history (${cols.join(', ')})
-            values ${slice.map(() => placeholders).join(', ')}
-            on conflict(symbol, d) do update set
-              model = excluded.model, score = excluded.score,
-              ${MOMENTUM_COLS.map((c) => `${c} = excluded.${c}`).join(', ')}`,
-      args,
-    });
-    n += slice.length;
-  }
-  return n;
-}
-
-// One symbol's series, oldest first, for charting.
-// Filtered on the model by default, so a half-migrated table returns a short
-// series rather than one that silently mixes two scoring regimes. Pass `model`
-// explicitly only to read rows written by an older one on purpose.
-async function readMomentum(symbol, since, model = MOMENTUM_MODEL) {
-  await init();
-  const r = await db.execute({
-    sql: `select d, score, ${MOMENTUM_COLS.join(', ')} from momentum_history
-          where symbol = ? and d >= ? and model = ? order by d asc`,
-    args: [String(symbol), since || '0000-00-00', model],
-  });
-  return r.rows.map((x) => {
-    const out = { d: x.d, score: Number(x.score) };
-    for (const c of MOMENTUM_COLS) out[c] = x[c] == null ? null : Number(x[c]);
-    return out;
-  });
-}
-
-// Rows that predate the current scoring model, so a caller can refuse to mix them.
-async function momentumStats(model) {
-  await init();
-  const r = await db.execute({
-    sql: `select count(*) n, count(distinct symbol) syms, min(d) a, max(d) z,
-                 sum(case when model <> ? then 1 else 0 end) stale
-          from momentum_history`,
-    args: [model],
-  });
-  const x = r.rows[0] || {};
-  return {
-    rows: Number(x.n || 0), symbols: Number(x.syms || 0),
-    from: x.a || null, to: x.z || null, stale: Number(x.stale || 0),
-  };
-}
-
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'momentum_history', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state'];
+const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state'];
 
 // Remove a symbol from the database entirely.
 //
@@ -1032,55 +859,8 @@ async function purgeSymbol(symbol) {
   return { symbol: sym, removed, total };
 }
 
-const DELTA_COLS = ['past_1w', 'past_2w', 'past_1m', 'past_3m', 'past_6m',
-                    'delta_1w', 'delta_2w', 'delta_1m', 'delta_3m', 'delta_6m',
-                    'close', 'ret_2w', 'fwd_ret_2w', 'fwd_ret_1m', 'fwd_ret_3m'];
-
-// The momentum series with every horizon's past score and delta beside it.
-// Ascending, filtered to one model, the same contract readMomentum() has.
-async function readMomentumDeltas(symbol, since, model = MOMENTUM_MODEL) {
-  await init();
-  // Deliberately not `select ... from momentum_deltas where symbol = ?`. A
-  // window function is computed before the outer filter, so reading one symbol
-  // out of the view made SQLite window all 270,000 rows and throw away 269,000
-  // of them — 1.6s against 0.1s for the same answer. The view stays for ad-hoc
-  // and cross-sectional queries; this is the hot path and windows one partition.
-  const lags = [['1w', 5], ['2w', 10], ['1m', 21], ['3m', 63], ['6m', 126]];
-  const cols = lags.map(([id, n]) => `lag(score, ${n}) over w as past_${id}`)
-    .concat(lags.map(([id, n]) => `score - lag(score, ${n}) over w as delta_${id}`))
-    // The price beside the score. ret_2w spans the same fortnight as delta_2w;
-    // fwd_ret_2w spans the next one, which is the half a backtest can use.
-    .concat([
-      '(close - lag(close, 10) over w) / lag(close, 10) over w * 100 as ret_2w',
-      '(lead(close, 10) over w - close) / close * 100 as fwd_ret_2w',
-      // A 12-1 momentum model is built for months, so a fortnight may simply be
-      // the wrong window to judge it on. One LEAD each to find out.
-      '(lead(close, 21) over w - close) / close * 100 as fwd_ret_1m',
-      '(lead(close, 63) over w - close) / close * 100 as fwd_ret_3m',
-    ])
-    .join(', ');
-  // The date filter sits outside the window, not in its WHERE: the first row a
-  // caller asks for still needs the 126 rows before it to have a 6m past score.
-  // Trimming in SQL rather than in JS keeps the discarded rows off the wire.
-  const r = await db.execute({
-    sql: `select * from (
-            select h.d, h.score, b.close, ${cols}
-            from momentum_history h
-            join bars b on b.symbol = h.symbol and b.d = h.d
-            where h.symbol = ? and h.model = ?
-            window w as (order by h.d)
-          ) where d >= ? order by d asc`,
-    args: [String(symbol).toUpperCase(), model, since || '0000-00-00'],
-  });
-  return r.rows.map((x) => {
-    const out = { d: x.d, score: Number(x.score) };
-    for (const c of DELTA_COLS) out[c] = x[c] == null ? null : Number(x[c]);
-    return out;
-  });
-}
-
-// What purgeSymbol would remove from one table, so a dry run cannot promise
-// one thing and the delete do another.
+// How many rows one table holds for one symbol — what the removal dialog
+// counts before anything is destroyed.
 async function countSymbolRows(table, symbol) {
   await init();
   if (!SYMBOL_TABLES.includes(table)) throw new Error(`not a per-symbol table: ${table}`);
@@ -1097,64 +877,6 @@ async function symbolsWithData() {
   const sql = SYMBOL_TABLES.map((t) => `select distinct symbol from ${t}`).join(' union ');
   const r = await db.execute(sql);
   return r.rows.map((x) => x.symbol).filter(Boolean).sort();
-}
-
-async function clearMomentum() {
-  await init();
-  await db.execute('delete from momentum_history');
-  await db.execute('delete from momentum_model');
-}
-
-// Stamped by the backfill once a full recompute has actually landed — never on
-// a partial run, or a half-finished rebuild would report itself as current.
-async function recordMomentumModel(model, fingerprint) {
-  await init();
-  await db.execute({
-    sql: `insert into momentum_model (id, model, fingerprint, computed_at)
-          values (1, ?, ?, ?)
-          on conflict(id) do update set
-            model = excluded.model, fingerprint = excluded.fingerprint,
-            computed_at = excluded.computed_at`,
-    args: [model, String(fingerprint), new Date().toISOString()],
-  });
-}
-
-async function readMomentumModel() {
-  await init();
-  const r = await db.execute('select model, fingerprint, computed_at from momentum_model where id = 1');
-  const x = r.rows[0];
-  return x ? { model: Number(x.model), fingerprint: x.fingerprint, computedAt: x.computed_at } : null;
-}
-
-// Is the stored history still the model the code would produce today?
-//
-//   current   — the rows match the running model
-//   drifted   — the scoring changed; the stored numbers are no longer what this
-//               code produces and need recomputing
-//   unstamped — rows exist from before this check did, or from a partial run
-//   empty     — nothing stored yet
-//
-// `versionBumped` separates the safe case (MODEL_VERSION was raised, so reads
-// already filter the old rows out and the app is merely short of history) from
-// the dangerous one (the maths changed under an unchanged version, so stale
-// rows are still being served as current).
-async function momentumModelStatus(model, fingerprint) {
-  await init();
-  const stats = await momentumStats(model);
-  const stored = await readMomentumModel();
-  let state;
-  if (!stats.rows) state = 'empty';
-  else if (!stored) state = 'unstamped';
-  else if (stored.fingerprint === fingerprint && stored.model === model) state = 'current';
-  else state = 'drifted';
-  return {
-    state,
-    stored,
-    current: { model, fingerprint },
-    versionBumped: !!(stored && stored.model !== model),
-    rows: stats.rows, symbols: stats.symbols, stale: stats.stale,
-    from: stats.from, to: stats.to,
-  };
 }
 
 async function barsStats() {
@@ -1850,21 +1572,12 @@ module.exports = {
   replaceBarsFor,
   readBars,
   readBarsFor,
-  writeMomentum,
-  readMomentum,
-  recordMomentumModel,
-  readMomentumModel,
-  momentumModelStatus,
   purgeSymbol,
   markRefreshPrices, readBarsFullFor,
   writeNews, readNews, readLatestNews, readNewsState,
   symbolsWithData,
   countSymbolRows,
   SYMBOL_TABLES,
-  readMomentumDeltas,
-  DELTA_COLS,
-  momentumStats,
-  clearMomentum,
   readCloses,
   barsStats,
   logVisit,

@@ -23,12 +23,10 @@ const store = require('./db');
 const Screens = require('./private/screens.js');
 // The Excel model of the momentum calculation, shared with the CLI in the same
 // file so the workbook served here and the one written locally are one thing.
-const { buildModel, momentumMap, MODEL_ROWS, MODEL_MIN_BARS } = require('./momentum-model.js');
+const { buildModel, MODEL_ROWS, MODEL_MIN_BARS } = require('./momentum-model.js');
 // Momentum scored from bars alone, shared with the backfill so the stored
 // history and the live score can never drift into two different models.
 const Momentum = require('./momentum.js');
-// The arithmetic behind /signal, kept apart so it can be checked on its own.
-const Signal = require('./private/signal-stats.js');
 // Tunable indicators, shared with /lab and the offline grid.
 const Indicators = require('./private/indicators.js');
 // The Action rules — what to do with each stock. Shared with the browser so a
@@ -156,14 +154,6 @@ app.get('/stock/:symbol', route(async (req, res) => {
 
 // Open to any signed-in user, like /analysis and /chat — it explains the app to
 // whoever is using it, so gating it behind admin would defeat the point.
-// Does a momentum move predict the next move in price? One symbol at a time.
-app.get('/signal/:symbol', route(async (req, res) => {
-  if (!(await isSignedIn(req))) return res.redirect('/login');
-  if (await isGuest(req)) return res.redirect('/');
-  logAct(req, 'page', 'signal:' + String(req.params.symbol || '').toUpperCase().slice(0, 12));
-  res.sendFile(path.join(__dirname, 'private', 'signal.html'));
-}));
-
 // A real backtest: a rule, positions, and an equity curve. The runs are
 // precomputed offline (strategy-runs.js) because simulating 116 symbols across
 // 4,700 sessions is neither a browser nor a serverless job; this route only
@@ -287,7 +277,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       // no symbol in that path, so there is nothing to show
                       '/stock.html': '/',
                       // no symbol in that path either
-                      '/signal.html': '/', '/lab.html': '/', '/strategy.html': '/strategy',
+                      '/lab.html': '/', '/strategy.html': '/strategy',
                       '/single.html': '/single' };
 app.get(Object.keys(GATED_PAGES), (req, res) => res.redirect(GATED_PAGES[req.path]));
 
@@ -1884,39 +1874,6 @@ function scoreFactors(comps, minWeightFrac = 0) {
 // is strongest", not "does this clear some absolute bar" — so each return
 // factor becomes the stock's percentile among its peers. Quality stays
 // absolute: a 25% margin is a 25% margin regardless of the company it keeps.
-// ---- momentum at a past date ------------------------------------------------
-// The score says where a stock stands; on its own it cannot say which way it is
-// heading. Re-scoring the universe as it stood N sessions back gives that, and
-// costs no API credits — momentum is derived entirely from daily bars, and the
-// archive already holds them.
-//
-// A daily horizon was measured and rejected: 46% of the list moves three or more
-// places on no news at all, so an arrow at that horizon is pure flicker.
-//
-// The longest factor needs a year of bars plus the month 12-1 skips, so a series
-// shorter than this cannot be scored at the older date at all.
-const MOM_MIN_BARS = 254;
-
-// Just the fields applyScores() reads. Deliberately not the whole row: a profile
-// belongs to now, not to a fortnight ago, and quality is not being restated.
-function momentumInputs(values) {
-  if (!Array.isArray(values) || values.length < MOM_MIN_BARS) return null;
-  const mc = maCross(values);
-  return {
-    mom12_1: windowReturn(values, 252, 21),
-    sixMonthPct: pctChange(values, 126),
-    threeMonthPct: pctChange(values, 63),
-    oneMonthPct: pctChange(values, 21),
-    realisedVol: realisedVol(values),
-    pctFromHigh: pctFromHigh(values, 252),
-    posMonths: positiveMonths(values),
-    rsi: rsi(values, 14),
-    vs200ma: pctVsMA(values, 200),
-    maBullish: mc ? mc.bullish : null,
-    maCrossDays: mc ? mc.daysSince : null,
-  };
-}
-
 // ---- absolute factor curves -------------------------------------------------
 // A logistic curve rather than a clamped line. lin() pinned a third to a half of
 // the universe at exactly 0 or 1 on every major factor, and a factor that is
@@ -2728,39 +2685,20 @@ async function computeStocks(asOf, opts = {}) {
     applyScores(stocks);
     scoreActionInto(stocks);
 
-    // …and again at each past horizon, for the Past Momentum column and the
-    // direction arrow. Scored from the archive rather than from the series just
-    // fetched: 300 bars only reaches back about a month once momentum's own
-    // run-up is taken out. Never allowed to fail a refresh — it is a decoration
-    // on numbers that are already correct.
+    // The trend ribbon's year, as dated runs, for the assistant. Bar-derived,
+    // so honestly replayable — which is why it survived the momentum cull that
+    // took the past-score columns this window used to share.
     try {
-      const past = await pastMomentum(stocks.map((r) => r.symbol));
+      const bars = await trendBars(stocks.map((r) => r.symbol));
       for (const row of stocks) {
-        const p = past[row.symbol] || {};
-        row.pastMomentum = {};
-        row.pastSubs = {};
-        for (const period of PAST_PERIODS) {
-          const hit = p[period.id];
-          if (!hit) continue;
-          row.pastMomentum[period.id] = hit.score;
-          row.pastSubs[period.id] = hit.subs;
-        }
-        // The default horizon also fills the fields the screens and the email
-        // read, so those keep one fixed meaning whatever the dropdown says.
-        const base = p[PAST_DEFAULT];
-        row.momentumScorePrev = base ? base.score : null;
-        row.momentumChange = (!base || row.momentumScore == null)
-          ? null : Math.round((row.momentumScore - base.score) * 10) / 10;
-        // The trend ribbon's year, as dated runs — bar-derived, so honestly
-        // replayable, and computed from the window this pass already read.
-        const tb = (pastMomentum.lastBars || {})[row.symbol];
+        const tb = bars[row.symbol];
         row.trendTimeline = Array.isArray(tb)
           ? Action.trendTimeline(tb.map((x) => x.close), tb.map((x) => x.datetime),
             row.companyType || 'Established', ACTION_CFG, 252)
           : null;
       }
     } catch (err) {
-      console.warn('momentum: could not score the earlier dates:', err.message);
+      console.warn('trend timeline: could not build it:', err.message);
     }
 
     // Archive the bars we just fetched. Live pulls only — an as-of range is
@@ -3170,7 +3108,7 @@ app.get('/api/model', requireAuth, route(async (req, res) => {
   const snap = await readSnapshot();
   const live = (snap && snap.stocks || []).find((x) => x.symbol === symbol) || null;
 
-  const buf = buildModel(symbol, bars, live, await momentumMap(store, symbol, bars));
+  const buf = buildModel(symbol, bars, live);
   res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.set('Content-Disposition', `attachment; filename="momentum-model-${symbol}.xlsx"`);
   res.set('Cache-Control', 'no-store');
@@ -3196,14 +3134,6 @@ app.get('/api/lab', requireMember, route(async (req, res) => {
   // them and the only way an arbitrary horizon could work at all.
 
   // The momentum score, aligned to the bar dates by lookup rather than by
-  // position. momentum_history only holds rows for days a symbol was scoreable —
-  // nothing until MIN_BARS of run-up — so its dates are a subset of the bars',
-  // and zipping the two arrays would silently offset the whole series. The
-  // momentum pane on /api/history aligns the same way for the same reason.
-  const hist = await store.readMomentum(symbol, '0000-00-00');
-  const scoreAt = new Map(hist.map((h) => [h.d, h.score]));
-  const score = rows.map((r) => (scoreAt.has(r.d) ? scoreAt.get(r.d) : null));
-
   const snap = await readSnapshot();
   const row = (snap && snap.stocks || []).find((x) => x.symbol === symbol);
   res.set('Cache-Control', 'no-store');
@@ -3224,128 +3154,6 @@ app.get('/api/lab', requireMember, route(async (req, res) => {
       .map((x) => ({ symbol: x.symbol, name: x.name || '' }))
       .sort((a, b) => a.symbol.localeCompare(b.symbol)),
   });
-}));
-
-// The signal study: a momentum move against what the price did next.
-//
-// The signal is fixed and the test horizon varies, which is the way round that
-// answers a question — fixing the horizon and varying the signal would be
-// fishing. `score` is offered beside `delta` because a 12-1 model is built out
-// of levels, so the level is the other obvious thing to test.
-const SIGNAL_HORIZONS = {
-  '2w': { id: '2w', label: 'next 2 weeks', col: 'fwd_ret_2w', days: 10 },
-  '1m': { id: '1m', label: 'next month', col: 'fwd_ret_1m', days: 21 },
-  '3m': { id: '3m', label: 'next 3 months', col: 'fwd_ret_3m', days: 63 },
-};
-// `split` is where "high" begins. A delta straddles zero; a 0-100 score never
-// goes negative, so splitting it at zero would put every row on one side and
-// report a lift of exactly zero however the data looked.
-const SIGNAL_XS = {
-  delta: { id: 'delta', label: 'Momentum delta (2W)', col: 'delta_2w', split: 'zero',
-           high: 'rose', low: 'fell' },
-  score: { id: 'score', label: 'Momentum score', col: 'score', split: 'median',
-           high: 'was high', low: 'was low' },
-};
-
-// Oversold to overbought, on the conventional 30/70 lines with the middle split
-// so "not stretched either way" is not one giant bucket. Ranges are half-open so
-// a reading belongs to exactly one band.
-const RSI_BANDS = [
-  { id: 'all', label: 'Any', lo: null, hi: null },
-  { id: 'os', label: '< 30', lo: null, hi: 30 },
-  { id: 'lo', label: '30–45', lo: 30, hi: 45 },
-  { id: 'mid', label: '45–55', lo: 45, hi: 55 },
-  { id: 'hi', label: '55–70', lo: 55, hi: 70 },
-  { id: 'ob', label: '> 70', lo: 70, hi: null },
-];
-
-app.get('/api/signal', requireMember, route(async (req, res) => {
-  const symbol = String(req.query.symbol || '').trim().toUpperCase();
-  if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
-  const h = SIGNAL_HORIZONS[String(req.query.horizon || '2w')] || SIGNAL_HORIZONS['2w'];
-  const xs = SIGNAL_XS[String(req.query.signal || 'delta')] || SIGNAL_XS.delta;
-
-  const rows = await store.readMomentumDeltas(symbol, '0000-00-00');
-
-  // Raw RSI at every date, so the page can ask whether a momentum move means
-  // something different when the stock is oversold. momentum_history stores the
-  // rsi *sub-score*, which is a non-monotonic curve and therefore cannot be
-  // inverted back to the reading — 25 and 85 both score low. So it is computed
-  // here from the bars, by the same Wilder pass the scorer uses.
-  const bars = (await store.readBars(symbol, 6000))
-    .map((b) => ({ d: b.datetime, high: Number(b.high), close: Number(b.close) }));
-  const rsiAt = new Map();
-  const series = Momentum.rsiSeriesAt(bars);
-  bars.forEach((b, i) => { if (series[i] != null) rsiAt.set(b.d, Math.round(series[i] * 100) / 100); });
-
-  const usable = rows.filter((r) => r[xs.col] != null && r[h.col] != null && rsiAt.has(r.d));
-  if (usable.length < 30) {
-    return res.status(422).json({
-      error: `${symbol} has ${usable.length} scored sessions with a ${h.label} return behind them; ` +
-        'the study needs at least 30.',
-    });
-  }
-
-  // Rounded to the 2dp the payload ships, and the statistics are computed from
-  // the same rounded numbers. The page recomputes everything itself when the RSI
-  // filter changes, so if the server summarised the full-precision values the
-  // two would disagree in the sixth decimal — a difference that means nothing
-  // and would cost someone an afternoon working out which was wrong.
-  const r2 = (v) => Math.round(v * 100) / 100;
-  const px = usable.map((r) => r2(r[xs.col]));
-  const py = usable.map((r) => r2(r[h.col]));
-  const pairs = px.map((x, i) => ({ x, y: py[i] }));
-  // The same statistics twice: once over every day, once over a sample whose
-  // forward windows do not overlap. The gap between them is the point — it is
-  // what says how much of the first number was ever really there.
-  const thinned = Signal.thin(pairs, h.days);
-
-  const snap = await readSnapshot();
-  const row = (snap && snap.stocks || []).find((x) => x.symbol === symbol);
-  const universe = ((snap && snap.stocks) || [])
-    .map((x) => ({ symbol: x.symbol, name: x.name || '' }))
-    .sort((a, b) => a.symbol.localeCompare(b.symbol));
-
-  res.set('Cache-Control', 'no-store');
-  res.json({
-    symbol,
-    name: row ? row.name : '',
-    signal: xs,
-    horizon: h,
-    horizons: Object.values(SIGNAL_HORIZONS),
-    signals: Object.values(SIGNAL_XS),
-    from: usable[0].d,
-    to: usable[usable.length - 1].d,
-    dates: usable.map((r) => r.d),
-    x: px,
-    y: py,
-    rsi: usable.map((r) => rsiAt.get(r.d)),
-    // The score and the close on each date, so a dot's tooltip can say what the
-    // stock actually was that day rather than only where it sits on two axes.
-    // The score a lookback ago is score - delta, so it costs nothing to ship.
-    score: usable.map((r) => r.score),
-    close: usable.map((r) => r.close),
-    rsiBands: RSI_BANDS,
-    stats: Signal.summarise(pairs, h.days, xs.split),
-    sampled: Signal.summarise(thinned, 1, xs.split),
-    universe,
-  });
-}));
-
-// Per-account UI preferences. Keyed on the signed-in email, falling back to
-// 'admin' for the legacy cookie and for open mode, where there is no user row —
-// the same key convention chat_usage uses.
-async function prefsKey(req) {
-  const who = await currentUser(req);
-  return who ? who.email : 'admin';
-}
-
-app.get('/api/prefs', requireAuth, route(async (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  // A guest has no user row, so prefsKey() would fall through to the 'admin'
-  // key — the owner's saved layout. Guests get defaults and store nothing.
-  if (await isGuest(req)) return res.json({ prefs: {} });
-  res.json({ prefs: await store.readPrefs(await prefsKey(req)) });
 }));
 
 app.put('/api/prefs', requireAuth, route(async (req, res) => {
@@ -3371,9 +3179,6 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   if (wid) out.weights = wid;
   const custom = Screens.cleanWeights(incoming.customWeights);
   if (custom) out.customWeights = custom;
-  // Which Past Momentum horizon the table is showing. An id from the known list
-  // only — anything else is dropped and the default stands.
-  if (Screens.PAST_PERIODS.some((x) => x.id === incoming.past)) out.past = String(incoming.past);
   // Which optional advice columns the table shows beside Balanced (which is
   // always shown and never stored). Ids from the fixed four only — there is
   // deliberately no custom profile, so nothing free-form can get in.
@@ -3632,28 +3437,6 @@ app.get('/api/history', requireAuth, route(async (req, res) => {
   if (!bars.length) return res.json({ symbol, dates: [], closes: [], volumes: [], from: null, to: null });
   const asc = bars.slice().reverse();
 
-  // Momentum for the same window, read from momentum_history rather than
-  // recomputed: scoring every date on demand is ~0.3ms a day, which is fine for
-  // a backfill and far too slow inside a page load. Aligned to the bar dates by
-  // lookup, so a gap in the momentum table leaves a gap in the line rather than
-  // shifting every later point.
-  let momentum = null;
-  try {
-    const rows = await store.readMomentum(symbol, asc[0].datetime);
-    if (rows.length) {
-      const byDate = new Map(rows.map((r) => [r.d, r.score]));
-      momentum = asc.map((b) => {
-        const v = byDate.get(b.datetime);
-        return v == null ? null : Math.round(v * 10) / 10;
-      });
-      // All-null is the same as absent to the caller, and cheaper to send.
-      if (!momentum.some((v) => v != null)) momentum = null;
-    }
-  } catch (err) {
-    // A chart pane must never cost the price chart its data.
-    console.warn('history: momentum unavailable for', symbol, err.message);
-  }
-
   res.json({
     symbol,
     from: asc[0].datetime,
@@ -3664,7 +3447,6 @@ app.get('/api/history', requireAuth, route(async (req, res) => {
     // Volume is split-adjusted the same way price is, so it is comparable
     // across the series but is not the literal share count for a past day.
     volumes: asc.map((b) => (b.volume == null ? 0 : Math.round(b.volume))),
-    momentum,
   });
 }));
 
@@ -3864,23 +3646,6 @@ async function buildRefreshReport(state, snap, kind = 'all') {
     }
   }
 
-  // Only surfaced when something is wrong: a line saying the model is fine,
-  // every night, is a line nobody reads by the third email.
-  let modelWarning = null;
-  try {
-    const st = await store.momentumModelStatus(Momentum.MODEL_VERSION, Momentum.MODEL_ID);
-    if (st.state === 'drifted' && !st.versionBumped) {
-      modelWarning = `The momentum scoring has changed but MODEL_VERSION is still ${Momentum.MODEL_VERSION}, ` +
-        `so ${st.rows.toLocaleString()} stored rows no longer match the running model and are being served as current. ` +
-        'Bump MODEL_VERSION and re-run the backfill.';
-    } else if (st.state === 'drifted') {
-      modelWarning = `Momentum history was built at model version ${st.stored.model}, the app is on ` +
-        `${Momentum.MODEL_VERSION}. Old rows are filtered out, so charts stay short until the backfill is re-run.`;
-    }
-  } catch (err) {
-    console.warn('report: momentum model status unavailable:', err.message);
-  }
-
   const asOf = live.reduce((m, x) => (x.latestDate && x.latestDate > m ? x.latestDate : m), '');
   // A Refresh all is judged on coverage; a plain Refresh never touches profiles,
   // so the only thing that can go wrong in one is a symbol that failed outright.
@@ -3917,7 +3682,7 @@ async function buildRefreshReport(state, snap, kind = 'all') {
   }
 
   return {
-    kind, complete, rows, live, loaded, failed, missing, asOf, day, stats, modelWarning,
+    kind, complete, rows, live, loaded, failed, missing, asOf, day, stats,
     // The digest is the day's movers and nothing else. The screens and the
     // highest-rated list were dropped in Sep 2026: both restate a standing
     // rather than reporting what happened, and both are a click away on
@@ -3967,7 +3732,6 @@ function refreshReportBodies(r) {
     line('Fundamentals', fundLine),
     line('Bar archive', barLine),
   ];
-  if (r.modelWarning) t.push('', 'Momentum model: ' + r.modelWarning);
   if (r.failed.length) {
     t.push('', `Failed (${r.failed.length}): ` +
       r.failed.map((x) => `${x.symbol} — ${x.error}`).join('; '));
@@ -4065,11 +3829,7 @@ function refreshReportBodies(r) {
     kv('Finished', fmtClock(Date.now())) +
     kv('Prices as of', r.asOf || '—') + kv('Fundamentals', fundLine) + kv('Bar archive', barLine) +
     '</table>' +
-    (r.modelWarning
-      ? '<p style="margin:14px 0 0;padding:10px 12px;border-radius:6px;background:#fff4e5;' +
-        'border:1px solid #f0c98a;font-size:13px;color:#7a4b00">' +
-        '<b>Momentum model</b><br>' + escHtml(r.modelWarning) + '</p>'
-      : '') + problems +
+    problems +
     '<h3 style="margin:22px 0 6px;font-size:14px">Movers today</h3>' +
     '<div>' + r.top.map(chip).join('') + '</div>' +
     '<div style="margin-top:4px">' + r.bottom.map(chip).join('') + '</div>' +
@@ -4181,32 +3941,6 @@ async function finishLiveRefresh(payload, ctx = {}) {
   // complete the moment it returns — tying its report to coverage meant that one
   // abandoned Refresh all silently suppressed every plain-refresh email until
   // somebody noticed the missing mail.
-  // Today's momentum into the history table, so the series the chart draws stays
-  // current without ever re-running the backfill. Keyed on (symbol, day), so
-  // repeated refreshes in one day overwrite rather than accumulate — and what is
-  // stored is the score the page is showing, not a second opinion computed from
-  // the archive. Unlike the fundamentals above, this is not gated on a Refresh
-  // all: momentum comes from bars, which every refresh re-pulls.
-  try {
-    const day = marketDay(rows);
-    const mrows = [];
-    for (const r of rows) {
-      if (r.error || r.momentumScore == null || !Array.isArray(r.momentumBreakdown)) continue;
-      const sub = {};
-      for (const c of r.momentumBreakdown) if (c.key) sub[c.key] = c.sub;
-      mrows.push({
-        symbol: r.symbol, d: day, model: Momentum.MODEL_VERSION, score: r.momentumScore,
-        mom121: sub.mom121 ?? null, ret6m: sub.ret6m ?? null, ret3m: sub.ret3m ?? null,
-        from_high: sub.fromHigh ?? null, trend: sub.trend ?? null,
-        consistency: sub.consistency ?? null, revers1m: sub.revers1m ?? null, rsi: sub.rsi ?? null,
-      });
-    }
-    if (mrows.length) await store.writeMomentum(mrows);
-  } catch (err) {
-    // A history write never fails a refresh — the same rule the bars follow.
-    console.warn('momentum: history write failed (screener unaffected):', err.message);
-  }
-
   const covered = rows.length > 0 && loaded >= rows.length;
 
   if (running) {
@@ -4236,58 +3970,16 @@ async function finishLiveRefresh(payload, ctx = {}) {
 // measured across the live universe. A fixed threshold cannot work here: five
 // points is half the table at a fortnight and nearly all of it at three months,
 // so the arrow and the Delta column scale their deadband with the horizon.
-const PAST_PERIODS = [
-  { id: '1w', days: 5, label: '1 week', move: 3 },
-  { id: '2w', days: 10, label: '2 weeks', move: 5 },
-  { id: '1m', days: 21, label: '1 month', move: 7 },
-  { id: '3m', days: 63, label: '3 months', move: 12 },
-  { id: '6m', days: 126, label: '6 months', move: 15 },
-];
-// The one the screens and the nightly email use. Those must not follow a
-// dropdown somebody set on their own screen, or the email changes meaning.
-const PAST_DEFAULT = '2w';
+// Enough calendar days for the trend ribbon's year: 252 sessions of output
+// plus the 200 its moving average needs is about 640 calendar days. This used
+// to be sized for momentum's run-up as well, and came out at the same number.
+const TREND_WINDOW_DAYS = 650;
 
-// Enough calendar days to cover the deepest horizon plus the run-up momentum
-// needs, with slack for holidays: 126 + 274 trading days is about 580 calendar.
-const PAST_WINDOW_DAYS = 650;
-
-// Momentum for the whole universe at each horizon, scored from the archive.
-// Returns { SYMBOL: { '1w': { score, subs }, ... } }.
-async function pastMomentum(symbols) {
-  const T0 = Date.now();
-  const since = new Date(Date.now() - PAST_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
-  const bars = await store.readBarsFor(symbols, since);
-  pastMomentum.lastBars = bars;   // the trend timeline rides this same read
-  const T1 = Date.now();
-  const out = {};
-  for (const p of PAST_PERIODS) {
-    const rows = [];
-    for (const sym of symbols) {
-      const all = bars[sym];
-      const sliced = Array.isArray(all) ? all.slice(p.days) : null;
-      rows.push({ symbol: sym, ...(momentumInputs(sliced) || {}) });
-    }
-    applyScores(rows);
-    for (const r of rows) {
-      if (r.momentumScore == null) continue;
-      (out[r.symbol] ||= {})[p.id] = {
-        score: Math.round(r.momentumScore * 10) / 10,
-        // Just the sub-scores, in momComps order. The labels and weights are
-        // already on the row's current breakdown, and repeating them five times
-        // over would be most of the payload for none of the information.
-        subs: (r.momentumBreakdown || []).map((b) => (b.sub == null ? null : b.sub)),
-      };
-    }
-  }
-  // Measured at ~3.5s for 85 symbols — 3.4 of it the archive read, the scoring
-  // itself is 0.15. Logged only when it runs long, as an early warning that the
-  // archive query has outgrown the window rather than as noise on every round.
-  const took = Date.now() - T0;
-  if (took > 10000) {
-    console.warn(`momentum: past horizons took ${(took / 1000).toFixed(1)}s ` +
-      `(read ${((T1 - T0) / 1000).toFixed(1)}s) for ${symbols.length} symbols`);
-  }
-  return out;
+// The bar window the trend timeline is built from. One read for the universe,
+// the same shape the momentum pass used to make before it was retired.
+async function trendBars(symbols) {
+  const since = new Date(Date.now() - TREND_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
+  return store.readBarsFor(symbols, since);
 }
 
 // The nightly job's one endpoint. It drives exactly the loop the browser drives
@@ -4511,31 +4203,6 @@ store.init().then(
   (err) => console.error('Turso: schema init failed —', err.message)
 );
 
-// One query at boot: is the stored momentum history still what this code
-// produces? MODEL_VERSION is a human decision and humans forget to bump it, so
-// the model fingerprints itself and the mismatch is reported here rather than
-// waiting for somebody to run the backfill and notice.
-async function checkMomentumModel() {
-  try {
-    const st = await store.momentumModelStatus(Momentum.MODEL_VERSION, Momentum.MODEL_ID);
-    if (st.state === 'current' || st.state === 'empty') return;
-    const fix = 'run: node --use-system-ca backfill-momentum.js --commit';
-    if (st.state === 'drifted' && !st.versionBumped) {
-      console.warn(`WARNING: the momentum scoring has changed but MODEL_VERSION has not (still ${Momentum.MODEL_VERSION}). ` +
-        `${st.rows.toLocaleString()} stored rows were built by fingerprint ${st.stored.fingerprint}, this code is ${Momentum.MODEL_ID}, ` +
-        `and they are being served as current. Bump MODEL_VERSION in momentum.js, then ${fix}`);
-    } else if (st.state === 'drifted') {
-      console.warn(`NOTE: MODEL_VERSION is ${Momentum.MODEL_VERSION} but the stored momentum history was built at version ${st.stored.model}. ` +
-        `Reads filter the old rows out, so charts stay short until you ${fix}`);
-    } else {
-      console.warn(`NOTE: ${st.rows.toLocaleString()} momentum rows have no recorded model. To confirm they match this code, ${fix}`);
-    }
-  } catch (err) {
-    // Never let a diagnostic stop the server coming up.
-    console.warn('momentum model check skipped:', err.message);
-  }
-}
-
 // ALWAYS listen. This was briefly guarded by `require.main === module` so a
 // script could require the file for its mail helpers, and it took the site down:
 // package.json sets "main": "server.js", so Vercel imports this module rather
@@ -4548,5 +4215,4 @@ app.listen(PORT, () => {
   if (!API_KEY) {
     console.warn('WARNING: TWELVE_DATA_API_KEY is not set — /api/stocks will return an error until you add it to .env');
   }
-  checkMomentumModel();
 });
