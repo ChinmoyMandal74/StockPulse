@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Database — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(34, 211, 238, 0.09), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: #22d3ee; box-shadow: 0 0 8px #22d3ee; }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 60ch; font-size: 13px; line-height: 1.65; }
+    .masthead { margin: 34px 0 22px; }
+
+    .k { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px; }
+    .stat .core { padding: 20px 22px; }
+    .val { margin-top: 12px; font-family: var(--mono); font-size: 32px; font-weight: 500;
+           letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+    .stat:nth-child(1) .val { color: #22d3ee; }
+    .stat:nth-child(2) .val { color: var(--green); }
+    .stat:nth-child(3) .val { color: var(--accent); }
+    .val small { font-size: 13px; color: var(--faint); letter-spacing: 0; }
+
+    .bar-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 4px 10px; }
+    .bar-top h2 { margin: 0 auto 0 0; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    .when { font-size: 12px; color: var(--faint); }
+    .table-wrap { overflow-x: auto; }
+    table { font-size: 13px; width: 100%; border-collapse: collapse; }
+    thead th { background: var(--surface-2); }
+    th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); white-space: nowrap; }
+    th { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; color: var(--faint);
+         border-bottom: 1px solid var(--hair); cursor: pointer; user-select: none; }
+    th:hover { color: var(--text); }
+    th.on { color: var(--accent); }
+    th.n, td.n { text-align: right; }
+    td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    td.tn { font-family: var(--mono); font-size: 12.5px; }
+    td.desc { white-space: normal; color: var(--muted); font-size: 12.5px; line-height: 1.45; min-width: 220px; }
+    .grp { font-size: 11px; font-weight: 500; }
+    .share { display: inline-block; width: 90px; height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.06);
+             vertical-align: middle; margin-left: 10px; overflow: hidden; }
+    .share i { display: block; height: 100%; background: #22d3ee; border-radius: 99px; }
+    .tag { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint);
+           border: 1px solid var(--hair); border-radius: 99px; padding: 1px 7px; margin-left: 6px; }
+    .zero { color: var(--faint); }
+    .empty, .error { padding: 26px; font-size: 13px; color: var(--muted); }
+    .error { color: var(--red); }
+    .note { margin: 14px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.6; max-width: 80ch; }
+    @media (max-width: 768px) {
+      .page { padding: 0 16px; } .hide-sm { display: none !important; }
+      .stats { grid-template-columns: 1fr; } .share { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.9 13.6A8 8 0 1 1 18.1 7.3"/><path d="M18.7 3.2v4.4h-4.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <button class="btn" id="countBtn"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Count again</button>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Admin</span>
+      <h1>Database</h1>
+      <p class="lede">Every table the back end keeps in Turso, with how many rows and columns each holds.
+        Counts are exact, taken when the page opens.</p>
+    </header>
+
+    <div class="stats">
+      <div class="bezel stat"><div class="core"><span class="k">Tables</span><div class="val" id="sTables">—</div></div></div>
+      <div class="bezel stat"><div class="core"><span class="k">Rows, all tables</span><div class="val" id="sRows">—</div></div></div>
+      <div class="bezel stat"><div class="core"><span class="k">Columns, all tables</span><div class="val" id="sCols">—</div></div></div>
+    </div>
+
+    <div class="bar-top">
+      <h2>Tables</h2>
+      <span class="when" id="when"></span>
+    </div>
+    <div class="bezel"><div class="core" style="padding:0">
+      <div class="table-wrap" id="wrap"><div class="empty">Counting…</div></div>
+    </div></div>
+    <p class="note">Counts are cached for five minutes: counting reads every row of every table, and Turso
+      meters rows read, so a reload within that window reuses the last count. <b>Count again</b> always counts.
+      Views are listed with their columns but not counted, since counting a view runs its query.</p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    // What each table is for, grouped the way the app thinks about them. A
+    // table not listed here still shows, under Other, with no description.
+    const GROUPS = { market: ['Market data', '#34d399'], portfolios: ['Portfolios', '#fbbf24'],
+      accounts: ['Accounts', '#a78bfa'], logs: ['Logs', '#f472b6'], refresh: ['Refresh', '#7c9cff'],
+      reference: ['Reference', '#22d3ee'], other: ['Other', '#9aa3b2'] };
+    const TABLES = {
+      bars: ['market', 'Daily price bars — one row per stock per trading day, back to 2006'],
+      profiles: ['market', 'Cached company data per stock: sector, industry, fundamentals'],
+      fundamentals_history: ['market', 'One set of fundamentals per stock per Refresh-all day'],
+      snapshot: ['market', 'The computed screener table everyone is served (one row)'],
+      names: ['market', 'Company names, and short-name overrides'],
+      news: ['market', 'Stored headlines per stock (21 days, 25 each)'],
+      news_state: ['market', 'When each stock’s headlines were last fetched'],
+      portfolios: ['portfolios', 'The shared portfolios and their order'],
+      portfolio_tickers: ['portfolios', 'Which stocks are in which shared portfolio'],
+      user_portfolios: ['portfolios', 'Members’ personal portfolios'],
+      users: ['accounts', 'Accounts: email, role, approval status'],
+      sessions: ['accounts', 'Signed-in sessions (30 days)'],
+      password_resets: ['accounts', 'Pending password-reset links (hashed)'],
+      prefs: ['accounts', 'Saved layout and choices per account'],
+      chat_usage: ['accounts', 'Daily assistant and contact-form counters'],
+      visitors: ['logs', 'Front-door visits'],
+      activity: ['logs', 'Who did what (60 days)'],
+      refresh_state: ['refresh', 'The refresh currently running, if any (at most one row)'],
+      refresh_runs: ['refresh', 'Every refresh run, manual or scheduled (90 days)'],
+      refresh_rounds: ['refresh', 'Each round of those runs (30 days)'],
+      nasdaq_listings: ['reference', 'Every US listing NASDAQ publishes — not joined to the screener'],
+    };
+
+    let data = null;
+    let sortKey = 'rows', sortDir = -1;
+    const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString());
+
+    function paint() {
+      const items = data.items;
+      const tables = items.filter((x) => x.type === 'table');
+      const totalRows = tables.reduce((a, x) => a + x.rows, 0);
+      $('sTables').innerHTML = fmt(tables.length) +
+        (items.length > tables.length ? ` <small>+ ${items.length - tables.length} view${items.length - tables.length === 1 ? '' : 's'}</small>` : '');
+      $('sRows').textContent = fmt(totalRows);
+      $('sCols').textContent = fmt(tables.reduce((a, x) => a + x.columns, 0));
+      $('when').textContent = `Counted ${new Date(data.countedAt).toLocaleTimeString()} in ${data.ms} ms` +
+        (data.cached ? ' · from the last count' : '');
+
+      const groupOf = (x) => (TABLES[x.name] || ['other'])[0];
+      const val = (x) => sortKey === 'name' ? x.name
+        : sortKey === 'group' ? GROUPS[groupOf(x)][0] + ' ' + x.name
+        : sortKey === 'columns' ? x.columns : (x.rows == null ? -1 : x.rows);
+      const rows = items.slice().sort((a, b) => {
+        const va = val(a), vb = val(b);
+        return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * sortDir;
+      });
+      const maxRows = Math.max(1, ...tables.map((x) => x.rows));
+      const th = (key, label, cls = '') =>
+        `<th class="${cls}${sortKey === key ? ' on' : ''}" data-sort="${key}">${label}${sortKey === key ? (sortDir < 0 ? ' ↓' : ' ↑') : ''}</th>`;
+      $('wrap').innerHTML = '<table><thead><tr>' + th('name', 'Table') + th('group', 'Area') +
+        th('rows', 'Rows', 'n') + th('columns', 'Columns', 'n') + '<th>What it holds</th></tr></thead><tbody>' +
+        rows.map((x) => {
+          const g = GROUPS[groupOf(x)];
+          const share = x.rows ? Math.max(1, (x.rows / maxRows) * 100) : 0;
+          return `<tr><td class="tn">${we(x.name)}${x.type === 'view' ? '<span class="tag">view</span>' : ''}</td>` +
+            `<td><span class="grp" style="color:${g[1]}">${g[0]}</span></td>` +
+            `<td class="n${x.rows === 0 ? ' zero' : ''}">${x.rows == null ? '—' : fmt(x.rows)}` +
+            (x.type === 'table' ? `<span class="share"><i style="width:${share}%"></i></span>` : '') + '</td>' +
+            `<td class="n">${fmt(x.columns)}</td>` +
+            `<td class="desc">${we((TABLES[x.name] || [null, ''])[1])}</td></tr>`;
+        }).join('') + '</tbody></table>';
+      $('wrap').querySelectorAll('th[data-sort]').forEach((h) => h.addEventListener('click', () => {
+        const k = h.dataset.sort;
+        if (sortKey === k) sortDir *= -1;
+        else { sortKey = k; sortDir = (k === 'rows' || k === 'columns') ? -1 : 1; }
+        paint();
+      }));
+    }
+
+    async function load(fresh) {
+      $('countBtn').disabled = true;
+      try {
+        const res = await fetch('/api/db-stats' + (fresh ? '?fresh=1' : ''), { cache: 'no-store' });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || `Request failed (${res.status})`);
+        data = d;
+        paint();
+      } catch (e) {
+        $('wrap').innerHTML = `<div class="error">Could not count the tables: ${we(e.message)}</div>`;
+      } finally {
+        $('countBtn').disabled = false;
+      }
+    }
+    $('countBtn').addEventListener('click', () => load(true));
+    load(false);
+  </script>
+</body>
+</html>

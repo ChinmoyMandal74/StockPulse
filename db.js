@@ -794,6 +794,34 @@ async function pruneRuns(runDays = 90, roundDays = 30) {
   ], 'write');
 }
 
+// ---- the database page ------------------------------------------------------
+// Every table with its row and column count, and every view with its columns.
+// Counts are exact (count(*)), all in one read batch: measured at ~90ms for 21
+// tables and ~382k rows. Views are listed but not counted — a view can be an
+// arbitrary query, and counting one runs it.
+async function tableStats() {
+  await init();
+  const m = await db.execute(
+    `select type, name from sqlite_master
+      where type in ('table', 'view') and name not like 'sqlite_%' and name not like '_litestream%'
+      order by name`);
+  const items = m.rows.map((r) => ({ type: r.type, name: r.name }));
+  const quote = (n) => '"' + String(n).replace(/"/g, '""') + '"';
+  const stmts = [];
+  for (const it of items) {
+    stmts.push({ sql: `select count(*) as n from pragma_table_info(?)`, args: [it.name] });
+    if (it.type === 'table') stmts.push({ sql: `select count(*) as n from ${quote(it.name)}`, args: [] });
+  }
+  const t0 = Date.now();
+  const res = stmts.length ? await db.batch(stmts, 'read') : [];
+  let i = 0;
+  for (const it of items) {
+    it.columns = Number(res[i++].rows[0].n);
+    it.rows = it.type === 'table' ? Number(res[i++].rows[0].n) : null;
+  }
+  return { items, ms: Date.now() - t0, countedAt: Date.now() };
+}
+
 // Counts for the nightly report: how much of the archive exists, and whether
 // today's fundamentals row actually landed. Cheap enough to run once per run.
 async function archiveStats(day) {
@@ -1773,6 +1801,7 @@ module.exports = {
   markPriced,
   expireOldestProfiles,
   expireProfilesFor,
+  tableStats,
   startRun,
   noteRound,
   finishRun,

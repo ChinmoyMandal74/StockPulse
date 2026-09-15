@@ -270,7 +270,7 @@ app.get('/login', (req, res) => {
 // file. Locally it worked, which is exactly why it went unnoticed.
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
-                      '/admin.html': '/admin', '/refreshes.html': '/refreshes',
+                      '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
                       '/nasdaq.html': '/nasdaq',
                       '/cards.html': '/cards',
                       '/users.html': '/users', '/reset.html': '/reset',
@@ -350,6 +350,13 @@ app.get('/admin', route(async (req, res) => {
 app.get('/visitors', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'private', 'visitors.html'));
+}));
+
+// Admin only: every table in the database, with its row and column count.
+app.get('/database', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'database');
+  res.sendFile(path.join(__dirname, 'private', 'database.html'));
 }));
 
 // Admin only: every refresh run, manual or scheduled, with its rounds.
@@ -4331,6 +4338,21 @@ function nightVerdicts(runs, days = 14, now = Date.now()) {
   }
   return out;
 }
+
+// The counts behind /database. Cached five minutes per instance: every open
+// is an exact count(*) of every table, which Turso meters as rows read
+// (~382k at the time of writing, nearly all of it the bar archive), so a few
+// reloads should not each pay for it. ?fresh=1 counts again.
+let dbStatsCache = null;
+app.get('/api/db-stats', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const fresh = req.query.fresh === '1';
+  if (!fresh && dbStatsCache && Date.now() - dbStatsCache.countedAt < 5 * 60 * 1000) {
+    return res.json({ ...dbStatsCache, cached: true });
+  }
+  dbStatsCache = await store.tableStats();
+  res.json({ ...dbStatsCache, cached: false });
+}));
 
 app.get('/api/refresh-runs', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
