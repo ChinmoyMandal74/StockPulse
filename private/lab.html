@@ -227,7 +227,6 @@
       <div class="picks" id="indPicks"></div>
       <p class="pnote" id="indBlurb"></p>
       <div class="hrow"><span class="hlab">Measure against the next</span><span id="horPicks"></span></div>
-      <div class="nodata" id="noScore" hidden></div>
       <div class="knobs" id="knobs"></div>
       <button class="btn reset" id="resetBtn">Reset to defaults</button>
     </div></section>
@@ -281,10 +280,6 @@
     let horizon = 21;
     const hLabel = () => (data.horizons.find((h) => h.days === horizon) || { label: horizon + ' sessions' }).label;
     const ind = () => (data.indicators.find((x) => x.id === current) || data.indicators[0]);
-    // An indicator that reads the score is unusable on a symbol too short to
-    // have one — SKHY and SPCX have neither, and several faders are scored only
-    // for part of their history.
-    const hasScore = () => (data.score || []).some((v) => v != null);
 
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t)
@@ -368,19 +363,10 @@
     }
 
     function renderPicks() {
-      const scored = hasScore();
-      $('indPicks').innerHTML = data.indicators.map((x) => {
-        const off = x.needs === 'score' && !scored;
-        return `<button class="pick2${x.id === current ? ' on' : ''}" data-ind="${esc(x.id)}"` +
-          `${off ? ' disabled title="No momentum score stored for this symbol"' : ''}>${esc(x.label)}</button>`;
-      }).join('');
+      $('indPicks').innerHTML = data.indicators.map((x) =>
+        `<button class="pick2${x.id === current ? ' on' : ''}" data-ind="${esc(x.id)}">${esc(x.label)}</button>`
+      ).join('');
       $('indBlurb').textContent = ind().blurb;
-      const needScore = ind().needs === 'score';
-      $('noScore').hidden = !(needScore && !scored);
-      if (needScore && !scored) {
-        $('noScore').textContent = `${data.symbol} has no stored momentum score — it needs 274 sessions ` +
-          'of run-up before the model will score it at all, so there is no series to take a slope of.';
-      }
     }
 
     // ---- the sliders --------------------------------------------------------

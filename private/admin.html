@@ -234,8 +234,6 @@
           <div class="grid" style="margin-top:8px">
             <a class="row" id="goStock" href="/"><svg class="ic" aria-hidden="true"><use href="#i-chart" /></svg>
               <span class="txt"><span class="nm">Stock</span><span class="hint">Everything about one stock: chart, ribbon, every field.</span></span></a>
-            <a class="row" id="goSignal" href="/"><svg class="ic" aria-hidden="true"><use href="#i-scatter" /></svg>
-              <span class="txt"><span class="nm">Signal study</span><span class="hint">Does a momentum move predict the next move in price.</span></span></a>
             <a class="row" id="goLab" href="/"><svg class="ic" aria-hidden="true"><use href="#i-sliders" /></svg>
               <span class="txt"><span class="nm">Indicator lab</span><span class="hint">Build a short-horizon indicator and see what it does.</span></span></a>
           </div>
@@ -363,7 +361,6 @@
       const s = $('symPick').value;
       const enc = encodeURIComponent(s || '');
       $('goStock').href = s ? '/stock/' + enc : '/';
-      $('goSignal').href = s ? '/signal/' + enc : '/';
       $('goLab').href = s ? '/lab/' + enc : '/';
     }
     $('symPick').addEventListener('change', paintSymbolLinks);

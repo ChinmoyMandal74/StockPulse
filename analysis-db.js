@@ -37,7 +37,6 @@ const DB_PATH = path.resolve(argOf('--path', 'analysis.db'));
 // `chat_usage` are personal and answer no question worth asking here.
 const TABLES = [
   { name: 'bars', dated: true, bySymbol: true },
-  { name: 'momentum_history', dated: true, bySymbol: true },
   { name: 'fundamentals_history', dated: true, bySymbol: true },
   { name: 'names', dated: false, bySymbol: false },
   { name: 'portfolios', dated: false, bySymbol: false },
@@ -168,27 +167,7 @@ function showStats(local) {
   // Indexes analysis wants, which the app's schema does not have: every
   // cross-sectional question groups by date first.
   local.exec('create index if not exists ix_bars_d on bars (d)');
-  local.exec('create index if not exists ix_mom_d on momentum_history (d)');
-  local.exec('create index if not exists ix_mom_model_d on momentum_history (model, d)');
 
-  // The same view the server defines, so a query written against one runs
-  // against the other unchanged.
-  local.exec('drop view if exists momentum_deltas');
-  local.exec(`create view momentum_deltas as
-    select symbol, d, model, score, close,
-      lag(score, 5) over w as past_1w, lag(score, 10) over w as past_2w,
-      lag(score, 21) over w as past_1m, lag(score, 63) over w as past_3m,
-      lag(score, 126) over w as past_6m,
-      score - lag(score, 5) over w as delta_1w, score - lag(score, 10) over w as delta_2w,
-      score - lag(score, 21) over w as delta_1m, score - lag(score, 63) over w as delta_3m,
-      score - lag(score, 126) over w as delta_6m,
-      (close - lag(close, 10) over w) / lag(close, 10) over w * 100 as ret_2w,
-      (lead(close, 10) over w - close) / close * 100 as fwd_ret_2w,
-      (lead(close, 21) over w - close) / close * 100 as fwd_ret_1m,
-      (lead(close, 63) over w - close) / close * 100 as fwd_ret_3m
-    from (select h.symbol, h.d, h.model, h.score, b.close
-          from momentum_history h join bars b on b.symbol = h.symbol and b.d = h.d)
-    window w as (partition by symbol, model order by d)`);
   local.exec('analyze');
 
   console.log(`\n${n(grand)} rows in ${((Date.now() - t0) / 1000).toFixed(1)}s\n`);

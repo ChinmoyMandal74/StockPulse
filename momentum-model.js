@@ -26,18 +26,6 @@ const MIN_BARS = 274;
 // averages need 200 with somewhere to look back for the last cross.
 const ROWS = Math.max(280, Number(process.argv[3]) || 320);
 
-// Every horizon the screener's Past picker offers, taken from the module that
-// defines that picker rather than restated here — a workbook that disagreed
-// with the dropdown it is named after would be worse than one that omits it.
-const { PAST_PERIODS, DEFAULT_PAST } = require('./private/screens.js');
-const HORIZONS = PAST_PERIODS.map((p) => ({ id: p.id, lag: p.days, label: p.id.toUpperCase() }));
-
-// The fortnight still has a special place: it is what the screener ships as
-// momentumScorePrev and momentumChange, what momentum_deltas lags by, and so
-// what the two return columns are measured over.
-const PAST_LAG = (PAST_PERIODS.find((p) => p.id === DEFAULT_PAST) || { days: 10 }).days;
-const PAST_LABEL = DEFAULT_PAST.toUpperCase();
-
 // ---- a minimal zip writer --------------------------------------------------
 // Local file header + central directory, deflated. No dependency, ~50 lines.
 const CRC = (() => {
@@ -103,78 +91,6 @@ function zip(files) {
 }
 
 // ---- the scatter chart -----------------------------------------------------
-// A chart is four more parts in the zip — the chart itself, a drawing that
-// anchors it to a sheet, and a relationship apiece — plus two content-type
-// overrides. Written out by hand for the same reason the rest is: a chart is
-// XML, and reaching for a library to emit 60 lines of it would buy a dependency
-// and lose the ability to say exactly what is in the file.
-//
-// The series points at the Bars sheet rather than copying the numbers, so the
-// scatter is a view of the same formulas everything else uses. Edit a close
-// price and the cloud moves with the score.
-const AX_X = 745110001, AX_Y = 745110002;   // any two stable ids
-
-function chartXml(title, xRef, yRef, xName, yName) {
-  const t = (txt, size) =>
-    `<c:rich><a:bodyPr/><a:p><a:pPr><a:defRPr sz="${size}" b="0"/></a:pPr>` +
-    `<a:r><a:rPr lang="en-US" sz="${size}"/><a:t>${esc(txt)}</a:t></a:r></a:p></c:rich>`;
-  const axTitle = (txt) => `<c:title><c:tx>${t(txt, 900)}</c:tx><c:overlay val="0"/></c:title>`;
-  const valAx = (id, cross, pos, name) =>
-    `<c:valAx><c:axId val="${id}"/><c:scaling><c:orientation val="minMax"/></c:scaling>` +
-    `<c:delete val="0"/><c:axPos val="${pos}"/>` +
-    `<c:majorGridlines/>${axTitle(name)}<c:numFmt formatCode="General" sourceLinked="0"/>` +
-    `<c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>` +
-    // Cross at zero, so the four quadrants of the scatter read as quadrants.
-    `<c:crossAx val="${cross}"/><c:crosses val="autoZero"/><c:crossBetween val="midCat"/></c:valAx>`;
-
-  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-    '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" ' +
-    'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
-    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-    `<c:chart><c:title><c:tx>${t(title, 1200)}</c:tx><c:overlay val="0"/></c:title>` +
-    '<c:autoTitleDeleted val="0"/><c:plotArea><c:layout/>' +
-    '<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>' +
-    '<c:ser><c:idx val="0"/><c:order val="0"/>' +
-    `<c:tx><c:v>${esc(yName)}</c:v></c:tx>` +
-    // No connecting line: joining 300 points in date order would draw a scribble
-    // over the very shape the chart exists to show.
-    '<c:spPr><a:ln w="19050"><a:noFill/></a:ln></c:spPr>' +
-    '<c:marker><c:symbol val="circle"/><c:size val="4"/><c:spPr>' +
-    '<a:solidFill><a:srgbClr val="4472C4"><a:alpha val="55000"/></a:srgbClr></a:solidFill>' +
-    '<a:ln><a:noFill/></a:ln></c:spPr></c:marker>' +
-    // Excel draws the fit and prints r2 on it, so the number on the Signal sheet
-    // and the line through the cloud cannot disagree.
-    '<c:trendline><c:spPr><a:ln w="12700"><a:solidFill><a:srgbClr val="808080"/></a:solidFill>' +
-    '<a:prstDash val="dash"/></a:ln></c:spPr><c:trendlineType val="linear"/>' +
-    '<c:dispRSqr val="1"/><c:dispEq val="0"/></c:trendline>' +
-    `<c:xVal><c:numRef><c:f>${esc(xRef)}</c:f></c:numRef></c:xVal>` +
-    `<c:yVal><c:numRef><c:f>${esc(yRef)}</c:f></c:numRef></c:yVal>` +
-    '<c:smooth val="0"/></c:ser>' +
-    `<c:axId val="${AX_X}"/><c:axId val="${AX_Y}"/></c:scatterChart>` +
-    valAx(AX_X, AX_Y, 'b', xName) + valAx(AX_Y, AX_X, 'l', yName) +
-    '</c:plotArea><c:plotVisOnly val="1"/>' +
-    // A blank must leave a hole, never be read as zero — the oldest ten rows
-    // have no fortnight behind them and the newest ten have no fortnight ahead.
-    '<c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>';
-}
-
-// Anchored across a block of cells so it resizes with the window rather than
-// sitting at a fixed pixel size.
-const DRAWING_XML =
-  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-  '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" ' +
-  'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
-  '<xdr:twoCellAnchor>' +
-  '<xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>13</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>' +
-  '<xdr:to><xdr:col>9</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>44</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>' +
-  '<xdr:graphicFrame macro="">' +
-  '<xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="Signal scatter"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>' +
-  '<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>' +
-  '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">' +
-  '<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" ' +
-  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/>' +
-  '</a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>';
-
 // ---- sheet building --------------------------------------------------------
 const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const col = (n) => { let s = ''; n++; while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = (n - r - 1) / 26; } return s; };
@@ -263,12 +179,12 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 //
 //   bars: newest first, [{ d, high, close }]
 //   live: the app's momentum score, or null — only used for the CHECK block
-// `momentum` is a date -> score map read from momentum_history. It is the one
-// column on the Bars sheet that is a stored value rather than a formula: the
-// score at an earlier date needs a year of run-up before it, and reproducing
-// that down 320 rows would mean 320 copies of the whole Factors sheet. The
-// current score stays live on Score, which is the one anybody checks.
-function buildModel(SYMBOL, bars, live, momentum) {
+// Every cell is a formula over the bars. Nothing here is a stored value any
+// more: the Momentum column used to be one, read from a history table that has
+// since been retired, and the Signal sheet that put its delta against the next
+// fortnight went with it. What remains is the live calculation of today's
+// score, which is what the workbook was always for.
+function buildModel(SYMBOL, bars, live) {
   const n = bars.length;
 
   // Excel serial dates: days since 1899-12-30.
@@ -280,24 +196,10 @@ function buildModel(SYMBOL, bars, live, momentum) {
   const RSI_SEED = LAST - 14;               // Wilder is seeded at the old end
   const b = [];
   b.push([{ v: `${SYMBOL} — daily bars and the running indicators`, s: S.title }]);
-  b.push([{ v: `Newest first. Row 2 is the most recent session, exactly as the app holds it. Grey columns are intermediates the factors need. Momentum is the stored score for that date — a value, not a formula, and the only cell here that does not recalculate. Past Mom. and Mom. Delta read it ${HORIZONS.map((h) => h.lag).join(', ')} rows down — the five horizons the screener's Past picker offers. Return ${PAST_LABEL} covers that same fortnight; Next ${PAST_LABEL} Return covers the one after it, and is the column to put the delta against when asking whether it predicts anything.`, s: S.note }]);
+  b.push([{ v: 'Newest first. Row 2 is the most recent session, exactly as the app holds it. Grey columns are intermediates the factors need. Every cell recalculates: change a close and the score on the Score sheet moves with it.', s: S.note }]);
   b.push([]);
-  // Paired by horizon — Past 1W, Delta 1W, Past 2W, Delta 2W … — because that
-  // is the pairing the dropdown expresses: pick a period, read what momentum was
-  // and how far it has moved. All five Pasts followed by all five Deltas would
-  // read better across horizons and worse for the question actually being asked.
-  const HEAD = [...['Date', 'High', 'Close', 'Log return', 'MA 50', 'MA 200', 'MA50 vs 200', 'Gain', 'Loss', 'Avg gain', 'Avg loss', 'RSI 14', 'Momentum'],
-    ...HORIZONS.flatMap((h) => [`Past Mom. (${h.label})`, `Mom. Delta (${h.label})`]),
-    `Return ${PAST_LABEL} %`, `Next ${PAST_LABEL} Return %`];
-  // Looked up rather than counted: adding a horizon shifts every column after
-  // it, and a chart pointed at a hardcoded letter would quietly plot the wrong
-  // series instead of failing.
-  const colOf = (label) => {
-    const i = HEAD.indexOf(label);
-    if (i < 0) throw new Error(`no such Bars column: ${label}`);
-    return col(i);
-  };
-  const MOM_COL = colOf('Momentum');
+  const HEAD = ['Date', 'High', 'Close', 'Log return', 'MA 50', 'MA 200', 'MA50 vs 200',
+    'Gain', 'Loss', 'Avg gain', 'Avg loss', 'RSI 14'];
   b.push(HEAD.map((h) => ({ v: h, s: S.head })));
   for (let i = 0; i < n; i++) {
     const R = i + 5;                        // data starts at row 5
@@ -323,41 +225,6 @@ function buildModel(SYMBOL, bars, live, momentum) {
       row.push({ f: `(K${R + 1}*13+I${R})/14`, s: S.num3 });
     } else { row.push('', ''); }
     row.push(R <= RSI_SEED + 4 ? { f: `IF(K${R}=0,100,100-100/(1+J${R}/K${R}))`, s: S.num2 } : '');
-    // A date with no stored row is left blank rather than carried forward, so a
-    // gap in the history reads as a gap.
-    const mv = momentum ? momentum.get(bars[i].d) : undefined;
-    row.push(mv == null ? '' : { v: mv, s: S.num2 });
-
-    // Past momentum and the deltas are formulas over the Momentum column, not
-    // more stored values. The sheet is newest-first, so the score N sessions ago
-    // is simply N rows further down — the same offset momentum_deltas lags by,
-    // and the reason the workbook agrees with the screener's Past Mom. and Mom.
-    // Delta rather than approximating them. Each tests for a blank rather than
-    // trusting the reference: an empty cell reads as 0 in Excel, so a gap in the
-    // stored history would otherwise print a score of zero and a delta the full
-    // size of today's score.
-    for (const h of HORIZONS) {
-      const P = R + h.lag;
-      const ok = i + h.lag < n;
-      row.push(ok ? { f: `IF(${MOM_COL}${P}="","",${MOM_COL}${P})`, s: S.num2 } : '');
-      row.push(ok ? { f: `IF(OR(${MOM_COL}${R}="",${MOM_COL}${P}=""),"",${MOM_COL}${R}-${MOM_COL}${P})`, s: S.num2 } : '');
-    }
-    const P = R + PAST_LAG;
-    const hasPast = i + PAST_LAG < n;
-
-    // The price beside the score, so the delta can be read against what the
-    // stock actually did. Two columns because they answer different questions
-    // and are easy to conflate: the first covers the SAME fortnight as the
-    // delta, which is why they track each other (measured across the archive:
-    // correlation 0.554, most of it by construction — the score is built out of
-    // returns). The second is the NEXT fortnight, which nothing in the score has
-    // seen, and is the only one of the two a backtest can honestly use.
-    //
-    // The sheet is newest-first, so the past is DOWN the rows and the future is
-    // UP them. Getting that backwards would silently invert the whole question.
-    const F = R - PAST_LAG;
-    row.push(hasPast ? { f: `(C${R}-C${P})/C${P}*100`, s: S.num2 } : '');
-    row.push(F >= 5 ? { f: `(C${F}-C${R})/C${R}*100`, s: S.num2 } : '');   // row 5 is the newest bar
     b.push(row);
   }
 
@@ -473,70 +340,20 @@ function buildModel(SYMBOL, bars, live, momentum) {
   sc.push([]);
   sc.push([{ v: 'HOW TO USE THIS', s: S.head }, { v: '', s: S.head }, { v: '', s: S.head }]);
   for (const line of [
-    'Change any close price on the Bars sheet and watch every number move — nothing here is typed in but the constants and the stored Momentum column on Bars, which is history rather than calculation.',
+    'Change any close price on the Bars sheet and watch every number move — nothing in this workbook is typed in but the constants.',
     'The centres and scales on the Factors sheet are the fixed scale. They do not depend on the other stocks, which is why a score means the same thing in any month.',
     'Weights are the same eight the app uses. Editing column F reproduces what the Weights menu does on the screener.',
     'Overall = 0.65 × momentum + 0.35 × quality. Quality is company data and is not modelled here.',
   ]) sc.push([{ v: '• ' + line, s: S.note }]);
 
   // ---- assemble ------------------------------------------------------------
-  // ================= Sheet 4 — Signal ========================================
-  // The relationship the /signal page draws, in the workbook: does a fortnight's
-  // move in the momentum score say anything about the fortnight that follows?
-  //
-  // Every number here is a formula over the Bars sheet, including the
-  // correlation — so this is not a screenshot of the finding, it is the finding,
-  // and editing a close price moves it.
-  const R1 = 5, R2 = n + 4;                            // the Bars data rows
-  const DX = colOf(`Mom. Delta (${PAST_LABEL})`);
-  const DY = colOf(`Next ${PAST_LABEL} Return %`);
-  const RX = `Bars!$${DX}$${R1}:$${DX}$${R2}`;
-  const RY = `Bars!$${DY}$${R1}:$${DY}$${R2}`;
-  // A blank from IF(...,"") is text, not a number, and text is greater than any
-  // number in an Excel comparison — so every count has to be gated on ISNUMBER
-  // or the empty rows at each end quietly join the "positive" side.
-  const BOTH = `(ISNUMBER(${RX}))*(ISNUMBER(${RY}))`;
-
-  const sg = [];
-  sg.push([{ v: `${SYMBOL} — momentum delta against what happened next`, s: S.title }]);
-  sg.push([{ v: `Each point is one session: the ${PAST_LABEL} change in the momentum score, ` +
-    `against the return over the ${PAST_LABEL} that followed. Both columns live on the Bars sheet, ` +
-    'so this chart and every figure below it recalculate when a price does.', s: S.note }]);
-  sg.push([]);
-  const F = (label, formula, style, note) =>
-    sg.push([{ v: label, s: S.label }, { f: formula, s: style }, { v: note || '', s: S.note }]);
-  F('Observations', `SUMPRODUCT(${BOTH})`, S.plain,
-    'Sessions with both a delta behind them and a return ahead of them.');
-  F('Independent ones', `ROUNDDOWN(SUMPRODUCT(${BOTH})/${PAST_LAG},0)`, S.plain,
-    `Consecutive returns share ${PAST_LAG - 1} of their ${PAST_LAG} days, so the honest count is roughly one per window.`);
-  F('Correlation', `CORREL(${RX},${RY})`, S.num3,
-    'Between -1 and 1. Near zero means the delta told you nothing about the next fortnight.');
-  F('R squared', `RSQ(${RY},${RX})`, S.num3, 'The share of the next fortnight the delta explains.');
-  F('Slope', `SLOPE(${RY},${RX})`, S.num3, '% of return per point of momentum move.');
-  F('Mean next return %', `AVERAGE(${RY})`, S.num2, 'What the stock did over an average fortnight.');
-  F('Base rate', `SUMPRODUCT(${BOTH}*(${RY}>=0))/SUMPRODUCT(${BOTH})`, S.num3,
-    'How often the next fortnight was positive at all.');
-  F('Hit rate', `SUMPRODUCT(${BOTH}*(${RX}>=0)*(${RY}>=0))/SUMPRODUCT(${BOTH}*(${RX}>=0))`, S.num3,
-    'How often it was positive after the momentum score rose.');
-  F('Lift', `SUMPRODUCT(${BOTH}*(${RX}>=0)*(${RY}>=0))/SUMPRODUCT(${BOTH}*(${RX}>=0))` +
-    `-SUMPRODUCT(${BOTH}*(${RY}>=0))/SUMPRODUCT(${BOTH})`, S.num3,
-    'Hit rate minus base rate. This is the only one of the three worth reading — a stock that rises most fortnights hands a high hit rate to a signal that knows nothing.');
-  sg.push([]);
-  sg.push([{ v: 'A round cloud is the honest outcome, and the usual one. Across the whole ' +
-    'screener this relationship measures about -0.003, so expect the trendline to lie flat and ' +
-    'R squared to sit near zero. Read the lift rather than the hit rate, and remember the ' +
-    'independent count above rather than the raw one.', s: S.note }]);
-
   const sheets = [
     { name: 'Bars', xml: sheetXml(b, {
-      widths: [12, 10, 10, 11, 10, 10, 12, 9, 9, 10, 10, 9, 11,
-        ...HORIZONS.flatMap(() => [14, 15]), 13, 17],
+      widths: [12, 10, 10, 11, 10, 10, 12, 9, 9, 10, 10, 9],
       freeze: 4 }) },
     { name: 'Factors', xml: sheetXml(f, { widths: [26, 14, 9, 9, 11, 8, 10, 70], tab: true }) },
     { name: 'Score', xml: sheetXml(sc, { widths: [24, 14, 78] }) },
-    { name: 'Signal', xml: sheetXml(sg, { widths: [22, 14, 78], drawing: 'rId1' }) },
   ];
-  const SIGNAL_SHEET = sheets.length;                  // 1-based, for the parts below
 
   const files = [
     { name: '[Content_Types].xml', data:
@@ -547,8 +364,6 @@ function buildModel(SYMBOL, bars, live, momentum) {
       '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
       sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') +
       '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
-      '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' +
-      '<Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>' +
       '</Types>' },
     { name: '_rels/.rels', data:
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -570,22 +385,6 @@ function buildModel(SYMBOL, bars, live, momentum) {
       '</Relationships>' },
     { name: 'xl/styles.xml', data: STYLES },
     ...sheets.map((s, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: s.xml })),
-    // The Signal sheet -> its drawing -> the chart. Two more relationship parts,
-    // each naming the next thing down the chain.
-    { name: `xl/worksheets/_rels/sheet${SIGNAL_SHEET}.xml.rels`, data:
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>' +
-      '</Relationships>' },
-    { name: 'xl/drawings/drawing1.xml', data: DRAWING_XML },
-    { name: 'xl/drawings/_rels/drawing1.xml.rels', data:
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>' +
-      '</Relationships>' },
-    { name: 'xl/charts/chart1.xml', data: chartXml(
-      `${SYMBOL} — momentum delta (${PAST_LABEL}) against the next ${PAST_LABEL}`,
-      RX, RY, `Momentum delta (${PAST_LABEL}), points`, `Next ${PAST_LABEL} return, %`) },
   ];
 
 
@@ -608,10 +407,9 @@ async function main() {
   const store = require('./db.js');
   const live = ((await store.readSnapshot()).stocks || [])
     .find((x) => x.symbol === SYMBOL);
-  const momentum = await momentumMap(store, SYMBOL, bars);
 
   const out = `momentum-model-${SYMBOL}.xlsx`;
-  fs.writeFileSync(out, buildModel(SYMBOL, bars, live, momentum));
+  fs.writeFileSync(out, buildModel(SYMBOL, bars, live));
   console.log(`${out}  —  ${bars.length} bars, ${bars[bars.length - 1].d} to ${bars[0].d}`);
   if (live && live.momentumScore != null) {
     console.log(`the app currently reports momentum ${live.momentumScore} for ${SYMBOL}; the Score sheet checks itself against it`);
@@ -619,17 +417,7 @@ async function main() {
   process.exit(0);
 }
 
-// The stored momentum for exactly the dates on the Bars sheet. Shared by the
-// CLI and /api/model: the two are verified byte-identical, which only holds if
-// they assemble their inputs the same way.
-async function momentumMap(store, symbol, bars) {
-  const oldest = bars.length ? bars[bars.length - 1].d : null;
-  if (!oldest) return new Map();
-  const rows = await store.readMomentum(symbol, oldest);
-  return new Map(rows.map((r) => [r.d, r.score]));
-}
-
-module.exports = { buildModel, momentumMap, MODEL_ROWS: ROWS, MODEL_MIN_BARS: MIN_BARS };
+module.exports = { buildModel, MODEL_ROWS: ROWS, MODEL_MIN_BARS: MIN_BARS };
 
 if (require.main === module) main();
 

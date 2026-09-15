@@ -36,18 +36,12 @@ const OUT = path.resolve('private/lab-grid.json');
 // One grid per indicator, over the knobs that indicator actually has.
 const GRIDS = QUICK ? {
   velocity: { lookback: [5, 20], skip: [0], volWindow: [60], smooth: [1] },
-  scoreSlope: { window: [10, 30], skip: [0], smooth: [1] },
   rsi: { period: [14], skip: [0], smooth: [1] },
 } : {
   velocity: {
     lookback: [3, 5, 10, 15, 20, 30],
     skip: [0, 1, 3, 5],
     volWindow: [20, 60, 126],
-    smooth: [1, 5],
-  },
-  scoreSlope: {
-    window: [5, 10, 20, 30, 45, 60],
-    skip: [0, 1, 3, 5],
     smooth: [1, 5],
   },
   rsi: {
@@ -71,29 +65,22 @@ if (!fs.existsSync(DB)) {
 const db = new DatabaseSync(DB);
 const t0 = Date.now();
 
-// Bars and scores once; neither depends on the parameters.
+// Bars once; they do not depend on the parameters.
 const bars = db.prepare('select symbol, d, close from bars order by symbol, d').all();
-const scores = db.prepare('select symbol, d, score from momentum_history where model = 2').all();
-const scoreAt = new Map();
-for (const r of scores) scoreAt.set(r.symbol + '|' + r.d, Number(r.score));
 
 const syms = new Map();
 for (const r of bars) {
-  if (!syms.has(r.symbol)) syms.set(r.symbol, { dates: [], closes: [], score: [] });
+  if (!syms.has(r.symbol)) syms.set(r.symbol, { dates: [], closes: [] });
   const s = syms.get(r.symbol);
   s.dates.push(r.d);
   s.closes.push(Number(r.close));
-  // Aligned by lookup, not by position: a symbol has no score until MIN_BARS of
-  // run-up, so the two tables do not line up row for row.
-  const k = r.symbol + '|' + r.d;
-  s.score.push(scoreAt.has(k) ? scoreAt.get(k) : null);
 }
 // One forward series per horizon, computed once — the parameters do not touch it.
 for (const s of syms.values()) {
   s.fwdBy = {};
   for (const h of I.HORIZONS) s.fwdBy[h.days] = I.forwardReturn(s.closes, h.days);
 }
-console.log(`${bars.length.toLocaleString()} bars, ${scores.length.toLocaleString()} scored rows, ` +
+console.log(`${bars.length.toLocaleString()} bars, ${syms.size} symbols, ` +
   `${syms.size} symbols, ${((Date.now() - t0) / 1000).toFixed(1)}s\n`);
 
 // One parameter set: rank within each day, measure excess over that day's

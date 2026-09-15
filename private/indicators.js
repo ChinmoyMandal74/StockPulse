@@ -86,40 +86,6 @@
     return out;
   }
 
-  // Least-squares slope over a rolling window, in units per session.
-  //
-  // This is the honest version of a two-point difference. `score[t] − score[t−10]`
-  // reads exactly two observations and throws the eight between them away, so
-  // one noisy endpoint moves the whole answer. A fitted slope uses every point
-  // in the window, which is the entire reason to prefer it.
-  //
-  // The window must be complete: a slope fitted through a gap is a different
-  // measurement wearing the same name, and momentum_history has no score at all
-  // until a symbol has MIN_BARS of run-up behind it.
-  function rollingSlope(values, window, skip) {
-    const n = values.length;
-    const out = new Array(n).fill(null);
-    if (!(window >= 2)) return out;
-    // x is fixed 0..window-1 for every fit, so its moments are constants.
-    const xbar = (window - 1) / 2;
-    let sxx = 0;
-    for (let k = 0; k < window; k++) sxx += (k - xbar) * (k - xbar);
-    if (!(sxx > 0)) return out;
-
-    for (let i = 0; i < n; i++) {
-      const end = i - skip, start = end - window + 1;
-      if (start < 0) continue;
-      let sxy = 0, ok = true;
-      for (let k = 0; k < window; k++) {
-        const y = num(values[start + k]);
-        if (y == null) { ok = false; break; }
-        sxy += (k - xbar) * y;
-      }
-      if (ok) out[i] = sxy / sxx;
-    }
-    return out;
-  }
-
   // Wilder's RSI at every date. Oldest-first here, where momentum.js works
   // newest-first — verified equal to Momentum.rsiSeriesAt, which is itself
   // checked against the screener's own RSI column to four decimals.
@@ -181,8 +147,6 @@
   const BOUNDS = {
     lookback: { min: 2, max: 40, label: 'Lookback', unit: ' sessions',
       help: 'How far back the return is measured. Below about five days you are measuring noise; above twenty you are measuring the medium term the score already covers.' },
-    window: { min: 5, max: 60, label: 'Fit window', unit: ' sessions',
-      help: 'How many sessions the slope is fitted through. Every one of them counts toward the answer, which is the difference from a two-point delta.' },
     skip: { min: 0, max: 10, label: 'Skip', unit: ' sessions',
       help: 'Sessions left out at the recent end. This is what 12-1 momentum does with its final month — the most recent days are where reversal lives.' },
     volWindow: { min: 20, max: 126, label: 'Vol window', unit: ' sessions',
@@ -211,24 +175,6 @@
         return ema(raw, p.smooth);
       },
       warmup: (p) => Math.max(p.lookback + p.skip, p.volWindow) + 1,
-    },
-    {
-      id: 'scoreSlope',
-      label: 'Momentum score slope',
-      needs: 'score',
-      blurb: 'The least-squares slope of the momentum score, in points per session. ' +
-        'The honest version of Mom. Delta, which reads two observations and discards ' +
-        'everything between them. No volatility normaliser is needed and that is not an ' +
-        'oversight: the score has been on a fixed absolute scale since September, so a ' +
-        'slope of 0.4 points a session means the same thing for every stock — which it ' +
-        'would not while the score was a percentile.',
-      params: ['window', 'skip', 'smooth'],
-      defaults: { window: 20, skip: 0, smooth: 1 },
-      compute(series, p) {
-        if (!series.score) return series.closes.map(() => null);
-        return ema(rollingSlope(series.score, p.window, p.skip), p.smooth);
-      },
-      warmup: (p) => p.window + p.skip + 1,
     },
   ];
 
@@ -306,5 +252,5 @@
   }
 
   return { INDICATORS, HORIZONS, byId, BOUNDS, clean, warmup, compute, forwardReturn,
-    realisedVolSeries, windowReturn, rollingSlope, rsiSeries, lag, ema };
+    realisedVolSeries, windowReturn, rsiSeries, lag, ema };
 });
