@@ -129,19 +129,26 @@
         const downs = scope.rows.filter((x) => x[field] < 0)
           .sort((a, b) => a[field] - b[field]).slice(0, k);
         const mx = Math.max(...ups.concat(downs).map((x) => Math.abs(x[field])), 0.01);
+        // On a story the rows spread down the column, so the shorter list is
+        // padded with invisible rows: the nth gainer then sits level with the
+        // nth loser instead of the two columns spacing out differently.
+        const slots = size.id === 'story' ? Math.max(ups.length, downs.length) : 0;
+        const pad = (list) => (list.length && slots > list.length
+          ? '<div class="mrow mpad" aria-hidden="true"><span class="ms">&nbsp;</span><span class="bar-rail"></span><span class="mv">&nbsp;</span></div>'
+            .repeat(slots - list.length) : '');
         const col = (title, list, neg) =>
-          `<div class="mcol"><div class="mch ${neg ? 'neg' : 'pos'}">${esc(title)}</div>` +
+          `<div class="mcol"><div class="mch ${neg ? 'neg' : 'pos'}">${esc(title)}</div><div class="mlist">` +
           (list.length ? list.map((x) => {
             const w = Math.max(6, Math.round(Math.abs(x[field]) / mx * 100));
             return `<div class="mrow"><span class="ms">${esc(movLabel(x))}</span>` +
               `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
               `<span class="mv ${neg ? 'neg' : 'pos'}">${pct(x[field])}</span></div>`;
-          }).join('') : '<div class="mnone">nothing moved that way</div>') +
-          '</div>';
+          }).join('') + pad(list) : '<div class="mnone">nothing moved that way</div>') +
+          '</div></div>';
         return chromeTop() +
           `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 ${esc(periodLabel)}</span>` +
           '<h2 class="s-title">Up and down<br><span class="dim">' + esc(periodLabel) + '</span></h2>' +
-          `<div class="twocol${dense}">${col('Gainers', ups, false)}${col('Losers', downs, true)}</div>` +
+          `<div class="twocol${dense}${slots && slots <= 6 ? ' few' : ''}">${col('Gainers', ups, false)}${col('Losers', downs, true)}</div>` +
           '</div></div>' + chromeFoot();
       }
       // The verdict beside the move. Off unless a rule set is picked, and
@@ -1448,6 +1455,28 @@
     .sz-story .rows, .sz-story .atally, .sz-story .stmts, .sz-story .flow,
     .sz-story .rungs { flex: 1; justify-content: space-evenly; }
     .sz-story .twocol { flex: 1; }
+    /* Side by side on a story: the columns take the height, each row is two
+       lines — name and move above, the bar full width beneath — so a name
+       gets the column's whole width instead of 92px, and the rows spread
+       down the space. The dense post rhythm is overridden: it exists because
+       a post has no height to spare, and a story has 570px more. */
+    .sz-story .twocol, .sz-story .twocol.dense { gap: 46px; margin-top: 40px; }
+    .sz-story .mcol { display: flex; flex-direction: column; }
+    .sz-story .mlist { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
+    .sz-story .twocol .mch, .sz-story .twocol.dense .mch { font-size: 19px; padding-bottom: 12px; margin-bottom: 4px; }
+    .sz-story .twocol .mrow, .sz-story .twocol.dense .mrow { flex-wrap: wrap; gap: 9px 12px; margin-bottom: 0; }
+    .sz-story .twocol .mrow .ms, .sz-story .twocol.dense .mrow .ms { order: 1; flex: 1 1 0; width: auto; font-size: 28px; }
+    .sz-story .twocol .mrow .mv, .sz-story .twocol.dense .mrow .mv { order: 2; width: auto; font-size: 28px; }
+    .sz-story .twocol .mrow .bar-rail, .sz-story .twocol.dense .mrow .bar-rail { order: 3; flex: 0 0 100%; height: 16px; border-radius: 6px; }
+    .sz-story .twocol.dense .mrow .ms, .sz-story .twocol.dense .mrow .mv { font-size: 25px; }
+    .sz-story .twocol.dense .mrow .bar-rail { height: 13px; }
+    /* a short list on a story: bigger rows, so five of them read as a card
+       rather than five lines floating in a tall frame */
+    .sz-story .twocol.few .mrow { gap: 14px 14px; }
+    .sz-story .twocol.few .mrow .ms, .sz-story .twocol.few .mrow .mv { font-size: 40px; }
+    .sz-story .twocol.few .mrow .bar-rail { height: 30px; border-radius: 9px; }
+    .sz-story .twocol.few .mlist { justify-content: space-around; }
+    .mpad { visibility: hidden; }
     .sz-story .row .sym { font-size: 32px; width: 168px; }
     .sz-story .row .val { font-size: 31px; width: 178px; }
     .sz-story .row .cmp { font-size: 28px; width: 190px; }
