@@ -45,9 +45,15 @@
     // a mixed |move| list buries the story either half tells alone.
     const MOV_PERIODS = {
       d: ['todayPct', 'today', 'today'],
-      w1: ['oneWeekPct', 'this week', '1 week'],
+      // Week and 1 month are ROLLING: five and 21 sessions back, i.e. the last
+      // 7 and ~30 days. "This week" and "this month" run from the last close
+      // before the week or month began; the host stamps wtdPct / mtdPct from
+      // /api/period-anchors, and a row without one is simply not ranked.
+      wtd: ['wtdPct', 'this week', 'week to date'],
+      w1: ['oneWeekPct', 'past week', '7 days'],
       w2: ['twoWeekPct', 'past two weeks', '2 weeks'],
-      m1: ['oneMonthPct', 'past month', '1 month'],
+      mtd: ['mtdPct', 'this month', 'month to date'],
+      m1: ['oneMonthPct', 'past month', '30 days'],
       m3: ['threeMonthPct', 'past three months', '3 months'],
       m6: ['sixMonthPct', 'past six months', '6 months'],
       y1: ['oneYearPct', 'past year', '1 year'],

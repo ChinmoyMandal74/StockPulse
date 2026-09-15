@@ -100,9 +100,11 @@
         <label>Time window</label>
         <select id="movPeriod">
           <option value="d">Day</option>
-          <option value="w1" selected>Week</option>
+          <option value="wtd">This week (since last Friday's close)</option>
+          <option value="w1" selected>Week (last 7 days)</option>
           <option value="w2">2 weeks</option>
-          <option value="m1">1 month</option>
+          <option value="mtd">This month (since last month's close)</option>
+          <option value="m1">Month (last 30 days)</option>
           <option value="m3">3 months</option>
           <option value="m6">6 months</option>
           <option value="y1">1 year</option>
@@ -111,9 +113,11 @@
         <select id="movCmp">
           <option value="" selected>Nothing — one column</option>
           <option value="d">Day</option>
-          <option value="w1">Week</option>
+          <option value="wtd">This week</option>
+          <option value="w1">Week (last 7 days)</option>
           <option value="w2">2 weeks</option>
-          <option value="m1">1 month</option>
+          <option value="mtd">This month</option>
+          <option value="m1">Month (last 30 days)</option>
           <option value="m3">3 months</option>
           <option value="m6">6 months</option>
           <option value="y1">1 year</option>
@@ -814,6 +818,19 @@
         if (!canAnnounce && OWNER_ONLY_TPLS.has(tpl)) tpl = 'movers';
         const data = await fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json());
         stocks = (data.stocks || []).filter((s) => !s.error);
+        // "This week" / "this month": the row's price against its last close
+        // before the week or month began. Rows without an anchor stay unranked
+        // in those two windows rather than showing a longer move.
+        try {
+          const an = await fetch('/api/period-anchors', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null));
+          if (an) {
+            const move = (row, a) => (a && row.price != null && a.close ? (row.price / a.close - 1) * 100 : null);
+            for (const row of stocks) {
+              row.wtdPct = move(row, an.week[row.symbol]);
+              row.mtdPct = move(row, an.month[row.symbol]);
+            }
+          }
+        } catch { /* the rolling windows still work */ }
         loadedAt = data.updatedAt || null;
         portfolioNames = data.portfolios || [];
         try {

@@ -1917,6 +1917,21 @@ async function readLatestNews() {
     source: x.source, headline: x.headline, url: x.url }));
 }
 
+// The last stored close strictly before a date, per symbol — the anchor a
+// week-to-date or month-to-date move is measured from. One query per anchor;
+// ~80ms each for the universe.
+async function closesBefore(dates) {
+  await init();
+  const q = (before) => ({
+    sql: `select b.symbol, b.d, b.close from bars b
+            join (select symbol, max(d) as md from bars where d < ? group by symbol) m
+              on m.symbol = b.symbol and m.md = b.d`,
+    args: [before],
+  });
+  const res = await db.batch(dates.map(q), 'read');
+  return res.map((r) => Object.fromEntries(r.rows.map((x) => [x.symbol, { d: x.d, close: Number(x.close) }])));
+}
+
 // Headlines published since an ISO time, newest first — the ticker's read.
 // published_at is stored as an ISO string, so the comparison is lexical.
 async function readRecentNews(sinceIso, limit = 600) {
@@ -1975,6 +1990,7 @@ module.exports = {
   expireOldestProfiles,
   expireProfilesFor,
   tableStats,
+  closesBefore,
   readRecentNews,
   startNewsRun,
   noteNewsItem,

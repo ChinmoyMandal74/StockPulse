@@ -3639,6 +3639,36 @@ function symbolSeries(bars, symbols, dates) {
   return out;
 }
 
+// Anchors for "this week" and "this month" on the cards: each symbol's last
+// close before the current week (Monday) and the current month began, where
+// "current" is the week and month of the freshest bar in the universe — so a
+// Saturday post shows the whole week just ended. The page divides the row's
+// price by the anchor. An anchor from well before the boundary (a symbol with
+// a gap in its bars) is dropped, since the move would silently span more than
+// the window it is labelled with. Cached ten minutes per instance.
+let periodAnchorCache = null;
+app.get('/api/period-anchors', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (periodAnchorCache && Date.now() - periodAnchorCache.at < 10 * 60 * 1000) return res.json(periodAnchorCache.body);
+  const snap = await readSnapshot();
+  const rows = ((snap && snap.stocks) || []).filter((x) => !x.error);
+  const latest = rows.reduce((m, x) => (x.latestDate && x.latestDate > m ? x.latestDate : m), '');
+  if (!latest) return res.json({ latest: null, weekStart: null, monthStart: null, week: {}, month: {} });
+  const day = new Date(latest + 'T12:00:00Z');
+  const monday = new Date(day);
+  monday.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
+  const weekStart = monday.toISOString().slice(0, 10);
+  const monthStart = latest.slice(0, 8) + '01';
+  const [week, month] = await store.closesBefore([weekStart, monthStart]);
+  const within = (anchors, boundary) => {
+    const floor = new Date(Date.parse(boundary + 'T12:00:00Z') - 7 * 86400000).toISOString().slice(0, 10);
+    return Object.fromEntries(Object.entries(anchors).filter(([, a]) => a.d >= floor));
+  };
+  const body = { latest, weekStart, monthStart, week: within(week, weekStart), month: within(month, monthStart) };
+  periodAnchorCache = { at: Date.now(), body };
+  res.json(body);
+}));
+
 app.get('/api/basket', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const rawName = String(req.query.name || '').trim();
