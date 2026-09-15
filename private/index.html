@@ -685,10 +685,6 @@
           <button class="btn picker-btn" id="indBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="indMenu" role="listbox" aria-label="Industry"></div>
         </div>
-        <div class="picker" id="pastPicker" data-open="0">
-          <button class="btn picker-btn" id="pastBtn" aria-haspopup="listbox" aria-expanded="false"></button>
-          <div class="picker-menu" id="pastMenu" role="listbox" aria-label="Past momentum horizon"></div>
-        </div>
         <div class="picker" id="actPicker" data-open="0">
           <button class="btn picker-btn" id="actBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="actMenu" role="listbox" aria-label="Advice rules profile"></div>
@@ -842,7 +838,7 @@
         <th class="group grp-info" data-group="info" colspan="6">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="2">Scores</th>
         <th class="group grp-act" data-group="act" colspan="10">Advice</th>
-        <th class="group grp-pmom" data-group="pmom" colspan="3">Price Momentum</th>
+        <th class="group grp-pmom" data-group="pmom" colspan="1">Price Momentum</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="3">Long-term %</th>
@@ -874,10 +870,6 @@
         <th class="grp-act left av-col avx av-max-risk" data-key="av:Max Risk" title="Max Risk's advice: widest stops (−20%), chase caps nearly off, Buy to −30% below the high. Still never buys below the 200D.">Max Risk</th>
         <th class="grp-act left av-col avx av-dip-buyer" data-key="av:Dip Buyer" title="Dip Buyer's advice: may buy below the 200D (capped at Buy with Risk). The research log does not endorse the mode.">Dip Buyer</th>
         <th class="grp-pmom ta-l" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
-        <th class="grp-pmom ta-l" data-key="pastShown" id="thPast"
-            title="The momentum score as it stood at the end of the chosen horizon. Change the horizon with the Past picker in the bar.">Past<br>Mom.</th>
-        <th class="grp-pmom ta-l" data-key="deltaShown" id="thDelta"
-            title="Momentum now minus Past Momentum, in score points. Positive means the stock has strengthened on the fixed scale since then.">Mom.<br>Delta</th>
         <th class="grp-chart" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
         <th class="grp-short" data-key="todayPct">Today</th>
         <th class="grp-short" data-key="yesterdayPct">YDAY</th>
@@ -936,7 +928,6 @@
     let stocks = [];
     let weightPreset = 'default';
     let customWeights = null;      // the saved slider set, or null until one exists
-    let pastPeriod = Screens.DEFAULT_PAST;   // which horizon Past Mom. and Delta show
     let portfolios = [];       // ordered portfolio names
     let activeTab = 'All';
     let sortKey = 'overallScore';
@@ -1060,56 +1051,13 @@
       else if (n <= 30) c = 'pos';
       return `<td class="${c} ${cls}"${t}>${n.toFixed(0)}</td>`;
     }
-    // Shared with scoreTip(), which describes the arrow in words — the number
-    // and the sentence explaining it must not drift apart.
-    const MOM_ARROW_MIN = RowCard.MOM_ARROW_MIN;
-
-    // The past score and the move, for whichever horizon is selected. Both are
-    // read rather than stored on the row, so switching the picker needs no
-    // re-fetch and no re-scoring — every horizon is already in the payload.
-    const pastOf = (s) => (s.pastMomentum ? s.pastMomentum[pastPeriod] : null) ?? null;
-    const deltaOf = (s) => {
-      const was = pastOf(s);
-      return was == null || s.momentumScore == null
-        ? null : Math.round((s.momentumScore - was) * 10) / 10;
-    };
-
-    function pastCell(s) {
-      const v = pastOf(s);
-      if (v == null) return '<td class="na grp-pmom ta-l lens-col">—</td>';
-      return `<td class="grp-pmom ta-l lens-col">${v.toFixed(1)}</td>`;
-    }
-
-    function deltaCell(s) {
-      const d = deltaOf(s);
-      if (d == null) return '<td class="na grp-pmom ta-l lens-col">—</td>';
-      // Coloured only past the horizon's own deadband, so a move inside the
-      // noise reads as neutral rather than as a signal.
-      const move = Screens.pastById(pastPeriod).move;
-      const cls = Math.abs(d) < move ? 'na' : (d >= 0 ? 'pos' : 'neg');
-      return `<td class="${cls} grp-pmom ta-l lens-col">${d >= 0 ? '+' : ''}${d.toFixed(1)}</td>`;
-    }
-
-    // Which way momentum has moved over the selected horizon, or nothing at all.
-    // Deliberately direction only: the size is in the tooltip, and 84 rows of
-    // signed numbers in a rating column would be harder to scan, not easier.
-    function momArrow(d) {
-      const min = Screens.pastById(pastPeriod).move;
-      if (d == null || !isFinite(d) || Math.abs(d) < min) return '';
-      const up = d > 0;
-      const word = `Momentum ${up ? 'up' : 'down'} ${Math.abs(d).toFixed(1)} points over ` +
-        Screens.pastById(pastPeriod).label;
-      return `<svg class="momarrow ${up ? 'up' : 'down'}" aria-label="${word}" role="img">` +
-             '<use href="#i-chevron" /></svg>';
-    }
-
-    function ratingCell(n, sym, kind, extraCls = '', delta = null) {
+    function ratingCell(n, sym, kind, extraCls = '') {
       if (n == null || !isFinite(n)) return `<td class="na ${extraCls}">—</td>`;
       let color = 'var(--amber)'; // mid
       if (n >= 8) color = 'var(--green)';
       else if (n <= 4) color = 'var(--red)';
       return `<td class="rating ${extraCls}" data-sym="${sym}" data-kind="${kind}" style="font-weight:700;color:${color}">` +
-             `${n}${momArrow(delta)}</td>`;
+             `${n}</td>`;
     }
     // Map a Twelve Data MIC / exchange to the code Google Finance uses in its quote URL
     // (https://www.google.com/finance/quote/SYMBOL:EXCHANGE). MIC is authoritative; the
@@ -1391,7 +1339,6 @@
       { root: 'colPicker', btn: 'colBtn', menu: 'colMenu' },
       { root: 'secPicker', btn: 'secBtn', menu: 'secMenu' },
       { root: 'indPicker', btn: 'indBtn', menu: 'indMenu' },
-      { root: 'pastPicker', btn: 'pastBtn', menu: 'pastMenu' },
       { root: 'actPicker', btn: 'actBtn', menu: 'actMenu' },
       { root: 'researchPicker', btn: 'researchBtn', menu: 'researchMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
@@ -1735,7 +1682,6 @@
       renderChangedChip();
       renderLensChip();
       renderActTrigger();
-      renderPastTrigger();
       const tbody = $('tbody');
       const rows = visibleStocks();
       markSortedColumn();
@@ -1758,17 +1704,16 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="57">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="55">${msg}</td></tr>`;
         researchSymbol = null;
         renderResearchMenu();
         applyGroups();
         return;
       }
 
-      const valueFor = (x) => (sortKey === 'pastShown' ? pastOf(x)
-        : sortKey === 'deltaShown' ? deltaOf(x)
+      const valueFor = (x) => (
         // Alphabetical would put Avoid above Buy; rank by the ladder instead.
-        : sortKey.startsWith('av:') ? (() => {
+        sortKey.startsWith('av:') ? (() => {
           const v = x.adviceBy && x.adviceBy[sortKey.slice(3)];
           return v ? ActionRules.ACTIONS.indexOf(v.a) : null;
         })()
@@ -1795,7 +1740,7 @@
         if (s.error) {
           return `<tr style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="55">${s.error}</td>
+            <td class="na" colspan="53">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -1829,9 +1774,7 @@
           ${stateCell(s.actionFund, FUND_DANGER, 'fund')}
           ${guardsCell(s)}
           ${adviceCell(s, 'Balanced')}${adviceCell(s, 'Trend Rider')}${adviceCell(s, 'Aggressive')}${adviceCell(s, 'Max Risk')}${adviceCell(s, 'Dip Buyer')}
-          ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-pmom ta-l lens-col', deltaOf(s))}
-          ${pastCell(s)}
-          ${deltaCell(s)}
+          ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-pmom ta-l lens-col')}
           <td class="spark grp-chart" data-spark="${s.symbol}">${sparkCache[s.symbol] || ''}</td>
           ${pctCell(s.todayPct, 'grp-short', liveTitle)}
           ${pctCell(s.yesterdayPct, 'grp-short', liveTitle)}
@@ -2041,7 +1984,6 @@
       // The horizon picker drives the Price Momentum columns, so it follows them
       // in and out of view. Collapsing a group runs through here rather than
       // render(), which is why the trigger is redrawn from both.
-      renderPastTrigger();
       GROUPS.forEach((id) => {
         const hide = collapsed[id];
         document.querySelectorAll('.grp-' + id).forEach((el) => { el.style.display = hide ? 'none' : ''; });
@@ -2148,51 +2090,6 @@
     const weightLabel = () =>
       (weightPreset === 'custom' ? 'Custom' : Screens.presetById(weightPreset).label);
 
-    // Drawn on every render. Deliberately separate from the menu below: a redraw
-    // while a slider is being dragged would replace the very input under the
-    // cursor and the drag would die mid-gesture.
-    function setPastPeriod(id) {
-      if (id === pastPeriod) return;
-      pastPeriod = id;
-      window.track && track('picker', 'past:' + id);
-      render();
-      renderPastMenu();
-      savePrefs();
-    }
-
-    function renderPastTrigger() {
-      const p = Screens.pastById(pastPeriod);
-      $('pastBtn').innerHTML =
-        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-clock" /></svg>' +
-        '<span class="picker-label">Past</span>' +
-        `<span class="count">${we(p.label)}</span>` +
-        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
-      $('pastBtn').title = `Past Mom. and Mom. Delta are measured over ${p.label}. ` +
-        'The analysis screens and the nightly email always use two weeks.';
-      // The picker is only meaningful while the columns it drives are visible.
-      $('pastPicker').style.display = collapsed.pmom ? 'none' : '';
-    }
-
-    function renderPastMenu() {
-      $('pastMenu').innerHTML = '<div class="picker-inner">' +
-        Screens.PAST_PERIODS.map((w) =>
-          `<button class="pick ${w.id === pastPeriod ? 'on' : ''}" data-past="${w.id}" role="option" ` +
-          `aria-selected="${w.id === pastPeriod}">` +
-          `<span class="nm">${we(w.label)}<em>${w.days} sessions · marks a move past ${w.move} points</em></span>` +
-          '<svg class="ic ic-sm chk" aria-hidden="true"><use href="#i-check" /></svg></button>').join('') +
-        '<div class="pick-sep"></div>' +
-        '<div class="pick-hint">How far back Past Mom. looks. The deadband on Mom. Delta and the ' +
-        'arrow scales with it — the median name moves about three points in a week and fifteen in ' +
-        'six months, so one fixed threshold cannot serve both.</div></div>';
-      $('pastMenu').querySelectorAll('[data-past]').forEach((b) => {
-        b.addEventListener('click', (ev) => { ev.stopPropagation(); setPastPeriod(b.dataset.past); });
-      });
-    }
-
-    // The weighting is EDITED on /admin and only read here. What the bar still
-    // owes the reader is why two score columns are tinted, so a chip appears
-    // for exactly as long as a non-default weighting is in force and says
-    // nothing the rest of the time.
     function renderLensChip() {
       const chip = $('lensChip');
       chip.style.display = lensOn() ? '' : 'none';
@@ -2283,8 +2180,6 @@
         const res = await api('GET', '/api/prefs');
         const savedC = res && res.prefs && Screens.cleanWeights(res.prefs.customWeights);
         if (savedC) customWeights = Object.assign(Screens.defaultWeights(), savedC);
-        const savedP = res && res.prefs && res.prefs.past;
-        if (savedP && Screens.PAST_PERIODS.some((x) => x.id === savedP)) pastPeriod = savedP;
         const savedAv = res && res.prefs && res.prefs.advices;
         if (Array.isArray(savedAv)) {
           extraProfiles = ADVICE_OPTIONAL.filter((n) => savedAv.includes(avSlug(n)));
@@ -2314,7 +2209,7 @@
         const out = {};
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
-          prefs: { collapsed: out, weights: weightPreset, customWeights, past: pastPeriod,
+          prefs: { collapsed: out, weights: weightPreset, customWeights,
             advices: extraProfiles.map(avSlug) },
         }).catch(() => {});
       }, 600);
@@ -2618,7 +2513,7 @@
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     function showLoading(msg) {
-      $('tbody').innerHTML = `<tr><td class="empty" colspan="53">${msg}</td></tr>`;
+      $('tbody').innerHTML = `<tr><td class="empty" colspan="51">${msg}</td></tr>`;
     }
 
     // Clear the cache, then keep re-pulling until EVERY ticker's fundamentals are
@@ -2931,7 +2826,6 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         if (opening && p.root === 'actPicker') renderActMenu();
         if (opening && p.root === 'secPicker') renderSectorMenu();
         if (opening && p.root === 'indPicker') renderIndustryMenu();
-        if (opening && p.root === 'pastPicker') renderPastMenu();
         openPicker(opening ? p.root : null);
       });
     });

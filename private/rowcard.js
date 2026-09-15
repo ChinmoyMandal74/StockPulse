@@ -94,11 +94,6 @@
     ['pmom',  'Score',          (s) => (s.momentumScore == null ? null : { t: s.momentumScore.toFixed(1), c: '' })],
     // The card has no horizon picker, so it shows the default and says so
     // rather than borrowing whatever the table happens to be set to.
-    ['pmom',  'Past (2W)',      (s) => (s.momentumScorePrev == null ? null
-                                  : { t: s.momentumScorePrev.toFixed(1), c: '' })],
-    ['pmom',  'Delta (2W)',     (s) => (s.momentumChange == null ? null
-                                  : { t: (s.momentumChange >= 0 ? '+' : '') + s.momentumChange.toFixed(1),
-                                      c: s.momentumChange >= 0 ? 'pos' : 'neg' })],
     ['short', 'Today',          (s) => V.pct(s.todayPct)],
     ['short', 'YDAY',           (s) => V.pct(s.yesterdayPct)],
     ['short', '1W',             (s) => V.pct(s.oneWeekPct)],
@@ -486,8 +481,6 @@
   // Defined in screens.js, which the server can require and every page loads —
   // the arrow, the sentence describing it and the two momentum screens all read
   // one number. The fallback only matters if that script fails to load.
-  const MOM_ARROW_MIN = (typeof Screens !== 'undefined' && Screens.MOM_MIN_MOVE != null)
-    ? Screens.MOM_MIN_MOVE : 5;
 
   function factorRow(b) {
     if (b.sub == null) {
@@ -538,32 +531,11 @@
     const totalW = bd.reduce((a, b) => a + b.weight, 0);
     const availW = bd.reduce((a, b) => a + (b.sub != null ? b.weight : 0), 0);
     const conf = totalW ? Math.round((availW / totalW) * 100) : 0;
-    // The arrow in the table says only which way. Where it came from, how far it
-    // moved, and what the arrow actually means all belong here.
-    const d = s.momentumChange;
-    const hasMove = !quality && d != null && isFinite(d) && s.momentumScorePrev != null;
-    const moved = hasMove
-      ? '<div class="tip-sep"></div>' +
-        `<div class="tip-row"><span class="lbl">Score, 2 weeks ago</span>` +
-        `<span class="val" style="width:auto">${s.momentumScorePrev}</span></div>` +
-        `<div class="tip-row"><span class="lbl">Change</span>` +
-        `<span class="val" style="width:auto;color:${d >= 0 ? 'var(--green)' : 'var(--red)'}">` +
-        `${d >= 0 ? '+' : ''}${d.toFixed(1)}</span></div>`
-      : '';
-    const arrowNote = hasMove
-      ? (Math.abs(d) >= MOM_ARROW_MIN
-          ? ` The ${d >= 0 ? 'green' : 'red'} chevron beside the rating marks that move: ` +
-            `momentum has ${d >= 0 ? 'strengthened' : 'weakened'} against the rest of the list ` +
-            'over the last two weeks. It appears only past ' + MOM_ARROW_MIN + ' points, ' +
-            'which leaves about half the table unmarked.'
-          : ` No chevron: the move is under ${MOM_ARROW_MIN} points, which is within ` +
-            'the fortnightly noise for this universe.')
-      : '';
     return `<div class="tip-head">${label} ${rating}/10 ` +
       `<span>· score ${score}/100 · ${conf}% of factors</span></div>` +
-      bd.map(factorRow).join('') + moved +
+      bd.map(factorRow).join('') +
       `<div class="tip-foot">Confidence ${conf}%: share of factor-weight with data ` +
-      `(rest excluded &amp; renormalized).${arrowNote}${foot}</div>`;
+      `(rest excluded &amp; renormalized).${foot}</div>`;
   }
 
   // Clamp the card beside its anchor and inside the viewport — preferring the
@@ -740,7 +712,7 @@
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
     // used by the stock page
     buildSections, chartSVG, sparkSVG, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries,
-    scoreTip, placeTip, MOM_ARROW_MIN,
+    scoreTip, placeTip,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS,
   };
 })(window);
