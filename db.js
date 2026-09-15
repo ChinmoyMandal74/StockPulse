@@ -1917,6 +1917,19 @@ async function readLatestNews() {
     source: x.source, headline: x.headline, url: x.url }));
 }
 
+// Headlines published since an ISO time, newest first — the ticker's read.
+// published_at is stored as an ISO string, so the comparison is lexical.
+async function readRecentNews(sinceIso, limit = 600) {
+  await init();
+  const r = await db.execute({
+    sql: `select symbol, published_at, source, headline, url from news
+          where published_at >= ? order by published_at desc limit ?`,
+    args: [sinceIso, limit],
+  });
+  return r.rows.map((x) => ({ symbol: x.symbol, published_at: x.published_at,
+    source: x.source, headline: x.headline, url: x.url }));
+}
+
 async function readNewsState() {
   await init();
   const r = await db.execute('select symbol, fetched_at from news_state');
@@ -1962,6 +1975,7 @@ module.exports = {
   expireOldestProfiles,
   expireProfilesFor,
   tableStats,
+  readRecentNews,
   startNewsRun,
   noteNewsItem,
   finishNewsRun,

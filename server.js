@@ -1229,11 +1229,13 @@ function analystConsensus(c) {
 // stack, and every step keeps the previous value if it would empty the name.
 //
 // ETF is deliberately NOT stripped: for a fund the instrument IS the product,
-// so "VanEck Semiconductor ETF" is already its short name.
+// so "VanEck Semiconductor ETF" is already its short name. "American
+// Depositary Shares" and "Sponsored ADR" are matched whole (2026-09-15) — the
+// old rule took "Depositary Shares" and left "AstraZeneca PLC American".
 const SHORT_TAILS = [
   /\s*\b(?:Class|Series)\s+[A-Z]\b\s*$/,
-  /\s*\b(?:Common\s+Stock|Ordinary\s+Shares?|Depositary\s+Shares?|American\s+Depositary\s+Receipts?|Depositary\s+Receipts?|SP\s+ADR|ADR|ADS)\b\s*$/i,
-  /\s*,?\s*\b(?:Incorporated|Inc|Corporation|Corp|Company|Co|Limited|Ltd|LLC|LP|PLC|NV|SA|AG|SE)\b\.?\s*$/i,
+  /\s*\b(?:Common\s+Stock|Ordinary\s+Shares?|(?:Sponsored\s+)?American\s+Depositary\s+(?:Shares?|Receipts?)|Depositary\s+(?:Shares?|Receipts?)|(?:Sponsored\s+|SP\s+)?ADRs?|ADS|Sponsored)\b\s*$/i,
+  /\s*,?\s*\b(?:Incorporated|Inc|Corporation|Corp|Company|Co|Limited|Ltd|LLC|LP|PLC|N\.?V|S\.?A|AG|SE)\b\.?\s*$/i,
 ];
 function deriveShortName(full) {
   let n = String(full || '').trim();
@@ -3366,6 +3368,8 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   // Whether the screener's filter row is shown. The filters themselves are
   // never stored — only whether the row is open.
   if (incoming.filterRow === true) out.filterRow = true;
+  // The news ticker is on by default; only hiding it is stored.
+  if (incoming.tickerOff === true) out.tickerOff = true;
   await store.writePrefs(await prefsKey(req), out);
   res.json({ ok: true });
 }));
@@ -3405,12 +3409,27 @@ async function refreshNewsFor(symbol, name) {
   return { items: items.length, added: w.added, stored: w.stored };
 }
 
+// The name a headline search uses: the display name (an owner's override, else
+// the rule's short name), never the legal one. Quoted, "SK hynix Inc. American
+// Depositary Receipt" matches almost nothing but old filings, which fall outside
+// the 21-day window and leave the stock with no headlines at all — 36 of 271
+// were in that state on 2026-09-15, and the short name found news for all 36.
+async function newsNamesFor(picks) {
+  let nm = {};
+  try { nm = await store.readNamesFull(); } catch { /* fall back to the rule */ }
+  return picks.map((p) => {
+    const e = nm[p.symbol] || {};
+    return { ...p, name: e.short || deriveShortName(p.name || e.name) || p.name || e.name || p.symbol };
+  });
+}
+
 // One logged batch of headline fetches. Every symbol's outcome is written as
 // it lands, and the batch is closed with its totals: complete, partial (some
 // failed) or failed (all did). Logging is a by-product — trackSafe swallows
 // its failures, and a batch that never closes is swept to abandoned.
-async function runNewsBatch(picks, meta) {
-  if (!picks.length) return null;
+async function runNewsBatch(picksIn, meta) {
+  if (!picksIn.length) return null;
+  const picks = await newsNamesFor(picksIn);
   const runId = await trackSafe(store.startNewsRun({ ...meta, provider: NEWS_PROVIDER_NAME, attempted: picks.length }));
   const t0 = Date.now();
   const results = await Promise.all(picks.map(async ({ symbol, name }) => {
@@ -3449,7 +3468,16 @@ function topUpNews(rows, ctx = {}) {
     const live = (rows || []).filter((r) => r && !r.error && r.symbol);
     if (!live.length) return;
     const state = await store.readNewsState();
-    const pick = News.pickStalest(live.map((r) => r.symbol), state, NEWS_TOPUP_PER_REFRESH);
+    // A stock holding no headlines whose last fetch is past the TTL is treated
+    // as never fetched, so an empty feed is retried ahead of the rotation
+    // rather than waiting its turn with nothing to show.
+    let held = {};
+    try { held = (await store.newsHoldings()).perSymbol; } catch { /* plain stalest order */ }
+    const order = { ...state };
+    for (const r of live) {
+      if (!held[r.symbol] && state[r.symbol] && Date.now() - state[r.symbol] > NEWS_TTL_MS) order[r.symbol] = 0;
+    }
+    const pick = News.pickStalest(live.map((r) => r.symbol), order, NEWS_TOPUP_PER_REFRESH);
     const byId = Object.fromEntries(live.map((r) => [r.symbol, r]));
     await runNewsBatch(pick.map((sym) => ({ symbol: sym, name: byId[sym] && byId[sym].name })), {
       trigger: 'refresh', actor: ctx.actor || null, refreshRunId: ctx.refreshRunId || null,
@@ -3484,6 +3512,32 @@ app.get('/api/news', requireAuth, route(async (req, res) => {
     }
   }
   res.json({ symbol, items: await store.readNews(symbol, 12) });
+}));
+
+// The screener's news ticker: headlines PUBLISHED in the last 12 hours across
+// the whole universe, newest first. At most two per stock so one busy name
+// cannot fill the strip, one row per story (the same article filed under two
+// stocks keeps its first), 60 items. Stored rows only — never a fetch.
+const TICKER_HOURS = 12;
+app.get('/api/news/recent', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (NEWS_OFF) return res.json({ items: [], hours: TICKER_HOURS });
+  const since = new Date(Date.now() - TICKER_HOURS * 3600000).toISOString();
+  const snap = await readSnapshot();
+  let symbols = new Set(((snap && snap.stocks) || []).filter((x) => !x.error).map((x) => x.symbol));
+  if (await isGuest(req)) symbols = new Set([...symbols].filter((s) => guestSet.has(String(s).toUpperCase())));
+  const rows = await store.readRecentNews(since, 600);
+  const perSym = {};
+  const seen = new Set();
+  const items = [];
+  for (const x of rows) {
+    if (!symbols.has(x.symbol) || seen.has(x.url)) continue;
+    if ((perSym[x.symbol] = (perSym[x.symbol] || 0) + 1) > 2) continue;
+    seen.add(x.url);
+    items.push(x);
+    if (items.length >= 60) break;
+  }
+  res.json({ items, hours: TICKER_HOURS, since });
 }));
 
 // One newest headline per symbol, for the screener's hover card. Stored

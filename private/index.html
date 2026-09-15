@@ -225,6 +225,43 @@
     .notice .ic { color: var(--faint); }
     .notice b { color: var(--text); font-weight: 600; }
     #readonlyNote, #fwdViewBar, #refreshBar, #fltBar { margin-top: 8px; }
+
+    /* ---- the news ticker ----------------------------------------------------
+       A slow crawl of headlines published in the last 12 hours, under the
+       table. flex: none, so showing it takes one strip from the table's height
+       rather than pushing the page taller — the same rule as the notices. */
+    .ticker { flex: none; margin-top: 8px; }
+    .ticker > .core { display: flex; align-items: center; gap: 10px; height: 36px; box-sizing: border-box;
+      padding: 0 6px 0 12px; overflow: hidden; }
+    .tk-label { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 600;
+      letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+    .tk-label em { font-style: normal; font-weight: 500; letter-spacing: 0.04em; color: var(--faint); text-transform: none; }
+    .tk-dot { width: 6px; height: 6px; border-radius: 50%; background: #f472b6; box-shadow: 0 0 8px #f472b6; }
+    .tk-view { flex: 1; min-width: 0; overflow: hidden; position: relative; height: 100%;
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+              mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+    .tk-track { position: absolute; top: 0; left: 0; height: 100%; display: flex; align-items: center;
+      white-space: nowrap; will-change: transform; animation: tkCrawl var(--tk-dur, 120s) linear infinite; }
+    @keyframes tkCrawl { to { transform: translateX(-50%); } }
+    .tk-view:hover .tk-track, .tk-view:focus-within .tk-track, .ticker.paused .tk-track { animation-play-state: paused; }
+    .tk-item { display: inline-flex; align-items: baseline; gap: 8px; padding: 0 18px; font-size: 12.5px; }
+    .tk-sep { color: var(--faint); opacity: 0.5; }
+    .tk-sym { font-family: var(--mono); font-weight: 600; font-size: 12px; color: var(--text); text-decoration: none; }
+    .tk-sym:hover { color: var(--accent); }
+    .tk-chg { font-family: var(--mono); font-size: 11.5px; }
+    .tk-chg.up { color: var(--green); }
+    .tk-chg.down { color: var(--red); }
+    .tk-h { color: var(--text); text-decoration: none; }
+    .tk-h:hover { text-decoration: underline; }
+    .tk-meta { color: var(--faint); font-size: 11px; }
+    .tk-btn { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid transparent; background: none;
+      color: var(--faint); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+    .tk-btn:hover { color: var(--text); border-color: var(--hair); background: rgba(255, 255, 255, 0.05); }
+    /* Reduced motion: no crawl — one headline at a time, swapped every few
+       seconds with a fade (opacity is not motion). */
+    .ticker.still .tk-track { position: static; animation: none; transition: opacity 0.4s var(--ease); }
+    .ticker.still .tk-track.fade { opacity: 0; }
+    @media (max-width: 768px) { .tk-label em { display: none; } }
     /* The column-filter summary. Compact, because it sits above the table on
        every screen while a filter is on — including filters on columns that
        are currently hidden, which is exactly when it earns its place. */
@@ -702,6 +739,9 @@
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15.2l5.5-5.7"/></symbol>
     <symbol id="i-research" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.2"/><path d="M15.6 15.6 20 20"/></symbol>
     <symbol id="i-scatter" viewBox="0 0 24 24"><path d="M4.5 4.5v15h15"/><circle cx="9" cy="15" r="1.2"/><circle cx="12.5" cy="10.5" r="1.2"/><circle cx="16.5" cy="13" r="1.2"/><circle cx="19" cy="7.5" r="1.2"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6.4v11.2M15 6.4v11.2"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8.4 6.2v11.6L17.8 12z"/></symbol>
+    <symbol id="i-news" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/></symbol>
     <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5.5h16l-6.2 7.2v5.4l-3.6 1.9v-7.3z"/></symbol>
     <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9"/><path d="M17 7h3"/><circle cx="15" cy="7" r="2"/><path d="M4 17h3"/><path d="M11 17h9"/><circle cx="9" cy="17" r="2"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.4a2.6 2.6 0 1 1 3.4 2.5c-.6.2-.9.7-.9 1.3v.5"/><path d="M12 17.1h.01"/></symbol>
@@ -804,6 +844,10 @@
           </button>
           <div class="picker-menu" id="moreMenu" role="menu" aria-label="More actions">
             <div class="picker-inner">
+              <button class="pick" id="tickerToggle">
+                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>
+                <span class="nm">News ticker</span>
+              </button>
               <div id="portfolioActions" style="display:none">
                 <button class="pick pick-danger" id="deleteBtn">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-trash" /></svg>
@@ -975,6 +1019,17 @@
   </table>
   </div>
     </div>
+    </div>
+
+    <div class="bezel ticker" id="ticker" hidden aria-label="Latest headlines">
+      <div class="core">
+        <span class="tk-label"><span class="tk-dot"></span>Latest headlines <em id="tkWindow">last 12h</em></span>
+        <div class="tk-view" id="tkView"><div class="tk-track" id="tkTrack"></div></div>
+        <button class="tk-btn" id="tkPause" title="Pause the headlines" aria-label="Pause the headlines" aria-pressed="false">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-pause" /></svg></button>
+        <button class="tk-btn" id="tkHide" title="Hide the headlines — bring them back from the ⋯ menu" aria-label="Hide the headlines">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-x" /></svg></button>
+      </div>
     </div>
   </main>
 
@@ -2381,6 +2436,7 @@
       paintSparklines();
       loadSparklines();
         loadLatestNews();
+      paintTicker();
     }
 
     // Early is the case worth spotting, so it is the only type tinted.
@@ -2747,6 +2803,7 @@
         if (Array.isArray(savedAv)) {
           extraProfiles = ADVICE_OPTIONAL.filter((n) => savedAv.includes(avSlug(n)));
         }
+        if (res && res.prefs && res.prefs.tickerOff === true) tickerOff = true;
         if (res && res.prefs && res.prefs.filterRow === true) {
           filterRowOn = true;
           document.body.classList.add('filtering');
@@ -2777,7 +2834,7 @@
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
           prefs: { collapsed: out, weights: weightPreset, customWeights,
-            advices: extraProfiles.map(avSlug), filterRow: filterRowOn },
+            advices: extraProfiles.map(avSlug), filterRow: filterRowOn, tickerOff },
         }).catch(() => {});
       }, 600);
     }
@@ -2998,6 +3055,110 @@
     // decoration must not make the data wait). Injected onto the rows, where
     // the hover card's field spec picks it up; never a table column.
     let newsLoaded = false;
+    // ---- the news ticker -------------------------------------------------------
+    // Headlines published in the last 12 hours across the whole universe,
+    // crawling under the table. Loaded once after the table paints, re-read
+    // every ten minutes (so a headline ages out of the window on its own),
+    // and rebuilt only when its items or the prices change — rebuilding the
+    // track restarts the crawl, so a sort or a filter must not touch it.
+    let tickerOff = false;
+    let tickerPaused = false;
+    let tickerItems = null;
+    let tickerKey = '';
+    let tickerTimer = null;
+    let tickerRotate = null;
+    const TICKER_PX_PER_SEC = 60;
+    const TICKER_WINDOW_MS = 12 * 3600 * 1000;
+    const tkReduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const safeUrl = (u) => (/^https?:\/\//i.test(String(u || '')) ? String(u) : null);
+    const tkAge = (iso) => {
+      const m = Math.max(1, Math.round((Date.now() - Date.parse(iso)) / 60000));
+      return m < 60 ? m + 'm' : Math.round(m / 60) + 'h';
+    };
+
+    async function loadTicker() {
+      try {
+        const d = await api('GET', '/api/news/recent');
+        tickerItems = d.items || [];
+      } catch (e) {
+        tickerItems = tickerItems || [];
+      }
+      clearTimeout(tickerTimer);
+      tickerTimer = setTimeout(loadTicker, 10 * 60 * 1000);
+      tickerKey = '';
+      paintTicker();
+    }
+
+    function tickerItemHtml(x) {
+      const s = baseStocks.find((r) => r.symbol === x.symbol);
+      const pct = s && s.todayPct != null && isFinite(s.todayPct) ? s.todayPct : null;
+      const url = safeUrl(x.url);
+      const chg = pct == null ? '' : `<span class="tk-chg ${pct >= 0 ? 'up' : 'down'}">${pct >= 0 ? '▲' : '▼'}${Math.abs(pct).toFixed(1)}%</span>`;
+      return '<span class="tk-item">' +
+        `<a class="tk-sym" href="/stock/${encodeURIComponent(x.symbol)}" target="_blank" rel="noopener">${we(x.symbol)}</a>` + chg +
+        (url ? `<a class="tk-h" href="${we(url)}" target="_blank" rel="noopener">${we(x.headline)}</a>`
+          : `<span class="tk-h">${we(x.headline)}</span>`) +
+        `<span class="tk-meta">${x.source ? we(x.source) + ' · ' : ''}${tkAge(x.published_at)}</span>` +
+        '</span><span class="tk-sep" aria-hidden="true">•</span>';
+    }
+
+    function paintTicker() {
+      const bar = $('ticker');
+      $('tickerToggle').querySelector('.nm').textContent = tickerOff ? 'Show news ticker' : 'Hide news ticker';
+      if (tickerOff) { bar.hidden = true; stopTickerRotate(); return; }
+      if (tickerItems == null) { loadTicker(); return; }
+      // the window is enforced here too, so an item ages out between reads
+      const items = tickerItems.filter((x) => Date.now() - Date.parse(x.published_at) <= TICKER_WINDOW_MS);
+      const wasHidden = bar.hidden;
+      bar.hidden = !items.length;
+      if (wasHidden !== bar.hidden) paintWindow(true);   // the table's height just changed
+      if (!items.length) { stopTickerRotate(); return; }
+      const key = items.map((x) => x.url).join('|') + '|' + (lastUpdated || '');
+      if (key === tickerKey) return;
+      tickerKey = key;
+      const html = items.map(tickerItemHtml).join('');
+      const track = $('tkTrack');
+      bar.classList.toggle('still', tkReduced());
+      if (tkReduced()) {
+        startTickerRotate(items);
+        return;
+      }
+      stopTickerRotate();
+      // two copies side by side, crawling by exactly one copy's width, loop
+      // without a seam; the duration keeps the speed at 60px a second
+      track.innerHTML = html + html;
+      requestAnimationFrame(() => {
+        const half = track.scrollWidth / 2;
+        track.style.setProperty('--tk-dur', Math.max(20, Math.round(half / TICKER_PX_PER_SEC)) + 's');
+      });
+    }
+
+    function startTickerRotate(items) {
+      stopTickerRotate();
+      let i = 0;
+      const track = $('tkTrack');
+      const show = () => {
+        track.classList.add('fade');
+        setTimeout(() => {
+          track.innerHTML = tickerItemHtml(items[i % items.length]);
+          track.classList.remove('fade');
+          i++;
+        }, 400);
+      };
+      track.innerHTML = tickerItemHtml(items[0]);
+      i = 1;
+      tickerRotate = setInterval(() => { if (!tickerPaused && !$('tkView').matches(':hover')) show(); }, 6000);
+    }
+    function stopTickerRotate() { clearInterval(tickerRotate); tickerRotate = null; }
+
+    function setTickerOff(off) {
+      tickerOff = !!off;
+      window.track && track('picker', 'ticker:' + (tickerOff ? 'off' : 'on'));
+      savePrefs();
+      paintTicker();
+      paintWindow(true);
+    }
+
     async function loadLatestNews() {
       if (newsLoaded) return;
       newsLoaded = true;
@@ -3328,6 +3489,15 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
       }
     });
 
+    $('tkHide').addEventListener('click', () => setTickerOff(true));
+    $('tickerToggle').addEventListener('click', () => { closePickers(); setTickerOff(!tickerOff); });
+    $('tkPause').addEventListener('click', () => {
+      tickerPaused = !tickerPaused;
+      $('ticker').classList.toggle('paused', tickerPaused);
+      $('tkPause').setAttribute('aria-pressed', String(tickerPaused));
+      $('tkPause').title = tickerPaused ? 'Resume the headlines' : 'Pause the headlines';
+      $('tkPause').querySelector('use').setAttribute('href', tickerPaused ? '#i-play' : '#i-pause');
+    });
     buildFilterRow();
     $('fltBtn').addEventListener('click', () => setFilterRow(!filterRowOn));
 
