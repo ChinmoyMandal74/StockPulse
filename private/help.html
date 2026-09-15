@@ -136,8 +136,8 @@
           <span class="td">Trend, Steady, and your own weighting</span></span></a></li>
         <li><a href="#quality"><span class="no">6</span><span><span class="tt">The Quality score</span>
           <span class="td">Company numbers, and what happens without earnings</span></span></a></li>
-        <li><a href="#screens"><span class="no">7</span><span><span class="tt">The analysis screens</span>
-          <span class="td">Nine views the sorted table cannot give you</span></span></a></li>
+        <li><a href="#screens"><span class="no">7</span><span><span class="tt">Screens</span>
+          <span class="td">Ready-made filters, one click each</span></span></a></li>
         <li><a href="#stock"><span class="no">8</span><span><span class="tt">One stock in full</span>
           <span class="td">The chart, its ranges, and the indicators</span></span></a></li>
         <li><a href="#ask"><span class="no">9</span><span><span class="tt">Asking questions</span>
@@ -488,30 +488,45 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="screens"><div class="core">
-      <div class="sec-h"><h2>7 · The analysis screens</h2></div>
-      <p>The <strong>Analysis</strong> page holds nine filtered views. They are built from the raw
-        numbers rather than the composite scores, on purpose: a screen that just re-sorts the ranking
-        tells you nothing the table did not.</p>
-      <p>Every threshold was set by running the candidate against the real list. A screen that returns
-        nothing is a dead box, and one that returns a third of the list is not a signal.</p>
-
+      <div class="sec-h"><h2>7 · Screens</h2></div>
+      <p>The <strong>Screens</strong> menu beside View holds ready-made screens. One click sets the filters, the sort and the
+        columns that explain the result — the filters appear in the filter row and the strip above the table, so a screen
+        never hides what it means. Each shows how many stocks match right now, for the portfolio in view.</p>
+      <ul>
+        <li>Change any of its filters and the menu shows the screen as <b>edited</b>. <b>Clear screen</b> puts the table
+          back exactly as it was before — your sort, filters and view.</li>
+        <li>Portfolio still applies on top: pick a portfolio first and a screen searches only that list.</li>
+        <li>Screens are set by the site owner (hence the lock). They replace the old Analysis page, whose seven screens are
+          all here.</li>
+      </ul>
       <table>
-        <thead><tr><th>Screen</th><th>What it looks for</th></tr></thead>
+        <thead><tr><th>Group</th><th>Screen</th><th>What it looks for</th></tr></thead>
         <tbody>
-          <tr><td>Bouncing off the lows</td><td>Low in its 52-week range, but up over both the last month and the last fortnight</td></tr>
-          <tr><td>Just started moving</td><td>Up more than 5% in a fortnight while still negative over three months</td></tr>
-          <tr><td>Drifting after a beat</td><td>Beat consensus by more than 10% and reported within three weeks</td></tr>
-          <tr><td>Reporting in 14 days</td><td>A catalyst and a risk in the same event</td></tr>
-          <tr><td>Cheap, growing, profitable</td><td>Forward P/E under 20, revenue growth over 15%, net margin over 15%</td></tr>
-          <tr><td>Business improving, price isn't</td><td>Revenue growing over 25% while the price fell more than 10% in three months</td></tr>
-          <tr><td>Overextended</td><td>RSI above 75 and more than 12% above the 50-day average</td></tr>
+          <tr><td>Market movers</td><td>Day gainers / Day losers</td><td>Up or down 3% or more today</td></tr>
+          <tr><td></td><td>Recent 52-week highs / lows</td><td>A new 52-week high or low in the last five sessions</td></tr>
+          <tr><td></td><td>Most active</td><td>Everything, by the value of shares traded today</td></tr>
+          <tr><td>Value and growth</td><td>Undervalued growth</td><td>Earnings growing 25%+, forward P/E under 20, PEG under 1</td></tr>
+          <tr><td></td><td>Growth technology</td><td>Technology with revenue and earnings both growing 25%+</td></tr>
+          <tr><td></td><td>Undervalued large caps</td><td>$10B and up, forward P/E under 20, PEG under 1</td></tr>
+          <tr><td></td><td>Aggressive small caps</td><td>Under $2B with earnings growing 25%+</td></tr>
+          <tr><td></td><td>Cheap, growing and profitable</td><td>Forward P/E under 20, revenue growth over 15%, net margin over 15%</td></tr>
+          <tr><td></td><td>Business improving, price isn't</td><td>Revenue growing over 25% while the price fell more than 10% in three months</td></tr>
+          <tr><td>Technical</td><td>Upside breakouts</td><td>First close above the 3-month high, on 1.5× normal volume or more</td></tr>
+          <tr><td></td><td>Bullish / Bearish right now</td><td>Our own Trend and Entry readings — not a charting vendor’s pattern detection</td></tr>
+          <tr><td></td><td>Bouncing off the lows</td><td>Low in its 52-week range, but up over the last month and fortnight</td></tr>
+          <tr><td></td><td>Just started moving</td><td>Up more than 5% in a fortnight while still down over three months</td></tr>
+          <tr><td></td><td>Overextended</td><td>RSI above 75 and more than 12% above the 50-day average</td></tr>
+          <tr><td>Short interest</td><td>Most shorted</td><td>10% or more of the float sold short</td></tr>
+          <tr><td>Earnings</td><td>Reporting in the next 14 days</td><td>A catalyst and a risk in the same event</td></tr>
+          <tr><td></td><td>Drifting after a beat</td><td>Beat estimates by 10–100% and reported within three weeks</td></tr>
+          <tr><td>Advice</td><td>Strong Buys (Balanced)</td><td>The Balanced rules read Strong Buy — a mechanical reading, not an analyst rating</td></tr>
+          <tr><td></td><td>Advice changed today</td><td>The Balanced verdict moved since the previous session</td></tr>
         </tbody>
       </table>
-
-      <div class="note"><b>The first two are the ones a ranked table cannot give you.</b> Everything
-        else describes where a stock stands; those describe where it is going. A name climbing from the
-        middle of the pack is the interesting case — by the time it reaches the top of the ranking, the
-        move has already happened.</div>
+      <div class="note"><b>Two data notes.</b> Earnings growth here is the latest quarter against a year earlier, not an
+        analyst forecast; and a PEG ratio from the data feed is unreliable for loss-making companies. The six columns
+        some screens rely on — days since the 52-week high and low, the 52-week range, relative volume, volume and dollar
+        volume — fill in from the next price refresh.</div>
       <a class="top" href="#top">↑ Contents</a>
     </div></section>
 

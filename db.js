@@ -116,6 +116,18 @@ const SCHEMA = [
      updated_at integer
    )`,
   `create index if not exists idx_column_views_scope on column_views(scope, position)`,
+  // Screens: a saved set of filters, a sort and the columns that explain the
+  // result. Starter screens only — every account sees them, the owner edits.
+  // grp is the heading the menu files them under.
+  `create table if not exists screens (
+     id          text primary key,
+     name        text not null,
+     grp         text not null,
+     position    integer not null,
+     description text,
+     def         text not null,
+     updated_at  integer
+   )`,
   // One-time markers (key -> value), so a seed runs once rather than
   // re-appearing after the owner deletes what it created.
   `create table if not exists app_meta (
@@ -1568,6 +1580,37 @@ async function writeViews(scope, views) {
   await db.batch(stmts, 'write');
 }
 
+async function readScreens() {
+  await init();
+  const r = await db.execute('select id, name, grp, description, def from screens order by position');
+  return r.rows.map((x) => {
+    let def = {};
+    try { def = JSON.parse(x.def); } catch { /* an unreadable screen has no filters */ }
+    return { id: x.id, name: x.name, group: x.grp, description: x.description || '', def };
+  });
+}
+
+async function writeScreens(list) {
+  await init();
+  const now = Date.now();
+  const stmts = [{ sql: 'delete from screens', args: [] }];
+  (list || []).forEach((sc, i) => stmts.push({
+    sql: 'insert into screens (id, name, grp, position, description, def, updated_at) values (?, ?, ?, ?, ?, ?, ?)',
+    args: [sc.id, sc.name, sc.group, i, sc.description || null, JSON.stringify(sc.def), now],
+  }));
+  await db.batch(stmts, 'write');
+}
+
+async function seedScreensOnce(list) {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'screens_seeded'");
+  if (r.rows.length) return false;
+  const have = await db.execute('select count(*) as n from screens');
+  if (!Number(have.rows[0].n)) await writeScreens(list);
+  await db.execute({ sql: "insert or replace into app_meta (key, value) values ('screens_seeded', ?)", args: [String(Date.now())] });
+  return true;
+}
+
 // Writes the starter views once, ever. The marker is what stops them coming
 // back after the owner deletes one.
 async function seedSharedViewsOnce(views) {
@@ -2067,6 +2110,9 @@ module.exports = {
   expireOldestProfiles,
   expireProfilesFor,
   tableStats,
+  readScreens,
+  writeScreens,
+  seedScreensOnce,
   readViews,
   writeViews,
   seedSharedViewsOnce,

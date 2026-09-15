@@ -135,12 +135,9 @@ app.get(['/', '/index.html'], route(async (req, res, next) => {
   next();
 }));
 
-app.get('/analysis', route(async (req, res) => {
-  if (!(await isSignedIn(req))) return res.redirect('/login');
-  if (await isGuest(req)) return res.redirect('/');
-  logAct(req, 'page', 'analysis');
-  res.sendFile(path.join(__dirname, 'private', 'analysis.html'));
-}));
+// /analysis was retired on 2026-09-15: its seven screens are starter screens
+// on the screener now. The address sends people there rather than to a 404.
+app.get('/analysis', (req, res) => res.redirect('/'));
 
 // One stock, in full. The symbol is read client-side from the path, so every
 // ticker serves the same file.
@@ -1787,6 +1784,22 @@ function pctFromLow(values, lookback = 252) {
 // One number that answers "how far into its own range is this?", which distance
 // from the high alone cannot — a stock 30% off its high might be sitting on the
 // floor of a tight range or halfway up a wide one.
+// Sessions since the 52-week high and low were set (0 = today). A level like
+// "% from the high" cannot say whether the high was yesterday or ten months
+// ago; the "recent 52-week highs / lows" screens need exactly that.
+function extremeAges(values, lookback = 252) {
+  if (!Array.isArray(values) || !values.length) return { hi: null, lo: null };
+  let high = -Infinity, low = Infinity, hi = null, lo = null;
+  const n = Math.min(values.length, lookback);
+  for (let i = 0; i < n; i++) {
+    const h = parseFloat(values[i].high);
+    const l = parseFloat(values[i].low);
+    if (isFinite(h) && h > high) { high = h; hi = i; }
+    if (isFinite(l) && l > 0 && l < low) { low = l; lo = i; }
+  }
+  return { hi, lo };
+}
+
 function range52Pos(values, lookback = 252) {
   if (!Array.isArray(values) || values.length === 0) return null;
   const latest = parseFloat(values[0].close);
@@ -2177,6 +2190,136 @@ function cleanViews(input) {
   }
   return out;
 }
+
+// ---- screens ----------------------------------------------------------------------
+// A screen is filters + a sort + the columns that explain the result, applied
+// in one click from the screener's Screens menu. Starter screens only (the
+// owner's decision): every account sees them, only the owner edits. Filter
+// keys and column ids are shape-checked, never matched against a list — the
+// page ignores what it does not know, the views rule. The seven /analysis
+// screens are here, translated into filter-row grammar.
+const SCREENS_MAX = 60;
+const SCREEN_FILTER_VAL_RE = /^[^\u0000-\u001f<>]{1,80}$/;
+const ADVICE_COLS = ['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'actionGuards',
+  'av:Balanced', 'av:Trend Rider', 'av:Aggressive', 'av:Max Risk', 'av:Dip Buyer'];
+const sc = (id, group, name, description, def) => ({ id, group, name, description, def });
+const STARTER_SCREENS = [
+  sc('daygainr', 'Market movers', 'Day gainers', 'Up 3% or more today.',
+    { filters: { todayPct: '>=3' }, sort: { key: 'todayPct', dir: -1 },
+      columns: ['todayPct', 'oneWeekPct', 'volX', 'dollarVolume', 'marketCap', 'av:Balanced'] }),
+  sc('daylosrs', 'Market movers', 'Day losers', 'Down 3% or more today.',
+    { filters: { todayPct: '<=-3' }, sort: { key: 'todayPct', dir: 1 },
+      columns: ['todayPct', 'oneWeekPct', 'volX', 'dollarVolume', 'marketCap', 'av:Balanced'] }),
+  sc('rec52hi0', 'Market movers', 'Recent 52-week highs', 'Set a new 52-week high in the last five sessions.',
+    { filters: { daysSince52wHigh: '..4' }, sort: { key: 'oneMonthPct', dir: -1 },
+      columns: ['daysSince52wHigh', 'pctFromHigh', 'oneMonthPct', 'threeMonthPct', 'actionTrend', 'actionEntry'] }),
+  sc('rec52lo0', 'Market movers', 'Recent 52-week lows', 'Set a new 52-week low in the last five sessions.',
+    { filters: { daysSince52wLow: '..4' }, sort: { key: 'oneMonthPct', dir: 1 },
+      columns: ['daysSince52wLow', 'pctFromLow', 'oneMonthPct', 'threeMonthPct', 'actionTrend'] }),
+  sc('mostactv', 'Market movers', 'Most active', 'Everything, by the value of shares traded today.',
+    { filters: {}, sort: { key: 'dollarVolume', dir: -1 },
+      columns: ['todayPct', 'volume', 'dollarVolume', 'volX', 'marketCap'] }),
+  sc('undgrwth', 'Value and growth', 'Undervalued growth', 'Earnings growing 25%+, forward P/E under 20, PEG under 1.',
+    { filters: { earningsGrowthYoY: '>=25', forwardPe: '0..20', peg: '0..1' }, sort: { key: 'peg', dir: 1 },
+      columns: ['earningsGrowthYoY', 'revenueGrowthYoY', 'forwardPe', 'peg', 'marketCap', 'oneMonthPct'] }),
+  sc('growtech', 'Value and growth', 'Growth technology', 'Technology with revenue and earnings both growing 25%+.',
+    { filters: { revenueGrowthYoY: '>=25', earningsGrowthYoY: '>=25' }, sector: 'Technology', sort: { key: 'revenueGrowthYoY', dir: -1 },
+      columns: ['revenueGrowthYoY', 'earningsGrowthYoY', 'grossMargin', 'forwardPe', 'threeMonthPct'] }),
+  sc('lrgvalue', 'Value and growth', 'Undervalued large caps', '$10B and up, forward P/E under 20, PEG under 1.',
+    { filters: { marketCap: '>=10B', forwardPe: '0..20', peg: '0..1' }, sort: { key: 'forwardPe', dir: 1 },
+      columns: ['marketCap', 'forwardPe', 'peg', 'profitMargin', 'roe'] }),
+  sc('smallagg', 'Value and growth', 'Aggressive small caps', 'Under $2B with earnings growing 25%+.',
+    { filters: { marketCap: '..2B', earningsGrowthYoY: '>=25' }, sort: { key: 'earningsGrowthYoY', dir: -1 },
+      columns: ['marketCap', 'earningsGrowthYoY', 'revenueGrowthYoY', 'oneMonthPct'] }),
+  sc('cheapgrw', 'Value and growth', 'Cheap, growing and profitable', 'Forward P/E under 20, revenue growing 15%+, net margin over 15%.',
+    { filters: { forwardPe: '0..20', revenueGrowthYoY: '>15', profitMargin: '>15' }, sort: { key: 'forwardPe', dir: 1 },
+      columns: ['forwardPe', 'revenueGrowthYoY', 'profitMargin', 'marketCap', 'oneMonthPct'] }),
+  sc('disconct', 'Value and growth', "Business improving, price isn't", 'Revenue growing 25%+ while the price fell 10%+ over three months.',
+    { filters: { revenueGrowthYoY: '>25', threeMonthPct: '<-10' }, sort: { key: 'revenueGrowthYoY', dir: -1 },
+      columns: ['revenueGrowthYoY', 'threeMonthPct', 'oneMonthPct', 'grossMargin', 'forwardPe'] }),
+  sc('breakout', 'Technical', 'Upside breakouts', 'First close above the 3-month high, on 1.5x normal volume or more.',
+    { filters: { fresh3mHigh: 'Yes', volX: '>=1.5' }, sort: { key: 'volX', dir: -1 },
+      columns: ['actionEntry', 'actionTrend', 'oneWeekPct', 'pctFromHigh', 'volX', 'av:Balanced'] }),
+  sc('bullnow0', 'Technical', 'Bullish right now', 'Strong uptrend with a clean entry, on our own trend and entry rules.',
+    { filters: { actionTrend: 'Strong uptrend', actionEntry: 'Clean' }, sort: { key: 'oneMonthPct', dir: -1 },
+      columns: ['actionTrend', 'actionEntry', 'vs50ma', 'vs200ma', 'rsi', 'av:Balanced'] }),
+  sc('bearnow0', 'Technical', 'Bearish right now', 'In a breakdown or a downtrend, on our own trend rules.',
+    { filters: { actionTrend: 'Breakdown|Downtrend' }, sort: { key: 'oneMonthPct', dir: 1 },
+      columns: ['actionTrend', 'vs200ma', 'oneMonthPct', 'threeMonthPct', 'av:Balanced'] }),
+  sc('bouncelw', 'Technical', 'Bouncing off the lows', 'Low in the 52-week range, but up over the last month and fortnight.',
+    { filters: { range52Pos: '..30', oneMonthPct: '>3', twoWeekPct: '>0' }, sort: { key: 'range52Pos', dir: 1 },
+      columns: ['range52Pos', 'pctFromHigh', 'twoWeekPct', 'oneMonthPct', 'actionTrend'] }),
+  sc('wakingup', 'Technical', 'Just started moving', 'Up more than 5% in a fortnight, still down over three months.',
+    { filters: { twoWeekPct: '>5', threeMonthPct: '<0' }, sort: { key: 'twoWeekPct', dir: -1 },
+      columns: ['twoWeekPct', 'oneMonthPct', 'threeMonthPct', 'actionTrend', 'actionEntry'] }),
+  sc('overextd', 'Technical', 'Overextended', 'RSI above 75 and more than 12% above the 50-day average.',
+    { filters: { rsi: '>75', vs50ma: '>12' }, sort: { key: 'rsi', dir: -1 },
+      columns: ['rsi', 'vs50ma', 'oneMonthPct', 'actionEntry', 'av:Balanced'] }),
+  sc('shorted0', 'Short interest', 'Most shorted', '10% or more of the float sold short.',
+    { filters: { shortPctFloat: '>=10' }, sort: { key: 'shortPctFloat', dir: -1 },
+      columns: ['shortPctFloat', 'todayPct', 'oneMonthPct', 'marketCap'] }),
+  sc('earnsoon', 'Earnings', 'Reporting in the next 14 days', 'A catalyst and a risk in the same event.',
+    { filters: { nextEarningsDate: '0..14' }, sort: { key: 'nextEarningsDate', dir: 1 },
+      columns: ['nextEarningsDate', 'todayPct', 'oneMonthPct', 'actionGuards', 'av:Balanced'] }),
+  sc('driftbet', 'Earnings', 'Drifting after a beat', 'Beat estimates by 10-100%, reported in the last three weeks.',
+    { filters: { lastSurprise: '10..100', daysSinceEarnings: '0..21' }, sort: { key: 'lastSurprise', dir: -1 },
+      columns: ['nextEarningsDate', 'twoWeekPct', 'oneMonthPct', 'av:Balanced'] }),
+  sc('strngbuy', 'Advice', 'Strong Buys (Balanced)', 'The Balanced rules read Strong Buy — a mechanical reading, not an analyst rating.',
+    { filters: {}, advice: 'Strong Buy', sort: { key: 'overallScore', dir: -1 },
+      columns: ['overallScore', 'price', 'todayPct', 'oneMonthPct'].concat(ADVICE_COLS) }),
+  sc('chgtoday', 'Advice', 'Advice changed today', 'The Balanced verdict moved since the previous session.',
+    { filters: {}, changed: true, sort: { key: 'overallScore', dir: -1 },
+      columns: ['overallScore', 'price', 'todayPct', 'oneMonthPct'].concat(ADVICE_COLS) }),
+];
+
+function cleanScreens(input) {
+  const out = [];
+  const ids = new Set();
+  const names = new Set();
+  const str = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, '').trim().slice(0, n);
+  for (const x of Array.isArray(input) ? input : []) {
+    if (out.length >= SCREENS_MAX || !x || typeof x !== 'object') break;
+    const name = str(x.name, 60);
+    if (!name || names.has(name.toLowerCase())) continue;
+    const d = x.def && typeof x.def === 'object' ? x.def : {};
+    const filters = {};
+    for (const [k, v] of Object.entries(d.filters && typeof d.filters === 'object' ? d.filters : {})) {
+      if (Object.keys(filters).length >= 20) break;
+      if (VIEW_COL_RE.test(k) && SCREEN_FILTER_VAL_RE.test(String(v))) filters[k] = String(v);
+    }
+    const columns = [];
+    for (const c of Array.isArray(d.columns) ? d.columns : []) {
+      if (VIEW_COL_RE.test(String(c)) && !columns.includes(String(c))) columns.push(String(c));
+      if (columns.length >= VIEW_COLUMNS_MAX) break;
+    }
+    const def = { filters, columns };
+    for (const k of ['sector', 'industry', 'advice']) {
+      const v = str(d[k], 80);
+      if (v && v !== 'All') def[k] = v;
+    }
+    if (d.changed === true) def.changed = true;
+    if (d.sort && VIEW_COL_RE.test(String(d.sort.key || ''))) def.sort = { key: String(d.sort.key), dir: d.sort.dir === 1 ? 1 : -1 };
+    let id = VIEW_ID_RE.test(String(x.id || '')) ? String(x.id) : '';
+    while (!id || ids.has(id)) id = crypto.randomBytes(6).toString('hex').slice(0, 8);
+    ids.add(id);
+    names.add(name.toLowerCase());
+    out.push({ id, name, group: str(x.group, 30) || 'Screens', description: str(x.description, 200), def });
+  }
+  return out;
+}
+
+app.get('/api/screens', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  await store.seedScreensOnce(STARTER_SCREENS);
+  res.json({ screens: await store.readScreens(), canEdit: await isAdmin(req) });
+}));
+
+app.put('/api/screens', requireAdmin, route(async (req, res) => {
+  const list = cleanScreens(req.body && req.body.screens);
+  await store.writeScreens(list);
+  logAct(req, 'view', 'screens:' + list.length);
+  res.json({ ok: true, screens: list });
+}));
 
 app.get('/api/views', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -2882,6 +3025,15 @@ async function computeStocks(asOf, opts = {}) {
         macdSignal: mac ? mac.signal : null,
         volTrend: volumeTrendPct(values),
         volX: volumeX(values),             // today's volume / its prior 20-day average
+        // Today's shares traded and their value — what "most active" means. A
+        // mid-session refresh sees the volume so far, which is what it is.
+        volume: (() => { const v = Number(values[0] && values[0].volume); return isFinite(v) && v > 0 ? v : null; })(),
+        dollarVolume: (() => {
+          const v = Number(values[0] && values[0].volume); const c = parseFloat(values[0] && values[0].close);
+          return isFinite(v) && v > 0 && isFinite(c) ? Math.round(v * c) : null;
+        })(),
+        daysSince52wHigh: extremeAges(values).hi,
+        daysSince52wLow: extremeAges(values).lo,
         fresh3mHigh: fresh3mHigh(values),  // first close above the prior 3-month high
         // Yesterday's technical readings — the same fields, one bar back — so
         // the Advice can be re-evaluated as of the previous trading day.
