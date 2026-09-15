@@ -275,6 +275,10 @@ const ADDED_COLUMNS = [
   // One Refresh All pulls prices ONCE; this stamp is how later rounds know
   // the pull already happened and spend their whole minute on profiles.
   'alter table refresh_state add column prices_at integer',
+  // What kind of run this is: null for a Refresh all (full sweep or the
+  // nightly rotation), 'missing' for Fill missing, which re-pulls only the
+  // stocks whose company data is absent, failed or older than a field.
+  'alter table refresh_state add column mode text',
   // Registration approval (2026-09-14): new members are 'pending' until the
   // owner approves. The default backfills every existing account as active.
   "alter table users add column status text not null default 'active'",
@@ -509,6 +513,24 @@ async function expireOldestProfiles(limit) {
   return r.rowsAffected ?? 0;
 }
 
+// Fill missing: expire exactly the stocks it targets, and nothing else. Chunked
+// under SQLite's parameter ceiling, though a universe that needs a second
+// chunk is a universe with a very bad day behind it.
+async function expireProfilesFor(symbols) {
+  await init();
+  const list = [...new Set((symbols || []).filter(Boolean))];
+  let n = 0;
+  for (let i = 0; i < list.length; i += 500) {
+    const chunk = list.slice(i, i + 500);
+    const r = await db.execute({
+      sql: `update profiles set fetched_at = 0 where symbol in (${chunk.map(() => '?').join(',')})`,
+      args: chunk,
+    });
+    n += r.rowsAffected ?? 0;
+  }
+  return n;
+}
+
 async function expireProfiles() {
   await init();
   const r = await db.execute('update profiles set fetched_at = 0');
@@ -522,16 +544,19 @@ async function expireProfiles() {
 // admin closing the tab mid-backfill from pinning the banner up forever.
 const REFRESH_STALE_MS = 4 * 60 * 1000;
 
-async function beginRefresh(actor, total) {
+async function beginRefresh(actor, total, mode) {
   await init();
   const now = Date.now();
+  // prices_at and priced are reset too: a row left by an earlier run must not
+  // tell this one its prices were already pulled.
   await db.execute({
-    sql: `insert into refresh_state (id, started_at, updated_at, loaded, total, actor)
-          values (1, ?, ?, 0, ?, ?)
+    sql: `insert into refresh_state (id, started_at, updated_at, loaded, total, actor, mode, prices_at, priced)
+          values (1, ?, ?, 0, ?, ?, ?, null, 0)
           on conflict(id) do update set
             started_at = excluded.started_at, updated_at = excluded.updated_at,
-            loaded = 0, total = excluded.total, actor = excluded.actor`,
-    args: [now, now, total ?? null, actor || null],
+            loaded = 0, total = excluded.total, actor = excluded.actor,
+            mode = excluded.mode, prices_at = null, priced = 0`,
+    args: [now, now, total ?? null, actor || null, mode || null],
   });
 }
 
@@ -554,7 +579,7 @@ async function noteRefreshProgress(loaded, total) {
 async function endRefresh() {
   await init();
   const r = await db.execute(
-    'select started_at, updated_at, loaded, total, actor from refresh_state where id = 1');
+    'select started_at, updated_at, loaded, total, actor, mode from refresh_state where id = 1');
   const del = await db.execute('delete from refresh_state where id = 1');
   if (!r.rows.length || (del.rowsAffected ?? 0) < 1) return null;
   const row = r.rows[0];
@@ -564,6 +589,7 @@ async function endRefresh() {
     loaded: row.loaded == null ? null : Number(row.loaded),
     total: row.total == null ? null : Number(row.total),
     actor: row.actor || null,
+    mode: row.mode || null,
   };
 }
 
@@ -585,7 +611,7 @@ async function archiveStats(day) {
 // null when nothing is running, so callers can spread it straight into a payload.
 async function readRefreshState() {
   await init();
-  const r = await db.execute('select started_at, updated_at, loaded, total, actor, prices_at, priced from refresh_state where id = 1');
+  const r = await db.execute('select started_at, updated_at, loaded, total, actor, prices_at, priced, mode from refresh_state where id = 1');
   if (!r.rows.length) return null;
   const row = r.rows[0];
   if (Date.now() - Number(row.updated_at) > REFRESH_STALE_MS) return null;
@@ -596,6 +622,7 @@ async function readRefreshState() {
     actor: row.actor || null,
     pricesAt: row.prices_at == null ? null : Number(row.prices_at),
     priced: row.priced == null ? 0 : Number(row.priced),
+    mode: row.mode || null,
   };
 }
 
@@ -1543,6 +1570,7 @@ module.exports = {
   writeShortName,
   markPriced,
   expireOldestProfiles,
+  expireProfilesFor,
   writeNasdaqExchange,
   readNasdaqListings,
   nasdaqMeta,

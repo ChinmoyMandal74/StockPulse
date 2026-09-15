@@ -185,6 +185,11 @@
             <span class="txt"><span class="nm">Refresh all</span>
               <span class="hint">Re-pull every company profile, not just the night's rotation. Paced around the rate limit and much longer than the nightly job — leave the tab open.</span></span>
           </a>
+          <a class="row" id="fillRow" href="/?do=refreshmissing">
+            <svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>
+            <span class="txt"><span class="nm">Fill missing</span>
+              <span class="hint" id="fillHint">Re-pull only the stocks whose company data is missing, failed, or older than a field the app now stores. Checking…</span></span>
+          </a>
         </div>
 
         <div class="form">
@@ -340,6 +345,46 @@
       el.textContent = msg;
       el.className = 'said' + (kind ? ' ' + kind : '');
     };
+
+    // ---- Fill missing: the preview, and a confirm that repeats it -----------
+    let fillPlan = null;
+    function fillSummary(p) {
+      const parts = [];
+      if (p.counts.fields) {
+        const f = Object.entries(p.fields).map(([k, n]) => `${k}${n !== p.counts.fields ? ' ' + n : ''}`).join(', ');
+        parts.push(`${p.counts.fields} pulled before a field existed (${f})`);
+      }
+      if (p.counts.failed) parts.push(`${p.counts.failed} with a failed or unfinished pull`);
+      if (p.counts.none) parts.push(`${p.counts.none} with no company data yet`);
+      if (p.noBars.length) parts.push(`${p.noBars.length} with no price history`);
+      return parts.join(' \u00b7 ');
+    }
+    async function loadFillPlan() {
+      try {
+        fillPlan = await api('GET', '/api/refresh-missing');
+        const n = fillPlan.gaps.length;
+        $('fillHint').textContent = (n || fillPlan.noBars.length)
+          ? `${n} of ${fillPlan.total} stocks \u2014 ${fillSummary(fillPlan)}. About ${fillPlan.rounds} rounds, ` +
+            `~${fillPlan.minutes} min, ~${fillPlan.credits.toLocaleString()} credits. Leave the tab open.`
+          : `Nothing missing \u2014 all ${fillPlan.total} stocks have complete company data.`;
+      } catch (e) {
+        $('fillHint').textContent = 'Could not check what is missing: ' + e.message;
+      }
+    }
+    $('fillRow').addEventListener('click', (e) => {
+      if (!fillPlan) return;          // no preview yet: let the link run, the screener re-checks
+      const n = fillPlan.gaps.length;
+      if (!n && !fillPlan.noBars.length) {
+        e.preventDefault();
+        $('fillHint').textContent = `Nothing missing \u2014 all ${fillPlan.total} stocks have complete company data.`;
+        return;
+      }
+      const ok = confirm(`Fill missing company data for ${n} stock${n === 1 ? '' : 's'}?\n\n` +
+        `${fillSummary(fillPlan)}\n\nAbout ${fillPlan.rounds} rounds (~${fillPlan.minutes} min, ` +
+        `~${fillPlan.credits.toLocaleString()} credits). It runs on the screener \u2014 leave that tab open.`);
+      if (!ok) e.preventDefault();
+    });
+    loadFillPlan();
 
     // ---- portfolios: the add-ticker target and the symbol list -------------
     let portfolios = {};

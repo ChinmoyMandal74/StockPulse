@@ -1248,9 +1248,11 @@ async function stampShortNames(rows) {
   } catch { /* a display name must never fail a page */ }
 }
 
-async function fetchProfile(symbol) {
-  const enc = encodeURIComponent(symbol);
-  const out = {
+// Every field a profile pull writes, null until the pull fills it. Kept as a
+// function so each pull gets a fresh object, and so PROFILE_FIELDS below can
+// say what a COMPLETE stored profile looks like.
+function emptyProfile() {
+  return {
     sector: null,
     industry: null,
     marketCap: null,
@@ -1278,6 +1280,17 @@ async function fetchProfile(symbol) {
     targetHigh: null,
     targetLow: null,
   };
+}
+
+// A stored profile missing one of these keys was pulled before that field
+// existed (Industry, 2026-09-14, was the first case). Absent is not the same
+// as null: a fund pulled since then carries `industry: null` because the
+// provider has none, and re-pulling it would only buy the same null again.
+const PROFILE_FIELDS = Object.keys(emptyProfile());
+
+async function fetchProfile(symbol) {
+  const enc = encodeURIComponent(symbol);
+  const out = emptyProfile();
   // Whether every call that should have returned data actually did. A rate
   // limit or an outage leaves this false, and the caller then keeps what it
   // already had rather than replacing it with the nulls below.
@@ -2369,11 +2382,88 @@ app.delete('/api/tickers/:symbol', requireAdmin, route(async (req, res) => {
 // so deleting the rows stripped sector, market cap and fundamentals out of the
 // shared snapshot for the ten-odd minutes it ran, and every other viewer saw
 // the holes. The old values stay visible and are replaced one by one.
+// ---- Fill missing ----------------------------------------------------------
+// Which stocks lack company data, and why. Three reasons, checked in order:
+// no stored profile at all (a new ticker), a stored profile missing a field
+// the app now writes (pulled before that field existed), or a pull that was
+// refused or never finished (fetched_at 0 — the retry marker). A profile that
+// is merely OLD is not missing: that is the rotation's job, and Refresh all's.
+function profileGaps(universe, profiles) {
+  const out = [];
+  for (const symbol of universe) {
+    const p = profiles[symbol];
+    if (!p) { out.push({ symbol, reason: 'none', hasRow: false }); continue; }
+    const absent = PROFILE_FIELDS.filter((k) => !(k in p));
+    if (absent.length) { out.push({ symbol, reason: 'fields', fields: absent, hasRow: true }); continue; }
+    if (!p.fetchedAt) out.push({ symbol, reason: 'failed', hasRow: true });
+  }
+  return out;
+}
+
+// What a Fill missing run would do right now, costed. Rounds follow the
+// Refresh all pacing: 7 profiles a minute on archive rounds, and a first round
+// that also prices any stock with no bars at all (a new ticker) at 1 credit
+// each, sizing its profile batch down to fit the same minute.
+async function missingPlan() {
+  const universe = getUniverse(await readPortfolios());
+  const gaps = profileGaps(universe, await readProfiles());
+  const dates = await store.barsMaxDates();
+  const noBars = universe.filter((s) => !dates.has(s));
+  let left = gaps.length;
+  let rounds = 0;
+  if (noBars.length) {
+    const firstCap = Math.max(0, Math.min(PROFILE_CAP_ARCHIVE_ROUND,
+      Math.floor((CREDITS_PER_MINUTE - noBars.length - 1) / CREDITS_PER_PROFILE)));
+    left = Math.max(0, left - firstCap);
+    rounds = 1;
+  }
+  rounds += Math.ceil(left / PROFILE_CAP_ARCHIVE_ROUND);
+  const fields = {};
+  gaps.forEach((g) => (g.fields || []).forEach((f) => { fields[f] = (fields[f] || 0) + 1; }));
+  return {
+    total: universe.length,
+    gaps,
+    noBars,
+    counts: {
+      none: gaps.filter((g) => g.reason === 'none').length,
+      fields: gaps.filter((g) => g.reason === 'fields').length,
+      failed: gaps.filter((g) => g.reason === 'failed').length,
+    },
+    fields,
+    rounds,
+    // rounds run 62s apart; the last one does not wait
+    minutes: rounds ? Math.max(1, Math.round(((rounds - 1) * 62 + 20) / 60)) : 0,
+    credits: gaps.length * CREDITS_PER_PROFILE + noBars.length + rounds,
+  };
+}
+
+// The preview the console shows before a run: nothing is expired or started.
+app.get('/api/refresh-missing', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const p = await missingPlan();
+  res.json({ ...p, gaps: p.gaps.map(({ hasRow, ...g }) => g) });
+}));
+
 app.post('/api/refresh-all', requireAdmin, route(async (req, res) => {
+  const who = await currentUser(req);
+  // Fill missing: the same loop, pointed at the gaps only.
+  if (req.query.mode === 'missing' || req.body?.mode === 'missing') {
+    const plan = await missingPlan();
+    if (!plan.gaps.length && !plan.noBars.length) {
+      return res.json({ ok: true, nothing: true, total: plan.total, targets: 0 });
+    }
+    logAct(req, 'refresh', 'missing:' + plan.gaps.length);
+    const expired = await store.expireProfilesFor(plan.gaps.filter((g) => g.hasRow).map((g) => g.symbol));
+    await beginRefresh(who ? who.email : null, plan.total, 'missing');
+    // No stock without bars means no price pull at all: every round reads the
+    // archive and spends its whole minute on the gaps.
+    if (!plan.noBars.length) await store.markRefreshPrices();
+    return res.json({ ok: true, mode: 'missing', expired, total: plan.total,
+      targets: plan.gaps.length, noBars: plan.noBars.length, rounds: plan.rounds });
+  }
   logAct(req, 'refresh', 'all');
   const expired = await expireProfiles();
   const total = getUniverse(await readPortfolios()).length;
-  const who = await currentUser(req);
   await beginRefresh(who ? who.email : null, total);
   res.json({ ok: true, expired, total });
 }));
@@ -3733,7 +3823,7 @@ function refreshReportBodies(r) {
     : escHtml(sym));
   const line = (k, v) => k.padEnd(14) + v;
   const isAll = r.kind === 'all';
-  const runName = isAll ? 'Refresh all' : 'Refresh';
+  const runName = r.mode === 'missing' ? 'Fill missing' : isAll ? 'Refresh all' : 'Refresh';
   // Prices moved; the company numbers did not. Say which.
   const fundLine = !isAll ? 'not re-pulled — prices only'
     : (r.stats.fundamentalsToday == null ? '—'
@@ -3762,6 +3852,14 @@ function refreshReportBodies(r) {
   }
   if (isAll && r.missing.length) {
     t.push('', `No profile yet (${r.missing.length}): ` + r.missing.map((x) => x.symbol).join(', '));
+  }
+  if (r.mode === 'missing') {
+    t.push('', r.stillGaps.length
+      ? `Still missing (${r.stillGaps.length}): ` + r.stillGaps.map((g) => g.symbol).join(', ')
+      : 'Still missing: none — every stock has complete company data.');
+    if (r.noIndustry.length) {
+      t.push(`No industry from the provider (${r.noIndustry.length}, expected for funds): ` + r.noIndustry.join(', '));
+    }
   }
   t.push('', 'Movers today');
   for (const x of r.top) t.push('  ' + signed(x.todayPct).padStart(7) + '  ' + x.symbol);
@@ -3842,6 +3940,16 @@ function refreshReportBodies(r) {
       `No profile yet (${r.missing.length}):</b> ` +
       escHtml(r.missing.map((x) => x.symbol).join(', ')) + '</p>';
   }
+  if (r.mode === 'missing') {
+    problems += `<p style="margin:8px 0 0;font-size:13px"><b style="color:${r.stillGaps.length ? '#b06000' : '#137333'}">` +
+      (r.stillGaps.length ? `Still missing (${r.stillGaps.length}):</b> ` +
+        escHtml(r.stillGaps.map((g) => g.symbol).join(', ')) : 'Still missing: none.</b>') + '</p>';
+    if (r.noIndustry.length) {
+      problems += '<p style="margin:8px 0 0;font-size:13px;color:#5f6368">' +
+        `No industry from the provider (${r.noIndustry.length}, expected for funds): ` +
+        escHtml(r.noIndustry.join(', ')) + '</p>';
+    }
+  }
 
   const inner =
     '<table style="border-collapse:collapse">' +
@@ -3900,8 +4008,18 @@ async function sendRefreshReport(state, kind = 'all') {
     const to = await operatorEmail();
     if (!to) return false;
     const r = await buildRefreshReport(state, await readSnapshot(), kind);
+    r.mode = state.mode || null;
+    if (r.mode === 'missing') {
+      // What is still missing after the run, and which stocks the provider
+      // simply has no industry for — the second list is expected, not a gap.
+      const universe = r.live.map((x) => x.symbol);
+      r.stillGaps = profileGaps(universe, await readProfiles());
+      r.noIndustry = r.live.filter((x) => x.profileFetchedAt != null && !x.industry).map((x) => x.symbol);
+    }
     const { text, html } = refreshReportBodies(r);
-    const subject = kind === 'all'
+    const subject = r.mode === 'missing'
+      ? `[Tickr Lab] Fill missing — ${r.stillGaps.length ? r.stillGaps.length + ' still missing' : 'complete'}`
+      : kind === 'all'
       ? `[Tickr Lab] Refresh all — ${r.loaded.length}/${r.live.length}` + (r.complete ? '' : ' incomplete')
       : `[Tickr Lab] Refresh — ${r.live.length} symbols as of ${r.asOf || 'n/a'}` +
         (r.failed.length ? `, ${r.failed.length} failed` : '');
@@ -4020,6 +4138,22 @@ async function liveRefreshOpts() {
   const archivePrices = !!(running && running.pricesAt);
   const universe = getUniverse(await readPortfolios());
   const n = universe.length + 1;   // + SPY
+  // Fill missing prices ONLY the stocks with no bars at all, in its first
+  // round; everything else comes off the archive. notePriceRound then stamps
+  // prices_at, so every later round is an archive round.
+  if (running && running.mode === 'missing' && !archivePrices && !ANALYST_ENABLED) {
+    const dates = await store.barsMaxDates();
+    const slice = universe.filter((s) => !dates.has(s)).slice(0, CREDITS_PER_MINUTE - 1);
+    return {
+      archivePrices: false,
+      profileCap: Math.max(0, Math.min(PROFILE_CAP_ARCHIVE_ROUND,
+        Math.floor((CREDITS_PER_MINUTE - slice.length - 1) / CREDITS_PER_PROFILE))),
+      running,
+      priceSlice: slice,
+      pricedAfter: universe.length,
+      priceTotal: universe.length,
+    };
+  }
   if (archivePrices || ANALYST_ENABLED) {
     return {
       archivePrices,
@@ -4082,9 +4216,19 @@ app.post('/api/cron/refresh', route(async (req, res) => {
     // and the TTL leaves the rest alone. After the first week the fetched_at
     // values have fanned out and the rotation keeps itself spread.
     const full = req.query.full === '1' || req.body?.full === true;
-    const expired = full
+    // Gaps go first on a rotation night: a new ticker or a new field fills the
+    // next night instead of waiting its turn. expireOldestProfiles() only picks
+    // among fetched_at > 0, so these are not counted against the rotation.
+    let gapped = 0;
+    if (!full) {
+      const universe = getUniverse(await readPortfolios());
+      const gaps = profileGaps(universe, await readProfiles());
+      gapped = await store.expireProfilesFor(gaps.filter((g) => g.hasRow).map((g) => g.symbol));
+      if (gaps.length) console.log(`cron: ${gaps.length} stocks with missing company data queued first`);
+    }
+    const expired = gapped + (full
       ? await expireProfiles()
-      : await store.expireOldestProfiles(Math.ceil(total / FUND_ROTATION_DAYS));
+      : await store.expireOldestProfiles(Math.ceil(total / FUND_ROTATION_DAYS)));
     await beginRefresh(String(req.body?.actor || 'nightly job').slice(0, 80), total);
     console.log(`cron: refresh all started — ${expired} profiles expired ` +
       `(${full ? 'full sweep' : `1/${FUND_ROTATION_DAYS} rotation`}), ${total} symbols`);
