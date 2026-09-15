@@ -3514,10 +3514,12 @@ app.get('/api/news', requireAuth, route(async (req, res) => {
   res.json({ symbol, items: await store.readNews(symbol, 12) });
 }));
 
-// The screener's news ticker: headlines PUBLISHED in the last 12 hours across
-// the whole universe, newest first. At most two per stock so one busy name
-// cannot fill the strip, one row per story (the same article filed under two
-// stocks keeps its first), 60 items. Stored rows only — never a fetch.
+// The screener's news ticker: headlines PUBLISHED in the last 12 hours, newest
+// first. At most two per stock so one busy name cannot fill the strip, one row
+// per story (the same article filed under two stocks keeps its first). Every
+// stock's share is sent, not a top 60: the page narrows the strip to whatever
+// the table is filtered to, and a universe-wide top 60 would leave most filters
+// with nothing. Stored rows only — never a fetch.
 const TICKER_HOURS = 12;
 app.get('/api/news/recent', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -3526,7 +3528,7 @@ app.get('/api/news/recent', requireAuth, route(async (req, res) => {
   const snap = await readSnapshot();
   let symbols = new Set(((snap && snap.stocks) || []).filter((x) => !x.error).map((x) => x.symbol));
   if (await isGuest(req)) symbols = new Set([...symbols].filter((s) => guestSet.has(String(s).toUpperCase())));
-  const rows = await store.readRecentNews(since, 600);
+  const rows = await store.readRecentNews(since, 3000);
   const perSym = {};
   const seen = new Set();
   const items = [];
@@ -3535,7 +3537,6 @@ app.get('/api/news/recent', requireAuth, route(async (req, res) => {
     if ((perSym[x.symbol] = (perSym[x.symbol] || 0) + 1) > 2) continue;
     seen.add(x.url);
     items.push(x);
-    if (items.length >= 60) break;
   }
   res.json({ items, hours: TICKER_HOURS, since });
 }));

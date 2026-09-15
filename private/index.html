@@ -2403,6 +2403,7 @@
         researchSymbol = null;
         renderResearchMenu();
         applyGroups();
+        paintTicker();   // the strip follows the table, empty included
         return;
       }
 
@@ -3107,15 +3108,30 @@
       $('tickerToggle').querySelector('.nm').textContent = tickerOff ? 'Show news ticker' : 'Hide news ticker';
       if (tickerOff) { bar.hidden = true; stopTickerRotate(); return; }
       if (tickerItems == null) { loadTicker(); return; }
-      // the window is enforced here too, so an item ages out between reads
-      const items = tickerItems.filter((x) => Date.now() - Date.parse(x.published_at) <= TICKER_WINDOW_MS);
+      // The strip follows the table: only headlines for the stocks the current
+      // portfolio, sector, industry, advice, Changed and column filters leave
+      // on screen. The window is enforced here too, so an item ages out
+      // between reads.
+      const fresh = tickerItems.filter((x) => Date.now() - Date.parse(x.published_at) <= TICKER_WINDOW_MS);
+      const inView = new Set(visibleStocks().map((s) => s.symbol));
+      const narrowed = inView.size < baseStocks.filter((s) => !s.error).length;
+      const items = fresh.filter((x) => inView.has(x.symbol)).slice(0, 60);
+      $('tkWindow').textContent = narrowed ? 'last 12h · stocks in view' : 'last 12h';
+      // Hidden only when nothing in the whole universe is recent. A filter that
+      // leaves no headlines says so in the strip instead: hiding would resize
+      // the table on every filter change.
       const wasHidden = bar.hidden;
-      bar.hidden = !items.length;
+      bar.hidden = !fresh.length;
       if (wasHidden !== bar.hidden) paintWindow(true);   // the table's height just changed
-      if (!items.length) { stopTickerRotate(); return; }
-      const key = items.map((x) => x.url).join('|') + '|' + (lastUpdated || '');
+      if (!fresh.length) { stopTickerRotate(); return; }
+      const key = (items.length ? items.map((x) => x.url).join('|') : 'none') + '|' + (lastUpdated || '');
       if (key === tickerKey) return;
       tickerKey = key;
+      if (!items.length) {
+        stopTickerRotate();
+        $('tkTrack').innerHTML = '<span class="tk-item tk-meta">No headlines in the last 12 hours for the stocks in view.</span>';
+        return;
+      }
       const html = items.map(tickerItemHtml).join('');
       const track = $('tkTrack');
       bar.classList.toggle('still', tkReduced());
