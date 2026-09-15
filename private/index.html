@@ -1631,7 +1631,9 @@
         '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-chart" /></svg></a>' +
         (renamable && isAdmin
           ? `<button class="jump" data-pfren="${we(name)}" title="Rename ${we(name)}" style="transform:none">` +
-            '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-pencil" /></svg></button>'
+            '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-pencil" /></svg></button>' +
+            `<button class="jump" data-pfdel="${we(name)}" title="Delete ${we(name)} (its stocks stay in the screener)" style="transform:none">` +
+            '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-x" /></svg></button>'
           : '') +
         '</div>';
 
@@ -1684,6 +1686,12 @@
           ev.stopPropagation();          // renaming must not also switch tab
           closePickers();
           renamePortfolio(b.dataset.pfren);
+        }));
+      $('pickerMenu').querySelectorAll('[data-pfdel]').forEach((b) =>
+        b.addEventListener('click', (ev) => {
+          ev.stopPropagation();          // deleting must not also switch tab
+          closePickers();
+          deletePortfolio(b.dataset.pfdel);
         }));
       if (myEnabled()) {
         $('myNewTab').addEventListener('click', () => {
@@ -3959,16 +3967,17 @@
       } catch (err) { setError(err.message); }
     }
 
-    async function deletePortfolio() {
-      if (activeTab === 'All') return;
+    async function deletePortfolio(target) {
+      const name = typeof target === 'string' ? target : activeTab;
+      if (!name || name === 'All' || isMyTab(name)) return;
       // Since the universe became its own table, deleting a portfolio removes
       // the grouping only: every stock stays in the screener with its data.
-      if (!window.confirm(`Delete portfolio "${activeTab}"? Only the grouping goes — its stocks stay in the screener with all their data.`)) return;
+      if (!window.confirm(`Delete portfolio "${name}"? Only the grouping goes — its stocks stay in the screener with all their data.`)) return;
       setError('');
       try {
-        const gone = activeTab;
-        const r = await api('DELETE', '/api/portfolios/' + encodeURIComponent(activeTab));
-        activeTab = 'All';
+        const gone = name;
+        const r = await api('DELETE', '/api/portfolios/' + encodeURIComponent(name));
+        if (activeTab === name) activeTab = 'All';
         applyPortfolioMap(r && r.portfolios, r && r.universe);
         notePurge(r && r.purged);
         if (!r || !r.purged || !r.purged.length) setStatus(`Portfolio "${gone}" deleted.`);
