@@ -491,7 +491,7 @@
     /* Industry names run long — "Farm & Heavy Construction Machinery" is one
        of ours — so the trigger truncates rather than stretching the bar past
        the width where it wraps onto a second line. */
-    #indBtn .count { max-width: 148px; overflow: hidden; text-overflow: ellipsis;
+    #indBtn .count, #pickerBtn .count { max-width: 148px; overflow: hidden; text-overflow: ellipsis;
                      white-space: nowrap; display: inline-block; vertical-align: -3px; }
     /* and the menu itself, which is a list of them */
     #indMenu .pick .nm { white-space: normal; }
@@ -1476,7 +1476,9 @@
         : isMyTab(activeTab) ? countMine(myTabName(activeTab)) : countFor(activeTab);
       const activeLabel = isMyTab(activeTab) ? myTabName(activeTab) : activeTab;
       $('pickerBtn').innerHTML = dot(activeColor) +
-        `<span class="picker-label">${activeLabel}</span><span class="count">${activeCount}</span>` +
+        // Labelled like Sector and Industry beside it: what the control is,
+        // then the choice in force — "Portfolio  All · 93".
+        `<span class="picker-label">Portfolio</span><span class="count">${we(activeLabel)} · ${activeCount}</span>` +
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
       $('pickerBtn').title = `Showing ${activeLabel} — click to switch portfolio`;
 
