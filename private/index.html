@@ -123,6 +123,12 @@
     td.act.a-hold { color: var(--muted); }
     td.act.a-avoid { color: color-mix(in srgb, var(--red) 70%, var(--muted)); }
     td.act.a-sell-immediately { color: var(--red); font-weight: 700; }
+    /* the same ladder colours, as dots in the Advice quick filter */
+    .adot { width: 7px; height: 7px; border-radius: 50%; flex: none; display: inline-block; background: var(--muted); }
+    .adot.a-strong-buy, .adot.a-buy { background: var(--green); }
+    .adot.a-buy-with-risk { background: color-mix(in srgb, var(--green) 55%, var(--muted)); }
+    .adot.a-avoid { background: color-mix(in srgb, var(--red) 70%, var(--muted)); }
+    .adot.a-sell-immediately { background: var(--red); }
     td.ctype { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; cursor: pointer; text-align: left; }
     td.ctype .early { color: var(--amber); }
     td.state { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; cursor: pointer; text-align: left; }
@@ -480,7 +486,7 @@
        click that removes everything else. Amber when armed, because the rows
        it leaves are the ones the rules just moved. */
     /* a picker that is filtering says so, the way the weight lens does */
-    #secBtn.on, #indBtn.on { color: var(--accent); border-color: rgba(124, 156, 255, 0.45);
+    #secBtn.on, #indBtn.on, #advBtn.on { color: var(--accent); border-color: rgba(124, 156, 255, 0.45);
                  background: rgba(124, 156, 255, 0.09); }
     /* Industry names run long — "Farm & Heavy Construction Machinery" is one
        of ours — so the trigger truncates rather than stretching the bar past
@@ -730,6 +736,10 @@
           <div class="picker-menu" id="indMenu" role="listbox" aria-label="Industry"></div>
         </div>
         <button class="btn picker-btn" id="fltBtn" aria-pressed="false"></button>
+        <div class="picker" id="advPicker" data-open="0">
+          <button class="btn picker-btn" id="advBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="picker-menu" id="advMenu" role="listbox" aria-label="Balanced advice"></div>
+        </div>
         <div class="picker" id="actPicker" data-open="0">
           <button class="btn picker-btn" id="actBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="actMenu" role="listbox" aria-label="Advice rules profile"></div>
@@ -1386,6 +1396,7 @@
       { root: 'colPicker', btn: 'colBtn', menu: 'colMenu' },
       { root: 'secPicker', btn: 'secBtn', menu: 'secMenu' },
       { root: 'indPicker', btn: 'indBtn', menu: 'indMenu' },
+      { root: 'advPicker', btn: 'advBtn', menu: 'advMenu' },
       { root: 'actPicker', btn: 'actBtn', menu: 'actMenu' },
       { root: 'researchPicker', btn: 'researchBtn', menu: 'researchMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
@@ -1566,6 +1577,10 @@
     // exactly one, so the menu only ever offers what the current sector holds
     // and a sector change drops an industry that is no longer in scope.
     let industryFilter = 'All';
+    // The Balanced verdict, as a quick filter beside the classification ones.
+    // Balanced only: it is the shared measurement, the one advice column that
+    // is always shown, and the one every other surface reads.
+    let adviceFilter = 'All';
     const adviceMoved = (s) => !!(s && s.advicePrev && s.action && s.advicePrev !== s.action);
 
     // Tab and sector together decide what the view is ABOUT; the changed
@@ -1584,6 +1599,7 @@
       }
       if (sectorFilter !== 'All') rows = rows.filter((s) => s.sector === sectorFilter);
       if (industryFilter !== 'All') rows = rows.filter((s) => s.industry === industryFilter);
+      if (adviceFilter !== 'All') rows = rows.filter((s) => filterValue(s, 'av:Balanced') === adviceFilter);
       return rows;
     }
 
@@ -1621,7 +1637,7 @@
     const RATING_FOR = { overallScore: 'overallRating', qualityScore: 'qualityRating', momentumScore: 'momentumRating' };
     const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios']);
     const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank']);
-    const BOUND_KEYS = new Set(['sector', 'industry']);   // write the bar pickers' state
+    const BOUND_KEYS = new Set(['sector', 'industry', 'av:Balanced']);   // write the bar pickers' state
     const BLANK = '\u2014 blank';
 
     function maCrossWord(x) {
@@ -1804,6 +1820,7 @@
         const k = el.dataset.fk;
         if (k === 'sector') setSectorFilter(el.value || 'All');
         else if (k === 'industry') industryFilter = el.value || 'All';
+        else if (k === 'av:Balanced') adviceFilter = el.value || 'All';
         else setColFilter(k, el.value);
         window.track && track('picker', 'filter:' + k);
         applyColFilters();
@@ -1827,6 +1844,7 @@
     function clearFilterKey(k) {
       if (k === 'sector') setSectorFilter('All');
       else if (k === 'industry') industryFilter = 'All';
+      else if (k === 'av:Balanced') adviceFilter = 'All';
       else setColFilter(k, '');
       syncFilterInputs();
       applyColFilters();
@@ -1864,7 +1882,10 @@
         const k = el.dataset.fk;
         const pool = k === 'industry'
           ? inTab.filter((s) => sectorFilter === 'All' || s.sector === sectorFilter)
-          : inTab;
+          : k === 'av:Balanced'
+            ? inTab.filter((s) => (sectorFilter === 'All' || s.sector === sectorFilter)
+              && (industryFilter === 'All' || s.industry === industryFilter))
+            : inTab;
         const counts = new Map();
         let blank = 0;
         for (const s of pool) {
@@ -1874,6 +1895,7 @@
         }
         const cur = k === 'sector' ? (sectorFilter === 'All' ? '' : sectorFilter)
           : k === 'industry' ? (industryFilter === 'All' ? '' : industryFilter)
+          : k === 'av:Balanced' ? (adviceFilter === 'All' ? '' : adviceFilter)
           : (colFilters[k] || '');
         let names = [...counts.keys()];
         const order = ladder(k);
@@ -2045,6 +2067,56 @@
           render();
         });
       });
+    }
+
+    // Verdicts present in the tab, sector and industry in force, in ladder
+    // order from Strong Buy down, with counts.
+    function renderAdviceMenu() {
+      const inScope = tabStocks().filter((s) => (sectorFilter === 'All' || s.sector === sectorFilter)
+        && (industryFilter === 'All' || s.industry === industryFilter));
+      const counts = {};
+      let blank = 0;
+      inScope.forEach((s) => {
+        const v = filterValue(s, 'av:Balanced');
+        if (v) counts[v] = (counts[v] || 0) + 1; else blank++;
+      });
+      const names = ActionRules.ACTIONS.slice().reverse()
+        .filter((a) => counts[a] || a === adviceFilter);
+      const row = (val, label, n) =>
+        `<button class="pick ${adviceFilter === val ? 'on' : ''}" data-adv="${we(val)}" role="option" ` +
+        `aria-selected="${adviceFilter === val}">` +
+        (val === 'All' ? '' : `<span class="adot a-${val.toLowerCase().replace(/ /g, '-')}"></span>`) +
+        `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>`;
+      const note = blank
+        ? `${blank} ${blank === 1 ? 'row has' : 'rows have'} no verdict yet — not enough data for the rules to read.`
+        : '';
+      $('advMenu').innerHTML = '<div class="picker-inner">' +
+        row('All', 'All advice', inScope.length) +
+        names.map((n) => row(n, n, counts[n] || 0)).join('') +
+        '<div class="pick-sep"></div><div class="pick-hint">The Balanced rules — the advice column that is always shown. ' +
+        'Other profiles can be filtered from the filter row.' + (note ? ' ' + we(note) : '') + '</div>' +
+        '</div>';
+      $('advMenu').querySelectorAll('[data-adv]').forEach((b) => {
+        b.addEventListener('click', () => {
+          adviceFilter = b.dataset.adv;
+          window.track && track('picker', 'advice:' + adviceFilter);
+          closePickers();
+          render();
+        });
+      });
+    }
+
+    function renderAdviceTrigger() {
+      const on = adviceFilter !== 'All';
+      $('advBtn').innerHTML =
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-check" /></svg>' +
+        '<span class="picker-label">Advice</span>' +
+        `<span class="count">${on ? we(adviceFilter) : 'All'}</span>` +
+        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
+      $('advBtn').classList.toggle('on', on);
+      $('advBtn').title = on
+        ? `Showing Balanced “${adviceFilter}” only — open to change or clear`
+        : 'Filter the table to one Balanced verdict';
     }
 
     function renderIndustryTrigger() {
@@ -2230,6 +2302,7 @@
       renderPicker();
       renderSectorTrigger();
       renderIndustryTrigger();
+      renderAdviceTrigger();
       renderChangedChip();
       renderLensChip();
       renderActTrigger();
@@ -2250,11 +2323,14 @@
         // table, and the one to clear first.
         const narrowest = industryFilter !== 'All' ? industryFilter
           : sectorFilter !== 'All' ? sectorFilter : 'All';
-        const where = narrowest === 'All' ? tabName : `${narrowest} in ${tabName}`;
+        const where = (adviceFilter !== 'All' ? `“${adviceFilter}” in ` : '') +
+          (narrowest === 'All' ? tabName : `${narrowest} in ${tabName}`);
         const msg = activeColFilters().length && prefilterStocks().length
           ? 'Nothing matches the column filters \u2014 loosen one, or Clear filters in the bar above the table.'
           : changedOnly
           ? `Every verdict in ${where} held since the previous session — nothing changed to show.`
+          : adviceFilter !== 'All'
+            ? `Nothing reads ${where} — clear the Advice filter to see the rest.`
           : narrowest !== 'All'
             ? `Nothing in ${where} — clear the ${industryFilter !== 'All' ? 'industry' : 'sector'} filter to see the rest.`
             : activeTab === 'All'
@@ -3314,6 +3390,7 @@ ${orphaned.join(', ')} ${orphaned.length === 1 ? 'is' : 'are'} in no other portf
         if (opening && p.root === 'actPicker') renderActMenu();
         if (opening && p.root === 'secPicker') renderSectorMenu();
         if (opening && p.root === 'indPicker') renderIndustryMenu();
+        if (opening && p.root === 'advPicker') renderAdviceMenu();
         openPicker(opening ? p.root : null);
       });
     });
