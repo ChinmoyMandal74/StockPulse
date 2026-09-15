@@ -3133,7 +3133,6 @@ app.get('/api/lab', requireMember, route(async (req, res) => {
   // whichever horizon is selected, which is both cheaper than shipping five of
   // them and the only way an arbitrary horizon could work at all.
 
-  // The momentum score, aligned to the bar dates by lookup rather than by
   const snap = await readSnapshot();
   const row = (snap && snap.stocks || []).find((x) => x.symbol === symbol);
   res.set('Cache-Control', 'no-store');
@@ -3143,10 +3142,8 @@ app.get('/api/lab', requireMember, route(async (req, res) => {
     horizons: Indicators.HORIZONS,
     dates: rows.map((r) => r.d),
     closes: rows.map((r) => Math.round(r.c * 100) / 100),
-    score,
-    scoredFrom: hist.length ? hist[0].d : null,
     indicators: Indicators.INDICATORS.map((x) => ({
-      id: x.id, label: x.label, blurb: x.blurb, needs: x.needs,
+      id: x.id, label: x.label, blurb: x.blurb,
       params: x.params, defaults: x.defaults,
     })),
     bounds: Indicators.BOUNDS,
@@ -3154,6 +3151,22 @@ app.get('/api/lab', requireMember, route(async (req, res) => {
       .map((x) => ({ symbol: x.symbol, name: x.name || '' }))
       .sort((a, b) => a.symbol.localeCompare(b.symbol)),
   });
+}));
+
+// Which key a user's saved layout is stored under: their email, falling back to
+// 'admin' for the legacy cookie and for open mode, where there is no user row —
+// the same key convention chat_usage uses.
+async function prefsKey(req) {
+  const who = await currentUser(req);
+  return who ? who.email : 'admin';
+}
+
+app.get('/api/prefs', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  // A guest has no user row, so prefsKey() would fall through to the 'admin'
+  // key — the owner's saved layout. Guests get defaults and store nothing.
+  if (await isGuest(req)) return res.json({ prefs: {} });
+  res.json({ prefs: await store.readPrefs(await prefsKey(req)) });
 }));
 
 app.put('/api/prefs', requireAuth, route(async (req, res) => {
