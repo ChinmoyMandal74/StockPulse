@@ -89,6 +89,18 @@
             font: 600 9.5px var(--sans); letter-spacing: 0.08em; text-transform: uppercase;
             color: var(--green); border: 1px solid rgba(52, 211, 153, 0.4);
             background: rgba(52, 211, 153, 0.1); }
+    /* ---- selecting rows to add to the screener ------------------------- */
+    th.ck, td.ck { width: 34px; padding-left: 14px; padding-right: 2px; text-align: left; cursor: default; }
+    .ck input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; vertical-align: middle; }
+    .ck input:disabled { cursor: not-allowed; opacity: 0.3; }
+    tbody tr.sel td { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+    .selbar { margin-top: 10px; }
+    .selbar > .core { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 14px;
+                      border: 1px solid rgba(124, 156, 255, 0.35); font-size: 12.5px; color: var(--muted); }
+    .selbar b { color: var(--text); font-weight: 600; }
+    .selbar .cost { font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+    .done > .core { border-color: rgba(52, 211, 153, 0.4); }
+    .done a.btn { text-decoration: none; }
     .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
             padding: 12px 14px; font-size: 12px; color: var(--faint); }
     .empty { padding: 40px 20px; text-align: center; color: var(--faint); font-family: var(--sans); }
@@ -156,6 +168,21 @@
         <svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Refresh from NASDAQ</button>
     </div></div>
 
+    <div class="bezel selbar" id="selBar" hidden><div class="core">
+      <span><b id="selN">0</b> selected</span>
+      <span class="cost" id="selCost"></span>
+      <span class="spacer"></span>
+      <select id="selTo" aria-label="Also add to a portfolio (optional)"></select>
+      <button class="btn btn-primary" id="selAdd">Add to screener</button>
+      <button class="btn" id="selClear">Clear</button>
+    </div></div>
+    <div class="bezel selbar done" id="doneBar" hidden><div class="core">
+      <span id="doneText"></span>
+      <span class="spacer"></span>
+      <a class="btn btn-primary" id="doneFill" href="/refreshes?do=refreshmissing">Fill missing now</a>
+      <button class="btn" id="doneClose">Dismiss</button>
+    </div></div>
+
     <div class="bezel tbl" style="margin-top:10px"><div class="core">
       <div class="wrap">
         <table>
@@ -206,7 +233,15 @@
     const price = (n) => (n == null ? '—' : '$' + n.toFixed(2));
 
     let rows = [];
-    let mine = new Set();          // symbols already in a screener portfolio
+    let mine = new Set();          // symbols already in the screener
+    let portfolioNames = [];
+    const selected = new Set();    // NASDAQ spellings picked for adding
+    const BULK_MAX = 500;          // the server's BULK_ADD_MAX
+    // NASDAQ writes a class share BRK/B; the screener and the data provider BRK.B.
+    const key = (sym) => String(sym || '').toUpperCase().replace(/\//g, '.');
+    const held = (r) => mine.has(key(r.symbol));
+    // Preferred shares (WFC^Z) are not priced by the data provider.
+    const selectable = (r) => !held(r) && !String(r.symbol).includes('^');
     let sortKey = 'market_cap';
     let sortDir = -1;
     let shown = 500;
@@ -227,8 +262,13 @@
       ['country', 'Country', 'l tx'],
     ];
 
-    function paintHead() {
-      $('head').innerHTML = COLS.map(([k, label, cls]) =>
+    function paintHead(list) {
+      const pickable = (list || []).filter(selectable);
+      const allOn = pickable.length > 0 && pickable.slice(0, BULK_MAX).every((r) => selected.has(r.symbol));
+      $('head').innerHTML = `<th class="ck"><input type="checkbox" id="ckAll" ${allOn ? 'checked' : ''} ` +
+        `${pickable.length ? '' : 'disabled'} title="Select every matching row not already in the screener` +
+        `${pickable.length > BULK_MAX ? ' (the first ' + BULK_MAX + ')' : ''}" aria-label="Select all matching"></th>` +
+        COLS.map(([k, label, cls]) =>
         `<th class="${cls}${sortKey === k ? ' sorted' : ''}" data-k="${k}">${we(label)}` +
         (sortKey === k ? `<span class="ar"> ${sortDir < 0 ? '↓' : '↑'}</span>` : '') +
         '</th>').join('');
@@ -242,6 +282,15 @@
           shown = 500;
           paint();
         }));
+      const all = $('ckAll');
+      all.addEventListener('click', () => {
+        // All MATCHING rows, not only the page drawn — in the current sort
+        // order, so a capped selection takes the top of the list.
+        if (all.checked) pickable.slice(0, BULK_MAX).forEach((r) => selected.add(r.symbol));
+        else pickable.forEach((r) => selected.delete(r.symbol));
+        if (all.checked && pickable.length > BULK_MAX) say(`Selected the first ${BULK_MAX} of ${pickable.length.toLocaleString()} — the most one add takes.`, 'bad');
+        paint();
+      });
     }
 
     function filtered() {
@@ -258,14 +307,13 @@
         if (sec && r.sector !== sec) return false;
         if (ind && r.industry !== ind) return false;
         if (ipo && !(r.ipo_year && r.ipo_year <= ipo)) return false;
-        if (onlyNew && mine.has(r.symbol)) return false;
+        if (onlyNew && held(r)) return false;
         if (q && !(r.symbol.includes(q) || String(r.name || '').toUpperCase().includes(q))) return false;
         return true;
       });
     }
 
     function paint() {
-      paintHead();
       const list = filtered().slice().sort((a, b) => {
         const x = a[sortKey], y = b[sortKey];
         // Blanks sort last whichever way the column is pointing: a null is
@@ -278,13 +326,18 @@
         }
         return (x - y) * sortDir;
       });
+      paintHead(list);
       $('sShown').textContent = list.length.toLocaleString();
       const page = list.slice(0, shown);
       $('body').innerHTML = page.length ? page.map((r) => {
         const chg = r.pct_change;
-        return '<tr>' +
+        const can = selectable(r);
+        const why = held(r) ? 'Already in the screener' : !can ? 'Preferred share — not priced by the data provider' : 'Select to add';
+        return `<tr class="${selected.has(r.symbol) ? 'sel' : ''}">` +
+          `<td class="ck"><input type="checkbox" data-pick="${we(r.symbol)}" ${selected.has(r.symbol) ? 'checked' : ''} ` +
+          `${can ? '' : 'disabled'} title="${why}" aria-label="${why}: ${we(r.symbol)}"></td>` +
           `<td class="l sym"><a href="https://www.nasdaq.com/market-activity/stocks/${encodeURIComponent(r.symbol.toLowerCase())}" target="_blank" rel="noopener">${we(r.symbol)}</a>` +
-          (mine.has(r.symbol) ? '<span class="held">held</span>' : '') + '</td>' +
+          (held(r) ? '<span class="held">held</span>' : '') + '</td>' +
           `<td class="l nm" title="${we(r.name || '')}">${we(r.name || '—')}</td>` +
           `<td class="l">${we(r.exchange || '—')}</td>` +
           `<td>${money(r.market_cap)}</td>` +
@@ -296,11 +349,69 @@
           `<td>${r.ipo_year || '—'}</td>` +
           `<td class="l tx">${we(r.country || '—')}</td>` +
           '</tr>';
-      }).join('') : `<tr><td class="empty" colspan="${COLS.length}">Nothing matches — widen the filter${rows.length ? '' : ', or pull the list with Refresh from NASDAQ'}.</td></tr>`;
+      }).join('') : `<tr><td class="empty" colspan="${COLS.length + 1}">Nothing matches — widen the filter${rows.length ? '' : ', or pull the list with Refresh from NASDAQ'}.</td></tr>`;
       $('count').textContent = list.length
         ? `Showing ${page.length.toLocaleString()} of ${list.length.toLocaleString()} matching · ${rows.length.toLocaleString()} stored`
         : `${rows.length.toLocaleString()} stored`;
       $('more').style.display = page.length < list.length ? '' : 'none';
+      $('body').querySelectorAll('[data-pick]').forEach((cb) =>
+        cb.addEventListener('change', () => {
+          if (cb.checked) {
+            if (selected.size >= BULK_MAX) { cb.checked = false; say(`At most ${BULK_MAX} at a time.`, 'bad'); return; }
+            selected.add(cb.dataset.pick);
+          } else selected.delete(cb.dataset.pick);
+          cb.closest('tr').classList.toggle('sel', cb.checked);
+          paintSel();
+          paintHead(list);
+        }));
+      paintSel();
+    }
+
+    // What the selection will cost once its data is pulled: company data is
+    // ~80 credits a stock at 7 a minute, prices 1 credit each (Fill missing).
+    function paintSel() {
+      const n = selected.size;
+      $('selBar').hidden = !n;
+      if (!n) return;
+      $('selN').textContent = n.toLocaleString();
+      const rounds = Math.ceil(n / 7);
+      $('selCost').textContent = `data pull afterwards ≈ ${(n * 81).toLocaleString()} credits, ~${rounds} min of Fill missing`;
+      $('selAdd').textContent = `Add ${n.toLocaleString()} to screener`;
+    }
+    function paintPortfolioPick() {
+      const keep = $('selTo').value;
+      $('selTo').innerHTML = '<option value="">No portfolio — screener only</option>' +
+        portfolioNames.map((n) => `<option value="${we(n)}">Also add to ${we(n)}</option>`).join('');
+      if (portfolioNames.includes(keep)) $('selTo').value = keep;
+    }
+
+    async function addSelected() {
+      const symbols = [...selected];
+      if (!symbols.length) return;
+      const to = $('selTo').value;
+      if (!confirm(`Add ${symbols.length} stock${symbols.length === 1 ? '' : 's'} to the screener` +
+        `${to ? ` and to "${to}"` : ''}?\n\nThey appear as "no data yet" rows until Fill missing (or tonight's job) ` +
+        `pulls their prices and company data — about ${Math.ceil(symbols.length / 7)} minutes.`)) return;
+      $('selAdd').disabled = true;
+      say('Adding…');
+      try {
+        const r = await api('POST', '/api/universe/bulk', { symbols, portfolio: to || undefined });
+        mine = new Set((r.universe || []).concat(Object.values(r.portfolios || {}).flat()));
+        selected.clear();
+        say('');
+        const bits = [`<b>${r.added.length}</b> added to the screener${to ? ` and "${we(to)}"` : ''}`];
+        if (r.already.length) bits.push(`${r.already.length} already there${to ? ' (added to the portfolio)' : ''}`);
+        if (r.invalid.length) bits.push(`${r.invalid.length} skipped: ${we(r.invalid.join(', '))}`);
+        $('doneText').innerHTML = bits.join(' · ') + (r.added.length
+          ? '. Their data arrives with Fill missing, or tonight\'s job.' : '.');
+        $('doneFill').hidden = !r.added.length;
+        $('doneBar').hidden = false;
+        paint();
+      } catch (err) {
+        say('Could not add: ' + err.message, 'bad');
+      } finally {
+        $('selAdd').disabled = false;
+      }
     }
 
     // The pickers only ever offer values that are actually present, so a
@@ -382,6 +493,9 @@
       });
       $('more').addEventListener('click', () => { shown += 500; paint(); });
       $('refreshBtn').addEventListener('click', refreshAll);
+      $('selAdd').addEventListener('click', addSelected);
+      $('selClear').addEventListener('click', () => { selected.clear(); paint(); });
+      $('doneClose').addEventListener('click', () => { $('doneBar').hidden = true; });
 
       // Which symbols are already in the screener — used only to MARK rows and
       // to filter them out while hunting for candidates. Nothing flows the
@@ -389,6 +503,8 @@
       try {
         const p = await api('GET', '/api/portfolios');
         mine = new Set((p.universe || []).concat(Object.values(p.portfolios || {}).flat()));
+        portfolioNames = Object.keys(p.portfolios || {});
+        paintPortfolioPick();
       } catch (e) { /* the page still works without the badges */ }
 
       try {

@@ -2542,6 +2542,68 @@ async function nameForNewTicker(symbol) {
   return name;
 }
 
+// Bulk add from the NASDAQ list (2026-09-15). Symbols are NASDAQ's spelling:
+// a class share's slash becomes the dot the data provider uses (BRK/B ->
+// BRK.B), and preferred shares (WFC^Z) are refused — the provider does not
+// price them. Names come from the NASDAQ listing, trimmed of the instrument
+// words, and only where no name is stored — so a bulk add costs no credits.
+// The company data arrives with the next Fill missing or nightly run.
+const BULK_ADD_MAX = 500;
+const nasdaqToSymbol = (s) => String(s || '').trim().toUpperCase().replace(/\//g, '.');
+const cleanListingName = (n) => String(n || '').trim()
+  .replace(/\s+(American Depositary Shares?|American Depositary Receipts?|Sponsored ADR)\b.*$/i, '')
+  .replace(/\s+(Common Stock|Capital Stock|Ordinary Shares|Common Shares|Class [A-Z] Ordinary Shares)$/i, '')
+  .trim() || null;
+
+app.post('/api/universe/bulk', requireAdmin, route(async (req, res) => {
+  const raw = Array.isArray(req.body?.symbols) ? req.body.symbols : [];
+  if (!raw.length) return res.status(400).json({ error: 'No symbols given.' });
+  if (raw.length > BULK_ADD_MAX) return res.status(400).json({ error: `At most ${BULK_ADD_MAX} at a time.` });
+  const pname = String(req.body?.portfolio || '').trim();
+
+  const invalid = [];
+  const wanted = [];
+  const seen = new Set();
+  for (const r of raw) {
+    const sym = nasdaqToSymbol(r);
+    if (!SYMBOL_RE.test(sym)) { invalid.push(String(r).slice(0, 16)); continue; }
+    if (!seen.has(sym)) { seen.add(sym); wanted.push(sym); }
+  }
+
+  // Read BEFORE the portfolio write: writePortfolios() records members in the
+  // universe, so reading after it would report every new stock as already there.
+  const before = new Set(await readUniverse());
+  if (pname) {
+    const p = await readPortfolios();
+    if (!(pname in p)) return res.status(404).json({ error: 'Portfolio not found.' });
+    p[pname] = [...p[pname], ...wanted.filter((sym) => !p[pname].includes(sym))];
+    await writePortfolios(p);
+  }
+  // New = not in the screener before this request (the portfolio write may
+  // already have inserted them, so the insert's own count cannot say).
+  const added = wanted.filter((sym) => !before.has(sym));
+  await store.addManyToUniverse(added);
+  const already = wanted.filter((sym) => before.has(sym));
+
+  // Names for the new ones, from the listing, where none is stored.
+  if (added.length) {
+    try {
+      const [names, listings] = await Promise.all([readNames(), store.readNasdaqListings()]);
+      const bySym = new Map(listings.map((l) => [nasdaqToSymbol(l.symbol), l.name]));
+      const fill = {};
+      for (const sym of added) {
+        const nm = cleanListingName(bySym.get(sym));
+        if (!names[sym] && nm) fill[sym] = nm;
+      }
+      if (Object.keys(fill).length) await writeNames(fill);
+    } catch (err) {
+      console.warn('bulk add: names skipped:', err.message);   // a name never fails an add
+    }
+  }
+  logAct(req, 'portfolio', (`bulk-add:+${added.length}` + (pname ? '>' + pname : '')).slice(0, 80));
+  res.json(await portfolioAnswer({ added, already, invalid }));
+}));
+
 // Add a stock to the screener, optionally into a portfolio as well.
 app.post('/api/universe', requireAdmin, route(async (req, res) => {
   const symbol = String(req.body?.symbol || '').trim().toUpperCase();

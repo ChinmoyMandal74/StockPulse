@@ -507,6 +507,18 @@ async function addToUniverse(symbol) {
   return Number(r.rowsAffected || 0) > 0;
 }
 
+// Many at once (the NASDAQ page's bulk add). Returns the symbols that were new.
+async function addManyToUniverse(symbols) {
+  await init();
+  const list = [...new Set((symbols || []).map((x) => String(x).toUpperCase()))];
+  if (!list.length) return [];
+  const now = Date.now();
+  const res = await db.batch(list.map((sym) => ({
+    sql: 'insert or ignore into universe (symbol, added_at) values (?, ?)', args: [sym, now],
+  })), 'write');
+  return list.filter((_, i) => Number((res[i] && res[i].rowsAffected) || 0) > 0);
+}
+
 // Out of the screener: the universe row and every portfolio membership, in one
 // batch, so the union in readUniverse() cannot bring it straight back. The
 // caller purges its data.
@@ -2155,6 +2167,7 @@ module.exports = {
   readPortfolios,
   readUniverse,
   addToUniverse,
+  addManyToUniverse,
   removeFromUniverse,
   writePortfolios,
   readNames,
