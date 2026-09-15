@@ -13,10 +13,19 @@ name: Nightly refresh
 
 on:
   schedule:
-    # 00:00 UTC. That is 8PM Eastern while daylight saving is in force and 7PM
-    # the rest of the year — both comfortably after the 4PM close, which is what
-    # actually matters. GitHub can start a scheduled run late under load.
-    - cron: '0 0 * * *'
+    # 4:15 PM in New York, fifteen minutes after the close.
+    #
+    # GitHub cron is UTC and has no timezone option, so one entry cannot mean a
+    # local time in a place that moves its clocks. BOTH UTC times are registered
+    # — 20:15 while Eastern Daylight Time is in force (UTC-4) and 21:15 while
+    # Eastern Standard Time is (UTC-5) — and the job throws away whichever of
+    # the two is not 4PM in New York on the day.
+    #
+    # The guard asks the tz database rather than hardcoding the changeover
+    # dates, because those move: the US has shifted them before and may again.
+    # So this keeps working without anyone remembering it exists.
+    - cron: '15 20 * * *'     # 4:15 PM EDT (Mar-Nov)
+    - cron: '15 21 * * *'     # 4:15 PM EST (Nov-Mar)
   workflow_dispatch:          # the "Run workflow" button, for a refresh on demand
 
 # A run still going when the next fires would fight it for the refresh flag.
@@ -29,7 +38,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # Two crons are registered so one of them lands on 4:15 PM Eastern
+      # whatever the clocks are doing. Exactly one can be right on any given
+      # day; this is where the other one stops. A manual run is never gated.
+      - name: Is it 4:15 PM in New York?
+        id: gate
+        run: |
+          NY=$(TZ=America/New_York date '+%Y-%m-%d %H:%M %Z')
+          HOUR=$(TZ=America/New_York date '+%H')
+          echo "New York: $NY   (UTC $(date -u '+%H:%M'))"
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "manual run — not gated"
+            echo "go=yes" >> "$GITHUB_OUTPUT"
+          elif [ "$HOUR" = "16" ]; then
+            echo "go=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::$NY is not 4PM Eastern — this is the other daylight-saving cron. Nothing to do."
+            echo "go=no" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Drive a full Refresh all
+        if: steps.gate.outputs.go == 'yes'
         env:
           # APP_URL is not sensitive, so accept it from either tab. "Secrets and
           # variables" puts them side by side and the wrong one is easy to pick.

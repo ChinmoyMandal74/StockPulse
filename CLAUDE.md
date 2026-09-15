@@ -48,7 +48,7 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `private/contact.html` | Signed-in contact form at `/contact` — subject + message, mailed to the owner |
 | `private/help.html` | User-facing help at `/help` — how scoring works, what each momentum factor means |
 | `private/screens.js` | **The seven analysis screens, defined once** — loaded by `analysis.html` and `require`d by `server.js` |
-| `.github/workflows/nightly-refresh.yml` | The 8PM Refresh all — see **The nightly job** below |
+| `.github/workflows/nightly-refresh.yml` | The 4:15PM Eastern Refresh all — see **The nightly job** below |
 | `public/favicon.svg` | Momentum-line mark, emerald on OLED black |
 | `portfolios.json`, `snapshot.json`, `profiles.json`, `names.json`, `visitors.log` | **Legacy.** Pre-migration backups only — nothing reads or writes them any more. Safe to delete once you trust the database. |
 | `.env` | `TWELVE_DATA_API_KEY`, `TURSO_*`, `ADMIN_PASSWORD`, optional feature flags |
@@ -500,7 +500,11 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
 - `open` is stored although nothing reads it yet. `high`/`low` drive the 52-week range and `volume` the volume trend, so an archive without them could draw a chart but not reproduce the screener — which is the point of keeping it.
 
 ## The nightly job
-`.github/workflows/nightly-refresh.yml` runs a full Refresh all at **00:00 UTC** — 8PM Eastern in summer, 7PM in winter. Both are after the 4PM close, which is the part that matters; the hour of drift is deliberate rather than worth a second cron entry and a timezone guard.
+`.github/workflows/nightly-refresh.yml` runs a Refresh all at **4:15 PM in New York** — fifteen minutes after the close (changed 2026-09-15; it was 00:00 UTC, which drifted between 8PM and 7PM Eastern).
+
+**A local time needs two crons and a guard, because GitHub cron is UTC and has no timezone option.** Both UTC times are registered — **20:15 while EDT is in force and 21:15 while EST is** — and the first step of the job converts `now` to `America/New_York` and stops unless the hour is 16. Exactly one of the pair can be right on any given day. **The guard asks the tz database rather than hardcoding changeover dates**, because those move; the US has shifted them before. Verified by replaying 400 days through the real tz data: exactly one run fires per day, with clean handover on 2026-03-08 (21:15Z → 20:15Z) and 2026-11-01 (back again). A `workflow_dispatch` run is never gated.
+
+**4:15 PM is close to the close, and that is a deliberate trade.** Twelve Data returns a bar for *today* while the market is open whose close is the current price, so a run this soon after the bell can store a value that is not yet the settled close. It self-heals: `persistBars()` re-upserts a `BAR_OVERLAP` window of 5 sessions, so the next day's run overwrites it with the final figure (measured drift on a real pull: 0.003-0.007%). What it costs is that the evening's snapshot may carry a provisional close. Moving to 4:30 or 5:00 PM is one digit in both cron lines if that ever matters.
 
 **A runner, not a Vercel cron, because a full pass takes ~13 minutes** and no serverless function stays alive that long. The workflow drives exactly the loop the browser drives.
 
@@ -530,7 +534,7 @@ The `bars` table keeps one row per symbol per trading day (`open/high/low/close/
   - Values are printed **currency-neutral** (`89.10B`, not `$89.10B`): these are in the company's reporting currency, and Samsung's revenue is not dollars.
 - A run that *stalls* sends nothing — nobody calls `endRefresh()` and the flag ages out on its own. The cron job covers that case, since it is the thing still awake.
 - `REPORT_TO` overrides the destination; unset it falls back to the owner account's email, so it works before anything is configured.
-- **Fundamentals rows are dated by `marketDay(rows)`** — the freshest bar in the universe, not the server clock. At 8PM Eastern the server's UTC date is already tomorrow, so dating by `new Date()` would file every automated run one day ahead of the bars it was computed from.
+- **Fundamentals rows are dated by `marketDay(rows)`** — the freshest bar in the universe, not the server clock. This mattered more at the old 8PM Eastern slot, where the server's UTC date was already tomorrow and dating by `new Date()` filed every automated run a day ahead of its own bars. At 4:15 PM Eastern the UTC date still agrees, but the rule stands: the bars decide the date, not the clock.
 
 ## Chatbot
 `/chat` answers questions about the screener data. Open to **any signed-in user** (`requireAuth`), with the allowance set by role.
