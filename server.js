@@ -358,10 +358,13 @@ app.get('/activity', route(async (req, res) => {
 }));
 
 // The promo studio: fixed marketing-card templates rendered from tonight's
-// data in the site's own theme, for manual screenshotting. Admin only — it
-// is a marketing tool, not a member surface.
+// data in the site's own theme. Open to every signed-in member since
+// 2026-09-15; the Announcement template stays the owner's (hidden in the
+// page — it is free text, so there is nothing server-side to guard). Guests
+// are sent back: /api/basket, which the chart cards read, is member-only.
 app.get('/promo', route(async (req, res) => {
-  if (!(await isAdmin(req))) return res.redirect('/');
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
   logAct(req, 'page', 'promo');
   res.sendFile(path.join(__dirname, 'private', 'promo.html'));
 }));

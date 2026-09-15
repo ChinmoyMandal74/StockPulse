@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/app.css" />
+  <script src="/wmark.js" defer></script>
   <style>
     /* The studio: controls on the left, the card stage on the right. The
        stage is a REAL 1080px-wide artboard scaled to fit the window, so the
@@ -394,7 +395,12 @@
     let size = SIZES[0];
     let stocks = [];
     let loadedAt = null;
-    let myLists = {};        // the admin's own portfolios, for the scope picker
+    let myLists = {};        // the viewer's own portfolios, for the scope picker
+    // Announcement is free text in the brand's own voice, so only the owner
+    // gets it; everyone else sees every other template.
+    const OWNER_ONLY_TPLS = new Set(['announce']);
+    let canAnnounce = false;
+    const visibleTpls = () => TPLS.filter((t) => canAnnounce || !OWNER_ONLY_TPLS.has(t.id));
     let portfolioNames = [];
 
     // The archive read for the chart card: the host owns the cache and the
@@ -481,7 +487,7 @@
     window.addEventListener('resize', fit);
 
     function paintControls() {
-      $('tplList').innerHTML = TPLS.map((t) =>
+      $('tplList').innerHTML = visibleTpls().map((t) =>
         `<button class="${tpl === t.id ? 'on' : ''}" data-t="${t.id}">${esc(t.name)}<em>${esc(t.note)}</em></button>`).join('');
       $('tplList').querySelectorAll('[data-t]').forEach((b) =>
         b.addEventListener('click', () => {
@@ -766,11 +772,13 @@
     async function load(reload) {
       try {
         const me = await fetch('/api/me', { cache: 'no-store' }).then((r) => r.json());
-        if (!me.admin) {
+        if (me.guest) {
           document.querySelector('.deck').innerHTML =
-            '<div class="err">Admin access required. <a href="/" style="color:var(--accent)">Back to the screener</a>.</div>';
+            '<div class="err">The studio needs an account. <a href="/" style="color:var(--accent)">Back to the screener</a>.</div>';
           return;
         }
+        canAnnounce = !!me.admin;
+        if (!canAnnounce && OWNER_ONLY_TPLS.has(tpl)) tpl = 'movers';
         const data = await fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json());
         stocks = (data.stocks || []).filter((s) => !s.error);
         loadedAt = data.updatedAt || null;

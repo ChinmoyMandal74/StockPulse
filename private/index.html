@@ -744,6 +744,12 @@
           <button class="btn picker-btn" id="actBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="actMenu" role="listbox" aria-label="Advice rules profile"></div>
         </div>
+        <!-- The promo studio, open to every account since 2026-09-15 (the
+             Announcement template stays the owner's). Hidden for guests. -->
+        <a class="btn" id="promoLink" href="/promo" target="_blank" rel="noopener"
+           title="Promo Studio — turn tonight's data into a post-ready card">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-star" /></svg>Promo Studio
+        </a>
         <!-- The forward-returns VIEW still belongs to this page: it is a mode of
              the table, with its own banner and its own column group. Only the
              control left — /admin sets the date and links here with ?asOf=. The
@@ -2909,6 +2915,7 @@
         if (rp) rp.style.display = 'none';
         const ask = document.querySelector('a.btn[href="/chat"]');
         if (ask) ask.style.display = 'none';
+        $('promoLink').style.display = 'none';
         const note = $('readonlyNote').querySelector('span');
         if (note) note.innerHTML = '<b>Guest preview.</b> A handful of stocks with every feature live — ' +
           'the full screener, research pages and assistant need an account.';
