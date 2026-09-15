@@ -717,15 +717,13 @@
         <h1 class="brand"><span class="w1">Tickr</span> <span class="w2">Lab</span></h1>
         <span class="bar-sep"></span>
 
-        <div class="picker" id="picker" data-open="0">
-          <button class="btn picker-btn" id="pickerBtn" aria-haspopup="listbox" aria-expanded="false"></button>
-          <div class="picker-menu" id="pickerMenu" role="listbox" aria-label="Portfolio"></div>
-        </div>
-        <button class="btn chgFilter" id="chgBtn" style="display:none"
-                title="Show only the stocks whose Balanced advice moved since the previous session"></button>
         <div class="picker" id="colPicker" data-open="0">
           <button class="btn picker-btn" id="colBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="colMenu" role="listbox" aria-multiselectable="true" aria-label="Column groups"></div>
+        </div>
+        <div class="picker" id="picker" data-open="0">
+          <button class="btn picker-btn" id="pickerBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="picker-menu" id="pickerMenu" role="listbox" aria-label="Portfolio"></div>
         </div>
         <div class="picker" id="secPicker" data-open="0">
           <button class="btn picker-btn" id="secBtn" aria-haspopup="listbox" aria-expanded="false"></button>
@@ -735,11 +733,13 @@
           <button class="btn picker-btn" id="indBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="indMenu" role="listbox" aria-label="Industry"></div>
         </div>
-        <button class="btn picker-btn" id="fltBtn" aria-pressed="false"></button>
         <div class="picker" id="advPicker" data-open="0">
           <button class="btn picker-btn" id="advBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="advMenu" role="listbox" aria-label="Balanced advice"></div>
         </div>
+        <button class="btn chgFilter" id="chgBtn" style="display:none"
+                title="Show only the stocks whose Balanced advice moved since the previous session"></button>
+        <button class="btn picker-btn" id="fltBtn" aria-pressed="false"></button>
         <div class="picker" id="actPicker" data-open="0">
           <button class="btn picker-btn" id="actBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="actMenu" role="listbox" aria-label="Advice rules profile"></div>
