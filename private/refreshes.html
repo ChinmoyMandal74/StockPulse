@@ -125,6 +125,7 @@
     .s-running { color: var(--accent); border-color: rgba(124, 156, 255, 0.45); }
     .s-incomplete, .s-stopped { color: var(--amber); border-color: rgba(251, 191, 36, 0.4); }
     .s-failed, .s-abandoned { color: var(--red); border-color: rgba(251, 113, 133, 0.45); }
+    .s-skipped { color: var(--faint); }
     .kindtag { font-weight: 600; }
     .trig { font-size: 11px; color: var(--faint); }
     .empty { padding: 26px; color: var(--muted); font-size: 13px; }
@@ -231,11 +232,11 @@
 
     const KINDS = {
       nightly: 'Nightly', 'nightly-full': 'Nightly full', all: 'Refresh all', missing: 'Fill missing',
-      refresh: 'Refresh', nasdaq: 'NASDAQ list',
+      refresh: 'Refresh', intraday: 'Intraday prices', nasdaq: 'NASDAQ list',
     };
     const KIND_COLORS = { nightly: '#34d399', 'nightly-full': '#22d3ee', all: '#fbbf24', missing: '#a78bfa',
-      refresh: '#7c9cff', nasdaq: '#f472b6' };
-    const STATUSES = ['complete', 'running', 'incomplete', 'stopped', 'failed', 'abandoned'];
+      refresh: '#7c9cff', intraday: '#38bdf8', nasdaq: '#f472b6' };
+    const STATUSES = ['complete', 'running', 'incomplete', 'stopped', 'failed', 'abandoned', 'skipped'];
     const VERDICT_WORDS = { ok: 'ran', running: 'running now', pending: 'not yet (runs 4:15 PM ET)',
       missed: 'did not run', incomplete: 'stopped short', stopped: 'was stopped', failed: 'failed',
       abandoned: 'abandoned partway', untracked: 'before tracking began' };
@@ -259,7 +260,8 @@
     // What a run did, in the unit that suits its kind.
     function workOf(r) {
       if (r.kind === 'nasdaq') return `${fmtNum(r.loaded)}/${fmtNum(r.total)} exchanges`;
-      if (r.kind === 'refresh') return `${fmtNum(r.pricesLive)} priced`;
+      if (r.status === 'skipped') return r.error || 'skipped';
+      if (r.kind === 'refresh' || r.kind === 'intraday') return `${fmtNum(r.pricesLive)} priced`;
       const t = r.targets != null ? r.targets : r.total;
       return `${fmtNum(r.profiles)}${t != null ? ' / ' + fmtNum(t) : ''} profiles`;
     }
@@ -313,13 +315,30 @@
       load();
     }
 
+    // Today's intraday price refreshes, in New York's day: how many ran, the
+    // last one, and anything that failed or was skipped.
+    function intradayLine() {
+      const day = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(ms));
+      const today = day(Date.now());
+      const list = runs.filter((r) => r.kind === 'intraday' && day(r.startedAt) === today);
+      if (!list.length) return '<div class="sub">Intraday prices today: none yet (every 30 min from 9:40 AM ET on trading days).</div>';
+      const done = list.filter((r) => r.status === 'complete');
+      const bad = list.filter((r) => ['failed', 'abandoned'].includes(r.status)).length;
+      const skipped = list.filter((r) => r.status === 'skipped').length;
+      const last = done[0];
+      return `<div class="sub">Intraday prices today: <b>${done.length}</b> run${done.length === 1 ? '' : 's'}` +
+        (last ? `, last ${new Date(last.startedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}` : '') +
+        (bad ? ` · <span style="color:var(--red)">${bad} failed</span>` : '') +
+        (skipped ? ` · ${skipped} skipped` : '') + '.</div>';
+    }
+
     // ---- health ----------------------------------------------------------------
     function paintNights(nights) {
       const lastNight = runs.find((r) => /^nightly/.test(r.kind));
       const tl = $('tLast');
       if (!lastNight) {
         tl.innerHTML = '<span class="k">Last nightly</span><div class="big faint">None recorded yet</div>' +
-          '<div class="sub">Tracking starts with the next run.</div>';
+          '<div class="sub">Tracking starts with the next run.</div>' + intradayLine();
       } else {
         const color = lastNight.status === 'complete' ? 'var(--green)'
           : ['incomplete', 'stopped'].includes(lastNight.status) ? 'var(--amber)'
@@ -327,7 +346,7 @@
         tl.innerHTML = '<span class="k">Last nightly</span>' +
           `<div class="big" style="color:${color}">${lastNight.status === 'complete' ? '✓ ' : ''}${we(lastNight.status)}</div>` +
           `<div class="sub">${fmtWhen(lastNight.startedAt)} · ${fmtDur(durationOf(lastNight, Date.now()))} · ` +
-          `${workOf(lastNight)} · ${fmtNum(lastNight.credits)} credits</div>`;
+          `${workOf(lastNight)} · ${fmtNum(lastNight.credits)} credits</div>` + intradayLine();
         tl.style.cursor = 'pointer';
         tl.onclick = () => openRun(lastNight.id);
       }

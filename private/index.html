@@ -3051,6 +3051,26 @@
     }
     function stopRefreshPoll() { clearInterval(refreshPoll); refreshPoll = null; }
 
+    // Newer data, quietly. Prices now refresh every 30 minutes in market hours,
+    // and a tab left open would otherwise show the morning's numbers all day.
+    // Every five minutes a visible tab asks when the snapshot was computed
+    // (one small column, not the table) and, if it is newer than what is on
+    // screen, reloads it in place: sort, filters, tab and scroll all survive,
+    // because they are page state the reload does not touch. It waits while
+    // anything is being pulled, while a forward-returns view is open, and
+    // while a panel or popover is in use, so nothing moves under the cursor.
+    async function checkNewerSnapshot() {
+      if (document.hidden || pulling || refreshingHere || asOfDate || !lastUpdated) return;
+      if (!$('actionPanel').hidden || !$('myPop').hidden) return;
+      try {
+        const s = await api('GET', '/api/status');
+        if (s.refreshing || !s.updatedAt || s.updatedAt === lastUpdated) return;
+        if (Date.parse(s.updatedAt) <= Date.parse(lastUpdated)) return;
+        await refresh({ live: false });
+      } catch (e) { /* transient — try again next time */ }
+    }
+    setInterval(checkNewerSnapshot, 5 * 60 * 1000);
+
     // ---- latest headline per symbol -----------------------------------------
     // One stored-only query after the table paints (the sparklines rule: a
     // decoration must not make the data wait). Injected onto the rows, where

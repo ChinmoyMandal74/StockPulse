@@ -682,6 +682,16 @@ async function endRefresh() {
 // means the tab closed or the job died.
 const RUN_ABANDON_MS = 6 * 60 * 1000;
 
+async function recordSkippedRun({ kind, trigger, actor, reason }) {
+  await init();
+  const now = Date.now();
+  await db.execute({
+    sql: `insert into refresh_runs (kind, trigger, actor, started_at, updated_at, ended_at, status, error)
+          values (?, ?, ?, ?, ?, ?, 'skipped', ?)`,
+    args: [kind, trigger, actor || null, now, now, now, String(reason || '').slice(0, 300)],
+  });
+}
+
 async function startRun({ kind, trigger, actor, total, targets, link }) {
   await init();
   const now = Date.now();
@@ -1396,6 +1406,14 @@ async function readSnapshot() {
   }
 }
 
+// When the served snapshot was computed, without reading the snapshot itself
+// (~1MB). Open screener tabs poll this to know newer prices have landed.
+async function snapshotUpdatedAt() {
+  await init();
+  const r = await db.execute('select updated_at from snapshot where id = 1');
+  return r.rows.length ? (r.rows[0].updated_at || null) : null;
+}
+
 async function writeSnapshot(payload) {
   await init();
   await db.execute({
@@ -1990,6 +2008,7 @@ module.exports = {
   expireOldestProfiles,
   expireProfilesFor,
   tableStats,
+  snapshotUpdatedAt,
   closesBefore,
   readRecentNews,
   startNewsRun,
@@ -2000,6 +2019,7 @@ module.exports = {
   newsHoldings,
   pruneNewsRuns,
   startRun,
+  recordSkippedRun,
   noteRound,
   finishRun,
   setRunReport,

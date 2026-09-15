@@ -2555,7 +2555,8 @@ app.delete('/api/refresh-all', requireAdmin, route(async (req, res) => {
 // snapshot, since every open page hits this while one is in progress.
 app.get('/api/status', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ refreshing: await readRefreshState() });
+  const [refreshing, updatedAt] = await Promise.all([readRefreshState(), store.snapshotUpdatedAt()]);
+  res.json({ refreshing, updatedAt });
 }));
 
 // ---- API: stocks (the screener data) ---------------------------------------
@@ -4216,7 +4217,11 @@ async function sendRefreshReport(state, kind = 'all') {
       : `[Tickr Lab] Refresh — ${r.live.length} symbols as of ${r.asOf || 'n/a'}` +
         (r.failed.length ? `, ${r.failed.length} failed` : '');
     let ok = false;
-    const to = MAIL_READY ? await operatorEmail() : null;
+    // Only a Refresh all (and Fill missing, which is one) mails. A plain price
+    // Refresh stopped mailing on 2026-09-15, when intraday refreshes arrived —
+    // thirteen emails a trading day would bury the one that matters. Its
+    // report is still kept on the run, for /refreshes.
+    const to = MAIL_READY && kind !== 'plain' ? await operatorEmail() : null;
     if (to) {
       ok = await sendMail({ to, subject, text, html });
       console.log(`report: ${kind === 'all' ? 'refresh all' : 'refresh'} summary ` +
@@ -4629,6 +4634,78 @@ app.get('/api/cron/watchdog', route(async (req, res) => {
   }
   console.log(`watchdog: ${today.day} ${today.verdict}${mailed ? ' — alert mailed' : ''}`);
   res.json({ ok: true, ...today, alert: bad, mailed });
+}));
+
+// ---- intraday price refreshes -------------------------------------------------
+// Called every 30 minutes by an external scheduler (cron-job.org, set in New
+// York time: minutes 10 and 40, hours 9-15, Monday-Friday). The server decides
+// whether to act, so the schedule can be broad and daylight saving needs no
+// thought: a weekday between 9:40 AM and 4:00 PM New York time, nothing else
+// running (two jobs in one minute breach the 610 credits), and NYSE open by
+// Twelve Data's market_state (1 credit — it knows holidays and early closes).
+// Then one plain price refresh, no email, logged as an `intraday` run. A call
+// outside the window returns without logging (the 9:10 call lands there every
+// day); a holiday or a busy slot is logged as `skipped`, since those are the
+// calls worth seeing. ?dry=1 reports the decision and changes nothing.
+const INTRADAY_START_MIN = 9 * 60 + 38;   // two minutes of scheduler slack before 9:40
+const INTRADAY_END_MIN = 16 * 60;
+
+function nyClock(ms = Date.now()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: 'numeric', hourCycle: 'h23',
+  }).formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
+  return { weekday: parts.weekday, minutes: Number(parts.hour) * 60 + Number(parts.minute),
+    label: `${parts.hour.padStart(2, '0')}:${parts.minute.padStart(2, '0')}` };
+}
+
+async function nyseState() {
+  try {
+    const j = await fetchJson(`${TD_BASE}/market_state?exchange=NYSE&apikey=${API_KEY}`);
+    const x = Array.isArray(j) ? j.find((r) => r && r.code === 'XNYS') : null;
+    return x ? { known: true, open: !!x.is_market_open, timeToClose: x.time_to_close || null } : { known: false };
+  } catch {
+    return { known: false };
+  }
+}
+
+app.all('/api/cron/intraday', route(async (req, res) => {
+  if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'GET or POST.' });
+  if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
+  if (!API_KEY) return res.status(500).json({ error: 'No API key configured.' });
+  const dry = req.query.dry === '1';
+  const clock = nyClock();
+  const actor = 'intraday schedule';
+  const skip = async (reason, log) => {
+    if (log && !dry) await trackSafe(store.recordSkippedRun({ kind: 'intraday', trigger: 'scheduled', actor, reason }));
+    return res.json({ ok: true, ran: false, reason, ny: clock.label, dry });
+  };
+  if (['Sat', 'Sun'].includes(clock.weekday)) return skip('weekend', false);
+  if (clock.minutes < INTRADAY_START_MIN || clock.minutes >= INTRADAY_END_MIN) {
+    return skip(`outside 9:40 AM-4:00 PM New York (${clock.label})`, false);
+  }
+  const running = await readRefreshState();
+  if (running) return skip(`another refresh is running (${running.mode === 'missing' ? 'Fill missing' : 'Refresh all'})`, true);
+  const market = await nyseState();
+  if (market.known && !market.open) return skip('NYSE closed (holiday or early close)', true);
+  if (dry) return res.json({ ok: true, ran: false, wouldRun: true, ny: clock.label, market, dry });
+
+  const startedAt = Date.now();
+  const total = getUniverse(await readPortfolios()).length;
+  const runId = await trackSafe(store.startRun({ kind: 'intraday', trigger: 'scheduled', actor, total, targets: total }));
+  const opts = await liveRefreshOpts();
+  const { r, m, ms } = await metered(() => computeStocks(null, opts));
+  if (!r.ok) {
+    await recordRound(runId, opts, m, ms, { error: r.error, refused: r.status === 429 });
+    await trackSafe(store.finishRun(runId, { status: 'failed', error: r.error }));
+    return res.status(r.status).json({ error: r.error, runId });
+  }
+  const fin = await finishLiveRefresh(r.payload, { startedAt, actor, runId });
+  // the market check's credit belongs to this run too
+  m.credits += market.known ? 1 : 0;
+  await recordRound(runId, opts, m, ms, { loaded: fin.loaded, total: fin.total, rows: r.payload.stocks.length });
+  await trackSafe(store.finishRun(runId, { status: 'complete', loaded: fin.loaded, total: fin.total }));
+  console.log(`intraday: refreshed ${r.payload.stocks.length} symbols at ${clock.label} New York`);
+  res.json({ ok: true, ran: true, runId, ny: clock.label, market, updatedAt: r.payload.updatedAt });
 }));
 
 app.post('/api/cron/refresh', route(async (req, res) => {
