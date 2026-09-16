@@ -690,29 +690,38 @@
     #scrMenu .pick .count { font-family: var(--mono); }
     #scrMenu .pick.zero .nm { color: var(--faint); }
     dialog.modal#viewDialog { width: min(640px, calc(100vw - 32px)); }
-    dialog.modal#tileDialog { width: min(620px, calc(100vw - 32px)); }
+    dialog.modal#tileDialog { width: min(640px, calc(100vw - 32px)); }   /* the view editor's width, so the field grid matches it column for column */
     #tileDialog .td-row { display: flex; align-items: center; gap: 10px; margin: 10px 0 12px; font-size: 13px; }
     #tileDialog .td-row select { padding: 7px 10px; border-radius: 10px; border: 1px solid var(--hair);
       background: rgba(255, 255, 255, 0.04); color: var(--text); font: 500 13px var(--sans); cursor: pointer; }
     #tileDialog .td-row select option { background: #0d1017; }
     #tileDialog .td-toggles { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 14px;
       padding-bottom: 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
-    #tileDialog .td-toggles label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
+    #tileDialog .td-toggles label { display: flex; align-items: center; gap: 8px; margin: 0;
+      font-size: 12.5px; font-weight: 400; letter-spacing: 0; text-transform: none;
+      color: var(--text); cursor: pointer; }
+    #tileDialog .td-row label { margin: 0; white-space: nowrap; }
+    #tileDialog .vd-tools { margin-top: 2px; }
     #tileDialog .td-toggles input { width: 15px; height: 15px; accent-color: var(--accent); }
-    #viewDialog .vd-tools { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
-    #viewDialog .vd-tools input { flex: 1; }
-    #viewDialog .vd-count { font-size: 12px; color: var(--muted); white-space: nowrap; font-family: var(--mono); }
-    #viewDialog .vd-list { max-height: min(46vh, 440px); overflow: auto; padding-right: 4px;
+    /* The field picker: the view editor's list, now shared with the tile
+       setup. Scoped to the class rather than to #viewDialog, because two
+       dialogs draw the same thing and only one of them should own it. The
+       label rules keep a `dialog.modal` prefix: the modal's own label styling
+       (small caps, block) is more specific than a bare class and would win. */
+    .vd-tools { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
+    .vd-tools input { flex: 1; }
+    .vd-count { font-size: 12px; color: var(--muted); white-space: nowrap; font-family: var(--mono); }
+    .vd-list { max-height: min(46vh, 440px); overflow: auto; padding-right: 4px;
       border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
-    #viewDialog .vd-group { padding: 10px 0 6px; }
-    #viewDialog .vd-group + .vd-group { border-top: 1px solid rgba(255, 255, 255, 0.04); }
-    #viewDialog label.vd-gh, #viewDialog label.vd-col { display: flex; align-items: center; gap: 8px; margin: 0;
+    .vd-group { padding: 10px 0 6px; }
+    .vd-group + .vd-group { border-top: 1px solid rgba(255, 255, 255, 0.04); }
+    dialog.modal label.vd-gh, dialog.modal label.vd-col { display: flex; align-items: center; gap: 8px; margin: 0;
       text-transform: none; letter-spacing: 0; cursor: pointer; }
-    #viewDialog label.vd-gh { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+    dialog.modal label.vd-gh { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
       color: var(--tint, var(--muted)); margin-bottom: 6px; }
-    #viewDialog .vd-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 12px; padding-left: 22px; }
-    #viewDialog label.vd-col { font-size: 12.5px; color: var(--text); padding: 3px 0; }
-    #viewDialog input[type="checkbox"] { width: auto; padding: 0; margin: 0; box-shadow: none; accent-color: var(--accent); flex: none; }
+    .vd-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 12px; padding-left: 22px; }
+    dialog.modal label.vd-col { font-size: 12.5px; color: var(--text); padding: 3px 0; }
+    dialog.modal input[type="checkbox"] { width: auto; padding: 0; margin: 0; box-shadow: none; accent-color: var(--accent); flex: none; }
 
     /* ==========================================================================
        Responsive collapse
