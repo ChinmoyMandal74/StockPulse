@@ -78,6 +78,20 @@
     .zero { color: var(--faint); }
     .empty, .error { padding: 26px; font-size: 13px; color: var(--muted); }
     .error { color: var(--red); }
+    .usage > .core { padding: 18px 22px; }
+    .usage .head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .usage .head h2 { margin: 0 auto 0 0; font-size: 10px; font-weight: 500; text-transform: uppercase;
+                      letter-spacing: 0.2em; color: var(--faint); }
+    .meters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .meter .lbl { font-size: 11px; color: var(--faint); }
+    .meter .big { margin-top: 6px; font-family: var(--mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+    .meter .of { color: var(--faint); font-size: 12px; }
+    .track { margin-top: 8px; height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+    .track i { display: block; height: 100%; border-radius: 99px; background: var(--green); }
+    .track.warn i { background: var(--amber); } .track.hot i { background: var(--red); }
+    .usage .hint { margin: 12px 0 0; font-size: 12px; color: var(--faint); line-height: 1.6; }
+    .usage code { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+    @media (max-width: 768px) { .meters { grid-template-columns: 1fr; } }
     .note { margin: 14px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.6; max-width: 80ch; }
     @media (max-width: 768px) {
       .page { padding: 0 16px; } .hide-sm { display: none !important; }
@@ -120,7 +134,15 @@
       <div class="bezel stat"><div class="core"><span class="k">Columns, all tables</span><div class="val" id="sCols">—</div></div></div>
     </div>
 
-    <div class="bar-top">
+    <div class="bezel usage" id="usage" hidden><div class="core">
+      <div class="head">
+        <h2>Turso usage, this billing period</h2>
+        <span class="when" id="usageWhen"></span>
+      </div>
+      <div id="usageBody"></div>
+    </div></div>
+
+    <div class="bar-top" style="margin-top:16px">
       <h2>Tables</h2>
       <span class="when" id="when"></span>
     </div>
@@ -214,6 +236,62 @@
       }));
     }
 
+    // What the database costs, from Turso's own API. Rows read is the metered
+    // number and nothing here can measure it — a scan reads far more rows than
+    // it returns — so the only honest source is Turso.
+    const big = (n) => {
+      if (!isFinite(n)) return '—';
+      if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+      if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+      if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+      return String(Math.round(n));
+    };
+    const gb = (b) => (b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : (b / 1e6).toFixed(0) + ' MB');
+
+    function meter(label, used, limit, fmt, alertAt) {
+      const frac = limit > 0 ? used / limit : null;
+      const cls = frac == null ? '' : frac >= 0.9 ? ' hot' : frac >= alertAt ? ' warn' : '';
+      return `<div class="meter"><div class="lbl">${label}</div>` +
+        `<div class="big">${fmt(used)}` +
+        (limit > 0 ? ` <span class="of">of ${fmt(limit)} · ${Math.round(frac * 100)}%</span>` : '') +
+        '</div>' +
+        (limit > 0 ? `<div class="track${cls}"><i style="width:${Math.min(100, frac * 100).toFixed(1)}%"></i></div>` : '') +
+        '</div>';
+    }
+
+    async function loadUsage() {
+      let u;
+      try {
+        const res = await fetch('/api/turso-usage', { cache: 'no-store' });
+        u = await res.json();
+      } catch (e) { return; }   // the table counts are the page; this is a tile
+      $('usage').hidden = false;
+      if (u.error) {
+        $('usageBody').innerHTML = `<p class="hint">Turso did not answer: ${we(u.error)}</p>`;
+        return;
+      }
+      if (!u.configured) {
+        $('usageBody').innerHTML = '<p class="hint">Not configured. Rows read is what Turso bills for, and ' +
+          'nothing in this app can measure it — a query that scans a table reads far more rows than it returns. ' +
+          'To show it here, create a <b>platform API token</b> in the Turso dashboard (Settings → API Tokens — ' +
+          'this is not the database auth token) and set <code>TURSO_API_TOKEN</code> and <code>TURSO_ORG</code> ' +
+          'in the Vercel environment. Optionally set <code>TURSO_ROWS_READ_LIMIT</code>, ' +
+          '<code>TURSO_ROWS_WRITTEN_LIMIT</code> and <code>TURSO_STORAGE_LIMIT_GB</code> from your plan to draw ' +
+          'the bars, and the daily watchdog will email once usage passes ' +
+          '<code>TURSO_ALERT_AT</code> (70% by default).</p>';
+        return;
+      }
+      const a = u.alertAt || 0.7;
+      $('usageBody').innerHTML = '<div class="meters">' +
+        meter('Rows read', u.rowsRead, u.limits.rowsRead, big, a) +
+        meter('Rows written', u.rowsWritten, u.limits.rowsWritten, big, a) +
+        meter('Storage', u.storageBytes, u.limits.storageBytes, gb, a) +
+        '</div>' +
+        (u.limits.rowsRead ? '' : '<p class="hint">Set <code>TURSO_ROWS_READ_LIMIT</code> (and the other two) ' +
+          'to see these against your plan and to get an email before the quota does.</p>');
+      $('usageWhen').textContent = (u.cached ? 'cached · ' : '') + 'org ' + u.org;
+    }
+
     async function load(fresh) {
       $('countBtn').disabled = true;
       try {
@@ -229,6 +307,7 @@
       }
     }
     $('countBtn').addEventListener('click', () => load(true));
+    loadUsage();
     load(false);
   </script>
 </body>

@@ -5054,6 +5054,78 @@ function nightVerdicts(runs, days = 14, now = Date.now()) {
 // (~382k at the time of writing, nearly all of it the bar archive), so a few
 // reloads should not each pay for it. ?fresh=1 counts again.
 let dbStatsCache = null;
+// ---- Turso usage -----------------------------------------------------------
+// What the database ACTUALLY costs, from Turso's own platform API — rows read
+// is the metered number and nothing in this app can measure it (the client
+// reports rows returned, which for a scan is a tiny fraction of rows read:
+// the query that triggered the 2026-09-15 quota alert returned 254 rows and
+// read 748,859). So the honest way to watch it is to ask Turso.
+//
+// Needs TURSO_API_TOKEN (a platform token, NOT the database auth token) and
+// TURSO_ORG. Optional TURSO_ROWS_READ_LIMIT / TURSO_ROWS_WRITTEN_LIMIT /
+// TURSO_STORAGE_LIMIT_GB draw the percentage; without them the page shows the
+// raw numbers, since the API does not report the plan's allowance.
+const TURSO_API_TOKEN = process.env.TURSO_API_TOKEN || '';
+const TURSO_ORG = process.env.TURSO_ORG || '';
+const TURSO_LIMITS = {
+  rowsRead: Number(process.env.TURSO_ROWS_READ_LIMIT) || 0,
+  rowsWritten: Number(process.env.TURSO_ROWS_WRITTEN_LIMIT) || 0,
+  storageBytes: (Number(process.env.TURSO_STORAGE_LIMIT_GB) || 0) * 1e9,
+};
+const TURSO_ALERT_AT = Math.min(0.99, Math.max(0.1, Number(process.env.TURSO_ALERT_AT) || 0.7));
+let tursoUsageCache = null;
+
+async function tursoUsage(force = false) {
+  if (!TURSO_API_TOKEN || !TURSO_ORG) return { configured: false };
+  if (!force && tursoUsageCache && Date.now() - tursoUsageCache.at < 60 * 60 * 1000) {
+    return { ...tursoUsageCache.body, cached: true };
+  }
+  const r = await fetch(`https://api.turso.tech/v1/organizations/${encodeURIComponent(TURSO_ORG)}/usage`, {
+    headers: { Authorization: `Bearer ${TURSO_API_TOKEN}` },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!r.ok) throw new Error(`Turso API ${r.status}`);
+  const j = await r.json();
+  // The shape has moved before; take the usage object wherever it is and read
+  // the keys we know, rather than assuming the whole envelope.
+  const u = (j && j.organization && j.organization.usage) || (j && j.usage) || j || {};
+  const body = {
+    configured: true,
+    org: TURSO_ORG,
+    rowsRead: Number(u.rows_read || 0),
+    rowsWritten: Number(u.rows_written || 0),
+    storageBytes: Number(u.storage_bytes || 0),
+    bytesSynced: Number(u.bytes_synced || 0),
+    limits: TURSO_LIMITS,
+    alertAt: TURSO_ALERT_AT,
+    at: Date.now(),
+  };
+  tursoUsageCache = { at: Date.now(), body };
+  return { ...body, cached: false };
+}
+
+// The worst of the three as a fraction of its limit, for the alert and the page.
+function tursoWorst(u) {
+  if (!u || !u.configured) return null;
+  const parts = [
+    ['rows read', u.rowsRead, u.limits.rowsRead],
+    ['rows written', u.rowsWritten, u.limits.rowsWritten],
+    ['storage', u.storageBytes, u.limits.storageBytes],
+  ].filter(([, , lim]) => lim > 0).map(([name, used, lim]) => ({ name, used, lim, frac: used / lim }));
+  if (!parts.length) return null;
+  return parts.sort((a, b) => b.frac - a.frac)[0];
+}
+
+app.get('/api/turso-usage', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    res.json(await tursoUsage(req.query.fresh === '1'));
+  } catch (err) {
+    // Never fail the page over a third-party status call.
+    res.json({ configured: !!(TURSO_API_TOKEN && TURSO_ORG), error: err.message });
+  }
+}));
+
 app.get('/api/db-stats', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const fresh = req.query.fresh === '1';
@@ -5197,7 +5269,37 @@ app.get('/api/cron/watchdog', route(async (req, res) => {
       mailed = await sendMail({ to, subject: `[Tickr Lab] ${heading} — ${today.day}`, text, html });
     }
   }
-  console.log(`watchdog: ${today.day} ${today.verdict}${mailed ? ' — alert mailed' : ''}`);
+  // Database usage, checked on the same daily pass rather than on its own
+  // schedule: one more thing that is only worth hearing about when it is wrong.
+  let usage = null;
+  let usageMailed = false;
+  try {
+    usage = await tursoUsage();
+    const worst = tursoWorst(usage);
+    if (worst && worst.frac >= TURSO_ALERT_AT && req.query.dry !== '1' && MAIL_READY) {
+      const to = await operatorEmail();
+      if (to) {
+        const pct = Math.round(worst.frac * 100);
+        const heading = `Database usage at ${pct}% — ${worst.name}`;
+        const intro = `Turso reports ${worst.used.toLocaleString()} of ${worst.lim.toLocaleString()} ` +
+          `${worst.name} this billing period (${pct}%). Rows read is what a full-table scan spends, so ` +
+          'a jump usually means a query started scanning rather than seeking.';
+        const link = APP_URL ? `${APP_URL}/database` : '';
+        const html = emailShell({ heading, intro,
+          body: '<p style="margin:0 0 14px;font-size:14px;line-height:1.6">The Database page shows the ' +
+            'current usage and every table. <code>node query-plan-test.js</code> fails on any query that ' +
+            'scans a big table.</p>' + (link ? mailButton(link, 'Open the database page') : ''),
+          note: 'Sent by the daily check that watches the nightly job and the database quota.' });
+        const text = textShell({ heading, intro, lines: link ? [link] : [],
+          note: 'Sent by the daily check that watches the nightly job and the database quota.' });
+        usageMailed = await sendMail({ to, subject: `[Tickr Lab] ${heading}`, text, html });
+      }
+    }
+  } catch (err) {
+    console.warn('watchdog: usage check skipped:', err.message);
+  }
+  console.log(`watchdog: ${today.day} ${today.verdict}${mailed ? ' — alert mailed' : ''}` +
+              (usage && usage.configured ? ` · rows read ${Number(usage.rowsRead || 0).toLocaleString()}${usageMailed ? ' — usage alert mailed' : ''}` : ''));
   res.json({ ok: true, ...today, alert: bad, mailed });
 }));
 
