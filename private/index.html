@@ -275,6 +275,33 @@
     .tl-px { margin-left: auto; text-align: right; }
     .tl-price { font-family: var(--mono); font-size: 15px; font-variant-numeric: tabular-nums; }
     .tl-today { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+    /* ---- the News column and its panel ---------------------------------- */
+    td.news { cursor: pointer; white-space: nowrap; }
+    td.news .nw-age { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+    td.news.nw-fresh .nw-age { color: var(--text); }
+    td.news .nw-n { display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 99px;
+                    font-family: var(--mono); font-size: 9.5px; line-height: 15px; color: var(--faint);
+                    border: 1px solid var(--hair); }
+    td.news.nw-fresh .nw-n { color: var(--accent); border-color: rgba(124, 156, 255, 0.4); }
+    td.news .nw-none { color: var(--faint); opacity: 0.5; }
+    td.news:hover .nw-age, td.news:hover .nw-none { color: var(--text); }
+    #newsPop { position: fixed; z-index: var(--z-tip); width: min(420px, calc(100vw - 24px));
+               max-height: min(60vh, 520px); overflow: auto; border-radius: 16px; border: 1px solid var(--hair-2);
+               background: rgba(10, 12, 17, 0.97); backdrop-filter: blur(24px);
+               box-shadow: 0 30px 80px -24px rgba(0, 0, 0, 0.95); padding: 14px 16px; }
+    #newsPop h4 { margin: 0 0 2px; font-size: 13px; font-weight: 600; }
+    #newsPop .np-sub { font-size: 11px; color: var(--faint); margin-bottom: 10px; }
+    #newsPop a.np-item { display: block; text-decoration: none; color: inherit; padding: 9px 0;
+                         border-top: 1px solid rgba(255, 255, 255, 0.055); }
+    #newsPop a.np-item:hover .np-h { color: var(--accent); }
+    #newsPop .np-h { font-size: 12.5px; line-height: 1.45; color: var(--text); }
+    #newsPop .np-m { margin-top: 3px; font-size: 10.5px; color: var(--faint); font-family: var(--mono); }
+    #newsPop .np-empty { font-size: 12.5px; color: var(--muted); padding: 8px 0 2px; line-height: 1.5; }
+    #newsPop .np-foot { margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(255, 255, 255, 0.055);
+                        display: flex; gap: 12px; font-size: 11.5px; }
+    #newsPop .np-foot a { color: var(--muted); text-decoration: none; }
+    #newsPop .np-foot a:hover { color: var(--text); text-decoration: underline; }
+
     .tl-spark { margin: 12px 0 2px; }
     .tl-spark svg { width: 100%; display: block; color: var(--muted); height: var(--tl-h, 72px); }
     .tl-spark .spark-area { fill: currentColor; opacity: 0.10; }
@@ -1048,6 +1075,7 @@
     <div id="rowcard"></div>
     <div id="actionPanel" hidden></div>
     <div id="myPop" hidden></div>
+    <div id="newsPop" hidden role="dialog" aria-label="Headlines"></div>
 
     <dialog class="modal" id="tileDialog">
       <div class="core">
@@ -1141,7 +1169,7 @@
       <tr>
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="shortName" title="What a person would call it — shortened from the legal name by rule, and editable by the owner. The full legal name is in the tooltip on each row.">Name</th>
-        <th class="group grp-info" data-group="info" colspan="6">Info</th>
+        <th class="group grp-info" data-group="info" colspan="7">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="3">Scores</th>
         <th class="group grp-act" data-group="act" colspan="10">Advice</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
@@ -1162,7 +1190,8 @@
         <th class="left grp-info" data-key="sector">Sector</th>
         <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — Twelve Data's own taxonomy, not GICS.">Industry</th>
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
-        <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
+        <th class="grp-info" data-key="newsAge" title="How long ago the latest stored headline was published, and how many this stock has from the last week. Click a cell to read them. A dot means we have not checked this stock yet — headlines are fetched a few stocks at a time.">News</th>
+        <th class="grp-info" data-key="nextEarningsDate" ="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
         <th class="grp-rank ta-c" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
         <th class="grp-rank ta-c" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
         <th class="grp-rank ta-c" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all and Overall falls back to momentum. Hover a cell for the factor split and the confidence figure.">Qual.</th>
@@ -2538,7 +2567,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="81">${s.error}</td>
+            <td class="na" colspan="82">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -2563,6 +2592,7 @@
           <td class="name left grp-info"${attr(cacheTitle)}>${s.sector || '—'}</td>
           <td class="name left grp-info industry"${attr(s.industry || cacheTitle)}>${s.industry ? we(s.industry) : '—'}</td>
           <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
+          ${newsCell(s)}
           ${earningsCell(s, cacheTitle)}
           ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-rank ta-c lens-col')}
           ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-rank ta-c lens-col')}
@@ -2651,7 +2681,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 86;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 87;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -2825,7 +2855,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="83">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="84">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -2835,6 +2865,11 @@
       }
 
       const valueFor = (x) => (
+        // The News column sorts on the timestamp, not the age: a new column
+        // starts descending, and descending should mean freshest first.
+        sortKey === 'newsAge'
+          ? (x.newsLatest && x.newsLatest.published_at ? Date.parse(x.newsLatest.published_at) : null)
+          :
         // Alphabetical would put Avoid above Buy; rank by the ladder instead.
         sortKey.startsWith('av:') ? (() => {
           const v = x.adviceBy && x.adviceBy[sortKey.slice(3)];
@@ -2868,6 +2903,37 @@
         loadLatestNews();
       paintTicker();
     }
+
+    // Age of the latest headline, with a count when there is more than one.
+    // BLANK MEANS TWO THINGS and the cell has to separate them: an em-dash is
+    // "checked, nothing in the last week", a faint dot is "not looked at yet" —
+    // headlines are topped up a dozen stocks per refresh round, so the second
+    // is common and must not read as the first.
+    function newsCell(s) {
+      const n = s.newsCount || 0;
+      const at = s.newsLatest && s.newsLatest.published_at ? Date.parse(s.newsLatest.published_at) : null;
+      if (!s.newsCheckedAt && !at) {
+        return '<td class="news grp-info" data-news="' + we(s.symbol) + '" title="Not checked yet">' +
+          '<span class="nw-none">·</span></td>';
+      }
+      if (!at) {
+        return '<td class="news grp-info" data-news="' + we(s.symbol) + '" ' +
+          `title="Checked ${we(fmtAgo(s.newsCheckedAt))} — nothing stored">—</td>`;
+      }
+      const hrs = (Date.now() - at) / 3600000;
+      const age = hrs < 1 ? 'now' : hrs < 24 ? Math.round(hrs) + 'h' : Math.round(hrs / 24) + 'd';
+      const fresh = hrs <= 24 ? ' nw-fresh' : '';
+      const badge = n > 1 ? `<span class="nw-n">${n}</span>` : '';
+      const t = we((s.newsLatest.headline || '').slice(0, 110));
+      return `<td class="news grp-info${fresh}" data-news="${we(s.symbol)}" title="${t}">` +
+        `<span class="nw-age">${age}</span>${badge}</td>`;
+    }
+
+    const fmtAgo = (ms) => {
+      if (!ms) return 'never';
+      const h = (Date.now() - Number(ms)) / 3600000;
+      return h < 1 ? 'just now' : h < 24 ? Math.round(h) + 'h ago' : Math.round(h / 24) + 'd ago';
+    };
 
     // Early is the case worth spotting, so it is the only type tinted.
     function typeCell(s) {
@@ -4076,8 +4142,16 @@
         const data = await api('GET', '/api/news/latest');
         const byId = {};
         for (const x of (data.items || [])) byId[x.symbol] = x;
-        for (const s of baseStocks) if (byId[s.symbol]) s.newsLatest = byId[s.symbol];
-        for (const s of stocks) if (byId[s.symbol]) s.newsLatest = byId[s.symbol];
+        const counts = data.counts || {};
+        const checked = data.checked || {};
+        for (const list of [baseStocks, stocks]) {
+          for (const s of list) {
+            if (byId[s.symbol]) s.newsLatest = byId[s.symbol];
+            s.newsCount = counts[s.symbol] || 0;
+            s.newsCheckedAt = checked[s.symbol] || null;
+          }
+        }
+        render();   // the column was drawn before this landed
       } catch (e) {
         newsLoaded = false;   // a later refresh may succeed
       }
@@ -4432,6 +4506,76 @@
       savePrefs();
       window.track && track('picker', 'tilecols:' + tileCols);
     });
+
+    // ---- the News panel -----------------------------------------------------
+    // Reads /api/news?symbol=, which is stored-or-fetch with a six-hour rule:
+    // a stock nobody has looked at gets its headlines on the first click, and
+    // the provider is free, so this costs no API credits either way.
+    let newsPopFor = null;
+    function closeNewsPop() { $('newsPop').hidden = true; newsPopFor = null; }
+
+    function placeNewsPop(cell) {
+      const pop = $('newsPop');
+      const r = cell.getBoundingClientRect();
+      pop.hidden = false;
+      const w = pop.offsetWidth, h = pop.offsetHeight;
+      let left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+      let top = r.bottom + 6;
+      if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+      pop.style.left = left + 'px';
+      pop.style.top = top + 'px';
+    }
+
+    async function openNewsPop(cell, sym) {
+      const row = stocks.find((x) => x.symbol === sym);
+      const name = (row && (row.shortName || row.name)) || sym;
+      const pop = $('newsPop');
+      pop.innerHTML = `<h4>${we(name)}</h4><div class="np-sub">Loading headlines…</div>`;
+      newsPopFor = sym;
+      placeNewsPop(cell);
+      let items = [];
+      let failed = false;
+      try {
+        const d = await api('GET', '/api/news?symbol=' + encodeURIComponent(sym));
+        items = d.items || [];
+      } catch (e) { failed = true; }
+      if (newsPopFor !== sym) return;                 // another cell was clicked meanwhile
+      const ago = (iso) => {
+        const h = (Date.now() - Date.parse(iso)) / 3600000;
+        if (!isFinite(h)) return '';
+        return h < 1 ? 'just now' : h < 24 ? Math.round(h) + 'h ago' : Math.round(h / 24) + 'd ago';
+      };
+      const list = items.slice(0, 10).map((x) => {
+        const href = /^https?:\/\//i.test(x.url || '') ? x.url : null;
+        const meta = [x.source, ago(x.published_at)].filter(Boolean).join(' · ');
+        const body = `<div class="np-h">${we(x.headline)}</div><div class="np-m">${we(meta)}</div>`;
+        return href ? `<a class="np-item" href="${we(href)}" target="_blank" rel="noopener">${body}</a>`
+          : `<div class="np-item">${body}</div>`;
+      }).join('');
+      const empty = failed
+        ? 'Could not reach the news feed just now.'
+        : (row && row.newsCheckedAt
+          ? `Nothing stored. Last checked ${we(fmtAgo(row.newsCheckedAt))}.`
+          : 'Nothing yet — this stock has not been checked. Headlines are fetched a few at a time on each refresh.');
+      pop.innerHTML = `<h4>${we(name)}</h4>` +
+        `<div class="np-sub">${items.length ? `${Math.min(items.length, 10)} recent headline${items.length === 1 ? '' : 's'} · titles only, opens the publisher` : 'Headlines'}</div>` +
+        (list || `<div class="np-empty">${empty}</div>`) +
+        `<div class="np-foot"><a href="/stock/${encodeURIComponent(sym)}" target="_blank" rel="noopener">Open ${we(sym)} →</a></div>`;
+      placeNewsPop(cell);
+    }
+
+    $('tbody').addEventListener('click', (e) => {
+      const cell = e.target.closest('td.news');
+      if (!cell) return;
+      e.stopPropagation();
+      if (newsPopFor === cell.dataset.news) return closeNewsPop();
+      openNewsPop(cell, cell.dataset.news);
+    });
+    document.addEventListener('click', (e) => {
+      if (!$('newsPop').hidden && !e.target.closest('#newsPop') && !e.target.closest('td.news')) closeNewsPop();
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNewsPop(); });
+    window.addEventListener('resize', closeNewsPop);
 
     $('layToggle').addEventListener('click', (e) => {
       const b = e.target.closest('[data-lay]');

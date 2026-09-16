@@ -45,6 +45,10 @@ const ALLOWED = [
   // Measured 2026-09-15: activity 1,236 rows, news 5,849.
   /from activity group by (user|kind)/i,
   /select symbol, count\(\*\) as n from news group by symbol/i,
+  // The News column's 7-day count, once per screener load. Same bounded table
+  // (pruned to 21 days and 25 items a symbol — 5,849 rows on 2026-09-16), and
+  // a per-symbol seek would be 271 queries to save a few thousand rows.
+  /select symbol, count\(\*\) as n from news where published_at >= \? group by symbol/i,
   // The hover card's latest headline per symbol: a covering-index pass over
   // the same bounded news table, once per screener load.
   /from news n\s+join \(select symbol, max\(published_at\)/i,

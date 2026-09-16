@@ -4429,11 +4429,28 @@ app.get('/api/news/recent', requireAuth, route(async (req, res) => {
 
 // One newest headline per symbol, for the screener's hover card. Stored
 // rows only — this path never calls anything external.
+// The News column's data: each symbol's latest headline, how many it has from
+// the last week, and WHEN IT WAS LAST CHECKED — which the column needs to tell
+// "nothing to report" from "we have not looked yet". Headlines are topped up 12
+// stocks a refresh round, so the second case is common and must not read as the
+// first. Three bounded reads, none of them per symbol.
 app.get('/api/news/latest', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  let items = NEWS_OFF ? [] : await store.readLatestNews();
-  if (await isGuest(req)) items = items.filter((x) => guestSet.has(String(x.symbol).toUpperCase()));
-  res.json({ items });
+  if (NEWS_OFF) return res.json({ items: [], counts: {}, checked: {} });
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const [latest, counts, state] = await Promise.all([
+    store.readLatestNews(), store.newsCountsSince(weekAgo), store.readNewsState(),
+  ]);
+  let items = latest;
+  let checked = state;
+  let byCount = counts;
+  if (await isGuest(req)) {
+    const keep = (sym) => guestSet.has(String(sym).toUpperCase());
+    items = items.filter((x) => keep(x.symbol));
+    checked = Object.fromEntries(Object.entries(state).filter(([sym]) => keep(sym)));
+    byCount = Object.fromEntries(Object.entries(counts).filter(([sym]) => keep(sym)));
+  }
+  res.json({ items, counts: byCount, checked });
 }));
 
 // Cached per (days, guest): every signed-in page asks for the same closes, and

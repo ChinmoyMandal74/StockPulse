@@ -2391,6 +2391,18 @@ async function readLatestNews() {
     source: x.source, headline: x.headline, url: x.url }));
 }
 
+// How many stored headlines each symbol has since a date. The news table is
+// pruned to 21 days and 25 items a symbol, so this is a few thousand rows at
+// most — the same bounded read the /news-runs rollup makes.
+async function newsCountsSince(sinceIso) {
+  await init();
+  const r = await db.execute({
+    sql: 'select symbol, count(*) as n from news where published_at >= ? group by symbol',
+    args: [String(sinceIso)],
+  });
+  return Object.fromEntries(r.rows.map((x) => [x.symbol, Number(x.n)]));
+}
+
 // The last stored close strictly before a date, per symbol — the anchor a
 // week-to-date or month-to-date move is measured from. One query per anchor;
 // ~80ms each for the universe.
@@ -2560,7 +2572,7 @@ module.exports = {
   readBarsFor,
   purgeSymbol,
   markRefreshPrices, readBarsFullFor,
-  writeNews, readNews, readLatestNews, readNewsState,
+  writeNews, readNews, readLatestNews, readNewsState, newsCountsSince,
   symbolsWithData,
   countSymbolRows,
   SYMBOL_TABLES,
