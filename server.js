@@ -4182,6 +4182,8 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   if (incoming.tickerOff === true) out.tickerOff = true;
   // Table or tiles: which shape the screener draws the same rows in.
   if (incoming.layout === 'tiles') out.layout = 'tiles';
+  // How many tiles a row holds: 'auto' (fill the width) or a fixed 2-6.
+  if (/^(auto|[2-6])$/.test(String(incoming.tileCols || ''))) out.tileCols = String(incoming.tileCols);
   // Which column view the screener opens in: 'standard' or a view's id.
   if (/^(standard|[a-z0-9]{8})$/.test(String(incoming.activeView || ''))) out.activeView = String(incoming.activeView);
   await store.writePrefs(await prefsKey(req), out);

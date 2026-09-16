@@ -246,6 +246,23 @@
     body:not(.tiling) #tileWrap { display: none; }
     .tiles { display: grid; gap: 12px; padding: 2px 2px 14px;
              grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); }
+    /* A chosen count. minmax(0, 1fr) rather than a width floor, so three wide
+       tiles really are a third each instead of wrapping at the first long name. */
+    .tiles[data-cols="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tiles[data-cols="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .tiles[data-cols="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .tiles[data-cols="5"] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .tiles[data-cols="6"] { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .laycols { display: none; }
+    body.tiling .laycols { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--faint); }
+    .laycols select { padding: 5px 8px; border-radius: 9px; border: 1px solid var(--hair);
+                      background: rgba(255, 255, 255, 0.04); color: var(--text); font: 500 12px var(--sans); cursor: pointer; }
+    .laycols select option { background: #0d1017; color: var(--text); }
+    /* Below this the screen decides, whatever was chosen: four across on a
+       laptop is four, on a phone it is one. */
+    @media (max-width: 1100px) {
+      .tiles[data-cols] { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+    }
     .tile { position: relative; display: block; text-decoration: none; color: inherit;
             border-radius: 18px; border: 1px solid var(--hair); background: var(--surface);
             padding: 16px 18px 14px; transition: border-color .16s var(--ease), transform .16s var(--ease); }
@@ -844,6 +861,17 @@
         <span class="lay" id="layToggle" role="group" aria-label="Layout">
           <button type="button" data-lay="table" class="on">Table</button>
           <button type="button" data-lay="tiles">Tiles</button>
+        </span>
+        <span class="laycols">
+          <label for="tileCols">Per row</label>
+          <select id="tileCols" aria-label="Tiles per row">
+            <option value="auto">Auto</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+          </select>
         </span>
         <div class="picker" id="scrPicker" data-open="0">
           <button class="btn picker-btn" id="scrBtn" aria-haspopup="listbox" aria-expanded="false"></button>
@@ -1817,6 +1845,17 @@
     let layout = 'table';
     const tilesOn = () => layout === 'tiles';
     let tilesShown = 60;           // grown by the More button; a tile is markup, 271 of them is not free
+    let tileCols = 'auto';         // 'auto' fills the width; 2-6 is a fixed count
+
+    // Applied to the grid rather than to each tile, so changing it is one
+    // attribute and no repaint.
+    function applyTileCols() {
+      const box = $('tiles');
+      if (!box) return;
+      if (tileCols === 'auto') box.removeAttribute('data-cols'); else box.dataset.cols = tileCols;
+      const sel = $('tileCols');
+      if (sel && sel.value !== String(tileCols)) sel.value = String(tileCols);
+    }
 
     function setLayout(next, { save = true } = {}) {
       layout = next === 'tiles' ? 'tiles' : 'table';
@@ -2624,6 +2663,7 @@
 
     function paintTiles(rows) {
       const box = $('tiles');
+      applyTileCols();
       if (!rows.length) {
         box.innerHTML = '<div class="tl-empty">Nothing matches — loosen a filter above.</div>';
         return;
@@ -2678,7 +2718,7 @@
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
         tbody.innerHTML = `<tr><td class="empty" colspan="83">${msg}</td></tr>`;
-        if (tilesOn()) $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`;
+        if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
         applyGroups();
@@ -3048,6 +3088,7 @@
         const savedC = res && res.prefs && Screens.cleanWeights(res.prefs.customWeights);
         if (savedC) customWeights = Object.assign(Screens.defaultWeights(), savedC);
         if (res && res.prefs && res.prefs.tickerOff === true) tickerOff = true;
+        if (res && res.prefs && /^(auto|[2-6])$/.test(String(res.prefs.tileCols || ''))) tileCols = String(res.prefs.tileCols);
         if (res && res.prefs && res.prefs.layout === 'tiles') setLayout('tiles', { save: false });
         if (res && res.prefs && /^(standard|[a-z0-9]{8})$/.test(String(res.prefs.activeView || ''))) activeViewId = res.prefs.activeView;
         if (res && res.prefs && res.prefs.filterRow === true) {
@@ -3080,7 +3121,7 @@
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
           prefs: { collapsed: out, weights: weightPreset, customWeights,
-            filterRow: filterRowOn, tickerOff, activeView: activeViewId, layout },
+            filterRow: filterRowOn, tickerOff, activeView: activeViewId, layout, tileCols },
         }).catch(() => {});
       }, 600);
     }
@@ -4182,6 +4223,13 @@
 
     // Editing is a prompt rather than an inline field: it happens rarely, on
     // one cell, and a prompt cannot be left half-finished in the table.
+    $('tileCols').addEventListener('change', (e) => {
+      tileCols = /^(auto|[2-6])$/.test(e.target.value) ? e.target.value : 'auto';
+      applyTileCols();
+      savePrefs();
+      window.track && track('picker', 'tilecols:' + tileCols);
+    });
+
     $('layToggle').addEventListener('click', (e) => {
       const b = e.target.closest('[data-lay]');
       if (!b || b.dataset.lay === layout) return;
