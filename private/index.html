@@ -2738,9 +2738,12 @@
         // one by one — except a group none of whose columns are in it, whose
         // banner would otherwise sit over nothing. Forward returns keep their
         // own rule: shown only in the forward-returns view.
+        const live = VIEW_COLS.filter((c) => c.group === id && siteShows(c.id));
         const hide = v
-          ? (id === 'fwd' ? collapsed.fwd : !VIEW_COLS.some((c) => c.group === id && v.columns.includes(c.id)))
-          : collapsed[id];
+          ? (id === 'fwd' ? collapsed.fwd : !live.some((c) => v.columns.includes(c.id)))
+          // Standard: collapsed as before, or nothing left after the site's own
+          // hiding — a banner over no columns is worse than no banner.
+          : (collapsed[id] || (id !== 'fwd' && VIEW_COLS.some((c) => c.group === id) && !live.length));
         document.querySelectorAll('.grp-' + id).forEach((el) => { el.style.display = hide ? 'none' : ''; });
       });
     }
@@ -2900,6 +2903,7 @@
     async function loadPrefs() {
       try {
         const res = await api('GET', '/api/prefs');
+        if (res && Array.isArray(res.siteHidden)) siteHidden = new Set(res.siteHidden);
         const savedC = res && res.prefs && Screens.cleanWeights(res.prefs.customWeights);
         if (savedC) customWeights = Object.assign(Screens.defaultWeights(), savedC);
         if (res && res.prefs && res.prefs.tickerOff === true) tickerOff = true;
@@ -2947,6 +2951,11 @@
     // (v1): a view hides columns rather than rebuilding the table, through
     // nth-child rules in #viewStyle, which the windowed rows and the filter
     // row pick up without any per-cell work.
+    // Columns the owner has hidden for EVERYONE, from /api/prefs (site setting,
+    // not a pref). They are hidden in Standard and inside every view, so a view
+    // or a screen cannot bring back a column the site has taken away.
+    let siteHidden = new Set();
+    const siteShows = (id) => !siteHidden.has(id);
     let VIEW_COLS = [];   // [{ id, label, group, idx }] — row-2 headers in order, forward returns excluded
     let views = { shared: [], mine: [], max: 10, canEditShared: false, canEditMine: false };
     let activeViewId = 'standard';
@@ -2987,14 +2996,13 @@
     function applyView() {
       const v = activeView();
       const rules = [];
-      if (v) {
-        const want = new Set(v.columns);
-        for (const c of VIEW_COLS) {
-          if (want.has(c.id)) continue;
-          rules.push(`thead tr:nth-child(2) > th:nth-child(${c.idx + 1})`,
-            `#tbody > tr:not(.padrow):not(.errrow) > td:nth-child(${c.idx + 3})`,
-            `thead tr.filterrow > th:nth-child(${c.idx + 3})`);
-        }
+      const want = v ? new Set(v.columns) : null;
+      const shown = (c) => siteShows(c.id) && (!want || want.has(c.id));
+      for (const c of VIEW_COLS) {
+        if (shown(c)) continue;
+        rules.push(`thead tr:nth-child(2) > th:nth-child(${c.idx + 1})`,
+          `#tbody > tr:not(.padrow):not(.errrow) > td:nth-child(${c.idx + 3})`,
+          `thead tr.filterrow > th:nth-child(${c.idx + 3})`);
       }
       $('viewStyle').textContent = rules.length ? rules.join(',\n') + ' { display: none; }' : '';
       document.body.classList.toggle('viewing', !!v);
@@ -3002,8 +3010,9 @@
         const hdr = document.querySelector(`th.group[data-group="${g}"]`);
         if (!hdr) return;
         if (!hdr.dataset.span) hdr.dataset.span = hdr.getAttribute('colspan');
-        if (!v || g === 'fwd') { hdr.colSpan = Number(hdr.dataset.span); return; }
-        hdr.colSpan = Math.max(1, VIEW_COLS.filter((c) => c.group === g && v.columns.includes(c.id)).length);
+        if (g === 'fwd') { hdr.colSpan = Number(hdr.dataset.span); return; }
+        const n = VIEW_COLS.filter((c) => c.group === g && shown(c)).length;
+        hdr.colSpan = (!v && !siteHidden.size) ? Number(hdr.dataset.span) : Math.max(1, n);
       });
     }
 
@@ -3165,7 +3174,9 @@
     function paintViewList() {
       const q = $('vdSearch').value.trim().toLowerCase();
       const html = GROUPS.filter((g) => g !== 'fwd').map((g) => {
-        const cols = VIEW_COLS.filter((c) => c.group === g &&
+        // A column the site hides is not offered here: a view could not show
+        // it anyway, and listing it would look like the tick did nothing.
+        const cols = VIEW_COLS.filter((c) => c.group === g && siteShows(c.id) &&
           (!q || c.label.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)));
         if (!cols.length) return '';
         const all = cols.every((c) => viewEdit.selected.has(c.id));

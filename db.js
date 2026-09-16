@@ -603,6 +603,32 @@ async function writePortfolios(obj) {
   await db.batch(stmts, 'write');
 }
 
+// ---- site-wide column visibility ------------------------------------------
+
+// Which screener columns the owner has hidden for EVERYONE. One app_meta row
+// holding a JSON array of column ids — site settings, not per-account, so it
+// has no business in `prefs` (which is keyed per user and rewritten by three
+// pages under the hand-back rule).
+async function readHiddenColumns() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'hidden_columns'");
+  if (!r.rows.length) return [];
+  try {
+    const v = JSON.parse(r.rows[0].value || '[]');
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+  } catch { return []; }
+}
+
+async function writeHiddenColumns(ids) {
+  await init();
+  const list = [...new Set((ids || []).filter((x) => typeof x === 'string'))];
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('hidden_columns', ?)",
+    args: [JSON.stringify(list)],
+  });
+  return list;
+}
+
 // ---- earnings history -----------------------------------------------------
 
 // One batch for a whole refresh round rather than one write per symbol. Rows
@@ -2284,6 +2310,8 @@ module.exports = {
   removeFromUniverse,
   writePortfolios,
   readNames,
+  readHiddenColumns,
+  writeHiddenColumns,
   writeEarnings,
   readEarnings,
   writeNames,

@@ -260,6 +260,16 @@ The **Size** group carries the absolute-size columns — Revenue TTM, Gross Prof
 
 The **Info** banner spans eight columns — Overall, Mom., Qual., Portfolios, Price, Sector, Market Cap, Next Earn — and all eight collapse together.
 
+### Site-wide hidden columns (the owner's floor)
+**`/admin` → Screener columns hides columns for EVERYONE (2026-09-15).** 85 columns is more than most accounts want as a default, and a view is a per-person choice; this is the floor under all of them.
+
+- **The catalogue is parsed out of `private/index.html`'s own header row** by `columnCatalogue()` in server.js (cached per instance): id from `data-col` / `data-fkey` / `data-key`, group and group label from the banner, label from the cell's text with `<br>` and entities resolved. **78 columns** — Symbol, Name and the four forward-returns columns are excluded (the anchors, and the as-of view's own). Restating the list anywhere else would drift the first time a column was added; adding a column needs no edit here.
+- **Stored in `app_meta` under `hidden_columns`** as a JSON id array (`readHiddenColumns` / `writeHiddenColumns`) — a site setting, so deliberately not in `prefs`. `GET`/`PUT /api/columns` are admin; the PUT keeps only ids the catalogue knows, so it cannot rot or become free storage.
+- **Delivered to every page in `GET /api/prefs`** as `siteHidden`, which the screener already awaits before its first render — a second request would paint the full table and then visibly drop columns. Guests get it too.
+- **Enforced in `applyView()` for Standard, views AND screens**: the `#viewStyle` nth-child rules are now built from `siteShows(c.id) && (!view || view.columns.includes(c.id))`, so a view or a screen cannot bring back what the site hid. Banners span what is actually shown; `hideCollapsedCells()` hides a group with nothing left. The view EDITOR does not offer a hidden column — listing one would look like the tick did nothing.
+- Nothing is deleted: the data keeps being recorded, and unticking restores the column. An open screener tab keeps the old set until it reloads, which the admin note says.
+- Verified end to end against the real server and pages in headless Chrome (20 checks — catalogue size and labels, unknown ids dropped, malformed PUT refused, `siteHidden` on prefs, the admin list/count/search/group tick, the column gone from header and body, a fully hidden group losing its banner, the neighbouring banner's span, a view unable to show a hidden column, the editor not offering one), plus the 42-check column suite re-run to prove the nothing-hidden case is unchanged.
+
 ### Column views
 **Named column sets per account, switched from the `View` menu (the former Columns button), 2026-09-15.** The column half of what personal portfolios are for rows. **Standard** is the full grouped table and keeps the group toggles; a view shows Symbol, Name and exactly its own columns, **in the table's existing order (v1 — the owner chose this over drag-to-reorder)**.
 

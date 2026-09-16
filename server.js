@@ -3752,12 +3752,67 @@ async function prefsKey(req) {
   return who ? who.email : 'admin';
 }
 
+// ---- site-wide column visibility -------------------------------------------
+// The owner can hide columns for everyone (2026-09-15) — 85 of them is more
+// than most accounts want, and a view is a per-person choice rather than a
+// default. The CATALOGUE is read out of index.html's own header row rather
+// than restated here: the table is the one description of what columns exist,
+// and a second list would drift the first time a column was added. Parsed
+// once per instance.
+let COLUMN_CATALOGUE = null;
+function columnCatalogue() {
+  if (COLUMN_CATALOGUE) return COLUMN_CATALOGUE;
+  const out = [];
+  try {
+    const html = fs.readFileSync(path.join(__dirname, 'private', 'index.html'), 'utf8');
+    const head = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
+    const labels = {};
+    for (const m of head.matchAll(/<th class="group grp-([a-z]+)"[^>]*>([^<]+)<\/th>/g)) labels[m[1]] = m[2].trim();
+    for (const m of head.matchAll(/<th ([^>]*class="[^"]*grp-([a-z]+)[^"]*"[^>]*)>([\s\S]*?)<\/th>/g)) {
+      const attrs = m[1];
+      const group = m[2];
+      if (attrs.includes('class="group')) continue;       // the banner itself
+      const id = (/data-col="([^"]+)"/.exec(attrs) || /data-fkey="([^"]+)"/.exec(attrs)
+        || /data-key="([^"]+)"/.exec(attrs) || [])[1];
+      if (!id || group === 'fwd') continue;               // forward returns follow the as-of mode
+      const label = m[3].replace(/<br\s*\/?>/g, ' ').replace(/<[^>]*>/g, '')
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
+      out.push({ id, label, group, groupLabel: labels[group] || group });
+    }
+  } catch (err) {
+    console.warn('column catalogue could not be read:', err.message);
+  }
+  COLUMN_CATALOGUE = out;
+  return out;
+}
+
+app.get('/api/columns', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ columns: columnCatalogue(), hidden: await store.readHiddenColumns() });
+}));
+
+app.put('/api/columns', requireAdmin, route(async (req, res) => {
+  const known = new Set(columnCatalogue().map((c) => c.id));
+  const asked = Array.isArray(req.body && req.body.hidden) ? req.body.hidden : null;
+  if (!asked) return res.status(400).json({ error: 'Expected a hidden array.' });
+  // Only ids the table actually has, so the setting cannot rot into a list of
+  // names nothing matches, and cannot be used as free storage.
+  const hidden = await store.writeHiddenColumns(asked.filter((x) => known.has(x)));
+  logAct(req, 'view', 'sitecols:' + hidden.length);
+  res.json({ ok: true, hidden });
+}));
+
 app.get('/api/prefs', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   // A guest has no user row, so prefsKey() would fall through to the 'admin'
   // key — the owner's saved layout. Guests get defaults and store nothing.
-  if (await isGuest(req)) return res.json({ prefs: {} });
-  res.json({ prefs: await store.readPrefs(await prefsKey(req)) });
+  // siteHidden rides along because the screener already awaits this call
+  // before its first render — a second request would paint the full table and
+  // then visibly drop columns.
+  const siteHidden = await store.readHiddenColumns();
+  if (await isGuest(req)) return res.json({ prefs: {}, siteHidden });
+  res.json({ prefs: await store.readPrefs(await prefsKey(req)), siteHidden });
 }));
 
 app.put('/api/prefs', requireAuth, route(async (req, res) => {
