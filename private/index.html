@@ -994,7 +994,7 @@
         <th class="group grp-act" data-group="act" colspan="10">Advice</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
-        <th class="group grp-long" data-group="long" colspan="3">Long-term %</th>
+        <th class="group grp-long" data-group="long" colspan="4">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
         <th class="group grp-rel" data-group="rel" colspan="7">Relative</th>
         <th class="group grp-trend" data-group="trend" colspan="4">Trend</th>
@@ -1033,6 +1033,7 @@
         <th class="grp-long" data-key="threeMonthPct">3M</th>
         <th class="grp-long" data-key="sixMonthPct">6M</th>
         <th class="grp-long" data-key="oneYearPct">1Y</th>
+        <th class="grp-long" data-key="fiveYearPct" title="Five-year price change. Taken from the stored bar archive rather than the refresh window, so it is blank for a stock with less than five years of history here.">5Y</th>
         <th class="grp-fwd" data-key="fwd1M" title="Return in the ~1 month AFTER the as-of date">+1M</th>
         <th class="grp-fwd" data-key="fwd3M" title="Return in the ~3 months after the as-of date">+3M</th>
         <th class="grp-fwd" data-key="fwd6M" title="Return in the ~6 months after the as-of date">+6M</th>
@@ -2349,7 +2350,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="80">${s.error}</td>
+            <td class="na" colspan="81">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -2393,6 +2394,7 @@
           ${pctCell(s.threeMonthPct, 'grp-long', liveTitle)}
           ${pctCell(s.sixMonthPct, 'grp-long', liveTitle)}
           ${pctCell(s.oneYearPct, 'grp-long', liveTitle)}
+          ${pctCell(s.fiveYearPct, 'grp-long', cacheTitle)}
           ${pctCell(s.fwd1M, 'grp-fwd', fwdTitle)}
           ${pctCell(s.fwd3M, 'grp-fwd', fwdTitle)}
           ${pctCell(s.fwd6M, 'grp-fwd', fwdTitle)}
@@ -2461,7 +2463,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 85;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 86;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -2539,7 +2541,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="82">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="83">${msg}</td></tr>`;
         researchSymbol = null;
         renderResearchMenu();
         applyGroups();

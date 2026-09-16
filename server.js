@@ -3073,6 +3073,32 @@ async function computeStocks(asOf, opts = {}) {
     const SIX_MONTH = 126;
     const ONE_YEAR = 252;
 
+    // 5Y comes from the ARCHIVE, not from `values`. A refresh fetches ~300 bars
+    // and an archive round reads 650 days, so a five-year return cannot be a
+    // pctChange over the series the other columns use — it would be null for
+    // every stock. One query for the whole universe instead (the promo studio's
+    // period anchors do the same): the last close before today minus five
+    // years. A stock that listed later simply has no bar before the boundary
+    // and stays blank, and an anchor more than 30 days early is refused so a
+    // hole in the bars cannot quietly turn into a longer window.
+    const FIVE_YEAR_GRACE_MS = 30 * 86400000;
+    let fiveYearAnchor = {};
+    if (!asOf) {
+      const at = new Date();
+      at.setFullYear(at.getFullYear() - 5);
+      const boundary = at.toISOString().slice(0, 10);
+      try {
+        const [got] = await store.closesBefore([boundary]);
+        for (const [sym, a] of Object.entries(got || {})) {
+          if (Date.parse(boundary) - Date.parse(a.d) <= FIVE_YEAR_GRACE_MS) fiveYearAnchor[sym] = a;
+        }
+      } catch (err) {
+        // A column must never fail a refresh — the bars rule.
+        console.warn('5Y anchors skipped:', err.message);
+        fiveYearAnchor = {};
+      }
+    }
+
     // Benchmark 3-month return (as of the chosen date, if one is set).
     const spyFull = series[BENCHMARK]?.values;
     let spyThreeMonthPct;
@@ -3213,6 +3239,11 @@ async function computeStocks(asOf, opts = {}) {
         threeMonthPct,
         sixMonthPct: pctChange(values, SIX_MONTH),
         oneYearPct: pctChange(values, ONE_YEAR),
+        fiveYearPct: (() => {
+          const a = fiveYearAnchor[sym];
+          return a && isFinite(a.close) && a.close > 0 && isFinite(price)
+            ? ((price - a.close) / a.close) * 100 : null;
+        })(),
         relStrength,
         pctFromHigh: pctFromHigh(values, 252),
         vs50ma: pctVsMA(values, 50),

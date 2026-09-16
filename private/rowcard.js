@@ -109,6 +109,7 @@
     ['long',  '3M',             (s) => V.pct(s.threeMonthPct)],
     ['long',  '6M',             (s) => V.pct(s.sixMonthPct)],
     ['long',  '1Y',             (s) => V.pct(s.oneYearPct)],
+    ['long',  '5Y',             (s) => V.pct(s.fiveYearPct)],
     ['fwd',   '+1M',            (s) => V.pct(s.fwd1M)],
     ['fwd',   '+3M',            (s) => V.pct(s.fwd3M)],
     ['fwd',   '+6M',            (s) => V.pct(s.fwd6M)],

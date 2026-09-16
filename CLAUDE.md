@@ -295,6 +295,11 @@ The **Info** banner spans eight columns — Overall, Mom., Qual., Portfolios, Pr
 - **A filter change scrolls to the top**, and `paintWindow()` clamps its first row so a list that got shorter can never open on the blank spacer.
 - Verified by a headless harness on the real page (400 synthetic rows): 58 filter cells aligned to 58 body cells by group, grammar units, counts against independent filters over the payload, AND, hidden-column persistence, bound sector, Escape, empty state, deep-scroll-then-narrow, clear, sort still working, prefs PUT carrying `filterRow`.
 
+### The 5Y column
+**Long-term gained a 5Y column after 1Y (2026-09-15, shown to everyone).** It is the one return column that does NOT come from the refresh window: a refresh fetches ~300 bars and an archive round reads 650 days, so `pctChange(values, 1260)` would be null for every stock. Instead `computeStocks` takes **one `closesBefore()` query for the whole universe** — the last close before today minus five years, the same anchor mechanism the promo studio's week/month windows use — and divides today's price by it. An anchor more than **30 days** earlier than the boundary is refused, so a hole in the bars cannot quietly stretch the window; a stock with no bar that far back stays blank. A failed query logs and leaves the column empty, the bars rule.
+
+**It is blank for most of the universe until the archive is deepened**: measured 2026-09-15, **82 of 271 symbols have five years of bars** (the 2021 deep backfill covered the universe as it was then), 182 have one to two years — those arrived through refreshes, which keep ~300 bars. `backfill-bars.js --commit --depth 1300` fills the rest at **1 credit a symbol**; the cost is rows written to Turso, not credits.
+
 ### Sparklines
 The **Chart** group is one column (`90d`) between Scores and Short-term, holding a 90-session price line per row. A group of its own rather than a column inside Info, because the columns menu toggles *groups* — inside Info it could only be hidden by hiding Price, Sector and Market Cap too. `data-group="vol" colspan="1"` was already the precedent for a one-column group.
 
