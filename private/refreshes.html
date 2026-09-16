@@ -239,9 +239,11 @@
 
     const KINDS = {
       nightly: 'Nightly', 'nightly-full': 'Nightly full', all: 'Refresh all', missing: 'Fill missing',
+      fast: 'Fast refresh',
       refresh: 'Refresh', intraday: 'Intraday prices', nasdaq: 'NASDAQ list',
     };
     const KIND_COLORS = { nightly: '#34d399', 'nightly-full': '#22d3ee', all: '#fbbf24', missing: '#a78bfa',
+      fast: '#5eead4',
       refresh: '#7c9cff', intraday: '#38bdf8', nasdaq: '#f472b6' };
     const STATUSES = ['complete', 'running', 'incomplete', 'stopped', 'failed', 'abandoned', 'skipped'];
     const VERDICT_WORDS = { ok: 'ran', running: 'running now', pending: 'not yet (runs 4:15 PM ET)',
@@ -611,9 +613,10 @@
           drive(`<b>Prices refreshed</b> — ${(data.stocks || []).length} stocks, as of ${new Date(data.updatedAt).toLocaleTimeString()}.`);
         } else {
           const fill = what === 'refreshmissing';
-          const name = fill ? 'Fill missing' : 'Refresh all';
+          const fast = what === 'refreshfast';
+          const name = fill ? 'Fill missing' : fast ? 'Fast refresh' : 'Refresh all';
           drive(`<b>Starting ${name}…</b> Keep this tab open until it finishes — this tab is what runs it.`);
-          const r = await RefreshLoop.run(fill ? 'missing' : 'all', api, {
+          const r = await RefreshLoop.run(fill ? 'missing' : fast ? 'fast' : 'all', api, {
             onStart: () => load(),
             onRound: ({ loaded, total, rounds }) => {
               drive(`<b>${name} is running in this tab</b> — keep it open. Round ${rounds}, ` +
@@ -622,13 +625,18 @@
             },
             onWait: (why) => {
               if (why === 'refused') drive(`<b>${name}:</b> the API refused a round (rate limit) — retrying in a minute.`, 'warn');
+              // Only a Fast refresh has this step: every profile is in, and the
+              // table is being built from them now.
+              if (why === 'rebuild') drive('<b>Every profile is in — rebuilding the table…</b> a few seconds.');
             },
           });
           const said = {
-            done: [`<b>${name} finished.</b> Every stock has its company data. The report email is on its way.`, ''],
+            done: [`<b>${name} finished.</b> Every stock has its company data` +
+              (fast ? ', and the table has been rebuilt from it' : '') + '. The report email is on its way.', ''],
             nothing: ['<b>Nothing missing</b> — every stock already has complete company data. Nothing was started.', ''],
             stopped: [`<b>${name} was stopped.</b> What was pulled is kept, and the report says how far it got.`, 'warn'],
-            gaveup: [`<b>${name} ended before every stock loaded</b> — see the run below for the rounds and what is left.`, 'warn'],
+            gaveup: [`<b>${name} ended before every stock loaded</b> — see the run below for the rounds and what is left.` +
+              (fast ? ' What it did fetch is stored; the table shows it after the next refresh.' : ''), 'warn'],
           }[r.outcome];
           drive(said[0], said[1]);
         }
@@ -644,7 +652,7 @@
     load();
     loadHealth();
     const doWhat = new URLSearchParams(location.search).get('do');
-    if (['refresh', 'refreshall', 'refreshmissing'].includes(doWhat)) {
+    if (['refresh', 'refreshall', 'refreshmissing', 'refreshfast'].includes(doWhat)) {
       history.replaceState(null, '', location.pathname);
       startFromConsole(doWhat);
     }

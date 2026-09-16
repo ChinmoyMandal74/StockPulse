@@ -18,7 +18,8 @@
   const REFUSALS_ALLOWED = 8;        // a refused round fetched nothing, so it has its own allowance
   const STAGNANT_LIMIT = 3;          // rounds without progress before giving up
 
-  // mode: 'all' (Refresh all) or 'missing' (Fill missing).
+  // mode: 'all' (Refresh all), 'missing' (Fill missing) or 'fast' (Fast
+  // refresh — profile rounds, then ONE rebuild at the end).
   // hooks: onStart(started), onRound({ loaded, total, rounds, data }),
   //        onWait(reason) — 'refused' or 'gap'.
   // Resolves { outcome, started, data } where outcome is
@@ -28,12 +29,14 @@
   //   'gaveup'   out of rounds, out of refusals, or no progress
   async function run(mode, api, hooks = {}) {
     const fill = mode === 'missing';
+    const fast = mode === 'fast';
     const sleep = hooks.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
     let started = null;
     let data = null;
     let outcome = 'gaveup';
     try {
-      started = await api('POST', '/api/refresh-all' + (fill ? '?mode=missing' : ''));
+      started = await api('POST', '/api/refresh-all' +
+        (fill ? '?mode=missing' : fast ? '?mode=fast' : ''));
       if (fill && started && started.nothing) { outcome = 'nothing'; return { outcome, started, data }; }
       if (hooks.onStart) hooks.onStart(started);
 
@@ -50,7 +53,9 @@
       let stagnant = 0;
       while (rounds < budget && refusals < REFUSALS_ALLOWED) {
         try {
-          data = await api('GET', '/api/stocks?refresh=1' + runQ);
+          // A fast round fetches profiles and nothing else; the table is built
+          // once, after the last one.
+          data = await api('GET', fast ? '/api/refresh-profiles?x=1' + runQ : '/api/stocks?refresh=1' + runQ);
         } catch (e) {
           refusals++;
           if (hooks.onWait) hooks.onWait('refused');
@@ -59,10 +64,22 @@
         }
         if (data && data.stopped) { outcome = 'stopped'; break; }
         rounds++;
-        const total = (data.stocks || []).length;
-        const loaded = (data.stocks || []).filter((s) => s.profileFetchedAt != null).length;
+        // A fast round answers with the counts directly; an ordinary one
+        // answers with the table, and the counts come off its rows.
+        const total = fast ? (data.total || 0) : (data.stocks || []).length;
+        const loaded = fast ? (data.loaded || 0)
+          : (data.stocks || []).filter((s) => s.profileFetchedAt != null).length;
         if (hooks.onRound) hooks.onRound({ loaded, total, rounds, data });
-        if (total === 0 || loaded >= total) { outcome = 'done'; break; }
+        if (total === 0 || loaded >= total) {
+          outcome = 'done';
+          // The one rebuild: scores, advice, the snapshot, the report and the
+          // email all come from this round, the same way a Refresh all ends.
+          if (fast) {
+            if (hooks.onWait) hooks.onWait('rebuild');
+            data = await api('GET', '/api/stocks?refresh=1' + runQ);
+          }
+          break;
+        }
         if (loaded === lastLoaded) stagnant++; else stagnant = 0;
         lastLoaded = loaded;
         if (stagnant >= STAGNANT_LIMIT) break;

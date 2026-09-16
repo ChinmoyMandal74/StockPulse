@@ -3135,6 +3135,23 @@ app.post('/api/refresh-all', requireAdmin, route(async (req, res) => {
     return res.json({ ok: true, mode: 'missing', runId, expired, total: plan.total,
       targets: plan.gaps.length, noBars: plan.noBars.length, rounds: plan.rounds });
   }
+  // Fast refresh: the same stocks as a Refresh all, but the rounds ONLY fetch
+  // profiles. The table is rebuilt once, at the end. A Refresh all rebuilds it
+  // on every round — a year of bars for the whole universe, rescored and
+  // rewritten — to fold in the seven profiles that round fetched; measured
+  // 2026-09-16, that is ~46s of the 108s a round takes at 271 stocks, and it
+  // is what makes a 1,000-stock sweep a five-hour job rather than a
+  // two-and-a-half-hour one. The wait itself cannot go: 80 credits a profile
+  // against 610 a minute is seven a minute whatever we do.
+  if (req.query.mode === 'fast' || req.body?.mode === 'fast') {
+    logAct(req, 'refresh', 'fast');
+    const expiredFast = await expireProfiles();
+    const totalFast = (await readUniverse()).length;
+    const runIdFast = await trackSafe(store.startRun({ kind: 'fast', trigger: 'manual',
+      actor: who ? who.email : null, total: totalFast, targets: totalFast }));
+    await beginRefresh(who ? who.email : null, totalFast, 'fast', runIdFast);
+    return res.json({ ok: true, mode: 'fast', runId: runIdFast, expired: expiredFast, total: totalFast });
+  }
   logAct(req, 'refresh', 'all');
   const expired = await expireProfiles();
   const total = (await readUniverse()).length;
@@ -3142,6 +3159,31 @@ app.post('/api/refresh-all', requireAdmin, route(async (req, res) => {
     actor: who ? who.email : null, total, targets: total }));
   await beginRefresh(who ? who.email : null, total, null, runId);
   res.json({ ok: true, runId, expired, total });
+}));
+
+// One round of a Fast refresh: fetch the next slice of profiles, store them,
+// report progress. No bars are read, nothing is scored and no snapshot is
+// written — the loop calls the ordinary round once at the end for that, which
+// is where the report and the email come from, exactly as a Refresh all ends.
+//
+// Stopping mid-run loses nothing: the profiles fetched so far are stored, and
+// the next refresh of any kind picks them up.
+app.get('/api/refresh-profiles', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const asked = Number(req.query.run) || null;
+  if (asked && (await trackSafe(store.runStatus(asked))) === 'stopped') {
+    return res.json({ stopped: true, runId: asked });
+  }
+  const running = await readRefreshState();
+  const runId = (running && running.runId) || asked;
+  const universe = await readUniverse();
+  const started = Date.now();
+  const { r: profiles, m } = await metered(() => ensureProfiles(universe, PROFILE_CAP_ARCHIVE_ROUND));
+  const loaded = universe.filter((sym) => profiles[sym] && profiles[sym].fetchedAt).length;
+  await recordRound(runId, { archivePrices: true }, m, Date.now() - started, { loaded, total: universe.length });
+  // Progress only: the run is closed by the rebuild round, not here.
+  if (running) await noteRefreshProgress(loaded, universe.length);
+  res.json({ loaded, total: universe.length, done: loaded >= universe.length, runId });
 }));
 
 // The client calls this when its backfill loop finishes or gives up, so the
@@ -4953,7 +4995,8 @@ function refreshReportBodies(r) {
     : escHtml(sym));
   const line = (k, v) => k.padEnd(14) + v;
   const isAll = r.kind === 'all';
-  const runName = r.mode === 'missing' ? 'Fill missing' : isAll ? 'Refresh all' : 'Refresh';
+  const runName = r.mode === 'missing' ? 'Fill missing'
+    : r.mode === 'fast' ? 'Fast refresh' : isAll ? 'Refresh all' : 'Refresh';
   // Prices moved; the company numbers did not. Say which.
   const fundLine = !isAll ? 'not re-pulled — prices only'
     : (r.stats.fundamentalsToday == null ? '—'
@@ -5725,7 +5768,8 @@ app.all('/api/cron/intraday', route(async (req, res) => {
     return skip(`outside 9:40 AM-4:00 PM New York (${clock.label})`, false);
   }
   const running = await readRefreshState();
-  if (running) return skip(`another refresh is running (${running.mode === 'missing' ? 'Fill missing' : 'Refresh all'})`, true);
+  if (running) return skip(`another refresh is running (${running.mode === 'missing' ? 'Fill missing'
+    : running.mode === 'fast' ? 'Fast refresh' : 'Refresh all'})`, true);
   const market = await nyseState();
   if (market.known && !market.open) return skip('NYSE closed (holiday or early close)', true);
   if (dry) return res.json({ ok: true, ran: false, wouldRun: true, ny: clock.label, market, dry });
