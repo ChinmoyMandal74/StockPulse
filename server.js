@@ -3371,7 +3371,10 @@ async function computeStocks(asOf, opts = {}) {
 
     const line = T.line();
     if (line) console.log(`refresh phases: ${line}`);
-    return { ok: true, payload: { stocks, portfolios: portfolioNames, asOf, updatedAt: new Date().toISOString() } };
+    // Also on the payload: Vercel's log view does not show stdout for a
+    // function, and the question "which phase is slow" comes up per round.
+    return { ok: true, payload: { stocks, portfolios: portfolioNames, asOf,
+      phases: line || null, updatedAt: new Date().toISOString() } };
   } catch (err) {
     return { ok: false, status: 502, error: `Failed to reach Twelve Data: ${err.message}` };
   }
