@@ -4736,7 +4736,6 @@ app.get('/api/history', requireAuth, route(async (req, res) => {
 // flag ages out on its own after REFRESH_STALE_MS. The cron job covers that
 // case instead, since it is the thing still awake.
 
-const REPORT_MOVERS = 5;
 
 // ---- fundamentals that moved ------------------------------------------------
 // What a Refresh all can say that a price refresh cannot: the company numbers
@@ -4939,51 +4938,57 @@ async function buildRefreshReport(state, snap, kind = 'all') {
     ? (rows.length > 0 && loaded.length >= live.length && !failed.length)
     : (rows.length > 0 && !failed.length);
 
-  const num = (n) => n != null && isFinite(n);
-  const movers = live.filter((x) => num(x.todayPct)).sort((a, b) => b.todayPct - a.todayPct);
-
-  // Advice that changed since the previous trading day — the one thing in the
-  // report that is a verdict moving rather than a number moving. Biggest tier
-  // jumps first.
-  const tier = (a) => Action.ACTIONS.indexOf(a);
-  const advice = live
-    .filter((x) => x.action && x.advicePrev && x.advicePrev !== x.action)
-    .map((x) => ({ symbol: x.symbol, from: x.advicePrev, to: x.action, flag: x.actionFlag || '',
-      up: tier(x.action) > tier(x.advicePrev) }))
-    .sort((a, b) => (Math.abs(tier(b.to) - tier(b.from)) - Math.abs(tier(a.to) - tier(a.from)))
-      || a.symbol.localeCompare(b.symbol));
-
-  // A Refresh all pairs each changed verdict with its freshest stored
-  // headlines — a flip raises "what happened?", and this is where it gets
-  // answered. Stored rows only, never a fetch on the report path (the same
-  // run's earlier rounds have usually topped these up minutes before); a
-  // symbol with nothing recent simply shows none.
-  if (kind === 'all') {
-    const since = new Date(Date.now() - 3 * 86400000).toISOString();
-    for (const x of advice) {
-      try {
-        x.news = (await store.readNews(x.symbol, 4)).filter((h) => h.published_at >= since).slice(0, 2);
-      } catch { x.news = []; }
-    }
-  }
-
+  // The day's movers and the advice changes used to be the digest here. Both
+  // went on 2026-09-16 (owner's call): each restated a standing the screener
+  // shows live and neither said anything about the run, which is what this
+  // mail is for. Their per-symbol news read went with them — the report path
+  // no longer touches the news table at all.
   return {
     kind, complete, rows, live, loaded, failed, missing, asOf, day, stats,
-    // The digest is the day's movers and nothing else. The screens and the
-    // highest-rated list were dropped in Sep 2026: both restate a standing
-    // rather than reporting what happened, and both are a click away on
-    // /analysis and the screener, where they are current rather than a
-    // snapshot of whenever the refresh happened to finish. Screens.run() over
-    // the whole universe went with them.
-    top: movers.slice(0, REPORT_MOVERS),
-    bottom: movers.slice(-REPORT_MOVERS).reverse(),
-    advice,
     funds,
     actor: state.actor || 'unknown',
     startedAt: state.startedAt,
     duration: fmtDuration(Date.now() - state.startedAt),
   };
 }
+
+// What the JOB did, as opposed to what the data says — the same figures the
+// Refresh runs page shows, so the mail answers "did it run normally?" without
+// opening anything. Read from the run's own row, which the rounds have been
+// updating as they went.
+async function runFacts(runId) {
+  if (!runId) return null;
+  try {
+    const run = await store.readRun(runId);
+    if (!run) return null;
+    const rounds = run.roundsDetail || [];
+    const timed = rounds.filter((x) => x.ms);
+    const gaps = [];
+    for (let i = 1; i < rounds.length; i++) {
+      if (rounds[i].at && rounds[i - 1].at) gaps.push(rounds[i].at - rounds[i - 1].at);
+    }
+    const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+    return {
+      rounds: run.rounds || rounds.length,
+      refused: run.refused || rounds.filter((x) => x.error).length,
+      credits: run.credits || sum(rounds.map((x) => x.credits || 0)),
+      profiles: run.profiles || sum(rounds.map((x) => x.profiles || 0)),
+      profileFails: sum(rounds.map((x) => x.profileFails || 0)),
+      pricedLive: run.pricesLive || 0,
+      trigger: run.trigger || null,
+      link: run.link || null,
+      avgRoundMs: timed.length ? Math.round(sum(timed.map((x) => x.ms)) / timed.length) : null,
+      maxRoundMs: timed.length ? Math.max(...timed.map((x) => x.ms)) : null,
+      avgGapMs: gaps.length ? Math.round(sum(gaps) / gaps.length) : null,
+      creditsPerRound: rounds.length ? Math.round(sum(rounds.map((x) => x.credits || 0)) / rounds.length) : null,
+    };
+  } catch (err) {
+    console.warn('report: run facts unavailable:', err.message);
+    return null;
+  }
+}
+
+const secs = (ms) => (ms == null ? '—' : ms >= 60000 ? (ms / 60000).toFixed(1) + ' min' : (ms / 1000).toFixed(1) + 's');
 
 function refreshReportBodies(r) {
   const url = APP_URL || '';
@@ -5034,17 +5039,20 @@ function refreshReportBodies(r) {
       t.push(`No industry from the provider (${r.noIndustry.length}, expected for funds): ` + r.noIndustry.join(', '));
     }
   }
-  t.push('', 'Movers today');
-  for (const x of r.top) t.push('  ' + signed(x.todayPct).padStart(7) + '  ' + x.symbol);
-  if (r.top.length && r.bottom.length) t.push('  …');
-  for (const x of r.bottom) t.push('  ' + signed(x.todayPct).padStart(7) + '  ' + x.symbol);
-  t.push('', 'Advice changes  (vs the previous trading day)');
-  if (!(r.advice || []).length) t.push('  none — every verdict held');
-  else {
-    for (const x of r.advice) {
-      t.push(`  ${x.symbol.padEnd(6)} ${x.from} → ${x.to}   ${x.flag}`);
-      for (const h of x.news || []) t.push(`         · ${h.headline}${h.source ? ' — ' + h.source : ''}`);
-    }
+  // The movers list and the advice changes were removed on 2026-09-16 (owner's
+  // call): both restated what the screener shows live, and the question this
+  // mail exists to answer is whether the JOB went normally.
+  if (r.job) {
+    t.push('', 'The run');
+    t.push(line('Rounds', `${r.job.rounds}` + (r.job.refused ? `, ${r.job.refused} refused` : '')));
+    t.push(line('Profiles', `${r.job.profiles} pulled` + (r.job.profileFails ? `, ${r.job.profileFails} refused` : '')));
+    t.push(line('Credits', `${r.job.credits.toLocaleString()}` +
+      (r.job.creditsPerRound ? ` (~${r.job.creditsPerRound.toLocaleString()} a round, ceiling 610/min)` : '')));
+    t.push(line('Prices', r.job.pricedLive ? `${r.job.pricedLive} pulled live` : 'from the archive'));
+    t.push(line('Round time', `${secs(r.job.avgRoundMs)} average, ${secs(r.job.maxRoundMs)} longest`));
+    if (r.job.avgGapMs) t.push(line('Round spacing', `${secs(r.job.avgGapMs)} (62s is the floor)`));
+    if (r.job.trigger) t.push(line('Trigger', r.job.trigger));
+    if (r.job.link) t.push(line('Job log', r.job.link));
   }
   if (isAll && r.funds.prevDay) {
     t.push('', `Fundamentals that moved  (against ${r.funds.prevDay}, the previous recorded set)`);
@@ -5070,9 +5078,6 @@ function refreshReportBodies(r) {
   const cell = 'padding:3px 10px 3px 0;font-size:13px';
   const kv = (k, v) => `<tr><td style="${cell};color:#777;white-space:nowrap">${escHtml(k)}</td>` +
     `<td style="${cell}">${escHtml(v)}</td></tr>`;
-  const chip = (x) => `<span style="display:inline-block;margin:0 10px 4px 0;font-size:13px">` +
-    `<b>${symLink(x.symbol)}</b> <span style="color:${x.todayPct >= 0 ? '#0f9d58' : '#c5221f'}">` +
-    `${signed(x.todayPct)}</span></span>`;
   // The section a Refresh all exists for: what changed about the companies,
   // rather than about their prices.
   let fundsBlock = '';
@@ -5100,6 +5105,33 @@ function refreshReportBodies(r) {
       '<p style="margin:8px 0 0;font-size:12px;color:#999">Price, market cap, forward P/E, PEG, ' +
       'FCF yield and net-cash % are left out: they move with the price every night rather than ' +
       'with the company.</p>';
+  }
+
+  // How the job itself went: the numbers from the Refresh runs page, so the
+  // mail answers "did it run normally?" on its own.
+  let jobBlock = '';
+  if (r.job) {
+    const j = r.job;
+    const jrow = (k, v) => `<tr><td style="${cell};color:#777;white-space:nowrap">${escHtml(k)}</td>` +
+      `<td style="${cell}">${v}</td></tr>`;
+    const runUrl = url && r.runId ? `${url}/refreshes?run=${r.runId}` : null;
+    jobBlock =
+      '<h3 style="margin:22px 0 6px;font-size:14px">The run</h3>' +
+      '<table style="border-collapse:collapse">' +
+      jrow('Rounds', escHtml(String(j.rounds)) +
+        (j.refused ? ` <span style="color:#b06000">${j.refused} refused</span>` : '')) +
+      jrow('Profiles', escHtml(`${j.profiles} pulled`) +
+        (j.profileFails ? ` <span style="color:#c5221f">${j.profileFails} refused</span>` : '')) +
+      jrow('Credits', escHtml(j.credits.toLocaleString()) +
+        (j.creditsPerRound ? ` <span style="color:#999">~${escHtml(j.creditsPerRound.toLocaleString())} a round, ceiling 610/min</span>` : '')) +
+      jrow('Prices', escHtml(j.pricedLive ? `${j.pricedLive} pulled live` : 'read from the archive')) +
+      jrow('Round time', escHtml(`${secs(j.avgRoundMs)} average, ${secs(j.maxRoundMs)} longest`)) +
+      (j.avgGapMs ? jrow('Round spacing', escHtml(`${secs(j.avgGapMs)} — 62s is the floor the credit ceiling sets`)) : '') +
+      (j.trigger ? jrow('Trigger', escHtml(j.trigger)) : '') +
+      '</table>' +
+      (runUrl ? `<p style="margin:8px 0 0;font-size:12px"><a href="${runUrl}" style="color:#556a8a">` +
+        'Every round of this run →</a></p>' : '') +
+      (j.link ? `<p style="margin:4px 0 0;font-size:12px"><a href="${escHtml(j.link)}" style="color:#556a8a">The job log →</a></p>` : '');
   }
 
   let problems = '';
@@ -5135,29 +5167,7 @@ function refreshReportBodies(r) {
     kv('Prices as of', r.asOf || '—') + kv('Fundamentals', fundLine) + kv('Bar archive', barLine) +
     '</table>' +
     problems +
-    '<h3 style="margin:22px 0 6px;font-size:14px">Movers today</h3>' +
-    '<div>' + r.top.map(chip).join('') + '</div>' +
-    '<div style="margin-top:4px">' + r.bottom.map(chip).join('') + '</div>' +
-    (() => {
-      const aCell = 'padding:3px 12px 3px 0;vertical-align:top;font-size:13px';
-      const rowsH = (r.advice || []).map((x) =>
-        `<tr><td style="${aCell};font-weight:600;white-space:nowrap">${symLink(x.symbol)}</td>` +
-        `<td style="${aCell};white-space:nowrap;color:${x.up ? '#0f766e' : '#b91c1c'}">${x.from} → ${x.to}</td>` +
-        `<td style="${aCell};color:#666">${x.flag}</td></tr>` +
-        ((x.news || []).length
-          ? `<tr><td></td><td colspan="2" style="padding:0 12px 7px 0;font-size:12px;color:#888">` +
-            x.news.map((h) => (/^https?:\/\//i.test(h.url || '')
-              ? `<a href="${escHtml(h.url)}" style="color:#556a8a;text-decoration:none">${escHtml(h.headline)}</a>`
-              : escHtml(h.headline))
-              + (h.source ? ` <span style="color:#aaa">— ${escHtml(h.source)}</span>` : '')).join('<br>') +
-            '</td></tr>'
-          : '')).join('');
-      return '<h3 style="margin:22px 0 6px;font-size:14px">Advice changes</h3>' +
-        (rowsH
-          ? `<table cellpadding="0" cellspacing="0">${rowsH}</table>` +
-            '<p style="margin:6px 0 0;font-size:12px;color:#999">Against the previous trading day, on the Balanced rules. Headlines are the newest stored for each changed symbol.</p>'
-          : '<p style="margin:0;font-size:13px;color:#666">None — every verdict held from the previous trading day.</p>');
-    })() +
+    jobBlock +
     fundsBlock +
     '';
 
@@ -5181,6 +5191,8 @@ async function sendRefreshReport(state, kind = 'all') {
   try {
     const r = await buildRefreshReport(state, await readSnapshot(), kind);
     r.mode = state.mode || null;
+    r.runId = state.runId || null;
+    r.job = await runFacts(state.runId);
     if (r.mode === 'missing') {
       // What is still missing after the run, and which stocks the provider
       // simply has no industry for — the second list is expected, not a gap.
@@ -5191,6 +5203,8 @@ async function sendRefreshReport(state, kind = 'all') {
     const { text, html } = refreshReportBodies(r);
     const subject = r.mode === 'missing'
       ? `[Tickr Lab] Fill missing — ${r.stillGaps.length ? r.stillGaps.length + ' still missing' : 'complete'}`
+      : r.mode === 'fast'
+      ? `[Tickr Lab] Fast refresh — ${r.loaded.length}/${r.live.length}` + (r.complete ? '' : ' incomplete')
       : kind === 'all'
       ? `[Tickr Lab] Refresh all — ${r.loaded.length}/${r.live.length}` + (r.complete ? '' : ' incomplete')
       : `[Tickr Lab] Refresh — ${r.live.length} symbols as of ${r.asOf || 'n/a'}` +
@@ -5912,8 +5926,15 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     // Cache the live pull, record today's fundamentals, and move the shared
     // refresh flag on — the same tail the nightly job runs, so the two callers
     // cannot drift apart.
+    // Recorded BEFORE the tail: finishLiveRefresh is what closes the run and
+    // builds the report, and a round recorded after it would be missing from
+    // the very summary it completes. The counts are the same ones
+    // finishLiveRefresh derives from these rows.
+    const rowsNow = r.payload.stocks || [];
+    await recordRound(runId, opts, m, ms, {
+      loaded: rowsNow.filter((x) => x.profileFetchedAt != null).length,
+      total: rowsNow.length, rows: rowsNow.length });
     const fin = await finishLiveRefresh(r.payload, { startedAt, actor, runId: plainRun ? runId : null });
-    await recordRound(runId, opts, m, ms, { loaded: fin.loaded, total: fin.total, rows: r.payload.stocks.length });
     if (plainRun) await trackSafe(store.finishRun(runId, { status: 'complete', loaded: fin.loaded, total: fin.total }));
     return res.json({ ...r.payload, runId, refreshing: await readRefreshState() });
   }
