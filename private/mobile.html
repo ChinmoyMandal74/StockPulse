@@ -36,6 +36,12 @@
             padding: 7px 13px; border-radius: 999px; border: 1px solid var(--hair);
             background: rgba(255, 255, 255, 0.05); color: var(--text); font: 500 13px var(--sans); }
     .vbtn small { color: var(--faint); font-size: 11px; }
+    .cbtn { margin-left: 8px; display: inline-flex; align-items: center; justify-content: center;
+            min-height: 36px; min-width: 36px; padding: 0 9px; border-radius: 999px;
+            border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.05); color: var(--faint); }
+    .cbtn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7;
+                stroke-linecap: round; stroke-linejoin: round; }
+    .cbtn.on { color: var(--green); border-color: rgba(52, 211, 153, 0.34); background: rgba(52, 211, 153, 0.10); }
     .back { min-height: 36px; padding: 7px 12px 7px 8px; border-radius: 999px; border: 1px solid var(--hair);
             background: none; color: var(--muted); font: 500 13px var(--sans); }
     h1 { margin: 12px 0 2px; font-size: 22px; font-weight: 600; letter-spacing: -0.03em; }
@@ -71,6 +77,18 @@
     .r-f .k { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .r-f .v { margin-left: auto; font-family: var(--mono); }
     .r-verdict { margin-top: 8px; font-size: 12.5px; font-weight: 600; }
+    /* The chart. app.css stocks svg.spark at 20px with a muted stroke for the
+       table's deliberately neutral column; on a phone it is the biggest thing
+       in the row, so it is taller and takes the colour of its own 90 days.
+       These rules match that specificity and sit after it, so they win. */
+    .r-spark { display: block; margin: 10px 0 1px; color: var(--muted); }
+    .r-spark svg { width: 100%; display: block; height: 40px; }
+    .r-spark svg path { stroke: currentColor; }
+    .r-spark .spark-area { fill: currentColor; opacity: 0.11; stroke: none; }
+    .r-spark.up { color: var(--green); } .r-spark.dn { color: var(--red); }
+    .r-spark.sh { margin: 2px 0 12px; }
+    .r-spark.sh svg { height: 96px; }
+    .r-spark .sp-cap { margin-top: 5px; font-size: 11px; color: var(--faint); }
     .up { color: var(--green); } .dn { color: var(--red); } .na, .flat { color: var(--faint); }
     .pos { color: var(--green); } .neg { color: var(--red); } .warn { color: var(--amber); }
 
@@ -130,6 +148,9 @@
       <button class="back" id="back" hidden>‹ Back</button>
       <span class="brand"><span class="dot"></span>Tickr Lab</span>
       <button class="vbtn" id="viewBtn">View <small id="viewName">…</small></button>
+      <button class="cbtn" id="chartBtn" aria-pressed="true" aria-label="Show charts" title="Charts">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 16.4 9 10.2l3.6 3.4 7.9-8.2"/></svg>
+      </button>
     </div>
     <h1 id="title">Screens</h1>
     <p class="sub" id="subtitle">Ready-made questions over every stock tracked.</p>
@@ -173,9 +194,19 @@
     const remember = (id) => { try { localStorage.setItem('m.view', id); } catch (e) { /* private mode */ } };
     const remembered = () => { try { return localStorage.getItem('m.view'); } catch (e) { return null; } };
 
+    // Charts are on by default and remembered per device, like the view. The
+    // toggle controls the PAYLOAD as well as the display: with it off the
+    // server draws nothing and sends nothing, so the rows stay tiny.
+    let chartOn = true;
+    try { chartOn = localStorage.getItem('m.chart') !== 'off'; } catch (e) { /* private mode */ }
+    const chartQ = () => (chartOn ? '&chart=1' : '');
+
     function paintView() {
       const v = views.find((x) => x.id === viewId) || views[0];
       $('viewName').textContent = v ? v.name : '';
+      $('chartBtn').classList.toggle('on', chartOn);
+      $('chartBtn').setAttribute('aria-pressed', chartOn ? 'true' : 'false');
+      $('chartBtn').setAttribute('aria-label', chartOn ? 'Hide charts' : 'Show charts');
     }
 
     // ---- screens ------------------------------------------------------------
@@ -220,6 +251,7 @@
         `<span class="r-price">${we(r.price || '—')}</span>` +
         (r.today ? `<span class="r-today ${r.up ? 'up' : 'dn'}">${we(r.today)}</span>` : '') +
         '</span></span>' +
+        (r.spark ? `<span class="r-spark ${r.sparkUp ? 'up' : 'dn'}">${r.spark}</span>` : '') +
         (fields ? `<span class="r-fields">${fields}</span>` : '') +
         '</button>';
     }
@@ -231,7 +263,7 @@
       $('back').hidden = false;
       $('main').innerHTML = '<div class="msg">Loading…</div>';
       try {
-        const d = await get(`/api/m/screen?id=${encodeURIComponent(id)}&view=${encodeURIComponent(viewId || '')}`);
+        const d = await get(`/api/m/screen?id=${encodeURIComponent(id)}&view=${encodeURIComponent(viewId || '')}${chartQ()}`);
         if (id === 'all') allRows = d.rows;   // Search reuses them
         $('title').textContent = d.name;
         $('subtitle').textContent = (d.description || '') +
@@ -268,7 +300,7 @@
       };
       $('q').addEventListener('input', run);
       if (!allRows) {
-        try { allRows = (await get(`/api/m/screen?id=all&view=${encodeURIComponent(viewId || '')}&limit=200`)).rows; }
+        try { allRows = (await get(`/api/m/screen?id=all&view=${encodeURIComponent(viewId || '')}&limit=200${chartQ()}`)).rows; }
         catch (e) { /* search simply finds nothing */ }
       }
       run();
@@ -294,7 +326,7 @@
     async function showStock(sym) {
       const sheet = openSheet('<div class="msg">Loading…</div>');
       try {
-        const d = await get('/api/m/stock?symbol=' + encodeURIComponent(sym));
+        const d = await get('/api/m/stock?symbol=' + encodeURIComponent(sym) + chartQ());
         const vcls = /Buy/.test(d.action || '') ? 'up' : /Sell|Avoid/.test(d.action || '') ? 'dn' : 'flat';
         const secs = (d.groups || []).map((g) =>
           `<div class="sec" style="--tint:${GROUP_TINT[g.group] || 'var(--faint)'}">` +
@@ -315,6 +347,8 @@
         sheet.innerHTML = '<div class="grab"></div>' +
           `<h2>${we(d.name)}</h2>` +
           `<div class="meta">${we(d.symbol)}${d.sector ? ' · ' + we(d.sector) : ''}${d.industry ? ' · ' + we(d.industry) : ''}</div>` +
+          (d.spark ? `<div class="r-spark sh ${d.sparkUp ? 'up' : 'dn'}">${d.spark}` +
+            '<div class="sp-cap">Last 90 sessions</div></div>' : '') +
           (d.action ? '<div class="verdict">' +
             `<div class="v ${vcls}">${we(d.action)}</div>` +
             (d.actionFlag ? `<div class="why">${we(d.actionFlag)}</div>` : '') +
@@ -348,6 +382,17 @@
 
     // ---- boot ---------------------------------------------------------------
     $('viewBtn').addEventListener('click', showViews);
+    $('chartBtn').addEventListener('click', () => {
+      chartOn = !chartOn;
+      try { localStorage.setItem('m.chart', chartOn ? 'on' : 'off'); } catch (e) { /* private mode */ }
+      paintView();
+      // The cached All rows either carry charts or do not, so they have to go.
+      allRows = null;
+      closeSheet();
+      if (tab === 'search') showSearch();
+      else if (tab === 'screens') showScreens();
+      else if (currentScreen) showScreen(currentScreen);
+    });
     $('back').addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x.dataset.tab === 'screens'));
       showScreens();

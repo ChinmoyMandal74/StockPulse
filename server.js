@@ -4292,6 +4292,24 @@ function mobileRow(x, fields) {
   };
 }
 
+// A phone row's chart, drawn here rather than sent as data: the browser gets
+// ~50 coordinates instead of 90 closes, and it is RowCard.sparkSVG — the same
+// function the table's 90d column and the tiles draw with.
+const MOBILE_SPARK_POINTS = 52;          // ample at ~120px wide; halves the payload
+function mobileSpark(closes, opts) {
+  if (!closes || closes.length < 2) return null;
+  let pts = closes;
+  if (pts.length > MOBILE_SPARK_POINTS) {
+    const step = (pts.length - 1) / (MOBILE_SPARK_POINTS - 1);
+    pts = Array.from({ length: MOBILE_SPARK_POINTS }, (_, i) => closes[Math.round(i * step)]);
+  }
+  const o = opts || {};
+  return {
+    svg: RowCard.sparkSVG(pts, { w: 120, h: o.h || 34, pad: 2, area: true }),
+    up: closes[closes.length - 1] >= closes[0],
+  };
+}
+
 async function mobileRows(req) {
   const snap = await readSnapshot();
   let rows = ((snap && snap.stocks) || []);
@@ -4346,13 +4364,23 @@ app.get('/api/m/screen', requireAuth, route(async (req, res) => {
   } else {
     picked = picked.slice().sort((a, b) => (b.overallRating || 0) - (a.overallRating || 0));
   }
+  const out = picked.slice(0, limit).map((x) => mobileRow(x, view.fields));
+  // Charts are opt-in, and the toggle controls the PAYLOAD as much as the
+  // display: with it off nothing is drawn and nothing is sent.
+  if (String(req.query.chart || '') === '1') {
+    const closes = await sparkCloses(req, 90);
+    for (const r of out) {
+      const art = mobileSpark(closes[r.symbol]);
+      if (art) { r.spark = art.svg; r.sparkUp = art.up; }
+    }
+  }
   res.json({
     id: id || 'all',
     name: screen ? screen.name : 'Every stock',
     description: screen ? screen.description : null,
     view: { id: view.id, name: view.name, fields: view.fields.map((k) => k.slice(k.indexOf('|') + 1)) },
     total: picked.length,
-    rows: picked.slice(0, limit).map((x) => mobileRow(x, view.fields)),
+    rows: out,
   });
 }));
 
@@ -4378,10 +4406,22 @@ app.get('/api/m/stock', requireAuth, route(async (req, res) => {
   }
   let news = [];
   try { news = NEWS_OFF ? [] : (await store.readNews(symbol, 6)); } catch { news = []; }
+  // The sheet's chart follows the same toggle the rows do — one stock, so it
+  // is drawn taller and keeps every session rather than being thinned.
+  let art = null;
+  if (String(req.query.chart || '') === '1') {
+    const closes = await sparkCloses(req, 90);
+    const series = closes[symbol];
+    art = series && series.length > 1
+      ? { svg: RowCard.sparkSVG(series, { w: 320, h: 88, pad: 3, area: true }),
+        up: series[series.length - 1] >= series[0] }
+      : null;
+  }
   res.json({
     symbol, name: x.shortName || x.name || symbol,
     sector: x.sector || null, industry: x.industry || null,
     action: x.action || null, actionFlag: x.actionFlag || null, actionTrend: x.actionTrend || null,
+    spark: art ? art.svg : null, sparkUp: art ? art.up : null,
     groups: Object.entries(groups).map(([g, rowsOut]) => ({ group: g, rows: rowsOut })),
     news: news.map((n) => ({ headline: n.headline, source: n.source, url: n.url, published_at: n.published_at })),
   });
@@ -4692,27 +4732,34 @@ app.get('/api/news/latest', requireAuth, route(async (req, res) => {
 const sparkCacheSrv = new Map();
 const SPARK_TTL_MS = 10 * 60 * 1000;
 
-app.get('/api/sparklines', requireAuth, route(async (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  const days = Math.min(400, Math.max(20, Number(req.query.days) || 90));
+// Closes for every symbol the caller may see, cached per (days, guest). Shared
+// by /api/sparklines and the phone page, so a chart on a phone and a chart in
+// the table come off the same rows and the same cache.
+async function sparkCloses(req, days) {
   const snap = await readSnapshot();
   let symbols = ((snap && snap.stocks) || []).filter((x) => !x.error).map((x) => x.symbol);
-  if (await isGuest(req)) symbols = symbols.filter((x) => guestSet.has(String(x).toUpperCase()));
-  if (!symbols.length) return res.json({ closes: {}, days });
+  const guest = await isGuest(req);
+  if (guest) symbols = symbols.filter((x) => guestSet.has(String(x).toUpperCase()));
+  if (!symbols.length) return {};
+  const key = `${days}|${guest ? 'g' : 'm'}`;
+  const hit = sparkCacheSrv.get(key);
+  if (hit && Date.now() - hit.at < SPARK_TTL_MS) return hit.body.closes;
   // A calendar cutoff rather than a row limit: one query for every symbol, and
   // US tickers share trading days so they come back the same length.
   const since = new Date(Date.now() - Math.round(days * 1.45) * 86400000)
     .toISOString().slice(0, 10);
-  const key = `${days}|${await isGuest(req) ? 'g' : 'm'}`;
-  const hit = sparkCacheSrv.get(key);
-  if (hit && Date.now() - hit.at < SPARK_TTL_MS) return res.json(hit.body);
   const closes = await store.readCloses(symbols, since);
   for (const k of Object.keys(closes)) {
     closes[k] = closes[k].slice(-days).map((v) => Math.round(v * 100) / 100);
   }
-  const body = { closes, days };
-  sparkCacheSrv.set(key, { at: Date.now(), body });
-  res.json(body);
+  sparkCacheSrv.set(key, { at: Date.now(), body: { closes, days } });
+  return closes;
+}
+
+app.get('/api/sparklines', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const days = Math.min(400, Math.max(20, Number(req.query.days) || 90));
+  res.json({ closes: await sparkCloses(req, days), days });
 }));
 
 // Closes for one symbol, oldest-first, for the hover card's chart. Reads the
