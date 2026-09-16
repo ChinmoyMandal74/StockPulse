@@ -811,7 +811,9 @@
 
         // The price axis replaces the old floating high/low captions — with real
         // gridlines those two were saying the same thing twice.
-        const yLabels = c.ticks.map((tk) =>
+        // Only ticks that actually got a gridline: one outside the band is a
+        // price label hanging beside nothing.
+        const yLabels = c.ticks.filter((tk) => tk.drawn).map((tk) =>
           `<span class="ytick" style="top:${atY(tk.top)}">${esc(tickLabel(tk.v))}</span>`
         ).join('');
 

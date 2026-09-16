@@ -1451,7 +1451,12 @@ async function readBars(symbol, limit = 400) {
 
 // Closes only, for sparklines across the whole table. One query, oldest-first
 // per symbol so the caller can draw straight through it.
-async function readCloses(symbols, since) {
+// Closes per symbol WITH the window each one actually covers. The query already
+// selected `d` and threw it away, so the two dates cost nothing — and they are
+// the only honest x-axis a card can carry: symbols do not share a calendar
+// (Samsung misses US sessions, a recent listing starts late), so one shared
+// date axis would mislabel some of them.
+async function readCloseSeries(symbols, since) {
   await init();
   if (!symbols || !symbols.length) return {};
   const r = await db.execute({
@@ -1461,7 +1466,18 @@ async function readCloses(symbols, since) {
     args: [...symbols, since],
   });
   const out = {};
-  for (const row of r.rows) (out[row.symbol] ||= []).push(Number(row.close));
+  for (const row of r.rows) {
+    const s = (out[row.symbol] ||= { closes: [], dates: [] });
+    s.closes.push(Number(row.close));
+    s.dates.push(row.d);
+  }
+  return out;
+}
+
+async function readCloses(symbols, since) {
+  const series = await readCloseSeries(symbols, since);
+  const out = {};
+  for (const k of Object.keys(series)) out[k] = series[k].closes;
   return out;
 }
 
@@ -2600,6 +2616,7 @@ module.exports = {
   countSymbolRows,
   SYMBOL_TABLES,
   readCloses,
+  readCloseSeries,
   barsStats,
   logVisit,
   readVisitorStats,

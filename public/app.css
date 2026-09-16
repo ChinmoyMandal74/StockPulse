@@ -439,3 +439,72 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 .rc-row.has-tip { cursor: help; border-radius: 6px; margin: 0 -6px; padding: 0 6px;
                   transition: background 0.35s var(--ease); }
 .rc-row.has-tip:hover { background: rgba(255, 255, 255, 0.045); }
+
+/* ---- the stock card -------------------------------------------------------
+   RowCard.stockCard() draws this, and two surfaces use it: the screener's
+   Tiles view and the phone page at /m. The styles live here for the same
+   reason the markup lives in one function — a card that looks different on a
+   phone from the way it looks on a desktop is two cards.
+
+   The shape follows the cards people already read on their phones: the quote
+   on top, a chart with real gridlines and price labels, then a small grid of
+   whichever fields the owner chose. */
+.sc-head { display: flex; align-items: flex-start; gap: 10px; }
+.sc-id { min-width: 0; }
+.sc-sym { display: block; font-family: var(--mono); font-weight: 600; letter-spacing: -0.01em; }
+.sc-nm { display: block; margin-top: 2px; color: var(--faint);
+         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-quote { margin-left: auto; text-align: right; white-space: nowrap; }
+.sc-px { font-family: var(--mono); }
+.sc-chg { font-family: var(--mono); margin-left: 8px; }
+
+/* The svg fills the box exactly, so a tick's viewBox fraction is its height
+   here — which is what lets the price labels be HTML. They have to be: the
+   chart stretches with preserveAspectRatio="none" and would distort text. */
+.sc-chart { position: relative; height: var(--sc-h, 150px); margin-top: 12px; color: var(--muted);
+             /* A gutter for the price labels, so the line never runs underneath
+                one. The svg is the content box; the labels sit in the padding. */
+             box-sizing: content-box; padding-right: 36px; }
+.sc-chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.sc-chart .ln { fill: none; stroke: currentColor; stroke-width: 1.5;
+                stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.sc-chart .ch-area { fill: currentColor; opacity: 0.11; }
+.sc-chart .dot { fill: currentColor; stroke: none; }
+.sc-chart .grid { stroke: rgba(255, 255, 255, 0.055); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.sc-chart .base { stroke: rgba(255, 255, 255, 0.13); stroke-width: 1; stroke-dasharray: 3 3;
+                  vector-effect: non-scaling-stroke; }
+.sc-chart.up { color: var(--green); } .sc-chart.dn { color: var(--red); }
+.sc-yt { position: absolute; right: 0; width: 34px; transform: translateY(-50%);
+         font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+         text-align: right; pointer-events: none; }
+
+.sc-axis { display: flex; align-items: baseline; gap: 8px; margin-top: 6px;
+           font-size: 10.5px; color: var(--faint); }
+.sc-xt { font-family: var(--mono); }
+.sc-win { margin: 0 auto; display: inline-flex; align-items: baseline; gap: 6px; }
+.sc-wl { color: var(--faint); }
+.sc-win b { font-family: var(--mono); font-weight: 500; }
+
+.sc-fields { display: grid; gap: 5px 16px; margin-top: 12px; }
+.sc-fields.c1 { grid-template-columns: minmax(0, 1fr); }
+.sc-fields.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sc-fields.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sc-f { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.sc-f .k { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-f .v { margin-left: auto; font-family: var(--mono); }
+.sc-f .v.na { color: var(--faint); }
+
+.sc-verdict { margin-top: 11px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.sc-v { font-weight: 600; }
+.sc-why { color: var(--faint); min-width: 0; }
+.sc-chips { margin-top: 9px; display: flex; gap: 6px; flex-wrap: wrap; }
+.sc-chip { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--hair);
+           color: var(--faint); font-size: 11px; }
+.sc-chip b { color: var(--text); font-weight: 600; }
+/* The card's own colour words. `.pos`/`.neg` are global; `up`/`dn`/`down` come
+   off the row renderers and each page used to define them locally, so the card
+   states them once, scoped, and needs nothing from its host page. */
+.sc-chg.up, .sc-win b.up, .sc-v.up, .sc-fields .v.up, .sc-fields .v.pos { color: var(--green); }
+.sc-chg.dn, .sc-win b.dn, .sc-v.dn, .sc-v.down, .sc-fields .v.dn,
+.sc-fields .v.down, .sc-fields .v.neg { color: var(--red); }
+.sc-fields .v.warn { color: var(--amber); }

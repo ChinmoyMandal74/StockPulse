@@ -4292,22 +4292,26 @@ function mobileRow(x, fields) {
   };
 }
 
-// A phone row's chart, drawn here rather than sent as data: the browser gets
-// ~50 coordinates instead of 90 closes, and it is RowCard.sparkSVG — the same
-// function the table's 90d column and the tiles draw with.
-const MOBILE_SPARK_POINTS = 52;          // ample at ~120px wide; halves the payload
-function mobileSpark(closes, opts) {
-  if (!closes || closes.length < 2) return null;
-  let pts = closes;
-  if (pts.length > MOBILE_SPARK_POINTS) {
-    const step = (pts.length - 1) / (MOBILE_SPARK_POINTS - 1);
-    pts = Array.from({ length: MOBILE_SPARK_POINTS }, (_, i) => closes[Math.round(i * step)]);
-  }
-  const o = opts || {};
-  return {
-    svg: RowCard.sparkSVG(pts, { w: 120, h: o.h || 34, pad: 2, area: true }),
-    up: closes[closes.length - 1] >= closes[0],
-  };
+// The ranges a card offers. No 1D: the archive is daily bars, so a single
+// session is a single point — a button that drew nothing would be a lie. The
+// top is a year, which keeps the widest read at ~68k rows (Turso meters rows
+// read, and that lesson is written up under the anchor query).
+const CARD_RANGES = [
+  { id: '1w', label: '1 week', short: '1W', days: 5 },
+  { id: '1m', label: '1 month', short: '1M', days: 21 },
+  { id: '3m', label: '3 months', short: '3M', days: 63 },
+  { id: '6m', label: '6 months', short: '6M', days: 126 },
+  { id: '1y', label: '1 year', short: '1Y', days: 253 },
+];
+const cardRange = (id) => CARD_RANGES.find((r) => r.id === String(id || '')) || CARD_RANGES[2];
+
+// A chart's points, thinned for a phone. Fewer coordinates than sessions is
+// invisible at this width and halves what goes over the wire.
+const CARD_POINTS = 64;
+function thin(closes) {
+  if (!closes || closes.length <= CARD_POINTS) return closes || [];
+  const step = (closes.length - 1) / (CARD_POINTS - 1);
+  return Array.from({ length: CARD_POINTS }, (_, i) => closes[Math.round(i * step)]);
 }
 
 async function mobileRows(req) {
@@ -4321,7 +4325,14 @@ async function mobileRows(req) {
 
 app.get('/api/m/config', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ ...(await mobileConfig()), max: MOBILE_VIEWS_MAX, fieldsMax: MOBILE_FIELDS_MAX });
+  res.json({
+    ...(await mobileConfig()),
+    max: MOBILE_VIEWS_MAX,
+    fieldsMax: MOBILE_FIELDS_MAX,
+    // The chart ranges, so the page can paint its strip before the first list
+    // lands and cannot drift from what the server will actually serve.
+    ranges: CARD_RANGES.map((r) => ({ id: r.id, short: r.short, label: r.label })),
+  });
 }));
 
 app.put('/api/m/config', requireAdmin, route(async (req, res) => {
@@ -4366,12 +4377,19 @@ app.get('/api/m/screen', requireAuth, route(async (req, res) => {
   }
   const out = picked.slice(0, limit).map((x) => mobileRow(x, view.fields));
   // Charts are opt-in, and the toggle controls the PAYLOAD as much as the
-  // display: with it off nothing is drawn and nothing is sent.
+  // display: with it off nothing is drawn and nothing is sent. When it is on,
+  // the whole card is rendered here through RowCard.stockCard — the same
+  // function the screener's Tiles view draws with.
+  const range = cardRange(req.query.range);
   if (String(req.query.chart || '') === '1') {
-    const closes = await sparkCloses(req, 90);
+    const series = await sparkSeries(req, range.days);
     for (const r of out) {
-      const art = mobileSpark(closes[r.symbol]);
-      if (art) { r.spark = art.svg; r.sparkUp = art.up; }
+      const s = series[r.symbol];
+      r.card = RowCard.stockCard({
+        symbol: r.symbol, name: r.name, price: r.price, change: r.today, up: r.up,
+        fields: r.fields, closes: s ? thin(s.closes) : null,
+        from: s && s.from, to: s && s.to, rangeLabel: range.label,
+      }, { size: 'phone', cols: 2 });
     }
   }
   res.json({
@@ -4379,6 +4397,8 @@ app.get('/api/m/screen', requireAuth, route(async (req, res) => {
     name: screen ? screen.name : 'Every stock',
     description: screen ? screen.description : null,
     view: { id: view.id, name: view.name, fields: view.fields.map((k) => k.slice(k.indexOf('|') + 1)) },
+    range: range.id,
+    ranges: CARD_RANGES.map((r) => ({ id: r.id, short: r.short, label: r.label })),
     total: picked.length,
     rows: out,
   });
@@ -4410,18 +4430,19 @@ app.get('/api/m/stock', requireAuth, route(async (req, res) => {
   // is drawn taller and keeps every session rather than being thinned.
   let art = null;
   if (String(req.query.chart || '') === '1') {
-    const closes = await sparkCloses(req, 90);
-    const series = closes[symbol];
-    art = series && series.length > 1
-      ? { svg: RowCard.sparkSVG(series, { w: 320, h: 88, pad: 3, area: true }),
-        up: series[series.length - 1] >= series[0] }
+    const range = cardRange(req.query.range);
+    const s = (await sparkSeries(req, range.days))[symbol];
+    art = s && s.closes.length > 1
+      ? { svg: RowCard.sparkSVG(s.closes, { w: 320, h: 88, pad: 3, area: true }),
+        up: s.closes[s.closes.length - 1] >= s.closes[0],
+        window: range.label + ' · ' + s.closes.length + ' sessions' }
       : null;
   }
   res.json({
     symbol, name: x.shortName || x.name || symbol,
     sector: x.sector || null, industry: x.industry || null,
     action: x.action || null, actionFlag: x.actionFlag || null, actionTrend: x.actionTrend || null,
-    spark: art ? art.svg : null, sparkUp: art ? art.up : null,
+    spark: art ? art.svg : null, sparkUp: art ? art.up : null, sparkWindow: art ? art.window : null,
     groups: Object.entries(groups).map(([g, rowsOut]) => ({ group: g, rows: rowsOut })),
     news: news.map((n) => ({ headline: n.headline, source: n.source, url: n.url, published_at: n.published_at })),
   });
@@ -4465,8 +4486,11 @@ app.get('/api/prefs', requireAuth, route(async (req, res) => {
   // before its first render — a second request would paint the full table and
   // then visibly drop columns.
   const [siteHidden, tile] = await Promise.all([store.readHiddenColumns(), tileConfig()]);
-  if (await isGuest(req)) return res.json({ prefs: {}, siteHidden, tile });
-  res.json({ prefs: await store.readPrefs(await prefsKey(req)), siteHidden, tile });
+  // The card's chart ranges ride along too, so the screener's Tiles view and
+  // the phone page offer the same windows without either restating the list.
+  const ranges = CARD_RANGES.map((r) => ({ id: r.id, short: r.short, label: r.label, days: r.days }));
+  if (await isGuest(req)) return res.json({ prefs: {}, siteHidden, tile, ranges });
+  res.json({ prefs: await store.readPrefs(await prefsKey(req)), siteHidden, tile, ranges });
 }));
 
 app.put('/api/prefs', requireAuth, route(async (req, res) => {
@@ -4735,7 +4759,7 @@ const SPARK_TTL_MS = 10 * 60 * 1000;
 // Closes for every symbol the caller may see, cached per (days, guest). Shared
 // by /api/sparklines and the phone page, so a chart on a phone and a chart in
 // the table come off the same rows and the same cache.
-async function sparkCloses(req, days) {
+async function sparkSeries(req, days) {
   const snap = await readSnapshot();
   let symbols = ((snap && snap.stocks) || []).filter((x) => !x.error).map((x) => x.symbol);
   const guest = await isGuest(req);
@@ -4743,23 +4767,50 @@ async function sparkCloses(req, days) {
   if (!symbols.length) return {};
   const key = `${days}|${guest ? 'g' : 'm'}`;
   const hit = sparkCacheSrv.get(key);
-  if (hit && Date.now() - hit.at < SPARK_TTL_MS) return hit.body.closes;
+  if (hit && Date.now() - hit.at < SPARK_TTL_MS) return hit.body.series;
   // A calendar cutoff rather than a row limit: one query for every symbol, and
   // US tickers share trading days so they come back the same length.
   const since = new Date(Date.now() - Math.round(days * 1.45) * 86400000)
     .toISOString().slice(0, 10);
-  const closes = await store.readCloses(symbols, since);
-  for (const k of Object.keys(closes)) {
-    closes[k] = closes[k].slice(-days).map((v) => Math.round(v * 100) / 100);
+  const raw = await store.readCloseSeries(symbols, since);
+  const series = {};
+  for (const k of Object.keys(raw)) {
+    const s = raw[k];
+    const cut = Math.max(0, s.closes.length - days);
+    // The two dates follow the TRIM, or a card would label a 3-month chart
+    // with the date its wider query happened to reach back to. The rest of the
+    // date list is dropped here: it is a few MB across the universe and only
+    // the two ends are ever shown.
+    series[k] = {
+      closes: s.closes.slice(cut).map((v) => Math.round(v * 100) / 100),
+      from: s.dates[cut] || null,
+      to: s.dates[s.dates.length - 1] || null,
+    };
   }
-  sparkCacheSrv.set(key, { at: Date.now(), body: { closes, days } });
-  return closes;
+  sparkCacheSrv.set(key, { at: Date.now(), body: { series, days } });
+  return series;
+}
+
+// Closes alone, the shape the table's 90d column has always taken.
+async function sparkCloses(req, days) {
+  const series = await sparkSeries(req, days);
+  const out = {};
+  for (const k of Object.keys(series)) out[k] = series[k].closes;
+  return out;
 }
 
 app.get('/api/sparklines', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  const days = Math.min(400, Math.max(20, Number(req.query.days) || 90));
-  res.json({ closes: await sparkCloses(req, days), days });
+  const days = Math.min(560, Math.max(5, Number(req.query.days) || 90));
+  const series = await sparkSeries(req, days);
+  const closes = {};
+  const ends = {};
+  for (const k of Object.keys(series)) {
+    closes[k] = series[k].closes;
+    // Two dates a symbol, not a shared calendar: they do not share one.
+    ends[k] = [series[k].from, series[k].to];
+  }
+  res.json({ closes, ends, days });
 }));
 
 // Closes for one symbol, oldest-first, for the hover card's chart. Reads the

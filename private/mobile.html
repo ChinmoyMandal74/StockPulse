@@ -86,6 +86,19 @@
     .r-spark svg path { stroke: currentColor; }
     .r-spark .spark-area { fill: currentColor; opacity: 0.11; stroke: none; }
     .r-spark.up { color: var(--green); } .r-spark.dn { color: var(--red); }
+    .ranges { display: flex; gap: 4px; margin-top: 10px; overflow-x: auto; scrollbar-width: none; }
+    .ranges::-webkit-scrollbar { display: none; }
+    .rg { flex: 1 0 auto; min-height: 32px; padding: 6px 12px; border-radius: 999px; border: 1px solid transparent;
+          background: none; color: var(--faint); font: 500 12.5px var(--sans); }
+    .rg.on { background: rgba(255, 255, 255, 0.08); border-color: var(--hair); color: var(--text); }
+    /* A card row is the shared stock card, so it carries no layout of its own
+       beyond the box it sits in. */
+    .card-row { padding: 14px 15px; }
+    .card-row .sc-sym { font-size: 14px; }
+    .card-row .sc-nm { font-size: 12px; }
+    .card-row .sc-px { font-size: 15px; }
+    .card-row .sc-chg { font-size: 12.5px; }
+    .card-row .sc-fields { font-size: 12.5px; }
     .r-spark.sh { margin: 2px 0 12px; }
     .r-spark.sh svg { height: 96px; }
     .r-spark .sp-cap { margin-top: 5px; font-size: 11px; color: var(--faint); }
@@ -154,6 +167,10 @@
     </div>
     <h1 id="title">Screens</h1>
     <p class="sub" id="subtitle">Ready-made questions over every stock tracked.</p>
+    <!-- One control for the whole list, not one per card: every chart on
+         screen then covers the same window, which is what makes two cards
+         comparable — and it is one fetch, not one per card. -->
+    <div class="ranges" id="ranges" hidden role="group" aria-label="Chart range"></div>
   </header>
 
   <main class="wrap" id="main"><div class="msg">Loading…</div></main>
@@ -199,7 +216,10 @@
     // server draws nothing and sends nothing, so the rows stay tiny.
     let chartOn = true;
     try { chartOn = localStorage.getItem('m.chart') !== 'off'; } catch (e) { /* private mode */ }
-    const chartQ = () => (chartOn ? '&chart=1' : '');
+    let ranges = [];
+    let rangeId = null;
+    try { rangeId = localStorage.getItem('m.range'); } catch (e) { /* private mode */ }
+    const chartQ = () => (chartOn ? '&chart=1&range=' + encodeURIComponent(rangeId || '') : '');
 
     function paintView() {
       const v = views.find((x) => x.id === viewId) || views[0];
@@ -207,6 +227,28 @@
       $('chartBtn').classList.toggle('on', chartOn);
       $('chartBtn').setAttribute('aria-pressed', chartOn ? 'true' : 'false');
       $('chartBtn').setAttribute('aria-label', chartOn ? 'Hide charts' : 'Show charts');
+      paintRanges();
+    }
+
+    // The strip shows only where there are charts to change: with the toggle
+    // off, or on the screens list, it would be a control over nothing.
+    function paintRanges() {
+      const show = chartOn && ranges.length && tab !== 'screens';
+      $('ranges').hidden = !show;
+      if (!show) return;
+      $('ranges').innerHTML = ranges.map((r) =>
+        `<button class="rg ${r.id === rangeId ? 'on' : ''}" data-range="${we(r.id)}" ` +
+        `aria-label="${we(r.label)}"${r.id === rangeId ? ' aria-current="true"' : ''}>${we(r.short)}</button>`).join('');
+      $('ranges').querySelectorAll('[data-range]').forEach((b) =>
+        b.addEventListener('click', () => {
+          if (b.dataset.range === rangeId) return;
+          rangeId = b.dataset.range;
+          try { localStorage.setItem('m.range', rangeId); } catch (e) { /* private mode */ }
+          allRows = null;                       // the cached rows hold the old window
+          paintRanges();
+          if (tab === 'search') showSearch();
+          else if (currentScreen) showScreen(currentScreen);
+        }));
     }
 
     // ---- screens ------------------------------------------------------------
@@ -215,6 +257,7 @@
       $('back').hidden = true;
       $('title').textContent = 'Screens';
       $('subtitle').textContent = 'Ready-made questions over every stock tracked.';
+      paintRanges();
       $('main').innerHTML = '<div class="msg">Loading…</div>';
       try {
         const d = await get('/api/m/screens');
@@ -241,6 +284,10 @@
     }
 
     function rowHTML(r) {
+      // With charts on the server sends the whole card, drawn by the same
+      // RowCard.stockCard() the screener's tiles use. Without them the row
+      // stays the compact line it has always been.
+      if (r.card) return `<button class="row card-row" data-stock="${we(r.symbol)}">${r.card}</button>`;
       const fields = (r.fields || []).map((f) =>
         `<span class="r-f"><span class="k">${we(f.k)}</span><span class="v ${we(f.c || '')}">${we(f.t)}</span></span>`).join('');
       return `<button class="row" data-stock="${we(r.symbol)}">` +
@@ -251,7 +298,6 @@
         `<span class="r-price">${we(r.price || '—')}</span>` +
         (r.today ? `<span class="r-today ${r.up ? 'up' : 'dn'}">${we(r.today)}</span>` : '') +
         '</span></span>' +
-        (r.spark ? `<span class="r-spark ${r.sparkUp ? 'up' : 'dn'}">${r.spark}</span>` : '') +
         (fields ? `<span class="r-fields">${fields}</span>` : '') +
         '</button>';
     }
@@ -265,6 +311,11 @@
       try {
         const d = await get(`/api/m/screen?id=${encodeURIComponent(id)}&view=${encodeURIComponent(viewId || '')}${chartQ()}`);
         if (id === 'all') allRows = d.rows;   // Search reuses them
+        // The server decides which range it actually served; adopt it, so a
+        // stored id it no longer offers cannot leave the strip lying.
+        if (d.ranges) ranges = d.ranges;
+        if (d.range && d.range !== rangeId) { rangeId = d.range; }
+        paintRanges();
         $('title').textContent = d.name;
         $('subtitle').textContent = (d.description || '') +
           (d.description ? ' · ' : '') + `${d.total} stock${d.total === 1 ? '' : 's'}`;
@@ -285,6 +336,7 @@
       $('back').hidden = true;
       $('title').textContent = 'Search';
       $('subtitle').textContent = 'By ticker or company name.';
+      paintRanges();
       $('main').innerHTML = '<input type="search" id="q" placeholder="NVDA, or Nvidia" autocomplete="off" ' +
         'autocapitalize="characters" /><div id="hits"></div>';
       const run = () => {
@@ -348,7 +400,7 @@
           `<h2>${we(d.name)}</h2>` +
           `<div class="meta">${we(d.symbol)}${d.sector ? ' · ' + we(d.sector) : ''}${d.industry ? ' · ' + we(d.industry) : ''}</div>` +
           (d.spark ? `<div class="r-spark sh ${d.sparkUp ? 'up' : 'dn'}">${d.spark}` +
-            '<div class="sp-cap">Last 90 sessions</div></div>' : '') +
+            `<div class="sp-cap">${we(d.sparkWindow || '')}</div></div>` : '') +
           (d.action ? '<div class="verdict">' +
             `<div class="v ${vcls}">${we(d.action)}</div>` +
             (d.actionFlag ? `<div class="why">${we(d.actionFlag)}</div>` : '') +
@@ -411,6 +463,8 @@
       try {
         const cfg = await get('/api/m/config');
         views = cfg.views || [];
+        ranges = cfg.ranges || [];
+        if (rangeId && !ranges.some((r) => r.id === rangeId)) rangeId = null;
         const want = remembered();
         viewId = (views.find((v) => v.id === want) || views[0] || {}).id || null;
         paintView();

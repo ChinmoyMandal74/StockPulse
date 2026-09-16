@@ -433,7 +433,11 @@
     let grid = '';
     for (const tk of ticks) {
       const gy = y(tk.v);
-      if (gy < PT - 1 || gy > PRICE_H) continue;
+      // A tick outside the band gets no line — and `drawn` says so, because a
+      // caller labelling every tick would hang a price beside nothing (on a
+      // card it landed on top of the header).
+      tk.drawn = !(gy < PT - 1 || gy > PRICE_H);
+      if (!tk.drawn) continue;
       grid += `<line class="grid" x1="0" y1="${gy.toFixed(1)}" x2="${W}" y2="${gy.toFixed(1)}"/>`;
     }
     // Where each label sits as a fraction of the whole viewBox, not of the
@@ -472,8 +476,15 @@
       }
     }
 
+    // A tint under the line, as its OWN path — never a fill on `.ln`, which
+    // would close the line back to its start and paint a wedge (see the note
+    // on the stroke and fill rules being deliberately ungrouped).
+    const area = o.area
+      ? `<path class="ch-area" d="${d}L${x(closes.length - 1).toFixed(1)} ${PRICE_H}L0 ${PRICE_H}Z" stroke="none"/>`
+      : '';
+
     const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` +
-      grid +
+      grid + area +
       `<line class="base" x1="0" y1="${baseY}" x2="${W}" y2="${baseY}"/>` +
       `<path class="ln" d="${d}"/>` +
       overlayPaths +
@@ -483,6 +494,79 @@
       bars +
       '</svg>';
     return { svg, log: useLog, ticks, panes };
+  }
+
+  // ---- the stock card -------------------------------------------------------
+  // One card, drawn at two sizes: the screener's Tiles view and the phone page
+  // draw from THIS, so a card cannot come to mean different things on the two
+  // surfaces. Everything is handed in already formatted — the caller knows
+  // whether it is a snapshot row (desktop) or a row the server has already
+  // rendered (phone), and this knows only how to lay a card out.
+  //
+  // data: { symbol, name, price, change, up, fields: [{k,t,c}],
+  //         closes, from, to, rangeLabel, verdict, chips }
+  // opts: { size: 'tile' | 'phone', chartH, cols }
+  function stockCard(data, opts) {
+    const o = opts || {};
+    const d = data || {};
+    const phone = o.size === 'phone';
+    const e = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    const head = '<div class="sc-head">' +
+      `<div class="sc-id"><span class="sc-sym">${e(d.symbol)}</span>` +
+      (d.name && d.name !== d.symbol ? `<span class="sc-nm">${e(d.name)}</span>` : '') + '</div>' +
+      '<div class="sc-quote">' +
+      `<span class="sc-px">${e(d.price == null ? '—' : d.price)}</span>` +
+      (d.change ? `<span class="sc-chg ${d.up ? 'up' : 'dn'}">${e(d.change)}</span>` : '') +
+      '</div></div>';
+
+    // The chart, with the gridlines and price labels the references have. The
+    // labels are HTML positioned against the returned tick fractions, never
+    // SVG text — the chart stretches with preserveAspectRatio="none".
+    let chart = '';
+    const closes = d.closes;
+    if (closes && closes.length > 1) {
+      const art = chartSVG(closes, { ticks: phone ? 3 : 4, area: true });
+      // An axis wants round numbers, not prices: "937", not "936.44", and "88"
+      // rather than "88.0" — priceTicks already lands on round-ish values.
+      const axis = (v) => (Math.abs(v) >= 100 ? v.toFixed(0)
+        : (Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2)).replace(/\.0+$/, ''));
+      const labels = art.ticks.filter((tk) => tk.drawn).map((tk) =>
+        `<span class="sc-yt" style="top:${(tk.top * 100).toFixed(2)}%">${e(axis(tk.v))}</span>`).join('');
+      const move = (closes[closes.length - 1] / closes[0] - 1) * 100;
+      const movTxt = (move >= 0 ? '+' : '') + (Math.abs(move) >= 100 ? move.toFixed(0) : move.toFixed(1)) + '%';
+      const up = move >= 0;
+      chart =
+        `<div class="sc-chart ${up ? 'up' : 'dn'}"${o.chartH ? ` style="--sc-h:${Number(o.chartH)}px"` : ''}>` +
+        art.svg + labels + '</div>' +
+        '<div class="sc-axis">' +
+        `<span class="sc-xt">${e(d.from ? shortDate(d.from) : '')}</span>` +
+        `<span class="sc-win"><span class="sc-wl">${e(d.rangeLabel || '')}</span>` +
+        `<b class="${up ? 'up' : 'dn'}">${movTxt}</b></span>` +
+        `<span class="sc-xt">${e(d.to ? shortDate(d.to) : '')}</span>` +
+        '</div>';
+    }
+
+    const fields = (d.fields || []).filter(Boolean);
+    const cols = Math.max(1, Math.min(3, o.cols || (phone ? 2 : 3)));
+    const grid = fields.length
+      ? `<div class="sc-fields c${cols}">` + fields.map((f) =>
+        `<span class="sc-f"><span class="k">${e(f.k)}</span>` +
+        `<span class="v ${e(f.c === 'na' ? 'na' : f.c || '')}">${e(f.t)}</span></span>`).join('') + '</div>'
+      : '';
+
+    const v = d.verdict;
+    const verdict = v && v.word
+      ? `<div class="sc-verdict"><span class="sc-v ${e(v.cls || '')}">${e(v.word)}</span>` +
+        (v.why ? `<span class="sc-why">${e(v.why)}</span>` : '') + '</div>'
+      : '';
+    const chips = (d.chips || []).length
+      ? '<div class="sc-chips">' + d.chips.map((c) =>
+        `<span class="sc-chip">${e(c.k)}${c.v == null ? '' : ` <b>${e(c.v)}</b>`}</span>`).join('') + '</div>'
+      : '';
+
+    return head + chart + grid + verdict + chips;
   }
 
   const fmtPrice = (n) => (n >= 1000 ? n.toFixed(0) : n.toFixed(2));
@@ -790,7 +874,7 @@
   global.RowCard = {
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
     // used by the stock page
-    buildSections, chartSVG, sparkSVG, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries,
+    buildSections, chartSVG, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries,
     scoreTip, placeTip,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS,
     fieldCatalogue, fieldValues, fieldProps,

@@ -276,6 +276,14 @@
             padding: 16px 18px 14px; transition: border-color .16s var(--ease), transform .16s var(--ease); }
     .tile:hover { border-color: var(--hair-2); transform: translateY(-1px); }
     .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    /* The tile is the shared stock card in a box; only the type sizes are the
+       tile's own. Everything else comes from .sc-* in app.css. */
+    .tile .sc-sym { font-size: 15px; }
+    .tile .sc-nm { font-size: 12px; max-width: 168px; }
+    .tile .sc-px { font-size: 15px; }
+    .tile .sc-chg { font-size: 12px; }
+    .tile .sc-fields { font-size: 12px; }
+    .tile .sc-verdict { font-size: 12.5px; }
     .tl-top { display: flex; align-items: flex-start; gap: 10px; }
     .tl-sym { font-family: var(--mono); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
     .tl-name { margin-top: 2px; font-size: 12px; color: var(--faint); overflow: hidden;
@@ -936,6 +944,13 @@
             <option value="5">5</option>
             <option value="6">6</option>
           </select>
+        </span>
+        <!-- One range for every tile on screen, not one per tile: the cards
+             are then comparable, which is the point of a grid of them, and it
+             is one fetch rather than one per card. -->
+        <span class="laycols" id="tileRangeBox" hidden>
+          <label for="tileRange">Range</label>
+          <select id="tileRange" aria-label="Chart range"></select>
         </span>
         <button class="btn admin-only" id="tileCfgBtn" hidden>Tile setup</button>
         <div class="picker" id="scrPicker" data-open="0">
@@ -1969,6 +1984,45 @@
     let tileCfg = { spark: 90, sparkH: 72, fields: ['short|1W', 'short|1M', 'long|1Y', 'long|5Y'],
       scores: true, sector: true, verdict: true, why: true, trend: true };
 
+    // The chart windows a card can show, handed down by /api/prefs so this page
+    // and the phone page cannot offer different ones.
+    let cardRanges = [];
+    let tileRange = null;          // null = follow the admin's tile setup
+    try { tileRange = localStorage.getItem('tileRange'); } catch (e) { /* private window */ }
+
+    // The admin's configured period is the DEFAULT, snapped to the nearest
+    // offered window — it is a free day count and these are five fixed ones.
+    function defaultRange() {
+      const days = Number(tileCfg.spark) || 0;
+      if (!days || !cardRanges.length) return null;
+      return cardRanges.reduce((best, r) =>
+        (Math.abs(r.days - days) < Math.abs(best.days - days) ? r : best), cardRanges[0]);
+    }
+    const currentRange = () => {
+      if (!cardRanges.length) return null;
+      return cardRanges.find((r) => r.id === tileRange) || defaultRange();
+    };
+    // 0 when the admin has turned the chart off entirely, which is what keeps
+    // "no chart" a setting rather than a sixth range.
+    const tileRangeDays = () => (Number(tileCfg.spark) ? (currentRange() || {}).days || 0 : 0);
+    const tileRangeLabel = () => (currentRange() || {}).label || '';
+
+    function renderTileRange() {
+      const box = $('tileRangeBox');
+      const sel = $('tileRange');
+      if (!box || !sel) return;
+      const on = tilesOn() && !!tileRangeDays();
+      box.hidden = !on;
+      if (!on) return;
+      const want = (currentRange() || {}).id || '';
+      if (sel.dataset.built !== String(cardRanges.length)) {
+        sel.innerHTML = cardRanges.map((r) =>
+          `<option value="${we(r.id)}">${we(r.short)}</option>`).join('');
+        sel.dataset.built = String(cardRanges.length);
+      }
+      if (sel.value !== want) sel.value = want;
+    }
+
     // Applied to the grid rather than to each tile, so changing it is one
     // attribute and no repaint.
     function applyTileCols() {
@@ -1977,6 +2031,7 @@
       if (tileCols === 'auto') box.removeAttribute('data-cols'); else box.dataset.cols = tileCols;
       const sel = $('tileCols');
       if (sel && sel.value !== String(tileCols)) sel.value = String(tileCols);
+      renderTileRange();
     }
 
     function setLayout(next, { save = true } = {}) {
@@ -1984,6 +2039,7 @@
       tilesShown = 60;
       document.body.classList.toggle('tiling', tilesOn());
       $('tileCfgBtn').hidden = !(tilesOn() && isAdmin);
+      renderTileRange();
       $('layToggle').querySelectorAll('[data-lay]').forEach((b) =>
         b.classList.toggle('on', b.dataset.lay === layout));
       if (save) savePrefs();
@@ -2643,74 +2699,70 @@
     // and the sparkline comes from the same cached markup.
     function tileHTML(s) {
       const cur = (s.currency || 'USD');
-      const sym = { USD: '$', EUR: '\u20ac', GBP: '\u00a3', JPY: '\u00a5', KRW: '\u20a9', CAD: 'C$',
-                    AUD: 'A$', HKD: 'HK$', TWD: 'NT$', INR: '\u20b9', CHF: 'CHF ' }[cur] || (cur + ' ');
-      const pct = (v, cls) => (v == null || !isFinite(v)
-        ? '<span class="flat">\u2014</span>'
-        : `<span class="${cls === false ? '' : v >= 0 ? 'up' : 'dn'}">${v >= 0 ? '+' : ''}${Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1)}%</span>`);
-      const v = s.action || '';
-      const vcls = /Buy/.test(v) ? 'up' : /Sell|Avoid/.test(v) ? 'dn' : 'flat';
+      const sym = { USD: '$', EUR: '€', GBP: '£', JPY: '¥', KRW: '₩', CAD: 'C$',
+                    AUD: 'A$', HKD: 'HK$', TWD: 'NT$', INR: '₹', CHF: 'CHF ' }[cur] || (cur + ' ');
       const vals = RowCard.fieldValues(s);
       const fields = (tileCfg.fields || []).map((key) => {
         const v = vals[key];
-        if (!v) return '';
-        const label = key.slice(key.indexOf('|') + 1);
-        return `<div class="tl-f"><span class="k">${we(label)}</span>` +
-          `<span class="v ${v.c === 'na' ? 'na' : v.c}">${we(v.t)}</span></div>`;
-      }).filter(Boolean).join('');
+        return v ? { k: key.slice(key.indexOf('|') + 1), t: v.t, c: v.c } : null;
+      }).filter(Boolean);
+      const v = s.action || '';
       const art = tileSpark(s.symbol);
-      const spark = art
-        ? `<div class="tl-spark ${art.up ? 'up' : 'dn'}" style="--tl-h:${Number(tileCfg.sparkH) || 72}px">${art.svg}</div>`
-        : '';
-      const chip = (label, n) => (n == null ? '' : `<span class="tl-chip">${label} <b>${n}</b></span>`);
+      const chips = [];
+      if (tileCfg.scores) {
+        for (const [k, n] of [['Overall', s.overallRating], ['Mom', s.momentumRating], ['Qual', s.qualityRating]]) {
+          if (n != null) chips.push({ k, v: n });
+        }
+      }
+      if (tileCfg.sector && s.sector) chips.push({ k: s.sector });
+      // A display name that has collapsed to the ticker (a short legal name, an
+      // ETF) would print the symbol twice; the card drops it on its own.
+      const inner = RowCard.stockCard({
+        symbol: s.symbol,
+        name: s.shortName || s.name || '',
+        price: s.price == null ? null : sym + s.price.toFixed(2),
+        change: s.todayPct == null || !isFinite(s.todayPct) ? null
+          : (s.todayPct >= 0 ? '+' : '') + (Math.abs(s.todayPct) >= 100 ? s.todayPct.toFixed(0) : s.todayPct.toFixed(1)) + '%',
+        up: s.todayPct >= 0,
+        fields,
+        closes: art ? art.closes : null,
+        from: art ? art.from : null,
+        to: art ? art.to : null,
+        rangeLabel: tileRangeLabel(),
+        verdict: v && tileCfg.verdict
+          ? { word: v, cls: /Buy/.test(v) ? 'up' : /Sell|Avoid/.test(v) ? 'dn' : '',
+              why: [tileCfg.trend ? s.actionTrend : '', tileCfg.why ? s.actionFlag : '']
+                .filter(Boolean).join(' · ') }
+          : null,
+        chips,
+      }, { size: 'tile', chartH: Number(tileCfg.sparkH) || 72, cols: tileCols === '2' ? 3 : 2 });
       return `<a class="tile" href="/stock/${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener" ` +
-        `aria-label="${we(s.symbol)} ${we(s.shortName || s.name || '')}">` +
-        '<div class="tl-top"><div>' +
-        `<div class="tl-sym">${we(s.symbol)}</div>` +
-        // A display name that has collapsed to the ticker (a short legal name,
-        // an ETF) would print the symbol twice; show the legal name instead.
-        ((s.shortName || s.name) && (s.shortName || s.name) !== s.symbol
-          ? `<div class="tl-name" title="${we(s.name || '')}">${we(s.shortName || s.name)}</div>`
-          : (s.name && s.name !== s.symbol ? `<div class="tl-name">${we(s.name)}</div>` : '')) +
-        '</div><div class="tl-px">' +
-        `<div class="tl-price">${s.price == null ? '\u2014' : sym + s.price.toFixed(2)}</div>` +
-        `<div class="tl-today">${pct(s.todayPct)}</div>` +
-        '</div></div>' +
-        spark +
-        (v && tileCfg.verdict ? '<div class="tl-verdict">' +
-          `<span class="tl-v ${vcls}">${we(v)}</span>` +
-          (tileCfg.trend && s.actionTrend ? `<span class="tl-trend">${we(s.actionTrend)}</span>` : '') +
-          '</div>' + (tileCfg.why && s.actionFlag ? `<div class="tl-why">${we(s.actionFlag)}</div>` : '') : '') +
-        (fields ? `<div class="tl-fields">${fields}</div>` : '') +
-        (tileCfg.scores || tileCfg.sector
-          ? '<div class="tl-scores">' +
-            (tileCfg.scores ? chip('Overall', s.overallRating) + chip('Mom', s.momentumRating) + chip('Qual', s.qualityRating) : '') +
-            (tileCfg.sector && s.sector ? `<span class="tl-chip">${we(s.sector)}</span>` : '') + '</div>'
-          : '') +
-        '</a>';
+        `aria-label="${we(s.symbol)} ${we(s.shortName || s.name || '')}">` + inner + '</a>';
     }
 
     // The table's 90d column and the tiles can want different periods. 90 days
     // reuses the column's cache; anything else gets its own, fetched once.
     // Drawn for the tile rather than borrowed from the table's 90d column: the
     // column's 32-unit box stretched to 110px thickens the stroke unevenly.
-    const tileSparkCache = {};       // { sym: { svg, up } }
+    // The card draws its own chart from the closes, so what is cached here is
+    // the DATA for the chosen range, not markup: the same series serves every
+    // tile whatever the card does with it.
+    const tileSparkCache = {};       // { sym: { closes, from, to } }
     let tileSparkFor = null;
-    const tileSparkKey = () => `${tileCfg.spark}|${tileCfg.sparkH}`;
     function tileSpark(sym) {
-      if (!tileCfg.spark) return null;
+      if (!tileRangeDays()) return null;
       return tileSparkCache[sym] || null;
     }
     async function loadTileSparks() {
-      const days = Number(tileCfg.spark) || 0;
-      const key = tileSparkKey();
+      const days = tileRangeDays();
+      const key = String(days);
       if (!days || tileSparkFor === key) return;
       tileSparkFor = key;
       try {
         const data = await api('GET', '/api/sparklines?days=' + days);
+        const ends = data.ends || {};
         for (const [sym, closes] of Object.entries(data.closes || {})) {
-          const svg = RowCard.sparkSVG(closes, { w: 240, h: Number(tileCfg.sparkH) || 72, pad: 6, area: true });
-          if (svg) tileSparkCache[sym] = { svg, up: closes[closes.length - 1] >= closes[0] };
+          tileSparkCache[sym] = { closes, from: (ends[sym] || [])[0], to: (ends[sym] || [])[1] };
         }
         if (tilesOn()) render();
       } catch (e) { tileSparkFor = null; }
@@ -3182,6 +3234,8 @@
         if (savedC) customWeights = Object.assign(Screens.defaultWeights(), savedC);
         if (res && res.prefs && res.prefs.tickerOff === true) tickerOff = true;
         if (res && res.prefs && /^(auto|[2-6])$/.test(String(res.prefs.tileCols || ''))) tileCols = String(res.prefs.tileCols);
+        if (res && Array.isArray(res.ranges)) cardRanges = res.ranges;
+        if (tileRange && !cardRanges.some((r) => r.id === tileRange)) tileRange = null;
         if (res && res.prefs && res.prefs.layout === 'tiles') setLayout('tiles', { save: false });
         if (res && res.prefs && /^(standard|[a-z0-9]{8})$/.test(String(res.prefs.activeView || ''))) activeViewId = res.prefs.activeView;
         if (res && res.prefs && res.prefs.filterRow === true) {
@@ -4417,6 +4471,16 @@
       $('tdHeight').disabled = !tdDraft.spark;
     });
     $('tdHeight').addEventListener('change', () => { tdDraft.sparkH = Number($('tdHeight').value) || 72; });
+
+    $('tileRange').addEventListener('change', (e) => {
+      const r = cardRanges.find((x) => x.id === e.target.value);
+      if (!r) return;
+      tileRange = r.id;
+      try { localStorage.setItem('tileRange', tileRange); } catch (err) { /* private window */ }
+      window.track && track('picker', 'tilerange:' + tileRange);
+      loadTileSparks();        // a different window is a different fetch
+      render();
+    });
 
     $('tileCols').addEventListener('change', (e) => {
       tileCols = /^(auto|[2-6])$/.test(e.target.value) ? e.target.value : 'auto';
