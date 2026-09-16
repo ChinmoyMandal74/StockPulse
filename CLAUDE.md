@@ -295,6 +295,20 @@ The **Info** banner spans eight columns — Overall, Mom., Qual., Portfolios, Pr
 - **A filter change scrolls to the top**, and `paintWindow()` clamps its first row so a list that got shorter can never open on the blank spacer.
 - Verified by a headless harness on the real page (400 synthetic rows): 58 filter cells aligned to 58 body cells by group, grammar units, counts against independent filters over the payload, AND, hidden-column persistence, bound sector, Escape, empty state, deep-scroll-then-narrow, clear, sort still working, prefs PUT carrying `filterRow`.
 
+### Turso meters ROWS READ — the anchor query was the lesson
+**Turso sent a 75%-of-quota warning hours after the archive was deepened to 1.08M rows (2026-09-15).** The cause was `closesBefore()`, which the new 5Y column calls **on every refresh round**: it joined against `select symbol, max(d) from bars where d < ? group by symbol`, and at a five-year boundary that reads **748,859 rows** — about 35 times a day across the nightly rounds and the intraday runs, so tens of millions of rows a day for 254 numbers. Rewritten to seek per symbol on the `(symbol, d)` primary key, batched and chunked at 250: **254 rows and 80ms, against 748,859 rows and 231ms**. Same answers, verified against the old query.
+
+**The rule this leaves: on this database, a `group by` over a whole table is a quota event, not a slow query.** Prefer N indexed seeks — they are cheaper in rows AND in time. Measured read sizes to budget against (271 symbols, 1.08M bars):
+
+| path | rows read | when |
+|---|---|---|
+| a refresh round's 650-day window (`readBarsFullFor`) | **118,671** | every round — the dominant cost |
+| sparklines (`readCloses`, ~90 sessions) | 25,914 | every screener load, after the table paints |
+| the 5Y anchor, before / after | 748,859 → **254** | every round |
+| `/database`'s counts | 1.08M+ | that page only, cached 5 min; `?fresh=1` always counts |
+
+At 1,000 symbols the 650-day window becomes ~440k rows a round, which is what to design against next (a shorter window for intraday rounds, or fewer intraday runs).
+
 ### The 5Y column
 **Long-term gained a 5Y column after 1Y (2026-09-15, shown to everyone).** It is the one return column that does NOT come from the refresh window: a refresh fetches ~300 bars and an archive round reads 650 days, so `pctChange(values, 1260)` would be null for every stock. Instead `computeStocks` takes **one `closesBefore()` query for the whole universe** — the last close before today minus five years, the same anchor mechanism the promo studio's week/month windows use — and divides today's price by it. An anchor more than **30 days** earlier than the boundary is refused, so a hole in the bars cannot quietly stretch the window; a stock with no bar that far back stays blank. A failed query logs and leaves the column empty, the bars rule.
 

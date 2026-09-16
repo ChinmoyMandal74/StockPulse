@@ -3088,7 +3088,7 @@ async function computeStocks(asOf, opts = {}) {
       at.setFullYear(at.getFullYear() - 5);
       const boundary = at.toISOString().slice(0, 10);
       try {
-        const [got] = await store.closesBefore([boundary]);
+        const [got] = await store.closesBefore([boundary], symbols);
         for (const [sym, a] of Object.entries(got || {})) {
           if (Date.parse(boundary) - Date.parse(a.d) <= FIVE_YEAR_GRACE_MS) fiveYearAnchor[sym] = a;
         }
@@ -4185,7 +4185,7 @@ app.get('/api/period-anchors', requireMember, route(async (req, res) => {
   monday.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
   const weekStart = monday.toISOString().slice(0, 10);
   const monthStart = latest.slice(0, 8) + '01';
-  const [week, month] = await store.closesBefore([weekStart, monthStart]);
+  const [week, month] = await store.closesBefore([weekStart, monthStart], rows.map((x) => x.symbol));
   const within = (anchors, boundary) => {
     const floor = new Date(Date.parse(boundary + 'T12:00:00Z') - 7 * 86400000).toISOString().slice(0, 10);
     return Object.fromEntries(Object.entries(anchors).filter(([, a]) => a.d >= floor));

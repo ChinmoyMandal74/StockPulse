@@ -2244,16 +2244,41 @@ async function readLatestNews() {
 // The last stored close strictly before a date, per symbol — the anchor a
 // week-to-date or month-to-date move is measured from. One query per anchor;
 // ~80ms each for the universe.
-async function closesBefore(dates) {
+// ONE SEEK PER SYMBOL, not a scan (2026-09-15). The first version joined
+// against `select symbol, max(d) from bars where d < ? group by symbol`, which
+// reads every bar older than the boundary — measured at 748,859 rows for the
+// five-year anchor once the archive was deepened, on EVERY refresh round, and
+// Turso meters rows read (it sent a quota warning the same evening). Seeking
+// per symbol on the (symbol, d) primary key reads one row each: 254 rows and
+// 80ms against 748,859 rows and 231ms. Batched, and chunked so a 1,000-symbol
+// universe does not build one enormous batch.
+const ANCHOR_CHUNK = 250;
+async function closesBefore(dates, symbols) {
   await init();
-  const q = (before) => ({
-    sql: `select b.symbol, b.d, b.close from bars b
-            join (select symbol, max(d) as md from bars where d < ? group by symbol) m
-              on m.symbol = b.symbol and m.md = b.d`,
-    args: [before],
-  });
-  const res = await db.batch(dates.map(q), 'read');
-  return res.map((r) => Object.fromEntries(r.rows.map((x) => [x.symbol, { d: x.d, close: Number(x.close) }])));
+  const syms = [...new Set((symbols || []).map((x) => String(x).toUpperCase()))];
+  if (!syms.length || !dates.length) return dates.map(() => ({}));
+  const out = dates.map(() => ({}));
+  for (let i = 0; i < syms.length; i += ANCHOR_CHUNK) {
+    const slice = syms.slice(i, i + ANCHOR_CHUNK);
+    const stmts = [];
+    for (const before of dates) {
+      for (const sym of slice) {
+        stmts.push({
+          sql: 'select d, close from bars where symbol = ? and d < ? order by d desc limit 1',
+          args: [sym, before],
+        });
+      }
+    }
+    const res = await db.batch(stmts, 'read');
+    let k = 0;
+    for (let di = 0; di < dates.length; di++) {
+      for (const sym of slice) {
+        const row = res[k++].rows[0];
+        if (row) out[di][sym] = { d: row.d, close: Number(row.close) };
+      }
+    }
+  }
+  return out;
 }
 
 // Headlines published since an ISO time, newest first — the ticker's read.
