@@ -294,6 +294,8 @@
     .fields { column-count: 4; column-gap: 26px; }
     .fields .rc-sec { margin-bottom: 14px; }
     /* ---- news card ------------------------------------------------- */
+    .sec-h .news-when { margin-left: auto; font-size: 11.5px; color: var(--faint); font-family: var(--mono); }
+    #newsBtn[disabled] { opacity: 0.55; cursor: default; }
     #newsList { font-size: 13px; }
     #newsList .msg { color: var(--faint); font-size: 12.5px; padding: 4px 0; }
     .news-item { display: flex; gap: 14px; align-items: baseline; padding: 7px 0;
@@ -719,16 +721,33 @@
     }
     // ---- end news renderers ---------------------------------------------
 
-    async function loadNews() {
+    // `force` asks the feed now instead of waiting out the six-hour rule. The
+    // provider is free, so the only cost is the wait; the server keeps a
+    // one-minute floor per stock so the button cannot be held down.
+    function newsChecked(ms) {
+      const el = document.getElementById('newsWhen');
+      if (!el) return;
+      if (!ms) { el.textContent = 'never checked'; return; }
+      const h = (Date.now() - Number(ms)) / 3600000;
+      el.textContent = 'checked ' + (h < 0.02 ? 'just now' : h < 1 ? Math.round(h * 60) + 'm ago'
+        : h < 24 ? Math.round(h) + 'h ago' : Math.round(h / 24) + 'd ago');
+    }
+
+    async function loadNews(force) {
       const box = document.getElementById('newsList');
       if (!box) return;
+      const btn = document.getElementById('newsBtn');
+      if (btn) { btn.disabled = true; if (force) btn.textContent = 'Checking…'; }
       try {
-        const res = await fetch(`/api/news?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' });
+        const res = await fetch(`/api/news?symbol=${encodeURIComponent(SYMBOL)}${force ? '&force=1' : ''}`, { cache: 'no-store' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'news unavailable');
         box.innerHTML = renderNewsList(data.items);
+        newsChecked(data.checkedAt);
       } catch (err) {
         box.innerHTML = '<div class="msg">Headlines unavailable right now.</div>';
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Check now'; }
       }
     }
 
@@ -921,7 +940,10 @@
         </section></div>
 
         <section class="bezel card"><div class="core">
-          <div class="sec-h"><h2>News</h2></div>
+          <div class="sec-h"><h2>News</h2>
+            <span class="news-when" id="newsWhen"></span>
+            <button class="rng" id="newsBtn" type="button" title="Check the feed for this stock now, rather than waiting for the next refresh">Check now</button>
+          </div>
           <div id="newsList"><div class="msg">Loading headlines…</div></div>
         </div></section>
 
@@ -1173,6 +1195,8 @@
       });
       paintChart();
       loadNews();          // after the chart: a decoration must not make the data wait
+      const nb = document.getElementById('newsBtn');
+      if (nb) nb.addEventListener('click', () => loadNews(true));
     })();
   </script>
   <div id="tip"></div>

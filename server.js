@@ -4374,6 +4374,13 @@ function topUpNews(rows, ctx = {}) {
 // Stored-or-fetch for one symbol — the stock page's card. Six-hour TTL, so a
 // visited page stays fresh with no schedule at all; on a provider failure
 // the stored set is served, because stale beats nothing.
+// `?force=1` checks now rather than waiting out the six-hour rule — the stock
+// page's Check now button. The provider is free and keyless, so this costs no
+// API credits; the floor below exists so a held-down button cannot hammer
+// someone else's server, and it is per symbol per instance.
+const newsForcedAt = new Map();
+const NEWS_FORCE_FLOOR_MS = 60 * 1000;
+
 app.get('/api/news', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
@@ -4381,9 +4388,12 @@ app.get('/api/news', requireAuth, route(async (req, res) => {
   if ((await isGuest(req)) && !guestSet.has(symbol)) {
     return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   }
-  if (NEWS_OFF) return res.json({ symbol, items: [] });
+  if (NEWS_OFF) return res.json({ symbol, items: [], checkedAt: null });
   const state = await store.readNewsState();
-  if (!state[symbol] || Date.now() - state[symbol] > NEWS_TTL_MS) {
+  const forced = req.query.force === '1' &&
+    Date.now() - (newsForcedAt.get(symbol) || 0) > NEWS_FORCE_FLOOR_MS;
+  if (forced) newsForcedAt.set(symbol, Date.now());
+  if (forced || !state[symbol] || Date.now() - state[symbol] > NEWS_TTL_MS) {
     try {
       const snap = await readSnapshot();
       const row = ((snap && snap.stocks) || []).find((x) => x.symbol === symbol);
@@ -4397,7 +4407,10 @@ app.get('/api/news', requireAuth, route(async (req, res) => {
       console.warn('news fetch failed for ' + symbol + ':', err.message);
     }
   }
-  res.json({ symbol, items: await store.readNews(symbol, 12) });
+  // The fetch clock is re-read: the page shows when this stock was last
+  // checked, and after a forced check that is "just now".
+  const after = await store.readNewsState();
+  res.json({ symbol, items: await store.readNews(symbol, 12), checkedAt: after[symbol] || null, forced });
 }));
 
 // The screener's news ticker: headlines PUBLISHED in the last 12 hours, newest
