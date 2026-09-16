@@ -304,6 +304,10 @@ The **Info** banner spans eight columns — Overall, Mom., Qual., Portfolios, Pr
 
 **`phaseTimer()` exists because that was invisible.** Every round now logs and returns `phases` on the payload — `profiles 0.1s · prices 3.0s · score 0.5s · trend-bars 5.4s · persist-bars 2.4s` — since Vercel's log view does not show a function's stdout. **`trend-bars` is the one to watch**: it is `readBarsFor(universe, 650 days)`, 118,671 rows at 271 symbols and ~440k at 1,000.
 
+**`query-plan-test.js` now enforces the rule** (2026-09-15): it lifts `SCHEMA` + `ADDED_COLUMNS` out of db.js into an in-memory `node:sqlite`, pulls every SQL literal out of the same file, runs `explain query plan` on each, and fails if anything plans as `SCAN` over a big table (`bars`, `fundamentals_history`, `earnings_history`, `news`, `activity`, `visitors`, `snapshot`). **No network, no data, under a second** — run it after touching db.js. Deliberate scans live in `ALLOWED` with the reason written beside them (the `/database` counts, whole-collection reads of small tables, the two log tails — which say SCAN but walk the primary key backwards to a LIMIT — and the pruned `activity` / `news` rollups). Proved to work by re-introducing the offending `group by` and watching it fail.
+
+**It found three things on its first run.** Two queries got an index — `news (published_at)` for the ticker's 12-hour read and `fundamentals_history (d)` for the report's day-pair lookup — and, more seriously, **the `news` and `news_state` tables had no `create table` in the schema at all**: the momentum cleanup (`ca2efed`) deleted them, production already had them so nothing broke, and a fresh database would have failed every news write. Restored verbatim from the live `sqlite_master`. **The test also enforces statement ORDER**, since an index that precedes its table throws at boot.
+
 **The rule this leaves: on this database, a `group by` over a whole table is a quota event, not a slow query.** Prefer N indexed seeks — they are cheaper in rows AND in time. Measured read sizes to budget against (271 symbols, 1.08M bars):
 
 | path | rows read | when |

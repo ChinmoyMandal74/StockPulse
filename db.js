@@ -244,6 +244,10 @@ const SCHEMA = [
      short_pct_float     real,
      primary key (symbol, d)
    )`,
+  // The refresh report compares a day against the previous recorded one, and
+  // both halves are looked up by date. The primary key is (symbol, d), which
+  // cannot seek on a date alone.
+  `create index if not exists idx_fund_hist_d on fundamentals_history (d)`,
   // Password-reset tokens. The token itself is never stored: only its SHA-256,
   // for the same reason sessions and passwords are hashed — a database read
   // must not hand anyone a working reset link.
@@ -329,6 +333,31 @@ const SCHEMA = [
      primary key (run_id, n)
    )`,
 
+  // Headlines per stock: headline / source / url / timestamp, never bodies.
+  // The id is a hash of the url, so the same story from two fetches is one row.
+  // RESTORED 2026-09-15: these two were deleted from the schema by the momentum
+  // cleanup (ca2efed) and nothing noticed, because production already had the
+  // tables — a fresh database would have failed every news write. Copied back
+  // from the live `sqlite_master`, so they match what is deployed exactly.
+  // Found by the query-plan test, which could not prepare the news statements.
+  `create table if not exists news (
+     id           text primary key,
+     symbol       text not null,
+     published_at text not null,
+     source       text,
+     headline     text not null,
+     url          text not null
+   )`,
+  `create index if not exists idx_news_symbol on news (symbol, published_at)`,
+  // The ticker asks for everything published in the last 12 hours across the
+  // universe; without this it scanned the table (query-plan test, 2026-09-15).
+  `create index if not exists idx_news_published on news (published_at)`,
+  // Separate from `news` so a stock whose feed came back empty still counts as
+  // fetched, and does not come up first in the rotation forever.
+  `create table if not exists news_state (
+     symbol     text primary key,
+     fetched_at integer not null
+   )`,
   // The news job's log: one row per batch of headline fetches (a refresh
   // round's top-up, or a stock page fetching stale headlines), one row per
   // symbol inside it. The /news-runs page reads these.
