@@ -1293,6 +1293,7 @@
 
   <script src="/screens.js"></script>
   <script src="/action.js"></script>
+  <script src="/filters.js"></script>
   <script src="/rowcard.js"></script>
   <script src="/track.js"></script>
   <script src="/refresh-loop.js"></script>
@@ -2020,118 +2021,12 @@
     const fltLabel = {};        // key -> the column's header text
     const fltCell = {};         // key -> its filter cell, for the hidden check
     let fltTimer = null;
-    const RATING_FOR = { overallScore: 'overallRating', qualityScore: 'qualityRating', momentumScore: 'momentumRating' };
-    const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios']);
-    const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh']);
-    // Filters a screen can set that have no column of their own, with the label
-    // the filter strip shows for them.
-    const SCREEN_ONLY_KEYS = { fresh3mHigh: 'Fresh 3M high', lastSurprise: 'Last surprise %', daysSinceEarnings: 'Days since earnings' };
-    const BOUND_KEYS = new Set(['sector', 'industry', 'av:Balanced']);   // write the bar pickers' state
-    const BLANK = '\u2014 blank';
-
-    function maCrossWord(x) {
-      if (x.maBullish == null) return null;
-      const fresh = x.maCrossDays != null && x.maCrossDays <= 20;
-      return x.maBullish ? (fresh ? 'Golden cross' : 'Bullish') : (fresh ? 'Death cross' : 'Bearish');
-    }
-
-    // What a filter reads: the value the cell SHOWS, in the unit it shows it —
-    // the 1-10 rating rather than the score behind it, days to earnings rather
-    // than a date, the MA cross as its word.
-    function filterValue(x, key) {
-      if (key.startsWith('av:')) {
-        const v = x.adviceBy && x.adviceBy[key.slice(3)];
-        return v ? v.a : null;
-      }
-      if (RATING_FOR[key]) return x[RATING_FOR[key]];
-      if (key === 'maCrossRank') return maCrossWord(x);
-      if (key === 'shortName') return [x.shortName, x.name].filter(Boolean).join(' \u00b7 ');
-      if (key === 'portfolios') {
-        return (x.portfolios || []).concat(
-          Object.keys(myPortfolios).filter((n) => (myPortfolios[n] || []).includes(x.symbol))).join(' \u00b7 ');
-      }
-      if (key === 'nextEarningsDate') {
-        return x.nextEarningsDate ? Math.round((new Date(x.nextEarningsDate) - new Date()) / 86400000) : null;
-      }
-      if (key === 'daysSinceEarnings') {
-        return x.lastEarningsDate ? Math.round((new Date() - new Date(x.lastEarningsDate)) / 86400000) : null;
-      }
-      if (key === 'fresh3mHigh') return x.fresh3mHigh ? 'Yes' : 'No';
-      return x[key];
-    }
-
-    function filterKind(key) {
-      if (BOUND_KEYS.has(key)) return 'bound';
-      if (key.startsWith('av:') || CAT_KEYS.has(key)) return 'cat';
-      if (TEXT_KEYS.has(key)) return 'text';
-      return 'num';
-    }
-
-    function parseNumTerm(t) {
-      const m = /^([-+]?\d*\.?\d+)([kmbt])?$/i.exec(String(t).replace(/[\s,$%]/g, ''));
-      if (!m) return null;
-      const mult = { k: 1e3, m: 1e6, b: 1e9, t: 1e12 }[(m[2] || '').toLowerCase()] || 1;
-      const dec = (m[1].split('.')[1] || '').length;
-      return { n: parseFloat(m[1]) * mult, tol: (0.5 * Math.pow(10, -dec)) * mult };
-    }
-
-    // null = empty (no filter), false = not understood, else a predicate.
-    // Blanks never pass a number filter in either direction.
-    function compileNum(src) {
-      const s = String(src || '').trim();
-      if (!s) return null;
-      const num = (f) => (v) => v != null && v !== '' && isFinite(v) && f(Number(v));
-      const range = /^(.*?)\.\.(.*)$/.exec(s);
-      if (range) {
-        const lo = range[1].trim() ? parseNumTerm(range[1]) : { n: -Infinity };
-        const hi = range[2].trim() ? parseNumTerm(range[2]) : { n: Infinity };
-        if (!lo || !hi) return false;
-        return num((v) => v >= lo.n && v <= hi.n);
-      }
-      const m = /^(>=|<=|!=|=>|=<|>|<|=|\u2265|\u2264)?\s*(.+)$/.exec(s);
-      const t = m && parseNumTerm(m[2]);
-      if (!t) return false;
-      const n = t.n;
-      switch (m[1]) {
-        case '>': return num((v) => v > n);
-        case '<': return num((v) => v < n);
-        case '<=': case '=<': case '\u2264': return num((v) => v <= n);
-        // "=" matches at the precision typed, so =61 finds an RSI of 61.2
-        case '=': return num((v) => Math.abs(v - n) < t.tol);
-        case '!=': return num((v) => Math.abs(v - n) >= t.tol);
-        default: return num((v) => v >= n);       // bare, >=, => and \u2265: at least
-      }
-    }
-
-    function compileText(src) {
-      const s = String(src || '').trim().toLowerCase();
-      if (!s) return null;
-      const terms = s.split('|').map((x) => x.trim()).filter(Boolean);
-      const neg = terms.filter((x) => x[0] === '!').map((x) => x.slice(1)).filter(Boolean);
-      const pos = terms.filter((x) => x[0] !== '!');
-      if (!neg.length && !pos.length) return false;
-      return (v) => {
-        const hay = v == null ? '' : String(v).toLowerCase();
-        if (neg.some((x) => hay.includes(x))) return false;
-        if (!pos.length) return true;
-        return pos.some((x) => (x[0] === '=' ? hay === x.slice(1).trim()
-          || hay.split(' \u00b7 ').includes(x.slice(1).trim()) : hay.includes(x)));
-      };
-    }
-
-    function compileFilter(key, src) {
-      const k = filterKind(key);
-      if (k === 'num') return compileNum(src);
-      if (k === 'text') return compileText(src);
-      if (k === 'cat') {
-        if (!src) return null;
-        if (src === BLANK) return (v) => v == null || v === '';
-        // a screen may ask for either of several values: "Breakdown|Downtrend"
-        if (src.includes('|')) { const any = new Set(src.split('|')); return (v) => any.has(v); }
-        return (v) => v === src;
-      }
-      return null;
-    }
+    // The grammar lives in filters.js: the server runs the same screens for the
+    // mobile page, and two implementations of `>=3` would have drifted.
+    const { RATING_FOR, TEXT_KEYS, CAT_KEYS, SCREEN_ONLY_KEYS, BOUND_KEYS, BLANK,
+      maCrossWord, filterKind, compileNum, compileText } = Filters;
+    const filterValue = (x, key) => Filters.filterValue(x, key, { myPortfolios });
+    const compileFilter = (key, src) => Filters.compileFilter(key, src);
 
     function activeColFilters() {
       return Object.keys(colFilters).filter((k) => fltCompiled[k]);
