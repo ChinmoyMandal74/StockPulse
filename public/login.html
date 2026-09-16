@@ -139,6 +139,11 @@
 
       <div class="msg" id="msg"><svg class="ic" aria-hidden="true"><use href="#i-warn" /></svg><span id="msgText"></span></div>
 
+      <p class="forgot" style="margin-top:2px">
+        <a href="/blog" style="color:var(--muted);font-size:12.5px">Read the blog</a>
+        <a href="/" style="color:var(--muted);font-size:12.5px">What is Tickr Lab?</a>
+      </p>
+
       <p class="foot" id="foot">Everyone signed in sees the same shared screener. Only the owner can add tickers, refresh data or rewind the table. Guests get a live preview of a handful of stocks — every feature, a fraction of the universe.</p>
     </div>
   </main>
@@ -237,7 +242,7 @@
     // The guest door: one click, a filtered preview, no account. The limit
     // (a handful of stocks) is enforced server-side; this button is just the
     // handle.
-    $('guestBtn').addEventListener('click', async () => {
+    async function enterAsGuest() {
       try {
         const res = await fetch('/api/guest', { method: 'POST' });
         if (!res.ok) throw new Error('Guest access is unavailable right now.');
@@ -245,7 +250,11 @@
       } catch (err) {
         setMsg(err.message);
       }
-    });
+    }
+    $('guestBtn').addEventListener('click', enterAsGuest);
+    // The landing page's "Try it" button links here with ?guest=1 rather than
+    // POSTing from a public page, so the door stays in one place.
+    if (new URLSearchParams(location.search).get('guest') === '1') enterAsGuest();
 
     // If a session is already live, skip the form entirely.
     (async () => {

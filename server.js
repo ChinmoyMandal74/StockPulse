@@ -116,8 +116,18 @@ const route = (fn) => (req, res, next) =>
 
 // Log every public page load before static files are served.
 app.get(['/', '/index.html'], route(async (req, res, next) => {
-  // The door: the screener is only served to signed-in users.
-  if (!(await isSignedIn(req))) return res.redirect('/login');
+  // The door: the screener is only served to signed-in users. A stranger gets
+  // the marketing page rather than a login form (2026-09-16) — the form asks
+  // for a password before saying what the site is.
+  if (!(await isSignedIn(req))) {
+    store.logVisit({
+      ts: new Date().toISOString(), ip: req.ip || null,
+      ua: req.headers['user-agent'] || null,
+      ref: req.headers['referer'] || req.headers['referrer'] || null,
+      userEmail: null,
+    }).catch(() => { /* a logging failure must never block the page */ });
+    return res.sendFile(path.join(__dirname, 'private', 'landing.html'));
+  }
   // isSignedIn() above already resolved and cached the user on req, so this
   // costs nothing extra. Null means either a pre-accounts row or someone signed
   // in with ADMIN_PASSWORD, which has no account behind it.
@@ -252,6 +262,25 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: PRIVATE_ASSETS > 0, assets: PRIVATE_ASSETS });
 });
 
+// The two numbers the landing page claims, from the product itself. Public and
+// deliberately CHEAP — the universe is 271 rows and the snapshot's timestamp is
+// its own column, so this costs nothing like the row counts on /database.
+// Cached ten minutes per instance.
+let publicStatsCache = null;
+app.get('/api/public-stats', route(async (req, res) => {
+  if (publicStatsCache && Date.now() - publicStatsCache.at < 10 * 60 * 1000) {
+    return res.json(publicStatsCache.body);
+  }
+  try {
+    const [universe, updatedAt] = await Promise.all([readUniverse(), store.snapshotUpdatedAt()]);
+    const body = { symbols: universe.length, updatedAt: updatedAt || null };
+    publicStatsCache = { at: Date.now(), body };
+    res.json(body);
+  } catch (err) {
+    res.json({});   // the page ships with sensible numbers already
+  }
+}));
+
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
@@ -269,6 +298,9 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
+                      // The public pages have canonical addresses of their own.
+                      '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
+                      '/posts.html': '/posts',
                       '/nasdaq.html': '/nasdaq',
                       '/cards.html': '/cards',
                       '/users.html': '/users', '/reset.html': '/reset',
@@ -355,6 +387,187 @@ app.get('/news-runs', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'news-runs');
   res.sendFile(path.join(__dirname, 'private', 'news-runs.html'));
+}));
+
+// ---- the blog --------------------------------------------------------------
+// PUBLIC: the pages and the two read routes below are the only things in this
+// app a stranger can see. They serve `status = 'published'` only, and a draft
+// is invisible without an admin session — the same rule the screener follows,
+// enforced in the route rather than in the page.
+
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const slugify = (s) => String(s || '').toLowerCase().normalize('NFKD')
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+
+// A small markdown subset, rendered SERVER-SIDE and escape-first — the same
+// order chat.html uses, and the reason is the same: a post is written by the
+// owner but rendered to the public, so nothing in it may become markup by
+// accident. Supported: #/##/### headings, - and 1. lists, > quotes, ```code```,
+// **bold**, *italic*, `code`, [text](href) with http(s) and internal links
+// only, --- rules, and blank-line paragraphs.
+function renderMarkdown(src) {
+  const esc = (t) => String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const inline = (t) => esc(t)
+    .replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, text, href) =>
+      (/^https?:\/\//i.test(href) || /^\//.test(href))
+        ? `<a href="${href}"${/^https?:/i.test(href) ? ' target="_blank" rel="noopener"' : ''}>${text}</a>`
+        : text);   // anything else (javascript:, data:) loses its link, keeps its words
+  const out = [];
+  const lines = String(src || '').replace(/\r\n/g, '\n').split('\n');
+  let list = null, quote = false, code = false, para = [];
+  const closePara = () => { if (para.length) { out.push(`<p>${inline(para.join(' '))}</p>`); para = []; } };
+  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  const closeQuote = () => { if (quote) { out.push('</blockquote>'); quote = false; } };
+  for (const raw of lines) {
+    const line = raw.replace(/\s+$/, '');
+    if (/^```/.test(line)) {
+      closePara(); closeList(); closeQuote();
+      out.push(code ? '</code></pre>' : '<pre><code>');
+      code = !code;
+      continue;
+    }
+    if (code) { out.push(esc(raw)); continue; }
+    if (!line.trim()) { closePara(); closeList(); closeQuote(); continue; }
+    let m;
+    if ((m = /^(#{1,3})\s+(.*)$/.exec(line))) {
+      closePara(); closeList(); closeQuote();
+      const n = m[1].length + 1;            // # is an h2: the page owns the h1
+      out.push(`<h${n}>${inline(m[2])}</h${n}>`);
+      continue;
+    }
+    if (/^(-{3,}|\*{3,})$/.test(line)) { closePara(); closeList(); closeQuote(); out.push('<hr />'); continue; }
+    if ((m = /^>\s?(.*)$/.exec(line))) {
+      closePara(); closeList();
+      if (!quote) { out.push('<blockquote>'); quote = true; }
+      out.push(`<p>${inline(m[1])}</p>`);
+      continue;
+    }
+    if ((m = /^[-*]\s+(.*)$/.exec(line))) {
+      closePara(); closeQuote();
+      if (list !== 'ul') { closeList(); out.push('<ul>'); list = 'ul'; }
+      out.push(`<li>${inline(m[1])}</li>`);
+      continue;
+    }
+    if ((m = /^\d+[.)]\s+(.*)$/.exec(line))) {
+      closePara(); closeQuote();
+      if (list !== 'ol') { closeList(); out.push('<ol>'); list = 'ol'; }
+      out.push(`<li>${inline(m[1])}</li>`);
+      continue;
+    }
+    closeList(); closeQuote();
+    para.push(line.trim());
+  }
+  closePara(); closeList(); closeQuote();
+  if (code) out.push('</code></pre>');
+  return out.join('\n');
+}
+
+// Roughly how long the post takes to read, at 220 words a minute.
+const readingMinutes = (body) => Math.max(1, Math.round(String(body || '').split(/\s+/).filter(Boolean).length / 220));
+
+const publicPost = (p) => ({
+  slug: p.slug, title: p.title, summary: p.summary, author: p.author,
+  publishedAt: p.publishedAt, updatedAt: p.updatedAt,
+  minutes: readingMinutes(p.body), html: p.body ? renderMarkdown(p.body) : undefined,
+});
+
+// Public: the published list, newest first.
+app.get('/api/posts', route(async (req, res) => {
+  const posts = await store.readPosts({ publishedOnly: true });
+  res.json({ posts: posts.map(publicPost) });
+}));
+
+// Public: one published post, rendered.
+app.get('/api/posts/:slug', route(async (req, res) => {
+  const p = await store.readPost(req.params.slug, { publishedOnly: true });
+  if (!p) return res.status(404).json({ error: 'No such post.' });
+  res.json({ post: publicPost(p) });
+}));
+
+// The public pages. Served by the function rather than from public/, so the
+// markup stays in private/ with everything else; nothing here checks a session.
+// RENDERED ON THE SERVER, not fetched by the page: a blog that needs
+// JavaScript to show its words is a blog search engines and readers-with-a-bad
+// connection cannot read. The templates carry %PLACEHOLDERS% which are filled
+// here; the pages ship no script at all.
+const pageTemplate = (() => {
+  const cache = {};
+  return (name) => (cache[name] ||= fs.readFileSync(path.join(__dirname, 'private', name), 'utf8'));
+})();
+const htmlEsc = (t) => String(t == null ? '' : t)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const postDate = (iso) => {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  } catch { return String(iso).slice(0, 10); }
+};
+
+app.get('/blog', route(async (req, res) => {
+  logAct(req, 'page', 'blog');
+  const posts = await store.readPosts({ publishedOnly: true });
+  const list = posts.length ? posts.map((p) => {
+    const bits = [postDate(p.publishedAt), p.author ? htmlEsc(p.author) : '', `${readingMinutes(p.summary || '')} min read`]
+      .filter(Boolean);
+    return `<a class="post bezel" href="/blog/${encodeURIComponent(p.slug)}"><div class="core">` +
+      `<div class="meta">${bits.slice(0, 2).join(' · ')}</div>` +
+      `<h2>${htmlEsc(p.title)}</h2>` +
+      (p.summary ? `<p>${htmlEsc(p.summary)}</p>` : '') +
+      '<div class="more">Read it &rarr;</div>' +
+      '</div></a>';
+  }).join('\n') : '<div class="empty">No posts yet. The first one is being written.</div>';
+  res.type('html').send(pageTemplate('blog.html').replace('%POSTS%', list));
+}));
+
+app.get('/blog/:slug', route(async (req, res, next) => {
+  const p = await store.readPost(req.params.slug, { publishedOnly: true });
+  if (!p) return next();                     // falls through to the 404 handler
+  logAct(req, 'page', 'post:' + String(req.params.slug).slice(0, 60));
+  const base = APP_URL || `https://${req.headers.host}`;
+  const meta = [postDate(p.publishedAt), p.author ? htmlEsc(p.author) : '', `${readingMinutes(p.body)} min read`]
+    .filter(Boolean).join(' · ');
+  const summary = p.summary || '';
+  const html = pageTemplate('post.html')
+    .split('%TITLE%').join(htmlEsc(p.title))
+    .split('%DESC%').join(htmlEsc(summary || p.title))
+    .replace('%CANONICAL%', htmlEsc(`${base}/blog/${p.slug}`))
+    .replace('%META%', meta)
+    .replace('%SUMMARY%', htmlEsc(summary))
+    .replace('%BODY%', renderMarkdown(p.body));
+  res.type('html').send(summary ? html : html.replace('<p class="summary"></p>', ''));
+}));
+
+// Admin: writing them.
+app.get('/posts', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'posts');
+  res.sendFile(path.join(__dirname, 'private', 'posts.html'));
+}));
+
+// Public pages want to be findable, which is most of the point of a blog.
+app.get('/robots.txt', route(async (req, res) => {
+  res.type('text/plain').send(
+    'User-agent: *\n' +
+    'Allow: /$\nAllow: /blog\nAllow: /login\n' +
+    // Everything else needs a session anyway; saying so keeps crawlers out of
+    // the redirect loop rather than protecting anything.
+    'Disallow: /api/\nDisallow: /stock/\nDisallow: /admin\n' +
+    (APP_URL ? `Sitemap: ${APP_URL}/sitemap.xml\n` : ''));
+}));
+
+app.get('/sitemap.xml', route(async (req, res) => {
+  const base = APP_URL || `https://${req.headers.host}`;
+  const posts = await store.readPosts({ publishedOnly: true });
+  const url = (loc, when) => `  <url><loc>${loc}</loc>${when ? `<lastmod>${String(when).slice(0, 10)}</lastmod>` : ''}</url>`;
+  res.type('application/xml').send(
+    '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    [url(base + '/'), url(base + '/blog'),
+      ...posts.map((p) => url(`${base}/blog/${p.slug}`, p.updatedAt ? new Date(p.updatedAt).toISOString() : p.publishedAt))
+    ].join('\n') + '\n</urlset>\n');
 }));
 
 // Admin only: which screener columns everyone sees.
@@ -3851,6 +4064,58 @@ function columnCatalogue() {
   COLUMN_CATALOGUE = out;
   return out;
 }
+
+// Admin: everything, drafts included, with the markdown source.
+app.get('/api/admin/posts', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const slug = String(req.query.slug || '');
+  if (slug) {
+    const p = await store.readPost(slug, { publishedOnly: false });
+    if (!p) return res.status(404).json({ error: 'No such post.' });
+    return res.json({ post: { ...p, html: renderMarkdown(p.body) } });
+  }
+  res.json({ posts: await store.readPosts({ publishedOnly: false }) });
+}));
+
+// Admin: write one. The slug comes from the title unless it is given, and a
+// rename carries the old post to the new slug rather than leaving two.
+app.put('/api/admin/posts', requireAdmin, route(async (req, res) => {
+  const b = req.body || {};
+  const title = String(b.title || '').trim().slice(0, 160);
+  const body = String(b.body || '').slice(0, 100000);
+  if (!title) return res.status(400).json({ error: 'A title is required.' });
+  if (!body.trim()) return res.status(400).json({ error: 'The post is empty.' });
+  const slug = slugify(b.slug || title);
+  if (!SLUG_RE.test(slug)) return res.status(400).json({ error: 'That title does not make a usable web address.' });
+  const was = String(b.was || '').trim();
+  const status = b.status === 'published' ? 'published' : 'draft';
+
+  const existing = await store.readPost(slug, { publishedOnly: false });
+  if (existing && was && was !== slug) return res.status(409).json({ error: `A post already lives at /blog/${slug}.` });
+  if (existing && !was) return res.status(409).json({ error: `A post already lives at /blog/${slug}.` });
+  if (was && was !== slug) await store.renamePost(was, slug);
+  const prev = existing || (was ? await store.readPost(slug, { publishedOnly: false }) : null);
+
+  const who = await currentUser(req);
+  const post = await store.writePost({
+    slug, title, body,
+    summary: String(b.summary || '').trim().slice(0, 300) || null,
+    status,
+    author: (prev && prev.author) || String(b.author || '').trim().slice(0, 60) || (who ? who.email.split('@')[0] : null),
+    // Stamped once, on the first publish: an edit later must not reorder the list.
+    publishedAt: status === 'published' ? ((prev && prev.publishedAt) || new Date().toISOString()) : (prev && prev.publishedAt) || null,
+    createdAt: (prev && prev.createdAt) || Date.now(),
+  });
+  logAct(req, 'post', `${status}:${slug}`.slice(0, 80));
+  res.json({ ok: true, post, html: renderMarkdown(post.body) });
+}));
+
+app.delete('/api/admin/posts/:slug', requireAdmin, route(async (req, res) => {
+  const gone = await store.deletePost(req.params.slug);
+  if (!gone) return res.status(404).json({ error: 'No such post.' });
+  logAct(req, 'post', 'delete:' + req.params.slug.slice(0, 60));
+  res.json({ ok: true });
+}));
 
 app.get('/api/columns', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');

@@ -146,6 +146,21 @@ const SCHEMA = [
      fetched_at   integer,
      primary key (symbol, d)
    )`,
+  // Blog posts (2026-09-16). PUBLIC when published — the only table in here
+  // whose rows a stranger can read — so the routes serve `status = 'published'`
+  // only and the body is rendered to HTML server-side, escaped first.
+  `create table if not exists posts (
+     slug         text primary key,
+     title        text not null,
+     summary      text,
+     body         text not null,
+     status       text not null default 'draft',
+     author       text,
+     published_at text,
+     created_at   integer,
+     updated_at   integer
+   )`,
+  `create index if not exists idx_posts_published on posts (status, published_at)`,
   `create table if not exists app_meta (
      key   text primary key,
      value text
@@ -630,6 +645,65 @@ async function writePortfolios(obj) {
   }
   stmts.push({ sql: UNIVERSE_FROM_PORTFOLIOS, args: [Date.now()] });
   await db.batch(stmts, 'write');
+}
+
+// ---- blog posts -----------------------------------------------------------
+
+const postRow = (x) => ({
+  slug: x.slug, title: x.title, summary: x.summary, body: x.body, status: x.status,
+  author: x.author, publishedAt: x.published_at,
+  createdAt: Number(x.created_at) || null, updatedAt: Number(x.updated_at) || null,
+});
+
+// The list. `publishedOnly` is what every public route passes; the editor asks
+// for everything. Bodies are left out — a list page does not need them and a
+// dozen posts of markdown is a payload nobody reads.
+async function readPosts({ publishedOnly = true } = {}) {
+  await init();
+  const r = await db.execute(publishedOnly
+    ? { sql: `select slug, title, summary, '' as body, status, author, published_at, created_at, updated_at
+                from posts where status = 'published' order by published_at desc`, args: [] }
+    : { sql: `select slug, title, summary, '' as body, status, author, published_at, created_at, updated_at
+                from posts order by coalesce(published_at, '') desc, updated_at desc`, args: [] });
+  return r.rows.map(postRow);
+}
+
+async function readPost(slug, { publishedOnly = true } = {}) {
+  await init();
+  const r = await db.execute({
+    sql: `select * from posts where slug = ?` + (publishedOnly ? " and status = 'published'" : ''),
+    args: [String(slug)],
+  });
+  return r.rows.length ? postRow(r.rows[0]) : null;
+}
+
+// Whole-row upsert, keyed on the slug. `published_at` is stamped by the caller
+// so the first publish sets it and an edit afterwards does not move it.
+async function writePost(p) {
+  await init();
+  const now = Date.now();
+  await db.execute({
+    sql: `insert into posts (slug, title, summary, body, status, author, published_at, created_at, updated_at)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          on conflict(slug) do update set
+            title = excluded.title, summary = excluded.summary, body = excluded.body,
+            status = excluded.status, author = excluded.author,
+            published_at = excluded.published_at, updated_at = excluded.updated_at`,
+    args: [p.slug, p.title, p.summary || null, p.body, p.status, p.author || null,
+      p.publishedAt || null, p.createdAt || now, now],
+  });
+  return readPost(p.slug, { publishedOnly: false });
+}
+
+async function renamePost(from, to) {
+  await init();
+  await db.execute({ sql: 'update posts set slug = ?, updated_at = ? where slug = ?', args: [to, Date.now(), from] });
+}
+
+async function deletePost(slug) {
+  await init();
+  const r = await db.execute({ sql: 'delete from posts where slug = ?', args: [String(slug)] });
+  return Number(r.rowsAffected || 0) > 0;
 }
 
 // ---- site-wide column visibility ------------------------------------------
@@ -2389,6 +2463,11 @@ module.exports = {
   removeFromUniverse,
   writePortfolios,
   readNames,
+  readPosts,
+  readPost,
+  writePost,
+  renamePost,
+  deletePost,
   readHiddenColumns,
   writeHiddenColumns,
   writeEarnings,

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Blog posts — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 70px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 0 28px; }
+    .aura { background:
+      radial-gradient(46vw 40vw at 4% -8%, rgba(167, 139, 250, 0.10), transparent 62%),
+      radial-gradient(50vw 42vw at 98% 4%, rgba(52, 211, 153, 0.10), transparent 64%); }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center; padding: 16px 20px 0; pointer-events: none; }
+    .island { pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
+      padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+    h1 { margin: 24px 0 4px; font-size: clamp(28px, 3.4vw, 38px); font-weight: 600; letter-spacing: -0.04em; }
+    .lede { margin: 0 0 20px; font-size: 13px; color: var(--muted); max-width: 80ch; line-height: 1.6; }
+
+    .split { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+    .list .core { padding: 10px; }
+    .prow { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; border-radius: 12px;
+            border: 0; background: none; color: var(--muted); font: 500 13px var(--sans); cursor: pointer; text-align: left; }
+    .prow:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+    .prow.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); }
+    .prow .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pill { font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; padding: 2px 7px; border-radius: 99px;
+            border: 1px solid var(--hair); color: var(--faint); }
+    .pill.live { color: var(--green); border-color: rgba(52, 211, 153, 0.4); background: rgba(52, 211, 153, 0.1); }
+    .newBtn { width: 100%; justify-content: center; margin-top: 6px; }
+
+    .editor .core { padding: 20px 22px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--faint); margin-bottom: 6px; }
+    input[type="text"], textarea {
+      width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.04); color: var(--text); font: 400 14px var(--sans); }
+    textarea { font-family: var(--mono); font-size: 13px; line-height: 1.6; resize: vertical; min-height: 380px; }
+    input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .row .grow { flex: 1 1 200px; }
+    .hint { font-size: 11.5px; color: var(--faint); margin-top: 6px; }
+    .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+    .bar .sp { margin-left: auto; }
+    .said { font-size: 12.5px; color: var(--muted); }
+    .said.good { color: var(--green); } .said.bad { color: var(--red); }
+    .danger { color: var(--red); border-color: rgba(251, 113, 133, 0.4); }
+    .preview { margin-top: 16px; }
+    .preview .core { padding: 22px 26px; }
+    .preview h2 { margin: 26px 0 0; font-size: 21px; letter-spacing: -0.02em; }
+    .preview h3 { margin: 20px 0 0; font-size: 17px; }
+    .preview p { margin: 13px 0 0; font-size: 14.5px; line-height: 1.75; color: #cfd6e2; }
+    .preview ul, .preview ol { margin: 13px 0 0; padding-left: 22px; color: #cfd6e2; font-size: 14.5px; line-height: 1.7; }
+    .preview code { font-family: var(--mono); font-size: 12.5px; background: rgba(255,255,255,.06); padding: 2px 6px; border-radius: 6px; }
+    .preview pre { margin: 14px 0 0; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--hair); overflow-x: auto; }
+    .preview blockquote { margin: 14px 0 0; padding-left: 16px; border-left: 2px solid rgba(52,211,153,.5); color: var(--muted); }
+    .k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    @media (max-width: 980px) { .split { grid-template-columns: 1fr; } }
+    @media (max-width: 640px) { .page { padding: 0 14px; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.2v13.6M5.2 12h13.6"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12Z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark"><span class="wordmark">Tickr Lab</span></span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <a class="btn" href="/blog" target="_blank" rel="noopener"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-eye" /></svg>The blog</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <h1>Blog posts</h1>
+    <p class="lede">Written in markdown, rendered on the server. A draft is invisible to everyone but you;
+      publishing puts it on <a href="/blog" target="_blank" rel="noopener">/blog</a> immediately — no deploy.
+      The date is stamped the first time a post is published and does not move when you edit it afterwards.</p>
+
+    <div class="split">
+      <div class="bezel list"><div class="core">
+        <div id="plist"></div>
+        <button class="btn newBtn" id="newBtn"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>New post</button>
+      </div></div>
+
+      <div>
+        <div class="bezel editor"><div class="core">
+          <div class="field">
+            <label for="title">Title</label>
+            <input type="text" id="title" maxlength="160" placeholder="What the post is about" />
+          </div>
+          <div class="row">
+            <div class="field grow">
+              <label for="slug">Web address</label>
+              <input type="text" id="slug" maxlength="80" placeholder="auto from the title" />
+              <p class="hint">tickrlab.com/blog/<span id="slugEcho">…</span></p>
+            </div>
+            <div class="field grow">
+              <label for="summary">Summary</label>
+              <input type="text" id="summary" maxlength="300" placeholder="One line, shown on the blog index and in search results" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="body">Post</label>
+            <textarea id="body" spellcheck="true" placeholder="# A heading&#10;&#10;Write in markdown. Headings, **bold**, *italic*, `code`, lists, > quotes, ```code blocks``` and [links](https://example.com)."></textarea>
+          </div>
+          <div class="bar">
+            <button class="btn" id="saveBtn">Save draft</button>
+            <button class="btn btn-primary" id="pubBtn">Publish</button>
+            <button class="btn" id="previewBtn">Preview</button>
+            <span class="said" id="said"></span>
+            <span class="sp"></span>
+            <button class="btn danger" id="delBtn" hidden>Delete</button>
+          </div>
+        </div></div>
+
+        <div class="bezel preview" id="preview" hidden><div class="core">
+          <span class="k">Preview — exactly what the page will render</span>
+          <div id="previewBody"></div>
+        </div></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    async function api(method, url, body) {
+      const res = await fetch(url, {
+        method, cache: 'no-store',
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || `Request failed (${res.status})`);
+      return d;
+    }
+    const say = (m, kind) => { $('said').textContent = m || ''; $('said').className = 'said' + (kind ? ' ' + kind : ''); };
+    const slugify = (s) => String(s || '').toLowerCase().normalize('NFKD')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+
+    let posts = [];
+    let current = null;          // the slug being edited, null for a new post
+
+    function paintList() {
+      $('plist').innerHTML = posts.length ? posts.map((p) =>
+        `<button class="prow ${p.slug === current ? 'on' : ''}" data-slug="${we(p.slug)}">` +
+        `<span class="t">${we(p.title)}</span>` +
+        `<span class="pill ${p.status === 'published' ? 'live' : ''}">${p.status === 'published' ? 'live' : 'draft'}</span>` +
+        '</button>').join('') : '<p class="hint" style="padding:10px 12px">No posts yet.</p>';
+      $('plist').querySelectorAll('[data-slug]').forEach((b) =>
+        b.addEventListener('click', () => open(b.dataset.slug)));
+    }
+
+    function fill(p) {
+      current = p ? p.slug : null;
+      $('title').value = p ? p.title : '';
+      $('slug').value = p ? p.slug : '';
+      $('summary').value = p ? (p.summary || '') : '';
+      $('body').value = p ? p.body : '';
+      $('delBtn').hidden = !p;
+      $('pubBtn').textContent = p && p.status === 'published' ? 'Update the live post' : 'Publish';
+      $('preview').hidden = true;
+      echoSlug();
+      paintList();
+    }
+
+    function echoSlug() {
+      $('slugEcho').textContent = slugify($('slug').value || $('title').value) || '…';
+    }
+
+    async function load() {
+      try {
+        posts = (await api('GET', '/api/admin/posts')).posts || [];
+        paintList();
+      } catch (e) { say('Could not load the posts: ' + e.message, 'bad'); }
+    }
+
+    async function open(slug) {
+      try {
+        const d = await api('GET', '/api/admin/posts?slug=' + encodeURIComponent(slug));
+        fill(d.post);
+        say('');
+      } catch (e) { say(e.message, 'bad'); }
+    }
+
+    async function save(status) {
+      const payload = {
+        title: $('title').value.trim(),
+        slug: $('slug').value.trim() || $('title').value.trim(),
+        summary: $('summary').value.trim(),
+        body: $('body').value,
+        status,
+        was: current || '',
+      };
+      if (!payload.title) return say('It needs a title.', 'bad');
+      if (!payload.body.trim()) return say('It needs something in the body.', 'bad');
+      $('saveBtn').disabled = $('pubBtn').disabled = true;
+      say('Saving…');
+      try {
+        const d = await api('PUT', '/api/admin/posts', payload);
+        current = d.post.slug;
+        $('slug').value = d.post.slug;
+        echoSlug();
+        await load();
+        $('delBtn').hidden = false;
+        $('pubBtn').textContent = d.post.status === 'published' ? 'Update the live post' : 'Publish';
+        say(d.post.status === 'published'
+          ? `Published — it is live at /blog/${d.post.slug}.`
+          : 'Saved as a draft. Nobody else can see it.', 'good');
+        $('previewBody').innerHTML = d.html;
+        $('preview').hidden = false;
+      } catch (e) {
+        say(e.message, 'bad');
+      } finally {
+        $('saveBtn').disabled = $('pubBtn').disabled = false;
+      }
+    }
+
+    // The preview renders through the SERVER's markdown, so what you see is
+    // what the page will show — a second renderer here would drift from it.
+    async function preview() {
+      if (!$('body').value.trim()) return say('Nothing to preview yet.', 'bad');
+      say('Rendering…');
+      try {
+        const d = await api('PUT', '/api/admin/posts', {
+          title: $('title').value.trim() || 'Untitled',
+          slug: $('slug').value.trim() || $('title').value.trim() || 'untitled-draft',
+          summary: $('summary').value.trim(),
+          body: $('body').value,
+          status: 'draft',
+          was: current || '',
+        });
+        current = d.post.slug;
+        $('slug').value = d.post.slug;
+        echoSlug();
+        $('previewBody').innerHTML = d.html;
+        $('preview').hidden = false;
+        await load();
+        say('Saved as a draft and rendered below.', 'good');
+      } catch (e) { say(e.message, 'bad'); }
+    }
+
+    async function del() {
+      if (!current) return;
+      if (!confirm(`Delete "${$('title').value}"? This cannot be undone.`)) return;
+      try {
+        await api('DELETE', '/api/admin/posts/' + encodeURIComponent(current));
+        fill(null);
+        await load();
+        say('Deleted.', 'good');
+      } catch (e) { say(e.message, 'bad'); }
+    }
+
+    $('title').addEventListener('input', echoSlug);
+    $('slug').addEventListener('input', echoSlug);
+    $('newBtn').addEventListener('click', () => { fill(null); say(''); $('title').focus(); });
+    $('saveBtn').addEventListener('click', () => save('draft'));
+    $('pubBtn').addEventListener('click', () => save('published'));
+    $('previewBtn').addEventListener('click', preview);
+    $('delBtn').addEventListener('click', del);
+    load();
+  </script>
+</body>
+</html>

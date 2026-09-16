@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Tickr Lab — one screen for every stock you follow</title>
+  <meta name="description" content="A nightly stock screener: momentum and quality scored the same way every night, mechanical Advice rules that name the one rule that fired, and twenty years of daily bars behind every number." />
+  <meta property="og:title" content="Tickr Lab — one screen for every stock you follow" />
+  <meta property="og:description" content="Momentum and quality scored the same way every night, mechanical Advice rules, and twenty years of bars behind every number." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 0; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+    .aura {
+      background:
+        radial-gradient(52vw 46vw at 8% -12%, rgba(52, 211, 153, 0.13), transparent 62%),
+        radial-gradient(50vw 44vw at 96% 2%, rgba(124, 156, 255, 0.13), transparent 64%); }
+
+    /* ---- nav ------------------------------------------------------------ */
+    .nav-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
+                padding: 16px 20px 0; pointer-events: none; }
+    .nav {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px; width: min(1120px, 100%);
+      padding: 8px 10px 8px 18px; border-radius: 999px; background: rgba(9, 11, 15, 0.74);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .nav .mark { display: inline-flex; align-items: center; gap: 9px; margin-right: auto; }
+    .nav .glyph { width: 26px; height: 26px; border-radius: 9px; display: inline-flex; align-items: center;
+                  justify-content: center; color: var(--green);
+                  background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+                  border: 1px solid rgba(52, 211, 153, 0.24); }
+    .nav a.link { color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none; padding: 8px 12px; border-radius: 10px; }
+    .nav a.link:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+
+    /* ---- hero ----------------------------------------------------------- */
+    .hero { padding: 72px 0 26px; }
+    .kicker { display: inline-flex; align-items: center; gap: 8px; padding: 5px 13px 5px 9px; border-radius: 999px;
+              border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035); font-size: 11px;
+              letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+    .kicker .pip { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 9px var(--green); }
+    h1 { margin: 22px 0 0; font-size: clamp(42px, 7vw, 82px); font-weight: 600; line-height: 0.94;
+         letter-spacing: -0.05em; max-width: 16ch; }
+    h1 em { font-style: normal; color: var(--green); }
+    .sub { margin: 22px 0 0; max-width: 62ch; font-size: clamp(15px, 1.7vw, 18px); line-height: 1.6; color: var(--muted); }
+    .cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
+    .cta .btn { padding: 12px 20px; font-size: 14px; }
+    .cta .btn-primary { background: var(--green); color: #04150e; border-color: transparent; font-weight: 600; }
+    .cta .btn-primary:hover { filter: brightness(1.08); }
+    .under { margin-top: 14px; font-size: 12.5px; color: var(--faint); }
+
+    /* ---- strip ---------------------------------------------------------- */
+    .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 42px 0 8px; }
+    .strip .core { padding: 18px 20px; }
+    .strip .n { font-family: var(--mono); font-size: clamp(20px, 2.4vw, 28px); font-weight: 500; letter-spacing: -0.03em; }
+    .strip .n.g { color: var(--green); } .strip .n.b { color: var(--accent); }
+    .strip .n.p { color: var(--accent-2); } .strip .n.c { color: #22d3ee; }
+    .strip .l { margin-top: 7px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--faint); }
+
+    /* ---- sections ------------------------------------------------------- */
+    section { padding: 62px 0; border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 52px; }
+    section:first-of-type { border-top: 0; margin-top: 0; }
+    .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--green); }
+    h2 { margin: 14px 0 0; font-size: clamp(26px, 3.6vw, 40px); font-weight: 600; letter-spacing: -0.035em; line-height: 1.05; max-width: 20ch; }
+    .lede { margin: 16px 0 0; max-width: 68ch; font-size: 15px; line-height: 1.7; color: var(--muted); }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 34px; }
+    .card .core { padding: 22px 24px; height: 100%; box-sizing: border-box; }
+    .card h3 { margin: 0 0 9px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+    .card p { margin: 0; font-size: 13.5px; line-height: 1.65; color: var(--muted); }
+    .card .tag { display: inline-block; margin-bottom: 12px; font-family: var(--mono); font-size: 10.5px;
+                 letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint);
+                 border: 1px solid var(--hair); border-radius: 99px; padding: 2px 9px; }
+
+    /* ---- the honest bit ------------------------------------------------- */
+    .quote > .core { padding: 34px 38px; border: 1px solid rgba(52, 211, 153, 0.22); }
+    .quote p { margin: 0; font-size: clamp(17px, 2.2vw, 22px); line-height: 1.5; letter-spacing: -0.02em; }
+    .quote .who { margin-top: 16px; font-size: 12.5px; color: var(--faint); }
+
+    /* ---- table preview -------------------------------------------------- */
+    .shot > .core { padding: 0; overflow: hidden; }
+    .shot table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .shot th { background: var(--surface-2); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.14em;
+               color: var(--faint); font-weight: 500; padding: 9px 14px; text-align: right; white-space: nowrap; }
+    .shot th:first-child, .shot td:first-child, .shot th.l, .shot td.l { text-align: left; }
+    .shot td { padding: 10px 14px; text-align: right; border-top: 1px solid rgba(255, 255, 255, 0.045);
+               font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .shot td.nm { font-family: var(--sans); color: var(--text); }
+    .shot td.up { color: var(--green); } .shot td.dn { color: var(--red); }
+    .shot .verdict { font-family: var(--sans); font-size: 12px; }
+    .shot .v-buy { color: var(--green); } .shot .v-hold { color: var(--amber); } .shot .v-avoid { color: var(--red); }
+    .shot-note { margin: 12px 4px 0; font-size: 11.5px; color: var(--faint); }
+
+    /* ---- faq ------------------------------------------------------------ */
+    .faq { margin-top: 28px; }
+    details { border-top: 1px solid rgba(255, 255, 255, 0.06); padding: 16px 2px; }
+    details summary { cursor: pointer; font-size: 15px; font-weight: 500; list-style: none; display: flex; gap: 12px; align-items: center; }
+    details summary::-webkit-details-marker { display: none; }
+    details summary::after { content: '+'; margin-left: auto; color: var(--faint); font-family: var(--mono); }
+    details[open] summary::after { content: '\\2212'; }
+    details p { margin: 12px 0 0; font-size: 13.5px; line-height: 1.7; color: var(--muted); max-width: 74ch; }
+
+    /* ---- close ---------------------------------------------------------- */
+    .close { text-align: center; padding: 74px 0 40px; }
+    .close h2 { margin: 0 auto; max-width: 18ch; }
+    .close .cta { justify-content: center; }
+    footer { border-top: 1px solid rgba(255, 255, 255, 0.06); padding: 30px 0 50px; margin-top: 20px; }
+    .frow { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; font-size: 12.5px; color: var(--faint); }
+    .frow a { color: var(--muted); text-decoration: none; }
+    .frow a:hover { color: var(--text); text-decoration: underline; }
+    .frow .sp { margin-left: auto; }
+    .legal { margin-top: 16px; font-size: 11.5px; line-height: 1.7; color: var(--faint); max-width: 90ch; }
+
+    @media (max-width: 900px) { .cards { grid-template-columns: 1fr; } .strip { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 640px) {
+      .page { padding: 0 16px; } .hide-sm { display: none !important; }
+      .hero { padding: 46px 0 10px; } section { padding: 46px 0; margin-top: 34px; }
+      .shot .opt { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13.4"/><path d="M13.4 6.6 18.8 12l-5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="nav-wrap">
+    <nav class="nav">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark">Tickr Lab</span>
+      </span>
+      <a class="link hide-sm" href="#what">What it is</a>
+      <a class="link hide-sm" href="#rules">The rules</a>
+      <a class="link" href="/blog">Blog</a>
+      <a class="btn" href="/login">Sign in</a>
+      <a class="btn btn-primary" href="/login?guest=1">Try it</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <div class="hero">
+      <span class="kicker"><span class="pip"></span>Screened nightly</span>
+      <h1>One screen for <em>every stock</em> you follow.</h1>
+      <p class="sub">Tickr Lab scores momentum and quality the same way every night, on a fixed scale, and shows
+        its working. No tips, no watch-this-space — a consistent way to see where every stock you track stands,
+        and how it got there.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="/login?guest=1">See it with real data
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow" /></svg></a>
+        <a class="btn" href="/blog">Read the blog</a>
+      </div>
+      <p class="under">The preview needs no account and no card. Members get the full universe.</p>
+    </div>
+
+    <div class="strip">
+      <div class="bezel"><div class="core"><div class="n g" id="sSymbols">271</div><div class="l">Stocks tracked</div></div></div>
+      <div class="bezel"><div class="core"><div class="n b">85</div><div class="l">Columns per stock</div></div></div>
+      <div class="bezel"><div class="core"><div class="n p">20 yrs</div><div class="l">Of daily history</div></div></div>
+      <div class="bezel"><div class="core"><div class="n c">4:15pm ET</div><div class="l">Refreshed daily</div></div></div>
+    </div>
+
+    <section id="what">
+      <span class="eyebrow">What it is</span>
+      <h2>A screener that explains itself.</h2>
+      <p class="lede">Most screens hand you a number and leave. Every score here opens into the factors behind it,
+        every verdict names the single rule that produced it, and every percentage can be traced to bars going
+        back to 2005.</p>
+      <div class="cards">
+        <div class="bezel card"><div class="core">
+          <span class="tag">Scores</span>
+          <h3>Momentum on a fixed scale</h3>
+          <p>Eight factors, each weighted and measured against constants rather than against today's list — so a
+            score means the same thing in a weak quarter as a strong one, and adding a stock doesn't move everyone
+            else's.</p>
+        </div></div>
+        <div class="bezel card"><div class="core">
+          <span class="tag">Advice</span>
+          <h3>Rules, not a black box</h3>
+          <p>Ordered rule lists where the first match wins, and the caution rules sit above every buy rule. Click a
+            verdict and the whole ladder opens: which rung fired, which were never reached, and how far the price
+            can fall before the answer changes.</p>
+        </div></div>
+        <div class="bezel card"><div class="core">
+          <span class="tag">Your view</span>
+          <h3>85 columns, or the nine you want</h3>
+          <p>Filter every column, save your own column views, keep personal lists over the shared universe, and
+            start from ready-made screens — day gainers, fresh highs, cheap and growing.</p>
+        </div></div>
+      </div>
+    </section>
+
+    <section id="rules">
+      <span class="eyebrow">The table</span>
+      <h2>What a row actually looks like.</h2>
+      <p class="lede">Scores, the day's move, the trend state, and the verdict with its reason — the same shape for
+        every stock, every night.</p>
+      <div class="bezel shot" style="margin-top:28px"><div class="core">
+        <table>
+          <thead><tr>
+            <th class="l">Name</th><th>Overall</th><th>Today</th><th>1Y</th>
+            <th class="opt">5Y</th><th class="l">Trend</th><th class="l">Advice</th>
+          </tr></thead>
+          <tbody>
+            <tr><td class="nm">Example Semis</td><td>8</td><td class="up">+2.4%</td><td class="up">+61.2%</td>
+                <td class="up opt">+318%</td><td class="l verdict">Strong uptrend</td>
+                <td class="l verdict v-buy">Buy — above the 200-day, pullback done</td></tr>
+            <tr><td class="nm">Example Bank</td><td>6</td><td class="up">+0.3%</td><td class="up">+12.9%</td>
+                <td class="up opt">+74%</td><td class="l verdict">Above 200D</td>
+                <td class="l verdict v-hold">Hold — extended, wait for a pullback</td></tr>
+            <tr><td class="nm">Example Retail</td><td>3</td><td class="dn">−1.8%</td><td class="dn">−22.4%</td>
+                <td class="dn opt">−41%</td><td class="l verdict">Breakdown</td>
+                <td class="l verdict v-avoid">Avoid — below both averages</td></tr>
+          </tbody>
+        </table>
+      </div></div>
+      <p class="shot-note">Illustration, not live data — the names are made up. The live table carries 85 columns
+        across thirteen groups.</p>
+    </section>
+
+    <section>
+      <span class="eyebrow">What we will not do</span>
+      <h2>Tell you something works when it doesn't.</h2>
+      <p class="lede">Every signal here has been tested against twenty years of bars, and the results are written
+        down — including the ones that failed. Five framings of the momentum delta came back flat, so the feature
+        built on them was removed rather than quietly kept.</p>
+      <div class="bezel quote" style="margin-top:28px"><div class="core">
+        <p>The screener is descriptive rather than predictive, and that is a legitimate thing for it to be: a
+          consistent way to see where every stock stands and how each got there.</p>
+        <p class="who">— from the project's own research log</p>
+      </div></div>
+    </section>
+
+    <section>
+      <span class="eyebrow">Under it</span>
+      <h2>The data, and how fresh it is.</h2>
+      <div class="cards">
+        <div class="bezel card"><div class="core">
+          <span class="tag">Nightly</span>
+          <h3>Fifteen minutes after the close</h3>
+          <p>Prices, scores and verdicts are rebuilt every trading evening, with prices refreshed through the
+            session. Every run is logged: how long it took, what it cost, what failed.</p>
+        </div></div>
+        <div class="bezel card"><div class="core">
+          <span class="tag">History</span>
+          <h3>Twenty years of daily bars</h3>
+          <p>Over a million rows, back to 2005, kept so a chart, a backtest and the screener all read from the same
+            archive rather than three different ones.</p>
+        </div></div>
+        <div class="bezel card"><div class="core">
+          <span class="tag">Fundamentals</span>
+          <h3>Recorded, not just shown</h3>
+          <p>Revenue, margins, cash, debt, share count and the dividend are stored each night, so the movement is
+            there later — the data provider only ever returns today.</p>
+        </div></div>
+      </div>
+    </section>
+
+    <section>
+      <span class="eyebrow">Questions</span>
+      <h2>The ones worth asking.</h2>
+      <div class="faq">
+        <details><summary>Is this investment advice?</summary>
+          <p>No. The Advice column is a mechanical reading of the table — rules applied to numbers, naming the rule
+            that fired. It knows nothing about you, your tax position or your timeline, and it is not a
+            recommendation. Nothing here is personalised advice.</p></details>
+        <details><summary>Can I try it without an account?</summary>
+          <p>Yes. The guest preview shows a handful of stocks with every column and every feature, needs no account
+            and no card, and stores nothing about you beyond a visit log.</p></details>
+        <details><summary>Where does the data come from?</summary>
+          <p>Prices and fundamentals come from Twelve Data; headlines from public news feeds; the NASDAQ reference
+            list from NASDAQ. Momentum, quality, the trend states and the Advice verdicts are computed here from
+            those inputs.</p></details>
+        <details><summary>How often is it wrong?</summary>
+          <p>A feed can be. ADR fundamentals in particular can be incoherent, and a refused data pull leaves a gap
+            rather than a guess. Where a number is uncertain the table shows it blank instead of filling it in.</p></details>
+        <details><summary>Who is it for?</summary>
+          <p>Someone who follows a few dozen to a few hundred stocks and wants one consistent view of them, rather
+            than a tip service. It is a personal project run in the open, not a brokerage.</p></details>
+      </div>
+    </section>
+
+    <div class="close">
+      <h2>Look at the real thing.</h2>
+      <p class="lede" style="margin:16px auto 0">The preview opens on live data in a couple of clicks.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="/login?guest=1">Try the preview
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow" /></svg></a>
+        <a class="btn" href="/blog">Read the blog</a>
+      </div>
+    </div>
+
+    <footer>
+      <div class="frow">
+        <span class="wordmark">Tickr Lab</span>
+        <a href="/blog">Blog</a>
+        <a href="/login">Sign in</a>
+        <a href="/login?guest=1">Guest preview</a>
+        <span class="sp"></span>
+        <span id="fresh"></span>
+      </div>
+      <p class="legal">Tickr Lab is an information tool, not a broker, adviser or recommendation service. Scores and
+        Advice verdicts are mechanical readings of published data and may be wrong, stale or incomplete. Nothing here
+        is personalised financial advice — do your own research, and consider a professional before you act.</p>
+    </footer>
+  </main>
+
+  <script>
+    // Two numbers on this page are claims about the product, so they come from
+    // the product rather than from the copy. Public, cached, and the page reads
+    // fine if the call fails — the markup ships with the last known values.
+    fetch('/api/public-stats').then((r) => r.json()).then((d) => {
+      if (d && d.symbols) document.getElementById('sSymbols').textContent = d.symbols.toLocaleString();
+      if (d && d.updatedAt) {
+        document.getElementById('fresh').textContent = 'Data as of ' +
+          new Date(d.updatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      }
+    }).catch(() => { /* the page is not about this number */ });
+  </script>
+</body>
+</html>

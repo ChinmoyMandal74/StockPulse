@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>%TITLE% — Tickr Lab</title>
+  <meta name="description" content="%DESC%" />
+  <meta property="og:title" content="%TITLE%" />
+  <meta property="og:description" content="%DESC%" />
+  <meta property="og:type" content="article" />
+  <link rel="canonical" href="%CANONICAL%" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; padding: 0 28px 90px; }
+    .aura { background:
+      radial-gradient(48vw 42vw at 6% -10%, rgba(124, 156, 255, 0.12), transparent 62%),
+      radial-gradient(46vw 40vw at 98% 2%, rgba(52, 211, 153, 0.10), transparent 64%); }
+    .nav-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center; padding: 16px 20px 0; pointer-events: none; }
+    .nav { pointer-events: auto; display: flex; align-items: center; gap: 8px; width: min(760px, 100%);
+      padding: 8px 10px 8px 18px; border-radius: 999px; background: rgba(9, 11, 15, 0.74);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+    .nav .mark { display: inline-flex; align-items: center; gap: 9px; margin-right: auto; text-decoration: none; color: var(--text); }
+    .nav .glyph { width: 26px; height: 26px; border-radius: 9px; display: inline-flex; align-items: center;
+      justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24); }
+
+    article { padding-top: 56px; }
+    .meta { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.06em; color: var(--faint); text-transform: uppercase; }
+    h1 { margin: 14px 0 0; font-size: clamp(32px, 5.2vw, 52px); font-weight: 600; letter-spacing: -0.04em; line-height: 1.02; }
+    .summary { margin: 18px 0 0; font-size: 16.5px; line-height: 1.65; color: var(--muted); }
+    .rule { margin: 34px 0; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+
+    .body { font-size: 15.5px; line-height: 1.78; color: #cfd6e2; }
+    .body h2 { margin: 40px 0 0; font-size: 25px; font-weight: 600; letter-spacing: -0.025em; color: var(--text); line-height: 1.2; }
+    .body h3 { margin: 30px 0 0; font-size: 19px; font-weight: 600; letter-spacing: -0.015em; color: var(--text); }
+    .body h4 { margin: 24px 0 0; font-size: 16px; font-weight: 600; color: var(--text); }
+    .body p { margin: 16px 0 0; }
+    .body ul, .body ol { margin: 16px 0 0; padding-left: 22px; }
+    .body li { margin: 7px 0; }
+    .body a { color: var(--accent); }
+    .body strong { color: var(--text); }
+    .body code { font-family: var(--mono); font-size: 13px; background: rgba(255, 255, 255, 0.06);
+                 padding: 2px 6px; border-radius: 6px; color: var(--text); }
+    .body pre { margin: 20px 0 0; padding: 16px 18px; border-radius: 14px; overflow-x: auto;
+                background: var(--surface-2); border: 1px solid var(--hair); }
+    .body pre code { background: none; padding: 0; font-size: 12.5px; line-height: 1.6; }
+    .body blockquote { margin: 20px 0 0; padding: 2px 0 2px 18px; border-left: 2px solid rgba(52, 211, 153, 0.5); color: var(--muted); }
+    .body blockquote p:first-child { margin-top: 0; }
+    .body hr { margin: 30px 0; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+
+    .after { margin-top: 54px; }
+    .after .core { padding: 26px 28px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+    .after p { margin: 0; font-size: 14px; color: var(--muted); max-width: 46ch; }
+    .after .btn { margin-left: auto; }
+    footer { margin-top: 40px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 24px;
+             display: flex; flex-wrap: wrap; gap: 16px; font-size: 12.5px; color: var(--faint); }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--text); text-decoration: underline; }
+    @media (max-width: 640px) { .page { padding: 0 16px 60px; } article { padding-top: 38px; } .after .btn { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+  </svg>
+
+  <div class="nav-wrap">
+    <nav class="nav">
+      <a class="mark" href="/">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark">Tickr Lab</span>
+      </a>
+      <a class="btn" href="/blog">All posts</a>
+      <a class="btn btn-primary" href="/login?guest=1">Try it</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <article>
+      <div class="meta">%META%</div>
+      <h1>%TITLE%</h1>
+      <p class="summary">%SUMMARY%</p>
+      <hr class="rule" />
+      <div class="body">%BODY%</div>
+    </article>
+
+    <div class="bezel after"><div class="core">
+      <p>Tickr Lab scores every stock it tracks the same way every night, and shows its working.</p>
+      <a class="btn btn-primary" href="/login?guest=1">See the screener</a>
+    </div></div>
+
+    <footer>
+      <a href="/blog">All posts</a>
+      <a href="/">Home</a>
+      <a href="/login">Sign in</a>
+    </footer>
+  </main>
+</body>
+</html>
