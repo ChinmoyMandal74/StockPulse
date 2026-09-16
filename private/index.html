@@ -230,6 +230,59 @@
        A slow crawl of headlines published in the last 12 hours, under the
        table. flex: none, so showing it takes one strip from the table's height
        rather than pushing the page taller — the same rule as the notices. */
+    /* ---- tiles: the same rows, drawn as cards ---------------------------
+       A short list (a portfolio, a screen, a filter) leaves most of the screen
+       empty as a table. Same data, same order, same filters — only the shape
+       changes, and the toggle sits beside View because that is the other
+       control that decides how the selection is drawn. */
+    .lay { display: inline-flex; padding: 2px; gap: 2px; border-radius: 999px;
+           border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03); }
+    .lay button { border: 0; background: none; color: var(--faint); cursor: pointer;
+                  font: 500 12px var(--sans); padding: 6px 12px; border-radius: 999px; }
+    .lay button:hover { color: var(--text); }
+    .lay button.on { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+    body.tiling .table-bezel { display: none; }
+    #tileWrap { flex: 1; min-height: 0; overflow: auto; }
+    body:not(.tiling) #tileWrap { display: none; }
+    .tiles { display: grid; gap: 12px; padding: 2px 2px 14px;
+             grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); }
+    .tile { position: relative; display: block; text-decoration: none; color: inherit;
+            border-radius: 18px; border: 1px solid var(--hair); background: var(--surface);
+            padding: 16px 18px 14px; transition: border-color .16s var(--ease), transform .16s var(--ease); }
+    .tile:hover { border-color: var(--hair-2); transform: translateY(-1px); }
+    .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .tl-top { display: flex; align-items: flex-start; gap: 10px; }
+    .tl-sym { font-family: var(--mono); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+    .tl-name { margin-top: 2px; font-size: 12px; color: var(--faint); overflow: hidden;
+               text-overflow: ellipsis; white-space: nowrap; max-width: 168px; }
+    .tl-px { margin-left: auto; text-align: right; }
+    .tl-price { font-family: var(--mono); font-size: 15px; font-variant-numeric: tabular-nums; }
+    .tl-today { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+    .tl-spark { margin: 12px 0 2px; height: 34px; }
+    .tl-spark svg { width: 100%; height: 34px; display: block; color: var(--muted); }
+    .tile:hover .tl-spark svg { color: var(--text); }
+    .tl-verdict { margin-top: 10px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+    .tl-v { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
+    .tl-trend { font-size: 11.5px; color: var(--muted); }
+    .tl-why { margin-top: 4px; font-size: 11.5px; line-height: 1.45; color: var(--faint);
+              display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .tl-rets { margin-top: 12px; padding-top: 11px; border-top: 1px solid rgba(255, 255, 255, 0.055);
+               display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .tl-ret { text-align: right; }
+    .tl-ret .k { font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+    .tl-ret .v { margin-top: 3px; font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+    .tl-scores { margin-top: 11px; display: flex; gap: 6px; align-items: center; }
+    .tl-chip { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 99px;
+               border: 1px solid var(--hair); color: var(--muted); }
+    .tl-chip b { font-weight: 600; color: var(--text); }
+    .tl-star { position: absolute; top: 12px; right: 12px; opacity: 0; }
+    .tile:hover .tl-star, .tl-star:focus-visible { opacity: 1; }
+    .tl-more { grid-column: 1 / -1; display: flex; justify-content: center; padding: 6px 0 2px; }
+    .tl-empty { padding: 34px 6px; color: var(--muted); font-size: 14px; }
+    .tl-hint { margin: 0 2px 10px; font-size: 12px; color: var(--faint); }
+    .up { color: var(--green); } .dn { color: var(--red); } .flat { color: var(--muted); }
+    @media (max-width: 520px) { .tiles { grid-template-columns: 1fr; } }
+
     .ticker { flex: none; margin-top: 8px; }
     .ticker > .core { display: flex; align-items: center; gap: 10px; height: 36px; box-sizing: border-box;
       padding: 0 6px 0 12px; overflow: hidden; }
@@ -788,6 +841,10 @@
           <button class="btn picker-btn" id="colBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="colMenu" role="listbox" aria-multiselectable="true" aria-label="Column views"></div>
         </div>
+        <span class="lay" id="layToggle" role="group" aria-label="Layout">
+          <button type="button" data-lay="table" class="on">Table</button>
+          <button type="button" data-lay="tiles">Tiles</button>
+        </span>
         <div class="picker" id="scrPicker" data-open="0">
           <button class="btn picker-btn" id="scrBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="scrMenu" role="listbox" aria-label="Screens"></div>
@@ -1098,6 +1155,8 @@
   </div>
     </div>
     </div>
+
+    <div id="tileWrap"><div class="tiles" id="tiles"></div></div>
 
     <div class="bezel ticker" id="ticker" hidden aria-label="Latest headlines">
       <div class="core">
@@ -1753,6 +1812,23 @@
     // Balanced only: it is the shared measurement, the one advice column that
     // is always shown, and the one every other surface reads.
     let adviceFilter = 'All';
+    // 'table' or 'tiles'. Saved per account: which shape you read in is a
+    // preference, not a property of the data.
+    let layout = 'table';
+    const tilesOn = () => layout === 'tiles';
+    let tilesShown = 60;           // grown by the More button; a tile is markup, 271 of them is not free
+
+    function setLayout(next, { save = true } = {}) {
+      layout = next === 'tiles' ? 'tiles' : 'table';
+      tilesShown = 60;
+      document.body.classList.toggle('tiling', tilesOn());
+      $('layToggle').querySelectorAll('[data-lay]').forEach((b) =>
+        b.classList.toggle('on', b.dataset.lay === layout));
+      if (save) savePrefs();
+      render();
+      if (!tilesOn()) paintWindow(true);   // the table sizes itself from its own height
+    }
+
     const adviceMoved = (s) => !!(s && s.advicePrev && s.action && s.advicePrev !== s.action);
 
     // Tab and sector together decide what the view is ABOUT; the changed
@@ -2505,6 +2581,63 @@
       paintSparklines();
     }
 
+    // The same rows the table would draw, in the same order, as cards. Nothing
+    // here re-derives a value: every number comes off the row the table uses,
+    // and the sparkline comes from the same cached markup.
+    function tileHTML(s) {
+      const cur = (s.currency || 'USD');
+      const sym = { USD: '$', EUR: '\u20ac', GBP: '\u00a3', JPY: '\u00a5', KRW: '\u20a9', CAD: 'C$',
+                    AUD: 'A$', HKD: 'HK$', TWD: 'NT$', INR: '\u20b9', CHF: 'CHF ' }[cur] || (cur + ' ');
+      const pct = (v, cls) => (v == null || !isFinite(v)
+        ? '<span class="flat">\u2014</span>'
+        : `<span class="${cls === false ? '' : v >= 0 ? 'up' : 'dn'}">${v >= 0 ? '+' : ''}${Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1)}%</span>`);
+      const v = s.action || '';
+      const vcls = /Buy/.test(v) ? 'up' : /Sell|Avoid/.test(v) ? 'dn' : 'flat';
+      const ret = (k, val) => `<div class="tl-ret"><div class="k">${k}</div><div class="v">${pct(val)}</div></div>`;
+      const spark = sparkCache[s.symbol] ? `<div class="tl-spark">${sparkCache[s.symbol]}</div>` : '';
+      const chip = (label, n) => (n == null ? '' : `<span class="tl-chip">${label} <b>${n}</b></span>`);
+      return `<a class="tile" href="/stock/${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener" ` +
+        `aria-label="${we(s.symbol)} ${we(s.shortName || s.name || '')}">` +
+        '<div class="tl-top"><div>' +
+        `<div class="tl-sym">${we(s.symbol)}</div>` +
+        // A display name that has collapsed to the ticker (a short legal name,
+        // an ETF) would print the symbol twice; show the legal name instead.
+        ((s.shortName || s.name) && (s.shortName || s.name) !== s.symbol
+          ? `<div class="tl-name" title="${we(s.name || '')}">${we(s.shortName || s.name)}</div>`
+          : (s.name && s.name !== s.symbol ? `<div class="tl-name">${we(s.name)}</div>` : '')) +
+        '</div><div class="tl-px">' +
+        `<div class="tl-price">${s.price == null ? '\u2014' : sym + s.price.toFixed(2)}</div>` +
+        `<div class="tl-today">${pct(s.todayPct)}</div>` +
+        '</div></div>' +
+        spark +
+        (v ? '<div class="tl-verdict">' +
+          `<span class="tl-v ${vcls}">${we(v)}</span>` +
+          (s.actionTrend ? `<span class="tl-trend">${we(s.actionTrend)}</span>` : '') +
+          '</div>' + (s.actionFlag ? `<div class="tl-why">${we(s.actionFlag)}</div>` : '') : '') +
+        '<div class="tl-rets">' + ret('1W', s.oneWeekPct) + ret('1M', s.oneMonthPct) +
+        ret('1Y', s.oneYearPct) + ret('5Y', s.fiveYearPct) + '</div>' +
+        '<div class="tl-scores">' + chip('Overall', s.overallRating) + chip('Mom', s.momentumRating) +
+        chip('Qual', s.qualityRating) +
+        (s.sector ? `<span class="tl-chip">${we(s.sector)}</span>` : '') + '</div>' +
+        '</a>';
+    }
+
+    function paintTiles(rows) {
+      const box = $('tiles');
+      if (!rows.length) {
+        box.innerHTML = '<div class="tl-empty">Nothing matches — loosen a filter above.</div>';
+        return;
+      }
+      const page = rows.slice(0, tilesShown);
+      box.innerHTML = page.map(tileHTML).join('') +
+        (rows.length > page.length
+          ? `<div class="tl-more"><button class="btn" id="tileMore">Show ${Math.min(60, rows.length - page.length)} more ` +
+            `(${page.length} of ${rows.length})</button></div>`
+          : '');
+      const more = $('tileMore');
+      if (more) more.addEventListener('click', () => { tilesShown += 60; render(); });
+    }
+
     function render() {
       renderPicker();
       renderSectorTrigger();
@@ -2545,6 +2678,7 @@
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
         tbody.innerHTML = `<tr><td class="empty" colspan="83">${msg}</td></tr>`;
+        if (tilesOn()) $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`;
         researchSymbol = null;
         renderResearchMenu();
         applyGroups();
@@ -2575,7 +2709,9 @@
 
       winRows = sorted;
       winFresh = freshest;
-      paintWindow(true);
+      // One selection, two shapes. The tiles read the sorted rows the table
+      // would have drawn, so a sort, a filter or a screen changes both.
+      if (tilesOn()) paintTiles(sorted); else paintWindow(true);
 
       applyGroups();
       // Cheap when the cache is warm; kicks off the one fetch when it is not.
@@ -2912,6 +3048,7 @@
         const savedC = res && res.prefs && Screens.cleanWeights(res.prefs.customWeights);
         if (savedC) customWeights = Object.assign(Screens.defaultWeights(), savedC);
         if (res && res.prefs && res.prefs.tickerOff === true) tickerOff = true;
+        if (res && res.prefs && res.prefs.layout === 'tiles') setLayout('tiles', { save: false });
         if (res && res.prefs && /^(standard|[a-z0-9]{8})$/.test(String(res.prefs.activeView || ''))) activeViewId = res.prefs.activeView;
         if (res && res.prefs && res.prefs.filterRow === true) {
           filterRowOn = true;
@@ -2943,7 +3080,7 @@
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
           prefs: { collapsed: out, weights: weightPreset, customWeights,
-            filterRow: filterRowOn, tickerOff, activeView: activeViewId },
+            filterRow: filterRowOn, tickerOff, activeView: activeViewId, layout },
         }).catch(() => {});
       }, 600);
     }
@@ -4045,6 +4182,13 @@
 
     // Editing is a prompt rather than an inline field: it happens rarely, on
     // one cell, and a prompt cannot be left half-finished in the table.
+    $('layToggle').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-lay]');
+      if (!b || b.dataset.lay === layout) return;
+      setLayout(b.dataset.lay);
+      window.track && track('picker', 'layout:' + layout);
+    });
+
     $('tbody').addEventListener('click', async (e) => {
       const b = e.target.closest('.snEdit');
       if (!b) return;

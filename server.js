@@ -4180,6 +4180,8 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   if (incoming.filterRow === true) out.filterRow = true;
   // The news ticker is on by default; only hiding it is stored.
   if (incoming.tickerOff === true) out.tickerOff = true;
+  // Table or tiles: which shape the screener draws the same rows in.
+  if (incoming.layout === 'tiles') out.layout = 'tiles';
   // Which column view the screener opens in: 'standard' or a view's id.
   if (/^(standard|[a-z0-9]{8})$/.test(String(incoming.activeView || ''))) out.activeView = String(incoming.activeView);
   await store.writePrefs(await prefsKey(req), out);

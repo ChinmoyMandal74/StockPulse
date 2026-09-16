@@ -271,6 +271,16 @@ The **Info** banner spans eight columns — Overall, Mom., Qual., Portfolios, Pr
 - Nothing is deleted: the data keeps being recorded, and unticking restores the column. An open screener tab keeps the old set until it reloads, which the admin note says.
 - Verified end to end against the real server and pages in headless Chrome (20 checks — catalogue size and labels, unknown ids dropped, malformed PUT refused, `siteHidden` on prefs, the admin list/count/search/group tick, the column gone from header and body, a fully hidden group losing its banner, the neighbouring banner's span, a view unable to show a hidden column, the editor not offering one), plus the 42-check column suite re-run to prove the nothing-hidden case is unchanged.
 
+### Tiles — the same rows, drawn as cards
+**A Table / Tiles toggle beside View (2026-09-16).** A short selection — a portfolio, a screen, a filter — leaves two-thirds of the screen empty as a table; the owner asked for a nicer shape for exactly that case (the Mag 7 view, 7 rows). **One selection, two shapes**: `render()` builds the same `sorted` rows and then either `paintWindow()` or `paintTiles()`, so the sort, the portfolio, the sector/industry/advice pickers, the Changed chip, the screens and every column filter apply identically. `body.tiling` hides the table bezel and shows `#tileWrap`.
+
+- **A tile shows**: symbol, display name, price and today's move, the 90-day sparkline (the SAME `sparkCache` markup the table's column uses — not a second drawing), the Balanced verdict with its fired rule and the trend word, four returns (1W / 1M / 1Y / 5Y) and chips for Overall / Mom / Qual and the sector. Nothing is re-derived: every value comes off the row the table would have drawn.
+- **The whole tile is one link** to `/stock/<SYMBOL>` in a new tab, so tabbing moves tile to tile and Enter opens — no mouse-only targets.
+- **A return of 100% or more drops its decimal** (`+850%`, not `+849.7%`), and **the name line is omitted when the display name has collapsed to the ticker**, which would otherwise print the symbol twice.
+- **Capped at 60 with a More button**: a tile is markup and 271 of them is not free. The windowed table's own budget is untouched.
+- **Saved per account** (`prefs.layout`, `'tiles'` only — table is the default and stores nothing), so it opens the way it was left; the PUT whitelist takes the one value.
+- Verified in a browser over a 7-stock portfolio: 16 checks — the toggle, table hidden / tiles shown and back, one tile per row, the fields on a tile, the new-tab link, the 100% rounding, the name-line rule, tiles following the table's sort, the preference saved and re-read on the next load, the empty state, no console errors. The column-structure and changed-chip suites were re-run unchanged.
+
 ### Column views
 **Named column sets per account, switched from the `View` menu (the former Columns button), 2026-09-15.** The column half of what personal portfolios are for rows. **Standard** is the full grouped table and keeps the group toggles; a view shows Symbol, Name and exactly its own columns, **in the table's existing order (v1 — the owner chose this over drag-to-reorder)**.
 
