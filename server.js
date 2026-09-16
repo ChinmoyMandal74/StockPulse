@@ -4133,9 +4133,11 @@ const TILE_GROUPS = ['info', 'rank', 'act', 'chart', 'short', 'long', 'rel', 'tr
 // test caught a field key of `evil|drop table` being stored.
 const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|trend|vol|size|fund|own)\|[^|]{1,32}$/;
 const TILE_SPARK_DAYS = [0, 21, 63, 126, 252];
-const TILE_FIELDS_MAX = 8;
+const TILE_FIELDS_MAX = 6;   // six reads as a tile; eight reads as a table cell
+const TILE_HEIGHTS = [44, 72, 110];
 const TILE_DEFAULT = {
   spark: 90,                    // trading sessions in the tile's chart; 0 hides it
+  sparkH: 72,                   // how tall it is drawn, in pixels
   fields: ['short|1W', 'short|1M', 'long|1Y', 'long|5Y'],
   scores: true,                 // the Overall / Mom / Qual chips
   sector: true,
@@ -4152,7 +4154,8 @@ function cleanTileConfig(raw) {
     ? [...new Set(c.fields.filter((f) => typeof f === 'string' && TILE_FIELD_RE.test(f)))].slice(0, TILE_FIELDS_MAX)
     : TILE_DEFAULT.fields;
   const flag = (k) => (typeof c[k] === 'boolean' ? c[k] : TILE_DEFAULT[k]);
-  return { spark, fields, scores: flag('scores'), sector: flag('sector'),
+  const sparkH = TILE_HEIGHTS.includes(Number(c.sparkH)) ? Number(c.sparkH) : TILE_DEFAULT.sparkH;
+  return { spark, sparkH, fields, scores: flag('scores'), sector: flag('sector'),
     verdict: flag('verdict'), why: flag('why'), trend: flag('trend') };
 }
 
@@ -4166,7 +4169,8 @@ async function tileConfig() {
 
 app.get('/api/tile-config', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ tile: await tileConfig(), sparkDays: [21, 63, 126, 252], max: TILE_FIELDS_MAX });
+  res.json({ tile: await tileConfig(), sparkDays: [21, 63, 126, 252],
+    heights: TILE_HEIGHTS, max: TILE_FIELDS_MAX });
 }));
 
 app.put('/api/tile-config', requireAdmin, route(async (req, res) => {

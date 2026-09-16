@@ -275,9 +275,13 @@
     .tl-px { margin-left: auto; text-align: right; }
     .tl-price { font-family: var(--mono); font-size: 15px; font-variant-numeric: tabular-nums; }
     .tl-today { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 2px; }
-    .tl-spark { margin: 12px 0 2px; height: 34px; }
-    .tl-spark svg { width: 100%; height: 34px; display: block; color: var(--muted); }
+    .tl-spark { margin: 12px 0 2px; }
+    .tl-spark svg { width: 100%; display: block; color: var(--muted); height: var(--tl-h, 72px); }
+    .tl-spark .spark-area { fill: currentColor; opacity: 0.10; }
     .tile:hover .tl-spark svg { color: var(--text); }
+    /* Its own colour on a tile, unlike the table's deliberately neutral column:
+       a tile is a picture of one stock, and the line is the biggest thing on it. */
+    .tl-spark.up svg { color: var(--green); } .tl-spark.dn svg { color: var(--red); }
     .tl-verdict { margin-top: 10px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
     .tl-v { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
     .tl-trend { font-size: 11.5px; color: var(--muted); }
@@ -1059,6 +1063,12 @@
             <option value="90">90 days</option>
             <option value="126">6 months</option>
             <option value="252">1 year</option>
+          </select>
+          <label for="tdHeight" style="margin-left:14px">Chart height</label>
+          <select id="tdHeight">
+            <option value="44">Short</option>
+            <option value="72">Medium</option>
+            <option value="110">Tall</option>
           </select>
         </div>
         <div class="td-toggles" id="tdToggles"></div>
@@ -1903,7 +1913,7 @@
     // What a tile SHOWS: one setting for the whole site, from /api/prefs.
     // The field keys are rowcard's own (`group|label`), so a tile and the hover
     // card format the same field the same way.
-    let tileCfg = { spark: 90, fields: ['short|1W', 'short|1M', 'long|1Y', 'long|5Y'],
+    let tileCfg = { spark: 90, sparkH: 72, fields: ['short|1W', 'short|1M', 'long|1Y', 'long|5Y'],
       scores: true, sector: true, verdict: true, why: true, trend: true };
 
     // Applied to the grid rather than to each tile, so changing it is one
@@ -2700,8 +2710,10 @@
         return `<div class="tl-f"><span class="k">${we(label)}</span>` +
           `<span class="v ${v.c === 'na' ? 'na' : v.c}">${we(v.t)}</span></div>`;
       }).filter(Boolean).join('');
-      const art = tileCfg.spark ? tileSpark(s.symbol) : '';
-      const spark = art ? `<div class="tl-spark">${art}</div>` : '';
+      const art = tileSpark(s.symbol);
+      const spark = art
+        ? `<div class="tl-spark ${art.up ? 'up' : 'dn'}" style="--tl-h:${Number(tileCfg.sparkH) || 72}px">${art.svg}</div>`
+        : '';
       const chip = (label, n) => (n == null ? '' : `<span class="tl-chip">${label} <b>${n}</b></span>`);
       return `<a class="tile" href="/stock/${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener" ` +
         `aria-label="${we(s.symbol)} ${we(s.shortName || s.name || '')}">` +
@@ -2732,22 +2744,25 @@
 
     // The table's 90d column and the tiles can want different periods. 90 days
     // reuses the column's cache; anything else gets its own, fetched once.
-    const tileSparkCache = {};
+    // Drawn for the tile rather than borrowed from the table's 90d column: the
+    // column's 32-unit box stretched to 110px thickens the stroke unevenly.
+    const tileSparkCache = {};       // { sym: { svg, up } }
     let tileSparkFor = null;
+    const tileSparkKey = () => `${tileCfg.spark}|${tileCfg.sparkH}`;
     function tileSpark(sym) {
-      if (!tileCfg.spark) return '';
-      if (tileCfg.spark === 90) return sparkCache[sym] || '';
-      return tileSparkCache[sym] || '';
+      if (!tileCfg.spark) return null;
+      return tileSparkCache[sym] || null;
     }
     async function loadTileSparks() {
       const days = Number(tileCfg.spark) || 0;
-      if (!days || days === 90 || tileSparkFor === days) return;
-      tileSparkFor = days;
+      const key = tileSparkKey();
+      if (!days || tileSparkFor === key) return;
+      tileSparkFor = key;
       try {
         const data = await api('GET', '/api/sparklines?days=' + days);
         for (const [sym, closes] of Object.entries(data.closes || {})) {
-          const svg = RowCard.sparkSVG(closes);
-          if (svg) tileSparkCache[sym] = svg;
+          const svg = RowCard.sparkSVG(closes, { w: 240, h: Number(tileCfg.sparkH) || 72, pad: 6, area: true });
+          if (svg) tileSparkCache[sym] = { svg, up: closes[closes.length - 1] >= closes[0] };
         }
         if (tilesOn()) render();
       } catch (e) { tileSparkFor = null; }
@@ -4322,6 +4337,7 @@
     // everyone. The field list comes from rowcard's catalogue — the same
     // description the hover card renders from.
     let tdDraft = null;
+    const TILE_FIELDS_MAX = 6;     // the server's cap, restated so the dialog can show it
     const TD_TOGGLES = [
       ['verdict', 'Advice verdict'], ['why', 'The rule that fired'], ['trend', 'Trend state'],
       ['scores', 'Score chips'], ['sector', 'Sector chip'],
@@ -4349,7 +4365,7 @@
         cb.addEventListener('change', () => {
           const key = cb.dataset.tfield;
           if (cb.checked) {
-            if (tdDraft.fields.length >= 8) { cb.checked = false; return; }
+            if (tdDraft.fields.length >= TILE_FIELDS_MAX) { cb.checked = false; return; }
             if (!tdDraft.fields.includes(key)) tdDraft.fields.push(key);
           } else tdDraft.fields = tdDraft.fields.filter((k) => k !== key);
           tdCount();
@@ -4360,15 +4376,17 @@
       $('tdToggles').querySelectorAll('[data-tflag]').forEach((cb) =>
         cb.addEventListener('change', () => { tdDraft[cb.dataset.tflag] = cb.checked; }));
       $('tdSpark').value = String(tdDraft.spark);
+      $('tdHeight').value = String(tdDraft.sparkH || 72);
+      $('tdHeight').disabled = !Number(tdDraft.spark);
     }
 
     // The count, and the cap: at eight, the boxes not already ticked go quiet
     // rather than silently refusing a click.
     function tdCount() {
       const n = tdDraft.fields.length;
-      $('tdCount').textContent = `${n} of 8 fields`;
+      $('tdCount').textContent = `${n} of ${TILE_FIELDS_MAX} fields`;
       $('tdList').querySelectorAll('[data-tfield]').forEach((cb) => {
-        cb.disabled = !cb.checked && n >= 8;
+        cb.disabled = !cb.checked && n >= TILE_FIELDS_MAX;
         cb.closest('label').style.opacity = cb.disabled ? '0.45' : '';
       });
     }
@@ -4382,6 +4400,7 @@
 
     async function saveTileDialog() {
       tdDraft.spark = Number($('tdSpark').value) || 0;
+      tdDraft.sparkH = Number($('tdHeight').value) || 72;
       $('tdSave').disabled = true;
       try {
         const r = await api('PUT', '/api/tile-config', { tile: tdDraft });
@@ -4401,7 +4420,11 @@
     $('tdCancel').addEventListener('click', () => $('tileDialog').close());
     $('tdSave').addEventListener('click', saveTileDialog);
     $('tdSearch').addEventListener('input', paintTileDialog);
-    $('tdSpark').addEventListener('change', () => { tdDraft.spark = Number($('tdSpark').value) || 0; });
+    $('tdSpark').addEventListener('change', () => {
+      tdDraft.spark = Number($('tdSpark').value) || 0;
+      $('tdHeight').disabled = !tdDraft.spark;
+    });
+    $('tdHeight').addEventListener('change', () => { tdDraft.sparkH = Number($('tdHeight').value) || 72; });
 
     $('tileCols').addEventListener('change', (e) => {
       tileCols = /^(auto|[2-6])$/.test(e.target.value) ? e.target.value : 'auto';

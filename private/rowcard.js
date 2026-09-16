@@ -280,9 +280,18 @@
   // flags — at 72x20 there is no room for a baseline, an end dot or padding,
   // and a function that draws "everything except" is harder to reason about
   // than two small ones.
-  function sparkSVG(closes) {
+  // opts.h draws it taller — the tiles ask for 44-110 where the table's column
+  // asks for 32. The viewBox height is the height in PIXELS the caller will
+  // give it, so the vertical scale stays 1:1 and a tall chart is a taller
+  // drawing rather than the 32-unit one stretched (which thickens the stroke
+  // unevenly, since preserveAspectRatio is none).
+  //
+  // opts.area closes the path to the floor for a soft fill: worth it on a tile,
+  // which is a picture, and deliberately not in the table, which is a table.
+  function sparkSVG(closes, opts) {
     if (!closes || closes.length < 2) return '';
-    const W = 120, H = 32, PAD = 3;
+    const o = opts || {};
+    const W = o.w || 120, H = o.h || 32, PAD = o.pad == null ? 3 : o.pad;
     const lo = Math.min.apply(null, closes);
     const hi = Math.max.apply(null, closes);
     const span = (hi - lo) || 1;
@@ -292,8 +301,10 @@
       const y = PAD + (1 - (closes[i] - lo) / span) * (H - PAD * 2);
       d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
     }
+    const area = o.area
+      ? `<path class="spark-area" d="${d}L${W} ${H}L0 ${H}Z" stroke="none"/>` : '';
     return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` +
-           `<path d="${d}"/></svg>`;
+           area + `<path d="${d}"/></svg>`;
   }
 
   // Returns { svg, log, ticks }. The caller labels the chart when the scale is
