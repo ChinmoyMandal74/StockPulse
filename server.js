@@ -2961,6 +2961,22 @@ app.get('/api/status', requireAuth, route(async (req, res) => {
 // Compute the full screener payload live from the API. As-of mode (asOf set)
 // recomputes momentum as it looked on that date (plus forward returns); fundamentals
 // are skipped — they aren't point-in-time. Returns {ok, payload} or {ok:false, status, error}.
+// Where a refresh round's wall clock goes. One line per round in the logs —
+// added 2026-09-15, when a plain refresh went from 15s to 140s after the bar
+// archive tripled and there was no way to tell which phase had slowed.
+function phaseTimer() {
+  const t = {};
+  let last = Date.now();
+  return {
+    mark(name) { t[name] = (t[name] || 0) + (Date.now() - last); last = Date.now(); },
+    skip() { last = Date.now(); },
+    line() {
+      return Object.entries(t).filter(([, ms]) => ms >= 50)
+        .map(([k, ms]) => `${k} ${(ms / 1000).toFixed(1)}s`).join(' · ');
+    },
+  };
+}
+
 async function computeStocks(asOf, opts = {}) {
   if (!API_KEY) {
     return { ok: false, status: 500, error: 'TWELVE_DATA_API_KEY is not set. Copy .env.example to .env and add your key.' };
@@ -2977,9 +2993,11 @@ async function computeStocks(asOf, opts = {}) {
   // strength, without adding it to any portfolio or the output rows.
   const BENCHMARK = 'SPY';
   const fetchSymbols = symbols.includes(BENCHMARK) ? symbols : [...symbols, BENCHMARK];
+  const T = phaseTimer();
   const names = await readNames();
   const shortOverrides = await store.readShortNames();
   const profiles = asOf ? {} : await ensureProfiles(symbols, opts.profileCap); // no point-in-time fundamentals
+  T.mark('profiles');
 
   try {
     let series;
@@ -3109,6 +3127,7 @@ async function computeStocks(asOf, opts = {}) {
       spyThreeMonthPct = pctChange(spyFull, THREE_MONTH);
     }
 
+    T.mark('prices');
     const stocks = symbols.map((sym) => {
       const s = series[sym] || {};
       const full = s.values;
@@ -3313,7 +3332,9 @@ async function computeStocks(asOf, opts = {}) {
     // so honestly replayable — which is why it survived the momentum cull that
     // took the past-score columns this window used to share.
     try {
+      T.mark('score');
       const bars = await trendBars(stocks.map((r) => r.symbol));
+      T.mark('trend-bars');
       for (const row of stocks) {
         const tb = bars[row.symbol];
         // `x.d`, not `x.datetime` — readBarsFor returns { d, high, close }. The
@@ -3338,6 +3359,7 @@ async function computeStocks(asOf, opts = {}) {
     if (!asOf && !opts.archivePrices) {
       try {
         const b = await persistBars(pricedLive || symbols, series);
+        T.mark('persist-bars');
         if (b.inserted) {
           console.log(`bars: +${b.inserted} rows across ${b.symbols} symbols` +
                       (b.rewritten ? `, ${b.rewritten} rewritten in full` : ''));
@@ -3347,6 +3369,8 @@ async function computeStocks(asOf, opts = {}) {
       }
     }
 
+    const line = T.line();
+    if (line) console.log(`refresh phases: ${line}`);
     return { ok: true, payload: { stocks, portfolios: portfolioNames, asOf, updatedAt: new Date().toISOString() } };
   } catch (err) {
     return { ok: false, status: 502, error: `Failed to reach Twelve Data: ${err.message}` };
