@@ -300,6 +300,10 @@ The **Info** banner spans eight columns — Overall, Mom., Qual., Portfolios, Pr
 
 **Two more of the same shape were found and fixed in the same hour**, both on the refresh path, both reading the whole bars table every round: `barsMaxDates()` (`select symbol, max(d), count(*) ... group by symbol` — 1.08M rows, 133ms; now one `order by d desc limit 1` seek per symbol, 271 rows, 57ms, and the `count` it also returned was never read by anything) and `barsOn()` for the split probe (`where d in (...)`, which the `(symbol, d)` primary key cannot seek on a date alone — 1.08M rows, 261ms; now one seek per (symbol, date) pair, 271 rows, 62ms). **A refresh round went from ~2.2M rows read to ~800.**
 
+**Being over quota SLOWS the database, it does not only bill for it.** The same evening a plain refresh went 15s → 143s → 187s with identical API usage (272 credits, no profiles), and came back to **25-39s** once the plan was upgraded and the scans were gone. So an unexplained, uniform slowdown on every database call is worth checking against the Turso usage page before it is debugged as a code problem.
+
+**`phaseTimer()` exists because that was invisible.** Every round now logs and returns `phases` on the payload — `profiles 0.1s · prices 3.0s · score 0.5s · trend-bars 5.4s · persist-bars 2.4s` — since Vercel's log view does not show a function's stdout. **`trend-bars` is the one to watch**: it is `readBarsFor(universe, 650 days)`, 118,671 rows at 271 symbols and ~440k at 1,000.
+
 **The rule this leaves: on this database, a `group by` over a whole table is a quota event, not a slow query.** Prefer N indexed seeks — they are cheaper in rows AND in time. Measured read sizes to budget against (271 symbols, 1.08M bars):
 
 | path | rows read | when |
