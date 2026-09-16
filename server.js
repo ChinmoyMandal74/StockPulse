@@ -2866,7 +2866,7 @@ function profileGaps(universe, profiles) {
 async function missingPlan() {
   const universe = (await readUniverse());
   const gaps = profileGaps(universe, await readProfiles());
-  const dates = await store.barsMaxDates();
+  const dates = await store.barsMaxDates(universe);
   const noBars = universe.filter((s) => !dates.has(s));
   let left = gaps.length;
   let rounds = 0;
@@ -3378,7 +3378,7 @@ const barRow = (symbol, b) => {
 // Only ever called for a live pull. An as-of pull fetches a different, truncated
 // range, and persisting from that path would poison the archive.
 async function persistBars(symbols, series) {
-  const meta = await store.barsMaxDates();
+  const meta = await store.barsMaxDates(symbols);
 
   const probes = [];
   const have = [];
@@ -3389,7 +3389,7 @@ async function persistBars(symbols, series) {
     const p = v[Math.min(SPLIT_PROBE_BARS, v.length - 1)];
     if (p && p.datetime) probes.push({ sym, d: String(p.datetime).slice(0, 10), close: parseFloat(p.close) });
   }
-  const stored = await store.barsOn(probes.map((x) => x.d));
+  const stored = await store.barsOn(probes);
   const probeBySym = new Map(probes.map((x) => [x.sym, x]));
 
   let inserted = 0, rewritten = 0;
@@ -4898,7 +4898,7 @@ async function liveRefreshOpts() {
   // round; everything else comes off the archive. notePriceRound then stamps
   // prices_at, so every later round is an archive round.
   if (running && running.mode === 'missing' && !archivePrices && !ANALYST_ENABLED) {
-    const dates = await store.barsMaxDates();
+    const dates = await store.barsMaxDates(universe);
     const slice = universe.filter((s) => !dates.has(s)).slice(0, CREDITS_PER_MINUTE - 1);
     return {
       archivePrices: false,

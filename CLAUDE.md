@@ -298,6 +298,8 @@ The **Info** banner spans eight columns — Overall, Mom., Qual., Portfolios, Pr
 ### Turso meters ROWS READ — the anchor query was the lesson
 **Turso sent a 75%-of-quota warning hours after the archive was deepened to 1.08M rows (2026-09-15).** The cause was `closesBefore()`, which the new 5Y column calls **on every refresh round**: it joined against `select symbol, max(d) from bars where d < ? group by symbol`, and at a five-year boundary that reads **748,859 rows** — about 35 times a day across the nightly rounds and the intraday runs, so tens of millions of rows a day for 254 numbers. Rewritten to seek per symbol on the `(symbol, d)` primary key, batched and chunked at 250: **254 rows and 80ms, against 748,859 rows and 231ms**. Same answers, verified against the old query.
 
+**Two more of the same shape were found and fixed in the same hour**, both on the refresh path, both reading the whole bars table every round: `barsMaxDates()` (`select symbol, max(d), count(*) ... group by symbol` — 1.08M rows, 133ms; now one `order by d desc limit 1` seek per symbol, 271 rows, 57ms, and the `count` it also returned was never read by anything) and `barsOn()` for the split probe (`where d in (...)`, which the `(symbol, d)` primary key cannot seek on a date alone — 1.08M rows, 261ms; now one seek per (symbol, date) pair, 271 rows, 62ms). **A refresh round went from ~2.2M rows read to ~800.**
+
 **The rule this leaves: on this database, a `group by` over a whole table is a quota event, not a slow query.** Prefer N indexed seeks — they are cheaper in rows AND in time. Measured read sizes to budget against (271 symbols, 1.08M bars):
 
 | path | rows read | when |

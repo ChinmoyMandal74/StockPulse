@@ -1224,26 +1224,51 @@ const barInsert = (r) => ({
 
 // Newest stored date per symbol, in one query — the refresh path needs it for
 // every symbol at once and must not make 69 round trips to find out.
-async function barsMaxDates() {
+// The newest stored bar per symbol. SEEKS, not a `group by` over the table:
+// that scanned all 1,077,738 rows on every refresh round (measured 133ms and,
+// more to the point, 1.08M rows read against a metered quota). One indexed
+// probe per symbol answers the same question from 271 rows in 57ms. The row
+// COUNT the old version also returned was never read by anything.
+async function barsMaxDates(symbols) {
   await init();
-  const r = await db.execute('select symbol, max(d) as maxd, count(*) as n from bars group by symbol');
+  const syms = [...new Set((symbols || []).map((x) => String(x).toUpperCase()))];
   const out = new Map();
-  for (const row of r.rows) out.set(row.symbol, { maxDate: row.maxd, count: Number(row.n) });
+  if (!syms.length) return out;
+  for (let i = 0; i < syms.length; i += ANCHOR_CHUNK) {
+    const slice = syms.slice(i, i + ANCHOR_CHUNK);
+    const res = await db.batch(slice.map((s) => ({
+      sql: 'select d from bars where symbol = ? order by d desc limit 1', args: [s],
+    })), 'read');
+    slice.forEach((s, k) => {
+      const row = res[k].rows[0];
+      if (row && row.d) out.set(s, { maxDate: row.d });
+    });
+  }
   return out;
 }
 
 // Stored closes on a handful of dates, for the split probe. One query for the
 // whole universe: US symbols share trading days, so the date set is tiny.
-async function barsOn(dates) {
+// The split probe's stored closes — one per (symbol, date) pair the caller
+// asks about. `where d in (...)` had no index to use (the primary key is
+// (symbol, d), so a date alone cannot seek) and scanned the whole table:
+// 1.08M rows and 261ms, against 271 rows and 62ms for the pairs.
+async function barsOn(pairs) {
   await init();
-  const list = [...new Set(dates.filter(Boolean))];
-  if (!list.length) return new Map();
-  const r = await db.execute({
-    sql: `select symbol, d, close from bars where d in (${list.map(() => '?').join(',')})`,
-    args: list,
-  });
+  const list = (pairs || []).filter((p) => p && p.sym && p.d);
   const out = new Map();
-  for (const row of r.rows) out.set(row.symbol + '|' + row.d, Number(row.close));
+  if (!list.length) return out;
+  for (let i = 0; i < list.length; i += ANCHOR_CHUNK) {
+    const slice = list.slice(i, i + ANCHOR_CHUNK);
+    const res = await db.batch(slice.map((p) => ({
+      sql: 'select close from bars where symbol = ? and d = ?',
+      args: [String(p.sym).toUpperCase(), p.d],
+    })), 'read');
+    slice.forEach((p, k) => {
+      const row = res[k].rows[0];
+      if (row) out.set(String(p.sym).toUpperCase() + '|' + p.d, Number(row.close));
+    });
+  }
   return out;
 }
 
