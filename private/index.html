@@ -533,8 +533,11 @@
     .chgFilter.on { color: var(--amber); border-color: rgba(251, 191, 36, 0.45);
                     background: rgba(251, 191, 36, 0.1); }
     .chgFilter:disabled { opacity: 0.45; cursor: default; }
-    /* and the rows themselves, so a change is visible while browsing too */
-    tr.chgRow td.frz0 { box-shadow: inset 3px 0 0 var(--amber); }
+    /* The rows themselves used to carry an amber bar on the Symbol cell. It went
+       on 2026-09-16: the Changed chip filters to exactly these rows, and the
+       per-column chevron still marks which verdict moved, so the bar was a
+       third way of saying the same thing. adviceMoved() stays — the chip and
+       its count are built on it. */
     /* The frozen name column: the link ellipsizes, the pencil sits beside it.
        Width comes from .frz1 above, not from here — this cell IS that column
        now that Name has gone, and two different widths would fight. */
@@ -2367,7 +2370,7 @@
               ? `Cached ${fmtDateTime(s.profileFetchedAt)} — auto-refreshes daily (Refresh All to force)`
               : 'Not fetched yet — backfills over the next refreshes');
         const fwdTitle = 'Forward return after the as-of date (what happened next)';
-        return `<tr style="--i:${i}"${adviceMoved(s) ? ' class="chgRow"' : ''}>
+        return `<tr style="--i:${i}">
           ${symbolCell(s, freshest)}
           ${shortNameCell(s)}
           <td class="left grp-info">${badges(s.portfolios)}${myBadges(s.symbol)}</td>
