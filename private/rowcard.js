@@ -593,6 +593,27 @@
   // Which groups carry rows that can explain themselves.
   const TIP_GROUPS = ['rank'];
 
+  // Every field a row can show, as a stable key — `group|label`. The tiles pick
+  // a SUBSET of these, and reading them from FIELD_SPEC means the tile shows
+  // exactly what the hover card shows for the same field, formatted the same
+  // way. A second list of "fields a tile can show" is the drift this file
+  // exists to prevent.
+  function fieldCatalogue() {
+    return FIELD_SPEC.map(([g, label]) => ({ group: g, label, key: g + '|' + label }));
+  }
+
+  // One row's values under those keys: { t: text, c: colour class } or null.
+  function fieldValues(s) {
+    const ctx = {};
+    const out = {};
+    for (const [g, label, get] of FIELD_SPEC) {
+      let v = null;
+      try { v = get(s, ctx); } catch { v = null; }
+      out[g + '|' + label] = v ? { t: v.t, c: v.c || '' } : null;
+    }
+    return out;
+  }
+
   function buildSections(s, opts) {
     const o = opts || {};
     const colors = o.colors || {};
@@ -746,5 +767,6 @@
     buildSections, chartSVG, sparkSVG, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries,
     scoreTip, placeTip,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS,
+    fieldCatalogue, fieldValues,
   };
 })(window);

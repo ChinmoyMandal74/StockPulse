@@ -288,7 +288,13 @@
     .tl-ret { text-align: right; }
     .tl-ret .k { font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
     .tl-ret .v { margin-top: 3px; font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-    .tl-scores { margin-top: 11px; display: flex; gap: 6px; align-items: center; }
+    .tl-fields { margin-top: 12px; padding-top: 11px; border-top: 1px solid rgba(255, 255, 255, 0.055);
+                 display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 14px; }
+    .tl-f { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+    .tl-f .k { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tl-f .v { margin-left: auto; font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
+    .tl-f .v.na { color: var(--faint); }
+    .tl-scores { margin-top: 11px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
     .tl-chip { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 99px;
                border: 1px solid var(--hair); color: var(--muted); }
     .tl-chip b { font-weight: 600; color: var(--text); }
@@ -684,6 +690,15 @@
     #scrMenu .pick .count { font-family: var(--mono); }
     #scrMenu .pick.zero .nm { color: var(--faint); }
     dialog.modal#viewDialog { width: min(640px, calc(100vw - 32px)); }
+    dialog.modal#tileDialog { width: min(620px, calc(100vw - 32px)); }
+    #tileDialog .td-row { display: flex; align-items: center; gap: 10px; margin: 10px 0 12px; font-size: 13px; }
+    #tileDialog .td-row select { padding: 7px 10px; border-radius: 10px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.04); color: var(--text); font: 500 13px var(--sans); cursor: pointer; }
+    #tileDialog .td-row select option { background: #0d1017; }
+    #tileDialog .td-toggles { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 14px;
+      padding-bottom: 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+    #tileDialog .td-toggles label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
+    #tileDialog .td-toggles input { width: 15px; height: 15px; accent-color: var(--accent); }
     #viewDialog .vd-tools { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
     #viewDialog .vd-tools input { flex: 1; }
     #viewDialog .vd-count { font-size: 12px; color: var(--muted); white-space: nowrap; font-family: var(--mono); }
@@ -873,6 +888,7 @@
             <option value="6">6</option>
           </select>
         </span>
+        <button class="btn admin-only" id="tileCfgBtn" hidden>Tile setup</button>
         <div class="picker" id="scrPicker" data-open="0">
           <button class="btn picker-btn" id="scrBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="scrMenu" role="listbox" aria-label="Screens"></div>
@@ -1019,6 +1035,35 @@
     <div id="rowcard"></div>
     <div id="actionPanel" hidden></div>
     <div id="myPop" hidden></div>
+
+    <dialog class="modal" id="tileDialog">
+      <div class="core">
+        <h2>Tile setup</h2>
+        <p class="sub">What every tile shows, for everyone — these are the cards that get shared, so they are
+          the owner's decision rather than each account's. The chart period and the fields are stored site-wide.</p>
+        <div class="td-row">
+          <label for="tdSpark">Chart period</label>
+          <select id="tdSpark">
+            <option value="0">No chart</option>
+            <option value="21">1 month</option>
+            <option value="63">3 months</option>
+            <option value="90">90 days</option>
+            <option value="126">6 months</option>
+            <option value="252">1 year</option>
+          </select>
+        </div>
+        <div class="td-toggles" id="tdToggles"></div>
+        <div class="vd-tools">
+          <input type="search" id="tdSearch" placeholder="Find a field…" autocomplete="off" aria-label="Find a field" />
+          <span class="vd-count" id="tdCount"></span>
+        </div>
+        <div class="vd-list" id="tdList"></div>
+        <div class="modal-actions">
+          <button class="btn" id="tdCancel">Cancel</button>
+          <button class="btn btn-primary" id="tdSave">Save for everyone</button>
+        </div>
+      </div>
+    </dialog>
 
     <dialog class="modal" id="viewDialog">
       <div class="core">
@@ -1846,6 +1891,11 @@
     const tilesOn = () => layout === 'tiles';
     let tilesShown = 60;           // grown by the More button; a tile is markup, 271 of them is not free
     let tileCols = 'auto';         // 'auto' fills the width; 2-6 is a fixed count
+    // What a tile SHOWS: one setting for the whole site, from /api/prefs.
+    // The field keys are rowcard's own (`group|label`), so a tile and the hover
+    // card format the same field the same way.
+    let tileCfg = { spark: 90, fields: ['short|1W', 'short|1M', 'long|1Y', 'long|5Y'],
+      scores: true, sector: true, verdict: true, why: true, trend: true };
 
     // Applied to the grid rather than to each tile, so changing it is one
     // attribute and no repaint.
@@ -1861,6 +1911,7 @@
       layout = next === 'tiles' ? 'tiles' : 'table';
       tilesShown = 60;
       document.body.classList.toggle('tiling', tilesOn());
+      $('tileCfgBtn').hidden = !(tilesOn() && isAdmin);
       $('layToggle').querySelectorAll('[data-lay]').forEach((b) =>
         b.classList.toggle('on', b.dataset.lay === layout));
       if (save) savePrefs();
@@ -2632,8 +2683,16 @@
         : `<span class="${cls === false ? '' : v >= 0 ? 'up' : 'dn'}">${v >= 0 ? '+' : ''}${Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1)}%</span>`);
       const v = s.action || '';
       const vcls = /Buy/.test(v) ? 'up' : /Sell|Avoid/.test(v) ? 'dn' : 'flat';
-      const ret = (k, val) => `<div class="tl-ret"><div class="k">${k}</div><div class="v">${pct(val)}</div></div>`;
-      const spark = sparkCache[s.symbol] ? `<div class="tl-spark">${sparkCache[s.symbol]}</div>` : '';
+      const vals = RowCard.fieldValues(s);
+      const fields = (tileCfg.fields || []).map((key) => {
+        const v = vals[key];
+        if (!v) return '';
+        const label = key.slice(key.indexOf('|') + 1);
+        return `<div class="tl-f"><span class="k">${we(label)}</span>` +
+          `<span class="v ${v.c === 'na' ? 'na' : v.c}">${we(v.t)}</span></div>`;
+      }).filter(Boolean).join('');
+      const art = tileCfg.spark ? tileSpark(s.symbol) : '';
+      const spark = art ? `<div class="tl-spark">${art}</div>` : '';
       const chip = (label, n) => (n == null ? '' : `<span class="tl-chip">${label} <b>${n}</b></span>`);
       return `<a class="tile" href="/stock/${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener" ` +
         `aria-label="${we(s.symbol)} ${we(s.shortName || s.name || '')}">` +
@@ -2649,16 +2708,40 @@
         `<div class="tl-today">${pct(s.todayPct)}</div>` +
         '</div></div>' +
         spark +
-        (v ? '<div class="tl-verdict">' +
+        (v && tileCfg.verdict ? '<div class="tl-verdict">' +
           `<span class="tl-v ${vcls}">${we(v)}</span>` +
-          (s.actionTrend ? `<span class="tl-trend">${we(s.actionTrend)}</span>` : '') +
-          '</div>' + (s.actionFlag ? `<div class="tl-why">${we(s.actionFlag)}</div>` : '') : '') +
-        '<div class="tl-rets">' + ret('1W', s.oneWeekPct) + ret('1M', s.oneMonthPct) +
-        ret('1Y', s.oneYearPct) + ret('5Y', s.fiveYearPct) + '</div>' +
-        '<div class="tl-scores">' + chip('Overall', s.overallRating) + chip('Mom', s.momentumRating) +
-        chip('Qual', s.qualityRating) +
-        (s.sector ? `<span class="tl-chip">${we(s.sector)}</span>` : '') + '</div>' +
+          (tileCfg.trend && s.actionTrend ? `<span class="tl-trend">${we(s.actionTrend)}</span>` : '') +
+          '</div>' + (tileCfg.why && s.actionFlag ? `<div class="tl-why">${we(s.actionFlag)}</div>` : '') : '') +
+        (fields ? `<div class="tl-fields">${fields}</div>` : '') +
+        (tileCfg.scores || tileCfg.sector
+          ? '<div class="tl-scores">' +
+            (tileCfg.scores ? chip('Overall', s.overallRating) + chip('Mom', s.momentumRating) + chip('Qual', s.qualityRating) : '') +
+            (tileCfg.sector && s.sector ? `<span class="tl-chip">${we(s.sector)}</span>` : '') + '</div>'
+          : '') +
         '</a>';
+    }
+
+    // The table's 90d column and the tiles can want different periods. 90 days
+    // reuses the column's cache; anything else gets its own, fetched once.
+    const tileSparkCache = {};
+    let tileSparkFor = null;
+    function tileSpark(sym) {
+      if (!tileCfg.spark) return '';
+      if (tileCfg.spark === 90) return sparkCache[sym] || '';
+      return tileSparkCache[sym] || '';
+    }
+    async function loadTileSparks() {
+      const days = Number(tileCfg.spark) || 0;
+      if (!days || days === 90 || tileSparkFor === days) return;
+      tileSparkFor = days;
+      try {
+        const data = await api('GET', '/api/sparklines?days=' + days);
+        for (const [sym, closes] of Object.entries(data.closes || {})) {
+          const svg = RowCard.sparkSVG(closes);
+          if (svg) tileSparkCache[sym] = svg;
+        }
+        if (tilesOn()) render();
+      } catch (e) { tileSparkFor = null; }
     }
 
     function paintTiles(rows) {
@@ -2676,6 +2759,7 @@
           : '');
       const more = $('tileMore');
       if (more) more.addEventListener('click', () => { tilesShown += 60; render(); });
+      loadTileSparks();
     }
 
     function render() {
@@ -3085,6 +3169,7 @@
       try {
         const res = await api('GET', '/api/prefs');
         if (res && Array.isArray(res.siteHidden)) siteHidden = new Set(res.siteHidden);
+        if (res && res.tile) tileCfg = res.tile;
         const savedC = res && res.prefs && Screens.cleanWeights(res.prefs.customWeights);
         if (savedC) customWeights = Object.assign(Screens.defaultWeights(), savedC);
         if (res && res.prefs && res.prefs.tickerOff === true) tickerOff = true;
@@ -4223,6 +4308,92 @@
 
     // Editing is a prompt rather than an inline field: it happens rarely, on
     // one cell, and a prompt cannot be left half-finished in the table.
+    // ---- the tile setup (admin) ---------------------------------------------
+    // One setting for the site, so a shared screenshot means the same thing for
+    // everyone. The field list comes from rowcard's catalogue — the same
+    // description the hover card renders from.
+    let tdDraft = null;
+    const TD_TOGGLES = [
+      ['verdict', 'Advice verdict'], ['why', 'The rule that fired'], ['trend', 'Trend state'],
+      ['scores', 'Score chips'], ['sector', 'Sector chip'],
+    ];
+
+    function paintTileDialog() {
+      const q = $('tdSearch').value.trim().toLowerCase();
+      const cat = RowCard.fieldCatalogue().filter((f) => f.group !== 'fwd');
+      const chosen = new Set(tdDraft.fields);
+      const html = GROUPS.filter((g) => g !== 'fwd').map((g) => {
+        const rows = cat.filter((f) => f.group === g &&
+          (!q || f.label.toLowerCase().includes(q)));
+        if (!rows.length) return '';
+        return `<div class="vd-group"><label class="vd-gh" style="--tint:${GROUP_COLORS[g] || 'var(--muted)'}">` +
+          `${we(GROUP_LABELS[g] || g)}</label><div class="vd-cols">` +
+          rows.map((f) => `<label class="vd-col"><input type="checkbox" data-tfield="${we(f.key)}" ` +
+            `${chosen.has(f.key) ? 'checked' : ''} />${we(f.label)}</label>`).join('') +
+          '</div></div>';
+      }).join('');
+      $('tdList').innerHTML = html || '<div class="pick-hint">No field matches that.</div>';
+      // Updated in place, NOT repainted: rebuilding the list under the cursor
+      // loses the checkbox being clicked (and every one after it in a bulk
+      // change), which is how the first cut dropped half of them.
+      $('tdList').querySelectorAll('[data-tfield]').forEach((cb) =>
+        cb.addEventListener('change', () => {
+          const key = cb.dataset.tfield;
+          if (cb.checked) {
+            if (tdDraft.fields.length >= 8) { cb.checked = false; return; }
+            if (!tdDraft.fields.includes(key)) tdDraft.fields.push(key);
+          } else tdDraft.fields = tdDraft.fields.filter((k) => k !== key);
+          tdCount();
+        }));
+      tdCount();
+      $('tdToggles').innerHTML = TD_TOGGLES.map(([k, label]) =>
+        `<label><input type="checkbox" data-tflag="${k}" ${tdDraft[k] ? 'checked' : ''} />${we(label)}</label>`).join('');
+      $('tdToggles').querySelectorAll('[data-tflag]').forEach((cb) =>
+        cb.addEventListener('change', () => { tdDraft[cb.dataset.tflag] = cb.checked; }));
+      $('tdSpark').value = String(tdDraft.spark);
+    }
+
+    // The count, and the cap: at eight, the boxes not already ticked go quiet
+    // rather than silently refusing a click.
+    function tdCount() {
+      const n = tdDraft.fields.length;
+      $('tdCount').textContent = `${n} of 8 fields`;
+      $('tdList').querySelectorAll('[data-tfield]').forEach((cb) => {
+        cb.disabled = !cb.checked && n >= 8;
+        cb.closest('label').style.opacity = cb.disabled ? '0.45' : '';
+      });
+    }
+
+    function openTileDialog() {
+      tdDraft = JSON.parse(JSON.stringify(tileCfg));
+      $('tdSearch').value = '';
+      paintTileDialog();
+      $('tileDialog').showModal();
+    }
+
+    async function saveTileDialog() {
+      tdDraft.spark = Number($('tdSpark').value) || 0;
+      $('tdSave').disabled = true;
+      try {
+        const r = await api('PUT', '/api/tile-config', { tile: tdDraft });
+        tileCfg = r.tile;
+        tileSparkFor = null;                 // the period may have changed
+        $('tileDialog').close();
+        render();
+        setStatus('Tile setup saved for everyone.');
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        $('tdSave').disabled = false;
+      }
+    }
+
+    $('tileCfgBtn').addEventListener('click', openTileDialog);
+    $('tdCancel').addEventListener('click', () => $('tileDialog').close());
+    $('tdSave').addEventListener('click', saveTileDialog);
+    $('tdSearch').addEventListener('input', paintTileDialog);
+    $('tdSpark').addEventListener('change', () => { tdDraft.spark = Number($('tdSpark').value) || 0; });
+
     $('tileCols').addEventListener('change', (e) => {
       tileCols = /^(auto|[2-6])$/.test(e.target.value) ? e.target.value : 'auto';
       applyTileCols();

@@ -4117,6 +4117,66 @@ app.delete('/api/admin/posts/:slug', requireAdmin, route(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ---- the tile setup ---------------------------------------------------------
+// What a tile shows, site-wide. The FIELDS are keys from rowcard's FIELD_SPEC
+// (`group|label`), so the tile and the hover card cannot disagree about what a
+// field is called or how it is formatted; the server only checks their shape,
+// the way it does for column views — the browser ignores a key it no longer
+// knows, so adding or renaming a field needs no edit here.
+// `group|label`, where the group is one the table really has — rowcard's
+// GROUP_ORDER. The LABEL is only shape-checked: it is rowcard's own text, the
+// browser ignores a key it no longer knows, and renaming a field there should
+// not need an edit here.
+const TILE_GROUPS = ['info', 'rank', 'act', 'chart', 'short', 'long', 'rel', 'trend', 'vol', 'size', 'fund', 'own'];
+// A literal, not a built string: inside a template literal `\|` collapses to a
+// bare pipe, which made this "one of the groups, OR anything at all" — the
+// test caught a field key of `evil|drop table` being stored.
+const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|trend|vol|size|fund|own)\|[^|]{1,32}$/;
+const TILE_SPARK_DAYS = [0, 21, 63, 126, 252];
+const TILE_FIELDS_MAX = 8;
+const TILE_DEFAULT = {
+  spark: 90,                    // trading sessions in the tile's chart; 0 hides it
+  fields: ['short|1W', 'short|1M', 'long|1Y', 'long|5Y'],
+  scores: true,                 // the Overall / Mom / Qual chips
+  sector: true,
+  verdict: true,                // the Advice word
+  why: true,                    // and the rule that fired
+  trend: true,                  // the Trend state beside the verdict
+};
+
+function cleanTileConfig(raw) {
+  const c = raw && typeof raw === 'object' ? raw : {};
+  const spark = TILE_SPARK_DAYS.includes(Number(c.spark)) || Number(c.spark) === 90
+    ? Number(c.spark) : TILE_DEFAULT.spark;
+  const fields = Array.isArray(c.fields)
+    ? [...new Set(c.fields.filter((f) => typeof f === 'string' && TILE_FIELD_RE.test(f)))].slice(0, TILE_FIELDS_MAX)
+    : TILE_DEFAULT.fields;
+  const flag = (k) => (typeof c[k] === 'boolean' ? c[k] : TILE_DEFAULT[k]);
+  return { spark, fields, scores: flag('scores'), sector: flag('sector'),
+    verdict: flag('verdict'), why: flag('why'), trend: flag('trend') };
+}
+
+let tileConfigCache = null;
+async function tileConfig() {
+  if (tileConfigCache && Date.now() - tileConfigCache.at < 60 * 1000) return tileConfigCache.cfg;
+  const cfg = cleanTileConfig(await store.readTileConfig());
+  tileConfigCache = { at: Date.now(), cfg };
+  return cfg;
+}
+
+app.get('/api/tile-config', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ tile: await tileConfig(), sparkDays: [21, 63, 126, 252], max: TILE_FIELDS_MAX });
+}));
+
+app.put('/api/tile-config', requireAdmin, route(async (req, res) => {
+  const cfg = cleanTileConfig(req.body && req.body.tile);
+  await store.writeTileConfig(cfg);
+  tileConfigCache = { at: Date.now(), cfg };
+  logAct(req, 'view', 'tiles:' + cfg.fields.length);
+  res.json({ ok: true, tile: cfg });
+}));
+
 app.get('/api/columns', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({ columns: columnCatalogue(), hidden: await store.readHiddenColumns() });
@@ -4140,9 +4200,9 @@ app.get('/api/prefs', requireAuth, route(async (req, res) => {
   // siteHidden rides along because the screener already awaits this call
   // before its first render — a second request would paint the full table and
   // then visibly drop columns.
-  const siteHidden = await store.readHiddenColumns();
-  if (await isGuest(req)) return res.json({ prefs: {}, siteHidden });
-  res.json({ prefs: await store.readPrefs(await prefsKey(req)), siteHidden });
+  const [siteHidden, tile] = await Promise.all([store.readHiddenColumns(), tileConfig()]);
+  if (await isGuest(req)) return res.json({ prefs: {}, siteHidden, tile });
+  res.json({ prefs: await store.readPrefs(await prefsKey(req)), siteHidden, tile });
 }));
 
 app.put('/api/prefs', requireAuth, route(async (req, res) => {
@@ -4372,6 +4432,12 @@ app.get('/api/news/latest', requireAuth, route(async (req, res) => {
   res.json({ items });
 }));
 
+// Cached per (days, guest): every signed-in page asks for the same closes, and
+// a year of them is ~68,000 bar rows — which Turso meters. Ten minutes is far
+// inside the gap between refreshes, and a sparkline's tail is a shape anyway.
+const sparkCacheSrv = new Map();
+const SPARK_TTL_MS = 10 * 60 * 1000;
+
 app.get('/api/sparklines', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const days = Math.min(400, Math.max(20, Number(req.query.days) || 90));
@@ -4383,11 +4449,16 @@ app.get('/api/sparklines', requireAuth, route(async (req, res) => {
   // US tickers share trading days so they come back the same length.
   const since = new Date(Date.now() - Math.round(days * 1.45) * 86400000)
     .toISOString().slice(0, 10);
+  const key = `${days}|${await isGuest(req) ? 'g' : 'm'}`;
+  const hit = sparkCacheSrv.get(key);
+  if (hit && Date.now() - hit.at < SPARK_TTL_MS) return res.json(hit.body);
   const closes = await store.readCloses(symbols, since);
   for (const k of Object.keys(closes)) {
     closes[k] = closes[k].slice(-days).map((v) => Math.round(v * 100) / 100);
   }
-  res.json({ closes, days });
+  const body = { closes, days };
+  sparkCacheSrv.set(key, { at: Date.now(), body });
+  res.json(body);
 }));
 
 // Closes for one symbol, oldest-first, for the hover card's chart. Reads the

@@ -647,6 +647,28 @@ async function writePortfolios(obj) {
   await db.batch(stmts, 'write');
 }
 
+// ---- the tile setup --------------------------------------------------------
+
+// How a tile is laid out, for EVERYONE. A site setting like the hidden columns
+// beside it, not a pref: the owner decides what a tile says (these are the
+// cards that get shared), and a member choosing their own would make the same
+// screenshot mean different things.
+async function readTileConfig() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'tile_config'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value || 'null'); } catch { return null; }
+}
+
+async function writeTileConfig(cfg) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('tile_config', ?)",
+    args: [JSON.stringify(cfg)],
+  });
+  return cfg;
+}
+
 // ---- blog posts -----------------------------------------------------------
 
 const postRow = (x) => ({
@@ -2463,6 +2485,8 @@ module.exports = {
   removeFromUniverse,
   writePortfolios,
   readNames,
+  readTileConfig,
+  writeTileConfig,
   readPosts,
   readPost,
   writePost,
