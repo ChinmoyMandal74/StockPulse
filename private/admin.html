@@ -82,21 +82,6 @@
     select { cursor: pointer; }
     input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .said { margin: 9px 0 0; font-size: 12px; color: var(--muted); min-height: 1.2em; }
-    .cols-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 10px; }
-    .cols-tools input[type="search"] { flex: 1 1 220px; min-width: 0; box-sizing: border-box; padding: 8px 11px;
-      border-radius: 10px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
-      color: var(--text); font: 500 12.5px var(--sans); }
-    .cols-list { max-height: min(52vh, 520px); overflow: auto; padding-right: 4px; }
-    .cg { padding: 10px 0 6px; }
-    .cg + .cg { border-top: 1px solid rgba(255, 255, 255, 0.05); }
-    .cg > label.cg-h { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700;
-      letter-spacing: 0.14em; text-transform: uppercase; color: var(--tint, var(--muted)); cursor: pointer; }
-    .cg-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 14px; margin: 6px 0 0 20px; }
-    .cg-cols label { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted);
-      padding: 3px 0; cursor: pointer; }
-    .cg-cols label:hover, .cg > label.cg-h:hover { color: var(--text); }
-    .cg input, .cg-h input { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
-    .cg-cols label.off { color: var(--faint); text-decoration: line-through; }
     .said.bad { color: var(--red); }
     .said.good { color: var(--green); }
 
@@ -174,8 +159,7 @@
     <nav class="jumps" aria-label="Sections">
       <a class="jump" href="#data"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Data</a>
       <a class="jump" href="#research"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-research" /></svg>Research</a>
-      <a class="jump" href="#columns"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-list" /></svg>Columns</a>
-      <a class="jump" href="#scoring"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>Scoring</a>
+      <a class="jump" href="#scoring"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>Screener</a>
       <a class="jump" href="#listings"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-list" /></svg>Reference</a>
       <a class="jump" href="#studio"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-star" /></svg>Studio</a>
       <a class="jump" href="#people"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-users" /></svg>People &amp; logs</a>
@@ -277,35 +261,16 @@
       </div></div>
     </section>
 
-    <!-- ================= screener columns ================= -->
-    <section id="columns">
-      <div class="sec-head"><h2>Screener columns</h2><p>Which columns everyone sees. The table has 78 to choose from.</p></div>
-      <div class="bezel card"><div class="core">
-        <div class="form">
-          <div class="line" style="justify-content:space-between">
-            <span class="lbl" style="margin:0">Hide a column for everyone</span>
-            <span class="said" id="colCount" style="margin:0"></span>
-          </div>
-          <div class="cols-tools">
-            <input type="search" id="colSearch" placeholder="Find a column" aria-label="Find a column" />
-            <button class="btn" id="colAll" type="button">Show all</button>
-            <button class="btn btn-primary" id="colSave" type="button">Save</button>
-          </div>
-          <div class="cols-list" id="colList">Loading…</div>
-          <p class="said" id="colSaid"></p>
-        </div>
-      </div></div>
-      <p class="note">A ticked column is shown. Hiding one takes it off the table for every account, including this
-        one, and out of the column views — a view cannot bring back a column the site has hidden, so this is the
-        floor rather than a default. Nothing is deleted: the data keeps being recorded and a column comes back the
-        moment it is ticked again. Symbol, Name and the forward-returns columns are not listed — the first two are
-        the table's anchors and the last follow the as-of view. A screener tab left open keeps the old set until it
-        is reloaded.</p>
-    </section>
-
     <!-- ================= scoring ================= -->
     <section id="scoring">
-      <div class="sec-head"><h2>Scoring</h2><p>How momentum is weighted on the screener.</p></div>
+      <div class="sec-head"><h2>Screener</h2><p>What the table shows, and how it scores.</p></div>
+      <div class="bezel card"><div class="core">
+        <div class="grid">
+          <a class="row" href="/columns"><svg class="ic" aria-hidden="true"><use href="#i-list" /></svg>
+            <span class="txt"><span class="nm">Columns</span>
+              <span class="hint">Hide columns for everyone. 78 to choose from, and a view cannot bring back what is hidden here.</span></span></a>
+        </div>
+      </div></div>
       <div class="bezel card"><div class="core">
         <div class="form">
           <span class="lbl">Momentum weighting</span>
@@ -590,65 +555,6 @@
       }, 400);
     }
 
-    // ---- screener columns: hidden for everyone ------------------------------
-    // The catalogue comes from the server, which reads the screener's own
-    // header row — this page never restates what columns exist.
-    let colCat = [];
-    let colHidden = new Set();
-    function paintCols() {
-      const q = $('colSearch').value.trim().toLowerCase();
-      const groups = [];
-      for (const c of colCat) {
-        if (q && !c.label.toLowerCase().includes(q) && !c.id.toLowerCase().includes(q)) continue;
-        let g = groups.find((x) => x.id === c.group);
-        if (!g) groups.push((g = { id: c.group, label: c.groupLabel, cols: [] }));
-        g.cols.push(c);
-      }
-      $('colList').innerHTML = groups.length ? groups.map((g) => {
-        const on = g.cols.every((c) => !colHidden.has(c.id));
-        return `<div class="cg"><label class="cg-h"><input type="checkbox" data-cgroup="${we(g.id)}" ${on ? 'checked' : ''} />` +
-          `${we(g.label)}</label><div class="cg-cols">` +
-          g.cols.map((c) => {
-            const shown = !colHidden.has(c.id);
-            return `<label class="${shown ? '' : 'off'}"><input type="checkbox" data-col="${we(c.id)}" ${shown ? 'checked' : ''} />` +
-              `${we(c.label)}</label>`;
-          }).join('') + '</div></div>';
-      }).join('') : '<p class="said">No column matches that.</p>';
-      $('colList').querySelectorAll('[data-col]').forEach((cb) =>
-        cb.addEventListener('change', () => {
-          if (cb.checked) colHidden.delete(cb.dataset.col); else colHidden.add(cb.dataset.col);
-          paintCols();
-        }));
-      $('colList').querySelectorAll('[data-cgroup]').forEach((cb) =>
-        cb.addEventListener('change', () => {
-          for (const c of colCat.filter((x) => x.group === cb.dataset.cgroup)) {
-            if (cb.checked) colHidden.delete(c.id); else colHidden.add(c.id);
-          }
-          paintCols();
-        }));
-      const n = colHidden.size;
-      $('colCount').textContent = n
-        ? `${colCat.length - n} of ${colCat.length} shown \u00b7 ${n} hidden`
-        : `all ${colCat.length} shown`;
-    }
-
-    async function saveCols() {
-      $('colSave').disabled = true;
-      say('colSaid', 'Saving…');
-      try {
-        const r = await api('PUT', '/api/columns', { hidden: [...colHidden] });
-        colHidden = new Set(r.hidden || []);
-        paintCols();
-        say('colSaid', colHidden.size
-          ? `Saved — ${colHidden.size} column${colHidden.size === 1 ? '' : 's'} hidden for everyone. Reload an open screener tab to see it.`
-          : 'Saved — every column is shown again. Reload an open screener tab to see it.', 'good');
-      } catch (err) {
-        say('colSaid', 'Could not save: ' + err.message, 'bad');
-      } finally {
-        $('colSave').disabled = false;
-      }
-    }
-
     // ---- boot ---------------------------------------------------------------
     (async function boot() {
       try {
@@ -659,19 +565,6 @@
       } catch (err) {
         say('addSaid', 'Could not read the portfolios: ' + err.message, 'bad');
       }
-      try {
-        const r = await api('GET', '/api/columns');
-        colCat = r.columns || [];
-        colHidden = new Set(r.hidden || []);
-        paintCols();
-        $('colSearch').addEventListener('input', paintCols);
-        $('colSave').addEventListener('click', saveCols);
-        $('colAll').addEventListener('click', () => { colHidden = new Set(); paintCols(); });
-      } catch (err) {
-        $('colList').innerHTML = '';
-        say('colSaid', 'Could not read the column list: ' + err.message, 'bad');
-      }
-
       try {
         const r = await api('GET', '/api/prefs');
         prefs = (r && r.prefs) || {};

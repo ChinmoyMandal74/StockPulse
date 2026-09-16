@@ -268,7 +268,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
-                      '/news-runs.html': '/news-runs',
+                      '/news-runs.html': '/news-runs', '/columns.html': '/columns',
                       '/nasdaq.html': '/nasdaq',
                       '/cards.html': '/cards',
                       '/users.html': '/users', '/reset.html': '/reset',
@@ -355,6 +355,13 @@ app.get('/news-runs', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'news-runs');
   res.sendFile(path.join(__dirname, 'private', 'news-runs.html'));
+}));
+
+// Admin only: which screener columns everyone sees.
+app.get('/columns', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'columns');
+  res.sendFile(path.join(__dirname, 'private', 'columns.html'));
 }));
 
 // Admin only: every table in the database, with its row and column count.

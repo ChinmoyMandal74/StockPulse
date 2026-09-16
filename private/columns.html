@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Screener columns — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(163, 230, 53, 0.09), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: #a3e635; box-shadow: 0 0 8px #a3e635; }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 62ch; font-size: 13px; line-height: 1.65; }
+    .masthead { margin: 34px 0 22px; }
+
+    /* ---- the toolbar and the list --------------------------------------- */
+    .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 4px 12px; }
+    .tools input[type="search"] {
+      flex: 1 1 240px; min-width: 0; box-sizing: border-box; padding: 9px 12px; border-radius: 10px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      color: var(--text); font: 500 13px var(--sans);
+    }
+    .tools input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .count { font-family: var(--mono); font-size: 12px; color: var(--faint); white-space: nowrap; }
+    .said { margin: 12px 6px 0; font-size: 12.5px; color: var(--muted); min-height: 1.2em; }
+    .said.good { color: var(--green); } .said.bad { color: var(--red); }
+
+    .list { padding: 6px 22px 18px; }
+    .cg { padding: 12px 0 8px; }
+    .cg + .cg { border-top: 1px solid rgba(255, 255, 255, 0.05); }
+    label.cg-h { display: flex; align-items: center; gap: 9px; font-size: 11px; font-weight: 700;
+                 letter-spacing: 0.14em; text-transform: uppercase; color: var(--tint, var(--muted)); cursor: pointer; }
+    label.cg-h .n { font-family: var(--mono); font-size: 10px; letter-spacing: 0.05em; color: var(--faint); font-weight: 500; }
+    .cg-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+               gap: 2px 16px; margin: 8px 0 0 22px; }
+    .cg-cols label { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--muted);
+                     padding: 4px 0; cursor: pointer; }
+    .cg-cols label:hover, label.cg-h:hover { color: var(--text); }
+    .cg-cols label.off { color: var(--faint); text-decoration: line-through; }
+    input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+    .empty, .error { padding: 26px; font-size: 13px; color: var(--muted); }
+    .error { color: var(--red); }
+    .note { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 84ch; }
+    @media (max-width: 768px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.8 9.4 17 19 7"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <a class="btn" href="/" target="_blank" rel="noopener">Screener</a>
+      <button class="btn btn-primary" id="save"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-check" /></svg>Save</button>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Admin</span>
+      <h1>Screener columns</h1>
+      <p class="lede">Which columns the screener shows, for everyone. A ticked column is shown. This is the floor
+        under every account's own column views — a view cannot bring back a column hidden here.</p>
+    </header>
+
+    <div class="tools">
+      <input type="search" id="q" placeholder="Find a column" aria-label="Find a column" />
+      <span class="count" id="count"></span>
+      <button class="btn" id="all" type="button">Show all</button>
+      <button class="btn" id="reset" type="button">Undo changes</button>
+    </div>
+
+    <div class="bezel"><div class="core" style="padding:0">
+      <div class="list" id="list"><div class="empty">Loading…</div></div>
+    </div></div>
+    <p class="said" id="said"></p>
+
+    <p class="note">Nothing is deleted: the data keeps being recorded and a column comes back the moment it is
+      ticked again. Symbol, Name and the forward-returns columns are not listed — the first two are the table's
+      anchors and the last follow the as-of view. Hiding applies to every account including this one, and a
+      screener tab left open keeps the old set until it is reloaded.</p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    async function api(method, url, body) {
+      const res = await fetch(url, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      return data;
+    }
+    const say = (m, kind) => { $('said').textContent = m || ''; $('said').className = 'said' + (kind ? ' ' + kind : ''); };
+
+    // The catalogue comes from the server, which reads the screener's own header
+    // row — this page never restates what columns exist.
+    const TINT = {
+      info: '#7c9cff', rank: '#a3e635', act: '#5eead4', chart: '#a8a29e', short: '#34d399', long: '#a78bfa',
+      rel: '#22d3ee', trend: '#fbbf24', vol: '#f472b6', size: '#94a3b8', fund: '#fb7185', own: '#f0abfc',
+    };
+    let cat = [];
+    let hidden = new Set();
+    let saved = new Set();          // what the server last confirmed, for Undo
+
+    function paint() {
+      const q = $('q').value.trim().toLowerCase();
+      const groups = [];
+      for (const c of cat) {
+        if (q && !c.label.toLowerCase().includes(q) && !c.id.toLowerCase().includes(q)) continue;
+        let g = groups.find((x) => x.id === c.group);
+        if (!g) groups.push((g = { id: c.group, label: c.groupLabel, cols: [] }));
+        g.cols.push(c);
+      }
+      $('list').innerHTML = groups.length ? groups.map((g) => {
+        const on = g.cols.filter((c) => !hidden.has(c.id)).length;
+        return `<div class="cg" style="--tint:${TINT[g.id] || 'var(--muted)'}">` +
+          `<label class="cg-h"><input type="checkbox" data-group="${we(g.id)}" ${on === g.cols.length ? 'checked' : ''} />` +
+          `${we(g.label)} <span class="n">${on}/${g.cols.length}</span></label>` +
+          '<div class="cg-cols">' + g.cols.map((c) => {
+            const shown = !hidden.has(c.id);
+            return `<label class="${shown ? '' : 'off'}"><input type="checkbox" data-col="${we(c.id)}" ${shown ? 'checked' : ''} />` +
+              `${we(c.label)}</label>`;
+          }).join('') + '</div></div>';
+      }).join('') : '<div class="empty">No column matches that.</div>';
+
+      $('list').querySelectorAll('[data-col]').forEach((cb) =>
+        cb.addEventListener('change', () => {
+          if (cb.checked) hidden.delete(cb.dataset.col); else hidden.add(cb.dataset.col);
+          paint();
+        }));
+      $('list').querySelectorAll('[data-group]').forEach((cb) =>
+        cb.addEventListener('change', () => {
+          for (const c of cat.filter((x) => x.group === cb.dataset.group)) {
+            if (cb.checked) hidden.delete(c.id); else hidden.add(c.id);
+          }
+          paint();
+        }));
+
+      const n = hidden.size;
+      const dirty = n !== saved.size || [...hidden].some((id) => !saved.has(id));
+      $('count').textContent = (n ? `${cat.length - n} of ${cat.length} shown · ${n} hidden` : `all ${cat.length} shown`)
+        + (dirty ? ' · unsaved' : '');
+      $('save').disabled = !dirty;
+      $('reset').disabled = !dirty;
+    }
+
+    async function save() {
+      $('save').disabled = true;
+      say('Saving…');
+      try {
+        const r = await api('PUT', '/api/columns', { hidden: [...hidden] });
+        hidden = new Set(r.hidden || []);
+        saved = new Set(r.hidden || []);
+        paint();
+        say(hidden.size
+          ? `Saved — ${hidden.size} column${hidden.size === 1 ? '' : 's'} hidden for everyone. Reload an open screener tab to see it.`
+          : 'Saved — every column is shown again. Reload an open screener tab to see it.', 'good');
+      } catch (err) {
+        say('Could not save: ' + err.message, 'bad');
+        paint();
+      }
+    }
+
+    (async function boot() {
+      $('q').addEventListener('input', paint);
+      $('save').addEventListener('click', save);
+      $('all').addEventListener('click', () => { hidden = new Set(); paint(); });
+      $('reset').addEventListener('click', () => { hidden = new Set(saved); paint(); say(''); });
+      try {
+        const r = await api('GET', '/api/columns');
+        cat = r.columns || [];
+        hidden = new Set(r.hidden || []);
+        saved = new Set(r.hidden || []);
+        paint();
+      } catch (err) {
+        $('list').innerHTML = `<div class="error">Could not read the column list: ${we(err.message)}</div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
