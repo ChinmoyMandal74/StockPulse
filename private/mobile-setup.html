@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Mobile setup — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+    .aura { background:
+      radial-gradient(46vw 40vw at 4% -8%, rgba(52, 211, 153, 0.10), transparent 62%),
+      radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.11), transparent 64%); }
+    .bezel { border-radius: 26px; } .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island { pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
+      padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+    .eyebrow { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px; border-radius: 999px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035); font-size: 10px; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted); }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+    h1 { margin: 20px 0 0; font-size: clamp(30px, 4vw, 44px); font-weight: 600; letter-spacing: -0.04em; line-height: 1; }
+    .lede { margin: 14px 0 26px; max-width: 70ch; font-size: 13.5px; line-height: 1.7; color: var(--muted); }
+    .split { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+    .list .core, .editor .core { padding: 14px 16px; }
+    .vrow { display: flex; align-items: center; gap: 8px; width: 100%; padding: 11px 12px; border-radius: 12px;
+            border: 0; background: none; color: var(--muted); font: 500 13px var(--sans); cursor: pointer; text-align: left; }
+    .vrow:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+    .vrow.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); }
+    .vrow .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vrow .n { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+    .addBtn { width: 100%; justify-content: center; margin-top: 6px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--faint); margin-bottom: 6px; }
+    input[type="text"], input[type="search"] {
+      width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.04); color: var(--text); font: 400 14px var(--sans); }
+    input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .tools { display: flex; align-items: center; gap: 12px; margin: 2px 0 10px; }
+    .tools input { flex: 1; } .count { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .flist { max-height: min(46vh, 430px); overflow: auto; padding-right: 4px; }
+    .fg { padding: 10px 0 6px; } .fg + .fg { border-top: 1px solid rgba(255, 255, 255, 0.05); }
+    .fg > .gh { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--tint, var(--muted)); }
+    .fcols { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 12px; padding-left: 4px; margin-top: 6px; }
+    .fcols label { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); padding: 3px 0; cursor: pointer; }
+    .fcols input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+    .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+    .bar .sp { margin-left: auto; }
+    .said { font-size: 12.5px; color: var(--muted); } .said.good { color: var(--green); } .said.bad { color: var(--red); }
+    .danger { color: var(--red); border-color: rgba(251, 113, 133, 0.4); }
+    .phone { margin-top: 16px; }
+    .phone .core { padding: 18px; }
+    .k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    .prev { margin-top: 12px; border-radius: 16px; border: 1px solid var(--hair); background: var(--surface); padding: 12px 14px; }
+    .prev .pt { display: flex; align-items: baseline; gap: 10px; }
+    .prev .sym { font-family: var(--mono); font-size: 14px; font-weight: 600; }
+    .prev .nm { font-size: 12.5px; color: var(--faint); }
+    .prev .px { margin-left: auto; font-family: var(--mono); font-size: 14px; }
+    .prev .up { color: var(--green); margin-left: 8px; font-size: 12px; }
+    .prev .pf { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 14px; margin-top: 9px; }
+    .prev .pf span { display: flex; font-size: 12.5px; color: var(--faint); }
+    .prev .pf b { margin-left: auto; font-family: var(--mono); font-weight: 400; color: var(--text); }
+    .note { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 84ch; }
+    @media (max-width: 900px) { .split { grid-template-columns: 1fr; } .page { padding: 0 16px; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.2v13.6M5.2 12h13.6"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18.2h2"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark"><span class="wordmark">Tickr Lab</span></span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <a class="btn" href="/m" target="_blank" rel="noopener"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-phone" /></svg>Open /m</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <span class="eyebrow" style="margin-top:22px"><span class="pip"></span>Admin</span>
+    <h1>Mobile setup</h1>
+    <p class="lede">The views the phone offers, and what each row shows under the price. The mobile page has no
+      settings of its own — someone on a phone only picks between these. Up to six views, up to five fields each;
+      a phone row fits about four comfortably.</p>
+
+    <div class="split">
+      <div class="bezel list"><div class="core">
+        <div id="vlist"></div>
+        <button class="btn addBtn" id="addBtn"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>New view</button>
+      </div></div>
+
+      <div>
+        <div class="bezel editor"><div class="core">
+          <div class="field">
+            <label for="vname">Name</label>
+            <input type="text" id="vname" maxlength="24" placeholder="Move, Verdict, Value…" />
+          </div>
+          <div class="tools">
+            <input type="search" id="fsearch" placeholder="Find a field…" autocomplete="off" aria-label="Find a field" />
+            <span class="count" id="fcount"></span>
+          </div>
+          <div class="flist" id="flist"></div>
+          <div class="bar">
+            <button class="btn btn-primary" id="saveBtn">Save for everyone</button>
+            <span class="said" id="said"></span>
+            <span class="sp"></span>
+            <button class="btn danger" id="delBtn">Delete view</button>
+          </div>
+        </div></div>
+
+        <div class="bezel phone"><div class="core">
+          <span class="k">How a row will look</span>
+          <div class="prev" id="prev"></div>
+        </div></div>
+      </div>
+    </div>
+
+    <p class="note">Everyone on a phone sees these views, guests included, and their choice of view is remembered
+      on their own device. The values are formatted exactly as the screener's hover card formats them — the same
+      descriptions, so a number cannot read differently in the two places. Deleting the last view puts the
+      built-in three back.</p>
+  </main>
+
+  <script src="/rowcard.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    async function api(method, url, body) {
+      const r = await fetch(url, { method, cache: 'no-store',
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `Request failed (${r.status})`);
+      return d;
+    }
+    const say = (m, k) => { $('said').textContent = m || ''; $('said').className = 'said' + (k ? ' ' + k : ''); };
+    const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
+
+    const GROUPS = ['info', 'rank', 'act', 'short', 'long', 'rel', 'trend', 'vol', 'size', 'fund', 'own'];
+    const GROUP_NAMES = RowCard.GROUP_LABELS;
+    const GROUP_COLORS = RowCard.GROUP_COLORS;
+    const CAT = RowCard.fieldCatalogue().filter((f) => f.group !== 'fwd' && f.group !== 'chart');
+    const FIELDS_MAX = 5;
+
+    let views = [];
+    let idx = 0;
+
+    const current = () => views[idx] || { id: '', name: '', fields: [] };
+
+    function paintList() {
+      $('vlist').innerHTML = views.map((v, i) =>
+        `<button class="vrow ${i === idx ? 'on' : ''}" data-i="${i}">` +
+        `<span class="t">${we(v.name)}</span><span class="n">${v.fields.length}</span></button>`).join('') ||
+        '<p class="said" style="padding:10px 12px">No views — add one.</p>';
+      $('vlist').querySelectorAll('[data-i]').forEach((b) =>
+        b.addEventListener('click', () => { idx = Number(b.dataset.i); paintEditor(); }));
+    }
+
+    function paintPreview() {
+      const v = current();
+      const sample = { 'Today': ['+1.8%', 'up'], '1W': ['+4.8%', 'up'], '1M': ['+8.3%', 'up'], '1Y': ['+41.6%', 'up'],
+        'Advice': ['Strong Buy', 'up'], 'Trend': ['Strong uptrend', ''], 'Entry': ['Pullback', ''],
+        'Overall': ['8', ''], 'RSI': ['61', ''], 'Fwd P/E': ['13.6', ''], 'ROE': ['+117.2%', 'up'],
+        'Profit margin': ['+63.7%', 'up'], 'Market Cap': ['$5.1T', ''] };
+      const rows = v.fields.map((k) => {
+        const label = k.slice(k.indexOf('|') + 1);
+        const s = sample[label] || ['—', 'na'];
+        return `<span>${we(label)}<b class="${s[1]}">${we(s[0])}</b></span>`;
+      }).join('');
+      $('prev').innerHTML =
+        '<div class="pt"><span class="sym">NVDA</span><span class="nm">NVIDIA</span>' +
+        '<span class="px">$212.17<span class="up">+0.6%</span></span></div>' +
+        (rows ? `<div class="pf">${rows}</div>` : '');
+    }
+
+    function paintFields() {
+      const v = current();
+      const q = $('fsearch').value.trim().toLowerCase();
+      const chosen = new Set(v.fields);
+      $('flist').innerHTML = GROUPS.map((g) => {
+        const rows = CAT.filter((f) => f.group === g && (!q || f.label.toLowerCase().includes(q)));
+        if (!rows.length) return '';
+        return `<div class="fg" style="--tint:${GROUP_COLORS[g] || 'var(--muted)'}">` +
+          `<div class="gh">${we(GROUP_NAMES[g] || g)}</div><div class="fcols">` +
+          rows.map((f) => `<label><input type="checkbox" data-f="${we(f.key)}" ${chosen.has(f.key) ? 'checked' : ''} />` +
+            `${we(f.label)}</label>`).join('') + '</div></div>';
+      }).join('') || '<p class="said" style="padding:8px 2px">No field matches that.</p>';
+      $('flist').querySelectorAll('[data-f]').forEach((cb) =>
+        cb.addEventListener('change', () => {
+          const key = cb.dataset.f;
+          if (cb.checked) {
+            if (v.fields.length >= FIELDS_MAX) { cb.checked = false; return; }
+            if (!v.fields.includes(key)) v.fields.push(key);
+          } else v.fields = v.fields.filter((k) => k !== key);
+          countFields();
+          paintPreview();
+          paintList();
+        }));
+      countFields();
+    }
+
+    function countFields() {
+      const n = current().fields.length;
+      $('fcount').textContent = `${n} of ${FIELDS_MAX} fields`;
+      $('flist').querySelectorAll('[data-f]').forEach((cb) => {
+        cb.disabled = !cb.checked && n >= FIELDS_MAX;
+        cb.closest('label').style.opacity = cb.disabled ? '0.45' : '';
+      });
+    }
+
+    function paintEditor() {
+      $('vname').value = current().name;
+      paintList();
+      paintFields();
+      paintPreview();
+    }
+
+    async function save() {
+      const clean = views.filter((v) => v.name.trim() && v.fields.length)
+        .map((v) => ({ id: v.id || slug(v.name), name: v.name.trim(), fields: v.fields }));
+      if (!clean.length) return say('A view needs a name and at least one field.', 'bad');
+      $('saveBtn').disabled = true;
+      say('Saving…');
+      try {
+        const d = await api('PUT', '/api/m/config', { config: { views: clean } });
+        views = d.views || clean;
+        if (idx >= views.length) idx = 0;
+        paintEditor();
+        say(`Saved — the phone now offers ${views.length} view${views.length === 1 ? '' : 's'}.`, 'good');
+      } catch (e) {
+        say('Could not save: ' + e.message, 'bad');
+      } finally { $('saveBtn').disabled = false; }
+    }
+
+    $('vname').addEventListener('input', () => {
+      const v = current();
+      v.name = $('vname').value;
+      if (!v.id) v.id = slug(v.name);
+      paintList();
+    });
+    $('fsearch').addEventListener('input', paintFields);
+    $('addBtn').addEventListener('click', () => {
+      if (views.length >= 6) return say('Six views is the most a phone should offer.', 'bad');
+      views.push({ id: '', name: 'New view', fields: [] });
+      idx = views.length - 1;
+      paintEditor();
+      $('vname').select();
+    });
+    $('delBtn').addEventListener('click', () => {
+      if (!views.length) return;
+      if (!confirm(`Delete "${current().name}"?`)) return;
+      views.splice(idx, 1);
+      idx = Math.max(0, idx - 1);
+      paintEditor();
+      say('Removed — press Save to apply it.', 'good');
+    });
+    $('saveBtn').addEventListener('click', save);
+
+    (async function boot() {
+      try {
+        const d = await api('GET', '/api/m/config');
+        views = (d.views || []).map((v) => ({ ...v, fields: [...v.fields] }));
+      } catch (e) { say('Could not load the setup: ' + e.message, 'bad'); }
+      paintEditor();
+    })();
+  </script>
+</body>
+</html>

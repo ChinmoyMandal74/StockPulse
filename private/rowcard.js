@@ -613,6 +613,21 @@
     return FIELD_SPEC.map(([g, label]) => ({ group: g, label, key: g + '|' + label }));
   }
 
+  // Which ROW PROPERTIES each field reads, asked of the getters themselves
+  // rather than written down again: a recording proxy stands in for the row,
+  // so a field that starts using another property says so on its own. The
+  // mobile page's payload is built from this.
+  function fieldProps() {
+    const out = {};
+    for (const [g, label, get] of FIELD_SPEC) {
+      const seen = new Set();
+      const probe = new Proxy({}, { get: (t, k) => { if (typeof k === 'string') seen.add(k); return undefined; } });
+      try { get(probe, {}); } catch { /* a getter that needs a real value still recorded its reads */ }
+      out[g + '|' + label] = [...seen];
+    }
+    return out;
+  }
+
   // One row's values under those keys: { t: text, c: colour class } or null.
   function fieldValues(s) {
     const ctx = {};
@@ -778,6 +793,9 @@
     buildSections, chartSVG, sparkSVG, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries,
     scoreTip, placeTip,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS,
-    fieldCatalogue, fieldValues,
+    fieldCatalogue, fieldValues, fieldProps,
   };
-})(window);
+})(typeof window !== 'undefined' ? window : globalThis);
+// Loadable in Node as well as the browser (2026-09-16): the server asks
+// fieldProps() which row properties a mobile view needs, so it can send a
+// phone those and nothing else. Nothing at load time touches the DOM.

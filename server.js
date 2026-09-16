@@ -22,6 +22,12 @@ const store = require('./db');
 // The analysis screens, shared with public/analysis.html so the nightly report
 // and the page can never disagree about what "bouncing off the lows" means.
 const Screens = require('./private/screens.js');
+// Loaded here so the SERVER can run a screen and render a row the way the
+// browser would: the mobile page gets the twenty matching rows, formatted,
+// instead of the 1.3MB table. Both are the same modules the pages load.
+const Filters = require('./private/filters.js');
+require('./private/rowcard.js');
+const RowCard = globalThis.RowCard;
 // The Excel model of the momentum calculation, shared with the CLI in the same
 // file so the workbook served here and the one written locally are one thing.
 const { buildModel, MODEL_ROWS, MODEL_MIN_BARS } = require('./momentum-model.js');
@@ -301,6 +307,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       // The public pages have canonical addresses of their own.
                       '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
                       '/posts.html': '/posts',
+                      '/mobile.html': '/m', '/mobile-setup.html': '/mobile-setup',
                       '/nasdaq.html': '/nasdaq',
                       '/cards.html': '/cards',
                       '/users.html': '/users', '/reset.html': '/reset',
@@ -568,6 +575,21 @@ app.get('/sitemap.xml', route(async (req, res) => {
     [url(base + '/'), url(base + '/blog'),
       ...posts.map((p) => url(`${base}/blog/${p.slug}`, p.updatedAt ? new Date(p.updatedAt).toISOString() : p.publishedAt))
     ].join('\n') + '\n</urlset>\n');
+}));
+
+// The phone. Any signed-in user, guests included — the owner's call: it is the
+// friendliest surface the site has.
+app.get('/m', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  logAct(req, 'page', 'mobile');
+  res.sendFile(path.join(__dirname, 'private', 'mobile.html'));
+}));
+
+// Where its views are decided — on a desktop, by the owner.
+app.get('/mobile-setup', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'mobile-setup');
+  res.sendFile(path.join(__dirname, 'private', 'mobile-setup.html'));
 }));
 
 // Admin only: which screener columns everyone sees.
@@ -4208,6 +4230,162 @@ async function tileConfig() {
   tileConfigCache = { at: Date.now(), cfg };
   return cfg;
 }
+
+// ---- the mobile page --------------------------------------------------------
+// What the phone offers, decided on a desktop. The page itself has no settings:
+// the owner's request was "the mobile view setup should be available to admin
+// to configure on the desktop… the mobile view does not need any configuration
+// option but should have option to change the view".
+const MOBILE_VIEWS_MAX = 6;
+const MOBILE_FIELDS_MAX = 5;          // a phone row, not a table row
+const MOBILE_DEFAULT = {
+  views: [
+    { id: 'move', name: 'Move', fields: ['short|Today', 'short|1W', 'short|1M', 'long|1Y'] },
+    { id: 'verdict', name: 'Verdict', fields: ['act|Advice', 'act|Trend', 'act|Entry', 'rank|Overall'] },
+    { id: 'value', name: 'Value', fields: ['fund|Fwd P/E', 'fund|ROE', 'fund|Profit margin', 'info|Market Cap'] },
+  ],
+};
+
+function cleanMobileConfig(raw) {
+  const c = raw && typeof raw === 'object' ? raw : {};
+  const known = new Set(RowCard.fieldCatalogue().map((f) => f.key));
+  const seen = new Set();
+  const views = (Array.isArray(c.views) ? c.views : [])
+    .map((v) => {
+      const name = String((v && v.name) || '').trim().slice(0, 24);
+      const id = slugify((v && v.id) || name).slice(0, 24);
+      const fields = (Array.isArray(v && v.fields) ? v.fields : [])
+        .filter((f) => known.has(f)).slice(0, MOBILE_FIELDS_MAX);
+      return { id, name, fields };
+    })
+    .filter((v) => v.id && v.name && v.fields.length && !seen.has(v.id) && seen.add(v.id))
+    .slice(0, MOBILE_VIEWS_MAX);
+  return { views: views.length ? views : MOBILE_DEFAULT.views };
+}
+
+let mobileCfgCache = null;
+async function mobileConfig() {
+  if (mobileCfgCache && Date.now() - mobileCfgCache.at < 60 * 1000) return mobileCfgCache.cfg;
+  const cfg = cleanMobileConfig(await store.readMobileConfig());
+  mobileCfgCache = { at: Date.now(), cfg };
+  return cfg;
+}
+
+// A row, rendered for a phone: the fixed head every list needs, plus the
+// chosen view's fields formatted by rowcard — the same text the hover card and
+// the tiles show, so a value cannot read differently on a phone.
+function mobileRow(x, fields) {
+  const vals = RowCard.fieldValues(x);
+  const cur = { USD: '$', EUR: '\u20ac', GBP: '\u00a3', JPY: '\u00a5', KRW: '\u20a9', CAD: 'C$',
+    AUD: 'A$', HKD: 'HK$', TWD: 'NT$', INR: '\u20b9', CHF: 'CHF ' }[x.currency || 'USD'] || '';
+  return {
+    symbol: x.symbol,
+    name: x.shortName || x.name || x.symbol,
+    price: x.price == null ? null : cur + x.price.toFixed(2),
+    today: x.todayPct == null ? null : (x.todayPct >= 0 ? '+' : '') + x.todayPct.toFixed(1) + '%',
+    up: x.todayPct == null ? null : x.todayPct >= 0,
+    action: x.action || null,
+    fields: fields.map((k) => {
+      const v = vals[k];
+      return { k: k.slice(k.indexOf('|') + 1), t: v ? v.t : '\u2014', c: v ? v.c : 'na' };
+    }),
+  };
+}
+
+async function mobileRows(req) {
+  const snap = await readSnapshot();
+  let rows = ((snap && snap.stocks) || []);
+  if (await isGuest(req)) rows = rows.filter((x) => guestSet.has(String(x.symbol).toUpperCase()));
+  scoreActionInto(rows);
+  await stampShortNames(rows);
+  return rows;
+}
+
+app.get('/api/m/config', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ ...(await mobileConfig()), max: MOBILE_VIEWS_MAX, fieldsMax: MOBILE_FIELDS_MAX });
+}));
+
+app.put('/api/m/config', requireAdmin, route(async (req, res) => {
+  const cfg = cleanMobileConfig(req.body && req.body.config);
+  await store.writeMobileConfig(cfg);
+  mobileCfgCache = { at: Date.now(), cfg };
+  logAct(req, 'view', 'mobile:' + cfg.views.length);
+  res.json({ ok: true, ...cfg });
+}));
+
+// Every screen with how many stocks it holds right now — the phone's front
+// page. Counted here rather than on the phone, which is the whole point.
+app.get('/api/m/screens', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const [screens, rows] = await Promise.all([store.readScreens(), mobileRows(req)]);
+  const list = (screens || []).map((sc) => ({
+    id: sc.id, name: sc.name, grp: sc.group, description: sc.description,
+    count: Filters.screenRows(sc.def || {}, rows).length,
+  }));
+  res.json({ screens: list, universe: rows.length });
+}));
+
+// One screen's stocks, formatted for the chosen view. This is the request the
+// phone actually makes, and it is a few kilobytes: the filtering, the sorting
+// and the formatting all happen here.
+app.get('/api/m/screen', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const id = String(req.query.id || '');
+  const cfg = await mobileConfig();
+  const view = cfg.views.find((v) => v.id === String(req.query.view || '')) || cfg.views[0];
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
+  const rows = await mobileRows(req);
+  let picked = rows.filter((x) => !x.error);
+  let screen = null;
+  if (id && id !== 'all') {
+    const screens = await store.readScreens();
+    screen = (screens || []).find((sc) => sc.id === id);
+    if (!screen) return res.status(404).json({ error: 'No such screen.' });
+    picked = Filters.screenRows(screen.def || {}, rows);
+  } else {
+    picked = picked.slice().sort((a, b) => (b.overallRating || 0) - (a.overallRating || 0));
+  }
+  res.json({
+    id: id || 'all',
+    name: screen ? screen.name : 'Every stock',
+    description: screen ? screen.description : null,
+    view: { id: view.id, name: view.name, fields: view.fields.map((k) => k.slice(k.indexOf('|') + 1)) },
+    total: picked.length,
+    rows: picked.slice(0, limit).map((x) => mobileRow(x, view.fields)),
+  });
+}));
+
+// One stock, in full, for the sheet that opens when a row is tapped: every
+// field rowcard knows, grouped as the hover card groups them, plus its stored
+// headlines. One stock is a couple of kilobytes.
+app.get('/api/m/stock', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  const rows = await mobileRows(req);
+  const x = rows.find((r) => r.symbol === symbol);
+  if (!x) return res.status(404).json({ error: 'No such stock.' });
+  const vals = RowCard.fieldValues(x);
+  const groups = {};
+  for (const f of RowCard.fieldCatalogue()) {
+    if (f.group === 'fwd') continue;                       // the as-of view's own
+    const v = vals[f.key];
+    if (!v || v.t === '\u2014') continue;                     // a sheet of dashes helps nobody
+    (groups[f.group] = groups[f.group] || []).push({ k: f.label, t: v.t, c: v.c || '' });
+  }
+  let news = [];
+  try { news = NEWS_OFF ? [] : (await store.readNews(symbol, 6)); } catch { news = []; }
+  res.json({
+    symbol, name: x.shortName || x.name || symbol,
+    sector: x.sector || null, industry: x.industry || null,
+    action: x.action || null, actionFlag: x.actionFlag || null, actionTrend: x.actionTrend || null,
+    groups: Object.entries(groups).map(([g, rowsOut]) => ({ group: g, rows: rowsOut })),
+    news: news.map((n) => ({ headline: n.headline, source: n.source, url: n.url, published_at: n.published_at })),
+  });
+}));
 
 app.get('/api/tile-config', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');

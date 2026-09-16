@@ -669,6 +669,27 @@ async function writeTileConfig(cfg) {
   return cfg;
 }
 
+// ---- the mobile setup ------------------------------------------------------
+
+// The views the phone offers, and what each shows. A site setting like the
+// tile setup beside it: the owner configures it on a desktop, and the mobile
+// page has no configuration of its own — only a switch between these.
+async function readMobileConfig() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'mobile_config'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value || 'null'); } catch { return null; }
+}
+
+async function writeMobileConfig(cfg) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('mobile_config', ?)",
+    args: [JSON.stringify(cfg)],
+  });
+  return cfg;
+}
+
 // ---- blog posts -----------------------------------------------------------
 
 const postRow = (x) => ({
@@ -2498,6 +2519,8 @@ module.exports = {
   writePortfolios,
   readNames,
   readTileConfig,
+  readMobileConfig,
+  writeMobileConfig,
   writeTileConfig,
   readPosts,
   readPost,

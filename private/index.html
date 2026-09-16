@@ -225,6 +225,14 @@
     .notice .ic { color: var(--faint); }
     .notice b { color: var(--text); font-weight: 600; }
     #readonlyNote, #fwdViewBar, #refreshBar, #fltBar { margin-top: 8px; }
+    #phoneBar { flex: none; display: flex; align-items: center; gap: 8px; margin-top: 8px;
+      padding: 8px 10px; border: 1px solid var(--hair); border-radius: 12px;
+      background: var(--surface); font-size: 13px; color: var(--muted); }
+    #phoneBar .ic { color: var(--accent); flex: none; }
+    #phoneBar span { flex: 1; min-width: 0; }
+    #phoneBar a { color: var(--text); font-weight: 600; text-decoration: none; border-bottom: 1px solid var(--hair-2); }
+    #phoneBar button { flex: none; background: none; border: 0; color: var(--faint); font-size: 18px;
+      line-height: 1; padding: 2px 4px; cursor: pointer; }
 
     /* ---- the news ticker ----------------------------------------------------
        A slow crawl of headlines published in the last 12 hours, under the
@@ -894,6 +902,7 @@
     <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6.4v11.2M15 6.4v11.2"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8.4 6.2v11.6L17.8 12z"/></symbol>
     <symbol id="i-news" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18.2h2"/></symbol>
     <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5.5h16l-6.2 7.2v5.4l-3.6 1.9v-7.3z"/></symbol>
     <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9"/><path d="M17 7h3"/><circle cx="15" cy="7" r="2"/><path d="M4 17h3"/><path d="M11 17h9"/><circle cx="9" cy="17" r="2"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.4a2.6 2.6 0 1 1 3.4 2.5c-.6.2-.9.7-.9 1.3v.5"/><path d="M12 17.1h.01"/></symbol>
@@ -1017,6 +1026,10 @@
                 <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>
                 <span class="nm">News ticker</span>
               </button>
+              <a class="pick" href="/m">
+                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-phone" /></svg>
+                <span class="nm">Phone version</span>
+              </a>
               <div id="portfolioActions" style="display:none">
                 <button class="pick pick-danger" id="deleteBtn">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-trash" /></svg>
@@ -1054,6 +1067,16 @@
         </button>
       </div>
     </header>
+
+    <!-- Shown only on a narrow screen: the table is built for a desktop, and the
+         phone page is the answer rather than an apology. Dismissal is a
+         per-device convenience, so localStorage is the right place for it. -->
+    <div id="phoneBar" hidden>
+      <svg class="ic ic-sm" aria-hidden="true"><use href="#i-phone" /></svg>
+      <span>There is a version built for phones.</span>
+      <a href="/m">Open it</a>
+      <button type="button" id="phoneBarX" aria-label="Dismiss">&times;</button>
+    </div>
 
     <div class="bezel notice" id="readonlyNote" style="display:none">
       <div class="core">
@@ -4499,6 +4522,27 @@
         setStatus(`Could not save: ${err.message}`);
       }
     });
+
+    // The phone hint: shown on a narrow screen until it is dismissed on this
+    // device. Hiding it gives the table its height back, which no resize
+    // event announces — the ticker's rule.
+    (function phoneHint() {
+      let gone = false;
+      try { gone = localStorage.getItem('phoneHint') === 'off'; } catch { /* private window */ }
+      const paint = () => {
+        const want = !gone && window.innerWidth <= 720;
+        if (want === !$('phoneBar').hidden) return;
+        $('phoneBar').hidden = !want;
+        if (typeof paintWindow === 'function') paintWindow(true);
+      };
+      $('phoneBarX').addEventListener('click', () => {
+        gone = true;
+        try { localStorage.setItem('phoneHint', 'off'); } catch { /* nothing to remember it with */ }
+        paint();
+      });
+      window.addEventListener('resize', paint);
+      paint();
+    }());
 
     $('tkHide').addEventListener('click', () => setTickerOff(true));
     $('tickerToggle').addEventListener('click', () => { closePickers(); setTickerOff(!tickerOff); });
