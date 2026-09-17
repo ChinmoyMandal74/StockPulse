@@ -57,16 +57,20 @@
     .panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .hint { font-size: 10.5px; color: var(--faint); line-height: 1.55; margin-top: 14px; }
     .postlist { display: grid; gap: 4px; margin-bottom: 8px; }
-    .postlist .prow { display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+    .postlist .prow { display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 8px;
                       border: 1px solid var(--hair); border-radius: 10px; background: var(--surface); }
     .postlist .pnm { flex: 1; min-width: 0; font-size: 12px; overflow: hidden;
                      text-overflow: ellipsis; white-space: nowrap; text-align: left;
                      background: none; border: 0; color: var(--text); font-family: var(--sans); }
     .postlist .pnm small { color: var(--faint); margin-left: 6px; }
-    .postlist .px { flex: none; background: none; border: 0; color: var(--faint);
-                    font-size: 11px; padding: 2px 4px; }
-    .postlist .px:hover { color: var(--text); }
-    .postlist .px.danger:hover { color: var(--red); }
+    /* Both actions read as buttons. The delete was a bare x beside the word
+       Replace, which read as decoration rather than as the other choice. */
+    .postlist .px { flex: none; padding: 4px 8px; border-radius: 7px; font-size: 11px;
+                    border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+                    color: var(--muted); }
+    .postlist .px:hover { color: var(--text); border-color: var(--hair-2); }
+    .postlist .px.danger { color: var(--red); border-color: rgba(251, 113, 133, 0.28); }
+    .postlist .px.danger:hover { background: rgba(251, 113, 133, 0.12); }
     #postName { width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 10px;
                 border: 1px solid var(--hair); background: var(--surface); color: var(--text);
                 font: 400 12px var(--sans); }
@@ -375,11 +379,10 @@
         <button id="motOn">Animate</button>
         <button id="motReplay" title="Play it again">Replay</button>
       </div>
-      <p class="hint" style="margin-top:6px">Animate previews the motion. Export video renders it to
-        an MP4 — no screen recorder, no editor.</p>
+      <p class="hint" style="margin-top:6px">Animate previews the motion; a screen recorder is how
+        it becomes a video.</p>
 
       <button class="btn" id="dlBtn" title="Render this card to a PNG at its exact pixel size">Download PNG</button>
-      <button class="btn" id="vidBtn" title="Render the animation to a video file">Export video</button>
       <p class="hint" id="dlMsg"></p>
       <button class="btn" id="reloadBtn">Re-pull tonight's data</button>
 
@@ -627,7 +630,7 @@
         `<div class="prow"><button class="pnm" data-open="${i}" title="Load this post's controls">` +
         `${esc(p.name)}<small>${esc(p.tpl)} · ${esc(p.size)}</small></button>` +
         `<button class="px" data-rep="${i}" title="Replace it with the card as it is now">Replace</button>` +
-        `<button class="px danger" data-del="${i}" title="Delete this post">×</button></div>`).join('')
+        `<button class="px danger" data-del="${i}" title="Delete this post">Delete</button></div>`).join('')
         || '<p class="hint" style="margin:0">None yet.</p>';
       $('postList').querySelectorAll('[data-open]').forEach((b) =>
         b.addEventListener('click', () => openPost(posts[Number(b.dataset.open)])));
@@ -712,85 +715,6 @@
     const ensureFontCss = () => CardShot.fontCss();
     const shoot = (fontCss, mime, quality) =>
       CardShot.shoot($('stage'), { w: 1080, h: size.h, fontCss, mime, quality });
-
-    // ---- Export video -----------------------------------------------------
-    // The animation is rendered frame by frame OFFLINE — each frame seeks the
-    // real Animation objects to one instant and photographs the card — then
-    // the frames are played into a MediaRecorder at the right pace. Rendering
-    // a frame costs about a tenth of a second, far slower than real time,
-    // which is exactly why the two passes are separate: the recording sees a
-    // steady 20fps regardless of how long the drawing took.
-    const VID_FPS = 20, VID_HOLD = 1400;
-    function videoMime() {
-      const want = ['video/mp4;codecs=avc1.42E01E', 'video/mp4',
-                    'video/webm;codecs=vp9', 'video/webm'];
-      return want.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || null;
-    }
-    async function exportVideo() {
-      const btn = $('vidBtn'), msg = $('dlMsg'), stage = $('stage');
-      const mime = videoMime();
-      if (!mime) { msg.textContent = 'This browser cannot record video; Animate + a screen recorder still works.'; return; }
-      btn.disabled = true;
-      $('dlBtn').disabled = true;
-      try {
-        const fontCss = await ensureFontCss();
-        const total = Math.round((Cards.MOTION_MS + VID_HOLD) / 1000 * VID_FPS);
-        const frames = [];
-        for (let i = 0; i < total; i++) {
-          Cards.freezeAt(stage, i * (1000 / VID_FPS));
-          // JPEG, not PNG: eighty full-size PNGs is a third of a gigabyte in
-          // memory, and the frames are about to be video-compressed anyway.
-          frames.push(await shoot(fontCss, 'image/jpeg', 0.94));
-          msg.textContent = `Rendering frame ${i + 1} of ${total}\u2026`;
-        }
-        msg.textContent = 'Recording\u2026';
-        const cv = document.createElement('canvas');
-        cv.width = 1080; cv.height = size.h;
-        const cx = cv.getContext('2d');
-        const stream = cv.captureStream(0);
-        const track = stream.getVideoTracks()[0];
-        const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 9e6 });
-        const chunks = [];
-        rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-        const done = new Promise((r) => { rec.onstop = r; });
-        const first = await createImageBitmap(frames[0]);
-        cx.drawImage(first, 0, 0);
-        first.close();
-        rec.start();
-        // A deadline loop rather than a sleep per frame: sleeps drift, and a
-        // drifting frame clock shows up as stutter in the finished file.
-        const t0 = performance.now();
-        for (let i = 0; i < frames.length; i++) {
-          const bmp = await createImageBitmap(frames[i]);
-          cx.drawImage(bmp, 0, 0);
-          bmp.close();
-          track.requestFrame();
-          const due = t0 + (i + 1) * (1000 / VID_FPS);
-          const wait = due - performance.now();
-          if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-        }
-        rec.stop();
-        await done;
-        const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm';
-        const blob = new Blob(chunks, { type: mime });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `tickrlab-${tpl}-${size.id}-${new Date().toISOString().slice(0, 10)}.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 8000);
-        msg.textContent = `Saved ${a.download} \u00b7 ${(blob.size / 1048576).toFixed(1)}MB, ` +
-          `${(frames.length / VID_FPS).toFixed(1)}s at ${VID_FPS}fps.`;
-      } catch (err) {
-        msg.textContent = 'Could not export video: ' + err.message;
-      }
-      Cards.unfreeze(stage);
-      render();
-      btn.disabled = false;
-      $('dlBtn').disabled = false;
-    }
-    $('vidBtn').addEventListener('click', exportVideo);
 
     async function downloadPng() {
       const btn = $('dlBtn'), msg = $('dlMsg');

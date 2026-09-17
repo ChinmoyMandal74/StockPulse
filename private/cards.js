@@ -1651,18 +1651,6 @@
   // The exporter's half: pin every animation to one instant so the card can
   // be photographed at that instant. CSS animations are real Animation
   // objects, so seeking them is exact rather than a re-implementation.
-  function freezeAt(root, t) {
-    if (!root) return;
-    if (!root.classList.contains('motion')) root.classList.add('motion');
-    root.getAnimations({ subtree: true }).forEach((a) => {
-      try {
-        a.pause();
-        const end = (a.effect && a.effect.getComputedTiming().endTime) || t;
-        a.currentTime = Math.min(t, end);
-      } catch (e) { /* an animation that will not seek is left where it is */ }
-    });
-    setNumbersAt(numberTargets(root), t);
-  }
   function unfreeze(root) {
     if (!root) return;
     root.getAnimations({ subtree: true }).forEach((a) => { try { a.cancel(); } catch (e) {} });
@@ -1682,7 +1670,7 @@
   }
 
   global.Cards = {
-    STYLE, MOTION, injectStyle, motion, freezeAt, unfreeze, MOTION_MS,
+    STYLE, MOTION, injectStyle, motion, unfreeze, MOTION_MS,
     ids: Object.keys(BUILDERS),
     ADV_PROFILES,
     MOV_PERIODS,
