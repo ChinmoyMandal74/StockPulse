@@ -109,17 +109,11 @@
        A card is a fixed 1080px artboard, so it is never laid out to fit: it is
        built at full size and SCALED, which is the only way a thumbnail and the
        saved image can be the same picture. */
-    .shelf { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .post { display: block; width: 100%; padding: 0; border: 1px solid var(--hair);
-            border-radius: 14px; overflow: hidden; background: var(--surface); text-align: left; }
-    .post:active { border-color: var(--hair-2); }
-    .post .frame { display: block; position: relative; width: 100%; overflow: hidden; }
-    .post .art { display: block; position: absolute; top: 0; left: 0; width: 1080px;
-                 transform-origin: top left; }
-    .post .cap { display: block; padding: 8px 10px; font-size: 12px; font-weight: 600;
-                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .post .cap small { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 400;
-                       color: var(--faint); }
+    .frame { display: block; position: relative; width: 100%; overflow: hidden;
+             border-radius: 12px; }
+    .frame .art { display: block; position: absolute; top: 0; left: 0; width: 1080px;
+                  transform-origin: top left; }
+    .btn.wide { display: block; width: 100%; margin-top: 12px; min-height: 44px; }
     /* The full-size card, off-screen, only while one is being rasterised. */
     #shot { position: fixed; left: -20000px; top: 0; width: 1080px; }
     .shotwrap { text-align: center; }
@@ -134,20 +128,25 @@
              animation: rise .18s var(--ease); }
     @keyframes rise { from { transform: translateY(12px); opacity: 0.6 } to { transform: none; opacity: 1 } }
     .grab { width: 38px; height: 4px; border-radius: 99px; background: rgba(255, 255, 255, 0.18); margin: 6px auto 12px; }
-    .sheet h2 { margin: 0 0 2px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
-    .sheet .meta { font-size: 12px; color: var(--faint); margin-bottom: 12px; }
-    .sheet .verdict { padding: 11px 13px; border-radius: 13px; border: 1px solid var(--hair);
-                      background: rgba(255, 255, 255, 0.03); margin-bottom: 14px; }
-    .sheet .verdict .v { font-size: 15px; font-weight: 600; }
-    .sheet .verdict .why { margin-top: 3px; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
-    .sec { margin-top: 14px; }
-    .sec h3 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--tint, var(--faint)); }
-    .sec .pair { display: flex; gap: 10px; padding: 5px 0; border-top: 1px solid rgba(255, 255, 255, 0.05); font-size: 13px; }
-    .sec .pair .k { color: var(--muted); }
-    .sec .pair .v { margin-left: auto; font-family: var(--mono); }
-    .news a { display: block; padding: 9px 0; border-top: 1px solid rgba(255, 255, 255, 0.05);
+    /* Direct children only. A sheet can now hold a promo CARD, which brings
+       its own h2, .meta, .v and .why from cards.js — and `.sheet h2` beats
+       `.s-title` on specificity, so a descendant selector here silently
+       reset the card's 66px headline to 18px. Anything added below that the
+       card might also use has to stay a child selector. */
+    .sheet > h2 { margin: 0 0 2px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+    .sheet > .meta { font-size: 12px; color: var(--faint); margin-bottom: 12px; }
+    .sheet > .verdict { padding: 11px 13px; border-radius: 13px; border: 1px solid var(--hair);
+                        background: rgba(255, 255, 255, 0.03); margin-bottom: 14px; }
+    .sheet > .verdict .v { font-size: 15px; font-weight: 600; }
+    .sheet > .verdict .why { margin-top: 3px; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+    .sheet > .sec { margin-top: 14px; }
+    .sheet > .sec h3 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--tint, var(--faint)); }
+    .sheet > .sec .pair { display: flex; gap: 10px; padding: 5px 0; border-top: 1px solid rgba(255, 255, 255, 0.05); font-size: 13px; }
+    .sheet > .sec .pair .k { color: var(--muted); }
+    .sheet > .sec .pair .v { margin-left: auto; font-family: var(--mono); }
+    .sheet > .news a { display: block; padding: 9px 0; border-top: 1px solid rgba(255, 255, 255, 0.05);
               text-decoration: none; color: var(--text); font-size: 13px; line-height: 1.4; }
-    .news .src { display: block; margin-top: 3px; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+    .sheet > .news a .src { display: block; margin-top: 3px; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
     .vopt { display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; min-height: 52px;
             padding: 12px 14px; margin-bottom: 8px; border-radius: 13px; border: 1px solid var(--hair);
             background: var(--surface); color: inherit; font: inherit; text-align: left; }
@@ -367,28 +366,24 @@
       currentScreen = null;
       $('back').hidden = true;
       $('title').textContent = 'Posts';
-      $('subtitle').textContent = 'Saved cards, drawn from today’s data. Tap one to save the image.';
+      $('subtitle').textContent = 'Saved cards. Tap one to draw it from today’s data.';
       paintRanges();
       $('main').innerHTML = '<div class="msg">Loading…</div>';
       try {
         const d = await get('/api/m/posts');
         posts = d.posts || [];
-        if (d.style) injectCardStyle(d.style);
         if (!posts.length) {
           $('main').innerHTML = '<div class="msg">No saved posts yet. Save one from the Promo Studio ' +
             'on a desktop and it will appear here.</div>';
           return;
         }
-        // A card is a fixed 1080px artboard, so the thumbnail is the real card
-        // SCALED — the picture you tap is the picture you get.
-        $('main').innerHTML = '<div class="shelf">' + posts.map((p, i) =>
-          `<button class="post" data-post="${i}">` +
-          `<span class="frame" style="aspect-ratio:${p.size.w}/${p.size.h}">` +
-          `<span class="art s-art sz-${we(p.size.id)}" style="height:${p.size.h}px">` +
-          '<span class="s-aura"></span><span class="s-in">' + p.html + '</span></span></span>' +
-          `<span class="cap">${we(p.name)}<small>${we(p.size.w)}×${we(p.size.h)}</small></span>` +
-          '</button>').join('') + '</div>';
-        fitPosts();
+        $('main').innerHTML = posts.map((p, i) =>
+          `<button class="card" data-post="${i}"><span class="t">` +
+          `<span class="nm">${we(p.name)}</span>` +
+          `<span class="ds">${we(TPL_NAMES[p.tpl] || p.tpl)} · ${we(SHAPE_NAMES[p.size.id] || p.size.id)}` +
+          ` · ${we(p.size.w)}×${we(p.size.h)}</span></span>` +
+          '<span class="n">›</span></button>').join('') +
+          '<p class="foot">Each one is drawn when you open it, so it always carries the latest data.</p>';
         $('main').querySelectorAll('[data-post]').forEach((b) =>
           b.addEventListener('click', () => showPost(posts[Number(b.dataset.post)])));
       } catch (e) {
@@ -396,16 +391,28 @@
       }
     }
 
-    // A 1080px artboard scaled to whatever the column turned out to be.
-    // Measured rather than computed, so turning the phone re-fits it.
-    function fitPosts() {
-      document.querySelectorAll('.post .frame').forEach((fr) => {
+    const TPL_NAMES = { movers: 'Movers', chart: 'Chart', sparks: 'Sparklines', range: 'Range',
+      advboard: 'Advice', fund: 'Fundamentals', intro: 'Intro', announce: 'Announcement',
+      avatar: 'Profile picture' };
+    const SHAPE_NAMES = { portrait: 'Post 4:5', square: 'Square', story: 'Story 9:16' };
+
+    // A 1080px artboard scaled to whatever width it ended up with. Measured
+    // rather than computed, so turning the phone re-fits it.
+    function fitFrames(root) {
+      (root || document).querySelectorAll('.frame').forEach((fr) => {
         const art = fr.querySelector('.art');
         const w = fr.clientWidth;
         if (art && w) art.style.transform = `scale(${w / 1080})`;
       });
     }
-    window.addEventListener('resize', () => { if (tab === 'posts') fitPosts(); });
+    window.addEventListener('resize', () => fitFrames());
+
+    const stamp = (iso) => {
+      const t = Date.parse(iso);
+      if (!isFinite(t)) return '';
+      return new Date(t).toLocaleString(undefined,
+        { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    };
 
     function injectCardStyle(css) {
       if ($('cards-style')) return;
@@ -415,34 +422,63 @@
       document.head.appendChild(el);
     }
 
-    // Rasterised at its true 1080px, off-screen, then shown as an image: a
-    // screenshot would be the phone's aspect ratio with a status bar in it,
-    // where this is the exact artboard. Long-press it to add it to Photos.
+    // Tapping a name draws the card — built on the server from the snapshot as
+    // it stands, so opening it is what makes it current. The card is shown
+    // first because that is instant; the PNG is a second step, because
+    // rasterising 1080x1920 on a phone takes a moment and is only wanted when
+    // the file is.
     async function showPost(p) {
       if (!p) return;
-      const sheet = openSheet(`<h2>${we(p.name)}</h2>` +
-        `<div class="meta">${we(p.size.w)}×${we(p.size.h)} · rendering…</div>` +
-        '<div class="msg">Drawing the image…</div>');
-      const stage = document.createElement('div');
-      stage.id = 'shot';
-      stage.className = 's-art sz-' + p.size.id;
-      stage.style.height = p.size.h + 'px';
-      stage.innerHTML = '<div class="s-aura"></div><div class="s-in">' + p.html + '</div>';
-      document.body.appendChild(stage);
+      const sheet = openSheet(`<h2>${we(p.name)}</h2><div class="msg">Drawing it…</div>`);
+      let d;
       try {
-        const blob = await CardShot.shoot(stage, { w: p.size.w, h: p.size.h });
-        const url = URL.createObjectURL(blob);
-        sheet.innerHTML = '<div class="grab"></div>' +
-          `<h2>${we(p.name)}</h2>` +
-          `<div class="meta">${we(p.size.w)}×${we(p.size.h)} · ` +
-          `${Math.round(blob.size / 1024)} KB</div>` +
-          `<div class="shotwrap"><img src="${url}" alt="${we(p.name)}" />` +
-          '<p class="note">Press and hold the image, then <b>Add to Photos</b> — it saves at the ' +
-          'full size, with no status bar in it.</p></div>';
-        sheet.addEventListener('sheetclose', () => URL.revokeObjectURL(url), { once: true });
+        d = await get('/api/m/post?id=' + encodeURIComponent(p.id));
       } catch (e) {
         sheet.innerHTML = '<div class="grab"></div>' + `<h2>${we(p.name)}</h2>` +
-          `<div class="msg">Could not draw it: ${we(e.message)}<br>A screenshot of the card still works.</div>`;
+          `<div class="msg">Could not draw it: ${we(e.message)}</div>`;
+        return;
+      }
+      if (d.style) injectCardStyle(d.style);
+      sheet.innerHTML = '<div class="grab"></div>' +
+        `<h2>${we(d.name)}</h2>` +
+        `<div class="meta">${we(d.size.w)}×${we(d.size.h)}` +
+        (d.updatedAt ? ' · data as of ' + we(stamp(d.updatedAt)) : '') + '</div>' +
+        `<div class="frame" style="aspect-ratio:${d.size.w}/${d.size.h}">` +
+        `<div class="art s-art sz-${we(d.size.id)}" style="height:${d.size.h}px">` +
+        '<div class="s-aura"></div><div class="s-in">' + d.html + '</div></div></div>' +
+        '<button class="btn wide" id="saveShot">Save as an image</button>' +
+        `<p class="note" id="shotNote">A real ${we(d.size.w)}×${we(d.size.h)} file, ` +
+        'not a screenshot — no status bar, nothing to crop.</p>';
+      fitFrames(sheet);
+      sheet.querySelector('#saveShot').addEventListener('click', () => rasterise(sheet, d));
+    }
+
+    // The card at its true 1080px, off-screen, painted to a PNG you can press
+    // and hold. A screenshot would be the phone's aspect ratio with a status
+    // bar in it; this is the exact artboard.
+    async function rasterise(sheet, d) {
+      const btn = sheet.querySelector('#saveShot');
+      const note = sheet.querySelector('#shotNote');
+      btn.disabled = true;
+      note.textContent = 'Rendering…';
+      const stage = document.createElement('div');
+      stage.id = 'shot';
+      stage.className = 's-art sz-' + d.size.id;
+      stage.style.height = d.size.h + 'px';
+      stage.innerHTML = '<div class="s-aura"></div><div class="s-in">' + d.html + '</div>';
+      document.body.appendChild(stage);
+      try {
+        const blob = await CardShot.shoot(stage, { w: d.size.w, h: d.size.h });
+        const url = URL.createObjectURL(blob);
+        sheet.querySelector('.frame').outerHTML =
+          `<div class="shotwrap"><img src="${url}" alt="${we(d.name)}" /></div>`;
+        btn.remove();
+        note.innerHTML = 'Press and hold the image, then <b>Add to Photos</b> — ' +
+          `${we(d.size.w)}×${we(d.size.h)}, ${Math.round(blob.size / 1024)} KB.`;
+        sheet.addEventListener('sheetclose', () => URL.revokeObjectURL(url), { once: true });
+      } catch (e) {
+        btn.disabled = false;
+        note.textContent = 'Could not render it: ' + e.message + ' A screenshot of the card still works.';
       } finally {
         stage.remove();
       }

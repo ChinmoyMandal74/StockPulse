@@ -92,6 +92,17 @@
     const css = o.fontCss == null ? await fontCss() : o.fontCss;
     const clone = el.cloneNode(true);
     inlineStyles(el, clone);
+    // The clone inherits the original's own placement, and a caller that
+    // renders the card OFF-SCREEN to shoot it (the phone parks it at
+    // left:-20000px) would otherwise position it right off the canvas and
+    // export a blank image. `relative` rather than `static`, because the card
+    // is the containing block for its own aura and overlays.
+    clone.style.position = 'relative';
+    clone.style.left = '0';
+    clone.style.top = '0';
+    clone.style.right = 'auto';
+    clone.style.bottom = 'auto';
+    clone.style.margin = '0';
     clone.style.transform = 'none';
     clone.style.width = w + 'px';
     clone.style.height = h + 'px';

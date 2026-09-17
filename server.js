@@ -4513,14 +4513,24 @@ app.put('/api/promo-posts', requireAdmin, route(async (req, res) => {
   res.json({ ok: true, posts: list, max: POSTS_MAX });
 }));
 
-// Every saved post BUILT — the phone shows thumbnails of the real cards, and
-// building them here is what keeps it from downloading the 1.3MB snapshot and
-// the card module to do it. Member-only: a guest sees neither the studio nor
-// the portfolio names and whole-universe rankings these carry.
+// The phone lists posts by NAME and builds one only when it is opened
+// (owner's call: "I need to see the Preset name and when it click on it it
+// should open the visualization"). So the list is a few hundred bytes and the
+// archive read a chart card needs happens on the tap, not on the tab.
+// Member-only: a guest sees neither the studio nor the portfolio names and
+// whole-universe rankings these carry.
 app.get('/api/m/posts', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const posts = await savedPosts();
-  if (!posts.length) return res.json({ posts: [], style: '' });
+  res.json({ posts: posts.map((p) => ({ id: p.id, name: p.name, tpl: p.tpl, size: POST_SIZES[p.size] })) });
+}));
+
+// One post, built from the snapshot as it stands right now.
+app.get('/api/m/post', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const id = String(req.query.id || '');
+  const post = (await savedPosts()).find((p) => p.id === id);
+  if (!post) return res.status(404).json({ error: 'No such post.' });
 
   const snap = await readSnapshot();
   const stocks = ((snap && snap.stocks) || []);
@@ -4528,39 +4538,26 @@ app.get('/api/m/posts', requireMember, route(async (req, res) => {
   await stampShortNames(stocks);
   const myLists = await store.readUserPortfolios(await prefsKey(req));
 
-  // Two templates read the archive. Fetch each window they ask for ONCE,
-  // before building, because Cards.build is synchronous and takes the data
-  // through a plain getter.
-  const wants = new Set();
-  for (const p of posts) {
-    if (p.tpl !== 'chart' && p.tpl !== 'sparks') continue;
-    const key = p.tpl === 'chart' ? p.opts.chtWin : p.opts.spkWin;
+  // Two templates read the archive; the rest never touch it.
+  let basket = null;
+  if (post.tpl === 'chart' || post.tpl === 'sparks') {
+    const key = post.tpl === 'chart' ? post.opts.chtWin : post.opts.spkWin;
     const win = Cards.CHART_WINDOWS[key] || Cards.CHART_WINDOWS.m6;
-    wants.add(win[0]);
-  }
-  const baskets = {};
-  for (const days of wants) {
-    // The studio always reads the whole universe and lets the card narrow it,
-    // so one basket per window covers every scope.
-    try { baskets[days] = await basketPayload(req, 'All', days); } catch { baskets[days] = null; }
+    // The studio always reads the whole universe and lets the card narrow it.
+    try { basket = await basketPayload(req, 'All', win[0]); } catch { basket = null; }
   }
 
-  const out = posts.map((p) => {
-    const size = POST_SIZES[p.size];
-    let html = '';
-    try {
-      html = Cards.build(p.tpl, {
-        stocks, myLists, size, opts: p.opts, getBasket: (d) => baskets[d] || null,
-      });
-    } catch (e) {
-      html = '';
-    }
-    return { id: p.id, name: p.name, tpl: p.tpl, size, html };
-  }).filter((p) => p.html);
-
-  // The card's own stylesheet, sent once rather than per card: the phone has
-  // no reason to load cards.js when it is not building anything.
-  res.json({ posts: out, style: Cards.STYLE });
+  const size = POST_SIZES[post.size];
+  let html = '';
+  try {
+    html = Cards.build(post.tpl, {
+      stocks, myLists, size, opts: post.opts, getBasket: () => basket,
+    });
+  } catch (e) {
+    return res.status(500).json({ error: 'That card could not be drawn.' });
+  }
+  res.json({ id: post.id, name: post.name, tpl: post.tpl, size, html, style: Cards.STYLE,
+    updatedAt: (snap && snap.updatedAt) || null });
 }));
 
 app.get('/api/tile-config', requireAuth, route(async (req, res) => {
