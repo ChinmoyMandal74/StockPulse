@@ -1163,6 +1163,19 @@
           <label for="vdName">Name</label>
           <input type="text" id="vdName" maxlength="40" autocomplete="off" />
         </div>
+        <!-- A screen carries a heading and a line of its own; a view does not,
+             so these are hidden unless the dialog is editing a screen. -->
+        <div id="vdMeta" hidden>
+          <div class="row-f">
+            <label for="vdGroup">Heading</label>
+            <input type="text" id="vdGroup" maxlength="40" autocomplete="off" list="vdGroups" />
+            <datalist id="vdGroups"></datalist>
+          </div>
+          <div class="row-f">
+            <label for="vdDesc">One line</label>
+            <input type="text" id="vdDesc" maxlength="120" autocomplete="off" />
+          </div>
+        </div>
         <div class="vd-tools">
           <input type="search" id="vdSearch" placeholder="Find a column…" autocomplete="off" aria-label="Find a column" />
           <span class="vd-count" id="vdCount"></span>
@@ -3540,6 +3553,36 @@
         ? 'A starter view: every account sees it and only you can change it. '
         : '') + 'Tick the columns this view shows. Symbol and Name are always shown, and the columns keep the table\u2019s order.';
       $('vdName').value = id ? src.name : copyFrom ? `${src.name} (copy)` : '';
+      $('vdMeta').hidden = true;
+      $('vdSave').querySelector('.lbl').textContent = 'Save view';
+      $('vdSearch').value = '';
+      vdNote('');
+      paintViewList();
+      $('viewDialog').showModal();
+      $('vdName').focus();
+    }
+
+    // The screens menu had no way to change which columns a screen shows: you
+    // had to apply it, rearrange the table and press Replace, which also
+    // overwrote the filters. This edits the stored screen directly, and
+    // deliberately leaves the filters alone — those are edited on the table,
+    // where you can see them working, and captured with Replace.
+    function openScreenEditor(id) {
+      const sc = findScreen(id);
+      if (!sc) return;
+      const cols = (sc.def && Array.isArray(sc.def.columns) ? sc.def.columns : [])
+        .filter((c) => VIEW_COLS.some((v) => v.id === c));
+      viewEdit = { mode: 'screen', scope: 'shared', id, selected: new Set(cols) };
+      $('vdTitle').textContent = `Edit \u201c${sc.name}\u201d`;
+      $('vdSub').textContent = 'Its name, where it sits in the menu, and the columns it shows. '
+        + 'Filters and sort are not touched here \u2014 set those on the table and press Replace.';
+      $('vdName').value = sc.name;
+      $('vdGroup').value = sc.group || '';
+      $('vdDesc').value = sc.description || '';
+      $('vdGroups').innerHTML = [...new Set(screens.map((x) => x.group).filter(Boolean))]
+        .map((g) => `<option value="${we(g)}"></option>`).join('');
+      $('vdMeta').hidden = false;
+      $('vdSave').querySelector('.lbl').textContent = 'Save screen';
       $('vdSearch').value = '';
       vdNote('');
       paintViewList();
@@ -3569,6 +3612,7 @@
 
     async function saveViewEdit() {
       const name = $('vdName').value.trim();
+      if (viewEdit.mode === 'screen') return saveScreenEdit(name);
       if (!name) return vdNote('Give the view a name.');
       if (!viewEdit.selected.size) return vdNote('Pick at least one column.');
       const scope = viewEdit.scope;
@@ -3805,7 +3849,8 @@
           html += '<div class="pick-row">' +
             `<button class="pick ${on ? 'on' : ''} ${n ? '' : 'zero'}" data-screen="${sc.id}" role="option" aria-selected="${on}">` +
             `<span class="nm">${we(sc.name)}<em>${we(sc.description)}</em></span><span class="count">${n}</span></button>` +
-            (canEditScreens ? tool(`data-supdate="${sc.id}"`, 'i-refresh', `Replace ${sc.name} with the table as it is now`) +
+            (canEditScreens ? tool(`data-sedit="${sc.id}"`, 'i-pencil', `Edit ${sc.name} \u2014 its name, heading and columns`) +
+              tool(`data-supdate="${sc.id}"`, 'i-refresh', `Replace ${sc.name} with the filters, sort and columns on the table now`) +
               tool(`data-sdel="${sc.id}"`, 'i-trash', `Delete ${sc.name}`) : '') +
             '</div>';
         }
@@ -3819,9 +3864,31 @@
       const m = $('scrMenu');
       m.querySelectorAll('[data-screen]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); applyScreen(b.dataset.screen); }));
       m.querySelectorAll('[data-sclear]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); clearScreen(); }));
+      m.querySelectorAll('[data-sedit]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); closePickers(); openScreenEditor(b.dataset.sedit); }));
       m.querySelectorAll('[data-supdate]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); closePickers(); updateScreenFromTable(b.dataset.supdate); }));
       m.querySelectorAll('[data-sdel]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); closePickers(); deleteScreen(b.dataset.sdel); }));
       m.querySelectorAll('[data-snew]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); closePickers(); saveCurrentAsScreen(); }));
+    }
+
+    // Only the parts this dialog edits are written; the filters, the bound
+    // pickers and the sort are carried through from what was stored.
+    async function saveScreenEdit(name) {
+      if (!name) return vdNote('Give the screen a name.');
+      if (!viewEdit.selected.size) return vdNote('Pick at least one column.');
+      const sc = findScreen(viewEdit.id);
+      if (!sc) return vdNote('That screen is gone.');
+      const group = $('vdGroup').value.trim() || sc.group || 'Other';
+      const desc = $('vdDesc').value.trim();
+      // Keep the table's own order, not the order they were ticked in.
+      const columns = VIEW_COLS.filter((c) => viewEdit.selected.has(c.id)).map((c) => c.id);
+      try {
+        await putScreens(screens.map((x) => (x.id === viewEdit.id
+          ? { ...x, name, group, description: desc, def: { ...x.def, columns } }
+          : x)));
+        $('viewDialog').close();
+        // If it is the screen on screen, redraw the table under the new columns.
+        if (activeScreenId === viewEdit.id) { screenColsOff = false; render(); } else renderScreensMenu();
+      } catch (e) { vdNote('Could not save: ' + e.message); }
     }
 
     function wireViewEditor() {
