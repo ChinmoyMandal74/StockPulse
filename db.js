@@ -50,6 +50,21 @@ const SCHEMA = [
      position  integer not null,
      primary key (portfolio, symbol)
    )`,
+  // How long the Balanced verdict has stood, counted in market days. It could
+  // not be backfilled: only one day of technicals is stored (prevTech), and a
+  // full verdict replay needs fundamentals, which begin 2026-08-30 and land
+  // only on the days a Refresh all ran. So this starts counting when it ships
+  // and says so — `exact` is 0 until the row has actually been SEEN to change,
+  // which is what lets the column print "at least" rather than a number it
+  // cannot stand behind.
+  `create table if not exists advice_state (
+     symbol   text primary key,
+     action   text not null,
+     since_d  text not null,
+     seen_d   text not null,
+     sessions integer not null,
+     exact    integer not null default 0
+   )`,
   `create table if not exists names (
      symbol text primary key,
      name   text
@@ -667,6 +682,51 @@ async function writeTileConfig(cfg) {
     args: [JSON.stringify(cfg)],
   });
   return cfg;
+}
+
+// ---- how long a verdict has stood ------------------------------------------
+
+async function readAdviceState() {
+  await init();
+  const r = await db.execute('select symbol, action, since_d, seen_d, sessions, exact from advice_state');
+  const out = {};
+  for (const row of r.rows) {
+    out[row.symbol] = { action: row.action, since: row.since_d, seen: row.seen_d,
+      sessions: Number(row.sessions), exact: !!Number(row.exact) };
+  }
+  return out;
+}
+
+// One market day at a time, and idempotent: called twice for the same day it
+// counts once, because a Refresh all runs a dozen rounds and may be run again
+// by hand on the same afternoon.
+async function noteAdvice(day, rows) {
+  await init();
+  if (!day || !Array.isArray(rows) || !rows.length) return 0;
+  const prev = await readAdviceState();
+  const stmts = [];
+  for (const r of rows) {
+    if (!r || !r.symbol || !r.action) continue;
+    const was = prev[r.symbol];
+    if (was && was.action === r.action) {
+      if (was.seen >= day) continue;   // already counted today
+      stmts.push({
+        sql: `update advice_state set sessions = sessions + 1, seen_d = ?
+              where symbol = ? and seen_d < ?`,
+        args: [day, r.symbol, day],
+      });
+    } else {
+      // A change we watched: from here the count is exact.
+      stmts.push({
+        sql: `insert or replace into advice_state (symbol, action, since_d, seen_d, sessions, exact)
+              values (?, ?, ?, ?, 1, ?)`,
+        args: [r.symbol, r.action, day, day, was ? 1 : 0],
+      });
+    }
+  }
+  if (!stmts.length) return 0;
+  await db.batch(stmts, 'write');
+  return stmts.length;
 }
 
 // ---- saved promo posts -----------------------------------------------------
@@ -2557,6 +2617,8 @@ module.exports = {
   readNames,
   readTileConfig,
   readMobileConfig,
+  readAdviceState,
+  noteAdvice,
   readPromoPresets,
   writePromoPresets,
   writeMobileConfig,

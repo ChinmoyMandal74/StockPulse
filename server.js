@@ -1504,6 +1504,30 @@ function deriveShortName(full) {
 // Stamps the display name onto rows being served from the snapshot. One
 // query covers both columns, and the rule fills in wherever no override was
 // typed — so improving the rule improves every untouched name at once.
+// How long the Balanced verdict has stood, stamped on the way out for the
+// reason the display names are: it derives from data already held, so a
+// snapshot written before the field existed still carries it.
+//
+// `adviceExact` is false until the row has been SEEN to change. The column
+// prints "at least" then, because the history could not be backfilled: one day
+// of technicals is stored and a verdict replay needs fundamentals, which begin
+// 2026-08-30 and only on the days a Refresh all ran.
+async function stampAdviceAge(rows) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  let state = {};
+  try { state = await store.readAdviceState(); } catch (e) { return; }
+  for (const r of rows) {
+    const s = r && r.symbol ? state[r.symbol] : null;
+    // A verdict that has moved since the last close is one session old today,
+    // whatever the stored run says — the stored run is yesterday's news.
+    if (!s || !r.action) { r.adviceDays = null; r.adviceExact = null; r.adviceSince = null; continue; }
+    const moved = s.action !== r.action;
+    r.adviceDays = moved ? 1 : s.sessions;
+    r.adviceExact = moved ? true : s.exact;
+    r.adviceSince = moved ? null : s.since;
+  }
+}
+
 async function stampShortNames(rows) {
   if (!Array.isArray(rows) || !rows.length) return;
   try {
@@ -4355,6 +4379,7 @@ async function mobileRows(req) {
   if (await isGuest(req)) rows = rows.filter((x) => guestSet.has(String(x.symbol).toUpperCase()));
   scoreActionInto(rows);
   await stampShortNames(rows);
+  await stampAdviceAge(rows);
   return rows;
 }
 
@@ -4567,6 +4592,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const stocks = ((snap && snap.stocks) || []);
   scoreActionInto(stocks);
   await stampShortNames(stocks);
+  await stampAdviceAge(stocks);
   const myLists = await store.readUserPortfolios(await prefsKey(req));
 
   // Two templates read the archive; the rest never touch it.
@@ -5708,6 +5734,13 @@ async function finishLiveRefresh(payload, ctx = {}) {
       const withProfile = rows.filter((x) => !x.error && x.profileFetchedAt != null);
       const n = await store.writeFundamentals(marketDay(rows), withProfile);
       if (n) console.log(`fundamentals: ${n} symbols recorded for ${marketDay(rows)}`);
+      // How long each Balanced verdict has stood, on the SAME gate and for the
+      // same reason: a Refresh all runs after the close, so the verdict being
+      // counted is the settled one. Counting on the intraday rounds instead
+      // would advance the clock on a provisional bar and reset the run every
+      // time a verdict flapped over lunch.
+      const held = await store.noteAdvice(marketDay(rows), rows.filter((x) => !x.error && x.action));
+      if (held) console.log(`advice: ${held} verdicts aged for ${marketDay(rows)}`);
     } catch (err) {
       // A history write must never fail a refresh — same rule as the bars.
       console.warn('fundamentals: history write failed (screener unaffected):', err.message);
@@ -6381,6 +6414,7 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     // written before the field existed still carries it, and an override
     // typed a moment ago shows without waiting for a refresh.
     await stampShortNames(snap.stocks);
+    await stampAdviceAge(snap.stocks);
     // Memberships too: portfolios are edited between refreshes (a deleted one
     // must not linger on every row until the next refresh rewrites the snapshot).
     const pf = await readPortfolios();

@@ -105,6 +105,12 @@
     ['act',   'Cushion',        (s) => (s.actionCushion == null ? null
                                   : { t: s.actionCushion.toFixed(1) + 'σ',
                                       c: s.actionCushion >= 2 ? 'pos' : s.actionCushion < 1 ? 'warn' : '' })],
+    // Market days the Balanced verdict has stood. "At least" until the row has
+    // been watched changing — the run before that is unknowable, not zero.
+    ['act',   'Days held',      (s) => (s.adviceDays == null ? null
+                                  : { t: (s.adviceExact ? '' : '\u2265') + s.adviceDays
+                                        + ' session' + (s.adviceDays === 1 ? '' : 's'),
+                                      c: '' })],
     // Only on the day it happens; >=1.5x is the study's confirmed kind.
     ['act',   'Breakout',       (s) => (!s.fresh3mHigh ? null
                                   : { t: '3M high' + (s.volX != null ? ' \u00b7 ' + s.volX + '\u00d7 avg volume' : ''),
