@@ -3901,7 +3901,17 @@ async function computeStocks(asOf, opts = {}) {
           const served = Object.keys(liveSeries).filter(
             (sym) => sym !== BENCHMARK && liveSeries[sym] &&
                      Array.isArray(liveSeries[sym].values) && liveSeries[sym].values.length);
-          await store.notePricePull(served);
+          const at = Date.now();
+          await store.notePricePull(served, at);
+          // Stamp the rows this response is built from. The refresh branch of
+          // /api/stocks returns the payload directly and never reaches the
+          // stamp on the snapshot path, so without this the column is blank
+          // for the one person who just clicked Refresh and populated for
+          // everybody else — which is the wrong way round.
+          const servedSet = new Set(served);
+          for (const row of stocks) {
+            if (servedSet.has(row.symbol)) row.pricedAt = at;
+          }
         }
         T.mark('persist-bars');
         if (b.inserted) {
