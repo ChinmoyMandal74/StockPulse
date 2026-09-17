@@ -1528,6 +1528,21 @@ async function stampAdviceAge(rows) {
   }
 }
 
+// When each row's price was last fetched, stamped on the way out for the same
+// reason the display names and the advice age are: it derives from data we
+// already hold, so a snapshot written before the column existed still carries
+// it, and it is current rather than frozen at whenever the snapshot was built.
+async function stampPricedAt(rows) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  let state = {};
+  try { state = await store.readPriceState(); } catch (e) { return; }
+  for (const r of rows) {
+    if (!r || !r.symbol) continue;
+    const t = state[r.symbol];
+    r.pricedAt = Number.isFinite(t) ? t : null;
+  }
+}
+
 async function stampShortNames(rows) {
   if (!Array.isArray(rows) || !rows.length) return;
   try {
@@ -3878,6 +3893,16 @@ async function computeStocks(asOf, opts = {}) {
         // window came FROM the store, so a joined series would agree with itself
         // and never see one.
         const b = await persistBars(pricedLive || symbols, liveSeries || series);
+        // Exactly the symbols the provider served this round, not the ones we
+        // asked for: a chunk that failed must not claim to have been priced.
+        // Same guard as the archive write — an as-of pull and an archive round
+        // did not fetch prices, so neither may move this clock.
+        if (liveSeries) {
+          const served = Object.keys(liveSeries).filter(
+            (sym) => sym !== BENCHMARK && liveSeries[sym] &&
+                     Array.isArray(liveSeries[sym].values) && liveSeries[sym].values.length);
+          await store.notePricePull(served);
+        }
         T.mark('persist-bars');
         if (b.inserted) {
           console.log(`bars: +${b.inserted} rows across ${b.symbols} symbols` +
@@ -4580,6 +4605,7 @@ async function mobileRows(req) {
   scoreActionInto(rows);
   await stampShortNames(rows);
   await stampAdviceAge(rows);
+  await stampPricedAt(rows);
   return rows;
 }
 
@@ -4793,6 +4819,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   scoreActionInto(stocks);
   await stampShortNames(stocks);
   await stampAdviceAge(stocks);
+  await stampPricedAt(stocks);
   const myLists = await store.readUserPortfolios(await prefsKey(req));
 
   // Two templates read the archive; the rest never touch it.
@@ -6615,6 +6642,7 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     // typed a moment ago shows without waiting for a refresh.
     await stampShortNames(snap.stocks);
     await stampAdviceAge(snap.stocks);
+    await stampPricedAt(snap.stocks);
     // Memberships too: portfolios are edited between refreshes (a deleted one
     // must not linger on every row until the next refresh rewrites the snapshot).
     const pf = await readPortfolios();

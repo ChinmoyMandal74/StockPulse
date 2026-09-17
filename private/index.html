@@ -1229,7 +1229,7 @@
         <th class="group grp-rank" data-group="rank" colspan="3">Scores</th>
         <th class="group grp-act" data-group="act" colspan="12">Advice</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
-        <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
+        <th class="group grp-short" data-group="short" colspan="6">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="4">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
         <th class="group grp-rel" data-group="rel" colspan="7">Relative</th>
@@ -1264,6 +1264,7 @@
         <th class="grp-act" data-key="actionCushion" title="How far the rules let this stock fall before they exit, measured in its OWN monthly volatility — so it is comparable between a quiet stock and a wild one, which the raw percentage is not. It orders TAIL SIZE inside an advice tier, not return: over 307,965 stock-days the higher-cushion half of a tier had a thinner 10th-percentile loss in every era and horizon tested, while the average return difference stayed noise. Sorting by an advice column breaks ties on it.">Cushion</th>
         <th class="grp-act" data-key="adviceDays" title="Market days the Balanced verdict has stood. A reading that has held for weeks is a different proposition from one that turned this morning, and the chevron beside the verdict only says that it moved since the last close. It counts once a day, after the close — counting on the intraday rounds would advance it on a provisional bar and reset the run whenever a verdict flapped over lunch. A ≥ means the verdict has held since this column started watching: the run before that could not be recovered, because only one day of technicals is stored and a verdict replay needs fundamentals, which begin at the end of August.">Days held</th>
         <th class="grp-chart" data-col="spark90" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
+        <th class="grp-short" data-key="pricedAt" title="When this stock’s price was last fetched from the provider — a per-symbol clock, not the time the refresh ran. The two differ: price rounds are paced once the universe is large, so a round prices only the slice that fits inside the minute and reads the rest from the archive. It says we ASKED, which is a different fact from whether anything came back — a stock can be pulled on time and still carry a stale close, so read it beside the bar date rather than instead of it. Amber past a day.">Price<br>pulled</th>
         <th class="grp-short" data-key="todayPct">Today</th>
         <th class="grp-short" data-key="yesterdayPct">YDAY</th>
         <th class="grp-short" data-key="oneWeekPct">1W</th>
@@ -1585,6 +1586,37 @@
       const p = String(iso).split('-');
       return p.length === 3 ? `${M[+p[1] - 1]} ${+p[2]}` : iso;
     }
+    // When this row's price was last fetched. Deliberately separate from the
+    // bar date beside it: "we asked" and "something came back" are different
+    // facts, and on 2026-09-17 AVB was pulled on time and still carried a
+    // close from 24 August.
+    function pulledCell(s) {
+      const t = s.pricedAt;
+      if (t == null || !isFinite(t)) {
+        return `<td class="na grp-short" title="No price pull recorded for this stock yet \u2014 it fills in the next time a refresh prices it.">\u2014</td>`;
+      }
+      const d = new Date(t);
+      const now = Date.now();
+      const mins = (now - t) / 60000;
+      const ago = mins < 1 ? 'just now'
+        : mins < 60 ? Math.round(mins) + ' min ago'
+        : mins < 48 * 60 ? Math.round(mins / 60) + 'h ago'
+        : Math.round(mins / 1440) + 'd ago';
+      // The time alone when it is today's, which is the common case and the
+      // narrow one; the date joins it as soon as that stops being true.
+      const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const sameDay = d.toDateString() === new Date(now).toDateString();
+      const label = sameDay ? time
+        : d.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ' ' + time;
+      // `.warn` in app.css is colour only (its positioning rule is scoped to
+      // span.warn), so this stays a table cell and keeps its alignment.
+      const stale = now - t > 86400000;
+      const title = `Price last fetched ${d.toLocaleString()} (${ago})`
+        + (s.latestDate ? ` \u00b7 newest bar ${s.latestDate}` : '')
+        + '. A pull can succeed and return no new bar, so this says when we asked.';
+      return `<td class="grp-short${stale ? ' warn' : ''}"${attr(title)}>${label}</td>`;
+    }
+
     function earningsCell(s, cacheTitle) {
       const cls = 'grp-info';
       const d = s.nextEarningsDate;
@@ -2183,6 +2215,7 @@
               : `Filter ${label}: 5 means at least 5 \u00b7 >5 <5 <=5 =5 !=5 \u00b7 2..8 for a range \u00b7 ` +
                 `2B 500M 10K for big numbers \u00b7 blanks never match. Esc clears.` +
                 (key === 'nextEarningsDate' ? ' Counts DAYS until the report: ..14 is within two weeks.' : '') +
+                (key === 'pricedAt' ? ' Counts HOURS since the price was fetched: >24 finds anything not refreshed for a day.' : '') +
                 (RATING_FOR[key] ? ' Reads the 1\u201310 rating shown.' : '');
             cell.innerHTML = `<input class="flt" size="1" data-fk="${we(key)}" placeholder="${ph}" ` +
               `aria-label="${we('Filter ' + label)}" title="${we(help)}" autocomplete="off" spellcheck="false">`;
@@ -2561,7 +2594,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="84">${s.error}</td>
+            <td class="na" colspan="85">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -2600,6 +2633,7 @@
           ${cushionCell(s)}
           ${heldCell(s)}
           <td class="spark grp-chart" data-spark="${s.symbol}">${sparkCache[s.symbol] || ''}</td>
+          ${pulledCell(s)}
           ${pctCell(s.todayPct, 'grp-short', liveTitle)}
           ${pctCell(s.yesterdayPct, 'grp-short', liveTitle)}
           ${pctCell(s.oneWeekPct, 'grp-short', liveTitle)}
@@ -2677,7 +2711,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 89;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 90;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -2847,7 +2881,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="86">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="87">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

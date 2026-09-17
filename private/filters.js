@@ -56,6 +56,12 @@
     if (key === 'nextEarningsDate') {
       return x.nextEarningsDate ? Math.round((new Date(x.nextEarningsDate) - new Date()) / 86400000) : null;
     }
+    if (key === 'pricedAt') {
+      // Hours since this stock's price was fetched. >24 is "not refreshed for
+      // a day"; a stock never priced stays blank and matches nothing, which is
+      // the rule for blanks everywhere in this grammar.
+      return x.pricedAt ? Math.round(((c.now || Date.now()) - x.pricedAt) / 360000) / 10 : null;
+    }
     if (key === 'daysSinceEarnings') {
       return x.lastEarningsDate ? Math.round((new Date() - new Date(x.lastEarningsDate)) / 86400000) : null;
     }

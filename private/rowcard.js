@@ -117,6 +117,10 @@
                                       c: s.volX != null && s.volX >= 1.5 ? 'pos' : '' })],
     // The card has no horizon picker, so it shows the default and says so
     // rather than borrowing whatever the table happens to be set to.
+    ['short', 'Price pulled',   (s) => (s.pricedAt == null || !isFinite(s.pricedAt) ? null
+                                  : { t: new Date(s.pricedAt).toLocaleString([], { day: 'numeric',
+                                        month: 'short', hour: 'numeric', minute: '2-digit' }),
+                                      c: Date.now() - s.pricedAt > 86400000 ? 'warn' : '' })],
     ['short', 'Today',          (s) => V.pct(s.todayPct)],
     ['short', 'YDAY',           (s) => V.pct(s.yesterdayPct)],
     ['short', '1W',             (s) => V.pct(s.oneWeekPct)],

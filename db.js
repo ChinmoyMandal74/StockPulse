@@ -388,6 +388,20 @@ const SCHEMA = [
      symbol     text primary key,
      fetched_at integer not null
    )`,
+  // When each symbol's price was last fetched from the provider — a per-symbol
+  // clock, exactly like news_state's, and separate from the bars for the same
+  // reason: "we asked" and "there was something new" are different facts. A
+  // stock can be pulled on time and still carry a month-old close (AVB did, on
+  // 2026-09-17), and the snapshot's single updatedAt cannot tell the two apart.
+  //
+  // It is per SYMBOL rather than global because price rounds are paced: past
+  // ~529 stocks a round prices only the slice that fits inside the minute and
+  // the rest are read from the archive, so "when was this priced" genuinely
+  // differs row to row.
+  `create table if not exists price_state (
+     symbol    text primary key,
+     pulled_at integer not null
+   )`,
   // The news job's log: one row per batch of headline fetches (a refresh
   // round's top-up, or a stock page fetching stale headlines), one row per
   // symbol inside it. The /news-runs page reads these.
@@ -1571,6 +1585,28 @@ async function readCloses(symbols, since) {
 // shape a live time_series fetch has — so a Refresh All's later rounds can
 // rebuild every row from the archive the first round just wrote, for zero
 // API credits. ~96k rows at 300 symbols; the 50k-row read measures 2.0s.
+// Stamp the symbols a live price pull actually served. Whole-batch, keyed on
+// the primary key, so this is N indexed writes and never a scan.
+async function notePricePull(symbols, at) {
+  await init();
+  const list = (symbols || []).filter(Boolean);
+  if (!list.length) return 0;
+  const when = at || Date.now();
+  await db.batch(list.map((symbol) => ({
+    sql: 'insert or replace into price_state (symbol, pulled_at) values (?, ?)',
+    args: [symbol, when],
+  })));
+  return list.length;
+}
+
+async function readPriceState() {
+  await init();
+  const r = await db.execute('select symbol, pulled_at from price_state');
+  const out = {};
+  for (const row of r.rows) out[row.symbol] = Number(row.pulled_at);
+  return out;
+}
+
 async function readBarsFullFor(symbols, since) {
   await init();
   if (!symbols || !symbols.length) return {};
@@ -1609,7 +1645,7 @@ async function readBarsFor(symbols, since) {
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state',
-  'earnings_history'];
+  'earnings_history', 'price_state'];
 
 // Remove a symbol from the database entirely.
 //
@@ -2695,7 +2731,7 @@ module.exports = {
   readBars,
   readBarsFor,
   purgeSymbol,
-  markRefreshPrices, readBarsFullFor,
+  markRefreshPrices, readBarsFullFor, notePricePull, readPriceState,
   writeNews, readNews, readLatestNews, readNewsState, newsCountsSince,
   symbolsWithData,
   countSymbolRows,
