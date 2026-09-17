@@ -224,7 +224,7 @@
       wireBar();
       $('stage').classList.add('sz-' + SIZE.id);
       $('stage').innerHTML = '<div class="s-aura"></div>' +
-        `<div class="s-in">${Cards.build(kind, { stocks, myLists, size: SIZE, opts: state, getBasket })}</div>`;
+        `<div class="s-in">${Cards.build(kind, { stocks, myLists, size: SIZE, opts: state, getBasket, updatedAt: pulledAt })}</div>`;
       fit();
     }
     function fit() {
@@ -260,6 +260,7 @@
 
     // Two different facts: when the prices were pulled, and the day they
     // belong to — the second is what a card prints. Amber past a day.
+    let pulledAt = null;          // when the snapshot behind these rows was written
     function paintFresh(updatedAt, rows) {
       const el = $('freshLine');
       const t = Date.parse(updatedAt || '');
@@ -286,6 +287,7 @@
         const data = await fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json());
         if (data.error) throw new Error(data.error);
         stocks = (data.stocks || []).filter((s) => !s.error);
+        pulledAt = data.updatedAt || null;
         paintFresh(data.updatedAt, stocks);
         portfolioNames = data.portfolios || [];
         try {

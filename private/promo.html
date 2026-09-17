@@ -486,8 +486,9 @@
       CONTROL_IDS.forEach((id) => { const el = $(id); if (el) o[id] = el.value; });
       return o;
     }
+    let pulledAt = null;          // when the snapshot behind these rows was written
     const buildCard = () => Cards.build(tpl, {
-      stocks, myLists, size, opts: controlOpts(), getBasket,
+      stocks, myLists, size, opts: controlOpts(), getBasket, updatedAt: pulledAt,
     });
 
     // Each Industry picker offers only what its Sector picker's choice holds
@@ -806,6 +807,7 @@
         if (!canAnnounce && OWNER_ONLY_TPLS.has(tpl)) tpl = 'movers';
         const data = await fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json());
         stocks = (data.stocks || []).filter((s) => !s.error);
+        pulledAt = data.updatedAt || null;
         paintFresh(data.updatedAt, stocks);
         // "This week" / "this month": the row's price against its last close
         // before the week or month began. Rows without an anchor stay unranked

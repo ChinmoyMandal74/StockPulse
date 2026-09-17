@@ -28,9 +28,24 @@
     // card goes on Instagram. Noon local, because `new Date('2026-09-16')`
     // parses as UTC midnight and renders as the 15th west of Greenwich.
     let marketDay = null;
+    let pulledAt = null;
+    // ALWAYS New York, never the builder's own zone. The card is a baked
+    // image: whoever renders it bakes their clock into something other people
+    // read, and the market it describes keeps one timezone. ET is also what
+    // the refresh report prints.
+    const timeStr = (iso) => {
+      const t = Date.parse(iso || '');
+      if (!isFinite(t)) return '';
+      try {
+        return new Date(t).toLocaleTimeString('en-US',
+          { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) + ' ET';
+      } catch (e) { return ''; }
+    };
     const dateStr = () => {
       const d = marketDay ? new Date(marketDay + 'T12:00:00') : new Date();
-      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const day = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const at = timeStr(pulledAt);
+      return at ? day + ' · ' + at : day;
     };
     // dated: true for the data cards, whose numbers belong to a day. The
     // explainers are evergreen, so they carry no date — and no universe
@@ -1697,6 +1712,9 @@
       stocks = c.stocks || [];
       // The freshest bar anyone has: what the numbers on the card describe.
       marketDay = stocks.reduce((m, x) => (x && x.latestDate && x.latestDate > m ? x.latestDate : m), '') || null;
+      // When those prices were pulled. A host that does not know says nothing,
+      // rather than the card inventing a time.
+      pulledAt = c.updatedAt || null;
       myLists = c.myLists || {};
       size = c.size || { id: 'portrait', w: 1080, h: 1350 };
       O = c.opts || {};

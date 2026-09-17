@@ -4552,6 +4552,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   try {
     html = Cards.build(post.tpl, {
       stocks, myLists, size, opts: post.opts, getBasket: () => basket,
+      updatedAt: (snap && snap.updatedAt) || null,
     });
   } catch (e) {
     return res.status(500).json({ error: 'That card could not be drawn.' });
