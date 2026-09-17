@@ -148,6 +148,14 @@
           <span class="td">What is remembered, and the emails you may get</span></span></a></li>
         <li><a href="#rules"><span class="no">12</span><span><span class="tt">The Advice column</span>
           <span class="td">Company Type, the rule lists, and tuning them</span></span></a></li>
+        <li><a href="#tiles"><span class="no">13</span><span><span class="tt">Tiles</span>
+          <span class="td">The same rows as cards, with a chart on each</span></span></a></li>
+        <li><a href="#news"><span class="no">14</span><span><span class="tt">News</span>
+          <span class="td">The column, the panel behind it, and the ticker</span></span></a></li>
+        <li><a href="#phone"><span class="no">15</span><span><span class="tt">On a phone</span>
+          <span class="td">A page built for one hand, at tickrlab.com/m</span></span></a></li>
+        <li><a href="#share"><span class="no">16</span><span><span class="tt">Cards to share</span>
+          <span class="td">Making an image of what the screen found</span></span></a></li>
       </ul>
     </div></div>
 
@@ -308,6 +316,7 @@
       <div class="note"><b>Missing data is dropped, not counted as zero.</b> If a factor cannot be
         computed for a stock — usually too little price history — it is removed and the remaining
         weights are rescaled to fill the gap. A stock is never punished for a number nobody has.</div>
+      <a class="top" href="#top">↑ Contents</a>
     </div></section>
 
     <!-- ---------------------------------------------------------------- -->
@@ -405,6 +414,7 @@
       <div class="note"><b>Weights do not have to total 100.</b> Only their relative sizes matter — the
         score rescales them for you, which is what the second number beside each slider shows. Setting
         every slider to 10 is the same as setting them all to 1.</div>
+      <a class="top" href="#top">↑ Contents</a>
     </div></section>
 
     <!-- ---------------------------------------------------------------- -->
@@ -451,6 +461,7 @@
         agrees with something you already believe, then to read that back as evidence. The reordering
         figure shown when you pick a preset is there to keep you honest about how much you have moved.
         If a weighting only looks right for today's list, it is probably fitted to it.</div>
+      <a class="top" href="#top">↑ Contents</a>
     </div></section>
 
     <!-- ---------------------------------------------------------------- -->
@@ -840,6 +851,126 @@
       </table>
       <p class="small">Rule <em>order</em> is not configurable, on purpose: whatever the thresholds,
         the loss-avoidance rules are always checked first.</p>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="tiles"><div class="core">
+      <div class="sec-h"><h2>13 · Tiles</h2></div>
+      <p>The <strong>Table / Tiles</strong> switch beside the View menu draws the same rows as cards
+        instead of a table. It is the same selection either way: the sort, the portfolio, the sector,
+        industry and advice pickers, the Changed chip, any screen and every column filter all still
+        apply, so a filter that leaves seven stocks leaves seven tiles. Nothing is recalculated &mdash; a
+        tile shows the values the table would have shown.</p>
+      <p>It exists because a short list wastes a table. Filter to seven names and two thirds of the
+        screen is empty; as tiles those seven fill it, each with its own chart. Which shape you prefer is
+        remembered against your account.</p>
+
+      <h3>Per row, and the chart range</h3>
+      <p><strong>Per row</strong> is Auto or a fixed 2 to 6. Auto fits as many as the window holds; a
+        fixed number is honoured until the window gets too narrow, below which the window wins &mdash;
+        six across on a monitor is not six across on a laptop.</p>
+      <p><strong>Range</strong> sets the window every chart on screen draws: 1 week, 1 month, 3 months,
+        6 months or 1 year. It moves all of them together, deliberately &mdash; cards side by side are
+        only comparable if they cover the same period, and it is one fetch rather than one per tile.
+        There is no 1-day option, because the archive keeps daily closes and a single session would be a
+        single point.</p>
+      <p>Each chart carries its own price gridlines, the dates at either end, and the move over that
+        window with the window named beside it. That is not the same number as the change beside the
+        price, which is today's.</p>
+
+      <h3>What a tile shows <span class="adm">owner sets this</span></h3>
+      <p>Which fields sit under the chart, how tall the chart is, and which extras appear &mdash; the
+        verdict, the rule that fired, the trend word, the score chips, the sector &mdash; are one setting
+        for the whole site rather than a personal one, so a tile means the same thing to everyone
+        looking at it. The owner edits it from <strong>Tile setup</strong>, beside the switch.</p>
+      <p>Tiles stop at sixty with a button for the next sixty: a tile is a great deal more markup than a
+        table row, and 271 of them at once is not free.</p>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="news"><div class="core">
+      <div class="sec-h"><h2>14 · News</h2></div>
+      <p>Headlines only &mdash; the headline, who published it, when, and a link out. No article text is
+        stored anywhere, and nothing here is summarised or interpreted.</p>
+
+      <h3>The News column</h3>
+      <p>In the <em>Info</em> group, the <strong>News</strong> cell shows how old the newest stored
+        headline is (<code>2h</code>, <code>4d</code>), with a small count beside it when there is more
+        than one from the past week, and brighter when the newest is under a day old. Sorted descending
+        it puts the freshest first &mdash; it sorts on the timestamp rather than on the age, which is the
+        same fact the right way round.</p>
+      <p><strong>An empty cell means one of two different things, and the column separates them.</strong>
+        A dash means the stock has been checked and nothing recent is stored. A faint dot means it has
+        not been looked at yet. Headlines are topped up about a dozen stocks per refresh round, so the
+        second case is common and does not mean a quiet company.</p>
+      <p>Click the cell and a panel opens with up to ten headlines, each with its source and age, each
+        opening the publisher in a new tab, and a link to the stock's own page. If that stock has not
+        been checked in the last six hours, clicking fetches it there and then; the news source is free,
+        so this costs nothing.</p>
+
+      <h3>The ticker</h3>
+      <p>Under the table, a slow crawl of headlines published in the <strong>last 12 hours</strong>. It
+        follows the table: narrow the view to one sector and the strip narrows with it, and says so.
+        Hovering it, giving it keyboard focus, or pressing its pause button stops it; the
+        <strong>&times;</strong> hides it, and <em>News ticker</em> at the top of the &hellip; menu brings
+        it back. If you have asked your system for reduced motion it does not crawl at all &mdash; it
+        shows one headline at a time instead.</p>
+      <p>On a single stock's page the news card carries a <strong>Check now</strong> button, which
+        ignores the six-hour rule and tells you when that stock was last checked.</p>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="phone"><div class="core">
+      <div class="sec-h"><h2>15 · On a phone</h2></div>
+      <p>The screener is eighty-odd columns on a page that deliberately does not scroll, and it was
+        never going to fold onto a phone. <strong>tickrlab.com/m</strong> is a separate page built for
+        one hand. On a narrow screen the screener offers you a link to it; it is also
+        <em>Phone version</em> in the &hellip; menu.</p>
+      <p>Four tabs along the bottom. <strong>Screens</strong> is the front page &mdash; every screen with
+        how many stocks it holds right now, grouped as they are on the desktop. <strong>All</strong> is
+        every stock, best first. <strong>Search</strong> finds one by ticker or company name. Tapping any
+        stock opens a sheet with every field it has, grouped, and its headlines.</p>
+
+      <h3>What a row shows</h3>
+      <p>The <strong>View</strong> button at the top switches between a few named views &mdash; Move,
+        Verdict, Value, and whatever else the owner has set up &mdash; each deciding which handful of
+        fields sit under the price. The choice is remembered on that device. The views themselves are
+        configured on a desktop; the phone only picks between them.</p>
+      <p>The chart button beside it turns the charts on and off, and the strip under the title sets their
+        window. Turning charts off does not merely hide them: nothing is drawn and nothing is sent, so
+        the page is as light as it can be on a slow connection.</p>
+      <p>The page does not refresh itself. Reload it and you get the latest data. Nothing is kept on the
+        phone except which view you chose, whether charts are on, and which window.</p>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="share"><div class="core">
+      <div class="sec-h"><h2>16 · Cards to share</h2></div>
+      <p>A card is a picture of something the screen found &mdash; the week's movers, a chart, what the
+        rules concluded &mdash; drawn in the site's own theme at a fixed size, ready to post. Every one
+        carries the wordmark, the date the data belongs to, the time the prices were pulled, and the line
+        saying these are mechanical readings and not advice. <strong>Cards never recommend.</strong> They
+        report what the screen and the rules did, which is the rule the assistant follows too.</p>
+      <p><strong>Cards</strong> is the simple room: three cards, one shape, the controls in a bar above,
+        and a Save image button. <strong>Promo Studio</strong> is the same machinery with more templates,
+        three artboard sizes and a crop guide.</p>
+
+      <h3>Getting the image</h3>
+      <p><strong>Download PNG</strong> renders the card at its true size &mdash; 1080 pixels wide at every
+        shape &mdash; rather than photographing your screen, so there is no browser chrome in it and
+        nothing to crop. A screenshot of the artboard works too, at whatever size your screen happens
+        to be.</p>
+
+      <h3>Saved posts <span class="adm">owner sets these</span></h3>
+      <p>A card set up in the studio can be named and kept. A saved post remembers the template, the
+        shape and every control &mdash; not a picture &mdash; so opening it tomorrow draws tomorrow's
+        numbers. Saved posts appear on the phone under <strong>Posts</strong>, by name; tapping one draws
+        it from the current data and hands it to you as a real image to press and hold and add to your
+        photos. That is how a card gets posted without a computer.</p>
       <a class="top" href="#top">↑ Contents</a>
     </div></section>
   </main>
