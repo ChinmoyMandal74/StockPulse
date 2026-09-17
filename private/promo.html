@@ -24,14 +24,10 @@
     .panel .sub { font-size: 11.5px; color: var(--faint); line-height: 1.5; margin: 0 0 16px; }
     .panel label { display: block; font-size: 10px; font-weight: 500; text-transform: uppercase;
                    letter-spacing: 0.16em; color: var(--faint); margin: 14px 0 6px; }
-    .tpl { display: flex; flex-direction: column; gap: 6px; }
-    .tpl button { text-align: left; padding: 9px 12px; border-radius: 12px; cursor: pointer;
-                  border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
-                  color: var(--muted); font: 500 12.5px var(--sans);
-                  transition: background 0.3s var(--ease), color 0.3s var(--ease), border-color 0.3s var(--ease); }
-    .tpl button em { display: block; font-style: normal; font-size: 10.5px; color: var(--faint); margin-top: 2px; }
-    .tpl button.on { color: var(--text); border-color: rgba(52, 211, 153, 0.4);
-                     background: rgba(52, 211, 153, 0.07); }
+/* Nine templates as a stack of buttons cost most of the panel's height, and
+       the panel is the thing you scroll while tuning a card. One select, with
+       the chosen template's own note beneath it so nothing is lost. */
+    .tplnote { margin: 6px 2px 0; font-size: 10.5px; color: var(--faint); line-height: 1.5; }
     .sizes { display: flex; gap: 6px; }
     .sizes button { flex: 1; padding: 7px 0; border-radius: 10px; cursor: pointer;
                     border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
@@ -115,7 +111,8 @@
       <p class="freshline" id="freshLine">Checking the data…</p>
 
       <label>Template</label>
-      <div class="tpl" id="tplList"></div>
+      <select id="tplSelect" aria-label="Template"></select>
+      <p class="tplnote" id="tplNote"></p>
 
       <div id="movBox">
         <label>Time window</label>
@@ -560,22 +557,31 @@
     window.addEventListener('resize', fit);
 
     function paintControls() {
-      $('tplList').innerHTML = visibleTpls().map((t) =>
-        `<button class="${tpl === t.id ? 'on' : ''}" data-t="${t.id}">${esc(t.name)}<em>${esc(t.note)}</em></button>`).join('');
-      $('tplList').querySelectorAll('[data-t]').forEach((b) =>
-        b.addEventListener('click', () => {
-          tpl = b.dataset.t;
-          // an avatar is square by definition; the other cards keep whatever
-          // shape was already picked
-          if (tpl === 'avatar') size = SIZES.find((z) => z.id === 'square') || size;
-          paintControls();
-          render();
-        }));
+      const tpls = visibleTpls();
+      // Rebuilt only when the LIST changes — /api/me decides whether the
+      // owner-only template is in it, and that lands after the first paint.
+      const key = tpls.map((t) => t.id).join(',');
+      if ($('tplSelect').dataset.built !== key) {
+        $('tplSelect').innerHTML = tpls.map((t) =>
+          `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+        $('tplSelect').dataset.built = key;
+      }
+      if ($('tplSelect').value !== tpl) $('tplSelect').value = tpl;
+      const cur = tpls.find((t) => t.id === tpl);
+      $('tplNote').textContent = cur ? cur.note : '';
       $('sizeList').innerHTML = SIZES.map((z) =>
         `<button class="${size.id === z.id ? 'on' : ''}" data-z="${z.id}">${esc(z.label)}</button>`).join('');
       $('sizeList').querySelectorAll('[data-z]').forEach((b) =>
         b.addEventListener('click', () => { size = SIZES.find((z) => z.id === b.dataset.z); paintControls(); render(); }));
     }
+    $('tplSelect').addEventListener('change', (e) => {
+      tpl = e.target.value;
+      // an avatar is square by definition; the other cards keep whatever
+      // shape was already picked
+      if (tpl === 'avatar') size = SIZES.find((z) => z.id === 'square') || size;
+      paintControls();
+      render();
+    });
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
     $('movAdv').innerHTML = '<option value="off" selected>Don’t show</option>' +
