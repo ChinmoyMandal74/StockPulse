@@ -12,7 +12,7 @@
 //   ctx.getBasket (days) -> the /api/basket payload or null while it loads
 // The module reads no DOM and issues no requests: a host that hands it
 // numbers gets a card back, which is what makes it testable off-page.
-(function () {
+(function (global) {
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -1203,6 +1203,21 @@
   // The card styles travel WITH the builders: a new grammar added to one
   // page and styled in the other is exactly the drift this module prevents.
   const STYLE = `
+    /* ---- the artboard ---------------------------------------------------
+       The board the card is drawn on: 1080 wide, its own ground and aura, and
+       the padding every card lays out inside. It lived in promo.html AND in
+       cards.html as two copies until the phone needed a third (2026-09-16) —
+       so it moved here, beside the cards it holds. A host sets the height,
+       which is the one thing that follows the chosen size. */
+    .s-art { width: 1080px; position: relative; overflow: hidden; background: #050505;
+             transform-origin: top left; font-family: var(--sans); color: var(--text); }
+    .s-art .s-aura { position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(70% 52% at 8% -6%, rgba(52, 211, 153, 0.16), transparent 62%),
+        radial-gradient(76% 55% at 100% 2%, rgba(124, 156, 255, 0.14), transparent 64%),
+        radial-gradient(60% 40% at 50% 110%, rgba(167, 139, 250, 0.12), transparent 70%); }
+    .s-art .s-in { position: relative; display: flex; flex-direction: column;
+                   height: 100%; padding: 56px 64px 48px; box-sizing: border-box; }
     /* chrome shared by every card, so the family is unmistakable */
     /* The masthead carries the brand at thumbnail size — a feed shrinks a
        1080 card to a few hundred pixels, where 30px type stops reading. */
@@ -1666,7 +1681,7 @@
     document.head.appendChild(el);
   }
 
-  window.Cards = {
+  global.Cards = {
     STYLE, MOTION, injectStyle, motion, freezeAt, unfreeze, MOTION_MS,
     ids: Object.keys(BUILDERS),
     ADV_PROFILES,
@@ -1691,4 +1706,8 @@
       return fn();
     },
   };
-})();
+})(typeof window !== 'undefined' ? window : globalThis);
+// Loadable in Node as well as the browser (2026-09-16): the server builds a
+// saved preset's card the same way it builds a phone row, so the phone gets
+// finished markup instead of the whole snapshot. Nothing at load time touches
+// the DOM — only injectStyle() does, and only a browser host calls it.

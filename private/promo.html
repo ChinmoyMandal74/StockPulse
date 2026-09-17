@@ -56,6 +56,20 @@
     }
     .panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .hint { font-size: 10.5px; color: var(--faint); line-height: 1.55; margin-top: 14px; }
+    .postlist { display: grid; gap: 4px; margin-bottom: 8px; }
+    .postlist .prow { display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+                      border: 1px solid var(--hair); border-radius: 10px; background: var(--surface); }
+    .postlist .pnm { flex: 1; min-width: 0; font-size: 12px; overflow: hidden;
+                     text-overflow: ellipsis; white-space: nowrap; text-align: left;
+                     background: none; border: 0; color: var(--text); font-family: var(--sans); }
+    .postlist .pnm small { color: var(--faint); margin-left: 6px; }
+    .postlist .px { flex: none; background: none; border: 0; color: var(--faint);
+                    font-size: 11px; padding: 2px 4px; }
+    .postlist .px:hover { color: var(--text); }
+    .postlist .px.danger:hover { color: var(--red); }
+    #postName { width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 10px;
+                border: 1px solid var(--hair); background: var(--surface); color: var(--text);
+                font: 400 12px var(--sans); }
     .panel .btn { margin-top: 12px; width: 100%; justify-content: center; }
 
     /* The deck is deliberately NOT the card's black: the artboard edge has
@@ -69,15 +83,7 @@
 
     /* ---- the artboard -------------------------------------------------- */
     #stageWrap { flex: none; }
-    #stage { width: 1080px; position: relative; overflow: hidden; background: #050505;
-             transform-origin: top left; font-family: var(--sans); color: var(--text); }
-    #stage .s-aura { position: absolute; inset: 0; pointer-events: none;
-      background:
-        radial-gradient(70% 52% at 8% -6%, rgba(52, 211, 153, 0.16), transparent 62%),
-        radial-gradient(76% 55% at 100% 2%, rgba(124, 156, 255, 0.14), transparent 64%),
-        radial-gradient(60% 40% at 50% 110%, rgba(167, 139, 250, 0.12), transparent 70%); }
-    #stage .s-in { position: relative; display: flex; flex-direction: column;
-                   height: 100%; padding: 56px 64px 48px; box-sizing: border-box; }
+    /* the artboard itself is .s-art in cards.js, beside the cards it holds */
 
     /* every card style now lives in cards.js, beside the markup it dresses */
     .err { color: var(--red); padding: 40px; font-size: 14px; }
@@ -376,16 +382,31 @@
       <button class="btn" id="vidBtn" title="Render the animation to a video file">Export video</button>
       <p class="hint" id="dlMsg"></p>
       <button class="btn" id="reloadBtn">Re-pull tonight's data</button>
+
+      <!-- Saved posts: the card as it stands, named and kept, so it can be
+           opened on a phone and screenshotted. Admin only, and site-wide —
+           these are the brand's posts, not a per-account scratchpad. -->
+      <div id="postsBox" hidden>
+        <label style="margin-top:22px">Saved posts</label>
+        <div id="postList" class="postlist"></div>
+        <input type="text" id="postName" maxlength="40" placeholder="Name this card…" />
+        <button class="btn" id="postSave">Save this card as a post</button>
+        <p class="hint" id="postMsg"></p>
+        <p class="hint">A post remembers the template, the artboard and every control — not a
+          picture. Opening it tomorrow draws tomorrow's data. They appear on the phone under
+          Posts, ready to save to your camera roll.</p>
+      </div>
       <p class="hint">Download gives the exact artboard — 1080 wide at every size, no cropping,
         no browser chrome. Nothing here recommends — cards report what the screen and the
         rules did, which is the house line.</p>
     </aside>
 
-    <main class="deck"><div id="stageWrap"><div id="stage"></div></div></main>
+    <main class="deck"><div id="stageWrap"><div id="stage" class="s-art"></div></div></main>
   </div>
 
   <script src="/action.js"></script>
   <script src="/cards.js"></script>
+  <script src="/cardshot.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
@@ -595,6 +616,88 @@
 
     $('reloadBtn').addEventListener('click', () => load(true));
 
+    // ---- Saved posts ------------------------------------------------------
+    // The controls, remembered under a name. Never a picture: opening one
+    // tomorrow has to draw tomorrow's data, which is the whole point.
+    let posts = [];
+    const postSay = (m) => { $('postMsg').textContent = m || ''; };
+
+    function renderPosts() {
+      $('postList').innerHTML = posts.map((p, i) =>
+        `<div class="prow"><button class="pnm" data-open="${i}" title="Load this post's controls">` +
+        `${esc(p.name)}<small>${esc(p.tpl)} · ${esc(p.size)}</small></button>` +
+        `<button class="px" data-rep="${i}" title="Replace it with the card as it is now">Replace</button>` +
+        `<button class="px danger" data-del="${i}" title="Delete this post">×</button></div>`).join('')
+        || '<p class="hint" style="margin:0">None yet.</p>';
+      $('postList').querySelectorAll('[data-open]').forEach((b) =>
+        b.addEventListener('click', () => openPost(posts[Number(b.dataset.open)])));
+      $('postList').querySelectorAll('[data-rep]').forEach((b) =>
+        b.addEventListener('click', () => {
+          const i = Number(b.dataset.rep);
+          posts[i] = { ...posts[i], tpl, size: size.id, opts: controlOpts() };
+          savePosts('Replaced “' + posts[i].name + '”.');
+        }));
+      $('postList').querySelectorAll('[data-del]').forEach((b) =>
+        b.addEventListener('click', () => {
+          const p = posts[Number(b.dataset.del)];
+          if (!confirm(`Delete the post “${p.name}”?`)) return;
+          posts = posts.filter((x) => x !== p);
+          savePosts('Deleted “' + p.name + '”.');
+        }));
+    }
+
+    // Loading a post sets the template and size FIRST, then paints the panel,
+    // then writes the control values — the controls for a template do not
+    // exist until its panel is drawn.
+    function openPost(p) {
+      if (!p) return;
+      tpl = p.tpl;
+      size = SIZES.find((x) => x.id === p.size) || SIZES[0];
+      render();
+      for (const [k, v] of Object.entries(p.opts || {})) {
+        const el = $(k);
+        if (el) el.value = v;
+      }
+      render();
+      $('postName').value = p.name;
+      postSay('Loaded “' + p.name + '”.');
+    }
+
+    async function savePosts(msg) {
+      postSay('Saving…');
+      try {
+        const r = await fetch('/api/promo-posts', {
+          method: 'PUT', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ posts }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Save failed.');
+        // Adopt what the server stored, so the panel can never show something
+        // the phone will not.
+        posts = d.posts || [];
+        renderPosts();
+        postSay(msg || 'Saved.');
+      } catch (e) { postSay('Could not save: ' + e.message); renderPosts(); }
+    }
+
+    $('postSave').addEventListener('click', () => {
+      const name = $('postName').value.trim();
+      if (!name) { postSay('Give it a name first.'); $('postName').focus(); return; }
+      const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
+      const at = posts.findIndex((p) => p.id === id);
+      const post = { id, name, tpl, size: size.id, opts: controlOpts() };
+      if (at >= 0) posts[at] = post; else posts.push(post);
+      savePosts(at >= 0 ? 'Replaced “' + name + '”.' : 'Saved “' + name + '”.');
+    });
+
+    async function loadPosts() {
+      try {
+        const d = await (await fetch('/api/promo-posts', { cache: 'no-store' })).json();
+        posts = d.posts || [];
+      } catch (e) { posts = []; }
+      renderPosts();
+    }
+
     // ---- Download PNG -----------------------------------------------------
     // The artboard becomes an SVG foreignObject with every computed style
     // inlined (a serialized SVG document sees none of the page's
@@ -603,95 +706,12 @@
     // the result is painted onto a canvas at the card's TRUE pixel size —
     // 1080 wide, no screenshot, no scale wobble. Any failure falls back to
     // a message; the screenshot path always remains.
-    let fontCssPromise = null;
-    function ensureFontCss() {
-      if (fontCssPromise) return fontCssPromise;
-      fontCssPromise = (async () => {
-        const link = document.querySelector('link[href*="fonts.googleapis.com/css2"]');
-        if (!link) return '';
-        const css = await fetch(link.href).then((r) => r.text());
-        const urls = [...css.matchAll(/url\((https:[^)]+)\)/g)].map((m) => m[1]);
-        const uniq = [...new Set(urls)];
-        const data = {};
-        await Promise.all(uniq.map(async (u) => {
-          const buf = await fetch(u).then((r) => r.arrayBuffer());
-          let bin = '';
-          const bytes = new Uint8Array(buf);
-          for (let i = 0; i < bytes.length; i += 0x8000) {
-            bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-          }
-          data[u] = 'data:font/woff2;base64,' + btoa(bin);
-        }));
-        let out = css.replace(/url\((https:[^)]+)\)/g, (m, u) => data[u] ? `url(${data[u]})` : m);
-        // a face that still points at the network is worse than a missing
-        // face: the external ref is what taints the canvas
-        out = out.replace(/@font-face\s*\{[^}]*url\(https:[^}]*\}/g, '');
-        return out;
-      })().catch(() => '');
-      return fontCssPromise;
-    }
-
-    const INLINE_PROPS = [
-      'display', 'position', 'top', 'right', 'bottom', 'left', 'z-index', 'box-sizing',
-      'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
-      'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-      'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-      'flex-direction', 'flex-wrap', 'flex-grow', 'flex-shrink', 'flex-basis',
-      'align-items', 'align-self', 'justify-content', 'gap', 'row-gap', 'column-gap',
-      'grid-template-columns', 'grid-template-rows', 'place-items', 'order',
-      'overflow', 'overflow-x', 'overflow-y', 'visibility', 'opacity',
-      'font-family', 'font-size', 'font-weight', 'font-style', 'font-variant-numeric',
-      'letter-spacing', 'line-height', 'text-align', 'text-transform', 'text-decoration-line',
-      'white-space', 'word-break', 'text-overflow', 'vertical-align', 'color',
-      'background-color', 'background-image', 'background-repeat', 'background-position',
-      'background-size', 'background-clip',
-      'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
-      'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
-      'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
-      'border-top-left-radius', 'border-top-right-radius',
-      'border-bottom-left-radius', 'border-bottom-right-radius',
-      'box-shadow', 'transform', 'transform-origin', 'filter',
-      'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'fill',
-    ];
-    function inlineStyles(src, dst) {
-      const cs = getComputedStyle(src);
-      let text = '';
-      for (const prop of INLINE_PROPS) {
-        const v = cs.getPropertyValue(prop);
-        if (v && v !== 'none' || prop === 'display') text += `${prop}:${v};`;
-      }
-      dst.setAttribute('style', text);
-      const sk = src.children, dk = dst.children;
-      for (let i = 0; i < sk.length; i++) inlineStyles(sk[i], dk[i]);
-    }
-
-    // One rasteriser, two exporters: the still takes a single shot of the
-    // card as it stands, the video takes eighty of them along the timeline.
-    async function shoot(fontCss, mime, quality) {
-      const stage = $('stage');
-      const clone = stage.cloneNode(true);
-      inlineStyles(stage, clone);
-      // the on-screen stage is scaled to fit the window; the export is not
-      clone.style.transform = 'none';
-      clone.style.width = '1080px';
-      clone.style.height = size.h + 'px';
-      const xhtml = new XMLSerializer().serializeToString(clone);
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="${size.h}">` +
-        `<foreignObject width="100%" height="100%"><style>${fontCss}</style>` +
-        `<div xmlns="http://www.w3.org/1999/xhtml">${xhtml}</div></foreignObject></svg>`;
-      const img = new Image();
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = () => reject(new Error('The browser refused to rasterise the card.'));
-        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-      });
-      await new Promise((r) => requestAnimationFrame(r));
-      const cv = document.createElement('canvas');
-      cv.width = 1080; cv.height = size.h;
-      cv.getContext('2d').drawImage(img, 0, 0, 1080, size.h);
-      return new Promise((resolve, reject) =>
-        cv.toBlob((b) => (b ? resolve(b) : reject(new Error('Canvas export failed.'))), mime, quality));
-    }
+    // The rasteriser lives in cardshot.js — the studio, the member Cards page
+    // and the phone all take the same shot, and a second copy of it would
+    // drift the first time a CSS property mattered.
+    const ensureFontCss = () => CardShot.fontCss();
+    const shoot = (fontCss, mime, quality) =>
+      CardShot.shoot($('stage'), { w: 1080, h: size.h, fontCss, mime, quality });
 
     // ---- Export video -----------------------------------------------------
     // The animation is rendered frame by frame OFFLINE — each frame seeks the
@@ -815,6 +835,8 @@
           return;
         }
         canAnnounce = !!me.admin;
+        $('postsBox').hidden = !me.admin;
+        if (me.admin) loadPosts();
         if (!canAnnounce && OWNER_ONLY_TPLS.has(tpl)) tpl = 'movers';
         const data = await fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json());
         stocks = (data.stocks || []).filter((s) => !s.error);

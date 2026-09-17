@@ -105,6 +105,27 @@
     .up { color: var(--green); } .dn { color: var(--red); } .na, .flat { color: var(--faint); }
     .pos { color: var(--green); } .neg { color: var(--red); } .warn { color: var(--amber); }
 
+    /* ---- saved posts ------------------------------------------------------
+       A card is a fixed 1080px artboard, so it is never laid out to fit: it is
+       built at full size and SCALED, which is the only way a thumbnail and the
+       saved image can be the same picture. */
+    .shelf { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .post { display: block; width: 100%; padding: 0; border: 1px solid var(--hair);
+            border-radius: 14px; overflow: hidden; background: var(--surface); text-align: left; }
+    .post:active { border-color: var(--hair-2); }
+    .post .frame { display: block; position: relative; width: 100%; overflow: hidden; }
+    .post .art { display: block; position: absolute; top: 0; left: 0; width: 1080px;
+                 transform-origin: top left; }
+    .post .cap { display: block; padding: 8px 10px; font-size: 12px; font-weight: 600;
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .post .cap small { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 400;
+                       color: var(--faint); }
+    /* The full-size card, off-screen, only while one is being rasterised. */
+    #shot { position: fixed; left: -20000px; top: 0; width: 1080px; }
+    .shotwrap { text-align: center; }
+    .shotwrap img { width: 100%; height: auto; border-radius: 12px; display: block; }
+    .shotwrap .note { margin-top: 10px; font-size: 12px; color: var(--faint); line-height: 1.5; }
+
     /* ---- sheets --------------------------------------------------------- */
     .veil { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(3px); }
     .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 61; max-height: 86dvh; overflow: auto;
@@ -180,10 +201,13 @@
       <svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Screens</button>
     <button class="tab" data-tab="all">
       <svg viewBox="0 0 24 24"><path d="M4 18h4V9H4zM10 18h4V4h-4zM16 18h4v-6h-4z"/></svg>All</button>
+    <button class="tab" data-tab="posts" id="postsTab" hidden>
+      <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 15l4.5-4 4 3.4 3-2.6 4.5 4"/></svg>Posts</button>
     <button class="tab" data-tab="search">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.3-4.3"/></svg>Search</button>
   </nav>
 
+  <script src="/cardshot.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const we = (t) => String(t == null ? '' : t)
@@ -205,6 +229,8 @@
     let tab = 'screens';
     let screens = [];
     let allRows = null;            // the All tab's rows, for Search too
+    let posts = null;              // saved studio cards, built by the server
+    let canPost = false;           // members only: the studio is not for guests
 
     // The chosen view is remembered here rather than server-side: a guest has
     // no account to store it against, and it is a display choice either way.
@@ -233,7 +259,9 @@
     // The strip shows only where there are charts to change: with the toggle
     // off, or on the screens list, it would be a control over nothing.
     function paintRanges() {
-      const show = chartOn && ranges.length && tab !== 'screens';
+      // Only where there are stock charts to change: the screens list has
+      // none, and a saved post carries its own window.
+      const show = chartOn && ranges.length && tab !== 'screens' && tab !== 'posts';
       $('ranges').hidden = !show;
       if (!show) return;
       $('ranges').innerHTML = ranges.map((r) =>
@@ -330,6 +358,96 @@
       }
     }
 
+    // ---- saved posts ----------------------------------------------------------
+    // The studio's cards, named on a desktop and opened here to be saved to the
+    // camera roll. The server BUILDS them — a phone has no business downloading
+    // the whole snapshot and the card module to draw its own.
+    async function showPosts() {
+      tab = 'posts';
+      currentScreen = null;
+      $('back').hidden = true;
+      $('title').textContent = 'Posts';
+      $('subtitle').textContent = 'Saved cards, drawn from today’s data. Tap one to save the image.';
+      paintRanges();
+      $('main').innerHTML = '<div class="msg">Loading…</div>';
+      try {
+        const d = await get('/api/m/posts');
+        posts = d.posts || [];
+        if (d.style) injectCardStyle(d.style);
+        if (!posts.length) {
+          $('main').innerHTML = '<div class="msg">No saved posts yet. Save one from the Promo Studio ' +
+            'on a desktop and it will appear here.</div>';
+          return;
+        }
+        // A card is a fixed 1080px artboard, so the thumbnail is the real card
+        // SCALED — the picture you tap is the picture you get.
+        $('main').innerHTML = '<div class="shelf">' + posts.map((p, i) =>
+          `<button class="post" data-post="${i}">` +
+          `<span class="frame" style="aspect-ratio:${p.size.w}/${p.size.h}">` +
+          `<span class="art s-art sz-${we(p.size.id)}" style="height:${p.size.h}px">` +
+          '<span class="s-aura"></span><span class="s-in">' + p.html + '</span></span></span>' +
+          `<span class="cap">${we(p.name)}<small>${we(p.size.w)}×${we(p.size.h)}</small></span>` +
+          '</button>').join('') + '</div>';
+        fitPosts();
+        $('main').querySelectorAll('[data-post]').forEach((b) =>
+          b.addEventListener('click', () => showPost(posts[Number(b.dataset.post)])));
+      } catch (e) {
+        $('main').innerHTML = `<div class="msg">Could not load the posts: ${we(e.message)}</div>`;
+      }
+    }
+
+    // A 1080px artboard scaled to whatever the column turned out to be.
+    // Measured rather than computed, so turning the phone re-fits it.
+    function fitPosts() {
+      document.querySelectorAll('.post .frame').forEach((fr) => {
+        const art = fr.querySelector('.art');
+        const w = fr.clientWidth;
+        if (art && w) art.style.transform = `scale(${w / 1080})`;
+      });
+    }
+    window.addEventListener('resize', () => { if (tab === 'posts') fitPosts(); });
+
+    function injectCardStyle(css) {
+      if ($('cards-style')) return;
+      const el = document.createElement('style');
+      el.id = 'cards-style';
+      el.textContent = css;
+      document.head.appendChild(el);
+    }
+
+    // Rasterised at its true 1080px, off-screen, then shown as an image: a
+    // screenshot would be the phone's aspect ratio with a status bar in it,
+    // where this is the exact artboard. Long-press it to add it to Photos.
+    async function showPost(p) {
+      if (!p) return;
+      const sheet = openSheet(`<h2>${we(p.name)}</h2>` +
+        `<div class="meta">${we(p.size.w)}×${we(p.size.h)} · rendering…</div>` +
+        '<div class="msg">Drawing the image…</div>');
+      const stage = document.createElement('div');
+      stage.id = 'shot';
+      stage.className = 's-art sz-' + p.size.id;
+      stage.style.height = p.size.h + 'px';
+      stage.innerHTML = '<div class="s-aura"></div><div class="s-in">' + p.html + '</div>';
+      document.body.appendChild(stage);
+      try {
+        const blob = await CardShot.shoot(stage, { w: p.size.w, h: p.size.h });
+        const url = URL.createObjectURL(blob);
+        sheet.innerHTML = '<div class="grab"></div>' +
+          `<h2>${we(p.name)}</h2>` +
+          `<div class="meta">${we(p.size.w)}×${we(p.size.h)} · ` +
+          `${Math.round(blob.size / 1024)} KB</div>` +
+          `<div class="shotwrap"><img src="${url}" alt="${we(p.name)}" />` +
+          '<p class="note">Press and hold the image, then <b>Add to Photos</b> — it saves at the ' +
+          'full size, with no status bar in it.</p></div>';
+        sheet.addEventListener('sheetclose', () => URL.revokeObjectURL(url), { once: true });
+      } catch (e) {
+        sheet.innerHTML = '<div class="grab"></div>' + `<h2>${we(p.name)}</h2>` +
+          `<div class="msg">Could not draw it: ${we(e.message)}<br>A screenshot of the card still works.</div>`;
+      } finally {
+        stage.remove();
+      }
+    }
+
     // ---- search -------------------------------------------------------------
     async function showSearch() {
       tab = 'search';
@@ -361,7 +479,10 @@
 
     // ---- the sheets ---------------------------------------------------------
     function closeSheet() {
-      document.querySelectorAll('.veil, .sheet').forEach((el) => el.remove());
+      document.querySelectorAll('.veil, .sheet').forEach((el) => {
+        el.dispatchEvent(new Event('sheetclose'));
+        el.remove();
+      });
     }
     function openSheet(html) {
       closeSheet();
@@ -455,12 +576,20 @@
         closeSheet();
         if (b.dataset.tab === 'screens') showScreens();
         else if (b.dataset.tab === 'all') { tab = 'all'; showScreen('all'); }
+        else if (b.dataset.tab === 'posts') showPosts();
         else showSearch();
       }));
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
 
     (async function boot() {
       try {
+        // A guest has no studio and no posts: the cards carry portfolio names
+        // and whole-universe rankings the preview deliberately withholds.
+        try {
+          const me = await get('/api/me');
+          canPost = !me.guest;      // the page is already behind the gate
+        } catch (e) { canPost = false; }
+        $('postsTab').hidden = !canPost;
         const cfg = await get('/api/m/config');
         views = cfg.views || [];
         ranges = cfg.ranges || [];

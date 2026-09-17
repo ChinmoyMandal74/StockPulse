@@ -55,17 +55,10 @@
 
     /* the card, scaled to the column */
     .stagewrap { display: flex; justify-content: center; }
-    #stage { width: 1080px; height: 1350px; position: relative; overflow: hidden;
-             background: #050505; transform-origin: top left; border-radius: 22px;
-             font-family: var(--sans); color: var(--text);
+    /* the artboard itself is .s-art in cards.js; this page fixes the one
+       shape it offers and gives it the page's own frame */
+    #stage { height: 1350px; border-radius: 22px;
              box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.9); }
-    #stage .s-aura { position: absolute; inset: 0; pointer-events: none;
-      background:
-        radial-gradient(70% 52% at 8% -6%, rgba(52, 211, 153, 0.16), transparent 62%),
-        radial-gradient(76% 55% at 100% 2%, rgba(124, 156, 255, 0.14), transparent 64%),
-        radial-gradient(60% 40% at 50% 110%, rgba(167, 139, 250, 0.12), transparent 70%); }
-    #stage .s-in { position: relative; display: flex; flex-direction: column;
-                   height: 100%; padding: 56px 64px 48px; box-sizing: border-box; }
 
     .err { color: var(--red); padding: 30px; font-size: 13px; }
     @media (max-width: 768px) { .page { padding: 0 14px; } .bar select { min-width: 132px; } }
@@ -100,11 +93,12 @@
 
     <section class="bezel bar-shell"><div class="core bar" id="bar"></div></section>
 
-    <div class="stagewrap"><div id="stagewrap"><div id="stage"></div></div></div>
+    <div class="stagewrap"><div id="stagewrap"><div id="stage" class="s-art"></div></div></div>
   </main>
 
   <script src="/action.js"></script>
   <script src="/cards.js"></script>
+  <script src="/cardshot.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
@@ -232,91 +226,14 @@
     }
     window.addEventListener('resize', fit);
 
-    // ---- save as an image (the studio's exporter, same technique) --------
-    let fontCssPromise = null;
-    function ensureFontCss() {
-      if (fontCssPromise) return fontCssPromise;
-      fontCssPromise = (async () => {
-        const link = document.querySelector('link[href*="fonts.googleapis.com/css2"]');
-        if (!link) return '';
-        const css = await fetch(link.href).then((r) => r.text());
-        const urls = [...new Set([...css.matchAll(/url\((https:[^)]+)\)/g)].map((m) => m[1]))];
-        const data = {};
-        await Promise.all(urls.map(async (u) => {
-          const buf = await fetch(u).then((r) => r.arrayBuffer());
-          let bin = '';
-          const bytes = new Uint8Array(buf);
-          for (let i = 0; i < bytes.length; i += 0x8000) {
-            bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-          }
-          data[u] = 'data:font/woff2;base64,' + btoa(bin);
-        }));
-        let out = css.replace(/url\((https:[^)]+)\)/g, (m, u) => (data[u] ? `url(${data[u]})` : m));
-        return out.replace(/@font-face\s*\{[^}]*url\(https:[^}]*\}/g, '');
-      })().catch(() => '');
-      return fontCssPromise;
-    }
-    const INLINE_PROPS = [
-      'display', 'position', 'top', 'right', 'bottom', 'left', 'z-index', 'box-sizing',
-      'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
-      'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-      'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-      'flex-direction', 'flex-wrap', 'flex-grow', 'flex-shrink', 'flex-basis',
-      'align-items', 'align-self', 'justify-content', 'gap', 'row-gap', 'column-gap',
-      'grid-template-columns', 'grid-template-rows', 'place-items', 'order',
-      'overflow', 'overflow-x', 'overflow-y', 'visibility', 'opacity',
-      'font-family', 'font-size', 'font-weight', 'font-style', 'font-variant-numeric',
-      'letter-spacing', 'line-height', 'text-align', 'text-transform', 'text-decoration-line',
-      'white-space', 'word-break', 'text-overflow', 'vertical-align', 'color',
-      'background-color', 'background-image', 'background-repeat', 'background-position',
-      'background-size', 'background-clip',
-      'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
-      'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
-      'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
-      'border-top-left-radius', 'border-top-right-radius',
-      'border-bottom-left-radius', 'border-bottom-right-radius',
-      'box-shadow', 'transform', 'transform-origin', 'filter',
-      'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'fill',
-    ];
-    function inlineStyles(src, dst) {
-      const cs = getComputedStyle(src);
-      let text = '';
-      for (const prop of INLINE_PROPS) {
-        const v = cs.getPropertyValue(prop);
-        if (v && v !== 'none' || prop === 'display') text += `${prop}:${v};`;
-      }
-      dst.setAttribute('style', text);
-      const sk = src.children, dk = dst.children;
-      for (let i = 0; i < sk.length; i++) inlineStyles(sk[i], dk[i]);
-    }
+    // The rasteriser lives in cardshot.js — the studio, this page and the
+    // phone all take the same shot; three copies of it was two too many.
     async function downloadPng() {
       const btn = $('dlBtn'), msg = $('dlMsg');
       btn.disabled = true;
       msg.textContent = 'Rendering…';
       try {
-        const fontCss = await ensureFontCss();
-        const stage = $('stage');
-        const clone = stage.cloneNode(true);
-        inlineStyles(stage, clone);
-        clone.style.transform = 'none';
-        clone.style.width = SIZE.w + 'px';
-        clone.style.height = SIZE.h + 'px';
-        const xhtml = new XMLSerializer().serializeToString(clone);
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE.w}" height="${SIZE.h}">` +
-          `<foreignObject width="100%" height="100%"><style>${fontCss}</style>` +
-          `<div xmlns="http://www.w3.org/1999/xhtml">${xhtml}</div></foreignObject></svg>`;
-        const img = new Image();
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = () => reject(new Error('the browser refused to rasterise the card'));
-          img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-        });
-        await new Promise((r) => setTimeout(r, 120));
-        const cv = document.createElement('canvas');
-        cv.width = SIZE.w; cv.height = SIZE.h;
-        cv.getContext('2d').drawImage(img, 0, 0, SIZE.w, SIZE.h);
-        const blob = await new Promise((resolve, reject) =>
-          cv.toBlob((b) => (b ? resolve(b) : reject(new Error('canvas export failed'))), 'image/png'));
+        const blob = await CardShot.shoot($('stage'), { w: SIZE.w, h: SIZE.h });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = `tickrlab-${kind}-${new Date().toISOString().slice(0, 10)}.png`;

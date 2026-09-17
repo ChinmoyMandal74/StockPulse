@@ -28,6 +28,10 @@ const Screens = require('./private/screens.js');
 const Filters = require('./private/filters.js');
 require('./private/rowcard.js');
 const RowCard = globalThis.RowCard;
+// The promo cards, so a saved post can be built here and a phone handed
+// finished markup rather than the whole snapshot.
+require('./private/cards.js');
+const Cards = globalThis.Cards;
 // The Excel model of the momentum calculation, shared with the CLI in the same
 // file so the workbook served here and the one written locally are one thing.
 const { buildModel, MODEL_ROWS, MODEL_MIN_BARS } = require('./momentum-model.js');
@@ -4448,6 +4452,117 @@ app.get('/api/m/stock', requireAuth, route(async (req, res) => {
   });
 }));
 
+// ---- saved posts ------------------------------------------------------------
+// A studio card with its controls remembered and a name on it, so the owner
+// can open it on a phone and screenshot it for Instagram. Site-wide and
+// admin-curated, the Tile setup pattern: these are the brand's posts, not a
+// per-account scratchpad.
+const POSTS_MAX = 12;
+const POST_SIZES = { portrait: { id: 'portrait', w: 1080, h: 1350 },
+  square: { id: 'square', w: 1080, h: 1080 },
+  story: { id: 'story', w: 1080, h: 1920 } };
+// Control ids are SHAPE-checked, not listed: the studio owns that list, and
+// restating it here would drift the first time a control was added. The card
+// builder ignores an id it does not know, exactly as cleanViews leaves the
+// screener's column list to the screener.
+const POST_OPT_KEY = /^[a-z]{3,6}[A-Z][A-Za-z0-9]{0,20}$/;
+
+function cleanPosts(raw) {
+  const known = new Set(Cards.ids);
+  const seen = new Set();
+  return (Array.isArray(raw) ? raw : [])
+    .map((p) => {
+      const q = p && typeof p === 'object' ? p : {};
+      const name = String(q.name || '').trim().slice(0, 40);
+      const id = slugify(q.id || name).slice(0, 24);
+      const opts = {};
+      let n = 0;
+      for (const [k, v] of Object.entries(q.opts && typeof q.opts === 'object' ? q.opts : {})) {
+        if (n >= 40 || !POST_OPT_KEY.test(k)) continue;
+        if (v == null || typeof v === 'object') continue;
+        opts[k] = String(v).slice(0, 80);
+        n++;
+      }
+      return { id, name, tpl: String(q.tpl || ''), size: String(q.size || 'portrait'), opts };
+    })
+    .filter((p) => p.id && p.name && known.has(p.tpl) && POST_SIZES[p.size]
+      && !seen.has(p.id) && seen.add(p.id))
+    .slice(0, POSTS_MAX);
+}
+
+let postsCache = null;
+async function savedPosts() {
+  if (postsCache && Date.now() - postsCache.at < 60 * 1000) return postsCache.list;
+  const list = cleanPosts(await store.readPromoPresets());
+  postsCache = { at: Date.now(), list };
+  return list;
+}
+
+// NOT /api/posts — the blog owns that, registered higher up, and Express
+// takes the first match: this one answered the blog's empty list instead.
+app.get('/api/promo-posts', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ posts: await savedPosts(), max: POSTS_MAX });
+}));
+
+app.put('/api/promo-posts', requireAdmin, route(async (req, res) => {
+  const list = cleanPosts(req.body && req.body.posts);
+  await store.writePromoPresets(list);
+  postsCache = { at: Date.now(), list };
+  logAct(req, 'view', 'posts:' + list.length);
+  res.json({ ok: true, posts: list, max: POSTS_MAX });
+}));
+
+// Every saved post BUILT — the phone shows thumbnails of the real cards, and
+// building them here is what keeps it from downloading the 1.3MB snapshot and
+// the card module to do it. Member-only: a guest sees neither the studio nor
+// the portfolio names and whole-universe rankings these carry.
+app.get('/api/m/posts', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const posts = await savedPosts();
+  if (!posts.length) return res.json({ posts: [], style: '' });
+
+  const snap = await readSnapshot();
+  const stocks = ((snap && snap.stocks) || []);
+  scoreActionInto(stocks);
+  await stampShortNames(stocks);
+  const myLists = await store.readUserPortfolios(await prefsKey(req));
+
+  // Two templates read the archive. Fetch each window they ask for ONCE,
+  // before building, because Cards.build is synchronous and takes the data
+  // through a plain getter.
+  const wants = new Set();
+  for (const p of posts) {
+    if (p.tpl !== 'chart' && p.tpl !== 'sparks') continue;
+    const key = p.tpl === 'chart' ? p.opts.chtWin : p.opts.spkWin;
+    const win = Cards.CHART_WINDOWS[key] || Cards.CHART_WINDOWS.m6;
+    wants.add(win[0]);
+  }
+  const baskets = {};
+  for (const days of wants) {
+    // The studio always reads the whole universe and lets the card narrow it,
+    // so one basket per window covers every scope.
+    try { baskets[days] = await basketPayload(req, 'All', days); } catch { baskets[days] = null; }
+  }
+
+  const out = posts.map((p) => {
+    const size = POST_SIZES[p.size];
+    let html = '';
+    try {
+      html = Cards.build(p.tpl, {
+        stocks, myLists, size, opts: p.opts, getBasket: (d) => baskets[d] || null,
+      });
+    } catch (e) {
+      html = '';
+    }
+    return { id: p.id, name: p.name, tpl: p.tpl, size, html };
+  }).filter((p) => p.html);
+
+  // The card's own stylesheet, sent once rather than per card: the phone has
+  // no reason to load cards.js when it is not building anything.
+  res.json({ posts: out, style: Cards.STYLE });
+}));
+
 app.get('/api/tile-config', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({ tile: await tileConfig(), sparkDays: [21, 63, 126, 252],
@@ -4914,11 +5029,11 @@ app.get('/api/period-anchors', requireMember, route(async (req, res) => {
   res.json(body);
 }));
 
-app.get('/api/basket', requireMember, route(async (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  const rawName = String(req.query.name || '').trim();
-  // Floor of 5, a trading week: the promo studio's shortest chart window.
-  const days = Math.min(400, Math.max(5, Number(req.query.days) || 253));
+// The curve behind the chart and sparkline cards. Lifted out of the route so
+// the phone's saved-posts endpoint can build the same cards server-side
+// without a second copy of the axis rules. Returns the route's own payload,
+// or { error, status } for the two not-founds.
+async function basketPayload(req, rawName, days) {
   const portfolios = await readPortfolios();
   const all = await readUniverse();
   let symbols;
@@ -4926,7 +5041,7 @@ app.get('/api/basket', requireMember, route(async (req, res) => {
   if (rawName.startsWith('my:')) {
     const mine = await store.readUserPortfolios(await prefsKey(req));
     const nm = rawName.slice(3);
-    if (!(nm in mine)) return res.status(404).json({ error: 'No such personal portfolio.' });
+    if (!(nm in mine)) return { error: 'No such personal portfolio.', status: 404 };
     const uni = new Set(all);
     symbols = mine[nm].filter((x) => uni.has(x));
     label = nm;
@@ -4935,10 +5050,10 @@ app.get('/api/basket', requireMember, route(async (req, res) => {
   } else if (rawName in portfolios) {
     symbols = portfolios[rawName];
   } else {
-    return res.status(404).json({ error: 'No such portfolio.' });
+    return { error: 'No such portfolio.', status: 404 };
   }
   if (!symbols.length) {
-    return res.json({ label, mine: rawName.startsWith('my:'), symbols: [], dates: [], basket: null, universe: null });
+    return { label, mine: rawName.startsWith('my:'), symbols: [], dates: [], basket: null, universe: null };
   }
 
   const since = new Date(Date.now() - Math.round(days * 1.55 + 14) * 86400000)
@@ -4959,11 +5074,11 @@ app.get('/api/basket', requireMember, route(async (req, res) => {
     .filter((d) => perDate.get(d) >= busiest * 0.5)
     .sort()
     .slice(-days);
-  if (!dates.length) return res.json({ label, mine: rawName.startsWith('my:'), symbols, dates: [], basket: null, universe: null });
+  if (!dates.length) return { label, mine: rawName.startsWith('my:'), symbols, dates: [], basket: null, universe: null };
 
   const basket = equalWeightIndex(bars, symbols, dates);
   const universe = equalWeightIndex(bars, all, dates);
-  res.json({
+  return {
     label,
     mine: rawName.startsWith('my:'),
     symbols,
@@ -4971,7 +5086,16 @@ app.get('/api/basket', requireMember, route(async (req, res) => {
     basket: basket.index, basketUsed: basket.used, basketOf: symbols.length,
     universe: universe.index, universeUsed: universe.used, universeOf: all.length,
     series: symbolSeries(bars, symbols, dates),
-  });
+  };
+}
+
+app.get('/api/basket', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  // Floor of 5, a trading week: the promo studio's shortest chart window.
+  const days = Math.min(400, Math.max(5, Number(req.query.days) || 253));
+  const out = await basketPayload(req, String(req.query.name || '').trim(), days);
+  if (out.error) return res.status(out.status).json({ error: out.error });
+  res.json(out);
 }));
 
 app.get('/api/history', requireAuth, route(async (req, res) => {

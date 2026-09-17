@@ -669,6 +669,27 @@ async function writeTileConfig(cfg) {
   return cfg;
 }
 
+// ---- saved promo posts -----------------------------------------------------
+
+// The studio cards the owner has named and kept, so a phone can open one and
+// screenshot it. A site setting like the tile and mobile setups beside it: the
+// owner curates the list on a desktop, everyone sees the same list.
+async function readPromoPresets() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'promo_presets'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value || 'null'); } catch { return null; }
+}
+
+async function writePromoPresets(list) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('promo_presets', ?)",
+    args: [JSON.stringify(list)],
+  });
+  return list;
+}
+
 // ---- the mobile setup ------------------------------------------------------
 
 // The views the phone offers, and what each shows. A site setting like the
@@ -2536,6 +2557,8 @@ module.exports = {
   readNames,
   readTileConfig,
   readMobileConfig,
+  readPromoPresets,
+  writePromoPresets,
   writeMobileConfig,
   writeTileConfig,
   readPosts,
