@@ -592,7 +592,12 @@
     tr.padrow { animation: none; }
     tbody.nostagger tr { animation: none; }
     .name { color: var(--muted); }
-    .warn { cursor: help; display: inline-block; vertical-align: -2px; margin-left: 3px; }
+    /* Scoped to the SPAN it was written for. Unscoped it also caught any cell
+       carrying the app-wide amber signal class, and a td set to inline-block
+       stops being a table cell and stops aligning like one — which is exactly
+       what happened to the amber Cushion values. `.warn` in app.css is a
+       colour and nothing else; layout belongs to the thing being laid out. */
+    span.warn { cursor: help; display: inline-block; vertical-align: -2px; margin-left: 3px; }
     td.rating { cursor: help; font-size: 13px; }
     td.sym { cursor: help; }
     .tickerlink {
