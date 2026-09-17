@@ -90,11 +90,21 @@
                                   ? { t: s.action, c: /Buy/.test(s.action) ? 'up' : /Sell|Avoid/.test(s.action) ? 'down' : '' } : null],
     ['act',   'Why',            (s) => V.text(s.actionFlag)],
     ['act',   'Yesterday',      (s) => (s.advicePrev && s.advicePrev !== s.action ? V.text(s.advicePrev) : null)],
-    // The honest half of risk/reward: how far the Balanced rules let it fall.
-    ['act',   'Risk to exit',   (s) => (s.actionRisk == null ? null
+    // How far the Balanced rules let it fall before they exit. NOT a measure of
+    // safety, which is what it reads as: over the archive the roomiest half of
+    // a tier is the more EXTENDED and more volatile half, and its tail is
+    // fatter. Cushion below is the same distance in the stock's own volatility,
+    // and that one does order the tail correctly.
+    ['act',   'To exit',        (s) => (s.actionRisk == null ? null
                                   : s.actionRisk.drop === 0
                                     ? { t: 'technicals at ' + s.actionRisk.action, c: 'warn' }
-                                    : { t: '\u2212' + s.actionRisk.drop.toFixed(1) + '% to ' + s.actionRisk.action, c: '' })],
+                                    : { t: '−' + s.actionRisk.drop.toFixed(1) + '% to ' + s.actionRisk.action, c: '' })],
+    // The same distance in monthly sigmas. Ranks TAIL SIZE inside a tier, not
+    // return: measured thinner at p10 and p25 in 6 of 6 era/horizon cells,
+    // while every mean difference stayed noise.
+    ['act',   'Cushion',        (s) => (s.actionCushion == null ? null
+                                  : { t: s.actionCushion.toFixed(1) + 'σ',
+                                      c: s.actionCushion >= 2 ? 'pos' : s.actionCushion < 1 ? 'warn' : '' })],
     // Only on the day it happens; >=1.5x is the study's confirmed kind.
     ['act',   'Breakout',       (s) => (!s.fresh3mHigh ? null
                                   : { t: '3M high' + (s.volX != null ? ' \u00b7 ' + s.volX + '\u00d7 avg volume' : ''),

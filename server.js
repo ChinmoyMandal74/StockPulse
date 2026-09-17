@@ -2327,14 +2327,35 @@ function scoreActionInto(rows) {
     rows[i].actionEntry = r.states.entry;
     rows[i].actionFund = r.states.fund;
     rows[i].actionGuards = r.states.guards;
-    // Risk to exit under Balanced — how far the price can fall before these
-    // same rules flip to Avoid or worse. Engine-computed (exitDistance), so
-    // the hover card and the ladder panel cannot drift apart on it.
+    // Distance to the exit under Balanced — how far the price can fall before
+    // these same rules flip to Avoid or worse. Engine-computed (exitDistance),
+    // so the hover card and the ladder panel cannot drift apart on it.
     rows[i].actionRisk = Action.exitDistance({
       v200: rows[i].vs200ma, v50: rows[i].vs50ma, rsi: rows[i].rsi,
       m1: rows[i].oneMonthPct, m3: rows[i].threeMonthPct, fh: rows[i].pctFromHigh,
       vol: rows[i].volTrend, hist: rows[i].historyDays,
     }, ACTION_CFG);
+    // CUSHION — that same distance measured in the stock's OWN monthly
+    // volatility, and the only within-tier ordering the archive supports.
+    //
+    // Measured 2026-09-17 over 307,965 stock-days, 42,285 of them in the
+    // technical Strong Buy tier, ranked within the day against the universe's
+    // equal-weight return: ranking on the RAW distance orders the downside
+    // BACKWARDS — the roomiest half sits 25.6% above its 200-day on 31.7%
+    // volatility against 13.8% and 24.3%, so "more room" is really "more
+    // extended", and its 3M p10 is -18.5% against -15.7%. Divided by the
+    // stock's own volatility the tail orders correctly instead: thinner at
+    // p10 and p25 in 6 of 6 era/horizon cells, by 0.9 to 3.3 points.
+    //
+    // It ranks TAIL SIZE, not return: every mean-excess difference is noise
+    // (no |t| above 0.6), which is the tier-level backtest's verdict too —
+    // the ladder orders downside and does not pick winners. Anything built on
+    // this has to say so.
+    const rv = rows[i].realisedVol;
+    rows[i].actionCushion = (rows[i].actionRisk && rows[i].actionRisk.drop != null
+      && rv != null && isFinite(rv) && rv > 0)
+      ? Math.round((rows[i].actionRisk.drop / (rv / Math.sqrt(12))) * 100) / 100
+      : null;
   }
   // Yesterday's verdict: yesterday's technicals over today's cached
   // fundamentals, through the same engine. The table's change marker and the

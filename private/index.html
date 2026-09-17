@@ -1209,7 +1209,7 @@
         <th rowspan="2" class="left frz frz1" data-key="shortName" title="What a person would call it — shortened from the legal name by rule, and editable by the owner. The full legal name is in the tooltip on each row.">Name</th>
         <th class="group grp-info" data-group="info" colspan="7">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="3">Scores</th>
-        <th class="group grp-act" data-group="act" colspan="10">Advice</th>
+        <th class="group grp-act" data-group="act" colspan="11">Advice</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="5">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="4">Long-term %</th>
@@ -1243,6 +1243,7 @@
         <th class="grp-act left av-col avx av-aggressive" data-key="av:Aggressive" title="Aggressive's advice: stops widen to −15% (Early −8%), chase to +35%, blackout 3 days, Early reaches Buy on OK fundamentals.">Aggressive</th>
         <th class="grp-act left av-col avx av-max-risk" data-key="av:Max Risk" title="Max Risk's advice: widest stops (−20%), chase caps nearly off, Buy to −30% below the high. Still never buys below the 200D.">Max Risk</th>
         <th class="grp-act left av-col avx av-dip-buyer" data-key="av:Dip Buyer" title="Dip Buyer's advice: may buy below the 200D (capped at Buy with Risk). The research log does not endorse the mode.">Dip Buyer</th>
+        <th class="grp-act" data-key="actionCushion" title="How far the rules let this stock fall before they exit, measured in its OWN monthly volatility — so it is comparable between a quiet stock and a wild one, which the raw percentage is not. It orders TAIL SIZE inside an advice tier, not return: over 307,965 stock-days the higher-cushion half of a tier had a thinner 10th-percentile loss in every era and horizon tested, while the average return difference stayed noise. Sorting by an advice column breaks ties on it.">Cushion</th>
         <th class="grp-chart" data-col="spark90" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
         <th class="grp-short" data-key="todayPct">Today</th>
         <th class="grp-short" data-key="yesterdayPct">YDAY</th>
@@ -2541,7 +2542,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="82">${s.error}</td>
+            <td class="na" colspan="83">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -2577,6 +2578,7 @@
           ${stateCell(s.actionFund, FUND_DANGER, 'fund')}
           ${guardsCell(s)}
           ${adviceCell(s, 'Balanced')}${adviceCell(s, 'Trend Rider')}${adviceCell(s, 'Aggressive')}${adviceCell(s, 'Max Risk')}${adviceCell(s, 'Dip Buyer')}
+          ${cushionCell(s)}
           <td class="spark grp-chart" data-spark="${s.symbol}">${sparkCache[s.symbol] || ''}</td>
           ${pctCell(s.todayPct, 'grp-short', liveTitle)}
           ${pctCell(s.yesterdayPct, 'grp-short', liveTitle)}
@@ -2655,7 +2657,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 87;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 88;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -2825,7 +2827,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="84">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="85">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -2849,12 +2851,21 @@
         : sortKey === 'actionEntry' ? (x.actionEntry ? ActionRules.ENTRY_ORDER.indexOf(x.actionEntry) : null)
         : sortKey === 'actionFund' ? (x.actionFund ? ActionRules.FUND_ORDER.indexOf(x.actionFund) : null)
         : x[sortKey]);
+      // Sorting by an advice column leaves whole tiers tied — five Strong Buys
+      // in a row, in whatever order they happened to arrive. Cushion breaks
+      // that tie, always thickest first whichever way the tier is sorted,
+      // because it is a tail-size reading rather than a direction. It is the
+      // only within-tier order the archive supports; it does NOT rank return.
+      const tieBreak = sortKey.startsWith('av:')
+        ? (a, b) => ((b.actionCushion == null ? -Infinity : b.actionCushion)
+                   - (a.actionCushion == null ? -Infinity : a.actionCushion))
+        : () => 0;
       const sorted = [...rows].sort((a, b) => {
         const av = valueFor(a), bv = valueFor(b);
         if (av == null) return 1;
         if (bv == null) return -1;
-        if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
-        return (av - bv) * sortDir;
+        if (typeof av === 'string') return av.localeCompare(bv) * sortDir || tieBreak(a, b);
+        return (av - bv) * sortDir || tieBreak(a, b);
       });
 
       researchSymbol = sorted[0] ? sorted[0].symbol : null;
@@ -2970,6 +2981,18 @@
         ? `<svg class="advchg ${up ? 'up' : 'down'}" aria-label="Advice ${up ? 'raised' : 'lowered'} since the previous trading day" role="img"><use href="#i-chevron" /></svg>`
         : '';
       return `<td class="act grp-act av-col ${slug}${extra} ${cls}" data-av="${we(name)}"${attr(tip)}>${mark}${we(v.a)}</td>`;
+    }
+
+    // Cushion: the distance to the exit in the stock's own monthly volatility.
+    // Amber under 1 sigma, green at 2 or more — the tail-size reading, which is
+    // the only thing the archive says orders inside a tier.
+    function cushionCell(s) {
+      const v = s.actionCushion;
+      if (v == null || !isFinite(v)) return '<td class="num grp-act na">—</td>';
+      const cls = v >= 2 ? 'pos' : v < 1 ? 'warn' : '';
+      const tip = 'Falls about ' + v.toFixed(1) + ' monthly sigmas before the rules exit'
+        + (s.actionRisk && s.actionRisk.drop != null ? ' (−' + s.actionRisk.drop.toFixed(1) + '%)' : '');
+      return `<td class="num grp-act ${cls}"${attr(tip)}>${v.toFixed(1)}σ</td>`;
     }
 
     // Mark whichever column the table is currently sorted by.
@@ -4846,9 +4869,16 @@
         Array.from({ length: 7 }, (_, i) => `<i class="seg${i < e.estScore ? ' on' : ''}"></i>`).join('') +
         `<span>establishment ${e.estScore}/7 — ${we(e.type)} at ${actionCfg().company_type.score_cutoff}+</span></div>`;
     }
-    // Risk to exit, under whichever profile the panel is open on — the honest
+    // Distance to the exit, under whichever profile the panel is open on — the honest
     // half of the infographic's risk/reward: the reward half needs a forecast,
     // the risk half is arithmetic on the rules themselves.
+    // The same distance in the stock's own monthly volatility — the reading
+    // that actually orders the tail inside a tier.
+    function cushionLine(s) {
+      const cu = s.actionCushion;
+      if (cu == null || !isFinite(cu)) return '';
+      return ' That is a cushion of <b>' + cu.toFixed(1) + 'σ</b> in this stock’s own monthly volatility.';
+    }
     function apRiskHtml(s, act) {
       if (s.error) return '';
       const rk = ActionRules.exitDistance({ v200: s.vs200ma, v50: s.vs50ma, rsi: s.rsi,
@@ -4867,8 +4897,10 @@
           ? 'already at an exit \u2014 these rules read the stock as <b>' + we(rk.action) + '</b> today.'
           : 'a further <b>\u2212' + rk.drop.toFixed(1) + '%</b> flips this profile to <b>' + we(rk.action) +
             '</b> \u2014 \u201c' + we(rk.flag) + '\u201d fires.';
-      return '<div class="ap-risk"><b>Risk to exit</b> \u00b7 ' + body +
-        '<span class="ap-risk-note">Technical rules only; moving averages, RSI and fundamentals held at today\u2019s values \u2014 a gauge of where the rules stand, not a stop order.</span></div>';
+      return '<div class="ap-risk"><b>Distance to the exit</b> \u00b7 ' + body + cushionLine(s) +
+        '<span class="ap-risk-note">Technical rules only; moving averages, RSI and fundamentals held at today\u2019s values \u2014 a gauge of where the rules stand, not a stop order. ' +
+        'The raw percentage is not a safety ranking: across the archive the roomiest stocks in a tier were the most extended, and their worst cases were worse. ' +
+        'The sigma figure is the one that ordered the tail, and it ranks tail size, never return.</span></div>';
     }
 
     function apStockHtml(s) {
