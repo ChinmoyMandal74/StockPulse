@@ -56,6 +56,13 @@
     }
     .panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .hint { font-size: 10.5px; color: var(--faint); line-height: 1.55; margin-top: 14px; }
+    .freshline { margin: 10px 0 0; padding: 7px 10px; border-radius: 9px; font-size: 11px;
+                 line-height: 1.5; border: 1px solid var(--hair); background: var(--surface);
+                 color: var(--muted); }
+    .freshline b { color: var(--text); font-weight: 600; }
+    .freshline.stale { border-color: rgba(251, 191, 36, 0.32); background: rgba(251, 191, 36, 0.08);
+                       color: var(--amber); }
+    .freshline.stale b { color: var(--amber); }
     .postlist { display: grid; gap: 4px; margin-bottom: 8px; }
     .postlist .prow { display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 8px;
                       border: 1px solid var(--hair); border-radius: 10px; background: var(--surface); }
@@ -102,6 +109,10 @@
       <h1>Promo Studio</h1>
       <p class="sub">Pick a template, screenshot the card, post it. Every card renders from
         tonight's data in the site's own theme, at a fixed artboard size.</p>
+      <!-- Before anything is exported: when the prices behind these cards were
+           last pulled. The card carries the DATA's date; this says when that
+           data arrived, and goes amber when it is over a day old. -->
+      <p class="freshline" id="freshLine">Checking the data…</p>
 
       <label>Template</label>
       <div class="tpl" id="tplList"></div>
@@ -619,6 +630,32 @@
 
     $('reloadBtn').addEventListener('click', () => load(true));
 
+    // When the prices were pulled, and what day they belong to — two different
+    // facts, and the second is what a card prints. Amber past a day, because
+    // the one thing worth noticing here is posting yesterday's numbers.
+    const STALE_MS = 26 * 60 * 60 * 1000;
+    function paintFresh(updatedAt, rows) {
+      const el = $('freshLine');
+      const t = Date.parse(updatedAt || '');
+      const day = (rows || []).reduce((m, x) => (x && x.latestDate && x.latestDate > m ? x.latestDate : m), '');
+      if (!isFinite(t)) {
+        el.className = 'freshline stale';
+        el.textContent = 'No refresh time on this data — run a refresh before posting.';
+        return;
+      }
+      const age = Date.now() - t;
+      const when = new Date(t).toLocaleString(undefined,
+        { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const mins = Math.round(age / 60000);
+      const ago = mins < 60 ? mins + ' min ago'
+        : mins < 60 * 36 ? Math.round(mins / 60) + 'h ago'
+          : Math.round(mins / 1440) + ' days ago';
+      el.className = 'freshline' + (age > STALE_MS ? ' stale' : '');
+      el.innerHTML = `Prices refreshed <b>${esc(when)}</b> · ${esc(ago)}` +
+        (day ? ` · cards are dated <b>${esc(day)}</b>` : '') +
+        (age > STALE_MS ? ' — that is over a day old.' : '');
+    }
+
     // ---- Saved posts ------------------------------------------------------
     // The controls, remembered under a name. Never a picture: opening one
     // tomorrow has to draw tomorrow's data, which is the whole point.
@@ -769,6 +806,7 @@
         if (!canAnnounce && OWNER_ONLY_TPLS.has(tpl)) tpl = 'movers';
         const data = await fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json());
         stocks = (data.stocks || []).filter((s) => !s.error);
+        paintFresh(data.updatedAt, stocks);
         // "This week" / "this month": the row's price against its last close
         // before the week or month began. Rows without an anchor stay unranked
         // in those two windows rather than showing a longer move.

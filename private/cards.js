@@ -22,7 +22,16 @@
   let O = {};                       // control values, by control id
   let getBasket = () => null;
 
-    const dateStr = () => new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    // The date on a card is the DATA's, not the reader's clock. It stamped
+    // `new Date()` until 2026-09-16, so a card built on a Saturday — or after
+    // a refresh had failed — put today's date over Thursday's prices, and that
+    // card goes on Instagram. Noon local, because `new Date('2026-09-16')`
+    // parses as UTC midnight and renders as the 15th west of Greenwich.
+    let marketDay = null;
+    const dateStr = () => {
+      const d = marketDay ? new Date(marketDay + 'T12:00:00') : new Date();
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    };
     // dated: true for the data cards, whose numbers belong to a day. The
     // explainers are evergreen, so they carry no date — and no universe
     // count anywhere, since a post outlives the number.
@@ -1686,6 +1695,8 @@
     build(id, ctx) {
       const c = ctx || {};
       stocks = c.stocks || [];
+      // The freshest bar anyone has: what the numbers on the card describe.
+      marketDay = stocks.reduce((m, x) => (x && x.latestDate && x.latestDate > m ? x.latestDate : m), '') || null;
       myLists = c.myLists || {};
       size = c.size || { id: 'portrait', w: 1080, h: 1350 };
       O = c.opts || {};
