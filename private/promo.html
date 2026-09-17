@@ -649,18 +649,23 @@
         }));
     }
 
-    // Loading a post sets the template and size FIRST, then paints the panel,
-    // then writes the control values — the controls for a template do not
-    // exist until its panel is drawn.
+    // Loading a post puts the whole panel back: the template and size chips
+    // through paintControls (render alone redraws the CARD and leaves the
+    // chips lit on whatever was chosen before, which reads as nothing having
+    // happened), then every control value.
     function openPost(p) {
       if (!p) return;
       tpl = p.tpl;
       size = SIZES.find((x) => x.id === p.size) || SIZES[0];
-      render();
-      for (const [k, v] of Object.entries(p.opts || {})) {
-        const el = $(k);
-        if (el) el.value = v;
-      }
+      paintControls();
+      const opts = p.opts || {};
+      // Sectors first, then rebuild the industry lists, then everything else:
+      // an industry only exists as an option once its sector is set, and
+      // relying on the order the keys happen to be stored in is not a plan.
+      const set = (k) => { const el = $(k); if (el && opts[k] != null) el.value = opts[k]; };
+      Object.keys(opts).filter((k) => /Sector$/.test(k)).forEach(set);
+      syncIndustries(true);
+      Object.keys(opts).forEach(set);
       render();
       $('postName').value = p.name;
       postSay('Loaded “' + p.name + '”.');
