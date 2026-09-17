@@ -1891,14 +1891,109 @@ async function metered(fn) {
   return { r, m, ms: Date.now() - t0 };
 }
 
-async function fetchJson(url) {
-  const res = await fetch(url);
-  const m = creditMeter.getStore();
-  if (m) {
-    const c = Number(res.headers.get('api-credits-request'));
-    if (Number.isFinite(c)) m.credits += c;
+// Every call to Twelve Data carries a deadline and may be retried once, and
+// both halves were bought the hard way. On 2026-09-17 its batched time_series
+// began flapping: the SAME 120-symbol request returned in 12s, in 375s, as an
+// HTML gateway error page, and as a dropped socket, within one hour. A bare
+// fetch() turned each of those into a two-to-six minute hang that ended in the
+// word "terminated" — undici's word for "the connection died", with the actual
+// reason buried in err.cause — or, for the error page, in a JSON parse error
+// that read like a bug in here rather than a failure over there.
+//
+// The per-attempt deadline matters more than it looks: a serverless function is
+// killed at the platform's ceiling, so an unbounded wait does not fail, it
+// vanishes, taking the round's credits with it.
+const TD_TIMEOUT_MS = Number(process.env.TD_TIMEOUT_MS || 120000);
+// A budget for the WHOLE call, retry included, because what must not be
+// exceeded is the platform's ceiling on the request — not any one attempt.
+// A first attempt that fails at 77s (the 2026-09-17 gateway page did exactly
+// that) still leaves room to try again; one that burns the full deadline does
+// not, and retrying it would run the round off the end of the function.
+const TD_BUDGET_MS = Number(process.env.TD_BUDGET_MS || 200000);
+// ...and a ceiling on the price phase as a WHOLE. The budget above bounds one
+// call; three chunks each taking it would still run the round off the end of
+// the function. Measured 2026-09-17, a healthy shallow phase is 18-30s, so this
+// is slack rather than a constraint — it exists for the bad afternoon, where a
+// round that returns 271 rows late is worth more than one the platform kills.
+const PRICE_PHASE_MS = Number(process.env.TD_PRICE_PHASE_MS || 210000);
+const TD_RETRY_WAIT_MS = 2000;
+// Below this there is no point starting again.
+const TD_MIN_ATTEMPT_MS = 15000;
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// undici keeps the useful half of a network failure in .cause: the top-level
+// message is "fetch failed" or "terminated", and the chain underneath says
+// SocketError / UND_ERR_SOCKET / ETIMEDOUT. Flatten it so one line names the
+// reason in the log, in the run's stored error and on the screener's status.
+function netReason(err) {
+  const out = [];
+  const add = (v) => { if (v && !out.includes(v)) out.push(v); };
+  for (let e = err, i = 0; e && i < 4; e = e.cause, i++) {
+    add(e.message || e.name);
+    // Only a NAMED code is worth printing. DOMException.code is the legacy
+    // numeric constant — a timeout is 23 — so preferring it over the message
+    // turned an aborted fetch into the error text "23 — 23". Undici's codes
+    // are names (UND_ERR_SOCKET, ETIMEDOUT); all-digits means legacy, drop it.
+    if (typeof e.code === 'string' && !/^\d+$/.test(e.code)) add(e.code);
   }
-  return res.json();
+  return out.join(' \u2014 ') || 'unknown error';
+}
+
+async function fetchJson(url, opts = {}) {
+  const perAttempt = opts.timeout || TD_TIMEOUT_MS;
+  const budget = opts.budget || TD_BUDGET_MS;
+  const attempts = opts.retry === false ? 1 : 2;
+  const started = Date.now();
+  let last;
+  for (let n = 1; n <= attempts; n++) {
+    const t0 = Date.now();
+    // Never let attempt two run past the budget the platform allows — but
+    // never hand AbortSignal a zero either, which would abort instantly.
+    const timeout = Math.max(1000, Math.min(perAttempt, budget - (t0 - started)));
+    // Whether the provider CHARGED for this attempt decides whether retrying is
+    // free or doubles the bill. Credits are the binding constraint (610 a
+    // minute, and the round's profile budget is sized against a known price
+    // cost), so a blind retry could breach the ceiling and get the next round
+    // refused. An attempt whose Api-Credits-Request header never arrived was
+    // never served — retrying that spends what the first attempt failed to.
+    let charged = false;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(timeout) });
+      const m = creditMeter.getStore();
+      // Reject the empty BEFORE coercing: a missing header is null, and
+      // Number(null) is 0, which is finite. Reading that as "charged 0" would
+      // have meant "we were served" and suppressed every retry — the exact
+      // trap that fabricated momentum slopes out of null scores once already.
+      const raw = res.headers.get('api-credits-request');
+      const c = raw == null || raw === '' ? NaN : Number(raw);
+      if (Number.isFinite(c)) { charged = true; if (m) m.credits += c; }
+      if (!res.ok) {
+        // A gateway failure is an HTML page, not JSON. Read it as text and say
+        // what it was; res.json() here is what produced the useless
+        // "Unexpected token '<', \"<!DOCTYPE \"..." on 2026-09-17.
+        const body = await res.text().catch(() => '');
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = JSON.parse(body);
+          if (j && j.message) msg += `: ${j.message}`;
+        } catch {
+          if (res.status >= 500) msg += ' \u2014 the provider returned an error page, not data';
+        }
+        throw new Error(msg);
+      }
+      return await res.json();
+    } catch (err) {
+      last = err;
+      const left = budget - (Date.now() - started) - TD_RETRY_WAIT_MS;
+      if (n === attempts || charged || left < TD_MIN_ATTEMPT_MS) break;
+      console.warn(`twelve data: attempt ${n} failed after ${Date.now() - t0}ms ` +
+                   `(${netReason(err)}) \u2014 nothing was charged, ` +
+                   `${Math.round(left / 1000)}s of budget left, retrying`);
+      await sleep(TD_RETRY_WAIT_MS);
+    }
+  }
+  throw new Error(netReason(last), { cause: last });
 }
 
 // Fetch a company name for one symbol (1 credit). Best-effort; returns null on failure.
@@ -3342,6 +3437,9 @@ async function computeStocks(asOf, opts = {}) {
     // archive is a no-op upsert of the overlap window for every unpriced
     // symbol, every round.
     let pricedLive = null;
+    // The freshly fetched bars alone, where a live pull happened. persistBars
+    // needs these rather than the archive-joined window (see its call below).
+    let liveSeries = null;
     if (opts.archivePrices && !asOf) {
       // A Refresh All round after the first: prices come from the archive the
       // first round just wrote — zero credits — leaving the whole minute for
@@ -3365,9 +3463,13 @@ async function computeStocks(asOf, opts = {}) {
       // Live prices, CHUNKED: the API rejects a batch over 120 symbols, so
       // past that the pull is several calls in the same minute — 1 credit per
       // symbol regardless of chunking (measured), so the cost is symbols, not
-      // calls. Live: last ~300 bars. As-of: from ~430 days before asOf through
-      // today, so there is a year of history before the date AND the bars
-      // after it (forward returns).
+      // calls. As-of: from ~430 days before asOf through today, so there is a
+      // year of history before the date AND the bars after it (forward returns).
+      //
+      // A live pull is SHALLOW (see LIGHT_BARS): it asks only for the sessions
+      // the archive does not already hold, and the scoring window is joined on
+      // from the archive below. An as-of pull is unchanged and still deep — it
+      // reads a range the archive may not cover at all.
       series = {};
       // Only this round's slice is pulled live; everything else in the universe
       // comes off the archive below, so a universe too big to price inside one
@@ -3378,28 +3480,105 @@ async function computeStocks(asOf, opts = {}) {
         ? fetchSymbols.filter((x) => x === BENCHMARK || liveSet.has(x))
         : fetchSymbols;
       const CHUNK = 120;
-      for (let i = 0; i < toFetch.length; i += CHUNK) {
-        const chunk = toFetch.slice(i, i + CHUNK);
-        let rangeParam = '&outputsize=300';
-        if (asOf) {
-          const start = new Date(asOf);
-          start.setDate(start.getDate() - 430); // ~1 year of history before the as-of date
-          const daysBack = Math.round((Date.now() - start.getTime()) / 86400000);
-          const needed = Math.ceil(daysBack * 0.72) + 60; // approx trading days in range + buffer
-          // Twelve Data batch limit: symbols × outputsize ≤ 100000.
-          const maxPerSymbol = Math.floor(90000 / chunk.length);
-          const outSize = Math.min(Math.max(needed, 300), maxPerSymbol, 5000);
-          rangeParam = `&start_date=${start.toISOString().slice(0, 10)}&outputsize=${outSize}`;
+
+      // One fetch of a set of symbols at a given depth, chunked. Returns the
+      // symbol-keyed payload, or a structured refusal for the caller to return.
+      const priceDeadline = Date.now() + PRICE_PHASE_MS;
+      const pullPrices = async (syms, depthFor) => {
+        const got = {};
+        for (let i = 0; i < syms.length; i += CHUNK) {
+          const chunk = syms.slice(i, i + CHUNK);
+          const raw = await fetchJson(
+            `${TD_BASE}/time_series?symbol=${encodeURIComponent(chunk.join(','))}` +
+            `&interval=1day${depthFor(chunk)}&apikey=${API_KEY}`,
+            { budget: priceDeadline - Date.now() }
+          );
+          // A top-level error (bad key, rate limit) comes back as {status:"error"}.
+          if (raw && raw.status === 'error') {
+            return { refusal: { ok: false, status: raw.code === 429 ? 429 : 502,
+                                error: `Twelve Data: ${raw.message}` } };
+          }
+          Object.assign(got, normalizeBySymbol(raw, chunk));
         }
-        const raw = await fetchJson(
-          `${TD_BASE}/time_series?symbol=${encodeURIComponent(chunk.join(','))}&interval=1day${rangeParam}&apikey=${API_KEY}`
-        );
-        // A top-level error (bad key, rate limit) comes back as {status:"error"}.
-        if (raw && raw.status === 'error') {
-          const code = raw.code === 429 ? 429 : 502;
-          return { ok: false, status: code, error: `Twelve Data: ${raw.message}` };
+        return { got };
+      };
+
+      const asOfDepth = (chunk) => {
+        const start = new Date(asOf);
+        start.setDate(start.getDate() - 430); // ~1 year of history before the as-of date
+        const daysBack = Math.round((Date.now() - start.getTime()) / 86400000);
+        const needed = Math.ceil(daysBack * 0.72) + 60; // approx trading days in range + buffer
+        // Twelve Data batch limit: symbols × outputsize ≤ 100000.
+        const maxPerSymbol = Math.floor(90000 / chunk.length);
+        const outSize = Math.min(Math.max(needed, 300), maxPerSymbol, 5000);
+        return `&start_date=${start.toISOString().slice(0, 10)}&outputsize=${outSize}`;
+      };
+      const deepDepth = () => `&outputsize=${DEEP_BARS}`;
+      const lightDepth = () => `&outputsize=${LIGHT_BARS}`;
+
+      if (asOf) {
+        const r = await pullPrices(toFetch, asOfDepth);
+        if (r.refusal) return r.refusal;
+        Object.assign(series, r.got);
+      } else {
+        // The archive carries the history. SPY is deliberately never archived
+        // (it belongs to no portfolio and the orphan sweep would collect it),
+        // so the benchmark is always a deep pull.
+        const histSince = new Date(Date.now() - 470 * 86400000).toISOString().slice(0, 10);
+        const archive = await store.readBarsFullFor(
+          toFetch.filter((x) => x !== BENCHMARK), histSince);
+        const deepSyms = [];
+        const lightSyms = [];
+        for (const sym of toFetch) {
+          const h = archive[sym];
+          if (sym === BENCHMARK || !h || h.length < LIGHT_MIN_ARCHIVE) deepSyms.push(sym);
+          else lightSyms.push(sym);
         }
-        Object.assign(series, normalizeBySymbol(raw, chunk));
+
+        const light = await pullPrices(lightSyms, lightDepth);
+        if (light.refusal) return light.refusal;
+        const deep = await pullPrices(deepSyms, deepDepth);
+        if (deep.refusal) return deep.refusal;
+        liveSeries = { ...light.got, ...deep.got };
+
+        // A shallow window is only usable if it actually MEETS the archive.
+        // Without this check a symbol whose archive had fallen behind would be
+        // joined across a hole — and worse, persistBars treats "no overlap" as
+        // "rebuild this symbol", which from a 12-bar pull would replace years
+        // of history with twelve rows. Anything that does not meet is re-pulled
+        // deep, which is the only honest repair.
+        const dOf = (b) => String(b.datetime).slice(0, 10);
+        const stragglers = lightSyms.filter((sym) => {
+          const v = liveSeries[sym] && liveSeries[sym].values;
+          const h = archive[sym];
+          if (!Array.isArray(v) || !v.length || !h || !h.length) return true;
+          return dOf(h[0]) < dOf(v[v.length - 1]);   // archive ends before the live window starts
+        });
+        if (stragglers.length) {
+          console.warn(`prices: ${stragglers.length} symbol(s) did not meet the archive, ` +
+                       `re-pulling deep: ${stragglers.slice(0, 8).join(', ')}` +
+                       (stragglers.length > 8 ? ' …' : ''));
+          const redo = await pullPrices(stragglers, deepDepth);
+          if (redo.refusal) return redo.refusal;
+          Object.assign(liveSeries, redo.got);
+        }
+        const deepSet = new Set([...deepSyms, ...stragglers]);
+
+        // Join: the live bars, then the archive strictly older than them. The
+        // live copy wins on any shared date — that is what upgrades a
+        // provisional close captured mid-session to the settled one.
+        for (const sym of toFetch) {
+          const live = liveSeries[sym];
+          const v = (live && live.values) || [];
+          const h = archive[sym] || [];
+          if (!v.length) { series[sym] = live || { values: h }; continue; }
+          if (deepSet.has(sym)) { series[sym] = live; continue; }
+          const oldest = dOf(v[v.length - 1]);
+          series[sym] = { ...live, values: v.concat(h.filter((b) => dOf(b) < oldest)) };
+        }
+        const bars = lightSyms.length * LIGHT_BARS + deepSet.size * DEEP_BARS;
+        console.log(`prices: live, ${lightSyms.length - stragglers.length} shallow + ` +
+          `${deepSet.size} deep (~${bars} bars, was ${toFetch.length * DEEP_BARS})`);
       }
       // Whatever this round did not price comes off the archive, so the
       // snapshot is still complete — those rows simply carry the close they
@@ -3694,7 +3873,11 @@ async function computeStocks(asOf, opts = {}) {
     // by-product, and the screener must still work if it breaks.
     if (!asOf && !opts.archivePrices) {
       try {
-        const b = await persistBars(pricedLive || symbols, series);
+        // The LIVE bars, deliberately: persistBars detects a split by comparing
+        // an old fetched bar against the stored one, and every bar in the joined
+        // window came FROM the store, so a joined series would agree with itself
+        // and never see one.
+        const b = await persistBars(pricedLive || symbols, liveSeries || series);
         T.mark('persist-bars');
         if (b.inserted) {
           console.log(`bars: +${b.inserted} rows across ${b.symbols} symbols` +
@@ -3712,7 +3895,7 @@ async function computeStocks(asOf, opts = {}) {
     return { ok: true, payload: { stocks, portfolios: portfolioNames, asOf,
       phases: line || null, updatedAt: new Date().toISOString() } };
   } catch (err) {
-    return { ok: false, status: 502, error: `Failed to reach Twelve Data: ${err.message}` };
+    return { ok: false, status: 502, error: `Failed to reach Twelve Data: ${netReason(err)}` };
   }
 }
 
@@ -3737,6 +3920,23 @@ const barRow = (symbol, b) => {
   return { symbol, d: String(b.datetime).slice(0, 10),
            open: num(b.open), high: num(b.high), low: num(b.low), close, volume: num(b.volume) };
 };
+
+// How many bars a LIVE price pull asks for. The archive already holds the
+// history, so re-fetching 300 sessions a symbol re-downloads ~9.5MB of bars we
+// already have — and on 2026-09-17 that became the difference between a refresh
+// and no refresh: measured seconds apart, 120 symbols x 300 bars answered HTTP
+// 524 after 125s while 120 symbols x 12 bars answered 200 in 33s. Credits are
+// unchanged (1 a symbol whatever the depth, measured), so this is free.
+//
+// 12 is chosen against what has to be true for the join to work: the window must
+// overlap what the archive already holds. A nightly refresh leaves a one-session
+// gap, so 12 covers a long weekend plus a week of missed runs, and anything that
+// still fails to overlap is re-pulled deep rather than guessed at.
+const LIGHT_BARS = Number(process.env.TD_LIGHT_BARS || 12);
+const DEEP_BARS = 300;
+// Below this the archive cannot carry the scoring window (momentum needs ~260
+// sessions), so the symbol is pulled deep and the archive is not consulted.
+const LIGHT_MIN_ARCHIVE = 300;
 
 // Only ever called for a live pull. An as-of pull fetches a different, truncated
 // range, and persisting from that path would poison the archive.
