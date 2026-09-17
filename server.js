@@ -307,6 +307,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
+                      '/architecture.html': '/architecture',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
                       // The public pages have canonical addresses of their own.
                       '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
@@ -604,6 +605,15 @@ app.get('/columns', route(async (req, res) => {
 }));
 
 // Admin only: every table in the database, with its row and column count.
+// What talks to what, drawn from a layout spec rather than hand-placed
+// markup. Admin only: it is an internal document, and it names the schedulers
+// and the stores.
+app.get('/architecture', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'architecture');
+  res.sendFile(path.join(__dirname, 'private', 'architecture.html'));
+}));
+
 app.get('/database', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'database');

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Architecture · Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The diagram is ONE svg drawn from a layout spec rather than hand-placed
+       markup: the boxes are data, so moving a band or renaming a store is an
+       edit to a list and never to a pile of coordinates. No library — the same
+       decision the charts made. */
+    .page { max-width: 1320px; margin: 0 auto; padding: 0 20px 80px; }
+    h1 { margin: 26px 0 4px; font-size: 26px; font-weight: 600; letter-spacing: -0.03em; }
+    .lede { margin: 0 0 18px; max-width: 76ch; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+    .lede b { color: var(--text); font-weight: 600; }
+
+    .island { position: sticky; top: 10px; z-index: 20; display: flex; justify-content: center;
+              margin: 14px 0 6px; pointer-events: none; }
+    .island .core { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 16px; }
+    .island .wm { font-weight: 600; letter-spacing: -0.02em; font-size: 14px; }
+
+    .frame { padding: 10px; }
+    .frame svg { display: block; width: 100%; height: auto; }
+    /* Type inside the drawing. It is never stretched — the svg keeps its own
+       aspect ratio — so svg text is safe here, unlike on the price charts. */
+    .frame text { font-family: var(--sans); fill: var(--text); }
+    .frame .band-label { font-family: var(--mono); font-size: 11px; fill: var(--faint);
+                         letter-spacing: 0.14em; text-transform: uppercase; }
+    .frame .n-title { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+    .frame .n-sub { font-size: 11.5px; fill: var(--muted); }
+    .frame .n-mono { font-family: var(--mono); font-size: 11px; fill: var(--faint); }
+    .frame .e-label { font-family: var(--mono); font-size: 10.5px; fill: var(--faint); }
+    .frame .box { fill: var(--surface); stroke: var(--hair-2); stroke-width: 1; }
+    .frame .band { fill: rgba(255, 255, 255, 0.016); stroke: var(--hair); stroke-width: 1; }
+    .frame .edge { stroke: var(--hair-2); stroke-width: 1.4; fill: none; }
+    .frame .edge.hot { stroke: var(--green); stroke-opacity: 0.55; }
+    .frame .edge.cold { stroke-dasharray: 5 4; }
+
+    .keys { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 14px 2px 0; font-size: 11.5px; color: var(--faint); }
+    .keys span { display: inline-flex; align-items: center; gap: 7px; }
+    .keys i { width: 22px; height: 0; border-top: 2px solid var(--hair-2); display: inline-block; }
+    .keys i.hot { border-color: var(--green); opacity: 0.7; }
+    .keys i.cold { border-top-style: dashed; }
+    .keys b.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+    .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 10px; margin-top: 22px; }
+    .note { padding: 13px 15px; }
+    .note h3 { margin: 0 0 6px; font-size: 12.5px; font-weight: 600; letter-spacing: -0.01em; }
+    .note p { margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+    .note code { font-family: var(--mono); font-size: 11px; color: var(--text); }
+    .note.warn { border-color: rgba(251, 191, 36, 0.3); }
+    .note.warn h3 { color: var(--amber); }
+    @media (max-width: 720px) { .page { padding: 0 12px 60px; } h1 { font-size: 21px; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <main class="page">
+    <div class="island"><div class="bezel"><div class="core">
+      <span class="wm">Tickr Lab</span>
+      <a class="btn" href="/admin">← Admin</a>
+      <button class="btn" id="dlBtn" title="Render the diagram to a PNG">Download PNG</button>
+      <span class="hint" id="dlMsg" style="font-size:11px;color:var(--faint)"></span>
+    </div></div></div>
+
+    <h1>System architecture</h1>
+    <p class="lede">Every moving part and what talks to what. The shape to hold on to: <b>one Express
+      function</b> serving a handful of pages and a JSON API, <b>one accessor layer</b> over a hosted
+      SQLite, and <b>a set of modules that both the server and the browser load</b> so a rule can only
+      be written once. Everything below the line is scheduled or offline.</p>
+
+    <div class="bezel frame"><div class="core" style="padding:8px"><div id="diagram"></div></div></div>
+
+    <div class="keys">
+      <span><i class="hot"></i> the request path a reader takes</span>
+      <span><i></i> internal calls</span>
+      <span><i class="cold"></i> scheduled, or offline</span>
+      <span><b class="sw" style="background:#7c9cff33;border:1px solid #7c9cff77"></b> in the browser</span>
+      <span><b class="sw" style="background:#34d39933;border:1px solid #34d39977"></b> on the server</span>
+      <span><b class="sw" style="background:#fb718533;border:1px solid #fb718577"></b> stored</span>
+      <span><b class="sw" style="background:#fbbf2433;border:1px solid #fbbf2477"></b> third party</span>
+    </div>
+
+    <div class="notes" id="notes"></div>
+  </main>
+
+  <script src="/cardshot.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    // ---- the drawing, as data ------------------------------------------------
+    // x/y/w/h are in viewBox units. Bands are drawn first, then boxes, then the
+    // edges between them, so nothing has to be ordered by hand in the markup.
+    const W = 1240;
+    const TINT = { ui: '#7c9cff', srv: '#34d399', data: '#fb7185', ext: '#fbbf24', job: '#a78bfa' };
+
+    const BANDS = [
+      { y: 14, h: 108, label: 'who is asking' },
+      { y: 146, h: 96, label: 'vercel edge' },
+      { y: 266, h: 232, label: 'the function — server.js' },
+      { y: 522, h: 166, label: 'persistence — db.js over turso' },
+      { y: 696, h: 116, label: 'scheduled' },
+      { y: 836, h: 104, label: 'offline, on the owner’s machine' },
+    ];
+
+    const NODES = [
+      // who is asking
+      { id: 'anon', x: 26, y: 34, w: 250, h: 72, t: 'Anonymous', s: 'Landing, blog, login',
+        m: 'no session', k: 'ui' },
+      { id: 'desk', x: 296, y: 34, w: 300, h: 72, t: 'Signed-in browser', s: 'Screener + 20 pages',
+        m: 'member · guest · owner', k: 'ui' },
+      { id: 'phone', x: 616, y: 34, w: 230, h: 72, t: 'Phone', s: '/m — its own page',
+        m: 'server renders rows', k: 'ui' },
+      { id: 'mail', x: 866, y: 34, w: 348, h: 72, t: 'Inbox', s: 'Refresh report, resets, contact',
+        m: 'one shell, table markup', k: 'ui' },
+
+      // edge
+      { id: 'cdn', x: 26, y: 164, w: 380, h: 62, t: 'CDN — public/', s: 'login, reset, app.css, favicon, logo',
+        m: 'answered WITHOUT running code', k: 'ext' },
+      { id: 'fn', x: 430, y: 164, w: 784, h: 62, t: 'Serverless function', s: 'everything else falls through to it',
+        m: 'private/ is not a static directory', k: 'srv' },
+
+      // the function
+      { id: 'gate', x: 26, y: 292, w: 250, h: 86, t: 'gateAssets + auth', s: 'page → redirect, asset → 401',
+        m: 'scrypt · sessions · guest HMAC', k: 'srv' },
+      { id: 'routes', x: 296, y: 292, w: 300, h: 86, t: 'Routes', s: 'pages · data · admin · cron',
+        m: 'every async one wrapped in route()', k: 'srv' },
+      { id: 'compute', x: 616, y: 292, w: 300, h: 86, t: 'computeStocks', s: 'prices → scores → advice → snapshot',
+        m: 'the one build of a row', k: 'srv' },
+      { id: 'mailer', x: 936, y: 292, w: 278, h: 86, t: 'Mail + logs', s: 'emailShell, activity, visitors',
+        m: 'never blocks the response', k: 'srv' },
+      { id: 'shared', x: 26, y: 398, w: 890, h: 86, t: 'Shared modules — private/*.js',
+        s: 'momentum · action · screens · filters · indicators · rowcard · cards · cardshot · strategy · refresh-loop',
+        m: 'required by the server AND loaded by the browser — one implementation, no drift', k: 'srv' },
+      { id: 'pages', x: 936, y: 398, w: 278, h: 86, t: 'private/*.html', s: '26 pages, no build step',
+        m: 'vanilla JS, CSS in app.css', k: 'ui' },
+
+      // persistence
+      { id: 'db', x: 26, y: 540, w: 210, h: 114, t: 'db.js', s: 'every read and write',
+        m: 'whole-collection replaces', k: 'srv' },
+      { id: 't1', x: 256, y: 540, w: 232, h: 114, t: 'Market', s: 'bars · snapshot · profiles',
+        m: 'names · universe · fundamentals_history · earnings_history · nasdaq_listings', k: 'data' },
+      { id: 't2', x: 500, y: 540, w: 232, h: 114, t: 'People', s: 'users · sessions · prefs',
+        m: 'password_resets · user_portfolios · column_views · chat_usage', k: 'data' },
+      { id: 't3', x: 744, y: 540, w: 232, h: 114, t: 'Operations', s: 'refresh_state · runs · rounds',
+        m: 'news · news_state · news_runs · news_run_items · activity · visitors', k: 'data' },
+      { id: 't4', x: 988, y: 540, w: 226, h: 114, t: 'Content', s: 'screens · posts · app_meta',
+        m: 'portfolios · portfolio_tickers', k: 'data' },
+
+      // scheduled
+      { id: 'gha', x: 26, y: 714, w: 286, h: 80, t: 'GitHub Actions', s: 'Refresh all, 4:15 PM New York',
+        m: 'two crons + a tz guard', k: 'job' },
+      { id: 'cjo', x: 332, y: 714, w: 286, h: 80, t: 'cron-job.org', s: 'Intraday prices, every 30 min',
+        m: 'the server decides whether to act', k: 'job' },
+      { id: 'vcr', x: 638, y: 714, w: 286, h: 80, t: 'Vercel cron', s: 'Watchdog, 23:30 UTC',
+        m: 'a missed night, and Turso usage', k: 'job' },
+      { id: 'ext', x: 944, y: 700, w: 270, h: 108, t: 'Third parties', s: 'Twelve Data · Google News',
+        m: 'Anthropic · Resend · NASDAQ · Turso platform', k: 'ext' },
+
+      // offline
+      { id: 'local', x: 26, y: 854, w: 592, h: 72, t: 'analysis.db + analysis-db.js', s: 'a local copy of the archive',
+        m: 'research is 300× faster here, and costs no rows', k: 'job' },
+      { id: 'scripts', x: 638, y: 854, w: 576, h: 72, t: 'One-off scripts', s: 'backfill-bars · lab-grid · strategy-runs · single-data',
+        m: 'never run in production; three write JSON into private/', k: 'job' },
+    ];
+
+    // from -> to, with the side each leaves and enters by
+    const EDGES = [
+      ['anon', 'cdn', 'hot', 'HTTPS'],
+      ['desk', 'fn', 'hot', ''],
+      ['phone', 'fn', 'hot', ''],
+      ['cdn', 'fn', '', 'falls through'],
+      ['fn', 'gate', 'hot', ''],
+      ['fn', 'routes', 'hot', ''],
+      ['fn', 'compute', '', ''],
+      ['fn', 'mailer', '', ''],
+      ['routes', 'shared', '', ''],
+      ['compute', 'shared', '', ''],
+      ['routes', 'pages', '', ''],
+      ['shared', 'db', 'hot', ''],
+      ['mailer', 'db', '', ''],
+      ['db', 't1', '', ''],
+      ['db', 't2', '', ''],
+      ['db', 't3', '', ''],
+      ['db', 't4', '', ''],
+      ['gha', 'db', 'cold', ''],
+      ['cjo', 'db', 'cold', ''],
+      ['vcr', 'db', 'cold', ''],
+      ['ext', 'compute', 'cold', 'credits'],
+      ['local', 't1', 'cold', 'sync'],
+    ];
+
+    const NOTES = [
+      ['warn', 'Nothing in public/ can be protected',
+        'The CDN answers it before the function runs. Every gated page therefore lives in <code>private/</code>, which the CDN knows nothing about — the guard only gets to decide because the request reaches the code at all.'],
+      ['warn', 'Nothing may run after a response',
+        'A function is frozen the moment it replies, so fire-and-forget work is suspended mid-flight and resumes on some later request. The news top-up is awaited for exactly this reason.'],
+      ['warn', 'Turso meters rows READ',
+        'A <code>group by</code> over a whole table is a billing event, not just a slow query. Prefer N indexed seeks; <code>query-plan-test.js</code> fails the build-equivalent if anything scans a big table off the allowlist.'],
+      ['', 'One rule, one implementation',
+        'The modules in the middle band are <code>require</code>d by the server and <code>&lt;script&gt;</code>-tagged by the pages. That is why the advice a card shows, the advice the table shows and the advice the email quotes cannot disagree.'],
+      ['', 'The API ceiling shapes the refresh',
+        '610 credits a minute, and a cold company profile costs 80 — so seven profiles a round, rounds 62 seconds apart. Prices are one credit a symbol, which is why the archive was affordable to build.'],
+      ['', 'Deploys are git push only',
+        'A CLI deploy from another folder once replaced production with foreign code while <code>/api/health</code> stayed green. The health route returns an asset count for exactly that reason.'],
+    ];
+
+    // ---- draw it -------------------------------------------------------------
+    const byId = Object.fromEntries(NODES.map((n) => [n.id, n]));
+    const H = 952;
+
+    // Three cases, and the middle one is the one the first cut got wrong: two
+    // boxes in the SAME band must be joined across, not up and over, or the
+    // line climbs out of the band and back through everything between.
+    // Returns the path and where a label can sit on it without landing in a box.
+    function edgePath(a, b) {
+      const ac = a.x + a.w / 2, bc = b.x + b.w / 2;
+      const sameBand = a.y < b.y + b.h && b.y < a.y + a.h;
+      if (sameBand) {
+        const lo = Math.min(a.x, b.x), hi = Math.max(a.x + a.w, b.x + b.w);
+        // Anything else sitting between them? Then go UNDER the row rather than
+        // straight across it, which would read as a chain of boxes passing the
+        // work along instead of one box reaching all four.
+        const blocked = NODES.some((n) => n !== a && n !== b
+          && n.y < b.y + b.h && b.y < n.y + n.h && n.x > lo && n.x + n.w < hi);
+        if (blocked) {
+          const y = Math.max(a.y + a.h, b.y + b.h) + 12;
+          const ac2 = a.x + a.w / 2, bc2 = b.x + b.w / 2;
+          return { d: `M${ac2} ${a.y + a.h}L${ac2} ${y}L${bc2} ${y}L${bc2} ${b.y + b.h}`,
+            lx: ac2, ly: a.y + a.h + 14, gap: 999 };
+        }
+        const y = Math.max(a.y, b.y) + Math.min(a.h, b.h) / 2;
+        const [x1, x2] = a.x < b.x ? [a.x + a.w, b.x] : [a.x, b.x + b.w];
+        // gap says how much clear room there is; a label wider than that is
+        // dropped rather than printed across two boxes.
+        return { d: `M${x1} ${y}L${x2} ${y}`, lx: (x1 + x2) / 2, ly: y - 7,
+          gap: Math.abs(x2 - x1) };
+      }
+      const down = b.y > a.y;
+      const y1 = down ? a.y + a.h : a.y;
+      const y2 = down ? b.y : b.y + b.h;
+      // The label hugs the SOURCE box, just outside the edge it leaves by. The
+      // mid-run looked tidier until an edge skipped a band and dropped its
+      // label onto a box two rows away.
+      const ly = down ? y1 + 14 : y1 - 6;
+      if (Math.abs(ac - bc) < 6) return { d: `M${ac} ${y1}L${ac} ${y2}`, lx: ac, ly, gap: 999 };
+      const mid = (y1 + y2) / 2;
+      return { d: `M${ac} ${y1}L${ac} ${mid}L${bc} ${mid}L${bc} ${y2}`, lx: ac, ly, gap: 999 };
+    }
+
+    function draw() {
+      const parts = [];
+      for (const b of BANDS) {
+        parts.push(`<rect class="band" x="10" y="${b.y}" width="${W - 20}" height="${b.h}" rx="14"/>`);
+        parts.push(`<text class="band-label" x="24" y="${b.y + 18}">${esc(b.label)}</text>`);
+      }
+      const labels = [];
+      for (const [from, to, cls, label] of EDGES) {
+        const a = byId[from], b = byId[to];
+        if (!a || !b) continue;
+        const e = edgePath(a, b);
+        parts.push(`<path class="edge ${cls}" d="${e.d}" marker-end="url(#arw)"/>`);
+        // Labels are drawn LAST, over their own plate, so a line can never run
+        // through the word and the word can never sit on a box's title.
+        if (label && (e.gap == null || e.gap > label.length * 6 + 20)) {
+          labels.push({ label, x: e.lx, y: e.ly });
+        }
+      }
+      for (const l of labels) {
+        const w = l.label.length * 6 + 12;
+        parts.push(`<rect x="${l.x - w / 2}" y="${l.y - 11}" width="${w}" height="15" rx="4" ` +
+          'style="fill:#0a0c11;stroke:rgba(255,255,255,0.07)"/>');
+        parts.push(`<text class="e-label" x="${l.x}" y="${l.y}" text-anchor="middle">${esc(l.label)}</text>`);
+      }
+      for (const n of NODES) {
+        const tint = TINT[n.k] || '#9aa3b2';
+        parts.push(`<rect class="box" x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="12" ` +
+          `style="fill:${tint}14;stroke:${tint}66"/>`);
+        parts.push(`<rect x="${n.x}" y="${n.y}" width="3" height="${n.h}" rx="1.5" style="fill:${tint}"/>`);
+        parts.push(`<text class="n-title" x="${n.x + 16}" y="${n.y + 25}">${esc(n.t)}</text>`);
+        if (n.s) parts.push(`<text class="n-sub" x="${n.x + 16}" y="${n.y + 44}">${esc(n.s)}</text>`);
+        if (n.m) {
+          // wrap the mono line by width rather than by guesswork
+          const words = n.m.split(' ');
+          const perLine = Math.max(8, Math.floor((n.w - 32) / 5.6));
+          const lines = [];
+          let cur = '';
+          for (const w of words) {
+            if ((cur + ' ' + w).trim().length > perLine) { lines.push(cur.trim()); cur = w; } else cur += ' ' + w;
+          }
+          if (cur.trim()) lines.push(cur.trim());
+          lines.slice(0, 3).forEach((ln, i) =>
+            parts.push(`<text class="n-mono" x="${n.x + 16}" y="${n.y + 62 + i * 14}">${esc(ln)}</text>`));
+        }
+      }
+      $('diagram').innerHTML =
+        `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="System architecture diagram">` +
+        '<defs><marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" ' +
+        'orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#9aa3b2"/></marker></defs>' +
+        parts.join('') + '</svg>';
+
+      $('notes').innerHTML = NOTES.map(([k, h, p]) =>
+        `<div class="bezel note ${k}"><div class="core" style="padding:13px 15px">` +
+        `<h3>${esc(h)}</h3><p>${p}</p></div></div>`).join('');
+    }
+    draw();
+
+    // The shared rasteriser, so the diagram can go in a document.
+    $('dlBtn').addEventListener('click', async () => {
+      const btn = $('dlBtn');
+      btn.disabled = true;
+      $('dlMsg').textContent = 'Rendering…';
+      try {
+        const box = document.querySelector('.frame .core');
+        const r = box.getBoundingClientRect();
+        const scale = 1600 / r.width;
+        const blob = await CardShot.shoot(box,
+          { w: Math.round(r.width * scale), h: Math.round(r.height * scale) });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `tickrlab-architecture-${new Date().toISOString().slice(0, 10)}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        $('dlMsg').textContent = 'Saved ' + a.download;
+      } catch (e) {
+        $('dlMsg').textContent = 'Could not render: ' + e.message + ' A screenshot works.';
+      }
+      btn.disabled = false;
+    });
+  </script>
+</body>
+</html>

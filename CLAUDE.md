@@ -50,6 +50,7 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `private/filters.js` | **The column-filter grammar, defined once** — `filterValue`, `compileFilter`, `screenRows`. Loaded by the screener and `require`d by the server, which runs screens for the phone page |
 | `private/mobile.html` | The phone page at `/m` — screens, rows, a stock sheet, and a view switcher. No settings of its own |
 | `private/mobile-setup.html` | The admin editor at `/mobile-setup` — which views the phone offers and what each row shows |
+| `private/architecture.html` | The system diagram at `/architecture` (admin) — boxes and edges from a layout spec, drawn as one SVG |
 | `private/cardshot.js` | **The rasteriser, defined once** — inlines computed styles, embeds the fonts, paints a card onto a canvas at its true 1080px. Used by the studio, `/cards` and the phone |
 | `.github/workflows/nightly-refresh.yml` | The 4:15PM Eastern Refresh all — see **The nightly job** below |
 | `public/favicon.svg` | Momentum-line mark, emerald on OLED black |
@@ -1062,6 +1063,17 @@ Per-stock headlines — **headline / source / url / timestamp only, never bodies
 - **"Disable the button" became a flag.** `setPulling()` toggles `body.pulling` (a progress cursor) and guards `refreshAll()` from starting twice; the buttons it used to grey out are on another page.
 - **Members are not locked out of anything they had.** `/admin` is admin-only, so the research menu stays in their bar; what they lose is editing the weighting, which `/analysis` still lets them switch by preset.
 - Verified on introduction by a route walk (admin 200 on `/admin`, anon redirect, `/admin.html` funnels to `/admin`) and by a check that every `$('id')` the page asks for exists in its own markup — a syntax check cannot see a `TypeError` from a control that was deleted out from under its listener.
+
+## The architecture diagram
+**`/architecture` (admin only, an `Architecture` row in the console's Reference section) — every moving part and what talks to what (2026-09-17).** Six bands top to bottom: who is asking, the Vercel edge, the function, persistence, what is scheduled, and what only runs on the owner's machine.
+
+- **The drawing is DATA, not markup.** `BANDS`, `NODES` and `EDGES` are three arrays and a fifty-line renderer emits one SVG; moving a band or renaming a store is an edit to a list rather than to a pile of coordinates. No library, the same call the charts made.
+- **SVG text is safe here and nowhere else in this app.** The diagram keeps its own aspect ratio, so glyphs are not distorted — unlike every price chart, which stretches with `preserveAspectRatio="none"` and has to carry HTML labels.
+- **Three routing cases, and the middle one was wrong first.** Two boxes in the SAME band have to be joined across, not up and over; the first cut sent `db.js → sessions` climbing out of the band and back down through everything between. And where another box sits between them the line goes UNDER the row, or four stores hanging off one accessor read as a chain passing work along.
+- **Edge labels hug the source box on a plate.** Anchored mid-run they landed on a box title whenever an edge skipped a band; a same-band label with less clear room than it needs is dropped rather than printed across two boxes.
+- **It restates facts that live in code**, which is the `/help` bargain: the 610-credit ceiling, rows-read metering, nothing running after a response, `public/` being unprotectable. If those change, this page changes with them.
+- **Download PNG** goes through the shared `cardshot.js`, so the diagram can be pasted into a document at 1600px.
+- Verified: a route walk (anon and guest redirected, `/architecture.html` funnelled, owner 200), and the drawing itself — 23 boxes each with a title, 22 edges all real paths, nothing off the canvas, **no two boxes overlapping**, no sideways scroll at 1500px or 390px, the console's link and its icon resolving, and the PNG coming back with ink in it.
 
 ## The database page
 **`/database` (admin only, a `Database` row in the console's Data section) lists every table with its exact row and column count (2026-09-15).** `tableStats()` in db.js reads `sqlite_master`, then one **read batch** of `count(*) from pragma_table_info(?)` plus `count(*)` per table — measured 41-152ms for 21 tables and ~397k rows. Views would be listed with columns but not counted (counting a view runs its query); there are none today.
