@@ -96,6 +96,11 @@ const ANALYST_ENABLED = process.env.ENABLE_ANALYST === 'true';
 // 80 (statistics 50 + profile 10 + earnings 20) and prices are 1/symbol —
 // so an archive-priced round affords 7 profiles, and a round that also
 // pulls prices sizes its profile batch down to fit (see liveRefreshOpts).
+// How many quarters to ask /earnings for. Its cost is flat at 20 credits
+// whatever this says, so asking for 8 (as we did until 2026-09-18) simply
+// threw away eighteen quarters of surprise history that the PEAD study
+// needs and that nothing else can reconstruct.
+const EARNINGS_QUARTERS = 40;
 const MAX_PROFILE_FETCHES_PER_CALL = ANALYST_ENABLED ? 4 : 6;
 const PROFILE_CAP_ARCHIVE_ROUND = ANALYST_ENABLED ? 4 : 7;   // 7 x 80 = 560 <= 610
 const CREDITS_PER_MINUTE = 610;
@@ -1771,7 +1776,12 @@ async function fetchProfile(symbol) {
     // Earnings: last reported date + surprise, and the next date (confirmed if the
     // feed lists a future date, else estimated ~91 days after the last report).
     try {
-      const e = await fetchJson(`${TD_BASE}/earnings?symbol=${enc}&outputsize=8&apikey=${API_KEY}`);
+      // 40 asked, ~26 quarters returned (measured on MSFT, 2026-09-18:
+      // 2020-04 to 2026-07) — for the SAME 20 credits as the 8 we used to ask
+      // for. The cap is the provider's, not ours, so asking for more simply
+      // takes what it has; the financial statements are the endpoints with a
+      // hard 6-quarter plan wall, and asking those for more answers 400.
+      const e = await fetchJson(`${TD_BASE}/earnings?symbol=${enc}&outputsize=${EARNINGS_QUARTERS}&apikey=${API_KEY}`);
       const arr = Array.isArray(e?.earnings) ? e.earnings : [];
       const today = new Date().toISOString().slice(0, 10);
       const reported = arr.find((x) => x.eps_actual != null && x.date <= today) || arr.find((x) => x.eps_actual != null);
