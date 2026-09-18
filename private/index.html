@@ -1225,7 +1225,7 @@
       <tr>
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="shortName" title="What a person would call it — shortened from the legal name by rule, and editable by the owner. The full legal name is in the tooltip on each row.">Name</th>
-        <th class="group grp-info" data-group="info" colspan="7">Info</th>
+        <th class="group grp-info" data-group="info" colspan="8">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="3">Scores</th>
         <th class="group grp-act" data-group="act" colspan="12">Advice</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
@@ -1245,6 +1245,7 @@
         <th class="grp-info" data-key="price">Price</th>
         <th class="left grp-info" data-key="sector">Sector</th>
         <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — Twelve Data's own taxonomy, not GICS.">Industry</th>
+        <th class="left grp-info" data-key="exchange" title="Where the stock actually trades, with its MIC and trading currency on the cell. Stored on the profile rather than read from the price call, so it survives a round that prices from the archive. NOTE: the currency here is the TRADING one — an ADR trades in USD while its financials are in the home currency, so this does not tell you what the money columns are denominated in.">Exchange</th>
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
         <th class="grp-info" data-key="newsAge" title="How long ago the latest stored headline was published, and how many this stock has from the last week. Click a cell to read them. A dot means we have not checked this stock yet — headlines are fetched a few stocks at a time.">News</th>
         <th class="grp-info" data-key="nextEarningsDate" ="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
@@ -1615,6 +1616,18 @@
         + (s.latestDate ? ` \u00b7 newest bar ${s.latestDate}` : '')
         + '. A pull can succeed and return no new bar, so this says when we asked.';
       return `<td class="grp-short${stale ? ' warn' : ''}"${attr(title)}>${label}</td>`;
+    }
+
+    // Where it trades. The MIC and the trading currency ride on the tooltip
+    // rather than taking two more columns — they are the detail you want once,
+    // not the thing you scan a table for.
+    function exchangeCell(s) {
+      if (!s.exchange) {
+        return `<td class="name left grp-info na" title="Not recorded yet \u2014 it fills in the next time this stock's profile is pulled.">\u2014</td>`;
+      }
+      const bits = [s.micCode ? `MIC ${s.micCode}` : null,
+                    s.currency ? `trades in ${s.currency}` : null].filter(Boolean);
+      return `<td class="name left grp-info"${attr(bits.join(' \u00b7 '))}>${we(s.exchange)}</td>`;
     }
 
     function earningsCell(s, cacheTitle) {
@@ -2594,7 +2607,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="85">${s.error}</td>
+            <td class="na" colspan="86">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -2618,6 +2631,7 @@
           <td class="grp-info"${attr(liveTitle)}>${price != null ? curSym(s.currency) + price : '—'}</td>
           <td class="name left grp-info"${attr(cacheTitle)}>${s.sector || '—'}</td>
           <td class="name left grp-info industry"${attr(s.industry || cacheTitle)}>${s.industry ? we(s.industry) : '—'}</td>
+          ${exchangeCell(s)}
           <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
           ${newsCell(s)}
           ${earningsCell(s, cacheTitle)}
@@ -2711,7 +2725,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 90;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 91;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -2881,7 +2895,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="87">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="88">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

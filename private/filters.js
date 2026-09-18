@@ -20,7 +20,8 @@
   // score behind it.
   const RATING_FOR = { overallScore: 'overallRating', qualityScore: 'qualityRating', momentumScore: 'momentumRating' };
   const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios']);
-  const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh']);
+  const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh',
+    'exchange']);
   // Filters a screen can set that have no column of their own.
   const SCREEN_ONLY_KEYS = { fresh3mHigh: 'Fresh 3M high', lastSurprise: 'Last surprise %', daysSinceEarnings: 'Days since earnings' };
   // These write the bar's own pickers rather than a column filter of their own.
