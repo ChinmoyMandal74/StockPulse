@@ -278,6 +278,10 @@ const SCHEMA = [
   // both halves are looked up by date. The primary key is (symbol, d), which
   // cannot seek on a date alone.
   `create index if not exists idx_fund_hist_d on fundamentals_history (d)`,
+  // The backtest asks "what was the next earnings date, as of a past day", one
+  // bounded range over d. The primary key is (symbol, d), which cannot seek on
+  // a date alone, so without this the question is a scan of the whole table.
+  `create index if not exists idx_earnings_d on earnings_history (d)`,
   // Password-reset tokens. The token itself is never stored: only its SHA-256,
   // for the same reason sessions and passwords are hashed — a database read
   // must not hand anyone a working reset link.
@@ -1587,6 +1591,20 @@ async function readCloses(symbols, since) {
 // API credits. ~96k rows at 300 symbols; the 50k-row read measures 2.0s.
 // Stamp the symbols a live price pull actually served. Whole-batch, keyed on
 // the primary key, so this is N indexed writes and never a scan.
+// Report dates inside a window, for the backtest's "next earnings as of then".
+// `d` IS the report date (verified: AAPL 2026-07-30), and `reported` is text
+// ("After Hours"), not a flag — so it is deliberately not filtered on.
+async function readEarningsDates(fromD, toD) {
+  await init();
+  const r = await db.execute({
+    sql: 'select symbol, d from earnings_history where d >= ? and d <= ? order by symbol, d',
+    args: [fromD, toD],
+  });
+  const out = {};
+  for (const row of r.rows) (out[row.symbol] ||= []).push(row.d);
+  return out;
+}
+
 async function notePricePull(symbols, at) {
   await init();
   const list = (symbols || []).filter(Boolean);
@@ -2731,7 +2749,7 @@ module.exports = {
   readBars,
   readBarsFor,
   purgeSymbol,
-  markRefreshPrices, readBarsFullFor, notePricePull, readPriceState,
+  markRefreshPrices, readBarsFullFor, notePricePull, readPriceState, readEarningsDates,
   writeNews, readNews, readLatestNews, readNewsState, newsCountsSince,
   symbolsWithData,
   countSymbolRows,

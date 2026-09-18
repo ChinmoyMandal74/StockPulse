@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Advice backtest — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(52, 211, 153, 0.08), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.11), transparent 64%); }
+    .bezel { border-radius: 26px; }
+
+    header.top { display: flex; align-items: center; gap: 14px; padding: 26px 0 18px; flex-wrap: wrap; }
+    header.top h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+    .sub { color: var(--muted); font-size: 13px; margin: 0 0 22px; max-width: 74ch; line-height: 1.6; }
+    .back { margin-left: auto; }
+
+    .panel { padding: 18px 20px; margin-bottom: 18px; }
+    .controls { display: flex; gap: 22px; align-items: flex-end; flex-wrap: wrap; }
+    .fld { display: flex; flex-direction: column; gap: 6px; }
+    .fld label { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+    .fld input[type="date"] {
+      background: var(--surface-2); border: 1px solid var(--hair-2); color: var(--text);
+      border-radius: 10px; padding: 9px 11px; font: 500 13px var(--mono); }
+    .tiers { display: flex; gap: 7px; flex-wrap: wrap; }
+    .tier {
+      border: 1px solid var(--hair-2); background: var(--surface-2); color: var(--muted);
+      border-radius: 999px; padding: 8px 13px; font-size: 12.5px; font-weight: 500;
+      cursor: pointer; transition: all .18s var(--ease); }
+    .tier[aria-pressed="true"] { color: var(--void); font-weight: 600; }
+    .tier[data-t="Strong Buy"][aria-pressed="true"] { background: var(--green); border-color: var(--green); }
+    .tier[data-t="Buy"][aria-pressed="true"] { background: #6ee7b7; border-color: #6ee7b7; }
+    .tier[data-t="Buy with Risk"][aria-pressed="true"] { background: var(--amber); border-color: var(--amber); }
+    .tier[data-t="Hold"][aria-pressed="true"] { background: var(--muted); border-color: var(--muted); }
+    .tier[data-t="Avoid"][aria-pressed="true"] { background: #fda4af; border-color: #fda4af; }
+    .tier[data-t="Sell Immediately"][aria-pressed="true"] { background: var(--red); border-color: var(--red); }
+    .hint { color: var(--faint); font-size: 11.5px; margin-top: 8px; }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .card { padding: 15px 17px; }
+    .card .k { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+    .card .v { font: 600 24px/1.15 var(--mono); margin-top: 7px; font-variant-numeric: tabular-nums; }
+    .card .n { font-size: 11.5px; color: var(--muted); margin-top: 5px; }
+
+    #chartWrap { padding: 18px 20px 12px; margin-bottom: 18px; }
+    .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+    .legend span::before {
+      content: ''; display: inline-block; width: 16px; height: 2px; vertical-align: 4px;
+      margin-right: 7px; background: currentColor; }
+    .lg-p { color: var(--green); } .lg-u { color: var(--accent); } .lg-s { color: var(--faint); }
+    svg.chart { width: 100%; height: 260px; display: block; }
+    .chart .gl { stroke: var(--hair); stroke-width: 1; }
+    .chart .ln { fill: none; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+    .axl { font: 500 10px var(--mono); fill: var(--faint); }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--hair); font-size: 13px; }
+    th { font: 500 10px var(--mono); letter-spacing: .1em; text-transform: uppercase;
+         color: var(--faint); text-align: right; }
+    th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+    td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    td.flag { color: var(--muted); font-size: 12px; }
+    .mk { display: inline-block; margin-left: 6px; font-size: 10px; padding: 1px 6px; border-radius: 999px;
+          border: 1px solid var(--hair-2); color: var(--amber); vertical-align: 1px; }
+
+    .why { padding: 18px 20px; }
+    .why h3 { font-size: 13px; margin: 0 0 10px; font-weight: 600; }
+    .why ul { margin: 0; padding-left: 18px; }
+    .why li { color: var(--muted); font-size: 12.5px; line-height: 1.75; margin-bottom: 7px; }
+    .why b { color: var(--text); font-weight: 600; }
+    .warnbox { border-left: 2px solid var(--amber); padding-left: 12px; margin-top: 12px; }
+
+    .empty { color: var(--muted); padding: 26px; text-align: center; font-size: 13px; }
+    .err { color: var(--red); font-size: 13px; padding: 12px 0; }
+    @media (max-width: 720px) {
+      .page { padding: 0 16px; }
+      .controls { gap: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <main class="page">
+    <header class="top">
+      <h1>Advice backtest</h1>
+      <a class="btn back" href="/admin">Admin</a>
+    </header>
+    <p class="sub">
+      Pick a past date and a set of verdicts. The rules are re-run as they stood on that
+      day, an equal-weight basket is formed from whatever they picked, and it is carried
+      to today against the S&amp;P and against your own universe. Read
+      <b>What this replays and what it invents</b> at the foot before trusting a number.
+    </p>
+
+    <section class="bezel panel"><div class="core panel">
+      <div class="controls">
+        <div class="fld">
+          <label for="d">Start date</label>
+          <input type="date" id="d" />
+        </div>
+        <div class="fld" style="flex:1 1 380px">
+          <label>Verdicts to buy</label>
+          <div class="tiers" id="tiers"></div>
+        </div>
+        <button class="btn btn-accent" id="run">Run backtest</button>
+      </div>
+      <p class="hint" id="hint"></p>
+      <div class="err" id="err" hidden></div>
+    </div></section>
+
+    <div id="out" hidden>
+      <div class="cards" id="cards"></div>
+
+      <section class="bezel" id="chartWrap"><div class="core" style="padding:16px 18px">
+        <div class="legend">
+          <span class="lg-p" id="lgP">Picks</span>
+          <span class="lg-u">Your universe, equal weight</span>
+          <span class="lg-s" id="lgS">S&amp;P 500 (SPY)</span>
+        </div>
+        <svg class="chart" id="chart" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </div></section>
+
+      <section class="bezel" style="margin-bottom:18px"><div class="core" style="padding:6px 18px 4px">
+        <table id="tbl"><thead><tr>
+          <th>Symbol</th><th>Name</th><th>Verdict then</th><th>Rule that fired</th>
+          <th>Price then</th><th>Price now</th><th>Return</th><th>Verdict now</th>
+        </tr></thead><tbody id="tb"></tbody></table>
+        <div class="empty" id="none" hidden>Nothing matched those verdicts on that date.</div>
+      </div></section>
+    </div>
+
+    <section class="bezel why"><div class="core why">
+      <h3>What this replays, and what it invents</h3>
+      <ul id="notes">
+        <li>Run a backtest to see the figures for your chosen window.</li>
+      </ul>
+    </div></section>
+  </main>
+
+  <script src="/action.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
+      (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const TIERS = ['Strong Buy', 'Buy', 'Buy with Risk', 'Hold', 'Avoid', 'Sell Immediately'];
+    const picked = new Set(['Strong Buy']);
+    const pct = (v, dp) => (v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(dp == null ? 1 : dp) + '%');
+    const cls = (v) => (v == null ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : '');
+
+    // Two months back, and never today: the cap is the API's too, but saying it
+    // here means the control cannot offer something the server will refuse.
+    const iso = (d) => d.toISOString().slice(0, 10);
+    const TODAY = new Date();
+    const FLOOR = new Date(Date.now() - 62 * 86400000);
+    const LAST = new Date(Date.now() - 86400000);
+
+    function paintTiers() {
+      $('tiers').innerHTML = TIERS.map((t) =>
+        `<button class="tier" data-t="${we(t)}" aria-pressed="${picked.has(t)}">${we(t)}</button>`).join('');
+      $('tiers').querySelectorAll('.tier').forEach((b) => b.addEventListener('click', () => {
+        const t = b.dataset.t;
+        if (picked.has(t)) picked.delete(t); else picked.add(t);
+        if (!picked.size) picked.add(t);           // never leave it empty
+        paintTiers();
+      }));
+    }
+
+    function line(vals, dates, axisDates, color) {
+      // Values are indexed to 1.0 at the start; every series shares one y-scale
+      // so the comparison is honest rather than three curves each filling the box.
+      return { vals, dates, color };
+    }
+
+    function drawChart(c) {
+      const svg = $('chart');
+      const series = [
+        { v: c.portfolio, d: c.dates, col: 'var(--green)' },
+        { v: c.universe, d: c.universeDates, col: 'var(--accent)' },
+      ];
+      if (c.spy) series.push({ v: c.spy, d: c.spyDates, col: 'var(--faint)' });
+      let lo = Infinity, hi = -Infinity;
+      series.forEach((s) => (s.v || []).forEach((y) => {
+        if (y == null || !isFinite(y)) return;
+        if (y < lo) lo = y; if (y > hi) hi = y;
+      }));
+      if (!isFinite(lo)) { svg.innerHTML = ''; return; }
+      const pad = (hi - lo) * 0.12 || 0.02;
+      lo -= pad; hi += pad;
+      const W = 1000, H = 260, L = 46, R = 8, T = 10, B = 22;
+      const x = (i, n) => L + (n <= 1 ? 0 : (i / (n - 1)) * (W - L - R));
+      const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+      let g = '';
+      // Gridlines at round percentage moves from the start, not round levels.
+      for (let k = 0; k <= 4; k++) {
+        const v = lo + ((hi - lo) * k) / 4;
+        g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" />`;
+        g += `<text class="axl" x="4" y="${(y(v) + 3.5).toFixed(1)}">${((v - 1) * 100).toFixed(0)}%</text>`;
+      }
+      series.forEach((s) => {
+        const v = s.v || [];
+        const pts = v.map((val, i) => (val == null ? null : `${x(i, v.length).toFixed(1)},${y(val).toFixed(1)}`))
+          .filter(Boolean);
+        if (pts.length > 1) g += `<path class="ln" d="M${pts.join('L')}" stroke="${s.col}" />`;
+      });
+      const d0 = c.dates[0], d1 = c.dates[c.dates.length - 1];
+      g += `<text class="axl" x="${L}" y="${H - 6}">${we(d0 || '')}</text>`;
+      g += `<text class="axl" x="${W - R}" y="${H - 6}" text-anchor="end">${we(d1 || '')}</text>`;
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      svg.innerHTML = g;
+    }
+
+    function paint(r) {
+      const s = r.summary;
+      const beatS = s.spy == null ? null : s.portfolio - s.spy;
+      const beatU = s.universe == null ? null : s.portfolio - s.universe;
+      $('cards').innerHTML = [
+        ['Picks', String(s.n), `of ${r.universe} in the universe`],
+        ['Equal-weight return', pct(s.portfolio), `${r.tradingDate} → ${r.today}`],
+        ['vs S&P 500', pct(beatS), s.spy == null ? 'benchmark unavailable' : `S&P ${pct(s.spy)}`],
+        ['vs your universe', pct(beatU), `universe ${pct(s.universe)} · ${s.universeMembers} stocks`],
+        ['Winners', s.n ? `${s.up}/${s.n}` : '—', s.n ? Math.round((s.up / s.n) * 100) + '% positive' : ''],
+      ].map(([k, v, n], i) => {
+        const col = i === 2 ? cls(beatS) : i === 3 ? cls(beatU) : i === 1 ? cls(s.portfolio) : '';
+        return `<div class="bezel card"><div class="core card">
+          <div class="k">${we(k)}</div><div class="v ${col}">${we(v)}</div>
+          <div class="n">${we(n)}</div></div></div>`;
+      }).join('');
+
+      drawChart(r.curve);
+      $('lgP').textContent = `Picks (${s.n}, equal weight)`;
+      $('lgS').textContent = r.notes.spyError ? 'S&P 500 — unavailable' : 'S&P 500 (SPY)';
+
+      $('tb').innerHTML = r.picks.map((p) => `<tr>
+        <td><a class="namelink" href="/stock/${encodeURIComponent(p.symbol)}" target="_blank" rel="noopener">${we(p.symbol)}</a></td>
+        <td>${we(p.name)}${p.reportedInWindow ? '<span class="mk" title="This company reported earnings inside the window, so the fundamentals used to judge it on the start date include a quarter that had not been published then.">reported</span>' : ''}</td>
+        <td>${we(p.action)}</td>
+        <td class="flag">${we(p.flag || '')}</td>
+        <td class="num">${p.priceThen.toFixed(2)}</td>
+        <td class="num">${p.priceNow.toFixed(2)}</td>
+        <td class="num ${cls(p.ret)}">${pct(p.ret)}</td>
+        <td class="flag">${we(p.actionNow || '—')}</td></tr>`).join('');
+      $('none').hidden = r.picks.length > 0;
+      $('out').hidden = false;
+
+      const n = r.notes;
+      const li = [];
+      li.push(`<b>Replayed exactly</b> from archived bars at ${we(r.tradingDate)}: trend, entry, RSI,
+        volume, the 50- and 200-day averages and the 52-week position — the same arithmetic the
+        18-year study uses. ${n.evaluated} stocks were evaluated; ${n.tooShort} were skipped for
+        having under a year of history at that date.`);
+      li.push(`<b>The next earnings date is read from the archive</b>, not borrowed from today, so
+        the "earnings soon" guard sees what it would have seen.`);
+      li.push(`<b>Every fundamental is today's.</b> Recording began ${we(n.fundamentalsFrom)}, so for a
+        date before that there is nothing to read back and current values stand in — along with the
+        company type that follows from them. Fundamentals move in steps at earnings, so this is
+        close to harmless for a company that did not report inside the window.`);
+      if (n.reportedInWindow) {
+        li.push(`<div class="warnbox"><b>${n.reportedInWindow} of the ${r.summary.n} picks reported
+          earnings inside this window</b>, marked <span class="mk">reported</span> in the table. For
+          those, the fundamentals that helped select them include a quarter that had not been
+          published on the start date — a genuine look-ahead. If the result leans on those names,
+          treat it as unproven.</div>`);
+      } else if (r.summary.n) {
+        li.push(`<b>None of the picks reported earnings inside this window</b>, so the imputed
+          fundamentals were almost certainly the same numbers that stood on the start date.`);
+      }
+      if (n.addedAfterStart) {
+        li.push(`<b>${n.addedAfterStart === 1 ? 'One pick has' : n.addedAfterStart + ' picks have'}
+          no bar on the start date itself</b>, and begins from its first later session.`);
+      }
+      li.push(`<b>Stocks added to the universe recently are included</b>, by your choice. Anything you
+        added because it already looked good will flatter a backtest that starts before you added it.`);
+      const nm = r.summary.n === 1 ? '1 name' : `${r.summary.n} names`;
+      li.push(`<b>One window is one observation.</b> ${nm} held for a single stretch
+        cannot separate the rules from luck, however the number comes out — a single name moving
+        hard swings the whole basket. Re-run across several start dates before reading anything into it.`);
+      li.push(`<b>The S&amp;P is the flattering comparison; your universe is the informative one.</b>
+        These are mostly high-beta names, so beating the index may only say the universe rose.
+        Beating your own universe is what would say the verdicts selected.`);
+      li.push(`No costs, no slippage, no dividends, equal weight, never rebalanced.`);
+      if (n.spyError) li.push(`<b>The benchmark did not load:</b> ${we(n.spyError)}.`);
+      $('notes').innerHTML = li.map((x) => `<li>${x}</li>`).join('');
+    }
+
+    async function run() {
+      const d = $('d').value;
+      $('err').hidden = true;
+      if (!d) { $('err').textContent = 'Pick a start date.'; $('err').hidden = false; return; }
+      const btn = $('run');
+      btn.disabled = true; btn.textContent = 'Running…';
+      try {
+        const q = `?date=${encodeURIComponent(d)}&tiers=${encodeURIComponent([...picked].join(','))}`;
+        const res = await fetch('/api/backtest' + q);
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
+        paint(j);
+        history.replaceState(null, '', location.pathname + q);
+      } catch (e) {
+        $('err').textContent = e.message;
+        $('err').hidden = false;
+        $('out').hidden = true;
+      } finally { btn.disabled = false; btn.textContent = 'Run backtest'; }
+    }
+
+    (function boot() {
+      const el = $('d');
+      el.min = iso(FLOOR); el.max = iso(LAST);
+      const qs = new URLSearchParams(location.search);
+      const want = qs.get('date');
+      el.value = want && want >= el.min && want <= el.max ? want : iso(new Date(Date.now() - 30 * 86400000));
+      if (qs.get('tiers')) {
+        picked.clear();
+        qs.get('tiers').split(',').forEach((t) => { if (TIERS.includes(t)) picked.add(t); });
+        if (!picked.size) picked.add('Strong Buy');
+      }
+      $('hint').textContent = `Any trading day from ${el.min} to ${el.max}. `
+        + 'Two months is the limit: further back, almost the whole verdict would be imputed rather than replayed.';
+      paintTiers();
+      $('run').addEventListener('click', run);
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+      if (want) run();
+    })();
+  </script>
+</body>
+</html>

@@ -15,6 +15,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.TWELVE_DATA_API_KEY;
 const TD_BASE = 'https://api.twelvedata.com';
+// The benchmark. Module scope because two features read it now: the refresh
+// (which fetches it live, since it is deliberately never archived) and the
+// backtest's S&P comparison.
+const BENCHMARK = 'SPY';
 // Persistence lives in Turso (libSQL). The accessors below keep the shapes the
 // old flat-file helpers returned, so this file only had to gain `await`s.
 // See db.js and migrate-to-turso.js.
@@ -307,6 +311,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
+                      '/backtest.html': '/backtest',
                       '/architecture.html': '/architecture',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
                       // The public pages have canonical addresses of their own.
@@ -612,6 +617,14 @@ app.get('/architecture', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'architecture');
   res.sendFile(path.join(__dirname, 'private', 'architecture.html'));
+}));
+
+// Admin only: the advice backtest. It is the one page that produces a number
+// that looks like performance, which is exactly why it is not a member surface.
+app.get('/backtest', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'backtest');
+  res.sendFile(path.join(__dirname, 'private', 'backtest.html'));
 }));
 
 app.get('/database', route(async (req, res) => {
@@ -3437,7 +3450,6 @@ async function computeStocks(asOf, opts = {}) {
 
   // Fetch the S&P 500 (SPY) alongside the universe so we can compute relative
   // strength, without adding it to any portfolio or the output rows.
-  const BENCHMARK = 'SPY';
   const fetchSymbols = symbols.includes(BENCHMARK) ? symbols : [...symbols, BENCHMARK];
   const T = phaseTimer();
   const names = await readNames();
@@ -4025,6 +4037,217 @@ async function persistBars(symbols, series) {
     inserted += await store.upsertBars(slice);
   }
   return { inserted, rewritten, symbols: have.length };
+}
+
+
+// ============================================================================
+// The advice backtest
+// ============================================================================
+// "On this day a month ago, which stocks did the rules call a Strong Buy, and
+// what would an equal-weight basket of them have done since?"
+//
+// What is REPLAYED and what is IMPUTED, because the difference is the whole
+// honesty of this page and it is repeated on screen:
+//   replayed exactly  trend, entry, RSI, volume, the moving averages, the 52-week
+//                     position \u2014 every one derived from archived bars at that date,
+//                     the same arithmetic action-backtest.js has used for 18 years
+//   from the archive  the next earnings date as of then, read from earnings_history
+//                     rather than borrowed from today
+//   IMPUTED           every fundamental, and the company type that follows from it.
+//                     fundamentals_history begins 2026-08-30, so before that there is
+//                     nothing to read and today's values stand in. They move in steps
+//                     at earnings, so this is harmless on a stock that did not report
+//                     inside the window and a genuine look-ahead on one that did \u2014
+//                     which is why the count of those is reported with the result.
+//
+// Two months is the cap, set in the UI and enforced here: past that the share of
+// the verdict that is imputed grows without bound and the number stops meaning
+// anything.
+const BT_MAX_BACK_DAYS = 62;
+// When fundamentals_history begins. Anything before this has no recorded
+// fundamentals at all, which the page says in as many words.
+const FUND_HISTORY_FROM = '2026-08-30';
+// One window covers every start date the page can ask for, so changing the date
+// or the tiers re-runs against bars already in memory. At 1,000 stocks that read
+// is ~650k rows and must not happen per click.
+const BT_WINDOW_DAYS = 530;
+const BT_BAR_TTL_MS = 10 * 60 * 1000;
+const BT_SPY_TTL_MS = 30 * 60 * 1000;
+let btBars = null;      // { at, since, bars }
+let btSpy = null;       // { at, values }
+
+async function btLoadBars(universe) {
+  if (btBars && Date.now() - btBars.at < BT_BAR_TTL_MS && btBars.n === universe.length) {
+    return btBars.bars;
+  }
+  const since = new Date(Date.now() - BT_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
+  const bars = await store.readBarsFullFor(universe, since);
+  btBars = { at: Date.now(), since, bars, n: universe.length };
+  return bars;
+}
+
+// SPY is deliberately never archived (it belongs to no portfolio and the orphan
+// sweep would collect it), so the benchmark is fetched and held in memory. One
+// credit, and only when the cache is cold.
+async function btLoadSpy() {
+  if (btSpy && Date.now() - btSpy.at < BT_SPY_TTL_MS) return btSpy.values;
+  const raw = await fetchJson(
+    `${TD_BASE}/time_series?symbol=${BENCHMARK}&interval=1day&outputsize=400&apikey=${API_KEY}`);
+  if (!raw || raw.status === 'error' || !Array.isArray(raw.values)) throw new Error('no benchmark data');
+  const values = raw.values.slice().reverse()       // oldest-first, like the archive rows
+    .map((b) => ({ d: String(b.datetime).slice(0, 10), c: parseFloat(b.close) }))
+    .filter((b) => isFinite(b.c) && b.c > 0);
+  btSpy = { at: Date.now(), values };
+  return values;
+}
+
+// An equal-weight, buy-and-hold curve: every name gets the same dollar at the
+// start and nothing is rebalanced. mean(close / close_at_start) per session,
+// over the union of the dates the members actually traded \u2014 the convention
+// /api/basket already uses, so the two pages cannot disagree.
+function btCurve(series, from) {
+  const axis = new Set();
+  const start = {};
+  for (const sym of Object.keys(series)) {
+    const rows = series[sym];
+    const s0 = rows.find((r) => r.d >= from);
+    if (!s0) continue;
+    start[sym] = s0.c;
+    for (const r of rows) if (r.d >= from) axis.add(r.d);
+  }
+  const dates = [...axis].sort();
+  const held = Object.keys(start);
+  const out = [];
+  for (const d of dates) {
+    let sum = 0, n = 0;
+    for (const sym of held) {
+      const rows = series[sym];
+      // the last close on or before d, so a missing session holds its level
+      let v = null;
+      for (let i = rows.length - 1; i >= 0; i--) if (rows[i].d <= d) { v = rows[i].c; break; }
+      if (v == null) continue;
+      sum += v / start[sym]; n++;
+    }
+    out.push(n ? sum / n : null);
+  }
+  return { dates, values: out, members: held.length };
+}
+
+// The engine's inputs as they stood at index i of this symbol's closes. Exactly
+// action-backtest.js's row builder \u2014 the same fields, the same arithmetic \u2014 so
+// the page and the 18-year study cannot drift apart.
+// The RSI the screener shows, at an arbitrary index. Cached per symbol per run,
+// since it is O(n) and the loop asks for one index out of the same series.
+const btRsiCache = new Map();
+function rsiAt(rowsOldestFirst, i) {
+  let ser = btRsiCache.get(rowsOldestFirst);
+  if (!ser) {
+    ser = Momentum.rsiSeriesAt(
+      rowsOldestFirst.slice().reverse().map((r) => ({ close: Number(r.close) })), 14)
+      .slice().reverse();                 // back to oldest-first, aligned with i
+    btRsiCache.set(rowsOldestFirst, ser);
+  }
+  return ser[i] == null ? null : ser[i];
+}
+
+function btRowAt(closes, highs, vols, i) {
+  const c = closes[i];
+  if (!(c > 0)) return null;
+  const sma = (n) => {
+    if (i + 1 < n) return null;
+    let t = 0;
+    for (let k = i - n + 1; k <= i; k++) t += closes[k];
+    return t / n;
+  };
+  const s200 = sma(200), s50 = sma(50);
+  let hi = 0, lo = Infinity;
+  for (let k = Math.max(0, i - 251); k <= i; k++) {
+    if (highs[k] > hi) hi = highs[k];
+    if (closes[k] < lo) lo = closes[k];
+  }
+  let vsum = 0, vn = 0;
+  for (let k = Math.max(0, i - 20); k < i; k++) { if (vols[k] > 0) { vsum += vols[k]; vn++; } }
+  const avgVol = vn ? vsum / vn : null;
+  const back = (n) => (i >= n && closes[i - n] > 0 ? (c / closes[i - n] - 1) * 100 : null);
+  return {
+    price: c,
+    vs200ma: s200 > 0 ? (c / s200 - 1) * 100 : null,
+    vs50ma: s50 > 0 ? (c / s50 - 1) * 100 : null,
+    oneMonthPct: back(21), threeMonthPct: back(63), sixMonthPct: back(126),
+    oneYearPct: back(252), oneWeekPct: back(5), todayPct: back(1),
+    pctFromHigh: hi > 0 ? (c / hi - 1) * 100 : null,
+    pctFromLow: lo < Infinity && lo > 0 ? (c / lo - 1) * 100 : null,
+    range52Pos: hi > lo ? ((c - lo) / (hi - lo)) * 100 : null,
+    above200: s200 > 0 ? c > s200 : null,
+    historyDays: i + 1,
+    volX: avgVol > 0 && vols[i] > 0 ? vols[i] / avgVol : null,
+    volTrend: avgVol > 0 && vols[i] > 0 ? (vols[i] / avgVol - 1) * 100 : null,
+  };
+}
+
+// Run the whole thing. Pure over what it is handed, so it is testable without a
+// server and without the network.
+function btRun(opts) {
+  const { bars, snapshot, from, tiers, earnings } = opts;
+  btRsiCache.clear();
+  const want = new Set(tiers);
+  const byS = new Map((snapshot || []).map((x) => [x.symbol, x]));
+  const picks = [];
+  const heldSeries = {};
+  const allSeries = {};
+  let evaluated = 0, tooShort = 0, noFund = 0;
+
+  for (const sym of Object.keys(bars)) {
+    const rows = (bars[sym] || []).slice().reverse();   // archive is newest-first
+    btRsiCache.delete(rows);
+    if (!rows.length) continue;
+    const dates = rows.map((r) => String(r.datetime).slice(0, 10));
+    const closes = rows.map((r) => Number(r.close));
+    const highs = rows.map((r) => Number(r.high) || Number(r.close));
+    const vols = rows.map((r) => Number(r.volume) || 0);
+    // the session on or before the chosen date
+    let i = -1;
+    for (let k = dates.length - 1; k >= 0; k--) if (dates[k] <= from) { i = k; break; }
+    if (i < 0) continue;
+    const forward = [];
+    for (let k = i; k < dates.length; k++) forward.push({ d: dates[k], c: closes[k] });
+    if (forward.length > 1) allSeries[sym] = forward;
+
+    if (i < 252) { tooShort++; continue; }             // no 52-week window yet
+    const tech = btRowAt(closes, highs, vols, i);
+    if (!tech) continue;
+    const today = byS.get(sym) || {};
+    if (today.qualityRating == null && today.forwardPe == null) noFund++;
+    // TODAY's fundamentals, THAT DATE's technicals. Starting from the live row
+    // rather than listing the fundamental fields means a field added to the
+    // engine later is carried here with no edit \u2014 and it is exactly what
+    // "fundamentals filled forward" means.
+    const nextEarn = (earnings[sym] || []).find((d) => d > from) || null;
+    const row = { ...today, ...tech, symbol: sym, latestDate: dates[i],
+      // As of then: the next report that actually happened after that date.
+      // Falling back to today's only when none has yet.
+      nextEarningsDate: nextEarn || today.nextEarningsDate || null,
+      // Momentum.rsiSeriesAt is the app's own Wilder RSI, fed newest-first the
+      // way it expects. A second implementation here would drift from the
+      // column within a week — the reason indicators.js exists at all.
+      rsi: rsiAt(rows, i) };
+    // ACTION_CFG is the resolved Balanced profile, the same object every other
+    // surface scores against — so a verdict here means what the column means.
+    const v = Action.evaluate(row, ACTION_CFG);
+    evaluated++;
+    if (!want.has(v.action)) continue;
+    picks.push({ symbol: sym, name: today.shortName || today.name || sym,
+      action: v.action, flag: v.flag, type: v.type,
+      priceThen: closes[i], dateThen: dates[i],
+      priceNow: closes[closes.length - 1], lastDate: dates[dates.length - 1],
+      ret: (closes[closes.length - 1] / closes[i] - 1) * 100,
+      reportedInWindow: (earnings[sym] || []).some((d) => d > from),
+      actionNow: today.action || null });
+    if (forward.length > 1) heldSeries[sym] = forward;
+  }
+
+  picks.sort((a, b) => b.ret - a.ret);
+  return { picks, heldSeries, allSeries, evaluated, tooShort, noFund };
 }
 
 // ============================================================================
@@ -6254,6 +6477,81 @@ app.get('/api/turso-usage', requireAdmin, route(async (req, res) => {
     // Never fail the page over a third-party status call.
     res.json({ configured: !!(TURSO_API_TOKEN && TURSO_ORG), error: err.message });
   }
+}));
+
+
+// The backtest. Admin only: it is a research surface, it reads the whole bar
+// window, and it is the one page here that produces a number that looks like
+// performance.
+app.get('/api/backtest', requireAdmin, route(async (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const asked = String(req.query.date || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asked)) return res.status(400).json({ error: 'A date is required.' });
+  const floor = new Date(Date.now() - BT_MAX_BACK_DAYS * 86400000).toISOString().slice(0, 10);
+  if (asked < floor) {
+    return res.status(400).json({ error: `The earliest start date is ${floor} — two months. ` +
+      'Further back, almost the whole verdict would be imputed rather than replayed.' });
+  }
+  if (asked >= today) return res.status(400).json({ error: 'Pick a date before today.' });
+
+  const tiers = String(req.query.tiers || 'Strong Buy').split(',')
+    .map((x) => x.trim()).filter((x) => Action.ACTIONS.indexOf(x) >= 0);
+  if (!tiers.length) return res.status(400).json({ error: 'Pick at least one verdict.' });
+
+  const universe = await store.readUniverse();
+  const bars = await btLoadBars(universe);
+  const snap = await readSnapshot();
+  const stocks = (snap && snap.stocks) || [];
+  scoreActionInto(stocks);
+  await stampShortNames(stocks);
+  const earnings = await store.readEarningsDates(asked, today);
+
+  const r = btRun({ bars, snapshot: stocks, from: asked, tiers, earnings });
+  const held = btCurve(r.heldSeries, asked);
+  const all = btCurve(r.allSeries, asked);
+
+  // The benchmark is a nicety, not a dependency: if the provider is having one
+  // of its days the rest of the answer still stands.
+  let spy = null, spyError = null;
+  try {
+    const sv = await btLoadSpy();
+    const from = sv.find((x) => x.d >= asked);
+    if (from) {
+      const rows = sv.filter((x) => x.d >= asked);
+      spy = { dates: rows.map((x) => x.d), values: rows.map((x) => x.c / from.c) };
+    }
+  } catch (e) { spyError = netReason(e); }
+
+  const last = (a) => (a && a.length ? a[a.length - 1] : null);
+  const pct = (v) => (v == null ? null : (v - 1) * 100);
+  const addedAfter = r.picks.filter((x) => x.dateThen > asked).length;
+  res.json({
+    date: asked, tradingDate: held.dates[0] || asked, today,
+    tiers, universe: universe.length,
+    picks: r.picks,
+    curve: { dates: held.dates, portfolio: held.values,
+             universe: all.values, universeDates: all.dates,
+             spy: spy ? spy.values : null, spyDates: spy ? spy.dates : null },
+    summary: {
+      n: r.picks.length,
+      portfolio: pct(last(held.values)),
+      universe: pct(last(all.values)),
+      spy: spy ? pct(last(spy.values)) : null,
+      up: r.picks.filter((x) => x.ret > 0).length,
+      best: r.picks[0] || null,
+      worst: r.picks[r.picks.length - 1] || null,
+      universeMembers: all.members,
+    },
+    notes: {
+      evaluated: r.evaluated,
+      tooShort: r.tooShort,
+      noFundamentals: r.noFund,
+      reportedInWindow: r.picks.filter((x) => x.reportedInWindow).length,
+      addedAfterStart: addedAfter,
+      fundamentalsFrom: FUND_HISTORY_FROM,
+      spyError,
+    },
+  });
 }));
 
 app.get('/api/db-stats', requireAdmin, route(async (req, res) => {
