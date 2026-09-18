@@ -78,9 +78,17 @@
       border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
       color: var(--text); font: 500 13px var(--sans);
     }
-    input[type="text"] { font-family: var(--mono); text-transform: uppercase; width: 120px; }
+    /* Scoped to the TICKER box. As a bare input[type=text] rule this also
+       uppercased and shrank the bulk portfolio name -- the third time today a
+       broad selector written for one element caught a later one. */
+    #sym { font-family: var(--mono); text-transform: uppercase; width: 120px; }
+    #bulkPf { width: 260px; }
     select { cursor: pointer; }
     input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .form textarea {
+      width: 100%; background: var(--surface-2); border: 1px solid var(--hair-2); color: var(--text);
+      border-radius: 10px; padding: 9px 11px; font: 400 12.5px/1.6 var(--mono); resize: vertical; }
+    .form textarea:focus { outline: 1px solid var(--accent); outline-offset: 0; }
     .said { margin: 9px 0 0; font-size: 12px; color: var(--muted); min-height: 1.2em; }
     .said.bad { color: var(--red); }
     .said.good { color: var(--green); }
@@ -224,6 +232,23 @@
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>Add</button>
           </div>
           <p class="said" id="addSaid"></p>
+        </div>
+
+        <div class="form">
+          <span class="lbl">Add many at once</span>
+          <textarea id="bulkText" rows="3" spellcheck="false" autocomplete="off"
+            aria-label="Paste tickers"
+            placeholder="Paste tickers &mdash; commas, spaces or one per line.  AAPL, MSFT NVDA&#10;GOOGL"></textarea>
+          <div class="line" style="margin-top:8px">
+            <input type="text" id="bulkPf" maxlength="40" autocomplete="off" list="bulkPfList"
+              placeholder="Portfolio for the batch (optional)" aria-label="Portfolio for this batch" />
+            <datalist id="bulkPfList"></datalist>
+            <button class="btn" id="bulkCheck">Check</button>
+            <button class="btn btn-primary" id="bulkGo" disabled>
+              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>Add them</button>
+          </div>
+          <p class="said" id="bulkSaid">Adding costs no API credits and pulls nothing &mdash; the data
+            arrives with Fill missing or the nightly gap fill.</p>
         </div>
 
         <div class="form">
@@ -435,6 +460,10 @@
       // Every symbol the screener covers, once, alphabetically — the per-stock
       // pages need a name to open and this page has no "top of the table" the
       // screener's own menu could borrow.
+      // The bulk box takes a free-typed name (it can create one), so this is a
+      // datalist of what exists rather than a closed list.
+      const dl = $('bulkPfList');
+      if (dl) dl.innerHTML = names.map((n) => `<option value="${we(n)}"></option>`).join('');
       const syms = [...new Set(universe.concat(names.flatMap((n) => portfolios[n] || [])))].sort();
       $('symPick').innerHTML = syms.map((s) => `<option value="${we(s)}">${we(s)}</option>`).join('')
         || '<option value="">No tickers yet</option>';
@@ -475,6 +504,106 @@
         $('addBtn').disabled = false;
       }
     }
+    // ---- paste a batch ------------------------------------------------------
+    // Accept what a person actually has: a spreadsheet column, a comma list, a
+    // sentence with $TICKERs in it. Splitting on anything that is not part of a
+    // symbol is more forgiving than asking for a format.
+    const BULK_MAX = 500;
+    function parseTickers(text) {
+      return [...new Set(String(text || '')
+        .toUpperCase()
+        .split(/[^A-Z0-9./-]+/)
+        .map((x) => x.replace(/^\$+/, '').replace(/\//g, '.').replace(/[.\-]+$/, ''))
+        .filter(Boolean))];
+    }
+    const SYM_OK = /^[A-Z0-9][A-Z0-9.\-]{0,11}$/;
+
+    let bulkPlan = null;
+    // The listing check is what makes this safe: free text splits into
+    // symbol-shaped tokens -- "not a ticker!" becomes NOT, A and TICKER, and
+    // A is Agilent -- so shape alone cannot tell a batch from a sentence.
+    async function checkBulk() {
+      const all = parseTickers($('bulkText').value);
+      const known = new Set(universe || []);
+      const good = all.filter((x) => SYM_OK.test(x));
+      const bad = all.filter((x) => !SYM_OK.test(x));
+      const fresh = good.filter((x) => !known.has(x));
+      const dupe = good.filter((x) => known.has(x));
+      const name = $('bulkPf').value.trim();
+      const existing = Object.keys(portfolios || {})
+        .find((n) => n.toLowerCase() === name.toLowerCase());
+      bulkPlan = { fresh, dupe, bad, name, existing, over: fresh.length > BULK_MAX };
+
+      if (!all.length) { say('bulkSaid', 'Nothing pasted yet.'); $('bulkGo').disabled = true; return; }
+      const bits = [];
+      bits.push(`${fresh.length} new`);
+      if (dupe.length) bits.push(`${dupe.length} already in the screener`);
+      if (bad.length) bits.push(`${bad.length} not a symbol (${bad.slice(0, 4).join(', ')}${bad.length > 4 ? '\u2026' : ''})`);
+      if (name) bits.push(existing ? `into \u201c${existing}\u201d` : `into a NEW portfolio \u201c${name}\u201d`);
+      if (bulkPlan.over) {
+        say('bulkSaid', `${fresh.length} is over the ${BULK_MAX} limit for one batch \u2014 split it.`, 'bad');
+        $('bulkGo').disabled = true; return;
+      }
+      const cost = fresh.length * 81;
+      say('bulkSaid', bits.join(' \u00b7 ') + '. Checking the listing\u2026');
+      // Advisory, never blocking: a legitimate foreign listing may simply not
+      // be in NASDAQ's file, so this warns rather than refuses.
+      let unlisted = null;
+      try {
+        const chk = await api('POST', '/api/universe/check', { symbols: good });
+        unlisted = chk.unlisted;
+        bulkPlan.unlisted = unlisted;
+      } catch { /* advisory only */ }
+      if (unlisted && unlisted.length) {
+        bits.push(`<b>${unlisted.length} not in the NASDAQ listing</b> `
+          + `(${unlisted.slice(0, 6).join(', ')}${unlisted.length > 6 ? '\u2026' : ''}) \u2014 check these are real`);
+      }
+      const el = $('bulkSaid');
+      el.innerHTML = bits.join(' \u00b7 ')
+        + (fresh.length ? `. Costs nothing now; about ${cost.toLocaleString()} credits and `
+            + `${Math.max(1, Math.ceil(fresh.length / 7))} min of Fill missing to pull their data.` : '.');
+      el.className = 'said' + ((unlisted && unlisted.length) || !fresh.length ? ' bad' : '');
+      $('bulkGo').disabled = !fresh.length && !dupe.length;
+    }
+
+    async function addBulk() {
+      await checkBulk();
+      if (!bulkPlan || bulkPlan.over) return;
+      const syms = [...bulkPlan.fresh, ...bulkPlan.dupe];
+      if (!syms.length) return;
+      // Creating a portfolio is deliberate, so it is asked for out loud.
+      if (bulkPlan.name && !bulkPlan.existing
+        && !confirm(`Create a new portfolio \u201c${bulkPlan.name}\u201d and put ${syms.length} stock(s) in it?`)) return;
+      $('bulkGo').disabled = true;
+      say('bulkSaid', 'Adding\u2026');
+      try {
+        const r = await api('POST', '/api/universe/bulk', {
+          symbols: syms,
+          portfolio: bulkPlan.name || undefined,
+          createPortfolio: !!(bulkPlan.name && !bulkPlan.existing),
+        });
+        portfolios = r.portfolios || portfolios;
+        universe = r.universe || universe;
+        paintPortfolios();
+        $('bulkText').value = '';
+        const added = (r.added || []).length;
+        const already = (r.already || []).length;
+        const where = r.createdPortfolio ? ` into the new portfolio \u201c${r.createdPortfolio}\u201d`
+          : r.portfolio ? ` into \u201c${r.portfolio}\u201d` : ' to the screener';
+        say('bulkSaid', `Added ${added}${where}`
+          + (already ? `, ${already} were already there` : '')
+          + ((r.invalid || []).length ? `, ${r.invalid.length} refused` : '')
+          + '. They have no prices or fundamentals yet \u2014 run Fill missing to pull them.', 'good');
+        bulkPlan = null;
+      } catch (err) {
+        say('bulkSaid', err.message, 'bad');
+      } finally { $('bulkGo').disabled = false; }
+    }
+    $('bulkCheck').addEventListener('click', checkBulk);
+    $('bulkText').addEventListener('input', () => { $('bulkGo').disabled = true; });
+    $('bulkPf').addEventListener('input', () => { if (bulkPlan) checkBulk(); });
+    $('bulkGo').addEventListener('click', addBulk);
+
     $('addBtn').addEventListener('click', addTicker);
     $('sym').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTicker(); });
 

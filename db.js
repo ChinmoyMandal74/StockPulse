@@ -1441,6 +1441,25 @@ async function writeNasdaqExchange(exchange, rows) {
   return rows.length;
 }
 
+// Which of these symbols the NASDAQ listing knows. `symbol` is the primary
+// key, so this is N seeks and never a scan -- it exists so a pasted batch can
+// be checked BEFORE it is added, since free text splits into plausible-looking
+// tickers ("not a ticker!" becomes NOT, A, TICKER, and A is Agilent).
+async function knownListings(symbols) {
+  await init();
+  const syms = [...new Set((symbols || []).map((x) => String(x).toUpperCase()))];
+  const out = new Set();
+  for (let i = 0; i < syms.length; i += 200) {
+    const chunk = syms.slice(i, i + 200);
+    const r = await db.execute({
+      sql: `select symbol from nasdaq_listings where symbol in (${chunk.map(() => '?').join(',')})`,
+      args: chunk,
+    });
+    for (const row of r.rows) out.add(row.symbol);
+  }
+  return out;
+}
+
 async function readNasdaqListings() {
   await init();
   // `url` is stored but not selected: every one of the 7,136 is exactly
@@ -2887,6 +2906,7 @@ module.exports = {
   purgeSymbol,
   markRefreshPrices, readBarsFullFor, notePricePull, readPriceState, readEarningsDates,
   barsSpan, coverageRollups,
+  knownListings,
   readFundamentalsAsOf,
   readFundamentalsFirstSeen,
   mergeProfileFields,

@@ -3115,6 +3115,26 @@ const cleanListingName = (n) => String(n || '').trim()
   .replace(/\s+(Common Stock|Capital Stock|Ordinary Shares|Common Shares|Class [A-Z] Ordinary Shares)$/i, '')
   .trim() || null;
 
+// Check a pasted batch before adding it. Costs no API credits and changes
+// nothing: it says which symbols the screener already has and which the NASDAQ
+// listing has never heard of, because free text splits into symbol-shaped
+// tokens and "not a ticker!" would otherwise become three stocks.
+app.post('/api/universe/check', requireAdmin, route(async (req, res) => {
+  const raw = Array.isArray(req.body?.symbols) ? req.body.symbols : [];
+  if (raw.length > BULK_ADD_MAX * 2) return res.status(400).json({ error: 'Too many to check.' });
+  const syms = [...new Set(raw.map((x) => nasdaqToSymbol(x)).filter((x) => SYMBOL_RE.test(x)))];
+  let known = new Set();
+  try { known = await store.knownListings(syms); } catch { known = null; }
+  const have = new Set(await readUniverse());
+  res.json({
+    inUniverse: syms.filter((x) => have.has(x)),
+    // null when the listing table is empty or unreadable, so the page can say
+    // "not checked" rather than flagging everything as unknown.
+    unlisted: known ? syms.filter((x) => !known.has(x)) : null,
+    listingRows: known ? known.size : null,
+  });
+}));
+
 app.post('/api/universe/bulk', requireAdmin, route(async (req, res) => {
   const raw = Array.isArray(req.body?.symbols) ? req.body.symbols : [];
   if (!raw.length) return res.status(400).json({ error: 'No symbols given.' });
@@ -3133,11 +3153,30 @@ app.post('/api/universe/bulk', requireAdmin, route(async (req, res) => {
   // Read BEFORE the portfolio write: writePortfolios() records members in the
   // universe, so reading after it would report every new stock as already there.
   const before = new Set(await readUniverse());
+  let createdPortfolio = null;
+  let target = pname;
   if (pname) {
     const p = await readPortfolios();
-    if (!(pname in p)) return res.status(404).json({ error: 'Portfolio not found.' });
-    p[pname] = [...p[pname], ...wanted.filter((sym) => !p[pname].includes(sym))];
+    // Case-INSENSITIVE, matching POST /api/portfolios: typing "semis" when
+    // "Semis" exists must land in the existing list, not make a second one.
+    const existing = Object.keys(p).find((n) => n.toLowerCase() === pname.toLowerCase());
+    if (existing) target = existing;
+    else {
+      // Creating one takes an EXPLICIT flag. A batch is pasted, and a typo in
+      // the portfolio name would otherwise leave a junk list behind with the
+      // whole batch quietly inside it. The UI confirms before sending this;
+      // a scripted call has to mean it.
+      if (!req.body?.createPortfolio) {
+        return res.status(404).json({ error: `No portfolio called "${pname}". `
+          + 'Send createPortfolio: true to make one.', unknownPortfolio: pname });
+      }
+      if (pname.length > 40) return res.status(400).json({ error: 'Name too long (max 40 chars).' });
+      p[pname] = [];
+      createdPortfolio = pname;
+    }
+    p[target] = [...p[target], ...wanted.filter((sym) => !p[target].includes(sym))];
     await writePortfolios(p);
+    if (createdPortfolio) logAct(req, 'portfolio', 'create:' + createdPortfolio.slice(0, 40));
   }
   // New = not in the screener before this request (the portfolio write may
   // already have inserted them, so the insert's own count cannot say).
@@ -3161,7 +3200,10 @@ app.post('/api/universe/bulk', requireAdmin, route(async (req, res) => {
     }
   }
   logAct(req, 'portfolio', (`bulk-add:+${added.length}` + (pname ? '>' + pname : '')).slice(0, 80));
-  res.json(await portfolioAnswer({ added, already, invalid }));
+  // `createdPortfolio` and `target` so the caller can say what actually
+  // happened -- "added to Semis" reads differently from "created Semis".
+  res.json(await portfolioAnswer({ added, already, invalid,
+    portfolio: target || null, createdPortfolio }));
 }));
 
 // Add a stock to the screener, optionally into a portfolio as well.
