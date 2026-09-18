@@ -468,6 +468,14 @@ const SCHEMA = [
 
 // Columns added after a table shipped. SQLite has no "add column if not
 // exists", so each is attempted and a duplicate-column error is ignored.
+// `alter table X add column Y ...` -> { table, column }, so a boot can ask
+// which columns exist rather than attempting every ALTER and catching the
+// failure. Anything it cannot parse falls through and is attempted as before.
+function parseAddColumn(stmt) {
+  const m = /^\s*alter\s+table\s+([A-Za-z0-9_]+)\s+add\s+column\s+([A-Za-z0-9_]+)/i.exec(stmt || '');
+  return m ? { table: m[1], column: m[2] } : null;
+}
+
 const ADDED_COLUMNS = [
   'alter table visitors add column user_email text',
   // How many symbols of this run have had their prices pulled live. Prices are
@@ -539,21 +547,49 @@ let ready = null;
 async function init() {
   if (!ready) {
     ready = (async () => {
-      for (const stmt of SCHEMA) {
-        try {
-          await db.execute(stmt);
-        } catch (err) {
-          // Cold instances race any drop-then-create in the schema: Vercel
-          // runs ONE request per instance, so a page load fans several
-          // requests onto several instances initializing at the same moment,
-          // and every loser's CREATE VIEW sees the winner's — same code,
-          // same definition, so "already exists" IS the desired state. Took
-          // /api/stocks down on 2026-09-14: every losing instance kept its
-          // rejected init and answered 500 until recycled.
-          if (!/already exists/i.test(err.message || '')) throw err;
+      // ONE round trip, not 45. Measured against the live database on
+      // 2026-09-18: 46 statements sequentially is 1.72s, the same 46 in a
+      // batch is 0.04s — and this runs on EVERY cold start, before the
+      // instance can answer anything. It is why a second tab crawled while a
+      // Fill missing held the warm instance.
+      //
+      // Safe to batch because every statement is `if not exists`, checked by
+      // a test: none of them can raise the "already exists" the old loop
+      // tolerated. The fallback below keeps that tolerance anyway, because the
+      // race it was written for is real — cold instances initialise
+      // simultaneously, and on 2026-09-14 every loser cached its rejected init
+      // and served 500s until it was recycled.
+      try {
+        await db.batch(SCHEMA, 'write');
+      } catch (err) {
+        for (const stmt of SCHEMA) {
+          try {
+            await db.execute(stmt);
+          } catch (e2) {
+            if (!/already exists/i.test(e2.message || '')) throw e2;
+          }
         }
       }
-      for (const stmt of ADDED_COLUMNS) {
+      // These CANNOT be batched: `alter table add column` throws "duplicate
+      // column" on every boot after the first, and a batch is all-or-nothing.
+      // 36 guaranteed failures a cold start. Ask what the columns ARE instead,
+      // in one batch, and run only what is genuinely missing — normally none.
+      const wanted = ADDED_COLUMNS.map(parseAddColumn).filter(Boolean);
+      const tables = [...new Set(wanted.map((x) => x.table))];
+      const have = new Set();
+      if (tables.length) {
+        const info = await db.batch(tables.map((t) => ({
+          sql: 'select name from pragma_table_info(?)', args: [t],
+        })), 'read');
+        tables.forEach((t, i) => {
+          for (const row of info[i].rows) have.add(t + '.' + row.name);
+        });
+      }
+      const missing = ADDED_COLUMNS.filter((stmt, i) => {
+        const w = wanted[i];
+        return !w || !have.has(w.table + '.' + w.column);
+      });
+      for (const stmt of missing) {
         try {
           await db.execute(stmt);
         } catch (err) {
