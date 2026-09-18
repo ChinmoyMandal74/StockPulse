@@ -983,6 +983,37 @@ async function readProfile(symbol) {
   }
 }
 
+// Merge a few fields into stored profiles WITHOUT touching fetched_at.
+//
+// Deliberately not a readProfiles/writeProfiles round trip: readProfiles
+// DELETES `fetchedAt` when the column is 0 -- the "the pull was refused, retry
+// me" sentinel -- and writeProfiles then stores null rather than 0, which would
+// hide that symbol from both the rotation (it picks among fetched_at > 0) and
+// from profileGaps's `failed` test. Only the blob is rewritten here, so the
+// timestamps mean exactly what they meant before.
+async function mergeProfileFields(patch) {
+  await init();
+  const syms = Object.keys(patch || {});
+  if (!syms.length) return 0;
+  let done = 0;
+  for (let i = 0; i < syms.length; i += 100) {
+    const chunk = syms.slice(i, i + 100);
+    const r = await db.execute({
+      sql: `select symbol, data from profiles where symbol in (${chunk.map(() => '?').join(',')})`,
+      args: chunk,
+    });
+    const stmts = [];
+    for (const row of r.rows) {
+      let obj;
+      try { obj = JSON.parse(row.data); } catch { continue; }
+      stmts.push({ sql: 'update profiles set data = ? where symbol = ?',
+        args: [JSON.stringify({ ...obj, ...patch[row.symbol] }), row.symbol] });
+    }
+    if (stmts.length) { await db.batch(stmts, 'write'); done += stmts.length; }
+  }
+  return done;
+}
+
 async function readProfiles() {
   await init();
   const r = await db.execute('select symbol, data, fetched_at from profiles');
@@ -2806,6 +2837,7 @@ module.exports = {
   markRefreshPrices, readBarsFullFor, notePricePull, readPriceState, readEarningsDates,
   readFundamentalsAsOf,
   readFundamentalsFirstSeen,
+  mergeProfileFields,
   writeNews, readNews, readLatestNews, readNewsState, newsCountsSince,
   symbolsWithData,
   countSymbolRows,

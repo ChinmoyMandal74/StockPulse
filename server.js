@@ -1581,6 +1581,20 @@ function emptyProfile() {
   return {
     sector: null,
     industry: null,
+    // Where it trades, and in what. These were being read off the PRICE call's
+    // meta block, which only exists when a symbol was priced live — so every
+    // archive-priced round (rounds 2+ of a Refresh all) wrote a snapshot with
+    // all three null, and after a full sweep the whole universe had lost them.
+    // They belong with sector and industry: per-symbol facts, stored once,
+    // surviving every round. Both come out of calls already being made.
+    //
+    // `currency` here is the TRADING currency — USD for an ADR like ERIC, which
+    // reports in SEK. It is right for the price column and WRONG for the money
+    // columns; the reporting currency lives in /income_statement's meta and is
+    // a separate, 100-credit-a-symbol question.
+    exchange: null,
+    micCode: null,
+    currency: null,
     marketCap: null,
     forwardPe: null,
     peg: null,
@@ -1670,6 +1684,8 @@ async function fetchProfile(symbol) {
       // licensed and this API does not carry it — but it costs no credits,
       // since the call is charged whether one field is read or six.
       if (p.industry) out.industry = p.industry;
+      if (p.exchange) out.exchange = String(p.exchange).slice(0, 40);
+      if (p.mic_code) out.micCode = String(p.mic_code).slice(0, 12);
       // Everything below was already in this response and being discarded. The
       // call costs the same whether one field is read or five, so these are
       // free — but they are kept out of the snapshot and out of the assistant's
@@ -1688,6 +1704,11 @@ async function fetchProfile(symbol) {
     try {
       const st = await fetchJson(`${TD_BASE}/statistics?symbol=${enc}&apikey=${API_KEY}`);
       if (st && st.status === 'error') out.fetchOk = false;
+      // The meta block rides along with every statistics response and was being
+      // thrown away. Free.
+      if (st?.meta?.currency) out.currency = String(st.meta.currency).slice(0, 8);
+      if (!out.exchange && st?.meta?.exchange) out.exchange = String(st.meta.exchange).slice(0, 40);
+      if (!out.micCode && st?.meta?.mic_code) out.micCode = String(st.meta.mic_code).slice(0, 12);
       const vm = st?.statistics?.valuations_metrics;
       const fin = st?.statistics?.financials;
       const inc = fin?.income_statement;
@@ -3796,9 +3817,11 @@ async function computeStocks(asOf, opts = {}) {
         targetMean: prof.targetMean ?? null,
         targetUpside,
         price,
-        currency: s.meta?.currency || null,
-        exchange: s.meta?.exchange || null,
-        micCode: s.meta?.mic_code || null,
+        // The PROFILE first: it survives an archive-priced round, where the
+        // price call's meta does not exist at all.
+        currency: prof.currency || s.meta?.currency || null,
+        exchange: prof.exchange || s.meta?.exchange || null,
+        micCode: prof.micCode || s.meta?.mic_code || null,
         historyDays: ok ? values.length : 0,
         latestDate: ok ? values[0].datetime : null,
         profileFetchedAt: prof.fetchedAt ?? null, // when sector/fundamentals/analyst were cached
