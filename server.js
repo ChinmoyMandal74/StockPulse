@@ -300,6 +300,86 @@ app.get('/api/public-stats', route(async (req, res) => {
   }
 }));
 
+// Every figure the /about page prints, so none of them is typed into its prose.
+// The universe grows and the archive deepens between deploys, and a stale claim
+// on a public page is worse than no claim at all.
+//
+// EVERY query here is cheap or bounded, because this is public and uncached
+// traffic would otherwise meter rows. `select count(*) from bars` reads 1.08M
+// rows — the shape that produced the Turso quota warning — and `min(d)` over
+// the whole table is the same scan, since the primary key is (symbol, d) and
+// cannot seek on a date alone. So the archive is measured by SPAN, two indexed
+// seeks per symbol (~850 rows for the whole universe), and the session count
+// that follows is an ESTIMATE the page labels as one. The other three tables
+// are bounded by the universe times a small constant.
+//
+// One refresh an hour per instance whatever the traffic, so a crawler costs
+// the same as a single reader.
+let aboutStatsCache = null;
+const ABOUT_TTL_MS = 60 * 60 * 1000;
+const SESSIONS_PER_DAY = 0.69;      // trading days per calendar day, the /quality page's ratio
+const DEEP_SPAN_DAYS = 1826;        // five years, the 5Y column's requirement
+
+app.get('/api/about-stats', route(async (req, res) => {
+  if (!req.query.fresh && aboutStatsCache && Date.now() - aboutStatsCache.at < ABOUT_TTL_MS) {
+    return res.json({ ...aboutStatsCache.body, cached: true });
+  }
+  try {
+    const universe = await readUniverse();
+    const [updatedAt, spans, roll, screens, portfolios] = await Promise.all([
+      store.snapshotUpdatedAt(),
+      store.barsSpan(universe),
+      store.coverageRollups(),
+      store.readScreens(),
+      readPortfolios(),
+    ]);
+
+    const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+    let earliest = null, latest = null, sessions = 0, deep = 0;
+    const held = Object.values(spans);
+    for (const s of held) {
+      if (!earliest || s.first < earliest) earliest = s.first;
+      if (!latest || s.last > latest) latest = s.last;
+      const span = days(s.first, s.last);
+      sessions += Math.round(span * SESSIONS_PER_DAY);
+      if (span >= DEEP_SPAN_DAYS) deep++;
+    }
+    // Starter screens are seeded lazily by the first GET /api/screens, so a
+    // cold database has none stored yet and the page would claim zero. The
+    // honest figure is how many a reader would GET, which before seeding is the
+    // starter list itself — and reading it here avoids a public route causing a
+    // write, which seeding from here would.
+    const screenCount = (screens || []).length || STARTER_SCREENS.length;
+    const sum = (m) => Object.values(m).reduce((a, x) => a + x.n, 0);
+    const firstOf = (m) => Object.values(m).reduce((a, x) => (!a || x.first < a ? x.first : a), null);
+    // fundamentals_history holds one row per symbol per day a Refresh all ran,
+    // so the busiest symbol's row count IS the number of recorded days.
+    const recordedDays = Object.values(roll.fund).reduce((a, x) => Math.max(a, x.n), 0);
+
+    const body = {
+      symbols: universe.length,
+      portfolios: Object.keys(portfolios || {}).length,
+      columns: columnCatalogue().length,
+      screens: screenCount,
+      updatedAt: updatedAt || null,
+      bars: { symbols: held.length, earliest, latest, sessions, deep },
+      fundamentals: { symbols: Object.keys(roll.fund).length, days: recordedDays, since: firstOf(roll.fund) },
+      earnings: { symbols: Object.keys(roll.earn).length, quarters: sum(roll.earn), since: firstOf(roll.earn) },
+      news: { symbols: Object.keys(roll.news).length, items: sum(roll.news) },
+      builtAt: Date.now(),
+    };
+    aboutStatsCache = { at: Date.now(), body };
+    res.json(body);
+  } catch (err) {
+    console.error('about-stats failed:', err.message);
+    res.json({});   // the page renders without numbers rather than not at all
+  }
+}));
+
+app.get('/about', (req, res) => {
+  res.sendFile(path.join(__dirname, 'private', 'about.html'));
+});
+
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
@@ -321,6 +401,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
                       // The public pages have canonical addresses of their own.
                       '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
+                      '/about.html': '/about',
                       '/posts.html': '/posts',
                       '/mobile.html': '/m', '/mobile-setup.html': '/mobile-setup',
                       '/nasdaq.html': '/nasdaq',
@@ -587,7 +668,7 @@ app.get('/sitemap.xml', route(async (req, res) => {
   const url = (loc, when) => `  <url><loc>${loc}</loc>${when ? `<lastmod>${String(when).slice(0, 10)}</lastmod>` : ''}</url>`;
   res.type('application/xml').send(
     '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-    [url(base + '/'), url(base + '/blog'),
+    [url(base + '/'), url(base + '/about'), url(base + '/blog'),
       ...posts.map((p) => url(`${base}/blog/${p.slug}`, p.updatedAt ? new Date(p.updatedAt).toISOString() : p.publishedAt))
     ].join('\n') + '\n</urlset>\n');
 }));
