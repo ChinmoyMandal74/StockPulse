@@ -230,6 +230,8 @@
         ['vs S&P 500', pct(beatS), s.spy == null ? 'benchmark unavailable' : `S&P ${pct(s.spy)}`],
         ['vs your universe', pct(beatU), `universe ${pct(s.universe)} · ${s.universeMembers} stocks`],
         ['Winners', s.n ? `${s.up}/${s.n}` : '—', s.n ? Math.round((s.up / s.n) * 100) + '% positive' : ''],
+        ['Fundamentals', `${r.notes.fundReal}/${r.notes.fundReal + r.notes.fundImputed}`,
+          r.notes.fundReal ? 'recorded, not assumed' : 'all from today — none recorded that far back'],
       ].map(([k, v, n], i) => {
         const col = i === 2 ? cls(beatS) : i === 3 ? cls(beatU) : i === 1 ? cls(s.portfolio) : '';
         return `<div class="bezel card"><div class="core card">
@@ -261,11 +263,24 @@
         having under a year of history at that date.`);
       li.push(`<b>The next earnings date is read from the archive</b>, not borrowed from today, so
         the "earnings soon" guard sees what it would have seen.`);
-      li.push(`<b>Every fundamental is today's.</b> Recording began ${we(n.fundamentalsFrom)}, so for a
-        date before that there is nothing to read back and current values stand in — along with the
-        company type that follows from them. Fundamentals move in steps at earnings, so this is
-        close to harmless for a company that did not report inside the window.`);
-      if (n.reportedInWindow) {
+      // The honest headline: how much of the verdict was measured rather than assumed.
+      const tot = n.fundReal + n.fundImputed;
+      if (n.fundReal) {
+        li.push(`<b>${n.fundReal} of ${tot} stocks were judged on fundamentals we had actually
+          recorded</b> by ${we(r.tradingDate)} — the newest set on or before that date${
+          n.fundAsOf ? `, the latest from ${we(n.fundAsOf)}` : ''}. That is point-in-time: a row
+          exists only for days a Refresh all ran, and these values move in steps at earnings, so the
+          last recorded set before a date is what stood on it. ${n.fundImputed
+            ? `The other ${n.fundImputed} had nothing recorded by then and fell back to today's.`
+            : 'None had to fall back to today’s values.'}`);
+      } else {
+        li.push(`<b>Every fundamental is today's.</b> Recording began ${we(n.fundamentalsFrom)}, so for a
+          date before that there is nothing to read back and current values stand in — along with the
+          company type that follows from them. Fundamentals move in steps at earnings, so this is
+          close to harmless for a company that did not report inside the window.
+          <b>Pick a date on or after ${we(n.fundamentalsFrom)} and this stops being a guess.</b>`);
+      }
+      if (n.reportedInWindow && n.picksReal < r.summary.n) {
         li.push(`<div class="warnbox"><b>${n.reportedInWindow} of the ${r.summary.n} picks reported
           earnings inside this window</b>, marked <span class="mk">reported</span> in the table. For
           those, the fundamentals that helped select them include a quarter that had not been

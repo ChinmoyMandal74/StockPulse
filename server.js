@@ -4198,14 +4198,14 @@ function btRowAt(closes, highs, vols, i) {
 // Run the whole thing. Pure over what it is handed, so it is testable without a
 // server and without the network.
 function btRun(opts) {
-  const { bars, snapshot, from, tiers, earnings } = opts;
+  const { bars, snapshot, from, tiers, earnings, recorded } = opts;
   btRsiCache.clear();
   const want = new Set(tiers);
   const byS = new Map((snapshot || []).map((x) => [x.symbol, x]));
   const picks = [];
   const heldSeries = {};
   const allSeries = {};
-  let evaluated = 0, tooShort = 0, noFund = 0;
+  let evaluated = 0, tooShort = 0, noFund = 0, real = 0, imputed = 0;
 
   for (const sym of Object.keys(bars)) {
     const rows = (bars[sym] || []).slice().reverse();   // archive is newest-first
@@ -4228,12 +4228,19 @@ function btRun(opts) {
     if (!tech) continue;
     const today = byS.get(sym) || {};
     if (today.qualityRating == null && today.forwardPe == null) noFund++;
+    // The fundamentals AS THEY STOOD, when we recorded them. fundamentals_history
+    // holds 42 fields — every one the Balanced gate and classify() read, since
+    // `use_quality` is off in Balanced and qualityRating is the only field it
+    // does not store. Where there is no recorded row yet (nothing before
+    // 2026-08-30 exists at all) today's values stand in, as before.
+    const was = recorded ? recorded[sym] : null;
+    if (was) real++; else imputed++;
     // TODAY's fundamentals, THAT DATE's technicals. Starting from the live row
     // rather than listing the fundamental fields means a field added to the
     // engine later is carried here with no edit \u2014 and it is exactly what
     // "fundamentals filled forward" means.
     const nextEarn = (earnings[sym] || []).find((d) => d > from) || null;
-    const row = { ...today, ...tech, symbol: sym, latestDate: dates[i],
+    const row = { ...today, ...(was || {}), ...tech, symbol: sym, latestDate: dates[i],
       // As of then: the next report that actually happened after that date.
       // Falling back to today's only when none has yet.
       nextEarningsDate: nextEarn || today.nextEarningsDate || null,
@@ -4248,6 +4255,7 @@ function btRun(opts) {
     if (!want.has(v.action)) continue;
     picks.push({ symbol: sym, name: today.shortName || today.name || sym,
       action: v.action, flag: v.flag, type: v.type,
+      fundAsOf: was ? was.asOf : null,
       priceThen: closes[i], dateThen: dates[i],
       priceNow: closes[closes.length - 1], lastDate: dates[dates.length - 1],
       ret: (closes[closes.length - 1] / closes[i] - 1) * 100,
@@ -4257,7 +4265,7 @@ function btRun(opts) {
   }
 
   picks.sort((a, b) => b.ret - a.ret);
-  return { picks, heldSeries, allSeries, evaluated, tooShort, noFund };
+  return { picks, heldSeries, allSeries, evaluated, tooShort, noFund, real, imputed };
 }
 
 // ============================================================================
@@ -6515,8 +6523,11 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
   scoreActionInto(stocks);
   await stampShortNames(stocks);
   const earnings = await store.readEarningsDates(asked, today);
+  // Recorded fundamentals as of the start date — the newest set on or before it.
+  let recorded = null;
+  try { recorded = await store.readFundamentalsAsOf(asked); } catch (e) { recorded = null; }
 
-  const r = btRun({ bars, snapshot: stocks, from: asked, tiers, earnings });
+  const r = btRun({ bars, snapshot: stocks, from: asked, tiers, earnings, recorded });
   const held = btCurve(r.heldSeries, asked);
   const all = btCurve(r.allSeries, asked);
 
@@ -6558,6 +6569,11 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
       noFundamentals: r.noFund,
       reportedInWindow: r.picks.filter((x) => x.reportedInWindow).length,
       addedAfterStart: addedAfter,
+      // How much of the verdict was measured rather than assumed.
+      fundReal: r.real,
+      fundImputed: r.imputed,
+      picksReal: r.picks.filter((x) => x.fundAsOf).length,
+      fundAsOf: r.picks.map((x) => x.fundAsOf).filter(Boolean).sort().pop() || null,
       fundamentalsFrom: FUND_HISTORY_FROM,
       spyError,
     },

@@ -1853,6 +1853,33 @@ async function readFundamentalsPair(day) {
   return { day, prevDay, curr, prev };
 }
 
+// The fundamentals as they stood ON a past date: for each symbol, the newest
+// recorded row on or before it. Genuinely point-in-time — a row exists only for
+// days a Refresh all ran, and these values move in steps at earnings, so the
+// last recorded set before D is what stood on D rather than an approximation.
+// Symbols with nothing recorded by then simply do not appear, and the caller
+// decides what to do about that.
+async function readFundamentalsAsOf(day) {
+  await init();
+  const cols = FUND_FIELDS.map(([c]) => c);
+  const r = await db.execute({
+    sql: `select symbol, d, ${cols.join(', ')} from fundamentals_history
+          where d <= ? order by d`,
+    args: [day],
+  });
+  const out = {};
+  // Ordered by d ALONE, not (symbol, d): ordering by the primary key makes
+  // SQLite walk it as a covering index and ignore the date filter, which is a
+  // scan of the whole table. Ascending by d, the last row seen for a symbol is
+  // still its newest.
+  for (const row of r.rows) {
+    const v = { asOf: row.d };
+    for (const [c, f] of FUND_FIELDS) v[f] = row[c] == null ? null : Number(row[c]);
+    out[row.symbol] = v;
+  }
+  return out;
+}
+
 async function fundamentalsStats() {
   await init();
   const r = await db.execute(
@@ -2750,6 +2777,7 @@ module.exports = {
   readBarsFor,
   purgeSymbol,
   markRefreshPrices, readBarsFullFor, notePricePull, readPriceState, readEarningsDates,
+  readFundamentalsAsOf,
   writeNews, readNews, readLatestNews, readNewsState, newsCountsSince,
   symbolsWithData,
   countSymbolRows,
