@@ -5341,39 +5341,58 @@ async function runNewsBatch(picksIn, meta) {
   return { runId, results };
 }
 
-// Coverage without a schedule: every refresh tops up the few stalest
-// symbols, never-fetched first, so the nightly job's ~20 rounds cycle the
-// whole universe inside one night and no single call does bulk work.
-// Headlines are a by-product, and the archive rule applies: a failed news
-// write never fails a refresh (the promise never rejects).
-// Returns the batch as a promise, and the caller must AWAIT it before the
-// response goes out. On Vercel the function is frozen the moment it responds:
-// a fire-and-forget batch had its fetches suspended mid-flight, and when the
-// instance next woke minutes later every 6-second abort timer fired at once —
-// on 2026-09-15 two batches "took" 54s and 279s for refreshes that finished in
-// 19s, all 24 fetches "aborted due to timeout". Started early, awaited last.
-function topUpNews(rows, ctx = {}) {
-  if (NEWS_OFF) return Promise.resolve();
-  return (async () => {
-    const live = (rows || []).filter((r) => r && !r.error && r.symbol);
-    if (!live.length) return;
-    const state = await store.readNewsState();
-    // A stock holding no headlines whose last fetch is past the TTL is treated
-    // as never fetched, so an empty feed is retried ahead of the rotation
-    // rather than waiting its turn with nothing to show.
-    let held = {};
-    try { held = (await store.newsHoldings()).perSymbol; } catch { /* plain stalest order */ }
-    const order = { ...state };
-    for (const r of live) {
-      if (!held[r.symbol] && state[r.symbol] && Date.now() - state[r.symbol] > NEWS_TTL_MS) order[r.symbol] = 0;
-    }
-    const pick = News.pickStalest(live.map((r) => r.symbol), order, NEWS_TOPUP_PER_REFRESH);
-    const byId = Object.fromEntries(live.map((r) => [r.symbol, r]));
-    await runNewsBatch(pick.map((sym) => ({ symbol: sym, name: byId[sym] && byId[sym].name })), {
-      trigger: 'refresh', actor: ctx.actor || null, refreshRunId: ctx.refreshRunId || null,
-    });
-  })().catch((err) => console.warn('news top-up skipped:', err.message));
-}
+// One batch of the stalest stocks, on demand. Deliberately ONE batch per call
+// rather than the whole universe: the fetches are a dozen network round trips
+// and a serverless function must not be asked to hold hundreds of them. The
+// caller loops, which is the same shape the price refreshes use.
+app.post('/api/news/refresh', requireAdmin, route(async (req, res) => {
+  if (NEWS_OFF) return res.status(400).json({ error: 'The news provider is switched off.' });
+  const size = Math.max(1, Math.min(40, Number(req.query.n) || NEWS_TOPUP_PER_REFRESH));
+  const universe = await store.readUniverse();
+  if (!universe.length) return res.json({ done: true, fetched: 0, remaining: 0 });
+
+  const names = await readNames().catch(() => ({}));
+  const state = await store.readNewsState();
+  let held = {};
+  try { held = (await store.newsHoldings()).perSymbol; } catch { /* plain stalest order */ }
+  // Same rule the refresh used: a stock holding nothing whose fetch is past the
+  // TTL goes to the front, so an empty feed is retried rather than waiting its
+  // turn with nothing to show.
+  const order = { ...state };
+  for (const sym of universe) {
+    if (!held[sym] && state[sym] && Date.now() - state[sym] > NEWS_TTL_MS) order[sym] = 0;
+  }
+  // Staleness is purely the CLOCK, and must be the same test the `remaining`
+  // count uses below or the loop cannot terminate: holding no headlines is a
+  // reason to be fetched EARLIER (the `order` boost above), never a reason to
+  // be fetched again in the same pass -- a stock the provider has nothing on
+  // would otherwise be re-picked forever while the run reported itself done.
+  const cutoff = Date.now() - NEWS_TTL_MS;
+  const isStale = (sym, clock) => !clock[sym] || clock[sym] < cutoff;
+  const stale = universe.filter((sym) => isStale(sym, state));
+  if (!stale.length) return res.json({ done: true, fetched: 0, remaining: 0, universe: universe.length });
+
+  const pick = News.pickStalest(stale, order, size);
+  const out = await runNewsBatch(
+    pick.map((sym) => ({ symbol: sym, name: names[sym] && (names[sym].shortName || names[sym].name) })),
+    { trigger: 'manual', actor: (await currentUser(req))?.email || 'admin', refreshRunId: null });
+  const after = await store.readNewsState();
+  const left = universe.filter((sym) => isStale(sym, after)).length;
+  // runNewsBatch answers { runId, results }; each result carries what
+  // writeNews reported for that symbol.
+  const rs = (out && out.results) || [];
+  res.json({
+    done: left === 0,
+    fetched: pick.length,
+    symbols: pick,
+    ok: rs.filter((x) => x.ok).length,
+    added: rs.reduce((n, x) => n + (x.added || 0), 0),
+    stored: rs.reduce((n, x) => n + (x.stored || 0), 0),
+    remaining: left,
+    universe: universe.length,
+    runId: (out && out.runId) || null,
+  });
+}));
 
 // Stored-or-fetch for one symbol — the stock page's card. Six-hour TTL, so a
 // visited page stays fresh with no schedule at all; on a provider failure
@@ -6271,12 +6290,14 @@ async function finishLiveRefresh(payload, ctx = {}) {
   // same numbers under a new date and invent movement that never happened.
   // readRefreshState() is non-null only while a Refresh all runs.
   const running = await readRefreshState();
-  // Read after the run state so the news batch can name the refresh run it
-  // rode on — a plain Refresh passes its own run id in ctx.
-  const newsBatch = topUpNews(rows, {
-    refreshRunId: (running && running.runId) || ctx.runId || null,
-    actor: (running && running.actor) || ctx.actor || null,
-  });
+  // News NO LONGER rides the refresh (2026-09-18, owner's instruction: "don't
+  // mix the news refresh with any API data refresh"). It used to top up a
+  // dozen stocks here, awaited before the response because nothing may run
+  // after a response on this platform — which put a dozen network fetches
+  // inside the request that also had to price the universe and write the
+  // snapshot. A refresh that had already done its work was then cut before it
+  // could close its own run, and recorded as `abandoned` with no error.
+  // It is its own button now: POST /api/news/refresh.
   if (running) {
     try {
       // Rows whose profile has not come back yet are skipped rather than
@@ -6325,7 +6346,6 @@ async function finishLiveRefresh(payload, ctx = {}) {
   }
   // The headlines top-up started above runs alongside everything since; it has
   // to finish before the response does, or the platform freezes it mid-fetch.
-  await newsBatch;
   return { loaded, total: rows.length, done: running ? covered : true };
 }
 

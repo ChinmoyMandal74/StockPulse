@@ -138,6 +138,8 @@
       <span class="divider"></span>
       <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
       <a class="btn hide-sm" href="/refreshes">Refresh runs</a>
+      <button class="btn btn-primary" id="newsGo"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Refresh news</button>
+      <button class="btn" id="newsStop" hidden>Stop</button>
       <button class="btn" id="reloadBtn"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Reload</button>
     </nav>
   </div>
@@ -146,9 +148,11 @@
     <header class="masthead">
       <span class="eyebrow"><span class="pip"></span>Admin</span>
       <h1><span class="w1">News</span> <span class="w2">Runs</span></h1>
-      <p class="lede" id="lede">Every batch of headline fetches. Each refresh round tops up the stocks whose headlines are
-        oldest, and opening a stock page fetches its headlines when they are stale. Batches are kept 30 days,
-        per-stock detail 14.</p>
+      <p class="lede" id="lede">Every batch of headline fetches. Headlines are fetched <b>here</b>, on demand —
+        they no longer ride the price refresh, so a slow feed can never hold up or fail a refresh. Opening a
+        stock page still fetches its own when they are stale. Costs no API credits: the provider is free and
+        keyless. Batches are kept 30 days, per-stock detail 14.</p>
+      <p class="lede" id="newsSaid" style="margin-top:8px"></p>
     </header>
 
     <div id="offNote" class="off" hidden>News is switched off (NEWS_PROVIDER=off) — nothing is being fetched.</div>
@@ -185,6 +189,44 @@
     const $ = (id) => document.getElementById(id);
     const we = (t) => String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    // The page drives the loop, one batch a call, the same shape the price
+    // refreshes use: a serverless function must not be asked to hold hundreds
+    // of network fetches in one request.
+    let newsRunning = false, newsCancel = false;
+    async function refreshNews() {
+      if (newsRunning) return;
+      newsRunning = true; newsCancel = false;
+      $('newsGo').disabled = true;
+      $('newsStop').hidden = false;
+      let done = 0, added = 0, batches = 0;
+      const t0 = Date.now();
+      const say = (m) => { $('newsSaid').textContent = m; };
+      try {
+        for (;;) {
+          if (newsCancel) { say(`Stopped after ${done} stocks \u2014 ${added} new headlines. The rest keep their old ones.`); break; }
+          const r = await fetch('/api/news/refresh', { method: 'POST' });
+          const j = await r.json();
+          if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+          batches++;
+          done += j.fetched || 0;
+          added += j.added || 0;
+          if (j.done || !j.fetched) {
+            say(`Done \u2014 ${done} stock(s) checked in ${batches} batch(es), ${added} new headlines, `
+              + `${((Date.now() - t0) / 1000).toFixed(0)}s.`);
+            break;
+          }
+          say(`Checked ${done} of ${done + j.remaining}\u2026 ${added} new headlines so far.`);
+        }
+        load();                                   // redraw the tiles and history
+      } catch (e) {
+        $('newsSaid').textContent = 'Stopped: ' + e.message;
+      } finally {
+        newsRunning = false;
+        $('newsGo').disabled = false;
+        $('newsStop').hidden = true;
+      }
+    }
+
     async function api(url) {
       const res = await fetch(url, { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
@@ -339,6 +381,18 @@
         $('histWrap').innerHTML = `<div class="error">Could not load the news log: ${we(e.message)}</div>`;
       }
     }
+    $('newsGo').addEventListener('click', refreshNews);
+    $('newsStop').addEventListener('click', () => { newsCancel = true; });
+    // The console links here rather than running anything itself -- the loop,
+    // its progress and this page's history all live together.
+    (function fromConsole() {
+      const q = new URLSearchParams(location.search);
+      if (q.get('do') !== 'refresh') return;
+      // Out of the address bar before acting, so a reload cannot re-run it.
+      history.replaceState(null, '', location.pathname);
+      setTimeout(refreshNews, 400);
+    })();
+
     $('reloadBtn').addEventListener('click', load);
     load();
     setInterval(load, 60000);
