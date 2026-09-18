@@ -419,6 +419,19 @@
     }
     .ic.spin { animation: spin 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite; transform-origin: 50% 50%; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    /* The first load has an empty table and nothing else to look at — the word
+       in the bar's status is the least prominent text on the page. */
+    .table-bezel > .core { position: relative; }
+    #tableLoading {
+      position: absolute; inset: 0; z-index: 4;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; text-align: center; pointer-events: none;
+    }
+    .ldg { display: inline-flex; flex-direction: column; align-items: center; gap: 12px; }
+    .ldg .ic { width: 22px; height: 22px; color: var(--accent); }
+    .ldg b { font-size: 14px; font-weight: 600; color: var(--text); }
+    .ldg span { font-size: 12.5px; color: var(--muted); max-width: 40ch; line-height: 1.5; }
+    @media (prefers-reduced-motion: reduce) { .ic.spin { animation: none; } }
     #fwdViewBar > .core {
       background:
         linear-gradient(100deg, rgba(251, 191, 36, 0.10), rgba(251, 191, 36, 0.02) 60%),
@@ -1219,6 +1232,18 @@
 
     <div class="bezel table-bezel reveal">
     <div class="core">
+  <!-- An OVERLAY, not a row in the table. A cell spanning 91 columns centres
+       its content across ~3,300px, which on a 1,440px screen is off to the
+       right where nobody sees it — caught by a screenshot after the assertions
+       had passed. This is centred on what is actually visible instead, and
+       needs no colspan to keep in step with the column count. -->
+  <div id="tableLoading" hidden>
+    <span class="ldg">
+      <svg class="ic spin" aria-hidden="true"><use href="#i-refresh" /></svg>
+      <b>Loading the screener…</b>
+      <span id="ldgSub"></span>
+    </span>
+  </div>
   <div class="table-wrap">
   <table>
     <thead>
@@ -4321,17 +4346,57 @@
       });
     }
 
+    // What the page shows while /api/stocks is in flight. The payload is ~1.8MB
+    // and the instance serving it may be cold, so this can be several seconds
+    // with an empty table on screen; before this it said "Loading…" in the
+    // bar's far-right status and nothing else.
+    function showTableLoading(on) {
+      $('tableLoading').hidden = !on;
+      if (on) $('ldgSub').textContent = '';
+    }
+    function setLoadingLine(sub) { $('ldgSub').textContent = sub; }
+
+    // The cheap endpoint explains the slow one. /api/status stays ~0.15s even
+    // while a Fill missing holds every warm instance, so ask it WHY the table
+    // is taking its time and raise the refresh banner now, rather than after
+    // the table has landed and the answer no longer matters.
+    async function explainSlowLoad(done) {
+      // The fallback, for a wait nothing explains. Left ARMED when the status
+      // call comes back with nothing running — clearing it there is what a
+      // `finally` would do, and it would cancel the message in precisely the
+      // case it exists for. It is cleared only where a better line replaced it;
+      // otherwise the `done` check makes it a no-op once the table has landed.
+      const slow = setTimeout(() => {
+        if (!done.v) setLoadingLine('Still loading — the server may be starting up.');
+      }, 5000);
+      try {
+        const s = await api('GET', '/api/status');
+        if (done.v || !s || !s.refreshing) return;
+        clearTimeout(slow);
+        renderRefreshNote(s.refreshing);
+        const n = s.refreshing.total
+          ? ` (${s.refreshing.loaded} of ${s.refreshing.total} companies)`
+          : '';
+        setLoadingLine(`A data refresh is running${n}, so this is slower than usual.`);
+      } catch (e) { /* the real load is the one that matters */ }
+    }
+
     async function refresh(opts = {}) {
       const live = opts.live !== false;
       setError('');
       setStatus('Loading…');
       setPulling(true);
+      // Only when there is nothing on screen: a poll-driven reload must not
+      // blank a table the reader is using.
+      const done = { v: false };
+      if (!baseStocks.length) { showTableLoading(true); explainSlowLoad(done); }
       try {
         const params = new URLSearchParams();
         if (asOfDate) params.set('asOf', asOfDate);   // an as-of date always needs a live pull
         else if (live) params.set('refresh', '1');    // admin refresh → recompute + save snapshot
         const qs = params.toString();
         const data = await api('GET', '/api/stocks' + (qs ? '?' + qs : ''));
+        done.v = true;
         lastUpdated = data.updatedAt;
         baseStocks = data.stocks || [];
         scoreActionRows(baseStocks);
@@ -4355,13 +4420,15 @@
         setError(err.message);
         setStatus('');
       } finally {
+        done.v = true;
+        showTableLoading(false);
         setPulling(false);
       }
     }
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     function showLoading(msg) {
-      $('tbody').innerHTML = `<tr><td class="empty" colspan="51">${msg}</td></tr>`;
+      $('tbody').innerHTML = `<tr><td class="empty" colspan="${PAD_SPAN}">${msg}</td></tr>`;
     }
 
     // Clear the cache, then keep re-pulling until EVERY ticker's fundamentals are
