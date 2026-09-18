@@ -1523,6 +1523,57 @@ async function barsMaxDates(symbols) {
   return out;
 }
 
+// The SPAN of each symbol's archive: the first and last bar, by seek.
+//
+// Deliberately not `select symbol, count(*) from bars group by symbol`. That
+// reads all 1.08M rows, which is the exact shape that produced the Turso
+// quota warning, and no index can answer "how many". Two seeks per symbol on
+// the (symbol, d) primary key read two rows each instead — 708 rows for the
+// whole universe against 1.08M — and a span answers the question a count was
+// being asked for anyway: "does this stock have enough history". Sessions are
+// ESTIMATED from the span (~0.69 of calendar days) and the page says so.
+async function barsSpan(symbols) {
+  await init();
+  const syms = [...new Set((symbols || []).map((x) => String(x).toUpperCase()))];
+  const out = {};
+  if (!syms.length) return out;
+  for (let i = 0; i < syms.length; i += ANCHOR_CHUNK) {
+    const slice = syms.slice(i, i + ANCHOR_CHUNK);
+    const stmts = [];
+    for (const sym of slice) {
+      stmts.push({ sql: 'select d from bars where symbol = ? order by d limit 1', args: [sym] });
+      stmts.push({ sql: 'select d from bars where symbol = ? order by d desc limit 1', args: [sym] });
+    }
+    const res = await db.batch(stmts, 'read');
+    slice.forEach((sym, k) => {
+      const first = res[k * 2].rows[0];
+      const last = res[k * 2 + 1].rows[0];
+      if (first && last) out[sym] = { first: first.d, last: last.d };
+    });
+  }
+  return out;
+}
+
+// Per-symbol rollups over the SMALL tables. Bounded by the universe times a
+// retention window — fundamentals is universe x recorded days, earnings is
+// universe x 40 quarters — so these are thousands of rows, not a million, and
+// are allowlisted in query-plan-test.js with that reasoning.
+async function coverageRollups() {
+  await init();
+  const [fund, earn, news] = await Promise.all([
+    db.execute('select symbol, count(*) n, min(d) f from fundamentals_history group by symbol'),
+    db.execute('select symbol, count(*) n, min(d) f from earnings_history group by symbol'),
+    db.execute('select symbol, count(*) n from news group by symbol'),
+  ]);
+  const pack = (r, withFirst) => {
+    const out = {};
+    for (const row of r.rows) out[row.symbol] = withFirst
+      ? { n: Number(row.n), first: row.f } : { n: Number(row.n) };
+    return out;
+  };
+  return { fund: pack(fund, true), earn: pack(earn, true), news: pack(news, false) };
+}
+
 // Stored closes on a handful of dates, for the split probe. One query for the
 // whole universe: US symbols share trading days, so the date set is tiny.
 // The split probe's stored closes — one per (symbol, date) pair the caller
@@ -2835,6 +2886,7 @@ module.exports = {
   readBarsFor,
   purgeSymbol,
   markRefreshPrices, readBarsFullFor, notePricePull, readPriceState, readEarningsDates,
+  barsSpan, coverageRollups,
   readFundamentalsAsOf,
   readFundamentalsFirstSeen,
   mergeProfileFields,

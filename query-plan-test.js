@@ -29,6 +29,14 @@ const ALLOWED = [
   /^select count\(\*\)/i,
   /from pragma_table_info/i,
   /select distinct symbol from/i,          // the orphan sweep, run by hand
+  // The data-quality page's rollups. These tables are BOUNDED, unlike bars:
+  // fundamentals_history is universe x recorded days (~2,350 rows) and
+  // earnings_history universe x 40 quarters (~10,400), so a group-by reads
+  // thousands rather than the million that made barsMaxDates a quota event.
+  // The page counts nothing over `bars` — it seeks the first and last row
+  // per symbol and reports a SPAN instead.
+  /select symbol, count\(\*\) n, min\(d\) f from (fundamentals_history|earnings_history) group by symbol/i,
+  /select symbol, count\(\*\) n from news group by symbol/i,
   // Whole-collection reads of small tables the app holds in memory anyway.
   /from (portfolios|portfolio_tickers|names|profiles|universe|screens|column_views|app_meta|user_portfolios|prefs|refresh_state|nasdaq_listings)\b/i,
   // Date-ranged reads of the archive: these are the product (a chart, the

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Data quality — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1320px; margin: 0 auto; padding: 0 28px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(251, 191, 36, 0.07), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.10), transparent 64%); }
+    .bezel { border-radius: 24px; }
+
+    header.top { display: flex; align-items: center; gap: 14px; padding: 26px 0 14px; flex-wrap: wrap; }
+    header.top h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+    .spacer { margin-left: auto; }
+    .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; max-width: 86ch; line-height: 1.65; }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .card { padding: 13px 14px; cursor: pointer; }
+    .card .v { font: 600 22px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+    .card .k { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-top: 6px; }
+    .card.on { outline: 1px solid var(--accent); outline-offset: 2px; }
+    .card .v.bad { color: var(--red); } .card .v.warn { color: var(--amber); } .card .v.good { color: var(--green); }
+
+    .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+    .bar input[type="search"] {
+      background: var(--surface-2); border: 1px solid var(--hair-2); color: var(--text);
+      border-radius: 10px; padding: 8px 12px; font: 400 13px var(--sans); min-width: 200px; }
+    .count { color: var(--muted); font-size: 12.5px; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 7px 9px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: right; }
+    th { font: 500 9.5px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--faint);
+         position: sticky; top: 0; background: var(--surface); z-index: 2; cursor: pointer; white-space: nowrap; }
+    th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+    td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    td.na { color: var(--faint); }
+    tbody tr:hover { background: rgba(255,255,255,.02); }
+    .wrap { max-height: 62vh; overflow: auto; }
+
+    .flag { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 999px;
+            border: 1px solid var(--hair-2); margin-right: 4px; white-space: nowrap; }
+    .flag.sev { color: var(--red); border-color: rgba(251,113,133,.4); }
+    .flag.mid { color: var(--amber); border-color: rgba(251,191,36,.35); }
+    .flag.low { color: var(--muted); }
+    .ok { color: var(--green); }
+
+    .fix { padding: 16px 18px; margin-bottom: 16px; }
+    .fix h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+    .fix p { color: var(--muted); font-size: 12.5px; margin: 0 0 10px; line-height: 1.6; }
+    .cmd { display: flex; gap: 8px; align-items: flex-start; }
+    .cmd code {
+      flex: 1; background: var(--surface-2); border: 1px solid var(--hair); border-radius: 8px;
+      padding: 9px 11px; font: 400 11.5px/1.5 var(--mono); color: var(--text);
+      word-break: break-all; max-height: 92px; overflow: auto; }
+    .note { color: var(--faint); font-size: 11.5px; margin-top: 16px; line-height: 1.7; }
+    @media (max-width: 720px) { .page { padding: 0 14px; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <main class="page">
+    <header class="top">
+      <h1>Data quality</h1>
+      <span class="count" id="took"></span>
+      <span class="spacer"></span>
+      <button class="btn" id="again">Check again</button>
+      <a class="btn" href="/admin">Admin</a>
+    </header>
+    <p class="sub">
+      What is actually held for each stock, and what to run about it. Every gap this app
+      has had was silent — a whole universe with no exchange for weeks, stocks arriving
+      with no earnings history, one with 66 sessions of price data. A thin archive is the
+      one that never heals on its own: a new ticker gets about 300 bars from its first
+      price pull and stays there until it is backfilled.
+    </p>
+
+    <div class="cards" id="cards"></div>
+
+    <section class="bezel fix" id="fixBox" hidden><div class="core fix">
+      <h3>Deepen the thin ones</h3>
+      <p id="fixWhy"></p>
+      <div class="cmd">
+        <code id="fixCmd"></code>
+        <button class="btn" id="copy">Copy</button>
+      </div>
+    </div></section>
+
+    <div class="bar">
+      <input type="search" id="q" placeholder="Filter by symbol or name…" autocomplete="off" />
+      <span class="count" id="count"></span>
+    </div>
+
+    <section class="bezel"><div class="core" style="padding:4px 14px">
+      <div class="wrap">
+        <table>
+          <thead><tr>
+            <th data-s="symbol">Symbol</th>
+            <th data-s="name">Name</th>
+            <th data-s="exchange">Exchange</th>
+            <th data-s="firstBar">First bar</th>
+            <th data-s="lastBar">Last bar</th>
+            <th data-s="sessions">Sessions<br>(est.)</th>
+            <th data-s="pricedAt">Priced</th>
+            <th data-s="profileAt">Profile</th>
+            <th data-s="fundDays">Fund.<br>days</th>
+            <th data-s="earnQuarters">Earn.<br>qtrs</th>
+            <th data-s="news">News</th>
+            <th data-s="flagCount">Flags</th>
+          </tr></thead>
+          <tbody id="tb"></tbody>
+        </table>
+      </div>
+    </div></section>
+
+    <p class="note" id="note"></p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
+      (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let DATA = null, sortKey = 'flagCount', sortDir = -1, only = null;
+
+    // Worst first: a missing archive is not the same order of problem as a
+    // stock we have not fetched headlines for.
+    const SEV = { 'no bars': 'sev', 'too short to score': 'sev', 'profile pull failed': 'sev',
+                  'no profile': 'sev', 'stale prices': 'mid', 'no fundamentals': 'mid',
+                  'no earnings': 'mid', 'no 5Y': 'low', 'no exchange': 'low' };
+
+    const ago = (t) => {
+      if (t == null) return null;
+      const h = (Date.now() - t) / 3600000;
+      if (h < 1) return Math.max(1, Math.round(h * 60)) + 'm';
+      if (h < 48) return Math.round(h) + 'h';
+      return Math.round(h / 24) + 'd';
+    };
+
+    function paintCards() {
+      const s = DATA.summary;
+      const defs = [
+        ['clean', 'No flags', 'good'],
+        ['noBars', 'No bars', 'bad'],
+        ['tooShort', 'Too short to score', 'bad'],
+        ['profileFailed', 'Profile failed', 'bad'],
+        ['noEarnings', 'No earnings', 'warn'],
+        ['noFundamentals', 'No fundamentals', 'warn'],
+        ['stalePrices', 'Stale prices', 'warn'],
+        ['noFiveYear', 'No 5Y history', ''],
+        ['noExchange', 'No exchange', ''],
+      ];
+      $('cards').innerHTML = defs.map(([k, label, tone]) => {
+        const n = s[k] || 0;
+        const on = only === k ? ' on' : '';
+        return `<div class="bezel card${on}" data-k="${k}" role="button" tabindex="0"><div class="core card">
+          <div class="v ${n ? tone : ''}">${n}</div><div class="k">${we(label)}</div></div></div>`;
+      }).join('');
+      // DIRECT children only. `card` is on the bezel AND the core -- the
+      // double-bezel pattern -- so a bare '.card' matches both, attaches two
+      // listeners per card, and one click toggles the filter twice.
+      $('cards').querySelectorAll(':scope > .card').forEach((c) => {
+        const pick = () => { only = only === c.dataset.k ? null : c.dataset.k; paintCards(); paint(); };
+        c.addEventListener('click', pick);
+        c.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+      });
+    }
+
+    const FLAG_FOR = { noBars: 'no bars', tooShort: 'too short to score', noFiveYear: 'no 5Y',
+      stalePrices: 'stale prices', noProfile: 'no profile', profileFailed: 'profile pull failed',
+      noFundamentals: 'no fundamentals', noEarnings: 'no earnings', noExchange: 'no exchange' };
+
+    function rowsNow() {
+      const q = $('q').value.trim().toLowerCase();
+      let rows = DATA.rows.map((r) => ({ ...r, flagCount: r.flags.length }));
+      if (only === 'clean') rows = rows.filter((r) => !r.flags.length);
+      else if (only) rows = rows.filter((r) => r.flags.includes(FLAG_FOR[only]));
+      if (q) rows = rows.filter((r) => r.symbol.toLowerCase().includes(q)
+        || String(r.name).toLowerCase().includes(q));
+      const k = sortKey;
+      rows.sort((a, b) => {
+        const x = a[k], y = b[k];
+        if (x == null && y == null) return 0;
+        if (x == null) return 1;            // blanks last, whichever way it sorts
+        if (y == null) return -1;
+        if (typeof x === 'number' && typeof y === 'number') return (x - y) * sortDir;
+        return String(x).localeCompare(String(y)) * sortDir;
+      });
+      return rows;
+    }
+
+    function paint() {
+      const rows = rowsNow();
+      $('count').textContent = `${rows.length} of ${DATA.universe}`;
+      $('tb').innerHTML = rows.map((r) => {
+        const flags = r.flags.length
+          ? r.flags.map((f) => `<span class="flag ${SEV[f] || 'low'}">${we(f)}</span>`).join('')
+          : '<span class="ok">ok</span>';
+        const dash = (v) => (v == null ? '<span class="na">—</span>' : we(v));
+        return `<tr>
+          <td><a class="namelink" href="/stock/${encodeURIComponent(r.symbol)}" target="_blank" rel="noopener">${we(r.symbol)}</a></td>
+          <td>${we(r.name)}</td>
+          <td>${dash(r.exchange)}</td>
+          <td class="num">${dash(r.firstBar)}</td>
+          <td class="num">${dash(r.lastBar)}</td>
+          <td class="num">${r.sessions || '<span class="na">0</span>'}</td>
+          <td class="num">${dash(ago(r.pricedAt))}</td>
+          <td class="num">${dash(ago(r.profileAt))}</td>
+          <td class="num">${r.fundDays || '<span class="na">0</span>'}</td>
+          <td class="num">${r.earnQuarters || '<span class="na">0</span>'}</td>
+          <td class="num">${r.news || '<span class="na">0</span>'}</td>
+          <td style="text-align:left">${flags}</td></tr>`;
+      }).join('');
+    }
+
+    function paintFix() {
+      if (!DATA.fixCommand) { $('fixBox').hidden = true; return; }
+      $('fixBox').hidden = false;
+      $('fixWhy').textContent = `${DATA.thin.length} stock(s) have under ${DATA.thresholds.fiveYear} `
+        + 'sessions, so the 5Y column stays blank for them and the backtest may skip them as too short. '
+        + 'Bars cost one credit per symbol at any depth, so deepening them is cheap — but run it with '
+        + '--only, because each symbol is replaced wholesale and a shallow depth would truncate the '
+        + 'stocks that already have twenty years.';
+      $('fixCmd').textContent = DATA.fixCommand;
+    }
+
+    async function load(fresh) {
+      $('again').disabled = true;
+      try {
+        const r = await fetch('/api/data-quality' + (fresh ? '?fresh=1' : ''));
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        DATA = await r.json();
+        $('took').textContent = DATA.cached ? 'cached' : `${DATA.ms} ms`;
+        paintCards(); paintFix(); paint();
+        $('note').innerHTML = 'Sessions are <b>estimated</b> from the first and last bar, not counted: '
+          + 'counting rows per symbol would read the whole archive, which is what caused a database '
+          + 'quota warning once. Two seeks per stock read two rows instead. '
+          + `"Too short to score" is under ${DATA.thresholds.score} sessions, which is what momentum needs; `
+          + `"no 5Y" is under ${DATA.thresholds.fiveYear}. Cached five minutes — use Check again after a refresh.`;
+      } catch (e) {
+        $('tb').innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--red);padding:22px">${we(e.message)}</td></tr>`;
+      } finally { $('again').disabled = false; }
+    }
+
+    document.querySelectorAll('th[data-s]').forEach((th) => th.addEventListener('click', () => {
+      const k = th.dataset.s;
+      if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = (k === 'symbol' || k === 'name') ? 1 : -1; }
+      paint();
+    }));
+    $('q').addEventListener('input', paint);
+    $('again').addEventListener('click', () => load(true));
+    $('copy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(DATA.fixCommand); $('copy').textContent = 'Copied'; }
+      catch { $('copy').textContent = 'Select it'; }
+      setTimeout(() => { $('copy').textContent = 'Copy'; }, 1600);
+    });
+    load(false);
+  </script>
+</body>
+</html>

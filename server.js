@@ -316,7 +316,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
-                      '/backtest.html': '/backtest',
+                      '/backtest.html': '/backtest', '/quality.html': '/quality',
                       '/architecture.html': '/architecture',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
                       // The public pages have canonical addresses of their own.
@@ -630,6 +630,13 @@ app.get('/backtest', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'backtest');
   res.sendFile(path.join(__dirname, 'private', 'backtest.html'));
+}));
+
+// Admin only: what we actually hold for each stock, and what to run about it.
+app.get('/quality', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'quality');
+  res.sendFile(path.join(__dirname, 'private', 'quality.html'));
 }));
 
 app.get('/database', route(async (req, res) => {
@@ -6520,6 +6527,119 @@ app.get('/api/turso-usage', requireAdmin, route(async (req, res) => {
   }
 }));
 
+
+
+// ============================================================================
+// Data quality
+// ============================================================================
+// One line per stock, saying what we actually hold for it. It exists because
+// every gap this app has had was SILENT: exchange and currency were null for
+// the whole universe for weeks, two stocks arrived with no earnings history at
+// all, one with 66 bars, and nothing anywhere said so. A thin archive is the
+// worst of them because it never heals on its own — a new ticker gets ~300 bars
+// from its first price pull and stays there until someone runs backfill-bars.
+//
+// The archive is measured by SPAN, not by count: `count(*) group by symbol` over
+// bars reads 1.08M rows, which is what produced the Turso quota warning. Two
+// seeks per symbol read two rows. Sessions are estimated from the span and the
+// page says they are estimates.
+const DQ_TTL_MS = 5 * 60 * 1000;
+// What each threshold actually gates, so the flags mean something specific.
+const DQ_MIN_SCORE_BARS = 274;    // momentum needs this many (MIN_BARS)
+const DQ_MIN_5Y_BARS = 1260;      // the 5Y column's window
+const DQ_SESSIONS_PER_DAY = 0.69; // trading days per calendar day, for the estimate
+let dqCache = null;
+
+app.get('/api/data-quality', requireAdmin, route(async (req, res) => {
+  if (!req.query.fresh && dqCache && Date.now() - dqCache.at < DQ_TTL_MS) {
+    return res.json({ ...dqCache.body, cached: true });
+  }
+  const t0 = Date.now();
+  const universe = await store.readUniverse();
+  // Deliberately NOT readSnapshot(): it is a ~1.3MB JSON blob and the only
+  // thing wanted from it was a display name, which readNamesFull answers from
+  // two columns. Parsing a megabyte to label a table is not a trade worth making.
+  const [span, rollups, profiles, priced, names] = await Promise.all([
+    store.barsSpan(universe),
+    store.coverageRollups(),
+    store.readProfiles(),
+    store.readPriceState().catch(() => ({})),
+    store.readNamesFull().catch(() => ({})),
+  ]);
+  const today = new Date().toISOString().slice(0, 10);
+  const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+
+  const rows = universe.map((sym) => {
+    const sp = span[sym] || null;
+    const prof = profiles[sym] || null;
+    const f = rollups.fund[sym] || null;
+    const e = rollups.earn[sym] || null;
+    const n = rollups.news[sym] || null;
+    const nm = names[sym] || {};
+    // Estimated from the span, never counted.
+    const sessions = sp ? Math.round(days(sp.first, sp.last) * DQ_SESSIONS_PER_DAY) + 1 : 0;
+    const flags = [];
+    if (!sp) flags.push('no bars');
+    else {
+      if (sessions < DQ_MIN_SCORE_BARS) flags.push('too short to score');
+      else if (sessions < DQ_MIN_5Y_BARS) flags.push('no 5Y');
+      if (days(sp.last, today) > 5) flags.push('stale prices');
+    }
+    if (!prof) flags.push('no profile');
+    else if (prof.fetchedAt == null) flags.push('profile pull failed');
+    if (!f) flags.push('no fundamentals');
+    if (!e) flags.push('no earnings');
+    if (!prof || !prof.exchange) flags.push('no exchange');
+    return {
+      symbol: sym,
+      name: nm.shortName || nm.name || sym,
+      firstBar: sp ? sp.first : null,
+      lastBar: sp ? sp.last : null,
+      sessions,
+      pricedAt: priced[sym] == null ? null : priced[sym],
+      profileAt: prof && prof.fetchedAt != null ? prof.fetchedAt : null,
+      hasProfile: !!prof,
+      exchange: (prof && prof.exchange) || null,
+      fundDays: f ? f.n : 0,
+      fundFirst: f ? f.first : null,
+      earnQuarters: e ? e.n : 0,
+      earnFirst: e ? e.first : null,
+      news: n ? n.n : 0,
+      flags,
+    };
+  });
+
+  const count = (fn) => rows.filter(fn).length;
+  const thin = rows.filter((r) => r.sessions > 0 && r.sessions < DQ_MIN_5Y_BARS).map((r) => r.symbol);
+  // Built, then cached, then sent. Caching after the response would store
+  // nothing useful, and on this platform the function can be frozen the moment
+  // the response goes out.
+  const body = {
+    universe: universe.length,
+    rows,
+    ms: Date.now() - t0,
+    thresholds: { score: DQ_MIN_SCORE_BARS, fiveYear: DQ_MIN_5Y_BARS },
+    summary: {
+      clean: count((r) => !r.flags.length),
+      noBars: count((r) => r.flags.includes('no bars')),
+      tooShort: count((r) => r.flags.includes('too short to score')),
+      noFiveYear: count((r) => r.flags.includes('no 5Y')),
+      stalePrices: count((r) => r.flags.includes('stale prices')),
+      noProfile: count((r) => r.flags.includes('no profile')),
+      profileFailed: count((r) => r.flags.includes('profile pull failed')),
+      noFundamentals: count((r) => r.flags.includes('no fundamentals')),
+      noEarnings: count((r) => r.flags.includes('no earnings')),
+      noExchange: count((r) => r.flags.includes('no exchange')),
+    },
+    // The fix, not just the diagnosis. One credit a symbol at any depth.
+    thin,
+    fixCommand: thin.length
+      ? `node --use-system-ca backfill-bars.js --commit --depth 1300 --only ${thin.join(',')}`
+      : null,
+  };
+  dqCache = { at: Date.now(), body };
+  res.json(body);
+}));
 
 // The backtest. Admin only: it is a research surface, it reads the whole bar
 // window, and it is the one page here that produces a number that looks like
