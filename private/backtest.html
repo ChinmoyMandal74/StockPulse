@@ -45,6 +45,21 @@
     .tier[data-t="Sell Immediately"][aria-pressed="true"] { background: var(--red); border-color: var(--red); }
     .hint { color: var(--faint); font-size: 11.5px; margin-top: 8px; }
 
+    /* Coverage: one bar per day the page will accept, height = the share of the
+       universe whose fundamentals were already recorded by then. It answers
+       "what will I get" before a run rather than after one. */
+    .cov { display: flex; flex-direction: column; gap: 5px; min-width: 260px; }
+    .cov-bars { display: flex; align-items: flex-end; gap: 1px; height: 38px; }
+    .cov-b {
+      flex: 1 1 0; min-width: 2px; background: var(--hair-2); border: 0; padding: 0;
+      border-radius: 1px 1px 0 0; cursor: pointer; transition: opacity .15s var(--ease); }
+    .cov-b:hover { opacity: .75; }
+    .cov-b.has { background: var(--accent); }
+    .cov-b.most { background: var(--green); }
+    .cov-b.wknd { opacity: .45; }
+    .cov-b.sel { outline: 1px solid var(--text); outline-offset: 1px; }
+    .cov-ax { display: flex; justify-content: space-between; font: 500 9.5px var(--mono); color: var(--faint); }
+
     .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
     .card { padding: 15px 17px; }
     .card .k { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
@@ -108,6 +123,11 @@
         <div class="fld">
           <label for="d">Start date</label>
           <input type="date" id="d" />
+        </div>
+        <div class="fld cov" id="covWrap" hidden>
+          <label>Fundamentals recorded by that date</label>
+          <div class="cov-bars" id="cov"></div>
+          <div class="cov-ax"><span id="covA"></span><span id="covB"></span></div>
         </div>
         <div class="fld" style="flex:1 1 380px">
           <label>Verdicts to buy</label>
@@ -308,6 +328,42 @@
       $('notes').innerHTML = li.map((x) => `<li>${x}</li>`).join('');
     }
 
+    // Drawn once. Clicking a bar picks that date, which is the point: the
+    // strip is a control, not a decoration.
+    let coverage = null;
+    function paintCoverage() {
+      if (!coverage || !coverage.days.length) return;
+      const u = coverage.universe || 1;
+      const sel = $('d').value;
+      $('cov').innerHTML = coverage.days.map((x) => {
+        const share = x.n / u;
+        const cls = ['cov-b'];
+        if (share > 0) cls.push(share >= 0.9 ? 'most' : 'has');
+        if (x.weekend) cls.push('wknd');
+        if (x.d === sel) cls.push('sel');
+        const pc = Math.round(share * 100);
+        return `<button class="${cls.join(' ')}" data-d="${x.d}" style="height:${Math.max(3, share * 38).toFixed(0)}px"
+          title="${x.d}${x.weekend ? ' (weekend)' : ''} — ${x.n} of ${u} stocks had fundamentals recorded by then (${pc}%)"
+          aria-label="${x.d}, ${pc}% recorded"></button>`;
+      }).join('');
+      $('cov').querySelectorAll('.cov-b').forEach((b) => b.addEventListener('click', () => {
+        $('d').value = b.dataset.d;
+        paintCoverage();
+      }));
+      $('covA').textContent = coverage.days[0].d;
+      $('covB').textContent = coverage.days[coverage.days.length - 1].d;
+      $('covWrap').hidden = false;
+    }
+
+    async function loadCoverage() {
+      try {
+        const r = await fetch('/api/backtest/coverage');
+        if (!r.ok) return;
+        coverage = await r.json();
+        paintCoverage();
+      } catch { /* the strip is a convenience; its absence must not stop a run */ }
+    }
+
     async function run() {
       const d = $('d').value;
       $('err').hidden = true;
@@ -342,6 +398,8 @@
       $('hint').textContent = `Any trading day from ${el.min} to ${el.max}. `
         + 'Two months is the limit: further back, almost the whole verdict would be imputed rather than replayed.';
       paintTiers();
+      loadCoverage();
+      el.addEventListener('change', paintCoverage);
       $('run').addEventListener('click', run);
       el.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
       if (want) run();

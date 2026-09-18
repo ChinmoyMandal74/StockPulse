@@ -1880,6 +1880,33 @@ async function readFundamentalsAsOf(day) {
   return out;
 }
 
+// The first day each symbol was ever recorded. That is all the coverage strip
+// needs: what a backtest gets for a date D is every symbol with ANY row on or
+// before D (fundamentals are step functions, so the last set before D stands),
+// which is cumulative and derivable from these few points alone.
+async function readFundamentalsFirstSeen(since) {
+  await init();
+  // BOUNDED to the window, deliberately. An unbounded `group by symbol` walks
+  // the whole table as a covering index, which is fine at 2,000 rows and is
+  // ~365,000 a year at 1,000 stocks. Two indexed range reads instead: who was
+  // already recorded before the window (they count for every date in it), and
+  // when each of the rest first appeared inside it.
+  const before = await db.execute({
+    sql: 'select distinct symbol from fundamentals_history where d < ?', args: [since],
+  });
+  // No `group by symbol` here either: it makes SQLite walk the primary key as a
+  // covering index and ignore the date filter. Ordered by d over the indexed
+  // range, the FIRST row seen for a symbol is its earliest in the window.
+  const inside = await db.execute({
+    sql: 'select symbol, d from fundamentals_history where d >= ? order by d',
+    args: [since],
+  });
+  const out = {};
+  for (const row of before.rows) out[row.symbol] = '0000-00-00';   // before the window
+  for (const row of inside.rows) if (!out[row.symbol]) out[row.symbol] = row.d;
+  return out;
+}
+
 async function fundamentalsStats() {
   await init();
   const r = await db.execute(
@@ -2778,6 +2805,7 @@ module.exports = {
   purgeSymbol,
   markRefreshPrices, readBarsFullFor, notePricePull, readPriceState, readEarningsDates,
   readFundamentalsAsOf,
+  readFundamentalsFirstSeen,
   writeNews, readNews, readLatestNews, readNewsState, newsCountsSince,
   symbolsWithData,
   countSymbolRows,

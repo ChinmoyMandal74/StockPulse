@@ -6501,6 +6501,33 @@ app.get('/api/turso-usage', requireAdmin, route(async (req, res) => {
 // The backtest. Admin only: it is a research surface, it reads the whole bar
 // window, and it is the one page here that produces a number that looks like
 // performance.
+
+// What the backtest would have to work with, for every date it will accept.
+// Answered BEFORE a run, because it is the thing that decides which date to
+// pick, and running one to find out is the wrong order.
+let btCovCache = null;
+app.get('/api/backtest/coverage', requireAdmin, route(async (req, res) => {
+  if (btCovCache && Date.now() - btCovCache.at < 5 * 60 * 1000) return res.json(btCovCache.body);
+  const today = new Date().toISOString().slice(0, 10);
+  const floor = new Date(Date.now() - BT_MAX_BACK_DAYS * 86400000).toISOString().slice(0, 10);
+  const universe = (await store.readUniverse()).length;
+  let first = {};
+  try { first = await store.readFundamentalsFirstSeen(floor); } catch (e) { first = {}; }
+  // Cumulative: a date gets every symbol recorded on or before it, because
+  // fundamentals are step functions and the last set before a date is what
+  // stood on it. So this only ever rises.
+  const seen = Object.values(first).sort();
+  const days = [];
+  for (let t = Date.parse(floor + 'T00:00:00Z'); t <= Date.parse(today + 'T00:00:00Z'); t += 86400000) {
+    const d = new Date(t).toISOString().slice(0, 10);
+    const wd = new Date(t).getUTCDay();
+    days.push({ d, n: seen.filter((f) => f <= d).length, weekend: wd === 0 || wd === 6 });
+  }
+  const body = { universe, floor, today, days, recordingFrom: FUND_HISTORY_FROM };
+  btCovCache = { at: Date.now(), body };
+  res.json(body);
+}));
+
 app.get('/api/backtest', requireAdmin, route(async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   const asked = String(req.query.date || '').slice(0, 10);
