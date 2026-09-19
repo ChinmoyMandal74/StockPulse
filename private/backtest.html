@@ -108,6 +108,48 @@
     .mk { display: inline-block; margin-left: 6px; font-size: 10px; padding: 1px 6px; border-radius: 999px;
           border: 1px solid var(--hair-2); color: var(--amber); vertical-align: 1px; }
 
+    /* The trade log. Every rule is scoped under #trades — this page already
+       carries an unscoped `table` rule and two `.cov` families, and the last
+       two unscoped classes here each broke something else on the page. */
+    #tradeWrap { margin-bottom: 18px; }
+    #tradeWrap h3 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
+    #tradeNote { margin: 0 0 12px; line-height: 1.6; }
+    #tradeNote b { color: var(--text); font-weight: 600; }
+    #trades details { border-top: 1px solid var(--hair); }
+    #trades details:last-child { border-bottom: 1px solid var(--hair); }
+    #trades summary {
+      display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+      padding: 11px 2px; cursor: pointer; list-style: none; font-size: 12.5px; color: var(--muted); }
+    #trades summary::-webkit-details-marker { display: none; }
+    #trades summary::before {
+      content: '▸'; color: var(--faint); font-size: 10px; transition: transform .15s var(--ease); }
+    #trades details[open] > summary::before { transform: rotate(90deg); }
+    #trades summary:hover { color: var(--text); }
+    #trades summary .d { font: 600 13px var(--mono); color: var(--text); }
+    #trades summary .s { color: var(--red); }
+    #trades summary .b { color: var(--green); }
+    #trades summary .t { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+    #trades .rows { padding: 2px 0 12px; }
+    #trades .tr {
+      display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+      padding: 5px 2px 5px 18px; font-size: 12.5px; }
+    #trades .tr .ar { width: 10px; margin-left: -14px; font-size: 9px; }
+    #trades .tr.out .ar { color: var(--red); }
+    #trades .tr.in .ar { color: var(--green); }
+    #trades .tr .sym { font: 600 12.5px var(--mono); min-width: 54px; }
+    #trades .tr .nm { color: var(--muted); min-width: 92px; }
+    #trades .tr .fl { flex: 1 1 200px; color: var(--faint); font-size: 12px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #trades .tr .hd { font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+    #trades .tr .rt { font-family: var(--mono); font-variant-numeric: tabular-nums;
+      min-width: 58px; text-align: right; }
+    #trades .more { padding: 6px 2px 0 18px; font-size: 11.5px; color: var(--faint); }
+    #trades .none { padding: 4px 2px 10px 18px; font-size: 12px; color: var(--faint); }
+    @media (max-width: 620px) {
+      #trades .tr .fl { flex-basis: 100%; white-space: normal; padding-left: 0; }
+      #trades .tr .rt { text-align: left; }
+    }
+
     .why { padding: 18px 20px; }
     .why h3 { font-size: 13px; margin: 0 0 10px; font-weight: 600; }
     .why ul { margin: 0; padding-left: 18px; }
@@ -224,6 +266,12 @@
         <p class="hint" id="rebNote" hidden></p>
       </div></section>
 
+      <section class="bezel" id="tradeWrap" hidden><div class="core" style="padding:16px 18px 6px">
+        <h3>What it traded</h3>
+        <p class="hint" id="tradeNote"></p>
+        <div id="trades"></div>
+      </div></section>
+
       <section class="bezel" style="margin-bottom:18px"><div class="core" style="padding:6px 18px 4px">
         <table id="tbl"><thead><tr>
           <th>Symbol</th><th>Name</th><th>Verdict then</th><th>Rule that fired</th>
@@ -250,6 +298,10 @@
     const picked = new Set(['Strong Buy']);
     const pct = (v, dp) => (v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(dp == null ? 1 : dp) + '%');
     const cls = (v) => (v == null ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : '');
+    // One writer for the ranking's name: the cards, the legend and the trade
+    // log all print it, and three copies would disagree the first time one moved.
+    const rankLabel = (k) => ({ cushion: 'thickest cushion', momentum: 'highest momentum',
+      random: 'at random' }[k] || k);
 
     // Two months back, and never today: the cap is the API's too, but saying it
     // here means the control cannot offer something the server will refuse.
@@ -338,12 +390,62 @@
       svg.innerHTML = g;
     }
 
+    // The rebalance log: what changed hands at each mark and the verdict that
+    // caused it. A rebalance reported only as a turnover percentage is a number
+    // nobody can check — this is that same diff, named.
+    function paintTrades(r) {
+      const w = $('tradeWrap');
+      const list = r.trades || [];
+      if (!r.every || !list.some((x) => x.soldN || x.boughtN)) { w.hidden = true; return; }
+      const rerun = r.mode !== 'exit';
+      const nS = list.reduce((a, x) => a + x.soldN, 0);
+      const nB = list.reduce((a, x) => a + x.boughtN, 0);
+      $('tradeNote').innerHTML =
+        `<b>${nS}</b> sale${nS === 1 ? '' : 's'} and <b>${nB}</b> purchase${nB === 1 ? '' : 's'} across `
+        + `${list.length} rebalance${list.length === 1 ? '' : 's'}. `
+        + (rerun
+          ? `Each mark rebuilds the basket from whatever the rules pick that day, so a name that is kept
+             is re-weighted rather than traded — that re-weighting counts towards the turnover figure
+             above but is neither a purchase nor a sale, and is not listed here.`
+          : `This mode never buys back: a holding is sold when its verdict reaches Avoid, and the cash
+             sits idle from then on.`)
+        + ` The reason beside each name is <b>the verdict that fired for it on that date</b>.`;
+      const cutBy = `ranked below the top ${r.top} by ${rankLabel(r.rank)}`;
+      const row = (t, dir) => {
+        const out = dir === 'out';
+        // A sale whose verdict still qualified was not downgraded — it lost the
+        // cut. Without this the log reads as selling a Hold to buy a Hold.
+        const why = t.ranked ? `Still ${t.action} — ${cutBy}`
+          : t.action ? t.action + (t.flag ? ' — ' + t.flag : '')
+          : 'No verdict at that date — too little history';
+        return `<div class="tr ${dir}"><span class="ar">${out ? '▼' : '▲'}</span>`
+          + `<a class="sym namelink" href="/stock/${encodeURIComponent(t.sym)}" target="_blank" rel="noopener">${we(t.sym)}</a>`
+          + `<span class="nm">${we(t.name)}</span>`
+          + `<span class="fl" title="${we(why)}">${we(why)}</span>`
+          + `<span class="hd">${out && t.days != null ? `held ${t.days} session${t.days === 1 ? '' : 's'}` : ''}</span>`
+          + `<span class="rt ${out ? cls(t.ret) : ''}">${out ? pct(t.ret) : ''}</span></div>`;
+      };
+      // The list is capped server-side, so a trimmed one has to say so rather
+      // than quietly looking complete.
+      const more = (shown, n) => (n > shown ? `<div class="more">…and ${n - shown} more, not listed.</div>` : '');
+      $('trades').innerHTML = list.map((e, i) => `<details${i === 0 ? ' open' : ''}>
+        <summary><span class="d">${we(e.d)}</span>
+          <span class="s">sold ${e.soldN}</span>
+          <span class="b">bought ${e.boughtN}</span>
+          <span class="t">${we(String(e.turnover))}% turnover · ${e.held} held</span></summary>
+        <div class="rows">${e.sold.map((t) => row(t, 'out')).join('') + more(e.sold.length, e.soldN)
+          + e.bought.map((t) => row(t, 'in')).join('') + more(e.bought.length, e.boughtN)
+          + (!e.soldN && !e.boughtN
+            ? '<div class="none">Nothing changed hands — every holding still qualified.</div>' : '')}
+        </div></details>`).join('');
+      w.hidden = false;
+    }
+
     function paint(r) {
       const s = r.summary;
       const beatS = s.spy == null ? null : s.portfolio - s.spy;
       const cut = r.top > 0;
-      const rankName = { cushion: 'thickest cushion', momentum: 'highest momentum', random: 'at random' }[r.rank]
-        || r.rank;
+      const rankName = rankLabel(r.rank);
       const cards = [
         [cut ? 'Held' : 'Picks', cut ? `${s.selected} of ${s.n}` : String(s.n),
           cut ? `${rankName}, tier first`
@@ -422,6 +524,7 @@
             }).join('') + '</span>' : '');
         rn.hidden = false;
       } else { rn.hidden = true; }
+      paintTrades(r);
       $('lgR').hidden = !(r.every && s.rebalanced != null);
       $('lgT').hidden = !cut;
       $('lgB').hidden = !cut;

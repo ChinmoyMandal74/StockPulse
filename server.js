@@ -4568,7 +4568,11 @@ function btSimulate(opts) {
   let cash = 0;
   const first = [...open].filter((sym) => px[sym] && px[sym][0] > 0);
   if (!first.length) return null;
-  for (const sym of first) held.set(sym, 1 / first.length);
+  // What each holding was bought at, so a sale can report what the position
+  // did while it was held rather than only that it happened. Keyed by symbol
+  // because a name sold and bought back later starts a new position.
+  const entry = new Map();             // symbol -> { j, px }
+  for (const sym of first) { held.set(sym, 1 / first.length); entry.set(sym, { j: 0, px: px[sym][0] }); }
 
   const nav = new Array(axis.length).fill(null);
   nav[0] = 1;
@@ -4600,16 +4604,33 @@ function btSimulate(opts) {
         else cash = total;             // nothing qualifies: sit in cash
       }
       let moved = 0;
+      const sold = [], bought = [];
       const names = new Set([...before.keys(), ...held.keys()]);
-      for (const sym of names) moved += Math.abs((held.get(sym) || 0) - (before.get(sym) || 0));
+      for (const sym of names) {
+        const was = before.get(sym) || 0, now = held.get(sym) || 0;
+        moved += Math.abs(now - was);
+        // The same diff that measures turnover names the trades, so the two can
+        // never disagree about what happened.
+        if (was > 0 && now === 0) {
+          const e = entry.get(sym);
+          const at = px[sym] ? px[sym][j] : null;
+          sold.push({ sym, from: e ? axis[e.j] : null,
+            days: e ? j - e.j : null,
+            ret: e && e.px > 0 && at > 0 ? Math.round((at / e.px - 1) * 1000) / 10 : null });
+          entry.delete(sym);
+        } else if (was === 0 && now > 0) {
+          bought.push({ sym });
+          entry.set(sym, { j, px: px[sym][j] });
+        }
+      }
       traded += moved / total;
       // Charge the spread on every dollar that moved, both sides of a switch.
       const fee = (moved / total) * cost;
       for (const [sym, v] of held) held.set(sym, v * (1 - fee));
       cash *= 1 - fee;
       rebalances++;
-      log.push({ d: axis[j], held: held.size, cash: Math.round((cash / total) * 1000) / 10,
-        turnover: Math.round((moved / total) * 1000) / 10 });
+      log.push({ d: axis[j], j, held: held.size, cash: Math.round((cash / total) * 1000) / 10,
+        turnover: Math.round((moved / total) * 1000) / 10, sold, bought });
     }
     let end = cash;
     for (const v of held.values()) end += v;
@@ -4617,6 +4638,77 @@ function btSimulate(opts) {
   }
   return { values: nav, turnover: Math.round(traded * 1000) / 10, rebalances, log,
            endNames: held.size, endCash: Math.round((cash / (nav[nav.length - 1] || 1)) * 1000) / 10 };
+}
+
+// What a Top-N cut ranks on, AS OF one session. Shared by the opening pick and
+// by every rebalance, so a re-run cuts on exactly the measure the run was set
+// up with — a second copy of this would drift the first time either moved.
+// Both values come from data already in hand: this symbol's bars and the row
+// just built. No query.
+//
+// Cushion is the screener's own definition — the distance to the technical
+// exit in the stock's OWN monthly volatility. The raw drop is deliberately not
+// offered as a ranking: measured over 307,965 stock-days it orders the
+// downside BACKWARDS, because "more room" is mostly "more extended".
+function btRankMetrics(row, rows, i) {
+  const newestFirst = rows.slice(0, i + 1).reverse();   // momentum.js's orientation
+  const rv = Momentum.realisedVol(newestFirst);
+  // exitDistance takes a NORMALISED shape, not a snapshot row — it rescales
+  // each field as it walks the price down, so it has to know which is which.
+  // Handing it the row gave every field as undefined and a null cushion for
+  // the whole universe, which then made btPick fall through to the inherited
+  // return order. Same argument list as the live call in scoreActionInto.
+  const ed = Action.exitDistance({
+    v200: row.vs200ma, v50: row.vs50ma, rsi: row.rsi,
+    m1: row.oneMonthPct, m3: row.threeMonthPct, fh: row.pctFromHigh,
+    vol: row.volTrend, hist: row.historyDays,
+  }, ACTION_CFG);
+  const ms = Momentum.scoreBars(newestFirst);
+  return {
+    cushion: (ed && ed.drop != null && rv != null && isFinite(rv) && rv > 0)
+      ? Math.round((ed.drop / (rv / Math.sqrt(12))) * 100) / 100 : null,
+    momentum: ms ? ms.score : null,
+  };
+}
+
+// A rebalance is a number until you can see what it did. btSimulate names the
+// symbols that moved; this hangs the WHY on them — the verdict that fired at
+// that date, which for a sale is precisely the one that disqualified it.
+//
+// Capped per side, because a re-run at weekly cadence over a wide universe can
+// turn over most of the book at every mark and nobody reads three hundred
+// rows. The cap trims by usefulness: sales worst-first (the ones the rule was
+// there to avoid), buys best-verdict-first, and the full count travels with
+// the list so a trimmed one says so rather than looking complete.
+const BT_TRADE_CAP = 40;
+
+function btTrades(log, verdicts, byS, opts) {
+  const { want, cut } = opts || {};
+  const nameOf = (sym) => {
+    const s = byS.get(sym);
+    return (s && (s.shortName || s.name)) || sym;
+  };
+  const tier = (a) => Action.ACTIONS.indexOf(a);
+  return (log || []).map((e) => {
+    const why = verdicts.get(e.j) || new Map();
+    const deco = (t, out) => {
+      const w = why.get(t.sym);
+      return { ...t, name: nameOf(t.sym),
+        action: w ? w.a : null, flag: w ? w.f : null, real: w ? w.real : false,
+        // Under a Top-N cut a holding can be sold while its verdict still
+        // qualifies — it was simply ranked out. Saying "Hold — Extended" beside
+        // a sale AND beside the purchase that replaced it reads as a
+        // contradiction; this is the flag that lets the page tell them apart.
+        ranked: !!(out && cut && w && want && want.has(w.a)) };
+    };
+    const sold = e.sold.map((t) => deco(t, true))
+      .sort((a, b) => (a.ret == null ? 1 : b.ret == null ? -1 : a.ret - b.ret));
+    const bought = e.bought.map((t) => deco(t, false))
+      .sort((a, b) => tier(b.action) - tier(a.action) || a.sym.localeCompare(b.sym));
+    return { d: e.d, held: e.held, cash: e.cash, turnover: e.turnover,
+      soldN: sold.length, boughtN: bought.length,
+      sold: sold.slice(0, BT_TRADE_CAP), bought: bought.slice(0, BT_TRADE_CAP) };
+  });
 }
 
 // The engine's verdict for ONE symbol at ONE session. btRun calls it for the
@@ -4697,31 +4789,11 @@ function btRun(opts) {
     evaluated++;
     if (!want.has(v.action)) continue;
     // What a Top-N cut ranks on, AS OF THEN — computed only for rows that made
-    // the cut, so a run that picks 12 of 427 pays for 12. Both come from data
-    // already in hand: this symbol's bars and the row just built. No query.
-    //
-    // Cushion is the screener's own definition — the distance to the technical
-    // exit in the stock's OWN monthly volatility. The raw drop is deliberately
-    // not offered as a ranking: measured over 307,965 stock-days it orders the
-    // downside BACKWARDS, because "more room" is mostly "more extended".
-    const newestFirst = rows.slice(0, i + 1).reverse();   // momentum.js's orientation
-    const rv = Momentum.realisedVol(newestFirst);
-    // exitDistance takes a NORMALISED shape, not a snapshot row — it rescales
-    // each field as it walks the price down, so it has to know which is which.
-    // Handing it the row gave every field as undefined and a null cushion for
-    // the whole universe, which then made btPick fall through to the inherited
-    // return order. Same argument list as the live call in scoreActionInto.
-    const ed = Action.exitDistance({
-      v200: row.vs200ma, v50: row.vs50ma, rsi: row.rsi,
-      m1: row.oneMonthPct, m3: row.threeMonthPct, fh: row.pctFromHigh,
-      vol: row.volTrend, hist: row.historyDays,
-    }, ACTION_CFG);
-    const ms = Momentum.scoreBars(newestFirst);
+    // the cut, so a run that picks 12 of 427 pays for 12.
+    const m = btRankMetrics(row, rows, i);
     picks.push({ symbol: sym, name: today.shortName || today.name || sym,
       action: v.action, flag: v.flag, type: v.type,
-      cushion: (ed && ed.drop != null && rv != null && isFinite(rv) && rv > 0)
-        ? Math.round((ed.drop / (rv / Math.sqrt(12))) * 100) / 100 : null,
-      momentum: ms ? ms.score : null,
+      cushion: m.cushion, momentum: m.momentum,
       tierRank: Action.ACTIONS.indexOf(v.action),
       fundAsOf: was ? was.asOf : null,
       priceThen: closes[i], dateThen: dates[i],
@@ -7220,12 +7292,19 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
       const rows = await store.readFundamentalsRows(today).catch(() => []);
       const targets = new Map();
       const coverage = [];
+      // Every verdict at every rebalance date, not only the qualifying ones —
+      // the reason a stock was SOLD is the verdict that disqualified it, which
+      // by definition is not in the target set.
+      const verdicts = new Map();
+      const recut = mode === 'rerun' && top > 0;
       let ptr = 0;
       const stood = {};
       for (const j of marks) {
         const at = axis[j];
         while (ptr < rows.length && rows[ptr].d <= at) { stood[rows[ptr].symbol] = rows[ptr]; ptr++; }
         const set = new Set();
+        const why = new Map();
+        const cand = [];
         let real2 = 0, imputed2 = 0;
         for (const sym of Object.keys(bars)) {
           const p = r.prep[sym];
@@ -7237,22 +7316,46 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
           const ev = btEvalAt(sym, p, i, byS2.get(sym) || {}, was, earnings, at);
           if (!ev) continue;
           if (was) real2++; else imputed2++;
+          why.set(sym, { a: ev.v.action, f: ev.v.flag || null, real: !!was });
           // In exit mode a holding survives while its verdict is ABOVE the exit
           // tier, which is a wider net than the tiers you bought on — you do not
           // sell a Strong Buy that merely slipped to Hold.
           const ok = mode === 'exit'
             ? Action.ACTIONS.indexOf(ev.v.action) > Action.ACTIONS.indexOf(BT_EXIT_TIER)
             : tiers.indexOf(ev.v.action) >= 0;
-          if (ok) set.add(sym);
+          if (!ok) continue;
+          set.add(sym);
+          // Ranked only when a cut has to be made, and only on the qualifying
+          // names: the momentum score is a pass over the bars, and doing it for
+          // the whole universe at every mark would be the expensive half of the
+          // run for a number nothing would read.
+          if (recut) cand.push({ symbol: sym, tierRank: Action.ACTIONS.indexOf(ev.v.action),
+            ...btRankMetrics(ev.row, p.rows, i) });
+        }
+        // A Top-N cut is part of the strategy, so re-running the rules has to
+        // re-run the CUT as well. Without this, asking for the top 5 and
+        // rebalancing weekly quietly held all 20 from the first mark onward —
+        // invisible until the trade log named the fifteen it bought.
+        //
+        // The seed moves with the mark so the random control draws a fresh
+        // basket each period rather than the same one every time; exit-only is
+        // left alone, since a cut there would sell names for ranking low, which
+        // is not what "sell on downgrade" means.
+        if (recut && cand.length > top) {
+          const keep = new Set(btPick(cand, rank, top, seed + j).map((x) => x.symbol));
+          for (const sym of [...set]) if (!keep.has(sym)) set.delete(sym);
         }
         targets.set(j, set);
+        verdicts.set(j, why);
         coverage.push({ d: at, recorded: real2, imputed: imputed2 });
       }
       const sim = btSimulate({ axis, px, open: chosen.map((x) => x.symbol),
         targets, mode, costBps });
       if (sim) {
         rebal = { ...sim, every, mode, costBps, coverage,
-          marks: marks.map((j) => axis[j]) };
+          marks: marks.map((j) => axis[j]),
+          trades: btTrades(sim.log, verdicts, byS2,
+            { want: new Set(tiers), cut: recut }) };
       }
     } catch (err) {
       rebalError = err.message;      // a failed simulation never fails the run
@@ -7286,6 +7389,10 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
              tier: top ? tier.values : null,
              band: band ? { p10: band.p10, p50: band.p50, p90: band.p90 } : null,
              spy: spy ? spy.values : null, spyDates: spy ? spy.dates : null },
+    // What the rebalancing actually traded, per rebalance, with the verdict
+    // that caused each move. Beside the curve rather than inside summary:
+    // it is a list, not a statistic.
+    trades: rebal ? rebal.trades : null,
     summary: {
       n: r.picks.length,
       selected: chosen.length,
