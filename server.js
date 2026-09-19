@@ -1219,7 +1219,12 @@ function fromHeader() {
 // box where the brand should be.
 
 const BRAND = 'Tickr Lab';
-const BRAND_TAG = 'Momentum screening, one page.';
+// The tagline, and the ONE place it is written. The email shell reads it from
+// here; the static public pages cannot, so they carry it as text for SEO and to
+// avoid it flashing in after paint — and `tagline-test.js` asserts every one of
+// them still matches this string exactly, naming any file that drifts. Same
+// bargain /help takes with the numbers it restates.
+const BRAND_TAG = 'From data to decisions';
 
 // Colours picked for a light background rather than lifted from the app: mail
 // clients invert or ignore dark themes unpredictably, and a screenshot-black

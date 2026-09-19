@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Tickr Lab — one screen for every stock you follow</title>
-  <meta name="description" content="A nightly stock screener: momentum and quality scored the same way every night, mechanical Advice rules that name the one rule that fired, and twenty years of daily bars behind every number." />
+  <meta name="description" content="From data to decisions. A nightly stock screener: momentum and quality scored the same way every night, mechanical Advice rules that name the one rule that fired, and twenty years of daily bars behind every number." />
   <meta property="og:title" content="Tickr Lab — one screen for every stock you follow" />
-  <meta property="og:description" content="Momentum and quality scored the same way every night, mechanical Advice rules, and twenty years of bars behind every number." />
+  <meta property="og:description" content="From data to decisions. Momentum and quality scored the same way every night, mechanical Advice rules, and twenty years of bars behind every number." />
   <meta property="og:type" content="website" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
@@ -111,6 +111,7 @@
     .close .cta { justify-content: center; }
     footer { border-top: 1px solid rgba(255, 255, 255, 0.06); padding: 30px 0 50px; margin-top: 20px; }
     .frow { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; font-size: 12.5px; color: var(--faint); }
+    .frow .ftag { color: var(--green); letter-spacing: .1em; text-transform: uppercase; font-size: 10.5px; margin-left: -10px; }
     .frow a { color: var(--muted); text-decoration: none; }
     .frow a:hover { color: var(--text); text-decoration: underline; }
     .frow .sp { margin-left: auto; }
@@ -140,7 +141,7 @@
       </span>
       <a class="link hide-sm" href="#what">What it is</a>
       <a class="link hide-sm" href="#rules">The rules</a>
-      <a class="link" href="/about">About</a>
+      <a class="link hide-sm" href="/about">About</a>
       <a class="link" href="/blog">Blog</a>
       <a class="btn" href="/login">Sign in</a>
       <a class="btn btn-primary" href="/login?guest=1">Try it</a>
@@ -149,7 +150,7 @@
 
   <main class="page">
     <div class="hero">
-      <span class="kicker"><span class="pip"></span>Screened nightly</span>
+      <span class="kicker"><span class="pip"></span>From data to decisions</span>
       <h1>One screen for <em>every stock</em> you follow.</h1>
       <p class="sub">Tickr Lab scores momentum and quality the same way every night, on a fixed scale, and shows
         its working. No tips, no watch-this-space — a consistent way to see where every stock you track stands,
@@ -164,8 +165,8 @@
 
     <div class="strip">
       <div class="bezel"><div class="core"><div class="n g" id="sSymbols">271</div><div class="l">Stocks tracked</div></div></div>
-      <div class="bezel"><div class="core"><div class="n b">85</div><div class="l">Columns per stock</div></div></div>
-      <div class="bezel"><div class="core"><div class="n p">20 yrs</div><div class="l">Of daily history</div></div></div>
+      <div class="bezel"><div class="core"><div class="n b" id="sCols">—</div><div class="l">Columns per stock</div></div></div>
+      <div class="bezel"><div class="core"><div class="n p" id="sYears">—</div><div class="l">Of daily history</div></div></div>
       <div class="bezel"><div class="core"><div class="n c">4:15pm ET</div><div class="l">Refreshed daily</div></div></div>
     </div>
 
@@ -302,6 +303,8 @@
     <footer>
       <div class="frow">
         <span class="wordmark">Tickr Lab</span>
+        <span class="ftag">From data to decisions</span>
+        <a href="/about">About</a>
         <a href="/blog">Blog</a>
         <a href="/login">Sign in</a>
         <a href="/login?guest=1">Guest preview</a>
@@ -318,8 +321,13 @@
     // Two numbers on this page are claims about the product, so they come from
     // the product rather than from the copy. Public, cached, and the page reads
     // fine if the call fails — the markup ships with the last known values.
-    fetch('/api/public-stats').then((r) => r.json()).then((d) => {
+    fetch('/api/about-stats').then((r) => r.json()).then((d) => {
       if (d && d.symbols) document.getElementById('sSymbols').textContent = d.symbols.toLocaleString();
+      if (d && d.columns) document.getElementById('sCols').textContent = d.columns;
+      if (d && d.bars && d.bars.earliest && d.bars.latest) {
+        const y = Math.floor((Date.parse(d.bars.latest) - Date.parse(d.bars.earliest)) / 31557600000);
+        if (y > 0) document.getElementById('sYears').textContent = y + ' yrs';
+      }
       if (d && d.updatedAt) {
         document.getElementById('fresh').textContent = 'Data as of ' +
           new Date(d.updatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
