@@ -408,6 +408,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
                       '/backtest.html': '/backtest', '/quality.html': '/quality',
+                      '/trend-backtest.html': '/trend-backtest',
                       '/architecture.html': '/architecture', '/themes.html': '/themes',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
                       // The public pages have canonical addresses of their own.
@@ -731,6 +732,12 @@ app.get('/backtest', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'backtest');
   res.sendFile(path.join(__dirname, 'private', 'backtest.html'));
+}));
+
+app.get('/trend-backtest', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'trend-backtest');
+  res.sendFile(path.join(__dirname, 'private', 'trend-backtest.html'));
 }));
 
 // Admin only: what we actually hold for each stock, and what to run about it.

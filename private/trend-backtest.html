@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Trend backtest — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(124, 156, 255, 0.09), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(52, 211, 153, 0.09), transparent 64%); }
+    .bezel { border-radius: 26px; }
+
+    header.top { display: flex; align-items: center; gap: 14px; padding: 26px 0 18px; flex-wrap: wrap; }
+    header.top h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+    .sub { color: var(--muted); font-size: 13px; margin: 0 0 22px; max-width: 76ch; line-height: 1.6; }
+    .back { margin-left: auto; }
+
+    .panel { padding: 18px 20px; margin-bottom: 18px; }
+    .controls { display: flex; gap: 22px; align-items: flex-end; flex-wrap: wrap; }
+    .fld { display: flex; flex-direction: column; gap: 6px; }
+    .fld label { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+    .fld select, .fld input {
+      background: var(--surface-2); border: 1px solid var(--hair-2); color: var(--text);
+      border-radius: 10px; padding: 9px 11px; font: 500 12.5px var(--sans); min-width: 170px; }
+    .tiers { display: flex; gap: 7px; flex-wrap: wrap; }
+    .tier {
+      border: 1px solid var(--hair-2); background: var(--surface-2); color: var(--muted);
+      border-radius: 999px; padding: 8px 13px; font-size: 12.5px; font-weight: 500;
+      cursor: pointer; transition: all .18s var(--ease); }
+    .tier[aria-pressed="true"] { color: var(--void); font-weight: 600; }
+    .tier[data-t="Strong Buy"][aria-pressed="true"] { background: var(--green); border-color: var(--green); }
+    .tier[data-t="Buy"][aria-pressed="true"] { background: #6ee7b7; border-color: #6ee7b7; }
+    .tier[data-t="Buy with Risk"][aria-pressed="true"] { background: var(--amber); border-color: var(--amber); }
+    .tier[data-t="Hold"][aria-pressed="true"] { background: var(--muted); border-color: var(--muted); }
+    .tier[data-t="Avoid"][aria-pressed="true"] { background: #fda4af; border-color: #fda4af; }
+    .tier[data-t="Sell Immediately"][aria-pressed="true"] { background: var(--red); border-color: var(--red); }
+    /* Buy with Risk is unreachable on the all-technical list — the rule that
+       produces it lives in the Established and Early lists only. Shown struck
+       through rather than hidden, because its absence is a fact about the
+       engine and hiding it would read as an oversight. */
+    .tier.na { opacity: .4; cursor: not-allowed; text-decoration: line-through; }
+    .hint { color: var(--faint); font-size: 11.5px; margin-top: 8px; }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .card { padding: 15px 17px; }
+    .card .k { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+    .card .v { font: 600 24px/1.15 var(--mono); margin-top: 7px; font-variant-numeric: tabular-nums; }
+    .card .n { font-size: 11.5px; color: var(--muted); margin-top: 5px; }
+
+    section.chartbox { padding: 18px 20px 14px; margin-bottom: 18px; }
+    section.chartbox h3 { font-size: 13px; margin: 0 0 4px; font-weight: 600; }
+    section.chartbox .cap { color: var(--faint); font-size: 11.5px; margin: 0 0 14px; line-height: 1.6; }
+    svg.chart { width: 100%; display: block; overflow: visible; }
+    .chart .gl { stroke: var(--hair); stroke-width: 1; }
+    .chart .zero { stroke: var(--hair-2); stroke-width: 1; }
+    .chart .up { fill: var(--green); } .chart .dn { fill: var(--red); }
+    .chart .bar:hover { opacity: .7; }
+    .axl { font: 500 9.5px var(--mono); fill: var(--faint); }
+
+    /* The era strip: two columns of the same numbers, because every result on
+       this project has turned on the 2020 split. */
+    .eras { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+    .era { border: 1px solid var(--hair); border-radius: 12px; padding: 13px 15px; }
+    .era h4 { margin: 0 0 9px; font: 600 12px var(--sans); }
+    .era .row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; color: var(--muted); }
+    .era .row b { font-family: var(--mono); font-weight: 500; color: var(--text); }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 9px; text-align: right; border-bottom: 1px solid var(--hair); font-size: 12.5px; }
+    th { font: 500 10px var(--mono); letter-spacing: .1em; text-transform: uppercase;
+         color: var(--faint); text-align: right; cursor: pointer; }
+    th:first-child, td:first-child { text-align: left; }
+    td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    /* `.tag`, not `.mk` — `.mk` is taken elsewhere in this app as a bordered
+       badge, and an empty one draws a stray pill. The fourth time an unscoped
+       class captured new markup here. */
+    .tag { display: inline-block; margin-left: 6px; font-size: 9.5px; padding: 1px 6px;
+           border-radius: 999px; border: 1px solid var(--hair-2); color: var(--faint); }
+    .tag.thin { color: var(--amber); }
+    .tag.cash { color: var(--accent); }
+    tbody tr:hover { background: var(--surface-2); }
+
+    .why { padding: 18px 20px; }
+    .why h3 { font-size: 13px; margin: 0 0 10px; font-weight: 600; }
+    .why ul { margin: 0; padding-left: 18px; }
+    .why li { color: var(--muted); font-size: 12.5px; line-height: 1.75; margin-bottom: 7px; }
+    .why b { color: var(--text); font-weight: 600; }
+    .warnbox { border-left: 2px solid var(--amber); padding-left: 12px; margin-top: 12px; }
+
+    .empty { color: var(--muted); padding: 26px; text-align: center; font-size: 13px; }
+    .err { color: var(--red); font-size: 13px; padding: 12px 0; }
+    @media (max-width: 720px) {
+      .page { padding: 0 16px; }
+      .controls { gap: 14px; }
+      .tblwrap { overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <main class="page">
+    <header class="top">
+      <h1>Trend backtest</h1>
+      <a class="btn back" href="/admin">Admin</a>
+    </header>
+    <p class="sub">
+      The same rules, over twenty years instead of two months. This one reads
+      <b>nothing but bars</b> — no fundamentals, so nothing is imputed and nothing caps it
+      at the day we started recording them. It runs the rules at every month-start it can,
+      holds what they picked for a fixed horizon, and measures against the equal-weight
+      market over the same window. The answer is the <b>spread across ~200 windows</b>,
+      never one of them. Read <b>How to read this</b> at the foot first.
+    </p>
+
+    <section class="bezel panel"><div class="core panel">
+      <div class="controls">
+        <div class="fld">
+          <label for="horizon">Hold for</label>
+          <select id="horizon">
+            <option value="1M">1 month</option>
+            <option value="3M" selected>3 months</option>
+            <option value="6M">6 months</option>
+            <option value="1Y">1 year</option>
+          </select>
+        </div>
+        <div class="fld">
+          <label for="rules">Rules</label>
+          <select id="rules"></select>
+        </div>
+        <div class="fld">
+          <label for="theme">Run over</label>
+          <select id="theme"><option value="">All stocks</option></select>
+        </div>
+        <div class="fld">
+          <label for="from">Start from</label>
+          <select id="from"></select>
+        </div>
+        <div class="fld">
+          <label for="everyMonths">A window every</label>
+          <select id="everyMonths">
+            <option value="1" selected>month</option>
+            <option value="3">quarter</option>
+            <option value="6">half year</option>
+          </select>
+        </div>
+        <div class="fld" style="flex:1 1 340px">
+          <label>Verdicts to buy</label>
+          <div class="tiers" id="tiers"></div>
+        </div>
+        <button class="btn btn-accent" id="run">Run sweep</button>
+      </div>
+      <p class="hint" id="hint"></p>
+      <div class="err" id="err" hidden></div>
+    </div></section>
+
+    <div id="out" hidden>
+      <div class="cards" id="cards"></div>
+
+      <section class="bezel chartbox"><div class="core" style="padding:16px 18px">
+        <h3>The spread across every window</h3>
+        <p class="cap" id="histCap"></p>
+        <svg class="chart" id="hist" height="170" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </div></section>
+
+      <section class="bezel chartbox"><div class="core" style="padding:16px 18px">
+        <h3>Window by window</h3>
+        <p class="cap" id="seriesCap"></p>
+        <svg class="chart" id="series" height="180" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </div></section>
+
+      <section class="bezel chartbox"><div class="core" style="padding:16px 18px">
+        <h3>Before and after 2020</h3>
+        <p class="cap">Every result on this project has turned on this split, so it is
+          shown rather than left to be discovered.</p>
+        <div class="eras" id="eras"></div>
+      </div></section>
+
+      <section class="bezel" style="margin-bottom:18px"><div class="core" style="padding:6px 18px 4px">
+        <div class="tblwrap">
+          <table id="tbl"><thead><tr>
+            <th data-s="d">Start</th><th data-s="end">Held to</th>
+            <th data-s="n">Picks</th><th data-s="universe">Pool</th>
+            <th data-s="basket">Basket</th><th data-s="bench">Market</th>
+            <th data-s="excess">Excess</th>
+          </tr></thead><tbody id="tb"></tbody></table>
+        </div>
+        <div class="empty" id="none" hidden>No windows — try an earlier start or a wider set of verdicts.</div>
+      </div></section>
+    </div>
+
+    <section class="bezel why"><div class="core why">
+      <h3>How to read this</h3>
+      <ul id="notes">
+        <li>Run a sweep to see the figures for your settings.</li>
+      </ul>
+    </div></section>
+  </main>
+
+  <script src="/action.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
+      (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const pct = (v, dp) => (v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(dp == null ? 2 : dp) + '%');
+    const cls = (v) => (v == null ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : '');
+
+    // Buy with Risk is unreachable here: `etfRules` — the all-technical list
+    // this backtest runs — has no path to it. Offering it as a tick that does
+    // nothing would be worse than showing it struck through.
+    const TIERS = ['Strong Buy', 'Buy', 'Buy with Risk', 'Hold', 'Avoid', 'Sell Immediately'];
+    const UNREACHABLE = new Set(['Buy with Risk']);
+    const picked = new Set(['Strong Buy', 'Buy']);
+    let last = null, sortBy = 'd', sortDir = 1;
+
+    function paintTiers() {
+      $('tiers').innerHTML = TIERS.map((t) => {
+        const na = UNREACHABLE.has(t);
+        return `<button class="tier${na ? ' na' : ''}" data-t="${we(t)}"
+          aria-pressed="${picked.has(t)}"${na ? ' disabled title="The all-technical rules never return this"' : ''}
+          >${we(t)}</button>`;
+      }).join('');
+      $('tiers').querySelectorAll('.tier:not(.na)').forEach((b) => b.addEventListener('click', () => {
+        const t = b.dataset.t;
+        if (picked.has(t)) picked.delete(t); else picked.add(t);
+        if (!picked.size) picked.add(t);            // never leave it empty
+        paintTiers();
+      }));
+    }
+
+    // ---- charts: hand-rolled SVG, the house rule ---------------------------
+    // Both are drawn into a viewBox and stretched, so every label is HTML or a
+    // plain <text> at a fixed size — no glyph rides the scaling.
+    function drawHist(windows) {
+      const vals = windows.map((w) => w.excess).filter((v) => v != null);
+      if (!vals.length) { $('hist').innerHTML = ''; return; }
+      const lo = Math.min(...vals), hi = Math.max(...vals);
+      const span = Math.max(1e-9, hi - lo);
+      const BINS = 31;
+      const bins = new Array(BINS).fill(0);
+      for (const v of vals) bins[Math.min(BINS - 1, Math.floor(((v - lo) / span) * BINS))]++;
+      const top = Math.max(...bins);
+      const W = 1000, H = 150, PAD = 16;
+      const bw = (W - PAD * 2) / BINS;
+      // Where zero sits, so the eye can see which side the mass is on — the
+      // whole question this chart answers.
+      const zx = PAD + ((0 - lo) / span) * (W - PAD * 2);
+      const bars = bins.map((n, i) => {
+        const h = top ? (n / top) * (H - 26) : 0;
+        const mid = lo + ((i + 0.5) / BINS) * span;
+        return `<rect class="bar ${mid >= 0 ? 'up' : 'dn'}" x="${PAD + i * bw + 0.5}"
+          y="${H - 18 - h}" width="${Math.max(1, bw - 1)}" height="${h}" rx="1"
+          ><title>${n} window${n === 1 ? '' : 's'} near ${pct(mid, 1)}</title></rect>`;
+      }).join('');
+      $('hist').setAttribute('viewBox', `0 0 ${W} ${H}`);
+      $('hist').innerHTML = bars
+        + (zx > PAD && zx < W - PAD
+          ? `<line class="zero" x1="${zx}" y1="6" x2="${zx}" y2="${H - 18}" />
+             <text class="axl" x="${zx + 4}" y="14">0</text>` : '')
+        + `<text class="axl" x="${PAD}" y="${H - 5}">${we(pct(lo, 1))}</text>`
+        + `<text class="axl" x="${W - PAD}" y="${H - 5}" text-anchor="end">${we(pct(hi, 1))}</text>`;
+    }
+
+    function drawSeries(windows) {
+      const ws = windows.filter((w) => w.excess != null);
+      if (!ws.length) { $('series').innerHTML = ''; return; }
+      const top = Math.max(...ws.map((w) => Math.abs(w.excess))) || 1;
+      const W = 1000, H = 160, PAD = 16, MID = (H - 16) / 2;
+      const bw = (W - PAD * 2) / ws.length;
+      const bars = ws.map((w, i) => {
+        const h = (Math.abs(w.excess) / top) * (MID - 6);
+        const up = w.excess >= 0;
+        return `<rect class="bar ${up ? 'up' : 'dn'}" x="${PAD + i * bw}"
+          y="${up ? MID - h : MID}" width="${Math.max(0.8, bw - 0.6)}" height="${Math.max(0.6, h)}"
+          ><title>${we(w.d)} → ${we(w.end)}: ${we(pct(w.excess))} (${w.n} of ${w.universe})</title></rect>`;
+      }).join('');
+      $('series').setAttribute('viewBox', `0 0 ${W} ${H}`);
+      const years = [];
+      ws.forEach((w, i) => {
+        const y = w.d.slice(0, 4);
+        if (!years.length || years[years.length - 1].y !== y) years.push({ y, x: PAD + i * bw });
+      });
+      $('series').innerHTML = `<line class="zero" x1="${PAD}" y1="${MID}" x2="${W - PAD}" y2="${MID}" />`
+        + bars
+        + years.filter((_, i) => i % Math.ceil(years.length / 12) === 0)
+            .map((t) => `<text class="axl" x="${t.x}" y="${H - 3}">${t.y}</text>`).join('');
+    }
+
+    function eraCard(name, s) {
+      if (!s || !s.windows) return `<div class="era"><h4>${we(name)}</h4>
+        <div class="row">No windows in this era.</div></div>`;
+      const row = (k, v, c) => `<div class="row"><span>${we(k)}</span><b class="${c || ''}">${we(v)}</b></div>`;
+      return `<div class="era"><h4>${we(name)} · ${s.windows} windows</h4>
+        ${row('Median excess', pct(s.medianExcess), cls(s.medianExcess))}
+        ${row('Hit rate', s.hitRate == null ? '—' : s.hitRate.toFixed(0) + '%')}
+        ${row('Worst window', pct(s.worst), cls(s.worst))}
+        ${row('Best window', pct(s.best), cls(s.best))}
+        ${row('Basket vs market', pct(s.meanBasket) + ' vs ' + pct(s.meanBench))}
+      </div>`;
+    }
+
+    function paintTable() {
+      const ws = (last.windows || []).slice().sort((a, b) => {
+        const x = a[sortBy], y = b[sortBy];
+        if (x == null) return 1;
+        if (y == null) return -1;
+        return (x > y ? 1 : x < y ? -1 : 0) * sortDir;
+      });
+      $('tb').innerHTML = ws.map((w) => `<tr>
+        <td>${we(w.d)}${w.cash ? '<span class="tag cash">cash</span>'
+          : w.thin ? '<span class="tag thin">thin</span>' : ''}</td>
+        <td class="num">${we(w.end)}</td>
+        <td class="num">${w.n}</td>
+        <td class="num">${w.universe}</td>
+        <td class="num ${cls(w.basket)}">${pct(w.basket, 1)}</td>
+        <td class="num ${cls(w.bench)}">${pct(w.bench, 1)}</td>
+        <td class="num ${cls(w.excess)}">${pct(w.excess, 1)}</td></tr>`).join('');
+      $('none').hidden = ws.length > 0;
+    }
+
+    function paint(r) {
+      last = r;
+      const s = r.summary;
+      const HL = { '1M': 'one month', '3M': 'three months', '6M': 'six months', '1Y': 'one year' };
+      $('cards').innerHTML = [
+        ['Median excess', pct(s.medianExcess), `over ${s.windows} windows, held ${HL[r.horizon]}`],
+        ['Hit rate', s.hitRate == null ? '—' : s.hitRate.toFixed(0) + '%', 'of windows beat the market'],
+        ['Independent windows', String(s.effectiveWindows),
+          `of ${s.windows}, discounted for ${s.overlapFactor}x overlap`],
+        ['Typical basket', s.avgPicks == null ? '—' : s.avgPicks.toFixed(0),
+          `picks from ${s.avgUniverse == null ? '—' : s.avgUniverse.toFixed(0)} in scope`],
+        ['Basket vs market', pct(s.meanBasket), `market ${pct(s.meanBench)} on average`],
+      ].map(([k, v, n]) => `<div class="bezel card"><div class="core card">
+        <div class="k">${we(k)}</div><div class="v ${cls(k === 'Median excess' ? s.medianExcess : null)}">${we(v)}</div>
+        <div class="n">${we(n)}</div></div></div>`).join('');
+
+      $('histCap').innerHTML = `Each bar is a count of windows whose excess over the market fell in that`
+        + ` range. <b>The question is which side of zero the mass sits on</b>, not where any one window landed.`
+        + (s.p10 != null ? ` Eight windows in ten fell between <b>${we(pct(s.p10))}</b> and <b>${we(pct(s.p90))}</b>.` : '');
+      drawHist(r.windows);
+
+      $('seriesCap').innerHTML = `Excess per window, oldest first — ${we(s.firstWindow || '')} to`
+        + ` ${we(s.lastWindow || '')}. Hover a bar for its dates and basket size.`
+        + ` The pool grows from <b>${s.firstUniverse}</b> stocks to <b>${s.lastUniverse}</b> across this span,`
+        + ` so an early bar is a narrower claim than a late one.`;
+      drawSeries(r.windows);
+
+      $('eras').innerHTML = eraCard('Before 2020', r.eras.pre2020) + eraCard('2020 onward', r.eras.post2020);
+      paintTable();
+      $('out').hidden = false;
+
+      const li = [];
+      li.push(`<b>Nothing here is imputed.</b> Every input — the 200- and 50-day averages, RSI,
+        the one- and three-month returns, the 52-week position, the volume trend — is computed from
+        that stock's own bars at that date. This runs <b>the all-technical rule list</b>, the same one
+        an ETF row goes through today, so there is no second engine and no fundamentals to invent.`);
+      li.push(`<b>One window is one observation, and they overlap.</b> ${s.windows} windows at a
+        ${we(HL[r.horizon])} horizon starting every ${r.everyMonths === 1 ? 'month' : r.everyMonths + ' months'}
+        share most of their lives with their neighbours — about <b>${s.effectiveWindows} independent</b>
+        readings, not ${s.windows}. Judge the median and the hit rate against that number.`);
+      li.push(`<b>The pool changes underneath you.</b> ${s.firstUniverse} stocks had enough history at
+        ${we(s.firstWindow || '')}, against ${s.lastUniverse} at ${we(s.lastWindow || '')}. Every one of them
+        is a stock we track <i>today</i>, so the further back a window sits the more it is conditioned on
+        having survived to now — the bias the ballast exists to counter, and it is thin.`);
+      if (s.cashWindows) {
+        li.push(`<b>${s.cashWindows} window${s.cashWindows === 1 ? '' : 's'} bought nothing.</b> That is
+          a result, not a gap: the money sat in cash, earned nothing, and its excess is minus whatever
+          the market did. Those windows are counted.`);
+      }
+      if (s.thinWindows) {
+        li.push(`<b>${s.thinWindows} window${s.thinWindows === 1 ? '' : 's'} held under three stocks</b>
+          and are marked <i>thin</i> in the table. They are counted too — dropping the windows where the
+          rules found almost nothing would remove exactly the periods a trend rule is judged on — but a
+          two-stock basket is mostly one company's luck.`);
+      }
+      li.push(`<b>The benchmark is the equal-weight universe</b>, not the S&amp;P: it asks whether the
+        rules <i>selected</i>, which is the only question the archive can answer without a second data source.
+        No costs, no dividends, no rebalancing inside a window.`);
+      $('notes').innerHTML = li.map((x) => `<li>${x}</li>`).join('')
+        + `<li class="warnbox"><b>What would change the answer:</b> the universe. These are large,
+          heavily-covered, correlated names — the most arbitraged corner of the market — and at these
+          horizons most of their variance is common. A result here is a statement about this pool
+          first and the rules second.</li>`;
+    }
+
+    async function run() {
+      $('err').hidden = true;
+      const btn = $('run');
+      btn.disabled = true; btn.textContent = 'Running…';
+      try {
+        const q = `?horizon=${encodeURIComponent($('horizon').value)}`
+          + `&tiers=${encodeURIComponent([...picked].join(','))}`
+          + `&rules=${encodeURIComponent($('rules').value || 'Balanced')}`
+          + `&everyMonths=${encodeURIComponent($('everyMonths').value)}`
+          + `&from=${encodeURIComponent($('from').value)}`
+          + ($('theme').value ? `&theme=${encodeURIComponent($('theme').value)}` : '');
+        const res = await fetch('/api/trend-backtest' + q);
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
+        if (j.empty) {
+          $('err').textContent = j.note || 'No trend history recorded yet.';
+          $('err').hidden = false; $('out').hidden = true;
+        } else {
+          paint(j);
+          history.replaceState(null, '', location.pathname + q);
+        }
+      } catch (e) {
+        $('err').textContent = e.message;
+        $('err').hidden = false;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Run sweep';
+      }
+    }
+
+    (async () => {
+      const qs = new URLSearchParams(location.search);
+      // Start years: 2008 is where the archive first carries a real pool — the
+      // 5,000-bar ceiling puts most deep symbols at 2006-11 and the rules need
+      // a 52-week run-up on top.
+      $('from').innerHTML = [];
+      const opts = [];
+      for (let y = 2008; y <= new Date().getFullYear() - 1; y++) {
+        opts.push(`<option value="${y}-01-01"${y === 2008 ? ' selected' : ''}>${y}</option>`);
+      }
+      $('from').innerHTML = opts.join('');
+
+      try {
+        const pf = (await (await fetch('/api/portfolios')).json()).portfolios || {};
+        $('theme').innerHTML = '<option value="">All stocks</option>' + Object.keys(pf).map((n) =>
+          `<option value="${we(n)}">${we(n)} (${(pf[n] || []).length})</option>`).join('');
+      } catch (e) { /* the sweep still runs over everything */ }
+
+      // The rule sets come from the server, never a copy in this page.
+      try {
+        const c = await (await fetch('/api/backtest/coverage')).json();
+        const list = (c && c.ruleSets) || ['Balanced'];
+        $('rules').innerHTML = list.map((n) => `<option value="${we(n)}">${we(n)}</option>`).join('');
+      } catch (e) { $('rules').innerHTML = '<option value="Balanced">Balanced</option>'; }
+
+      for (const [id, key] of [['horizon', 'horizon'], ['theme', 'theme'], ['from', 'from'],
+        ['everyMonths', 'everyMonths'], ['rules', 'rules']]) {
+        if (qs.get(key)) $(id).value = qs.get(key);
+      }
+      if (qs.get('tiers')) {
+        picked.clear();
+        qs.get('tiers').split(',').forEach((t) => { if (TIERS.includes(t) && !UNREACHABLE.has(t)) picked.add(t); });
+        if (!picked.size) picked.add('Strong Buy');
+      }
+      paintTiers();
+      $('hint').textContent = 'The archive supports windows from 2008; before that only a handful of '
+        + 'stocks have the 52 weeks of bars the rules need.';
+      $('run').addEventListener('click', run);
+      document.querySelectorAll('#tbl th[data-s]').forEach((th) => th.addEventListener('click', () => {
+        const k = th.dataset.s;
+        if (sortBy === k) sortDir = -sortDir; else { sortBy = k; sortDir = k === 'd' ? 1 : -1; }
+        if (last) paintTable();
+      }));
+      run();
+    })();
+  </script>
+</body>
+</html>
