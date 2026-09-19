@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Themes &amp; tickers — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(52, 211, 153, 0.09), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.11), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+
+    header.top { display: flex; align-items: center; gap: 14px; padding: 26px 0 16px; flex-wrap: wrap; }
+    header.top h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+    .back { margin-left: auto; }
+    .sub { color: var(--muted); font-size: 13px; margin: 0 0 22px; max-width: 78ch; line-height: 1.6; }
+
+    /* The padding belongs on the CORE, not the bezel. Putting it on the bezel
+       overrode its own 6px shell and left the core's content flush against its
+       rounded edge — every section label lost its first letter ("\DD A TICKER").
+       The house pattern is `.card > .core { padding }`. */
+    .card { margin-bottom: 18px; }
+    .card > .core { padding: 20px 22px; }
+    .lbl { display: block; font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+           color: var(--faint); margin-bottom: 9px; }
+    .line { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+    .said { font-size: 12px; color: var(--muted); margin: 9px 0 0; line-height: 1.55; min-height: 1em; }
+    .said.err { color: var(--red); }
+    .said.ok { color: var(--green); }
+    input[type="text"], select, textarea {
+      background: var(--surface-2); border: 1px solid var(--hair-2); color: var(--text);
+      border-radius: 10px; padding: 9px 11px; font-family: var(--sans); font-size: 13px; outline: none; }
+    input[type="text"]:focus, textarea:focus, select:focus { border-color: var(--accent); }
+    #sym { width: 130px; font-family: var(--mono); text-transform: uppercase; }
+    textarea { width: 100%; box-sizing: border-box; resize: vertical; font-family: var(--mono); font-size: 12.5px; }
+    select { min-width: 210px; }
+
+    /* ---- the theme list ---------------------------------------------------
+       One row per theme: drag handle, its own colour, the name (click to
+       rename in place), how many stocks, and the controls. */
+    .ord { list-style: none; margin: 0; padding: 0; border: 1px solid var(--hair);
+           border-radius: 12px; overflow: hidden; }
+    .ord li { display: flex; align-items: center; gap: 10px; padding: 8px 11px;
+              border-top: 1px solid rgba(255, 255, 255, 0.05); background: var(--surface); font-size: 13.5px; }
+    .ord li:first-child { border-top: 0; }
+    .ord li.drag { opacity: 0.4; }
+    .ord li.over { background: rgba(124, 156, 255, 0.10); }
+    .ord .grip { color: var(--faint); cursor: grab; line-height: 1; font-size: 13px; user-select: none; }
+    .ord .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+    .ord .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+               background: none; border: 1px solid transparent; color: var(--text);
+               font-family: var(--sans); font-size: 13.5px; padding: 4px 7px; border-radius: 7px; }
+    .ord .nm:hover { border-color: var(--hair); }
+    .ord .nm:focus { border-color: var(--accent); background: rgba(255, 255, 255, 0.04); outline: none; }
+    .ord .n { font-family: var(--mono); font-size: 11.5px; color: var(--faint); min-width: 30px; text-align: right; }
+    .ord .mv, .ord .del, .ord .go {
+      background: none; border: 1px solid var(--hair); color: var(--muted); border-radius: 7px;
+      width: 24px; height: 24px; line-height: 1; cursor: pointer; font-size: 11px; padding: 0; flex: none; }
+    .ord .mv:hover:not(:disabled), .ord .go:hover { color: var(--text); border-color: var(--hair-2); }
+    .ord .del:hover { color: var(--red); border-color: rgba(251, 113, 133, 0.4); }
+    .ord .mv:disabled { opacity: 0.28; cursor: default; }
+    .ord .go { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+
+    .warn { border-left: 2px solid var(--amber); padding-left: 12px; margin-top: 14px;
+            font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+    .empty { color: var(--muted); padding: 22px; text-align: center; font-size: 13px; }
+    @media (max-width: 720px) {
+      .page { padding: 0 16px; }
+      select, #sym { width: 100%; min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.6 9.8 17.4 19 6.6"/></symbol>
+  </svg>
+
+  <main class="page">
+    <header class="top">
+      <h1>Themes &amp; tickers</h1>
+      <a class="btn back" href="/admin">Admin</a>
+      <a class="btn" href="/">Screener</a>
+    </header>
+    <p class="sub">
+      Add stocks to the screener, and keep the themes that group them. A stock belongs to the
+      screener on its own — a theme is optional grouping, and a stock can sit in several.
+      To put one stock into a theme, the star on its row in the screener is quicker than anything here.
+    </p>
+
+    <section class="bezel card"><div class="core">
+      <span class="lbl">Add a ticker</span>
+      <div class="line">
+        <input type="text" id="sym" placeholder="TSLA" maxlength="12" autocomplete="off" aria-label="Ticker symbol" />
+        <select id="addTo" aria-label="Also add to a theme (optional)"></select>
+        <button class="btn btn-primary" id="addBtn">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>Add</button>
+      </div>
+      <p class="said" id="addSaid"></p>
+    </div></section>
+
+    <section class="bezel card"><div class="core">
+      <span class="lbl">Add many at once</span>
+      <textarea id="bulkText" rows="3" spellcheck="false" autocomplete="off" aria-label="Paste tickers"
+        placeholder="Paste tickers &mdash; commas, spaces or one per line.  AAPL, MSFT NVDA&#10;GOOGL"></textarea>
+      <div class="line" style="margin-top:9px">
+        <input type="text" id="bulkPf" maxlength="40" autocomplete="off" list="bulkPfList"
+          placeholder="Theme for the batch (optional)" aria-label="Theme for this batch" />
+        <datalist id="bulkPfList"></datalist>
+        <button class="btn" id="bulkCheck">Check</button>
+        <button class="btn btn-primary" id="bulkGo" disabled>
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>Add them</button>
+      </div>
+      <p class="said" id="bulkSaid">Adding costs no API credits and pulls nothing &mdash; the data arrives
+        with Fill missing or the nightly gap fill.</p>
+    </div></section>
+
+    <section class="bezel card"><div class="core">
+      <span class="lbl">The themes</span>
+      <p class="said" style="margin:0 0 10px">Click a name to rename it. Drag a row, or use the arrows,
+        to set the order &mdash; that order is the order everywhere. Colours follow the theme's name, so
+        reordering never repaints them.</p>
+      <ol class="ord" id="ordList" aria-label="Themes"></ol>
+      <div class="empty" id="ordEmpty" hidden>No themes yet.</div>
+      <div class="line" style="margin-top:10px">
+        <input type="text" id="newName" maxlength="40" autocomplete="off" placeholder="New theme name" aria-label="New theme name" />
+        <button class="btn" id="newGo">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>Create</button>
+        <span style="flex:1"></span>
+        <button class="btn btn-primary" id="ordSave" disabled>
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-check" /></svg>Save order</button>
+        <button class="btn" id="ordReset" disabled>Undo</button>
+      </div>
+      <p class="said" id="ordSaid"></p>
+      <p class="warn">Deleting a theme keeps its stocks. The universe is its own table, so nothing is
+        purged and no price history is lost &mdash; the stocks simply stop being grouped. A stock leaves
+        the screener only through the &times; on its row in the All view.</p>
+    </div></section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    async function api(method, url, body) {
+      const res = await fetch(url, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      return data;
+    }
+    const say = (id, msg, kind) => {
+      const el = $(id);
+      el.textContent = msg;
+      el.className = 'said' + (kind ? ' ' + kind : '');
+    };
+
+    let portfolios = {};
+    let universe = [];
+    let order = [], savedOrder = [];
+
+    const PALETTE = ['#7c9cff', '#34d399', '#a78bfa', '#fb923c', '#fb7185', '#22d3ee', '#fbbf24', '#f472b6'];
+    // The SAME hash the screener and /admin use. Colour follows the NAME, which
+    // is what lets a theme be reordered without its badge changing colour.
+    const colorFor = (name) => {
+      let h = 0x811c9dc5;
+      const t = String(name || '');
+      for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+      return PALETTE[h % PALETTE.length];
+    };
+    const sameOrder = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+    // ---- the list ----------------------------------------------------------
+    function paintList() {
+      const list = $('ordList');
+      $('ordEmpty').hidden = order.length > 0;
+      list.hidden = order.length === 0;
+      list.innerHTML = order.map((n, i) =>
+        `<li draggable="true" data-i="${i}" data-name="${we(n)}">` +
+        '<span class="grip" aria-hidden="true">⠿</span>' +
+        `<span class="dot" style="background:${colorFor(n)}"></span>` +
+        `<input class="nm" value="${we(n)}" maxlength="40" data-ren="${we(n)}" aria-label="Theme name" />` +
+        `<span class="n">${(portfolios[n] || []).length}</span>` +
+        `<a class="go" href="/theme/${encodeURIComponent(n)}" title="Open this theme" target="_blank" rel="noopener">↗</a>` +
+        `<button class="mv" data-up="${i}" ${i === 0 ? 'disabled' : ''} aria-label="Move up">▲</button>` +
+        `<button class="mv" data-dn="${i}" ${i === order.length - 1 ? 'disabled' : ''} aria-label="Move down">▼</button>` +
+        `<button class="del" data-del="${we(n)}" aria-label="Delete theme">✕</button>` +
+        '</li>').join('');
+      const dirty = !sameOrder(order, savedOrder);
+      $('ordSave').disabled = !dirty;
+      $('ordReset').disabled = !dirty;
+    }
+
+    function adopt(r) {
+      portfolios = r.portfolios || portfolios;
+      universe = r.universe || universe;
+      savedOrder = Object.keys(portfolios);
+      // Keep the order on screen for the themes that still exist, then append
+      // any the server knows about that this page does not. That way creating
+      // one shows it AT ONCE without throwing away an unsaved drag, and a
+      // delete elsewhere simply drops out. The first cut only refreshed the
+      // list when it already matched, so a newly created theme stayed
+      // invisible until a reload.
+      const known = new Set(savedOrder);
+      const kept = order.filter((n) => known.has(n));
+      order = kept.concat(savedOrder.filter((n) => !kept.includes(n)));
+      paintList();
+      paintPickers();
+    }
+    function paintPickers() {
+      const names = Object.keys(portfolios);
+      $('addTo').innerHTML = '<option value="">No theme — screener only</option>' +
+        names.map((n) => `<option value="${we(n)}">Also add to ${we(n)}</option>`).join('');
+      $('bulkPfList').innerHTML = names.map((n) => `<option value="${we(n)}"></option>`).join('');
+    }
+
+    function moveTheme(from, to) {
+      if (to < 0 || to >= order.length || from === to) return;
+      const [x] = order.splice(from, 1);
+      order.splice(to, 0, x);
+      say('ordSaid', '');
+      paintList();
+    }
+
+    // ---- add one -----------------------------------------------------------
+    async function addTicker() {
+      const symbol = $('sym').value.trim().toUpperCase();
+      if (!symbol) { say('addSaid', 'Type a ticker first.', 'err'); return; }
+      const theme = $('addTo').value;
+      $('addBtn').disabled = true;
+      say('addSaid', 'Adding…');
+      try {
+        const r = theme
+          ? await api('POST', `/api/portfolios/${encodeURIComponent(theme)}/tickers`, { symbol })
+          : await api('POST', '/api/universe', { symbol });
+        adopt(r);
+        $('sym').value = '';
+        // A name coming back empty is the earliest hint of a typo — the add
+        // route resolves it, and nothing else touches the symbol until the
+        // next refresh.
+        const nm = r.name || (r.names && r.names[symbol]);
+        say('addSaid', `${symbol} added${theme ? ` to ${theme}` : ''}${nm ? ` — ${nm}` : ''}.`
+          + (nm ? '' : ' No company name came back, which usually means a typo.'), nm ? 'ok' : 'err');
+      } catch (err) { say('addSaid', err.message, 'err'); }
+      $('addBtn').disabled = false;
+    }
+
+    // ---- add many ----------------------------------------------------------
+    // Free text splits into symbol-shaped tokens, and that is the hazard: "not
+    // a ticker!" becomes NOT, A and TICKER — and A is Agilent. So the preview
+    // checks them against the stored US listing and says which are unknown.
+    const parseTickers = (text) => [...new Set(String(text || '').toUpperCase()
+      .split(/[^A-Z0-9./-]+/).map((x) => x.replace(/^\$/, '').trim())
+      .filter((x) => x && /^[A-Z][A-Z0-9./-]{0,11}$/.test(x)))];
+    let bulkReady = null;
+
+    async function checkBulk() {
+      const syms = parseTickers($('bulkText').value);
+      $('bulkGo').disabled = true;
+      bulkReady = null;
+      if (!syms.length) { say('bulkSaid', 'Nothing that looks like a ticker in there.', 'err'); return; }
+      say('bulkSaid', 'Checking…');
+      try {
+        const chk = await api('POST', '/api/universe/check', { symbols: syms });
+        const already = chk.inUniverse || [];
+        const unknown = chk.unlisted || [];
+        const fresh = syms.filter((s) => !already.includes(s));
+        const theme = $('bulkPf').value.trim();
+        const isNew = theme && !Object.keys(portfolios).some((n) => n.toLowerCase() === theme.toLowerCase());
+        bulkReady = { symbols: syms, theme, isNew };
+        const bits = [`${syms.length} ticker${syms.length === 1 ? '' : 's'}`];
+        if (already.length) bits.push(`${already.length} already tracked`);
+        if (fresh.length) bits.push(`${fresh.length} new — about ${(fresh.length * 81).toLocaleString()} credits on the next Fill missing`);
+        if (theme) bits.push(isNew ? `will CREATE the theme "${theme}"` : `into "${theme}"`);
+        say('bulkSaid', bits.join(' · ') + (unknown.length
+          ? ` — ${unknown.length} not in the NASDAQ listing (${unknown.slice(0, 6).join(', ')})` : ''),
+          unknown.length ? 'err' : 'ok');
+        $('bulkGo').disabled = false;
+      } catch (err) { say('bulkSaid', err.message, 'err'); }
+    }
+
+    async function addBulk() {
+      if (!bulkReady) return;
+      const { symbols, theme, isNew } = bulkReady;
+      if (isNew && !confirm(`This will create a new theme called "${theme}" and put ${symbols.length} stocks in it.\n\nGo ahead?`)) return;
+      $('bulkGo').disabled = true;
+      say('bulkSaid', 'Adding…');
+      try {
+        const r = await api('POST', '/api/universe/bulk',
+          { symbols, ...(theme ? { portfolio: theme, createPortfolio: true } : {}) });
+        adopt(r);
+        $('bulkText').value = '';
+        bulkReady = null;
+        say('bulkSaid', `${(r.added || []).length} added, ${(r.already || []).length} already tracked`
+          + ((r.invalid || []).length ? `, ${r.invalid.length} rejected` : '')
+          + '. Run Fill missing to pull their data.', 'ok');
+      } catch (err) { say('bulkSaid', err.message, 'err'); $('bulkGo').disabled = false; }
+    }
+
+    // ---- create / rename / delete ------------------------------------------
+    async function createTheme() {
+      const name = $('newName').value.trim();
+      if (!name) { say('ordSaid', 'Type a name first.', 'err'); return; }
+      try {
+        adopt(await api('POST', '/api/portfolios', { name }));
+        $('newName').value = '';
+        say('ordSaid', `"${name}" created. Add stocks with the star on any screener row.`, 'ok');
+      } catch (err) { say('ordSaid', err.message, 'err'); }
+    }
+    async function renameTheme(from, to) {
+      if (!to || to === from) return;
+      try {
+        const r = await api('PUT', `/api/portfolios/${encodeURIComponent(from)}`, { newName: to });
+        // The order array holds names, so rename it there too or the list and
+        // the saved order disagree and Save would look dirty for no reason.
+        order = order.map((n) => (n === from ? to : n));
+        adopt(r);
+        say('ordSaid', `Renamed to "${to}".`, 'ok');
+      } catch (err) { say('ordSaid', err.message, 'err'); paintList(); }
+    }
+    async function deleteTheme(name) {
+      const n = (portfolios[name] || []).length;
+      if (!confirm(`Delete the theme "${name}"?\n\n`
+        + `Its ${n} stock${n === 1 ? '' : 's'} stay in the screener with all their history — `
+        + 'they just stop being grouped.')) return;
+      try {
+        order = order.filter((x) => x !== name);
+        adopt(await api('DELETE', `/api/portfolios/${encodeURIComponent(name)}`));
+        say('ordSaid', `"${name}" deleted. Its stocks are still tracked.`, 'ok');
+      } catch (err) { say('ordSaid', err.message, 'err'); }
+    }
+
+    // ---- wiring ------------------------------------------------------------
+    $('addBtn').addEventListener('click', addTicker);
+    $('sym').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTicker(); });
+    $('bulkCheck').addEventListener('click', checkBulk);
+    $('bulkGo').addEventListener('click', addBulk);
+    $('bulkText').addEventListener('input', () => { $('bulkGo').disabled = true; bulkReady = null; });
+    $('bulkPf').addEventListener('input', () => { $('bulkGo').disabled = true; bulkReady = null; });
+    $('newGo').addEventListener('click', createTheme);
+    $('newName').addEventListener('keydown', (e) => { if (e.key === 'Enter') createTheme(); });
+
+    const list = $('ordList');
+    list.addEventListener('click', (e) => {
+      const up = e.target.closest('[data-up]'), dn = e.target.closest('[data-dn]'),
+            del = e.target.closest('[data-del]');
+      if (up) moveTheme(+up.dataset.up, +up.dataset.up - 1);
+      else if (dn) moveTheme(+dn.dataset.dn, +dn.dataset.dn + 1);
+      else if (del) deleteTheme(del.dataset.del);
+    });
+    // Rename commits on blur or Enter, never on every keystroke — repainting
+    // the list mid-type would drop the caret.
+    list.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.dataset.ren) { e.preventDefault(); e.target.blur(); }
+      if (e.key === 'Escape' && e.target.dataset.ren) { e.target.value = e.target.dataset.ren; e.target.blur(); }
+    });
+    list.addEventListener('focusout', (e) => {
+      const from = e.target.dataset && e.target.dataset.ren;
+      if (from) renameTheme(from, e.target.value.trim());
+    });
+    // Dragging from the row, but not from the name field — a drag there would
+    // stop you selecting the text you are about to edit.
+    let from = null;
+    list.addEventListener('dragstart', (e) => {
+      if (e.target.classList && e.target.classList.contains('nm')) { e.preventDefault(); return; }
+      const li = e.target.closest('li');
+      if (!li) return;
+      from = +li.dataset.i;
+      li.classList.add('drag');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(from));   // Firefox needs data to start a drag
+    });
+    list.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const li = e.target.closest('li');
+      if (!li) return;
+      list.querySelectorAll('li.over').forEach((x) => x.classList.remove('over'));
+      li.classList.add('over');
+    });
+    list.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const li = e.target.closest('li');
+      if (li && from != null) moveTheme(from, +li.dataset.i);
+      from = null;
+    });
+    list.addEventListener('dragend', () => {
+      from = null;
+      list.querySelectorAll('li.drag, li.over').forEach((x) => x.classList.remove('drag', 'over'));
+    });
+
+    $('ordReset').addEventListener('click', () => { order = savedOrder.slice(); say('ordSaid', ''); paintList(); });
+    $('ordSave').addEventListener('click', async () => {
+      $('ordSave').disabled = true;
+      try {
+        const r = await api('PUT', '/api/portfolios/order', { names: order.slice() });
+        order = [];                                   // adopt the server's answer wholesale
+        adopt(r);
+        say('ordSaid', `Order saved — ${r.reordered} themes`
+          + (r.appended ? `, ${r.appended} appended that this tab had not seen.` : '.')
+          + ' Reload an open screener tab to see it.', 'ok');
+      } catch (err) { say('ordSaid', 'Could not save: ' + err.message, 'err'); paintList(); }
+    });
+
+    (async () => {
+      try {
+        adopt(await api('GET', '/api/portfolios'));
+      } catch (err) { say('ordSaid', err.message, 'err'); }
+    })();
+  </script>
+</body>
+</html>

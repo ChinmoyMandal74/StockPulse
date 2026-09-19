@@ -229,6 +229,10 @@
             <span class="txt"><span class="nm">News runs</span>
               <span class="hint">Every batch of headline fetches: which stocks, what came back, what was new, what failed.</span></span>
           </a>
+          <a class="row" href="/themes"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>
+            <span class="txt"><span class="nm">Themes &amp; tickers</span>
+              <span class="hint">Add stocks one at a time or paste a batch, and keep the themes that group them — create, rename, delete and set the order.</span></span>
+          </a>
           <a class="row" href="/refreshes">
             <svg class="ic" aria-hidden="true"><use href="#i-list" /></svg>
             <span class="txt"><span class="nm">Refresh runs</span>
@@ -242,48 +246,6 @@
             <span class="txt"><span class="nm">Fill missing</span>
               <span class="hint" id="fillHint">Re-pull only the stocks whose company data is missing, failed, or older than a field the app now stores. Checking…</span></span>
           </a>
-        </div>
-
-        <div class="form">
-          <span class="lbl">Add a ticker</span>
-          <div class="line">
-            <input type="text" id="sym" placeholder="TSLA" maxlength="12" autocomplete="off" aria-label="Ticker symbol" />
-            <select id="addTo" aria-label="Also add to a theme (optional)"></select>
-            <button class="btn btn-primary" id="addBtn">
-              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>Add</button>
-          </div>
-          <p class="said" id="addSaid"></p>
-        </div>
-
-        <div class="form">
-          <span class="lbl">Add many at once</span>
-          <textarea id="bulkText" rows="3" spellcheck="false" autocomplete="off"
-            aria-label="Paste tickers"
-            placeholder="Paste tickers &mdash; commas, spaces or one per line.  AAPL, MSFT NVDA&#10;GOOGL"></textarea>
-          <div class="line" style="margin-top:8px">
-            <input type="text" id="bulkPf" maxlength="40" autocomplete="off" list="bulkPfList"
-              placeholder="Theme for the batch (optional)" aria-label="Theme for this batch" />
-            <datalist id="bulkPfList"></datalist>
-            <button class="btn" id="bulkCheck">Check</button>
-            <button class="btn btn-primary" id="bulkGo" disabled>
-              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>Add them</button>
-          </div>
-          <p class="said" id="bulkSaid">Adding costs no API credits and pulls nothing &mdash; the data
-            arrives with Fill missing or the nightly gap fill.</p>
-        </div>
-
-        <div class="form">
-          <span class="lbl">Order the themes</span>
-          <p class="said" style="margin:0 0 8px">The order here is the order everywhere — the theme
-            picker, the row badges, this page. Drag a theme, or use the arrows. Colours follow the
-            theme's name, so reordering never repaints them.</p>
-          <ol class="ord" id="ordList" aria-label="Theme order"></ol>
-          <div class="line" style="margin-top:8px">
-            <button class="btn btn-primary" id="ordSave" disabled>
-              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-check" /></svg>Save order</button>
-            <button class="btn" id="ordReset" disabled>Undo changes</button>
-          </div>
-          <p class="said" id="ordSaid"></p>
         </div>
 
         <div class="form">
@@ -487,63 +449,14 @@
     // ---- portfolios: the add-ticker target and the symbol list -------------
     let portfolios = {};
     let universe = [];
-    // ---- theme order ------------------------------------------------------
-    // `order` is what the list currently shows; `savedOrder` is what the server
-    // last confirmed. Undo goes back to the second, and Save is dead until they
-    // differ — the /columns pattern.
-    let order = [], savedOrder = [];
-    const PALETTE = ['#7c9cff', '#34d399', '#a78bfa', '#fb923c', '#fb7185', '#22d3ee', '#fbbf24', '#f472b6'];
-    // The SAME hash the screener uses, so a swatch here is the badge there.
-    // Colour follows the name, which is why reordering leaves it alone.
-    const colorFor = (name) => {
-      let h = 0x811c9dc5;
-      const t = String(name || '');
-      for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
-      return PALETTE[h % PALETTE.length];
-    };
-    const sameOrder = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
-    function paintOrder() {
-      const list = $('ordList');
-      if (!list) return;
-      list.innerHTML = order.map((n, i) =>
-        `<li draggable="true" data-i="${i}">` +
-        '<span class="grip" aria-hidden="true">⠿</span>' +
-        `<span class="dot" style="background:${colorFor(n)}"></span>` +
-        `<span class="nm">${we(n)}</span>` +
-        `<span class="n">${(portfolios[n] || []).length}</span>` +
-        `<button class="mv" data-up="${i}" ${i === 0 ? 'disabled' : ''} aria-label="Move up">▲</button>` +
-        `<button class="mv" data-dn="${i}" ${i === order.length - 1 ? 'disabled' : ''} aria-label="Move down">▼</button>` +
-        '</li>').join('');
-      const dirty = !sameOrder(order, savedOrder);
-      $('ordSave').disabled = !dirty;
-      $('ordReset').disabled = !dirty;
-      if (!dirty && !$('ordSaid').dataset.keep) $('ordSaid').textContent = '';
-    }
-    function moveTheme(from, to) {
-      if (to < 0 || to >= order.length || from === to) return;
-      const [x] = order.splice(from, 1);
-      order.splice(to, 0, x);
-      $('ordSaid').dataset.keep = '';
-      $('ordSaid').textContent = '';
-      paintOrder();
-    }
 
+    // Adding tickers and keeping themes moved to /themes; what this page still
+    // needs from the map is the symbol list for the per-stock research links.
     function paintPortfolios() {
       const names = Object.keys(portfolios);
-      // Adopt the server's order whenever nothing is being dragged, so a create
-      // or delete elsewhere on this page does not leave the list stale.
-      if (sameOrder(order, savedOrder)) { order = names.slice(); savedOrder = names.slice(); paintOrder(); }
-      else { savedOrder = names.slice(); paintOrder(); }
-      // A stock joins the screener on its own; a theme is optional grouping.
-      $('addTo').innerHTML = '<option value="">No theme — screener only</option>' +
-        names.map((n) => `<option value="${we(n)}">Also add to ${we(n)}</option>`).join('');
       // Every symbol the screener covers, once, alphabetically — the per-stock
       // pages need a name to open and this page has no "top of the table" the
       // screener's own menu could borrow.
-      // The bulk box takes a free-typed name (it can create one), so this is a
-      // datalist of what exists rather than a closed list.
-      const dl = $('bulkPfList');
-      if (dl) dl.innerHTML = names.map((n) => `<option value="${we(n)}"></option>`).join('');
       const syms = [...new Set(universe.concat(names.flatMap((n) => portfolios[n] || [])))].sort();
       $('symPick').innerHTML = syms.map((s) => `<option value="${we(s)}">${we(s)}</option>`).join('')
         || '<option value="">No tickers yet</option>';
@@ -557,206 +470,10 @@
     }
     $('symPick').addEventListener('change', paintSymbolLinks);
 
-    async function addTicker() {
-      const symbol = $('sym').value.trim().toUpperCase();
-      const target = $('addTo').value;
-      if (!symbol) return $('sym').focus();
-      $('addBtn').disabled = true;
-      say('addSaid', 'Adding…');
-      try {
-        const r = await api('POST', '/api/universe', { symbol, portfolio: target || undefined });
-        portfolios = r.portfolios || portfolios;
-        universe = r.universe || universe;
-        paintPortfolios();
-        $('sym').value = '';
-        $('sym').focus();
-        // A name coming back empty is the earliest hint of a typo: adding a
-        // ticker does not pull prices, so this lookup is the only thing that
-        // touches the symbol before the next refresh.
-        const where = target ? (r.added ? `added to the screener and to "${target}"` : `added to "${target}"`) : 'added to the screener';
-        say('addSaid', r.name
-          ? `${symbol} — ${r.name} — ${where}. Run Fill missing or Refresh to pull its data.`
-          : `${symbol} ${where}, but the feed returned no company name. Check the spelling.`,
-          r.name ? 'good' : 'bad');
-      } catch (err) {
-        say('addSaid', err.message, 'bad');
-      } finally {
-        $('addBtn').disabled = false;
-      }
-    }
     // ---- paste a batch ------------------------------------------------------
     // Accept what a person actually has: a spreadsheet column, a comma list, a
     // sentence with $TICKERs in it. Splitting on anything that is not part of a
     // symbol is more forgiving than asking for a format.
-    const BULK_MAX = 500;
-    function parseTickers(text) {
-      return [...new Set(String(text || '')
-        .toUpperCase()
-        .split(/[^A-Z0-9./-]+/)
-        .map((x) => x.replace(/^\$+/, '').replace(/\//g, '.').replace(/[.\-]+$/, ''))
-        .filter(Boolean))];
-    }
-    const SYM_OK = /^[A-Z0-9][A-Z0-9.\-]{0,11}$/;
-
-    let bulkPlan = null;
-    // The listing check is what makes this safe: free text splits into
-    // symbol-shaped tokens -- "not a ticker!" becomes NOT, A and TICKER, and
-    // A is Agilent -- so shape alone cannot tell a batch from a sentence.
-    async function checkBulk() {
-      const all = parseTickers($('bulkText').value);
-      const known = new Set(universe || []);
-      const good = all.filter((x) => SYM_OK.test(x));
-      const bad = all.filter((x) => !SYM_OK.test(x));
-      const fresh = good.filter((x) => !known.has(x));
-      const dupe = good.filter((x) => known.has(x));
-      const name = $('bulkPf').value.trim();
-      const existing = Object.keys(portfolios || {})
-        .find((n) => n.toLowerCase() === name.toLowerCase());
-      bulkPlan = { fresh, dupe, bad, name, existing, over: fresh.length > BULK_MAX };
-
-      if (!all.length) { say('bulkSaid', 'Nothing pasted yet.'); $('bulkGo').disabled = true; return; }
-      const bits = [];
-      bits.push(`${fresh.length} new`);
-      if (dupe.length) bits.push(`${dupe.length} already in the screener`);
-      if (bad.length) bits.push(`${bad.length} not a symbol (${bad.slice(0, 4).join(', ')}${bad.length > 4 ? '\u2026' : ''})`);
-      if (name) bits.push(existing ? `into \u201c${existing}\u201d` : `into a NEW portfolio \u201c${name}\u201d`);
-      if (bulkPlan.over) {
-        say('bulkSaid', `${fresh.length} is over the ${BULK_MAX} limit for one batch \u2014 split it.`, 'bad');
-        $('bulkGo').disabled = true; return;
-      }
-      const cost = fresh.length * 81;
-      say('bulkSaid', bits.join(' \u00b7 ') + '. Checking the listing\u2026');
-      // Advisory, never blocking: a legitimate foreign listing may simply not
-      // be in NASDAQ's file, so this warns rather than refuses.
-      let unlisted = null;
-      try {
-        const chk = await api('POST', '/api/universe/check', { symbols: good });
-        unlisted = chk.unlisted;
-        bulkPlan.unlisted = unlisted;
-      } catch { /* advisory only */ }
-      if (unlisted && unlisted.length) {
-        bits.push(`<b>${unlisted.length} not in the NASDAQ listing</b> `
-          + `(${unlisted.slice(0, 6).join(', ')}${unlisted.length > 6 ? '\u2026' : ''}) \u2014 check these are real`);
-      }
-      const el = $('bulkSaid');
-      el.innerHTML = bits.join(' \u00b7 ')
-        + (fresh.length ? `. Costs nothing now; about ${cost.toLocaleString()} credits and `
-            + `${Math.max(1, Math.ceil(fresh.length / 7))} min of Fill missing to pull their data.` : '.');
-      el.className = 'said' + ((unlisted && unlisted.length) || !fresh.length ? ' bad' : '');
-      $('bulkGo').disabled = !fresh.length && !dupe.length;
-    }
-
-    async function addBulk() {
-      await checkBulk();
-      if (!bulkPlan || bulkPlan.over) return;
-      const syms = [...bulkPlan.fresh, ...bulkPlan.dupe];
-      if (!syms.length) return;
-      // Creating a portfolio is deliberate, so it is asked for out loud.
-      if (bulkPlan.name && !bulkPlan.existing
-        && !confirm(`Create a new portfolio \u201c${bulkPlan.name}\u201d and put ${syms.length} stock(s) in it?`)) return;
-      $('bulkGo').disabled = true;
-      say('bulkSaid', 'Adding\u2026');
-      try {
-        const r = await api('POST', '/api/universe/bulk', {
-          symbols: syms,
-          portfolio: bulkPlan.name || undefined,
-          createPortfolio: !!(bulkPlan.name && !bulkPlan.existing),
-        });
-        portfolios = r.portfolios || portfolios;
-        universe = r.universe || universe;
-        paintPortfolios();
-        $('bulkText').value = '';
-        const added = (r.added || []).length;
-        const already = (r.already || []).length;
-        const where = r.createdPortfolio ? ` into the new portfolio \u201c${r.createdPortfolio}\u201d`
-          : r.portfolio ? ` into \u201c${r.portfolio}\u201d` : ' to the screener';
-        say('bulkSaid', `Added ${added}${where}`
-          + (already ? `, ${already} were already there` : '')
-          + ((r.invalid || []).length ? `, ${r.invalid.length} refused` : '')
-          + '. They have no prices or fundamentals yet \u2014 run Fill missing to pull them.', 'good');
-        bulkPlan = null;
-      } catch (err) {
-        say('bulkSaid', err.message, 'bad');
-      } finally { $('bulkGo').disabled = false; }
-    }
-    $('bulkCheck').addEventListener('click', checkBulk);
-    $('bulkText').addEventListener('input', () => { $('bulkGo').disabled = true; });
-    $('bulkPf').addEventListener('input', () => { if (bulkPlan) checkBulk(); });
-    $('bulkGo').addEventListener('click', addBulk);
-
-    // ---- theme order: drag, arrows, save ----------------------------------
-    (() => {
-      const list = $('ordList');
-      if (!list) return;
-      list.addEventListener('click', (e) => {
-        const up = e.target.closest('[data-up]'), dn = e.target.closest('[data-dn]');
-        if (up) moveTheme(+up.dataset.up, +up.dataset.up - 1);
-        else if (dn) moveTheme(+dn.dataset.dn, +dn.dataset.dn + 1);
-      });
-      let from = null;
-      list.addEventListener('dragstart', (e) => {
-        const li = e.target.closest('li');
-        if (!li) return;
-        from = +li.dataset.i;
-        li.classList.add('drag');
-        e.dataTransfer.effectAllowed = 'move';
-        // Firefox refuses to start a drag without data on the transfer.
-        e.dataTransfer.setData('text/plain', String(from));
-      });
-      list.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        const li = e.target.closest('li');
-        if (!li) return;
-        list.querySelectorAll('li.over').forEach((x) => x.classList.remove('over'));
-        li.classList.add('over');
-      });
-      list.addEventListener('dragleave', (e) => {
-        const li = e.target.closest('li');
-        if (li) li.classList.remove('over');
-      });
-      list.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const li = e.target.closest('li');
-        if (li && from != null) moveTheme(from, +li.dataset.i);
-        from = null;
-      });
-      list.addEventListener('dragend', () => {
-        from = null;
-        list.querySelectorAll('li.drag, li.over').forEach((x) => x.classList.remove('drag', 'over'));
-      });
-
-      $('ordReset').addEventListener('click', () => {
-        order = savedOrder.slice();
-        $('ordSaid').dataset.keep = '';
-        $('ordSaid').textContent = '';
-        paintOrder();
-      });
-      $('ordSave').addEventListener('click', async () => {
-        const btn = $('ordSave');
-        btn.disabled = true;
-        try {
-          const r = await api('PUT', '/api/portfolios/order', { names: order.slice() });
-          // Adopt what the server stored rather than what was sent — it appends
-          // anything this tab never knew about, so the two could differ.
-          portfolios = r.portfolios || portfolios;
-          universe = r.universe || universe;
-          savedOrder = Object.keys(portfolios);
-          order = savedOrder.slice();
-          paintPortfolios();
-          $('ordSaid').dataset.keep = '1';
-          $('ordSaid').textContent = `Order saved — ${r.reordered} themes`
-            + (r.appended ? `, ${r.appended} appended that this tab had not seen.` : '.')
-            + ' Reload an open screener tab to see it.';
-        } catch (err) {
-          $('ordSaid').dataset.keep = '1';
-          $('ordSaid').textContent = 'Could not save: ' + err.message;
-        }
-        paintOrder();
-      });
-    })();
-
-    $('addBtn').addEventListener('click', addTicker);
-    $('sym').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTicker(); });
 
     // ---- the forward-returns view lives on the screener --------------------
     $('asOfGo').addEventListener('click', () => {

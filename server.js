@@ -407,7 +407,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
                       '/backtest.html': '/backtest', '/quality.html': '/quality',
-                      '/architecture.html': '/architecture',
+                      '/architecture.html': '/architecture', '/themes.html': '/themes',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
                       // The public pages have canonical addresses of their own.
                       '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
@@ -699,6 +699,15 @@ app.get('/mobile-setup', route(async (req, res) => {
 }));
 
 // Admin only: which screener columns everyone sees.
+// Adding stocks and keeping the themes. It was three panels on /admin; the
+// console is a door, and a panel that does work belongs on its own page — the
+// same move /columns made.
+app.get('/themes', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'themes');
+  res.sendFile(path.join(__dirname, 'private', 'themes.html'));
+}));
+
 app.get('/columns', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'columns');
