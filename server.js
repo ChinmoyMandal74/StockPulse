@@ -2627,6 +2627,28 @@ function curve(v, centre, scale) {
 // picker) was built, then removed 2026-09-11. The engine still takes a config,
 // so bringing configurability back is wiring, not a rewrite.
 const ACTION_CFG = (() => { const { cfg } = Action.resolve(null, 'Balanced'); cfg.__resolved = true; return cfg; })();
+
+// Every rule set the app offers, resolved once each and kept. The screener's
+// columns and the studio's cards are Balanced-only by design; the BACKTEST can
+// run under any of them, which is the one place a second rule set answers a
+// question rather than just showing a different word.
+//
+// The LIST is Cards.ADV_PROFILES — the same five the studio offers — so a rule
+// set added there is offered here with no edit, and Conservative stays out of
+// both for the reason action.js records. `Action.resolve` clones DEFAULTS on
+// every call, so these are cached rather than resolved per request.
+const RULE_SETS = (Cards.ADV_PROFILES || ['Balanced']).filter((n) => Action.PRESETS[n]);
+const ruleCfgCache = new Map([['Balanced', ACTION_CFG]]);
+function ruleCfg(name) {
+  const want = RULE_SETS.indexOf(name) >= 0 ? name : 'Balanced';
+  if (!ruleCfgCache.has(want)) {
+    const { cfg } = Action.resolve(null, want);
+    cfg.__resolved = true;
+    ruleCfgCache.set(want, cfg);
+  }
+  return ruleCfgCache.get(want);
+}
+
 function scoreActionInto(rows) {
   if (!Array.isArray(rows) || !rows.length) return;
   const results = Action.apply(rows, ACTION_CFG);
@@ -4650,7 +4672,7 @@ function btSimulate(opts) {
 // exit in the stock's OWN monthly volatility. The raw drop is deliberately not
 // offered as a ranking: measured over 307,965 stock-days it orders the
 // downside BACKWARDS, because "more room" is mostly "more extended".
-function btRankMetrics(row, rows, i) {
+function btRankMetrics(row, rows, i, cfg) {
   const newestFirst = rows.slice(0, i + 1).reverse();   // momentum.js's orientation
   const rv = Momentum.realisedVol(newestFirst);
   // exitDistance takes a NORMALISED shape, not a snapshot row — it rescales
@@ -4662,7 +4684,11 @@ function btRankMetrics(row, rows, i) {
     v200: row.vs200ma, v50: row.vs50ma, rsi: row.rsi,
     m1: row.oneMonthPct, m3: row.threeMonthPct, fh: row.pctFromHigh,
     vol: row.volTrend, hist: row.historyDays,
-  }, ACTION_CFG);
+    // The exit ladder is the RUN'S rule set, not Balanced: Max Risk stops at
+    // −20% against Balanced's −10%, so the same stock genuinely has more room
+    // under it. Ranking a Max Risk run on Balanced's cushion would rank it by
+    // a threshold that run never uses.
+  }, cfg || ACTION_CFG);
   const ms = Momentum.scoreBars(newestFirst);
   return {
     cushion: (ed && ed.drop != null && rv != null && isFinite(rv) && rv > 0)
@@ -4716,7 +4742,7 @@ function btTrades(log, verdicts, byS, opts) {
 // that re-runs the rules every 7 days evaluates through exactly the same code
 // path as the one that evaluates once. A second row builder would drift from
 // the Advice column inside a week — the reason rowcard.js and action.js exist.
-function btEvalAt(sym, p, i, today, was, earnings, atDate) {
+function btEvalAt(sym, p, i, today, was, earnings, atDate, cfg, also) {
   const tech = p.tech || btRowAt(p.closes, p.highs, p.vols, i);
   if (!tech) return null;
   // As of then: the next report that actually happened after that date,
@@ -4727,15 +4753,31 @@ function btEvalAt(sym, p, i, today, was, earnings, atDate) {
     // Momentum.rsiSeriesAt is the app's own Wilder RSI, fed newest-first the
     // way it expects.
     rsi: rsiAt(p.rows, i) };
-  // ACTION_CFG is the resolved Balanced profile, the same object every other
-  // surface scores against — so a verdict here means what the column means.
-  return { row, v: Action.evaluate(row, ACTION_CFG) };
+  // The run's own rule set, defaulting to ACTION_CFG — the resolved Balanced
+  // profile every other surface scores against, so an unqualified verdict here
+  // still means what the column means.
+  const use = cfg || ACTION_CFG;
+  const v = Action.evaluate(row, use);
+  if (!also || !also.length) return { row, v };
+  // The row is the expensive half — bars, the 52-week window, a Wilder RSI —
+  // and it is rule-set independent. So comparing five rule sets costs four more
+  // `evaluate` calls on a row already in hand, not five passes over the archive.
+  const by = {};
+  for (const c of also) by[c.profile] = (c === use ? v : Action.evaluate(row, c));
+  return { row, v, by };
 }
 
 function btRun(opts) {
-  const { bars, snapshot, from, tiers, earnings, recorded, only } = opts;
+  const { bars, snapshot, from, tiers, earnings, recorded, only, cfg, compare } = opts;
   btRsiCache.clear();
   const want = new Set(tiers);
+  const use = cfg || ACTION_CFG;
+  // Every rule set measured on the same date, the same rows and the same
+  // verdicts asked for — the only comparison that says anything, since a
+  // different date or a different tier selection would move the answer more
+  // than the rules do.
+  const also = (compare || []).map(ruleCfg);
+  const cmp = new Map(also.map((c) => [c.profile, { profile: c.profile, n: 0, sum: 0, strong: 0 }]));
   const byS = new Map((snapshot || []).map((x) => [x.symbol, x]));
   const picks = [];
   const heldSeries = {};
@@ -4784,13 +4826,24 @@ function btRun(opts) {
     // rather than listing the fundamental fields means a field added to the
     // engine later is carried here with no edit \u2014 and it is exactly what
     // "fundamentals filled forward" means.
-    const { row, v } = btEvalAt(sym, { rows, dates, closes, highs, vols, tech },
-      i, today, was, earnings, from);
+    const { row, v, by } = btEvalAt(sym, { rows, dates, closes, highs, vols, tech },
+      i, today, was, earnings, from, use, also);
     evaluated++;
+    // Hoisted above the tier test: every rule set's comparison needs it, not
+    // only the one that happened to pick this stock.
+    const ret = (closes[closes.length - 1] / closes[i] - 1) * 100;
+    if (by) {
+      for (const name of Object.keys(by)) {
+        const c = cmp.get(name);
+        if (!c || !want.has(by[name].action)) continue;
+        c.n++; c.sum += ret;
+        if (by[name].action === 'Strong Buy') c.strong++;
+      }
+    }
     if (!want.has(v.action)) continue;
     // What a Top-N cut ranks on, AS OF THEN — computed only for rows that made
     // the cut, so a run that picks 12 of 427 pays for 12.
-    const m = btRankMetrics(row, rows, i);
+    const m = btRankMetrics(row, rows, i, use);
     picks.push({ symbol: sym, name: today.shortName || today.name || sym,
       action: v.action, flag: v.flag, type: v.type,
       cushion: m.cushion, momentum: m.momentum,
@@ -4798,15 +4851,24 @@ function btRun(opts) {
       fundAsOf: was ? was.asOf : null,
       priceThen: closes[i], dateThen: dates[i],
       priceNow: closes[closes.length - 1], lastDate: dates[dates.length - 1],
-      ret: (closes[closes.length - 1] / closes[i] - 1) * 100,
+      ret,
       reportedInWindow: (earnings[sym] || []).some((d) => d > from),
-      actionNow: today.action || null });
+      // "Verdict now" has to be read under the SAME rules as "verdict then",
+      // or the two columns quietly compare two different machines. The
+      // snapshot's stamped verdict is Balanced's, so it stands only for
+      // Balanced; anything else is re-evaluated against the live row.
+      actionNow: (use === ACTION_CFG ? today.action : (Action.evaluate(today, use) || {}).action) || null });
     if (forward.length > 1) heldSeries[sym] = forward;
   }
 
   picks.sort((a, b) => b.ret - a.ret);
   return { picks, heldSeries, everySeries, prep,
-           evaluated, tooShort, noFund, real, imputed };
+           evaluated, tooShort, noFund, real, imputed,
+           // Equal dollars at the start, held: for that shape a basket's return
+           // IS the mean of its members' returns, so no second simulation is
+           // needed to price four more rule sets.
+           compare: [...cmp.values()].map((c) => ({ profile: c.profile, n: c.n,
+             strong: c.strong, ret: c.n ? c.sum / c.n : null })) };
 }
 
 // ============================================================================
@@ -7201,7 +7263,10 @@ app.get('/api/backtest/coverage', requireAdmin, route(async (req, res) => {
     const wd = new Date(t).getUTCDay();
     days.push({ d, n: seen.filter((f) => f <= d).length, weekend: wd === 0 || wd === 6 });
   }
-  const body = { universe, floor, today, days, recordingFrom: FUND_HISTORY_FROM };
+  // The rule sets ride along on the page's own boot call, so the picker is
+  // filled before the first run and the list is never restated in the page.
+  const body = { universe, floor, today, days, recordingFrom: FUND_HISTORY_FROM,
+    ruleSets: RULE_SETS };
   btCovCache = { at: Date.now(), body };
   res.json(body);
 }));
@@ -7243,7 +7308,15 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
   const only = theme ? new Set(themes[theme]) : null;
   const scopeOf = theme ? (themes[theme] || []).length : universe.length;
 
-  const r = btRun({ bars, snapshot: stocks, from: asked, tiers, earnings, recorded, only });
+  // Which rule set is being backtested. Balanced is the default and is what
+  // every other surface shows; the others exist because the question "would
+  // Max Risk have done better on this date" is exactly what a backtest is for.
+  const rules = RULE_SETS.indexOf(String(req.query.rules || '')) >= 0
+    ? String(req.query.rules) : 'Balanced';
+  const cfg = ruleCfg(rules);
+
+  const r = btRun({ bars, snapshot: stocks, from: asked, tiers, earnings, recorded, only,
+    cfg, compare: RULE_SETS });
   const tier = btCurve(r.heldSeries, asked);        // every pick in the chosen verdicts
 
   // Top N. Seeded off the date + size so the same run draws the same band.
@@ -7313,7 +7386,7 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
           for (let k = p.dates.length - 1; k >= 0; k--) if (p.dates[k] <= at) { i = k; break; }
           if (i < 252) continue;
           const was = stood[sym] || null;
-          const ev = btEvalAt(sym, p, i, byS2.get(sym) || {}, was, earnings, at);
+          const ev = btEvalAt(sym, p, i, byS2.get(sym) || {}, was, earnings, at, cfg);
           if (!ev) continue;
           if (was) real2++; else imputed2++;
           why.set(sym, { a: ev.v.action, f: ev.v.flag || null, real: !!was });
@@ -7330,7 +7403,7 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
           // the whole universe at every mark would be the expensive half of the
           // run for a number nothing would read.
           if (recut) cand.push({ symbol: sym, tierRank: Action.ACTIONS.indexOf(ev.v.action),
-            ...btRankMetrics(ev.row, p.rows, i) });
+            ...btRankMetrics(ev.row, p.rows, i, cfg) });
         }
         // A Top-N cut is part of the strategy, so re-running the rules has to
         // re-run the CUT as well. Without this, asking for the top 5 and
@@ -7384,6 +7457,11 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
     picks: r.picks,
     rank, top, every, mode: every ? mode : null, cost: costBps,
     theme: theme || null,
+    rules, ruleSets: RULE_SETS,
+    // Every rule set over the same date, the same rows and the same verdicts —
+    // buy-and-hold only, since that is what one shared row build can price
+    // honestly. Rebalancing each of them would be five more simulations.
+    compare: r.compare,
     curve: { dates: held.dates, portfolio: held.values,
              rebalanced: rebal ? rebal.values : null,
              tier: top ? tier.values : null,

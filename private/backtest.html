@@ -108,6 +108,38 @@
     .mk { display: inline-block; margin-left: 6px; font-size: 10px; padding: 1px 6px; border-radius: 999px;
           border: 1px solid var(--hair-2); color: var(--amber); vertical-align: 1px; }
 
+    /* The rule-set comparison. Scoped under #cmp for the reason recorded
+       below — an unscoped class on this page has broken something twice. */
+    #cmpWrap { margin-bottom: 18px; }
+    #cmpWrap h3 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
+    #cmpNote { margin: 0 0 12px; line-height: 1.6; }
+    #cmpNote b { color: var(--text); font-weight: 600; }
+    #cmp .crow {
+      display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; width: 100%;
+      padding: 9px 10px; border: 1px solid transparent; border-radius: 8px;
+      background: none; font: inherit; color: var(--muted); text-align: left;
+      cursor: pointer; transition: background .15s var(--ease), border-color .15s var(--ease); }
+    #cmp .crow:hover { background: var(--surface-2); }
+    #cmp .crow.on { border-color: var(--hair-2); background: var(--surface-2); color: var(--text); }
+    #cmp .crow .nm { min-width: 104px; font-weight: 600; color: var(--text); }
+    #cmp .crow .n { font-family: var(--mono); font-size: 11.5px; min-width: 66px; }
+    #cmp .crow .sb { font-size: 11.5px; color: var(--faint); min-width: 84px; }
+    /* The bar is the comparison — a column of numbers is read one at a time. */
+    #cmp .crow .bar { flex: 1 1 120px; height: 6px; position: relative; min-width: 80px; }
+    #cmp .crow .bar i { position: absolute; top: 0; height: 6px; border-radius: 2px; }
+    #cmp .crow .bar i.up { background: var(--green); }
+    #cmp .crow .bar i.dn { background: var(--red); }
+    #cmp .crow .bar u { position: absolute; top: -3px; width: 1px; height: 12px;
+      background: var(--hair-2); text-decoration: none; }
+    #cmp .crow .rt { font-family: var(--mono); font-variant-numeric: tabular-nums;
+      min-width: 66px; text-align: right; }
+    #cmp .crow .tag { font-size: 10px; color: var(--faint); min-width: 56px; }
+    #cmp .crow .tag:empty { min-width: 0; }
+    @media (max-width: 620px) {
+      #cmp .crow .bar { flex-basis: 100%; order: 9; }
+      #cmp .crow .sb, #cmp .crow .tag { min-width: 0; }
+    }
+
     /* The trade log. Every rule is scoped under #trades — this page already
        carries an unscoped `table` rule and two `.cov` families, and the last
        two unscoped classes here each broke something else on the page. */
@@ -197,6 +229,10 @@
           <label for="theme">Run over</label>
           <select id="theme"><option value="">All stocks</option></select>
         </div>
+        <div class="fld">
+          <label for="rules">Rules</label>
+          <select id="rules"></select>
+        </div>
         <div class="fld" style="flex:1 1 380px">
           <label>Verdicts to buy</label>
           <div class="tiers" id="tiers"></div>
@@ -264,6 +300,12 @@
         <svg class="chart" id="chart" preserveAspectRatio="none" aria-hidden="true"></svg>
         <p class="hint" id="bandNote" hidden></p>
         <p class="hint" id="rebNote" hidden></p>
+      </div></section>
+
+      <section class="bezel" id="cmpWrap" hidden><div class="core" style="padding:16px 18px 14px">
+        <h3>Every rule set, on this date</h3>
+        <p class="hint" id="cmpNote"></p>
+        <div id="cmp"></div>
       </div></section>
 
       <section class="bezel" id="tradeWrap" hidden><div class="core" style="padding:16px 18px 6px">
@@ -390,6 +432,48 @@
       svg.innerHTML = g;
     }
 
+    // Every rule set over the same date, the same stocks and the same verdicts
+    // asked for — the only comparison that says anything, since moving the date
+    // or the tier selection shifts a result further than the rules do.
+    //
+    // Buy-and-hold only. Rebalancing five rule sets would be five more
+    // simulations, and the note says so rather than letting the reader assume
+    // these lines carry whatever rebalancing the run above is using.
+    function paintCompare(r) {
+      const w = $('cmpWrap');
+      const list = (r.compare || []).filter((x) => x.n > 0 || x.ret != null);
+      if (!list.length) { w.hidden = true; return; }
+      const rets = list.map((x) => x.ret).filter((x) => x != null);
+      const span = Math.max(0.5, ...rets.map((x) => Math.abs(x)));
+      const best = rets.length ? Math.max(...rets) : null;
+      $('cmpNote').innerHTML =
+        `The same start date, the same stocks and the same verdicts, scored by each rule set in turn — `
+        + `<b>bought equally and held</b>, so these lines carry no rebalancing`
+        + (r.every ? ` even though the run above does` : '')
+        + `. Click one to run the whole backtest under it.`;
+      $('cmp').innerHTML = list.map((x) => {
+        const v = x.ret;
+        // Zero sits in the middle, so a loss reads as a loss at a glance.
+        const half = 50, w2 = v == null ? 0 : (Math.abs(v) / span) * half;
+        const bar = v == null ? ''
+          : `<i class="${v >= 0 ? 'up' : 'dn'}" style="left:${v >= 0 ? half : half - w2}%;width:${w2}%"></i>`;
+        return `<button class="crow${x.profile === r.rules ? ' on' : ''}" data-rs="${we(x.profile)}">
+          <span class="nm">${we(x.profile)}</span>
+          <span class="n">${x.n} pick${x.n === 1 ? '' : 's'}</span>
+          <span class="sb">${x.strong} Strong Buy</span>
+          <span class="bar">${bar}<u style="left:${half}%"></u></span>
+          <span class="rt ${cls(v)}">${pct(v)}</span>
+          <span class="tag">${x.profile === r.rules ? 'running' : (v != null && v === best ? 'best here' : '')}</span>
+        </button>`;
+      }).join('');
+      $('cmp').querySelectorAll('.crow').forEach((b) => b.addEventListener('click', () => {
+        if (b.dataset.rs === r.rules) return;
+        $('rules').value = b.dataset.rs;
+        run();
+      }));
+      w.hidden = false;
+    }
+
     // The rebalance log: what changed hands at each mark and the verdict that
     // caused it. A rebalance reported only as a turnover percentage is a number
     // nobody can check — this is that same diff, named.
@@ -452,7 +536,13 @@
               : `of ${s.scopeOf}${s.scope === 'All' ? ' tracked' : ' in ' + s.scope}`],
         ['Equal-weight return', pct(s.portfolio), `${r.tradingDate} → ${r.today}`],
         ['vs S&P 500', pct(beatS), s.spy == null ? 'benchmark unavailable' : `S&P ${pct(s.spy)}`],
-        ['Picked from', s.scope === 'All' ? 'All stocks' : s.scope, `${s.scopeOf} in scope`],
+        // Which machine produced all of this. It replaces the "Picked from"
+        // card when it is not the default, since the scope is already named on
+        // the Picks card's own caption.
+        [r.rules && r.rules !== 'Balanced' ? 'Rules' : 'Picked from',
+          r.rules && r.rules !== 'Balanced' ? r.rules : (s.scope === 'All' ? 'All stocks' : s.scope),
+          r.rules && r.rules !== 'Balanced'
+            ? `instead of Balanced · ${s.scopeOf} in scope` : `${s.scopeOf} in scope`],
         ['Winners', s.selected ? `${s.up}/${s.selected}` : '—',
           s.selected ? Math.round((s.up / s.selected) * 100) + '% positive' : ''],
       ];
@@ -524,6 +614,7 @@
             }).join('') + '</span>' : '');
         rn.hidden = false;
       } else { rn.hidden = true; }
+      paintCompare(r);
       paintTrades(r);
       $('lgR').hidden = !(r.every && s.rebalanced != null);
       $('lgT').hidden = !cut;
@@ -627,12 +718,26 @@
       $('covWrap').hidden = false;
     }
 
+    // The rule sets come from the server, never a copy in this page — the
+    // studio and the screener already offer this list and a fourth restatement
+    // would drift the first time one was added. The choice made before the
+    // options land (from the address bar) is preserved.
+    function paintRules() {
+      const list = (coverage && coverage.ruleSets) || [];
+      if (!list.length) return;
+      const want = $('rules').value || (new URLSearchParams(location.search)).get('rules') || 'Balanced';
+      $('rules').innerHTML = list.map((n) =>
+        `<option value="${we(n)}">${we(n)}</option>`).join('');
+      $('rules').value = list.indexOf(want) >= 0 ? want : 'Balanced';
+    }
+
     async function loadCoverage() {
       try {
         const r = await fetch('/api/backtest/coverage');
         if (!r.ok) return;
         coverage = await r.json();
         paintCoverage();
+        paintRules();
       } catch { /* the strip is a convenience; its absence must not stop a run */ }
     }
 
@@ -645,11 +750,12 @@
       try {
         const top = $('top').value, rank = $('rank').value;
         const every = $('every').value, mode = $('mode').value, cost = $('cost').value;
-        const theme = $('theme').value;
+        const theme = $('theme').value, rules = $('rules').value;
         const q = `?date=${encodeURIComponent(d)}&tiers=${encodeURIComponent([...picked].join(','))}`
           + `&top=${encodeURIComponent(top)}&rank=${encodeURIComponent(rank)}`
           + `&every=${encodeURIComponent(every)}&mode=${encodeURIComponent(mode)}&cost=${encodeURIComponent(cost)}`
-          + (theme ? `&theme=${encodeURIComponent(theme)}` : '');
+          + (theme ? `&theme=${encodeURIComponent(theme)}` : '')
+          + (rules && rules !== 'Balanced' ? `&rules=${encodeURIComponent(rules)}` : '');
         const res = await fetch('/api/backtest' + q);
         const j = await res.json();
         if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
@@ -698,6 +804,10 @@
       $('every').addEventListener('change', syncEvery);
       if (qs.get('top')) $('top').value = qs.get('top');
       if (qs.get('rank')) $('rank').value = qs.get('rank');
+      // The options arrive with the coverage call; hold the choice until then.
+      if (qs.get('rules')) { $('rules').innerHTML =
+        `<option value="${we(qs.get('rules'))}">${we(qs.get('rules'))}</option>`;
+        $('rules').value = qs.get('rules'); }
       // Ranking only means something once there is a cut to rank FOR.
       const syncRank = () => { $('rank').disabled = $('top').value === '0'; };
       syncRank();
