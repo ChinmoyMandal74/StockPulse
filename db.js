@@ -2193,8 +2193,24 @@ async function readTechMarks(from, to) {
   }));
 }
 
-// What the table holds, for the page's coverage note and for the nightly job's
-// "is a new mark due" test. Two aggregates over an indexed column and a count,
+// The newest mark, and NOTHING else. This is the nightly job's "is a mark due"
+// test and it runs inside the refresh tail, so it has to be a seek: `max(d)`
+// over the date index is a covering-index lookup, 0ms.
+//
+// It exists because the first version asked techHistorySpan() instead, which
+// is a full scan — measured at 14 SECONDS cold against 228k rows, on every
+// round of a nightly. That is what broke the 2026-09-19 nightly: the final
+// round was recorded, then the tail ran out of time before it could build the
+// report or answer the job, so the workflow saw no `done` and failed a run
+// whose data was perfectly good.
+async function techHistoryLastMark() {
+  await init();
+  const r = await db.execute('select max(d) as last from tech_history');
+  return (r.rows[0] && r.rows[0].last) || null;
+}
+
+// What the table holds, for the page's coverage note. NOT for the refresh path
+// — this one scans. Two aggregates over an indexed column and a count,
 // which is bounded by the table rather than by `bars`.
 async function techHistorySpan() {
   await init();
@@ -3156,6 +3172,7 @@ module.exports = {
   readFundamentalsAsOf, readFundamentalsRows,
   readFundamentalsFirstSeen,
   writeTechHistory, readTechMarks, readTechMarkDates, techHistorySpan, techHistoryCounts,
+  techHistoryLastMark,
   mergeProfileFields,
   writeNews, readNews, readLatestNews, readNewsState, newsCountsSince,
   symbolsWithData,

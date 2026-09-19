@@ -6929,9 +6929,16 @@ const TECH_MARK_DAYS = 7;
 
 async function noteTechMark(day, rows) {
   if (!day || !Array.isArray(rows) || !rows.length) return 0;
-  const span = await store.techHistorySpan();
-  if (span.last) {
-    const gap = (Date.parse(day + 'T00:00:00Z') - Date.parse(span.last + 'T00:00:00Z')) / 86400000;
+  // ONE INDEXED SEEK, and it has to stay that way. This runs inside the refresh
+  // tail — the work that must finish before the response — on every round of a
+  // Refresh all. The first version asked techHistorySpan(), a full scan
+  // measured at 14 SECONDS cold over 228k rows, and that is what broke the
+  // 2026-09-19 nightly: nine rounds of it, and on the last one the tail ran out
+  // of time before it could build the report or answer the job. The data was
+  // perfect; the workflow failed a run that had already succeeded.
+  const last = await store.techHistoryLastMark();
+  if (last) {
+    const gap = (Date.parse(day + 'T00:00:00Z') - Date.parse(last + 'T00:00:00Z')) / 86400000;
     if (!(gap >= TECH_MARK_DAYS)) return 0;
   }
   const out = [];
@@ -7997,9 +8004,26 @@ app.post('/api/cron/refresh', route(async (req, res) => {
   let cronRunId = null;
   const starting = req.query.start === '1' || req.body?.start === true;
   const askedRun = Number(req.body?.runId) || null;
-  if (!starting && askedRun && (await trackSafe(store.runStatus(askedRun))) === 'stopped') {
+  const askedStatus = !starting && askedRun
+    ? await trackSafe(store.runStatus(askedRun)) : null;
+  if (askedStatus === 'stopped') {
     // Stopped from /refreshes: tell the job it is done, and spend nothing.
     return res.json({ ok: true, done: true, stopped: true, runId: askedRun });
+  }
+  // ALREADY FINISHED: say so, and spend nothing.
+  //
+  // The job only exits 0 when a round answers `done`. If that one response is
+  // ever lost — a slow tail, a cold instance, a dropped socket — every later
+  // call used to fall through to a fresh full refresh, time out at the job's
+  // 180s curl limit, and count as a round with no progress. Three of those and
+  // the job gives up and reports failure.
+  //
+  // That is exactly what happened on 2026-09-19: the run was `complete` with
+  // all 430 loaded and the job still failed, having burned three 180-second
+  // calls after the work was done. The run's own status is the authority on
+  // whether there is anything left to do.
+  if (askedStatus === 'complete' || askedStatus === 'incomplete') {
+    return res.json({ ok: true, done: true, runId: askedRun, already: askedStatus });
   }
   if (starting) {
     const total = (await readUniverse()).length;
