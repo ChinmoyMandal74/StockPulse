@@ -28,9 +28,11 @@
     .controls { display: flex; gap: 22px; align-items: flex-end; flex-wrap: wrap; }
     .fld { display: flex; flex-direction: column; gap: 6px; }
     .fld label { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
-    .fld input[type="date"] {
+    .fld input[type="date"], .fld select {
       background: var(--surface-2); border: 1px solid var(--hair-2); color: var(--text);
       border-radius: 10px; padding: 9px 11px; font: 500 13px var(--mono); }
+    .fld select { font-family: var(--sans); font-size: 12.5px; min-width: 190px; }
+    .fld select:disabled { opacity: .45; cursor: not-allowed; }
     .tiers { display: flex; gap: 7px; flex-wrap: wrap; }
     .tier {
       border: 1px solid var(--hair-2); background: var(--surface-2); color: var(--muted);
@@ -72,6 +74,12 @@
       content: ''; display: inline-block; width: 16px; height: 2px; vertical-align: 4px;
       margin-right: 7px; background: currentColor; }
     .lg-p { color: var(--green); } .lg-u { color: var(--accent); } .lg-s { color: var(--faint); }
+    .lg-t { color: var(--amber); } .lg-b { color: var(--muted); }
+    /* The band's swatch is a block, not a line: it is an area on the chart. */
+    .lg-b::before { border-radius: 2px; background: rgba(255, 255, 255, 0.16); }
+    #bandNote { margin: 10px 0 2px; line-height: 1.6; }
+    #bandNote b { color: var(--text); font-weight: 600; }
+    #bandNote.out b { color: var(--amber); }
     svg.chart { width: 100%; height: 260px; display: block; }
     .chart .gl { stroke: var(--hair); stroke-width: 1; }
     .chart .ln { fill: none; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
@@ -133,6 +141,24 @@
           <label>Verdicts to buy</label>
           <div class="tiers" id="tiers"></div>
         </div>
+        <div class="fld">
+          <label for="top">How many to hold</label>
+          <select id="top">
+            <option value="0" selected>All of them</option>
+            <option value="5">Top 5</option>
+            <option value="10">Top 10</option>
+            <option value="15">Top 15</option>
+            <option value="20">Top 20</option>
+          </select>
+        </div>
+        <div class="fld">
+          <label for="rank">Rank by</label>
+          <select id="rank" disabled>
+            <option value="cushion" selected>Cushion (room to the exit)</option>
+            <option value="momentum">Momentum score</option>
+            <option value="random">Random (the control)</option>
+          </select>
+        </div>
         <button class="btn btn-accent" id="run">Run backtest</button>
       </div>
       <p class="hint" id="hint"></p>
@@ -145,10 +171,13 @@
       <section class="bezel" id="chartWrap"><div class="core" style="padding:16px 18px">
         <div class="legend">
           <span class="lg-p" id="lgP">Picks</span>
+          <span class="lg-t" id="lgT" hidden>All picks in the tier</span>
+          <span class="lg-b" id="lgB" hidden>Random baskets, middle 80%</span>
           <span class="lg-u">Your universe, equal weight</span>
           <span class="lg-s" id="lgS">S&amp;P 500 (SPY)</span>
         </div>
         <svg class="chart" id="chart" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <p class="hint" id="bandNote" hidden></p>
       </div></section>
 
       <section class="bezel" style="margin-bottom:18px"><div class="core" style="padding:6px 18px 4px">
@@ -208,8 +237,17 @@
         { v: c.portfolio, d: c.dates, col: 'var(--green)' },
         { v: c.universe, d: c.universeDates, col: 'var(--accent)' },
       ];
+      // The whole tier, when a Top-N cut is in force: what the selection is
+      // actually being compared against.
+      if (c.tier) series.push({ v: c.tier, d: c.dates, col: 'var(--amber)', dash: '4 4' });
       if (c.spy) series.push({ v: c.spy, d: c.spyDates, col: 'var(--faint)' });
       let lo = Infinity, hi = -Infinity;
+      // The band is part of the scale, or a line can leave the chart.
+      const scan = (a) => (a || []).forEach((y) => {
+        if (y == null || !isFinite(y)) return;
+        if (y < lo) lo = y; if (y > hi) hi = y;
+      });
+      if (c.band) { scan(c.band.p10); scan(c.band.p90); }
       series.forEach((s) => (s.v || []).forEach((y) => {
         if (y == null || !isFinite(y)) return;
         if (y < lo) lo = y; if (y > hi) hi = y;
@@ -227,11 +265,25 @@
         g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" />`;
         g += `<text class="axl" x="4" y="${(y(v) + 3.5).toFixed(1)}">${((v - 1) * 100).toFixed(0)}%</text>`;
       }
+      // The random band goes down FIRST, so every line reads on top of it.
+      if (c.band) {
+        const pts = (arr) => (arr || []).map((val, i) =>
+          (val == null ? null : `${x(i, arr.length).toFixed(1)},${y(val).toFixed(1)}`)).filter(Boolean);
+        const up = pts(c.band.p90), dn = pts(c.band.p10);
+        if (up.length > 1 && dn.length > 1) {
+          g += `<path d="M${up.join('L')}L${dn.slice().reverse().join('L')}Z"
+                 fill="rgba(255,255,255,0.075)" stroke="none" />`;
+          const mid = pts(c.band.p50);
+          if (mid.length > 1) g += `<path class="ln" d="M${mid.join('L')}" stroke="var(--faint)"
+                                     stroke-dasharray="2 5" stroke-width="1" />`;
+        }
+      }
       series.forEach((s) => {
         const v = s.v || [];
         const pts = v.map((val, i) => (val == null ? null : `${x(i, v.length).toFixed(1)},${y(val).toFixed(1)}`))
           .filter(Boolean);
-        if (pts.length > 1) g += `<path class="ln" d="M${pts.join('L')}" stroke="${s.col}" />`;
+        if (pts.length > 1) g += `<path class="ln" d="M${pts.join('L')}" stroke="${s.col}"` +
+          (s.dash ? ` stroke-dasharray="${s.dash}"` : '') + ' />';
       });
       const d0 = c.dates[0], d1 = c.dates[c.dates.length - 1];
       g += `<text class="axl" x="${L}" y="${H - 6}">${we(d0 || '')}</text>`;
@@ -244,23 +296,62 @@
       const s = r.summary;
       const beatS = s.spy == null ? null : s.portfolio - s.spy;
       const beatU = s.universe == null ? null : s.portfolio - s.universe;
-      $('cards').innerHTML = [
-        ['Picks', String(s.n), `of ${r.universe} in the universe`],
+      const cut = r.top > 0;
+      const rankName = { cushion: 'thickest cushion', momentum: 'highest momentum', random: 'at random' }[r.rank]
+        || r.rank;
+      const cards = [
+        [cut ? 'Held' : 'Picks', cut ? `${s.selected} of ${s.n}` : String(s.n),
+          cut ? `${rankName}, tier first` : `of ${r.universe} in the universe`],
         ['Equal-weight return', pct(s.portfolio), `${r.tradingDate} → ${r.today}`],
         ['vs S&P 500', pct(beatS), s.spy == null ? 'benchmark unavailable' : `S&P ${pct(s.spy)}`],
         ['vs your universe', pct(beatU), `universe ${pct(s.universe)} · ${s.universeMembers} stocks`],
-        ['Winners', s.n ? `${s.up}/${s.n}` : '—', s.n ? Math.round((s.up / s.n) * 100) + '% positive' : ''],
-        ['Fundamentals', `${r.notes.fundReal}/${r.notes.fundReal + r.notes.fundImputed}`,
-          r.notes.fundReal ? 'recorded, not assumed' : 'all from today — none recorded that far back'],
-      ].map(([k, v, n], i) => {
+        ['Winners', s.selected ? `${s.up}/${s.selected}` : '—',
+          s.selected ? Math.round((s.up / s.selected) * 100) + '% positive' : ''],
+      ];
+      // The number to read FIRST when a cut is in force: where the ranked basket
+      // landed among random baskets of the same size. 50 means the ranking did
+      // nothing. It replaces the fundamentals card, which moves into the notes.
+      if (cut && s.bandPct != null) {
+        cards.push(['Beat this share of random picks', s.bandPct + 'th',
+          `percentile of ${s.bandTrials} random ${s.selected}-stock baskets`]);
+      } else {
+        cards.push(['Fundamentals', `${r.notes.fundReal}/${r.notes.fundReal + r.notes.fundImputed}`,
+          r.notes.fundReal ? 'recorded, not assumed' : 'all from today — none recorded that far back']);
+      }
+      $('cards').innerHTML = cards.map(([k, v, n], i) => {
         const col = i === 2 ? cls(beatS) : i === 3 ? cls(beatU) : i === 1 ? cls(s.portfolio) : '';
         return `<div class="bezel card"><div class="core card">
           <div class="k">${we(k)}</div><div class="v ${col}">${we(v)}</div>
           <div class="n">${we(n)}</div></div></div>`;
       }).join('');
 
+      // What the band actually says, in a sentence, because a percentile alone
+      // invites reading 62nd as a result.
+      const bw = $('bandNote');
+      if (cut && s.bandPct != null) {
+        const inside = s.bandPct > 10 && s.bandPct < 90;
+        bw.className = 'hint' + (inside ? '' : ' out');
+        // A cut made mostly on rows the metric could not read is arbitrary, and
+        // saying so matters more than the percentile beside it.
+        const thin = r.rank !== 'random' && s.rankable < s.n
+          ? ` <b>${s.n - s.rankable} of the ${s.n} picks had no ${we(rankName.split(' ').pop())}</b> to rank on, ` +
+            `so that part of the cut is arbitrary.` : '';
+        bw.innerHTML = `Ranking by <b>${we(rankName)}</b> returned <b>${we(pct(s.portfolio))}</b> ` +
+          `against <b>${we(pct(s.tier))}</b> for all ${s.n} picks. A random ${s.selected} from the same ` +
+          `pool landed between ${we(pct(s.bandLo))} and ${we(pct(s.bandHi))} four times in five — ` +
+          (inside
+            ? `this sits <b>inside</b> that spread, so on this one window the ranking did not separate anything.`
+            : `this sits <b>outside</b> it, which is suggestive and is still one window: ten stocks over ` +
+              `two months is one or two independent observations, not a finding.`) + thin;
+        bw.hidden = false;
+      } else { bw.hidden = true; }
+      $('lgT').hidden = !cut;
+      $('lgB').hidden = !cut;
+
       drawChart(r.curve);
-      $('lgP').textContent = `Picks (${s.n}, equal weight)`;
+      // One writer for this label — it was set above and overwritten here.
+      $('lgP').textContent = cut
+        ? `Top ${s.selected} by ${rankName}` : `Picks (${s.n}, equal weight)`;
       $('lgS').textContent = r.notes.spyError ? 'S&P 500 — unavailable' : 'S&P 500 (SPY)';
 
       $('tb').innerHTML = r.picks.map((p) => `<tr>
@@ -371,7 +462,9 @@
       const btn = $('run');
       btn.disabled = true; btn.textContent = 'Running…';
       try {
-        const q = `?date=${encodeURIComponent(d)}&tiers=${encodeURIComponent([...picked].join(','))}`;
+        const top = $('top').value, rank = $('rank').value;
+        const q = `?date=${encodeURIComponent(d)}&tiers=${encodeURIComponent([...picked].join(','))}`
+          + `&top=${encodeURIComponent(top)}&rank=${encodeURIComponent(rank)}`;
         const res = await fetch('/api/backtest' + q);
         const j = await res.json();
         if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
@@ -395,6 +488,12 @@
         qs.get('tiers').split(',').forEach((t) => { if (TIERS.includes(t)) picked.add(t); });
         if (!picked.size) picked.add('Strong Buy');
       }
+      if (qs.get('top')) $('top').value = qs.get('top');
+      if (qs.get('rank')) $('rank').value = qs.get('rank');
+      // Ranking only means something once there is a cut to rank FOR.
+      const syncRank = () => { $('rank').disabled = $('top').value === '0'; };
+      syncRank();
+      $('top').addEventListener('change', syncRank);
       $('hint').textContent = `Any trading day from ${el.min} to ${el.max}. `
         + 'Two months is the limit: further back, almost the whole verdict would be imputed rather than replayed.';
       paintTiers();

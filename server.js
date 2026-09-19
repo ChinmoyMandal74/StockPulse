@@ -4268,7 +4268,12 @@ async function btLoadSpy() {
 // start and nothing is rebalanced. mean(close / close_at_start) per session,
 // over the union of the dates the members actually traded \u2014 the convention
 // /api/basket already uses, so the two pages cannot disagree.
-function btCurve(series, from) {
+// Every symbol's series normalised to 1.0 at `from`, on one shared date axis.
+// btCurve averages every row of this; the random band averages random SUBSETS
+// of it. One alignment rule, one implementation — a second walk of "the last
+// close on or before d" would drift the moment either was fixed, which is why
+// rowcard.js, screens.js and action.js exist at all.
+function btMatrix(series, from) {
   const axis = new Set();
   const start = {};
   for (const sym of Object.keys(series)) {
@@ -4279,21 +4284,125 @@ function btCurve(series, from) {
     for (const r of rows) if (r.d >= from) axis.add(r.d);
   }
   const dates = [...axis].sort();
-  const held = Object.keys(start);
-  const out = [];
-  for (const d of dates) {
-    let sum = 0, n = 0;
-    for (const sym of held) {
-      const rows = series[sym];
-      // the last close on or before d, so a missing session holds its level
-      let v = null;
-      for (let i = rows.length - 1; i >= 0; i--) if (rows[i].d <= d) { v = rows[i].c; break; }
-      if (v == null) continue;
-      sum += v / start[sym]; n++;
+  const syms = Object.keys(start);
+  const rows = {};
+  for (const sym of syms) {
+    const src = series[sym];              // ascending by date, as btRun builds it
+    const out = new Array(dates.length);
+    // A forward pointer rather than a backwards scan per date: the old version
+    // was O(dates x bars) per symbol, and the band asks for this many times.
+    let k = 0, v = null;
+    for (let j = 0; j < dates.length; j++) {
+      while (k < src.length && src[k].d <= dates[j]) { v = src[k].c; k++; }
+      out[j] = v == null ? null : v / start[sym];
     }
-    out.push(n ? sum / n : null);
+    rows[sym] = out;
   }
-  return { dates, values: out, members: held.length };
+  return { dates, syms, rows };
+}
+
+// The equal-weight curve of whichever symbols are handed in.
+function btAverage(m, syms) {
+  const out = new Array(m.dates.length);
+  for (let j = 0; j < m.dates.length; j++) {
+    let sum = 0, n = 0;
+    for (const s of syms) {
+      const v = m.rows[s] && m.rows[s][j];
+      if (v != null) { sum += v; n++; }
+    }
+    out[j] = n ? sum / n : null;
+  }
+  return out;
+}
+
+function btCurve(series, from) {
+  const m = btMatrix(series, from);
+  return { dates: m.dates, values: btAverage(m, m.syms), members: m.syms.length, matrix: m };
+}
+
+// Seeded, so the band does not jitter on every reload — a confidence interval
+// that moves when nothing moved reads as a bug. mulberry32.
+function btRng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const BT_BAND_TRIALS = 400;
+
+// What a RANDOM basket of the same size, from the same pool, would have done.
+// This is the point of the Top-N feature rather than an ornament: ten stocks
+// over two months is one or two independent observations, so a ranked basket
+// beating the tier average says nothing until you know the spread. If the
+// ranked line sits inside this band, the ranking did nothing.
+function btBand(m, pool, n, seed) {
+  const syms = pool.filter((s) => m.rows[s]);
+  if (n < 1 || syms.length <= n) return null;       // nothing to choose = no spread
+  const rnd = btRng(seed);
+  const D = m.dates.length;
+  const draws = [];
+  for (let t = 0; t < BT_BAND_TRIALS; t++) {
+    const idx = syms.slice();
+    for (let k = 0; k < n; k++) {                    // partial Fisher-Yates, no replacement
+      const j = k + Math.floor(rnd() * (idx.length - k));
+      const tmp = idx[k]; idx[k] = idx[j]; idx[j] = tmp;
+    }
+    draws.push(btAverage(m, idx.slice(0, n)));
+  }
+  const quantile = (j, q) => {
+    const col = draws.map((c) => c[j]).filter((v) => v != null).sort((a, b) => a - b);
+    return col.length ? col[Math.min(col.length - 1, Math.floor(q * col.length))] : null;
+  };
+  const p10 = [], p50 = [], p90 = [];
+  for (let j = 0; j < D; j++) { p10.push(quantile(j, 0.10)); p50.push(quantile(j, 0.50)); p90.push(quantile(j, 0.90)); }
+  const finals = draws.map((c) => c[D - 1]).filter((v) => v != null).sort((a, b) => a - b);
+  return { p10, p50, p90, finals, trials: draws.length };
+}
+
+const BT_RANKS = ['cushion', 'momentum', 'random'];
+
+// Choose the Top N. Ranked on what was knowable ON THE START DATE, never on
+// what happened afterwards.
+//
+// THE TRAP: btRun returns `picks` already sorted by realised forward return,
+// for the table. Slicing THAT array is one plausible line of code and is
+// perfect hindsight — it would report a magnificent result that means nothing.
+// The same look-ahead class the strategy backtest was caught on once already.
+// So this sorts its own copy and the caller's order is never consulted.
+function btPick(picks, rank, n, seed) {
+  if (!n || n >= picks.length) return picks.slice();
+  // Neutralise the inherited order BEFORE ranking. picks arrives sorted by
+  // realised return, so every tie — and the whole list when a metric is null
+  // for everyone, which exitDistance does return past -60% — would otherwise
+  // resolve by what happened next. Caught by a fixture where the ranking and
+  // the outcome are opposed: the cut came back as exactly the ten best
+  // performers. Symbol order is arbitrary, and arbitrary is the point.
+  const sorted = picks.slice().sort((a, b) => (a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0));
+  if (rank === 'random') {
+    const rnd = btRng(seed);
+    for (let k = 0; k < n; k++) {
+      const j = k + Math.floor(rnd() * (sorted.length - k));
+      const tmp = sorted[k]; sorted[k] = sorted[j]; sorted[j] = tmp;
+    }
+  } else {
+    const key = rank === 'momentum' ? 'momentum' : 'cushion';
+    sorted.sort((a, b) => {
+      // Tier first, metric second — the screener's own rule, where sorting by an
+      // advice column breaks ties on cushion. A Buy should not outrank a Strong
+      // Buy because it happens to have more room.
+      if (a.tierRank !== b.tierRank) return b.tierRank - a.tierRank;
+      const av = a[key], bv = b[key];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;                     // unrankable sorts last, never first
+      if (bv == null) return -1;
+      return bv - av;
+    });
+  }
+  return sorted.slice(0, n);
 }
 
 // The engine's inputs as they stood at index i of this symbol's closes. Exactly
@@ -4406,8 +4515,33 @@ function btRun(opts) {
     const v = Action.evaluate(row, ACTION_CFG);
     evaluated++;
     if (!want.has(v.action)) continue;
+    // What a Top-N cut ranks on, AS OF THEN — computed only for rows that made
+    // the cut, so a run that picks 12 of 427 pays for 12. Both come from data
+    // already in hand: this symbol's bars and the row just built. No query.
+    //
+    // Cushion is the screener's own definition — the distance to the technical
+    // exit in the stock's OWN monthly volatility. The raw drop is deliberately
+    // not offered as a ranking: measured over 307,965 stock-days it orders the
+    // downside BACKWARDS, because "more room" is mostly "more extended".
+    const newestFirst = rows.slice(0, i + 1).reverse();   // momentum.js's orientation
+    const rv = Momentum.realisedVol(newestFirst);
+    // exitDistance takes a NORMALISED shape, not a snapshot row — it rescales
+    // each field as it walks the price down, so it has to know which is which.
+    // Handing it the row gave every field as undefined and a null cushion for
+    // the whole universe, which then made btPick fall through to the inherited
+    // return order. Same argument list as the live call in scoreActionInto.
+    const ed = Action.exitDistance({
+      v200: row.vs200ma, v50: row.vs50ma, rsi: row.rsi,
+      m1: row.oneMonthPct, m3: row.threeMonthPct, fh: row.pctFromHigh,
+      vol: row.volTrend, hist: row.historyDays,
+    }, ACTION_CFG);
+    const ms = Momentum.scoreBars(newestFirst);
     picks.push({ symbol: sym, name: today.shortName || today.name || sym,
       action: v.action, flag: v.flag, type: v.type,
+      cushion: (ed && ed.drop != null && rv != null && isFinite(rv) && rv > 0)
+        ? Math.round((ed.drop / (rv / Math.sqrt(12))) * 100) / 100 : null,
+      momentum: ms ? ms.score : null,
+      tierRank: Action.ACTIONS.indexOf(v.action),
       fundAsOf: was ? was.asOf : null,
       priceThen: closes[i], dateThen: dates[i],
       priceNow: closes[closes.length - 1], lastDate: dates[dates.length - 1],
@@ -6841,8 +6975,30 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
   try { recorded = await store.readFundamentalsAsOf(asked); } catch (e) { recorded = null; }
 
   const r = btRun({ bars, snapshot: stocks, from: asked, tiers, earnings, recorded });
-  const held = btCurve(r.heldSeries, asked);
   const all = btCurve(r.allSeries, asked);
+  const tier = btCurve(r.heldSeries, asked);        // every pick in the chosen verdicts
+
+  // Top N. Seeded off the date + size so the same run draws the same band.
+  const rank = BT_RANKS.indexOf(String(req.query.rank || '')) >= 0 ? String(req.query.rank) : 'cushion';
+  const topAsked = Math.max(0, Math.min(200, parseInt(req.query.top, 10) || 0));
+  const top = topAsked && topAsked < r.picks.length ? topAsked : 0;   // 0 = take them all
+  const seed = Array.from(asked + '|' + top).reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const chosen = btPick(r.picks, rank, top, seed);
+  const chosenSet = new Set(chosen.map((x) => x.symbol));
+  for (const p of r.picks) p.selected = chosenSet.has(p.symbol);
+  // How many of the picks the chosen metric could actually rank. exitDistance
+  // returns null past a 60% fall, so a stock a long way above its 200-day has
+  // no cushion — and a cut made mostly on unrankable rows is an arbitrary cut,
+  // which the page has to be able to say.
+  const rankable = rank === 'random' ? r.picks.length
+    : r.picks.filter((p) => p[rank === 'momentum' ? 'momentum' : 'cushion'] != null).length;
+
+  // With no cut, the selection IS the tier and there is no spread to draw.
+  const held = top
+    ? { dates: tier.dates, values: btAverage(tier.matrix, chosen.map((x) => x.symbol)),
+        members: chosen.length, matrix: tier.matrix }
+    : tier;
+  const band = top ? btBand(tier.matrix, r.picks.map((x) => x.symbol), top, seed) : null;
 
   // The benchmark is a nicety, not a dependency: if the provider is having one
   // of its days the rest of the answer still stands.
@@ -6863,18 +7019,33 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
     date: asked, tradingDate: held.dates[0] || asked, today,
     tiers, universe: universe.length,
     picks: r.picks,
+    rank, top,
     curve: { dates: held.dates, portfolio: held.values,
+             tier: top ? tier.values : null,
+             band: band ? { p10: band.p10, p50: band.p50, p90: band.p90 } : null,
              universe: all.values, universeDates: all.dates,
              spy: spy ? spy.values : null, spyDates: spy ? spy.dates : null },
     summary: {
       n: r.picks.length,
+      selected: chosen.length,
+      rankable,
       portfolio: pct(last(held.values)),
+      tier: top ? pct(last(tier.values)) : null,
       universe: pct(last(all.values)),
       spy: spy ? pct(last(spy.values)) : null,
-      up: r.picks.filter((x) => x.ret > 0).length,
+      up: chosen.filter((x) => x.ret > 0).length,
       best: r.picks[0] || null,
       worst: r.picks[r.picks.length - 1] || null,
       universeMembers: all.members,
+      // Where the ranked basket landed among random baskets of the same size.
+      // 50 means the ranking did exactly nothing; this is the number to read
+      // first, ahead of the return.
+      bandPct: band && last(held.values) != null
+        ? Math.round((band.finals.filter((x) => x < last(held.values)).length / band.finals.length) * 100)
+        : null,
+      bandLo: band ? pct(last(band.p10)) : null,
+      bandHi: band ? pct(last(band.p90)) : null,
+      bandTrials: band ? band.trials : null,
     },
     notes: {
       evaluated: r.evaluated,
