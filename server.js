@@ -4314,6 +4314,143 @@ const FUND_HISTORY_FROM = '2026-08-30';
 // One window covers every start date the page can ask for, so changing the date
 // or the tiers re-runs against bars already in memory. At 1,000 stocks that read
 // is ~650k rows and must not happen per click.
+// ============================================================================
+// The trend-only backtest — twenty years, because it reads nothing but bars
+// ============================================================================
+// The advice backtest stops at two months: everything before 2026-08-30 would
+// have its fundamentals imputed. This one asks a narrower question that the
+// archive can actually answer — what the ALL-TECHNICAL rules did — and so it
+// runs from 2008.
+//
+// It reads `tech_history` and never touches `bars`. Every field the rules need
+// was precomputed at a weekly mark, which is what keeps a twenty-year study off
+// the rows-read meter: ~333,000 small rows, read once and cached, against 1.7M
+// bars re-read per request.
+//
+// ONE WINDOW IS ONE OBSERVATION. That is the advice backtest's stated weakness
+// and the whole reason this exists: twenty years buys a DISTRIBUTION of start
+// dates, not a longer curve. So the primary output is the spread across ~200
+// windows — median, hit rate, the tail — and never a single equity line.
+const TB_TTL_MS = 10 * 60 * 1000;
+let tbMarks = null;          // { at, rows }
+
+// Forward horizons, in WEEKLY MARKS. A fixed horizon is what makes windows
+// comparable: "carry every start date to today" gives a 2008 window eighteen
+// years and a 2026 one a fortnight, and averaging those compares nothing.
+const TB_HORIZONS = { '1M': 4, '3M': 13, '6M': 26, '1Y': 52 };
+// Under this many picks a window is a thin basket — its excess is mostly one
+// stock's idiosyncratic noise. FLAGGED, never dropped: excluding the windows
+// where the rules found almost nothing would quietly remove exactly the
+// periods a trend rule is supposed to be judged on.
+const TB_THIN_PICKS = 3;
+
+// Every mark, once, cached. The whole table is ~333k rows and the sweep needs
+// the verdict at each start and the close at each end — which between them is
+// most of it, so reading a range beats reading dates one at a time.
+async function tbLoadMarks() {
+  if (tbMarks && Date.now() - tbMarks.at < TB_TTL_MS) return tbMarks.rows;
+  const rows = await store.readTechMarks('1900-01-01', '2100-01-01');
+  tbMarks = { at: Date.now(), rows };
+  return rows;
+}
+
+// One pass, one basket per start date.
+//
+// Pure over what it is handed: no database, no clock, no config beyond the
+// rule set — so the whole sweep is testable without a server, which is what
+// makes its arithmetic checkable against hand-computed numbers.
+function tbSweep(opts) {
+  const { rows, cfg, want, horizon, from, only, everyMonths } = opts;
+  const H = TB_HORIZONS[horizon] || TB_HORIZONS['3M'];
+
+  // marks -> symbol -> row. Rows arrive ordered by date, so this walk is one
+  // pass rather than a sort.
+  const byDate = new Map();
+  for (const r of rows) {
+    if (only && !only.has(r.symbol)) continue;
+    if (!byDate.has(r.d)) byDate.set(r.d, new Map());
+    byDate.get(r.d).set(r.symbol, r);
+  }
+  const marks = [...byDate.keys()].sort();
+
+  // Start dates: the first mark of each month (or every Nth month), which is
+  // how anyone describes "I would have started in March 2012".
+  const starts = [];
+  let lastKey = null;
+  for (let i = 0; i < marks.length; i++) {
+    if (marks[i] < from) continue;
+    const key = marks[i].slice(0, 7);
+    if (key === lastKey) continue;
+    lastKey = key;
+    const month = Number(marks[i].slice(5, 7)) - 1;
+    if (everyMonths > 1 && month % everyMonths !== 0) continue;
+    if (i + H >= marks.length) break;            // no full horizon left
+    starts.push(i);
+  }
+
+  // Balanced is the stored default, so its verdict needs no re-evaluation —
+  // which matters: the alternative is ~70,000 engine calls a sweep.
+  const isDefault = !cfg || cfg.profile === 'Balanced';
+  const verdictOf = (r) => (isDefault ? r.action : Action.actionAt({
+    v200: r.vs200, v50: r.vs50, rsi: r.rsi, m1: r.m1, m3: r.m3,
+    fh: r.fromHigh, vol: r.volTrend, hist: r.historyDays }, cfg).action);
+
+  const windows = [];
+  for (const i of starts) {
+    const sd = marks[i], ed = marks[i + H];
+    const at = byDate.get(sd), then = byDate.get(ed);
+    let bSum = 0, bN = 0, uSum = 0, uN = 0;
+    const picks = [];
+    for (const [sym, r] of at) {
+      const end = then.get(sym);
+      // A return needs a price at BOTH ends. A symbol that stops trading part
+      // way through is left out of both legs rather than counted in one.
+      if (!end || !(r.close > 0) || !(end.close > 0)) continue;
+      const ret = (end.close / r.close - 1) * 100;
+      uSum += ret; uN++;
+      if (want.has(verdictOf(r))) { bSum += ret; bN++; picks.push(sym); }
+    }
+    if (!uN) continue;
+    const bench = uSum / uN;
+    // NO PICKS IS A RESULT, NOT A GAP. If the rules qualify nothing, the money
+    // sits in cash and earns nothing — so the window returns 0 and its excess
+    // is minus the market's move. Treating it as a missing observation would
+    // drop precisely the windows a trend rule exists for (it is what March 2009
+    // looks like) and would flatter every one of them.
+    const cash = bN === 0;
+    const basket = cash ? 0 : bSum / bN;
+    windows.push({ d: sd, end: ed, n: bN, universe: uN,
+      basket, bench, excess: basket - bench,
+      cash, thin: bN > 0 && bN < TB_THIN_PICKS,
+      picks: picks.slice(0, 30) });
+  }
+  return { windows, horizon, horizonMarks: H, marks: marks.length };
+}
+
+// The spread, which is the answer — not any one window.
+function tbStats(windows) {
+  // Every window counts. `thin` and `cash` are reported alongside so a reader
+  // can see how much of the distribution rests on almost nothing, but they are
+  // not filtered out — a filter there is a thumb on the scale.
+  const usable = windows.filter((w) => w.excess != null);
+  const ex = usable.map((w) => w.excess).sort((a, b) => a - b);
+  const q = (p) => (ex.length ? ex[Math.min(ex.length - 1, Math.floor(p * (ex.length - 1)))] : null);
+  const mean = (a) => (a.length ? a.reduce((t, x) => t + x, 0) / a.length : null);
+  return {
+    windows: usable.length,
+    thinWindows: windows.filter((w) => w.thin).length,
+    cashWindows: windows.filter((w) => w.cash).length,
+    medianExcess: q(0.5), meanExcess: mean(ex),
+    p10: q(0.1), p90: q(0.9),
+    worst: ex.length ? ex[0] : null, best: ex.length ? ex[ex.length - 1] : null,
+    hitRate: ex.length ? (ex.filter((x) => x > 0).length / ex.length) * 100 : null,
+    meanBasket: mean(usable.map((w) => w.basket)),
+    meanBench: mean(usable.map((w) => w.bench)),
+    avgPicks: mean(usable.map((w) => w.n)),
+    avgUniverse: mean(usable.map((w) => w.universe)),
+  };
+}
+
 const BT_WINDOW_DAYS = 530;
 const BT_BAR_TTL_MS = 10 * 60 * 1000;
 const BT_SPY_TTL_MS = 30 * 60 * 1000;
@@ -7262,6 +7399,64 @@ app.get('/api/data-quality', requireAdmin, route(async (req, res) => {
 // Answered BEFORE a run, because it is the thing that decides which date to
 // pick, and running one to find out is the wrong order.
 let btCovCache = null;
+// The trend-only sweep. Reads tech_history and nothing else.
+app.get('/api/trend-backtest', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const horizon = TB_HORIZONS[String(req.query.horizon || '')] ? String(req.query.horizon) : '3M';
+  const tiers = String(req.query.tiers || 'Strong Buy,Buy').split(',')
+    .map((x) => x.trim()).filter((x) => Action.ACTIONS.indexOf(x) >= 0);
+  if (!tiers.length) return res.status(400).json({ error: 'Pick at least one verdict.' });
+  const rules = RULE_SETS.indexOf(String(req.query.rules || '')) >= 0
+    ? String(req.query.rules) : 'Balanced';
+  const everyMonths = Math.max(1, Math.min(12, parseInt(req.query.everyMonths, 10) || 1));
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.from || '')) ? String(req.query.from) : '2008-01-01';
+
+  const themes = await readPortfolios();
+  const themeAsked = String(req.query.theme || '').trim();
+  const theme = themeAsked && themeAsked in themes ? themeAsked : null;
+  if (themeAsked && !theme) return res.status(404).json({ error: `No theme called "${themeAsked}".` });
+  const only = theme ? new Set(themes[theme]) : null;
+
+  const rows = await tbLoadMarks();
+  if (!rows.length) {
+    return res.json({ error: null, empty: true,
+      note: 'No trend history recorded yet — run build-tech-history.js.' });
+  }
+  const t0 = Date.now();
+  const swept = tbSweep({ rows, cfg: ruleCfg(rules), want: new Set(tiers),
+    horizon, from, only, everyMonths });
+  const stats = tbStats(swept.windows);
+
+  // THE TWO NUMBERS THAT KEEP IT HONEST, computed rather than asserted.
+  //
+  // Overlap: monthly start dates with a three-month horizon means each window
+  // shares two thirds of its life with its neighbour, so ~200 windows is not
+  // ~200 independent readings. The research log's own discount rule, applied
+  // here rather than left to the reader.
+  const perYear = 12 / everyMonths;
+  const overlap = Math.max(1, swept.horizonMarks / (52 / perYear));
+  const effective = stats.windows ? Math.max(1, Math.round(stats.windows / overlap)) : 0;
+  // Coverage: the pool shrinks going back, and an early window that reads well
+  // on 40 stocks is not the same claim as a late one on 400.
+  const first = swept.windows[0], last = swept.windows[swept.windows.length - 1];
+
+  res.json({
+    horizon, tiers, rules, ruleSets: RULE_SETS, from, everyMonths,
+    theme: theme || null,
+    scopeOf: theme ? (themes[theme] || []).length : null,
+    summary: { ...stats, effectiveWindows: effective, overlapFactor: Math.round(overlap * 10) / 10,
+      firstWindow: first ? first.d : null, lastWindow: last ? last.d : null,
+      firstUniverse: first ? first.universe : null, lastUniverse: last ? last.universe : null,
+      ms: Date.now() - t0 },
+    windows: swept.windows,
+    // Split at 2020 — every result on this project has turned on it.
+    eras: {
+      pre2020: tbStats(swept.windows.filter((w) => w.d < '2020-01-01')),
+      post2020: tbStats(swept.windows.filter((w) => w.d >= '2020-01-01')),
+    },
+  });
+}));
+
 app.get('/api/backtest/coverage', requireAdmin, route(async (req, res) => {
   if (btCovCache && Date.now() - btCovCache.at < 5 * 60 * 1000) return res.json(btCovCache.body);
   const today = new Date().toISOString().slice(0, 10);
