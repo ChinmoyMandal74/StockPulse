@@ -27,6 +27,11 @@ const BIG = ['bars', 'fundamentals_history', 'earnings_history', 'news', 'activi
 // Statements that scan on purpose, each with the reason it is allowed to.
 // A new entry here is a decision, which is the point of naming them.
 const ALLOWED = [
+  // The tech-history builder's RESUME check, run by hand and never on a
+  // request path. It returns one row per symbol (<= 430) and exists so a
+  // dropped connection part way through a twenty-minute bulk write does not
+  // mean starting again.
+  /select symbol, count\(\*\) as n from tech_history group by symbol/i,
   // The counts ARE the product on /database, cached five minutes, and no index
   // can answer "how many rows".
   /^select count\(\*\)/i,

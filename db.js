@@ -2205,6 +2205,18 @@ async function techHistorySpan() {
     first: row.first || null, last: row.last || null };
 }
 
+// How many marks each symbol already holds. Only the BUILDER calls this, to
+// resume after a dropped connection — a full rebuild is ~333,000 rows over
+// twenty minutes or more, and a write that long across a network will be cut
+// at least once. Returns at most one row per symbol.
+async function techHistoryCounts() {
+  await init();
+  const r = await db.execute('select symbol, count(*) as n from tech_history group by symbol');
+  const out = {};
+  for (const row of r.rows) out[row.symbol] = Number(row.n || 0);
+  return out;
+}
+
 // The distinct marks in a window, oldest first — the sweep's list of start
 // dates. Reads only the date column over the index.
 async function readTechMarkDates(from) {
@@ -3143,7 +3155,7 @@ module.exports = {
   knownListings,
   readFundamentalsAsOf, readFundamentalsRows,
   readFundamentalsFirstSeen,
-  writeTechHistory, readTechMarks, readTechMarkDates, techHistorySpan,
+  writeTechHistory, readTechMarks, readTechMarkDates, techHistorySpan, techHistoryCounts,
   mergeProfileFields,
   writeNews, readNews, readLatestNews, readNewsState, newsCountsSince,
   symbolsWithData,

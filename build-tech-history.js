@@ -163,14 +163,49 @@ const fmt = (n) => n.toLocaleString('en-US');
 
   if (!COMMIT) { console.log('\nRe-run with --commit to write.'); process.exit(0); }
 
+  // RESUME. A full write is twenty minutes or more across a network and will be
+  // cut at least once — the first attempt died on ECONNRESET at 258 of 430
+  // symbols, having spent half an hour. A symbol already holding exactly the
+  // marks computed for it is skipped; anything short is rewritten whole, which
+  // the upsert makes free and which is the one case worth redoing.
+  let todo = out;
+  if (!process.argv.includes('--no-resume')) {
+    const have = await store.techHistoryCounts();
+    const wantBy = new Map();
+    for (const r of out) wantBy.set(r.symbol, (wantBy.get(r.symbol) || 0) + 1);
+    const done = new Set();
+    for (const [sym, n] of wantBy) if (have[sym] === n) done.add(sym);
+    if (done.size) {
+      todo = out.filter((r) => !done.has(r.symbol));
+      console.log(`\nresuming: ${done.size} symbols already complete, `
+        + `${fmt(out.length - todo.length)} rows skipped`);
+    }
+  }
+  if (!todo.length) {
+    const already = await store.techHistorySpan();
+    console.log(`\nnothing to write — tech_history holds ${fmt(already.rows)} rows across `
+      + `${already.symbols} symbols, ${already.first} → ${already.last}.`);
+    process.exit(0);
+  }
+
   console.log('\nwriting…');
   const t0 = Date.now();
   let written = 0;
   const CHUNK = 5000;
-  for (let k = 0; k < out.length; k += CHUNK) {
-    written += await store.writeTechHistory(out.slice(k, k + CHUNK));
-    const pct = ((k + CHUNK) / out.length) * 100;
-    console.log(`  ${fmt(Math.min(written, out.length))} / ${fmt(out.length)}  (${Math.min(pct, 100).toFixed(0)}%)`
+  for (let k = 0; k < todo.length; k += CHUNK) {
+    const slice = todo.slice(k, k + CHUNK);
+    // A dropped socket part way through is a network event, not a data problem,
+    // and the upsert means replaying a chunk costs only time.
+    let ok = false;
+    for (let attempt = 1; attempt <= 4 && !ok; attempt++) {
+      try { written += await store.writeTechHistory(slice); ok = true; } catch (err) {
+        if (attempt === 4) throw err;
+        console.log(`  chunk at ${fmt(k)} failed (${err.message}) — retrying in ${attempt * 5}s`);
+        await new Promise((r) => setTimeout(r, attempt * 5000));
+      }
+    }
+    const pct = ((k + CHUNK) / todo.length) * 100;
+    console.log(`  ${fmt(Math.min(written, todo.length))} / ${fmt(todo.length)}  (${Math.min(pct, 100).toFixed(0)}%)`
       + `  ${((Date.now() - t0) / 60000).toFixed(1)} min`);
   }
   const after = await store.techHistorySpan();
