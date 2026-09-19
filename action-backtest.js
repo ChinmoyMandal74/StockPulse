@@ -41,7 +41,7 @@ cfg.__resolved = true;
 console.log(`preset: ${preset}   (technical skeleton only — fundamentals cannot be replayed)\n`);
 
 const db = new DatabaseSync(DB);
-const syms = db.prepare('select distinct symbol from portfolio_tickers order by symbol').all()
+const syms = db.prepare('select distinct symbol from theme_tickers order by symbol').all()
   .map((r) => r.symbol);
 
 const HORIZONS = [21, 63];

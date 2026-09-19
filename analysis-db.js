@@ -39,8 +39,8 @@ const TABLES = [
   { name: 'bars', dated: true, bySymbol: true },
   { name: 'fundamentals_history', dated: true, bySymbol: true },
   { name: 'names', dated: false, bySymbol: false },
-  { name: 'portfolios', dated: false, bySymbol: false },
-  { name: 'portfolio_tickers', dated: false, bySymbol: false },
+  { name: 'themes', dated: false, bySymbol: false },
+  { name: 'theme_tickers', dated: false, bySymbol: false },
 ];
 
 // Re-pull this many days on top of what is already local. The archive rewrites

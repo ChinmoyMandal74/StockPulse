@@ -161,7 +161,7 @@
 
     // What each table is for, grouped the way the app thinks about them. A
     // table not listed here still shows, under Other, with no description.
-    const GROUPS = { market: ['Market data', '#34d399'], portfolios: ['Portfolios', '#fbbf24'],
+    const GROUPS = { market: ['Market data', '#34d399'], themes: ['Themes', '#fbbf24'],
       accounts: ['Accounts', '#a78bfa'], logs: ['Logs', '#f472b6'], refresh: ['Refresh', '#7c9cff'],
       reference: ['Reference', '#22d3ee'], other: ['Other', '#9aa3b2'] };
     const TABLES = {
@@ -172,11 +172,11 @@
       names: ['market', 'Company names, and short-name overrides'],
       news: ['market', 'Stored headlines per stock (21 days, 25 each)'],
       news_state: ['market', 'When each stock’s headlines were last fetched'],
-      universe: ['portfolios', 'The stocks the screener tracks — a stock leaves only by being removed from here'],
+      universe: ['themes', 'The stocks the screener tracks — a stock leaves only by being removed from here'],
       earnings_history: ['market', 'Reported quarters per stock: EPS estimate, actual and the surprise'],
-      portfolios: ['portfolios', 'The shared portfolios and their order'],
-      portfolio_tickers: ['portfolios', 'Which stocks are in which shared portfolio'],
-      user_portfolios: ['portfolios', 'Members’ personal portfolios'],
+      themes: ['themes', 'The shared themes and their order'],
+      theme_tickers: ['themes', 'Which stocks are in which shared theme'],
+      user_themes: ['themes', 'Members’ personal themes'],
       users: ['accounts', 'Accounts: email, role, approval status'],
       sessions: ['accounts', 'Signed-in sessions (30 days)'],
       password_resets: ['accounts', 'Pending password-reset links (hashed)'],

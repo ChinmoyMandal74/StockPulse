@@ -40,15 +40,15 @@ const SCHEMA = [
   // Portfolio order drives the UI's tab order and its colour assignment, so it
   // has to survive a round trip — hence an explicit position rather than
   // relying on insertion order.
-  `create table if not exists portfolios (
+  `create table if not exists themes (
      name     text primary key,
      position integer not null
    )`,
-  `create table if not exists portfolio_tickers (
-     portfolio text    not null,
-     symbol    text    not null,
-     position  integer not null,
-     primary key (portfolio, symbol)
+  `create table if not exists theme_tickers (
+     theme    text    not null,
+     symbol   text    not null,
+     position integer not null,
+     primary key (theme, symbol)
    )`,
   // How long the Balanced verdict has stood, counted in market days. It could
   // not be backfilled: only one day of technicals is stored (prevTech), and a
@@ -188,7 +188,7 @@ const SCHEMA = [
      symbol   text primary key,
      added_at integer
    )`,
-  `create table if not exists user_portfolios (
+  `create table if not exists user_themes (
      user_key text not null,
      name     text not null,
      position integer not null,
@@ -559,6 +559,46 @@ async function init() {
       // race it was written for is real — cold instances initialise
       // simultaneously, and on 2026-09-14 every loser cached its rejected init
       // and served 500s until it was recycled.
+      // BEFORE the schema, and that order is the whole thing: SCHEMA carries
+      // `create table if not exists themes`, so running it first would make an
+      // empty themes table, the rename below would then refuse ("table themes
+      // already exists"), and 26 themes plus 281 memberships would sit stranded
+      // in a table nothing reads. Rename first, create second.
+      //
+      // Each rename is attempted only when the OLD table is present and the NEW
+      // one is not, so this is idempotent: on every boot after the first it
+      // asks pragma_table_list, finds nothing to do, and costs one read.
+      try {
+        const RENAMES = [
+          ['portfolios', 'themes'],
+          ['portfolio_tickers', 'theme_tickers'],
+          ['user_portfolios', 'user_themes'],
+        ];
+        const found = await db.execute(
+          "select name from sqlite_master where type = 'table' and name in " +
+          "('portfolios','themes','portfolio_tickers','theme_tickers','user_portfolios','user_themes')");
+        const have = new Set(found.rows.map((r) => r.name));
+        for (const [from, to] of RENAMES) {
+          if (have.has(from) && !have.has(to)) {
+            await db.execute(`alter table ${from} rename to ${to}`);
+            console.log(`Turso: renamed ${from} -> ${to}`);
+          }
+        }
+        // The column inside the membership table, same guard.
+        if (have.has('portfolio_tickers') || have.has('theme_tickers')) {
+          const cols = await db.execute("select name from pragma_table_info('theme_tickers')");
+          const names = new Set(cols.rows.map((r) => r.name));
+          if (names.has('portfolio') && !names.has('theme')) {
+            await db.execute('alter table theme_tickers rename column portfolio to theme');
+            console.log('Turso: renamed theme_tickers.portfolio -> theme');
+          }
+        }
+      } catch (err) {
+        // A failed rename must not stop the app booting — the old tables are
+        // still there and readable, and the next cold start tries again.
+        console.warn('Turso: theme rename skipped:', err.message);
+      }
+
       try {
         await db.batch(SCHEMA, 'write');
       } catch (err) {
@@ -634,17 +674,17 @@ function normalize(obj) {
 async function readPortfolios() {
   await init();
   const [pf, tk] = await Promise.all([
-    db.execute('select name from portfolios order by position, name'),
-    db.execute('select portfolio, symbol from portfolio_tickers order by portfolio, position'),
+    db.execute('select name from themes order by position, name'),
+    db.execute('select theme, symbol from theme_tickers order by theme, position'),
   ]);
   const out = {};
   for (const r of pf.rows) out[r.name] = [];
-  for (const r of tk.rows) if (out[r.portfolio]) out[r.portfolio].push(r.symbol);
+  for (const r of tk.rows) if (out[r.theme]) out[r.theme].push(r.symbol);
   return out;
 }
 
 const UNIVERSE_FROM_PORTFOLIOS =
-  'insert or ignore into universe (symbol, added_at) select distinct symbol, ? from portfolio_tickers';
+  'insert or ignore into universe (symbol, added_at) select distinct symbol, ? from theme_tickers';
 
 // The stocks the screener tracks: the universe table, plus any portfolio
 // member not yet in it (belt and braces — writePortfolios keeps them in step).
@@ -653,7 +693,7 @@ async function readUniverse() {
   await init();
   const [u, tk] = await Promise.all([
     db.execute('select symbol from universe order by added_at, rowid'),
-    db.execute('select distinct symbol from portfolio_tickers'),
+    db.execute('select distinct symbol from theme_tickers'),
   ]);
   const out = u.rows.map((r) => r.symbol);
   const seen = new Set(out);
@@ -687,7 +727,7 @@ async function removeFromUniverse(symbol) {
   await init();
   const sym = String(symbol).toUpperCase();
   await db.batch([
-    { sql: 'delete from portfolio_tickers where symbol = ?', args: [sym] },
+    { sql: 'delete from theme_tickers where symbol = ?', args: [sym] },
     { sql: 'delete from universe where symbol = ?', args: [sym] },
   ], 'write');
 }
@@ -699,15 +739,15 @@ async function writePortfolios(obj) {
     // Before the memberships are replaced, every current member is recorded in
     // the universe — so deleting a portfolio can never drop a stock with it.
     { sql: UNIVERSE_FROM_PORTFOLIOS, args: [Date.now()] },
-    { sql: 'delete from portfolio_tickers', args: [] },
-    { sql: 'delete from portfolios', args: [] },
+    { sql: 'delete from theme_tickers', args: [] },
+    { sql: 'delete from themes', args: [] },
   ];
   let pi = 0;
   for (const [name, syms] of Object.entries(clean)) {
-    stmts.push({ sql: 'insert into portfolios (name, position) values (?, ?)', args: [name, pi++] });
+    stmts.push({ sql: 'insert into themes (name, position) values (?, ?)', args: [name, pi++] });
     syms.forEach((sym, si) => {
       stmts.push({
-        sql: 'insert into portfolio_tickers (portfolio, symbol, position) values (?, ?, ?)',
+        sql: 'insert into theme_tickers (theme, symbol, position) values (?, ?, ?)',
         args: [name, sym, si],
       });
     });
@@ -1825,7 +1865,7 @@ async function purgeSymbol(symbol) {
   // as rows edited, not rows deleted, and never fatal to the purge.
   try {
     const n = await removeSymbolFromUserPortfolios(sym);
-    if (n) removed.user_portfolios = n;
+    if (n) removed.user_themes = n;
   } catch { /* the sweep can catch it later */ }
   return { symbol: sym, removed, total };
 }
@@ -2343,7 +2383,7 @@ async function seedSharedViewsOnce(views) {
 async function readUserPortfolios(userKey) {
   await init();
   const r = await db.execute({
-    sql: 'select name, symbols from user_portfolios where user_key = ? order by position',
+    sql: 'select name, symbols from user_themes where user_key = ? order by position',
     args: [userKey],
   });
   const out = {};
@@ -2357,11 +2397,11 @@ async function readUserPortfolios(userKey) {
 // collection write here has, and fine at a ten-portfolio cap.
 async function writeUserPortfolios(userKey, map) {
   await init();
-  const stmts = [{ sql: 'delete from user_portfolios where user_key = ?', args: [userKey] }];
+  const stmts = [{ sql: 'delete from user_themes where user_key = ?', args: [userKey] }];
   let pos = 0;
   for (const [name, symbols] of Object.entries(map || {})) {
     stmts.push({
-      sql: 'insert into user_portfolios (user_key, name, position, symbols) values (?, ?, ?, ?)',
+      sql: 'insert into user_themes (user_key, name, position, symbols) values (?, ?, ?, ?)',
       args: [userKey, name, pos++, JSON.stringify(symbols)],
     });
   }
@@ -2372,7 +2412,7 @@ async function writeUserPortfolios(userKey, map) {
 // /api/users by email so /users can show them beside the delete button.
 async function listAllUserPortfolios() {
   await init();
-  const r = await db.execute('select user_key, name, symbols from user_portfolios order by user_key, position');
+  const r = await db.execute('select user_key, name, symbols from user_themes order by user_key, position');
   return r.rows.map((row) => {
     let symbols = [];
     try { symbols = JSON.parse(row.symbols); } catch { /* leave empty */ }
@@ -2387,14 +2427,14 @@ async function listAllUserPortfolios() {
 async function removeSymbolFromUserPortfolios(symbol) {
   await init();
   const sym = String(symbol).toUpperCase();
-  const r = await db.execute('select user_key, name, symbols from user_portfolios');
+  const r = await db.execute('select user_key, name, symbols from user_themes');
   let touched = 0;
   for (const row of r.rows) {
     let arr;
     try { arr = JSON.parse(row.symbols); } catch { continue; }
     if (!Array.isArray(arr) || !arr.includes(sym)) continue;
     await db.execute({
-      sql: 'update user_portfolios set symbols = ? where user_key = ? and name = ?',
+      sql: 'update user_themes set symbols = ? where user_key = ? and name = ?',
       args: [JSON.stringify(arr.filter((x) => x !== sym)), row.user_key, row.name],
     });
     touched++;
@@ -2516,7 +2556,7 @@ async function deleteUser(id) {
   if (email) {
     stmts.push({ sql: 'delete from prefs where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from chat_usage where user_key = ?', args: [email] });
-    stmts.push({ sql: 'delete from user_portfolios where user_key = ?', args: [email] });
+    stmts.push({ sql: 'delete from user_themes where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from column_views where scope = ?', args: [email] });
   }
   await db.batch(stmts, 'write');
