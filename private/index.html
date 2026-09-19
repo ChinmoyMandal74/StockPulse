@@ -649,6 +649,14 @@
     #myPop .pick { width: 100%; }
     #myPop .pick .count { margin-left: auto; }
     #myPop .pop-hint { padding: 7px 12px 8px; font-size: 11px; line-height: 1.5; color: var(--faint); }
+    #myPop { max-height: min(70vh, 520px); overflow-y: auto; }
+    #myPop .pop-head { padding: 10px 12px 2px; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+    #myPop .pop-q {
+      width: calc(100% - 20px); margin: 8px 10px 6px; padding: 6px 9px; border-radius: 8px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04); color: var(--text);
+      font-family: var(--sans); font-size: 12px; outline: none; box-sizing: border-box; }
+    #myPop .pop-q:focus { border-color: var(--hair-2); }
+    #myPop .tdot { width: 6px; height: 6px; border-radius: 50%; flex: none; margin-right: 7px; }
     .state .bo { margin-left: 5px; font-size: 7px; vertical-align: 2px; color: var(--faint); }
     .state .bo.on { color: var(--amber); }
     .ap-risk { margin: 12px 14px 2px; padding: 10px 12px; border-radius: 12px;
@@ -1425,9 +1433,19 @@
     collapsed.fwd = true; // forward-return columns appear only when an as-of date is set
 
     const PALETTE = ['#7c9cff', '#34d399', '#a78bfa', '#fb923c', '#fb7185', '#22d3ee', '#fbbf24', '#f472b6'];
+    // Colour follows the NAME, not the position. It used to be
+    // PALETTE[portfolios.indexOf(name)], which meant reordering the themes
+    // repainted every badge on every row — and reordering is now a feature, so
+    // a theme has to keep its colour for life. FNV-1a over the name: stable,
+    // order-independent, and the same theme is the same colour on every page.
     const colorFor = (name) => {
-      const i = portfolios.indexOf(name);
-      return PALETTE[(i < 0 ? 0 : i) % PALETTE.length];
+      let h = 0x811c9dc5;
+      const t = String(name || '');
+      for (let i = 0; i < t.length; i++) {
+        h ^= t.charCodeAt(i);
+        h = Math.imul(h, 0x01000193) >>> 0;
+      }
+      return PALETTE[h % PALETTE.length];
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1817,21 +1835,63 @@
     const myPop = $('myPop');
     let myPopSym = null;
     function closeMyPop() { myPop.hidden = true; myPopSym = null; }
+    // Typed into the popover's filter. At 26 shared themes an unfiltered list is
+    // a scroll, and the point of this control is that it is quicker than /admin.
+    let myPopQ = '';
     function paintMyPop() {
-      const names = Object.keys(myPortfolios);
-      const row = (name) => {
-        const on = (myPortfolios[name] || []).includes(myPopSym);
-        return `<button class="pick ${on ? 'on' : ''}" data-mypin="${we(name)}" role="option" aria-selected="${on}">` +
-          `<span class="nm">${we(name)}</span><span class="count">${(myPortfolios[name] || []).length}</span>` +
-          '<svg class="ic tick" aria-hidden="true"><use href="#i-check" /></svg></button>';
-      };
-      myPop.innerHTML = `<div class="pop-title">${we(myPopSym)} — my portfolios</div>` +
-        (names.length ? names.map(row).join('')
-          : '<div class="pop-hint">No personal themes yet — create one below, and it starts with this stock in it.</div>') +
+      const q = myPopQ.trim().toLowerCase();
+      const hit = (n) => !q || n.toLowerCase().includes(q);
+      const row = (name, on, count, shared) =>
+        `<button class="pick ${on ? 'on' : ''}" data-${shared ? 'shpin' : 'mypin'}="${we(name)}"` +
+        ` role="option" aria-selected="${on}">` +
+        (shared ? `<span class="tdot" style="background:${colorFor(name)}"></span>` : '') +
+        `<span class="nm">${we(name)}</span><span class="count">${count}</span>` +
+        '<svg class="ic tick" aria-hidden="true"><use href="#i-check" /></svg></button>';
+
+      // Shared themes, owner only — the endpoints behind them are admin-only
+      // and would refuse anyone else anyway. The ones this stock is ALREADY in
+      // come first, because taking a stock OUT is the case where hunting a
+      // 26-row list is worst.
+      let sharedHtml = '';
+      if (isAdmin) {
+        const inIt = portfolios.filter((n) => memberOf(n, myPopSym));
+        const rest = portfolios.filter((n) => !memberOf(n, myPopSym));
+        const list = inIt.filter(hit).map((n) => row(n, true, countIn(n), true))
+          .concat(rest.filter(hit).map((n) => row(n, false, countIn(n), true)));
+        sharedHtml = '<div class="pop-title">Shared themes</div>' +
+          (list.length ? list.join('') : '<div class="pop-hint">No theme matches that.</div>');
+      }
+
+      const mine = Object.keys(myPortfolios).filter(hit);
+      const mineHtml = '<div class="pop-title">' + (isAdmin ? 'Your own themes' : `${we(myPopSym)} — your themes`) + '</div>' +
+        (Object.keys(myPortfolios).length
+          ? (mine.length ? mine.map((n) => row(n, (myPortfolios[n] || []).includes(myPopSym),
+              (myPortfolios[n] || []).length, false)).join('')
+            : '<div class="pop-hint">No theme matches that.</div>')
+          : '<div class="pop-hint">No personal themes yet — create one below, and it starts with this stock in it.</div>');
+
+      myPop.innerHTML =
+        `<div class="pop-head">${we(myPopSym)}</div>` +
+        `<input id="myPopQ" class="pop-q" type="text" placeholder="Filter themes…" value="${we(myPopQ)}" ` +
+        'autocomplete="off" spellcheck="false" />' +
+        sharedHtml + mineHtml +
         '<button class="pick pick-new" data-mynew>' +
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>' +
-        '<span class="nm">New theme…</span></button>';
+        '<span class="nm">New personal theme…</span></button>';
+      const box = $('myPopQ');
+      if (box) {
+        // Repainting replaces the input, so the caret has to be put back or
+        // the second keystroke lands nowhere — the tile-dialog lesson.
+        box.addEventListener('input', () => { myPopQ = box.value; paintMyPop(); });
+        if (myPopQ) { box.focus(); box.setSelectionRange(myPopQ.length, myPopQ.length); }
+      }
     }
+    // Membership read off the rows the table already has, so this needs no fetch.
+    const memberOf = (theme, sym) => {
+      const s = baseStocks.find((x) => x.symbol === sym);
+      return !!(s && (s.portfolios || []).includes(theme));
+    };
+    const countIn = (theme) => stocks.filter((s) => (s.portfolios || []).includes(theme)).length;
     function openMyPop(sym, anchor) {
       myPopSym = sym;
       paintMyPop();
@@ -1850,6 +1910,30 @@
       if (nb) {
         const name = myCreate(myPopSym);
         if (name) { paintMyPop(); render(); }
+        return;
+      }
+      // A SHARED theme. The endpoints are admin-only and answer with the fresh
+      // map, so applyPortfolioMap reconciles badges, counts and the picker with
+      // no refresh and no API credits — the "editing themes does not pull" rule.
+      const sb = e.target.closest('[data-shpin]');
+      if (sb) {
+        const theme = sb.dataset.shpin;
+        const on = memberOf(theme, myPopSym);
+        const sym = myPopSym;
+        sb.classList.toggle('on', !on);                 // optimistic, so ticking feels instant
+        (async () => {
+          try {
+            const r = on
+              ? await api('DELETE', `/api/portfolios/${encodeURIComponent(theme)}/tickers/${encodeURIComponent(sym)}`)
+              : await api('POST', `/api/portfolios/${encodeURIComponent(theme)}/tickers`, { symbol: sym });
+            applyPortfolioMap(r && r.portfolios, r && r.universe);
+            if (myPopSym === sym) paintMyPop();         // unless a different star was opened meanwhile
+            setStatus(`${sym} ${on ? 'removed from' : 'added to'} "${theme}".`);
+          } catch (err) {
+            sb.classList.toggle('on', on);              // put it back — the server refused
+            setError(err.message);
+          }
+        })();
         return;
       }
       const b = e.target.closest('[data-mypin]');

@@ -3344,12 +3344,33 @@ app.post('/api/portfolios', requireAdmin, route(async (req, res) => {
   if (name.length > 40) return res.status(400).json({ error: 'Name too long (max 40 chars).' });
   const p = await readPortfolios();
   if (Object.keys(p).some((n) => n.toLowerCase() === name.toLowerCase())) {
-    return res.status(409).json({ error: `Portfolio "${name}" already exists.` });
+    return res.status(409).json({ error: `Theme "${name}" already exists.` });
   }
   p[name] = [];
   await writePortfolios(p);
   logAct(req, 'portfolio', 'create:' + name.slice(0, 40));
   res.json(await portfolioAnswer());
+}));
+
+// The order themes are shown in, everywhere. `position` has always been an
+// explicit column and has always been honoured; there was just no way to set
+// it. writePortfolios assigns position from key order, so this is the same map
+// rebuilt in the order asked for — no membership is touched.
+//
+// Names the client does not mention keep their existing order AFTER the ones
+// it does, so a stale tab cannot silently drop a theme created since it loaded.
+app.put('/api/portfolios/order', requireAdmin, route(async (req, res) => {
+  const asked = Array.isArray(req.body?.names) ? req.body.names.map((x) => String(x)) : null;
+  if (!asked) return res.status(400).json({ error: 'Send { names: [...] }.' });
+  const current = await readPortfolios();
+  const known = new Set(Object.keys(current));
+  const out = {};
+  for (const n of asked) if (known.has(n) && !(n in out)) out[n] = current[n];
+  const missing = Object.keys(current).filter((n) => !(n in out));
+  for (const n of missing) out[n] = current[n];
+  await writePortfolios(out);
+  logAct(req, 'portfolio', 'reorder:' + Object.keys(out).length);
+  res.json({ ...(await portfolioAnswer()), reordered: Object.keys(out).length, appended: missing.length });
 }));
 
 // Rename a portfolio (preserves order + membership).
