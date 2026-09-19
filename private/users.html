@@ -157,7 +157,7 @@
           <div class="val">${v}</div><div class="lbl">${l}</div></div></div>`).join('');
 
       $('out').innerHTML = `<table><thead><tr>
-          <th>Email</th><th>Role</th><th>Joined</th><th>Last sign-in</th><th>Portfolios</th><th></th>
+          <th>Email</th><th>Role</th><th>Joined</th><th>Last sign-in</th><th>Themes</th><th></th>
         </tr></thead><tbody>${users.map((u) => row(u, owners)).join('')}</tbody></table>` +
         otherPortfoliosHtml(data.otherPortfolios || []);
 

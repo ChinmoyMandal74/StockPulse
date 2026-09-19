@@ -222,7 +222,10 @@ app.get('/lab/:symbol', route(async (req, res) => {
 // One portfolio, aggregated — the basket page. Works for shared portfolios
 // and a member's own lists ('my:' prefix); a screener view, deliberately not
 // a tracker: there are no positions anywhere in this product.
-app.get('/portfolio/:name', route(async (req, res) => {
+// /theme/<name> is the address now; /portfolio/<name> keeps working because
+// links to it have already been shared. Same handler, one canonical URL — the
+// GATED_PAGES funnel's rule.
+app.get(['/theme/:name', '/portfolio/:name'], route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   if (await isGuest(req)) return res.redirect('/');
   logAct(req, 'page', 'basket:' + String(req.params.name || '').slice(0, 30));
@@ -3321,7 +3324,7 @@ app.post('/api/universe', requireAdmin, route(async (req, res) => {
   const already = (await readUniverse()).includes(symbol);
   if (pname) {
     const p = await readPortfolios();
-    if (!(pname in p)) return res.status(404).json({ error: 'Portfolio not found.' });
+    if (!(pname in p)) return res.status(404).json({ error: 'Theme not found.' });
     if (p[pname].includes(symbol)) return res.status(409).json({ error: `${symbol} is already in "${pname}".` });
     p[pname].push(symbol);
     await writePortfolios(p);
@@ -3337,7 +3340,7 @@ app.post('/api/universe', requireAdmin, route(async (req, res) => {
 // Create an empty portfolio.
 app.post('/api/portfolios', requireAdmin, route(async (req, res) => {
   const name = String(req.body?.name || '').trim();
-  if (!name) return res.status(400).json({ error: 'Portfolio name is required.' });
+  if (!name) return res.status(400).json({ error: 'Theme name is required.' });
   if (name.length > 40) return res.status(400).json({ error: 'Name too long (max 40 chars).' });
   const p = await readPortfolios();
   if (Object.keys(p).some((n) => n.toLowerCase() === name.toLowerCase())) {
@@ -3356,7 +3359,7 @@ app.put('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
   if (!newName) return res.status(400).json({ error: 'New name is required.' });
   if (newName.length > 40) return res.status(400).json({ error: 'Name too long (max 40 chars).' });
   const p = await readPortfolios();
-  if (!(oldName in p)) return res.status(404).json({ error: 'Portfolio not found.' });
+  if (!(oldName in p)) return res.status(404).json({ error: 'Theme not found.' });
   if (
     newName.toLowerCase() !== oldName.toLowerCase() &&
     Object.keys(p).some((n) => n.toLowerCase() === newName.toLowerCase())
@@ -3376,7 +3379,7 @@ app.put('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
 app.delete('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
   const name = decodeURIComponent(req.params.name);
   const p = await readPortfolios();
-  if (!(name in p)) return res.status(404).json({ error: 'Portfolio not found.' });
+  if (!(name in p)) return res.status(404).json({ error: 'Theme not found.' });
   delete p[name];
   await writePortfolios(p);
   logAct(req, 'portfolio', 'delete:' + name.slice(0, 40));
@@ -3390,7 +3393,7 @@ app.post('/api/portfolios/:name/tickers', requireAdmin, route(async (req, res) =
   if (!symbol) return res.status(400).json({ error: 'Symbol is required.' });
   if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Invalid symbol format.' });
   const p = await readPortfolios();
-  if (!(name in p)) return res.status(404).json({ error: 'Portfolio not found.' });
+  if (!(name in p)) return res.status(404).json({ error: 'Theme not found.' });
   if (p[name].includes(symbol)) {
     return res.status(409).json({ error: `${symbol} is already in "${name}".` });
   }
@@ -3406,7 +3409,7 @@ app.delete('/api/portfolios/:name/tickers/:symbol', requireAdmin, route(async (r
   const name = decodeURIComponent(req.params.name);
   const symbol = String(req.params.symbol || '').trim().toUpperCase();
   const p = await readPortfolios();
-  if (!(name in p)) return res.status(404).json({ error: 'Portfolio not found.' });
+  if (!(name in p)) return res.status(404).json({ error: 'Theme not found.' });
   p[name] = p[name].filter((s) => s !== symbol);
   await writePortfolios(p);
   logAct(req, 'portfolio', 'remove:' + symbol + '<' + name.slice(0, 40));
@@ -5908,7 +5911,7 @@ async function basketPayload(req, rawName, days) {
   if (rawName.startsWith('my:')) {
     const mine = await store.readUserPortfolios(await prefsKey(req));
     const nm = rawName.slice(3);
-    if (!(nm in mine)) return { error: 'No such personal portfolio.', status: 404 };
+    if (!(nm in mine)) return { error: 'No such personal theme.', status: 404 };
     const uni = new Set(all);
     symbols = mine[nm].filter((x) => uni.has(x));
     label = nm;
@@ -5917,7 +5920,7 @@ async function basketPayload(req, rawName, days) {
   } else if (rawName in portfolios) {
     symbols = portfolios[rawName];
   } else {
-    return { error: 'No such portfolio.', status: 404 };
+    return { error: 'No such theme.', status: 404 };
   }
   if (!symbols.length) {
     return { label, mine: rawName.startsWith('my:'), symbols: [], dates: [], basket: null, universe: null };

@@ -172,7 +172,7 @@
       <span><b id="selN">0</b> selected</span>
       <span class="cost" id="selCost"></span>
       <span class="spacer"></span>
-      <select id="selTo" aria-label="Also add to a portfolio (optional)"></select>
+      <select id="selTo" aria-label="Also add to a theme (optional)"></select>
       <button class="btn btn-primary" id="selAdd">Add to screener</button>
       <button class="btn" id="selClear">Clear</button>
     </div></div>
@@ -380,7 +380,7 @@
     }
     function paintPortfolioPick() {
       const keep = $('selTo').value;
-      $('selTo').innerHTML = '<option value="">No portfolio — screener only</option>' +
+      $('selTo').innerHTML = '<option value="">No theme — screener only</option>' +
         portfolioNames.map((n) => `<option value="${we(n)}">Also add to ${we(n)}</option>`).join('');
       if (portfolioNames.includes(keep)) $('selTo').value = keep;
     }
@@ -400,7 +400,7 @@
         selected.clear();
         say('');
         const bits = [`<b>${r.added.length}</b> added to the screener${to ? ` and "${we(to)}"` : ''}`];
-        if (r.already.length) bits.push(`${r.already.length} already there${to ? ' (added to the portfolio)' : ''}`);
+        if (r.already.length) bits.push(`${r.already.length} already there${to ? ' (added to the theme)' : ''}`);
         if (r.invalid.length) bits.push(`${r.invalid.length} skipped: ${we(r.invalid.join(', '))}`);
         $('doneText').innerHTML = bits.join(' · ') + (r.added.length
           ? '. Their data arrives with Fill missing, or tonight\'s job.' : '.');

@@ -164,7 +164,7 @@
   <main class="page">
     <h1>Admin</h1>
     <p class="lede">Everything that used to crowd the screener's bar, in one place. The table keeps
-      only the controls that describe what it is showing — portfolio, columns, sector, horizon, rules.</p>
+      only the controls that describe what it is showing — theme, columns, sector, horizon, rules.</p>
 
     <nav class="jumps" aria-label="Sections">
       <a class="jump" href="#data"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Data</a>
@@ -229,7 +229,7 @@
           <span class="lbl">Add a ticker</span>
           <div class="line">
             <input type="text" id="sym" placeholder="TSLA" maxlength="12" autocomplete="off" aria-label="Ticker symbol" />
-            <select id="addTo" aria-label="Also add to a portfolio (optional)"></select>
+            <select id="addTo" aria-label="Also add to a theme (optional)"></select>
             <button class="btn btn-primary" id="addBtn">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>Add</button>
           </div>
@@ -243,7 +243,7 @@
             placeholder="Paste tickers &mdash; commas, spaces or one per line.  AAPL, MSFT NVDA&#10;GOOGL"></textarea>
           <div class="line" style="margin-top:8px">
             <input type="text" id="bulkPf" maxlength="40" autocomplete="off" list="bulkPfList"
-              placeholder="Portfolio for the batch (optional)" aria-label="Portfolio for this batch" />
+              placeholder="Theme for the batch (optional)" aria-label="Theme for this batch" />
             <datalist id="bulkPfList"></datalist>
             <button class="btn" id="bulkCheck">Check</button>
             <button class="btn btn-primary" id="bulkGo" disabled>
@@ -276,7 +276,7 @@
           <a class="row" href="/cards"><svg class="ic" aria-hidden="true"><use href="#i-chart" /></svg>
             <span class="txt"><span class="nm">Cards</span><span class="hint">The screen, summarised as a post-shaped picture.</span></span></a>
           <a class="row" href="/strategy"><svg class="ic" aria-hidden="true"><use href="#i-strategy" /></svg>
-            <span class="txt"><span class="nm">Strategy</span><span class="hint">A trend rule over a whole portfolio: equity, drawdown, costs.</span></span></a>
+            <span class="txt"><span class="nm">Strategy</span><span class="hint">A trend rule over a whole theme: equity, drawdown, costs.</span></span></a>
           <a class="row" href="/single"><svg class="ic" aria-hidden="true"><use href="#i-chart" /></svg>
             <span class="txt"><span class="nm">Single</span><span class="hint">One stock in or out, plus the same rule swept across everything.</span></span></a>
         </div>
@@ -361,7 +361,7 @@
       <div class="bezel card"><div class="core">
         <div class="grid">
           <a class="row" href="/users"><svg class="ic" aria-hidden="true"><use href="#i-users" /></svg>
-            <span class="txt"><span class="nm">Users</span><span class="hint">Approve a registration, review member portfolios, delete an account.</span></span></a>
+            <span class="txt"><span class="nm">Users</span><span class="hint">Approve a registration, review member themes, delete an account.</span></span></a>
           <a class="row" href="/visitors"><svg class="ic" aria-hidden="true"><use href="#i-pulse" /></svg>
             <span class="txt"><span class="nm">Visitor log</span><span class="hint">Every anonymous knock at the front door.</span></span></a>
           <a class="row" href="/activity"><svg class="ic" aria-hidden="true"><use href="#i-clock" /></svg>
@@ -456,8 +456,8 @@
     let universe = [];
     function paintPortfolios() {
       const names = Object.keys(portfolios);
-      // A stock joins the screener on its own; a portfolio is optional grouping.
-      $('addTo').innerHTML = '<option value="">No portfolio — screener only</option>' +
+      // A stock joins the screener on its own; a theme is optional grouping.
+      $('addTo').innerHTML = '<option value="">No theme — screener only</option>' +
         names.map((n) => `<option value="${we(n)}">Also add to ${we(n)}</option>`).join('');
       // Every symbol the screener covers, once, alphabetically — the per-stock
       // pages need a name to open and this page has no "top of the table" the

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Portfolio — Tickr Lab</title>
+  <title>Theme — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -158,7 +158,10 @@
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const NAME = decodeURIComponent(location.pathname.split('/portfolio/')[1] || '');
+    // Either address reaches this page, so the name is taken from the LAST
+    // path segment rather than from one prefix. Splitting on '/portfolio/'
+    // returned undefined the moment the canonical URL became /theme/.
+    const NAME = decodeURIComponent(location.pathname.replace(/^\/(theme|portfolio)\//, ''));
     const RANGES = [
       { id: '1M', days: 21 }, { id: '3M', days: 63 }, { id: '6M', days: 126 }, { id: '1Y', days: 253 },
     ];
@@ -333,12 +336,12 @@
       const main = $('main');
       if (!rows.length) {
         main.innerHTML = `<div class="head"><h1>${esc(curve ? curve.label : NAME)}</h1></div>` +
-          '<div class="bezel card"><div class="core"><div class="empty">This portfolio has no stocks with data yet.</div></div></div>';
+          '<div class="bezel card"><div class="core"><div class="empty">This theme has no stocks with data yet.</div></div></div>';
         return;
       }
       const sectors = new Set(rows.map((s) => s.sector).filter(Boolean));
       const menuRow = (target, label, personal, on) =>
-        `<a href="/portfolio/${encodeURIComponent(target)}" class="${on ? 'on' : ''}">` +
+        `<a href="/theme/${encodeURIComponent(target)}" class="${on ? 'on' : ''}">` +
         `<span class="pdot" style="background:${personal ? 'var(--green)' : 'var(--accent)'}"></span>` +
         `${esc(label)}${personal ? '<span class="n">personal</span>' : ''}</a>`;
       const menu =
@@ -348,7 +351,7 @@
           myNames.map((n) => menuRow('my:' + n, n, true, NAME === 'my:' + n)).join('') : '');
       main.innerHTML =
         `<div class="head"><h1 class="ppick">` +
-        `<button id="pfBtn" aria-expanded="false" aria-haspopup="listbox" title="Pick another portfolio">` +
+        `<button id="pfBtn" aria-expanded="false" aria-haspopup="listbox" title="Pick another theme">` +
         `${esc(curve ? curve.label : NAME)}<svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9.4 6 6 6-6"/></svg></button>` +
         `<div id="pfMenu">${menu}</div>` +
         `</h1><span class="kind" style="font-size:15px">${curve && curve.mine ? '· personal' : ''}</span>` +
@@ -437,7 +440,7 @@
           fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json()),
           fetch(`/api/basket?name=${encodeURIComponent(NAME)}&days=${range.days}`, { cache: 'no-store' }).then(async (r) => {
             const d = await r.json();
-            if (!r.ok) throw new Error(d.error || 'No such portfolio.');
+            if (!r.ok) throw new Error(d.error || 'No such theme.');
             return d;
           }),
           fetch('/api/my/portfolios', { cache: 'no-store' })

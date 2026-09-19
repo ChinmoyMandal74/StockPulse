@@ -239,7 +239,7 @@
        table. flex: none, so showing it takes one strip from the table's height
        rather than pushing the page taller — the same rule as the notices. */
     /* ---- tiles: the same rows, drawn as cards ---------------------------
-       A short list (a portfolio, a screen, a filter) leaves most of the screen
+       A short list (a theme, a screen, a filter) leaves most of the screen
        empty as a table. Same data, same order, same filters — only the shape
        changes, and the toggle sits beside View because that is the other
        control that decides how the selection is drawn. */
@@ -978,7 +978,7 @@
         <span class="lenschip" id="sortNote" hidden></span>
         <div class="picker" id="picker" data-open="0">
           <button class="btn picker-btn" id="pickerBtn" aria-haspopup="listbox" aria-expanded="false"></button>
-          <div class="picker-menu" id="pickerMenu" role="listbox" aria-label="Portfolio"></div>
+          <div class="picker-menu" id="pickerMenu" role="listbox" aria-label="Theme"></div>
         </div>
         <div class="picker" id="secPicker" data-open="0">
           <button class="btn picker-btn" id="secBtn" aria-haspopup="listbox" aria-expanded="false"></button>
@@ -1066,7 +1066,7 @@
               <div id="portfolioActions" style="display:none">
                 <button class="pick pick-danger" id="deleteBtn">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-trash" /></svg>
-                  <span class="nm">Delete portfolio</span>
+                  <span class="nm">Delete theme</span>
                 </button>
               </div>
               <!-- Account maintenance: rare, so it lives in the menu rather than
@@ -1114,7 +1114,7 @@
     <div class="bezel notice" id="readonlyNote" style="display:none">
       <div class="core">
         <svg class="ic" aria-hidden="true"><use href="#i-lock" /></svg>
-        <span><b>Read-only view.</b> The data updates when the site owner refreshes. You can sort, collapse column groups and keep your own portfolios.</span>
+        <span><b>Read-only view.</b> The data updates when the site owner refreshes. You can sort, collapse column groups and keep your own themes.</span>
       </div>
     </div>
 
@@ -1266,7 +1266,7 @@
         <th rowspan="2"></th>
       </tr>
       <tr>
-        <th class="left grp-info" data-fkey="portfolios">Portfolios</th>
+        <th class="left grp-info" data-fkey="portfolios">Themes</th>
         <th class="grp-info" data-key="price">Price</th>
         <th class="left grp-info" data-key="sector">Sector</th>
         <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — Twelve Data's own taxonomy, not GICS.">Industry</th>
@@ -1594,7 +1594,7 @@
       }
       const star = myEnabled()
         ? ` <button class="mypf${inAnyMine(s.symbol) ? ' on' : ''}" data-my="${s.symbol}"` +
-          ` title="Add to / remove from my portfolios" aria-label="My portfolios for ${s.symbol}">` +
+          ` title="Add to / remove from my themes" aria-label="My themes for ${s.symbol}">` +
           '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-star" /></svg></button>'
         : '';
       return `<td class="sym left frz frz0" title="${title}">${tickerLink(s)}${star}${warn}</td>`;
@@ -1827,10 +1827,10 @@
       };
       myPop.innerHTML = `<div class="pop-title">${we(myPopSym)} — my portfolios</div>` +
         (names.length ? names.map(row).join('')
-          : '<div class="pop-hint">No personal portfolios yet — create one below, and it starts with this stock in it.</div>') +
+          : '<div class="pop-hint">No personal themes yet — create one below, and it starts with this stock in it.</div>') +
         '<button class="pick pick-new" data-mynew>' +
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>' +
-        '<span class="nm">New portfolio…</span></button>';
+        '<span class="nm">New theme…</span></button>';
     }
     function openMyPop(sym, anchor) {
       myPopSym = sym;
@@ -1949,7 +1949,7 @@
       $('pickerBtn').innerHTML = dot(activeColor) +
         // Labelled like Sector and Industry beside it: what the control is,
         // then the choice in force — "Portfolio  All · 93".
-        `<span class="picker-label">Portfolio</span><span class="count">${we(activeLabel)} · ${activeCount}</span>` +
+        `<span class="picker-label">Theme</span><span class="count">${we(activeLabel)} · ${activeCount}</span>` +
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
       $('pickerBtn').title = `Showing ${activeLabel} — click to switch portfolio`;
 
@@ -1961,7 +1961,7 @@
         `<button class="pick ${activeTab === name ? 'on' : ''}" data-tab="${name}" role="option" ` +
         `aria-selected="${activeTab === name}" style="--tint:${c}">` +
         dot(c) + `<span class="nm">${name}</span><span class="count">${n}</span></button>` +
-        `<a class="jump" href="/portfolio/${encodeURIComponent(name)}" target="_blank" rel="noopener" ` +
+        `<a class="jump" href="/theme/${encodeURIComponent(name)}" target="_blank" rel="noopener" ` +
         `title="Open ${we(name)} aggregated ↗" style="transform:none">` +
         '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-chart" /></svg></a>' +
         (renamable && isAdmin
@@ -1986,7 +1986,7 @@
             `<button class="pick ${activeTab === t ? 'on' : ''}" data-tab="${we(t)}" role="option" ` +
             `aria-selected="${activeTab === t}" style="--tint:${MY_TINT}">` +
             dot(MY_TINT) + `<span class="nm">${we(name)}</span><span class="count">${countMine(name)}</span></button>` +
-            `<a class="jump" href="/portfolio/${encodeURIComponent(MY_PREFIX + name)}" target="_blank" rel="noopener" ` +
+            `<a class="jump" href="/theme/${encodeURIComponent(MY_PREFIX + name)}" target="_blank" rel="noopener" ` +
             `title="Open ${we(name)} aggregated ↗" style="transform:none">` +
             '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-chart" /></svg></a>' +
             `<button class="jump" data-myren="${we(name)}" title="Rename ${we(name)}" style="transform:none">` +
@@ -1997,13 +1997,13 @@
         }
         parts.push('<button class="pick pick-new" id="myNewTab">' +
           '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-star" /></svg>' +
-          `<span class="nm">${mine.length ? 'New personal portfolio' : 'New personal portfolio — your own list'}</span></button>`);
+          `<span class="nm">${mine.length ? 'New personal theme' : 'New personal theme — your own list'}</span></button>`);
       }
       if (isAdmin) {
         parts.push('<div class="pick-sep"></div>' +
           '<button class="pick pick-new" id="newTab">' +
           '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>' +
-          '<span class="nm">New portfolio</span></button>');
+          '<span class="nm">New theme</span></button>');
       }
       $('pickerMenu').innerHTML = `<div class="picker-inner">${parts.join('')}</div>`;
 
@@ -3932,7 +3932,7 @@
         html += '<div class="pick-sep"></div><button class="pick" data-snew="1"><span class="nm">+ Save the table as a starter screen' +
           '<em>Its filters, Sector / Industry / Advice picks, sort and columns</em></span></button>';
       }
-      html += '<div class="pick-hint">Counts are for the portfolio in view. A screen\u2019s filters show in the filter row; change any and it reads “edited”.</div></div>';
+      html += '<div class="pick-hint">Counts are for the theme in view. A screen\u2019s filters show in the filter row; change any and it reads “edited”.</div></div>';
       $('scrMenu').innerHTML = html;
       const m = $('scrMenu');
       m.querySelectorAll('[data-screen]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); applyScreen(b.dataset.screen); }));
