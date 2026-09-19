@@ -1784,6 +1784,7 @@ async function fetchProfile(symbol) {
       // licensed and this API does not carry it — but it costs no credits,
       // since the call is charged whether one field is read or six.
       if (p.industry) out.industry = p.industry;
+      if (p.name) out.providerName = String(p.name).slice(0, 200);
       if (p.exchange) out.exchange = String(p.exchange).slice(0, 40);
       if (p.mic_code) out.micCode = String(p.mic_code).slice(0, 12);
       // Everything below was already in this response and being discarded. The
@@ -2002,8 +2003,20 @@ async function ensureProfiles(symbols, cap) {
       try { await store.writeEarnings(quarters); }
       catch (err) { console.warn('earnings history skipped:', err.message); }
     }
+    // Fill a MISSING name from the response we just paid for. The bulk add
+    // takes names from nasdaq_listings, and that file holds no ETFs — so SPY,
+    // IWM and DIA arrived nameless and nothing would ever have fixed them:
+    // profiles never carried a name, and no other path writes one. An existing
+    // name is never overwritten, so an edited one survives.
+    try {
+      const have = await readNames();
+      const fill = {};
+      for (const { s, r } of results) if (!have[s] && r && r.providerName) fill[s] = r.providerName;
+      if (Object.keys(fill).length) await writeNames(fill);
+    } catch (err) { console.warn('name backfill skipped:', err.message); }
+
     for (const { s, r } of results) {
-      const { fetchOk, earningsRows, ...vals } = r;
+      const { fetchOk, earningsRows, providerName, ...vals } = r;
       if (fetchOk) {
         profiles[s] = { ...vals, fetchedAt: now };
         continue;
