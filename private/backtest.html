@@ -173,7 +173,7 @@
           <span class="lg-p" id="lgP">Picks</span>
           <span class="lg-t" id="lgT" hidden>All picks in the tier</span>
           <span class="lg-b" id="lgB" hidden>Random baskets, middle 80%</span>
-          <span class="lg-u">Your universe, equal weight</span>
+          <span class="lg-u" title="Every stock you track, equally weighted — excluding the four index ETFs (SPY, QQQ, IWM, DIA), so the comparison is not partly against itself">Your universe, equal weight</span>
           <span class="lg-s" id="lgS">S&amp;P 500 (SPY)</span>
         </div>
         <svg class="chart" id="chart" preserveAspectRatio="none" aria-hidden="true"></svg>
@@ -304,7 +304,7 @@
           cut ? `${rankName}, tier first` : `of ${r.universe} in the universe`],
         ['Equal-weight return', pct(s.portfolio), `${r.tradingDate} → ${r.today}`],
         ['vs S&P 500', pct(beatS), s.spy == null ? 'benchmark unavailable' : `S&P ${pct(s.spy)}`],
-        ['vs your universe', pct(beatU), `universe ${pct(s.universe)} · ${s.universeMembers} stocks`],
+        ['vs your universe', pct(beatU), `universe ${pct(s.universe)} · ${s.universeMembers} stocks, benchmarks excluded`],
         ['Winners', s.selected ? `${s.up}/${s.selected}` : '—',
           s.selected ? Math.round((s.up / s.selected) * 100) + '% positive' : ''],
       ];

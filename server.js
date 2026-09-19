@@ -19,6 +19,13 @@ const TD_BASE = 'https://api.twelvedata.com';
 // (which fetches it live, since it is deliberately never archived) and the
 // backtest's S&P comparison.
 const BENCHMARK = 'SPY';
+// The index-tracking ETFs. They are ordinary universe rows — a stranger can
+// chart them and the stock page overlays them — but they are EXCLUDED from
+// every "your universe, equal weight" line, because a comparison against a
+// universe containing the thing you are comparing to is circular. Four rows in
+// 431 is under a percent, so this is about the claim rather than the number.
+const BENCHMARKS = new Set(['SPY', 'QQQ', 'IWM', 'DIA']);
+const notBenchmark = (sym) => !BENCHMARKS.has(sym);
 // Persistence lives in Turso (libSQL). The accessors below keep the shapes the
 // old flat-file helpers returned, so this file only had to gain `await`s.
 // See db.js and migrate-to-turso.js.
@@ -4079,7 +4086,7 @@ async function computeStocks(asOf, opts = {}) {
         // did not fetch prices, so neither may move this clock.
         if (liveSeries) {
           const served = Object.keys(liveSeries).filter(
-            (sym) => sym !== BENCHMARK && liveSeries[sym] &&
+            (sym) => liveSeries[sym] &&
                      Array.isArray(liveSeries[sym].values) && liveSeries[sym].values.length);
           const at = Date.now();
           await store.notePricePull(served, at);
@@ -4488,7 +4495,10 @@ function btRun(opts) {
     if (i < 0) continue;
     const forward = [];
     for (let k = i; k < dates.length; k++) forward.push({ d: dates[k], c: closes[k] });
-    if (forward.length > 1) allSeries[sym] = forward;
+    // The universe curve the backtest compares against — the stocks followed,
+    // not the index ETFs that track the market. A pick is still allowed to BE
+    // a benchmark; it just cannot also be its own yardstick.
+    if (forward.length > 1 && notBenchmark(sym)) allSeries[sym] = forward;
 
     if (i < 252) { tooShort++; continue; }             // no 52-week window yet
     const tech = btRowAt(closes, highs, vols, i);
@@ -5921,14 +5931,18 @@ async function basketPayload(req, rawName, days) {
   if (!dates.length) return { label, mine: rawName.startsWith('my:'), symbols, dates: [], basket: null, universe: null };
 
   const basket = equalWeightIndex(bars, symbols, dates);
-  const universe = equalWeightIndex(bars, all, dates);
+  // The stocks you follow, without the benchmarks that track the market.
+  const universe = equalWeightIndex(bars, all.filter(notBenchmark), dates);
   return {
     label,
     mine: rawName.startsWith('my:'),
     symbols,
     dates,
     basket: basket.index, basketUsed: basket.used, basketOf: symbols.length,
-    universe: universe.index, universeUsed: universe.used, universeOf: all.length,
+    // The count must describe the curve, not the table: the benchmarks are
+    // out of the line, so they are out of the number beside it too.
+    universe: universe.index, universeUsed: universe.used,
+    universeOf: all.filter(notBenchmark).length,
     series: symbolSeries(bars, symbols, dates),
   };
 }

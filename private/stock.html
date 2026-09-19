@@ -261,6 +261,25 @@
     #chart .thend.pos { color: var(--green); }
     #chart .thend.neg { color: var(--red); }
     #chart .ov.th-ln { stroke: var(--text); stroke-dasharray: 5 4; opacity: 0.75; }
+    /* The index overlays. Dashed and thinner than the price, because they are
+       context: on a 1Y view the eye should still find the stock first. */
+    #chart .ov.bm-ln { stroke-width: 1.1; stroke-dasharray: 3 3; opacity: 0.8; }
+    #chart .ov.bm-spy { stroke: #94a3b8; }
+    #chart .ov.bm-qqq { stroke: #f0abfc; }
+    #chart .ov.bm-iwm { stroke: #22d3ee; }
+    #chart .ov.bm-dia { stroke: #fb923c; }
+    #chart .cap.ma i.bm { height: 0; border-top: 2px dashed currentColor; border-radius: 0;
+                          background: none; width: 12px; }
+    #chart .cap.ma i.bm.bm-spy { color: #94a3b8; }
+    #chart .cap.ma i.bm.bm-qqq { color: #f0abfc; }
+    #chart .cap.ma i.bm.bm-iwm { color: #22d3ee; }
+    #chart .cap.ma i.bm.bm-dia { color: #fb923c; }
+    .bm-toggle:first-of-type { margin-left: 10px; }
+    .bm-toggle.on { color: var(--text); }
+    .bm-toggle.bm-spy.on { background: rgba(148, 163, 184, 0.20); }
+    .bm-toggle.bm-qqq.on { background: rgba(240, 171, 252, 0.16); }
+    .bm-toggle.bm-iwm.on { background: rgba(34, 211, 238, 0.16); }
+    .bm-toggle.bm-dia.on { background: rgba(251, 146, 60, 0.16); }
     .th-toggle.on { background: rgba(233, 236, 242, 0.12); color: var(--text);
       border-color: var(--hair-2); }
 
@@ -377,6 +396,16 @@
     // The server clamps at its own ceiling, which only bites on Max, where 200
     // missing bars are invisible across twenty years.
     const MA_PAD = Math.max.apply(null, MAS.map((m) => m.len));
+    // Index overlays. The four US benchmarks are ordinary universe rows with
+    // twenty years of archived bars, so these cost a cached /api/history read
+    // and no API credits. Off by default — the chart is about this stock, and
+    // a comparison is something you ask for.
+    const BENCH = [
+      { sym: 'SPY', label: 'S&P 500',      cls: 'bm-spy', on: false },
+      { sym: 'QQQ', label: 'Nasdaq 100',   cls: 'bm-qqq', on: false },
+      { sym: 'IWM', label: 'Russell 2000', cls: 'bm-iwm', on: false },
+      { sym: 'DIA', label: 'Dow 30',       cls: 'bm-dia', on: false },
+    ].filter((b) => b.sym !== SYMBOL);   // never overlay a stock on itself
     // The verdict replay reads the 252-session high beside the 200-day
     // average, so the fetch pads by the larger of the two needs.
     const REPLAY_PAD = 260;
@@ -530,6 +559,35 @@
     // cash, no dividends — the round-trip count is the tell for what costs
     // would take, and /single is the full instrument.
     const TH_GREEN = { 'Strong uptrend': 1, 'Above 200D': 1 };
+    // An index rebased to THIS stock's price at the left edge of the window, so
+    // the gap between the lines is relative performance and the price axis keeps
+    // meaning what it says. The same anchoring the trend-hold line uses — the
+    // alternative, rebasing both to 100, would change the axis for everyone to
+    // serve an overlay that is off by default.
+    //
+    // Aligned BY DATE, not by index: a stock that listed recently, or one that
+    // keeps a different calendar, does not share the benchmark's session list,
+    // and lining up two arrays by position would silently shear them.
+    function benchSeries(dates, closes, hist) {
+      if (!hist || !Array.isArray(hist.dates) || hist.dates.length < 2) return null;
+      const by = new Map();
+      hist.dates.forEach((d, i) => { const c = hist.closes[i]; if (c > 0) by.set(d, c); });
+      // last close on or before each of the stock's dates, so a missing session
+      // holds its level rather than breaking the line
+      const raw = new Array(dates.length).fill(null);
+      let last = null, k = 0;
+      const hd = hist.dates;
+      for (let i = 0; i < dates.length; i++) {
+        while (k < hd.length && hd[k] <= dates[i]) { const c = hist.closes[k]; if (c > 0) last = c; k++; }
+        raw[i] = last;
+      }
+      let a = 0;
+      while (a < raw.length && (raw[a] == null || closes[a] == null)) a++;
+      if (a >= raw.length - 1) return null;
+      const scale = closes[a] / raw[a];
+      return raw.map((v) => (v == null ? null : v * scale));
+    }
+
     function trendHoldSeries(closes, words) {
       const n = closes.length;
       const values = new Array(n).fill(null);
@@ -756,7 +814,14 @@
       if (!box) return;
       box.dataset.range = range.id;
       box.classList.toggle('has-rsi', showRSI);
-      RowCard.loadHistory(SYMBOL, range.days + REPLAY_PAD).then((data) => {
+      const wantBench = BENCH.filter((b) => b.on);
+      Promise.all([
+        RowCard.loadHistory(SYMBOL, range.days + REPLAY_PAD),
+        // A benchmark that cannot be read must not take the chart down with it
+        // — a guest is refused these symbols outright, and a fresh install has
+        // no bars for them yet.
+        ...wantBench.map((b) => RowCard.loadHistory(b.sym, range.days + REPLAY_PAD).catch(() => null)),
+      ]).then(([data, ...benchHist]) => {
         if (box.dataset.range !== range.id) return;      // a later click won
         const all = (data && data.closes) || [];
         box.classList.remove('up', 'down');
@@ -791,12 +856,19 @@
         // card only — never the line.
         const verds = showTrendHold ? verdictSeries(all, from, rulesCfg(), rsiAllFull) : null;
         const th = showTrendHold ? trendHoldSeries(closes, trend) : null;
+        // Resolved before the chart is built, so the legend and the lines are
+        // drawn from one list and cannot disagree about which indices are up.
+        const drawnBench = wantBench.map((b, i) => {
+          const values = benchSeries(dates, closes, benchHist[i]);
+          return values ? { ...b, values } : null;
+        }).filter(Boolean);
         const thLabel = 'Trend-held';
         paintCtx = { all, from, closes, dates, trend, rsiAll: rsiAllFull };
         const c = RowCard.chartSVG(closes, {
           volumes, ticks: 5, rsi,
           overlays: series.map((x) => ({ values: x.values, cls: x.ma.cls }))
-            .concat(th ? [{ values: th.values, cls: 'th-ln' }] : []),
+            .concat(th ? [{ values: th.values, cls: 'th-ln' }] : [])
+            .concat(drawnBench.map((b) => ({ values: b.values, cls: 'bm-ln ' + b.cls }))),
         });
 
         // Axis labels are HTML rather than SVG text: the chart stretches with
@@ -821,7 +893,8 @@
           `<span class="cap chg">${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%${c.log ? ' · log scale' : ''}</span>` +
           thEndTag(th, (v) => c.panes.price.at(v)) +
           `<span class="cap ma">${series.map((x) =>
-            `<i class="${x.ma.cls}"></i>${x.ma.len}-day`).join('')}</span>` +
+            `<i class="${x.ma.cls}"></i>${x.ma.len}-day`).join('')}${
+            drawnBench.map((b) => `<i class="bm ${b.cls}"></i>${b.label}`).join('')}</span>` +
           (c.panes.rsi
             ? `<span class="cap rsi" style="top:${atY(c.panes.rsi.top)}">` +
               `RSI ${RSI_LEN}${rsiNow == null ? '' : ' &middot; ' + rsiNow.toFixed(0)}</span>` +
@@ -933,6 +1006,10 @@
                 `<button class="rng ma-toggle ${m.cls}${m.on ? ' on' : ''}" data-ma="${m.len}">${m.label}</button>`
               ).join('')}
               <button class="rng rsi-toggle${showRSI ? ' on' : ''}" id="rsiBtn">RSI</button>
+              ${BENCH.map((b) =>
+                `<button class="rng bm-toggle ${b.cls}${b.on ? ' on' : ''}" data-bm="${b.sym}"
+                  title="Overlay ${b.label} (${b.sym}), rebased to this stock's price at the left edge — the gap between the lines is relative performance">${b.sym}</button>`
+              ).join('')}
               <button class="rng th-toggle${showTrendHold ? ' on' : ''}" id="thBtn"
                 title="What holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on">TREND</button></span>
           </div>
@@ -1179,6 +1256,14 @@
           showRSI = !showRSI;
           window.track && track('chart', 'pane:rsi:' + (showRSI ? 'on' : 'off'));
           b.classList.toggle('on', showRSI);
+          paintChart();
+          return;
+        }
+        if (b.dataset.bm) {
+          const bm = BENCH.find((x) => x.sym === b.dataset.bm);
+          bm.on = !bm.on;
+          window.track && track('chart', 'bench:' + bm.sym + ':' + (bm.on ? 'on' : 'off'));
+          b.classList.toggle('on', bm.on);
           paintChart();
           return;
         }
