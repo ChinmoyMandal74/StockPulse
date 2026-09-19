@@ -26,8 +26,7 @@
 const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
 const Action = require('./private/action.js');
-const Momentum = require('./momentum.js');
-const Strategy = require('./private/strategy.js');
+const TechRow = require('./techrow.js');
 
 const DB = path.resolve('analysis.db');
 const FROM = '2008-01-01';
@@ -56,34 +55,28 @@ const bump = (action, h, era, v) => {
 
 let days = 0;
 for (const sym of syms) {
-  const rows = db.prepare('select d, close from bars where symbol = ? and d >= ? order by d')
+  // highs and volume as well as closes: the row builder reads the INTRADAY
+  // high for the 52-week window and the 20-day average volume for volTrend.
+  // This script used to build its own row from closes alone, which reported
+  // every stock as nearer its high than the app does and left `distribution`
+  // unable to fire in eighteen years. See techrow.js.
+  const rows = db.prepare('select d, high, close, volume from bars where symbol = ? and d >= ? order by d')
     .all(sym, '2006-01-01');            // run-up before FROM so the 200D exists at the start
   if (rows.length < 260) continue;
   const dates = rows.map((r) => r.d);
   const closes = rows.map((r) => Number(r.close));
-  const sma200 = Strategy.smaSeries(closes, 200);
-  const sma50 = Strategy.smaSeries(closes, 50);
-  // The app's own Wilder RSI, fed newest-first the way it expects.
-  const rsi = Momentum.rsiSeriesAt(rows.slice().reverse().map((r) => ({ close: Number(r.close) })), 14)
-    .slice().reverse();
+  const highs = rows.map((r) => Number(r.high) || Number(r.close));
+  const vols = rows.map((r) => Number(r.volume) || 0);
+  const rsi = TechRow.rsiSeries(closes);
 
-  for (let i = 252; i < closes.length; i++) {
+  for (let i = TechRow.MIN_SESSIONS; i < closes.length; i++) {
     if (dates[i] < FROM) continue;
+    const tech = TechRow.rowAt(closes, highs, vols, i);
+    if (!tech) continue;
     const c = closes[i];
-    if (!(c > 0)) continue;
-    let hi = 0;
-    for (let k = i - 251; k <= i; k++) if (closes[k] > hi) hi = closes[k];
-    const row = {
-      symbol: sym,
-      vs200ma: sma200[i] > 0 ? (c / sma200[i] - 1) * 100 : null,
-      vs50ma: sma50[i] > 0 ? (c / sma50[i] - 1) * 100 : null,
-      rsi: rsi[i],
-      oneMonthPct: i >= 21 ? (c / closes[i - 21] - 1) * 100 : null,
-      threeMonthPct: i >= 63 ? (c / closes[i - 63] - 1) * 100 : null,
-      pctFromHigh: hi > 0 ? (c / hi - 1) * 100 : null,
-      historyDays: i + 1,
-      // no fundamentals, no Quality, no P/E -> classifies ETF -> technical rules
-    };
+    // No fundamentals, no Quality, no P/E -> classify() answers ETF -> the
+    // all-technical rules. That is what makes this the real engine, not a fork.
+    const row = { symbol: sym, ...tech, rsi: rsi[i] };
     const r = Action.evaluate(row, cfg);
     days++;
     const era = dates[i] < '2020-01-01' ? 'pre2020' : 'post2020';

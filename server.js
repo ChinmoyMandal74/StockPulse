@@ -49,6 +49,7 @@ const { buildModel, MODEL_ROWS, MODEL_MIN_BARS } = require('./momentum-model.js'
 // Momentum scored from bars alone, shared with the backfill so the stored
 // history and the live score can never drift into two different models.
 const Momentum = require('./momentum.js');
+const TechRow = require('./techrow.js');
 // Tunable indicators, shared with /lab and the offline grid.
 const Indicators = require('./private/indicators.js');
 // The Action rules — what to do with each stock. Shared with the browser so a
@@ -4494,48 +4495,17 @@ const btRsiCache = new Map();
 function rsiAt(rowsOldestFirst, i) {
   let ser = btRsiCache.get(rowsOldestFirst);
   if (!ser) {
-    ser = Momentum.rsiSeriesAt(
-      rowsOldestFirst.slice().reverse().map((r) => ({ close: Number(r.close) })), 14)
-      .slice().reverse();                 // back to oldest-first, aligned with i
+    ser = TechRow.rsiSeries(rowsOldestFirst.map((r) => Number(r.close)));
     btRsiCache.set(rowsOldestFirst, ser);
   }
   return ser[i] == null ? null : ser[i];
 }
 
-function btRowAt(closes, highs, vols, i) {
-  const c = closes[i];
-  if (!(c > 0)) return null;
-  const sma = (n) => {
-    if (i + 1 < n) return null;
-    let t = 0;
-    for (let k = i - n + 1; k <= i; k++) t += closes[k];
-    return t / n;
-  };
-  const s200 = sma(200), s50 = sma(50);
-  let hi = 0, lo = Infinity;
-  for (let k = Math.max(0, i - 251); k <= i; k++) {
-    if (highs[k] > hi) hi = highs[k];
-    if (closes[k] < lo) lo = closes[k];
-  }
-  let vsum = 0, vn = 0;
-  for (let k = Math.max(0, i - 20); k < i; k++) { if (vols[k] > 0) { vsum += vols[k]; vn++; } }
-  const avgVol = vn ? vsum / vn : null;
-  const back = (n) => (i >= n && closes[i - n] > 0 ? (c / closes[i - n] - 1) * 100 : null);
-  return {
-    price: c,
-    vs200ma: s200 > 0 ? (c / s200 - 1) * 100 : null,
-    vs50ma: s50 > 0 ? (c / s50 - 1) * 100 : null,
-    oneMonthPct: back(21), threeMonthPct: back(63), sixMonthPct: back(126),
-    oneYearPct: back(252), oneWeekPct: back(5), todayPct: back(1),
-    pctFromHigh: hi > 0 ? (c / hi - 1) * 100 : null,
-    pctFromLow: lo < Infinity && lo > 0 ? (c / lo - 1) * 100 : null,
-    range52Pos: hi > lo ? ((c - lo) / (hi - lo)) * 100 : null,
-    above200: s200 > 0 ? c > s200 : null,
-    historyDays: i + 1,
-    volX: avgVol > 0 && vols[i] > 0 ? vols[i] / avgVol : null,
-    volTrend: avgVol > 0 && vols[i] > 0 ? (vols[i] / avgVol - 1) * 100 : null,
-  };
-}
+// The bar-derived row lives in techrow.js now — server.js, action-backtest.js
+// and the tech-history builder all need it, and the first two had already
+// drifted apart while this file claimed they had not. Kept as a named wrapper
+// so the ~dozen call sites and the tests read unchanged.
+const btRowAt = (closes, highs, vols, i) => TechRow.rowAt(closes, highs, vols, i);
 
 // Run the whole thing. Pure over what it is handed, so it is testable without a
 // server and without the network.
@@ -6798,6 +6768,48 @@ async function sendRefreshReport(state, kind = 'all') {
 // tomorrow in UTC, so dating these rows by the server's own date would file every
 // automated run one day ahead of the bars it was computed from. Falls back to the
 // UTC date only when no row carries a bar date at all.
+// One weekly mark for the long backtest, written during a Refresh all beside
+// the other histories and on the same gate: that run happens after the close,
+// so the reading is the settled one.
+//
+// SELF-PACING rather than calendar-driven. "Write it if the newest mark is a
+// week old" needs no weekday arithmetic, no holiday list, and heals itself
+// after a missed night — where "write it on Fridays" would silently skip a
+// week whenever a Friday was a holiday or the job failed.
+//
+// The verdict stored is the ALL-TECHNICAL one, from the same `Action.actionAt`
+// the builder uses. It is deliberately NOT `row.action`, which is the Balanced
+// verdict WITH fundamentals — mixing the two would make the column mean one
+// thing before today and another after it.
+const TECH_MARK_DAYS = 7;
+
+async function noteTechMark(day, rows) {
+  if (!day || !Array.isArray(rows) || !rows.length) return 0;
+  const span = await store.techHistorySpan();
+  if (span.last) {
+    const gap = (Date.parse(day + 'T00:00:00Z') - Date.parse(span.last + 'T00:00:00Z')) / 86400000;
+    if (!(gap >= TECH_MARK_DAYS)) return 0;
+  }
+  const out = [];
+  for (const r of rows) {
+    if (r.error || !(r.price > 0)) continue;
+    // Below the 52-week window the rules cannot be read properly, and the
+    // builder skips these too — a mark present for some symbols and absent for
+    // others at the same date is what an equal-weight basket must not have.
+    if (!(Number(r.historyDays) >= TechRow.MIN_SESSIONS)) continue;
+    const compact = { v200: r.vs200ma, v50: r.vs50ma, rsi: r.rsi,
+      m1: r.oneMonthPct, m3: r.threeMonthPct, fh: r.pctFromHigh,
+      vol: r.volTrend, hist: r.historyDays };
+    const v = Action.actionAt(compact, ACTION_CFG);
+    out.push({ symbol: r.symbol, d: day, action: v.action, flag: v.flag,
+      trend: Action.trendAt(compact, 'ETF', ACTION_CFG),
+      close: r.price, vs200: r.vs200ma, vs50: r.vs50ma, rsi: r.rsi,
+      m1: r.oneMonthPct, m3: r.threeMonthPct, fromHigh: r.pctFromHigh,
+      volTrend: r.volTrend, historyDays: r.historyDays });
+  }
+  return out.length ? store.writeTechHistory(out) : 0;
+}
+
 function marketDay(rows) {
   const latest = (rows || []).reduce((m, x) => (x.latestDate && x.latestDate > m ? x.latestDate : m), '');
   return latest || new Date().toISOString().slice(0, 10);
@@ -6847,6 +6859,10 @@ async function finishLiveRefresh(payload, ctx = {}) {
       // time a verdict flapped over lunch.
       const held = await store.noteAdvice(marketDay(rows), rows.filter((x) => !x.error && x.action));
       if (held) console.log(`advice: ${held} verdicts aged for ${marketDay(rows)}`);
+      // The long backtest's weekly mark. Free here: every technical it stores
+      // was already computed for this row, so nothing is re-read.
+      const marked = await noteTechMark(marketDay(rows), rows);
+      if (marked) console.log(`tech history: ${marked} marks written for ${marketDay(rows)}`);
     } catch (err) {
       // A history write must never fail a refresh — same rule as the bars.
       console.warn('fundamentals: history write failed (screener unaffected):', err.message);

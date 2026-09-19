@@ -19,7 +19,10 @@ const SRC = fs.readFileSync(path.join(__dirname, 'db.js'), 'utf8');
 const VERBOSE = process.argv.includes('--all');
 
 // Tables where a full scan is a quota event rather than a rounding error.
-const BIG = ['bars', 'fundamentals_history', 'earnings_history', 'news', 'activity', 'visitors', 'snapshot'];
+const BIG = ['bars', 'fundamentals_history', 'earnings_history', 'news', 'activity', 'visitors', 'snapshot',
+  // ~342k rows: 430 symbols x weekly marks back to 2003. The long backtest
+  // reads it instead of `bars`, which only helps if these reads seek.
+  'tech_history'];
 
 // Statements that scan on purpose, each with the reason it is allowed to.
 // A new entry here is a decision, which is the point of naming them.

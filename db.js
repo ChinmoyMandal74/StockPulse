@@ -278,6 +278,44 @@ const SCHEMA = [
   // both halves are looked up by date. The primary key is (symbol, d), which
   // cannot seek on a date alone.
   `create index if not exists idx_fund_hist_d on fundamentals_history (d)`,
+  // The all-technical verdict at weekly marks, for the long backtest.
+  //
+  // Everything here is derived from a symbol's own bars, so unlike
+  // fundamentals_history it CAN be rebuilt — and reaches back to 2003 rather
+  // than to 2026-08-30. That is the whole reason it exists: a trend-only study
+  // needs no fundamentals, so it is not bounded by when we started recording
+  // them. `close` rides along so a sweep never has to touch `bars` at all,
+  // which is what keeps a twenty-year study off the rows-read meter.
+  //
+  // It stores the INPUTS the engine reads, not only the verdict it reached, so
+  // the table is rule-set agnostic: a page can re-evaluate any preset at read
+  // time rather than being locked to whichever one the builder baked in.
+  // Between them vs200/vs50/rsi/m1/m3/from_high/vol_trend/history_days are
+  // every field the all-technical rules touch. `action` and `flag` are kept as
+  // the Balanced reading, so a sweep that does not care about presets can read
+  // them straight rather than re-evaluating 344,000 rows.
+  `create table if not exists tech_history (
+     symbol    text not null,
+     d         text not null,
+     action    text,
+     flag      text,
+     trend     text,
+     close     real,
+     vs200     real,
+     vs50      real,
+     rsi       real,
+     m1        real,
+     m3        real,
+     from_high real,
+     vol_trend real,
+     history_days integer,
+     primary key (symbol, d)
+   )`,
+  // The sweep walks DATES across every symbol, which the primary key cannot
+  // seek on. Same lesson fundamentals_history records one line above, and the
+  // reads must order by `d` alone — ordering by (symbol, d) makes SQLite walk
+  // the primary key as a covering index and ignore the date filter.
+  `create index if not exists idx_tech_hist_d on tech_history (d)`,
   // The backtest asks "what was the next earnings date, as of a past day", one
   // bounded range over d. The primary key is (symbol, d), which cannot seek on
   // a date alone, so without this the question is a scan of the whole table.
@@ -1840,7 +1878,7 @@ async function readBarsFor(symbols, since) {
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state',
-  'earnings_history', 'price_state'];
+  'earnings_history', 'price_state', 'tech_history'];
 
 // Remove a symbol from the database entirely.
 //
@@ -2079,6 +2117,102 @@ async function readFundamentalsRows(through) {
     for (const [c, f] of FUND_FIELDS) v[f] = row[c] == null ? null : Number(row[c]);
     return v;
   });
+}
+
+// ---- tech_history: the all-technical verdict at weekly marks ---------------
+//
+// Written by build-tech-history.js for the whole archive and topped up by the
+// nightly job. Every field is derived from bars, so this table is rebuildable
+// — the opposite of fundamentals_history, and the reason a trend-only backtest
+// can reach 2003 while the advice one is capped at two months.
+
+const TECH_COLS = ['action', 'flag', 'trend', 'close', 'vs200', 'vs50', 'rsi', 'm1', 'm3',
+  'from_high', 'vol_trend', 'history_days'];
+
+async function writeTechHistory(rows) {
+  await init();
+  if (!Array.isArray(rows) || !rows.length) return 0;
+  // Reject the empty BEFORE coercing: Number(null) is 0 and isFinite(0) is
+  // true, so the other order stores a fabricated zero reading where the engine
+  // should see a blank — and blanks satisfy no comparison in either direction,
+  // which is load-bearing in these rules.
+  const num = (v) => (v == null || !isFinite(Number(v)) ? null : Number(v));
+  // MULTI-ROW inserts, not one statement per row. The initial build is ~333,000
+  // rows, and a batch of 500 single-row statements measured about 30 seconds —
+  // five hours for the table. The cost is per STATEMENT, not per row, so 200
+  // rows in one `values (...),(...)` is the same work in a fraction of the
+  // round trips. (14 columns x 200 rows = 2,800 bound parameters, well inside
+  // SQLite's 32,766 limit; the old 500-row batch of single statements stays
+  // the shape for everything else, which writes tens of rows at a time.)
+  const PER_STMT = 200;
+  const cols = ['symbol', 'd', ...TECH_COLS];
+  const tuple = `(${cols.map(() => '?').join(', ')})`;
+  const argsFor = (r) => [r.symbol, r.d, r.action || null, r.flag || null, r.trend || null,
+    num(r.close), num(r.vs200), num(r.vs50), num(r.rsi), num(r.m1), num(r.m3), num(r.fromHigh),
+    num(r.volTrend), num(r.historyDays)];
+  const stmts = [];
+  for (let i = 0; i < rows.length; i += PER_STMT) {
+    const slice = rows.slice(i, i + PER_STMT);
+    stmts.push({
+      sql: `insert into tech_history (${cols.join(', ')})
+            values ${slice.map(() => tuple).join(', ')}
+            on conflict(symbol, d) do update set
+              ${TECH_COLS.map((c) => `${c} = excluded.${c}`).join(', ')}`,
+      args: slice.flatMap(argsFor),
+    });
+  }
+  for (let i = 0; i < stmts.length; i += 20) {
+    await db.batch(stmts.slice(i, i + 20), 'write');
+  }
+  return rows.length;
+}
+
+// Every mark in a window, across every symbol. ORDERED BY `d` ALONE — ordering
+// by the primary key makes SQLite walk it as a covering index and ignore the
+// date filter, which is a scan of the whole table. The same trap
+// readFundamentalsAsOf records, and query-plan-test.js enforces.
+async function readTechMarks(from, to) {
+  await init();
+  const r = await db.execute({
+    sql: `select symbol, d, ${TECH_COLS.join(', ')} from tech_history
+          where d >= ? and d <= ? order by d`,
+    args: [from, to],
+  });
+  return r.rows.map((row) => ({
+    symbol: row.symbol, d: row.d,
+    action: row.action, flag: row.flag, trend: row.trend,
+    close: row.close == null ? null : Number(row.close),
+    vs200: row.vs200 == null ? null : Number(row.vs200),
+    vs50: row.vs50 == null ? null : Number(row.vs50),
+    rsi: row.rsi == null ? null : Number(row.rsi),
+    m1: row.m1 == null ? null : Number(row.m1),
+    m3: row.m3 == null ? null : Number(row.m3),
+    fromHigh: row.from_high == null ? null : Number(row.from_high),
+    volTrend: row.vol_trend == null ? null : Number(row.vol_trend),
+    historyDays: row.history_days == null ? null : Number(row.history_days),
+  }));
+}
+
+// What the table holds, for the page's coverage note and for the nightly job's
+// "is a new mark due" test. Two aggregates over an indexed column and a count,
+// which is bounded by the table rather than by `bars`.
+async function techHistorySpan() {
+  await init();
+  const r = await db.execute(
+    'select count(*) as n, count(distinct symbol) as syms, min(d) as first, max(d) as last from tech_history');
+  const row = r.rows[0] || {};
+  return { rows: Number(row.n || 0), symbols: Number(row.syms || 0),
+    first: row.first || null, last: row.last || null };
+}
+
+// The distinct marks in a window, oldest first — the sweep's list of start
+// dates. Reads only the date column over the index.
+async function readTechMarkDates(from) {
+  await init();
+  const r = await db.execute({
+    sql: 'select distinct d from tech_history where d >= ? order by d', args: [from],
+  });
+  return r.rows.map((row) => row.d);
 }
 
 // The first day each symbol was ever recorded. That is all the coverage strip
@@ -3009,6 +3143,7 @@ module.exports = {
   knownListings,
   readFundamentalsAsOf, readFundamentalsRows,
   readFundamentalsFirstSeen,
+  writeTechHistory, readTechMarks, readTechMarkDates, techHistorySpan,
   mergeProfileFields,
   writeNews, readNews, readLatestNews, readNewsState, newsCountsSince,
   symbolsWithData,
