@@ -4641,13 +4641,12 @@ function btEvalAt(sym, p, i, today, was, earnings, atDate) {
 }
 
 function btRun(opts) {
-  const { bars, snapshot, from, tiers, earnings, recorded } = opts;
+  const { bars, snapshot, from, tiers, earnings, recorded, only } = opts;
   btRsiCache.clear();
   const want = new Set(tiers);
   const byS = new Map((snapshot || []).map((x) => [x.symbol, x]));
   const picks = [];
   const heldSeries = {};
-  const allSeries = {};
   // Kept for the rebalancer: the same arrays, so evaluating at six more dates
   // costs six evaluations rather than six more passes over the archive.
   const prep = {};
@@ -4655,6 +4654,10 @@ function btRun(opts) {
   let evaluated = 0, tooShort = 0, noFund = 0, real = 0, imputed = 0;
 
   for (const sym of Object.keys(bars)) {
+    // Scoped to a theme when one is chosen: the rules are run over those
+    // stocks and nothing else, so a run on Chips asks what the rules did
+    // INSIDE Chips rather than picking Chips names out of 430.
+    if (only && !only.has(sym)) continue;
     const rows = (bars[sym] || []).slice().reverse();   // archive is newest-first
     btRsiCache.delete(rows);
     if (!rows.length) continue;
@@ -4668,10 +4671,6 @@ function btRun(opts) {
     if (i < 0) continue;
     const forward = [];
     for (let k = i; k < dates.length; k++) forward.push({ d: dates[k], c: closes[k] });
-    // The universe curve the backtest compares against — the stocks followed,
-    // not the index ETFs that track the market. A pick is still allowed to BE
-    // a benchmark; it just cannot also be its own yardstick.
-    if (forward.length > 1 && notBenchmark(sym)) allSeries[sym] = forward;
     // EVERY symbol, benchmarks included: a re-run can buy something that was
     // not in the opening basket, and one of them may be an index ETF.
     if (forward.length > 1) everySeries[sym] = forward;
@@ -4734,7 +4733,7 @@ function btRun(opts) {
   }
 
   picks.sort((a, b) => b.ret - a.ret);
-  return { picks, heldSeries, allSeries, everySeries, prep,
+  return { picks, heldSeries, everySeries, prep,
            evaluated, tooShort, noFund, real, imputed };
 }
 
@@ -7161,8 +7160,18 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
   let recorded = null;
   try { recorded = await store.readFundamentalsAsOf(asked); } catch (e) { recorded = null; }
 
-  const r = btRun({ bars, snapshot: stocks, from: asked, tiers, earnings, recorded });
-  const all = btCurve(r.allSeries, asked);
+  // The universe the run is allowed to pick from. A theme scopes it: the rules
+  // are evaluated over that theme's stocks and nothing else, which is the
+  // question worth asking once the whole-universe comparison is gone — "what
+  // did the rules do inside Chips" rather than "how did 430 mixed stocks do".
+  const themes = await readPortfolios();
+  const themeAsked = String(req.query.theme || '').trim();
+  const theme = themeAsked && themeAsked in themes ? themeAsked : null;
+  if (themeAsked && !theme) return res.status(404).json({ error: `No theme called "${themeAsked}".` });
+  const only = theme ? new Set(themes[theme]) : null;
+  const scopeOf = theme ? (themes[theme] || []).length : universe.length;
+
+  const r = btRun({ bars, snapshot: stocks, from: asked, tiers, earnings, recorded, only });
   const tier = btCurve(r.heldSeries, asked);        // every pick in the chosen verdicts
 
   // Top N. Seeded off the date + size so the same run draws the same band.
@@ -7271,11 +7280,11 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
     tiers, universe: universe.length,
     picks: r.picks,
     rank, top, every, mode: every ? mode : null, cost: costBps,
+    theme: theme || null,
     curve: { dates: held.dates, portfolio: held.values,
              rebalanced: rebal ? rebal.values : null,
              tier: top ? tier.values : null,
              band: band ? { p10: band.p10, p50: band.p50, p90: band.p90 } : null,
-             universe: all.values, universeDates: all.dates,
              spy: spy ? spy.values : null, spyDates: spy ? spy.dates : null },
     summary: {
       n: r.picks.length,
@@ -7283,12 +7292,12 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
       rankable,
       portfolio: pct(last(held.values)),
       tier: top ? pct(last(tier.values)) : null,
-      universe: pct(last(all.values)),
       spy: spy ? pct(last(spy.values)) : null,
       up: chosen.filter((x) => x.ret > 0).length,
       best: r.picks[0] || null,
       worst: r.picks[r.picks.length - 1] || null,
-      universeMembers: all.members,
+      scope: theme || 'All',
+      scopeOf,
       // Where the ranked basket landed among random baskets of the same size.
       // 50 means the ranking did exactly nothing; this is the number to read
       // first, ahead of the return.

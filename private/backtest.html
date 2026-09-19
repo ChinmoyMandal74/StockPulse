@@ -135,7 +135,8 @@
     <p class="sub">
       Pick a past date and a set of verdicts. The rules are re-run as they stood on that
       day, an equal-weight basket is formed from whatever they picked, and it is carried
-      to today against the S&amp;P and against your own universe. Read
+      to today against the S&amp;P. Run it over every stock you track, or scope it to one
+      theme. Read
       <b>What this replays and what it invents</b> at the foot before trusting a number.
     </p>
 
@@ -149,6 +150,10 @@
           <label>Fundamentals recorded by that date</label>
           <div class="cov-bars" id="cov"></div>
           <div class="cov-ax"><span id="covA"></span><span id="covB"></span></div>
+        </div>
+        <div class="fld">
+          <label for="theme">Run over</label>
+          <select id="theme"><option value="">All stocks</option></select>
         </div>
         <div class="fld" style="flex:1 1 380px">
           <label>Verdicts to buy</label>
@@ -212,7 +217,6 @@
           <span class="lg-r" id="lgR" hidden>Rebalanced</span>
           <span class="lg-t" id="lgT" hidden>All picks in the tier</span>
           <span class="lg-b" id="lgB" hidden>Random baskets, middle 80%</span>
-          <span class="lg-u" title="Every stock you track, equally weighted — excluding the four index ETFs (SPY, QQQ, IWM, DIA), so the comparison is not partly against itself">Your universe, equal weight</span>
           <span class="lg-s" id="lgS">S&amp;P 500 (SPY)</span>
         </div>
         <svg class="chart" id="chart" preserveAspectRatio="none" aria-hidden="true"></svg>
@@ -275,7 +279,6 @@
       const svg = $('chart');
       const series = [
         { v: c.portfolio, d: c.dates, col: 'var(--green)' },
-        { v: c.universe, d: c.universeDates, col: 'var(--accent)' },
       ];
       // The whole tier, when a Top-N cut is in force: what the selection is
       // actually being compared against.
@@ -338,16 +341,16 @@
     function paint(r) {
       const s = r.summary;
       const beatS = s.spy == null ? null : s.portfolio - s.spy;
-      const beatU = s.universe == null ? null : s.portfolio - s.universe;
       const cut = r.top > 0;
       const rankName = { cushion: 'thickest cushion', momentum: 'highest momentum', random: 'at random' }[r.rank]
         || r.rank;
       const cards = [
         [cut ? 'Held' : 'Picks', cut ? `${s.selected} of ${s.n}` : String(s.n),
-          cut ? `${rankName}, tier first` : `of ${r.universe} in the universe`],
+          cut ? `${rankName}, tier first`
+              : `of ${s.scopeOf}${s.scope === 'All' ? ' tracked' : ' in ' + s.scope}`],
         ['Equal-weight return', pct(s.portfolio), `${r.tradingDate} → ${r.today}`],
         ['vs S&P 500', pct(beatS), s.spy == null ? 'benchmark unavailable' : `S&P ${pct(s.spy)}`],
-        ['vs your universe', pct(beatU), `universe ${pct(s.universe)} · ${s.universeMembers} stocks, benchmarks excluded`],
+        ['Picked from', s.scope === 'All' ? 'All stocks' : s.scope, `${s.scopeOf} in scope`],
         ['Winners', s.selected ? `${s.up}/${s.selected}` : '—',
           s.selected ? Math.round((s.up / s.selected) * 100) + '% positive' : ''],
       ];
@@ -366,7 +369,7 @@
           r.notes.fundReal ? 'recorded, not assumed' : 'all from today — none recorded that far back']);
       }
       $('cards').innerHTML = cards.map(([k, v, n], i) => {
-        const col = i === 2 ? cls(beatS) : i === 3 ? cls(beatU) : i === 1 ? cls(s.portfolio) : '';
+        const col = i === 2 ? cls(beatS) : i === 1 ? cls(s.portfolio) : '';
         return `<div class="bezel card"><div class="core card">
           <div class="k">${we(k)}</div><div class="v ${col}">${we(v)}</div>
           <div class="n">${we(n)}</div></div></div>`;
@@ -539,9 +542,11 @@
       try {
         const top = $('top').value, rank = $('rank').value;
         const every = $('every').value, mode = $('mode').value, cost = $('cost').value;
+        const theme = $('theme').value;
         const q = `?date=${encodeURIComponent(d)}&tiers=${encodeURIComponent([...picked].join(','))}`
           + `&top=${encodeURIComponent(top)}&rank=${encodeURIComponent(rank)}`
-          + `&every=${encodeURIComponent(every)}&mode=${encodeURIComponent(mode)}&cost=${encodeURIComponent(cost)}`;
+          + `&every=${encodeURIComponent(every)}&mode=${encodeURIComponent(mode)}&cost=${encodeURIComponent(cost)}`
+          + (theme ? `&theme=${encodeURIComponent(theme)}` : '');
         const res = await fetch('/api/backtest' + q);
         const j = await res.json();
         if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
@@ -554,7 +559,9 @@
       } finally { btn.disabled = false; btn.textContent = 'Run backtest'; }
     }
 
-    (function boot() {
+    // async, because the theme list is fetched before the first run: a run
+    // fired from the URL must already know which theme it is scoped to.
+    (async function boot() {
       const el = $('d');
       el.min = iso(FLOOR); el.max = iso(LAST);
       const qs = new URLSearchParams(location.search);
@@ -565,6 +572,16 @@
         qs.get('tiers').split(',').forEach((t) => { if (TIERS.includes(t)) picked.add(t); });
         if (!picked.size) picked.add('Strong Buy');
       }
+      // The themes, with their counts, so the scope of a run is visible before
+      // it starts. A theme too small to pick from is still offered — the empty
+      // result says more than a hidden option would.
+      try {
+        const pf = (await (await fetch('/api/portfolios')).json()).portfolios || {};
+        $('theme').innerHTML = '<option value="">All stocks</option>' +
+          Object.keys(pf).map((n) =>
+            `<option value="${we(n)}">${we(n)} (${(pf[n] || []).length})</option>`).join('');
+        if (qs.get('theme')) $('theme').value = qs.get('theme');
+      } catch (e) { /* the run still works over everything */ }
       if (qs.get('every')) $('every').value = qs.get('every');
       if (qs.get('mode')) $('mode').value = qs.get('mode');
       if (qs.get('cost')) $('cost').value = qs.get('cost');
