@@ -75,6 +75,19 @@
       margin-right: 7px; background: currentColor; }
     .lg-p { color: var(--green); } .lg-u { color: var(--accent); } .lg-s { color: var(--faint); }
     .lg-t { color: var(--amber); } .lg-b { color: var(--muted); }
+    .lg-r { color: #f0abfc; }
+    #rebNote { margin: 8px 0 2px; line-height: 1.6; }
+    #rebNote b { color: var(--text); font-weight: 600; }
+    /* `.rcov`, not `.cov`: this page ALREADY has a .cov — the fundamentals
+       coverage strip beside the date picker — and a second unscoped rule of the
+       same name, defined later, turned that column into a 26px row whose
+       content spilled into the controls beneath it. The .warn and .card lesson,
+       for the third time: a class that also positions must name what it
+       positions. */
+    #rebNote .rcov { display: flex; gap: 3px; margin-top: 9px; align-items: flex-end; height: 26px; }
+    #rebNote .rcov i { flex: 1 1 0; background: var(--hair-2); border-radius: 1px 1px 0 0; min-width: 3px; }
+    #rebNote .rcov i.some { background: var(--accent); }
+    #rebNote .rcov i.most { background: var(--green); }
     /* The band's swatch is a block, not a line: it is an area on the chart. */
     .lg-b::before { border-radius: 2px; background: rgba(255, 255, 255, 0.16); }
     #bandNote { margin: 10px 0 2px; line-height: 1.6; }
@@ -159,6 +172,31 @@
             <option value="random">Random (the control)</option>
           </select>
         </div>
+        <div class="fld">
+          <label for="every">Rebalance</label>
+          <select id="every">
+            <option value="0" selected>Never — buy and hold</option>
+            <option value="7">Every 7 days</option>
+            <option value="14">Every 14 days</option>
+            <option value="30">Every 30 days</option>
+          </select>
+        </div>
+        <div class="fld">
+          <label for="mode">On each rebalance</label>
+          <select id="mode" disabled>
+            <option value="rerun" selected>Re-run the rules</option>
+            <option value="exit">Exit only — never re-buy</option>
+          </select>
+        </div>
+        <div class="fld">
+          <label for="cost">Cost</label>
+          <select id="cost" disabled>
+            <option value="0">0 bps</option>
+            <option value="5" selected>5 bps</option>
+            <option value="10">10 bps</option>
+            <option value="20">20 bps</option>
+          </select>
+        </div>
         <button class="btn btn-accent" id="run">Run backtest</button>
       </div>
       <p class="hint" id="hint"></p>
@@ -171,6 +209,7 @@
       <section class="bezel" id="chartWrap"><div class="core" style="padding:16px 18px">
         <div class="legend">
           <span class="lg-p" id="lgP">Picks</span>
+          <span class="lg-r" id="lgR" hidden>Rebalanced</span>
           <span class="lg-t" id="lgT" hidden>All picks in the tier</span>
           <span class="lg-b" id="lgB" hidden>Random baskets, middle 80%</span>
           <span class="lg-u" title="Every stock you track, equally weighted — excluding the four index ETFs (SPY, QQQ, IWM, DIA), so the comparison is not partly against itself">Your universe, equal weight</span>
@@ -178,6 +217,7 @@
         </div>
         <svg class="chart" id="chart" preserveAspectRatio="none" aria-hidden="true"></svg>
         <p class="hint" id="bandNote" hidden></p>
+        <p class="hint" id="rebNote" hidden></p>
       </div></section>
 
       <section class="bezel" style="margin-bottom:18px"><div class="core" style="padding:6px 18px 4px">
@@ -240,6 +280,9 @@
       // The whole tier, when a Top-N cut is in force: what the selection is
       // actually being compared against.
       if (c.tier) series.push({ v: c.tier, d: c.dates, col: 'var(--amber)', dash: '4 4' });
+      // The rebalanced run is the headline when it exists — it is the same
+      // picks, managed, and the gap to the held line is what managing bought.
+      if (c.rebalanced) series.push({ v: c.rebalanced, d: c.dates, col: '#f0abfc' });
       if (c.spy) series.push({ v: c.spy, d: c.spyDates, col: 'var(--faint)' });
       let lo = Infinity, hi = -Infinity;
       // The band is part of the scale, or a line can leave the chart.
@@ -311,7 +354,11 @@
       // The number to read FIRST when a cut is in force: where the ranked basket
       // landed among random baskets of the same size. 50 means the ranking did
       // nothing. It replaces the fundamentals card, which moves into the notes.
-      if (cut && s.bandPct != null) {
+      if (r.every && s.rebalanced != null) {
+        cards.push([r.mode === 'exit' ? 'Exit-only return' : 'Rebalanced return', pct(s.rebalanced),
+          `every ${r.every} days · ${s.rebalances} rebalance${s.rebalances === 1 ? '' : 's'}`
+          + ` · ${s.turnover}% turned over at ${r.cost} bps`]);
+      } else if (cut && s.bandPct != null) {
         cards.push(['Beat this share of random picks', s.bandPct + 'th',
           `percentile of ${s.bandTrials} random ${s.selected}-stock baskets`]);
       } else {
@@ -345,6 +392,34 @@
               `two months is one or two independent observations, not a finding.`) + thin;
         bw.hidden = false;
       } else { bw.hidden = true; }
+      // What the rebalancing itself was worth, said as a difference — and what
+      // it stood on, which is the part that improves as the archive fills.
+      const rn = $('rebNote');
+      if (r.every && s.rebalanced != null) {
+        const gap = s.rebalanced - s.portfolio;
+        const cov = s.rebalCoverage || [];
+        const tot = cov.reduce((a, x) => a + x.recorded + x.imputed, 0);
+        const rec = cov.reduce((a, x) => a + x.recorded, 0);
+        const share = tot ? Math.round((rec / tot) * 100) : 0;
+        rn.innerHTML =
+          (r.mode === 'exit'
+            ? `Selling a holding when its verdict reached <b>Avoid</b> and never re-buying returned `
+            : `Re-running the rules every <b>${r.every} days</b> returned `)
+          + `<b>${we(pct(s.rebalanced))}</b> against <b>${we(pct(s.portfolio))}</b> for holding the same `
+          + `opening picks — a difference of <b>${we(pct(gap))}</b> after ${we(String(s.turnover))}% turnover `
+          + `at ${r.cost} bps. It ended holding ${s.endNames} name${s.endNames === 1 ? '' : 's'}`
+          + (s.endCash > 0.5 ? ` and ${we(String(s.endCash))}% cash, which earns nothing here.` : '.')
+          + ` <b>${share}% of the verdicts at those rebalances stood on RECORDED fundamentals</b>; the rest `
+          + `used today's, because fundamentals_history only began on 2026-08-30. That share rises on its `
+          + `own with every Refresh all, and this number is how you will know when it is worth trusting.`
+          + (cov.length ? '<span class="rcov">' + cov.map((x) => {
+              const p = (x.recorded + x.imputed) ? x.recorded / (x.recorded + x.imputed) : 0;
+              return `<i class="${p > 0.75 ? 'most' : p > 0 ? 'some' : ''}" style="height:${Math.max(8, p * 26)}px"`
+                + ` title="${we(x.d)}: ${x.recorded} recorded, ${x.imputed} imputed"></i>`;
+            }).join('') + '</span>' : '');
+        rn.hidden = false;
+      } else { rn.hidden = true; }
+      $('lgR').hidden = !(r.every && s.rebalanced != null);
       $('lgT').hidden = !cut;
       $('lgB').hidden = !cut;
 
@@ -463,8 +538,10 @@
       btn.disabled = true; btn.textContent = 'Running…';
       try {
         const top = $('top').value, rank = $('rank').value;
+        const every = $('every').value, mode = $('mode').value, cost = $('cost').value;
         const q = `?date=${encodeURIComponent(d)}&tiers=${encodeURIComponent([...picked].join(','))}`
-          + `&top=${encodeURIComponent(top)}&rank=${encodeURIComponent(rank)}`;
+          + `&top=${encodeURIComponent(top)}&rank=${encodeURIComponent(rank)}`
+          + `&every=${encodeURIComponent(every)}&mode=${encodeURIComponent(mode)}&cost=${encodeURIComponent(cost)}`;
         const res = await fetch('/api/backtest' + q);
         const j = await res.json();
         if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
@@ -488,6 +565,17 @@
         qs.get('tiers').split(',').forEach((t) => { if (TIERS.includes(t)) picked.add(t); });
         if (!picked.size) picked.add('Strong Buy');
       }
+      if (qs.get('every')) $('every').value = qs.get('every');
+      if (qs.get('mode')) $('mode').value = qs.get('mode');
+      if (qs.get('cost')) $('cost').value = qs.get('cost');
+      // Mode and cost mean nothing without a rebalance to apply them to.
+      const syncEvery = () => {
+        const off = $('every').value === '0';
+        $('mode').disabled = off;
+        $('cost').disabled = off;
+      };
+      syncEvery();
+      $('every').addEventListener('change', syncEvery);
       if (qs.get('top')) $('top').value = qs.get('top');
       if (qs.get('rank')) $('rank').value = qs.get('rank');
       // Ranking only means something once there is a cut to rank FOR.

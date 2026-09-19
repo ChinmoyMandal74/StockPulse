@@ -2057,6 +2057,30 @@ async function readFundamentalsAsOf(day) {
   return out;
 }
 
+// Every recorded set through `day`, oldest first, for a caller that needs the
+// fundamentals AT SEVERAL DATES — a rebalancing backtest asks "what stood on
+// each rebalance day", and readFundamentalsAsOf would re-read the whole table
+// for each one. One read, folded forward by the caller: the rows arrive in date
+// order, so walking them with a pointer gives every date's set in one pass.
+//
+// Rows, not a folded map, precisely because the folding is what differs per
+// caller. Bounded by universe x recorded days, the same shape the /quality
+// rollups are allowlisted for.
+async function readFundamentalsRows(through) {
+  await init();
+  const cols = FUND_FIELDS.map(([c]) => c);
+  const r = await db.execute({
+    sql: `select symbol, d, ${cols.join(', ')} from fundamentals_history
+          where d <= ? order by d`,
+    args: [through],
+  });
+  return r.rows.map((row) => {
+    const v = { symbol: row.symbol, d: row.d, asOf: row.d };
+    for (const [c, f] of FUND_FIELDS) v[f] = row[c] == null ? null : Number(row[c]);
+    return v;
+  });
+}
+
 // The first day each symbol was ever recorded. That is all the coverage strip
 // needs: what a backtest gets for a date D is every symbol with ANY row on or
 // before D (fundamentals are step functions, so the last set before D stands),
@@ -2983,7 +3007,7 @@ module.exports = {
   markRefreshPrices, readBarsFullFor, notePricePull, readPriceState, readEarningsDates,
   barsSpan, coverageRollups,
   knownListings,
-  readFundamentalsAsOf,
+  readFundamentalsAsOf, readFundamentalsRows,
   readFundamentalsFirstSeen,
   mergeProfileFields,
   writeNews, readNews, readLatestNews, readNewsState, newsCountsSince,

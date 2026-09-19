@@ -4517,6 +4517,129 @@ function btRowAt(closes, highs, vols, i) {
 
 // Run the whole thing. Pure over what it is handed, so it is testable without a
 // server and without the network.
+// ---- rebalancing ----------------------------------------------------------
+// Two modes, both asked for:
+//
+//   rerun — re-evaluate the rules every N days and hold whatever is in the
+//           chosen verdicts, equal weight. The full strategy reading.
+//   exit  — buy the opening set once and only ever SELL, when a holding's
+//           verdict falls to the exit tier. Proceeds sit in cash and are never
+//           re-invested. This tests the one claim the rules actually make:
+//           measured over 307,875 stock-days the tiers order DOWNSIDE
+//           correctly while medians are flat, so "does obeying the exit cut
+//           the tail" is a fairer question than "does it make more".
+//
+// Deliberately NOT offered: resetting weights to equal without re-running the
+// rules. Over two months of correlated large caps that moves a result by tens
+// of basis points and would be a control that does nothing.
+const BT_MODES = ['rerun', 'exit'];
+const BT_EXIT_TIER = 'Avoid';          // this or worse closes a holding
+
+// Every Nth calendar day from the start, snapped to the next session that
+// actually traded. Calendar days rather than sessions because 7 / 14 / 30 is
+// how anyone thinks about it, and a fortnight is a fortnight whatever the
+// market did.
+function btRebalanceDays(axis, everyDays) {
+  if (!everyDays || everyDays < 1) return [];
+  const out = [];
+  const start = Date.parse(axis[0] + 'T00:00:00Z');
+  for (let d = everyDays; ; d += everyDays) {
+    const want = new Date(start + d * 86400000).toISOString().slice(0, 10);
+    if (want > axis[axis.length - 1]) break;
+    const j = axis.findIndex((x) => x >= want);
+    if (j <= 0) continue;
+    if (!out.includes(j)) out.push(j);
+  }
+  return out;
+}
+
+// Value-tracked, not weight-tracked: holdings drift with price between
+// rebalances, which is the whole point of rebalancing, and turnover has to be
+// measured against what was actually held.
+//
+// THE DAY IS EARNED BEFORE THE REBALANCE. Rebalancing first would decide a
+// position from today's close and then earn today's own move with it — the
+// look-ahead the strategy backtest was caught on once, where a synthetic 48%
+// gap on a rebalance day booked 5.98% instead of 39.98%.
+function btSimulate(opts) {
+  const { axis, px, open, targets, mode, costBps } = opts;
+  const cost = (costBps || 0) / 10000;
+  let held = new Map();                // symbol -> value
+  let cash = 0;
+  const first = [...open].filter((sym) => px[sym] && px[sym][0] > 0);
+  if (!first.length) return null;
+  for (const sym of first) held.set(sym, 1 / first.length);
+
+  const nav = new Array(axis.length).fill(null);
+  nav[0] = 1;
+  let traded = 0, rebalances = 0;
+  const log = [];
+
+  for (let j = 1; j < axis.length; j++) {
+    for (const [sym, v] of held) {
+      const a = px[sym][j - 1], b = px[sym][j];
+      if (a > 0 && b > 0) held.set(sym, v * (b / a));
+    }
+    let total = cash;
+    for (const v of held.values()) total += v;
+
+    if (targets.has(j) && total > 0) {
+      const want = targets.get(j);
+      const before = new Map(held);
+      if (mode === 'exit') {
+        // Sell the failures only. Survivors keep the weight they drifted to —
+        // this mode never re-weights and never buys.
+        for (const sym of [...held.keys()]) {
+          if (!want.has(sym)) { cash += held.get(sym); held.delete(sym); }
+        }
+      } else {
+        const keep = [...want].filter((sym) => px[sym] && px[sym][j] > 0);
+        held = new Map();
+        cash = 0;
+        if (keep.length) for (const sym of keep) held.set(sym, total / keep.length);
+        else cash = total;             // nothing qualifies: sit in cash
+      }
+      let moved = 0;
+      const names = new Set([...before.keys(), ...held.keys()]);
+      for (const sym of names) moved += Math.abs((held.get(sym) || 0) - (before.get(sym) || 0));
+      traded += moved / total;
+      // Charge the spread on every dollar that moved, both sides of a switch.
+      const fee = (moved / total) * cost;
+      for (const [sym, v] of held) held.set(sym, v * (1 - fee));
+      cash *= 1 - fee;
+      rebalances++;
+      log.push({ d: axis[j], held: held.size, cash: Math.round((cash / total) * 1000) / 10,
+        turnover: Math.round((moved / total) * 1000) / 10 });
+    }
+    let end = cash;
+    for (const v of held.values()) end += v;
+    nav[j] = end;
+  }
+  return { values: nav, turnover: Math.round(traded * 1000) / 10, rebalances, log,
+           endNames: held.size, endCash: Math.round((cash / (nav[nav.length - 1] || 1)) * 1000) / 10 };
+}
+
+// The engine's verdict for ONE symbol at ONE session. btRun calls it for the
+// start date and the rebalancer calls it again at every rebalance, so a run
+// that re-runs the rules every 7 days evaluates through exactly the same code
+// path as the one that evaluates once. A second row builder would drift from
+// the Advice column inside a week — the reason rowcard.js and action.js exist.
+function btEvalAt(sym, p, i, today, was, earnings, atDate) {
+  const tech = p.tech || btRowAt(p.closes, p.highs, p.vols, i);
+  if (!tech) return null;
+  // As of then: the next report that actually happened after that date,
+  // falling back to today's only when none has yet.
+  const nextEarn = (earnings[sym] || []).find((d) => d > atDate) || null;
+  const row = { ...today, ...(was || {}), ...tech, symbol: sym, latestDate: p.dates[i],
+    nextEarningsDate: nextEarn || today.nextEarningsDate || null,
+    // Momentum.rsiSeriesAt is the app's own Wilder RSI, fed newest-first the
+    // way it expects.
+    rsi: rsiAt(p.rows, i) };
+  // ACTION_CFG is the resolved Balanced profile, the same object every other
+  // surface scores against — so a verdict here means what the column means.
+  return { row, v: Action.evaluate(row, ACTION_CFG) };
+}
+
 function btRun(opts) {
   const { bars, snapshot, from, tiers, earnings, recorded } = opts;
   btRsiCache.clear();
@@ -4525,6 +4648,10 @@ function btRun(opts) {
   const picks = [];
   const heldSeries = {};
   const allSeries = {};
+  // Kept for the rebalancer: the same arrays, so evaluating at six more dates
+  // costs six evaluations rather than six more passes over the archive.
+  const prep = {};
+  const everySeries = {};
   let evaluated = 0, tooShort = 0, noFund = 0, real = 0, imputed = 0;
 
   for (const sym of Object.keys(bars)) {
@@ -4545,6 +4672,10 @@ function btRun(opts) {
     // not the index ETFs that track the market. A pick is still allowed to BE
     // a benchmark; it just cannot also be its own yardstick.
     if (forward.length > 1 && notBenchmark(sym)) allSeries[sym] = forward;
+    // EVERY symbol, benchmarks included: a re-run can buy something that was
+    // not in the opening basket, and one of them may be an index ETF.
+    if (forward.length > 1) everySeries[sym] = forward;
+    prep[sym] = { rows, dates, closes, highs, vols };
 
     if (i < 252) { tooShort++; continue; }             // no 52-week window yet
     const tech = btRowAt(closes, highs, vols, i);
@@ -4562,18 +4693,8 @@ function btRun(opts) {
     // rather than listing the fundamental fields means a field added to the
     // engine later is carried here with no edit \u2014 and it is exactly what
     // "fundamentals filled forward" means.
-    const nextEarn = (earnings[sym] || []).find((d) => d > from) || null;
-    const row = { ...today, ...(was || {}), ...tech, symbol: sym, latestDate: dates[i],
-      // As of then: the next report that actually happened after that date.
-      // Falling back to today's only when none has yet.
-      nextEarningsDate: nextEarn || today.nextEarningsDate || null,
-      // Momentum.rsiSeriesAt is the app's own Wilder RSI, fed newest-first the
-      // way it expects. A second implementation here would drift from the
-      // column within a week — the reason indicators.js exists at all.
-      rsi: rsiAt(rows, i) };
-    // ACTION_CFG is the resolved Balanced profile, the same object every other
-    // surface scores against — so a verdict here means what the column means.
-    const v = Action.evaluate(row, ACTION_CFG);
+    const { row, v } = btEvalAt(sym, { rows, dates, closes, highs, vols, tech },
+      i, today, was, earnings, from);
     evaluated++;
     if (!want.has(v.action)) continue;
     // What a Top-N cut ranks on, AS OF THEN — computed only for rows that made
@@ -4613,7 +4734,8 @@ function btRun(opts) {
   }
 
   picks.sort((a, b) => b.ret - a.ret);
-  return { picks, heldSeries, allSeries, evaluated, tooShort, noFund, real, imputed };
+  return { picks, heldSeries, allSeries, everySeries, prep,
+           evaluated, tooShort, noFund, real, imputed };
 }
 
 // ============================================================================
@@ -7065,6 +7187,70 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
     : tier;
   const band = top ? btBand(tier.matrix, r.picks.map((x) => x.symbol), top, seed) : null;
 
+  // ---- rebalancing --------------------------------------------------------
+  // Built to work better as fundamentals history accumulates rather than to
+  // pretend it already has: every rebalance reports how many of ITS verdicts
+  // used recorded fundamentals rather than today's, so the instrument says
+  // what it is standing on and improves on its own as the archive fills.
+  const byS2 = new Map(stocks.map((x) => [x.symbol, x]));
+  const every = Math.max(0, Math.min(90, parseInt(req.query.every, 10) || 0));
+  const mode = BT_MODES.indexOf(String(req.query.mode || '')) >= 0 ? String(req.query.mode) : 'rerun';
+  const costBps = Math.max(0, Math.min(200, Number(req.query.cost) || 0));
+  let rebal = null, rebalError = null;
+  if (every && tier.dates.length > 2) {
+    try {
+      const axis = tier.dates;
+      const marks = btRebalanceDays(axis, every);
+      // Prices on the shared axis for EVERY symbol, not just the opening set:
+      // a rerun can buy something that was not in the first basket.
+      const full = btMatrix(r.everySeries, asked);
+      const px = full.rows;
+      // One read of the whole history, folded forward as the rebalance dates
+      // are walked in order. readFundamentalsAsOf would re-read everything for
+      // each date, which gets worse precisely as the archive grows.
+      const rows = await store.readFundamentalsRows(today).catch(() => []);
+      const targets = new Map();
+      const coverage = [];
+      let ptr = 0;
+      const stood = {};
+      for (const j of marks) {
+        const at = axis[j];
+        while (ptr < rows.length && rows[ptr].d <= at) { stood[rows[ptr].symbol] = rows[ptr]; ptr++; }
+        const set = new Set();
+        let real2 = 0, imputed2 = 0;
+        for (const sym of Object.keys(bars)) {
+          const p = r.prep[sym];
+          if (!p) continue;
+          let i = -1;
+          for (let k = p.dates.length - 1; k >= 0; k--) if (p.dates[k] <= at) { i = k; break; }
+          if (i < 252) continue;
+          const was = stood[sym] || null;
+          const ev = btEvalAt(sym, p, i, byS2.get(sym) || {}, was, earnings, at);
+          if (!ev) continue;
+          if (was) real2++; else imputed2++;
+          // In exit mode a holding survives while its verdict is ABOVE the exit
+          // tier, which is a wider net than the tiers you bought on — you do not
+          // sell a Strong Buy that merely slipped to Hold.
+          const ok = mode === 'exit'
+            ? Action.ACTIONS.indexOf(ev.v.action) > Action.ACTIONS.indexOf(BT_EXIT_TIER)
+            : tiers.indexOf(ev.v.action) >= 0;
+          if (ok) set.add(sym);
+        }
+        targets.set(j, set);
+        coverage.push({ d: at, recorded: real2, imputed: imputed2 });
+      }
+      const sim = btSimulate({ axis, px, open: chosen.map((x) => x.symbol),
+        targets, mode, costBps });
+      if (sim) {
+        rebal = { ...sim, every, mode, costBps, coverage,
+          marks: marks.map((j) => axis[j]) };
+      }
+    } catch (err) {
+      rebalError = err.message;      // a failed simulation never fails the run
+      console.error('rebalance failed:', err.message);
+    }
+  }
+
   // The benchmark is a nicety, not a dependency: if the provider is having one
   // of its days the rest of the answer still stands.
   let spy = null, spyError = null;
@@ -7084,8 +7270,9 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
     date: asked, tradingDate: held.dates[0] || asked, today,
     tiers, universe: universe.length,
     picks: r.picks,
-    rank, top,
+    rank, top, every, mode: every ? mode : null, cost: costBps,
     curve: { dates: held.dates, portfolio: held.values,
+             rebalanced: rebal ? rebal.values : null,
              tier: top ? tier.values : null,
              band: band ? { p10: band.p10, p50: band.p50, p90: band.p90 } : null,
              universe: all.values, universeDates: all.dates,
@@ -7111,6 +7298,18 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
       bandLo: band ? pct(last(band.p10)) : null,
       bandHi: band ? pct(last(band.p90)) : null,
       bandTrials: band ? band.trials : null,
+      // The rebalanced run, beside the buy-and-hold one it is a variant of, so
+      // the page can say what the rebalancing itself was worth.
+      rebalanced: rebal ? pct(last(rebal.values)) : null,
+      rebalances: rebal ? rebal.rebalances : null,
+      turnover: rebal ? rebal.turnover : null,
+      endNames: rebal ? rebal.endNames : null,
+      endCash: rebal ? rebal.endCash : null,
+      // How much of THIS run stood on recorded fundamentals rather than
+      // today's, per rebalance — the number that improves on its own as the
+      // archive fills, and the reason this is worth building before it does.
+      rebalCoverage: rebal ? rebal.coverage : null,
+      rebalError,
     },
     notes: {
       evaluated: r.evaluated,
