@@ -54,7 +54,8 @@
       return '<div class="s-top">' +
         '<span class="s-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">' +
         '<path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></svg></span>' +
-        '<span class="s-word">Tickr Lab</span>' +
+        '<span class="s-lock"><span class="s-word">Tickr Lab</span>' +
+        '<span class="s-tag">From data to decisions</span></span>' +
         (dated === false ? '' : `<span class="s-date">${esc(dateStr())}</span>`) + '</div>';
     }
     function chromeFoot() {
@@ -1252,7 +1253,12 @@
                border: 1px solid rgba(52, 211, 153, 0.3); }
     .s-glyph svg { width: 40px; height: 40px; stroke: currentColor; fill: none;
                    stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-    .s-word { font-size: 44px; font-weight: 700; letter-spacing: -0.035em; }
+    .s-lock { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .s-word { font-size: 44px; font-weight: 700; letter-spacing: -0.035em; line-height: 1; }
+    /* line-height 1 on BOTH, or the lockup measures 71px against the glyph's 68
+       and every card's body starts three pixels lower. Measured, not assumed. */
+    .s-tag { font-size: 16px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase;
+             color: var(--green); white-space: nowrap; line-height: 1; }
     .s-date { margin-left: auto; font: 500 24px var(--mono); color: var(--muted);
               padding: 11px 24px; border: 1px solid var(--hair-2); border-radius: 999px; }
     .s-kick { margin: 44px 0 0; font-size: 17px; font-weight: 600; letter-spacing: 0.24em;
@@ -1488,6 +1494,7 @@
     .sz-story .s-title { font-size: 84px; }
     .sz-story .s-sub { font-size: 25px; max-width: 34ch; }
     .sz-story .s-foot { font-size: 20px; }
+    .sz-story .s-tag { font-size: 18px; }
     .sz-story .s-empty { font-size: 36px; }
 
     /* the lists spread through the space rather than bunching at the top */
