@@ -1155,22 +1155,58 @@
   // the edge in amber and counted, the same treatment the indicator lab uses:
   // three runaway growth rates would otherwise press every other dot into a
   // band a few pixels tall.
-  function scatterSvg(pts, q) {
-    const W = 952, H = size.id === 'story' ? 1000 : size.id === 'square' ? 470 : 600;
-    const PL = 96, PR = 30, PT = 24, PB = 60;
+  // The axis arithmetic, shared by every plot on a card — the part that was
+  // hard to get right, as opposed to how the marks look.
+  //
+  // Axes cover the middle 96% and the strays are PINNED to the edge rather than
+  // allowed to set the scale, the same treatment the indicator lab uses: three
+  // runaway growth rates would otherwise press every other dot into a band a
+  // few pixels tall. `includeZero` keeps the origin on the chart, which the
+  // quadrant card needs and a market-cap axis does not.
+  function plotScales(pts, g) {
+    // THE 2% TRIM DOES NOTHING AT SMALL n, which is why `fence` exists. With
+    // the ~140 dots the quadrant card plots it drops three at each end and the
+    // scale behaves. With the 20 a Bubble card shows, `floor(20 * 0.02)` is 0
+    // and `ceil(20 * 0.98) - 1` is the last index — the full range, so one
+    // company at 900% growth sets the axis and presses every other circle into
+    // a band a few pixels tall, with nothing marked as pinned. Tukey's fence
+    // (a quartile either side, 1.5x the spread between them) is robust at any
+    // size, so that is what a small plot asks for.
+    const quart = (a, p) => {
+      const i = (a.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i);
+      return lo === hi ? a[lo] : a[lo] + (a[hi] - a[lo]) * (i - lo);
+    };
     const span = (vals) => {
       const a = vals.slice().sort((m, n) => m - n);
-      const lo = a[Math.floor(a.length * 0.02)], hi = a[Math.ceil(a.length * 0.98) - 1];
-      return [Math.min(lo, 0), Math.max(hi, 0)];
+      let lo, hi;
+      if (g.fence === 'iqr') {
+        const q1 = quart(a, 0.25), q3 = quart(a, 0.75), iqr = q3 - q1;
+        // Clamped to the real data: a fence wider than the values themselves
+        // would leave dead space rather than pin anything.
+        lo = Math.max(a[0], q1 - iqr * 1.5);
+        hi = Math.min(a[a.length - 1], q3 + iqr * 1.5);
+        if (!(hi > lo)) { lo = a[0]; hi = a[a.length - 1]; }
+      } else {
+        lo = a[Math.floor(a.length * 0.02)];
+        hi = a[Math.ceil(a.length * 0.98) - 1];
+      }
+      return g.includeZero === false ? [lo, hi] : [Math.min(lo, 0), Math.max(hi, 0)];
     };
     let [x0, x1] = span(pts.map((p) => p.x));
     let [y0, y1] = span(pts.map((p) => p.y));
     const padX = (x1 - x0) * 0.08 || 1, padY = (y1 - y0) * 0.08 || 1;
     x0 -= padX; x1 += padX; y0 -= padY; y1 += padY;
-    const X = (v) => PL + (Math.min(Math.max(v, x0), x1) - x0) / (x1 - x0) * (W - PL - PR);
-    const Y = (v) => PT + (1 - (Math.min(Math.max(v, y0), y1) - y0) / (y1 - y0)) * (H - PT - PB);
+    const X = (v) => g.PL + (Math.min(Math.max(v, x0), x1) - x0) / (x1 - x0) * (g.W - g.PL - g.PR);
+    const Y = (v) => g.PT + (1 - (Math.min(Math.max(v, y0), y1) - y0) / (y1 - y0)) * (g.H - g.PT - g.PB);
+    return { X, Y, x0, x1, y0, y1, stray: (p) => p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1 };
+  }
+
+  function scatterSvg(pts, q) {
+    const W = 952, H = size.id === 'story' ? 1000 : size.id === 'square' ? 470 : 600;
+    const PL = 96, PR = 30, PT = 24, PB = 60;
+    const sc = plotScales(pts, { W, H, PL, PR, PT, PB });
+    const { X, Y, x0, x1, y0, y1, stray } = sc;
     const zx = X(0), zy = Y(0);
-    const stray = (p) => p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1;
     // the eight furthest from the origin carry their name; labelling 140
     // dots is mush
     const named = pts.slice().sort((a, b) =>
@@ -1410,10 +1446,227 @@
       '</div>';
   }
 
+  // ---- Bubble: three measures at once, positioned ---------------------------
+  //
+  // The owner asked for "a bubble instead of concentric circles". A single
+  // circle per company already exists — Size with the inner measure set to
+  // none — so the reading worth building is the other one: a chart where
+  // POSITION carries meaning. Size ranks magnitudes in a grid; this asks how
+  // two measures relate, and lets a third set the weight of each answer.
+  //
+  // It is also NOT the quadrant card (`fund` mode `quad`), which plots one
+  // fixed pair — revenue growth against profit margin — with every dot the same
+  // size. Here both axes AND the area are chosen, which makes it a different
+  // question rather than a restyling.
+  //
+  // Axes, spans and stray-pinning come from `plotScales`, shared with that card,
+  // so the arithmetic that was hard to get right is not written twice.
+  const BUB_SECTOR_TINTS = ['#34d399', '#7c9cff', '#a78bfa', '#fbbf24', '#22d3ee', '#f472b6',
+    '#fb7185', '#a3e635', '#94a3b8', '#f0abfc', '#fb923c'];
+
+  function tplBubble() {
+    const scope = scopeOf('bubScope', 'bubSector');
+    const pick = (id, dflt) => (FUND_METRICS[O[id]] ? O[id] : dflt);
+    const xk = pick('bubX', 'rg'), yk = pick('bubY', 'pm'), sk = pick('bubSize', 'cap');
+    const xm = FUND_METRICS[xk], ym = FUND_METRICS[yk], sm = FUND_METRICS[sk];
+    const xf = xm[0], xl = xm[1], xkind = xm[2];
+    const yf = ym[0], yl = ym[1], ykind = ym[2];
+    const sf = sm[0], sl = sm[1], skind = sm[2];
+    const colorBy = O.bubColor === 'advice' ? 'advice' : O.bubColor === 'none' ? 'none' : 'sector';
+    const n = Number(O.bubCount) || 20;
+
+    let rows = scope.rows.filter((r) =>
+      r[xf] != null && isFinite(r[xf]) && r[yf] != null && isFinite(r[yf]));
+    // Every absolute figure is in the company's OWN reporting currency, so one
+    // foreign reporter would dominate for the wrong reason — Samsung's revenue
+    // is in won. The guard Size and the fundamentals ranking already apply, and
+    // it matters MORE here: an axis is a comparison by construction.
+    if ([xkind, ykind, skind].indexOf('money') >= 0) {
+      rows = rows.filter((r) => !r.currency || r.currency === 'USD');
+    }
+    // Gross margin and net cash mean nothing for a lender — a bank has no cost
+    // of goods, which is why JPM reports exactly 100%.
+    if ([xk, yk, sk].some((k) => k === 'gm' || k === 'cash' || k === 'ncp')) {
+      rows = rows.filter((r) => r.sector !== 'Financial Services');
+    }
+    // A multiple off a loss is arithmetic, not cheapness — the rule the Quality
+    // score, the fundamentals ranking and the Size card all follow.
+    [xk, yk, sk].forEach((k, i) => {
+      if (k !== 'pe' && k !== 'peg') return;
+      const f = [xf, yf, sf][i];
+      rows = rows.filter((r) => r[f] > 0);
+    });
+    // The biggest by the AREA measure, because those are the circles a reader
+    // actually sees; blanks fall to the end.
+    rows = rows.slice()
+      .sort((a, b) => (Number(b[sf]) || -Infinity) - (Number(a[sf]) || -Infinity))
+      .slice(0, n);
+
+    if (rows.length < 3) {
+      return chromeTop() + '<div class="s-body"><div><span class="s-kick">' + esc(scope.label) + '</span>'
+        + '<h2 class="s-title">Bubble</h2><p class="s-empty">Not enough of ' + esc(scope.label)
+        + ' reports both ' + esc(xl.toLowerCase()) + ' and ' + esc(yl.toLowerCase())
+        + ' to plot.</p></div></div>' + chromeFoot();
+    }
+
+    const pts = rows.map((r) => ({
+      sym: r.symbol, label: nameOf(r), x: Number(r[xf]), y: Number(r[yf]),
+      v: Number(r[sf]), sector: r.sector || '—', action: r.action || null,
+    }));
+
+    const W = 952, H = size.id === 'story' ? 1080 : size.id === 'square' ? 520 : 660;
+    const PL = 92, PR = 40, PT = 30, PB = 64;
+    // `fence: 'iqr'` because this card plots tens of circles, not hundreds —
+    // see plotScales for why the percentile trim cannot bite at that size.
+    const sc = plotScales(pts, { W, H, PL, PR, PT, PB, includeZero: false, fence: 'iqr' });
+    const X = sc.X, Y = sc.Y, stray = sc.stray;
+
+    // AREA is the encoding, never radius. A circle of twice the radius is four
+    // times the area, so sizing by radius quadruples the apparent gap — in the
+    // direction people already misread a bubble chart. The card says so on its
+    // own face, because the misreading is the default.
+    const big = pts.reduce((m, p) => (p.v > 0 && p.v > m ? p.v : m), 0);
+    const MAXR = size.id === 'square' ? 52 : 66, MINR = 9;
+    const rOf = (v) => (big > 0 && v > 0 ? Math.max(MINR, MAXR * Math.sqrt(v / big)) : MINR);
+    // A company with no positive area measure is drawn as a RING at the floor
+    // size and COUNTED: it still has a place on both axes, and either inventing
+    // an area for it or dropping it silently would misreport the screen.
+    const ringed = pts.filter((p) => !(p.v > 0)).length;
+
+    const sectors = [...new Set(pts.map((p) => p.sector))].sort();
+    const colorOf = (p) => {
+      if (colorBy === 'none') return '#7c9cff';
+      if (colorBy === 'advice') return (p.action && ADV_TINT[p.action]) || '#9aa3b2';
+      return BUB_SECTOR_TINTS[sectors.indexOf(p.sector) % BUB_SECTOR_TINTS.length];
+    };
+
+    // A CIRCLE IS NOT A DOT: it has a radius, and pinning a stray puts its
+    // CENTRE on the axis edge, which hangs half the circle off the artboard —
+    // the biggest company on the card, sliced in two, because it was the
+    // furthest out. The centre is kept a radius inside the plot on every side.
+    // A scatter never needed this; every plot of sized marks does.
+    const cxOf = (p) => {
+      const r = rOf(p.v);
+      return Math.min(Math.max(X(p.x), PL + r + 2), W - PR - r - 2);
+    };
+    const cyOf = (p) => {
+      const r = rOf(p.v);
+      return Math.min(Math.max(Y(p.y), PT + r + 2), H - PB - r - 2);
+    };
+
+    // Drawn largest first so a small circle is never buried under a big one —
+    // the point of the size channel is that the small ones stay findable.
+    const order = pts.slice().sort((a, b) => rOf(b.v) - rOf(a.v));
+    const circles = order.map((p) => {
+      const r = rOf(p.v), cx = cxOf(p).toFixed(1), cy = cyOf(p).toFixed(1), c = colorOf(p);
+      const edge = stray(p);
+      if (!(p.v > 0)) {
+        return '<circle cx="' + cx + '" cy="' + cy + '" r="' + r.toFixed(1)
+          + '" fill="none" stroke="' + c + '" stroke-width="1.75" stroke-dasharray="3 3"/>';
+      }
+      return '<circle cx="' + cx + '" cy="' + cy + '" r="' + r.toFixed(1)
+        + '" fill="' + c + '" fill-opacity="0.26" stroke="' + c
+        + '" stroke-width="' + (edge ? 3 : 1.75) + '"'
+        + (edge ? ' stroke-dasharray="5 4"' : '') + '/>';
+    }).join('');
+
+    // A name sits INSIDE its circle when the circle is big enough to hold it,
+    // which is the advantage a bubble has over a scatter. The rest of the
+    // largest few are labelled beside the mark, anchored back towards the middle
+    // on the right-hand side so a long name cannot run off the artboard — the
+    // same rule the quadrant card learned.
+    // A LABEL BESIDE A CIRCLE LANDS ON THE NEXT CIRCLE. The first cut anchored
+    // ten names left or right of their marks, the way the quadrant card does
+    // with its uniform 7px dots — and on a chart of 66px circles they collided
+    // with everything: "JPMorgan Chase" printed across Microsoft, "Broadcom"
+    // across AMD. A screenshot found it; no assertion would have.
+    //
+    // So: a name goes INSIDE its circle when the circle can hold it — the one
+    // thing a bubble chart can do that a scatter cannot — and otherwise sits
+    // CENTRED BELOW the mark, where a neighbour has to be almost exactly
+    // underneath to clash rather than merely nearby. Fewer names, placed well,
+    // beat ten placed badly on something that goes out as a poster.
+    const INSIDE = 34;
+    const labelled = order.filter((p) => rOf(p.v) >= INSIDE).concat(
+      order.filter((p) => rOf(p.v) < INSIDE).slice(0, 3));
+    // A NAME THAT WOULD LAND ON ONE ALREADY PLACED IS DROPPED. Circles overlap
+    // — that is the chart — so two labels can be drawn in nearly the same spot
+    // and print over each other, which is worse than one of them being absent:
+    // an unreadable name is noise AND it hides the mark underneath. Boxes are
+    // approximated from the character count at this weight, which is enough to
+    // catch the real collisions without laying out text properly.
+    const placed = [];
+    const fits = (x, y, w) => {
+      const box = { x0: x - w / 2, x1: x + w / 2, y0: y - 15, y1: y + 6 };
+      if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) return false;
+      placed.push(box);
+      return true;
+    };
+    const labels = labelled.map((p) => {
+      const r = rOf(p.v), cx = cxOf(p), cy = cyOf(p);
+      const full = p.label || p.sym;
+      if (r >= INSIDE) {
+        // Roughly 0.5em a character at this weight, so the name fits the chord
+        // it is drawn across rather than spilling past the edge.
+        const fit = Math.max(6, Math.floor(r / 4.9));
+        const txt = full.length > fit ? full.slice(0, fit - 1) + '…' : full;
+        if (!fits(cx, cy + 6, txt.length * 10)) return '';
+        return '<text x="' + cx.toFixed(1) + '" y="' + (cy + 6).toFixed(1) + '" text-anchor="middle" '
+          + 'font-size="19" font-weight="600" fill="#e9ecf2" font-family="Geist, sans-serif">'
+          + esc(txt) + '</text>';
+      }
+      const txt = full.length > 18 ? full.slice(0, 17) + '…' : full;
+      // Below, unless that would run off the foot, in which case above.
+      const below = cy + r + 21 < H - PB;
+      const ly = below ? cy + r + 21 : cy - r - 10;
+      if (!fits(cx, ly, txt.length * 9)) return '';
+      return '<text x="' + cx.toFixed(1) + '" y="' + ly.toFixed(1)
+        + '" text-anchor="middle" font-size="17" font-weight="600" '
+        + 'fill="#cfd6e2" font-family="Geist, sans-serif">' + esc(txt) + '</text>';
+    }).join('');
+
+    const axis = (t, x, y, anchor) => '<text x="' + x + '" y="' + y + '" text-anchor="' + anchor
+      + '" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">' + esc(t) + '</text>';
+    const svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" '
+      + 'style="display:block;margin-top:20px" role="img" aria-label="'
+      + esc(xl + ' against ' + yl) + '">'
+      + '<line x1="' + PL + '" y1="' + (H - PB) + '" x2="' + (W - PR) + '" y2="' + (H - PB)
+      + '" stroke="rgba(255,255,255,0.18)"/>'
+      + '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (H - PB)
+      + '" stroke="rgba(255,255,255,0.18)"/>'
+      + circles + labels
+      + axis(xl.toLowerCase() + ' →', W - PR, H - 18, 'end')
+      + axis('↑ ' + yl.toLowerCase(), 16, PT + 12, 'start')
+      + '</svg>';
+
+    // Three channels is two more than a reader can guess at, so the legend is
+    // not optional.
+    const swatch = colorBy === 'none' ? ''
+      : (colorBy === 'advice'
+        ? '<span class="bkey">colour: the Balanced verdict</span>'
+        : sectors.slice(0, 6).map((s, i) =>
+          '<span class="bkey"><i style="background:'
+          + BUB_SECTOR_TINTS[i % BUB_SECTOR_TINTS.length] + '"></i>' + esc(s) + '</span>').join(''));
+
+    return chromeTop()
+      + '<div class="s-body"><div><span class="s-kick">' + esc(scope.label) + ' · reported figures</span>'
+      + '<h2 class="s-title">' + esc(xl) + '<br><span class="dim">against ' + esc(yl.toLowerCase()) + '</span></h2>'
+      + '<div class="blegend"><span class="bkey bsz">circle area: ' + esc(sl.toLowerCase()) + '</span>'
+      + swatch + '</div>'
+      + svg
+      + '<p class="s-sub" style="font-size:17px;margin-top:16px">Each circle is one company. '
+      + 'Circle AREA is ' + esc(sl.toLowerCase()) + ', not its width.'
+      + (ringed ? ' ' + ringed + ' with no positive ' + esc(sl.toLowerCase())
+        + ' are drawn as rings at the smallest size.' : '')
+      + ' A dashed edge sits outside the axis range and is pinned to it.'
+      + '</p></div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
+    bubble: tplBubble,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -1800,6 +2053,18 @@
     .zkey i { width: 16px; height: 16px; border-radius: 50%; display: inline-block; }
     .zkey i.zout { background: rgba(124, 156, 255, 0.20); box-shadow: inset 0 0 0 2px rgba(124, 156, 255, 0.55); }
     .zkey i.zin { background: var(--green); }
+
+    /* ---- Bubble ----------------------------------------------------------
+       Three channels — two axes and the area — so the legend is not optional.
+       It wraps, because a sector legend on a narrow artboard is otherwise a
+       row that runs off the side. NO BACKTICKS IN HERE; see the note below. */
+    .blegend { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-top: 18px;
+               font: 500 18px var(--sans); color: var(--muted); }
+    .bkey { display: inline-flex; align-items: center; gap: 8px; }
+    .bkey i { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+    .bkey.bsz { color: var(--text); }
+    .bkey.bsz::before { content: ""; width: 17px; height: 17px; border-radius: 50%;
+                        border: 2px solid rgba(255, 255, 255, 0.5); display: inline-block; }
     /* .s-sub is capped at 40ch for the templates that set a sentence beside a
        chart. This card's note runs under a full-width grid, so that cap
        squeezes it into a narrow column in the corner.
@@ -1941,6 +2206,13 @@
     ids: Object.keys(BUILDERS),
     ADV_PROFILES,
     MOV_PERIODS,
+    // The measures the Bubble card can put on an axis or in the area, as
+    // [key, label] pairs. Exported so the studio builds its three pickers from
+    // the SAME catalogue the card reads — a copy in the markup would drift the
+    // first time a measure was added, which is the drift this module exists to
+    // prevent. Money measures are marked so a host can say so if it wants to.
+    bubbleMeasures: () => Object.keys(FUND_METRICS)
+      .map((k) => ({ key: k, label: FUND_METRICS[k][1], kind: FUND_METRICS[k][2] })),
     // the sectors actually present, so a picker can never offer an empty one
     sectors: (rows) => [...new Set((rows || []).map((x) => x.sector).filter(Boolean))].sort(),
     // the industries present, inside one sector when one is given

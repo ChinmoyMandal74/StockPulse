@@ -5775,6 +5775,17 @@ const POST_SIZES = { portrait: { id: 'portrait', w: 1080, h: 1350 },
 // builder ignores an id it does not know, exactly as cleanViews leaves the
 // screener's column list to the screener.
 const POST_OPT_KEY = /^[a-z]{3,6}[A-Z][A-Za-z0-9]{0,20}$/;
+// The cap is a guard against this becoming free storage, NOT a budget — and it
+// was set at 40 while the studio collected 63 controls, so every id past the
+// fortieth was silently dropped on save (2026-09-20). That was all seven of the
+// Size card's controls, both of Intro's, and annKick/annHead/annBody — the
+// Announcement card's free text, lost without a word. It went unnoticed because
+// the test reopened a post without first moving the controls away, so the
+// assertion passed on values that had never left the page.
+//
+// **A cap here must clear CONTROL_IDS in promo.html with room to spare**, since
+// a template is added there and this number is nowhere near it. 100 against 63.
+const POST_OPT_MAX = 100;
 
 function cleanPosts(raw) {
   const known = new Set(Cards.ids);
@@ -5787,7 +5798,7 @@ function cleanPosts(raw) {
       const opts = {};
       let n = 0;
       for (const [k, v] of Object.entries(q.opts && typeof q.opts === 'object' ? q.opts : {})) {
-        if (n >= 40 || !POST_OPT_KEY.test(k)) continue;
+        if (n >= POST_OPT_MAX || !POST_OPT_KEY.test(k)) continue;
         if (v == null || typeof v === 'object') continue;
         opts[k] = String(v).slice(0, 80);
         n++;

@@ -413,6 +413,39 @@
         <select id="sizeIndustry"><option value="All">All industries</option></select>
       </div>
 
+      <!-- Bubble. The three measure pickers are filled from Cards.FUND_METRICS
+           at boot rather than listed here: the card reads that catalogue, and a
+           second copy in the markup would drift the first time a measure was
+           added. Same reason the column list is not restated in cleanViews. -->
+      <div id="bubBox">
+        <label>Across</label>
+        <select id="bubX"></select>
+        <label>Up</label>
+        <select id="bubY"></select>
+        <label>Circle area</label>
+        <select id="bubSize"></select>
+        <label>Colour</label>
+        <select id="bubColor">
+          <option value="sector" selected>By sector</option>
+          <option value="advice">By the Balanced verdict</option>
+          <option value="none">One colour</option>
+        </select>
+        <label>How many</label>
+        <select id="bubCount">
+          <option value="10">10</option>
+          <option value="15">15</option>
+          <option value="20" selected>20</option>
+          <option value="30">30</option>
+          <option value="40">40</option>
+        </select>
+        <label>Within</label>
+        <select id="bubScope"><option value="All">All screened</option></select>
+        <label>Sector</label>
+        <select id="bubSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="bubIndustry"><option value="All">All industries</option></select>
+      </div>
+
       <div id="intBox">
         <label>Topic</label>
         <select id="intTopic"></select>
@@ -488,6 +521,7 @@
       { id: 'advboard', name: 'Advice', note: 'What the rules read, four ways' },
       { id: 'fund', name: 'Fundamentals', note: 'Size, margins, growth \u2014 four ways' },
       { id: 'size', name: 'Size', note: 'Companies as circles — two measures at once' },
+      { id: 'bubble', name: 'Bubble', note: 'Two measures against each other, area as a third' },
       { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
       { id: 'avatar', name: 'Profile picture', note: 'The mark alone — pick Square, then download' },
@@ -531,6 +565,7 @@
       'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry',
       'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry',
       'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry',
+      'bubX', 'bubY', 'bubSize', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
       const o = {};
@@ -546,7 +581,7 @@
     // (an industry belongs to one sector), and drops a choice the new sector
     // does not contain. Run at the top of every render, so it has already
     // happened by the time a card reads the controls.
-    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size'];
+    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub'];
     const industryFor = {};
     function syncIndustries(force) {
       INDUSTRY_PREFIXES.forEach((p) => {
@@ -588,6 +623,7 @@
       $('rngCountWrap').style.display = rm === 'spread' ? 'none' : 'block';
       $('fundBox').style.display = tpl === 'fund' ? 'block' : 'none';
       $('sizeBox').style.display = tpl === 'size' ? 'block' : 'none';
+      $('bubBox').style.display = tpl === 'bubble' ? 'block' : 'none';
       const fm = $('fundMode').value;
       $('fundMetricWrap').style.display = fm === 'rank' ? 'block' : 'none';
       $('fundSymWrap').style.display = fm === 'one' ? 'block' : 'none';
@@ -677,6 +713,19 @@
       $(id).addEventListener('change', () => { if (tpl === 'fund') render(); }));
     ['sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'size') render(); }));
+
+    // The three measure pickers are filled from the card's own catalogue, so a
+    // measure added to FUND_METRICS appears here with no edit.
+    (function fillBubbleMeasures() {
+      const ms = (Cards.bubbleMeasures && Cards.bubbleMeasures()) || [];
+      const opts = (sel) => ms.map((m) =>
+        `<option value="${esc(m.key)}"${m.key === sel ? ' selected' : ''}>${esc(m.label)}</option>`).join('');
+      $('bubX').innerHTML = opts('rg');
+      $('bubY').innerHTML = opts('pm');
+      $('bubSize').innerHTML = opts('cap');
+    })();
+    ['bubX', 'bubY', 'bubSize', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'bubble') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
     $('intSlide').addEventListener('change', () => { if (tpl === 'intro') render(); });
@@ -906,13 +955,14 @@
         $('rngScope').innerHTML = $('movScope').innerHTML;
         $('fundScope').innerHTML = $('movScope').innerHTML;
         $('sizeScope').innerHTML = $('movScope').innerHTML;
+        $('bubScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         // one sector list, built from the rows themselves so it can never
         // offer a sector nothing is in
         const secOpts = '<option value="All">All sectors</option>' +
           Cards.sectors(stocks).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
         ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector', 'rngSector',
-          'sizeSector'].forEach((id) => {
+          'sizeSector', 'bubSector'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = secOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
