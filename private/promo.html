@@ -386,6 +386,17 @@
           </optgroup>
           <option value="none">None — one circle</option>
         </select>
+        <label>Also show, as text</label>
+        <select id="sizeThird">
+          <option value="none" selected>Nothing</option>
+          <option value="fpe">Forward P/E</option>
+          <option value="tpe">Trailing P/E</option>
+          <option value="ps">Price to sales</option>
+          <option value="pb">Price to book</option>
+          <option value="ev">EV / EBITDA</option>
+          <option value="peg">PEG</option>
+          <option value="cap">Market cap</option>
+        </select>
         <label>How many</label>
         <select id="sizeCount">
           <option value="4">4</option>
@@ -519,7 +530,7 @@
       'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry',
       'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry',
       'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry',
-      'sizeOuter', 'sizeInner', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry',
+      'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
       const o = {};
@@ -664,7 +675,7 @@
       $(id).addEventListener('change', () => { if (tpl === 'advboard') render(); }));
     ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'fund') render(); }));
-    ['sizeOuter', 'sizeInner', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry'].forEach((id) =>
+    ['sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'size') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });

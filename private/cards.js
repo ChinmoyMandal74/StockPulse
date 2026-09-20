@@ -1240,6 +1240,25 @@
     growth: ['Revenue growth', 'revenueGrowthYoY', 'pct'],
   };
 
+  // A THIRD measure, as plain text under each circle. Deliberately not a third
+  // ring: the card already encodes two things by area, and a valuation
+  // multiple is a number you read rather than a magnitude you compare at a
+  // glance — three nested circles would be decoration pretending to be data.
+  //
+  // Every one of these is the provider's own ratio rather than something
+  // divided here, which is what keeps it safe for an ADR: computing
+  // price-to-sales from a dollar market cap and a won revenue would produce a
+  // confident, meaningless number.
+  const SIZE_THIRDS = {
+    fpe: ['fwd P/E', 'forwardPe', 'x'],
+    tpe: ['P/E', 'trailingPe', 'x'],
+    ps: ['P/S', 'priceToSales', 'x'],
+    pb: ['P/B', 'priceToBook', 'x'],
+    ev: ['EV/EBITDA', 'evToEbitda', 'x'],
+    peg: ['PEG', 'peg', 'x'],
+    cap: ['market cap', 'marketCap', 'money'],
+  };
+
   function tplSize() {
     const scope = scopeOf('sizeScope', 'sizeSector');
     const outerKey = SIZE_MEASURES[O.sizeOuter] ? O.sizeOuter : 'cap';
@@ -1248,6 +1267,26 @@
     const oM = SIZE_MEASURES[outerKey];
     const oLabel = oM[0], oField = oM[1], oKind = oM[2];
     const inner = innerKey ? SIZE_MEASURES[innerKey] : null;
+    const third = SIZE_THIRDS[O.sizeThird] || null;
+    // A multiple off a loss is arithmetic, not cheapness — the same reason the
+    // Quality score refuses a P/E from a loss-maker, and the reason the
+    // fundamentals ranking filters them out rather than sorting on them. Shown
+    // as a dash, with the count said aloud underneath, so an absent number
+    // never reads as a missing one.
+    // A dash means two DIFFERENT things and the caption separates them, the
+    // lesson the News column and the data-quality page both record: a company
+    // that loses money has no meaningful multiple, and one that simply does
+    // not report the figure has no number at all. Drawing them the same and
+    // then miscounting one as the other is how a card quietly lies.
+    let noMultiple = 0, notReported = 0;
+    const thirdTxt = (r) => {
+      if (!third) return '';
+      const v = r[third[1]];
+      if (v == null || !isFinite(v)) { notReported++; return '—'; }
+      if (third[2] === 'money') return fmtMoney(v);
+      if (v <= 0) { noMultiple++; return '—'; }
+      return v.toFixed(1) + '×';
+    };
 
     const n = Number(O.sizeCount) || (size.id === 'story' ? 9 : size.id === 'square' ? 6 : 8);
     let rows = scope.rows.filter((x) => x[oField] != null && isFinite(x[oField]) && x[oField] > 0);
@@ -1333,12 +1372,17 @@
         + '<div class="zname">' + esc(nameOf(r)) + (tiny ? '<span class="zdot">·</span>' : '') + '</div>'
         + '<div class="zval">' + esc(oKind === 'money' ? fmtMoney(ov) : fmtMetric(ov, 'pct'))
         + (iTxt ? '<span class="zi">' + esc(iTxt) + '</span>' : '') + '</div>'
+        + (third ? '<div class="zthird">' + esc(thirdTxt(r)) + '</div>' : '')
         + '</div>';
     }).join('');
 
     const ratio = big / rows[rows.length - 1][oField];
     const legend = '<span class="zkey"><i class="zout"></i>' + esc(oLabel) + '</span>'
-      + (inner ? '<span class="zkey"><i class="zin"></i>' + esc(inner[0]) + '</span>' : '');
+      + (inner ? '<span class="zkey"><i class="zin"></i>' + esc(inner[0]) + '</span>' : '')
+      // The third measure is named ONCE here rather than beside every circle:
+      // twelve repetitions of "fwd P/E" is noise on a poster, and the number
+      // under each disc is unambiguous once the label has been said.
+      + (third ? '<span class="zkey zkey3"><i class="ztxt"></i>' + esc(third[0]) + '</span>' : '');
 
     return chromeTop()
       + '<div class="s-body"><div><span class="s-kick">' + esc(scope.label) + ' · reported figures</span>'
@@ -1352,6 +1396,9 @@
         ? ' The second disc shares that scale, so its share of the first is the ratio between them.' : '')
       + (inner && inner[2] !== 'money' ? ' The inner disc fills that share of the area.' : '')
       + (floored ? ' ' + floored + ' shown at a minimum size to stay legible (·).' : '')
+      + (third ? ' The figure under each name is ' + esc(third[0]) + '.' : '')
+      + (noMultiple ? ' ' + noMultiple + ' had no meaningful multiple: a ratio off a loss is arithmetic, not cheapness.' : '')
+      + (notReported ? ' ' + notReported + ' does not report it.' : '')
       + '</p></div></div>' + chromeFoot();
   }
 
@@ -1742,6 +1789,12 @@
     .zdot { color: var(--faint); margin-left: 4px; }
     .zval { font: 500 19px/1.3 var(--mono); color: var(--muted); text-align: center; margin-top: 3px; }
     .zval .zi { color: var(--green); margin-left: 9px; }
+    /* The third measure is TEXT, in the mono face and quieter than the two
+       the circles encode — it is read one company at a time, not compared at
+       a glance, and giving it equal weight would suggest otherwise. */
+    .zthird { font: 500 17px var(--mono); color: var(--faint); text-align: center; margin-top: 2px; }
+    .zkey3 i.ztxt { background: none; box-shadow: none; width: 13px; height: 2px;
+                    border-radius: 1px; background: var(--faint); }
     .zlegend { display: flex; gap: 22px; margin-top: 22px; font: 500 19px var(--sans); color: var(--muted); }
     .zkey { display: inline-flex; align-items: center; gap: 9px; }
     .zkey i { width: 16px; height: 16px; border-radius: 50%; display: inline-block; }
@@ -1756,6 +1809,7 @@
     .zsub { max-width: none !important; }
     .sz-story .zname { font-size: 25px; }
     .sz-story .zval { font-size: 22px; }
+    .sz-story .zthird { font-size: 19px; }
     .sz-story .zlegend { font-size: 22px; }
     .sz-square .zname { font-size: 19px; }
     .sz-square .zval { font-size: 17px; }
