@@ -1244,7 +1244,19 @@ Per-stock headlines — **headline / source / url / timestamp only, never bodies
 - **Neither is needed.** The report's `Prices as of` already carries that date from `asOf`, computed from rows in memory; the **Bar archive line is deleted** rather than made cheap, since it said the same thing twice. `/api/refresh-runs/health` wanted only the through-date and **threw the row count away** — it uses `barsThrough()` now, which is `barsMaxDates()`: one indexed seek per symbol on the primary key. Its own comment had called it "the slower half of the page" and blamed the profiles. The archive's SIZE stays on `/database` and `/quality`, cached, where counting is the point of the page.
 - **`sendRefreshReport` took a `snap` argument** so the two refresh-tail callers hand over the payload instead of re-reading the 1.3MB snapshot they just wrote — 2.1s, and the same trap `/quality` records (readSnapshot took that page from 2.4s to 10.8s).
 - **`query-plan-test.js` could never have caught this, and that is fixed too.** Its allowlist carried a bare `/^select count\(\*\)/`, justified for `/database`, which silently licensed every count over every big table. It is now **eight named entries** — barsStats, fundamentalsStats, techHistorySpan, the two clear-with-count confirms, the two log summaries, the news coverage tile — each saying where it runs. The file now also states what it cannot do: **it reads plans, not call sites, and a count that is fine on a cached admin page is a disaster in the refresh tail while the SQL looks identical.**
-- Verified: the guard fails if the `bars` aggregate returns, and the report suites assert the Bar archive line is gone while `Prices as of` still carries the date.
+- Verified: the guard fails if the `bars` aggregate returns, and the report suites assert the Bar archive line is gone while `Prices as of` still carries the date. **Against production, the same call that 504'd:**
+
+| | before | after |
+|---|---|---|
+| a plain one-round refresh | **504 at 300.1s** | **200 at 146.2s** |
+| its run record | `abandoned` | **`complete`** |
+| `/api/refresh-runs/health` | ~145s+ | **4.4s cold, 0.7s warm** |
+
+- **AND THE PHASES FINALLY ARRIVED, which corrects the standing claim about what a round costs.** The response carrying `phases` is the thing a 504 destroys, so this was unmeasurable until the tail was fixed:
+
+  `profiles 7.0s · prices 67.1s · score 0.3s · trend-bars 18.4s · persist-bars 20.4s` — 113.2s of phases inside a 146.2s wall, at 430 symbols.
+
+  **The dominant cost of a refresh round is the PROVIDER, not the database**: 67.1s of 113s is the batched `time_series` call. The database's share is ~39s (`trend-bars` + `persist-bars`), and **`trend-bars` — the 650-day window this file names as the thing to watch — is 18.4s**, not the bulk of it. A previous reading of this round as "~100s of largely database time" was wrong in its attribution; the round's own `ms` measures everything, and only the phases say where it goes. Note also that prices are already paced above ~529 symbols, so at 1,000 that phase is capped by the credit budget by design rather than growing without bound.
 
 ### The 2026-09-20 nightly: a benchmark run against production during the run
 **The failure was mine and it was not in the code — it was a 106.7MB query aimed at the live database at 4:26 PM on a nightly day.** Run 49 went `abandoned` after one round, 370/430 loaded, and GitHub mailed a failure.
