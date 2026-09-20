@@ -2167,10 +2167,30 @@ async function writeTechHistory(rows) {
   return rows.length;
 }
 
-// Every mark in a window, across every symbol. ORDERED BY `d` ALONE — ordering
-// by the primary key makes SQLite walk it as a covering index and ignore the
-// date filter, which is a scan of the whole table. The same trap
+// One stored mark, as the engine and the sweep expect it. Defined once so the
+// range read and the by-date read cannot decode a row differently.
+const techMark = (row) => ({
+  symbol: row.symbol, d: row.d,
+  action: row.action, flag: row.flag, trend: row.trend,
+  close: row.close == null ? null : Number(row.close),
+  vs200: row.vs200 == null ? null : Number(row.vs200),
+  vs50: row.vs50 == null ? null : Number(row.vs50),
+  rsi: row.rsi == null ? null : Number(row.rsi),
+  m1: row.m1 == null ? null : Number(row.m1),
+  m3: row.m3 == null ? null : Number(row.m3),
+  fromHigh: row.from_high == null ? null : Number(row.from_high),
+  volTrend: row.vol_trend == null ? null : Number(row.vol_trend),
+  historyDays: row.history_days == null ? null : Number(row.history_days),
+});
+
+// A window of marks across every symbol. ORDERED BY `d` ALONE — ordering by
+// the primary key makes SQLite walk it as a covering index and ignore the date
+// filter, which is a scan of the whole table. The same trap
 // readFundamentalsAsOf records, and query-plan-test.js enforces.
+//
+// NOTHING ON A REQUEST PATH MAY CALL THIS. It is the shape that cost 181.8
+// seconds (see readTechMarksOn below); it is kept for offline work, where a
+// range genuinely is what is wanted.
 async function readTechMarks(from, to) {
   await init();
   const r = await db.execute({
@@ -2178,19 +2198,45 @@ async function readTechMarks(from, to) {
           where d >= ? and d <= ? order by d`,
     args: [from, to],
   });
-  return r.rows.map((row) => ({
-    symbol: row.symbol, d: row.d,
-    action: row.action, flag: row.flag, trend: row.trend,
-    close: row.close == null ? null : Number(row.close),
-    vs200: row.vs200 == null ? null : Number(row.vs200),
-    vs50: row.vs50 == null ? null : Number(row.vs50),
-    rsi: row.rsi == null ? null : Number(row.rsi),
-    m1: row.m1 == null ? null : Number(row.m1),
-    m3: row.m3 == null ? null : Number(row.m3),
-    fromHigh: row.from_high == null ? null : Number(row.from_high),
-    volTrend: row.vol_trend == null ? null : Number(row.vol_trend),
-    historyDays: row.history_days == null ? null : Number(row.history_days),
-  }));
+  return r.rows.map(techMark);
+}
+
+// Exactly the dates asked for, and only the columns the caller will read.
+//
+// WHY IT EXISTS, measured against production on 2026-09-20: the trend sweep
+// read the whole table through readTechMarks and took **181.8 seconds** cold,
+// of which the arithmetic was 154ms. The table was 232k rows on its way to
+// ~333k, and the documented response wall is about three minutes — so the
+// page was days away from simply failing. The sweep lands on one mark a month
+// and reads four of the fourteen columns, and asking for that is the whole
+// fix: 280 dates against 1,200, four columns against fourteen.
+//
+// `d in (...)` seeks the date index rather than scanning, which is why the
+// list is passed as dates and not as a range. Chunked because an IN list is a
+// parameter per date and the sweep's is a few hundred; `read` batches so the
+// chunks are one round trip.
+const TECH_ON_CHUNK = 300;
+// Everything tbSweep touches without a rule set of its own. `flag` and `trend`
+// are never read by it at all, at any rule set.
+const TECH_SLIM_COLS = ['close', 'action'];
+async function readTechMarksOn(dates, slim) {
+  await init();
+  const want = [...new Set(dates)].sort();
+  if (!want.length) return [];
+  const cols = slim ? TECH_SLIM_COLS : TECH_COLS;
+  const stmts = [];
+  for (let i = 0; i < want.length; i += TECH_ON_CHUNK) {
+    const slice = want.slice(i, i + TECH_ON_CHUNK);
+    stmts.push({
+      sql: `select symbol, d, ${cols.join(', ')} from tech_history
+            where d in (${slice.map(() => '?').join(', ')})`,
+      args: slice,
+    });
+  }
+  const res = await db.batch(stmts, 'read');
+  const out = [];
+  for (const r of res) for (const row of r.rows) out.push(techMark(row));
+  return out;
 }
 
 // The newest mark, and NOTHING else. This is the nightly job's "is a mark due"
@@ -2233,8 +2279,17 @@ async function techHistoryCounts() {
   return out;
 }
 
-// The distinct marks in a window, oldest first — the sweep's list of start
-// dates. Reads only the date column over the index.
+// The mark calendar, oldest first — the sweep's list of candidate start dates.
+// Reads only the date column over the index.
+//
+// A separate `tech_marks` table was built for this on 2026-09-20 and REMOVED
+// the same day. The case for it was a 429.9-second reading of this query —
+// which turned out to be contention with a bulk writer saturating the same
+// database, not the query. Measured idle, at the table's full 332,883 rows:
+// **~250ms here against ~100ms from a dedicated table.** 150ms inside a
+// six-second operation does not buy a second copy of state that is already
+// derivable, plus a write to keep in step. **Time a query on an IDLE database
+// before designing around it.**
 async function readTechMarkDates(from) {
   await init();
   const r = await db.execute({
@@ -3171,7 +3226,8 @@ module.exports = {
   knownListings,
   readFundamentalsAsOf, readFundamentalsRows,
   readFundamentalsFirstSeen,
-  writeTechHistory, readTechMarks, readTechMarkDates, techHistorySpan, techHistoryCounts,
+  writeTechHistory, readTechMarks, readTechMarksOn, readTechMarkDates,
+  techHistorySpan, techHistoryCounts,
   techHistoryLastMark,
   mergeProfileFields,
   writeNews, readNews, readLatestNews, readNewsState, newsCountsSince,

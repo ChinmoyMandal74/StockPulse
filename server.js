@@ -4339,25 +4339,63 @@ const FUND_HISTORY_FROM = '2026-08-30';
 // dates, not a longer curve. So the primary output is the spread across ~200
 // windows — median, hit rate, the tail — and never a single equity line.
 const TB_TTL_MS = 10 * 60 * 1000;
-let tbMarks = null;          // { at, rows }
+let tbMarks = null;          // { at, rows, slim }
 
-// Forward horizons, in WEEKLY MARKS. A fixed horizon is what makes windows
+// Forward horizons, in MONTHLY MARKS. A fixed horizon is what makes windows
 // comparable: "carry every start date to today" gives a 2008 window eighteen
 // years and a 2026 one a fortnight, and averaging those compares nothing.
-const TB_HORIZONS = { '1M': 4, '3M': 13, '6M': 26, '1Y': 52 };
+//
+// MONTHS, NOT WEEKS, since 2026-09-20 — and the reason is the read, not the
+// statistics. The table holds a weekly mark, but a sweep whose start dates are
+// month-firsts lands on a month-first at the far end too if the horizon is a
+// whole number of months, so ONE set of month-first marks serves all four
+// horizons and the cache survives changing one. Reading weekly marks meant
+// reading four times the rows for end dates that were never start dates.
+// It also reads better: "started in March 2012 and held three months" is what
+// the page claims, and 13 weekly marks was 91 days pretending to be that.
+const TB_HORIZONS = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12 };
 // Under this many picks a window is a thin basket — its excess is mostly one
 // stock's idiosyncratic noise. FLAGGED, never dropped: excluding the windows
 // where the rules found almost nothing would quietly remove exactly the
 // periods a trend rule is supposed to be judged on.
 const TB_THIN_PICKS = 3;
 
-// Every mark, once, cached. The whole table is ~333k rows and the sweep needs
-// the verdict at each start and the close at each end — which between them is
-// most of it, so reading a range beats reading dates one at a time.
-async function tbLoadMarks() {
-  if (tbMarks && Date.now() - tbMarks.at < TB_TTL_MS) return tbMarks.rows;
-  const rows = await store.readTechMarks('1900-01-01', '2100-01-01');
-  tbMarks = { at: Date.now(), rows };
+// Every month-first mark, once, cached — NOT the whole table.
+//
+// Measured before this existed: the whole table was 181.8 seconds cold against
+// 232k rows, for a sweep whose arithmetic takes 154ms, and it was growing
+// toward 333k against a ~3-minute response wall. Two narrowings, both of which
+// only work because the sweep starts on month-firsts:
+//
+//   - the DATES. One mark a month, so ~280 of ~1,200. The other three weeks of
+//     every month are never a start and, with whole-month horizons, never an
+//     end either. Asked for by date because `d in (...)` seeks the index.
+//   - the COLUMNS. Balanced reads the stored verdict and the close and nothing
+//     else, so `slim` drops ten of fourteen. A non-default rule set re-runs the
+//     engine and needs the inputs.
+//
+// The calendar read that precedes it comes from `tech_marks` — ~1,200 rows of
+// one column — and NOT from a `distinct d` over tech_history, which walks
+// every index entry and measured 429.9 seconds for the same answer.
+//
+// ONE cached copy is kept, never two: the full set is ~19MB of JSON and many
+// times that as objects, and it already carries everything the slim path
+// reads, so a slim request is served from a full copy rather than fetching a
+// second one.
+async function tbLoadMarks(slim) {
+  const held = tbMarks;
+  if (held && Date.now() - held.at < TB_TTL_MS && (slim || !held.slim)) return held.rows;
+  const dates = await store.readTechMarkDates('1900-01-01');
+  const firsts = [];
+  let lastMonth = null;
+  for (const d of dates) {
+    const m = d.slice(0, 7);
+    if (m === lastMonth) continue;
+    lastMonth = m;
+    firsts.push(d);
+  }
+  const rows = await store.readTechMarksOn(firsts, slim);
+  tbMarks = { at: Date.now(), rows, slim: !!slim };
   return rows;
 }
 
@@ -7431,10 +7469,21 @@ app.get('/api/trend-backtest', requireAdmin, route(async (req, res) => {
   if (themeAsked && !theme) return res.status(404).json({ error: `No theme called "${themeAsked}".` });
   const only = theme ? new Set(themes[theme]) : null;
 
-  const rows = await tbLoadMarks();
+  // Balanced is the verdict stored on the row, so it needs neither the inputs
+  // nor a re-evaluation; anything else re-runs the engine and needs all of
+  // them. Same test tbSweep's `isDefault` makes, and it has to be — asking for
+  // the slim row and then evaluating against it would read undefined inputs.
+  const rows = await tbLoadMarks(rules === 'Balanced');
   if (!rows.length) {
+    // Two different emptinesses, and saying the wrong one sends someone to
+    // rebuild a table that is already there. The calendar can be missing while
+    // the marks are not — marks written before `tech_marks` existed, or a
+    // table restored by hand — so ask the marks directly. One indexed seek.
+    const last = await store.techHistoryLastMark();
     return res.json({ error: null, empty: true,
-      note: 'No trend history recorded yet — run build-tech-history.js.' });
+      note: last
+        ? `Marks are recorded through ${last} but the mark calendar is empty — run rebuildTechMarks() in db.js.`
+        : 'No trend history recorded yet — run build-tech-history.js.' });
   }
   const t0 = Date.now();
   const swept = tbSweep({ rows, cfg: ruleCfg(rules), want: new Set(tiers),
@@ -7446,9 +7495,9 @@ app.get('/api/trend-backtest', requireAdmin, route(async (req, res) => {
   // Overlap: monthly start dates with a three-month horizon means each window
   // shares two thirds of its life with its neighbour, so ~200 windows is not
   // ~200 independent readings. The research log's own discount rule, applied
-  // here rather than left to the reader.
-  const perYear = 12 / everyMonths;
-  const overlap = Math.max(1, swept.horizonMarks / (52 / perYear));
+  // here rather than left to the reader. Both figures are in months now that
+  // the horizon is, so it is one division.
+  const overlap = Math.max(1, swept.horizonMarks / everyMonths);
   const effective = stats.windows ? Math.max(1, Math.round(stats.windows / overlap)) : 0;
   // Coverage: the pool shrinks going back, and an early window that reads well
   // on 40 stocks is not the same claim as a late one on 400.
