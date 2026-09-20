@@ -158,7 +158,13 @@
         <svg class="ic ic-sm" aria-hidden="true"><use href="#i-users" /></svg><span class="hide-sm">Visitor log</span>
       </a>
       <button class="btn danger" id="clearBtn" style="display:none" title="Delete every entry in the activity log">
-        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-trash" /></svg>Clear log
+        <!-- The label hides below 640px like the wordmark and the visitor-log
+             one beside it. `.island` is a single non-wrapping flex row with a
+             pill radius, so it cannot wrap gracefully — at 390px its buttons
+             already overran it by ~10px, which only became visible once the
+             timing panel made the page tall enough for a vertical scrollbar to
+             take that width away. The icon keeps its title. -->
+        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-trash" /></svg><span class="hide-sm">Clear log</span>
       </button>
     </nav>
   </div>
@@ -203,18 +209,53 @@
 
     // The tail repaints client-side from the already-fetched 500 rows, so the
     // user filter costs nothing and needs no request.
+    // WHOSE CLOCK depends on the kind, and saying so is the whole point of the
+    // column: the client kinds are measured in the browser and are what the
+    // person waited, everything else is the server's own elapsed time. The rule
+    // is read off the kind here and in db.js, never stored as a flag that could
+    // drift from it.
+    const BROWSER_KINDS = new Set(['sort', 'tab', 'picker', 'panel', 'chart', 'load']);
+    const isBrowser = (kind) => BROWSER_KINDS.has(kind);
+
+    // A duration reads better at the scale it lives on: 84ms, 1.4s, 2m 26s.
+    function fmtMs(ms) {
+      if (ms == null) return '—';
+      if (ms < 1000) return Math.round(ms) + 'ms';
+      if (ms < 60000) return (ms / 1000).toFixed(ms < 10000 ? 2 : 1) + 's';
+      const m = Math.floor(ms / 60000);
+      return m + 'm ' + Math.round((ms % 60000) / 1000) + 's';
+    }
+
+    // Amber past a second, red past ten — the two thresholds worth noticing at a
+    // glance. A dash means nothing timed it, which is NOT the same as instant:
+    // `page` rows carry no time on purpose (the server writes them before the
+    // static file goes out), and the real wait is on that page's `load` row.
+    function msCell(e) {
+      if (e.ms == null) {
+        const why = e.kind === 'page'
+          ? 'Not timed — the real load time is on the load row for this page'
+          : 'Not timed';
+        return `<span class="dash" title="${esc(why)}">—</span>`;
+      }
+      const cls = e.ms >= 10000 ? 'neg' : e.ms >= 1000 ? 'warn' : '';
+      const who = isBrowser(e.kind) ? 'in the browser, what the user waited' : 'server time';
+      return `<span class="${cls}" title="${esc(fmtMs(e.ms) + ' — ' + who)}">${esc(fmtMs(e.ms))}</span>`;
+    }
+
     function tailHtml() {
       const rows = userFilter ? allEntries.filter((e) => e.user === userFilter) : allEntries;
       if (!rows.length) {
         return '<div class="empty">Nothing logged' + (userFilter ? ' for this user in the recent tail.' : ' yet.') + '</div>';
       }
       let html = '<div class="table-wrap tail-wrap"><table>' +
-        '<thead><tr><th>Time</th><th>User</th><th>Kind</th><th>Detail</th><th class="hide-sm">IP</th></tr></thead><tbody>';
+        '<thead><tr><th>Time</th><th>User</th><th>Kind</th><th>Detail</th>' +
+        '<th class="n">Took</th><th class="hide-sm">IP</th></tr></thead><tbody>';
       rows.forEach((e, i) => {
         const ts = new Date(e.ts).toLocaleString();
         html += `<tr style="--i:${i}"><td class="ts">${esc(ts)}</td>${whoCell(e.user)}` +
           `<td class="kind">${esc(e.kind)}</td>` +
           (e.detail ? `<td class="det" title="${esc(e.detail)}">${esc(e.detail)}</td>` : '<td class="det dash">—</td>') +
+          `<td class="n ms">${msCell(e)}</td>` +
           `<td class="ip hide-sm">${esc(e.ip || '—')}</td></tr>`;
       });
       return html + '</tbody></table></div>';
@@ -238,7 +279,7 @@
           return;
         }
         const data = await fetch('/api/activity').then(r => r.json());
-        const { total, todayCount, usersToday, users, kinds, entries } = data;
+        const { total, todayCount, usersToday, users, kinds, entries, timing } = data;
         lastTotal = total;
         allEntries = entries || [];
         document.getElementById('clearBtn').style.display = total > 0 ? '' : 'none';
@@ -272,6 +313,38 @@
             `<tr style="--i:${i}"><td class="kind">${esc(k.kind)}</td><td class="n">${Number(k.count).toLocaleString()}</td></tr>`).join('') +
           '</tbody></table></div></div></div>';
         html += '</div>';
+
+        // HOW LONG THINGS TAKE — the reason the column exists. A column of
+        // milliseconds down a 500-row tail is not something anyone reads; this
+        // is. Slowest p95 first, because the reason to open it is to find what
+        // is slow.
+        //
+        // `n` sits beside every figure and the note says why: a p95 over four
+        // observations is noise wearing a statistic's clothes.
+        if ((timing || []).length) {
+          html += '<div class="bezel reveal" style="--d:120ms"><div class="core" style="padding-top:14px">' +
+            '<h2>How long operations take</h2>' +
+            '<div class="table-wrap"><table>' +
+            '<thead><tr><th>Operation</th><th>Measured</th><th class="n">n</th>' +
+            '<th class="n">Median</th><th class="n">p95</th><th class="n">Slowest</th></tr></thead><tbody>' +
+            timing.map((t, i) => {
+              const cls = t.p95 >= 10000 ? 'neg' : t.p95 >= 1000 ? 'warn' : '';
+              const thin = t.n < 5 ? ' <span class="dash" title="Too few to read a p95 from">thin</span>' : '';
+              return `<tr style="--i:${i}"><td class="kind">${esc(t.kind)}</td>` +
+                `<td class="det">${isBrowser(t.kind) ? 'browser — what the user waited' : 'server'}</td>` +
+                `<td class="n">${Number(t.n).toLocaleString()}${thin}</td>` +
+                `<td class="n">${esc(fmtMs(t.median))}</td>` +
+                `<td class="n ${cls}">${esc(fmtMs(t.p95))}</td>` +
+                `<td class="n">${esc(fmtMs(t.max))}</td></tr>`;
+            }).join('') +
+            '</tbody></table></div>' +
+            '<p class="note">Browser rows are what the person actually waited for, ' +
+            'including the network and the paint; server rows are the time the server ' +
+            'itself spent. <b>page</b> is deliberately untimed — its row is written ' +
+            'before the page is even sent, so the <b>load</b> row for that page is the ' +
+            'honest figure. A p95 needs a few dozen observations before it means much.</p>' +
+            '</div></div>';
+        }
 
         // The raw tail, filterable by user.
         const opts = ['<option value="">Everyone</option>'].concat(

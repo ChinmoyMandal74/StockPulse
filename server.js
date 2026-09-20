@@ -132,6 +132,12 @@ const LOCK_MS = 15 * 60 * 1000;
 app.set('trust proxy', 1); // so req.secure reflects an HTTPS reverse proxy when published
 app.use(express.json());
 
+// When this request arrived, so `logAct` can say how long the operation took.
+// FIRST middleware, or the number measures less than the request: it has to be
+// set before anything else gets a chance to spend time. Nothing else reads it,
+// and a request that never logs pays one Date.now().
+app.use((req, _res, next) => { req._t0 = Date.now(); next(); });
+
 // Express 4 does not catch rejected promises from async handlers — an unhandled
 // rejection would hang the request and can take the process down. Every async
 // route below is wrapped so a database error becomes a normal 500 instead.
@@ -925,14 +931,29 @@ async function actKey(req) {
   }
   return null;
 }
+// `ms` is how long the server had been working on this request when the line was
+// written, which is the operation's cost for anything logged at the END of its
+// route — a refresh, a chat answer, a model build.
+//
+// **NOT for `page`.** Those log at the TOP of their route and then serve a
+// static file, so the elapsed time is ~1ms every time and says nothing about
+// the wait: the browser then fetches the data and paints. A page's real cost
+// arrives separately as a browser-measured `load` row (see trackLoad in
+// private/track.js). Recording 1ms against "page screener" would be true and
+// useless, and it would drag the per-kind summary into nonsense.
+const UNTIMED_ACT_KINDS = new Set(['page']);
+
 function logAct(req, kind, detail, userKey) {
+  const k = String(kind).slice(0, 16);
+  const ms = UNTIMED_ACT_KINDS.has(k) || !req || !req._t0 ? null : Date.now() - req._t0;
   Promise.resolve(userKey !== undefined ? userKey : actKey(req))
     .then((user) => store.logActivity([{
       ts: new Date().toISOString(),
       user,
-      kind: String(kind).slice(0, 16),
+      kind: k,
       detail: detail == null ? null : String(detail).slice(0, 80),
       ip: req.ip || null,
+      ms,
     }]))
     .catch(() => { /* never blocks the action */ });
 }
@@ -8276,7 +8297,18 @@ app.delete('/api/activity', requireAdmin, route(async (req, res) => {
 // allowlisted and details clamped, so this cannot become free-form storage;
 // guests are welcome — a guest's walk is the most valuable trace the log
 // produces. requireAuth already admits the guest cookie.
-const CLIENT_ACT_KINDS = new Set(['sort', 'tab', 'picker', 'panel', 'chart']);
+// The kinds the browser is allowed to report. `load` joined them for timing:
+// how long a page took to become usable, which the server cannot see — its own
+// `page` row is written before the static file even goes out.
+//
+// These are also exactly the kinds whose `ms` is a BROWSER measurement — what
+// the person actually waited — where every other kind's is the server's own
+// elapsed time. `/activity` reads that distinction off the kind rather than
+// storing a flag beside it, so the two can never disagree.
+const CLIENT_ACT_KINDS = new Set(['sort', 'tab', 'picker', 'panel', 'chart', 'load']);
+// A browser-supplied duration is untrusted input like any other. Ten minutes is
+// far past any real interaction and keeps a junk value out of the percentiles.
+const ACT_MS_MAX = 600000;
 app.post('/api/activity', requireAuth, route(async (req, res) => {
   const events = Array.isArray(req.body && req.body.events) ? req.body.events.slice(0, 50) : [];
   const user = await actKey(req);
@@ -8286,7 +8318,15 @@ app.post('/api/activity', requireAuth, route(async (req, res) => {
     const kind = String((e && e.k) || '');
     if (!CLIENT_ACT_KINDS.has(kind)) continue;
     const detail = String((e && e.d) || '').replace(/[^\x20-\x7e]/g, '').slice(0, 80);
-    rows.push({ ts, user, kind, detail: detail || null, ip: req.ip || null });
+    // Reject the empty BEFORE coercing: Number(null) and Number('') are both 0
+    // and finite, so the other order records a fabricated 0ms for every event
+    // that was never timed — and a floor of zeros would flatter every
+    // percentile on the page. The `num()` lesson, third time in this codebase.
+    const raw = e && e.m;
+    const ms = raw == null || raw === '' || !Number.isFinite(Number(raw))
+      ? null
+      : Math.min(ACT_MS_MAX, Math.max(0, Math.round(Number(raw))));
+    rows.push({ ts, user, kind, detail: detail || null, ip: req.ip || null, ms });
   }
   if (rows.length) store.logActivity(rows).catch(() => { /* fire and forget */ });
   res.json({ ok: true, accepted: rows.length });

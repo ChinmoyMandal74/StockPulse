@@ -4946,8 +4946,12 @@
         const key = th.dataset.key;
         if (sortKey === key) sortDir *= -1;
         else { sortKey = key; sortDir = -1; }
-        window.track && track('sort', key + (sortDir < 0 ? ':desc' : ':asc'));
+        // Timed around render(), because the sort IS the render: re-ranking and
+        // repainting the window is the work, and the click is free. Logged after
+        // so the number is real rather than predicted.
+        const t0 = performance.now();
         render();
+        window.track && track('sort', key + (sortDir < 0 ? ':desc' : ':asc'), performance.now() - t0);
       });
     });
 
@@ -5450,6 +5454,14 @@
       .then(() => Promise.all([loadPrefs(), loadMyPortfolios()]))
       .then(() => Promise.all([loadViews(), loadScreens()]))
       .then(() => refresh({ live: false }))
+      .then(() => {
+        // THE PAGE IS USABLE HERE, and this is the only place that knows it.
+        // Not `window.load`, which fires while /api/stocks is still in flight,
+        // and not the server's `page` row, which is written before the static
+        // file goes out. Time from navigation start, so it includes the fetch
+        // and the first paint — what the person actually waited for.
+        window.trackLoad && trackLoad('screener');
+      })
       .then(() => {
         // The server refuses either of these to anyone else; this only stops a
         // member's browser from asking and being told no.

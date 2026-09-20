@@ -554,6 +554,13 @@ function parseAddColumn(stmt) {
 
 const ADDED_COLUMNS = [
   'alter table visitors add column user_email text',
+  // How long the operation took, in milliseconds — null when nothing timed it.
+  // WHOSE clock depends on the kind, and there is deliberately no second column
+  // saying which: the CLIENT kinds (see CLIENT_ACT_KINDS in server.js, plus
+  // `load`) are measured in the browser and are what the person actually
+  // waited; every other kind is the server's own elapsed time. One rule, read
+  // off the kind, rather than a flag that can disagree with it.
+  'alter table activity add column ms integer',
   // How many symbols of this run have had their prices pulled live. Prices are
   // 1 credit each, so above ~530 symbols the whole universe does not fit in one
   // minute and the round is refused outright — the pull is paced across rounds
@@ -2572,8 +2579,9 @@ async function logActivity(rows) {
   await init();
   if (!rows || !rows.length) return;
   await db.batch(rows.map((r) => ({
-    sql: 'insert into activity (ts, user, kind, detail, ip) values (?, ?, ?, ?, ?)',
-    args: [r.ts, r.user ?? null, r.kind, r.detail ?? null, r.ip ?? null],
+    sql: 'insert into activity (ts, user, kind, detail, ip, ms) values (?, ?, ?, ?, ?, ?)',
+    args: [r.ts, r.user ?? null, r.kind, r.detail ?? null, r.ip ?? null,
+      Number.isFinite(r.ms) && r.ms >= 0 ? Math.round(r.ms) : null],
   })), 'write');
 }
 
@@ -2582,7 +2590,7 @@ async function logActivity(rows) {
 async function readActivityStats(limit = 500) {
   await init();
   const today = new Date().toISOString().slice(0, 10);
-  const [agg, users, kinds, recent] = await Promise.all([
+  const [agg, users, kinds, recent, timed] = await Promise.all([
     db.execute({
       sql: `select count(*) as total,
                    sum(case when ts like ? then 1 else 0 end) as today_count,
@@ -2592,7 +2600,14 @@ async function readActivityStats(limit = 500) {
     }),
     db.execute('select user, count(*) as c, max(ts) as last from activity group by user order by c desc limit 50'),
     db.execute('select kind, count(*) as c from activity group by kind order by c desc'),
-    db.execute({ sql: 'select ts, user, kind, detail, ip from activity order by id desc limit ?', args: [limit] }),
+    db.execute({ sql: 'select ts, user, kind, detail, ip, ms from activity order by id desc limit ?', args: [limit] }),
+    // Every timing, one column, for exact percentiles computed below. A bounded
+    // read by the same reasoning as the rollups above: `activity` is pruned to
+    // ACTIVITY_KEEP_DAYS (60) and measured at 1,236 rows, so this is thousands
+    // rather than the million that made barsMaxDates a quota event. Percentiles
+    // are done in JS because SQLite has no percentile function and the
+    // alternative is a window query over the same rows.
+    db.execute('select kind, ms from activity where ms is not null'),
   ]);
   const a = agg.rows[0] || {};
   return {
@@ -2601,8 +2616,38 @@ async function readActivityStats(limit = 500) {
     usersToday: Number(a.users_today || 0),
     users: users.rows.map((r) => ({ user: r.user, count: Number(r.c), last: r.last })),
     kinds: kinds.rows.map((r) => ({ kind: r.kind, count: Number(r.c) })),
-    entries: recent.rows.map((r) => ({ ts: r.ts, user: r.user, kind: r.kind, detail: r.detail, ip: r.ip })),
+    entries: recent.rows.map((r) => ({
+      ts: r.ts, user: r.user, kind: r.kind, detail: r.detail, ip: r.ip,
+      ms: r.ms == null ? null : Number(r.ms),
+    })),
+    timing: timingByKind(timed.rows),
   };
+}
+
+// How long each kind of operation takes. The SUMMARY is the point rather than
+// the per-row number: a column of milliseconds down a 500-row tail is not
+// something anyone reads, where "chart p95 2.1s" is.
+//
+// p95 over few observations is noise, so `n` travels beside every figure and
+// the page says so. Exact percentiles on the sorted sample — no interpolation,
+// no estimator to explain.
+function timingByKind(rows) {
+  const by = new Map();
+  for (const r of rows || []) {
+    const ms = Number(r.ms);
+    if (!Number.isFinite(ms) || ms < 0) continue;
+    if (!by.has(r.kind)) by.set(r.kind, []);
+    by.get(r.kind).push(ms);
+  }
+  const at = (a, p) => a[Math.min(a.length - 1, Math.floor(p * (a.length - 1)))];
+  const out = [];
+  for (const [kind, a] of by) {
+    a.sort((x, y) => x - y);
+    out.push({ kind, n: a.length, median: at(a, 0.5), p95: at(a, 0.95), max: a[a.length - 1] });
+  }
+  // Slowest first: the reason to open this table is to find what is slow.
+  out.sort((x, y) => y.p95 - x.p95);
+  return out;
 }
 
 // Wipes the log, like clearVisitors — the autoincrement resets too.

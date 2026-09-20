@@ -29,14 +29,42 @@
     } catch (e) { /* never the page's problem */ }
   }
 
-  // track('sort', 'overallScore:desc') — kind from the server's allowlist,
-  // detail a short fact string. Anything else is dropped server-side.
-  window.track = function (kind, detail) {
+  // track('sort', 'overallScore:desc', 81) — kind from the server's allowlist,
+  // detail a short fact string, and an OPTIONAL duration in milliseconds.
+  // Anything else is dropped server-side.
+  //
+  // The duration is carried per event rather than derived at flush time, and it
+  // has to be: a batch of up to fifty events is sent as one request and the
+  // server stamps them all with ONE timestamp, so nothing downstream can work
+  // out how long any single interaction took. This is the only place that knows.
+  window.track = function (kind, detail, ms) {
     try {
-      Q.push({ k: String(kind).slice(0, 16), d: detail == null ? '' : String(detail).slice(0, 80) });
+      var e = { k: String(kind).slice(0, 16), d: detail == null ? '' : String(detail).slice(0, 80) };
+      // Reject the empty before coercing — Number(null) is 0 and finite, which
+      // would record a fabricated "instant" for every untimed call. The lesson
+      // `num()` taught this codebase twice already.
+      if (ms != null && ms !== '' && isFinite(ms) && Number(ms) >= 0) e.m = Math.round(Number(ms));
+      Q.push(e);
       if (Q.length >= 40) { flush(); return; }
       if (!timer) timer = setTimeout(function () { timer = null; flush(); }, 20000);
     } catch (e) { /* ignore */ }
+  };
+
+  // How long THIS page took to become usable, which is the only load time worth
+  // recording: the server logs its `page` row in about a millisecond and then
+  // hands over a static file, so every wait that matters happens after that.
+  //
+  // The page decides when it is usable, because only it knows — the screener
+  // means "the table is painted", not `window.load`, which fires while the data
+  // is still in flight. Called once; later calls are ignored so a re-render
+  // cannot log a second, smaller number and make the first look wrong.
+  var loadSent = false;
+  window.trackLoad = function (name, ms) {
+    if (loadSent) return;
+    loadSent = true;
+    var t = ms;
+    if (t == null && window.performance && performance.now) t = performance.now();
+    window.track('load', name, t);
   };
 
   // pagehide is the reliable end-of-page signal; visibilitychange covers
