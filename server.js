@@ -6623,7 +6623,7 @@ async function buildRefreshReport(state, snap, kind = 'all') {
   const missing = live.filter((x) => x.profileFetchedAt == null);
   const day = marketDay(live);
 
-  let stats = { barRows: null, barsThrough: null, fundamentalsToday: null };
+  let stats = { fundamentalsToday: null };
   try {
     stats = await store.archiveStats(day);
   } catch (err) {
@@ -6720,8 +6720,12 @@ function refreshReportBodies(r) {
   const headCount = isAll
     ? `${r.loaded.length} of ${r.live.length} profiles`
     : `${r.live.length} symbols`;
-  const barLine = r.stats.barRows == null ? '—'
-    : `${r.stats.barRows.toLocaleString()} rows through ${r.stats.barsThrough || '—'}`;
+  // THERE IS NO "Bar archive" LINE ANY MORE. It printed the row count and the
+  // archive's through-date, read with `count(*), max(d) from bars` — 135.9s and
+  // 268.9s respectively against 1,708,408 rows, in the tail that must finish
+  // before the response. `Prices as of` above already carries that date, from
+  // `asOf`, which is in memory and free; the archive's SIZE lives on /database
+  // and /quality, cached, where counting is the point of the page.
 
   const t = [
     `${runName} — ${headCount}`,
@@ -6733,7 +6737,6 @@ function refreshReportBodies(r) {
     line('Triggered by', r.actor),
     line('Prices as of', r.asOf || '—'),
     line('Fundamentals', fundLine),
-    line('Bar archive', barLine),
   ];
   if (r.failed.length) {
     t.push('', `Failed (${r.failed.length}): ` +
@@ -6875,7 +6878,7 @@ function refreshReportBodies(r) {
     `<td style="padding:3px 10px 3px 0;font-size:15px;font-weight:600">${escHtml(r.duration)}</td></tr>` +
     kv('Started', fmtClock(r.startedAt)) +
     kv('Finished', fmtClock(Date.now())) +
-    kv('Prices as of', r.asOf || '—') + kv('Fundamentals', fundLine) + kv('Bar archive', barLine) +
+    kv('Prices as of', r.asOf || '—') + kv('Fundamentals', fundLine) +
     '</table>' +
     problems +
     jobBlock +
@@ -6895,12 +6898,18 @@ function refreshReportBodies(r) {
 
 // Never throws: the report is a by-product, and a mail outage must not fail the
 // refresh round that happened to finish the run.
-async function sendRefreshReport(state, kind = 'all') {
+// `snap` is the payload the caller already holds. Passing it skips re-reading
+// the ~1.3MB snapshot blob the refresh has just written — measured at 2.1s
+// against production, in the tail that must finish before the response. Small
+// beside the 145s `archiveStats` used to spend there, but it is the same trap
+// /quality recorded (readSnapshot took that page from 2.4s to 10.8s), and a
+// caller with the data in hand should never ask the database for it back.
+async function sendRefreshReport(state, kind = 'all', snap = null) {
   if (!state) return false;          // nothing was cleared — someone else reported this run
   // A tracked run keeps its report on /refreshes even when mail is not set up.
   if (!MAIL_READY && !state.runId) return false;
   try {
-    const r = await buildRefreshReport(state, await readSnapshot(), kind);
+    const r = await buildRefreshReport(state, snap || await readSnapshot(), kind);
     r.mode = state.mode || null;
     r.runId = state.runId || null;
     r.job = await runFacts(state.runId);
@@ -7077,7 +7086,7 @@ async function finishLiveRefresh(payload, ctx = {}) {
       const cleared = await endRefresh();
       if (cleared) {
         await closeRun(cleared, 'complete', { loaded, total: rows.length });
-        await sendRefreshReport(cleared, 'all');
+        await sendRefreshReport(cleared, 'all', payload);
       }
     } else {
       await noteRefreshProgress(loaded, rows.length);
@@ -7089,7 +7098,8 @@ async function finishLiveRefresh(payload, ctx = {}) {
     // reported — a run nobody finished has nothing to say.
     const stale = await endRefresh();
     if (stale) await closeRun(stale, 'abandoned');
-    await sendRefreshReport({ startedAt: ctx.startedAt, actor: ctx.actor, runId: ctx.runId }, 'plain');
+    await sendRefreshReport({ startedAt: ctx.startedAt, actor: ctx.actor, runId: ctx.runId },
+      'plain', payload);
   }
   // The headlines top-up started above runs alongside everything since; it has
   // to finish before the response does, or the platform freezes it mid-fetch.
@@ -7878,13 +7888,18 @@ app.get('/api/refresh-runs/health', requireAdmin, route(async (req, res) => {
     const d = (now - p.fetchedAt) / 86400000;
     if (d < 1) ages.day++; else if (d < 3) ages.three++; else if (d < 7) ages.week++; else ages.older++;
   }
-  let stats = { barRows: null, barsThrough: null };
-  try { stats = await store.archiveStats(nyDay(now)); } catch { /* shown as unknown */ }
+  // This asked archiveStats() for the archive's through-date and threw its row
+  // count away — paying `count(*), max(d) from bars` over 1,708,408 rows, 135.9s
+  // and 268.9s cold, for one date string. That is why this endpoint was "the
+  // slower half of the page": the comment above blamed the profiles, which are
+  // the cheap part. `barsThrough` seeks per symbol on the primary key instead.
+  let through = null;
+  try { through = await store.barsThrough(universe); } catch { /* shown as unknown */ }
   res.json({
     universe: universe.length,
     ages,
     gaps: profileGaps(universe, profiles).length,
-    barsThrough: stats.barsThrough,
+    barsThrough: through,
     rotationDays: FUND_ROTATION_DAYS,
   });
 }));

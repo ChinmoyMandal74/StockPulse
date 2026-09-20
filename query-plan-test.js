@@ -32,10 +32,34 @@ const ALLOWED = [
   // dropped connection part way through a twenty-minute bulk write does not
   // mean starting again.
   /select symbol, count\(\*\) as n from tech_history group by symbol/i,
-  // The counts ARE the product on /database, cached five minutes, and no index
-  // can answer "how many rows".
-  /^select count\(\*\)/i,
-  /from pragma_table_info/i,
+
+  // ---- counts, each named rather than blanket-allowed -----------------------
+  // There WAS a bare /^select count\(\*\)/ here, justified as "the counts ARE
+  // the product on /database". It silently licensed every count over every big
+  // table — including `archiveStats`, which ran `count(*), max(d) from bars` in
+  // the REFRESH TAIL at 135.9s and 268.9s cold (2026-09-20). The guard could
+  // never have flagged it. Each count is now its own decision.
+  //
+  // NOTE WHAT THIS FILE CANNOT DO: it reads plans, not call sites. A count that
+  // is fine on a cached admin page is a disaster in the refresh tail, and the
+  // SQL looks identical. When you add one of these, say where it runs.
+  /from pragma_table_info/i,                       // /database, per-table column counts
+  /select count\(\*\) as n from \?/i,              // /database's per-table count, cached 5 min
+  // barsStats / fundamentalsStats / techHistorySpan — the /database and /quality
+  // stat tiles. Page-only, cached, and counting IS what the page is for.
+  /select count\(\*\) as n, count\(distinct symbol\) as syms, min\(d\) as mind, max\(d\) as maxd from bars/i,
+  /select count\(\*\) as n, count\(distinct symbol\) as syms, min\(d\) as first, max\(d\) as last from tech_history/i,
+  /select count\(\*\) n, count\(distinct symbol\) syms, count\(distinct d\) days/i,
+  // clearActivity / clearVisitors: the confirm-with-count on a destructive admin
+  // button. One click, and the count is the number being confirmed.
+  /select count\(\*\) as c from (activity|visitors)/i,
+  // readVisitorStats / readActivityStats — the summary header on /visitors and
+  // /activity. Both tables are pruned (activity to ACTIVITY_KEEP_DAYS 60;
+  // measured 1,236 rows on 2026-09-15) and this is one admin page load.
+  /select count\(\*\) as total,\s+sum\(case when ts like \? then 1 else 0 end\)/i,
+  // newsHoldings — the /news-runs coverage tile, over the same bounded news
+  // table (pruned to 21 days and 25 items a symbol, 5,849 rows).
+  /select count\(\*\) as n, count\(distinct symbol\) as syms, max\(published_at\) as newest from news/i,
   /select distinct symbol from/i,          // the orphan sweep, run by hand
   // The data-quality page's rollups. These tables are BOUNDED, unlike bars:
   // fundamentals_history is universe x recorded days (~2,350 rows) and

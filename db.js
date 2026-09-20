@@ -1506,17 +1506,49 @@ async function tableStats() {
 
 // Counts for the nightly report: how much of the archive exists, and whether
 // today's fundamentals row actually landed. Cheap enough to run once per run.
+// **NO AGGREGATE OVER `bars` HERE. It was the slowest thing in the app.**
+//
+// This ran `select count(*), max(d) from bars` — over 1,708,408 rows, uncached,
+// in the refresh TAIL on every report build, and on `/api/refresh-runs/health`.
+// Measured against production on 2026-09-20, cold:
+//
+//   count(*) from bars                    135.9s
+//   max(d) from bars                      268.9s   <- WORSE than the count
+//   d order by d desc limit 1             253.0s
+//   max(d) again, same connection           0.9s   <- cold cost only
+//
+// That is where a plain refresh's ~200-second tail went: 99.6s of round work,
+// then this. The response died on the 300s gateway while the snapshot had been
+// written correctly at +100s, which is how the night gets reported as a failure
+// over good data — the third time that shape has bitten (news 2026-09-18,
+// tech-history 2026-09-19, this).
+//
+// **`max(d)` looked like the safe half and is the expensive half**, and its plan
+// reads `SEARCH bars USING COVERING INDEX` — the second time in one day that a
+// SEARCH line concealed a minutes-long walk. There is no index on `d` alone;
+// the primary key is (symbol, d). So "drop the count, keep the through-date"
+// would have been a 2x REGRESSION shipped as a fix.
+//
+// Both callers get the through-date cheaply instead: the report already holds
+// the freshest bar date in memory, and the health endpoint uses
+// `barsMaxDates()`, which seeks per symbol on the primary key.
 async function archiveStats(day) {
   await init();
-  const b = await db.execute('select count(*) as n, max(d) as through from bars');
+  // Bounded: one row per symbol for one day, over the `d` index.
   const f = await db.execute({
     sql: 'select count(*) as n from fundamentals_history where d = ?', args: [day],
   });
-  return {
-    barRows: Number(b.rows[0]?.n || 0),
-    barsThrough: b.rows[0]?.through || null,
-    fundamentalsToday: Number(f.rows[0]?.n || 0),
-  };
+  return { fundamentalsToday: Number(f.rows[0]?.n || 0) };
+}
+
+// The archive's newest bar date, WITHOUT touching the whole table: one indexed
+// seek per symbol on the (symbol, d) primary key, batched — the same shape
+// `barsMaxDates` already uses for the refresh (271 rows, 57ms).
+async function barsThrough(symbols) {
+  const dates = await barsMaxDates(symbols);
+  let out = null;
+  for (const { maxDate } of dates.values()) if (maxDate && (!out || maxDate > out)) out = maxDate;
+  return out;
 }
 
 // null when nothing is running, so callers can spread it straight into a payload.
@@ -3242,7 +3274,7 @@ module.exports = {
   readProfiles,
   writeProfiles,
   expireProfiles,
-  archiveStats,
+  archiveStats, barsThrough,
   beginRefresh,
   noteRefreshProgress,
   endRefresh,

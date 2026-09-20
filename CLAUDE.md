@@ -1228,6 +1228,24 @@ Per-stock headlines — **headline / source / url / timestamp only, never bodies
 
 **The lesson, which the news incident already taught and this repeated: work added to the refresh tail is not free, and a slow query there does not fail loudly — it fails as a job that says the night went wrong when it went right.** Before adding anything to that path, time it COLD against production, and prefer a seek. And when a refresh "fails", read the run record before believing it: `complete` with a full `loaded` and an empty report means the work succeeded and the tail did not.
 
+### The slowest thing in the app was a row count in the refresh tail
+**`archiveStats()` ran `select count(*), max(d) from bars` — over 1,708,408 rows, uncached — in the tail that must finish before the response, on every report build (2026-09-20).** Measured cold against production:
+
+| | |
+|---|---|
+| `count(*) from bars` | **135.9s** |
+| `max(d) from bars` | **268.9s** |
+| `d order by d desc limit 1` | 253.0s |
+| `max(d)` again, same connection | 0.9s |
+| `readSnapshot()` beside it | 2.1s |
+
+- **How it showed.** A plain one-round price refresh, the simplest operation here, answered **HTTP 504 after 300.1s** — Vercel's gateway ceiling. The round itself was 99.6s and the snapshot was written correctly at +100s; the remaining ~200s was this. So the work succeeded, the response died, the run was swept `abandoned`, and the night reads as a failure. **That is the third time this shape has bitten** — news (2026-09-18), tech-history (2026-09-19), this — and each time the tail was the cause.
+- **`max(d)` is the trap, not the count.** It looks like the cheap half and is twice as expensive, because there is **no index on `bars(d)`** — the primary key is `(symbol, d)`. Its plan reads `SEARCH bars USING COVERING INDEX`, the second time in one day a SEARCH line concealed a minutes-long walk (see `select distinct d` in the trend backtest). **"Drop the count, keep the through-date" would have been a 2x regression shipped as a fix**, and it was what I proposed before measuring.
+- **Neither is needed.** The report's `Prices as of` already carries that date from `asOf`, computed from rows in memory; the **Bar archive line is deleted** rather than made cheap, since it said the same thing twice. `/api/refresh-runs/health` wanted only the through-date and **threw the row count away** — it uses `barsThrough()` now, which is `barsMaxDates()`: one indexed seek per symbol on the primary key. Its own comment had called it "the slower half of the page" and blamed the profiles. The archive's SIZE stays on `/database` and `/quality`, cached, where counting is the point of the page.
+- **`sendRefreshReport` took a `snap` argument** so the two refresh-tail callers hand over the payload instead of re-reading the 1.3MB snapshot they just wrote — 2.1s, and the same trap `/quality` records (readSnapshot took that page from 2.4s to 10.8s).
+- **`query-plan-test.js` could never have caught this, and that is fixed too.** Its allowlist carried a bare `/^select count\(\*\)/`, justified for `/database`, which silently licensed every count over every big table. It is now **eight named entries** — barsStats, fundamentalsStats, techHistorySpan, the two clear-with-count confirms, the two log summaries, the news coverage tile — each saying where it runs. The file now also states what it cannot do: **it reads plans, not call sites, and a count that is fine on a cached admin page is a disaster in the refresh tail while the SQL looks identical.**
+- Verified: the guard fails if the `bars` aggregate returns, and the report suites assert the Bar archive line is gone while `Prices as of` still carries the date.
+
 ### The 2026-09-20 nightly: a benchmark run against production during the run
 **The failure was mine and it was not in the code — it was a 106.7MB query aimed at the live database at 4:26 PM on a nightly day.** Run 49 went `abandoned` after one round, 370/430 loaded, and GitHub mailed a failure.
 
