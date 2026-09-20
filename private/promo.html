@@ -361,6 +361,47 @@
         </div>
       </div>
 
+      <div id="sizeBox">
+        <label>Circle area</label>
+        <select id="sizeOuter">
+          <option value="cap" selected>Market cap</option>
+          <option value="rev">Revenue</option>
+          <option value="gp">Gross profit</option>
+          <option value="ni">Net income</option>
+          <option value="fcf">Free cash flow</option>
+        </select>
+        <label>Inner circle</label>
+        <select id="sizeInner">
+          <optgroup label="Same scale — the ring is the ratio">
+            <option value="rev" selected>Revenue</option>
+            <option value="ni">Net income</option>
+            <option value="fcf">Free cash flow</option>
+            <option value="cash">Net cash</option>
+          </optgroup>
+          <optgroup label="A share of the area">
+            <option value="gm">Gross margin</option>
+            <option value="pm">Profit margin</option>
+            <option value="fm">FCF margin</option>
+            <option value="growth">Revenue growth</option>
+          </optgroup>
+          <option value="none">None — one circle</option>
+        </select>
+        <label>How many</label>
+        <select id="sizeCount">
+          <option value="4">4</option>
+          <option value="6">6</option>
+          <option value="8" selected>8</option>
+          <option value="9">9</option>
+          <option value="12">12</option>
+        </select>
+        <label>Within</label>
+        <select id="sizeScope"><option value="All">All screened</option></select>
+        <label>Sector</label>
+        <select id="sizeSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="sizeIndustry"><option value="All">All industries</option></select>
+      </div>
+
       <div id="intBox">
         <label>Topic</label>
         <select id="intTopic"></select>
@@ -435,6 +476,7 @@
       { id: 'range', name: 'Range', note: 'Where each stock sits in its 52-week range' },
       { id: 'advboard', name: 'Advice', note: 'What the rules read, four ways' },
       { id: 'fund', name: 'Fundamentals', note: 'Size, margins, growth \u2014 four ways' },
+      { id: 'size', name: 'Size', note: 'Companies as circles — two measures at once' },
       { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
       { id: 'avatar', name: 'Profile picture', note: 'The mark alone — pick Square, then download' },
@@ -477,6 +519,7 @@
       'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry',
       'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry',
       'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry',
+      'sizeOuter', 'sizeInner', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
       const o = {};
@@ -492,7 +535,7 @@
     // (an industry belongs to one sector), and drops a choice the new sector
     // does not contain. Run at the top of every render, so it has already
     // happened by the time a card reads the controls.
-    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund'];
+    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size'];
     const industryFor = {};
     function syncIndustries(force) {
       INDUSTRY_PREFIXES.forEach((p) => {
@@ -533,6 +576,7 @@
       $('rngMeasureWrap').style.display = rm === 'rank' ? 'block' : 'none';
       $('rngCountWrap').style.display = rm === 'spread' ? 'none' : 'block';
       $('fundBox').style.display = tpl === 'fund' ? 'block' : 'none';
+      $('sizeBox').style.display = tpl === 'size' ? 'block' : 'none';
       const fm = $('fundMode').value;
       $('fundMetricWrap').style.display = fm === 'rank' ? 'block' : 'none';
       $('fundSymWrap').style.display = fm === 'one' ? 'block' : 'none';
@@ -620,6 +664,8 @@
       $(id).addEventListener('change', () => { if (tpl === 'advboard') render(); }));
     ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'fund') render(); }));
+    ['sizeOuter', 'sizeInner', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'size') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
     $('intSlide').addEventListener('change', () => { if (tpl === 'intro') render(); });
@@ -848,12 +894,14 @@
         $('spkScope').innerHTML = $('movScope').innerHTML;
         $('rngScope').innerHTML = $('movScope').innerHTML;
         $('fundScope').innerHTML = $('movScope').innerHTML;
+        $('sizeScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         // one sector list, built from the rows themselves so it can never
         // offer a sector nothing is in
         const secOpts = '<option value="All">All sectors</option>' +
           Cards.sectors(stocks).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-        ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector', 'rngSector'].forEach((id) => {
+        ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector', 'rngSector',
+          'sizeSector'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = secOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;

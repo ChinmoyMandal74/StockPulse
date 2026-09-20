@@ -1211,6 +1211,150 @@
   // footer — a bio avatar is shown at about a hundred pixels in a circle,
   // where a wordmark is mush and only a shape survives. Everything stays
   // inside the middle 70%, which is what the circle crop keeps.
+  // ---- Size: companies as circles, two measures at once ---------------------
+  //
+  // The owner's brief: compare companies within a theme by size, carry other
+  // fundamentals with it, and do it as circles rather than another bar chart —
+  // "maybe two concentric circles, each representing a different measure".
+  //
+  // AREA is the encoding, never radius. A circle of twice the radius is four
+  // times the area, so sizing by radius would quadruple the apparent gap — the
+  // direction people already misread a bubble chart in.
+  //
+  // BOTH discs share ONE area scale whenever both are money, which is what
+  // makes the pair worth drawing: the second disc's share of the first IS the
+  // ratio between the two figures. Revenue inside market cap is price-to-sales
+  // drawn rather than stated, and when revenue EXCEEDS the cap the discs simply
+  // swap — the company trading under one times sales is the one whose circle
+  // breaks out, which is the right thing for an eye to catch.
+  const SIZE_MEASURES = {
+    cap: ['Market cap', 'marketCap', 'money'],
+    rev: ['Revenue', 'revenueTtm', 'money'],
+    gp: ['Gross profit', 'grossProfitTtm', 'money'],
+    ni: ['Net income', 'netIncomeTtm', 'money'],
+    fcf: ['Free cash flow', 'fcfTtm', 'money'],
+    cash: ['Net cash', 'netCash', 'money'],
+    gm: ['Gross margin', 'grossMargin', 'pct'],
+    pm: ['Profit margin', 'profitMargin', 'pct'],
+    fm: ['FCF margin', 'fcfMargin', 'pct'],
+    growth: ['Revenue growth', 'revenueGrowthYoY', 'pct'],
+  };
+
+  function tplSize() {
+    const scope = scopeOf('sizeScope', 'sizeSector');
+    const outerKey = SIZE_MEASURES[O.sizeOuter] ? O.sizeOuter : 'cap';
+    const innerKey = O.sizeInner === 'none' ? null
+      : (SIZE_MEASURES[O.sizeInner] ? O.sizeInner : 'rev');
+    const oM = SIZE_MEASURES[outerKey];
+    const oLabel = oM[0], oField = oM[1], oKind = oM[2];
+    const inner = innerKey ? SIZE_MEASURES[innerKey] : null;
+
+    const n = Number(O.sizeCount) || (size.id === 'story' ? 9 : size.id === 'square' ? 6 : 8);
+    let rows = scope.rows.filter((x) => x[oField] != null && isFinite(x[oField]) && x[oField] > 0);
+    // Every absolute figure is in the company's OWN reporting currency, so a
+    // single foreign reporter would dominate the picture for the wrong reason:
+    // Samsung's revenue is in won. The fundamentals ranking already applies
+    // this rule, and a card whose whole point is comparing magnitudes needs it
+    // more, not less.
+    if (oKind === 'money' || (inner && inner[2] === 'money')) {
+      rows = rows.filter((x) => !x.currency || x.currency === 'USD');
+    }
+    // Gross margin and net cash mean nothing for a lender — a bank has no cost
+    // of goods, which is why JPM reports exactly 100%.
+    if (outerKey === 'gm' || outerKey === 'cash'
+      || innerKey === 'gm' || innerKey === 'cash') {
+      rows = rows.filter((x) => x.sector !== 'Financial Services');
+    }
+    rows = rows.sort((a, b) => b[oField] - a[oField]).slice(0, n);
+
+    if (rows.length < 2) {
+      return chromeTop() + '<div class="s-body"><div><span class="s-kick">' + esc(scope.label) + '</span>'
+        + '<h2 class="s-title">Size</h2><p class="s-empty">Not enough of ' + esc(scope.label)
+        + ' reports ' + esc(oLabel.toLowerCase()) + ' yet to compare.</p></div></div>' + chromeFoot();
+    }
+
+    const cols = rows.length <= 4 ? 2 : rows.length <= 9 ? 3 : 4;
+    // The cell is sized from the artboard's OWN height, not from the column
+    // count alone. A card cannot scroll: a grid too tall does not clip, it
+    // sits on top of the masthead, because `.s-body` centres its content. The
+    // first cut fixed the cell per column count and overflowed the square by
+    // 93px at four circles — the shortest artboard with the largest cells.
+    const gridRows = Math.ceil(rows.length / cols);
+    // What the title, legend, caption and chrome take before the grid gets any.
+    const FURNITURE = size.id === 'story' ? 640 : 530;
+    const CELL = Math.max(112, Math.min(420, (size.h - FURNITURE) / gridRows));
+    const MAXR = CELL * 0.39;
+    // The scale is set by the largest company, so everything else is honestly
+    // smaller: r = R * sqrt(v / vmax) keeps AREA proportional to the value.
+    const big = rows[0][oField];
+    const rOf = (v) => MAXR * Math.sqrt(Math.max(0, v) / big);
+    // Under this a circle is a dot nobody can read. Floored rather than
+    // dropped, and MARKED — a dot drawn at its honest size is still the truth,
+    // and silently enlarging it would not be.
+    const MINR = 14;
+    let floored = 0;
+
+    const body = rows.map((r) => {
+      const ov = r[oField];
+      let ro = rOf(ov);
+      const tiny = ro < MINR;
+      if (tiny) { ro = MINR; floored++; }
+      let ri = 0, iTxt = '', swapped = false;
+      if (inner) {
+        const iField = inner[1], iKind = inner[2];
+        const iv = r[iField];
+        if (iv != null && isFinite(iv)) {
+          if (iKind === 'money') {
+            // The same absolute scale as the outer disc, so the two compare
+            // both within one company and across the card.
+            ri = tiny ? ro * 0.5 : rOf(Math.abs(iv));
+            swapped = ri > ro;
+            iTxt = fmtMoney(iv);
+          } else {
+            // A ratio has no scale of its own, so it is drawn as a SHARE of the
+            // outer area: a 30% margin fills 30% of the disc. Clamped at the
+            // edge, since a margin over 100% is a data fault, not a bigger
+            // circle.
+            const f = Math.max(0, Math.min(1, iv / 100));
+            ri = ro * Math.sqrt(f);
+            iTxt = fmtMetric(iv, 'pct');
+          }
+        }
+      }
+      const outerD = Math.max(ro, ri) * 2;
+      const innerD = Math.min(ro, ri) * 2;
+      const outerCls = swapped ? 'zin' : 'zout';
+      const innerCls = swapped ? 'zout' : 'zin';
+      return '<div class="zcell" style="height:' + CELL + 'px">'
+        + '<div class="zdisc" style="width:' + outerD + 'px;height:' + outerD + 'px">'
+        + '<span class="zc ' + outerCls + '" style="width:' + outerD + 'px;height:' + outerD + 'px"></span>'
+        + (ri > 0 ? '<span class="zc ' + innerCls + '" style="width:' + innerD + 'px;height:' + innerD + 'px"></span>' : '')
+        + '</div>'
+        + '<div class="zname">' + esc(nameOf(r)) + (tiny ? '<span class="zdot">·</span>' : '') + '</div>'
+        + '<div class="zval">' + esc(oKind === 'money' ? fmtMoney(ov) : fmtMetric(ov, 'pct'))
+        + (iTxt ? '<span class="zi">' + esc(iTxt) + '</span>' : '') + '</div>'
+        + '</div>';
+    }).join('');
+
+    const ratio = big / rows[rows.length - 1][oField];
+    const legend = '<span class="zkey"><i class="zout"></i>' + esc(oLabel) + '</span>'
+      + (inner ? '<span class="zkey"><i class="zin"></i>' + esc(inner[0]) + '</span>' : '');
+
+    return chromeTop()
+      + '<div class="s-body"><div><span class="s-kick">' + esc(scope.label) + ' · reported figures</span>'
+      + '<h2 class="s-title">Size<br><span class="dim">' + esc(oLabel.toLowerCase())
+      + (inner ? ' and ' + esc(inner[0].toLowerCase()) : '') + '</span></h2>'
+      + '<div class="zlegend">' + legend + '</div>'
+      + '<div class="zgrid" style="grid-template-columns:repeat(' + cols + ',1fr)">' + body + '</div>'
+      + '<p class="s-sub zsub" style="font-size:17px;margin-top:20px">Circle AREA is the measure, not its width. '
+      + 'The largest here is ' + (ratio >= 100 ? Math.round(ratio) : ratio.toFixed(1)) + '× the smallest.'
+      + (inner && inner[2] === 'money'
+        ? ' The second disc shares that scale, so its share of the first is the ratio between them.' : '')
+      + (inner && inner[2] !== 'money' ? ' The inner disc fills that share of the area.' : '')
+      + (floored ? ' ' + floored + ' shown at a minimum size to stay legible (·).' : '')
+      + '</p></div></div>' + chromeFoot();
+  }
+
   function tplAvatar() {
     return '<div class="avatarFull">' +
       '<div class="avGlow"></div>' +
@@ -1222,7 +1366,7 @@
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
-    fund: tplFund, sparks: tplSparks, range: tplRange, avatar: tplAvatar,
+    fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -1578,6 +1722,44 @@
     .spkt svg { display: block; width: 100%; height: 78px; margin-top: 10px; }
 
     /* one company, in full: a grid of reported figures */
+    /* ---- Size: companies as concentric discs --------------------------
+       The discs are laid out by the grid and CENTRED in a square cell, so a
+       circle's position never encodes anything — only its area does. Both
+       discs are absolutely positioned about the same centre, which is what
+       makes them concentric at any pair of sizes. */
+    .zgrid { display: grid; gap: 10px 8px; margin-top: 26px; }
+    .zcell { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+    .zdisc { position: relative; margin: auto auto 12px; }
+    .zc { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+          border-radius: 50%; display: block; }
+    /* The outer disc is a wash with a hairline so a small inner one still
+       reads against it; the inner is solid, because the thing being compared
+       twice should not be the fainter of the two. */
+    .zc.zout { background: rgba(124, 156, 255, 0.20); box-shadow: inset 0 0 0 2px rgba(124, 156, 255, 0.55); }
+    .zc.zin { background: var(--green); opacity: .92; }
+    .zname { font: 600 21px/1.15 var(--sans); text-align: center; letter-spacing: -0.01em;
+             max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .zdot { color: var(--faint); margin-left: 4px; }
+    .zval { font: 500 19px/1.3 var(--mono); color: var(--muted); text-align: center; margin-top: 3px; }
+    .zval .zi { color: var(--green); margin-left: 9px; }
+    .zlegend { display: flex; gap: 22px; margin-top: 22px; font: 500 19px var(--sans); color: var(--muted); }
+    .zkey { display: inline-flex; align-items: center; gap: 9px; }
+    .zkey i { width: 16px; height: 16px; border-radius: 50%; display: inline-block; }
+    .zkey i.zout { background: rgba(124, 156, 255, 0.20); box-shadow: inset 0 0 0 2px rgba(124, 156, 255, 0.55); }
+    .zkey i.zin { background: var(--green); }
+    /* .s-sub is capped at 40ch for the templates that set a sentence beside a
+       chart. This card's note runs under a full-width grid, so that cap
+       squeezes it into a narrow column in the corner.
+       NO BACKTICKS ANYWHERE IN HERE: STYLE is itself a template literal, so
+       one inside a comment ends the string and the whole module stops
+       parsing. */
+    .zsub { max-width: none !important; }
+    .sz-story .zname { font-size: 25px; }
+    .sz-story .zval { font-size: 22px; }
+    .sz-story .zlegend { font-size: 22px; }
+    .sz-square .zname { font-size: 19px; }
+    .sz-square .zval { font-size: 17px; }
+
     .fgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 34px; }
     .ftile { padding: 20px 22px; border-radius: 17px; border: 1px solid var(--hair);
              background: rgba(255, 255, 255, 0.024); }
