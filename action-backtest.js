@@ -40,7 +40,17 @@ cfg.__resolved = true;
 console.log(`preset: ${preset}   (technical skeleton only — fundamentals cannot be replayed)\n`);
 
 const db = new DatabaseSync(DB);
-const syms = db.prepare('select distinct symbol from theme_tickers order by symbol').all()
+// EVERY stock with bars, which for a bar-replay study is the universe.
+//
+// This read `theme_tickers` until 2026-09-20, which has not been the universe
+// since the `universe` table was introduced — a theme only GROUPS stocks, and a
+// tracked stock in no theme was silently absent. Measured when it was found:
+// 241 symbols against 430 with price history, so the eighteen-year study had
+// been running on a little over half the screener and saying nothing about it.
+// The local analysis copy does not sync `universe`, and does not need to:
+// a replay can use exactly the symbols that have bars, which is what
+// build-tech-history.js uses for the same reason.
+const syms = db.prepare('select distinct symbol from bars order by symbol').all()
   .map((r) => r.symbol);
 
 const HORIZONS = [21, 63];
@@ -112,5 +122,9 @@ for (const era of eras) {
 }
 
 console.log('Read the p10 columns: the model earns its keep if the bad cases in the Buy tiers');
-console.log('are materially shallower than in Avoid/Sell. Survivorship caveat: these 93 all');
+console.log('are materially shallower than in Avoid/Sell. Survivorship caveat: these '
+  // COUNTED, not typed. This read "these 93" long after the universe reached
+  // 430 — a stale number in the one sentence that exists to stop the reader
+  // trusting the table too much.
+  + syms.length + ' all');
 console.log('still trade; the names a stop-loss rule would have saved you from most are absent.');
