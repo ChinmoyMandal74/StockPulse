@@ -1228,6 +1228,22 @@ Per-stock headlines — **headline / source / url / timestamp only, never bodies
 
 **The lesson, which the news incident already taught and this repeated: work added to the refresh tail is not free, and a slow query there does not fail loudly — it fails as a job that says the night went wrong when it went right.** Before adding anything to that path, time it COLD against production, and prefer a seek. And when a refresh "fails", read the run record before believing it: `complete` with a full `loaded` and an empty report means the work succeeded and the tail did not.
 
+### The 2026-09-20 nightly: a benchmark run against production during the run
+**The failure was mine and it was not in the code — it was a 106.7MB query aimed at the live database at 4:26 PM on a nightly day.** Run 49 went `abandoned` after one round, 370/430 loaded, and GitHub mailed a failure.
+
+| | |
+|---|---|
+| 16:24:49 | the workflow starts |
+| 16:25:02 | the server records run 49 |
+| **16:26:09 → 16:28:15** | **my whole-table benchmark: 332,883 rows, 106.7MB, 126.2s** |
+| 16:27:56 | the workflow dies — 187s, its `-m 180` curl limit |
+| 16:28:43 | the server finishes round 1 (106.5s of compute), 47s too late |
+
+- **The contention runs BOTH ways, and this file only documented one.** The `init()` section records that a long refresh makes every other tab cold. The reverse is just as true and bit harder: **a long query makes the refresh miss its deadline.** The round was 106.5s of compute where a normal one is a fraction of that, the start call overran 180 seconds, and nothing called `DELETE`, so the flag aged out and the run was swept to `abandoned`.
+- **A deploy was NOT the cause, though three landed minutes later.** The Actions API settles it: the workflow died at 20:27:56Z and the first push was 16:29:06 EDT, afterwards. Worth checking rather than assuming — `run_started_at` / `updated_at` on `/actions/runs/<id>` is public even when the log is not, and it is the cheapest way to time a workflow's death against anything else.
+- **What it actually cost was small, and reading the run record is how you know that**: prices were pulled live for all 430 and the snapshot was written at 16:26:49, so the day's data was in. The one real gap was the profile rotation — 2 of ~62 — which self-heals, since each night expires the oldest `ceil(N/7)` again. The failure email described a night that had mostly succeeded, for the third time (see 2026-09-18 news and 2026-09-19 tech-history).
+- **The rule this leaves: research reads belong on the LOCAL copy, and anything whole-table aimed at production must not run between 4:15 and 4:45 PM Eastern.** `analysis-db.js` exists precisely so a 100MB question never has to be asked of the live database; the benchmark above had a reason to hit production (it was measuring production's own wall) and still should have waited for the window to clear.
+
 ## The trend-only backtest (built and measured)
 **A backtest that reads NOTHING but bars, so it can go back twenty years instead of two months (2026-09-19, owner's request).** The advice backtest is capped at two months because `fundamentals_history` begins 2026-08-30 and everything before that would be imputed. Trend, entry, RSI, volume, the moving averages and the 52-week position are all bar-derived, and `action.js` already carries a fundamentals-free rule list — **`etfRules`**, reached whenever a row has neither Quality nor a forward P/E. So there is no new engine and no fork: this runs the same rules the ETF rows run today, which is also what `action-backtest.js` has replayed over eighteen years.
 
