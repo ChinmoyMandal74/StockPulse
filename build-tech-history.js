@@ -198,7 +198,15 @@ const fmt = (n) => n.toLocaleString('en-US');
     // and the upsert means replaying a chunk costs only time.
     let ok = false;
     for (let attempt = 1; attempt <= 4 && !ok; attempt++) {
-      try { written += await store.writeTechHistory(slice); ok = true; } catch (err) {
+      // A generous deadline, because a HEALTHY batch here is slow: measured on
+      // 2026-09-20, a 4,000-row statement batch took 3-6 minutes against an
+      // archive this size, and write throughput degrades as the table grows.
+      // 15 minutes is over twice the worst healthy batch seen and still turns
+      // a dead socket from 159 minutes of silence into one retry.
+      try {
+        written += await store.writeTechHistory(slice, { timeoutMs: 15 * 60 * 1000 });
+        ok = true;
+      } catch (err) {
         if (attempt === 4) throw err;
         console.log(`  chunk at ${fmt(k)} failed (${err.message}) — retrying in ${attempt * 5}s`);
         await new Promise((r) => setTimeout(r, attempt * 5000));

@@ -33,6 +33,44 @@ if (!url) {
 
 const db = createClient({ url, authToken });
 
+// ---- a deadline on one round trip -----------------------------------------
+// **A DROPPED SOCKET DOES NOT THROW FOR HOURS.** Measured on 2026-09-20 during
+// the `tech_history` build: a write stalled at the 72-minute mark and the
+// `terminated` error did not surface until minute 231 — **159 minutes inside a
+// single `await db.batch(...)`**, with no error to catch and nothing printed.
+// From the outside that is indistinguishable from healthy work on a
+// network-bound job: the process is alive, CPU is near zero, stdout is silent.
+//
+// It cost 2h39m of a 4h38m offline run, which is merely annoying. The same
+// `writeTechHistory` is called by `noteTechMark` inside the REFRESH TAIL,
+// where the platform kills the function instead and the night is reported as
+// a failure over data that was fine — the 2026-09-19 nightly's exact shape.
+//
+// So: race the work against a clock. **The request is NOT cancelled** — libSQL
+// offers no handle for that — which is safe here only because every caller is
+// an idempotent upsert, and a caller that is not must not use this.
+const DB_BATCH_TIMEOUT_MS = Number(process.env.DB_BATCH_TIMEOUT_MS) || 60000;
+
+function withDeadline(label, ms, run) {
+  const work = run();
+  // The abandoned request settles minutes later and would otherwise land as an
+  // unhandled rejection long after we stopped waiting — which on Node takes
+  // the process down. Marking it handled here is the whole reason this is not
+  // a bare Promise.race at each call site.
+  work.catch(() => {});
+  let timer = null;
+  const bell = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} did not answer within ${Math.round(ms / 1000)}s`)), ms);
+  });
+  // NO `timer.unref()` here, and a test pins that. An unref'd timer does not
+  // hold the event loop open, so in a CLI script — the builder, which is the
+  // one place this deadline most has to work — a hung request would leave
+  // nothing else pending and Node would exit 0 mid-write instead of throwing.
+  // The `clearTimeout` below is what stops a healthy call waiting on the clock.
+  return Promise.race([work, bell]).finally(() => clearTimeout(timer));
+}
+
 // ---- schema ---------------------------------------------------------------
 // Idempotent. Called once at boot; cheap enough to be safe on a warm start too.
 
@@ -2129,7 +2167,10 @@ async function readFundamentalsRows(through) {
 const TECH_COLS = ['action', 'flag', 'trend', 'close', 'vs200', 'vs50', 'rsi', 'm1', 'm3',
   'from_high', 'vol_trend', 'history_days'];
 
-async function writeTechHistory(rows) {
+// `opts.timeoutMs` is the deadline on EACH batch, not on the call. The default
+// suits a request path; the offline builder sends far larger batches and passes
+// its own — see withDeadline above for what the deadline is protecting against.
+async function writeTechHistory(rows, opts = {}) {
   await init();
   if (!Array.isArray(rows) || !rows.length) return 0;
   // Reject the empty BEFORE coercing: Number(null) is 0 and isFinite(0) is
@@ -2161,8 +2202,11 @@ async function writeTechHistory(rows) {
       args: slice.flatMap(argsFor),
     });
   }
+  const ms = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : DB_BATCH_TIMEOUT_MS;
   for (let i = 0; i < stmts.length; i += 20) {
-    await db.batch(stmts.slice(i, i + 20), 'write');
+    const slice = stmts.slice(i, i + 20);
+    await withDeadline(`tech_history write (${slice.length} statements)`, ms,
+      () => db.batch(slice, 'write'));
   }
   return rows.length;
 }

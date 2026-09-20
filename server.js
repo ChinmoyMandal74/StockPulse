@@ -6996,7 +6996,14 @@ async function noteTechMark(day, rows) {
       m1: r.oneMonthPct, m3: r.threeMonthPct, fromHigh: r.pctFromHigh,
       volTrend: r.volTrend, historyDays: r.historyDays });
   }
-  return out.length ? store.writeTechHistory(out) : 0;
+  // A SHORT deadline, because this runs in the refresh tail and is optional.
+  // One weekly mark for ~420 stocks is three statements; if that cannot be
+  // written in half a minute the socket is gone, and the right answer is to
+  // let the refresh finish. Nothing is lost — noteTechMark is self-pacing, so
+  // the next Refresh all past the seven-day gap writes the mark instead.
+  // Without this the await simply never returns and the platform kills the
+  // function, which is reported as a failed night over perfectly good data.
+  return out.length ? store.writeTechHistory(out, { timeoutMs: 30000 }) : 0;
 }
 
 function marketDay(rows) {
