@@ -24,6 +24,50 @@
     .spacer { margin-left: auto; }
     .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; max-width: 86ch; line-height: 1.65; }
 
+    /* The shape of the archive. Everything here is drawn from rows the page
+       has ALREADY fetched — first bar, last bar, and the per-dataset fields —
+       so it costs no query and the five-minute cache still holds. */
+    .shape { padding: 16px 18px 14px; }
+    #shapeBox { margin-bottom: 16px; }
+    .shape-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 26px; }
+    .shape h3 { font-size: 12.5px; margin: 0 0 3px; font-weight: 600; }
+    .scap { color: var(--faint); font-size: 11px; margin: 0 0 12px; line-height: 1.55; }
+    .scap b { color: var(--muted); font-weight: 600; }
+    svg.qchart { width: 100%; display: block; }
+    .qchart .yr { fill: var(--accent); }
+    .qchart .yr.thin { fill: var(--hair-2); }
+    .qchart .gl { stroke: var(--hair); stroke-width: 1; }
+    .qax { display: flex; justify-content: space-between; font: 500 9.5px var(--mono);
+           color: var(--faint); margin-top: 4px; }
+    /* One row per dataset: a track, a filled bar, and the counts. `.crow`, not
+       `.row` or `.card` — both are taken on this page, and an unscoped class
+       that also positions is the trap this repo keeps meeting. */
+    #comp .crow {
+      display: grid; grid-template-columns: 96px 1fr 96px; align-items: center; gap: 10px;
+      width: 100%; padding: 5px 4px; background: none; border: 0; color: inherit;
+      font: inherit; text-align: left; cursor: pointer; border-radius: 7px; }
+    #comp .crow:hover { background: var(--surface-2); }
+    #comp .crow[disabled] { cursor: default; opacity: .75; }
+    #comp .crow[disabled]:hover { background: none; }
+    #comp .crow .lbl { font-size: 11.5px; color: var(--muted); }
+    /* display:block on BOTH. They are spans, and an inline box ignores width
+       and height — the first cut set a percentage width on an inline element
+       and drew nothing. The track still showed (a background paints an inline
+       box) so it read as an empty bar rather than as broken markup, and the
+       test passed because it read the style ATTRIBUTE rather than the rendered
+       box. A screenshot found it. */
+    #comp .crow .track { display: block; height: 9px; border-radius: 3px;
+      background: var(--hair); overflow: hidden; }
+    #comp .crow .fill { display: block; height: 9px; border-radius: 3px 0 0 3px;
+      background: var(--green); min-width: 2px; }
+    #comp .crow .fill.warn { background: var(--amber); }
+    #comp .crow .fill.bad { background: var(--red); }
+    #comp .crow .n { font: 500 11px var(--mono); color: var(--faint); text-align: right; }
+    #comp .crow .n b { color: var(--text); font-weight: 600; }
+    @media (max-width: 620px) {
+      #comp .crow { grid-template-columns: 84px 1fr 78px; gap: 7px; }
+    }
+
     .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; margin-bottom: 16px; }
     .card { padding: 13px 14px; cursor: pointer; }
     .card .v { font: 600 22px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
@@ -88,6 +132,22 @@
 
     <div class="cards" id="cards"></div>
 
+    <section class="bezel" id="shapeBox" hidden><div class="core shape">
+      <div class="shape-grid">
+        <div>
+          <h3>What the archive can price, by year</h3>
+          <p class="scap" id="covCap"></p>
+          <svg class="qchart" id="covChart" height="150" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div class="qax" id="covAx"></div>
+        </div>
+        <div>
+          <h3>What is held, per dataset</h3>
+          <p class="scap">Click a bar to filter the table to whatever is missing from it.</p>
+          <div id="comp"></div>
+        </div>
+      </div>
+    </div></section>
+
     <section class="bezel fix" id="fixBox" hidden><div class="core fix">
       <h3>Deepen the thin ones</h3>
       <p id="fixWhy"></p>
@@ -146,6 +206,101 @@
       if (h < 48) return Math.round(h) + 'h';
       return Math.round(h / 24) + 'd';
     };
+
+    // ---- the shape of the archive ------------------------------------------
+    // Both charts are drawn from rows already fetched. No query, no new
+    // endpoint, nothing slower — `firstBar`/`lastBar` and the per-dataset
+    // fields are in the payload the table renders from.
+
+    // How many stocks the archive can price in a given year: every stock whose
+    // bars SPAN it. Not "started by then" — a stock that stopped trading in
+    // 2015 cannot price 2020, and counting it would overstate what a backtest
+    // from that year actually had.
+    function coverageByYear(rows) {
+      const spans = rows.filter((r) => r.firstBar && r.lastBar);
+      if (!spans.length) return [];
+      const y0 = Math.min(...spans.map((r) => +r.firstBar.slice(0, 4)));
+      const y1 = new Date().getFullYear();
+      const out = [];
+      for (let y = y0; y <= y1; y++) {
+        const jan = `${y}-01-01`, dec = `${y}-12-31`;
+        out.push({ year: y, n: spans.filter((r) => r.firstBar <= dec && r.lastBar >= jan).length });
+      }
+      return out;
+    }
+
+    function paintCoverage() {
+      const cov = coverageByYear(DATA.rows);
+      if (!cov.length) { $('covChart').innerHTML = ''; return; }
+      const top = Math.max(...cov.map((c) => c.n)) || 1;
+      const W = 1000, H = 130, PAD = 4;
+      const bw = (W - PAD * 2) / cov.length;
+      // A year holding under a tenth of the universe cannot form a basket, and
+      // saying so in the drawing is the point of the chart.
+      const THIN = Math.max(3, Math.round(DATA.universe * 0.1));
+      $('covChart').setAttribute('viewBox', `0 0 ${W} ${H}`);
+      $('covChart').innerHTML = cov.map((c, i) => {
+        const h = (c.n / top) * (H - 8);
+        return `<rect class="yr${c.n < THIN ? ' thin' : ''}" x="${PAD + i * bw + 0.5}"
+          y="${H - h}" width="${Math.max(1, bw - 1.5)}" height="${h}" rx="1"
+          ><title>${c.year}: ${c.n} stock${c.n === 1 ? '' : 's'} with bars covering it</title></rect>`;
+      }).join('');
+      $('covAx').innerHTML = [cov[0], cov[Math.floor(cov.length / 2)], cov[cov.length - 1]]
+        .map((c) => `<span>${c.year}</span>`).join('');
+      // The floor is the first year with enough stocks to be worth running —
+      // the number that decides what any long backtest can honestly claim.
+      const floor = cov.find((c) => c.n >= THIN);
+      const now = cov[cov.length - 1];
+      $('covCap').innerHTML = floor
+        ? `Usable from <b>${floor.year}</b> (${floor.n} stocks) and <b>${now.n}</b> today. `
+          + `Grey years hold under ${THIN} and cannot form a basket. `
+          + `A wall rather than a slope is the <b>5,000-bar API ceiling</b>, not a listing date.`
+        : `Not enough history yet to price a basket in any year.`;
+    }
+
+    // What is held per dataset. `missing` names the flag the table already
+    // filters on, so a bar click reuses the cards' own mechanism rather than
+    // inventing a second one.
+    const DATASETS = [
+      ['Bars', (r) => !r.flags.includes('too short to score') && !r.flags.includes('no bars'), 'tooShort'],
+      ['5Y history', (r) => !r.flags.includes('no 5Y'), 'noFiveYear'],
+      ['Profile', (r) => r.hasProfile && !r.flags.includes('profile pull failed'), 'noProfile'],
+      ['Fundamentals', (r) => (r.fundDays || 0) > 0, 'noFundamentals'],
+      ['Earnings', (r) => (r.earnQuarters || 0) > 0, 'noEarnings'],
+      ['Exchange', (r) => !!r.exchange, 'noExchange'],
+      ['Headlines', (r) => (r.news || 0) > 0, null],
+    ];
+
+    function paintCompleteness() {
+      const rows = DATA.rows, total = rows.length || 1;
+      $('comp').innerHTML = DATASETS.map(([label, held, key]) => {
+        const n = rows.filter(held).length;
+        const gap = rows.length - n;
+        const share = (n / total) * 100;
+        const tone = share >= 97 ? '' : share >= 80 ? 'warn' : 'bad';
+        const can = key && gap > 0;
+        return `<button class="crow" data-k="${key || ''}"${can ? '' : ' disabled'}
+          ${can ? `title="Filter the table to the ${gap} without it"` : ''}>
+          <span class="lbl">${we(label)}</span>
+          <span class="track"><span class="fill ${tone}" style="width:${share.toFixed(1)}%"></span></span>
+          <span class="n"><b>${n}</b> · ${gap ? gap + ' no' : 'all'}</span>
+        </button>`;
+      }).join('');
+      $('comp').querySelectorAll('.crow:not([disabled])').forEach((b) => {
+        b.addEventListener('click', () => {
+          only = only === b.dataset.k ? null : b.dataset.k;
+          paintCards(); paint();
+          document.querySelector('.wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      });
+    }
+
+    function paintShape() {
+      if (!DATA || !DATA.rows || !DATA.rows.length) return;
+      paintCoverage();
+      paintCompleteness();
+      $('shapeBox').hidden = false;
+    }
 
     function paintCards() {
       const s = DATA.summary;
@@ -241,7 +396,7 @@
         if (!r.ok) throw new Error('HTTP ' + r.status);
         DATA = await r.json();
         $('took').textContent = DATA.cached ? 'cached' : `${DATA.ms} ms`;
-        paintCards(); paintFix(); paint();
+        paintCards(); paintShape(); paintFix(); paint();
         $('note').innerHTML = 'Sessions are <b>estimated</b> from the first and last bar, not counted: '
           + 'counting rows per symbol would read the whole archive, which is what caused a database '
           + 'quota warning once. Two seeks per stock read two rows instead. '
