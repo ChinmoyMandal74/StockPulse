@@ -784,6 +784,18 @@ app.get('/promo', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'private', 'promo.html'));
 }));
 
+// The pivot: the screen counted by two dimensions at once. A member page beside
+// the studio, refused to guests for the same reason — five preview stocks have
+// no shape to show. Everything it needs is already on a snapshot row, so it
+// reads /api/stocks and cross-tabulates in the browser: no endpoint of its own,
+// no query, nothing on the rows-read meter.
+app.get('/pivot', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'pivot');
+  res.sendFile(path.join(__dirname, 'private', 'pivot.html'));
+}));
+
 // ---- Admin auth (cookie-based, no DB) --------------------------------------
 // A deterministic token derived from the password (HMAC) is stored in an httpOnly
 // cookie; there's no separate secret to manage. When ADMIN_PASSWORD is unset the

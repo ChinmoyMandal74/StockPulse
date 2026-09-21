@@ -1009,6 +1009,13 @@
            title="Promo Studio — turn tonight's data into a post-ready card">
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-star" /></svg>Promo Studio
         </a>
+        <!-- The pivot: the same rows, cross-tabulated. A member page like the
+             studio beside it, and hidden for guests for the same reason —
+             a preview of five stocks has no shape to show. -->
+        <a class="btn" id="pivotLink" href="/pivot" target="_blank" rel="noopener"
+           title="Pivot view — count the screen by two dimensions at once">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>Pivot view
+        </a>
         <!-- The forward-returns VIEW still belongs to this page: it is a mode of
              the table, with its own banner and its own column group. Only the
              control left — /admin sets the date and links here with ?asOf=. The
@@ -4156,6 +4163,7 @@
         const ask = document.querySelector('a.btn[href="/chat"]');
         if (ask) ask.style.display = 'none';
         $('promoLink').style.display = 'none';
+        if ($('pivotLink')) $('pivotLink').style.display = 'none';
         const note = $('readonlyNote').querySelector('span');
         if (note) note.innerHTML = '<b>Guest preview.</b> A handful of stocks with every feature live — ' +
           'the full screener, research pages and assistant need an account.';

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Pivot view — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <script src="/wmark.js" defer></script>
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1480px; margin: 0 auto; padding: 0 28px; }
+
+    .top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 26px 0 0; }
+    .top h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.03em; }
+    .top .count { font: 500 12px var(--mono); color: var(--faint); }
+    .top .spacer { flex: 1 1 0; }
+    .sub { margin: 10px 0 0; max-width: 78ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+
+    /* The two dimension pickers and the swap, as one row. */
+    .picks { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin: 20px 0 0; }
+    .pick { display: flex; flex-direction: column; gap: 6px; }
+    .pick label { font-size: 10px; font-weight: 500; text-transform: uppercase;
+                  letter-spacing: 0.16em; color: var(--faint); }
+    .pick select {
+      appearance: none; -webkit-appearance: none; min-width: 190px;
+      padding: 9px 30px 9px 12px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--hair); background: var(--surface); color: var(--text);
+      font: 500 13px var(--sans);
+      background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa3b2' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center; }
+    .pick select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    #swap { padding: 9px 14px; }
+
+    .note { margin: 14px 0 0; font-size: 12px; line-height: 1.6; color: var(--faint); max-width: 96ch; }
+    .note b { color: var(--muted); font-weight: 600; }
+    .note.warn { color: var(--amber); }
+
+    .gridwrap { margin: 18px 0 0; overflow: auto; max-height: calc(100dvh - 330px);
+                border-radius: var(--r-core); }
+    table.pv { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+    table.pv th, table.pv td { padding: 9px 12px; font-size: 12.5px; white-space: nowrap;
+                               border-bottom: 1px solid var(--hair); }
+    /* The corner, the header row and the first column all pin, so a wide grid
+       stays readable — they paint on --surface, which must stay opaque or the
+       rows scroll through them. */
+    table.pv thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-2);
+                        color: var(--faint); font-weight: 500; text-align: right;
+                        text-transform: uppercase; letter-spacing: 0.1em; font-size: 10.5px; }
+    table.pv thead th.rowhead { left: 0; z-index: 3; text-align: left; }
+    table.pv tbody th { position: sticky; left: 0; z-index: 1; background: var(--surface);
+                        text-align: left; font-weight: 500; color: var(--text); }
+    /* A floor on the data columns, or the row-header column absorbs all the
+       slack on a narrow grid and the numbers bunch against the right edge. */
+    table.pv thead th:not(.rowhead) { min-width: 104px; }
+    table.pv td { text-align: right; font-family: var(--mono);
+                  font-variant-numeric: tabular-nums; color: var(--text); }
+    table.pv td.zero { color: var(--faint); }
+    table.pv .tot, table.pv tfoot td, table.pv tfoot th {
+      font-weight: 600; background: rgba(255, 255, 255, 0.028); }
+    table.pv tfoot th, table.pv tfoot td { position: sticky; bottom: 0; z-index: 2;
+                                           background: var(--surface-2); border-top: 1px solid var(--hair-2); }
+    table.pv tfoot th { left: 0; z-index: 3; }
+    table.pv tbody tr:hover th, table.pv tbody tr:hover td { background: rgba(255, 255, 255, 0.022); }
+    /* A cell with stocks in it is a button; an empty one is not. */
+    table.pv td.cell { cursor: pointer; }
+    table.pv td.cell:hover { color: var(--accent); }
+    table.pv td.cell.open { color: var(--accent); background: rgba(124, 156, 255, 0.10); }
+    table.pv td.blankdim, table.pv th.blankdim { color: var(--faint); font-style: italic; }
+
+    /* The expansion: one row spanning the table, under the row that was clicked. */
+    tr.drill td { background: rgba(124, 156, 255, 0.045); text-align: left; white-space: normal;
+                  padding: 12px 14px 14px; font-family: var(--sans); }
+    .drill h4 { margin: 0 0 9px; font-size: 12px; font-weight: 600; color: var(--muted); }
+    .drill h4 b { color: var(--text); }
+    .dlist { display: flex; flex-wrap: wrap; gap: 6px; }
+    .dlist a { display: inline-flex; align-items: baseline; gap: 7px; padding: 5px 10px;
+               border-radius: 999px; border: 1px solid var(--hair); background: var(--surface);
+               text-decoration: none; color: var(--text); font-size: 12px; }
+    .dlist a:hover { border-color: var(--hair-2); }
+    .dlist .sym { font: 600 11.5px var(--mono); }
+    .dlist .nm { color: var(--muted); max-width: 22ch; overflow: hidden;
+                 text-overflow: ellipsis; white-space: nowrap; }
+    .dlist .mv { font: 500 11px var(--mono); }
+    .dlist .vd { font-size: 10.5px; color: var(--faint); }
+
+    .msg { padding: 40px 0; color: var(--muted); font-size: 13px; }
+    .err { color: var(--red); }
+    @media (max-width: 720px) {
+      .page { padding: 0 14px; }
+      .pick select { min-width: 150px; }
+      .gridwrap { max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <main class="page">
+    <header class="top">
+      <h1>Pivot view</h1>
+      <span class="count" id="count"></span>
+      <span class="spacer"></span>
+      <a class="btn" href="/">Back to screener</a>
+    </header>
+    <p class="sub">
+      The screen counted by two dimensions at once. Every number is a count of stocks;
+      click a cell to see which ones. Nothing here is fetched twice — it is the same
+      snapshot the screener reads, cross-tabulated in the browser.
+    </p>
+
+    <div class="picks">
+      <div class="pick"><label for="rowDim">Rows</label><select id="rowDim"></select></div>
+      <button class="btn" id="swap" title="Swap the rows and the columns">⇄ Swap</button>
+      <div class="pick"><label for="colDim">Columns</label><select id="colDim"></select></div>
+    </div>
+
+    <p class="note" id="note"></p>
+    <div id="out"><div class="msg">Loading the screen…</div></div>
+  </main>
+
+  <script>
+    'use strict';
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    // A blank is a BUCKET, never a dropped row. Twenty stocks have no sector
+    // yet — profiles arrive on rotation — and silently omitting them would make
+    // every total wrong while looking perfectly tidy. The same rule the News
+    // column and the data-quality page both record.
+    const BLANK = '—';
+
+    // Ladders, so a dimension that HAS an order is not sorted alphabetically.
+    // "Avoid, Buy, Buy with Risk, Hold, Sell Immediately, Strong Buy" is the
+    // alphabet's idea of a verdict ladder and nobody's else's.
+    const ADVICE_ORDER = ['Strong Buy', 'Buy', 'Buy with Risk', 'Hold', 'Avoid', 'Sell Immediately'];
+    const TREND_ORDER = ['Strong uptrend', 'Above 200D', 'Neutral', 'Below 200D', 'Downtrend', 'Breakdown'];
+    const ENTRY_ORDER = ['Clean entry', 'Pullback', 'Extended', 'None'];
+    const TYPE_ORDER = ['Established', 'Early', 'ETF'];
+
+    // `multi` marks a dimension a stock can be in more than once. It is the one
+    // thing on this page that breaks the arithmetic everyone expects from a
+    // pivot, so it is a property of the dimension rather than a special case
+    // buried in the sum.
+    const DIMS = {
+      sector:   { label: 'Sector',          get: (s) => s.sector },
+      industry: { label: 'Industry',        get: (s) => s.industry, wide: true },
+      theme:    { label: 'Theme',           get: (s) => s.portfolios || [], multi: true },
+      advice:   { label: 'Balanced advice', get: (s) => s.action,      order: ADVICE_ORDER },
+      trend:    { label: 'Trend state',     get: (s) => s.actionTrend, order: TREND_ORDER },
+      entry:    { label: 'Entry state',     get: (s) => s.actionEntry, order: ENTRY_ORDER },
+      type:     { label: 'Company type',    get: (s) => s.companyType, order: TYPE_ORDER },
+      exchange: { label: 'Exchange',        get: (s) => s.exchange },
+    };
+    // Past this many values a dimension is collapsed to its largest plus an
+    // "Other" bucket. Industry is 87 values over 430 stocks: crossed with
+    // anything it is a wall of empty cells, and the average industry holds five
+    // companies. Measured before building, which is why it is capped at all.
+    const WIDE_CAP = 24;
+
+    let stocks = [];
+    let rowKey = 'sector';
+    let colKey = 'advice';
+    const open = new Set();          // "r|c" of the expanded cells
+
+    // One stock can land in several buckets of a multi-valued dimension, so
+    // every reader goes through this and gets a LIST back. Nothing downstream
+    // has to know which kind of dimension it is holding.
+    function valuesOf(dim, s) {
+      const v = dim.get(s);
+      if (Array.isArray(v)) return v.length ? v.slice() : [BLANK];
+      return [v == null || v === '' ? BLANK : String(v)];
+    }
+
+    function orderKeys(dim, counts) {
+      const keys = [...counts.keys()];
+      if (dim.order) {
+        const rank = (k) => {
+          const i = dim.order.indexOf(k);
+          return i < 0 ? dim.order.length + (k === BLANK ? 1 : 0) : i;
+        };
+        return keys.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+      }
+      // Otherwise by size, because "where is the weight" is the question a
+      // pivot is opened to answer. The blank bucket always sorts last: it is a
+      // gap in the data, not a finding.
+      return keys.sort((a, b) => {
+        if (a === BLANK) return 1;
+        if (b === BLANK) return -1;
+        return (counts.get(b) - counts.get(a)) || a.localeCompare(b);
+      });
+    }
+
+    // Collapse a wide dimension to its largest values plus one "Other" bucket,
+    // so the grid stays a grid. Returns the keys to show and a mapper.
+    function collapse(dim, counts, keys) {
+      if (!dim.wide || keys.length <= WIDE_CAP) return { keys, folded: 0, map: (k) => k };
+      const kept = keys.filter((k) => k !== BLANK).slice(0, WIDE_CAP - 1);
+      const keptSet = new Set(kept);
+      const tail = keys.filter((k) => k !== BLANK && !keptSet.has(k));
+      const out = kept.slice();
+      if (tail.length) out.push('Other');
+      if (keys.includes(BLANK)) out.push(BLANK);
+      return {
+        keys: out, folded: tail.length,
+        map: (k) => (k === BLANK || keptSet.has(k) ? k : 'Other'),
+      };
+    }
+
+    function build() {
+      const rd = DIMS[rowKey], cd = DIMS[colKey];
+      // First pass: how big is each value, so the order and the collapse know.
+      const rc = new Map(), cc = new Map();
+      for (const s of stocks) {
+        for (const v of valuesOf(rd, s)) rc.set(v, (rc.get(v) || 0) + 1);
+        for (const v of valuesOf(cd, s)) cc.set(v, (cc.get(v) || 0) + 1);
+      }
+      const rFold = collapse(rd, rc, orderKeys(rd, rc));
+      const cFold = collapse(cd, cc, orderKeys(cd, cc));
+
+      // Second pass: the cells. A stock in two themes lands in two cells, which
+      // is what makes the totals exceed the universe — counted here, said out
+      // loud under the table.
+      const cells = new Map();       // "r|c" -> [stocks]
+      const rowTot = new Map(), colTot = new Map();
+      let placements = 0;
+      const multiStocks = new Set();
+      for (const s of stocks) {
+        const rs = [...new Set(valuesOf(rd, s).map(rFold.map))];
+        const cs = [...new Set(valuesOf(cd, s).map(cFold.map))];
+        if (rs.length > 1 || cs.length > 1) multiStocks.add(s.symbol);
+        for (const r of rs) {
+          rowTot.set(r, (rowTot.get(r) || 0) + cs.length);
+          for (const c of cs) {
+            const k = r + '|' + c;
+            if (!cells.has(k)) cells.set(k, []);
+            cells.get(k).push(s);
+            colTot.set(c, (colTot.get(c) || 0) + 1);
+            placements++;
+          }
+        }
+      }
+      return { rd, cd, rKeys: rFold.keys, cKeys: cFold.keys, cells, rowTot, colTot,
+        placements, multi: multiStocks.size, rFolded: rFold.folded, cFolded: cFold.folded };
+    }
+
+    function moveCls(v) { return v == null ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : ''; }
+    function fmtMove(v) {
+      if (v == null || !isFinite(v)) return '';
+      return (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+    }
+
+    function drillHtml(list, rv, cv) {
+      const rows = list.slice().sort((a, b) => (b.todayPct || 0) - (a.todayPct || 0));
+      return '<h4>' + esc(rv) + ' <span style="color:var(--faint)">·</span> ' + esc(cv) +
+        ' — <b>' + rows.length + '</b> ' + (rows.length === 1 ? 'stock' : 'stocks') + '</h4>' +
+        '<div class="dlist">' + rows.map((s) =>
+          '<a href="/stock/' + esc(s.symbol) + '" target="_blank" rel="noopener" title="' +
+          esc((s.name || '') + (s.action ? ' · ' + s.action : '')) + '">' +
+          '<span class="sym">' + esc(s.symbol) + '</span>' +
+          '<span class="nm">' + esc(s.shortName || s.name || '') + '</span>' +
+          '<span class="mv ' + moveCls(s.todayPct) + '">' + esc(fmtMove(s.todayPct)) + '</span>' +
+          (s.action ? '<span class="vd">' + esc(s.action) + '</span>' : '') +
+          '</a>').join('') + '</div>';
+    }
+
+    function render() {
+      const p = build();
+      const total = stocks.length;
+      let h = '<div class="gridwrap"><table class="pv"><thead><tr>' +
+        '<th class="rowhead">' + esc(p.rd.label) + ' ↓ &nbsp; ' + esc(p.cd.label) + ' →</th>';
+      for (const c of p.cKeys) {
+        h += '<th class="' + (c === BLANK ? 'blankdim' : '') + '">' + esc(c) + '</th>';
+      }
+      h += '<th class="tot">Total</th></tr></thead><tbody>';
+
+      for (const r of p.rKeys) {
+        h += '<tr>';
+        h += '<th class="' + (r === BLANK ? 'blankdim' : '') + '">' + esc(r) + '</th>';
+        for (const c of p.cKeys) {
+          const k = r + '|' + c;
+          const n = (p.cells.get(k) || []).length;
+          // An EMPTY cell is left blank rather than printed as 0: on a grid of
+          // sixty-odd cells the zeros are louder than the numbers.
+          h += n
+            ? '<td class="cell' + (open.has(k) ? ' open' : '') + '" data-k="' + esc(k) + '">' + n + '</td>'
+            : '<td class="zero">·</td>';
+        }
+        h += '<td class="tot">' + (p.rowTot.get(r) || 0) + '</td></tr>';
+        // Any expanded cell on this row, opened underneath it.
+        for (const c of p.cKeys) {
+          const k = r + '|' + c;
+          if (!open.has(k)) continue;
+          const list = p.cells.get(k) || [];
+          h += '<tr class="drill"><td colspan="' + (p.cKeys.length + 2) + '">' +
+            drillHtml(list, r, c) + '</td></tr>';
+        }
+      }
+      h += '</tbody><tfoot><tr><th>Total</th>';
+      for (const c of p.cKeys) h += '<td>' + (p.colTot.get(c) || 0) + '</td>';
+      h += '<td>' + p.placements + '</td></tr></tfoot></table></div>';
+      $('out').innerHTML = h;
+
+      // ---- what the totals mean, said rather than left to be worked out ----
+      const bits = [];
+      if (p.placements !== total) {
+        bits.push('<b class="warn">The cells add up to ' + p.placements + ', not ' + total +
+          '</b> — ' + p.multi + ' ' + (p.multi === 1 ? 'stock is' : 'stocks are') +
+          ' counted in more than one bucket, because a stock can sit in several ' +
+          esc((p.rd.multi ? p.rd.label : p.cd.label).toLowerCase()) + 's.');
+      } else {
+        bits.push('Every stock is counted exactly once: the cells add up to <b>' + total + '</b>.');
+      }
+      const blanks = (p.cells.size ? 0 : 0) ||
+        stocks.filter((s) => valuesOf(p.rd, s).includes(BLANK) || valuesOf(p.cd, s).includes(BLANK)).length;
+      if (blanks) {
+        bits.push('<b>' + blanks + '</b> ' + (blanks === 1 ? 'stock has' : 'stocks have') +
+          ' no value for one of these yet and sit in the — bucket rather than being dropped.');
+      }
+      if (p.rFolded || p.cFolded) {
+        bits.push('<b>' + (p.rFolded + p.cFolded) + '</b> smaller values are folded into ' +
+          '“Other”, so the grid stays readable.');
+      }
+      $('note').innerHTML = bits.join(' ');
+
+      $('out').querySelectorAll('td.cell').forEach((td) => {
+        td.addEventListener('click', () => {
+          const k = td.dataset.k;
+          if (open.has(k)) open.delete(k); else open.add(k);
+          render();
+        });
+      });
+    }
+
+    function fillPicks() {
+      const opts = (sel) => Object.keys(DIMS).map((k) =>
+        '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' +
+        esc(DIMS[k].label) + '</option>').join('');
+      $('rowDim').innerHTML = opts(rowKey);
+      $('colDim').innerHTML = opts(colKey);
+    }
+
+    $('rowDim').addEventListener('change', () => {
+      rowKey = $('rowDim').value;
+      // Two of the same dimension is a diagonal and nothing else, so the other
+      // picker steps aside rather than the page drawing a useless grid.
+      if (colKey === rowKey) { colKey = Object.keys(DIMS).find((k) => k !== rowKey); }
+      open.clear(); fillPicks(); render();
+    });
+    $('colDim').addEventListener('change', () => {
+      colKey = $('colDim').value;
+      if (rowKey === colKey) { rowKey = Object.keys(DIMS).find((k) => k !== colKey); }
+      open.clear(); fillPicks(); render();
+    });
+    $('swap').addEventListener('click', () => {
+      const t = rowKey; rowKey = colKey; colKey = t;
+      open.clear(); fillPicks(); render();
+    });
+
+    fetch('/api/stocks')
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then((d) => {
+        stocks = (d.stocks || []).filter((s) => !s.error);
+        $('count').textContent = stocks.length.toLocaleString() + ' stocks' +
+          (d.updatedAt ? ' · ' + new Date(d.updatedAt).toLocaleString() : '');
+        if (!stocks.length) { $('out').innerHTML = '<div class="msg">Nothing to pivot yet.</div>'; return; }
+        fillPicks();
+        render();
+      })
+      .catch((e) => {
+        $('out').innerHTML = '<div class="msg err">Could not load the screen: ' + esc(e.message) + '</div>';
+      });
+  </script>
+</body>
+</html>
