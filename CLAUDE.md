@@ -1307,6 +1307,28 @@ Gaps between recorded rounds: 5m38s, 5m30s, **6m08s**. `RUN_ABANDON_MS` was **6 
 - **The cost, stated:** an admin closing the tab mid-backfill now pins the notice for ~7 minutes rather than 4, and the heavy reads stay guarded for that long after a run dies.
 - Verified: 8 behaviour checks against the real tables on an in-memory database, aged by rewriting the clock rather than by sleeping — run 55's own 6m08s and the full 362s ceiling both stay `running`, a 20-minute silence is still swept, the flag survives a 251s round and a 362s one, a closed tab still clears it, and the two tolerances are ordered. **Proved by reverting**: the old constants fail 4 of the 8. The stand-aside suite needed its ageing moved from 6 minutes to 20 — an "eventually releases" assertion must sit clear of the boundary, not on it.
 
+### Serving the screener was SIX round trips in series (2026-09-21)
+**Reported as "screener load is slow when a Fill missing is in progress", and the recorded timings agreed: browser-measured screener load at median 8.8s, p95 27.6s, max 40.7s** (the `load` kind in `/activity`, which exists for exactly this).
+
+**The decomposition is the whole finding, and it rules out three plausible culprits at once.** Measured against production while a Fill missing ran:
+
+| route | what it touches | time to first byte |
+|---|---|---|
+| `/api/health` | **nothing** | **0.09, 0.12, 0.09, 0.09s** |
+| `/api/status` | two tiny indexed reads | **3.1, 6.3, 9.2, 47.2s** |
+| `/api/stocks` | the snapshot + five more | 4.2, 9.7, 81.2s |
+
+- **Not the payload.** The response is 3.1MB of JSON and Vercel serves it **brotli at 620KB**; `time_starttransfer` equals `time_total` in every run, so the bytes were never the wait.
+- **Not the cold start, and not the code.** `/api/health` runs the same function on the same instances and answers in 90ms *every time*. Whatever is slow is behind the first database call.
+- **It is the DATABASE, and it is per-ROUND-TRIP.** Under a refresh a single small read costs seconds — so a path's cost is its number of round trips, not its number of rows.
+
+**The screener's read path was six, in series**: the snapshot, short names, advice age, priced-at, the portfolios, the refresh flag. **None of the five after the snapshot depends on any other** — they only need `snap`, and each writes a different field. They were sequential for no reason but the order they were written in. They are one `Promise.all` now: **six round trips became two.** The identical arithmetic `init()` already records — 46 sequential is 1.72s, the same 46 in one batch is 0.04s.
+
+- **Each stamp keeps its own `catch`**, so a slow auxiliary read degrades one field instead of 500-ing the screener — which matters most exactly when the database is struggling. **`readPortfolios()` is deliberately NOT tolerant**: memberships drive the badges and the tab counts, and silently dropping them would be a wrong table rather than a thin one.
+- **TIMING IS NOT THE ASSERTION.** On an in-memory database every read is sub-millisecond, so a stopwatch passes either way. The test wraps the client and records **peak concurrent round trips**: 1 in series, many in parallel. Measured **6 of 7 in flight together; reverting to sequential drops it to 2**, which is how the test was proved to catch the regression. `uni-boot.js` exposes `global.__client` for it.
+- **What this does NOT fix**: the refresh still saturates the database, and a round is 63–257s at 640 stocks with 156–382s between rounds (run 59). This cuts the screener's exposure to that by two thirds; it does not remove it. The remaining lever is caching the four small slow-changing reads per instance, which trades against the rule that an edited short name shows on the next load.
+- Verified: 13 checks — every stamped field still arriving, a live refresh still reported, the overlap, and a failing auxiliary read leaving the page up with its rows intact.
+
 ### The heavy reads stand aside while a refresh runs
 **Nothing may compete with a refresh for the database (2026-09-21, owner's instruction).** A refresh round reads ~118,671 rows and **cannot wait**: nothing may run after a response on this platform, so the tail has to finish inside the request, and the nightly job gives up after three rounds without progress. A page can wait; a night cannot. The 2026-09-19 nightly is the proof — it reported failure over data that was perfect.
 

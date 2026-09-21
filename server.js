@@ -8397,13 +8397,36 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     // columns are: they derive from data we already hold, so a snapshot
     // written before the field existed still carries it, and an override
     // typed a moment ago shows without waiting for a refresh.
-    await stampShortNames(snap.stocks);
-    await stampAdviceAge(snap.stocks);
-    await stampPricedAt(snap.stocks);
+    // FIVE SEQUENTIAL ROUND TRIPS BECAME ONE (2026-09-21). Serving the
+    // screener took six: the snapshot, then short names, advice age, priced-at,
+    // the portfolios and the refresh flag, each awaited in turn. None of the
+    // five depends on any other — they only need `snap` — and each writes a
+    // different field, so they were in series for no reason but the order they
+    // were written in.
+    //
+    // It costs nothing on an idle database and everything on a busy one.
+    // Measured while a Fill missing was running: /api/health, which touches no
+    // database, answered in 0.09s every time, while /api/status — TWO tiny
+    // indexed reads — took 3.1s, 6.3s, 9.2s and 47.2s. Whatever one round trip
+    // costs under that contention, this path was paying it six times over. The
+    // same arithmetic init() already records: 46 sequential is 1.72s and the
+    // same 46 in one batch is 0.04s.
+    //
+    // Each stamp keeps its own catch so one slow auxiliary read degrades a
+    // field rather than 500-ing the whole screener — which matters most
+    // exactly when the database is struggling. The portfolios are deliberately
+    // NOT tolerant: memberships are load-bearing for the badges and the tab
+    // counts, and silently dropping them would be a wrong table, not a thin one.
+    const [, , , pf, refreshing] = await Promise.all([
+      stampShortNames(snap.stocks).catch(() => {}),
+      stampAdviceAge(snap.stocks).catch(() => {}),
+      stampPricedAt(snap.stocks).catch(() => {}),
+      readPortfolios(),
+      readRefreshState().catch(() => null),
+    ]);
     stampCapBand(snap.stocks);
     // Memberships too: portfolios are edited between refreshes (a deleted one
     // must not linger on every row until the next refresh rewrites the snapshot).
-    const pf = await readPortfolios();
     snap.portfolios = Object.keys(pf);
     for (const x of snap.stocks) x.portfolios = membershipOf(x.symbol, pf);
     if (await isGuest(req)) {
@@ -8416,7 +8439,7 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
         portfolios: (snap.portfolios || []).filter((pn) => names.has(pn)),
         fromSnapshot: true, guest: true, refreshing: null });
     }
-    return res.json({ ...snap, fromSnapshot: true, refreshing: await readRefreshState() });
+    return res.json({ ...snap, fromSnapshot: true, refreshing });
   }
 
   // No snapshot yet: an admin (or open/local mode) computes and seeds the first one.
