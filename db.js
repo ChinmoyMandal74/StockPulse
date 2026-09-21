@@ -1265,10 +1265,40 @@ async function expireProfiles() {
 
 // ---- refresh state --------------------------------------------------------
 
+// HOW LONG A ROUND CAN LEGITIMATELY BE SILENT, which both timeouts below are
+// derived from rather than guessed at (2026-09-21).
+//
+// A round writes `updated_at` when it FINISHES, so between two writes there is
+// one whole round plus the loop's deliberate pacing. The round has a hard
+// ceiling that is not ours: the platform kills a function at ~300s. So the
+// longest legitimate silence is about 362 seconds — six minutes — whatever the
+// universe grows to.
+//
+// Both constants used to sit AT that worst case instead of above it, and at
+// 602 symbols the worst case arrived. Run 55 (Fill missing, 2026-09-21)
+// recorded four rounds of 73s, 244s, 218s and 251s — gaps of 5m38s, 5m30s and
+// 6m08s — and the six-minute sweep buried it mid-flight while it was still
+// working. The fingerprint is a run whose `ended_at` is EARLIER than its
+// `updated_at`: it was marked over, and then kept reporting.
+//
+// A tolerance must therefore exceed the ceiling plus the gap, with slack. The
+// cost of being generous is small and bounded (a notice that lingers, a run
+// that reads `running` a few minutes longer); the cost of being tight is a
+// night that reports failure over work that succeeded, three times over now.
+const ROUND_CEILING_MS = 300 * 1000;  // the platform kills a function here
+const ROUND_GAP_MS = 62 * 1000;       // the loop's pacing, set by the credit ceiling
+
 // A refresh whose last progress report is older than this is treated as over.
-// Rounds are ~62s apart, so this tolerates a missed one; it is what stops an
-// admin closing the tab mid-backfill from pinning the banner up forever.
-const REFRESH_STALE_MS = 4 * 60 * 1000;
+// It must outlast a whole round, not just the gap between two: `/api/status`
+// raises the banner from it and `standAside` guards the heavy reads with it,
+// so a value under the round time makes both flicker off mid-round — the
+// guard would stand down for the tail of every long round, which is exactly
+// when a refresh most needs the database to itself.
+//
+// It is also what stops an admin closing the tab mid-backfill from pinning the
+// banner up forever; that now takes ~7 minutes to clear rather than 4, which
+// is the price of the round above being allowed to finish.
+const REFRESH_STALE_MS = ROUND_CEILING_MS + ROUND_GAP_MS + 60 * 1000;
 
 async function beginRefresh(actor, total, mode, runId) {
   await init();
@@ -1322,10 +1352,13 @@ async function endRefresh() {
 
 // ---- refresh run history ----------------------------------------------------
 
-// A run still marked running with no update for this long is over: rounds are
-// 62s apart and a nightly round may take up to 180s, so six minutes of silence
-// means the tab closed or the job died.
-const RUN_ABANDON_MS = 6 * 60 * 1000;
+// A run still marked running with no update for this long is over — the tab
+// closed or the job died. Derived from the same ceiling as REFRESH_STALE_MS
+// (see there for the incident that forced it) and deliberately the more
+// forgiving of the two: the live flag should clear promptly so the banner and
+// the read guard let go, while the HISTORY should wait longer before calling a
+// run dead, because mislabelling a working run is what sends a false failure.
+const RUN_ABANDON_MS = ROUND_CEILING_MS + ROUND_GAP_MS + 3 * 60 * 1000;
 
 async function recordSkippedRun({ kind, trigger, actor, reason }) {
   await init();

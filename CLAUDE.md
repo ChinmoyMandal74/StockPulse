@@ -1246,6 +1246,25 @@ Per-stock headlines — **headline / source / url / timestamp only, never bodies
 
 **The lesson, which the news incident already taught and this repeated: work added to the refresh tail is not free, and a slow query there does not fail loudly — it fails as a job that says the night went wrong when it went right.** Before adding anything to that path, time it COLD against production, and prefer a seek. And when a refresh "fails", read the run record before believing it: `complete` with a full `loaded` and an empty report means the work succeeded and the tail did not.
 
+### The refresh timeouts sat AT the worst case, so growth buried a working run
+**Run 55 (Fill missing, 2026-09-21) was marked `abandoned` while it was still working** — 4 rounds, 26 profiles, 572 of 602 loaded, **0 refused and 0 failed**. Nothing was lost; only 24 stocks still lacked a profile afterwards. The owner reported it as a failure, correctly, because that is what the page said. **The fourth time a healthy refresh has been reported as a failed one** (news 2026-09-18, tech-history 2026-09-19, the benchmark 2026-09-20, this).
+
+| round | took | credits |
+|---|---|---|
+| 1 | 73s | 561 |
+| 2 | **244s** | 561 |
+| 3 | **218s** | 1,082 |
+| 4 | **251s** | 1,082 |
+
+Gaps between recorded rounds: 5m38s, 5m30s, **6m08s**. `RUN_ABANDON_MS` was **6 minutes**, so the last gap crossed it and the lazy sweep buried the run; round 4 then landed anyway, because `recordRound` writes whatever the status says. **The fingerprint is a run whose `ended_at` is EARLIER than its `updated_at`** — marked over, then kept reporting.
+
+- **The cause was the universe going 430 → 602.** ~172 stocks were added; rounds 3 and 4 cost 1,082 credits each — a full 602-symbol live price pull (**paced**, since 602 is over the 529 that fits in one minute) plus 6 profiles, then their first bars written into a 1.7M-row archive. Measured afterwards: 402 stocks hold 1,000+ sessions, 179 hold 300–999 (the new ones, now past `LIGHT_MIN_ARCHIVE` and on the shallow path), 21 under 300 and **none at zero** — so the 250s rounds were the cost of onboarding, not the new normal.
+- **Both tolerances are DERIVED now, not guessed.** A round writes its progress when it FINISHES, and the platform kills a function at ~300s, so the longest legitimate silence is `ROUND_CEILING_MS (300s) + ROUND_GAP_MS (62s)` ≈ **6 minutes, whatever the universe grows to**. Six minutes was therefore exactly the worst case with no slack. `REFRESH_STALE_MS` is that + 1 min (~7), `RUN_ABANDON_MS` that + 3 (~9).
+- **`REFRESH_STALE_MS` (was 4 min) has to outlast a WHOLE ROUND, not the gap between two.** `/api/status` raises the banner from it and `standAside()` guards the heavy reads with it, so a value under the round time makes both flicker off mid-round — the guard would stand down for the tail of every long round, which is exactly when a refresh most needs the database to itself. A 251s round already crossed the old 240s.
+- **The order is deliberate: the live flag lets go first, the history waits longer.** A lingering banner and a lingering read guard cost little; calling a working run dead is what sends a false failure. Measured: the flag clears at 422s of silence, the run is not called dead until 542s.
+- **The cost, stated:** an admin closing the tab mid-backfill now pins the notice for ~7 minutes rather than 4, and the heavy reads stay guarded for that long after a run dies.
+- Verified: 8 behaviour checks against the real tables on an in-memory database, aged by rewriting the clock rather than by sleeping — run 55's own 6m08s and the full 362s ceiling both stay `running`, a 20-minute silence is still swept, the flag survives a 251s round and a 362s one, a closed tab still clears it, and the two tolerances are ordered. **Proved by reverting**: the old constants fail 4 of the 8. The stand-aside suite needed its ageing moved from 6 minutes to 20 — an "eventually releases" assertion must sit clear of the boundary, not on it.
+
 ### The heavy reads stand aside while a refresh runs
 **Nothing may compete with a refresh for the database (2026-09-21, owner's instruction).** A refresh round reads ~118,671 rows and **cannot wait**: nothing may run after a response on this platform, so the tail has to finish inside the request, and the nightly job gives up after three rounds without progress. A page can wait; a night cannot. The 2026-09-19 nightly is the proof — it reported failure over data that was perfect.
 
