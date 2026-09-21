@@ -1295,6 +1295,39 @@
     cap: ['market cap', 'marketCap', 'money'],
   };
 
+  // The third measure's READER, shared by Size and Bubble so the rules below
+  // are stated once. Returns the formatter and the two counts it accumulates;
+  // a caller draws the text and prints the counts.
+  //
+  // A multiple off a loss is arithmetic, not cheapness — the same reason the
+  // Quality score refuses a P/E from a loss-maker, and the reason the
+  // fundamentals ranking filters them out rather than sorting on them. Shown as
+  // a dash, with the count said aloud, so an absent number never reads as a
+  // missing one.
+  //
+  // A dash means two DIFFERENT things and the caption must separate them, the
+  // lesson the News column and the data-quality page both record: a company
+  // that loses money has no meaningful multiple, and one that simply does not
+  // report the figure has no number at all. Drawing them the same and then
+  // miscounting one as the other is how a card quietly lies.
+  function thirdReader(key) {
+    const third = SIZE_THIRDS[key] || null;
+    const counts = { noMultiple: 0, notReported: 0 };
+    const txt = (r) => {
+      if (!third) return '';
+      const v = r[third[1]];
+      if (v == null || !isFinite(v)) { counts.notReported++; return '—'; }
+      if (third[2] === 'money') return fmtMoney(v);
+      if (v <= 0) { counts.noMultiple++; return '—'; }
+      return v.toFixed(1) + '×';
+    };
+    // The two sentences, built once so both cards word them identically.
+    const note = () => (counts.noMultiple
+      ? ' ' + counts.noMultiple + ' had no meaningful multiple: a ratio off a loss is arithmetic, not cheapness.' : '')
+      + (counts.notReported ? ' ' + counts.notReported + ' does not report it.' : '');
+    return { third, txt, counts, note };
+  }
+
   function tplSize() {
     const scope = scopeOf('sizeScope', 'sizeSector');
     const outerKey = SIZE_MEASURES[O.sizeOuter] ? O.sizeOuter : 'cap';
@@ -1303,26 +1336,10 @@
     const oM = SIZE_MEASURES[outerKey];
     const oLabel = oM[0], oField = oM[1], oKind = oM[2];
     const inner = innerKey ? SIZE_MEASURES[innerKey] : null;
-    const third = SIZE_THIRDS[O.sizeThird] || null;
-    // A multiple off a loss is arithmetic, not cheapness — the same reason the
-    // Quality score refuses a P/E from a loss-maker, and the reason the
-    // fundamentals ranking filters them out rather than sorting on them. Shown
-    // as a dash, with the count said aloud underneath, so an absent number
-    // never reads as a missing one.
-    // A dash means two DIFFERENT things and the caption separates them, the
-    // lesson the News column and the data-quality page both record: a company
-    // that loses money has no meaningful multiple, and one that simply does
-    // not report the figure has no number at all. Drawing them the same and
-    // then miscounting one as the other is how a card quietly lies.
-    let noMultiple = 0, notReported = 0;
-    const thirdTxt = (r) => {
-      if (!third) return '';
-      const v = r[third[1]];
-      if (v == null || !isFinite(v)) { notReported++; return '—'; }
-      if (third[2] === 'money') return fmtMoney(v);
-      if (v <= 0) { noMultiple++; return '—'; }
-      return v.toFixed(1) + '×';
-    };
+    // Shared with the Bubble card — see thirdReader for the rules it applies.
+    const rd = thirdReader(O.sizeThird);
+    const third = rd.third;
+    const thirdTxt = rd.txt;
 
     const n = Number(O.sizeCount) || (size.id === 'story' ? 9 : size.id === 'square' ? 6 : 8);
     let rows = scope.rows.filter((x) => x[oField] != null && isFinite(x[oField]) && x[oField] > 0);
@@ -1433,8 +1450,7 @@
       + (inner && inner[2] !== 'money' ? ' The inner disc fills that share of the area.' : '')
       + (floored ? ' ' + floored + ' shown at a minimum size to stay legible (·).' : '')
       + (third ? ' The figure under each name is ' + esc(third[0]) + '.' : '')
-      + (noMultiple ? ' ' + noMultiple + ' had no meaningful multiple: a ratio off a loss is arithmetic, not cheapness.' : '')
-      + (notReported ? ' ' + notReported + ' does not report it.' : '')
+      + rd.note()
       + '</p></div></div>' + chromeFoot();
   }
 
@@ -1474,6 +1490,12 @@
     const sf = sm[0], sl = sm[1], skind = sm[2];
     const colorBy = O.bubColor === 'advice' ? 'advice' : O.bubColor === 'none' ? 'none' : 'sector';
     const n = Number(O.bubCount) || 20;
+    // The Size card's third measure, on the same catalogue and the same rules —
+    // see thirdReader. It rides the NAME rather than sitting under every circle:
+    // twenty positioned, overlapping circles cannot each carry two lines of
+    // text without the collisions the labelling rules below exist to prevent.
+    // So it appears on the companies that are named, and the caption says so.
+    const rd = thirdReader(O.bubThird);
 
     let rows = scope.rows.filter((r) =>
       r[xf] != null && isFinite(r[xf]) && r[yf] != null && isFinite(r[yf]));
@@ -1512,6 +1534,7 @@
     const pts = rows.map((r) => ({
       sym: r.symbol, label: nameOf(r), x: Number(r[xf]), y: Number(r[yf]),
       v: Number(r[sf]), sector: r.sector || '—', action: r.action || null,
+      row: r,
     }));
 
     const W = 952, H = size.id === 'story' ? 1080 : size.id === 'square' ? 520 : 660;
@@ -1610,19 +1633,34 @@
         // it is drawn across rather than spilling past the edge.
         const fit = Math.max(6, Math.floor(r / 4.9));
         const txt = full.length > fit ? full.slice(0, fit - 1) + '…' : full;
-        if (!fits(cx, cy + 6, txt.length * 10)) return '';
-        return '<text x="' + cx.toFixed(1) + '" y="' + (cy + 6).toFixed(1) + '" text-anchor="middle" '
+        const val = rd.third ? rd.txt(p.row) : '';
+        // Two lines inside a circle need room for both, so the pair is raised
+        // by half a line rather than the name staying put and the figure
+        // hanging out of the bottom of the disc.
+        const dy = val ? -3 : 6;
+        if (!fits(cx, cy + dy, Math.max(txt.length * 10, val.length * 9))) return '';
+        return '<text x="' + cx.toFixed(1) + '" y="' + (cy + dy).toFixed(1) + '" text-anchor="middle" '
           + 'font-size="19" font-weight="600" fill="#e9ecf2" font-family="Geist, sans-serif">'
-          + esc(txt) + '</text>';
+          + esc(txt) + '</text>'
+          + (val ? '<text x="' + cx.toFixed(1) + '" y="' + (cy + dy + 21).toFixed(1)
+            + '" text-anchor="middle" font-size="17" fill="#cfd6e2" '
+            + 'font-family="Geist Mono, monospace">' + esc(val) + '</text>' : '');
       }
       const txt = full.length > 18 ? full.slice(0, 17) + '…' : full;
       // Below, unless that would run off the foot, in which case above.
-      const below = cy + r + 21 < H - PB;
-      const ly = below ? cy + r + 21 : cy - r - 10;
-      if (!fits(cx, ly, txt.length * 9)) return '';
+      const val = rd.third ? rd.txt(p.row) : '';
+      // Below needs room for BOTH lines before it is chosen, or the figure
+      // lands on the axis.
+      const need = val ? 40 : 21;
+      const below = cy + r + need < H - PB;
+      const ly = below ? cy + r + 21 : cy - r - 10 - (val ? 20 : 0);
+      if (!fits(cx, ly, Math.max(txt.length * 9, val.length * 9))) return '';
       return '<text x="' + cx.toFixed(1) + '" y="' + ly.toFixed(1)
         + '" text-anchor="middle" font-size="17" font-weight="600" '
-        + 'fill="#cfd6e2" font-family="Geist, sans-serif">' + esc(txt) + '</text>';
+        + 'fill="#cfd6e2" font-family="Geist, sans-serif">' + esc(txt) + '</text>'
+        + (val ? '<text x="' + cx.toFixed(1) + '" y="' + (ly + 20).toFixed(1)
+          + '" text-anchor="middle" font-size="16" fill="#9aa3b2" '
+          + 'font-family="Geist Mono, monospace">' + esc(val) + '</text>' : '');
     }).join('');
 
     const axis = (t, x, y, anchor) => '<text x="' + x + '" y="' + y + '" text-anchor="' + anchor
@@ -1652,13 +1690,21 @@
       + '<div class="s-body"><div><span class="s-kick">' + esc(scope.label) + ' · reported figures</span>'
       + '<h2 class="s-title">' + esc(xl) + '<br><span class="dim">against ' + esc(yl.toLowerCase()) + '</span></h2>'
       + '<div class="blegend"><span class="bkey bsz">circle area: ' + esc(sl.toLowerCase()) + '</span>'
-      + swatch + '</div>'
+      + swatch
+      + (rd.third ? '<span class="bkey btx">text: ' + esc(rd.third[0]) + '</span>' : '')
+      + '</div>'
       + svg
       + '<p class="s-sub" style="font-size:17px;margin-top:16px">Each circle is one company. '
       + 'Circle AREA is ' + esc(sl.toLowerCase()) + ', not its width.'
       + (ringed ? ' ' + ringed + ' with no positive ' + esc(sl.toLowerCase())
         + ' are drawn as rings at the smallest size.' : '')
       + ' A dashed edge sits outside the axis range and is pinned to it.'
+      // The counts can only describe the companies the figure was drawn for —
+      // it rides the name, and not every circle is named. Saying "of the
+      // companies named" is the difference between a count and a claim about
+      // the whole screen.
+      + (rd.third ? ' The figure under each name is ' + esc(rd.third[0])
+        + '. Of the companies named,' + (rd.note() || ' all report it.') : '')
       + '</p></div></div>' + chromeFoot();
   }
 
@@ -2065,6 +2111,10 @@
     .bkey.bsz { color: var(--text); }
     .bkey.bsz::before { content: ""; width: 17px; height: 17px; border-radius: 50%;
                         border: 2px solid rgba(255, 255, 255, 0.5); display: inline-block; }
+    /* The third measure is TEXT, so its key is set in the face it is drawn in
+       rather than given a swatch — a colour chip beside it would suggest the
+       card encodes it by colour, which is exactly what it does not do. */
+    .bkey.btx { font-family: var(--mono); font-size: 16px; }
     /* .s-sub is capped at 40ch for the templates that set a sentence beside a
        chart. This card's note runs under a full-width grid, so that cap
        squeezes it into a narrow column in the corner.

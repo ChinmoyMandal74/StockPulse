@@ -424,6 +424,22 @@
         <select id="bubY"></select>
         <label>Circle area</label>
         <select id="bubSize"></select>
+        <!-- The same catalogue and the same rules as the Size card's third
+             measure: the provider's own ratio, a dash for a multiple off a
+             loss, and the two kinds of blank counted separately. On this card
+             it rides the NAME, so it appears on the companies that are
+             labelled. -->
+        <label>Also show, as text</label>
+        <select id="bubThird">
+          <option value="none" selected>Nothing</option>
+          <option value="fpe">Forward P/E</option>
+          <option value="tpe">Trailing P/E</option>
+          <option value="ps">Price to sales</option>
+          <option value="pb">Price to book</option>
+          <option value="ev">EV / EBITDA</option>
+          <option value="peg">PEG</option>
+          <option value="cap">Market cap</option>
+        </select>
         <label>Colour</label>
         <select id="bubColor">
           <option value="sector" selected>By sector</option>
@@ -565,7 +581,7 @@
       'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry',
       'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry',
       'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry',
-      'bubX', 'bubY', 'bubSize', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry',
+      'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
       const o = {};
@@ -724,7 +740,7 @@
       $('bubY').innerHTML = opts('pm');
       $('bubSize').innerHTML = opts('cap');
     })();
-    ['bubX', 'bubY', 'bubSize', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry'].forEach((id) =>
+    ['bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'bubble') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
