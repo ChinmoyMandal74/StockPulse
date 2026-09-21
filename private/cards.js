@@ -1373,9 +1373,29 @@
     // 93px at four circles — the shortest artboard with the largest cells.
     const gridRows = Math.ceil(rows.length / cols);
     // What the title, legend, caption and chrome take before the grid gets any.
-    const FURNITURE = size.id === 'story' ? 640 : 530;
+    //
+    // MEASURED IN THE STUDIO, not estimated: everything above the grid is
+    // 354-359px and everything below it 156-161px, so the furniture is ~520 —
+    // and at 530 the body still spilled 8-13px over the masthead, because the
+    // CAPTION GROWS. It gains a sentence whenever circles are floored, and one
+    // each for a multiple off a loss and a figure not reported. A single
+    // constant is a guess at variable content, so this one carries headroom
+    // rather than sitting on the measurement. Reported 2026-09-20 as the kicker
+    // printing on top of the brand tagline.
+    // Per shape, because the square is the shortest artboard and the furniture
+    // eats proportionally more of it. Set from a 135-combination sweep of every
+    // shape x count x third x inner in the studio, with the tightest case left
+    // ~30px clear rather than sitting on the measurement — see size-fit-test.
+    const FURNITURE = size.id === 'story' ? 772 : size.id === 'square' ? 600 : 612;
     const CELL = Math.max(112, Math.min(420, (size.h - FURNITURE) / gridRows));
-    const MAXR = CELL * 0.39;
+    // The cell holds the disc AND the lines under it, so the DISC takes what is
+    // left rather than the text overflowing the cell it was supposed to sit in.
+    // A name can wrap to two lines — "Taiwan Semiconductor Manufacturing" does —
+    // so two is what is reserved.
+    const NAME_H = size.id === 'story' ? 30 : 26;
+    const TEXT_H = NAME_H * 2 + (size.id === 'story' ? 29 : 25) + (O.sizeThird && O.sizeThird !== 'none'
+      ? (size.id === 'story' ? 25 : 22) : 0);
+    const MAXR = Math.max(26, Math.min(CELL * 0.39, (CELL - TEXT_H) / 2));
     // The scale is set by the largest company, so everything else is honestly
     // smaller: r = R * sqrt(v / vmax) keeps AREA proportional to the value.
     const big = rows[0][oField];
