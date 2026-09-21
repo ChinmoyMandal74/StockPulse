@@ -996,6 +996,10 @@
           <button class="btn picker-btn" id="indBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="indMenu" role="listbox" aria-label="Industry"></div>
         </div>
+        <div class="picker" id="sizePicker" data-open="0">
+          <button class="btn picker-btn" id="sizeBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="picker-menu" id="sizeMenu" role="listbox" aria-label="Size by market cap"></div>
+        </div>
         <div class="picker" id="advPicker" data-open="0">
           <button class="btn picker-btn" id="advBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="advMenu" role="listbox" aria-label="Balanced advice"></div>
@@ -1972,6 +1976,7 @@
       { root: 'scrPicker', btn: 'scrBtn', menu: 'scrMenu' },
       { root: 'secPicker', btn: 'secBtn', menu: 'secMenu' },
       { root: 'indPicker', btn: 'indBtn', menu: 'indMenu' },
+      { root: 'sizePicker', btn: 'sizeBtn', menu: 'sizeMenu' },
       { root: 'advPicker', btn: 'advBtn', menu: 'advMenu' },
       { root: 'researchPicker', btn: 'researchBtn', menu: 'researchMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
@@ -2164,6 +2169,7 @@
     // Balanced only: it is the shared measurement, the one advice column that
     // is always shown, and the one every other surface reads.
     let adviceFilter = 'All';
+    let sizeFilter = 'All';
     // 'table' or 'tiles'. Saved per account: which shape you read in is a
     // preference, not a property of the data.
     let layout = 'table';
@@ -2257,6 +2263,7 @@
       }
       if (sectorFilter !== 'All') rows = rows.filter((s) => s.sector === sectorFilter);
       if (industryFilter !== 'All') rows = rows.filter((s) => s.industry === industryFilter);
+      if (sizeFilter !== 'All') rows = rows.filter((s) => s.capBand === sizeFilter);
       if (adviceFilter !== 'All') rows = rows.filter((s) => filterValue(s, 'av:Balanced') === adviceFilter);
       return rows;
     }
@@ -2383,6 +2390,7 @@
         const k = el.dataset.fk;
         if (k === 'sector') setSectorFilter(el.value || 'All');
         else if (k === 'industry') industryFilter = el.value || 'All';
+        else if (k === 'capBand') sizeFilter = el.value || 'All';
         else if (k === 'av:Balanced') adviceFilter = el.value || 'All';
         else setColFilter(k, el.value);
         window.track && track('picker', 'filter:' + k);
@@ -2407,6 +2415,7 @@
     function clearFilterKey(k) {
       if (k === 'sector') setSectorFilter('All');
       else if (k === 'industry') industryFilter = 'All';
+      else if (k === 'capBand') sizeFilter = 'All';
       else if (k === 'av:Balanced') adviceFilter = 'All';
       else setColFilter(k, '');
       syncFilterInputs();
@@ -2459,6 +2468,7 @@
         }
         const cur = k === 'sector' ? (sectorFilter === 'All' ? '' : sectorFilter)
           : k === 'industry' ? (industryFilter === 'All' ? '' : industryFilter)
+          : k === 'capBand' ? (sizeFilter === 'All' ? '' : sizeFilter)
           : k === 'av:Balanced' ? (adviceFilter === 'All' ? '' : adviceFilter)
           : (colFilters[k] || '');
         let names = [...counts.keys()];
@@ -2665,6 +2675,57 @@
           render();
         });
       });
+    }
+
+    // The size bands, counted over the tab + sector + industry already in
+    // force — so a count here can never describe a different population from
+    // the one the Industry menu just counted.
+    function renderSizeMenu(inScope) {
+      const counts = {};
+      let blank = 0;
+      inScope.forEach((s) => { if (s.capBand) counts[s.capBand] = (counts[s.capBand] || 0) + 1; else blank++; });
+      // The LADDER, not the alphabet — and EVERY band is offered even at zero,
+      // which is where this differs from the Advice and Sector menus. Those
+      // list what is present because their value sets are open-ended and long;
+      // this one is a fixed ladder of six, so hiding the empty ones would make
+      // a short control move under the pointer as the table narrowed, and
+      // "0 Micro in view" is itself an answer worth reading.
+      const names = Filters.CAP_ORDER;
+      const row = (val, label, n, hint) =>
+        `<button class="pick ${sizeFilter === val ? 'on' : ''}" data-size="${we(val)}" role="option" ` +
+        `aria-selected="${sizeFilter === val}"${hint ? ` title="${we(hint)}"` : ''}>` +
+        `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>`;
+      const note = blank
+        ? `${blank} ${blank === 1 ? 'row has' : 'rows have'} no market cap — a fund reports assets ` +
+          'under management instead, so it sits in no band.'
+        : '';
+      $('sizeMenu').innerHTML = '<div class="picker-inner">' +
+        row('All', 'All sizes', inScope.length) +
+        names.map((n) => row(n, n, counts[n] || 0, Filters.CAP_RANGE[n])).join('') +
+        '<div class="pick-sep"></div><div class="pick-hint">Market-cap bands. The $50B line inside ' +
+        'Large is this site&rsquo;s own cut, not a standard.' + (note ? ' ' + we(note) : '') + '</div>' +
+        '</div>';
+      $('sizeMenu').querySelectorAll('[data-size]').forEach((b) => {
+        b.addEventListener('click', () => {
+          sizeFilter = b.dataset.size;
+          window.track && track('picker', 'size:' + sizeFilter);
+          closePickers();
+          render();
+        });
+      });
+    }
+
+    function renderSizeTrigger() {
+      const on = sizeFilter !== 'All';
+      $('sizeBtn').innerHTML =
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-layers" /></svg>' +
+        '<span class="picker-label">Size</span>' +
+        `<span class="count">${on ? we(sizeFilter) : 'All'}</span>` +
+        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
+      $('sizeBtn').classList.toggle('on', on);
+      $('sizeBtn').title = on
+        ? `Showing ${sizeFilter} caps only (${Filters.CAP_RANGE[sizeFilter]}) — open to change or clear`
+        : 'Filter the table to one market-cap band';
     }
 
     function renderAdviceTrigger() {
@@ -2989,6 +3050,7 @@
       renderPicker();
       renderSectorTrigger();
       renderIndustryTrigger();
+      renderSizeTrigger();
       renderAdviceTrigger();
       renderChangedChip();
       renderLensChip();
@@ -3891,6 +3953,7 @@
         && Object.keys(want).every((k) => have[k] === want[k]);
       return !same || screenColsOff
         || (d.sector || 'All') !== sectorFilter || (d.industry || 'All') !== industryFilter
+        || (d.size || 'All') !== sizeFilter
         || (d.advice || 'All') !== adviceFilter || !!d.changed !== changedOnly
         || (d.sort && (d.sort.key !== sortKey || d.sort.dir !== sortDir));
     }
@@ -3899,7 +3962,7 @@
       const sc = findScreen(id);
       if (!sc) return;
       if (!activeScreenId) {
-        screenBase = { sortKey, sortDir, sectorFilter, industryFilter, adviceFilter, changedOnly,
+        screenBase = { sortKey, sortDir, sectorFilter, industryFilter, sizeFilter, adviceFilter, changedOnly,
           colFilters: { ...colFilters }, filterRowOn };
       }
       const d = sc.def || {};
@@ -3908,6 +3971,7 @@
       for (const [k, v] of Object.entries(d.filters || {})) setColFilter(k, v);
       sectorFilter = d.sector || 'All';
       industryFilter = d.industry || 'All';
+      sizeFilter = d.size || 'All';
       adviceFilter = d.advice || 'All';
       changedOnly = !!d.changed;
       if (d.sort) { sortKey = d.sort.key; sortDir = d.sort.dir; }
@@ -3933,6 +3997,7 @@
       if (b) {
         sortKey = b.sortKey; sortDir = b.sortDir;
         sectorFilter = b.sectorFilter; industryFilter = b.industryFilter; adviceFilter = b.adviceFilter;
+        sizeFilter = b.sizeFilter || 'All';
         changedOnly = b.changedOnly;
         colFilters = {}; fltCompiled = {};
         for (const [k, v] of Object.entries(b.colFilters)) setColFilter(k, v);
@@ -3966,6 +4031,7 @@
       };
       if (sectorFilter !== 'All') def.sector = sectorFilter;
       if (industryFilter !== 'All') def.industry = industryFilter;
+      if (sizeFilter !== 'All') def.size = sizeFilter;
       if (adviceFilter !== 'All') def.advice = adviceFilter;
       if (changedOnly) def.changed = true;
       return def;
@@ -5054,6 +5120,9 @@
         // replace the slider under the cursor and kill the gesture.
         if (opening && p.root === 'secPicker') renderSectorMenu();
         if (opening && p.root === 'indPicker') renderIndustryMenu();
+        if (opening && p.root === 'sizePicker') renderSizeMenu(tabStocks().filter((s) =>
+          (sectorFilter === 'All' || s.sector === sectorFilter)
+          && (industryFilter === 'All' || s.industry === industryFilter)));
         if (opening && p.root === 'advPicker') renderAdviceMenu();
         if (opening && p.root === 'scrPicker') renderScreensMenu();
         openPicker(opening ? p.root : null);

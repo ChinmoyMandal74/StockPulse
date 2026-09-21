@@ -71,7 +71,10 @@
   // Filters a screen can set that have no column of their own.
   const SCREEN_ONLY_KEYS = { fresh3mHigh: 'Fresh 3M high', lastSurprise: 'Last surprise %', daysSinceEarnings: 'Days since earnings' };
   // These write the bar's own pickers rather than a column filter of their own.
-  const BOUND_KEYS = new Set(['sector', 'industry', 'av:Balanced']);
+  // capBand joins these because it gained a bar picker: a BOUND key writes
+  // the bar's own state, so the column filter and the picker can never show
+  // two different things, and it is not counted as a column filter.
+  const BOUND_KEYS = new Set(['sector', 'industry', 'av:Balanced', 'capBand']);
   const BLANK = '— blank';
 
   function maCrossWord(x) {

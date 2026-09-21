@@ -109,8 +109,22 @@
       if (ind && ind !== 'All') rows = rows.filter((x) => x.industry === ind);
       // The kicker names the narrowest cut: an industry already implies its
       // sector, and "Technology · Semiconductors" costs width a card lacks.
-      const cut = ind && ind !== 'All' ? ind : sec && sec !== 'All' ? sec : null;
-      if (cut) label = v === 'All' ? cut : `${label} \u00b7 ${cut}`;
+      const taxo = ind && ind !== 'All' ? ind : sec && sec !== 'All' ? sec : null;
+      // The size band shares the prefix too (movSector -> movCap), and is
+      // ORTHOGONAL to the two above rather than narrower: a band is not a
+      // smaller sector, so it is ANDed and named alongside the taxonomy cut
+      // instead of replacing it. `/cards` has no such control, so the member
+      // page filters nothing and is unchanged.
+      //
+      // A fund has no band, so a size-filtered card drops it \u2014 which is right:
+      // this is a cut by company size, and a fund is not a company.
+      const cap = O[sectorKey.replace(/Sector$/, 'Cap')] || 'All';
+      if (cap && cap !== 'All') rows = rows.filter((x) => x.capBand === cap);
+      const cuts = [taxo, cap && cap !== 'All' ? `${cap} caps` : null].filter(Boolean);
+      if (cuts.length) {
+        const cut = cuts.join(' \u00b7 ');
+        label = v === 'All' ? cut : `${label} \u00b7 ${cut}`;
+      }
       return { rows, label };
     }
     const movScopeRows = () => scopeOf('movScope', 'movSector');

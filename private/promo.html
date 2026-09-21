@@ -163,6 +163,8 @@
         <select id="movSector"><option value="All">All sectors</option></select>
         <label>Industry</label>
         <select id="movIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="movCap"><option value="All">All sizes</option></select>
       </div>
 
       <div id="chtBox">
@@ -187,6 +189,8 @@
           <select id="chtSector"><option value="All">All sectors</option></select>
         <label>Industry</label>
         <select id="chtIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="chtCap"><option value="All">All sizes</option></select>
         </div>
         <div id="chtLinesWrap">
           <label>How many lines</label>
@@ -229,6 +233,8 @@
         <select id="spkSector"><option value="All">All sectors</option></select>
         <label>Industry</label>
         <select id="spkIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="spkCap"><option value="All">All sizes</option></select>
       </div>
 
       <div id="rngBox">
@@ -267,6 +273,8 @@
         <select id="rngSector"><option value="All">All sectors</option></select>
         <label>Industry</label>
         <select id="rngIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="rngCap"><option value="All">All sizes</option></select>
       </div>
 
       <div id="advBox">
@@ -293,6 +301,8 @@
           <select id="advSector"><option value="All">All sectors</option></select>
         <label>Industry</label>
         <select id="advIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="advCap"><option value="All">All sizes</option></select>
         </div>
         <div id="advProfWrap">
           <label>Rules</label>
@@ -358,6 +368,8 @@
           <select id="fundSector"><option value="All">All sectors</option></select>
         <label>Industry</label>
         <select id="fundIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="fundCap"><option value="All">All sizes</option></select>
         </div>
       </div>
 
@@ -411,6 +423,8 @@
         <select id="sizeSector"><option value="All">All sectors</option></select>
         <label>Industry</label>
         <select id="sizeIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="sizeCap"><option value="All">All sizes</option></select>
       </div>
 
       <!-- Bubble. The three measure pickers are filled from Cards.FUND_METRICS
@@ -460,6 +474,8 @@
         <select id="bubSector"><option value="All">All sectors</option></select>
         <label>Industry</label>
         <select id="bubIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="bubCap"><option value="All">All sizes</option></select>
       </div>
 
       <div id="intBox">
@@ -516,6 +532,9 @@
     <main class="deck"><div id="stageWrap"><div id="stage" class="s-art"></div></div></main>
   </div>
 
+  <!-- For the market-cap band ladder, defined once in the module the server
+       require()s to stamp it. -->
+  <script src="/filters.js"></script>
   <script src="/action.js"></script>
   <script src="/cards.js"></script>
   <script src="/cardshot.js"></script>
@@ -574,14 +593,14 @@
 
     // Every control's value, by id — the module reads no DOM, so the studio
     // hands it the panel's state and gets a card back.
-    const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry',
-      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector', 'chtIndustry',
-      'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry',
-      'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry',
-      'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry',
-      'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry',
-      'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry',
-      'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry',
+    const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap',
+      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector', 'chtIndustry', 'chtCap',
+      'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap',
+      'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry', 'rngCap',
+      'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap',
+      'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap',
+      'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap',
+      'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
       const o = {};
@@ -693,13 +712,19 @@
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
     $('movAdv').innerHTML = '<option value="off" selected>Don’t show</option>' +
       Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}">${esc(n)} rules</option>`).join('');
-    ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry'].forEach((id) =>
+    // THESE EIGHT LISTS ARE A SECOND COPY OF CONTROL_IDS, split per template so
+    // a change only redraws the card it belongs to. A control added to the
+    // markup and to CONTROL_IDS but NOT here exists, is saved with a post, is
+    // read by the builder — and does nothing when you touch it, because
+    // nothing re-renders. That is how the Size pickers shipped broken for an
+    // hour; a test that changed the control and diffed the card caught it.
+    ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'movers') render(); }));
-    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector', 'chtIndustry'].forEach((id) =>
+    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector', 'chtIndustry', 'chtCap'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'chart') render(); }));
-    ['spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry'].forEach((id) =>
+    ['spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'sparks') render(); }));
-    ['rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry'].forEach((id) =>
+    ['rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry', 'rngCap'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'range') render(); }));
 
     const CARD_TOPICS = Cards.topics();
@@ -723,11 +748,11 @@
     $('advTier').innerHTML = ActionRules.ACTIONS.slice().reverse()
       .map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
     $('advProf').innerHTML = Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    ['advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry'].forEach((id) =>
+    ['advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'advboard') render(); }));
-    ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry'].forEach((id) =>
+    ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'fund') render(); }));
-    ['sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry'].forEach((id) =>
+    ['sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'size') render(); }));
 
     // The three measure pickers are filled from the card's own catalogue, so a
@@ -740,7 +765,7 @@
       $('bubY').innerHTML = opts('pm');
       $('bubSize').innerHTML = opts('cap');
     })();
-    ['bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry'].forEach((id) =>
+    ['bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'bubble') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
@@ -981,6 +1006,20 @@
           'sizeSector', 'bubSector'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = secOpts;
+          if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
+        });
+        // One size ladder, from the module the server stamps the band with, so
+        // the studio can never offer a band the column does not mean. Built
+        // from CAP_ORDER rather than from the rows: an empty band is still a
+        // real choice, and a list that shrank as the screen changed would move
+        // under the pointer.
+        const capOpts = '<option value="All">All sizes</option>' +
+          Filters.CAP_ORDER.map((n) => `<option value="${esc(n)}">${esc(n)} · ` +
+            `${esc(Filters.CAP_RANGE[n])}</option>`).join('');
+        ['movCap', 'chtCap', 'advCap', 'fundCap', 'spkCap', 'rngCap',
+          'sizeCap', 'bubCap'].forEach((id) => {
+          const keep = $(id).value;
+          $(id).innerHTML = capOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
         });
         syncIndustries(true);
