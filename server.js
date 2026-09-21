@@ -1714,6 +1714,22 @@ async function stampPricedAt(rows) {
   }
 }
 
+// The market-cap band, stamped beside the others and for the same reason: it
+// derives from a field already on the row, so a snapshot written before the
+// column existed carries it, and moving a threshold moves every surface at once
+// without waiting for a refresh. The bands themselves live in filters.js, which
+// the screener and the pivot load too — one definition, four readers.
+//
+// Synchronous and free: no query, no API call. It reads `marketCap` and nothing
+// else, so it can run wherever rows are about to be served.
+function stampCapBand(rows) {
+  if (!Array.isArray(rows)) return;
+  for (const r of rows) {
+    if (!r || !r.symbol) continue;
+    r.capBand = Filters.capBandOf(r.marketCap);
+  }
+}
+
 async function stampShortNames(rows) {
   if (!Array.isArray(rows) || !rows.length) return;
   try {
@@ -5163,6 +5179,9 @@ const CHAT_FIELDS = [
   ['price', 'last close, in the currency column'],
   ['currency', 'reporting and price currency — money columns are NOT converted to USD'],
   ['marketCap', 'market capitalisation'],
+  ['capBand', 'size band from that cap: Mega $200B+ / Large $50-200B / Mid-Large $10-50B / ' +
+    'Mid $2-10B / Small $300M-2B / Micro under $300M; blank for funds, which report AUM. ' +
+    'The $50B line inside Large is this site\'s own cut, not an industry standard'],
   ['qualityRating', 'quality 1-10 from fundamentals; blank when too few inputs are usable'],
   ['companyType', 'Established, Early or ETF — which rule list judges this stock'],
   ['actionTrend', 'the Advice model\'s trend state: No data / Breakdown / Downtrend / Below 200D / Near 200D / Above 200D / Strong uptrend'],
@@ -5722,6 +5741,7 @@ async function mobileRows(req) {
   await stampShortNames(rows);
   await stampAdviceAge(rows);
   await stampPricedAt(rows);
+  stampCapBand(rows);
   return rows;
 }
 
@@ -5947,6 +5967,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   await stampShortNames(stocks);
   await stampAdviceAge(stocks);
   await stampPricedAt(stocks);
+  stampCapBand(stocks);
   const myLists = await store.readUserPortfolios(await prefsKey(req));
 
   // Two templates read the archive; the rest never touch it.
@@ -8376,6 +8397,7 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     await stampShortNames(snap.stocks);
     await stampAdviceAge(snap.stocks);
     await stampPricedAt(snap.stocks);
+    stampCapBand(snap.stocks);
     // Memberships too: portfolios are edited between refreshes (a deleted one
     // must not linger on every row until the next refresh rewrites the snapshot).
     const pf = await readPortfolios();

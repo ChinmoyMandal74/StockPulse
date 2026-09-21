@@ -295,6 +295,36 @@ The **Size** group carries the absolute-size columns — Revenue TTM, Gross Prof
 
 The **Info** banner spans eight columns — Overall, Mom., Qual., Portfolios, Price, Sector, Market Cap, Next Earn — and all eight collapse together.
 
+### Size by market cap — one band, four surfaces
+**A categorical size band, because you cannot pivot on a continuous number (2026-09-21, owner's request).** `Filters.CAP_BANDS` in `private/filters.js` — the module the server `require`s and the pages `<script>`-load, so the screener column, the pivot dimension, the row card and the chatbot cannot disagree about where a line sits.
+
+| band | range | share of 602 before the purge |
+|---|---|---|
+| Mega | $200B and above | 13.0% |
+| Large | $50B – $200B | 25.9% |
+| Mid-Large | $10B – $50B | 43.5% |
+| Mid | $2B – $10B | 9.0% |
+| Small | $300M – $2B | 3.3% |
+| Micro | under $300M | 0.8% |
+
+- **The $50B line inside Large is THE OWNER'S CUT, not a standard, and every surface says so.** Measured first: on the conventional tiers, **418 of 602 stocks (69%) landed in a single "Large" bucket** — a dimension that barely discriminates. Splitting at $50B takes the biggest bucket to 43.5%. The objection that $50B is "invented" does not survive examination: $200B and $10B are equally invented, just more repeated.
+- **THE THRESHOLDS ARE FIXED, never derived from the universe.** Today's median cap is $33.4B and splitting there would balance the chart beautifully — and would be **percentiles wearing a band's name**: "mid cap" would stop meaning the same thing next year, and a stock would change band because someone added a ticker. The momentum centres record the identical rule.
+- **Safe to band in DOLLARS, verified rather than assumed.** Market cap comes back in **USD even when the rest of the row does not** — Ericsson reads a **$33.2B cap beside 236.7B of revenue in SEK** — checked across 18 foreign reporters. This is the one exception to "absolute columns are in the reporting currency", and it holds *because the universe is US-listed only*. It would NOT hold for a foreign listing, which is one more reason that rule exists.
+- **A missing cap is a BLANK, never Micro.** A fund reports AUM rather than capitalisation, so calling it the smallest company on the screen would be a fabrication; the cell says which it is.
+- **Stamped on the way out** (`stampCapBand`, beside `stampShortNames` / `stampPricedAt` at all three read paths), so a snapshot written before the field existed carries it and moving a threshold moves every surface with no refresh. Synchronous and free — it reads `marketCap` and nothing else.
+- **The sort is INVERTED against the ladder, unlike the advice columns.** `CAP_ORDER` runs largest to smallest, so its raw index ranks Micro highest on a descending sort — and a size column has to behave like the Market Cap column beside it, where the first click means "biggest first". Caught by the test, which had the smallest company second.
+- Row width is 92 cells (`PAD_SPAN`), the error row 87, the empty row 89, the Info banner 9. `/columns`, column views, the filter row and `RowCard.FIELD_SPEC` needed nothing beyond one entry each, as designed.
+- Verified: 23 checks — **every threshold probed at its exact value, one dollar under and one dollar over** (a band is a step function, so every bug lives at an edge and none of them would look wrong on screen), a snapshot with no `capBand` coming back banded, the boundary stock, the fund's blank and its reason, **92 headers against 92 body cells and every banner spanning its own columns**, the ladder sort, and the pivot reconciling with the blank bucket last.
+
+### Preferred shares, units and a bond are not equities (2026-09-21)
+**29 instruments were removed from the screener at the owner's instruction — "I only care about equities here".** They arrived with the bulk add and would have sat in the blank bucket of every page forever: 24 preferred stocks and depositary shares *of* preferred (AGNC, Huntington, Valley National, Brookfield, Strategy, Alphabet, Microchip, Super Micro, Bruker, SLM), 4 preferred **units**, one tangible equity unit (BTSGU) and **TBB, an AT&T 5.350% bond**. Universe 602 → 573.
+
+- **Name-matching nearly deleted three real equities, and the scan is the only reason it did not.** `AZN` (AstraZeneca), `KSPI` (Kaspi.kz) and `PAYP` (PayPay) are **American Depositary Shares** — ordinary ADRs on common stock — which read almost identically to "Depositary Shares representing a 1/1000th interest in a share of 6.875% Series D **Preferred**". A later pass also spared `FWONA`/`FWONK` (Liberty Media *tracking stocks*) and `WBD`, which use "Series A/C" for ordinary share classes, and **`PAA`, whose name literally says "Common Units"** and is a real MLP equity.
+- **A SERIES LETTER ALONE PROVES NOTHING** — that was the rule that would have taken Liberty Media and Warner Bros. Discovery.
+- **The stored names are TRUNCATED at 120 characters**, so on a long depositary-share name the words "Preferred Stock" fall off the end. Any classification by name must use features that survive that: a coupon rate, "Interest in a Share of", the preferred/perpetual/cumulative vocabulary, "Notes due". Matching on the tail silently under-caught.
+- **8 of them carried a market cap** — the parent company's, wrongly attached (AGNCM $28.1B, STRC $30.7B, VLYPO $13.8B…) — so they never appeared in the no-cap list and **would have been banded as Large or Mid-Large** by the feature above. Cleaning first was what stopped the band inheriting that.
+- The 7 genuine ETFs stay. None of the 29 sat in a portfolio. **The snapshot still held them until the next refresh** — it is one JSON blob rewritten wholesale, which is documented and self-healing.
+
 ### Site-wide hidden columns (the owner's floor)
 **`/columns` (admin, its own page, linked from the console's Screener section) hides columns for EVERYONE (2026-09-15).** It was a panel on `/admin` for an hour; the owner moved it out rather than grow that page — the console stays a door. The page carries search, a per-group tick with an n/total count, Show all, **Undo changes** (back to what the server last confirmed) and a Save that is disabled until something differs. 85 columns is more than most accounts want as a default, and a view is a per-person choice; this is the floor under all of them.
 

@@ -11,6 +11,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/app.css" />
   <script src="/wmark.js" defer></script>
+  <!-- For the market-cap bands and their ladder. They are defined once, in the
+       module the server require()s to stamp them, so this page cannot disagree
+       with the column the screener draws. -->
+  <script src="/filters.js"></script>
   <style>
     body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
     .page { position: relative; z-index: 1; max-width: 1480px; margin: 0 auto; padding: 0 28px; }
@@ -71,6 +75,10 @@
     table.pv td.cell:hover { color: var(--accent); }
     table.pv td.cell.open { color: var(--accent); background: rgba(124, 156, 255, 0.10); }
     table.pv td.blankdim, table.pv th.blankdim { color: var(--faint); font-style: italic; }
+    /* A row header's range sits beside its name, quieter, so "Mid-Large" never
+       has to be remembered. Mono, because it is a pair of numbers. */
+    table.pv tbody th .rng { margin-left: 8px; color: var(--faint); font-weight: 400;
+                             font: 400 11px var(--mono); text-transform: none; }
 
     /* Expanding a sector into its industries.
        NOT `.sub` — that is this page's own intro paragraph, eleven rules up
@@ -181,6 +189,11 @@
     // Advice × Industry is still a real question.)
     const DIMS = {
       sector:   { label: 'Sector',          get: (s) => s.sector },
+      // The band carries its dollar range in the label, because "Mid-Large" is
+      // our own cut rather than a standard and nobody should have to remember
+      // where the line is. Ordered by the ladder, largest first.
+      capBand:  { label: 'Size by market cap', get: (s) => s.capBand,
+                  order: Filters.CAP_ORDER, range: Filters.CAP_RANGE },
       industry: { label: 'Industry',        get: (s) => s.industry, wide: true, childOf: 'sector' },
       theme:    { label: 'Theme',           get: (s) => s.portfolios || [], multi: true },
       advice:   { label: 'Balanced advice', get: (s) => s.action,      order: ADVICE_ORDER },
@@ -357,8 +370,14 @@
       const total = stocks.length;
       let h = '<div class="gridwrap"><table class="pv"><thead><tr>' +
         '<th class="rowhead">' + esc(p.rd.label) + ' ↓ &nbsp; ' + esc(p.cd.label) + ' →</th>';
+      // A dimension may carry a range per value (the market-cap bands do). On a
+      // column header there is no room for it, so it rides the tooltip; on a row
+      // header it is printed, because that is where a reader looks it up.
+      const rangeOf = (dim, k) => (dim.range && dim.range[k]) || '';
       for (const c of p.cKeys) {
-        h += '<th class="' + (c === BLANK ? 'blankdim' : '') + '">' + esc(c) + '</th>';
+        const rg = rangeOf(p.cd, c);
+        h += '<th class="' + (c === BLANK ? 'blankdim' : '') + '"' +
+          (rg ? ' title="' + esc(c + ' — ' + rg) + '"' : '') + '>' + esc(c) + '</th>';
       }
       h += '<th class="tot">Total</th></tr></thead><tbody>';
 
@@ -396,7 +415,9 @@
           (canOpen ? ' data-sec="' + esc(r) + '" title="' +
             (isOpen ? 'Collapse' : 'Expand into ' + kids.size + ' industries') + '"' : '') + '>' +
           (canOpen ? '<span class="car">' + (isOpen ? '&#9662;' : '&#9656;') + '</span>' : '') +
-          esc(r) + '</th>';
+          esc(r) +
+          (rangeOf(p.rd, r) ? '<span class="rng">' + esc(rangeOf(p.rd, r)) + '</span>' : '') +
+          '</th>';
         h += cellsFor(r, (c) => (p.cells.get(r + '|' + c) || []).length, (c) => r + '|' + c);
         h += '<td class="tot">' + (p.rowTot.get(r) || 0) + '</td></tr>';
         // Any drilled cell on this row, opened underneath it.

@@ -21,7 +21,53 @@
   const RATING_FOR = { overallScore: 'overallRating', qualityScore: 'qualityRating', momentumScore: 'momentumRating' };
   const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios']);
   const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh',
-    'exchange']);
+    'exchange', 'capBand']);
+
+  // ---- Size by market cap ---------------------------------------------------
+  // It lives HERE because four surfaces need it and none of them may own it:
+  // the server stamps the band, the screener sorts and filters on it, the pivot
+  // uses it as a dimension, and the row card shows it. This file is already the
+  // "what a column means, defined once" module and is both require()d by the
+  // server and <script>-loaded by the pages.
+  //
+  // The conventional US tiers, with ONE departure, recorded as a choice rather
+  // than smuggled in as a standard: Large ($10–200B) is split at $50B. Measured
+  // before the split, 418 of 602 stocks — 69% — landed in a single "Large"
+  // bucket, which is a dimension that barely discriminates; the split takes the
+  // biggest bucket to 43%. $50B is no more canonical than $200B or $10B, which
+  // are themselves just widely-repeated round numbers.
+  //
+  // THE THRESHOLDS ARE FIXED, never derived from the universe. Today's median
+  // cap is $33.4B and splitting there would balance the chart beautifully — and
+  // would be percentiles wearing a band's name: "mid cap" would stop meaning the
+  // same thing next year, and a stock would change band because someone added a
+  // ticker. The momentum centres record the same rule for the same reason.
+  //
+  // SAFE TO BAND IN DOLLARS, verified rather than assumed: market cap comes back
+  // in USD even when the rest of the row does not — Ericsson reads a $33.2B cap
+  // beside 236.7B of revenue in SEK — checked across 18 foreign reporters. That
+  // holds because the universe is US-listed only; it would NOT hold for a
+  // foreign listing, which is one more reason that rule exists.
+  const CAP_BANDS = [
+    { label: 'Mega',      min: 200e9, range: '$200B and above' },
+    { label: 'Large',     min: 50e9,  range: '$50B – $200B' },
+    { label: 'Mid-Large', min: 10e9,  range: '$10B – $50B' },
+    { label: 'Mid',       min: 2e9,   range: '$2B – $10B' },
+    { label: 'Small',     min: 300e6, range: '$300M – $2B' },
+    { label: 'Micro',     min: 0,     range: 'under $300M' },
+  ];
+  const CAP_ORDER = CAP_BANDS.map((b) => b.label);
+  const CAP_RANGE = {};
+  for (const b of CAP_BANDS) CAP_RANGE[b.label] = b.range;
+
+  // The band, or null. A missing or zero cap is NOT a band: an ETF reports AUM
+  // rather than capitalisation, so it belongs in the blank bucket rather than
+  // being called the smallest company on the screen.
+  function capBandOf(cap) {
+    if (cap == null || !isFinite(cap) || cap <= 0) return null;
+    for (const b of CAP_BANDS) if (cap >= b.min) return b.label;
+    return null;
+  }
   // Filters a screen can set that have no column of their own.
   const SCREEN_ONLY_KEYS = { fresh3mHigh: 'Fresh 3M high', lastSurprise: 'Last surprise %', daysSinceEarnings: 'Days since earnings' };
   // These write the bar's own pickers rather than a column filter of their own.
@@ -179,6 +225,7 @@
 
   return {
     RATING_FOR, TEXT_KEYS, CAT_KEYS, SCREEN_ONLY_KEYS, BOUND_KEYS, BLANK,
+    CAP_BANDS, CAP_ORDER, CAP_RANGE, capBandOf,
     maCrossWord, filterValue, filterKind, parseNumTerm,
     compileNum, compileText, compileFilter, screenRows,
   };

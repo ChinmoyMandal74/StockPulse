@@ -69,6 +69,9 @@
     ['info',  'Exchange',       (s) => (s.exchange
       ? { t: s.exchange + (s.micCode ? ' · ' + s.micCode : ''), c: '' } : null)],
     ['info',  'Market Cap',     (s) => V.money(s.marketCap, s.currency)],
+    // The band the cap falls in. One entry here puts it in the hover card, the
+    // tiles, the phone and the tile/mobile field pickers at once.
+    ['info',  'Size',           (s) => (s.capBand || null)],
     ['info',  'News',           (s) => {
                                   const n = s.newsLatest;
                                   if (!n || !n.headline) return null;
