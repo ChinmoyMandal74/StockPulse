@@ -72,6 +72,29 @@
     table.pv td.cell.open { color: var(--accent); background: rgba(124, 156, 255, 0.10); }
     table.pv td.blankdim, table.pv th.blankdim { color: var(--faint); font-style: italic; }
 
+    /* Expanding a sector into its industries.
+       NOT `.sub` — that is this page's own intro paragraph, eleven rules up
+       (font-size, max-width, colour), and a <tr class="sub"> inherits all of
+       it. The FIFTH unscoped class on this project to capture later markup,
+       after .warn, .card, input[type="text"] and .mk. `kid` is used nowhere
+       else and these rules name the element they style. */
+    table.pv tbody th.exp { cursor: pointer; }
+    table.pv tbody th.exp:hover { color: var(--accent); }
+    /* The caret is the ONLY thing saying a row opens, so it has to read as a
+       control before the pointer arrives — --muted, not --faint, and big
+       enough not to be mistaken for a bullet. */
+    table.pv tbody th .car { display: inline-block; width: 13px; margin-right: 5px;
+                             color: var(--muted); font-size: 12px; line-height: 1; }
+    table.pv tbody th.exp:hover .car, table.pv tbody th.exp.on .car { color: var(--accent); }
+    /* A child row is indented past the caret so the hierarchy is visible at a
+       glance rather than inferred from the order. The tint runs the width of
+       the row, which is what groups the numbers with their heading. */
+    table.pv tbody tr.kid th, table.pv tbody tr.kid td {
+      background: rgba(124, 156, 255, 0.05); }
+    table.pv tbody tr.kid th { padding-left: 30px; color: var(--muted); font-weight: 400; }
+    table.pv tbody tr.kid:hover th, table.pv tbody tr.kid:hover td {
+      background: rgba(124, 156, 255, 0.085); }
+
     /* The expansion: one row spanning the table, under the row that was clicked. */
     tr.drill td { background: rgba(124, 156, 255, 0.045); text-align: left; white-space: normal;
                   padding: 12px 14px 14px; font-family: var(--sans); }
@@ -148,9 +171,17 @@
     // thing on this page that breaks the arithmetic everyone expects from a
     // pivot, so it is a property of the dimension rather than a special case
     // buried in the sum.
+    // `childOf` marks a dimension that only exists INSIDE another one, so it is
+    // a drill rather than a peer. Industry is the case: every industry belongs
+    // to exactly one sector — verified on the live screen, 0 of 99 industries
+    // span two — so as a row dimension it draws 99 rows of which each is a
+    // single sector's slice, and crossed with Sector it is a block-diagonal
+    // grid with one non-empty cell per column. It is expanded from its sector
+    // instead, and left out of the Rows picker. (It stays in COLUMNS, where
+    // Advice × Industry is still a real question.)
     const DIMS = {
       sector:   { label: 'Sector',          get: (s) => s.sector },
-      industry: { label: 'Industry',        get: (s) => s.industry, wide: true },
+      industry: { label: 'Industry',        get: (s) => s.industry, wide: true, childOf: 'sector' },
       theme:    { label: 'Theme',           get: (s) => s.portfolios || [], multi: true },
       advice:   { label: 'Balanced advice', get: (s) => s.action,      order: ADVICE_ORDER },
       trend:    { label: 'Trend state',     get: (s) => s.actionTrend, order: TREND_ORDER },
@@ -164,10 +195,21 @@
     // companies. Measured before building, which is why it is capped at all.
     const WIDE_CAP = 24;
 
+    // A dimension that is somebody's child is not offered as a row.
+    const ROW_DIMS = Object.keys(DIMS).filter((k) => !DIMS[k].childOf);
+
     let stocks = [];
     let rowKey = 'sector';
     let colKey = 'advice';
-    const open = new Set();          // "r|c" of the expanded cells
+    const open = new Set();          // "r|c" of the drilled cells; "sub:i|c" on a child row
+    // ONE sector open at a time (the owner's call). Two hierarchies on screen
+    // and the eye stops knowing which child rows belong to which parent.
+    let expanded = null;
+
+    // Expanding is only meaningful when the rows ARE the parent dimension, and
+    // it is switched off when the columns are already the child: the sub-rows
+    // would restate the grid you are looking at.
+    const canExpand = () => rowKey === 'sector' && colKey !== 'industry';
 
     // One stock can land in several buckets of a multi-valued dimension, so
     // every reader goes through this and gets a LIST back. Nothing downstream
@@ -246,8 +288,48 @@
           }
         }
       }
+      // How many distinct industries sit inside each row value, so a caret is
+      // drawn only where opening it would show something new. One industry is
+      // a child row identical to its parent, which is a control that does
+      // nothing; the blank-sector bucket is exactly that case.
+      const kids = new Map();
+      if (canExpand()) {
+        for (const s of stocks) {
+          const r = rFold.map(valuesOf(rd, s)[0]);
+          if (!kids.has(r)) kids.set(r, new Set());
+          kids.get(r).add(valuesOf(DIMS.industry, s)[0]);
+        }
+      }
+
+      // The open sector's industries, counted through the SAME column logic as
+      // the grid above — `cFold.map` and the de-duplicated multi-value list —
+      // so the child rows add up to their parent's own total. That is the
+      // assertion this feature lives or dies by: a hierarchy whose children do
+      // not sum to their parent is a pivot that quietly lies.
+      let sub = null;
+      if (canExpand() && expanded && rowTot.has(expanded)) {
+        const kc = new Map(), kCells = new Map(), kTot = new Map();
+        for (const s of stocks) {
+          if (!valuesOf(rd, s).map(rFold.map).includes(expanded)) continue;
+          const ind = valuesOf(DIMS.industry, s)[0];
+          kc.set(ind, (kc.get(ind) || 0) + 1);
+          const cs = [...new Set(valuesOf(cd, s).map(cFold.map))];
+          kTot.set(ind, (kTot.get(ind) || 0) + cs.length);
+          for (const c of cs) {
+            const k = ind + '|' + c;
+            if (!kCells.has(k)) kCells.set(k, []);
+            kCells.get(k).push(s);
+          }
+        }
+        // No fold: measured on the live screen, the widest sector holds 16
+        // industries against a WIDE_CAP of 24, so a child list is always a
+        // list rather than a wall.
+        sub = { of: expanded, keys: orderKeys(DIMS.industry, kc), cells: kCells, tot: kTot };
+      }
+
       return { rd, cd, rKeys: rFold.keys, cKeys: cFold.keys, cells, rowTot, colTot,
-        placements, multi: multiStocks.size, rFolded: rFold.folded, cFolded: cFold.folded };
+        placements, multi: multiStocks.size, rFolded: rFold.folded, cFolded: cFold.folded,
+        kids, sub };
     }
 
     function moveCls(v) { return v == null ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : ''; }
@@ -280,26 +362,60 @@
       }
       h += '<th class="tot">Total</th></tr></thead><tbody>';
 
-      for (const r of p.rKeys) {
-        h += '<tr>';
-        h += '<th class="' + (r === BLANK ? 'blankdim' : '') + '">' + esc(r) + '</th>';
+      // One row of counts, used for a sector and for an industry inside one.
+      const cellsFor = (keyOf, count, openKey) => {
+        let s = '';
         for (const c of p.cKeys) {
-          const k = r + '|' + c;
-          const n = (p.cells.get(k) || []).length;
+          const n = count(c);
           // An EMPTY cell is left blank rather than printed as 0: on a grid of
           // sixty-odd cells the zeros are louder than the numbers.
-          h += n
-            ? '<td class="cell' + (open.has(k) ? ' open' : '') + '" data-k="' + esc(k) + '">' + n + '</td>'
+          s += n
+            ? '<td class="cell' + (open.has(openKey(c)) ? ' open' : '') +
+              '" data-k="' + esc(openKey(c)) + '">' + n + '</td>'
             : '<td class="zero">·</td>';
         }
-        h += '<td class="tot">' + (p.rowTot.get(r) || 0) + '</td></tr>';
-        // Any expanded cell on this row, opened underneath it.
+        return s;
+      };
+      const drillsFor = (openKey, listOf, label) => {
+        let s = '';
         for (const c of p.cKeys) {
-          const k = r + '|' + c;
-          if (!open.has(k)) continue;
-          const list = p.cells.get(k) || [];
-          h += '<tr class="drill"><td colspan="' + (p.cKeys.length + 2) + '">' +
-            drillHtml(list, r, c) + '</td></tr>';
+          if (!open.has(openKey(c))) continue;
+          s += '<tr class="drill"><td colspan="' + (p.cKeys.length + 2) + '">' +
+            drillHtml(listOf(c), label, c) + '</td></tr>';
+        }
+        return s;
+      };
+
+      for (const r of p.rKeys) {
+        const kids = p.kids.get(r);
+        const canOpen = !!kids && kids.size >= 2;
+        const isOpen = canOpen && p.sub && p.sub.of === r;
+        h += '<tr>';
+        h += '<th class="' + (r === BLANK ? 'blankdim' : '') +
+          (canOpen ? ' exp' + (isOpen ? ' on' : '') : '') + '"' +
+          (canOpen ? ' data-sec="' + esc(r) + '" title="' +
+            (isOpen ? 'Collapse' : 'Expand into ' + kids.size + ' industries') + '"' : '') + '>' +
+          (canOpen ? '<span class="car">' + (isOpen ? '&#9662;' : '&#9656;') + '</span>' : '') +
+          esc(r) + '</th>';
+        h += cellsFor(r, (c) => (p.cells.get(r + '|' + c) || []).length, (c) => r + '|' + c);
+        h += '<td class="tot">' + (p.rowTot.get(r) || 0) + '</td></tr>';
+        // Any drilled cell on this row, opened underneath it.
+        h += drillsFor((c) => r + '|' + c, (c) => p.cells.get(r + '|' + c) || [], r);
+
+        // Then this sector's industries, if it is the open one. Their own cells
+        // drill to stocks exactly like their parent's do — the `sub:` prefix is
+        // what keeps the two sets of keys apart, so a sector and an industry
+        // that happened to share a name could never share a drill.
+        if (isOpen) {
+          for (const ind of p.sub.keys) {
+            const at = (c) => p.sub.cells.get(ind + '|' + c) || [];
+            const ok = (c) => 'sub:' + ind + '|' + c;
+            h += '<tr class="kid"><th class="' + (ind === BLANK ? 'blankdim' : '') + '">' +
+              esc(ind) + '</th>';
+            h += cellsFor(ind, (c) => at(c).length, ok);
+            h += '<td class="tot">' + (p.sub.tot.get(ind) || 0) + '</td></tr>';
+            h += drillsFor(ok, at, ind);
+          }
         }
       }
       h += '</tbody><tfoot><tr><th>Total</th>';
@@ -327,7 +443,30 @@
         bits.push('<b>' + (p.rFolded + p.cFolded) + '</b> smaller values are folded into ' +
           '“Other”, so the grid stays readable.');
       }
+      if (p.sub) {
+        // State the reconciliation rather than leaving it to be trusted: the
+        // whole point of a hierarchy is that the children account for the
+        // parent exactly.
+        const kidSum = p.sub.keys.reduce((a, k) => a + (p.sub.tot.get(k) || 0), 0);
+        bits.push('<b>' + esc(p.sub.of) + '</b> is expanded into ' + p.sub.keys.length +
+          ' industries' + (kidSum === (p.rowTot.get(p.sub.of) || 0)
+            ? ', which add up to its own total of <b>' + kidSum + '</b>.'
+            : ' — <b class="warn">they add up to ' + kidSum + ', not ' +
+              (p.rowTot.get(p.sub.of) || 0) + '</b>.'));
+      } else if (rowKey === 'sector' && colKey === 'industry') {
+        bits.push('Sectors cannot be expanded while the columns are Industry — ' +
+          'the child rows would restate the grid.');
+      }
       $('note').innerHTML = bits.join(' ');
+
+      // Swapping would put Industry on the rows, where it has no entry in the
+      // picker. Say so on the control rather than letting the click do nothing.
+      const noSwap = !!DIMS[colKey].childOf;
+      $('swap').disabled = noSwap;
+      $('swap').title = noSwap
+        ? DIMS[colKey].label + ' is a drill of ' + DIMS[DIMS[colKey].childOf].label +
+          ', not a row dimension — expand a ' + DIMS[DIMS[colKey].childOf].label.toLowerCase() + ' instead'
+        : 'Swap the rows and the columns';
 
       $('out').querySelectorAll('td.cell').forEach((td) => {
         td.addEventListener('click', () => {
@@ -336,31 +475,55 @@
           render();
         });
       });
+      $('out').querySelectorAll('th.exp').forEach((th) => {
+        th.addEventListener('click', () => {
+          const sec = th.dataset.sec;
+          expanded = expanded === sec ? null : sec;
+          // Drop every child drill on the way. Those rows are about to stop
+          // existing, and a key left in `open` would silently re-open a stock
+          // list the next time any sector was expanded.
+          for (const k of [...open]) if (k.indexOf('sub:') === 0) open.delete(k);
+          render();
+        });
+      });
     }
 
     function fillPicks() {
-      const opts = (sel) => Object.keys(DIMS).map((k) =>
+      const opts = (keys, sel) => keys.map((k) =>
         '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' +
         esc(DIMS[k].label) + '</option>').join('');
-      $('rowDim').innerHTML = opts(rowKey);
-      $('colDim').innerHTML = opts(colKey);
+      $('rowDim').innerHTML = opts(ROW_DIMS, rowKey);
+      $('colDim').innerHTML = opts(Object.keys(DIMS), colKey);
     }
+
+    // Any change of axis drops both expansions: the keys in them name values of
+    // a dimension that is no longer on screen.
+    function reset() { open.clear(); expanded = null; fillPicks(); render(); }
+
+    // Two of the same dimension is a diagonal and nothing else, so the other
+    // picker steps aside rather than the page drawing a useless grid. It steps
+    // to a dimension that is nobody's CHILD: falling back to Industry would
+    // silently disable the sector caret, which is a state the reader chose
+    // nothing to get into.
+    const stepAside = (taken) => ROW_DIMS.find((k) => k !== taken);
 
     $('rowDim').addEventListener('change', () => {
       rowKey = $('rowDim').value;
-      // Two of the same dimension is a diagonal and nothing else, so the other
-      // picker steps aside rather than the page drawing a useless grid.
-      if (colKey === rowKey) { colKey = Object.keys(DIMS).find((k) => k !== rowKey); }
-      open.clear(); fillPicks(); render();
+      if (colKey === rowKey) { colKey = stepAside(rowKey); }
+      reset();
     });
     $('colDim').addEventListener('change', () => {
       colKey = $('colDim').value;
-      if (rowKey === colKey) { rowKey = Object.keys(DIMS).find((k) => k !== colKey); }
-      open.clear(); fillPicks(); render();
+      if (rowKey === colKey) { rowKey = stepAside(colKey); }
+      reset();
     });
     $('swap').addEventListener('click', () => {
+      // Industry has no Rows entry, so a swap that would put it there is
+      // refused rather than silently landing on a dimension the picker cannot
+      // show — the control would then disagree with the grid.
+      if (DIMS[colKey].childOf) return;
       const t = rowKey; rowKey = colKey; colKey = t;
-      open.clear(); fillPicks(); render();
+      reset();
     });
 
     fetch('/api/stocks')
