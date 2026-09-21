@@ -393,8 +393,12 @@
       $('again').disabled = true;
       try {
         const r = await fetch('/api/data-quality' + (fresh ? '?fresh=1' : ''));
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        DATA = await r.json();
+        // Read the body before deciding it failed: the server explains itself
+        // here (a refresh in progress answers 503 with a sentence saying so),
+        // and "HTTP 503" on its own tells nobody anything.
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        DATA = d;
         $('took').textContent = DATA.cached ? 'cached' : `${DATA.ms} ms`;
         paintCards(); paintShape(); paintFix(); paint();
         $('note').innerHTML = 'Sessions are <b>estimated</b> from the first and last bar, not counted: '

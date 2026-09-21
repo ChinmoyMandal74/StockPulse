@@ -1246,6 +1246,26 @@ Per-stock headlines — **headline / source / url / timestamp only, never bodies
 
 **The lesson, which the news incident already taught and this repeated: work added to the refresh tail is not free, and a slow query there does not fail loudly — it fails as a job that says the night went wrong when it went right.** Before adding anything to that path, time it COLD against production, and prefer a seek. And when a refresh "fails", read the run record before believing it: `complete` with a full `loaded` and an empty report means the work succeeded and the tail did not.
 
+### The heavy reads stand aside while a refresh runs
+**Nothing may compete with a refresh for the database (2026-09-21, owner's instruction).** A refresh round reads ~118,671 rows and **cannot wait**: nothing may run after a response on this platform, so the tail has to finish inside the request, and the nightly job gives up after three rounds without progress. A page can wait; a night cannot. The 2026-09-19 nightly is the proof — it reported failure over data that was perfect.
+
+`standAside(res)` in server.js answers **503** with the run's name and its progress, and the four heaviest reads call it:
+
+| route | what it reads |
+|---|---|
+| `/api/db-stats` (`/database`) | every row of every table — **1.7M**, nearly all `bars` |
+| `/api/backtest` | ~157,000 bars, plus the snapshot blob, earnings and recorded fundamentals |
+| `/api/trend-backtest` | 76,531 marks |
+| `/api/data-quality` (`/quality`) | ~33,000 rollup rows + every profile blob |
+
+- **It guards the READ, not the page.** A cached answer touches nothing, so `/api/db-stats` and `/api/data-quality` still serve theirs, and a trend sweep whose marks are already in memory still runs — `tbMarksWarm()` is one definition of "warm" shared by the loader and the guard, so they cannot disagree. **A guard that refuses free work is a regression dressed as safety.** The test proves both halves at once: the same endpoint is served warm and refused cold in the same run.
+- **Validation runs first**, so a malformed request still gets the 400 that explains it rather than being told to come back later and then refused again.
+- **The refusal has to be a SENTENCE.** All four pages render `j.error` straight into the page, so a bare status reaches a human as "HTTP 503". `/quality` was the one discarding the body (`throw new Error('HTTP ' + r.status)`) and now reads it.
+- **What it covers, and the gap is deliberate.** `readRefreshState()` is non-null only while a **multi-round** run is live — Refresh all, Fill missing, Fast refresh, the nightly. A plain price Refresh writes no state row *on purpose* (a row there raises the refreshing banner for every viewer, thirteen times a trading day), so the ~30-second intraday rounds are not covered. They are not the hazard; the 25-minute run is.
+- **No override, and none is needed**: the flag ages out after `REFRESH_STALE_MS`, so a run that dies mid-flight cannot lock the pages out. The answer is cached 5s so a page firing several guarded calls pays one round trip, and **a failure to read the flag counts as not-busy** — a database hiccup must not be able to lock out the research pages.
+- **The product is not collateral damage.** `/api/stocks`, `/api/sparklines`, `/api/status` and `/api/basket` are untouched: refusing a member's own page is a regression, not a safeguard.
+- Verified: 25 checks against the real server on an in-memory database — all four refused mid-run with the run named and its progress in the text, Retry-After set, cached and warm answers still served, the cold/warm pair on one endpoint, a 400 still a 400, the screener and its polls unaffected, and a stale flag unlocking everything on its own.
+
 ### The slowest thing in the app was a row count in the refresh tail
 **`archiveStats()` ran `select count(*), max(d) from bars` — over 1,708,408 rows, uncached — in the tail that must finish before the response, on every report build (2026-09-20).** Measured cold against production:
 

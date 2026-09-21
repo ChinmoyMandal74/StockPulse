@@ -3697,6 +3697,68 @@ app.get('/api/status', requireAuth, route(async (req, res) => {
   res.json({ refreshing, updatedAt });
 }));
 
+// ---- Standing aside while a refresh runs -----------------------------------
+//
+// The research and diagnostic pages read the archive in one gulp: the trend
+// sweep is 76,531 rows, the advice backtest ~157,000 bars, /database's counts
+// touch every one of the 1.7M, and the data-quality rollups about 33,000. A
+// refresh round reads 118,671 of its own and, unlike a page, CANNOT WAIT — on
+// this platform the tail has to finish before the response, and the nightly
+// job gives up after three rounds without progress.
+//
+// That is not hypothetical. On 2026-09-19 the nightly reported failure over
+// data that was perfect, because work competing for the same database pushed
+// the round past its deadline. A page is a click; a nightly run is a night.
+//
+// So the heavy reads stand aside rather than compete. A 503 naming the run and
+// its progress is a better answer than a page that spends four minutes and
+// then fails anyway.
+//
+// WHAT THIS COVERS, EXACTLY — and the gap is deliberate. readRefreshState() is
+// non-null only while a MULTI-ROUND run is live: Refresh all, Fill missing,
+// Fast refresh, the nightly. A plain price Refresh writes no state row on
+// purpose, because a row there raises the "refreshing" banner for every
+// viewer, and there are thirteen intraday runs a trading day. Those are ~30
+// seconds each and are not the hazard; the 25-minute run is.
+//
+// No override, and none is needed: readRefreshState() ages the flag out after
+// REFRESH_STALE_MS, so a run that dies mid-flight cannot lock these pages out.
+const BUSY_TTL_MS = 5000;
+let busyCache = null;
+
+// One answer per five seconds, so a page firing several guarded calls pays one
+// round trip rather than one each. A failure to READ the flag counts as NOT
+// busy: a database hiccup must not be able to lock out the research pages, and
+// the refresh itself is no worse off than it was before this existed.
+async function refreshBusy() {
+  if (busyCache && Date.now() - busyCache.at < BUSY_TTL_MS) return busyCache.state;
+  let state = null;
+  try { state = await readRefreshState(); } catch (e) { state = null; }
+  busyCache = { at: Date.now(), state };
+  return state;
+}
+
+// The first line of a heavy handler:  if (await standAside(res)) return;
+// Returns true when it has already answered the request.
+async function standAside(res) {
+  const st = await refreshBusy();
+  if (!st) return false;
+  // The same naming the intraday cron's own skip uses, so two surfaces cannot
+  // describe the same run differently.
+  const name = st.mode === 'missing' ? 'Fill missing'
+    : st.mode === 'fast' ? 'Fast refresh' : 'Refresh all';
+  const at = st.total ? ` — ${st.loaded || 0} of ${st.total} stocks so far` : '';
+  res.set('Retry-After', '120');
+  res.status(503).json({
+    error: `${name} is running${at}. This page reads a large slice of the archive in one go, `
+      + 'and doing that now would slow the run down or break it — so it is standing aside. '
+      + 'Try again once the run finishes; progress is on the Refresh runs page.',
+    refreshing: st,
+    busy: true,
+  });
+  return true;
+}
+
 // ---- API: stocks (the screener data) ---------------------------------------
 
 // Compute the full screener payload live from the API. As-of mode (asOf set)
@@ -4415,9 +4477,18 @@ const TB_THIN_PICKS = 3;
 // times that as objects, and it already carries everything the slim path
 // reads, so a slim request is served from a full copy rather than fetching a
 // second one.
+// Whether a sweep would read anything at all. One definition, used by the
+// loader and by the refresh guard, so the two cannot disagree about what
+// "warm" means — a guard that refused a sweep costing zero rows would be a
+// regression, and one that let a cold sweep through would be the bug.
+function tbMarksWarm(slim) {
+  const held = tbMarks;
+  return !!(held && Date.now() - held.at < TB_TTL_MS && (slim || !held.slim));
+}
+
 async function tbLoadMarks(slim) {
   const held = tbMarks;
-  if (held && Date.now() - held.at < TB_TTL_MS && (slim || !held.slim)) return held.rows;
+  if (tbMarksWarm(slim)) return held.rows;
   const dates = await store.readTechMarkDates('1900-01-01');
   const firsts = [];
   let lastMonth = null;
@@ -7423,6 +7494,10 @@ app.get('/api/data-quality', requireAdmin, route(async (req, res) => {
   if (!req.query.fresh && dqCache && Date.now() - dqCache.at < DQ_TTL_MS) {
     return res.json({ ...dqCache.body, cached: true });
   }
+  // The cached answer above reads nothing and is served regardless. This does:
+  // the span seeks are cheap, but the three coverage rollups are ~33,000 rows
+  // and readProfiles is every blob. Measured at 2.4s on an idle database.
+  if (await standAside(res)) return;
   const t0 = Date.now();
   const universe = await store.readUniverse();
   // Deliberately NOT readSnapshot(): it is a ~1.3MB JSON blob and the only
@@ -7540,6 +7615,12 @@ app.get('/api/trend-backtest', requireAdmin, route(async (req, res) => {
   // nor a re-evaluation; anything else re-runs the engine and needs all of
   // them. Same test tbSweep's `isDefault` makes, and it has to be — asking for
   // the slim row and then evaluating against it would read undefined inputs.
+  //
+  // 76,531 rows on a COLD cache, and nothing at all on a warm one — so the
+  // refresh guard asks which this is rather than refusing every sweep. Warm,
+  // the sweep is 154ms of arithmetic over rows already in memory and there is
+  // nothing for a refresh to be slowed by.
+  if (!tbMarksWarm(rules === 'Balanced') && await standAside(res)) return;
   const rows = await tbLoadMarks(rules === 'Balanced');
   if (!rows.length) {
     // Two different emptinesses, and saying the wrong one sends someone to
@@ -7626,6 +7707,15 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
   const tiers = String(req.query.tiers || 'Strong Buy').split(',')
     .map((x) => x.trim()).filter((x) => Action.ACTIONS.indexOf(x) >= 0);
   if (!tiers.length) return res.status(400).json({ error: 'Pick at least one verdict.' });
+
+  // After validation, so a malformed request still gets the 400 that explains
+  // it rather than being told to come back later and then refused again. The
+  // checks above are arithmetic on the query string and read nothing.
+  //
+  // ~157,000 bars on a cold cache (530 days x the universe), and never free
+  // even on a warm one: the snapshot blob, the earnings dates and the recorded
+  // fundamentals are read on every run.
+  if (await standAside(res)) return;
 
   const universe = await store.readUniverse();
   const bars = await btLoadBars(universe);
@@ -7869,6 +7959,10 @@ app.get('/api/db-stats', requireAdmin, route(async (req, res) => {
   if (!fresh && dbStatsCache && Date.now() - dbStatsCache.countedAt < 5 * 60 * 1000) {
     return res.json({ ...dbStatsCache, cached: true });
   }
+  // Only the counting stands aside — a cached answer reads nothing, so there
+  // is no reason to refuse it. The heaviest read in the app by a distance:
+  // counting every table reads every row, nearly all of them `bars`.
+  if (await standAside(res)) return;
   dbStatsCache = await store.tableStats();
   res.json({ ...dbStatsCache, cached: false });
 }));
