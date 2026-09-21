@@ -140,8 +140,8 @@
       <a class="btn" href="/">Back to screener</a>
     </header>
     <p class="sub">
-      The screen counted by two dimensions at once. Every number is a count of stocks;
-      click a cell to see which ones. Nothing here is fetched twice — it is the same
+      The screen counted by two dimensions at once. Every number is a count of stocks or their
+      total market cap; click a cell to see which ones. Nothing here is fetched twice — it is the same
       snapshot the screener reads, cross-tabulated in the browser.
     </p>
 
@@ -149,6 +149,7 @@
       <div class="pick"><label for="rowDim">Rows</label><select id="rowDim"></select></div>
       <button class="btn" id="swap" title="Swap the rows and the columns">⇄ Swap</button>
       <div class="pick"><label for="colDim">Columns</label><select id="colDim"></select></div>
+      <div class="pick"><label for="measure">Measure</label><select id="measure"></select></div>
     </div>
 
     <p class="note" id="note"></p>
@@ -211,6 +212,54 @@
     // A dimension that is somebody's child is not offered as a row.
     const ROW_DIMS = Object.keys(DIMS).filter((k) => !DIMS[k].childOf);
 
+    // ---- measures -----------------------------------------------------------
+    // A measure is one number per stock; everything else — the ordering, the
+    // fold, the row and column totals, the child rows — reduces over it, so
+    // adding one is an entry here rather than a parallel path through build().
+    //
+    // MARKET CAP IS THE ONLY MONEY MEASURE THIS PAGE MAY HAVE, and the reason is
+    // recorded rather than assumed: revenue and net income are in the company's
+    // REPORTING currency, which is not stored, so summing them would add SEK to
+    // USD and produce a confident, meaningless number. Market cap comes back in
+    // USD even when the rest of the row does not — Ericsson reads a $33.2B cap
+    // beside 236.7B of revenue in SEK, checked across 18 foreign reporters —
+    // which holds because the universe is US-listed only.
+    const MEASURES = {
+      count: {
+        label: 'Number of stocks',
+        each: () => 1,
+        fmt: (v) => String(v),
+        noun: 'a count of stocks',
+        // Nothing can be absent from a count: every row contributes exactly one.
+        missing: () => 0,
+      },
+      mcap: {
+        label: 'Total market cap',
+        each: (s) => (s.marketCap > 0 ? s.marketCap : 0),
+        fmt: (v) => fmtMoney(v),
+        noun: 'a total market capitalisation',
+        // A fund reports AUM, so it contributes NOTHING to a money total while
+        // still sitting in the cell. That gap is counted and said out loud —
+        // a sum that silently omits rows is the quietest kind of lie.
+        missing: (list) => list.filter((s) => !(s.marketCap > 0)).length,
+      },
+    };
+    let measure = 'count';
+    const M = () => MEASURES[measure];
+    const sumOf = (list) => (list || []).reduce((a, s) => a + M().each(s), 0);
+
+    // Matches the screener's own fmtMktCap so the same company does not read
+    // one way in the table and another here.
+    function fmtMoney(v) {
+      if (v == null || !isFinite(v)) return '—';
+      const sign = v < 0 ? '-' : '';
+      const a = Math.abs(v);
+      if (a >= 1e12) return sign + '$' + (a / 1e12).toFixed(1) + 'T';
+      if (a >= 1e9) return sign + '$' + (a / 1e9).toFixed(1) + 'B';
+      if (a >= 1e6) return sign + '$' + (a / 1e6).toFixed(1) + 'M';
+      return sign + '$' + Math.round(a).toLocaleString();
+    }
+
     let stocks = [];
     let rowKey = 'sector';
     let colKey = 'advice';
@@ -270,11 +319,14 @@
 
     function build() {
       const rd = DIMS[rowKey], cd = DIMS[colKey];
-      // First pass: how big is each value, so the order and the collapse know.
+      // First pass: how big is each value BY THE ACTIVE MEASURE, so the order
+      // and the collapse follow what is on screen. Ordering by count while
+      // showing money would put the biggest number halfway down the table.
       const rc = new Map(), cc = new Map();
       for (const s of stocks) {
-        for (const v of valuesOf(rd, s)) rc.set(v, (rc.get(v) || 0) + 1);
-        for (const v of valuesOf(cd, s)) cc.set(v, (cc.get(v) || 0) + 1);
+        const w = M().each(s);
+        for (const v of valuesOf(rd, s)) rc.set(v, (rc.get(v) || 0) + w);
+        for (const v of valuesOf(cd, s)) cc.set(v, (cc.get(v) || 0) + w);
       }
       const rFold = collapse(rd, rc, orderKeys(rd, rc));
       const cFold = collapse(cd, cc, orderKeys(cd, cc));
@@ -283,22 +335,43 @@
       // is what makes the totals exceed the universe — counted here, said out
       // loud under the table.
       const cells = new Map();       // "r|c" -> [stocks]
-      const rowTot = new Map(), colTot = new Map();
-      let placements = 0;
       const multiStocks = new Set();
       for (const s of stocks) {
         const rs = [...new Set(valuesOf(rd, s).map(rFold.map))];
         const cs = [...new Set(valuesOf(cd, s).map(cFold.map))];
         if (rs.length > 1 || cs.length > 1) multiStocks.add(s.symbol);
         for (const r of rs) {
-          rowTot.set(r, (rowTot.get(r) || 0) + cs.length);
           for (const c of cs) {
             const k = r + '|' + c;
             if (!cells.has(k)) cells.set(k, []);
             cells.get(k).push(s);
-            colTot.set(c, (colTot.get(c) || 0) + 1);
-            placements++;
           }
+        }
+      }
+      // The totals are REDUCED OUT OF THE CELLS rather than accumulated beside
+      // them. They were a parallel running count before, which was correct and
+      // could have drifted from what the grid draws; derived this way a row
+      // total cannot disagree with the row above it, whatever the measure.
+      const rowTot = new Map(), colTot = new Map();
+      let placements = 0;    // the grand total IN THE ACTIVE MEASURE
+      let placeCount = 0;    // how many cell-placements, whatever the measure
+      let noValue = 0;       // stocks the measure cannot account for
+      // Walked as a GRID rather than by splitting the cell keys apart: a value
+      // containing a "|" would make that split silently wrong, and sector and
+      // industry names are the provider's, not ours.
+      for (const r of rFold.keys) {
+        for (const c of cFold.keys) {
+          const list = cells.get(r + '|' + c);
+          if (!list) continue;
+          const v = sumOf(list);
+          rowTot.set(r, (rowTot.get(r) || 0) + v);
+          colTot.set(c, (colTot.get(c) || 0) + v);
+          placements += v;
+          // Kept separately because the "counted twice" warning is about ROWS,
+          // not about money: with a money measure `placements` is dollars and
+          // comparing it to the stock count would be nonsense.
+          placeCount += list.length;
+          noValue += M().missing(list);
         }
       }
       // How many distinct industries sit inside each row value, so a caret is
@@ -325,14 +398,21 @@
         for (const s of stocks) {
           if (!valuesOf(rd, s).map(rFold.map).includes(expanded)) continue;
           const ind = valuesOf(DIMS.industry, s)[0];
-          kc.set(ind, (kc.get(ind) || 0) + 1);
+          kc.set(ind, (kc.get(ind) || 0) + M().each(s));
           const cs = [...new Set(valuesOf(cd, s).map(cFold.map))];
-          kTot.set(ind, (kTot.get(ind) || 0) + cs.length);
           for (const c of cs) {
             const k = ind + '|' + c;
             if (!kCells.has(k)) kCells.set(k, []);
             kCells.get(k).push(s);
           }
+        }
+        // Reduced out of the child cells, the same way the parent totals are,
+        // so "the children add up to the parent" holds for money exactly as it
+        // does for a count.
+        for (const ind of kc.keys()) {
+          let v = 0;
+          for (const c of cFold.keys) v += sumOf(kCells.get(ind + '|' + c));
+          kTot.set(ind, v);
         }
         // No fold: measured on the live screen, the widest sector holds 16
         // industries against a WIDE_CAP of 24, so a child list is always a
@@ -341,7 +421,8 @@
       }
 
       return { rd, cd, rKeys: rFold.keys, cKeys: cFold.keys, cells, rowTot, colTot,
-        placements, multi: multiStocks.size, rFolded: rFold.folded, cFolded: cFold.folded,
+        placements, placeCount, noValue, multi: multiStocks.size,
+        rFolded: rFold.folded, cFolded: cFold.folded,
         kids, sub };
     }
 
@@ -354,7 +435,10 @@
     function drillHtml(list, rv, cv) {
       const rows = list.slice().sort((a, b) => (b.todayPct || 0) - (a.todayPct || 0));
       return '<h4>' + esc(rv) + ' <span style="color:var(--faint)">·</span> ' + esc(cv) +
-        ' — <b>' + rows.length + '</b> ' + (rows.length === 1 ? 'stock' : 'stocks') + '</h4>' +
+        ' — <b>' + rows.length + '</b> ' + (rows.length === 1 ? 'stock' : 'stocks') +
+        // With money on screen the cell shows a total, so the list has to name
+        // it too, or the number above cannot be checked against what is under it.
+        (measure === 'count' ? '' : ', <b>' + esc(M().fmt(sumOf(rows))) + '</b> in total') + '</h4>' +
         '<div class="dlist">' + rows.map((s) =>
           '<a href="/stock/' + esc(s.symbol) + '" target="_blank" rel="noopener" title="' +
           esc((s.name || '') + (s.action ? ' · ' + s.action : '')) + '">' +
@@ -381,16 +465,22 @@
       }
       h += '<th class="tot">Total</th></tr></thead><tbody>';
 
-      // One row of counts, used for a sector and for an industry inside one.
-      const cellsFor = (keyOf, count, openKey) => {
+      // One row of numbers, for a sector and for an industry inside one.
+      //
+      // THE EMPTINESS TEST IS THE STOCK LIST, NOT THE VALUE. A cell holding
+      // three funds sums to zero market cap and is still a cell with three
+      // stocks in it — drawing it as the empty dot would hide them, and the dot
+      // is not clickable. An EMPTY cell is still left blank rather than printed
+      // as 0: on a grid of sixty-odd cells the zeros are louder than the numbers.
+      const cellsFor = (listOf, openKey) => {
         let s = '';
         for (const c of p.cKeys) {
-          const n = count(c);
-          // An EMPTY cell is left blank rather than printed as 0: on a grid of
-          // sixty-odd cells the zeros are louder than the numbers.
-          s += n
+          const list = listOf(c) || [];
+          s += list.length
             ? '<td class="cell' + (open.has(openKey(c)) ? ' open' : '') +
-              '" data-k="' + esc(openKey(c)) + '">' + n + '</td>'
+              '" data-k="' + esc(openKey(c)) + '" title="' +
+              esc(list.length + (list.length === 1 ? ' stock' : ' stocks')) + '">' +
+              esc(M().fmt(sumOf(list))) + '</td>'
             : '<td class="zero">·</td>';
         }
         return s;
@@ -418,8 +508,8 @@
           esc(r) +
           (rangeOf(p.rd, r) ? '<span class="rng">' + esc(rangeOf(p.rd, r)) + '</span>' : '') +
           '</th>';
-        h += cellsFor(r, (c) => (p.cells.get(r + '|' + c) || []).length, (c) => r + '|' + c);
-        h += '<td class="tot">' + (p.rowTot.get(r) || 0) + '</td></tr>';
+        h += cellsFor((c) => p.cells.get(r + '|' + c), (c) => r + '|' + c);
+        h += '<td class="tot">' + esc(M().fmt(p.rowTot.get(r) || 0)) + '</td></tr>';
         // Any drilled cell on this row, opened underneath it.
         h += drillsFor((c) => r + '|' + c, (c) => p.cells.get(r + '|' + c) || [], r);
 
@@ -433,26 +523,51 @@
             const ok = (c) => 'sub:' + ind + '|' + c;
             h += '<tr class="kid"><th class="' + (ind === BLANK ? 'blankdim' : '') + '">' +
               esc(ind) + '</th>';
-            h += cellsFor(ind, (c) => at(c).length, ok);
-            h += '<td class="tot">' + (p.sub.tot.get(ind) || 0) + '</td></tr>';
+            h += cellsFor(at, ok);
+            h += '<td class="tot">' + esc(M().fmt(p.sub.tot.get(ind) || 0)) + '</td></tr>';
             h += drillsFor(ok, at, ind);
           }
         }
       }
       h += '</tbody><tfoot><tr><th>Total</th>';
-      for (const c of p.cKeys) h += '<td>' + (p.colTot.get(c) || 0) + '</td>';
-      h += '<td>' + p.placements + '</td></tr></tfoot></table></div>';
+      for (const c of p.cKeys) h += '<td>' + esc(M().fmt(p.colTot.get(c) || 0)) + '</td>';
+      h += '<td>' + esc(M().fmt(p.placements)) + '</td></tr></tfoot></table></div>';
       $('out').innerHTML = h;
 
       // ---- what the totals mean, said rather than left to be worked out ----
       const bits = [];
-      if (p.placements !== total) {
-        bits.push('<b class="warn">The cells add up to ' + p.placements + ', not ' + total +
-          '</b> — ' + p.multi + ' ' + (p.multi === 1 ? 'stock is' : 'stocks are') +
+      const money = measure !== 'count';
+      // The double-counting warning is about ROWS and is judged on placements,
+      // never on the measure: with money on screen `placements` is dollars, and
+      // comparing dollars to a stock count would be nonsense.
+      if (p.placeCount !== total) {
+        // The count wording is kept word for word: "the cells add up to 9, not
+        // 8" states the surprise directly, which a rephrasing lost. Money needs
+        // its own sentence only because `placements` is dollars there, and
+        // "adds up to $4.1T, not 573" would be nonsense.
+        const why = ' — ' + p.multi + ' ' + (p.multi === 1 ? 'stock is' : 'stocks are') +
           ' counted in more than one bucket, because a stock can sit in several ' +
-          esc((p.rd.multi ? p.rd.label : p.cd.label).toLowerCase()) + 's.');
+          esc((p.rd.multi ? p.rd.label : p.cd.label).toLowerCase()) + 's.';
+        bits.push(money
+          ? '<b class="warn">The cells cover ' + p.placeCount + ' placements of ' +
+            total + ' stocks</b>' + why +
+            ' A market cap is added once per placement, so these totals exceed the universe’s.'
+          : '<b class="warn">The cells add up to ' + p.placeCount + ', not ' + total +
+            '</b>' + why);
+      } else if (money) {
+        bits.push('Every stock is counted exactly once, across <b>' + total + '</b> stocks.');
       } else {
         bits.push('Every stock is counted exactly once: the cells add up to <b>' + total + '</b>.');
+      }
+      // A SUM THAT SILENTLY OMITS ROWS IS THE QUIETEST KIND OF LIE. A fund
+      // reports assets under management rather than a capitalisation, so it
+      // sits in its cell and contributes nothing — which has to be said, or a
+      // cell reading $0 over three stocks looks like a bug instead of a fact.
+      if (money && p.noValue) {
+        bits.push('<b>' + p.noValue + '</b> of those ' +
+          (p.noValue === 1 ? 'has' : 'have') + ' no market cap and add nothing to these ' +
+          'totals — a fund reports assets under management instead. ' +
+          'The cells still hold them, so a count and a total need not agree.');
       }
       const blanks = (p.cells.size ? 0 : 0) ||
         stocks.filter((s) => valuesOf(p.rd, s).includes(BLANK) || valuesOf(p.cd, s).includes(BLANK)).length;
@@ -469,11 +584,16 @@
         // whole point of a hierarchy is that the children account for the
         // parent exactly.
         const kidSum = p.sub.keys.reduce((a, k) => a + (p.sub.tot.get(k) || 0), 0);
+        const parent = p.rowTot.get(p.sub.of) || 0;
+        // Floating point: summing dollars gives a residue a strict equality
+        // would call a mismatch and print an alarming warning over two numbers
+        // that are the same to the penny.
+        const agrees = Math.abs(kidSum - parent) < Math.max(1, Math.abs(parent) * 1e-9);
         bits.push('<b>' + esc(p.sub.of) + '</b> is expanded into ' + p.sub.keys.length +
-          ' industries' + (kidSum === (p.rowTot.get(p.sub.of) || 0)
-            ? ', which add up to its own total of <b>' + kidSum + '</b>.'
-            : ' — <b class="warn">they add up to ' + kidSum + ', not ' +
-              (p.rowTot.get(p.sub.of) || 0) + '</b>.'));
+          ' industries' + (agrees
+            ? ', which add up to its own total of <b>' + esc(M().fmt(kidSum)) + '</b>.'
+            : ' — <b class="warn">they add up to ' + esc(M().fmt(kidSum)) + ', not ' +
+              esc(M().fmt(parent)) + '</b>.'));
       } else if (rowKey === 'sector' && colKey === 'industry') {
         bits.push('Sectors cannot be expanded while the columns are Industry — ' +
           'the child rows would restate the grid.');
@@ -513,6 +633,9 @@
       const opts = (keys, sel) => keys.map((k) =>
         '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' +
         esc(DIMS[k].label) + '</option>').join('');
+      $('measure').innerHTML = Object.keys(MEASURES).map((k) =>
+        '<option value="' + k + '"' + (k === measure ? ' selected' : '') + '>' +
+        esc(MEASURES[k].label) + '</option>').join('');
       $('rowDim').innerHTML = opts(ROW_DIMS, rowKey);
       $('colDim').innerHTML = opts(Object.keys(DIMS), colKey);
     }
@@ -538,6 +661,11 @@
       if (rowKey === colKey) { rowKey = stepAside(colKey); }
       reset();
     });
+    // Changing the measure keeps both axes and both expansions: it is the same
+    // table answering a different question, and dropping the reader's place
+    // would make comparing the two answers a chore.
+    $('measure').addEventListener('change', () => { measure = $('measure').value; render(); });
+
     $('swap').addEventListener('click', () => {
       // Industry has no Rows entry, so a swap that would put it there is
       // refused rather than silently landing on a dimension the picker cannot
