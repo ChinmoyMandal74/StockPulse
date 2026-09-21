@@ -123,12 +123,25 @@
     /* the shared chart, at page scale — taller, with a gutter on the right for
        the price axis and room underneath for the dates. The svg fills the
        content box, so the padding is what creates both. */
-    #chart.rc-chart { height: 320px; border-radius: 12px; padding: 0 52px 18px 0;
-                      transition: height 0.45s var(--ease); }
     /* The svg stretches with preserveAspectRatio="none", so a taller viewBox
-       alone would squash every band instead of adding one. Growing the box in
-       the same proportion (213 -> 284) keeps the price panel its own size. */
-    #chart.rc-chart.has-rsi { height: 427px; }
+       alone would squash every band instead of adding one — what has to stay
+       constant is PIXELS PER VIEWBOX UNIT. These two numbers are derived from
+       the bands in rowcard.js and have to be re-derived whenever those change:
+       the 18px of bottom padding is the date axis and is not part of the svg,
+       so the arithmetic is (viewBox height x px-per-unit) + 18.
+
+                          viewBox H          px/unit   height
+         volume only      195+13+44+6 = 258   1.4178    384px
+         + RSI            195+13+58+13+44+6 = 329   1.4401    492px
+
+       Those px-per-unit figures are the ones the old 320/427 pair already
+       implied, so the volume band stays 62px and the RSI band 84px while the
+       PRICE panel goes from 213px to 277px — the 30% the owner asked for
+       (2026-09-21). Change PRICE_H and these must move with it, or the bands
+       silently shrink instead of the price growing. */
+    #chart.rc-chart { height: 384px; border-radius: 12px; padding: 0 52px 18px 0;
+                      transition: height 0.45s var(--ease); }
+    #chart.rc-chart.has-rsi { height: 492px; }
     #chart .cap { font-size: 12.5px; }
     #chart .cap.chg { font-size: 17px; }
     /* Pane labels sit against the geometry the chart reports, not a guessed
