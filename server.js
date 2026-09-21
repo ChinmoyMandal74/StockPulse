@@ -5321,7 +5321,13 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     universe: stocks
       .filter((x) => !x.error)
       .filter((x) => !guest || guestSet.has(String(x.symbol).toUpperCase()))
-      .map((x) => ({ symbol: x.symbol, name: x.name || '' }))
+      // The DISPLAY name too: the compare picker and the chart legend both read
+      // it, and "NVIDIA" beats "NVIDIA Corporation" beside a line. `shortName`
+      // is stamped on every row on the way out (deriveShortName, plus any
+      // override), so it costs nothing here — the same reason the cards label
+      // by name rather than by ticker. The legal name stays, so the symbol
+      // picker's filter still matches what it always matched.
+      .map((x) => ({ symbol: x.symbol, name: x.name || '', short: x.shortName || '' }))
       .sort((a, b) => a.symbol.localeCompare(b.symbol)),
     updatedAt: snap.updatedAt || null,
   });

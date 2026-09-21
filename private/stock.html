@@ -274,12 +274,27 @@
     #chart .cap.ma i.bm.bm-qqq { color: #f0abfc; }
     #chart .cap.ma i.bm.bm-iwm { color: #22d3ee; }
     #chart .cap.ma i.bm.bm-dia { color: #fb923c; }
+    /* The chosen comparison stock. Its own colour, because it is not one of the
+       four indices and should not read as one. */
+    #chart .ov.bm-cmp { stroke: #a3e635; }
+    #chart .cap.ma i.bm.bm-cmp { color: #a3e635; }
     .bm-toggle:first-of-type { margin-left: 10px; }
     .bm-toggle.on { color: var(--text); }
     .bm-toggle.bm-spy.on { background: rgba(148, 163, 184, 0.20); }
     .bm-toggle.bm-qqq.on { background: rgba(240, 171, 252, 0.16); }
     .bm-toggle.bm-iwm.on { background: rgba(34, 211, 238, 0.16); }
     .bm-toggle.bm-dia.on { background: rgba(251, 146, 60, 0.16); }
+    /* The compare picker sits with the overlay toggles and is styled as one, so
+       the row reads as a single family of "what else is on this chart". */
+    select.cmp-pick { appearance: none; -webkit-appearance: none; margin-left: 6px;
+      padding: 4px 22px 4px 9px; border-radius: 8px; cursor: pointer;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      color: var(--muted); font: 500 11px var(--sans); max-width: 190px;
+      background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa3b2' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 7px center; }
+    select.cmp-pick.on { color: #a3e635; border-color: rgba(163, 230, 53, 0.4);
+      background-color: rgba(163, 230, 53, 0.12); }
+    select.cmp-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .th-toggle.on { background: rgba(233, 236, 242, 0.12); color: var(--text);
       border-color: var(--hair-2); }
 
@@ -406,6 +421,26 @@
       { sym: 'IWM', label: 'Russell 2000', cls: 'bm-iwm', on: false },
       { sym: 'DIA', label: 'Dow 30',       cls: 'bm-dia', on: false },
     ].filter((b) => b.sym !== SYMBOL);   // never overlay a stock on itself
+
+    // ONE MORE LINE, CHOSEN: the same overlay the four indices use, pointed at
+    // any stock in the universe. It is not a new mechanism — benchSeries does
+    // the alignment and the rebasing, chartSVG draws the path, and the legend
+    // already lists whatever is drawn — so this is a fifth entry in the list
+    // that paintChart builds, with a symbol that happens to be chosen.
+    //
+    // Rebased like the indices: scaled to this stock's price at the first date
+    // they share, so the line answers "what would that have done from the same
+    // starting point" and the GAP between the lines is the relative
+    // performance. Two raw price lines on one axis would be the misleading
+    // version — NVDA at $180 against KSS at $12 flattens one of them.
+    let compareSym = '';
+    let universeRows = [];   // filled once /api/stock lands; the picker reads it
+    // The company NAME where we have one, because "Advanced Micro Devices" says
+    // more on a legend than AMD does — the same call the cards make.
+    function cmpLabel(sym) {
+      const r = universeRows.find((x) => x.symbol === sym);
+      return (r && (r.short || r.name)) || sym;
+    }
     // The verdict replay reads the 252-session high beside the 200-day
     // average, so the fetch pads by the larger of the two needs.
     const REPLAY_PAD = 260;
@@ -814,7 +849,10 @@
       if (!box) return;
       box.dataset.range = range.id;
       box.classList.toggle('has-rsi', showRSI);
-      const wantBench = BENCH.filter((b) => b.on);
+      // The chosen stock rides with the indices: one list, so the fetch, the
+      // rebasing, the overlay paths and the legend all treat it identically.
+      const wantBench = BENCH.filter((b) => b.on).concat(
+        compareSym ? [{ sym: compareSym, label: cmpLabel(compareSym), cls: 'bm-cmp', on: true }] : []);
       Promise.all([
         RowCard.loadHistory(SYMBOL, range.days + REPLAY_PAD),
         // A benchmark that cannot be read must not take the chart down with it
@@ -1010,6 +1048,9 @@
                 `<button class="rng bm-toggle ${b.cls}${b.on ? ' on' : ''}" data-bm="${b.sym}"
                   title="Overlay ${b.label} (${b.sym}), rebased to this stock's price at the left edge — the gap between the lines is relative performance">${b.sym}</button>`
               ).join('')}
+              <select class="cmp-pick${compareSym ? ' on' : ''}" id="cmpPick"
+                title="Overlay another stock, rebased to this one's price at the left edge — the gap between the lines is relative performance"
+                aria-label="Compare with another stock"></select>
               <button class="rng th-toggle${showTrendHold ? ' on' : ''}" id="thBtn"
                 title="What holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on">TREND</button></span>
           </div>
@@ -1241,6 +1282,26 @@
       });
 
       chartEl.addEventListener('pointerleave', hideHover);
+
+      // ---- compare with another stock ----------------------------------------
+      // The universe minus this stock and minus the four indices, which already
+      // have their own buttons — offering SPY here as well would be two
+      // controls for one line.
+      universeRows = payload.universe || [];
+      const cmpPick = document.getElementById('cmpPick');
+      if (cmpPick) {
+        const taken = new Set([SYMBOL].concat(BENCH.map((b) => b.sym)));
+        cmpPick.innerHTML = '<option value="">Compare…</option>' +
+          universeRows.filter((r) => !taken.has(r.symbol))
+            .map((r) => `<option value="${esc(r.symbol)}"${r.symbol === compareSym ? ' selected' : ''}>` +
+              `${esc(r.symbol)} — ${esc(r.short || r.name || r.symbol)}</option>`).join('');
+        cmpPick.addEventListener('change', () => {
+          compareSym = cmpPick.value || '';
+          cmpPick.classList.toggle('on', !!compareSym);
+          window.track && track('chart', 'compare:' + (compareSym || 'off'));
+          paintChart();
+        });
+      }
 
       document.querySelector('.ranges').addEventListener('click', (e) => {
         const b = e.target.closest('.rng');
