@@ -36,7 +36,11 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 90, not 45. At 652 symbols the rotation is 94 profiles = 14 rounds, and
+    # with round 1 at ~257s, archive rounds averaging ~130s and a 62s gap after
+    # each, a clean run is ~47 minutes — which 45 cut off before it could
+    # finish. MAX_ROUNDS is the round ceiling; this is the wall-clock one.
+    timeout-minutes: 90
     steps:
       # Two crons are registered so one of them lands on 4:15 PM Eastern
       # whatever the clocks are doing. Exactly one can be right on any given
@@ -107,7 +111,19 @@ jobs:
             body=$(jq -nc --arg actor "nightly job (GitHub Actions)" --arg trigger "$TRIGGER" \
               --arg runUrl "$RUN_URL" --arg runId "$RUN_ID" \
               '{actor:$actor, trigger:$trigger, runUrl:$runUrl} + (if $runId == "" then {} else {runId:($runId|tonumber)} end)')
-            curl -sS -m 180 -X POST "${APP_URL}/api/cron/refresh$1" \
+            # 300s, not 180. `?start=1` does not merely start the run — it falls
+            # through and executes a whole round, and round ONE is the live
+            # price round, the most expensive kind. Measured on the two runs
+            # before this changed: 257.2s at 640 symbols and 234.3s at 652,
+            # against a 180s limit. It fit when a round was ~146s at 430
+            # symbols; the universe grew 52% in a day and it stopped fitting.
+            #
+            # 300s is the ceiling worth asking for, not a comfortable margin:
+            # the platform kills a function at about 300s and a 504 at 300.1s
+            # is already on record. Past that the answer is not a longer
+            # timeout, it is Fast refresh — profile-only rounds that take
+            # seconds, with one heavy rebuild at the end.
+            curl -sS -m 300 -X POST "${APP_URL}/api/cron/refresh$1" \
               -H "authorization: Bearer ${CRON_SECRET}" \
               -H 'content-type: application/json' \
               -d "$body"
@@ -119,7 +135,16 @@ jobs:
           }
 
           echo "Starting Refresh all against ${APP_URL}"
-          resp=$(call '?start=1')
+          # `|| true` IS LOAD-BEARING, on both call sites. The step runs under
+          # `bash -eo pipefail`, so a curl that times out kills the whole script
+          # on the spot — before the loop, before finish(). On 2026-09-21 that
+          # turned one slow first round into exit 28 at 3m05s with the run left
+          # stranded `running` and the refresh flag up, instead of a round the
+          # loop would have simply counted as stagnant and retried.
+          #
+          # It also resurrects dead code: the `if [ -z "$loaded" ]` branch below
+          # was written for exactly this and could never be reached.
+          resp=$(call '?start=1' || true)
           RUN_ID=$(printf '%s' "$resp" | jq -r '.runId // empty' 2>/dev/null)
           last=-1
           stagnant=0
@@ -135,7 +160,11 @@ jobs:
             fi
 
             if [ -z "$loaded" ]; then
-              # A rate limit or a cold start, not a reason to abandon the night.
+              # A rate limit, a cold start, a round that outran the 300s curl
+              # limit, or a 504 from the gateway — none of them a reason to
+              # abandon the night. Reachable only because both call sites carry
+              # `|| true`; without that, bash -e killed the script first and
+              # this branch never ran.
               echo "round ${round}: no usable response — $(printf '%s' "$resp" | head -c 200)"
               stagnant=$((stagnant + 1))
               if [ "$stagnant" -ge "$STAGNANT_LIMIT" ]; then
@@ -163,7 +192,7 @@ jobs:
             fi
 
             sleep "$GAP"
-            resp=$(call '')
+            resp=$(call '' || true)
           done
 
           echo "::warning::Hit the ${MAX_ROUNDS}-round ceiling without finishing."
