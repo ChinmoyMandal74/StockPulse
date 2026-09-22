@@ -10,6 +10,7 @@
 //   ctx.size      { id, w, h } — the artboard the card is being drawn into
 //   ctx.opts      the control values, by control id (movPeriod, chtWin, ...)
 //   ctx.getBasket (days) -> the /api/basket payload or null while it loads
+//   ctx.chart     ONE stock's own closes, for the `stock` card — see below
 // The module reads no DOM and issues no requests: a host that hands it
 // numbers gets a card back, which is what makes it testable off-page.
 (function (global) {
@@ -21,6 +22,12 @@
   let size = { id: 'portrait', w: 1080, h: 1350 };
   let O = {};                       // control values, by control id
   let getBasket = () => null;
+  // ONE stock's own daily closes — { symbol, name, closes, dates, rangeLabel,
+  // price, today }. A plain data field rather than a getter, because the only
+  // host that has it (the stock page) already holds it: it drew the chart from
+  // these very numbers. Every other host leaves it null and the `stock` card
+  // says so rather than inventing a line.
+  let chartOne = null;
 
     // The date on a card is the DATA's, not the reader's clock. It stamped
     // `new Date()` until 2026-09-16, so a card built on a Saturday — or after
@@ -736,6 +743,58 @@
     function chartScopeSymbols() {
       const sc = scopeOf('chtScope', 'chtSector');
       return { syms: sc.rows.map((x) => x.symbol), label: sc.label };
+    }
+
+    // ---- one stock, its own chart, as a post or a story --------------------
+    // The stock page asked for the studio's export on the chart it is already
+    // showing (2026-09-22, owner's request). It draws through `lineChart`, the
+    // SAME function the Chart card uses, rather than a second implementation —
+    // which is what makes it survive the PNG export unchanged (presentation
+    // attributes, no classes) and animate under Motion for free.
+    //
+    // REBASED TO THE WINDOW, not plotted in dollars, and the axis says `%`.
+    // Two reasons: it is the question a shared chart actually answers ("what
+    // did this do"), and it is the one scale that reads the same for a $4
+    // stock and a $1,000 one. The dollar price is not lost — it sits in the
+    // header, where a reader looks for it.
+    function tplStock() {
+      const c = chartOne;
+      const closes = (c && c.closes) || [];
+      const first = closes.findIndex((v) => v > 0);
+      if (!c || first < 0 || closes.length < 2) {
+        return chromeTop() + '<div class="s-body"><div><p class="s-empty">' +
+          'No stored history to draw for ' + esc((c && c.symbol) || 'this stock') + '.' +
+          '</p></div></div>' + chromeFoot();
+      }
+      const base = closes[first];
+      const S = closes.map((v) => (v > 0 ? v / base : null));
+      const last = closes[closes.length - 1];
+      const move = (last / base - 1) * 100;
+      // Green up, red down — a single line about a single stock, where the
+      // direction IS the story. The table's sparkline stays neutral for the
+      // opposite reason: five coloured columns already sit beside it.
+      const colour = move >= 0 ? '#34d399' : '#fb7185';
+      const win = esc(c.rangeLabel || 'this window');
+      const name = esc(c.name || c.symbol);
+      const sym = esc(c.symbol);
+      // The Chart card is the deliberate exception to labelling by name — a
+      // ticker is what fits beside a drawn line — so the title leads with the
+      // ticker and the company name rides under it, as tplChart does.
+      const head = `<span class="s-kick">${sym} · ${win}</span>` +
+        `<h2 class="s-title">${name}` +
+        (c.price != null || c.today != null
+          ? `<br><span class="dim">${c.price != null ? esc(c.price) : ''}` +
+            (c.today != null ? `&nbsp; ${esc(pct(c.today, 2))} today` : '') + '</span>'
+          : '') + '</h2>';
+      const dir = move >= 0 ? 'Up' : 'Down';
+      const note = `${dir} ${Math.abs(move).toFixed(1)}% over the ${win}. ` +
+        'Price only — no dividends, no positions.';
+      return chromeTop() +
+        '<div class="s-body"><div class="stk">' + head +
+        lineChart(c.dates || closes.map(() => ''), [{ color: colour, S, width: 4, fill: true }],
+          { h: size.id === 'story' ? 1180 : size.id === 'square' ? 470 : 590 }) +
+        `<p class="s-sub" style="font-size:17px;margin-top:18px">${note}</p>` +
+        '</div></div>' + chromeFoot();
     }
 
     function tplChart() {
@@ -1746,7 +1805,7 @@
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
-    bubble: tplBubble,
+    bubble: tplBubble, stock: tplStock,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -2014,6 +2073,13 @@
        into the space instead. Type steps up too: a story is read full-screen
        on a phone, where a post is read in a scrolling feed. */
     .sz-story .s-body > div { display: flex; flex-direction: column; height: 100%; }
+    /* A STORY HAS TO FILL ITS FRAME, the lesson the side-by-side Movers card
+       already learned: 1020px of drawing in a 1920px artboard left a band of
+       dead black at the foot. The chart is taller here AND the slack is spread
+       rather than pooled at the bottom, which is what makes it hold for a long
+       company name (whose title wraps to two lines and eats 172px) as well as
+       a short one. No constant is asked to know both. */
+    .sz-story .s-body > .stk { justify-content: space-between; }
     .sz-story .s-kick { font-size: 21px; margin-top: 30px; }
     .sz-story .s-title { font-size: 84px; }
     .sz-story .s-sub { font-size: 25px; max-width: 34ch; }
@@ -2318,6 +2384,7 @@
       size = c.size || { id: 'portrait', w: 1080, h: 1350 };
       O = c.opts || {};
       getBasket = c.getBasket || (() => null);
+      chartOne = c.chart || null;
       const fn = BUILDERS[id] || BUILDERS.movers;
       return fn();
     },

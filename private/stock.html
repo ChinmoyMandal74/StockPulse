@@ -11,6 +11,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/app.css" />
   <script src="/wmark.js" defer></script>
+  <!-- The card and the rasteriser, both shared: cards.js owns what a card
+       looks like and says, cardshot.js turns one into a PNG at its true
+       1080px. The studio, /cards, the phone and now this page all take the
+       same shot — three copies of it was two too many. -->
+  <script src="/cards.js"></script>
+  <script src="/cardshot.js"></script>
   <style>
     body { min-height: 100dvh; padding: 0 0 60px; overflow-x: clip; }
     /* Full width: the chart is the page, and an 18-year ribbon deserves
@@ -118,6 +124,35 @@
     .sec-h h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
                 text-transform: uppercase; color: var(--muted); }
     .ranges { margin-left: auto; display: flex; gap: 5px; }
+
+    /* Save the chart as a post or a story — the studio's export, on the one
+       chart this page is about (2026-09-22, owner's request). A menu rather
+       than two more buttons: the toolbar already carries sixteen, and the
+       shape is a choice made once at the moment of saving, not a mode the
+       page sits in. */
+    .share { position: relative; display: flex; }
+    .rng.shr { display: inline-flex; align-items: center; gap: 5px; }
+    .rng.shr .ic-sm { width: 13px; height: 13px; }
+    .shr-menu {
+      position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: 232px;
+      padding: 6px; border-radius: 14px; border: 1px solid var(--hair-2);
+      background: rgba(9, 11, 15, 0.94); box-shadow: 0 30px 70px -28px rgba(0, 0, 0, 0.95);
+      backdrop-filter: blur(22px) saturate(170%); -webkit-backdrop-filter: blur(22px) saturate(170%); }
+    .shr-row {
+      display: flex; align-items: baseline; gap: 7px; width: 100%; padding: 9px 11px;
+      border: 0; border-radius: 10px; background: none; cursor: pointer; text-align: left;
+      color: var(--text); font: 500 13px var(--sans); }
+    .shr-row b { font-family: var(--mono); font-weight: 600; color: var(--muted); }
+    .shr-row span { margin-left: auto; font: 400 11px var(--mono); color: var(--faint); }
+    .shr-row:hover { background: rgba(255, 255, 255, 0.06); }
+    .shr-row:disabled { opacity: 0.45; cursor: default; background: none; }
+    .shr-msg { margin: 4px 6px 2px; font-size: 11px; line-height: 1.5; color: var(--faint); }
+    .shr-msg.bad { color: var(--red); }
+    /* The artboard is built off-screen at its true 1080px and shot from there,
+       so nothing on the page moves while it renders. `fixed` keeps it out of
+       the document flow entirely; cardshot neutralises this offset on its own
+       clone, which is what stops the export coming back blank. */
+    #shot { position: fixed; left: -20000px; top: 0; pointer-events: none; }
     .rng {
       padding: 5px 12px; border-radius: 999px; cursor: pointer; font-size: 12.5px;
       font-family: var(--sans); border: 1px solid var(--hair); color: var(--muted);
@@ -410,15 +445,19 @@
     // Trading days, not calendar days — roughly 21 a month. The archive reaches
     // ~20 years for older listings and a symbol simply gets whatever it has, so
     // "Max" is honest rather than a fixed promise.
+    // `word` is for prose rather than for the button: a saved card's kicker
+    // reads "NVDA · past year", where "the past 1Y" would read like a form
+    // field. The button keeps the short label, which is all a toolbar has room
+    // for. One list, so the two can never name different windows.
     const RANGES = [
-      { id: '1w',  label: '1W',  days: 5 },
-      { id: '2w',  label: '2W',  days: 10 },
-      { id: '1m',  label: '1M',  days: 21 },
-      { id: '3m',  label: '3M',  days: 63 },
-      { id: '6m',  label: '6M',  days: 126 },
-      { id: '1y',  label: '1Y',  days: RowCard.HISTORY_DAYS },
-      { id: '5y',  label: '5Y',  days: 1260 },
-      { id: 'max', label: 'Max', days: 5200 },
+      { id: '1w',  label: '1W',  days: 5,    word: 'past week' },
+      { id: '2w',  label: '2W',  days: 10,   word: 'past fortnight' },
+      { id: '1m',  label: '1M',  days: 21,   word: 'past month' },
+      { id: '3m',  label: '3M',  days: 63,   word: 'past three months' },
+      { id: '6m',  label: '6M',  days: 126,  word: 'past six months' },
+      { id: '1y',  label: '1Y',  days: RowCard.HISTORY_DAYS, word: 'past year' },
+      { id: '5y',  label: '5Y',  days: 1260, word: 'past five years' },
+      { id: 'max', label: 'Max', days: 5200, word: 'whole archive' },
     ];
     let range = RANGES.find((r) => r.id === '1y');
     // Moving averages. Adding another is one entry here plus a colour in
@@ -1074,6 +1113,18 @@
                 aria-label="Compare with another stock"></select>
               <button class="rng th-toggle${showTrendHold ? ' on' : ''}" id="thBtn"
                 title="What holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on">TREND</button></span>
+            <span class="share" id="share" hidden>
+              <button class="rng shr" id="shrBtn" type="button" aria-expanded="false" aria-haspopup="true"
+                title="Save this chart as a branded image, sized for a feed post or a story">
+                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-download" /></svg>Save chart</button>
+              <div class="shr-menu" id="shrMenu" hidden>
+                <button class="shr-row" type="button" data-sz="portrait">Post <b>4:5</b>
+                  <span>1080 × 1350</span></button>
+                <button class="shr-row" type="button" data-sz="story">Story <b>9:16</b>
+                  <span>1080 × 1920</span></button>
+                <p class="shr-msg" id="shrMsg">The range on screen, drawn at full size.</p>
+              </div>
+            </span>
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
           <div id="trendStrip" hidden></div>
@@ -1362,6 +1413,100 @@
         document.querySelectorAll('.rng[data-r]').forEach((x) => x.classList.toggle('on', x.dataset.r === range.id));
         paintChart();
       });
+      // ---- save the chart as a post or a story -------------------------------
+      // The card is built from the SAME numbers the chart on screen was drawn
+      // from (paintCtx), so the image can never show a different window from
+      // the one being looked at. It is drawn off-screen at its true 1080px
+      // rather than scaled up from the page: a 468px chart blown up to a
+      // 1920px story is a blurred screenshot, and the whole point of going
+      // through cards.js is that the card is LAID OUT for the artboard.
+      const SHOT_SIZES = {
+        portrait: { id: 'portrait', w: 1080, h: 1350 },
+        story: { id: 'story', w: 1080, h: 1920 },
+      };
+      const share = document.getElementById('share');
+      const shrBtn = document.getElementById('shrBtn');
+      const shrMenu = document.getElementById('shrMenu');
+      const shrMsg = document.getElementById('shrMsg');
+
+      // Guests are refused, the way /cards and /promo refuse them. A guest sees
+      // five preview stocks; handing them a branded, dated image of one is the
+      // one thing the preview is not for.
+      fetch('/api/me', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((me) => { if (!me || !me.guest) share.hidden = false; })
+        .catch(() => { share.hidden = false; });   // open mode, or /api/me down
+
+      const closeShare = () => { shrMenu.hidden = true; shrBtn.setAttribute('aria-expanded', 'false'); };
+      shrBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = shrMenu.hidden;
+        shrMenu.hidden = !open;
+        shrBtn.setAttribute('aria-expanded', String(open));
+      });
+      shrMenu.addEventListener('click', (e) => e.stopPropagation());
+      document.addEventListener('click', closeShare);
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeShare(); });
+
+      async function saveCard(sizeId) {
+        const size = SHOT_SIZES[sizeId];
+        const rows = shrMenu.querySelectorAll('.shr-row');
+        if (!paintCtx || !paintCtx.closes || paintCtx.closes.length < 2) {
+          shrMsg.textContent = 'The chart has not drawn yet.';
+          shrMsg.classList.add('bad');
+          return;
+        }
+        rows.forEach((b) => { b.disabled = true; });
+        shrMsg.classList.remove('bad');
+        shrMsg.textContent = 'Rendering at 1080 × ' + size.h + '…';
+        const stage = document.createElement('div');
+        stage.id = 'shot';
+        stage.className = 's-art sz-' + size.id;
+        stage.style.height = size.h + 'px';
+        try {
+          Cards.injectStyle();
+          stage.innerHTML = '<div class="s-aura"></div><div class="s-in">' +
+            Cards.build('stock', {
+              stocks: [stock], size, updatedAt: payload.updatedAt,
+              chart: {
+                // The DISPLAY name, the rule every other card follows:
+                // "NVIDIA" beside a line, not "NVIDIA Corporation". The
+                // screener carries a Short name column, so the string exists
+                // on every row and costs nothing to prefer.
+                symbol: stock.symbol,
+                name: stock.shortName || stock.name || stock.symbol,
+                closes: paintCtx.closes, dates: paintCtx.dates,
+                rangeLabel: range.word,
+                price, today,
+              },
+            }) + '</div>';
+          document.body.appendChild(stage);
+          const blob = await CardShot.shoot(stage, { w: size.w, h: size.h });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `tickrlab-${stock.symbol}-${range.id}-${size.id}.png`;
+          // The synthetic click BUBBLES to the document, where the
+          // outside-click handler reads it as "clicked somewhere else" and
+          // shuts the menu — so saving a post closed the menu you would then
+          // have to reopen to save the story. Saving is not a reason to close
+          // it; wanting both shapes is the common case.
+          a.addEventListener('click', (e) => e.stopPropagation());
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+          shrMsg.textContent = 'Saved ' + a.download;
+          window.track && track('chart', 'save:' + size.id);
+        } catch (err) {
+          shrMsg.textContent = 'Could not save: ' + err.message + '. A screenshot still works.';
+          shrMsg.classList.add('bad');
+        }
+        stage.remove();
+        rows.forEach((b) => { b.disabled = false; });
+      }
+      shrMenu.querySelectorAll('.shr-row').forEach((b) =>
+        b.addEventListener('click', () => saveCard(b.dataset.sz)));
+
       paintChart();
       loadNews();          // after the chart: a decoration must not make the data wait
       const nb = document.getElementById('newsBtn');
