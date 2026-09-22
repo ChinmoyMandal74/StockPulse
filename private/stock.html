@@ -130,18 +130,19 @@
        the 18px of bottom padding is the date axis and is not part of the svg,
        so the arithmetic is (viewBox height x px-per-unit) + 18.
 
-                          viewBox H          px/unit   height
-         volume only      195+13+44+6 = 258   1.4178    384px
-         + RSI            195+13+58+13+44+6 = 329   1.4401    492px
+                          viewBox H                  px/unit   height
+         volume only      254+13+44+6      = 317      1.4196    468px
+         + RSI            254+13+58+13+44+6 = 388     1.4407    577px
 
-       Those px-per-unit figures are the ones the old 320/427 pair already
-       implied, so the volume band stays 62px and the RSI band 84px while the
-       PRICE panel goes from 213px to 277px — the 30% the owner asked for
-       (2026-09-21). Change PRICE_H and these must move with it, or the bands
-       silently shrink instead of the price growing. */
-    #chart.rc-chart { height: 384px; border-radius: 12px; padding: 0 52px 18px 0;
+       Those px-per-unit figures are the ones the original 320/427 pair already
+       implied and have been held constant through both increases, which is
+       what keeps the volume band at 62px and the RSI band at 84px while the
+       PRICE panel went 213 -> 277 -> 361px (two 30% steps, 2026-09-21).
+       Change PRICE_H and these must move with it, or the bands silently shrink
+       instead of the price growing. */
+    #chart.rc-chart { height: 468px; border-radius: 12px; padding: 0 52px 18px 0;
                       transition: height 0.45s var(--ease); }
-    #chart.rc-chart.has-rsi { height: 492px; }
+    #chart.rc-chart.has-rsi { height: 577px; }
     #chart .cap { font-size: 12.5px; }
     #chart .cap.chg { font-size: 17px; }
     /* Pane labels sit against the geometry the chart reports, not a guessed

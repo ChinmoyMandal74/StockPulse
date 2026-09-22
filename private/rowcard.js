@@ -361,9 +361,10 @@
     // how the move happened.
     const MOM_H = 52;
     const anyPane = vols || rsis || moms;
-    // The price panel is 30% taller than the panes under it (2026-09-21,
-    // owner's request: "increase the height of the chart by 30%, not the
-    // volume and RSI bands"). 150 -> 195 in viewBox units.
+    // The price panel is taller than the panes under it, twice over at the
+    // owner's request (2026-09-21): 150 -> 195 -> 254 viewBox units, each step
+    // 30% on the one before and the volume and RSI bands left alone both times.
+    // 254/150 is 69% above where it started.
     //
     // THE CSS HEIGHT HAS TO MOVE WITH IT. The svg stretches with
     // preserveAspectRatio="none", so growing the viewBox alone does not make
@@ -374,7 +375,7 @@
     //
     // ONLY the paned case changes. The 104 branch is the hover card and the
     // tile/phone stock card, which pass no panes and were not asked about.
-    const PRICE_H = anyPane ? 195 : 104;
+    const PRICE_H = anyPane ? 254 : 104;
     let cursor = PRICE_H;
     let momTop = 0, momBot = 0, rsiTop = 0, rsiBot = 0, volTop = 0, volBot = 0;
     if (moms) { cursor += PANE_GAP; momTop = cursor; momBot = cursor + MOM_H; cursor = momBot; }
