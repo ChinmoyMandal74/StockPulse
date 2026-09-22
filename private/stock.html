@@ -36,7 +36,14 @@
     /* The symbol doubles as the way to reach another one. Styled to look like
        the heading it replaced, so the page does not grow a control: the caret
        is the only thing that says it opens. */
-    .sympick { position: relative; }
+    /* margin: 0 is load-bearing, not tidying. This is an <h1>, app.css carries
+       no heading reset, and nothing else here sets one — so it kept the
+       browser's own `margin: 0.67em 0`. At this type size that is ~27px of
+       empty band above the symbol and the same below it, sitting between the
+       nav pill and the masthead for no reason anyone chose. `.head` is a flex
+       container, so an item's margin does not collapse into anything: it is
+       simply added. */
+    .sympick { position: relative; margin: 0; }
     #symBtn {
       display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
       margin: 0; padding: 2px 6px 2px 0; border: 0; background: none; border-radius: 10px;
