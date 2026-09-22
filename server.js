@@ -4365,7 +4365,20 @@ async function computeStocks(asOf, opts = {}) {
     // took the past-score columns this window used to share.
     try {
       T.mark('score');
-      const bars = await trendBars(stocks.map((r) => r.symbol));
+      // FROM THE SERIES ALREADY IN HAND, not a second read of the archive.
+      // This was `trendBars()` — its own 650-day window over the universe —
+      // left behind when pastMomentum(), the read it used to share, was
+      // retired. Measured against production at 767 stocks it had become
+      // 290,277 rows and 101.5s of a 296.5s rebuild, on top of the 470-day
+      // read the price series had just done: the same bars, twice, in one
+      // round. The timeline is capped at 252 sessions and 470 days is ~324,
+      // so nothing it draws is lost.
+      const bars = {};
+      for (const row of stocks) {
+        const v = (series[row.symbol] && series[row.symbol].values) || [];
+        bars[row.symbol] = v.map((b) => ({ d: String(b.datetime || b.d).slice(0, 10),
+          high: b.high, close: b.close }));
+      }
       T.mark('trend-bars');
       for (const row of stocks) {
         const tb = bars[row.symbol];
@@ -7576,6 +7589,9 @@ const TREND_WINDOW_DAYS = 650;
 
 // The bar window the trend timeline is built from. One read for the universe,
 // the same shape the momentum pass used to make before it was retired.
+// Kept for the window constant alone; the trend timeline is built from the
+// price series the round already holds (see computeStocks), because reading
+// the same bars a second time cost 101.5s of a 296.5s rebuild.
 async function trendBars(symbols) {
   const since = new Date(Date.now() - TREND_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
   return store.readBarsFor(symbols, since);
