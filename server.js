@@ -3762,6 +3762,80 @@ app.get('/api/refresh-profiles', requireAdmin, route(async (req, res) => {
     refreshing: running ? { ...running, loaded, total: universe.length } : null });
 }));
 
+// One round of a price sweep: fetch the next slice's bars, archive them, move
+// the marker on. NOTHING ELSE — no 650-day window, no scoring, no snapshot.
+//
+// That window is the reason this exists. Measured against production at 767
+// stocks it is 290,277 rows and 30-60s, and an ordinary round pays it EVERY
+// time regardless of how many symbols it prices — which is why capping the
+// price slice at 500 did not rescue the plain Refresh and it still 504'd. The
+// rebuild pays it once, at the end, where it is affordable: Fill missing's
+// closing round did exactly that work in 102s.
+app.get('/api/refresh-prices', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const asked = Number(req.query.run) || null;
+  if (asked && (await trackSafe(store.runStatus(asked))) === 'stopped') {
+    return res.json({ stopped: true, runId: asked });
+  }
+  const running = await readRefreshState();
+  const runId = (running && running.runId) || asked;
+  const started = Date.now();
+  const opts = await liveRefreshOpts();
+  const universe = await readUniverse();
+  // Nothing left to price: say so rather than pulling the first slice again.
+  if (opts.archivePrices || !opts.priceSlice) {
+    return res.json({ priced: universe.length, total: universe.length, done: true, runId,
+      refreshing: running });
+  }
+  const slice = opts.priceSlice;
+  const deadline = Date.now() + PRICE_PHASE_MS;
+  const { r: out, m } = await metered(async () => {
+    // SHALLOW for everyone, then repair. The alternative — deciding deep vs
+    // light by loading each symbol's archive — is the 470-day read this round
+    // exists to avoid; the newest stored date per symbol is one indexed seek.
+    const newest = await store.barsMaxDates(slice);
+    const light = await pullPricesFor(slice, () => `&outputsize=${LIGHT_BARS}`, deadline);
+    if (light.refusal) return light.refusal;
+    const got = light.got;
+    const dOf = (b) => String(b.datetime).slice(0, 10);
+    // A SHALLOW WINDOW IS ONLY USABLE IF IT MEETS THE ARCHIVE. Without this,
+    // persistBars reads "no overlap" as "rebuild this symbol from the fetch"
+    // and twelve bars would replace years of history. A symbol with no archive
+    // at all fails the test too, which is what a newly added ticker needs.
+    const stragglers = slice.filter((sym) => {
+      const v = got[sym] && got[sym].values;
+      if (!Array.isArray(v) || !v.length) return true;
+      const have = newest.get(sym);
+      return !have || String(have).slice(0, 10) < dOf(v[v.length - 1]);
+    });
+    if (stragglers.length) {
+      console.warn(`prices: ${stragglers.length} symbol(s) did not meet the archive, re-pulling deep`);
+      const redo = await pullPricesFor(stragglers, () => `&outputsize=${DEEP_BARS}`, deadline);
+      if (redo.refusal) return redo.refusal;
+      Object.assign(got, redo.got);
+    }
+    const bars = await persistBars(slice, got);
+    // Only the symbols the provider actually SERVED are stamped as pulled —
+    // a chunk that failed must not claim to have been priced.
+    const served = Object.keys(got).filter(
+      (sym) => got[sym] && Array.isArray(got[sym].values) && got[sym].values.length);
+    if (served.length) await store.notePricePull(served).catch(() => {});
+    return { ok: true, bars, served: served.length };
+  });
+  if (!out.ok) {
+    await recordRound(runId, opts, m, Date.now() - started, { error: out.error, refused: out.status === 429 });
+    return res.status(out.status).json({ error: out.error });
+  }
+  // Advances `priced`, and stamps prices_at once the last slice is in — which
+  // is what tells the loop the sweep is over.
+  await notePriceRound(opts);
+  const after = await readRefreshState();
+  await recordRound(runId, opts, m, Date.now() - started,
+    { loaded: opts.pricedAfter, total: opts.priceTotal });
+  res.json({ priced: opts.pricedAfter, total: opts.priceTotal,
+    served: out.served, done: !after || !!after.pricesAt, runId, refreshing: after });
+}));
+
 // The client calls this when its backfill loop finishes or gives up, so the
 // notice clears promptly. readRefreshState() ages the flag out on its own if
 // this never arrives — an admin can always just close the tab.
@@ -3941,29 +4015,8 @@ async function computeStocks(asOf, opts = {}) {
       const toFetch = liveSet
         ? fetchSymbols.filter((x) => x === BENCHMARK || liveSet.has(x))
         : fetchSymbols;
-      const CHUNK = 120;
-
-      // One fetch of a set of symbols at a given depth, chunked. Returns the
-      // symbol-keyed payload, or a structured refusal for the caller to return.
       const priceDeadline = Date.now() + PRICE_PHASE_MS;
-      const pullPrices = async (syms, depthFor) => {
-        const got = {};
-        for (let i = 0; i < syms.length; i += CHUNK) {
-          const chunk = syms.slice(i, i + CHUNK);
-          const raw = await fetchJson(
-            `${TD_BASE}/time_series?symbol=${encodeURIComponent(chunk.join(','))}` +
-            `&interval=1day${depthFor(chunk)}&apikey=${API_KEY}`,
-            { budget: priceDeadline - Date.now() }
-          );
-          // A top-level error (bad key, rate limit) comes back as {status:"error"}.
-          if (raw && raw.status === 'error') {
-            return { refusal: { ok: false, status: raw.code === 429 ? 429 : 502,
-                                error: `Twelve Data: ${raw.message}` } };
-          }
-          Object.assign(got, normalizeBySymbol(raw, chunk));
-        }
-        return { got };
-      };
+      const pullPrices = (syms, depthFor) => pullPricesFor(syms, depthFor, priceDeadline);
 
       const asOfDepth = (chunk) => {
         const start = new Date(asOf);
@@ -4054,8 +4107,8 @@ async function computeStocks(asOf, opts = {}) {
         }
         console.log(`prices: live ${liveSet.size}/${symbols.length} this round, ` +
           `${rest.length} from the archive`);
-      } else if (fetchSymbols.length > CHUNK) {
-        console.log(`prices: live, ${Math.ceil(toFetch.length / CHUNK)} chunks for ${toFetch.length} symbols`);
+      } else if (fetchSymbols.length > PRICE_CHUNK) {
+        console.log(`prices: live, ${Math.ceil(toFetch.length / PRICE_CHUNK)} chunks for ${toFetch.length} symbols`);
       }
     }
 
@@ -4416,6 +4469,34 @@ const barRow = (symbol, b) => {
 // overlap what the archive already holds. A nightly refresh leaves a one-session
 // gap, so 12 covers a long weekend plus a week of missed runs, and anything that
 // still fails to overlap is re-pulled deep rather than guessed at.
+// One fetch of a set of symbols at a given depth, chunked. Returns the
+// symbol-keyed payload, or a structured refusal for the caller to return.
+//
+// It was a closure inside computeStocks until 2026-09-22, when the light price
+// round needed the same pull — and a second copy of "ask the provider for bars"
+// is exactly the drift this project keeps paying for. `deadline` is an absolute
+// timestamp: a serverless function is killed at the platform's ceiling, so an
+// unbounded wait does not fail, it vanishes with the round's credits.
+const PRICE_CHUNK = 120;
+async function pullPricesFor(syms, depthFor, deadline) {
+  const got = {};
+  for (let i = 0; i < syms.length; i += PRICE_CHUNK) {
+    const chunk = syms.slice(i, i + PRICE_CHUNK);
+    const raw = await fetchJson(
+      `${TD_BASE}/time_series?symbol=${encodeURIComponent(chunk.join(','))}` +
+      `&interval=1day${depthFor(chunk)}&apikey=${API_KEY}`,
+      { budget: deadline - Date.now() }
+    );
+    // A top-level error (bad key, rate limit) comes back as {status:"error"}.
+    if (raw && raw.status === 'error') {
+      return { refusal: { ok: false, status: raw.code === 429 ? 429 : 502,
+                          error: `Twelve Data: ${raw.message}` } };
+    }
+    Object.assign(got, normalizeBySymbol(raw, chunk));
+  }
+  return { got };
+}
+
 const LIGHT_BARS = Number(process.env.TD_LIGHT_BARS || 12);
 const DEEP_BARS = 300;
 // Below this the archive cannot carry the scoring window (momentum needs ~260

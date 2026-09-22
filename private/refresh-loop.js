@@ -55,7 +55,13 @@
     // A light round fetches the same seven profiles and does none of the rest;
     // the table is built once, after the last one. `ensureProfiles` is shared,
     // so the two shapes pull exactly the same stocks — only the cost differs.
-    const light = (fast || fill) && !prices;
+    // ALL THREE run light rounds and rebuild once at the end; they differ only
+    // in what a round fetches. Refresh all alone keeps the heavy round, because
+    // watching the table move IS what it is for.
+    const light = prices || fast || fill;
+    const roundUrl = prices ? '/api/refresh-prices?x=1'
+      : (fast || fill) ? '/api/refresh-profiles?x=1'
+        : '/api/stocks?refresh=1';
     const sleep = hooks.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
     let started = null;
     let data = null;
@@ -86,7 +92,7 @@
         try {
           // A light round fetches profiles and nothing else; the table is
           // built once, after the last one.
-          data = await api('GET', light ? '/api/refresh-profiles?x=1' + runQ : '/api/stocks?refresh=1' + runQ);
+          data = await api('GET', roundUrl + runQ);
         } catch (e) {
           refusals++;
           if (hooks.onWait) hooks.onWait('refused');
@@ -104,17 +110,15 @@
         // on the flag as `priced`. Counting profiles here would report 767 of
         // 767 on the first round and stop with most of the universe still on
         // yesterday's close.
-        // A cleared flag means the sweep is OVER, so the last round reports the
-        // whole universe rather than the zero a missing `priced` would read —
-        // which would have shown "0 of 767 priced" on the round that finished.
-        const loaded = prices ? (data.refreshing ? Number(data.refreshing.priced || 0) : total)
+        const loaded = prices ? Number(data.priced || 0)
           : light ? (data.loaded || 0)
             : (data.stocks || []).filter((s) => s.profileFetchedAt != null).length;
         if (hooks.onRound) hooks.onRound({ loaded, total, rounds, data });
-        // The server clears the flag on the round that finishes the sweep, so
-        // a null `refreshing` IS the finish line for a price run — and it
-        // cannot disagree with the server about when that was.
-        if (prices ? !data.refreshing : (total === 0 || loaded >= total)) {
+        // A price round reports its OWN completion: the server stamps
+        // prices_at on the slice that reaches the end, and only it knows where
+        // the marker got to. Counting rows here would report the whole universe
+        // on round one, since every row is in the table whether priced or not.
+        if (prices ? !!data.done : (total === 0 || loaded >= total)) {
           outcome = 'done';
           // The one rebuild: scores, advice, the snapshot, the report and the
           // email all come from this round, the same way a Refresh all ends.
