@@ -63,6 +63,33 @@ const {
   readSnapshot, writeSnapshot,
   beginRefresh, noteRefreshProgress, endRefresh, readRefreshState,
 } = store;
+
+// THE SNAPSHOT IS ONE ROW AND 3.56MB OF IT, and /api/stock reads the whole
+// thing to answer with 65KB about one company — measured at a stable ~1.9s
+// warm, and 14.56s on a cold instance, with the stock page's chart not drawn
+// until 16.3s because /api/history cannot start until this returns. It was
+// 1.3MB at 271 stocks; at the 1,000 the universe is heading for it is ~4.6MB,
+// so this gets worse on its own.
+//
+// Cached per INSTANCE for a few seconds — deliberately at the call site rather
+// than inside store.readSnapshot(), which the refresh path uses and which must
+// never hand anyone a stale copy of a blob it is in the middle of rewriting.
+//
+// THE COST, STATED: an edited short name, or a refresh that has just landed,
+// can take up to the TTL to show on a page served by an instance that already
+// has a copy. Twenty seconds is chosen to be shorter than anyone's patience
+// for a page they are reading, and the instance that WRITES a snapshot drops
+// its own copy at once, so the tab that ran the refresh never sees stale data.
+// Other instances hold theirs for the TTL; nothing is shared between them.
+const SNAP_TTL_MS = Math.max(0, Number(process.env.SNAP_CACHE_MS) || 20000);
+let snapCache = { at: 0, snap: null };
+async function snapshotCached() {
+  if (snapCache.snap && Date.now() - snapCache.at < SNAP_TTL_MS) return snapCache.snap;
+  const snap = await readSnapshot();
+  snapCache = { at: Date.now(), snap };
+  return snap;
+}
+function dropSnapshotCache() { snapCache = { at: 0, snap: null }; }
 // How long a cached profile stays fresh — and therefore how often a symbol's
 // fundamentals are re-pulled. It was 24 hours, which meant every profile in the
 // universe was stale every night: at 80 credits a symbol that is 80,000 credits
@@ -5640,14 +5667,18 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   if (guest && !guestSet.has(symbol)) {
     return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   }
-  const snap = await readSnapshot();
+  // BOTH READS AT ONCE. The profile only ever needed the symbol off the query
+  // string, so waiting for the 3.56MB snapshot before asking for it bought
+  // nothing — the screener's own Promise.all lesson, unapplied here. Each keeps
+  // its own failure: the profile is optional (three display fields), the
+  // snapshot is the answer.
+  const [snap, profile] = await Promise.all([
+    snapshotCached(),
+    store.readProfile(symbol).catch(() => null),
+  ]);
   const stocks = (snap && snap.stocks) || [];
   const stock = stocks.find((x) => String(x.symbol).toUpperCase() === symbol);
   if (!stock) return res.status(404).json({ error: 'Not in the screener.' });
-  // Read straight from the profile rather than the snapshot: these three are
-  // deliberately absent from the row the screener serves to everyone.
-  let profile = null;
-  try { profile = await store.readProfile(stock.symbol); } catch { /* optional */ }
 
   res.json({
     stock,
@@ -7550,6 +7581,9 @@ function marketDay(rows) {
 // sent — which is what keeps the nightly job's rounds quiet.
 async function finishLiveRefresh(payload, ctx = {}) {
   await writeSnapshot({ ...payload, snapshotAt: payload.updatedAt });
+  // This instance just rewrote it, so its own copy is stale the moment the
+  // write lands. Other instances hold theirs for the TTL; nothing is shared.
+  dropSnapshotCache();
   const rows = payload.stocks || [];
   const loaded = rows.filter((x) => x.profileFetchedAt != null).length;
 
@@ -8846,6 +8880,7 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     const r = await computeStocks(null);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
     await writeSnapshot({ ...r.payload, snapshotAt: r.payload.updatedAt });
+    dropSnapshotCache();
     return res.json(r.payload);
   }
   return res.json({ stocks: [], portfolios: Object.keys(await readPortfolios()), asOf: null, updatedAt: null, fromSnapshot: true, empty: true });
