@@ -3821,8 +3821,10 @@ app.get('/api/refresh-prices', requireAdmin, route(async (req, res) => {
       if (redo.refusal) return redo.refusal;
       Object.assign(got, redo.got);
     }
-    const bars = await persistBars(slice, got);
+    const bars = await persistBars(slice, got, T);
     T.mark('persist-bars');
+    console.log(`bars: +${bars.inserted} rows across ${bars.symbols} symbols ` +
+                `in ${bars.trips} write round trips`);
     // Only the symbols the provider actually SERVED are stamped as pulled —
     // a chunk that failed must not claim to have been priced.
     const served = Object.keys(got).filter(
@@ -4422,7 +4424,7 @@ async function computeStocks(asOf, opts = {}) {
         // an old fetched bar against the stored one, and every bar in the joined
         // window came FROM the store, so a joined series would agree with itself
         // and never see one.
-        const b = await persistBars(pricedLive || symbols, liveSeries || series);
+        const b = await persistBars(pricedLive || symbols, liveSeries || series, T);
         // Exactly the symbols the provider served this round, not the ones we
         // asked for: a chunk that failed must not claim to have been priced.
         // Same guard as the archive write — an as-of pull and an archive round
@@ -4445,7 +4447,8 @@ async function computeStocks(asOf, opts = {}) {
         }
         T.mark('persist-bars');
         if (b.inserted) {
-          console.log(`bars: +${b.inserted} rows across ${b.symbols} symbols` +
+          console.log(`bars: +${b.inserted} rows across ${b.symbols} symbols ` +
+                      `in ${b.trips} write round trips` +
                       (b.rewritten ? `, ${b.rewritten} rewritten in full` : ''));
         }
       } catch (err) {
@@ -4534,8 +4537,16 @@ const LIGHT_MIN_ARCHIVE = 300;
 
 // Only ever called for a live pull. An as-of pull fetches a different, truncated
 // range, and persisting from that path would poison the archive.
-async function persistBars(symbols, series) {
+// `T` is the round's phase timer, optional. It is threaded in because
+// `persist-bars` measured 104.8s of a 121.3s production round (run 77) and the
+// single step could not say which of the three things in here spent it — two
+// indexed reads, the row building, or the writes. Marks ACCUMULATE by name, so
+// marking inside the loop costs one map write per symbol and gives the write
+// path its own total.
+async function persistBars(symbols, series, T = null) {
+  const mark = T ? (n) => T.mark(n) : () => {};
   const meta = await store.barsMaxDates(symbols);
+  mark('bars-maxdates');
 
   const probes = [];
   const have = [];
@@ -4547,9 +4558,12 @@ async function persistBars(symbols, series) {
     if (p && p.datetime) probes.push({ sym, d: String(p.datetime).slice(0, 10), close: parseFloat(p.close) });
   }
   const stored = await store.barsOn(probes);
+  mark('bars-probe');
   const probeBySym = new Map(probes.map((x) => [x.sym, x]));
 
-  let inserted = 0, rewritten = 0;
+  // Every write below is its own round trip, so count them: on this database a
+  // path's cost is its number of round trips, not its number of rows.
+  let inserted = 0, rewritten = 0, trips = 0;
   for (const [sym, v] of have) {
     const rows = v.map((b) => barRow(sym, b)).filter(Boolean);
     if (!rows.length) continue;
@@ -4571,7 +4585,10 @@ async function persistBars(symbols, series) {
     }
 
     if (full) {
+      mark('bars-prep');
       await store.replaceBarsFor(sym, rows);
+      trips++;
+      mark('bars-write');
       rewritten++;
       inserted += rows.length;
       continue;
@@ -4581,9 +4598,12 @@ async function persistBars(symbols, series) {
     // a provisional close gets corrected.
     const at = rows.findIndex((r) => r.d === m.maxDate);
     const slice = rows.slice(0, Math.min(rows.length, at + 1 + BAR_OVERLAP));
+    mark('bars-prep');
     inserted += await store.upsertBars(slice);
+    trips++;
+    mark('bars-write');
   }
-  return { inserted, rewritten, symbols: have.length };
+  return { inserted, rewritten, trips, symbols: have.length };
 }
 
 
