@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Download to Excel — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(52, 211, 153, 0.10), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399; }
+    /* app.css carries no heading reset, so an h1 keeps the UA margin unless its
+       page says otherwise — the empty band the stock page grew once already. */
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600;
+         line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 64ch; font-size: 13px; line-height: 1.65; }
+    .masthead { margin: 34px 0 22px; }
+
+    /* ---- what to take ---------------------------------------------------- */
+    .picks { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin: 0 4px 16px; }
+    .pick { display: flex; flex-direction: column; gap: 6px; }
+    .pick label { font-size: 10px; font-weight: 500; text-transform: uppercase;
+                  letter-spacing: 0.16em; color: var(--faint); }
+    .pick select {
+      appearance: none; -webkit-appearance: none; min-width: 200px;
+      padding: 9px 30px 9px 12px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--hair); background: var(--surface); color: var(--text);
+      font: 500 13px var(--sans);
+      background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa3b2' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center; }
+    .pick select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .dsnote { margin: 0 4px 18px; font-size: 12.5px; color: var(--muted); }
+
+    .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 4px 12px; }
+    .tools input[type="search"] {
+      flex: 1 1 240px; min-width: 0; box-sizing: border-box; padding: 9px 12px; border-radius: 10px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      color: var(--text); font: 500 13px var(--sans); }
+    .tools input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .count { font-family: var(--mono); font-size: 12px; color: var(--faint); white-space: nowrap; }
+    .said { margin: 12px 6px 0; font-size: 12.5px; color: var(--muted); min-height: 1.2em; }
+    .said.good { color: var(--green); } .said.bad { color: var(--red); }
+
+    .list { padding: 6px 22px 18px; }
+    .cg { padding: 12px 0 8px; }
+    .cg + .cg { border-top: 1px solid rgba(255, 255, 255, 0.05); }
+    label.cg-h { display: flex; align-items: center; gap: 9px; font-size: 11px; font-weight: 700;
+                 letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
+    label.cg-h .n { font-family: var(--mono); font-size: 10px; letter-spacing: 0.05em;
+                    color: var(--faint); font-weight: 500; }
+    .cg-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+               gap: 2px 16px; margin: 8px 0 0 22px; }
+    .cg-cols label { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--muted);
+                     padding: 4px 0; cursor: pointer; }
+    .cg-cols label:hover, label.cg-h:hover { color: var(--text); }
+    /* A column the site hides from the table is still OFFERED here — the data is
+       recorded either way, and an admin taking their own data out should not
+       have to undo a display choice to reach it. Marked, not withheld. */
+    .cg-cols .hid { font: 500 9.5px var(--mono); color: var(--faint); letter-spacing: 0.08em;
+                    text-transform: uppercase; }
+    input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+    .anchors { margin: 0 4px 10px; font-size: 12px; color: var(--faint); }
+    .anchors b { color: var(--muted); font-weight: 600; font-family: var(--mono); }
+    .empty, .error { padding: 26px; font-size: 13px; color: var(--muted); }
+    .error { color: var(--red); }
+    .note { margin: 18px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.7; max-width: 88ch; }
+    .note b { color: var(--muted); font-weight: 600; }
+    .note code { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    @media (max-width: 768px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4.4v10.2"/><path d="m7.8 10.6 4.2 4.2 4.2-4.2"/><path d="M4.6 18.6h14.8"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <button class="btn" id="csv" type="button">CSV</button>
+      <button class="btn btn-primary" id="dl" type="button">
+        <!-- `.island` is a single non-wrapping pill, so a long label here does
+             not wrap — it overruns the viewport and puts a scrollbar on the
+             page. Measured at 390px: this button ended at 395. The wordy half
+             takes hide-sm, exactly as the wordmark beside it does. -->
+        <span class="lbl"><span class="hide-sm">Download </span>.xlsx</span>
+        <span class="nub"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-download" /></svg></span>
+      </button>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Admin</span>
+      <h1>Download to Excel</h1>
+      <p class="lede">Take the data out as a spreadsheet — the screener today, and whatever datasets are
+        added beside it later. Tick the fields you want. Numbers arrive as numbers, so the sheet can sum,
+        sort and chart them; the header row filters and stays put.</p>
+    </header>
+
+    <div class="picks">
+      <div class="pick"><label for="dataset">Dataset</label><select id="dataset"></select></div>
+      <div class="pick"><label for="scope">Rows</label><select id="scope"></select></div>
+    </div>
+    <p class="dsnote" id="dsnote"></p>
+
+    <div class="tools">
+      <input type="search" id="q" placeholder="Find a field" aria-label="Find a field" />
+      <span class="count" id="count"></span>
+      <button class="btn" id="all" type="button">Select all</button>
+      <button class="btn" id="none" type="button">Select none</button>
+      <button class="btn" id="shown" type="button" title="Exactly the columns the screener shows today">As the table</button>
+    </div>
+    <p class="anchors" id="anchors"></p>
+
+    <section class="bezel card"><div class="core">
+      <div class="list" id="list"><div class="empty">Loading the fields…</div></div>
+    </div></section>
+
+    <p class="said" id="said"></p>
+    <p class="note" id="note"></p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    let cat = null;              // the whole catalogue, as the server described it
+    let chosen = new Set();      // field ids, by tick
+
+    const dataset = () => (cat.datasets.find((d) => d.id === $('dataset').value) || cat.datasets[0]);
+
+    function paint() {
+      const ds = dataset();
+      const q = $('q').value.trim().toLowerCase();
+      const groups = [];
+      for (const f of ds.fields) {
+        if (q && !(f.label.toLowerCase().includes(q) || f.id.toLowerCase().includes(q))) continue;
+        let g = groups.find((x) => x.name === f.group);
+        if (!g) groups.push((g = { name: f.group, fields: [] }));
+        g.fields.push(f);
+      }
+      $('list').innerHTML = groups.length ? groups.map((g) => {
+        const on = g.fields.filter((f) => chosen.has(f.id)).length;
+        return '<div class="cg"><label class="cg-h">' +
+          '<input type="checkbox" data-group="' + esc(g.name) + '"' +
+          (on === g.fields.length ? ' checked' : '') +
+          (on && on < g.fields.length ? ' data-some="1"' : '') + ' />' +
+          esc(g.name) + '<span class="n">' + on + '/' + g.fields.length + '</span></label>' +
+          '<div class="cg-cols">' + g.fields.map((f) =>
+            '<label><input type="checkbox" data-id="' + esc(f.id) + '"' +
+            (chosen.has(f.id) ? ' checked' : '') + ' />' + esc(f.label) +
+            (f.hidden ? '<span class="hid" title="Hidden from the screener at /columns — the data is still recorded">hidden</span>' : '') +
+            '</label>').join('') + '</div></div>';
+      }).join('') : '<div class="empty">No field matches “' + esc(q) + '”.</div>';
+      // A half-ticked group shows as indeterminate, which is a property rather
+      // than an attribute and cannot be set in the markup above.
+      $('list').querySelectorAll('input[data-some]').forEach((b) => { b.indeterminate = true; });
+
+      const total = ds.fields.length;
+      $('count').textContent = chosen.size + ' of ' + total + ' fields';
+      $('dl').disabled = chosen.size === 0;
+      $('csv').disabled = chosen.size === 0;
+    }
+
+    $('list').addEventListener('change', (e) => {
+      const b = e.target;
+      if (b.dataset.id) { b.checked ? chosen.add(b.dataset.id) : chosen.delete(b.dataset.id); }
+      else if (b.dataset.group) {
+        for (const f of dataset().fields) {
+          if (f.group !== b.dataset.group) continue;
+          b.checked ? chosen.add(f.id) : chosen.delete(f.id);
+        }
+      }
+      paint();
+    });
+    $('q').addEventListener('input', paint);
+    $('all').addEventListener('click', () => { chosen = new Set(dataset().fields.map((f) => f.id)); paint(); });
+    $('none').addEventListener('click', () => { chosen = new Set(); paint(); });
+    // The table's own set: everything the site is not hiding. A derived default
+    // rather than an invented "essentials" list nobody agreed on.
+    const asTable = () => new Set(dataset().fields.filter((f) => !f.hidden).map((f) => f.id));
+    $('shown').addEventListener('click', () => { chosen = asTable(); paint(); });
+    $('dataset').addEventListener('change', () => { chosen = asTable(); describe(); paint(); });
+    $('scope').addEventListener('change', describe);
+
+    function describe() {
+      const ds = dataset();
+      const scope = $('scope').value;
+      $('dsnote').innerHTML = esc(ds.note) +
+        ' <b>' + cat.rows + '</b> stocks' + (scope && scope !== 'All' ? ' in all, filtered to ' + esc(scope) : '') +
+        (cat.updatedAt ? ', as of ' + esc(new Date(cat.updatedAt).toLocaleString()) + '.' : '.');
+    }
+
+    // ---- the download -------------------------------------------------------
+    // Through fetch rather than by navigating: the route answers a 400 with a
+    // sentence when nothing is ticked, and navigating would replace this page
+    // with that JSON instead of showing it here.
+    async function download(format) {
+      const btn = format === 'csv' ? $('csv') : $('dl');
+      const said = $('said');
+      said.className = 'said';
+      said.textContent = 'Building the file…';
+      btn.disabled = true;
+      try {
+        const url = '/api/export/download?dataset=' + encodeURIComponent($('dataset').value) +
+          '&scope=' + encodeURIComponent($('scope').value) +
+          '&format=' + format +
+          '&fields=' + encodeURIComponent([...chosen].join(','));
+        const r = await fetch(url, { cache: 'no-store' });
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}));
+          throw new Error(j.error || ('HTTP ' + r.status));
+        }
+        const name = (/filename="([^"]+)"/.exec(r.headers.get('content-disposition') || '') || [])[1]
+          || ('tickrlab-export.' + format);
+        const blob = await r.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        said.className = 'said good';
+        said.textContent = 'Saved ' + name + ' — ' + (blob.size / 1024).toFixed(0) + ' KB, ' +
+          (chosen.size + 2) + ' columns.';
+      } catch (err) {
+        said.className = 'said bad';
+        said.textContent = 'Could not build the file: ' + err.message;
+      }
+      btn.disabled = chosen.size === 0;
+    }
+    $('dl').addEventListener('click', () => download('xlsx'));
+    $('csv').addEventListener('click', () => download('csv'));
+
+    fetch('/api/export/catalogue', { cache: 'no-store' })
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then((d) => {
+        cat = d;
+        $('dataset').innerHTML = d.datasets.map((x) =>
+          '<option value="' + esc(x.id) + '">' + esc(x.label) + '</option>').join('');
+        $('scope').innerHTML = (d.scopes || ['All']).map((s) =>
+          '<option value="' + esc(s) + '">' + esc(s === 'All' ? 'Every stock' : s) + '</option>').join('');
+        $('anchors').innerHTML = 'Every sheet leads with <b>Symbol</b> and <b>Name</b> — ' +
+          'a column of numbers with no symbol on it is not an export of anything.';
+        // What CANNOT come out, and why. Six of the table's columns are drawn
+        // rather than stored; exporting them as empty columns would be the
+        // quietest kind of lie.
+        $('note').innerHTML = 'Six columns the table draws cannot be exported, because a row does not hold them: ' +
+          (d.skipped || []).map((s) => '<b>' + esc(s.id) + '</b> (' + esc(s.why) + ')').join(', ') +
+          '. Balanced advice IS included — it is stamped on every row. ' +
+          'CSV is written with a byte-order mark and quotes anything a spreadsheet would read as a formula.';
+        chosen = asTable();
+        describe();
+        paint();
+      })
+      .catch((e) => {
+        $('list').innerHTML = '<div class="error">Could not load the fields: ' + esc(e.message) + '</div>';
+      });
+  </script>
+</body>
+</html>

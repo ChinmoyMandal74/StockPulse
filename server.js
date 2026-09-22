@@ -417,6 +417,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/trend-backtest.html': '/trend-backtest',
                       '/architecture.html': '/architecture', '/themes.html': '/themes',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
+                      '/export.html': '/export',
                       // The public pages have canonical addresses of their own.
                       '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
                       '/about.html': '/about',
@@ -757,6 +758,17 @@ app.get('/database', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'database');
   res.sendFile(path.join(__dirname, 'private', 'database.html'));
+}));
+
+// Admin only: take the data out, as a spreadsheet, with the fields chosen.
+// ADMIN rather than member on purpose. The CSV export came out of the screener
+// on 2026-09-14 because it was the one bulk-copy button a member had, and the
+// watermark work went in beside it; this is the owner taking their own data
+// out, which was never the thing that rule was about.
+app.get('/export', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'export');
+  res.sendFile(path.join(__dirname, 'private', 'export.html'));
 }));
 
 // Admin only: every refresh run, manual or scheduled, with its rounds.
@@ -2704,6 +2716,28 @@ function ruleCfg(name) {
     ruleCfgCache.set(want, cfg);
   }
   return ruleCfgCache.get(want);
+}
+
+// ---- what a row gains on the way out ---------------------------------------
+// Every field here derives from data already held, which is why it is stamped
+// at SERVE time rather than when the snapshot is written: a snapshot from
+// before a field existed still carries it, and an override typed a moment ago
+// shows without waiting for a refresh.
+//
+// ONE LIST, because there are now two readers. /api/stocks needs these to run
+// in parallel with the portfolios and the refresh flag — six round trips became
+// two that way — so this hands back the promises rather than awaiting them, and
+// the export spreads the same list into its own Promise.all. A field added to
+// one reader cannot go missing from the other.
+const serveStamps = (rows) => [
+  stampShortNames(rows).catch(() => {}),
+  stampAdviceAge(rows).catch(() => {}),
+  stampPricedAt(rows).catch(() => {}),
+];
+// The two that need no round trip, and therefore wait for the portfolios.
+function finishServe(rows, pf) {
+  stampCapBand(rows);
+  for (const x of rows) x.portfolios = membershipOf(x.symbol, pf);
 }
 
 function scoreActionInto(rows) {
@@ -5550,6 +5584,145 @@ function columnCatalogue() {
   COLUMN_CATALOGUE = out;
   return out;
 }
+
+// ---- the export ------------------------------------------------------------
+// The owner asked for the screener as a spreadsheet, "however in future maybe
+// it can be extended to download price or fundamental data". So a DATASET is a
+// registry entry — a label, a note, the fields it offers and the rows it
+// yields — rather than a route per thing. Adding prices later is one entry;
+// the page renders whatever the catalogue returns and needs no edit at all.
+//
+// SIX COLUMNS THE TABLE DRAWS THAT A ROW DOES NOT HOLD, each with its reason.
+// Measured against the live snapshot rather than assumed: of the 85 columns in
+// the catalogue, these six carry no value on any of 742 rows. Exporting them as
+// empty columns is the quiet lie this file warns about in three other places,
+// so they are left out and the page says which and why.
+const EXPORT_SKIP = {
+  spark90: 'a drawing, not a value',
+  newsAge: 'fetched separately, never stored on the row',
+  'av:Trend Rider': 'read in the browser under another rule set',
+  'av:Aggressive': 'read in the browser under another rule set',
+  'av:Max Risk': 'read in the browser under another rule set',
+  'av:Dip Buyer': 'read in the browser under another rule set',
+};
+// The anchors: always written, never offered as a tick. A sheet of numbers
+// with no symbol on it is not an export of anything. They are also exactly the
+// columns `columnCatalogue()` leaves out, being the table's frozen pair.
+const EXPORT_ANCHORS = [
+  { id: 'symbol', label: 'Symbol' },
+  { id: 'shortName', label: 'Name' },
+];
+// Two ids do not read straight off the row.
+function exportValue(row, id) {
+  if (id === 'av:Balanced') return row.action;     // the stamped Balanced verdict
+  const v = row[id];
+  if (Array.isArray(v)) return v.join(' · ');
+  return v === undefined ? null : v;
+}
+
+const EXPORT_DATASETS = {
+  screener: {
+    label: 'Screener',
+    note: 'One row per stock — every column the table can show, as it stands now.',
+    async fields() {
+      // Site-hidden columns are OFFERED, and marked. The floor at /columns is
+      // about what the table shows everyone; the data is still recorded, and
+      // an admin taking their own data out should not have to undo a display
+      // choice to get at it.
+      const hidden = new Set(await store.readHiddenColumns().catch(() => []));
+      return columnCatalogue().filter((c) => !EXPORT_SKIP[c.id])
+        .map((c) => ({ id: c.id, label: c.label, group: c.groupLabel, hidden: hidden.has(c.id) }));
+    },
+    async rows(scope) {
+      // A fresh install has no snapshot at all, and this page is reachable
+      // before the first refresh has ever run — so it answers "nothing yet"
+      // rather than 500-ing on a null.
+      const snap = (await readSnapshot()) || {};
+      const all = (snap.stocks || []).filter((s) => s && s.symbol);
+      // The SAME stamps the screener is served with, from the same list — a
+      // capBand or a display name missing here would be a spreadsheet that
+      // quietly disagrees with the page it came from.
+      const [, , , pf] = await Promise.all([...serveStamps(all), readPortfolios()]);
+      scoreActionInto(all);
+      finishServe(all, pf);
+      const rows = scope && scope !== 'All'
+        ? all.filter((s) => (s.portfolios || []).includes(scope))
+        : all;
+      return { rows, scopes: ['All', ...Object.keys(pf)], updatedAt: snap.updatedAt || null };
+    },
+  },
+};
+
+app.get('/api/export/catalogue', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const out = [];
+  for (const [id, d] of Object.entries(EXPORT_DATASETS)) {
+    out.push({ id, label: d.label, note: d.note, fields: await d.fields() });
+  }
+  const { rows, scopes, updatedAt } = await EXPORT_DATASETS.screener.rows('All');
+  res.json({ datasets: out, scopes, rows: rows.length, updatedAt,
+    skipped: Object.entries(EXPORT_SKIP).map(([id, why]) => ({ id, why })) });
+}));
+
+// The file itself. `fields` is a comma-separated list of ids; anything the
+// dataset does not offer is dropped rather than exported blank.
+app.get('/api/export/download', requireAdmin, route(async (req, res) => {
+  const dsId = String(req.query.dataset || 'screener');
+  const ds = EXPORT_DATASETS[dsId];
+  if (!ds) return res.status(400).json({ error: 'Unknown dataset: ' + dsId });
+  const format = String(req.query.format || 'xlsx').toLowerCase();
+  if (format !== 'xlsx' && format !== 'csv') {
+    return res.status(400).json({ error: 'Unknown format: ' + format });
+  }
+  const offered = await ds.fields();
+  const byId = new Map(offered.map((f) => [f.id, f]));
+  const want = String(req.query.fields || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const cols = EXPORT_ANCHORS.concat(want.filter((id) => byId.has(id)).map((id) => byId.get(id)));
+  if (cols.length <= EXPORT_ANCHORS.length) {
+    return res.status(400).json({ error: 'Choose at least one field to export.' });
+  }
+  const scope = String(req.query.scope || 'All');
+  const { rows } = await ds.rows(scope);
+  const stamp = new Date().toISOString().slice(0, 10);
+  const base = `tickrlab-${dsId}${scope && scope !== 'All' ? '-' + scope.replace(/[^\w-]+/g, '-') : ''}-${stamp}`;
+  logAct(req, 'export', `${dsId}:${format}:${cols.length}f:${rows.length}r`);
+
+  if (format === 'csv') {
+    // Quote everything that could be misread: a comma, a quote, a newline, and
+    // a leading = + - @, which a spreadsheet would treat as a formula.
+    const q = (v) => {
+      if (v == null) return '';
+      const s = String(v);
+      const risky = /^[=+\-@]/.test(s) || /[",\n\r]/.test(s);
+      return risky ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lines = [cols.map((c) => q(c.label)).join(',')];
+    for (const r of rows) lines.push(cols.map((c) => q(exportValue(r, c.id))).join(','));
+    res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="${base}.csv"`);
+    return res.send('﻿' + lines.join('\r\n'));   // BOM, or Excel mangles accents
+  }
+
+  const XLSX = require('./xlsx.js');
+  const head = cols.map((c) => ({ v: c.label, s: XLSX.S.head }));
+  const body = rows.map((r) => cols.map((c) => {
+    const v = exportValue(r, c.id);
+    // A NUMBER MUST ARRIVE AS A NUMBER or the sheet cannot sum, sort or chart
+    // it — which is most of the reason to want a spreadsheet at all.
+    return typeof v === 'number' && isFinite(v) ? v : (v == null ? null : String(v));
+  }));
+  const widths = cols.map((c) => Math.min(30, Math.max(9, c.label.length + 3)));
+  const sheet = XLSX.sheetXml([head, ...body], {
+    widths, freeze: 1, tab: true,
+    // The header row filters and the top row stays put: on 742 rows and 80
+    // columns that is the difference between a spreadsheet and a dump.
+    autoFilter: `A1:${XLSX.colName(cols.length - 1)}${rows.length + 1}`,
+  });
+  const buf = XLSX.workbook([{ name: XLSX.sheetName(ds.label), xml: sheet }]);
+  res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.set('Content-Disposition', `attachment; filename="${base}.xlsx"`);
+  return res.send(buf);
+}));
 
 // Admin: everything, drafts included, with the markdown source.
 app.get('/api/admin/posts', requireAdmin, route(async (req, res) => {
@@ -8418,17 +8591,14 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     // NOT tolerant: memberships are load-bearing for the badges and the tab
     // counts, and silently dropping them would be a wrong table, not a thin one.
     const [, , , pf, refreshing] = await Promise.all([
-      stampShortNames(snap.stocks).catch(() => {}),
-      stampAdviceAge(snap.stocks).catch(() => {}),
-      stampPricedAt(snap.stocks).catch(() => {}),
+      ...serveStamps(snap.stocks),
       readPortfolios(),
       readRefreshState().catch(() => null),
     ]);
-    stampCapBand(snap.stocks);
     // Memberships too: portfolios are edited between refreshes (a deleted one
     // must not linger on every row until the next refresh rewrites the snapshot).
+    finishServe(snap.stocks, pf);
     snap.portfolios = Object.keys(pf);
-    for (const x of snap.stocks) x.portfolios = membershipOf(x.symbol, pf);
     if (await isGuest(req)) {
       // The guest preview: the picked handful, and only portfolio names that
       // still contain one of them. Filtered here, never in the browser.
