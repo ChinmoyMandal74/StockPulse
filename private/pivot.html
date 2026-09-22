@@ -104,6 +104,23 @@
     table.pv td.cell.sel { color: var(--accent); background-color: rgba(124, 156, 255, 0.16);
                            box-shadow: inset 0 0 0 1px var(--accent); }
     table.pv td.blankdim, table.pv th.blankdim { color: var(--faint); font-style: italic; }
+    /* A drillable total. Marked the same way a lit cell is, because it selects
+       into the same child table — but `background-color`, never the `background`
+       shorthand, which would wipe the heat gradient off a cell that also
+       carries one. */
+    table.pv td.drill { cursor: pointer; }
+    table.pv td.drill:hover { color: var(--accent); }
+    /* THE LIT STATE IS AN IMAGE, NOT A COLOUR, and that is load-bearing here in
+       a way it is not for a body cell: the column totals are STICKY, so a
+       translucent background-COLOUR replaces the opaque one the sticky rule
+       painted and the rows scrolling underneath show straight through the lit
+       cell. Caught in a screenshot — a stray digit from a body row sat inside
+       the selected footer total. As an image the tint composes on top of
+       whatever opaque colour is already there, which is the same reasoning the
+       heat shading records a few rules above. */
+    table.pv td.drill.sel { color: var(--accent);
+      background-image: linear-gradient(rgba(124, 156, 255, 0.16), rgba(124, 156, 255, 0.16));
+      box-shadow: inset 0 0 0 1px var(--accent); }
 
     /* The ladder dot. Small, and it sits in front of the word rather than
        replacing it: the colour is a second reading of an order the page
@@ -174,6 +191,9 @@
                      margin: 0 0 10px; font-size: 13px; color: var(--muted); }
     .detail .dhead b { color: var(--text); font-weight: 600; }
     .detail .dhead .spacer { flex: 1 1 0; }
+    /* Why a total can read higher than the list under it. Quiet, because it is
+       an explanation rather than a warning — nothing is wrong when it appears. */
+    .detail .dhead .dnote { font-size: 11.5px; color: var(--faint); font-style: italic; }
     .detail .dhead .crumb { font: 500 12px var(--mono); color: var(--text); }
     .detail .dhead .crumb .sep { color: var(--faint); margin: 0 5px; }
     .detailwrap { overflow: auto; max-height: var(--detcap, 44dvh); border-radius: var(--r-core); }
@@ -296,6 +316,12 @@
       'Strong uptrend': GOOD, 'Above 200D': OK, 'Near 200D': COOL,
       'Below 200D': WARM, 'Downtrend': WARN, 'Breakdown': BAD, 'No data': 'var(--faint)',
       'Clean, near high': GOOD, 'Clean': OK, 'None': COOL, 'Extended': WARN,
+      // The move bands. The only ladder here whose ends are UP and DOWN rather
+      // than good and bad — but the colour language is the same one the
+      // screener's own percentage cells use, so it reads without a legend.
+      // Unchanged sits in the middle deliberately: it is neither.
+      'Up 3%+': GOOD, 'Up 1-3%': OK, 'Up 0-1%': COOL, 'Unchanged': 'var(--faint)',
+      'Down 0-1%': WARM, 'Down 1-3%': WARN, 'Down 3%+': BAD,
     };
 
     // `multi` marks a dimension a stock can be in more than once. It is the one
@@ -310,8 +336,55 @@
     // grid with one non-empty cell per column. It is expanded from its sector
     // instead, and left out of the Rows picker. (It stays in COLUMNS, where
     // Advice × Industry is still a real question.)
+    // TODAY'S MOVE, AS A BAND — and it is a DIMENSION rather than a measure on
+    // purpose. Every measure here is additive (a count and a market cap both
+    // sum) and percentages do not add: averaging them needs a weighting, and
+    // the weighting is not a detail. Measured on the session this was built,
+    // equal-weight against cap-weight disagreed on the SIGN of three of eleven
+    // sectors, Technology among them (-0.12% against +0.51%). Banded, there is
+    // nothing to weight and the measure stays a count, which cannot mislead
+    // about a group however small it is.
+    //
+    // THE THRESHOLDS ARE FIXED, never derived from the day. That is the
+    // market-cap bands' own rule and it holds here for the same reason: "a 3%
+    // day" has to mean the same thing next week, or the dimension stops being
+    // comparable between sessions and becomes percentiles wearing a band's
+    // name. Checked against a real session before being chosen — no band empty,
+    // none swallowing the table, on a quiet day AND mid-session, when the moves
+    // are partial and the middle bands are at their fullest.
+    //
+    // If this ever earns a screener column it moves to filters.js beside
+    // CAP_BANDS, which is where a band shared by more than one surface belongs.
+    const MOVE_BANDS = [
+      ['Up 3%+',    (v) => v >= 3,            '+3.00% and above'],
+      ['Up 1-3%',   (v) => v >= 1 && v < 3,   '+1.00% to +3.00%'],
+      ['Up 0-1%',   (v) => v > 0 && v < 1,    'above 0, under +1.00%'],
+      // Exactly unchanged is its own rung rather than folded into a neighbour,
+      // which would simply be false. Usually a handful of rows — and useful
+      // ones: mid-session an exactly-flat print is more often a stale price
+      // than a calm stock, so this is where that shows up.
+      ['Unchanged', (v) => v === 0,           'exactly 0.00%'],
+      ['Down 0-1%', (v) => v < 0 && v > -1,   'under 0, above -1.00%'],
+      ['Down 1-3%', (v) => v <= -1 && v > -3, '-1.00% to -3.00%'],
+      ['Down 3%+',  (v) => v <= -3,           '-3.00% and below'],
+    ];
+    const MOVE_ORDER = MOVE_BANDS.map((b) => b[0]);
+    const MOVE_RANGE = Object.fromEntries(MOVE_BANDS.map((b) => [b[0], b[2]]));
+    // A stock with no move recorded gets no band, so it lands in the blank
+    // bucket the page already draws — never silently in "Unchanged", which
+    // would read as "it did not move" when the truth is "we do not know".
+    const moveBand = (v) => {
+      if (v == null || !Number.isFinite(Number(v))) return null;
+      const hit = MOVE_BANDS.find((b) => b[1](Number(v)));
+      return hit ? hit[0] : null;
+    };
+
     const DIMS = {
       sector:   { label: 'Sector',          get: (s) => s.sector },
+      // Ordered best to worst, so the ladder's green-to-red tint reads the way
+      // the screener's own verdict cells do.
+      move:     { label: "Today's move",    get: (s) => moveBand(s.todayPct),
+                  order: MOVE_ORDER, range: MOVE_RANGE, tint: 1 },
       // The band carries its dollar range in the label, because "Mid-Large" is
       // our own cut rather than a standard and nobody should have to remember
       // where the line is. Ordered by the ladder, largest first.
@@ -686,7 +759,18 @@
         // With money on screen the cell shows a total, so the child names it
         // too — otherwise the figure above cannot be reconciled with the rows.
         (measure === 'count' ? '' : ', <b>' + esc(M().fmt(sumOf(list))) + '</b> in total') +
-        '</span><span class="spacer"></span>' +
+        '</span>' +
+        // A total can legitimately exceed the list beneath it: with a
+        // multi-valued dimension on an axis, a stock is added once per bucket
+        // it sits in, and this list holds each company once. Said out loud —
+        // a reader who spots 9 names under a total of 11 and is not told why
+        // has been handed a reason to distrust every other number on the page.
+        (picked.gridValue != null && measure === 'count' && picked.gridValue !== list.length
+          ? '<span class="dnote">the total reads ' + picked.gridValue +
+            ' because a stock in more than one bucket is counted once per bucket; ' +
+            'it is listed here once</span>'
+          : '') +
+        '<span class="spacer"></span>' +
         '<button class="btn quiet" id="dclear" type="button">Clear selection</button></div>';
       h += '<div class="bezel card"><div class="core"><div class="detailwrap"><table class="ch"><thead><tr>';
       for (const c of DETAIL_COLS) {
@@ -734,9 +818,48 @@
     // list captured when the cell was clicked — so changing the MEASURE keeps
     // the selection and redraws it against the new totals, and a selection whose
     // cell no longer exists clears itself instead of showing a stale list.
+    // The stocks behind a ROW, COLUMN or GRAND total — one definition, used
+    // both to decide whether a total is clickable and to fill the child table,
+    // so the two can never disagree about what is underneath a number.
+    //
+    // DE-DUPLICATED BY SYMBOL. A stock in two themes lands in two cells of the
+    // same row, so the total above legitimately counts it twice while this list
+    // holds one company once. That gap is the page's existing "counted in more
+    // than one bucket" fact, and the child table says it rather than leaving a
+    // reader to notice that 9 names sit under a total of 11.
+    function totalList(p, key) {
+      const kind = key.slice(4, 5);
+      const v = key.slice(6);
+      const out = [];
+      const take = (l) => { if (l) out.push(...l); };
+      if (kind === 'r') for (const c of p.cKeys) take(p.cells.get(v + '|' + c));
+      else if (kind === 's') { if (p.sub) for (const c of p.cKeys) take(p.sub.cells.get(v + '|' + c)); }
+      else if (kind === 'c') for (const r of p.rKeys) take(p.cells.get(r + '|' + v));
+      else for (const r of p.rKeys) for (const c of p.cKeys) take(p.cells.get(r + '|' + c));
+      const seen = new Set();
+      return out.filter((s) => (seen.has(s.symbol) ? false : (seen.add(s.symbol), true)));
+    }
+    // The measure's own figure for the same slice, so the child can report when
+    // the two differ instead of looking like one of them is wrong.
+    function totalValue(p, key) {
+      const kind = key.slice(4, 5);
+      const v = key.slice(6);
+      if (kind === 'r') return p.rowTot.get(v) || 0;
+      if (kind === 's') return (p.sub && p.sub.tot.get(v)) || 0;
+      if (kind === 'c') return p.colTot.get(v) || 0;
+      return p.placements;
+    }
+
     function resolvePick(p) {
       if (!picked) return;
       const k = picked.key;
+      if (k.indexOf('tot:') === 0) {
+        const list = totalList(p, k);
+        if (!list.length) { picked = null; return; }
+        picked.list = list;
+        picked.gridValue = totalValue(p, k);
+        return;
+      }
       const sub = k.indexOf('sub:') === 0;
       const rest = sub ? k.slice(4) : k;
       const i = rest.lastIndexOf('|');
@@ -801,6 +924,26 @@
         return s;
       };
 
+      // A TOTAL DRILLS LIKE A CELL. The row and column totals are the numbers a
+      // reader most wants to interrogate — "which 49 financials fell 1-3%" was
+      // already one click, but "which 86 financials are there at all" was none
+      // — so they select into the same child table, through the same `picked`,
+      // and clear the same way.
+      //
+      // CLICKABILITY IS THE STOCK LIST, NOT THE VALUE — the cells' own rule. A
+      // row holding nothing but funds totals $0 under the money measure and
+      // still has stocks in it; making the number dead because it reads zero
+      // would hide exactly those rows.
+      const totCell = (k, v, rLabel, cLabel, cls, sub) => {
+        const has = totalList(p, k).length > 0;
+        const on = picked && picked.key === k;
+        return '<td class="' + [cls, has ? 'drill' : '', on ? 'sel' : ''].filter(Boolean).join(' ') +
+          '"' + (has ? ' data-k="' + esc(k) + '" data-r="' + esc(rLabel) +
+            '" data-c="' + esc(cLabel) + '" data-sub="' + esc(sub || '') +
+            '" title="Click to list these stocks below"' : '') + '>' +
+          esc(M().fmt(v)) + '</td>';
+      };
+
       // The denominators, computed from the same cells the grid draws so the
       // shading cannot describe a different table from the numbers.
       //
@@ -851,7 +994,7 @@
           '</th>';
         h += cellsFor((c) => p.cells.get(r + '|' + c), (c) => r + '|' + c, r, '',
           denomFor(r, false));
-        h += '<td class="tot">' + esc(M().fmt(p.rowTot.get(r) || 0)) + '</td></tr>';
+        h += totCell('tot:r|' + r, p.rowTot.get(r) || 0, r, 'Total', 'tot') + '</tr>';
 
         // Then this sector's industries, if it is the open one. Their cells
         // select exactly like their parent's do — the `sub:` prefix is what
@@ -864,13 +1007,16 @@
             h += '<tr class="kid"><th class="' + (ind === BLANK ? 'blankdim' : '') + '">' +
               esc(ind) + '</th>';
             h += cellsFor(at, ok, ind, r, denomFor(ind, true));
-            h += '<td class="tot">' + esc(M().fmt(p.sub.tot.get(ind) || 0)) + '</td></tr>';
+            h += totCell('tot:s|' + ind, p.sub.tot.get(ind) || 0, ind, 'Total', 'tot', r) + '</tr>';
           }
         }
       }
       h += '</tbody><tfoot><tr><th>Total</th>';
-      for (const c of p.cKeys) h += '<td>' + esc(M().fmt(p.colTot.get(c) || 0)) + '</td>';
-      h += '<td>' + esc(M().fmt(p.placements)) + '</td></tr></tfoot></table></div>';
+      for (const c of p.cKeys) {
+        h += totCell('tot:c|' + c, p.colTot.get(c) || 0, 'Total', c, '');
+      }
+      h += totCell('tot:a|', p.placements, 'Total', 'Total', '') +
+        '</tr></tfoot></table></div>';
       $('out').innerHTML = h;
 
       // ---- what the totals mean, said rather than left to be worked out ----
@@ -959,7 +1105,7 @@
           ', not a row dimension — expand a ' + DIMS[DIMS[colKey].childOf].label.toLowerCase() + ' instead'
         : 'Swap the rows and the columns';
 
-      $('out').querySelectorAll('td.cell').forEach((td) => {
+      $('out').querySelectorAll('td.cell, td.drill').forEach((td) => {
         td.addEventListener('click', () => {
           const k = td.dataset.k;
           // Clicking the lit cell clears it; clicking another REPLACES it. One
