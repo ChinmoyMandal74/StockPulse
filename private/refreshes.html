@@ -608,9 +608,31 @@
       driving = true;
       try {
         if (what === 'refresh') {
-          drive('<b>Refreshing prices…</b> about ten seconds.');
-          const data = await RefreshLoop.runPlain(api);
-          drive(`<b>Prices refreshed</b> — ${(data.stocks || []).length} stocks, as of ${new Date(data.updatedAt).toLocaleTimeString()}.`);
+          // A PRICE SWEEP, not one request. A round prices 500 symbols; at 767
+          // that is two rounds a minute apart, and it stays two at the owner's
+          // 1,000-stock ceiling. It was a single call until 2026-09-22, when
+          // the work stopped fitting inside the platform's 300s and the button
+          // simply 504'd.
+          drive('<b>Refreshing prices…</b> Keep this tab open — it runs here, a round at a time.');
+          const r = await RefreshLoop.run('prices', api, {
+            onStart: () => load(),
+            onRound: ({ loaded, total, rounds }) => {
+              drive(`<b>Refreshing prices in this tab</b> — keep it open. Round ${rounds}, ` +
+                `${loaded} of ${total} priced; the next round starts in about a minute.`);
+              load();
+            },
+            onWait: (why) => {
+              if (why === 'refused') drive('<b>Refresh prices:</b> the API refused a round (rate limit) — retrying in a minute.', 'warn');
+            },
+          });
+          const rows = (r.data && r.data.stocks || []).length;
+          if (r.outcome === 'done') {
+            drive(`<b>Prices refreshed</b> — ${rows} stocks, as of ${new Date(r.data.updatedAt).toLocaleTimeString()}.`);
+          } else if (r.outcome === 'stopped') {
+            drive('<b>Stopped</b> — the symbols priced so far are in; the rest are on their archived close.', 'warn');
+          } else {
+            drive('<b>Ended short</b> — some symbols are still on their archived close. Run it again to finish.', 'warn');
+          }
         } else {
           const fill = what === 'refreshmissing';
           const fast = what === 'refreshfast';

@@ -113,6 +113,19 @@ const MAX_PROFILE_FETCHES_PER_CALL = ANALYST_ENABLED ? 4 : 6;
 const PROFILE_CAP_ARCHIVE_ROUND = ANALYST_ENABLED ? 4 : 7;   // 7 x 80 = 560 <= 610
 const CREDITS_PER_MINUTE = 610;
 const CREDITS_PER_PROFILE = 80;
+// How many symbols one round may price LIVE. The credit ceiling already caps a
+// round at 609, and that was the only cap until 2026-09-22 — but credits bound
+// what a round may SPEND, not how long it takes, and the platform kills a
+// function at 300s. At 767 stocks a 609-symbol round measured 170s on a good
+// day and 423s on a bad one (run 63), so the plain Refresh had started losing
+// more often than it won: two 504s in a row, reproduced.
+//
+// 500 is chosen from the phases of a good run — `prices 45.9s` and
+// `persist-bars 65.2s` scale with the slice while the other ~62s does not, so
+// pricing 500 instead of 609 takes a round to ~155s, about half the ceiling.
+// It also bounds the round at the owner's stated 1,000-stock ceiling: 500 is
+// two rounds there, and the loop simply takes a third if it is ever exceeded.
+const PRICE_SLICE = Math.max(1, Number(process.env.PRICE_SLICE) || 500);
 const SYMBOL_RE = /^[A-Z0-9.\-]{1,12}$/;
 
 // Registration gate. When SIGNUP_CODE is set, a new account must supply it —
@@ -3691,6 +3704,25 @@ app.post('/api/refresh-all', requireAdmin, route(async (req, res) => {
     await beginRefresh(who ? who.email : null, totalFast, 'fast', runIdFast);
     return res.json({ ok: true, mode: 'fast', runId: runIdFast, expired: expiredFast, total: totalFast });
   }
+  // Refresh prices: the ordinary price refresh, but as a tracked RUN so it can
+  // take more than one round. It expires no profiles — this is about prices —
+  // and deliberately does NOT stamp prices_at, which is what keeps every round
+  // a price round until the last slice is in.
+  //
+  // It became a run on 2026-09-22 because a single request stopped fitting: one
+  // round priced the whole 610-credit budget and the work overran the 300s
+  // ceiling. `priced` already existed to carry a price sweep across rounds; the
+  // plain path simply never created the state that uses it, so it always
+  // started from zero and tried to do the maximum.
+  if (req.query.mode === 'prices' || req.body?.mode === 'prices') {
+    const totalP = (await readUniverse()).length;
+    logAct(req, 'refresh', 'prices');
+    const runIdP = await trackSafe(store.startRun({ kind: 'refresh', trigger: 'manual',
+      actor: who ? who.email : null, total: totalP, targets: totalP }));
+    await beginRefresh(who ? who.email : null, totalP, 'prices', runIdP);
+    return res.json({ ok: true, mode: 'prices', runId: runIdP, total: totalP,
+      rounds: Math.ceil(totalP / PRICE_SLICE) });
+  }
   logAct(req, 'refresh', 'all');
   const expired = await expireProfiles();
   const total = (await readUniverse()).length;
@@ -3804,7 +3836,8 @@ async function standAside(res) {
   // The same naming the intraday cron's own skip uses, so two surfaces cannot
   // describe the same run differently.
   const name = st.mode === 'missing' ? 'Fill missing'
-    : st.mode === 'fast' ? 'Fast refresh' : 'Refresh all';
+    : st.mode === 'fast' ? 'Fast refresh'
+      : st.mode === 'prices' ? 'Refresh prices' : 'Refresh all';
   const at = st.total ? ` — ${st.loaded || 0} of ${st.total} stocks so far` : '';
   res.set('Retry-After', '120');
   res.status(503).json({
@@ -7035,7 +7068,8 @@ function refreshReportBodies(r) {
   const line = (k, v) => k.padEnd(14) + v;
   const isAll = r.kind === 'all';
   const runName = r.mode === 'missing' ? 'Fill missing'
-    : r.mode === 'fast' ? 'Fast refresh' : isAll ? 'Refresh all' : 'Refresh';
+    : r.mode === 'fast' ? 'Fast refresh'
+      : r.mode === 'prices' ? 'Refresh prices' : isAll ? 'Refresh all' : 'Refresh';
   // Prices moved; the company numbers did not. Say which.
   const fundLine = !isAll ? 'not re-pulled — prices only'
     : (r.stats.fundamentalsToday == null ? '—'
@@ -7373,7 +7407,15 @@ async function finishLiveRefresh(payload, ctx = {}) {
   // snapshot. A refresh that had already done its work was then cut before it
   // could close its own run, and recorded as `abandoned` with no error.
   // It is its own button now: POST /api/news/refresh.
-  if (running) {
+  // A PRICE run is deliberately NOT a profile sweep, and must not open this
+  // gate (2026-09-22). Making Refresh prices a tracked run gave it a
+  // refresh_state row, and `if (running)` alone then read that as "a Refresh
+  // all is happening" — so a price refresh started recording fundamentals from
+  // day-old cached profiles under today's date, which is precisely the
+  // invented movement this gate was written to prevent, and aged the advice
+  // counters against a provisional intraday bar. Caught by the round log
+  // saying "fundamentals: 21 symbols recorded" during a price sweep.
+  if (running && running.mode !== 'prices') {
     try {
       // Rows whose profile has not come back yet are skipped rather than
       // stored empty; a later round in the same run upserts over them.
@@ -7402,7 +7444,15 @@ async function finishLiveRefresh(payload, ctx = {}) {
   // complete the moment it returns — tying its report to coverage meant that one
   // abandoned Refresh all silently suppressed every plain-refresh email until
   // somebody noticed the missing mail.
-  const covered = rows.length > 0 && loaded >= rows.length;
+  // WHAT "FINISHED" MEANS DEPENDS ON WHAT THE RUN IS FOR. A profile sweep ends
+  // when every row has a profile; a PRICE sweep ends when every symbol has been
+  // priced, which `notePriceRound` records by stamping prices_at on the last
+  // slice. Judging a price run by profile coverage would close it after round
+  // one — coverage is already complete — leaving the rest of the universe on
+  // yesterday's close with the run marked `complete`.
+  const covered = running && running.mode === 'prices'
+    ? !!running.pricesAt
+    : (rows.length > 0 && loaded >= rows.length);
 
   if (running) {
     if (covered) {
@@ -7500,7 +7550,10 @@ async function liveRefreshOpts() {
   // SPY is fetched live on every round, priced or archived, so it is always
   // one credit off the top.
   const priceBudget = CREDITS_PER_MINUTE - 1;
-  const priceCap = Math.min(left || universe.length, priceBudget);
+  // TWO ceilings, not one: the credit budget says what a round may spend, and
+  // PRICE_SLICE says what it can finish inside the platform's 300s. The second
+  // was missing, which is what made the plain Refresh a coin toss at 767.
+  const priceCap = Math.min(left || universe.length, priceBudget, PRICE_SLICE);
   const slice = universe.slice(done, done + priceCap);
   const spent = slice.length + 1;
   const profileCap = Math.max(0, Math.min(PROFILE_CAP_ARCHIVE_ROUND,
@@ -8390,7 +8443,8 @@ app.all('/api/cron/intraday', route(async (req, res) => {
   }
   const running = await readRefreshState();
   if (running) return skip(`another refresh is running (${running.mode === 'missing' ? 'Fill missing'
-    : running.mode === 'fast' ? 'Fast refresh' : 'Refresh all'})`, true);
+    : running.mode === 'fast' ? 'Fast refresh'
+      : running.mode === 'prices' ? 'Refresh prices' : 'Refresh all'})`, true);
   const market = await nyseState();
   if (market.known && !market.open) return skip('NYSE closed (holiday or early close)', true);
   if (dry) return res.json({ ok: true, ran: false, wouldRun: true, ny: clock.label, market, dry });

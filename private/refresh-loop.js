@@ -15,24 +15,30 @@
 
   const GAP_MS = 62000;              // measured: two rounds inside a minute were refused
   const PROFILES_PER_ROUND = 7;      // archive rounds afford 7 × 80 credits; the price round pulls fewer
+  const PRICE_SLICE = 500;           // must match PRICE_SLICE in server.js — it only sizes the budget
   const REFUSALS_ALLOWED = 8;        // a refused round fetched nothing, so it has its own allowance
   const STAGNANT_LIMIT = 3;          // rounds without progress before giving up
 
-  // mode: 'all' (Refresh all), 'missing' (Fill missing) or 'fast' (Fast
-  // refresh). Fill missing and Fast refresh both run LIGHT rounds — profiles
-  // only, then ONE rebuild at the end; see the note in run(). Refresh all
-  // keeps the heavy round on purpose: it is the "everything, visibly" sweep,
-  // and its whole point is that the table moves while you watch.
+  // mode: 'all' (Refresh all), 'missing' (Fill missing), 'fast' (Fast refresh)
+  // or 'prices' (Refresh prices). Fill missing and Fast refresh run LIGHT
+  // rounds — profiles only, then ONE rebuild at the end; see the note in run().
+  // Refresh all keeps the heavy round on purpose: it is the "everything,
+  // visibly" sweep, and its whole point is that the table moves while you
+  // watch. A price sweep is heavy too, for the same reason, but it ends on
+  // prices rather than on profile coverage.
   // hooks: onStart(started), onRound({ loaded, total, rounds, data }),
   //        onWait(reason) — 'refused' or 'gap'.
   // Resolves { outcome, started, data } where outcome is
-  //   'done'     every row has a profile
+  //   'done'     every row has a profile — or, for 'prices', every symbol priced
   //   'nothing'  Fill missing found nothing to do
   //   'stopped'  the run was stopped from /refreshes
   //   'gaveup'   out of rounds, out of refusals, or no progress
   async function run(mode, api, hooks = {}) {
     const fill = mode === 'missing';
     const fast = mode === 'fast';
+    // A PRICE sweep. Heavy rounds like a Refresh all — it is the table it is
+    // refreshing — but it ends on a different signal: prices, not profiles.
+    const prices = mode === 'prices';
     // THE ROUND'S SHAPE IS A SEPARATE DECISION FROM THE MODE, and until
     // 2026-09-22 it was not: `fast` chose both, so Fill missing was stuck with
     // the expensive round. The two narrow different things and they multiply —
@@ -49,14 +55,14 @@
     // A light round fetches the same seven profiles and does none of the rest;
     // the table is built once, after the last one. `ensureProfiles` is shared,
     // so the two shapes pull exactly the same stocks — only the cost differs.
-    const light = fast || fill;
+    const light = (fast || fill) && !prices;
     const sleep = hooks.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
     let started = null;
     let data = null;
     let outcome = 'gaveup';
     try {
       started = await api('POST', '/api/refresh-all' +
-        (fill ? '?mode=missing' : fast ? '?mode=fast' : ''));
+        (fill ? '?mode=missing' : fast ? '?mode=fast' : prices ? '?mode=prices' : ''));
       if (fill && started && started.nothing) { outcome = 'nothing'; return { outcome, started, data }; }
       if (hooks.onStart) hooks.onStart(started);
 
@@ -65,7 +71,12 @@
       const runQ = started && started.runId ? '&run=' + started.runId : '';
       // Fill missing sizes its budget from the stocks it targets, not the universe.
       const work = fill ? (Number(started && started.targets) || 0) : (Number(started && started.total) || 84);
-      const budget = Math.ceil(work / PROFILES_PER_ROUND) + 6;
+      // A price sweep is bounded by how many symbols a round may price, not by
+      // how many profiles it may fetch — at 500 a side that is two rounds for
+      // 1,000 stocks, plus slack for a refusal.
+      const budget = prices
+        ? Math.ceil(work / PRICE_SLICE) + 3
+        : Math.ceil(work / PROFILES_PER_ROUND) + 6;
 
       let rounds = 0;
       let refusals = 0;
@@ -89,10 +100,21 @@
         // the SAME thing — a profile with a fetch time on it — which is what
         // lets a run that expired its gaps to zero terminate correctly.
         const total = light ? (data.total || 0) : (data.stocks || []).length;
-        const loaded = light ? (data.loaded || 0)
-          : (data.stocks || []).filter((s) => s.profileFetchedAt != null).length;
+        // A PRICE sweep counts what has been PRICED, which the server carries
+        // on the flag as `priced`. Counting profiles here would report 767 of
+        // 767 on the first round and stop with most of the universe still on
+        // yesterday's close.
+        // A cleared flag means the sweep is OVER, so the last round reports the
+        // whole universe rather than the zero a missing `priced` would read —
+        // which would have shown "0 of 767 priced" on the round that finished.
+        const loaded = prices ? (data.refreshing ? Number(data.refreshing.priced || 0) : total)
+          : light ? (data.loaded || 0)
+            : (data.stocks || []).filter((s) => s.profileFetchedAt != null).length;
         if (hooks.onRound) hooks.onRound({ loaded, total, rounds, data });
-        if (total === 0 || loaded >= total) {
+        // The server clears the flag on the round that finishes the sweep, so
+        // a null `refreshing` IS the finish line for a price run — and it
+        // cannot disagree with the server about when that was.
+        if (prices ? !data.refreshing : (total === 0 || loaded >= total)) {
           outcome = 'done';
           // The one rebuild: scores, advice, the snapshot, the report and the
           // email all come from this round, the same way a Refresh all ends.
