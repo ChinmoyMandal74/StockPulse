@@ -416,17 +416,45 @@
         `\nThis cannot be undone.`)) return;
       $('delGo').disabled = true;
       say('delSaid', 'Removing…');
+      // THE SERVER DOES WHAT FITS AND SAYS WHAT IS LEFT; this drives the rest.
+      // One request cannot hold a long list — a symbol with a deep archive took
+      // 13 seconds — so the work is bounded server-side and continued here, the
+      // same shape the refresh rounds use. No pause between passes: unlike a
+      // refresh there is no rate limit to respect, only a request ceiling.
+      let todo = symbols.slice();
+      let done = 0, rows = 0;
+      const allFailed = [];
       try {
-        const r = await api('POST', '/api/universe/bulk-delete', { symbols, commit: true });
-        adopt(r);
+        while (todo.length) {
+          const r = await api('POST', '/api/universe/bulk-delete', { symbols: todo, commit: true });
+          adopt(r);
+          done += (r.removed || []).length;
+          rows += r.rowsGone || 0;
+          allFailed.push(...(r.failed || []));
+          const left = r.remaining || [];
+          // A pass that removed nothing would loop forever. Stop and say so
+          // rather than hammering it.
+          if (left.length && left.length === todo.length) {
+            say('delSaid', `Stopped after ${done} — the last pass made no progress. ` +
+              `${left.length} still in the screener.`, 'err');
+            $('delGo').disabled = false;
+            return;
+          }
+          todo = left;
+          if (todo.length) say('delSaid', `Removed ${done}… ${todo.length} to go.`);
+        }
         $('delText').value = '';
         delReady = null;
         paintDelList([], []);
-        say('delSaid', `${(r.removed || []).length} removed, ` +
-          `${(r.rowsGone || 0).toLocaleString()} rows deleted` +
-          ((r.failed || []).length ? ` — ${r.failed.length} failed: ${r.failed.join(', ')}` : '') + '.',
-          (r.failed || []).length ? 'err' : 'ok');
-      } catch (err) { say('delSaid', err.message, 'err'); $('delGo').disabled = false; }
+        say('delSaid', `${done} removed, ${rows.toLocaleString()} rows deleted` +
+          (allFailed.length ? ` — ${allFailed.length} failed: ${allFailed.join(', ')}` : '') +
+          '. The screener still lists them until the next refresh rewrites the snapshot.',
+          allFailed.length ? 'err' : 'ok');
+      } catch (err) {
+        say('delSaid', `${err.message} — ${done} removed before it stopped; ` +
+          'press Preview and Remove again to continue with the rest.', 'err');
+        $('delGo').disabled = false;
+      }
     }
 
     // ---- create / rename / delete ------------------------------------------

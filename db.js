@@ -2048,12 +2048,20 @@ async function purgeSymbol(symbol) {
   const sym = String(symbol).toUpperCase();
   const removed = {};
   let total = 0;
-  for (const table of SYMBOL_TABLES) {
-    const r = await db.execute({ sql: `delete from ${table} where symbol = ?`, args: [sym] });
-    const n = Number(r.rowsAffected || 0);
+  // ONE ROUND TRIP, not nine. This was a sequential delete per table, and on
+  // this database a path's cost is its number of round trips: at ~200ms each
+  // that is over two seconds a symbol before the rows are even counted, and a
+  // bulk removal of a hundred stocks ran past the platform's 300s ceiling and
+  // was killed part way through its list. The nine deletes are independent —
+  // different tables, same symbol — so they belong in one batch.
+  const res = await db.batch(SYMBOL_TABLES.map((t) => ({
+    sql: `delete from ${t} where symbol = ?`, args: [sym],
+  })), 'write');
+  SYMBOL_TABLES.forEach((table, i) => {
+    const n = Number((res[i] && res[i].rowsAffected) || 0);
     if (n) removed[table] = n;
     total += n;
-  }
+  });
   // Member lists hold JSON arrays, so they cannot ride SYMBOL_TABLES; counted
   // as rows edited, not rows deleted, and never fatal to the purge.
   try {

@@ -3383,6 +3383,15 @@ async function nameForNewTicker(symbol) {
 // words, and only where no name is stored — so a bulk add costs no credits.
 // The company data arrives with the next Fill missing or nightly run.
 const BULK_ADD_MAX = 500;
+// How long one bulk-delete request may spend removing, against the platform's
+// ~300s hard kill. Deliberately a third of it: the tail (the portfolio answer,
+// which re-reads the universe) still has to fit, and a symbol's cost varies
+// from 200ms to 13s depending on how deep its archive is.
+// The floor is 1ms, not something comfortable: the loop always does at least
+// one symbol whatever the clock says, so a small value is merely slow (one
+// stock per pass) and never unsafe. A comfortable-looking floor would only
+// have made the continuation untestable, which is how it shipped unexercised.
+const BULK_DELETE_PHASE_MS = Math.max(1, Number(process.env.BULK_DELETE_MS) || 100000);
 const nasdaqToSymbol = (s) => String(s || '').trim().toUpperCase().replace(/\//g, '.');
 const cleanListingName = (n) => String(n || '').trim()
   .replace(/\s+(American Depositary Shares?|American Depositary Receipts?|Sponsored ADR)\b.*$/i, '')
@@ -3654,9 +3663,25 @@ app.post('/api/universe/bulk-delete', requireAdmin, route(async (req, res) => {
   }
 
   // ---- the destructive half ------------------------------------------------
+  // BOUNDED BY A DEADLINE, and the page loops. A removal is ~2 round trips a
+  // symbol after the purge was batched, but one symbol with a deep archive was
+  // measured at 13 SECONDS, so no fixed count is safe — the work per stock
+  // varies by orders of magnitude. Without this the request ran past the
+  // platform's 300s ceiling and was killed mid-list: every symbol it had
+  // reached was already gone (each commits as it goes) while the log line at
+  // the end never ran, so the operation both half-succeeded and left no record
+  // of having done so. This is the shape every long job here uses — the
+  // refresh rounds, the news batches: do what fits, say what is left.
+  const deadline = Date.now() + BULK_DELETE_PHASE_MS;
   const purged = [];
   const failed = [];
-  for (const sym of found) {
+  const remaining = [];
+  for (const [i, sym] of found.entries()) {
+    // ALWAYS DO AT LEAST ONE, whatever the clock says. A request that removes
+    // nothing and asks to be called again with the same list is a livelock,
+    // and the page's no-progress guard would stop the whole operation dead.
+    // Forward progress is guaranteed here rather than hoped for.
+    if (i > 0 && Date.now() > deadline) { remaining.push(sym); continue; }
     try {
       await store.removeFromUniverse(sym);
       try {
@@ -3672,7 +3697,7 @@ app.post('/api/universe/bulk-delete', requireAdmin, route(async (req, res) => {
       console.warn(`bulk delete: ${sym} failed: ${err.message}`);
     }
   }
-  const removed = found.filter((s) => !failed.includes(s));
+  const removed = found.filter((s) => !failed.includes(s) && !remaining.includes(s));
   // One activity row for the batch, capped, not one per symbol: the log is a
   // record of who did what, not somewhere to put a 500-line list.
   logAct(req, 'portfolio', 'bulk-remove:' + removed.length + ':' + removed.slice(0, 12).join(','));
@@ -3681,6 +3706,9 @@ app.post('/api/universe/bulk-delete', requireAdmin, route(async (req, res) => {
     `${fundTotal} recorded fundamentals days`);
   res.json(await portfolioAnswer({
     purged, removed, failed, unknown, invalid, fundDays: fundTotal, rowsGone,
+    // What this request did not reach. The page sends it straight back; the
+    // operation is idempotent, so a repeat costs nothing but is never needed.
+    remaining, done: remaining.length === 0,
   }));
 }));
 
