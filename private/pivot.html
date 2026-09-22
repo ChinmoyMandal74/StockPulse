@@ -76,19 +76,32 @@
                   font-variant-numeric: tabular-nums; color: var(--text); }
     table.pv td.zero { color: var(--faint); }
     table.pv .tot, table.pv tfoot td, table.pv tfoot th {
-      font-weight: 600; background: rgba(255, 255, 255, 0.028); }
+      font-weight: 600; background-color: rgba(255, 255, 255, 0.028); }
     table.pv tfoot th, table.pv tfoot td { position: sticky; bottom: 0; z-index: 2;
                                            background: var(--surface-2); border-top: 1px solid var(--hair-2); }
     table.pv tfoot th { left: 0; z-index: 3; }
-    table.pv tbody tr:hover th, table.pv tbody tr:hover td { background: rgba(255, 255, 255, 0.022); }
+    /* background-COLOUR, never the shorthand: the shorthand resets
+       background-image, which is where a cell's heat tint lives, so hovering
+       a row would wipe the shading off every cell in it. */
+    table.pv tbody tr:hover th, table.pv tbody tr:hover td {
+      background-color: rgba(255, 255, 255, 0.022); }
     /* A cell with stocks in it is a button; an empty one is not. */
     table.pv td.cell { cursor: pointer; }
+    /* THE HEAT IS A background-IMAGE, and that is what makes it compose.
+       `--h` is set inline per cell. Painting it as background-COLOUR would put
+       it in the same channel as the row hover and the selected cell, and
+       whichever rule won would erase the other — the tint would flicker off
+       under the pointer. As an image it layers ON TOP of whatever colour those
+       two put behind it, so all three read at once. */
+    table.pv td.cell {
+      background-image: linear-gradient(rgba(124, 156, 255, var(--h, 0)),
+                                        rgba(124, 156, 255, var(--h, 0))); }
     table.pv td.cell:hover { color: var(--accent); }
     /* Exactly ONE cell is lit at a time, and it is the only thing tying the
        child table to the grid above it — so it is marked harder than the old
        inline drill needed to be: a filled ground AND an accent outline drawn
        inside the cell, since a border would move every column by a pixel. */
-    table.pv td.cell.sel { color: var(--accent); background: rgba(124, 156, 255, 0.16);
+    table.pv td.cell.sel { color: var(--accent); background-color: rgba(124, 156, 255, 0.16);
                            box-shadow: inset 0 0 0 1px var(--accent); }
     table.pv td.blankdim, table.pv th.blankdim { color: var(--faint); font-style: italic; }
 
@@ -133,10 +146,10 @@
        glance rather than inferred from the order. The tint runs the width of
        the row, which is what groups the numbers with their heading. */
     table.pv tbody tr.kid th, table.pv tbody tr.kid td {
-      background: rgba(124, 156, 255, 0.05); }
+      background-color: rgba(124, 156, 255, 0.05); }
     table.pv tbody tr.kid th { padding-left: 30px; color: var(--muted); font-weight: 400; }
     table.pv tbody tr.kid:hover th, table.pv tbody tr.kid:hover td {
-      background: rgba(124, 156, 255, 0.085); }
+      background-color: rgba(124, 156, 255, 0.085); }
 
     /* ---- the child table -------------------------------------------------
        A cell no longer expands in place; it selects, and the stocks are drawn
@@ -228,6 +241,7 @@
       <button class="btn" id="swap" title="Swap the rows and the columns">⇄ Swap</button>
       <div class="pick"><label for="colDim">Columns</label><select id="colDim"></select></div>
       <div class="pick"><label for="measure">Measure</label><select id="measure"></select></div>
+      <div class="pick"><label for="heat">Shading</label><select id="heat"></select></div>
     </div>
 
     <p class="note" id="note"></p>
@@ -358,6 +372,35 @@
     };
     let measure = 'count';
     const M = () => MEASURES[measure];
+
+    // ---- heat ---------------------------------------------------------------
+    // A pivot's whole job is "where is the weight", and thirty cells of the
+    // same grey answer it only after they have all been READ. A tint behind
+    // each number answers it at a glance.
+    //
+    // SCALED TO WHAT is a real question and the page must not duck it, so it is
+    // a control rather than an assumption, and the note says which is in force
+    // and what the darkest cell actually holds:
+    //   grid — every cell against the largest cell anywhere. Where the weight
+    //          sits in absolute terms; most cells go faint when one dominates.
+    //   row  — every cell against the largest in its OWN row. The shape of each
+    //          row's distribution, comparable between a big row and a small one.
+    // LINEAR in the tint's alpha, and the note says "proportional" only because
+    // it is: a curve would flatter the small cells and is the same family of
+    // quiet lie as sizing a circle by its radius.
+    const HEATS = { off: 'No shading', grid: 'Shade against the grid', row: 'Shade against each row' };
+    let heat = 'grid';
+    // The ceiling. Measured against --surface rather than guessed: at 0.34 the
+    // number on the darkest cell still clears the 4.5:1 floor this project
+    // holds every grey to, so the tint never costs legibility.
+    const HEAT_MAX = 0.34;
+    // DELIBERATELY NOT green-to-red. Those are the ladder's colours three rows
+    // up, and a cell shaded red for being LARGE beside a column headed red for
+    // being BAD is two meanings in one channel. Accent blue says quantity.
+    const heatStyle = (v, denom) => {
+      if (heat === 'off' || !(denom > 0) || !(v > 0)) return '';
+      return ' style="--h:' + ((v / denom) * HEAT_MAX).toFixed(3) + '"';
+    };
     const sumOf = (list) => (list || []).reduce((a, s) => a + M().each(s), 0);
 
     // Matches the screener's own fmtMktCap so the same company does not read
@@ -740,22 +783,50 @@
       // `sub` is the parent sector on a child row and empty on a sector row; it
       // rides the cell so the crumb can be built from the click alone, without
       // the handler having to work out where in the hierarchy it landed.
-      const cellsFor = (listOf, openKey, label, sub) => {
+      const cellsFor = (listOf, openKey, label, sub, denom) => {
         let s = '';
         for (const c of p.cKeys) {
           const list = listOf(c) || [];
           const k = openKey(c);
+          const v = list.length ? sumOf(list) : 0;
           s += list.length
             ? '<td class="cell' + (picked && picked.key === k ? ' sel' : '') +
               '" data-k="' + esc(k) + '" data-r="' + esc(label) + '" data-c="' + esc(c) +
               '" data-sub="' + esc(sub || '') + '" title="' +
               esc(list.length + (list.length === 1 ? ' stock' : ' stocks') +
-                ' — click to list them below') + '">' +
-              esc(M().fmt(sumOf(list))) + '</td>'
+                ' — click to list them below') + '"' + heatStyle(v, denom) + '>' +
+              esc(M().fmt(v)) + '</td>'
             : '<td class="zero">·</td>';
         }
         return s;
       };
+
+      // The denominators, computed from the same cells the grid draws so the
+      // shading cannot describe a different table from the numbers.
+      //
+      // A CHILD ROW IS SCALED AMONG CHILD ROWS, never against its parent. An
+      // industry is a SUBSET of its sector, so shading it against the sector's
+      // own cells would say "smaller than its parent" in every cell — true by
+      // construction, and therefore telling nobody anything.
+      const maxOver = (keys, cellsOf) => {
+        let m = 0;
+        for (const k of keys) for (const c of p.cKeys) {
+          const v = sumOf(cellsOf(k, c)); if (v > m) m = v;
+        }
+        return m;
+      };
+      const rowMax = new Map();
+      for (const r of p.rKeys) rowMax.set(r, maxOver([r], (k, c) => p.cells.get(k + '|' + c)));
+      const gridMax = Math.max(0, ...rowMax.values());
+      const subMax = new Map();
+      let subGridMax = 0;
+      if (p.sub) {
+        for (const k of p.sub.keys) subMax.set(k, maxOver([k], (a, c) => p.sub.cells.get(a + '|' + c)));
+        subGridMax = Math.max(0, ...subMax.values());
+      }
+      const denomFor = (key, isSub) => (heat === 'off' ? 0
+        : heat === 'row' ? (isSub ? subMax.get(key) : rowMax.get(key)) || 0
+          : (isSub ? subGridMax : gridMax));
 
       for (const r of p.rKeys) {
         const kids = p.kids.get(r);
@@ -778,7 +849,8 @@
           (rangeOf(p.rd, r) ? '<span class="rng">' + esc(rangeOf(p.rd, r)) + '</span>' : '') +
           '<span class="shr" style="width:' + share.toFixed(2) + '%" aria-hidden="true"></span>' +
           '</th>';
-        h += cellsFor((c) => p.cells.get(r + '|' + c), (c) => r + '|' + c, r, '');
+        h += cellsFor((c) => p.cells.get(r + '|' + c), (c) => r + '|' + c, r, '',
+          denomFor(r, false));
         h += '<td class="tot">' + esc(M().fmt(p.rowTot.get(r) || 0)) + '</td></tr>';
 
         // Then this sector's industries, if it is the open one. Their cells
@@ -791,7 +863,7 @@
             const ok = (c) => 'sub:' + ind + '|' + c;
             h += '<tr class="kid"><th class="' + (ind === BLANK ? 'blankdim' : '') + '">' +
               esc(ind) + '</th>';
-            h += cellsFor(at, ok, ind, r);
+            h += cellsFor(at, ok, ind, r, denomFor(ind, true));
             h += '<td class="tot">' + esc(M().fmt(p.sub.tot.get(ind) || 0)) + '</td></tr>';
           }
         }
@@ -865,6 +937,17 @@
         bits.push('Sectors cannot be expanded while the columns are Industry — ' +
           'the child rows would restate the grid.');
       }
+      // A SHADED GRID WITHOUT A STATED SCALE IS A PICTURE NOBODY CAN CHECK.
+      // The tint is proportional to the value, and the sentence says what the
+      // darkest cell actually holds, so the shading can be read back against
+      // the numbers it sits behind rather than merely trusted.
+      if (heat !== 'off' && gridMax > 0) {
+        bits.push(heat === 'row'
+          ? 'Shaded in proportion to the value, each row against its own largest cell — ' +
+            'so the SHAPE of a small row reads like a big one.'
+          : 'Shaded in proportion to the value, against the largest cell on the grid (<b>' +
+            esc(M().fmt(gridMax)) + '</b>).');
+      }
       $('note').innerHTML = bits.join(' ');
 
       // Swapping would put Industry on the rows, where it has no entry in the
@@ -909,6 +992,9 @@
       $('measure').innerHTML = Object.keys(MEASURES).map((k) =>
         '<option value="' + k + '"' + (k === measure ? ' selected' : '') + '>' +
         esc(MEASURES[k].label) + '</option>').join('');
+      $('heat').innerHTML = Object.keys(HEATS).map((k) =>
+        '<option value="' + k + '"' + (k === heat ? ' selected' : '') + '>' +
+        esc(HEATS[k]) + '</option>').join('');
       $('rowDim').innerHTML = opts(ROW_DIMS, rowKey);
       $('colDim').innerHTML = opts(Object.keys(DIMS), colKey);
     }
@@ -938,6 +1024,9 @@
     // table answering a different question, and dropping the reader's place
     // would make comparing the two answers a chore.
     $('measure').addEventListener('change', () => { measure = $('measure').value; render(); });
+    // Shading is a way of LOOKING at the same grid, so it keeps the axes, the
+    // open sector and the selection — nothing it changes is about the data.
+    $('heat').addEventListener('change', () => { heat = $('heat').value; render(); });
 
     $('swap').addEventListener('click', () => {
       // Industry has no Rows entry, so a swap that would put it there is
