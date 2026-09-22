@@ -3749,9 +3749,12 @@ app.get('/api/refresh-profiles', requireAdmin, route(async (req, res) => {
   const runId = (running && running.runId) || asked;
   const universe = await readUniverse();
   const started = Date.now();
+  const T = phaseTimer();
   const { r: profiles, m } = await metered(() => ensureProfiles(universe, PROFILE_CAP_ARCHIVE_ROUND));
+  T.mark('profiles');
   const loaded = universe.filter((sym) => profiles[sym] && profiles[sym].fetchedAt).length;
-  await recordRound(runId, { archivePrices: true }, m, Date.now() - started, { loaded, total: universe.length });
+  await recordRound(runId, { archivePrices: true }, m, Date.now() - started,
+    { loaded, total: universe.length, phases: T.steps() });
   // Progress only: the run is closed by the rebuild round, not here.
   if (running) await noteRefreshProgress(loaded, universe.length);
   // The flag, with this round's counts folded in, so a light round is a DROP-IN
@@ -3789,12 +3792,15 @@ app.get('/api/refresh-prices', requireAdmin, route(async (req, res) => {
   }
   const slice = opts.priceSlice;
   const deadline = Date.now() + PRICE_PHASE_MS;
+  const T = phaseTimer();
   const { r: out, m } = await metered(async () => {
     // SHALLOW for everyone, then repair. The alternative — deciding deep vs
     // light by loading each symbol's archive — is the 470-day read this round
     // exists to avoid; the newest stored date per symbol is one indexed seek.
     const newest = await store.barsMaxDates(slice);
+    T.mark('archive-dates');
     const light = await pullPricesFor(slice, () => `&outputsize=${LIGHT_BARS}`, deadline);
+    T.mark('prices');
     if (light.refusal) return light.refusal;
     const got = light.got;
     const dOf = (b) => String(b.datetime).slice(0, 10);
@@ -3811,19 +3817,23 @@ app.get('/api/refresh-prices', requireAdmin, route(async (req, res) => {
     if (stragglers.length) {
       console.warn(`prices: ${stragglers.length} symbol(s) did not meet the archive, re-pulling deep`);
       const redo = await pullPricesFor(stragglers, () => `&outputsize=${DEEP_BARS}`, deadline);
+      T.mark('deep-repair');
       if (redo.refusal) return redo.refusal;
       Object.assign(got, redo.got);
     }
     const bars = await persistBars(slice, got);
+    T.mark('persist-bars');
     // Only the symbols the provider actually SERVED are stamped as pulled —
     // a chunk that failed must not claim to have been priced.
     const served = Object.keys(got).filter(
       (sym) => got[sym] && Array.isArray(got[sym].values) && got[sym].values.length);
     if (served.length) await store.notePricePull(served).catch(() => {});
+    T.mark('price-clock');
     return { ok: true, bars, served: served.length };
   });
   if (!out.ok) {
-    await recordRound(runId, opts, m, Date.now() - started, { error: out.error, refused: out.status === 429 });
+    await recordRound(runId, opts, m, Date.now() - started,
+      { error: out.error, refused: out.status === 429, phases: T.steps() });
     return res.status(out.status).json({ error: out.error });
   }
   // Advances `priced`, and stamps prices_at once the last slice is in — which
@@ -3831,7 +3841,7 @@ app.get('/api/refresh-prices', requireAdmin, route(async (req, res) => {
   await notePriceRound(opts);
   const after = await readRefreshState();
   await recordRound(runId, opts, m, Date.now() - started,
-    { loaded: opts.pricedAfter, total: opts.priceTotal });
+    { loaded: opts.pricedAfter, total: opts.priceTotal, phases: T.steps() });
   res.json({ priced: opts.pricedAfter, total: opts.priceTotal,
     served: out.served, done: !after || !!after.pricesAt, runId, refreshing: after });
 }));
@@ -3938,6 +3948,11 @@ function phaseTimer() {
   return {
     mark(name) { t[name] = (t[name] || 0) + (Date.now() - last); last = Date.now(); },
     skip() { last = Date.now(); },
+    // The RAW map, for storing against the round. `line()` drops anything under
+    // 50ms because a log line reading "score 0.0s" is noise — but a drill-down
+    // wants every step, including the ones that cost nothing, since "this step
+    // was free" is itself an answer.
+    steps() { return { ...t }; },
     line() {
       return Object.entries(t).filter(([, ms]) => ms >= 50)
         .map(([k, ms]) => `${k} ${(ms / 1000).toFixed(1)}s`).join(' · ');
@@ -4439,11 +4454,12 @@ async function computeStocks(asOf, opts = {}) {
     }
 
     const line = T.line();
+    const steps = T.steps();
     if (line) console.log(`refresh phases: ${line}`);
     // Also on the payload: Vercel's log view does not show stdout for a
     // function, and the question "which phase is slow" comes up per round.
     return { ok: true, payload: { stocks, portfolios: portfolioNames, asOf,
-      phases: line || null, updatedAt: new Date().toISOString() } };
+      phases: line || null, phaseSteps: steps, updatedAt: new Date().toISOString() } };
   } catch (err) {
     return { ok: false, status: 502, error: `Failed to reach Twelve Data: ${netReason(err)}` };
   }
@@ -7698,7 +7714,7 @@ async function recordRound(runId, opts, m, ms, extra = {}) {
   await trackSafe(store.noteRound(runId, {
     ms, credits: m.credits, profiles: m.profiles, profileFails: m.profileFails,
     priceSource, pricedLive, loaded: extra.loaded, total: extra.total,
-    error: extra.error, refused: extra.refused,
+    error: extra.error, refused: extra.refused, phases: extra.phases,
   }));
 }
 
@@ -8559,7 +8575,8 @@ app.all('/api/cron/intraday', route(async (req, res) => {
   const fin = await finishLiveRefresh(r.payload, { startedAt, actor, runId });
   // the market check's credit belongs to this run too
   m.credits += market.known ? 1 : 0;
-  await recordRound(runId, opts, m, ms, { loaded: fin.loaded, total: fin.total, rows: r.payload.stocks.length });
+  await recordRound(runId, opts, m, ms, { loaded: fin.loaded, total: fin.total,
+    rows: r.payload.stocks.length, phases: r.payload.phaseSteps });
   await trackSafe(store.finishRun(runId, { status: 'complete', loaded: fin.loaded, total: fin.total }));
   console.log(`intraday: refreshed ${r.payload.stocks.length} symbols at ${clock.label} New York`);
   res.json({ ok: true, ran: true, runId, ny: clock.label, market, updatedAt: r.payload.updatedAt });
@@ -8633,7 +8650,8 @@ app.post('/api/cron/refresh', route(async (req, res) => {
   }
   await notePriceRound(opts);
   const fin = await finishLiveRefresh(r.payload);
-  await recordRound(runId, opts, m, ms, { loaded: fin.loaded, total: fin.total, rows: r.payload.stocks.length });
+  await recordRound(runId, opts, m, ms, { loaded: fin.loaded, total: fin.total,
+    rows: r.payload.stocks.length, phases: r.payload.phaseSteps });
   res.json({ ok: true, runId, ...fin });
 }));
 
@@ -8708,7 +8726,7 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     const rowsNow = r.payload.stocks || [];
     await recordRound(runId, opts, m, ms, {
       loaded: rowsNow.filter((x) => x.profileFetchedAt != null).length,
-      total: rowsNow.length, rows: rowsNow.length });
+      total: rowsNow.length, rows: rowsNow.length, phases: r.payload.phaseSteps });
     const fin = await finishLiveRefresh(r.payload, { startedAt, actor, runId: plainRun ? runId : null });
     if (plainRun) await trackSafe(store.finishRun(runId, { status: 'complete', loaded: fin.loaded, total: fin.total }));
     return res.json({ ...r.payload, runId, refreshing: await readRefreshState() });

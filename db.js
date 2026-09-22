@@ -553,6 +553,11 @@ function parseAddColumn(stmt) {
 }
 
 const ADDED_COLUMNS = [
+  // Each step of a round and what it cost, as JSON — so a slow round can be
+  // explained after the fact. The phases used to ride the HTTP response only,
+  // which meant the one round you most wanted to understand, the one that
+  // timed out, was exactly the one whose timings were destroyed with it.
+  'alter table refresh_rounds add column phases text',
   'alter table visitors add column user_email text',
   // How long the operation took, in milliseconds — null when nothing timed it.
   // WHOSE clock depends on the kind, and there is deliberately no second column
@@ -1389,12 +1394,17 @@ async function noteRound(runId, rd) {
   await db.batch([
     {
       sql: `insert into refresh_rounds (run_id, n, at, ms, credits, profiles, profile_fails,
-              price_source, priced_live, loaded, total, error)
-            select ?, coalesce(max(n), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+              price_source, priced_live, loaded, total, error, phases)
+            select ?, coalesce(max(n), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
               from refresh_rounds where run_id = ?`,
       args: [runId, now, rd.ms ?? null, rd.credits ?? 0, rd.profiles ?? 0, rd.profileFails ?? 0,
         rd.priceSource || null, rd.pricedLive ?? 0, rd.loaded ?? null, rd.total ?? null,
-        rd.error ? String(rd.error).slice(0, 300) : null, runId],
+        rd.error ? String(rd.error).slice(0, 300) : null,
+        // Capped like every other free-form column here: a step map is ours,
+        // but the column must not become somewhere unbounded text can land.
+        rd.phases && Object.keys(rd.phases).length
+          ? JSON.stringify(rd.phases).slice(0, 2000) : null,
+        runId],
     },
     {
       sql: `update refresh_runs set rounds = rounds + 1, credits = credits + ?,
@@ -1491,7 +1501,8 @@ async function readRun(id) {
   const run = runFromRow(r.rows[0]);
   run.reportHtml = r.rows[0].report_html || null;
   const rr = await db.execute({
-    sql: `select n, at, ms, credits, profiles, profile_fails, price_source, priced_live, loaded, total, error
+    sql: `select n, at, ms, credits, profiles, profile_fails, price_source, priced_live,
+                 loaded, total, error, phases
             from refresh_rounds where run_id = ? order by n`,
     args: [id],
   });
@@ -1500,6 +1511,9 @@ async function readRun(id) {
     n: num(x.n), at: num(x.at), ms: num(x.ms), credits: num(x.credits), profiles: num(x.profiles),
     profileFails: num(x.profile_fails), priceSource: x.price_source || null,
     pricedLive: num(x.priced_live), loaded: num(x.loaded), total: num(x.total), error: x.error || null,
+    // Stored as JSON; a round written before the column existed simply has
+    // none, and the page says so rather than drawing an empty drill-down.
+    phases: (() => { try { return x.phases ? JSON.parse(x.phases) : null; } catch (e) { return null; } })(),
   }));
   return run;
 }
