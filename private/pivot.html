@@ -73,7 +73,12 @@
     /* A cell with stocks in it is a button; an empty one is not. */
     table.pv td.cell { cursor: pointer; }
     table.pv td.cell:hover { color: var(--accent); }
-    table.pv td.cell.open { color: var(--accent); background: rgba(124, 156, 255, 0.10); }
+    /* Exactly ONE cell is lit at a time, and it is the only thing tying the
+       child table to the grid above it — so it is marked harder than the old
+       inline drill needed to be: a filled ground AND an accent outline drawn
+       inside the cell, since a border would move every column by a pixel. */
+    table.pv td.cell.sel { color: var(--accent); background: rgba(124, 156, 255, 0.16);
+                           box-shadow: inset 0 0 0 1px var(--accent); }
     table.pv td.blankdim, table.pv th.blankdim { color: var(--faint); font-style: italic; }
     /* A row header's range sits beside its name, quieter, so "Mid-Large" never
        has to be remembered. Mono, because it is a pair of numbers. */
@@ -103,28 +108,58 @@
     table.pv tbody tr.kid:hover th, table.pv tbody tr.kid:hover td {
       background: rgba(124, 156, 255, 0.085); }
 
-    /* The expansion: one row spanning the table, under the row that was clicked. */
-    tr.drill td { background: rgba(124, 156, 255, 0.045); text-align: left; white-space: normal;
-                  padding: 12px 14px 14px; font-family: var(--sans); }
-    .drill h4 { margin: 0 0 9px; font-size: 12px; font-weight: 600; color: var(--muted); }
-    .drill h4 b { color: var(--text); }
-    .dlist { display: flex; flex-wrap: wrap; gap: 6px; }
-    .dlist a { display: inline-flex; align-items: baseline; gap: 7px; padding: 5px 10px;
-               border-radius: 999px; border: 1px solid var(--hair); background: var(--surface);
-               text-decoration: none; color: var(--text); font-size: 12px; }
-    .dlist a:hover { border-color: var(--hair-2); }
-    .dlist .sym { font: 600 11.5px var(--mono); }
-    .dlist .nm { color: var(--muted); max-width: 22ch; overflow: hidden;
-                 text-overflow: ellipsis; white-space: nowrap; }
-    .dlist .mv { font: 500 11px var(--mono); }
-    .dlist .vd { font-size: 10.5px; color: var(--faint); }
+    /* ---- the child table -------------------------------------------------
+       A cell no longer expands in place; it selects, and the stocks are drawn
+       as a real table below the grid (2026-09-21, owner's request: "think of
+       this as a master / child relationship, this way in the child table we
+       can show more fields"). Inline chips could carry four values; this
+       carries fifteen.
+
+       Both panes keep their own scroll and are capped so BOTH stay on screen
+       at once — which is the point of master/child. You have to be able to see
+       which cell is lit while reading its stocks; a child table you must
+       scroll away from the grid to read is just a worse screener.
+
+       THE CAPS ARE MEASURED, NOT GUESSED, and the fallbacks below are only
+       what applies before the first measurement. Two fixed percentages cannot
+       do this: 40dvh + 44dvh plus this page's own furniture — masthead, intro,
+       pickers, note, caption — overflowed a 1000px window by 35px, and by more
+       on a laptop. `sizePanes()` splits whatever is actually left. */
+    body.picked .gridwrap { max-height: var(--gridcap, 40dvh); }
+    .detail { margin: 20px 0 0; }
+    .detail .dhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+                     margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+    .detail .dhead b { color: var(--text); font-weight: 600; }
+    .detail .dhead .spacer { flex: 1 1 0; }
+    .detail .dhead .crumb { font: 500 12px var(--mono); color: var(--text); }
+    .detail .dhead .crumb .sep { color: var(--faint); margin: 0 5px; }
+    .detailwrap { overflow: auto; max-height: var(--detcap, 44dvh); border-radius: var(--r-core); }
+    table.ch { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+    table.ch th, table.ch td { padding: 7px 11px; font-size: 12.5px; white-space: nowrap;
+                               border-bottom: 1px solid var(--hair); }
+    table.ch thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-2);
+                        color: var(--faint); font-weight: 500; text-align: right;
+                        text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px;
+                        cursor: pointer; user-select: none; }
+    table.ch thead th.l { text-align: left; }
+    table.ch thead th:hover { color: var(--text); }
+    table.ch thead th.on { color: var(--accent); }
+    table.ch td { text-align: right; font-family: var(--mono);
+                  font-variant-numeric: tabular-nums; color: var(--text); }
+    table.ch td.l { text-align: left; font-family: var(--sans); }
+    table.ch tbody tr:hover td { background: rgba(255, 255, 255, 0.022); }
+    table.ch .symlink { font: 600 12px var(--mono); color: var(--text); text-decoration: none; }
+    table.ch .symlink:hover { color: var(--accent); text-decoration: underline; }
+    table.ch td.nm { color: var(--muted); max-width: 26ch; overflow: hidden;
+                     text-overflow: ellipsis; }
+    table.ch td.na { color: var(--faint); }
 
     .msg { padding: 40px 0; color: var(--muted); font-size: 13px; }
     .err { color: var(--red); }
     @media (max-width: 720px) {
       .page { padding: 0 14px; }
       .pick select { min-width: 150px; }
-      .gridwrap { max-height: none; }
+      .gridwrap, body.picked .gridwrap, .detailwrap { max-height: none; }
     }
   </style>
 </head>
@@ -141,7 +176,8 @@
     </header>
     <p class="sub">
       The screen counted by two dimensions at once. Every number is a count of stocks or their
-      total market cap; click a cell to see which ones. Nothing here is fetched twice — it is the same
+      total market cap; click a cell and the stocks behind it are listed in full underneath.
+      Nothing here is fetched twice — it is the same
       snapshot the screener reads, cross-tabulated in the browser.
     </p>
 
@@ -154,6 +190,7 @@
 
     <p class="note" id="note"></p>
     <div id="out"><div class="msg">Loading the screen…</div></div>
+    <div class="detail" id="detail"></div>
   </main>
 
   <script>
@@ -263,7 +300,38 @@
     let stocks = [];
     let rowKey = 'sector';
     let colKey = 'advice';
-    const open = new Set();          // "r|c" of the drilled cells; "sub:i|c" on a child row
+    // ONE selection, not a set. A cell no longer expands in place: it becomes
+    // the master, and the stocks are drawn in the child table below. Several
+    // open drills made sense when each sat under its own row; with one table
+    // underneath, a second selection would have nowhere to go.
+    //   { key, r, c, sub }  — `sub` is the parent sector when an industry row
+    //   was clicked, so the crumb can read "Technology › Semiconductors".
+    let picked = null;
+
+    // The child table's columns. A FIXED set, the owner's call — fifteen
+    // fields, against the four an inline chip could carry. `l` left-aligns a
+    // word, `mv` colours a percentage by sign, `f` formats.
+    const DETAIL_COLS = [
+      { k: 'symbol',        t: 'Symbol',     l: 1, link: 1 },
+      { k: 'shortName',     t: 'Name',       l: 1, nm: 1, f: (s) => s.shortName || s.name || '' },
+      { k: 'capBand',       t: 'Size',       l: 1 },
+      { k: 'marketCap',     t: 'Market cap', f: (s) => fmtMoney(s.marketCap) },
+      { k: 'price',         t: 'Price',      f: (s) => (s.price == null ? null : '$' + Number(s.price).toFixed(2)) },
+      { k: 'todayPct',      t: 'Today',      mv: 1 },
+      { k: 'oneWeekPct',    t: '1W',         mv: 1 },
+      { k: 'oneMonthPct',   t: '1M',         mv: 1 },
+      { k: 'oneYearPct',    t: '1Y',         mv: 1 },
+      { k: 'sector',        t: 'Sector',     l: 1 },
+      { k: 'industry',      t: 'Industry',   l: 1 },
+      { k: 'action',        t: 'Advice',     l: 1 },
+      { k: 'actionTrend',   t: 'Trend',      l: 1 },
+      { k: 'actionCushion', t: 'Cushion',    f: (s) => (s.actionCushion == null ? null : Number(s.actionCushion).toFixed(2) + 'σ') },
+      { k: 'overallRating', t: 'Overall' },
+    ];
+    // Biggest first, because "who is in this bucket" is answered by the names
+    // that carry it. Every column is sortable, so this is only a starting point.
+    let dSort = 'marketCap';
+    let dDir = -1;
     // ONE sector open at a time (the owner's call). Two hierarchies on screen
     // and the eye stops knowing which child rows belong to which parent.
     let expanded = null;
@@ -432,25 +500,138 @@
       return (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
     }
 
-    function drillHtml(list, rv, cv) {
-      const rows = list.slice().sort((a, b) => (b.todayPct || 0) - (a.todayPct || 0));
-      return '<h4>' + esc(rv) + ' <span style="color:var(--faint)">·</span> ' + esc(cv) +
-        ' — <b>' + rows.length + '</b> ' + (rows.length === 1 ? 'stock' : 'stocks') +
-        // With money on screen the cell shows a total, so the list has to name
-        // it too, or the number above cannot be checked against what is under it.
-        (measure === 'count' ? '' : ', <b>' + esc(M().fmt(sumOf(rows))) + '</b> in total') + '</h4>' +
-        '<div class="dlist">' + rows.map((s) =>
-          '<a href="/stock/' + esc(s.symbol) + '" target="_blank" rel="noopener" title="' +
-          esc((s.name || '') + (s.action ? ' · ' + s.action : '')) + '">' +
-          '<span class="sym">' + esc(s.symbol) + '</span>' +
-          '<span class="nm">' + esc(s.shortName || s.name || '') + '</span>' +
-          '<span class="mv ' + moveCls(s.todayPct) + '">' + esc(fmtMove(s.todayPct)) + '</span>' +
-          (s.action ? '<span class="vd">' + esc(s.action) + '</span>' : '') +
-          '</a>').join('') + '</div>';
+    // What a column shows for one stock, and what it SORTS on — deliberately
+    // the same reader, because a column that sorts on something other than the
+    // number printed in it is the quietest way to make a table lie.
+    const dRaw = (col, s) => s[col.k];
+    function dText(col, s) {
+      const v = col.f ? col.f(s) : (col.mv ? fmtMove(dRaw(col, s)) : dRaw(col, s));
+      return v == null || v === '' ? null : String(v);
+    }
+
+    function detailRows(list) {
+      const col = DETAIL_COLS.find((c) => c.k === dSort) || DETAIL_COLS[0];
+      // Blanks sort last in BOTH directions. A missing market cap is not the
+      // smallest one — the same rule the screener's own columns follow.
+      return list.slice().sort((a, b) => {
+        const x = dRaw(col, a), y = dRaw(col, b);
+        const xn = x == null || x === '', yn = y == null || y === '';
+        if (xn || yn) return xn && yn ? 0 : xn ? 1 : -1;
+        if (typeof x === 'number' && typeof y === 'number') return (x - y) * dDir;
+        return String(x).localeCompare(String(y)) * dDir;
+      });
+    }
+
+    // BOTH PANES ON SCREEN AT ONCE is the whole point of master/child, and two
+    // fixed percentages cannot deliver it — measured, 40dvh + 44dvh ran 35px
+    // past the fold on a 1000px window. So the caps are derived from what is
+    // genuinely left below the grid and split between the two, which holds at
+    // any viewport height and re-derives on resize.
+    function sizePanes() {
+      const root = document.documentElement.style;
+      const clear = () => { root.removeProperty('--gridcap'); root.removeProperty('--detcap'); };
+      const grid = $('out').querySelector('.gridwrap');
+      if (!picked || !grid) return clear();
+      // Scroll-independent on purpose: how far down the DOCUMENT the grid
+      // starts, not where it happens to be sitting in the viewport right now.
+      const above = grid.getBoundingClientRect().top + window.scrollY;
+      const head = $('detail').querySelector('.dhead');
+      const caption = head ? head.getBoundingClientRect().height + 10 : 40;
+      const budget = window.innerHeight - above - caption - 26;
+      // Below this there is genuinely no room for two panes, and squeezing them
+      // into 120px each is worse than letting the page scroll. The narrow-screen
+      // rule already takes this decision on a phone; this is the short-window
+      // case on a desktop.
+      if (budget < 300) return clear();
+      root.setProperty('--gridcap', Math.round(budget * 0.42) + 'px');
+      root.setProperty('--detcap', Math.round(budget * 0.58) + 'px');
+    }
+    window.addEventListener('resize', sizePanes);
+
+    // The child half of the master/child pair. It is drawn from the SAME list
+    // the cell summed, so the count and the total under the crumb can always be
+    // checked against the number in the cell above.
+    function paintDetail(p) {
+      const host = $('detail');
+      if (!picked) {
+        host.innerHTML = '';
+        document.body.classList.remove('picked');
+        sizePanes();
+        return;
+      }
+      document.body.classList.add('picked');
+      const list = picked.list;
+      const crumb = (picked.sub ? esc(picked.sub) + '<span class="sep">›</span>' : '') +
+        esc(picked.r) + '<span class="sep">·</span>' + esc(picked.c);
+      let h = '<div class="dhead"><span class="crumb">' + crumb + '</span>' +
+        '<span><b>' + list.length + '</b> ' + (list.length === 1 ? 'stock' : 'stocks') +
+        // With money on screen the cell shows a total, so the child names it
+        // too — otherwise the figure above cannot be reconciled with the rows.
+        (measure === 'count' ? '' : ', <b>' + esc(M().fmt(sumOf(list))) + '</b> in total') +
+        '</span><span class="spacer"></span>' +
+        '<button class="btn quiet" id="dclear" type="button">Clear selection</button></div>';
+      h += '<div class="bezel card"><div class="core"><div class="detailwrap"><table class="ch"><thead><tr>';
+      for (const c of DETAIL_COLS) {
+        h += '<th data-k="' + esc(c.k) + '" class="' + (c.l ? 'l' : '') +
+          (c.k === dSort ? ' on' : '') + '" title="Sort by ' + esc(c.t) + '">' + esc(c.t) +
+          (c.k === dSort ? (dDir < 0 ? ' ↓' : ' ↑') : '') + '</th>';
+      }
+      h += '</tr></thead><tbody>';
+      for (const s of detailRows(list)) {
+        h += '<tr>';
+        for (const c of DETAIL_COLS) {
+          const t = dText(c, s);
+          const cls = [c.l ? 'l' : '', c.nm ? 'nm' : '', t == null ? 'na' : '',
+            c.mv ? moveCls(dRaw(c, s)) : ''].filter(Boolean).join(' ');
+          h += '<td' + (cls ? ' class="' + cls + '"' : '') + '>' +
+            (t == null ? '—'
+              : c.link
+                ? '<a class="symlink" href="/stock/' + esc(s.symbol) + '" target="_blank" ' +
+                  'rel="noopener" title="' + esc(s.name || s.symbol) + '">' + esc(t) + '</a>'
+                : esc(t)) + '</td>';
+        }
+        h += '</tr>';
+      }
+      h += '</tbody></table></div></div></div>';
+      host.innerHTML = h;
+      // After the caption exists, so its real height is in the budget.
+      sizePanes();
+
+      $('dclear').addEventListener('click', () => { picked = null; render(); });
+      host.querySelectorAll('thead th').forEach((th) => {
+        th.addEventListener('click', () => {
+          const k = th.dataset.k;
+          // A second click on the same column reverses it; a new column starts
+          // the way that column reads best — biggest first for a number, A-Z
+          // for a word, which is what nobody has to be told twice.
+          if (dSort === k) dDir = -dDir;
+          else { dSort = k; dDir = typeof dRaw({ k }, list[0] || {}) === 'number' ? -1 : 1; }
+          paintDetail(p);
+        });
+      });
+    }
+
+    // The child table is drawn from the grid that was just built, not from the
+    // list captured when the cell was clicked — so changing the MEASURE keeps
+    // the selection and redraws it against the new totals, and a selection whose
+    // cell no longer exists clears itself instead of showing a stale list.
+    function resolvePick(p) {
+      if (!picked) return;
+      const k = picked.key;
+      const sub = k.indexOf('sub:') === 0;
+      const rest = sub ? k.slice(4) : k;
+      const i = rest.lastIndexOf('|');
+      const a = rest.slice(0, i), c = rest.slice(i + 1);
+      const list = sub
+        ? (p.sub && p.sub.cells.get(a + '|' + c))
+        : p.cells.get(a + '|' + c);
+      if (!list || !list.length) { picked = null; return; }
+      picked.list = list;
     }
 
     function render() {
       const p = build();
+      resolvePick(p);
       const total = stocks.length;
       let h = '<div class="gridwrap"><table class="pv"><thead><tr>' +
         '<th class="rowhead">' + esc(p.rd.label) + ' ↓ &nbsp; ' + esc(p.cd.label) + ' →</th>';
@@ -472,25 +653,22 @@
       // stocks in it — drawing it as the empty dot would hide them, and the dot
       // is not clickable. An EMPTY cell is still left blank rather than printed
       // as 0: on a grid of sixty-odd cells the zeros are louder than the numbers.
-      const cellsFor = (listOf, openKey) => {
+      // `sub` is the parent sector on a child row and empty on a sector row; it
+      // rides the cell so the crumb can be built from the click alone, without
+      // the handler having to work out where in the hierarchy it landed.
+      const cellsFor = (listOf, openKey, label, sub) => {
         let s = '';
         for (const c of p.cKeys) {
           const list = listOf(c) || [];
+          const k = openKey(c);
           s += list.length
-            ? '<td class="cell' + (open.has(openKey(c)) ? ' open' : '') +
-              '" data-k="' + esc(openKey(c)) + '" title="' +
-              esc(list.length + (list.length === 1 ? ' stock' : ' stocks')) + '">' +
+            ? '<td class="cell' + (picked && picked.key === k ? ' sel' : '') +
+              '" data-k="' + esc(k) + '" data-r="' + esc(label) + '" data-c="' + esc(c) +
+              '" data-sub="' + esc(sub || '') + '" title="' +
+              esc(list.length + (list.length === 1 ? ' stock' : ' stocks') +
+                ' — click to list them below') + '">' +
               esc(M().fmt(sumOf(list))) + '</td>'
             : '<td class="zero">·</td>';
-        }
-        return s;
-      };
-      const drillsFor = (openKey, listOf, label) => {
-        let s = '';
-        for (const c of p.cKeys) {
-          if (!open.has(openKey(c))) continue;
-          s += '<tr class="drill"><td colspan="' + (p.cKeys.length + 2) + '">' +
-            drillHtml(listOf(c), label, c) + '</td></tr>';
         }
         return s;
       };
@@ -508,24 +686,21 @@
           esc(r) +
           (rangeOf(p.rd, r) ? '<span class="rng">' + esc(rangeOf(p.rd, r)) + '</span>' : '') +
           '</th>';
-        h += cellsFor((c) => p.cells.get(r + '|' + c), (c) => r + '|' + c);
+        h += cellsFor((c) => p.cells.get(r + '|' + c), (c) => r + '|' + c, r, '');
         h += '<td class="tot">' + esc(M().fmt(p.rowTot.get(r) || 0)) + '</td></tr>';
-        // Any drilled cell on this row, opened underneath it.
-        h += drillsFor((c) => r + '|' + c, (c) => p.cells.get(r + '|' + c) || [], r);
 
-        // Then this sector's industries, if it is the open one. Their own cells
-        // drill to stocks exactly like their parent's do — the `sub:` prefix is
-        // what keeps the two sets of keys apart, so a sector and an industry
-        // that happened to share a name could never share a drill.
+        // Then this sector's industries, if it is the open one. Their cells
+        // select exactly like their parent's do — the `sub:` prefix is what
+        // keeps the two sets of keys apart, so a sector and an industry that
+        // happened to share a name could never share a selection.
         if (isOpen) {
           for (const ind of p.sub.keys) {
             const at = (c) => p.sub.cells.get(ind + '|' + c) || [];
             const ok = (c) => 'sub:' + ind + '|' + c;
             h += '<tr class="kid"><th class="' + (ind === BLANK ? 'blankdim' : '') + '">' +
               esc(ind) + '</th>';
-            h += cellsFor(at, ok);
+            h += cellsFor(at, ok, ind, r);
             h += '<td class="tot">' + esc(M().fmt(p.sub.tot.get(ind) || 0)) + '</td></tr>';
-            h += drillsFor(ok, at, ind);
           }
         }
       }
@@ -612,7 +787,12 @@
       $('out').querySelectorAll('td.cell').forEach((td) => {
         td.addEventListener('click', () => {
           const k = td.dataset.k;
-          if (open.has(k)) open.delete(k); else open.add(k);
+          // Clicking the lit cell clears it; clicking another REPLACES it. One
+          // child table cannot show two cells, and a selection that accumulated
+          // would have nowhere to put the second.
+          picked = picked && picked.key === k ? null : {
+            key: k, r: td.dataset.r, c: td.dataset.c, sub: td.dataset.sub || '', list: [],
+          };
           render();
         });
       });
@@ -620,13 +800,14 @@
         th.addEventListener('click', () => {
           const sec = th.dataset.sec;
           expanded = expanded === sec ? null : sec;
-          // Drop every child drill on the way. Those rows are about to stop
-          // existing, and a key left in `open` would silently re-open a stock
-          // list the next time any sector was expanded.
-          for (const k of [...open]) if (k.indexOf('sub:') === 0) open.delete(k);
+          // A selection on a child row is about to stop existing, so it goes
+          // with the rows. A selection on a SECTOR row survives — collapsing
+          // the hierarchy says nothing about the parent's own cell.
+          if (picked && picked.key.indexOf('sub:') === 0) picked = null;
           render();
         });
       });
+      paintDetail(p);
     }
 
     function fillPicks() {
@@ -642,7 +823,7 @@
 
     // Any change of axis drops both expansions: the keys in them name values of
     // a dimension that is no longer on screen.
-    function reset() { open.clear(); expanded = null; fillPicks(); render(); }
+    function reset() { picked = null; expanded = null; fillPicks(); render(); }
 
     // Two of the same dimension is a diagonal and nothing else, so the other
     // picker steps aside rather than the page drawing a useless grid. It steps
