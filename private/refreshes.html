@@ -625,14 +625,15 @@
             },
             onWait: (why) => {
               if (why === 'refused') drive(`<b>${name}:</b> the API refused a round (rate limit) — retrying in a minute.`, 'warn');
-              // Only a Fast refresh has this step: every profile is in, and the
-              // table is being built from them now.
+              // Fast refresh AND Fill missing have this step: their rounds
+              // fetch profiles and nothing else, so the table is built from
+              // them once, here, at the end.
               if (why === 'rebuild') drive('<b>Every profile is in — rebuilding the table…</b> a few seconds.');
             },
           });
           const said = {
             done: [`<b>${name} finished.</b> Every stock has its company data` +
-              (fast ? ', and the table has been rebuilt from it' : '') + '. The report email is on its way.', ''],
+              (fast || fill ? ', and the table has been rebuilt from it' : '') + '. The report email is on its way.', ''],
             nothing: ['<b>Nothing missing</b> — every stock already has complete company data. Nothing was started.', ''],
             stopped: [`<b>${name} was stopped.</b> What was pulled is kept, and the report says how far it got.`, 'warn'],
             gaveup: [`<b>${name} ended before every stock loaded</b> — see the run below for the rounds and what is left.` +

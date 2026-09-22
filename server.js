@@ -3722,7 +3722,12 @@ app.get('/api/refresh-profiles', requireAdmin, route(async (req, res) => {
   await recordRound(runId, { archivePrices: true }, m, Date.now() - started, { loaded, total: universe.length });
   // Progress only: the run is closed by the rebuild round, not here.
   if (running) await noteRefreshProgress(loaded, universe.length);
-  res.json({ loaded, total: universe.length, done: loaded >= universe.length, runId });
+  // The flag, with this round's counts folded in, so a light round is a DROP-IN
+  // for the pages that draw progress from an ordinary one. Without it the
+  // screener's Fill missing drew `refreshing: undefined` every round and blanked
+  // its own banner for the length of the run.
+  res.json({ loaded, total: universe.length, done: loaded >= universe.length, runId,
+    refreshing: running ? { ...running, loaded, total: universe.length } : null });
 }));
 
 // The client calls this when its backfill loop finishes or gives up, so the

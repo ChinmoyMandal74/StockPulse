@@ -19,7 +19,10 @@
   const STAGNANT_LIMIT = 3;          // rounds without progress before giving up
 
   // mode: 'all' (Refresh all), 'missing' (Fill missing) or 'fast' (Fast
-  // refresh — profile rounds, then ONE rebuild at the end).
+  // refresh). Fill missing and Fast refresh both run LIGHT rounds — profiles
+  // only, then ONE rebuild at the end; see the note in run(). Refresh all
+  // keeps the heavy round on purpose: it is the "everything, visibly" sweep,
+  // and its whole point is that the table moves while you watch.
   // hooks: onStart(started), onRound({ loaded, total, rounds, data }),
   //        onWait(reason) — 'refused' or 'gap'.
   // Resolves { outcome, started, data } where outcome is
@@ -30,6 +33,23 @@
   async function run(mode, api, hooks = {}) {
     const fill = mode === 'missing';
     const fast = mode === 'fast';
+    // THE ROUND'S SHAPE IS A SEPARATE DECISION FROM THE MODE, and until
+    // 2026-09-22 it was not: `fast` chose both, so Fill missing was stuck with
+    // the expensive round. The two narrow different things and they multiply —
+    // the mode decides WHICH profiles are pulled (Fill missing expires only the
+    // gaps), a light round decides what pulling them COSTS.
+    //
+    // Measured on run 66, at 742 stocks: an ordinary round reads a 650-day bar
+    // window across the whole universe, rescores momentum, re-runs advice and
+    // rewrites the 1.3MB snapshot — 101s median, 233s worst — to fold in the
+    // seven profiles it fetched. Forty rounds took 2h28m and still did not
+    // finish, because nobody keeps a tab open that long: seven of the last
+    // eight runs were swept `abandoned` having lost nothing at all.
+    //
+    // A light round fetches the same seven profiles and does none of the rest;
+    // the table is built once, after the last one. `ensureProfiles` is shared,
+    // so the two shapes pull exactly the same stocks — only the cost differs.
+    const light = fast || fill;
     const sleep = hooks.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
     let started = null;
     let data = null;
@@ -53,9 +73,9 @@
       let stagnant = 0;
       while (rounds < budget && refusals < REFUSALS_ALLOWED) {
         try {
-          // A fast round fetches profiles and nothing else; the table is built
-          // once, after the last one.
-          data = await api('GET', fast ? '/api/refresh-profiles?x=1' + runQ : '/api/stocks?refresh=1' + runQ);
+          // A light round fetches profiles and nothing else; the table is
+          // built once, after the last one.
+          data = await api('GET', light ? '/api/refresh-profiles?x=1' + runQ : '/api/stocks?refresh=1' + runQ);
         } catch (e) {
           refusals++;
           if (hooks.onWait) hooks.onWait('refused');
@@ -64,17 +84,19 @@
         }
         if (data && data.stopped) { outcome = 'stopped'; break; }
         rounds++;
-        // A fast round answers with the counts directly; an ordinary one
-        // answers with the table, and the counts come off its rows.
-        const total = fast ? (data.total || 0) : (data.stocks || []).length;
-        const loaded = fast ? (data.loaded || 0)
+        // A light round answers with the counts directly; an ordinary one
+        // answers with the table, and the counts come off its rows. Both count
+        // the SAME thing — a profile with a fetch time on it — which is what
+        // lets a run that expired its gaps to zero terminate correctly.
+        const total = light ? (data.total || 0) : (data.stocks || []).length;
+        const loaded = light ? (data.loaded || 0)
           : (data.stocks || []).filter((s) => s.profileFetchedAt != null).length;
         if (hooks.onRound) hooks.onRound({ loaded, total, rounds, data });
         if (total === 0 || loaded >= total) {
           outcome = 'done';
           // The one rebuild: scores, advice, the snapshot, the report and the
           // email all come from this round, the same way a Refresh all ends.
-          if (fast) {
+          if (light) {
             if (hooks.onWait) hooks.onWait('rebuild');
             data = await api('GET', '/api/stocks?refresh=1' + runQ);
           }
