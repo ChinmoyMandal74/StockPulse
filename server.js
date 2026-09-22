@@ -3785,12 +3785,19 @@ app.get('/api/refresh-prices', requireAdmin, route(async (req, res) => {
   const started = Date.now();
   const opts = await liveRefreshOpts();
   const universe = await readUniverse();
+  // `priceSlice: null` means "price EVERYTHING" — liveRefreshOpts' own
+  // convention, and what any universe smaller than PRICE_SLICE gets, since the
+  // first slice already covers it. Reading it as "nothing left to price" made
+  // this round answer `done` having priced nothing at all, and silently: the
+  // rebuild then serves yesterday's closes and the run is recorded complete.
+  // Invisible at 767 stocks against a 500 slice; it bites the moment the
+  // universe drops under the slice, which a ticker purge can do at any time.
+  const slice = opts.priceSlice || (opts.priceTotal != null ? universe : null);
   // Nothing left to price: say so rather than pulling the first slice again.
-  if (opts.archivePrices || !opts.priceSlice) {
+  if (opts.archivePrices || !slice) {
     return res.json({ priced: universe.length, total: universe.length, done: true, runId,
       refreshing: running });
   }
-  const slice = opts.priceSlice;
   const deadline = Date.now() + PRICE_PHASE_MS;
   const T = phaseTimer();
   const { r: out, m } = await metered(async () => {
@@ -3811,8 +3818,17 @@ app.get('/api/refresh-prices', requireAdmin, route(async (req, res) => {
     const stragglers = slice.filter((sym) => {
       const v = got[sym] && got[sym].values;
       if (!Array.isArray(v) || !v.length) return true;
+      // barsMaxDates answers with an OBJECT, `{ maxDate }`. This read the object
+      // itself — `String(have)` is '[object Object]', and '[object Ob' is never
+      // less than a date, so the STALENESS half of this guard had never once
+      // fired: only the no-archive-at-all case did. A symbol whose archive
+      // existed but sat behind the shallow window therefore fell through to
+      // persistBars, which reads "no overlap" as "rebuild from the fetch" —
+      // and twelve bars replaced years, which is the exact disaster the
+      // comment above says this guard prevents.
       const have = newest.get(sym);
-      return !have || String(have).slice(0, 10) < dOf(v[v.length - 1]);
+      const held = have && have.maxDate ? String(have.maxDate).slice(0, 10) : null;
+      return !held || held < dOf(v[v.length - 1]);
     });
     if (stragglers.length) {
       console.warn(`prices: ${stragglers.length} symbol(s) did not meet the archive, re-pulling deep`);
@@ -4561,9 +4577,11 @@ async function persistBars(symbols, series, T = null) {
   mark('bars-probe');
   const probeBySym = new Map(probes.map((x) => [x.sym, x]));
 
-  // Every write below is its own round trip, so count them: on this database a
-  // path's cost is its number of round trips, not its number of rows.
+  // Every write below is a round trip, so count them: on this database a path's
+  // cost is its number of round trips, not its number of rows.
   let inserted = 0, rewritten = 0, trips = 0;
+  // The steady-state upserts, collected across symbols and written once.
+  const pending = [];
   for (const [sym, v] of have) {
     const rows = v.map((b) => barRow(sym, b)).filter(Boolean);
     if (!rows.length) continue;
@@ -4585,6 +4603,11 @@ async function persistBars(symbols, series, T = null) {
     }
 
     if (full) {
+      // A REWRITE STAYS ITS OWN TRIP, deliberately. It is a delete followed by
+      // the inserts, and folding that into a batch shared with other symbols
+      // would put one symbol's delete beside another's inserts — the way to
+      // corrupt this archive. It is also the rare path: a split, or a symbol
+      // whose window does not meet what we hold.
       mark('bars-prep');
       await store.replaceBarsFor(sym, rows);
       trips++;
@@ -4597,10 +4620,22 @@ async function persistBars(symbols, series, T = null) {
     // Steady state: everything newer than what we hold, plus a short overlap so
     // a provisional close gets corrected.
     const at = rows.findIndex((r) => r.d === m.maxDate);
-    const slice = rows.slice(0, Math.min(rows.length, at + 1 + BAR_OVERLAP));
-    mark('bars-prep');
-    inserted += await store.upsertBars(slice);
-    trips++;
+    pending.push(...rows.slice(0, Math.min(rows.length, at + 1 + BAR_OVERLAP)));
+  }
+
+  // ONE BATCH ACROSS EVERY SYMBOL, not one per symbol. This was
+  // `await store.upsertBars(slice)` INSIDE the loop, so a 500-symbol round made
+  // 500 sequential round trips — measured in production (run 77) at ~210ms each
+  // and 104.8s of a 121.3s round, the single biggest step in the refresh. The
+  // rows were never the cost: the same round writes 2,400 rows cold and 48 in
+  // the steady state and took the same 8 trips either way. upsertBars already
+  // chunks at BAR_CHUNK statements, so this is ~6 trips for the whole universe.
+  // Safe to merge because every statement here is an idempotent upsert keyed on
+  // (symbol, d) — unlike the rewrite above, which deletes first.
+  mark('bars-prep');
+  if (pending.length) {
+    inserted += await store.upsertBars(pending);
+    trips += Math.ceil(pending.length / store.BAR_CHUNK);
     mark('bars-write');
   }
   return { inserted, rewritten, trips, symbols: have.length };

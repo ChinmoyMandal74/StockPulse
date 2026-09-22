@@ -3386,6 +3386,9 @@ module.exports = {
   barsOn,
   upsertBars,
   replaceBarsFor,
+  // Exported so a caller can report how many round trips a write actually
+  // cost, rather than guessing at the chunking.
+  BAR_CHUNK,
   readBars,
   readBarsFor,
   purgeSymbol,
