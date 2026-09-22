@@ -148,8 +148,20 @@
                   font-variant-numeric: tabular-nums; color: var(--text); }
     table.ch td.l { text-align: left; font-family: var(--sans); }
     table.ch tbody tr:hover td { background: rgba(255, 255, 255, 0.022); }
-    table.ch .symlink { font: 600 12px var(--mono); color: var(--text); text-decoration: none; }
-    table.ch .symlink:hover { color: var(--accent); text-decoration: underline; }
+    /* THE TICKER IS THE WAY OUT OF THIS TABLE, so it has to read as one before
+       the pointer arrives. It was --text, byte-identical to the plain numeric
+       cells beside it — a working link that nothing announced, which is the
+       same as no link at all. Accent, and it underlines on hover.
+
+       The screener's own .namelink deliberately does NOT colour, because 90
+       columns of blue would wreck that table; here it is ONE narrow column of
+       short tokens whose entire purpose is to be clicked, so the rule differs
+       on purpose rather than by oversight. */
+    table.ch .symlink { font: 600 12px var(--mono); color: var(--accent);
+                        text-decoration: none; }
+    table.ch .symlink:hover, table.ch .symlink:focus-visible {
+      color: #a8bcff; text-decoration: underline; }
+    table.ch tbody tr:hover .symlink { text-decoration: underline; }
     table.ch td.nm { color: var(--muted); max-width: 26ch; overflow: hidden;
                      text-overflow: ellipsis; }
     table.ch td.na { color: var(--faint); }
@@ -587,7 +599,8 @@
             (t == null ? '—'
               : c.link
                 ? '<a class="symlink" href="/stock/' + esc(s.symbol) + '" target="_blank" ' +
-                  'rel="noopener" title="' + esc(s.name || s.symbol) + '">' + esc(t) + '</a>'
+                  'rel="noopener" title="' + esc(s.name || s.symbol) +
+                  ' — open its page in a new tab">' + esc(t) + '</a>'
                 : esc(t)) + '</td>';
         }
         h += '</tr>';
