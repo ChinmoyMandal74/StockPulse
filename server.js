@@ -3591,6 +3591,99 @@ app.post('/api/portfolios/:name/tickers', requireAdmin, route(async (req, res) =
 }));
 
 // Take a ticker out of one portfolio. It stays in the screener.
+// Remove a PASTED LIST of stocks from the screener, data and all.
+//
+// DRY RUN BY DEFAULT — `commit: true` has to be sent explicitly, the same rule
+// purge-orphans.js follows for the same operation, and the UI cannot send it
+// until a preview has come back.
+//
+// The preview exists because of a hazard this project has already recorded:
+// free text splits into symbol-shaped tokens, and `not a ticker!` becomes NOT,
+// A and TICKER — and **A is Agilent**. On the ADD side that costs a wrong
+// stock in the screener. Here it would delete a real company's history, so the
+// preview names every company it matched and the count of recorded fundamentals
+// days each one would lose. Nothing about a symbol's LENGTH or SHAPE can tell a
+// header row from a ticker; only the name can.
+app.post('/api/universe/bulk-delete', requireAdmin, route(async (req, res) => {
+  const raw = Array.isArray(req.body?.symbols) ? req.body.symbols : [];
+  if (!raw.length) return res.status(400).json({ error: 'No symbols given.' });
+  if (raw.length > BULK_ADD_MAX) return res.status(400).json({ error: `At most ${BULK_ADD_MAX} at a time.` });
+  const commit = req.body?.commit === true;
+
+  const invalid = [];
+  const wanted = [];
+  const seen = new Set();
+  for (const r of raw) {
+    const sym = nasdaqToSymbol(r);
+    if (!SYMBOL_RE.test(sym)) { invalid.push(String(r).slice(0, 16)); continue; }
+    if (!seen.has(sym)) { seen.add(sym); wanted.push(sym); }
+  }
+
+  const universe = new Set(await readUniverse());
+  const found = wanted.filter((s) => universe.has(s));
+  // Shape-valid but not in the screener. Worth showing rather than ignoring:
+  // a pasted column of something else lands here, and a list that is mostly
+  // unmatched is the signal that the wrong column was copied.
+  const unknown = wanted.filter((s) => !universe.has(s));
+
+  const [names, fund, portfolios] = await Promise.all([
+    store.readNamesFull().catch(() => ({})),
+    store.fundamentalsDaysFor(found).catch(() => new Map()),
+    readPortfolios().catch(() => ({})),
+  ]);
+  const themesOf = (sym) => Object.keys(portfolios).filter((n) => (portfolios[n] || []).includes(sym));
+  const rows = found.map((sym) => {
+    const n = names[sym] || {};
+    const f = fund.get(sym) || null;
+    return {
+      symbol: sym,
+      // readNamesFull answers with `short`, not `shortName`. Getting that wrong
+      // would blank every company name in the preview — and the name IS the
+      // guard here, so it would quietly remove the only defence this screen has.
+      name: n.short || n.name || null,
+      themes: themesOf(sym),
+      fundDays: f ? f.days : 0,
+      fundFrom: f ? f.from : null,
+    };
+  });
+  const fundTotal = rows.reduce((a, r) => a + r.fundDays, 0);
+
+  if (!commit) {
+    return res.json({ dryRun: true, found: rows, unknown, invalid,
+      fundDays: fundTotal, max: BULK_ADD_MAX });
+  }
+
+  // ---- the destructive half ------------------------------------------------
+  const purged = [];
+  const failed = [];
+  for (const sym of found) {
+    try {
+      await store.removeFromUniverse(sym);
+      try {
+        purged.push(await store.purgeSymbol(sym));
+      } catch (err) {
+        // The removal stands even when the sweep fails — losing the edit
+        // because the cleanup broke would be worse, and purge-orphans.js
+        // collects what is left. The bars rule.
+        console.warn(`purge ${sym} failed (removed anyway): ${err.message}`);
+      }
+    } catch (err) {
+      failed.push(sym);
+      console.warn(`bulk delete: ${sym} failed: ${err.message}`);
+    }
+  }
+  const removed = found.filter((s) => !failed.includes(s));
+  // One activity row for the batch, capped, not one per symbol: the log is a
+  // record of who did what, not somewhere to put a 500-line list.
+  logAct(req, 'portfolio', 'bulk-remove:' + removed.length + ':' + removed.slice(0, 12).join(','));
+  const rowsGone = purged.reduce((a, p) => a + (p.total || 0), 0);
+  console.log(`bulk delete: ${removed.length} symbols, ${rowsGone.toLocaleString()} rows, ` +
+    `${fundTotal} recorded fundamentals days`);
+  res.json(await portfolioAnswer({
+    purged, removed, failed, unknown, invalid, fundDays: fundTotal, rowsGone,
+  }));
+}));
+
 app.delete('/api/portfolios/:name/tickers/:symbol', requireAdmin, route(async (req, res) => {
   const name = decodeURIComponent(req.params.name);
   const symbol = String(req.params.symbol || '').trim().toUpperCase();

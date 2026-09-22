@@ -37,6 +37,31 @@
     .said { font-size: 12px; color: var(--muted); margin: 9px 0 0; line-height: 1.55; min-height: 1em; }
     .said.err { color: var(--red); }
     .said.ok { color: var(--green); }
+    /* The destructive card is marked as one. A hairline rather than a fill:
+       it has to read as different from "Add many at once" at a glance without
+       shouting over the rest of the page. */
+    section.card.danger > .core { border: 1px solid rgba(251, 113, 133, 0.28); }
+    section.card.danger .lbl { color: var(--red); }
+    /* The preview list. The NAMES are the point — a reader checks these, not
+       the tickers — so they are --text while everything round them is quieter. */
+    .dellist { list-style: none; margin: 10px 0 0; padding: 0; max-height: 240px; overflow: auto;
+               border: 1px solid var(--hair); border-radius: 10px; }
+    .dellist li { display: block; padding: 5px 10px; font-size: 12.5px; color: var(--text);
+                  border-bottom: 1px solid var(--hair); }
+    .dellist li:last-child { border-bottom: 0; }
+    .dellist b { font: 600 12px var(--mono); margin-right: 8px; }
+    .dellist .faint { color: var(--faint); font-style: normal; }
+    /* What cannot be re-pulled, called out per row rather than only in total. */
+    .dellist .loss { color: var(--red); font-size: 11.5px; }
+    /* THE DESTRUCTIVE BUTTON HAS TO LOOK DESTRUCTIVE AT REST. Measured: the
+       shared `.btn.danger` only paints on :hover, so this computed IDENTICALLY
+       to the neutral Preview button beside it — same colour, same background,
+       same border. The most dangerous control on the page was styled as the
+       most ordinary one. Scoped here rather than changed in app.css, where
+       other pages rely on the hover-only behaviour. Disabled stays quiet: it
+       is armed only after a preview, and that change should be visible. */
+    #delGo:not(:disabled) { color: var(--red); border-color: rgba(251, 113, 133, 0.45);
+                            background: rgba(251, 113, 133, 0.10); }
     input[type="text"], select, textarea {
       background: var(--surface-2); border: 1px solid var(--hair-2); color: var(--text);
       border-radius: 10px; padding: 9px 11px; font-family: var(--sans); font-size: 13px; outline: none; }
@@ -126,6 +151,26 @@
       </div>
       <p class="said" id="bulkSaid">Adding costs no API credits and pulls nothing &mdash; the data arrives
         with Fill missing or the nightly gap fill.</p>
+    </div></section>
+
+    <!-- DELIBERATELY NOT BESIDE "Add many at once". The two take the same paste
+         and read almost identically, and the difference between them is a
+         company's history. It is its own card, in red, below the themes. -->
+    <section class="bezel card danger"><div class="core">
+      <span class="lbl">Remove many from the screener</span>
+      <textarea id="delText" rows="3" spellcheck="false" autocomplete="off" aria-label="Paste tickers to remove"
+        placeholder="Paste tickers &mdash; commas, spaces or one per line.  KSS, VFC ZM&#10;PTON"></textarea>
+      <div class="line" style="margin-top:9px">
+        <button class="btn" id="delCheck">Preview</button>
+        <!-- `.btn.danger` is the shared class; `btn-danger` does not exist, and
+             this page's sprite carries only i-check and i-plus, so no icon. -->
+        <button class="btn danger" id="delGo" disabled>Remove them</button>
+      </div>
+      <div id="delList" hidden></div>
+      <p class="said" id="delSaid">This takes the stocks out of the screener and every theme, and deletes
+        their stored data. Bars and earnings can be re-pulled for a credit; <b>recorded fundamentals
+        cannot</b> &mdash; that series starts from zero if you add the ticker back. Preview first: the
+        list is split into tokens, so a stray word can match a real ticker.</p>
     </div></section>
 
     <section class="bezel card"><div class="core">
@@ -314,6 +359,76 @@
       } catch (err) { say('bulkSaid', err.message, 'err'); $('bulkGo').disabled = false; }
     }
 
+    // ---- remove many -------------------------------------------------------
+    // The preview is not a courtesy, it is the safety. The same token splitter
+    // the add box uses turns a pasted header row into symbols, and "A" is
+    // Agilent — so before anything is destroyed the screen names every COMPANY
+    // it matched. A reader can spot "A — Agilent Technologies" in a list they
+    // meant to be retailers; nobody can spot it from a ticker.
+    let delReady = null;
+
+    function paintDelList(found, unknown) {
+      const host = $('delList');
+      if (!found.length && !unknown.length) { host.hidden = true; host.innerHTML = ''; return; }
+      host.hidden = false;
+      const row = (r) => '<li><b>' + we(r.symbol) + '</b> ' +
+        (r.name ? we(r.name) : '<i class="faint">no name stored</i>') +
+        (r.themes.length ? ' <span class="faint">· ' + we(r.themes.join(', ')) + '</span>' : '') +
+        (r.fundDays ? ' <span class="loss">' + r.fundDays +
+          ' day' + (r.fundDays === 1 ? '' : 's') + ' of fundamentals</span>' : '') + '</li>';
+      host.innerHTML =
+        (found.length ? '<ul class="dellist">' + found.map(row).join('') + '</ul>' : '') +
+        (unknown.length ? '<p class="said err">Not in the screener, so nothing to remove: ' +
+          we(unknown.slice(0, 20).join(', ')) + (unknown.length > 20 ? ' …' : '') + '</p>' : '');
+    }
+
+    async function checkDelete() {
+      const syms = parseTickers($('delText').value);
+      $('delGo').disabled = true;
+      delReady = null;
+      paintDelList([], []);
+      if (!syms.length) { say('delSaid', 'Nothing that looks like a ticker in there.', 'err'); return; }
+      say('delSaid', 'Checking…');
+      try {
+        const r = await api('POST', '/api/universe/bulk-delete', { symbols: syms });
+        paintDelList(r.found || [], r.unknown || []);
+        if (!(r.found || []).length) {
+          say('delSaid', 'None of those are in the screener — nothing would be removed.', 'err');
+          return;
+        }
+        delReady = { symbols: (r.found || []).map((x) => x.symbol), fundDays: r.fundDays || 0 };
+        const bits = [`${delReady.symbols.length} stock${delReady.symbols.length === 1 ? '' : 's'} would be removed`];
+        if (r.fundDays) bits.push(`${r.fundDays.toLocaleString()} recorded fundamentals days lost for good`);
+        if ((r.unknown || []).length) bits.push(`${r.unknown.length} not in the screener`);
+        say('delSaid', bits.join(' · ') + ' — check the names below before removing.', 'err');
+        $('delGo').disabled = false;
+      } catch (err) { say('delSaid', err.message, 'err'); }
+    }
+
+    async function doDelete() {
+      if (!delReady) return;
+      const { symbols, fundDays } = delReady;
+      // Names the irreversible loss in the confirm, not just the count. The
+      // rule this page already follows for deleting a theme.
+      if (!confirm(`Remove ${symbols.length} stock${symbols.length === 1 ? '' : 's'} from the screener?\n\n` +
+        `Their bars, profiles, headlines and earnings go too. Bars and earnings can be re-pulled.\n` +
+        (fundDays ? `${fundDays.toLocaleString()} days of recorded fundamentals CANNOT be — that history is gone.\n` : '') +
+        `\nThis cannot be undone.`)) return;
+      $('delGo').disabled = true;
+      say('delSaid', 'Removing…');
+      try {
+        const r = await api('POST', '/api/universe/bulk-delete', { symbols, commit: true });
+        adopt(r);
+        $('delText').value = '';
+        delReady = null;
+        paintDelList([], []);
+        say('delSaid', `${(r.removed || []).length} removed, ` +
+          `${(r.rowsGone || 0).toLocaleString()} rows deleted` +
+          ((r.failed || []).length ? ` — ${r.failed.length} failed: ${r.failed.join(', ')}` : '') + '.',
+          (r.failed || []).length ? 'err' : 'ok');
+      } catch (err) { say('delSaid', err.message, 'err'); $('delGo').disabled = false; }
+    }
+
     // ---- create / rename / delete ------------------------------------------
     async function createTheme() {
       const name = $('newName').value.trim();
@@ -351,6 +466,14 @@
     $('addBtn').addEventListener('click', addTicker);
     $('sym').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTicker(); });
     $('bulkCheck').addEventListener('click', checkBulk);
+    $('delCheck').addEventListener('click', checkDelete);
+    $('delGo').addEventListener('click', doDelete);
+    // EDITING THE LIST DISARMS THE BUTTON. Without this the preview could
+    // describe one set of tickers while the box holds another, and the thing
+    // it destroys would not be the thing it named.
+    $('delText').addEventListener('input', () => {
+      $('delGo').disabled = true; delReady = null; paintDelList([], []);
+    });
     $('bulkGo').addEventListener('click', addBulk);
     $('bulkText').addEventListener('input', () => { $('bulkGo').disabled = true; bulkReady = null; });
     $('bulkPf').addEventListener('input', () => { $('bulkGo').disabled = true; bulkReady = null; });

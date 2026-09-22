@@ -1856,6 +1856,37 @@ async function barsOn(pairs) {
   return out;
 }
 
+// How many days of recorded fundamentals each symbol holds.
+//
+// This is the number a bulk delete has to show, because it is THE ONE THING
+// THAT DOES NOT COME BACK. Bars cost a credit to re-pull at any depth and
+// earnings history comes back forty quarters at a time, but `profiles` only
+// ever holds today's values — so a deleted day of fundamentals_history is gone
+// for good and re-adding the ticker starts that series from zero.
+//
+// Seeks, never `group by` over the table: the (symbol, d) primary key answers
+// this per symbol, and a grouped scan here is the shape that produced the
+// Turso quota warning.
+async function fundamentalsDaysFor(symbols) {
+  await init();
+  const syms = [...new Set((symbols || []).map((x) => String(x).toUpperCase()))];
+  const out = new Map();
+  if (!syms.length) return out;
+  for (let i = 0; i < syms.length; i += ANCHOR_CHUNK) {
+    const slice = syms.slice(i, i + ANCHOR_CHUNK);
+    const res = await db.batch(slice.map((s) => ({
+      sql: 'select count(*) n, min(d) lo, max(d) hi from fundamentals_history where symbol = ?',
+      args: [s],
+    })), 'read');
+    slice.forEach((s, k) => {
+      const row = res[k].rows[0];
+      const n = Number((row && row.n) || 0);
+      if (n) out.set(s, { days: n, from: row.lo, to: row.hi });
+    });
+  }
+  return out;
+}
+
 async function upsertBars(rows) {
   await init();
   if (!rows || !rows.length) return 0;
@@ -3386,6 +3417,7 @@ module.exports = {
   barsOn,
   upsertBars,
   replaceBarsFor,
+  fundamentalsDaysFor,
   // Exported so a caller can report how many round trips a write actually
   // cost, rather than guessing at the chunking.
   BAR_CHUNK,
