@@ -6509,12 +6509,29 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
     // The studio always reads the whole universe and lets the card narrow it.
     try { basket = await basketPayload(req, 'All', win[0]); } catch { basket = null; }
   }
+  // A one-stock chart with a moving average needs that symbol's closes from
+  // BEFORE the window — the basket only carries the window itself. Cards says
+  // what it needs so this and the studio cannot ask for different depths; a
+  // post saved with a 200-day average would otherwise open here without one,
+  // silently, because the builder simply found no history to draw from.
+  let hist = null;
+  if (post.tpl === 'chart') {
+    const need = Cards.chartHistoryNeed(post.opts || {});
+    if (need && need.symbol) {
+      try {
+        const bars = await store.readBars(need.symbol, need.days);   // newest-first
+        const asc = bars.slice().reverse();
+        hist = { dates: asc.map((b) => b.datetime), closes: asc.map((b) => b.close) };
+      } catch { hist = null; }
+    }
+  }
 
   const size = POST_SIZES[post.size];
   let html = '';
   try {
     html = Cards.build(post.tpl, {
       stocks, myLists, size, opts: post.opts, getBasket: () => basket,
+      getHistory: () => hist,
       updatedAt: (snap && snap.updatedAt) || null,
     });
   } catch (e) {

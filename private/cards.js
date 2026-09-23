@@ -10,6 +10,10 @@
 //   ctx.size      { id, w, h } — the artboard the card is being drawn into
 //   ctx.opts      the control values, by control id (movPeriod, chtWin, ...)
 //   ctx.getBasket (days) -> the /api/basket payload or null while it loads
+//   ctx.getHistory (symbol, days) -> { dates, closes } for ONE symbol, or
+//                 null while it loads. Only the chart card's moving average
+//                 needs it, and only because an average needs run-up from
+//                 BEFORE the window — see CHART_MAS.
 //   ctx.chart     ONE stock's own closes, for the `stock` card — see below
 // The module reads no DOM and issues no requests: a host that hands it
 // numbers gets a card back, which is what makes it testable off-page.
@@ -22,6 +26,7 @@
   let size = { id: 'portrait', w: 1080, h: 1350 };
   let O = {};                       // control values, by control id
   let getBasket = () => null;
+  let getHistory = () => null;
   // ONE stock's own daily closes — { symbol, name, closes, dates, rangeLabel,
   // price, today }. A plain data field rather than a getter, because the only
   // host that has it (the stock page) already holds it: it drew the chart from
@@ -671,6 +676,66 @@
     const CHART_WINDOWS = { w1: [5, 'past week'], m1: [21, 'past month'],
                             m3: [63, 'past three months'], m6: [126, 'past six months'],
                             y1: [253, 'past year'] };
+    // A moving average on the one-stock chart. Colours are the stock page's
+    // own, so 50-day and 200-day mean the same thing on both surfaces.
+    //
+    // AN AVERAGE NEEDS RUN-UP FROM BEFORE THE WINDOW, which is the whole reason
+    // this cannot come off the basket payload: that carries only the window, so
+    // a 200-day average over six months (~126 sessions) would be undefined
+    // everywhere, and a 50-day one would start 40% of the way along. The card
+    // asks its host for `window + n` sessions of ONE symbol's closes instead —
+    // cheap, where deepening the whole-universe basket would read hundreds of
+    // thousands of rows for 844 stocks nobody is charting.
+    const CHART_MAS = {
+      off:   { n: 0 },
+      ma50:  { n: 50,  label: '50-day average',  color: '#7c9cff' },
+      ma200: { n: 200, label: '200-day average', color: '#fbbf24' },
+    };
+    // What the chart card needs fetched, so the studio and the server's saved-post
+    // builder ask for the same thing rather than each guessing. Exported.
+    function chartHistoryNeed(opts) {
+      const o = opts || {};
+      if (o.chtMode !== 'stock') return null;
+      const ma = CHART_MAS[o.chtMa];
+      if (!ma || !ma.n) return null;
+      const win = CHART_WINDOWS[o.chtWin] || CHART_WINDOWS.m6;
+      // A little slack past the average's own length: sessions and calendar
+      // days are not the same thing, and a short archive simply yields fewer
+      // points rather than an error.
+      return { symbol: o.chtSym || null, days: win[0] + ma.n + 15 };
+    }
+    // The average, rebased the way every line on this card is: to the close on
+    // the window's first session, so `(v - 1) * 100` reads as a percentage move
+    // from the same origin as the price line.
+    function maSeries(hist, winDates, n) {
+      if (!hist || !Array.isArray(hist.closes) || !Array.isArray(hist.dates)) return null;
+      if (hist.closes.length < n) return null;
+      const at = new Map();
+      hist.dates.forEach((d, i) => at.set(String(d).slice(0, 10), i));
+      // The base is the first window date the archive actually holds — not
+      // simply winDates[0], which a symbol may have no bar for.
+      let base = null;
+      for (const d of winDates) {
+        const i = at.get(String(d).slice(0, 10));
+        if (i != null && hist.closes[i] > 0) { base = hist.closes[i]; break; }
+      }
+      if (!(base > 0)) return null;
+      const sma = [];
+      let sum = 0;
+      for (let i = 0; i < hist.closes.length; i++) {
+        sum += hist.closes[i];
+        if (i >= n) sum -= hist.closes[i - n];
+        sma.push(i >= n - 1 ? sum / n : null);
+      }
+      let any = false;
+      const out = winDates.map((d) => {
+        const i = at.get(String(d).slice(0, 10));
+        const v = i == null ? null : sma[i];
+        if (v != null) any = true;
+        return v == null ? null : v / base;
+      });
+      return any ? out : null;
+    }
     const CHART_PALETTE = ['#34d399', '#22d3ee', '#a78bfa', '#fbbf24', '#fb923c',
                            '#f472b6', '#a3e635', '#60a5fa'];
     // Presentation attributes, not classes: this markup also travels through
@@ -823,12 +888,32 @@
         const row = stocks.find((r) => r.symbol === sym);
         const S = series[sym];
         if (!S) return chromeTop() + `<div class="s-body"><div><p class="s-empty">No stored history for ${esc(sym)} in this window.</p></div></div>` + chromeFoot();
-        lines = [{ color: '#34d399', S, width: 4, fill: true },
-                 { color: '#7c9cff', S: mean(stocks.map((r) => r.symbol)), width: 2, dim: true }];
-        legend = [{ color: '#34d399', label: esc(sym) }, { color: '#7c9cff', label: 'All screened' }];
+        // ONE STOCK IS ONE LINE. The whole-screen average used to ride along
+        // here and was removed at the owner's request (2026-09-22): on a card
+        // about a single company it competed with the subject, and it pulled
+        // the y-scale toward the middle so the stock's own shape read flatter
+        // than it is. The other two chart modes still carry it, where a
+        // comparison is the point.
+        lines = [{ color: '#34d399', S, width: 4, fill: true }];
+        legend = [{ color: '#34d399', label: esc(sym) }];
+        note = 'Price only, rebased to the start of the window \u2014 no dividends, no positions.';
+        const ma = CHART_MAS[O.chtMa];
+        if (ma && ma.n) {
+          const need = chartHistoryNeed(O);
+          const MS = maSeries(getHistory(sym, need ? need.days : days + ma.n), d.dates, ma.n);
+          if (MS) {
+            lines.push({ color: ma.color, S: MS, width: 2.5 });
+            legend.push({ color: ma.color, label: ma.label });
+            // Said out loud, because a reader could reasonably assume the
+            // average is computed only from what is on screen \u2014 in which case
+            // it would start well to the right of the left edge.
+            note += ` The ${ma.n}-day average uses closes from before the window, so it starts at the left edge.`;
+          }
+          // No branch for "still loading": the host repaints when the fetch
+          // lands, and a card that swapped in an apology would flicker.
+        }
         kick = `${esc(sym)} \u00b7 ${esc(winLabel)}`;
         title = `${esc(sym)}<br><span class="dim">${esc((row && row.name) || '')}</span>`;
-        note = 'Price only, rebased to the start of the window \u2014 no dividends, no positions.';
       } else if (mode === 'leaders') {
         const scope = chartScopeSymbols();
         const n = Number(O.chtLines) || 5;
@@ -2259,6 +2344,11 @@
 
   global.Cards = {
     STYLE, injectStyle,
+    // The moving averages the chart card offers, and what the host must
+    // fetch for one — both exported so the studio's picker and the
+    // server's saved-post builder read the SAME catalogue rather than
+    // restating it, the way CHART_WINDOWS already is.
+    CHART_MAS, chartHistoryNeed,
     ids: Object.keys(BUILDERS),
     ADV_PROFILES,
     MOV_PERIODS,
@@ -2290,6 +2380,7 @@
       size = c.size || { id: 'portrait', w: 1080, h: 1350 };
       O = c.opts || {};
       getBasket = c.getBasket || (() => null);
+      getHistory = c.getHistory || (() => null);
       chartOne = c.chart || null;
       const fn = BUILDERS[id] || BUILDERS.movers;
       return fn();

@@ -203,6 +203,12 @@
         <div id="chtSymWrap">
           <label>Stock</label>
           <select id="chtSym"></select>
+          <label style="margin-top:9px">Moving average</label>
+          <select id="chtMa">
+            <option value="off">None</option>
+            <option value="ma50">50-day</option>
+            <option value="ma200">200-day</option>
+          </select>
         </div>
       </div>
 
@@ -582,10 +588,36 @@
       return null;
     }
 
+    // ONE symbol's closes, for the chart card's moving average. Same shape as
+    // the basket cache above: the host owns the fetch and the repaint, the
+    // module only asks. Keyed on symbol AND depth, because switching from a
+    // 50-day average to a 200-day one needs more history, not the same again.
+    //
+    // /api/history reads the archive only — no API credits, ~2KB for a year —
+    // which is why this is a separate channel rather than deepening the basket:
+    // that would read the whole universe at the deeper window to draw one line.
+    const histCache = {};
+    const histPending = {};
+    function getHistory(symbol, days) {
+      if (!symbol) return null;
+      const key = symbol + '|' + days;
+      if (histCache[key]) return histCache[key];
+      if (histPending[key]) return null;
+      histPending[key] = true;
+      fetch(`/api/history?symbol=${encodeURIComponent(symbol)}&days=${days}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          histCache[key] = d; delete histPending[key];
+          if (tpl === 'chart') render();
+        })
+        .catch(() => { delete histPending[key]; });
+      return null;
+    }
+
     // Every control's value, by id — the module reads no DOM, so the studio
     // hands it the panel's state and gets a card back.
     const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap',
-      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector', 'chtIndustry', 'chtCap',
+      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap',
       'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap',
       'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry', 'rngCap',
       'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap',
@@ -600,7 +632,7 @@
     }
     let pulledAt = null;          // when the snapshot behind these rows was written
     const buildCard = () => Cards.build(tpl, {
-      stocks, myLists, size, opts: controlOpts(), getBasket, updatedAt: pulledAt,
+      stocks, myLists, size, opts: controlOpts(), getBasket, getHistory, updatedAt: pulledAt,
     });
 
     // Each Industry picker offers only what its Sector picker's choice holds
@@ -710,7 +742,7 @@
     // hour; a test that changed the control and diffed the card caught it.
     ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'movers') render(); }));
-    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSector', 'chtIndustry', 'chtCap'].forEach((id) =>
+    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'chart') render(); }));
     ['spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'sparks') render(); }));
