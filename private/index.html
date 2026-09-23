@@ -4197,7 +4197,13 @@
     // ---- admin auth (read-only publishing) ----
     async function checkAuth() {
       try {
-        const me = await api('GET', '/api/me');
+        // Shared with wmark.js, which needs the same answer — see the slot it
+        // defines. `api()` is bypassed only so both can await one promise; it
+        // sets the same `cache: 'no-store'`, and a 401 here is a real answer
+        // (signedIn: false) rather than something to redirect on.
+        window.__me = window.__me
+          || fetch('/api/me', { cache: 'no-store' }).then((r) => r.json());
+        const me = await window.__me;
         isAdmin = !!me.admin;
         authRequired = !!me.authRequired;
         signedIn = me.signedIn !== false;
@@ -4554,6 +4560,20 @@
       } catch (e) { /* the real load is the one that matters */ }
     }
 
+    // One place that knows what the table asks for, because the boot prefetch
+    // below has to ask the identical question or it is a wasted request.
+    function stocksUrl(live) {
+      const params = new URLSearchParams();
+      if (asOfDate) params.set('asOf', asOfDate);   // an as-of date always needs a live pull
+      else if (live) params.set('refresh', '1');    // admin refresh → recompute + save snapshot
+      const qs = params.toString();
+      return '/api/stocks' + (qs ? '?' + qs : '');
+    }
+
+    // The snapshot fetch, started at boot and awaited by the first refresh().
+    // `{ url, p }` rather than a bare promise: see refresh().
+    let pendingStocks = null;
+
     async function refresh(opts = {}) {
       const live = opts.live !== false;
       setError('');
@@ -4564,11 +4584,19 @@
       const done = { v: false };
       if (!baseStocks.length) { showTableLoading(true); explainSlowLoad(done); }
       try {
-        const params = new URLSearchParams();
-        if (asOfDate) params.set('asOf', asOfDate);   // an as-of date always needs a live pull
-        else if (live) params.set('refresh', '1');    // admin refresh → recompute + save snapshot
-        const qs = params.toString();
-        const data = await api('GET', '/api/stocks' + (qs ? '?' + qs : ''));
+        const url = stocksUrl(live);
+        // The boot prefetch, if this is the load it was started for. Matched on
+        // the URL rather than on a flag, so anything that would ask a different
+        // question just fetches normally.
+        let data;
+        if (pendingStocks && pendingStocks.url === url) {
+          const p = pendingStocks.p;
+          pendingStocks = null;
+          data = await p;
+        } else {
+          pendingStocks = null;
+          data = await api('GET', url);
+        }
         done.v = true;
         lastUpdated = data.updatedAt;
         baseStocks = data.stocks || [];
@@ -5523,6 +5551,28 @@
     // a second Refresh all is ten minutes and several hundred API credits.
     if (wantAsOf || wantDo) history.replaceState(null, '', location.pathname);
 
+    // THE SNAPSHOT FETCH STARTS HERE, not four round trips later. /api/stocks
+    // is by far the longest call on this page and depends on none of the
+    // config that used to precede it — identity, prefs, portfolios, views and
+    // screens were three sequential waves of pure latency in front of it. They
+    // still run in that order, because they genuinely depend on each other
+    // (prefs sets the active view that loadViews validates, and the personal
+    // lists need to know who is asking); they just no longer make the data
+    // wait. `refresh()` picks this up by URL.
+    // The catch only silences the unhandled-rejection warning — refresh()
+    // awaits the same promise and still sees the failure.
+    pendingStocks = { url: stocksUrl(false), p: api('GET', stocksUrl(false)) };
+    pendingStocks.p.catch(() => {});
+
+    // The news strip goes out in the same breath, and it has to: its presence
+    // decides the table's height, so it must be known BEFORE the rows are
+    // drawn or the table paints twice. It used to be started just before the
+    // snapshot fetch, which was enough only because that fetch was slow —
+    // prefetching the snapshot made this one the straggler instead. A few KB
+    // against a multi-megabyte payload; it lands first. paintTicker() no-ops
+    // until there are rows to filter against, so landing early is safe.
+    loadTicker();
+
     // Scrolling the table is what moves the window. Throttled to a frame: a
     // scroll fires far faster than anything can usefully repaint, and the
     // overscan means most frames decide there is nothing to do and return.
@@ -5545,13 +5595,7 @@
     checkAuth()
       .then(() => Promise.all([loadPrefs(), loadMyPortfolios()]))
       .then(() => Promise.all([loadViews(), loadScreens()]))
-      // The strip's own fetch starts BESIDE the table's, not after the first
-      // paint. /api/news/recent is a few KB against a multi-megabyte snapshot,
-      // so it lands first, and the first render then knows whether the strip is
-      // there — which is what stops it appearing a beat later and resizing the
-      // table under rows it has just drawn. It is not awaited: a decoration
-      // must never make the data wait.
-      .then(() => { loadTicker(); return refresh({ live: false }); })
+      .then(() => refresh({ live: false }))
       .then(() => {
         // THE PAGE IS USABLE HERE, and this is the only place that knows it.
         // Not `window.load`, which fires while /api/stocks is still in flight,
