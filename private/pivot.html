@@ -136,17 +136,6 @@
       display: inline-block; width: 6px; height: 6px; margin-right: 7px;
       border-radius: 50%; vertical-align: 1px; }
 
-    /* The row's share of the grid, as a hairline along the foot of its header.
-       A row header is `position: sticky`, which is a positioned box, so this
-       anchors to it without any further scaffolding. */
-    table.pv tbody th .shr {
-      position: absolute; left: 0; bottom: 0; height: 2px; pointer-events: none;
-      background: var(--accent); opacity: 0.4; border-radius: 0 2px 2px 0; }
-    table.pv tbody tr:hover th .shr { opacity: 0.75; }
-    /* A child row's bar would be measured against the same grand total as its
-       parent's and read as a second, smaller sector. The hierarchy is the
-       indent's job. */
-    table.pv tbody tr.kid th .shr { display: none; }
     /* A row header's range sits beside its name, quieter, so "Mid-Large" never
        has to be remembered. Mono, because it is a pair of numbers. */
     table.pv tbody th .rng { margin-left: 8px; color: var(--faint); font-weight: 400;
@@ -1030,13 +1019,6 @@
         const kids = p.kids.get(r);
         const canOpen = !!kids && kids.size >= 2;
         const isOpen = canOpen && p.sub && p.sub.of === r;
-        // How big is this row? A hairline along the foot of the row header,
-        // its width the row's share of everything on the grid. It answers the
-        // question the Total column answers, but without being read — and it
-        // costs no column. Share of PLACEMENTS, not of the stock count, so a
-        // multi-valued dimension's bars still add to the full width.
-        const share = p.placements > 0
-          ? Math.max(0, (p.rowTot.get(r) || 0) / p.placements) * 100 : 0;
         h += '<tr>';
         h += '<th class="' + (r === BLANK ? 'blankdim' : '') +
           (canOpen ? ' exp' + (isOpen ? ' on' : '') : '') + '"' +
@@ -1045,7 +1027,6 @@
           (canOpen ? '<span class="car">' + (isOpen ? '&#9662;' : '&#9656;') + '</span>' : '') +
           dotOf(p.rd, r) + esc(r) +
           (rangeOf(p.rd, r) ? '<span class="rng">' + esc(rangeOf(p.rd, r)) + '</span>' : '') +
-          '<span class="shr" style="width:' + share.toFixed(2) + '%" aria-hidden="true"></span>' +
           '</th>';
         h += cellsFor((c) => p.cells.get(r + '|' + c), (c) => r + '|' + c, r, '',
           denomFor(r, false));
