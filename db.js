@@ -932,6 +932,26 @@ async function writePromoPresets(list) {
   return list;
 }
 
+// ---- saved pivots ----------------------------------------------------------
+// The same shape as the promo presets above and for the same reason: a saved
+// pivot is the QUESTION (two dimensions, a measure, a filter), never the answer,
+// so opening one tomorrow cross-tabulates tomorrow's screen.
+async function readPivotPresets() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'pivot_presets'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value || 'null'); } catch { return null; }
+}
+
+async function writePivotPresets(list) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('pivot_presets', ?)",
+    args: [JSON.stringify(list)],
+  });
+  return list;
+}
+
 // ---- the mobile setup ------------------------------------------------------
 
 // The views the phone offers, and what each shows. A site setting like the
@@ -3387,6 +3407,8 @@ module.exports = {
   noteAdvice,
   readPromoPresets,
   writePromoPresets,
+  readPivotPresets,
+  writePivotPresets,
   writeMobileConfig,
   writeTileConfig,
   readPosts,

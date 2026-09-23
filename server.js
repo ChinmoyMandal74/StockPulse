@@ -6240,6 +6240,70 @@ app.put('/api/promo-posts', requireAdmin, route(async (req, res) => {
   res.json({ ok: true, posts: list, max: POSTS_MAX });
 }));
 
+// ---- saved pivots ----------------------------------------------------------
+// The promo-preset model applied to /pivot, at the owner's instruction: one
+// site-wide list, every member sees it, only the owner writes. A saved pivot
+// is the QUESTION and not the answer — two dimensions, a measure and a page
+// filter — so opening one tomorrow counts tomorrow's screen.
+const PIVOTS_MAX = 20;
+// SHAPE-CHECKED, not listed against DIMS/MEASURES: those live in pivot.html,
+// and restating them here would drift the first time a dimension was added.
+// The page already ignores a key it does not know — `childOf` dimensions and
+// the same-dimension guard both re-derive on load — which is the rule
+// cleanViews follows for the screener's columns and cleanPosts for the
+// studio's controls.
+const PIVOT_KEY_RE = /^[a-zA-Z][a-zA-Z0-9]{0,23}$/;
+
+function cleanPivots(raw) {
+  const seen = new Set();
+  return (Array.isArray(raw) ? raw : [])
+    .map((p) => {
+      const q = p && typeof p === 'object' ? p : {};
+      const name = String(q.name || '').trim().slice(0, 40);
+      const key = (v) => (PIVOT_KEY_RE.test(String(v || '')) ? String(v) : '');
+      return {
+        id: slugify(q.id || name).slice(0, 24),
+        name,
+        rowKey: key(q.rowKey),
+        colKey: key(q.colKey),
+        measure: key(q.measure) || 'count',
+        pageDim: key(q.pageDim) || 'none',
+        heat: key(q.heat) || 'grid',
+        // A VALUE, not an identifier: it is a sector, a theme or a band name
+        // that came out of the data, so anything printable is legitimate.
+        // Narrowing this is how every screen silently lost its `<` and `>`
+        // filters in 2026-09-15 — the page escapes it where it is shown.
+        pageVal: String(q.pageVal == null ? '' : q.pageVal).slice(0, 80),
+      };
+    })
+    // Both axes are required: a pivot with one dimension is not a pivot, and
+    // a preset that opened to a broken grid would be worse than none.
+    .filter((p) => p.id && p.name && p.rowKey && p.colKey
+      && !seen.has(p.id) && seen.add(p.id))
+    .slice(0, PIVOTS_MAX);
+}
+
+let pivotsCache = null;
+async function savedPivots() {
+  if (pivotsCache && Date.now() - pivotsCache.at < 60 * 1000) return pivotsCache.list;
+  const list = cleanPivots(await store.readPivotPresets());
+  pivotsCache = { at: Date.now(), list };
+  return list;
+}
+
+app.get('/api/pivot-presets', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ presets: await savedPivots(), max: PIVOTS_MAX });
+}));
+
+app.put('/api/pivot-presets', requireAdmin, route(async (req, res) => {
+  const list = cleanPivots(req.body && req.body.presets);
+  await store.writePivotPresets(list);
+  pivotsCache = { at: Date.now(), list };
+  logAct(req, 'view', 'pivots:' + list.length);
+  res.json({ ok: true, presets: list, max: PIVOTS_MAX });
+}));
+
 // The phone lists posts by NAME and builds one only when it is opened
 // (owner's call: "I need to see the Preset name and when it click on it it
 // should open the visualization"). So the list is a few hundred bytes and the

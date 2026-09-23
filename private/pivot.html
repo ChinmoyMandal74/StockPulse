@@ -31,6 +31,13 @@
 
     /* The two dimension pickers and the swap, as one row. */
     .picks { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin: 20px 0 0; }
+    /* The saved-pivot row. Scoped to #presetBar rather than styling `.psaid`
+       loose — five unscoped class names have captured later markup on this
+       project already, one of them on this very page (`.sub`). */
+    #presetBar { margin-top: 12px; }
+    #presetBar .psaid { font-size: 12px; color: var(--faint); align-self: center;
+                        line-height: 1.5; }
+    #presetBar .psaid.warn { color: var(--amber); }
     .pick { display: flex; flex-direction: column; gap: 6px; }
     .pick label { font-size: 10px; font-weight: 500; text-transform: uppercase;
                   letter-spacing: 0.16em; color: var(--faint); }
@@ -268,6 +275,18 @@
       <div class="pick"><label for="pageDim">Filter</label><select id="pageDim"></select></div>
       <div class="pick" id="pageValWrap" hidden><label for="pageVal">Is</label><select id="pageVal"></select></div>
       <button class="btn" id="pageClear" hidden title="Show the whole screen again">Clear filter</button>
+    </div>
+
+    <!-- Saved pivots. A preset stores the QUESTION — both axes, the measure,
+         the shading and the page filter — never the answer, so opening one
+         tomorrow counts tomorrow's screen. Site-wide and owner-curated, the
+         promo studio's model: members read the list, only the owner writes. -->
+    <div class="picks" id="presetBar">
+      <div class="pick"><label for="presetPick">Saved</label><select id="presetPick"></select></div>
+      <button class="btn" id="presetSave" hidden title="Save the current pivot under a new name">Save this pivot</button>
+      <button class="btn" id="presetReplace" hidden title="Point the chosen preset at what is on screen now">Replace</button>
+      <button class="btn danger" id="presetDelete" hidden title="Delete the chosen preset">Delete</button>
+      <span class="psaid" id="presetSaid"></span>
     </div>
 
     <p class="note" id="note"></p>
@@ -1174,6 +1193,11 @@
         });
       });
       paintDetail(p);
+      // The saved-pivot picker says which preset the screen currently IS, so it
+      // follows every change of axis, measure, shading or filter. Safe here:
+      // `presets` is initialised while the script evaluates, and nothing
+      // renders until the snapshot lands.
+      paintPresets();
     }
 
     function fillPicks() {
@@ -1270,6 +1294,149 @@
       if (DIMS[colKey].childOf) return;
       const t = rowKey; rowKey = colKey; colKey = t;
       reset();
+    });
+
+    // ---- saved pivots -------------------------------------------------------
+    // A preset is the QUESTION, never the answer: both axes, the measure, the
+    // shading and the page filter. The open sector and the drill selection are
+    // deliberately NOT stored — they are where you happened to be looking, not
+    // what you wanted to keep, and restoring a stock list from yesterday into
+    // today's counts would be the one thing a saved pivot must not do.
+    let presets = [];
+    let canEditPresets = false;
+    // WHICH PRESET IS CHOSEN, kept apart from whether the screen still matches
+    // it. The first cut conflated the two: the picker deselected the moment an
+    // axis moved, which hid Replace at exactly the moment it becomes useful —
+    // you change the pivot and THEN want to point the preset at it. It survives
+    // divergence and the option reads "(edited)", the idiom the screener's
+    // Screens menu already uses.
+    let chosenId = '';
+
+    const presetSaid = (msg, warn) => {
+      const el = $('presetSaid');
+      el.textContent = msg || '';
+      el.classList.toggle('warn', !!warn);
+    };
+
+    // What is on screen now, in the shape the server stores.
+    const currentPreset = () => ({
+      rowKey, colKey, measure, heat, pageDim, pageVal: pageDim === 'none' ? '' : pageVal,
+    });
+
+    const samePreset = (p) => p && p.rowKey === rowKey && p.colKey === colKey
+      && p.measure === measure && p.heat === heat && p.pageDim === pageDim
+      && (p.pageDim === 'none' || p.pageVal === pageVal);
+
+    function paintPresets() {
+      const sel = $('presetPick');
+      // An exact match wins and adopts the selection, so arriving at a saved
+      // pivot by hand names it rather than reading "Not saved".
+      const exact = presets.find(samePreset);
+      if (exact) chosenId = exact.id;
+      else if (chosenId && !presets.some((p) => p.id === chosenId)) chosenId = '';
+      const showing = presets.find((p) => p.id === chosenId) || null;
+      sel.innerHTML = '<option value="">' + (presets.length ? 'Not saved' : 'None saved yet') + '</option>' +
+        presets.map((p) => '<option value="' + esc(p.id) + '"' +
+          (showing && showing.id === p.id ? ' selected' : '') + '>' + esc(p.name) +
+          (showing && showing.id === p.id && !exact ? ' (edited)' : '') + '</option>').join('');
+      sel.disabled = !presets.length;
+      $('presetSave').hidden = !canEditPresets;
+      // Replace and Delete act on the CHOSEN preset — which survives the screen
+      // diverging from it, or Replace would disappear whenever it was wanted.
+      $('presetReplace').hidden = !canEditPresets || !showing;
+      $('presetDelete').hidden = !canEditPresets || !showing;
+    }
+
+    // Apply one. Unknown keys fall back rather than throwing: the server
+    // shape-checks but does not know DIMS, so a preset saved before a dimension
+    // was renamed must open to a working grid rather than a broken one.
+    function applyPreset(p) {
+      if (!p) return;
+      if (DIMS[p.rowKey] && !DIMS[p.rowKey].childOf) rowKey = p.rowKey;
+      if (DIMS[p.colKey]) colKey = p.colKey;
+      if (colKey === rowKey) colKey = stepAside(rowKey);
+      if (MEASURES[p.measure]) measure = p.measure;
+      if (HEATS[p.heat]) heat = p.heat;
+      const dim = p.pageDim && p.pageDim !== 'none' && DIMS[p.pageDim]
+        && p.pageDim !== rowKey && p.pageDim !== colKey ? p.pageDim : 'none';
+      pageDim = dim;
+      pageVal = dim === 'none' ? '' : String(p.pageVal || '');
+      // A saved filter VALUE may not exist any more — a theme renamed, a band
+      // now empty. fillPicks falls back to the first rather than filtering to
+      // nothing, and says so, because silently showing a different cut is
+      // worse than saying the saved one is gone.
+      const wanted = pageVal;
+      picked = null; expanded = null;
+      fillPicks();
+      if (dim !== 'none' && wanted && pageVal !== wanted) {
+        presetSaid('“' + wanted + '” is not on the screen any more — showing ' + pageVal + '.', true);
+      } else {
+        presetSaid('');
+      }
+      render();
+      paintPresets();
+    }
+
+    async function savePresets(list, what) {
+      const r = await fetch('/api/pivot-presets', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store', body: JSON.stringify({ presets: list }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { presetSaid(d.error || 'Could not save.', true); return false; }
+      // Adopt the server's cleaned answer rather than what was sent, so the
+      // page can never drift from what was actually stored.
+      presets = d.presets || [];
+      paintPresets();
+      presetSaid(what);
+      return true;
+    }
+
+    $('presetPick').addEventListener('change', () => {
+      chosenId = $('presetPick').value;
+      const p = presets.find((x) => x.id === chosenId);
+      if (p) applyPreset(p); else { presetSaid(''); paintPresets(); }
+    });
+
+    $('presetSave').addEventListener('click', async () => {
+      const name = (prompt('Name this pivot') || '').trim();
+      if (!name) return;
+      if (presets.length >= 20 && !presets.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+        presetSaid('That is the twentieth — delete one first.', true); return;
+      }
+      // Saving over an existing NAME replaces it rather than making a second
+      // entry that reads identically in the list.
+      const rest = presets.filter((p) => p.name.toLowerCase() !== name.toLowerCase());
+      await savePresets(rest.concat([Object.assign({ id: name, name }, currentPreset())]),
+        'Saved “' + name + '”.');
+    });
+
+    $('presetReplace').addEventListener('click', async () => {
+      const id = chosenId;
+      const p = presets.find((x) => x.id === id);
+      if (!p) return;
+      await savePresets(presets.map((x) => (x.id === id
+        ? Object.assign({ id: x.id, name: x.name }, currentPreset()) : x)),
+        '“' + p.name + '” now points at this pivot.');
+    });
+
+    $('presetDelete').addEventListener('click', async () => {
+      const id = chosenId;
+      const p = presets.find((x) => x.id === id);
+      if (!p || !confirm('Delete the saved pivot “' + p.name + '”?')) return;
+      chosenId = '';
+      await savePresets(presets.filter((x) => x.id !== id), 'Deleted “' + p.name + '”.');
+    });
+
+    // Both are small and neither blocks the grid, so they ride alongside the
+    // snapshot rather than in front of it.
+    Promise.all([
+      fetch('/api/pivot-presets', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch('/api/me', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
+    ]).then(([d, me]) => {
+      presets = (d && d.presets) || [];
+      canEditPresets = !!(me && me.admin);
+      paintPresets();
     });
 
     fetch('/api/stocks')
