@@ -170,9 +170,9 @@
     async function requestReset() {
       const email = ($('email').value || '').trim();
       if (!email) { $('email').focus(); return setMsg('Enter your email address first, then click again.'); }
-      const btn = $('forgotBtn');
-      btn.disabled = true;
-      btn.textContent = 'Sending…';
+      if (busy) return;
+      busy = true;
+      const w = working($('forgotBtn'), 'Sending…');
       try {
         const res = await fetch('/api/forgot', {
           method: 'POST',
@@ -184,8 +184,8 @@
       } catch {
         setMsg('Could not reach the server. Try again in a moment.');
       } finally {
-        btn.disabled = false;
-        btn.textContent = 'Forgot your password?';
+        w.restore();
+        busy = false;
       }
     }
 
@@ -205,14 +205,48 @@
       setMsg('');
     }
 
-    $('tabSignin').addEventListener('click', () => setMode('signin'));
-    $('tabRegister').addEventListener('click', () => setMode('register'));
+    // Switching tabs rewrites the submit button's label, so it must not happen
+    // while a request owns that label — it would come back reading the other
+    // mode's word.
+    $('tabSignin').addEventListener('click', () => { if (!busy) setMode('signin'); });
+    $('tabRegister').addEventListener('click', () => { if (!busy) setMode('register'); });
     $('forgotBtn').addEventListener('click', requestReset);
+
+    // IN FLIGHT, guarded beyond the disabled button. Disabling `#submit` does
+    // not reliably stop a second submission — Enter in a text field submits the
+    // form, and on this page a repeat is not merely wasteful: a wrong password
+    // counted twice moves the account two of the eight steps to a fifteen-minute
+    // lockout. The same flag stops the tabs relabelling the button underneath a
+    // request that is still running.
+    let busy = false;
+
+    // Signing in is scrypt plus, on a cold instance, a boot — so it can take a
+    // few seconds with nothing to show for it. The button says what it is doing
+    // rather than only going grey, and a slow one explains itself, which is the
+    // screener's own answer to the same question.
+    // Two endings, because they are genuinely different: `restore` puts the
+    // button back for another try, `settled` only stops the hint — used where
+    // the page is already navigating away and a button coming back to life for
+    // half a second is an invitation to click it again.
+    function working(btn, label) {
+      const was = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = label;
+      const slow = setTimeout(() =>
+        setMsg('Still working — the server may be starting up.', 'ok'), 4000);
+      const settled = () => clearTimeout(slow);
+      return {
+        settled,
+        restore: () => { settled(); btn.disabled = false; btn.textContent = was; },
+      };
+    }
 
     $('form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (busy) return;
+      busy = true;
       setMsg('');
-      $('submit').disabled = true;
+      const w = working($('submit'), mode === 'register' ? 'Creating account…' : 'Signing in…');
       const body = {
         email: $('email').value.trim(),
         password: $('password').value,
@@ -229,16 +263,20 @@
         if (mode === 'register' && data.pending) {
           // The account exists but the owner has not let it in yet — say so
           // here rather than bouncing to a page that would refuse them.
+          w.restore();
+          busy = false;
           setMsg('Account created. The owner has been asked to approve it — ' +
             'you will get a welcome email when you are in.', 'ok');
-          $('submit').disabled = false;
           return;
         }
+        // Not restored: the navigation is already under way.
+        w.settled();
         setMsg(mode === 'register' ? 'Account created — taking you in…' : 'Signed in — taking you in…', 'ok');
         window.location.href = '/';
       } catch (err) {
+        w.restore();
+        busy = false;
         setMsg(err.message);
-        $('submit').disabled = false;
       }
     });
 
@@ -246,11 +284,18 @@
     // (a handful of stocks) is enforced server-side; this button is just the
     // handle.
     async function enterAsGuest() {
+      if (busy) return;
+      busy = true;
+      setMsg('');
+      const w = working($('guestBtn'), 'Opening the preview…');
       try {
         const res = await fetch('/api/guest', { method: 'POST' });
         if (!res.ok) throw new Error('Guest access is unavailable right now.');
+        w.settled();                 // navigating; leave the button as it is
         window.location.href = '/';
       } catch (err) {
+        w.restore();
+        busy = false;
         setMsg(err.message);
       }
     }
