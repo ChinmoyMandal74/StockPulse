@@ -388,10 +388,6 @@
     #newsBtn[disabled] { opacity: 0.55; cursor: default; }
     #newsList { font-size: 13px; }
     #newsList .msg { color: var(--faint); font-size: 12.5px; padding: 4px 0; }
-    /* The fold. Collapsed is the default state of the container, so a list that
-       arrives long is short until asked — and `display: none` rather than a
-       height clamp, or the hidden rows would still be tab-stops. */
-    #newsList.collapsed .news-item.extra { display: none; }
     .newsmore { margin-top: 10px; }
     .news-item { display: flex; gap: 14px; align-items: baseline; padding: 7px 0;
       border-top: 1px solid var(--hair); }
@@ -869,22 +865,28 @@
       if (days === 1) return '1d ago';
       return days + 'd ago';
     }
-    // SHOWN is the fold, not a cap: every stored headline is rendered and the
-    // rest are hidden by CSS, so Show all is a class toggle rather than a
-    // re-render — no second pass over third-party text, and nothing to keep in
-    // step. Headlines only started accumulating when the wholesale delete came
-    // out of writeNews, so before that this fold could never have been reached.
-    const NEWS_SHOWN = 10;
-    function renderNewsList(items) {
+    // A PAGE AT A TIME. The archive is bounded by a 21-day window rather than a
+    // count, so a heavily-covered stock can hold a few hundred headlines —
+    // rendering them all to show ten, as the first cut did, does not scale and
+    // neither does sending them. `total` comes from the server, so the button
+    // can say how many are left and disappear when there are none.
+    const NEWS_PAGE = 10;
+    function renderNewsList(items, total) {
       const ok = (items || []).filter((x) => x && x.headline && /^https?:\/\//i.test(x.url || ''));
       if (!ok.length) return '<div class="msg">No stored headlines yet — they accrue as refreshes run.</div>';
-      const rows = ok.map((x, i) =>
-        `<div class="news-item${i >= NEWS_SHOWN ? ' extra' : ''}"><span class="nd">${esc(newsAge(x.published_at))}</span>` +
+      const rows = ok.map((x) =>
+        `<div class="news-item"><span class="nd">${esc(newsAge(x.published_at))}</span>` +
         `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.headline)}</a>` +
         `<span class="ns">${esc(x.source || '')}</span></div>`).join('');
-      if (ok.length <= NEWS_SHOWN) return rows;
-      return rows + `<button type="button" class="rng newsmore" id="newsMore" ` +
-        `data-n="${ok.length}">Show all ${ok.length} headlines</button>`;
+      const n = Number(total) || ok.length;
+      if (ok.length >= n) {
+        // Everything is on screen. Offer the way back only once the list has
+        // actually grown past a page.
+        return rows + (ok.length > NEWS_PAGE
+          ? `<button type="button" class="rng newsmore" id="newsLess">Show fewer</button>` : '');
+      }
+      return rows + `<button type="button" class="rng newsmore" id="newsMore">` +
+        `Show more — ${ok.length} of ${n}</button>`;
     }
     // ---- end news renderers ---------------------------------------------
 
@@ -900,24 +902,61 @@
         : h < 24 ? Math.round(h) + 'h ago' : Math.round(h / 24) + 'd ago');
     }
 
+    // What has been fetched so far, and how many exist. Kept outside loadNews so
+    // Show more appends to it rather than re-reading page one.
+    let newsHave = [];
+    let newsTotal = 0;
+    let newsBusy = false;
+    function paintNews() {
+      const box = document.getElementById('newsList');
+      if (!box) return;
+      box.innerHTML = renderNewsList(newsHave, newsTotal);
+      const more = document.getElementById('newsMore');
+      if (more) more.addEventListener('click', moreNews);
+      const less = document.getElementById('newsLess');
+      // Folding back keeps what was fetched — it is already in hand, and
+      // throwing it away would make the next Show more ask for it again.
+      if (less) less.addEventListener('click', () => {
+        newsHave = newsHave.slice(0, NEWS_PAGE);
+        paintNews();
+      });
+    }
+    async function moreNews() {
+      if (newsBusy) return;
+      newsBusy = true;
+      const more = document.getElementById('newsMore');
+      if (more) { more.disabled = true; more.textContent = 'Loading…'; }
+      try {
+        const res = await fetch(`/api/news?symbol=${encodeURIComponent(SYMBOL)}` +
+          `&offset=${newsHave.length}&limit=${NEWS_PAGE}`, { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'news unavailable');
+        // De-duplicated by url on append: a headline can arrive between two
+        // pages and shift the window, which would otherwise show it twice.
+        const seen = new Set(newsHave.map((x) => x.url));
+        newsHave = newsHave.concat((data.items || []).filter((x) => x && !seen.has(x.url)));
+        if (Number(data.total)) newsTotal = Number(data.total);
+        // A page that came back empty means there is no more, whatever the
+        // count said — otherwise the button would sit there forever.
+        if (!(data.items || []).length) newsTotal = newsHave.length;
+        paintNews();
+      } catch (err) {
+        if (more) { more.disabled = false; more.textContent = 'Could not load more — try again'; }
+      } finally { newsBusy = false; }
+    }
+
     async function loadNews(force) {
       const box = document.getElementById('newsList');
       if (!box) return;
       const btn = document.getElementById('newsBtn');
       if (btn) { btn.disabled = true; if (force) btn.textContent = 'Checking…'; }
       try {
-        const res = await fetch(`/api/news?symbol=${encodeURIComponent(SYMBOL)}${force ? '&force=1' : ''}`, { cache: 'no-store' });
+        const res = await fetch(`/api/news?symbol=${encodeURIComponent(SYMBOL)}&limit=${NEWS_PAGE}${force ? '&force=1' : ''}`, { cache: 'no-store' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'news unavailable');
-        box.innerHTML = renderNewsList(data.items);
-        box.classList.add('collapsed');
-        const more = document.getElementById('newsMore');
-        if (more) {
-          more.addEventListener('click', () => {
-            const open = box.classList.toggle('collapsed');
-            more.textContent = open ? `Show all ${more.dataset.n} headlines` : 'Show fewer';
-          });
-        }
+        newsHave = data.items || [];
+        newsTotal = Number(data.total) || newsHave.length;
+        paintNews();
         newsChecked(data.checkedAt);
       } catch (err) {
         box.innerHTML = '<div class="msg">Headlines unavailable right now.</div>';

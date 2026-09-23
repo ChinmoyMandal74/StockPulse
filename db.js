@@ -3240,13 +3240,26 @@ async function pruneNewsRuns(runDays = 30, itemDays = 14) {
   ], 'write');
 }
 
-async function readNews(symbol, limit = 12) {
+async function readNews(symbol, limit = 12, offset = 0) {
   await init();
   const r = await db.execute({
-    sql: 'select published_at, source, headline, url from news where symbol = ? order by published_at desc limit ?',
-    args: [symbol, limit],
+    sql: `select published_at, source, headline, url from news where symbol = ?
+          order by published_at desc limit ? offset ?`,
+    args: [symbol, limit, Math.max(0, Number(offset) || 0)],
   });
   return r.rows.map((x) => ({ published_at: x.published_at, source: x.source, headline: x.headline, url: x.url }));
+}
+
+// How many headlines are stored for one symbol, so a page can say "10 of 43"
+// and know when to stop asking. Bounded by the keep window and seeking on
+// idx_news_symbol, so it is a handful of rows rather than a count over the
+// table — the distinction this database is metered by.
+async function newsCount(symbol) {
+  await init();
+  const r = await db.execute({
+    sql: 'select count(*) n from news where symbol = ?', args: [symbol],
+  });
+  return Number((r.rows[0] && r.rows[0].n) || 0);
 }
 
 // The screener's one-per-symbol read: the newest stored headline everywhere,
@@ -3461,7 +3474,7 @@ module.exports = {
   techHistorySpan, techHistoryCounts,
   techHistoryLastMark,
   mergeProfileFields,
-  writeNews, readNews, readLatestNews, readNewsState, newsCountsSince,
+  writeNews, readNews, newsCount, readLatestNews, readNewsState, newsCountsSince,
   symbolsWithData,
   countSymbolRows,
   SYMBOL_TABLES,

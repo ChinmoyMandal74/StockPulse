@@ -6640,6 +6640,9 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
 // kills the feature — routes serve empty, the pages show their quiet states.
 // Only headline / source / url / timestamp are stored, never bodies.
 const NEWS_OFF = String(process.env.NEWS_PROVIDER || '').toLowerCase() === 'off';
+// The default page for /api/news. The stock page asks for this many, then
+// asks again; the screener's popover shows ten and takes the default.
+const NEWS_PAGE = 10;
 const FINNHUB_KEY = process.env.FINNHUB_API_KEY || '';
 const NEWS_TTL_MS = 6 * 3600 * 1000;   // a visited stock page refetches after this
 const NEWS_TOPUP_PER_REFRESH = 12;     // stalest symbols topped up per refresh
@@ -6662,7 +6665,7 @@ const NEWS_PROVIDER_NAME = FINNHUB_KEY ? 'finnhub' : 'google';
 
 async function refreshNewsFor(symbol, name) {
   const items = await fetchNewsItems(symbol, name);
-  const w = await store.writeNews(symbol, items, News.KEEP_DAYS, News.MAX_PER_SYMBOL);
+  const w = await store.writeNews(symbol, items, News.KEEP_DAYS, News.KEEP_MAX);
   return { items: items.length, added: w.added, stored: w.stored };
 }
 
@@ -6806,13 +6809,18 @@ app.get('/api/news', requireAuth, route(async (req, res) => {
   // The fetch clock is re-read: the page shows when this stock was last
   // checked, and after a forced check that is "just now".
   const after = await store.readNewsState();
-  // The WHOLE stored set, not 12. That number was chosen when every write
-  // replaced the lot, so a symbol never held more than one fetch and the cap
-  // never bound; now that headlines accumulate to MAX_PER_SYMBOL over the
-  // keep window, a cap here would silently be the real limit and the stock
-  // page's Show all would top out below what is actually stored.
-  res.json({ symbol, items: await store.readNews(symbol, News.MAX_PER_SYMBOL),
-    checkedAt: after[symbol] || null, forced });
+  // PAGED. Serving the whole stored set was fine at 25 a symbol and is not the
+  // shape to keep: the archive is bounded by a 21-day window now rather than by
+  // a count, so a heavily-covered stock can hold a few hundred headlines and
+  // neither the payload nor the page's DOM should carry all of them to show ten.
+  // `total` is what lets the page say "10 of 43" and know when to stop asking.
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || NEWS_PAGE));
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  const [items, total] = await Promise.all([
+    store.readNews(symbol, limit, offset),
+    store.newsCount(symbol).catch(() => 0),
+  ]);
+  res.json({ symbol, items, total, offset, limit, checkedAt: after[symbol] || null, forced });
 }));
 
 // The screener's news ticker: headlines PUBLISHED in the last 12 hours, newest

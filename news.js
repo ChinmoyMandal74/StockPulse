@@ -21,8 +21,20 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const MAX_PER_SYMBOL = 25;      // stored per symbol, newest kept
-  const KEEP_DAYS = 21;           // stored window; the page shows a fortnight
+  // ONE FETCHED BATCH, deduped — the provider's page size, not a storage
+  // policy. Google News RSS answers with about this many; the cap stops a
+  // pathological feed from arriving in one go.
+  const MAX_PER_SYMBOL = 25;
+  const KEEP_DAYS = 21;           // the retention window, and the real policy
+  // HOW MANY TO KEEP per symbol, which is a different question and used to be
+  // answered with MAX_PER_SYMBOL by mistake — conflating the size of one fetch
+  // with the depth of the archive, and truncating a heavily-covered stock to a
+  // single day's worth. The window above is the policy; this is only a ceiling
+  // so one runaway feed cannot fill the table. Provisional: nothing accumulated
+  // before 2026-09-22, so how fast a busy symbol fills is not yet measured.
+  // Worst case at 845 symbols is ~127k rows, against 1.8M bars.
+  const KEEP_MAX = Math.max(KEEP_DAYS,
+    (typeof process !== 'undefined' && process.env && Number(process.env.NEWS_KEEP_MAX)) || 150);
 
   function decodeEntities(s) {
     return String(s || '')
@@ -109,5 +121,5 @@
     return `https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(symbol)}&from=${from}&to=${to}&token=${key}`;
   }
 
-  return { MAX_PER_SYMBOL, KEEP_DAYS, parseGoogleRss, normFinnhub, dedupe, pickStalest, googleRssUrl, finnhubUrl, decodeEntities };
+  return { MAX_PER_SYMBOL, KEEP_DAYS, KEEP_MAX, parseGoogleRss, normFinnhub, dedupe, pickStalest, googleRssUrl, finnhubUrl, decodeEntities };
 });
