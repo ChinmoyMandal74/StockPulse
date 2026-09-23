@@ -6662,7 +6662,7 @@ const NEWS_PROVIDER_NAME = FINNHUB_KEY ? 'finnhub' : 'google';
 
 async function refreshNewsFor(symbol, name) {
   const items = await fetchNewsItems(symbol, name);
-  const w = await store.writeNews(symbol, items, News.KEEP_DAYS);
+  const w = await store.writeNews(symbol, items, News.KEEP_DAYS, News.MAX_PER_SYMBOL);
   return { items: items.length, added: w.added, stored: w.stored };
 }
 
@@ -6806,7 +6806,13 @@ app.get('/api/news', requireAuth, route(async (req, res) => {
   // The fetch clock is re-read: the page shows when this stock was last
   // checked, and after a forced check that is "just now".
   const after = await store.readNewsState();
-  res.json({ symbol, items: await store.readNews(symbol, 12), checkedAt: after[symbol] || null, forced });
+  // The WHOLE stored set, not 12. That number was chosen when every write
+  // replaced the lot, so a symbol never held more than one fetch and the cap
+  // never bound; now that headlines accumulate to MAX_PER_SYMBOL over the
+  // keep window, a cap here would silently be the real limit and the stock
+  // page's Show all would top out below what is actually stored.
+  res.json({ symbol, items: await store.readNews(symbol, News.MAX_PER_SYMBOL),
+    checkedAt: after[symbol] || null, forced });
 }));
 
 // The screener's news ticker: headlines PUBLISHED in the last 12 hours, newest

@@ -3081,18 +3081,38 @@ async function clearVisitors() {
 // Returns { added, stored }: how many of these headlines were not already
 // held for the symbol, and how many it holds afterwards. The first and last
 // statements of the same batch read both, so the log costs no extra trip.
-async function writeNews(symbol, items, keepDays = 21) {
+// HEADLINES ACCUMULATE; they are not replaced.
+//
+// This used to `delete from news where symbol = ?` before inserting — the
+// whole-collection-replace pattern that is right for portfolios and profiles,
+// where the stored set IS the source of truth. A news feed is not that: Google
+// News RSS serves a rolling window of the last day or two, so replacing meant
+// each fetch threw away everything older than the provider currently happened
+// to be carrying. Measured before the change: NVDA, MU and AAPL each held 12
+// items spanning ONE OR TWO DAYS, against a nominal 21-day window and a
+// 25-item cap that could therefore never bind.
+//
+// The id is a hash of the url, so `insert or replace` already dedupes an item
+// the feed keeps serving. Two trims bound the table instead of the wipe: the
+// date cutoff that was always here, and a newest-N cap — needed now because
+// MAX_PER_SYMBOL was only ever applied to the incoming batch, and over three
+// weeks a stored set would otherwise drift past it.
+async function writeNews(symbol, items, keepDays = 21, keepMax = 25) {
   await init();
   const cutoff = new Date(Date.now() - keepDays * 86400000).toISOString();
   const idOf = (x) => crypto.createHash('sha256').update(x.url).digest('hex').slice(0, 32);
   const stmts = [
     { sql: 'select id from news where symbol = ?', args: [symbol] },
-    { sql: 'delete from news where symbol = ?', args: [symbol] },
     ...items.map((x) => ({
       sql: 'insert or replace into news (id, symbol, published_at, source, headline, url) values (?, ?, ?, ?, ?, ?)',
       args: [idOf(x), symbol, x.published_at, x.source || null, x.headline, x.url],
     })),
     { sql: 'delete from news where symbol = ? and published_at < ?', args: [symbol, cutoff] },
+    // Newest N. Seeks on idx_news_symbol (symbol, published_at) rather than
+    // walking the table — the rule this database is metered by.
+    { sql: `delete from news where symbol = ? and id not in (
+              select id from news where symbol = ? order by published_at desc limit ?)`,
+      args: [symbol, symbol, keepMax] },
     { sql: 'insert or replace into news_state (symbol, fetched_at) values (?, ?)', args: [symbol, Date.now()] },
     { sql: 'select count(*) as n from news where symbol = ?', args: [symbol] },
   ];
