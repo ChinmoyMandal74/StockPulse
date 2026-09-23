@@ -2815,12 +2815,13 @@ function applyScores(rows) {
 }
 
 function computeScores(m) {
-  // `key` is the stable name a client re-weights against. The label is prose and
-  // may be reworded; the key is the contract, so a preset in screens.js cannot
-  // quietly stop matching because a caption was improved.
-  // Each centre is a measured median, each scale roughly the interquartile
-  // spread. Trend regime and RSI timing were always absolute and are unchanged.
-  const oneMonth = m.oneMonthPct;
+  // Earnings growth, PEG and forward P/E all describe earnings, so none of them
+  // says anything useful about a company that does not have any. The feed still
+  // supplies values — a positive-looking PEG of 0.16 on an $878M loss — and
+  // pegScore/peScore only guard against a ratio <= 0, so they sail through.
+  // Excluded rather than penalised: scoreFactors() renormalises over whatever
+  // remains, so the surviving factors simply carry the score.
+  const lossMaking = m.netIncomeTtm != null && m.netIncomeTtm < 0;
   const qualComps = [
     { label: 'Earnings growth', weight: 25, sub: lossMaking ? null : lin(m.earningsGrowthYoY, 0, 30) },
     { label: 'Revenue growth', weight: 20, sub: lin(m.revenueGrowthYoY, 0, 20) },
