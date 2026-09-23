@@ -54,6 +54,7 @@ Runs on port 3000. Requires `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_U
 | `public/favicon.svg` | Rising-line mark, emerald on OLED black |
 | `portfolios.json`, `snapshot.json`, `profiles.json`, `names.json`, `visitors.log` | **Legacy.** Pre-migration backups only — nothing reads or writes them any more. Safe to delete once you trust the database. |
 | `.env` | `TWELVE_DATA_API_KEY`, `TURSO_*`, `ADMIN_PASSWORD`, optional feature flags |
+| `docs/backlog.md` | **Work identified and deliberately not done** — what it is, what is already measured, and what would make it a bad idea. Read it before proposing something; it may already be there with numbers attached |
 
 ## Persistence (Turso)
 Everything goes through `db.js`. Tables: `portfolios`, `portfolio_tickers`, `names`, `profiles`, `snapshot`, `visitors`.
@@ -899,7 +900,7 @@ Five hypotheses have now come back flat, which starts to say something about the
 
 ### Untested, and worth doing
 
-- **Post-earnings announcement drift** is the best fit for a one-to-two-month hold that exists — right timescale, durable literature, and there is already a "Drifting after a beat" screen built on the idea. **Recording began 2026-09-13**: `next_earnings_date`, `next_earnings_estimated`, `last_earnings_date` and `last_surprise` now ride every Refresh-all row of `fundamentals_history` (via `FUND_EXTRAS` in db.js — written beside `FUND_FIELDS`, deliberately outside the email's numeric moved-fields pipeline). The study becomes answerable a couple of quarters after that date; nothing before it is recoverable.
+- **Post-earnings announcement drift** is the best fit for a one-to-two-month hold that exists — right timescale, durable literature, and there is already a "Drifting after a beat" screen built on the idea. **IT IS ANSWERABLE NOW, and this entry used to say otherwise.** It claimed the study waited on `fundamentals_history` recording, which began 2026-09-13 — but `EARNINGS_QUARTERS` went to 40 five days later and backfilled the depth for nothing, so `earnings_history` holds **27,421 events carrying a surprise since 2017** and `bars` prices the window after each one. The detail that would fake a result: **27,551 of 27,705 events are "After Hours"**, so the drift window must start at **t+1** or it swallows the announcement jump rather than measuring drift. See **[docs/backlog.md](docs/backlog.md)** for the full writeup, the two checks still owed, and what it should become if it works — a marker beside Entry, following the volume-breakout precedent, not a rule.
 - **Benchmark-relative returns everywhere** — subtract the universe's equal-weight return that day. It turns "did it go up" into "did it beat its peers", which is the only version that survives the remaining bias.
 - **Longer horizons, 6m and 12m.** Everything here has been tested at one to three months. Two more `LEAD`s in the view.
 

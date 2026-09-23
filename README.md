@@ -56,6 +56,8 @@ the refresh budget and its measured credit costs, the auth model, the research l
 what has been tested and come back flat, and a long list of things that will bite you.
 Read it before changing anything here.
 
+- [docs/backlog.md](docs/backlog.md) — work identified and deliberately not
+  done, with what is already measured about each
 - [docs/momentum-scoring.md](docs/momentum-scoring.md) — the price-strength score and the
   Overall composite, removed 2026-09-23, and why
 - [docs/momentum-delta.md](docs/momentum-delta.md) — the score's history and delta,
