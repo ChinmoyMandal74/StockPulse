@@ -404,6 +404,40 @@
     @media (max-width: 1000px) { .fields { column-count: 2; } }
     @media (max-width: 620px)  { .fields { column-count: 1; } }
 
+    /* ---- earnings history ---------------------------------------------
+       Reported EPS against what was expected, one row per quarter. Scoped to
+       #earn throughout: `.bar`, `.hit` and `.miss` are the kind of generic
+       names this project has been bitten by five times when left unscoped. */
+    #earn .count { font-size: 11.5px; color: var(--faint); font-family: var(--mono); }
+    #earn .summary { font-size: 13px; color: var(--muted); margin: 0 0 12px; line-height: 1.6; }
+    #earn .summary b { color: var(--text); font-weight: 600; }
+    /* The strip: one bar per quarter, oldest left, sized by surprise. */
+    #earn .strip { display: flex; align-items: flex-end; gap: 3px; height: 62px;
+                   margin: 0 0 14px; padding-bottom: 1px; border-bottom: 1px solid var(--hair); }
+    #earn .bar { flex: 1 1 0; min-width: 2px; position: relative; display: block;
+                 border-radius: 2px 2px 0 0; background: var(--faint); opacity: 0.85; }
+    #earn .bar.hit { background: var(--green); }
+    #earn .bar.miss { background: var(--red); }
+    /* A quarter with no estimate has no surprise to draw — a hairline says it
+       is a quarter we hold, not a zero. */
+    #earn .bar.none { background: var(--hair-2); }
+    #earn .bar:hover { opacity: 1; }
+    #earn table { width: 100%; border-collapse: collapse; }
+    #earn th, #earn td { text-align: right; padding: 6px 0 6px 14px; font-size: 12.5px;
+                         border-bottom: 1px solid rgba(255, 255, 255, 0.05); white-space: nowrap; }
+    #earn th { color: var(--faint); font-weight: 500; font-size: 10.5px;
+               text-transform: uppercase; letter-spacing: 0.1em; }
+    #earn td { font-family: var(--mono); color: var(--text); }
+    #earn th:first-child, #earn td:first-child { text-align: left; padding-left: 0; }
+    #earn td.q { font-family: var(--sans); color: var(--muted); }
+    #earn td.when { font-family: var(--sans); color: var(--faint); font-size: 11.5px; }
+    #earn td.up { color: var(--green); }
+    #earn td.dn { color: var(--red); }
+    #earn td.na { color: var(--faint); }
+    #earn .earnmore { margin-top: 12px; }
+    #earn .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
+    @media (max-width: 620px) { #earn .strip { height: 44px; } }
+
     .later { color: var(--faint); font-size: 12px; line-height: 1.6; }
     .err { color: var(--red); font-size: 13px; margin-top: 20px; }
   </style>
@@ -889,6 +923,101 @@
     }
     // ---- end news renderers ---------------------------------------------
 
+    // ---- earnings history ------------------------------------------------
+    // What the company reported each quarter against what was expected. The
+    // rows come from `earnings_history`, which fills for free: /earnings
+    // returns up to 40 quarters for the same 20 credits as 8.
+    const EARN_PAGE = 8;
+    let earnRows = [];
+    let earnAll = false;
+
+    const eps = (v) => (v == null || !isFinite(v) ? null : Number(v));
+    // A quarter counts as a beat or a miss only if somebody forecast it.
+    const hasEst = (r) => eps(r.epsEstimate) != null && eps(r.epsActual) != null;
+
+    // THE SCALE IS ROBUST ON PURPOSE. A surprise percentage is a ratio against
+    // the estimate, so a near-zero estimate produces enormous values — this
+    // archive holds a -262% and the project already records +214% appearing on
+    // two mega-caps at once as a feed artefact. Scaling to the largest bar
+    // would flatten every honest quarter into a sliver. The ceiling is the 90th
+    // percentile of what is there, floored at 10%, and anything past it is
+    // drawn full height and said so.
+    function earnScale(list) {
+      const mags = list.filter(hasEst).map((r) => Math.abs(eps(r.surprisePrc) || 0))
+        .filter((v) => isFinite(v)).sort((a, b) => a - b);
+      if (!mags.length) return 10;
+      return Math.max(10, mags[Math.floor(mags.length * 0.9)] || 10);
+    }
+
+    function earnStrip(list, scale) {
+      // Oldest on the left: a history reads forward.
+      const bars = list.slice().reverse().map((r) => {
+        const est = eps(r.epsEstimate), act = eps(r.epsActual);
+        if (est == null || act == null) {
+          return `<span class="bar none" style="height:3px" title="${esc(r.date)} — no estimate on record"></span>`;
+        }
+        const s = eps(r.surprisePrc);
+        const mag = s == null ? 0 : Math.min(Math.abs(s) / scale, 1);
+        const h = Math.max(3, Math.round(mag * 58));
+        const beat = act >= est;
+        const over = s != null && Math.abs(s) > scale;
+        const t = `${r.date} — reported ${act.toFixed(2)} against ${est.toFixed(2)}` +
+          (s == null ? '' : ` (${s >= 0 ? '+' : ''}${s.toFixed(1)}%${over ? ', beyond the scale' : ''})`);
+        return `<span class="bar ${beat ? 'hit' : 'miss'}" style="height:${h}px" title="${esc(t)}"></span>`;
+      }).join('');
+      return `<div class="strip">${bars}</div>`;
+    }
+
+    function earnTable(list) {
+      const shown = earnAll ? list : list.slice(0, EARN_PAGE);
+      const body = shown.map((r) => {
+        const est = eps(r.epsEstimate), act = eps(r.epsActual), s = eps(r.surprisePrc);
+        const sc = s == null ? 'na' : s >= 0 ? 'up' : 'dn';
+        return '<tr>' +
+          `<td class="q">${esc(r.date)}</td>` +
+          `<td class="${est == null ? 'na' : ''}">${est == null ? '—' : est.toFixed(2)}</td>` +
+          `<td class="${act == null ? 'na' : ''}">${act == null ? '—' : act.toFixed(2)}</td>` +
+          `<td class="${sc}">${s == null ? '—' : (s >= 0 ? '+' : '') + s.toFixed(1) + '%'}</td>` +
+          `<td class="when">${esc(r.time || '')}</td>` +
+          '</tr>';
+      }).join('');
+      return '<table><thead><tr><th>Quarter</th><th>Estimate</th><th>Reported</th>' +
+        '<th>Surprise</th><th>When</th></tr></thead><tbody>' + body + '</tbody></table>' +
+        (list.length > EARN_PAGE
+          ? `<button type="button" class="rng earnmore" id="earnMore">` +
+            (earnAll ? 'Show fewer' : `Show all ${list.length} quarters`) + '</button>'
+          : '');
+    }
+
+    function paintEarnings() {
+      const box = document.getElementById('earnBody');
+      if (!box) return;
+      const list = earnRows;
+      const scored = list.filter(hasEst);
+      const beats = scored.filter((r) => eps(r.epsActual) >= eps(r.epsEstimate)).length;
+      const mags = scored.map((r) => eps(r.surprisePrc)).filter((v) => v != null && isFinite(v))
+        .sort((a, b) => a - b);
+      const med = mags.length ? mags[Math.floor(mags.length / 2)] : null;
+      const scale = earnScale(list);
+
+      const summary = scored.length
+        ? `Beat the estimate in <b>${beats} of ${scored.length}</b> quarters` +
+          (med == null ? '' : `, median surprise <b>${med >= 0 ? '+' : ''}${med.toFixed(1)}%</b>`) + '.'
+        : `<b>${list.length}</b> quarter${list.length === 1 ? '' : 's'} on record, none with an estimate to compare against.`;
+
+      box.innerHTML =
+        `<p class="summary">${summary}</p>` +
+        earnStrip(list, scale) +
+        earnTable(list) +
+        '<p class="note">Bar height is the size of the surprise, green where the company beat and red where ' +
+        'it missed; oldest on the left. The scale stops at the 90th percentile, because a surprise is measured ' +
+        'against the estimate and a near-zero estimate makes the percentage enormous — a bar at full height may ' +
+        'be past it, and says so on hover. Reported figures only: this is what happened, not a forecast.</p>';
+
+      const more = document.getElementById('earnMore');
+      if (more) more.addEventListener('click', () => { earnAll = !earnAll; paintEarnings(); });
+    }
+
     // `force` asks the feed now instead of waiting out the six-hour rule. The
     // provider is free, so the only cost is the wait; the server keeps a
     // one-minute floor per stock so the button cannot be held down.
@@ -1218,6 +1347,14 @@
           })}</div>
         </section></div>
 
+        ${(payload.earnings || []).length ? `
+        <section class="bezel card" id="earn"><div class="core">
+          <div class="sec-h"><h2>Earnings history</h2>
+            <span class="deeper count">${(payload.earnings || []).length} quarters stored</span>
+          </div>
+          <div id="earnBody"></div>
+        </div></section>` : ''}
+
         ${payload.company && payload.company.description ? `
         <section class="bezel card"><div class="core">
           <div class="sec-h"><h2>About ${esc(stock.symbol)}</h2></div>
@@ -1227,6 +1364,12 @@
         <p class="later">Prices as of ${esc(payload.updatedAt ? new Date(payload.updatedAt).toLocaleString() : 'n/a')}.
         More charts will land on this page.</p>
       `;
+
+      // Filled after the markup lands, so the strip and the fold are built from
+      // one function that the Show-all button can call again.
+      earnRows = payload.earnings || [];
+      earnAll = false;
+      paintEarnings();
 
       // ---- symbol picker ------------------------------------------------------
       // The masthead symbol opens the whole universe, alphabetically, with a

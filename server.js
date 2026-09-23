@@ -5688,9 +5688,12 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   // nothing — the screener's own Promise.all lesson, unapplied here. Each keeps
   // its own failure: the profile is optional (three display fields), the
   // snapshot is the answer.
-  const [snap, profile] = await Promise.all([
+  const [snap, profile, earnings] = await Promise.all([
     snapshotCached(),
     store.readProfile(symbol).catch(() => null),
+    // Seeks on the (symbol, d) primary key. Optional like the profile: a page
+    // that loses its earnings table is thinner, not broken.
+    store.readEarnings(symbol).catch(() => []),
   ]);
   const stocks = (snap && snap.stocks) || [];
   const stock = stocks.find((x) => String(x.symbol).toUpperCase() === symbol);
@@ -5703,6 +5706,9 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
       employees: profile.employees ?? null,
       website: profile.website || null,
     } : null,
+    // Every stored quarter, newest first. Deliberately NOT in the snapshot:
+    // it is per-symbol and nothing else on any page reads it.
+    earnings,
     // The symbol picker's list. The whole snapshot is already in memory to work
     // out the rank above, so this costs a map and ~3 KB rather than a query.
     // Alphabetical, because the picker is for reaching a ticker you have in
