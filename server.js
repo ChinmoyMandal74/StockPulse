@@ -2937,7 +2937,12 @@ function cleanScreens(input) {
       const v = str(d[k], 80);
       if (v && v !== 'All') def[k] = v;
     }
-    if (d.changed === true) def.changed = true;
+    // The advice move. `changed: true` is the pre-2026-09-23 Changed chip and
+    // means exactly 'Moved'; it is kept verbatim rather than rewritten, so a
+    // screen stored before the picker existed round-trips unchanged and an old
+    // screener tab still reads it.
+    if (Filters.MOVES.includes(String(d.move || ''))) def.move = String(d.move);
+    else if (d.changed === true) def.changed = true;
     if (d.sort && VIEW_COL_RE.test(String(d.sort.key || ''))) def.sort = { key: String(d.sort.key), dir: d.sort.dir === 1 ? 1 : -1 };
     let id = VIEW_ID_RE.test(String(x.id || '')) ? String(x.id) : '';
     while (!id || ids.has(id)) id = crypto.randomBytes(6).toString('hex').slice(0, 8);

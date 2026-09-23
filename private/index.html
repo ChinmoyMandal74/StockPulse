@@ -129,6 +129,10 @@
     .adot.a-buy-with-risk { background: color-mix(in srgb, var(--green) 55%, var(--muted)); }
     .adot.a-avoid { background: color-mix(in srgb, var(--red) 70%, var(--muted)); }
     .adot.a-sell-immediately { background: var(--red); }
+    /* and the same idea for the direction of a move — Unchanged keeps the muted default */
+    .adot.mv-upgraded { background: var(--green); }
+    .adot.mv-downgraded { background: var(--red); }
+    .adot.mv-moved { background: var(--amber); }
     td.ctype { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; cursor: pointer; text-align: left; }
     td.ctype .early { color: var(--amber); }
     td.state { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; cursor: pointer; text-align: left; }
@@ -672,16 +676,11 @@
                      white-space: nowrap; display: inline-block; vertical-align: -3px; }
     /* and the menu itself, which is a list of them */
     #indMenu .pick .nm { white-space: normal; }
-    .chgFilter { gap: 7px; white-space: nowrap; }
-    .chgFilter .n { font-family: var(--mono); font-weight: 600; }
-    .chgFilter.on { color: var(--amber); border-color: rgba(251, 191, 36, 0.45);
-                    background: rgba(251, 191, 36, 0.1); }
-    .chgFilter:disabled { opacity: 0.45; cursor: default; }
     /* The rows themselves used to carry an amber bar on the Symbol cell. It went
-       on 2026-09-16: the Changed chip filters to exactly these rows, and the
+       on 2026-09-16: the Changed chip filtered to exactly these rows, and the
        per-column chevron still marks which verdict moved, so the bar was a
-       third way of saying the same thing. adviceMoved() stays — the chip and
-       its count are built on it. */
+       third way of saying the same thing. The chip itself went on 2026-09-23,
+       replaced by the Advice move picker, which says WHICH WAY as well. */
     /* The frozen name column: the link ellipsizes, the pencil sits beside it.
        Width comes from .frz1 above, not from here — this cell IS that column
        now that Name has gone, and two different widths would fight. */
@@ -999,8 +998,14 @@
           <button class="btn picker-btn" id="advBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="advMenu" role="listbox" aria-label="Balanced advice"></div>
         </div>
-        <button class="btn chgFilter" id="chgBtn" style="display:none"
-                title="Show only the stocks whose Balanced advice moved since the previous session"></button>
+        <!-- Which way the Balanced verdict went since the previous session.
+             This was a Changed chip — an on/off toggle meaning "moved either
+             way" — until 2026-09-23. `Moved` is that same view, kept as one of
+             the choices rather than lost to the split. -->
+        <div class="picker" id="movePicker" data-open="0" style="display:none">
+          <button class="btn picker-btn" id="moveBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="picker-menu" id="moveMenu" role="listbox" aria-label="Advice move"></div>
+        </div>
         <button class="btn picker-btn" id="fltBtn" aria-pressed="false"></button>
         <!-- The promo studio, open to every account since 2026-09-15 (the
              Announcement template stays the owner's). Hidden for guests. -->
@@ -1969,6 +1974,7 @@
       { root: 'indPicker', btn: 'indBtn', menu: 'indMenu' },
       { root: 'sizePicker', btn: 'sizeBtn', menu: 'sizeMenu' },
       { root: 'advPicker', btn: 'advBtn', menu: 'advMenu' },
+      { root: 'movePicker', btn: 'moveBtn', menu: 'moveMenu' },
       { root: 'researchPicker', btn: 'researchBtn', menu: 'researchMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
     ];
@@ -2146,7 +2152,11 @@
     // — the shared measurement the emails and the reports use. The per-column
     // chevrons stay profile-specific; one filter answering five questions at
     // once would answer none of them.
-    let changedOnly = false;
+    // 'All' | 'Moved' | 'Upgraded' | 'Unchanged' | 'Downgraded'. This was a
+    // Changed chip — an on/off toggle — until 2026-09-23; 'Moved' is that
+    // toggle in its on state, kept so the split does not cost the either-way
+    // view, and it is what a screen saved with `changed: true` still means.
+    let moveFilter = 'All';
     let sectorFilter = 'All';
     // The finer cut, and it lives INSIDE the sector: an industry belongs to
     // exactly one, so the menu only ever offers what the current sector holds
@@ -2232,10 +2242,13 @@
       if (!tilesOn()) paintWindow(true);   // the table sizes itself from its own height
     }
 
-    const adviceMoved = (s) => !!(s && s.advicePrev && s.action && s.advicePrev !== s.action);
+    // Defined once in filters.js, which the server also runs for the phone —
+    // the ladder is worst-first there and getting that backwards would label
+    // every upgrade a downgrade.
+    const adviceMove = (s) => Filters.adviceMove(s);
 
-    // Tab and sector together decide what the view is ABOUT; the changed
-    // filter then narrows it. Both the table and the Changed count read this,
+    // Tab and sector together decide what the view is ABOUT; the advice-move
+    // filter then narrows it. Both the table and its counts read this,
     // so the number on the chip can never describe a different set of rows
     // from the one on screen.
     function scopedStocks() {
@@ -2259,7 +2272,7 @@
     // its summary reports against.
     function prefilterStocks() {
       const rows = scopedStocks();
-      return changedOnly ? rows.filter(adviceMoved) : rows;
+      return moveFilter === 'All' ? rows : rows.filter((s) => Filters.adviceMoveIs(s, moveFilter));
     }
 
     function visibleStocks() {
@@ -2754,23 +2767,66 @@
         : 'Filter the table to one sector';
     }
 
-    // The count is of the CURRENT tab, so filtering inside a portfolio says
-    // how many moved in that portfolio rather than across the screen.
-    function renderChangedChip() {
-      const btn = $('chgBtn');
-      if (!btn) return;
-      const scope = scopedStocks();
-      const n = scope.filter(adviceMoved).length;
+    // Which way the Balanced verdict went since the previous close. This was a
+    // Changed chip — one on/off toggle — until 2026-09-23; 'Moved' is that
+    // toggle's on state, kept as a fourth option so the either-way view did not
+    // cost anything and so a screen stored as `changed: true` still means what
+    // it meant. Counts are of the CURRENT tab, sector, industry, size and
+    // advice, so a count here can never describe a different population from
+    // the one the menu beside it just counted.
+    function renderMoveMenu(scope) {
+      const counts = { Moved: 0, Upgraded: 0, Unchanged: 0, Downgraded: 0 };
+      let blank = 0;
+      scope.forEach((s) => {
+        const m = adviceMove(s);
+        if (!m) { blank++; return; }
+        counts[m]++;
+        if (m !== 'Unchanged') counts.Moved++;
+      });
+      const row = (val, label, n) =>
+        `<button class="pick ${moveFilter === val ? 'on' : ''}" data-move="${we(val)}" role="option" ` +
+        `aria-selected="${moveFilter === val}">` +
+        (val === 'All' ? '' : `<span class="adot mv-${val.toLowerCase()}"></span>`) +
+        `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>`;
+      const note = blank
+        ? `${blank} ${blank === 1 ? 'row has' : 'rows have'} no previous verdict to compare against yet.`
+        : '';
+      $('moveMenu').innerHTML = '<div class="picker-inner">' +
+        row('All', 'Any', scope.length) +
+        row('Moved', 'Moved either way', counts.Moved) +
+        row('Upgraded', 'Upgraded', counts.Upgraded) +
+        row('Unchanged', 'Unchanged', counts.Unchanged) +
+        row('Downgraded', 'Downgraded', counts.Downgraded) +
+        '<div class="pick-sep"></div><div class="pick-hint">The Balanced verdict against the previous ' +
+        'close. An upgrade is a step up the ladder, Strong Buy being the top.' + (note ? ' ' + we(note) : '') +
+        '</div></div>';
+      $('moveMenu').querySelectorAll('[data-move]').forEach((b) => {
+        b.addEventListener('click', () => {
+          moveFilter = b.dataset.move;
+          window.track && track('picker', 'move:' + moveFilter);
+          closePickers();
+          render();
+        });
+      });
+    }
+
+    function renderMoveTrigger(scope) {
+      const root = $('movePicker');
+      if (!root) return;
+      // Hidden until a refresh has stored yesterday's verdict — there is
+      // nothing to compare against before that, and every option would read 0.
       const any = scope.some((s) => s.advicePrev);
-      btn.style.display = any ? '' : 'none';      // hidden until a refresh has stored yesterday
-      btn.disabled = n === 0 && !changedOnly;
-      btn.classList.toggle('on', changedOnly);
-      btn.innerHTML = '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh-all" /></svg>' +
-        `<span>Changed</span><span class="n">${n}</span>`;
-      btn.title = n
-        ? (changedOnly ? 'Showing only the changed rows — click to show everything again'
-          : `${n} verdict${n === 1 ? '' : 's'} moved since the previous session — click to show only those`)
-        : 'Every verdict held since the previous session';
+      root.style.display = any ? '' : 'none';
+      const on = moveFilter !== 'All';
+      $('moveBtn').innerHTML =
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh-all" /></svg>' +
+        '<span class="picker-label">Advice move</span>' +
+        `<span class="count">${on ? we(moveFilter) : 'Any'}</span>` +
+        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
+      $('moveBtn').classList.toggle('on', on);
+      $('moveBtn').title = on
+        ? `Showing rows whose Balanced verdict is ${moveFilter.toLowerCase()} since the previous close — open to change or clear`
+        : 'Filter by which way the Balanced verdict moved since the previous close';
     }
 
     // One row of the table. Pulled out of render() so a window repaint can
@@ -3037,7 +3093,7 @@
       renderIndustryTrigger();
       renderSizeTrigger();
       renderAdviceTrigger();
-      renderChangedChip();
+      renderMoveTrigger(scopedStocks());
       const tbody = $('tbody');
       const rows = visibleStocks();
       markSortedColumn();
@@ -3061,8 +3117,10 @@
           (narrowest === 'All' ? tabName : `${narrowest} in ${tabName}`);
         const msg = activeColFilters().length && prefilterStocks().length
           ? 'Nothing matches the column filters \u2014 loosen one, or Clear filters in the bar above the table.'
-          : changedOnly
-          ? `Every verdict in ${where} held since the previous session — nothing changed to show.`
+          : moveFilter === 'Moved'
+          ? `Every verdict in ${where} held since the previous session — nothing moved to show.`
+          : moveFilter !== 'All'
+          ? `No verdict in ${where} was ${moveFilter.toLowerCase()} since the previous session.`
           : adviceFilter !== 'All'
             ? `Nothing reads ${where} — clear the Advice filter to see the rest.`
           : narrowest !== 'All'
@@ -3904,15 +3962,21 @@
         ? { id: 'screen:' + sc.id, name: sc.name, columns: sc.def.columns } : null;
     }
 
+    // What a stored screen means by an advice move. `changed: true` is how the
+    // Changed chip stored itself before 2026-09-23 and is exactly 'Moved'; the
+    // starter screen "Advice changed today" still carries it.
+    const screenMove = (d) => d.move || (d.changed ? 'Moved' : 'All');
+
     // The rows a screen keeps, from a starting set — the menu's live counts.
     function screenRows(sc, rows) {
       const d = sc.def || {};
+      const mv = screenMove(d);
       const preds = Object.entries(d.filters || {}).map(([k, v]) => [k, compileFilter(k, v)]).filter(([, f]) => f);
       return rows.filter((x) => !x.error
         && (!d.sector || x.sector === d.sector)
         && (!d.industry || x.industry === d.industry)
         && (!d.advice || filterValue(x, 'av:Balanced') === d.advice)
-        && (!d.changed || adviceMoved(x))
+        && Filters.adviceMoveIs(x, mv)
         && preds.every(([k, f]) => f(filterValue(x, k))));
     }
 
@@ -3926,7 +3990,7 @@
       return !same || screenColsOff
         || (d.sector || 'All') !== sectorFilter || (d.industry || 'All') !== industryFilter
         || (d.size || 'All') !== sizeFilter
-        || (d.advice || 'All') !== adviceFilter || !!d.changed !== changedOnly
+        || (d.advice || 'All') !== adviceFilter || screenMove(d) !== moveFilter
         || (d.sort && (d.sort.key !== sortKey || d.sort.dir !== sortDir));
     }
 
@@ -3934,7 +3998,7 @@
       const sc = findScreen(id);
       if (!sc) return;
       if (!activeScreenId) {
-        screenBase = { sortKey, sortDir, sectorFilter, industryFilter, sizeFilter, adviceFilter, changedOnly,
+        screenBase = { sortKey, sortDir, sectorFilter, industryFilter, sizeFilter, adviceFilter, moveFilter,
           colFilters: { ...colFilters }, filterRowOn };
       }
       const d = sc.def || {};
@@ -3945,7 +4009,7 @@
       industryFilter = d.industry || 'All';
       sizeFilter = d.size || 'All';
       adviceFilter = d.advice || 'All';
-      changedOnly = !!d.changed;
+      moveFilter = screenMove(d);
       if (d.sort) { sortKey = d.sort.key; sortDir = d.sort.dir; }
       activeScreenId = id;
       screenColsOff = false;
@@ -3970,7 +4034,7 @@
         sortKey = b.sortKey; sortDir = b.sortDir;
         sectorFilter = b.sectorFilter; industryFilter = b.industryFilter; adviceFilter = b.adviceFilter;
         sizeFilter = b.sizeFilter || 'All';
-        changedOnly = b.changedOnly;
+        moveFilter = b.moveFilter || 'All';
         colFilters = {}; fltCompiled = {};
         for (const [k, v] of Object.entries(b.colFilters)) setColFilter(k, v);
         if (filterRowOn !== b.filterRowOn) { filterRowOn = b.filterRowOn; document.body.classList.toggle('filtering', filterRowOn); }
@@ -4005,7 +4069,9 @@
       if (industryFilter !== 'All') def.industry = industryFilter;
       if (sizeFilter !== 'All') def.size = sizeFilter;
       if (adviceFilter !== 'All') def.advice = adviceFilter;
-      if (changedOnly) def.changed = true;
+      // Saved as `move`, never as the old `changed` flag — a screen saved today
+      // can mean Upgraded, which the boolean could not say.
+      if (moveFilter !== 'All') def.move = moveFilter;
       return def;
     }
 
@@ -5051,12 +5117,6 @@
     wireViewEditor();
     $('fltBtn').addEventListener('click', () => setFilterRow(!filterRowOn));
 
-    $('chgBtn').addEventListener('click', () => {
-      changedOnly = !changedOnly;
-      window.track && track('picker', 'changed:' + (changedOnly ? 'on' : 'off'));
-      render();
-    });
-
     // Sorting
     document.querySelectorAll('th[data-key]').forEach((th) => {
       th.addEventListener('click', () => {
@@ -5147,6 +5207,7 @@
           (sectorFilter === 'All' || s.sector === sectorFilter)
           && (industryFilter === 'All' || s.industry === industryFilter)));
         if (opening && p.root === 'advPicker') renderAdviceMenu();
+        if (opening && p.root === 'movePicker') renderMoveMenu(scopedStocks());
         if (opening && p.root === 'scrPicker') renderScreensMenu();
         openPicker(opening ? p.root : null);
       });

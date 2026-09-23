@@ -319,13 +319,12 @@
     // so a higher index is a better verdict and an upgrade is an increase. The
     // page reverses that list for display; using the display order here would
     // label every upgrade a downgrade.
-    const adviceMove = (s) => {
-      if (!s.action || !s.advicePrev) return null;   // nothing to compare — a blank
-      if (s.action === s.advicePrev) return 'Unchanged';
-      return ActionRules.ACTIONS.indexOf(s.action) > ActionRules.ACTIONS.indexOf(s.advicePrev)
-        ? 'Upgraded' : 'Downgraded';
-    };
-    const adviceMoved = (s) => { const m = adviceMove(s); return m === 'Upgraded' || m === 'Downgraded'; };
+    // Defined in filters.js, which this page already loads and the server
+    // require()s — so the pivot, the screener's Advice move picker and a screen
+    // the server runs for the phone cannot disagree about which way a verdict
+    // went. A blank stays a blank: nothing to compare is not "Unchanged".
+    const adviceMove = (s) => Filters.adviceMove(s);
+    const adviceMoved = (s) => Filters.adviceMoveIs(s, 'Moved');
     const TREND_ORDER = [...ActionRules.TREND_ORDER].reverse();
     const ENTRY_ORDER = [...ActionRules.ENTRY_ORDER].reverse();
     // Company type is a DISPLAY order, not a severity — an ETF is not a worse

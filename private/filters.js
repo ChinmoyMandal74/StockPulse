@@ -192,6 +192,38 @@
     return null;
   }
 
+  // Which way a stock's Balanced verdict went since the previous close:
+  // 'Upgraded' | 'Downgraded' | 'Unchanged', or null when there is nothing to
+  // compare against — a stock new to the screener has not "held" its verdict,
+  // and calling that Unchanged would be a third thing the blank rule exists to
+  // prevent.
+  //
+  // DEFINED HERE because three surfaces need the same answer: the screener's
+  // bar filter, the pivot's dimension and measure, and this module's own screen
+  // evaluation, which the server runs for the phone.
+  //
+  // `ActionRules.ACTIONS` RUNS WORST-FIRST (Sell Immediately → Strong Buy), so
+  // an upgrade is an INCREASE in index. Both pages reverse that list for
+  // display; using the display order here would label every upgrade a
+  // downgrade. Read off the global lazily rather than at load, because
+  // /pivot loads this file before action.js.
+  const MOVES = ['Moved', 'Upgraded', 'Unchanged', 'Downgraded'];
+  function adviceMove(s) {
+    if (!s || !s.action || !s.advicePrev) return null;
+    if (s.action === s.advicePrev) return 'Unchanged';
+    const L = (typeof globalThis !== 'undefined' && globalThis.ActionRules
+      && globalThis.ActionRules.ACTIONS) || null;
+    if (!L) return null;                     // no ladder, no honest direction
+    return L.indexOf(s.action) > L.indexOf(s.advicePrev) ? 'Upgraded' : 'Downgraded';
+  }
+  // 'Moved' is either direction — what the screener's Changed chip meant before
+  // it became this filter, and what a screen saved with `changed: true` means.
+  const adviceMoveIs = (s, want) => {
+    if (!want || want === 'All') return true;
+    const m = adviceMove(s);
+    return want === 'Moved' ? (m === 'Upgraded' || m === 'Downgraded') : m === want;
+  };
+
   // Every row a screen's definition matches, in its sort order. The bound keys
   // (sector, industry, the Balanced verdict) are part of the definition too,
   // and are applied here rather than by the caller.
@@ -207,7 +239,12 @@
     if (d.industry && d.industry !== 'All') tests.push(['industry', (v) => v === d.industry]);
     if (d.advice && d.advice !== 'All') tests.push(['av:Balanced', (v) => v === d.advice]);
     let out = list.filter((x) => tests.every(([key, fn]) => fn(filterValue(x, key, ctx))));
-    if (d.changed) out = out.filter((x) => x.action && x.advicePrev && x.advicePrev !== x.action);
+    // Which way the Balanced verdict went since the previous close.
+    // `d.changed` is the older spelling and means "moved either way"; it is
+    // still read so screens saved before the split keep working, and it is
+    // exactly what `move: 'Moved'` means.
+    const mv = d.move || (d.changed ? 'Moved' : '');
+    if (mv && mv !== 'All') out = out.filter((x) => adviceMoveIs(x, mv));
     const sort = d.sort || null;
     if (sort && sort.key) {
       const dir = sort.dir === 1 ? 1 : -1;
@@ -230,6 +267,7 @@
     RATING_FOR, TEXT_KEYS, CAT_KEYS, SCREEN_ONLY_KEYS, BOUND_KEYS, BLANK,
     CAP_BANDS, CAP_ORDER, CAP_RANGE, capBandOf,
     maCrossWord, filterValue, filterKind, parseNumTerm,
+    adviceMove, adviceMoveIs, MOVES,
     compileNum, compileText, compileFilter, screenRows,
   };
 });
