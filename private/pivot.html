@@ -309,6 +309,23 @@
     // 56 Extended. ActionRules exports them worst-first, and this page reads
     // best-first, hence the reverse.
     const ADVICE_ORDER = [...ActionRules.ACTIONS].reverse();
+
+    // The Balanced verdict against the one it held at the previous close.
+    // Both fields are stamped on every snapshot row — `action` by the read
+    // path, `advicePrev` from the technicals one bar back — so this costs a
+    // comparison and no fetch.
+    //
+    // `ActionRules.ACTIONS` runs WORST-FIRST (Sell Immediately → Strong Buy),
+    // so a higher index is a better verdict and an upgrade is an increase. The
+    // page reverses that list for display; using the display order here would
+    // label every upgrade a downgrade.
+    const adviceMove = (s) => {
+      if (!s.action || !s.advicePrev) return null;   // nothing to compare — a blank
+      if (s.action === s.advicePrev) return 'Unchanged';
+      return ActionRules.ACTIONS.indexOf(s.action) > ActionRules.ACTIONS.indexOf(s.advicePrev)
+        ? 'Upgraded' : 'Downgraded';
+    };
+    const adviceMoved = (s) => { const m = adviceMove(s); return m === 'Upgraded' || m === 'Downgraded'; };
     const TREND_ORDER = [...ActionRules.TREND_ORDER].reverse();
     const ENTRY_ORDER = [...ActionRules.ENTRY_ORDER].reverse();
     // Company type is a DISPLAY order, not a severity — an ETF is not a worse
@@ -336,6 +353,12 @@
       // Unchanged sits in the middle deliberately: it is neither.
       'Up 3%+': GOOD, 'Up 1-3%': OK, 'Up 0-1%': COOL, 'Unchanged': 'var(--faint)',
       'Down 0-1%': WARM, 'Down 1-3%': WARN, 'Down 3%+': BAD,
+      // Advice moves. `tint: 1` on a dimension is a DEAD FLAG until its values
+      // appear here — which this file already records happening once, with the
+      // move bands. Caught the same way the second time: a screenshot, where
+      // Unchanged carried a dot and the other two did not, only because the
+      // band ladder above happens to define that word and mean the same by it.
+      'Upgraded': GOOD, 'Downgraded': BAD,
     };
 
     // `multi` marks a dimension a stock can be in more than once. It is the one
@@ -415,6 +438,15 @@
       entry:    { label: 'Entry state',     get: (s) => s.actionEntry, order: ENTRY_ORDER, tint: 1 },
       type:     { label: 'Company type',    get: (s) => s.companyType, order: TYPE_ORDER },
       exchange: { label: 'Exchange',        get: (s) => s.exchange },
+      // Which WAY the Balanced verdict moved since the previous trading day.
+      // Direction belongs on an axis rather than in a measure: "Technology 27"
+      // says where the churn is, "Technology 15 up 12 down" says what happened,
+      // and a pivot expresses that by crossing it with something.
+      // A stock with no previous verdict is a BLANK, not "Unchanged" — the two
+      // are different facts and the page already buckets blanks rather than
+      // dropping them.
+      advmove:  { label: 'Advice move', get: (s) => adviceMove(s),
+                  order: ['Upgraded', 'Unchanged', 'Downgraded'], tint: 1 },
     };
     // Past this many values a dimension is collapsed to its largest plus an
     // "Other" bucket. Industry is 87 values over 430 stocks: crossed with
@@ -443,6 +475,9 @@
         each: () => 1,
         fmt: (v) => String(v),
         noun: 'a count of stocks',
+        // The only measure whose total IS the stock count, which is what lets
+        // the note say "the cells add up to 942".
+        everyStock: true,
         // Nothing can be absent from a count: every row contributes exactly one.
         missing: () => 0,
       },
@@ -455,6 +490,40 @@
         // still sitting in the cell. That gap is counted and said out loud —
         // a sum that silently omits rows is the quietest kind of lie.
         missing: (list) => list.filter((s) => !(s.marketCap > 0)).length,
+        missingNote: (n) => '<b>' + n + '</b> of those ' + (n === 1 ? 'has' : 'have') +
+          ' no market cap and add nothing to these totals — a fund reports assets ' +
+          'under management instead. The cells still hold them, so a count and a ' +
+          'total need not agree.',
+        placeNote: ' A market cap is added once per placement, so these totals exceed the universe’s.',
+      },
+      // How much the Balanced verdict CHANGED since the previous close. A count
+      // of stocks that moved, deliberately unsigned: the pivot orders, shades
+      // and totals on the measure, and a signed one would shade only its
+      // positive half and read a −20 cell the same as an empty one. Which way
+      // they moved is the `Advice move` dimension's job — cross the two and the
+      // grid says both at once.
+      moves: {
+        label: 'Advice moves',
+        each: (s) => (adviceMoved(s) ? 1 : 0),
+        fmt: (v) => String(v),
+        noun: 'a count of verdicts that moved since the previous close',
+        // A stock with no previous verdict did not "not move" — it cannot be
+        // judged, and a zero that means two different things is the quietest
+        // kind of lie this page keeps having to avoid.
+        missing: (list) => list.filter((s) => adviceMove(s) === null).length,
+        missingNote: (n) => '<b>' + n + '</b> of those ' + (n === 1 ? 'has' : 'have') +
+          ' no verdict from the previous close to compare against — new to the ' +
+          'screener — so they count as neither moved nor unmoved.',
+        placeNote: ' A move is counted once per placement, so these totals exceed the number of stocks that moved.',
+        // The split is the point of the measure, and it is not derivable from
+        // the grid unless Advice move is on an axis — so the note says it.
+        summary: (rows) => {
+          const up = rows.filter((s) => adviceMove(s) === 'Upgraded').length;
+          const dn = rows.filter((s) => adviceMove(s) === 'Downgraded').length;
+          if (!up && !dn) return 'No Balanced verdict moved since the previous close.';
+          return '<b>' + (up + dn) + '</b> moved since the previous close — <b>' + up +
+            '</b> up, <b>' + dn + '</b> down. Put <b>Advice move</b> on an axis to see which way, by cell.';
+        },
       },
     };
     let measure = 'count';
@@ -537,6 +606,11 @@
       { k: 'sector',        t: 'Sector',     l: 1 },
       { k: 'industry',      t: 'Industry',   l: 1 },
       { k: 'action',        t: 'Advice',     l: 1 },
+      // What it was at the previous close, shown only where it MOVED — a column
+      // repeating today's verdict on 800 unchanged rows is noise, and the blank
+      // then means "held", which is the common case and needs no word.
+      { k: 'advicePrev',    t: 'Was',        l: 1,
+        f: (s) => (adviceMoved(s) ? s.advicePrev : null) },
       { k: 'actionTrend',   t: 'Trend',      l: 1 },
       { k: 'actionCushion', t: 'Cushion',    f: (s) => (s.actionCushion == null ? null : Number(s.actionCushion).toFixed(2) + 'σ') },
     ];
@@ -1057,7 +1131,11 @@
 
       // ---- what the totals mean, said rather than left to be worked out ----
       const bits = [];
-      const money = measure !== 'count';
+      // Whether the measure's total IS the stock count. It used to be
+      // `measure !== 'count'`, which made every future measure inherit market
+      // cap's wording about funds — the Advice moves measure is a count of
+      // stocks and is still not a count of ALL of them.
+      const everyStock = !!M().everyStock;
       // THE FILTER IS SAID FIRST, before any total. A grid holding 191 of 845
       // stocks is not a smaller screen, it is a narrowed one, and every number
       // under it means something different — a reader who has forgotten the
@@ -1078,27 +1156,23 @@
         const why = ' — ' + p.multi + ' ' + (p.multi === 1 ? 'stock is' : 'stocks are') +
           ' counted in more than one bucket, because a stock can sit in several ' +
           esc((p.rd.multi ? p.rd.label : p.cd.label).toLowerCase()) + 's.';
-        bits.push(money
+        bits.push(!everyStock
           ? '<b class="warn">The cells cover ' + p.placeCount + ' placements of ' +
-            total + ' stocks</b>' + why +
-            ' A market cap is added once per placement, so these totals exceed the universe’s.'
+            total + ' stocks</b>' + why + (M().placeNote || '')
           : '<b class="warn">The cells add up to ' + p.placeCount + ', not ' + total +
             '</b>' + why);
-      } else if (money) {
+      } else if (!everyStock) {
         bits.push('Every stock is counted exactly once, across <b>' + total + '</b> stocks.');
       } else {
         bits.push('Every stock is counted exactly once: the cells add up to <b>' + total + '</b>.');
       }
+      // A measure that has something of its own to say says it here.
+      if (M().summary) bits.push(M().summary(p.rows));
       // A SUM THAT SILENTLY OMITS ROWS IS THE QUIETEST KIND OF LIE. A fund
       // reports assets under management rather than a capitalisation, so it
       // sits in its cell and contributes nothing — which has to be said, or a
       // cell reading $0 over three stocks looks like a bug instead of a fact.
-      if (money && p.noValue) {
-        bits.push('<b>' + p.noValue + '</b> of those ' +
-          (p.noValue === 1 ? 'has' : 'have') + ' no market cap and add nothing to these ' +
-          'totals — a fund reports assets under management instead. ' +
-          'The cells still hold them, so a count and a total need not agree.');
-      }
+      if (p.noValue && M().missingNote) bits.push(M().missingNote(p.noValue));
       const blanks = (p.cells.size ? 0 : 0) ||
         p.rows.filter((s) => valuesOf(p.rd, s).includes(BLANK) || valuesOf(p.cd, s).includes(BLANK)).length;
       if (blanks) {

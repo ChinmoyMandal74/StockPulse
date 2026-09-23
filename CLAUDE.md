@@ -1523,6 +1523,26 @@ Gaps between recorded rounds: 5m38s, 5m30s, **6m08s**. `RUN_ABANDON_MS` was **6 
 - **The drill names the total** (`2 stocks, $125.0B in total`), or the number in the cell above cannot be checked against the list under it. The child-row reconciliation is compared with a **relative epsilon**: summing dollars leaves a floating-point residue that a strict equality would report as a mismatch over two numbers identical to the penny.
 - Verified: 26 checks — every row's cells summing to its own total and the rows to the grand, each column footer against its own column, hand-computed totals ($175B / $8B / $183B), the `$0` cell staying clickable with its explanation, the drill's total, the hierarchy reconciling **in dollars**, the reorder-by-money, the expansion surviving a measure change, and counts coming back unchanged. The two earlier pivot suites still pass.
 
+### Balanced advice moves, as a measure AND a dimension (2026-09-23, owner's request)
+**"Analyse Balanced advice moves from the previous trading day to today… so I can slice by Sector, Theme."** Both halves shipped, because they answer different questions and the pivot expresses them differently:
+
+- **`moves` — a MEASURE, "Advice moves"**: how many stocks in each cell changed verdict since the previous close. Deliberately UNSIGNED. The page orders, shades and totals on the measure, and a signed one would shade only its positive half and draw a −20 cell the same as an empty one.
+- **`advmove` — a DIMENSION, "Advice move"**: Upgraded / Unchanged / Downgraded. Direction belongs on an AXIS: "Technology 27" says where the churn is, crossing it says what happened. Cross the two and the grid says both at once.
+
+Both read fields already stamped on every snapshot row — `action` and `advicePrev` — so this costs a comparison and no fetch. Measured on the live screen the day it shipped: **136 of 942 moved, 63 up and 73 down**.
+
+- **`ActionRules.ACTIONS` RUNS WORST-FIRST** (Sell Immediately → Strong Buy), so an upgrade is an INCREASE in index. The page reverses that list for display, and using the display order here would label every upgrade a downgrade. The test's two sectors have the same number of movers in opposite directions precisely so that inversion cannot pass.
+- **A stock with no previous verdict is a BLANK, not "Unchanged".** New to the screener is a different fact from held its verdict, and the measure counts it as neither — the two-kinds-of-blank rule this project keeps re-learning.
+- **The note carries the up/down split**, because it is not derivable from the grid unless the dimension is on an axis, and it names the dimension that would show it per cell.
+- **The drill gained a "Was" column**, filled only where the verdict moved: a column repeating today's verdict on 800 unchanged rows is noise, and the blank then means "held".
+
+**THE NOTE'S WORDING WAS HARDCODED AROUND MARKET CAP and had to move onto the measures first.** `const money = measure !== 'count'` meant any new measure inherited the sentence about funds reporting AUM. Each measure now owns `everyStock`, `missingNote`, `placeNote` and an optional `summary`; only `count` sets `everyStock`, because it is the one whose total IS the stock count.
+
+**`tint: 1` IS A DEAD FLAG UNTIL THE VALUES ARE IN `LADDER_TINT` — and this project has now shipped that wrong twice.** The first time was the move bands. This time a screenshot showed Unchanged carrying a dot while Upgraded and Downgraded did not, and only because the band ladder already defines that same word and means the same by it. There is a check now that reads the rendered dot colours and asserts the two ends differ.
+
+- Verified: 20 checks — the measure's per-row counts and a grand total of the movers rather than the universe, a 0 cell still clickable, the note's split and its absence of fund wording, the dimension's three columns reconciling, the blank bucket, the drill's Was column opened on an UPGRADED cell (opening whichever cell held a number landed on Unchanged, where the column is correctly blank and the assertion tested that a blank is blank), and a saved preset carrying both new keys.
+- **The fixture had to supply real technicals AND a `prevTech` overlay.** The server re-derives both verdicts on read, so hand-written `action` / `advicePrev` values are discarded — the first cut did that and every stock came back with no previous verdict at all. The documented trap, met again.
+
 ### Saved pivots (2026-09-23, owner's request: "something similar" to the promo presets)
 **The promo-preset model applied to /pivot, and the owner chose that scope explicitly when asked**: ONE site-wide list in `app_meta` under `pivot_presets`, every member reads it, only the owner writes. `GET /api/pivot-presets` is `requireMember` (so guests are refused, matching the page, which redirects them); `PUT` is `requireAdmin`. `cleanPivots()` rebuilds from scratch, `PIVOTS_MAX` 20, cached 60s per instance.
 
