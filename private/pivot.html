@@ -262,6 +262,12 @@
       <div class="pick"><label for="colDim">Columns</label><select id="colDim"></select></div>
       <div class="pick"><label for="measure">Measure</label><select id="measure"></select></div>
       <div class="pick"><label for="heat">Shading</label><select id="heat"></select></div>
+      <!-- Excel's report filter. Its own row, because it does something
+           different from the two axes: it changes WHICH STOCKS the grid is
+           about, rather than how they are arranged. -->
+      <div class="pick"><label for="pageDim">Filter</label><select id="pageDim"></select></div>
+      <div class="pick" id="pageValWrap" hidden><label for="pageVal">Is</label><select id="pageVal"></select></div>
+      <button class="btn" id="pageClear" hidden title="Show the whole screen again">Clear filter</button>
     </div>
 
     <p class="note" id="note"></p>
@@ -489,6 +495,14 @@
     }
 
     let stocks = [];
+    // THE PAGE FILTER — Excel's report filter: a dimension on neither axis that
+    // narrows the whole grid. It is not a third axis; it removes stocks before
+    // anything is counted, so every number on the page — the cells, both sets
+    // of totals, the shading denominators, the drill-downs and the note —
+    // describes the filtered population without any of them needing to know
+    // the filter exists.
+    let pageDim = 'none';
+    let pageVal = '';
     let rowKey = 'sector';
     let colKey = 'advice';
     // ONE selection, not a set. A cell no longer expands in place: it becomes
@@ -541,6 +555,22 @@
       return [v == null || v === '' ? BLANK : String(v)];
     }
 
+    // The stocks the page is about. Everything downstream starts here.
+    function pageRows() {
+      const dim = DIMS[pageDim];
+      if (!dim || !pageVal) return stocks;
+      return stocks.filter((s) => valuesOf(dim, s).includes(pageVal));
+    }
+    // What the filter could be set to, with a count beside each — the same
+    // shape the bar pickers on the screener use. Counted over the WHOLE
+    // universe, not the current filter, or the menu would describe a table you
+    // cannot get back to once you have narrowed it.
+    function pageValues(dim) {
+      const c = new Map();
+      for (const s of stocks) for (const v of valuesOf(dim, s)) c.set(v, (c.get(v) || 0) + 1);
+      return orderKeys(dim, c).map((k) => ({ k, n: c.get(k) || 0 }));
+    }
+
     function orderKeys(dim, counts) {
       const keys = [...counts.keys()];
       if (dim.order) {
@@ -578,11 +608,15 @@
 
     function build() {
       const rd = DIMS[rowKey], cd = DIMS[colKey];
+      // Filtered ONCE, here, and carried on the result. Every count below and
+      // every total in render() reduces over this same list, so a page filter
+      // cannot narrow the grid while leaving a total describing the universe.
+      const rows = pageRows();
       // First pass: how big is each value BY THE ACTIVE MEASURE, so the order
       // and the collapse follow what is on screen. Ordering by count while
       // showing money would put the biggest number halfway down the table.
       const rc = new Map(), cc = new Map();
-      for (const s of stocks) {
+      for (const s of rows) {
         const w = M().each(s);
         for (const v of valuesOf(rd, s)) rc.set(v, (rc.get(v) || 0) + w);
         for (const v of valuesOf(cd, s)) cc.set(v, (cc.get(v) || 0) + w);
@@ -595,7 +629,7 @@
       // loud under the table.
       const cells = new Map();       // "r|c" -> [stocks]
       const multiStocks = new Set();
-      for (const s of stocks) {
+      for (const s of rows) {
         const rs = [...new Set(valuesOf(rd, s).map(rFold.map))];
         const cs = [...new Set(valuesOf(cd, s).map(cFold.map))];
         if (rs.length > 1 || cs.length > 1) multiStocks.add(s.symbol);
@@ -639,7 +673,7 @@
       // nothing; the blank-sector bucket is exactly that case.
       const kids = new Map();
       if (canExpand()) {
-        for (const s of stocks) {
+        for (const s of rows) {
           const r = rFold.map(valuesOf(rd, s)[0]);
           if (!kids.has(r)) kids.set(r, new Set());
           kids.get(r).add(valuesOf(DIMS.industry, s)[0]);
@@ -654,7 +688,7 @@
       let sub = null;
       if (canExpand() && expanded && rowTot.has(expanded)) {
         const kc = new Map(), kCells = new Map(), kTot = new Map();
-        for (const s of stocks) {
+        for (const s of rows) {
           if (!valuesOf(rd, s).map(rFold.map).includes(expanded)) continue;
           const ind = valuesOf(DIMS.industry, s)[0];
           kc.set(ind, (kc.get(ind) || 0) + M().each(s));
@@ -679,7 +713,7 @@
         sub = { of: expanded, keys: orderKeys(DIMS.industry, kc), cells: kCells, tot: kTot };
       }
 
-      return { rd, cd, rKeys: rFold.keys, cKeys: cFold.keys, cells, rowTot, colTot,
+      return { rd, cd, rows, rKeys: rFold.keys, cKeys: cFold.keys, cells, rowTot, colTot,
         placements, placeCount, noValue, multi: multiStocks.size,
         rFolded: rFold.folded, cFolded: cFold.folded,
         kids, sub };
@@ -874,7 +908,10 @@
     function render() {
       const p = build();
       resolvePick(p);
-      const total = stocks.length;
+      // The FILTERED count. Reading stocks.length here would have the note
+      // say "every stock is counted exactly once, across 845" over a grid
+      // holding 191 — the page's own reconciliation, broken by its filter.
+      const total = p.rows.length;
       let h = '<div class="gridwrap"><table class="pv"><thead><tr>' +
         '<th class="rowhead">' + esc(p.rd.label) + ' ↓ &nbsp; ' + esc(p.cd.label) + ' →</th>';
       // A dimension may carry a range per value (the market-cap bands do). On a
@@ -1022,6 +1059,15 @@
       // ---- what the totals mean, said rather than left to be worked out ----
       const bits = [];
       const money = measure !== 'count';
+      // THE FILTER IS SAID FIRST, before any total. A grid holding 191 of 845
+      // stocks is not a smaller screen, it is a narrowed one, and every number
+      // under it means something different — a reader who has forgotten the
+      // filter is reading the wrong table and has no way to notice.
+      if (DIMS[pageDim] && pageVal) {
+        bits.push('Filtered to <b>' + esc(DIMS[pageDim].label) + ' = ' + esc(pageVal) +
+          '</b> — <b>' + total + '</b> of ' + stocks.length + ' stocks. ' +
+          'Everything below describes those ' + total + '.');
+      }
       // The double-counting warning is about ROWS and is judged on placements,
       // never on the measure: with money on screen `placements` is dollars, and
       // comparing dollars to a stock count would be nonsense.
@@ -1055,7 +1101,7 @@
           'The cells still hold them, so a count and a total need not agree.');
       }
       const blanks = (p.cells.size ? 0 : 0) ||
-        stocks.filter((s) => valuesOf(p.rd, s).includes(BLANK) || valuesOf(p.cd, s).includes(BLANK)).length;
+        p.rows.filter((s) => valuesOf(p.rd, s).includes(BLANK) || valuesOf(p.cd, s).includes(BLANK)).length;
       if (blanks) {
         bits.push('<b>' + blanks + '</b> ' + (blanks === 1 ? 'stock has' : 'stocks have') +
           ' no value for one of these yet and sit in the — bucket rather than being dropped.');
@@ -1143,11 +1189,37 @@
         esc(HEATS[k]) + '</option>').join('');
       $('rowDim').innerHTML = opts(ROW_DIMS, rowKey);
       $('colDim').innerHTML = opts(Object.keys(DIMS), colKey);
+      // A dimension already on an axis is not offered: filtering rows by the
+      // thing the rows ARE leaves one row, which is a control that appears to
+      // break the table. Excel refuses the same combination.
+      const free = Object.keys(DIMS).filter((k) => k !== rowKey && k !== colKey);
+      $('pageDim').innerHTML = '<option value="none">No filter</option>' +
+        free.map((k) => '<option value="' + k + '"' + (k === pageDim ? ' selected' : '') + '>' +
+          esc(DIMS[k].label) + '</option>').join('');
+      const dim = DIMS[pageDim];
+      $('pageValWrap').hidden = !dim;
+      $('pageClear').hidden = !dim;
+      if (dim) {
+        const vals = pageValues(dim);
+        // A value that no longer exists — the axes moved, or the data did —
+        // falls back to the first rather than filtering to nothing.
+        if (!vals.some((v) => v.k === pageVal)) pageVal = vals.length ? vals[0].k : '';
+        $('pageVal').innerHTML = vals.map((v) =>
+          '<option value="' + esc(v.k) + '"' + (v.k === pageVal ? ' selected' : '') + '>' +
+          esc(v.k) + ' (' + v.n + ')</option>').join('');
+      }
     }
 
     // Any change of axis drops both expansions: the keys in them name values of
     // a dimension that is no longer on screen.
-    function reset() { picked = null; expanded = null; fillPicks(); render(); }
+    function reset() {
+      picked = null; expanded = null;
+      // An axis may just have taken over the dimension the filter was on.
+      // fillPicks stops OFFERING it; without this the filter would keep
+      // applying invisibly, with no control on screen able to clear it.
+      if (pageDim === rowKey || pageDim === colKey) { pageDim = 'none'; pageVal = ''; }
+      fillPicks(); render();
+    }
 
     // Two of the same dimension is a diagonal and nothing else, so the other
     // picker steps aside rather than the page drawing a useless grid. It steps
@@ -1173,6 +1245,24 @@
     // Shading is a way of LOOKING at the same grid, so it keeps the axes, the
     // open sector and the selection — nothing it changes is about the data.
     $('heat').addEventListener('change', () => { heat = $('heat').value; render(); });
+
+    // THE FILTER CHANGES THE POPULATION, not the arrangement, so the axes and
+    // the open sector stay put — you are looking at the same table, narrower.
+    // The drill selection is left alone too: resolvePick re-reads it from the
+    // rebuilt cells and clears itself if the cell it named is now empty, so a
+    // stale stock list cannot survive a narrowing.
+    $('pageDim').addEventListener('change', () => {
+      pageDim = $('pageDim').value;
+      if (pageDim === 'none') pageVal = '';
+      else pageVal = '';                 // fillPicks picks the first value
+      fillPicks();
+      render();
+    });
+    $('pageVal').addEventListener('change', () => { pageVal = $('pageVal').value; render(); });
+    $('pageClear').addEventListener('click', () => {
+      pageDim = 'none'; pageVal = '';
+      fillPicks(); render();
+    });
 
     $('swap').addEventListener('click', () => {
       // Industry has no Rows entry, so a swap that would put it there is
