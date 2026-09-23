@@ -3123,6 +3123,11 @@
 
       winRows = sorted;
       winFresh = freshest;
+      // BEFORE the rows are built, not after: showing or hiding the strip takes
+      // ~44px out of the flex column, and doing that afterwards made the table
+      // paint twice and jump. It is told not to resize because the next line
+      // does exactly that.
+      paintTicker({ resize: false });
       // One selection, two shapes. The tiles read the sorted rows the table
       // would have drawn, so a sort, a filter or a screen changes both.
       if (tilesOn()) paintTiles(sorted); else paintWindow(true);
@@ -3131,8 +3136,7 @@
       // Cheap when the cache is warm; kicks off the one fetch when it is not.
       paintSparklines();
       loadSparklines();
-        loadLatestNews();
-      paintTicker();
+      loadLatestNews();
     }
 
     // Age of the latest headline, with a count when there is more than one.
@@ -3140,24 +3144,47 @@
     // "checked, nothing in the last week", a faint dot is "not looked at yet" —
     // headlines are topped up a dozen stocks per refresh round, so the second
     // is common and must not read as the first.
-    function newsCell(s) {
+    // The cell's three states, split out from the <td> so the column can be
+    // refilled in place when the headlines land — see paintNewsCells().
+    function newsBits(s) {
       const n = s.newsCount || 0;
       const at = s.newsLatest && s.newsLatest.published_at ? Date.parse(s.newsLatest.published_at) : null;
       if (!s.newsCheckedAt && !at) {
-        return '<td class="news grp-info" data-news="' + we(s.symbol) + '" title="Not checked yet">' +
-          '<span class="nw-none">·</span></td>';
+        return { fresh: '', title: 'Not checked yet', html: '<span class="nw-none">·</span>' };
       }
       if (!at) {
-        return '<td class="news grp-info" data-news="' + we(s.symbol) + '" ' +
-          `title="Checked ${we(fmtAgo(s.newsCheckedAt))} — nothing stored">—</td>`;
+        return { fresh: '', title: `Checked ${fmtAgo(s.newsCheckedAt)} — nothing stored`, html: '—' };
       }
       const hrs = (Date.now() - at) / 3600000;
       const age = hrs < 1 ? 'now' : hrs < 24 ? Math.round(hrs) + 'h' : Math.round(hrs / 24) + 'd';
-      const fresh = hrs <= 24 ? ' nw-fresh' : '';
-      const badge = n > 1 ? `<span class="nw-n">${n}</span>` : '';
-      const t = we((s.newsLatest.headline || '').slice(0, 110));
-      return `<td class="news grp-info${fresh}" data-news="${we(s.symbol)}" title="${t}">` +
-        `<span class="nw-age">${age}</span>${badge}</td>`;
+      return {
+        fresh: hrs <= 24 ? ' nw-fresh' : '',
+        title: (s.newsLatest.headline || '').slice(0, 110),
+        html: `<span class="nw-age">${age}</span>` + (n > 1 ? `<span class="nw-n">${n}</span>` : ''),
+      };
+    }
+
+    function newsCell(s) {
+      const b = newsBits(s);
+      return `<td class="news grp-info${b.fresh}" data-news="${we(s.symbol)}" title="${we(b.title)}">` +
+        `${b.html}</td>`;
+    }
+
+    // Refill the column without rebuilding the table, the way paintSparklines
+    // does. UPDATE THE CELL, NEVER REPLACE IT: hideCollapsedCells() sets
+    // `style.display` inline on every `.grp-info` element, so a fresh <td>
+    // would come back visible inside a collapsed Info group.
+    function paintNewsCells() {
+      const by = {};
+      for (const s of stocks) by[s.symbol] = s;
+      document.querySelectorAll('td.news[data-news]').forEach((td) => {
+        const s = by[td.dataset.news];
+        if (!s) return;
+        const b = newsBits(s);
+        td.className = 'news grp-info' + b.fresh;
+        td.title = b.title;
+        td.innerHTML = b.html;
+      });
     }
 
     const fmtAgo = (ms) => {
@@ -4318,12 +4345,21 @@
       return m < 60 ? m + 'm' : Math.round(m / 60) + 'h';
     };
 
+    // IN FLIGHT IS NOT THE SAME AS LOADED, and paintTicker() runs at the end of
+    // every render: the first render starts this fetch, and any render landing
+    // before it resolves still saw `tickerItems == null` and started a second.
+    // The guard is the same one loadSparklines and loadLatestNews already keep.
+    let tickerLoading = false;
     async function loadTicker() {
+      if (tickerLoading) return;
+      tickerLoading = true;
       try {
         const d = await api('GET', '/api/news/recent');
         tickerItems = d.items || [];
       } catch (e) {
         tickerItems = tickerItems || [];
+      } finally {
+        tickerLoading = false;
       }
       clearTimeout(tickerTimer);
       tickerTimer = setTimeout(loadTicker, 10 * 60 * 1000);
@@ -4344,10 +4380,19 @@
         '</span><span class="tk-sep" aria-hidden="true">•</span>';
     }
 
-    function paintTicker() {
+    // `resize` is false when render() is about to paint the rows anyway: the
+    // strip's visibility decides the table's height, so settling it FIRST and
+    // letting the coming paintWindow use the final height is one paint instead
+    // of two. A standalone call (the 10-minute re-read, a filter change) still
+    // has to resize, because nothing else is going to.
+    function paintTicker(opts) {
+      const resize = !opts || opts.resize !== false;
       const bar = $('ticker');
       $('tickerToggle').querySelector('.nm').textContent = tickerOff ? 'Show news ticker' : 'Hide news ticker';
       if (tickerOff) { bar.hidden = true; stopTickerRotate(); return; }
+      // Nothing is on screen yet — the boot fetch can land before the first
+      // render. That render calls this again, with rows to filter against.
+      if (!baseStocks.length) return;
       if (tickerItems == null) { loadTicker(); return; }
       // The strip follows the table: only headlines for the stocks the current
       // portfolio, sector, industry, advice, Changed and column filters leave
@@ -4363,7 +4408,8 @@
       // the table on every filter change.
       const wasHidden = bar.hidden;
       bar.hidden = !fresh.length;
-      if (wasHidden !== bar.hidden) paintWindow(true);   // the table's height just changed
+      // the table's height just changed — unless the caller is about to paint
+      if (wasHidden !== bar.hidden && resize) paintWindow(true);
       if (!fresh.length) { stopTickerRotate(); return; }
       const key = (items.length ? items.map((x) => x.url).join('|') : 'none') + '|' + (lastUpdated || '');
       if (key === tickerKey) return;
@@ -4432,7 +4478,11 @@
             s.newsCheckedAt = checked[s.symbol] || null;
           }
         }
-        render();   // the column was drawn before this landed
+        // A full render() here rebuilt every row to change one cell, and it was
+        // the second of the three flashes people saw on load. The exception is
+        // the one case where the ORDER genuinely changes: sorted by this
+        // column, the rows have to move, so nothing cheaper will do.
+        if (sortKey === 'newsAge') render(); else { paintNewsCells(); paintTicker(); }
       } catch (e) {
         newsLoaded = false;   // a later refresh may succeed
       }
@@ -5495,7 +5545,13 @@
     checkAuth()
       .then(() => Promise.all([loadPrefs(), loadMyPortfolios()]))
       .then(() => Promise.all([loadViews(), loadScreens()]))
-      .then(() => refresh({ live: false }))
+      // The strip's own fetch starts BESIDE the table's, not after the first
+      // paint. /api/news/recent is a few KB against a multi-megabyte snapshot,
+      // so it lands first, and the first render then knows whether the strip is
+      // there — which is what stops it appearing a beat later and resizing the
+      // table under rows it has just drawn. It is not awaited: a decoration
+      // must never make the data wait.
+      .then(() => { loadTicker(); return refresh({ live: false }); })
       .then(() => {
         // THE PAGE IS USABLE HERE, and this is the only place that knows it.
         // Not `window.load`, which fires while /api/stocks is still in flight,
