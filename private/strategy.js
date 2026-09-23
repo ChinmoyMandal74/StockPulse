@@ -53,7 +53,7 @@
   };
 
   // Annualised realised volatility, %, over a full window — the same definition
-  // indicators.js uses, which is momentum.js's.
+  // indicators.js uses, which is barmath.js's.
   function volSeries(closes, window) {
     const n = closes.length;
     const out = new Array(n).fill(null);

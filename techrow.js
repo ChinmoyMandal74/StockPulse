@@ -1,4 +1,4 @@
-// The bar-derived row, defined once — momentum.js's shape, for the Advice
+// The bar-derived row, defined once — barmath.js's shape, for the Advice
 // engine's inputs rather than its score.
 //
 // Everything here comes from a symbol's own daily bars and nothing else: no
@@ -24,16 +24,16 @@
 // history builder. A fourth copy was the alternative.
 'use strict';
 
-const Momentum = require('./momentum.js');
+const BarMath = require('./barmath.js');
 
 // Wilder's RSI for a whole series, oldest-first and index-aligned with the
-// arrays this module's other function takes. Momentum.rsiSeriesAt is the app's
+// arrays this module's other function takes. BarMath.rsiSeriesAt is the app's
 // own implementation and wants newest-first, so the flip happens here once
 // rather than at every call site.
 function rsiSeries(closes) {
   const newestFirst = [];
   for (let i = closes.length - 1; i >= 0; i--) newestFirst.push({ close: Number(closes[i]) });
-  return Momentum.rsiSeriesAt(newestFirst, 14).slice().reverse();
+  return BarMath.rsiSeriesAt(newestFirst, 14).slice().reverse();
 }
 
 // One row, as of session `i`. `highs` and `vols` may be omitted — a caller with

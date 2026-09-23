@@ -128,33 +128,27 @@
           <span class="td">The shape of the app, and why it exists at all</span></span></a></li>
         <li><a href="#table"><span class="no">2</span><span><span class="tt">Reading the table</span>
           <span class="td">Columns, sorting, and getting around 48 of them</span></span></a></li>
-        <li><a href="#scoring"><span class="no">3</span><span><span class="tt">How scoring works</span>
-          <span class="td">Momentum, Quality and Overall out of ten</span></span></a></li>
-        <li><a href="#weights"><span class="no">4</span><span><span class="tt">The eight momentum factors</span>
-          <span class="td">What each slider measures, and why</span></span></a></li>
-        <li><a href="#presets"><span class="no">5</span><span><span class="tt">Presets and Custom</span>
-          <span class="td">Trend, Steady, and your own weighting</span></span></a></li>
-        <li><a href="#quality"><span class="no">6</span><span><span class="tt">The Quality score</span>
+        <li><a href="#quality"><span class="no">3</span><span><span class="tt">The Quality score</span>
           <span class="td">Company numbers, and what happens without earnings</span></span></a></li>
-        <li><a href="#screens"><span class="no">7</span><span><span class="tt">Screens</span>
+        <li><a href="#screens"><span class="no">4</span><span><span class="tt">Screens</span>
           <span class="td">Ready-made filters, one click each</span></span></a></li>
-        <li><a href="#stock"><span class="no">8</span><span><span class="tt">One stock in full</span>
+        <li><a href="#stock"><span class="no">5</span><span><span class="tt">One stock in full</span>
           <span class="td">The chart, its ranges, and the indicators</span></span></a></li>
-        <li><a href="#ask"><span class="no">9</span><span><span class="tt">Asking questions</span>
+        <li><a href="#ask"><span class="no">6</span><span><span class="tt">Asking questions</span>
           <span class="td">The assistant, and what it will not do</span></span></a></li>
-        <li><a href="#fresh"><span class="no">10</span><span><span class="tt">How fresh the data is</span>
+        <li><a href="#fresh"><span class="no">7</span><span><span class="tt">How fresh the data is</span>
           <span class="td">Refresh, Refresh all, and the nightly run</span></span></a></li>
-        <li><a href="#account"><span class="no">11</span><span><span class="tt">Your account</span>
+        <li><a href="#account"><span class="no">8</span><span><span class="tt">Your account</span>
           <span class="td">What is remembered, and the emails you may get</span></span></a></li>
-        <li><a href="#rules"><span class="no">12</span><span><span class="tt">The Advice column</span>
+        <li><a href="#rules"><span class="no">9</span><span><span class="tt">The Advice column</span>
           <span class="td">Company Type, the rule lists, and tuning them</span></span></a></li>
-        <li><a href="#tiles"><span class="no">13</span><span><span class="tt">Tiles</span>
+        <li><a href="#tiles"><span class="no">10</span><span><span class="tt">Tiles</span>
           <span class="td">The same rows as cards, with a chart on each</span></span></a></li>
-        <li><a href="#news"><span class="no">14</span><span><span class="tt">News</span>
+        <li><a href="#news"><span class="no">11</span><span><span class="tt">News</span>
           <span class="td">The column, the panel behind it, and the ticker</span></span></a></li>
-        <li><a href="#phone"><span class="no">15</span><span><span class="tt">On a phone</span>
+        <li><a href="#phone"><span class="no">12</span><span><span class="tt">On a phone</span>
           <span class="td">A page built for one hand, at tickrlab.com/m</span></span></a></li>
-        <li><a href="#share"><span class="no">16</span><span><span class="tt">Cards to share</span>
+        <li><a href="#share"><span class="no">13</span><span><span class="tt">Cards to share</span>
           <span class="td">Making an image of what the screen found</span></span></a></li>
       </ul>
     </div></div>
@@ -209,7 +203,7 @@
       <p>A <b>view</b> is a named set of columns you can switch to with one click from the View menu. Symbol and Name are
         always shown, and the columns keep the table's order.</p>
       <ul>
-        <li><b>Starter views</b> (Trend &amp; momentum, Fundamentals, Advice) are shared by everyone. The lock beside
+        <li><b>Starter views</b> (Trend &amp; returns, Fundamentals, Advice) are shared by everyone. The lock beside
           them means only the site owner can change them — use the <b>+</b> beside one to copy it into your own views
           and change the copy.</li>
         <li><b>Your views</b>: <b>+ New view</b> opens a list of every column with a search box; tick what you want, name
@@ -258,23 +252,11 @@
           open is remembered.</li>
       </ul>
 
-      <h3>Momentum</h3>
-      <p><b>Mom.</b> sits in the Scores group, between Overall and Qual.: the momentum score now, 1 to 10. It is measured against a fixed
-        scale rather than against the rest of the list, so a 7 means the same thing in a weak quarter
-        as a strong one, and adding a ticker does not move anybody else's number.</p>
-
-      <div class="note"><b>The Past Mom. and Mom. Delta columns were retired in September 2026</b>,
-        along with the chevron that marked a move and the two screens built on it. Five separate
-        tests found the change in the score predicted nothing about what happened next — the
-        strongest of them read <em>r = −0.003</em> against the following fortnight across 264,290
-        stock-fortnights. The score stays because it describes where a stock stands today, which it
-        does well; what went is the claim that its movement told you anything.</div>
-
       <h3>What is hiding behind a cell</h3>
       <ul>
         <li>Hover a <b>company name</b> for a card showing every column for that row at once — useful
           when the value you want is off to the right.</li>
-        <li>Hover a <b>score</b> (Overall, Mom. or Qual.) to see the factors behind it, each with its
+        <li>Hover the <b>Qual.</b> score to see the factors behind it, each with its
           weight and how this stock scored on it.</li>
         <li>The <b>90d</b> column is a sparkline of the last 90 sessions. Read the shape, not the
           level — each line is scaled to its own high and low, so two lines are not comparable.</li>
@@ -283,192 +265,14 @@
     </div></section>
 
     <!-- ---------------------------------------------------------------- -->
-    <section class="bezel card" id="scoring"><div class="core">
-      <div class="sec-h"><h2>3 · How scoring works</h2></div>
-
-      <p>Every stock carries three scores out of ten. <strong>Momentum</strong> describes how the price
-        has behaved. <strong>Quality</strong> describes the company behind it — growth, margins,
-        valuation. <strong>Overall</strong> blends them, <em>65% momentum and 35% quality</em>, and
-        clicking that column sorts the list by it.</p>
-
-      <p>Every score is <strong>absolute</strong>. Each factor is measured against a fixed scale rather
-        than against the other stocks on your list, which means three things worth knowing:</p>
-
-      <ul>
-        <li><b>A number means the same thing over time.</b> A momentum of 70 in a weak quarter is the
-          same 70 as in a strong one, so this month's score can be compared with last year's.</li>
-        <li><b>Adding or removing a ticker changes nobody else's score.</b> Your scores describe the
-          stocks, not the company they happen to be keeping.</li>
-        <li><b>In a bad market the whole list scores low</b>, which is the honest answer. A ranked score
-          cannot say that — the best of a bad lot still comes out near the top.</li>
-      </ul>
-
-      <p>The scales are not guesses. Each factor's centre is the median measured across the price
-        archive at dates spanning 2011 to 2026, so a typical stock in a typical period sits near the
-        middle. The return factors are divided by volatility first, which makes them dimensionless and
-        is what allows a fixed scale to mean anything at all.</p>
-
-      <div class="note"><b>Nothing is pinned at the ends.</b> Each factor uses a curve that approaches
-        0 and 100 without reaching them, so two very strong stocks still separate. An earlier version
-        used straight cut-offs and flattened a third to a half of the list onto a floor or a ceiling,
-        which is a factor that cannot tell anything apart.</div>
-
-      <div class="note"><b>Missing data is dropped, not counted as zero.</b> If a factor cannot be
-        computed for a stock — usually too little price history — it is removed and the remaining
-        weights are rescaled to fill the gap. A stock is never punished for a number nobody has.</div>
-      <a class="top" href="#top">↑ Contents</a>
-    </div></section>
-
-    <!-- ---------------------------------------------------------------- -->
-    <section class="bezel card" id="weights"><div class="core">
-      <div class="sec-h"><h2>4 · The eight momentum factors</h2></div>
-      <p>These are the sliders behind <strong>Weights → Custom</strong>. The percentage beside each name
-        is its share under the Default weighting.</p>
-
-      <div class="factor">
-        <div class="fh"><h3>12-1 momentum</h3><span class="wt">20%</span></div>
-        <p class="tight">The last twelve months of return, <em>excluding the most recent month</em>,
-          divided by how much the stock normally swings.</p>
-        <p>Skipping the final month is deliberate. Over a year, strength tends to continue; over a few
-          weeks it tends to give some back. Leaving the last month in would mix the two effects and
-          blunt both.</p>
-        <div class="lever"><b>Raise it</b> to favour names with a long, established run.
-          <b>Lower it</b> if you care more about what is happening now than what happened last autumn.</div>
-      </div>
-
-      <div class="factor">
-        <div class="fh"><h3>6M return (risk-adjusted)</h3><span class="wt">18%</span></div>
-        <p class="tight">Six-month return divided by realised volatility.</p>
-        <p>The division is the important part. A 40% gain in a stock that normally drifts is a stronger
-          signal than the same 40% in one that swings that much routinely — without adjusting, the
-          score would simply reward whatever is most volatile.</p>
-        <div class="lever"><b>Raise it</b> for a medium-horizon view that still leans on established
-          moves. <b>Lower it</b> to let the one-year and three-month factors decide.</div>
-      </div>
-
-      <div class="factor">
-        <div class="fh"><h3>3M return (risk-adjusted)</h3><span class="wt">17%</span></div>
-        <p class="tight">The same measure over three months.</p>
-        <p>This is the shortest horizon treated as <em>more is better</em>. Below about three months the
-          evidence flips towards reversal, which is why the one-month factor further down is inverted
-          rather than simply weighted less.</p>
-        <div class="lever"><b>Raise it</b> to react sooner to something that has started working.
-          <b>Lower it</b> to be less easily impressed by a good quarter.</div>
-      </div>
-
-      <div class="factor">
-        <div class="fh"><h3>% from 52-week high</h3><span class="wt">10%</span></div>
-        <p class="tight">How far below its highest point of the last year the stock is trading.</p>
-        <p>Sitting near a 52-week high is itself a form of strength: there is nobody left holding at a
-          loss and waiting to sell into a recovery. A stock 40% below its high has to climb through all
-          of that.</p>
-        <div class="lever"><b>Raise it</b> to favour names already at the top of their range.
-          <b>Lower it</b> if you are hunting for recoveries rather than leaders.</div>
-      </div>
-
-      <div class="factor">
-        <div class="fh"><h3>Trend regime</h3><span class="wt">10%</span></div>
-        <p class="tight">Which side of its 200-day average the stock is on, and whether the 50-day has
-          crossed the 200-day in the last twenty sessions.</p>
-        <p>Unlike the return factors this one is a category, not a ranking. A fresh cross upward scores
-          full marks, an established uptrend slightly less, a long downtrend little, and a fresh cross
-          downward nothing. It is the one factor that says <em>which way the tide is running</em>
-          rather than how fast.</p>
-        <div class="lever"><b>Raise it</b> to insist on trend confirmation. <b>Lower it</b> if you are
-          willing to be early, before the averages agree.</div>
-      </div>
-
-      <div class="factor">
-        <div class="fh"><h3>Consistency</h3><span class="wt">10%</span></div>
-        <p class="tight">What share of the last twelve months closed higher than the month before.</p>
-        <p>Two stocks can post the same annual return, one by grinding upward most months and one on a
-          single enormous week. This separates them. It is the closest thing here to a measure of how
-          comfortable the ride was.</p>
-        <div class="lever"><b>Raise it</b> to prefer steady climbers over one-jump wonders.
-          <b>Lower it</b> if you do not care how the return arrived.</div>
-      </div>
-
-      <div class="factor">
-        <div class="fh"><h3>1M reversal</h3><span class="wt">8%</span></div>
-        <p class="tight">The one-month return, <em>inverted</em> — the biggest recent movers score
-          <em>lowest</em> here.</p>
-        <p>This is the only factor that runs backwards, and it is not a mistake. At a one-month horizon
-          the evidence points to reversal rather than continuation, so a name that has just jumped 30%
-          is more likely to give some back than to repeat. Treat it as a brake, not a verdict: it never
-          outvotes the longer factors, it just stops the score chasing whatever moved last week.</p>
-        <div class="lever"><b>Raise it</b> to be more cautious about anything that has just run.
-          <b>Set it to zero</b> — as the Trend preset does — to chase strength wherever it appears.</div>
-      </div>
-
-      <div class="factor">
-        <div class="fh"><h3>RSI timing</h3><span class="wt">7%</span></div>
-        <p class="tight">Where the 14-day Relative Strength Index sits, scored on a curve that
-          <em>peaks around 70–75</em>.</p>
-        <p>Not more-is-better. A reading in the low 70s is the sweet spot — strong but not stretched.
-          Below 30 scores poorly because the stock is falling, and above 85 the score drops away again
-          because it is overextended and prone to a snapback.</p>
-        <div class="lever"><b>Raise it</b> to weight entry timing more heavily. <b>Lower it</b> if you
-          intend to hold through the noise anyway.</div>
-      </div>
-
-      <div class="note"><b>Weights do not have to total 100.</b> Only their relative sizes matter — the
-        score rescales them for you, which is what the second number beside each slider shows. Setting
-        every slider to 10 is the same as setting them all to 1.</div>
-      <a class="top" href="#top">↑ Contents</a>
-    </div></section>
-
-    <!-- ---------------------------------------------------------------- -->
-    <section class="bezel card" id="presets"><div class="core">
-      <div class="sec-h"><h2>5 · Presets and Custom</h2></div>
-
-      <p>The three presets are positions on one axis: <strong>how much you trust a move to
-        continue</strong> versus how much you distrust a move that has just happened.</p>
-
-      <table>
-        <thead><tr><th>Factor</th><th class="n">Default</th><th class="n">Trend</th><th class="n">Steady</th></tr></thead>
-        <tbody>
-          <tr><td>12-1 momentum</td><td class="n">20</td><td class="n">18</td><td class="n">24</td></tr>
-          <tr><td>6M return</td><td class="n">18</td><td class="n">20</td><td class="n">16</td></tr>
-          <tr><td>3M return</td><td class="n">17</td><td class="n">24</td><td class="n">10</td></tr>
-          <tr><td>% from 52W high</td><td class="n">10</td><td class="n">12</td><td class="n">8</td></tr>
-          <tr><td>Trend regime</td><td class="n">10</td><td class="n">16</td><td class="n">10</td></tr>
-          <tr><td>Consistency</td><td class="n">10</td><td class="n">4</td><td class="n">20</td></tr>
-          <tr><td>1M reversal</td><td class="n">8</td><td class="n">0</td><td class="n">8</td></tr>
-          <tr><td>RSI timing</td><td class="n">7</td><td class="n">6</td><td class="n">4</td></tr>
-        </tbody>
-      </table>
-
-      <h3>Trend</h3>
-      <p>Shorter horizons, a stronger trend requirement, and <em>no reversal brake at all</em>. It wants
-        whatever is working right now and accepts that some of it will give back.</p>
-
-      <h3>Steady</h3>
-      <p>The year-long factor and month-to-month consistency lead, and the three-month factor is cut to
-        10. A name has to have been working for a while, and to have done it repeatedly.</p>
-
-      <h3>Custom</h3>
-      <p>Eight sliders, saved to your account, so the setting follows you to another browser or machine.
-        Choosing Custom starts from a copy of Default rather than a blank slate, and
-        <strong>Copy Default</strong> puts it back at any time.</p>
-
-      <div class="note"><b>Changing weights changes your view, not the data.</b> The screener and the
-        analysis page each remember their own choice. The nightly email, the assistant and the stored
-        snapshot always use Default, so a score quoted anywhere outside your own screen means the same
-        thing to everyone. Whenever a non-default weighting is in force, the Momentum and Overall
-        columns are tinted.</div>
-
-      <div class="note"><b>A word of caution.</b> Sliders make it easy to keep adjusting until the list
-        agrees with something you already believe, then to read that back as evidence. The reordering
-        figure shown when you pick a preset is there to keep you honest about how much you have moved.
-        If a weighting only looks right for today's list, it is probably fitted to it.</div>
-      <a class="top" href="#top">↑ Contents</a>
-    </div></section>
-
-    <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="quality"><div class="core">
-      <div class="sec-h"><h2>6 · The Quality score</h2></div>
-      <p>Where Momentum reads the price, Quality reads the company. Six factors, all absolute rather
-        than ranked against the list — a 30% margin is a 30% margin whoever else is on your screen.</p>
+      <div class="sec-h"><h2>3 · The Quality score</h2></div>
+      <p>Where the return columns read the price, <b>Qual.</b> reads the company behind it. Six factors,
+        all <strong>absolute</strong> rather than ranked against the list — a 30% margin is a 30% margin
+        whoever else is on your screen. That is worth knowing for three reasons: a number means the same
+        thing this year as last, adding or removing a ticker changes nobody else's score, and in a bad
+        market the whole list scores low, which is the honest answer. A ranked score cannot say that —
+        the best of a bad lot still comes out near the top.</p>
 
       <table>
         <thead><tr><th>Factor</th><th class="n">Weight</th><th>Measures</th></tr></thead>
@@ -491,15 +295,19 @@
         8 out of 10.</p>
 
       <div class="note"><b>Sometimes there is no Quality score at all.</b> If less than 40% of the
-        factor weight has usable data, the column shows a dash rather than a number, and Overall falls
-        back to Momentum alone. A score resting on one factor is not a score. ETFs and funds show a dash
-        for the same reason — they have no revenue or earnings of their own.</div>
+        factor weight has usable data, the column shows a dash rather than a number. A score resting on
+        one factor is not a score. ETFs and funds show a dash for the same reason — they have no revenue
+        or earnings of their own.</div>
+
+      <div class="note"><b>Missing data is dropped, not counted as zero.</b> A factor that cannot be
+        computed for a stock is removed and the remaining weights are rescaled to fill the gap. A stock
+        is never punished for a number nobody has.</div>
       <a class="top" href="#top">↑ Contents</a>
     </div></section>
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="screens"><div class="core">
-      <div class="sec-h"><h2>7 · Screens</h2></div>
+      <div class="sec-h"><h2>4 · Screens</h2></div>
       <p>The <strong>Screens</strong> menu beside View holds ready-made screens. One click sets the filters, the sort and the
         columns that explain the result — the filters appear in the filter row and the strip above the table, so a screen
         never hides what it means. Each shows how many stocks match right now, for the theme in view.</p>
@@ -543,7 +351,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="stock"><div class="core">
-      <div class="sec-h"><h2>8 · One stock in full</h2></div>
+      <div class="sec-h"><h2>5 · One stock in full</h2></div>
       <p>Clicking a company name opens that stock on its own page, in a new tab, with a price chart and
         every column the screener holds. The symbol at the top is also a picker — click it to jump to
         any other stock without going back.</p>
@@ -569,7 +377,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="ask"><div class="core">
-      <div class="sec-h"><h2>9 · Asking questions</h2></div>
+      <div class="sec-h"><h2>6 · Asking questions</h2></div>
       <p><strong>Ask</strong> puts a question to the same data in plain English — "which names have a
         margin above 20% and are within 10% of their high", or "what is improving fastest". The whole
         table is given to the assistant, so it is answering from your actual numbers rather than from
@@ -594,7 +402,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="fresh"><div class="core">
-      <div class="sec-h"><h2>10 · How fresh the data is</h2></div>
+      <div class="sec-h"><h2>7 · How fresh the data is</h2></div>
       <p>The bar shows when the data was last pulled and the trading day it covers. Everyone sees the
         same stored snapshot, so two people reading the screener are reading the same numbers.</p>
 
@@ -619,11 +427,11 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="account"><div class="core">
-      <div class="sec-h"><h2>11 · Your account</h2></div>
+      <div class="sec-h"><h2>8 · Your account</h2></div>
 
       <h3>What is remembered</h3>
-      <p>Which column groups you have collapsed, and which momentum weighting each page is using, are
-        stored <em>against your account rather than your browser</em> — so they follow you to another
+      <p>Which column groups you have collapsed, which view you were last in and how you had the table
+        set up are stored <em>against your account rather than your browser</em> — so they follow you to another
         machine, and are not shared with whoever else uses this computer.</p>
 
       <h3>Your own themes</h3>
@@ -664,7 +472,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="rules"><div class="core">
-      <div class="sec-h"><h2>12 · The Advice column</h2></div>
+      <div class="sec-h"><h2>9 · The Advice column</h2></div>
       <p><em>&ldquo;Advice&rdquo; here means the output of the fixed rules described below — a mechanical
         reading of the table, not a recommendation tailored to you.</em></p>
       <p>The <strong>Advice</strong> column group shows the whole derivation, left to right:
@@ -818,15 +626,14 @@
 
       <table>
         <tr><th>Group</th><th>Keys (default)</th></tr>
-        <tr><td><code>use_quality</code> / <code>use_momentum</code> / <code>use_vol_trend</code></td>
-          <td>false · false · true — whether the app's own composite scores participate. Off by design:
+        <tr><td><code>use_quality</code> / <code>use_vol_trend</code></td>
+          <td>false · true — whether the app's own Quality composite participates. Off by design:
           the rules read raw data.</td></tr>
         <tr><td><code>company_type</code></td><td>mc_big 100e9 · mc_mid 20e9 · mc_override 200e9 ·
           pm_min 5 · fm_min 5 · pe_max 40 · roe_min 10 · quality_min 7 · score_cutoff 5 ·
           manual_overrides {} (pin a symbol: <code>{"JOBY": "Early"}</code>)</td></tr>
         <tr><td><code>entry</code></td><td>vs50_low −3 · vs50_high 8 · rsi_low 45 · rsi_high 65 ·
-          near_high −10 · buy_max_drawdown −20 · strong_buy_vs200 10 · uptrend_vs50 −8 ·
-          momentum_min 7</td></tr>
+          near_high −10 · buy_max_drawdown −20 · strong_buy_vs200 10 · uptrend_vs50 −8</td></tr>
         <tr><td><code>stop_loss</code></td><td>established_vs200 −10 · confirm_1m −8 · confirm_3m −15 ·
           early_vs200 −5 · early_confirm_1m −5</td></tr>
         <tr><td><code>chase</code></td><td>max_1m 25 · max_vs50 15 · max_rsi 72</td></tr>
@@ -856,7 +663,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="tiles"><div class="core">
-      <div class="sec-h"><h2>13 · Tiles</h2></div>
+      <div class="sec-h"><h2>10 · Tiles</h2></div>
       <p>The <strong>Table / Tiles</strong> switch beside the View menu draws the same rows as cards
         instead of a table. It is the same selection either way: the sort, the theme, the sector,
         industry and advice pickers, the Changed chip, any screen and every column filter all still
@@ -891,7 +698,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="news"><div class="core">
-      <div class="sec-h"><h2>14 · News</h2></div>
+      <div class="sec-h"><h2>11 · News</h2></div>
       <p>Headlines only &mdash; the headline, who published it, when, and a link out. No article text is
         stored anywhere, and nothing here is summarised or interpreted.</p>
 
@@ -924,7 +731,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="phone"><div class="core">
-      <div class="sec-h"><h2>15 · On a phone</h2></div>
+      <div class="sec-h"><h2>12 · On a phone</h2></div>
       <p>The screener is eighty-odd columns on a page that deliberately does not scroll, and it was
         never going to fold onto a phone. <strong>tickrlab.com/m</strong> is a separate page built for
         one hand. On a narrow screen the screener offers you a link to it; it is also
@@ -949,7 +756,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="share"><div class="core">
-      <div class="sec-h"><h2>16 · Cards to share</h2></div>
+      <div class="sec-h"><h2>13 · Cards to share</h2></div>
       <p>A card is a picture of something the screen found &mdash; the week's movers, a chart, what the
         rules concluded &mdash; drawn in the site's own theme at a fixed size, ready to post. Every one
         carries the wordmark, the date the data belongs to, the time the prices were pulled, and the line

@@ -1,4 +1,4 @@
-// Stock Momentum Screener — POC backend
+// Stock screener — POC backend
 // State lives in Turso (hosted libSQL); every read and write goes through db.js.
 // Portfolios map a name -> [symbols], and a stock can belong to several
 // (many-to-many). The "universe" fetched from Twelve Data is the deduped union
@@ -32,7 +32,6 @@ const notBenchmark = (sym) => !BENCHMARKS.has(sym);
 const store = require('./db');
 // The analysis screens, shared with public/analysis.html so the nightly report
 // and the page can never disagree about what "bouncing off the lows" means.
-const Screens = require('./private/screens.js');
 // Loaded here so the SERVER can run a screen and render a row the way the
 // browser would: the mobile page gets the twenty matching rows, formatted,
 // instead of the 1.3MB table. Both are the same modules the pages load.
@@ -43,12 +42,9 @@ const RowCard = globalThis.RowCard;
 // finished markup rather than the whole snapshot.
 require('./private/cards.js');
 const Cards = globalThis.Cards;
-// The Excel model of the momentum calculation, shared with the CLI in the same
 // file so the workbook served here and the one written locally are one thing.
-const { buildModel, MODEL_ROWS, MODEL_MIN_BARS } = require('./momentum-model.js');
-// Momentum scored from bars alone, shared with the backfill so the stored
 // history and the live score can never drift into two different models.
-const Momentum = require('./momentum.js');
+const BarMath = require('./barmath.js');
 const TechRow = require('./techrow.js');
 // Tunable indicators, shared with /lab and the offline grid.
 const Indicators = require('./private/indicators.js');
@@ -1099,10 +1095,10 @@ async function sendWelcome(email, role) {
     const owner = role === 'owner';
     const intro = owner
       ? `Your ${BRAND} instance is live, and this first account owns it.`
-      : `You now have access to ${BRAND} — a momentum screener for a watchlist of stocks, ` +
+      : `You now have access to ${BRAND} — a stock screener for a watchlist of stocks, ` +
         'refreshed after every close.';
     const bullets = [
-      ['The screener', 'Every ticker scored on momentum and quality, with 48 columns you can ' +
+      ['The screener', 'Every ticker scored on quality and read by the advice rules, with 48 columns you can ' +
         'collapse into groups and sort however you like.'],
       ['Signal screens', 'Seven views the sorted table cannot give you — bases turning up, ' +
         'names that have just started moving, earnings drift, and what is stretched.'],
@@ -2257,7 +2253,7 @@ async function fetchJson(url, opts = {}) {
       // Reject the empty BEFORE coercing: a missing header is null, and
       // Number(null) is 0, which is finite. Reading that as "charged 0" would
       // have meant "we were served" and suppressed every retry — the exact
-      // trap that fabricated momentum slopes out of null scores once already.
+      // trap that fabricated slopes out of null values once already.
       const raw = res.headers.get('api-credits-request');
       const c = raw == null || raw === '' ? NaN : Number(raw);
       if (Number.isFinite(c)) { charged = true; if (m) m.credits += c; }
@@ -2506,7 +2502,7 @@ function maCross(values, shortP = 50, longP = 200) {
 }
 
 // ---- Buy Rating (1–10) -----------------------------------------------------
-// A transparent momentum-led composite: ~60% momentum/trend, ~25% fundamentals,
+// A transparent composite: ~60% trend, ~25% fundamentals,
 // ~15% timing (RSI). Each metric maps to a 0–1 sub-score via fixed thresholds;
 // missing metrics drop out and the remaining weights are renormalized.
 
@@ -2574,10 +2570,10 @@ function range52Pos(values, lookback = 252) {
 }
 
 // Return between two points, both measured back from the latest bar.
-// windowReturn(values, 252, 21) is the classic 12-1 momentum: a year of return
+// windowReturn(values, 252, 21) is the classic 12-1 window: a year of return
 // that stops a month short of today. The skip is deliberate — the most recent
 // month tends to reverse rather than continue, which is why the standard
-// momentum construction leaves it out.
+// this construction leaves it out.
 function windowReturn(values, fromDaysAgo, toDaysAgo = 0) {
   if (!Array.isArray(values) || values.length <= fromDaysAgo) return null;
   const a = parseFloat(values[toDaysAgo].close);
@@ -2586,7 +2582,7 @@ function windowReturn(values, fromDaysAgo, toDaysAgo = 0) {
   return ((a - b) / b) * 100;
 }
 
-// Annualised realised volatility (%), from daily log returns. Momentum is
+// Annualised realised volatility (%), from daily log returns. The Cushion is
 // divided by this so a 40% move in a quiet name outranks the same move in one
 // that swings 40% routinely.
 function realisedVol(values, lookback = 126) {
@@ -2698,38 +2694,21 @@ function scoreFactors(comps, minWeightFrac = 0) {
   };
 }
 
-// Momentum (price/trend/volume), Quality (company data), and a blended Overall — each 1–10.
-// Ranks the universe on each return factor, then scores every row.
+// Quality (company data), 1-10. Absolute, never ranked against the universe:
+// a 25% margin is a 25% margin regardless of the company it keeps.
 //
-// Momentum is comparative — the question a screener answers is "which of these
-// is strongest", not "does this clear some absolute bar" — so each return
-// factor becomes the stock's percentile among its peers. Quality stays
-// absolute: a 25% margin is a 25% margin regardless of the company it keeps.
-// ---- absolute factor curves -------------------------------------------------
-// A logistic curve rather than a clamped line. lin() pinned a third to a half of
-// the universe at exactly 0 or 1 on every major factor, and a factor that is
-// constant across half the list cannot order anything — which is what sent this
-// model to percentiles in the first place. tanh is asymptotic: it approaches the
-// ends without reaching them, so ordering survives at the extremes. Measured
-// over the archive, only 0-3.5% of sub-scores land within 0.005 of either end.
-//
-// Centres are the medians measured across the bar archive at six dates spanning
-// 2011 to 2026, and the scales are roughly the interquartile spread. The
-// risk-adjusted returns are dimensionless — a return divided by its own
-// volatility — which is why an absolute scale is well defined for them at all.
-//
-// These are constants on purpose. Deriving them from the current universe would
-// be percentiles again by another name, and the whole point is a scale that does
-// not move: a momentum of 70 has to mean in 2026 what it meant in 2011.
+// A logistic curve rather than a clamped line — lin() pinned a third to a half
+// of the universe at exactly 0 or 1 on every major factor, and a factor that is
+// constant across half the list cannot order anything. tanh is asymptotic, so
+// ordering survives at the extremes.
 function curve(v, centre, scale) {
   if (v == null || !isFinite(v)) return null;
   return 0.5 + 0.5 * Math.tanh((v - centre) / scale);
 }
 
-// Scores every row. Momentum no longer needs the universe — each factor is
-// measured against a fixed scale — so this is a plain loop rather than the
-// two-pass ranking it used to be. It is kept as a function because both the live
-// pull and the fortnight-ago reconstruction go through it.
+// Scores every row. Nothing here needs the universe — every factor is measured
+// against a fixed scale — so this is a plain loop. It is kept as a function
+// because both the live pull and the fortnight-ago reconstruction go through it.
 // Stamp Company Type / Action / Flag / the four state columns onto rows.
 // ONE fixed rule set — the Balanced defaults in code — at the owner's
 // instruction; the profile machinery (house row, personal presets, the Rules
@@ -2833,47 +2812,19 @@ function scoreActionInto(rows) {
   }
 }
 
+// Quality is the only composite left. Momentum and the Overall 65/35 blend
+// that sat on top of it were removed on 2026-09-23 — see docs/momentum-scoring.md
+// and the `momentum-scoring` tag for the model, its measured centres and the
+// evidence that it never predicted anything.
 function applyScores(rows) {
   rows.forEach((row) => {
     const sc = computeScores(row);
-    row.momentumScore = sc.momentum ? sc.momentum.score : null;
-    row.momentumRating = sc.momentum ? sc.momentum.rating : null;
-    row.momentumBreakdown = sc.momentum ? sc.momentum.breakdown : null;
     row.qualityScore = sc.quality ? sc.quality.score : null;
     row.qualityRating = sc.quality ? sc.quality.rating : null;
     row.qualityBreakdown = sc.quality ? sc.quality.breakdown : null;
-    row.overallScore = sc.overall ? sc.overall.score : null;
-    row.overallRating = sc.overall ? sc.overall.rating : null;
   });
 }
 
-// Momentum is measured against a fixed scale, not against the rest of the list.
-// A score therefore means the same thing in a weak quarter as in a strong one,
-// does not shift when a ticker is added or removed, and can be compared with the
-// same stock's score a year ago — none of which was true while it was ranked
-// cross-sectionally. The list's own ordering is still available by sorting.
-//
-// Measured before the change: the ranked model's median score sat at 54 in every
-// period sampled between 2011 and 2026, because percentiles average 0.5 by
-// construction — it could not express a weak market at all. The absolute model
-// ranged from 40 in the post-crisis chop of 2011 to 62 in the 2021 run, while
-// moving today's ordering by a median of two places and no rating by more than
-// one point.
-//
-// What changed, and why (each was measured against the live universe before
-// being replaced):
-//   - `RS vs S&P` was `3M return` minus a constant that is identical for every
-//     stock, so it correlated 1.000 with 3M and could not reorder anything. It
-//     spent a quarter of the weight restating one horizon.
-//   - `MACD` was binary 0.8/0.2 and correlated 0.022 with the composite;
-//     `Vol trend` was unsigned, so a crash on heavy volume scored as well as a
-//     breakout, and 51% of the universe sat at its floor. Both are dropped.
-//   - `Short squeeze` correlated -0.223 with the composite and rewarded heavy
-//     short interest, which predicts weaker returns, not stronger. Dropped: it
-//     is not a momentum factor.
-//   - The short horizons enter as `1M reversal`, inverted. At one month the
-//     evidence is reversal, not continuation — the same reason the 12-1 factor
-//     skips its final month.
 function computeScores(m) {
   // `key` is the stable name a client re-weights against. The label is prose and
   // may be reworded; the key is the contract, so a preset in screens.js cannot
@@ -2881,31 +2832,6 @@ function computeScores(m) {
   // Each centre is a measured median, each scale roughly the interquartile
   // spread. Trend regime and RSI timing were always absolute and are unchanged.
   const oneMonth = m.oneMonthPct;
-  const momComps = [
-    { key: 'mom121', label: '12-1 momentum', weight: 20,
-      sub: curve(riskAdj(m.mom12_1, m.realisedVol), 0.70, 1.30) },
-    { key: 'ret6m', label: '6M return (risk-adj.)', weight: 18,
-      sub: curve(riskAdj(m.sixMonthPct, m.realisedVol), 0.55, 0.90) },
-    { key: 'ret3m', label: '3M return (risk-adj.)', weight: 17,
-      sub: curve(riskAdj(m.threeMonthPct, m.realisedVol), 0.25, 0.45) },
-    { key: 'fromHigh', label: '% from 52W high', weight: 10,
-      sub: curve(m.pctFromHigh, -12, 14) },
-    { key: 'trend', label: 'Trend regime', weight: 10, sub: trendRegimeSub(m) },
-    { key: 'consistency', label: 'Consistency', weight: 10,
-      sub: curve(m.posMonths, 58, 15) },
-    // Inverted: at a one-month horizon the strongest recent movers are the
-    // likeliest to give some back, so leading this factor is a caution.
-    { key: 'revers1m', label: '1M reversal', weight: 8,
-      sub: oneMonth == null ? null : 1 - curve(oneMonth, 1.0, 10) },
-    { key: 'rsi', label: 'RSI timing', weight: 7, sub: rsiScore(m.rsi) },
-  ];
-  // Earnings growth, PEG and forward P/E all describe earnings, so none of them
-  // says anything useful about a company that does not have any. The feed still
-  // supplies values — a positive-looking PEG of 0.16 on an $878M loss — and
-  // pegScore/peScore only guard against a ratio <= 0, so they sail through.
-  // Excluded rather than penalised: scoreFactors() renormalises over whatever
-  // remains, so the surviving factors simply carry the score.
-  const lossMaking = m.netIncomeTtm != null && m.netIncomeTtm < 0;
   const qualComps = [
     { label: 'Earnings growth', weight: 25, sub: lossMaking ? null : lin(m.earningsGrowthYoY, 0, 30) },
     { label: 'Revenue growth', weight: 20, sub: lin(m.revenueGrowthYoY, 0, 20) },
@@ -2915,25 +2841,10 @@ function computeScores(m) {
     { label: 'ROE', weight: 10, sub: lin(m.roe, 0, 30) },
   ];
 
-  // Momentum needs ~3 months of history to be meaningful.
-  const momentum = m.threeMonthPct == null ? null : scoreFactors(momComps);
   // A quality score resting on a sliver of the factor weight is not a quality
-  // score — below this share of available weight, report none at all and let
-  // Overall fall back to momentum.
+  // score — below this share of available weight, report none at all.
   const quality = scoreFactors(qualComps, QUALITY_MIN_WEIGHT);
-
-  let overall = null;
-  let o01 = null;
-  if (momentum && quality) o01 = 0.65 * momentum.score01 + 0.35 * quality.score01;
-  else if (momentum) o01 = momentum.score01;
-  else if (quality) o01 = quality.score01;
-  if (o01 != null) {
-    overall = {
-      score: Math.round(o01 * 1000) / 10,
-      rating: Math.max(1, Math.min(10, Math.round(o01 * 9 + 1))),
-    };
-  }
-  return { momentum, quality, overall };
+  return { quality };
 }
 
 // ---- API: portfolios (management) ------------------------------------------
@@ -2978,13 +2889,13 @@ const VIEW_COLUMNS_MAX = 80;
 const VIEW_ID_RE = /^[a-z0-9]{8}$/;
 const VIEW_COL_RE = /^[A-Za-z0-9:_ \-]{1,40}$/;
 const STARTER_VIEWS = [
-  { id: 'strtrend', name: 'Trend & momentum', columns: ['overallScore', 'price', 'todayPct', 'oneWeekPct', 'oneMonthPct',
-    'threeMonthPct', 'sixMonthPct', 'oneYearPct', 'momentumScore', 'spark90', 'actionTrend', 'actionEntry',
+  { id: 'strtrend', name: 'Trend & returns', columns: ['marketCap', 'price', 'todayPct', 'oneWeekPct', 'oneMonthPct',
+    'threeMonthPct', 'sixMonthPct', 'oneYearPct', 'spark90', 'actionTrend', 'actionEntry',
     'vs50ma', 'vs200ma', 'maCrossRank', 'rsi', 'pctFromHigh', 'volTrend'] },
-  { id: 'strfunda', name: 'Fundamentals', columns: ['overallScore', 'price', 'sector', 'industry', 'marketCap', 'nextEarningsDate',
+  { id: 'strfunda', name: 'Fundamentals', columns: ['price', 'sector', 'industry', 'marketCap', 'nextEarningsDate',
     'qualityScore', 'revenueTtm', 'grossMargin', 'netIncomeTtm', 'fcfMargin', 'netCash', 'earningsGrowthYoY',
     'revenueGrowthYoY', 'profitMargin', 'roe', 'forwardPe', 'peg'] },
-  { id: 'stradvic', name: 'Advice', columns: ['overallScore', 'price', 'todayPct', 'oneMonthPct', 'companyType', 'actionTrend',
+  { id: 'stradvic', name: 'Advice', columns: ['marketCap', 'price', 'todayPct', 'oneMonthPct', 'companyType', 'actionTrend',
     'actionEntry', 'actionFund', 'actionGuards', 'av:Balanced', 'av:Trend Rider', 'av:Aggressive', 'av:Max Risk',
     'av:Dip Buyer'] },
 ];
@@ -3090,11 +3001,11 @@ const STARTER_SCREENS = [
     { filters: { lastSurprise: '10..100', daysSinceEarnings: '0..21' }, sort: { key: 'lastSurprise', dir: -1 },
       columns: ['nextEarningsDate', 'twoWeekPct', 'oneMonthPct', 'av:Balanced'] }),
   sc('strngbuy', 'Advice', 'Strong Buys (Balanced)', 'The Balanced rules read Strong Buy — a mechanical reading, not an analyst rating.',
-    { filters: {}, advice: 'Strong Buy', sort: { key: 'overallScore', dir: -1 },
-      columns: ['overallScore', 'price', 'todayPct', 'oneMonthPct'].concat(ADVICE_COLS) }),
+    { filters: {}, advice: 'Strong Buy', sort: { key: 'marketCap', dir: -1 },
+      columns: ['marketCap', 'price', 'todayPct', 'oneMonthPct'].concat(ADVICE_COLS) }),
   sc('chgtoday', 'Advice', 'Advice changed today', 'The Balanced verdict moved since the previous session.',
-    { filters: {}, changed: true, sort: { key: 'overallScore', dir: -1 },
-      columns: ['overallScore', 'price', 'todayPct', 'oneMonthPct'].concat(ADVICE_COLS) }),
+    { filters: {}, changed: true, sort: { key: 'marketCap', dir: -1 },
+      columns: ['marketCap', 'price', 'todayPct', 'oneMonthPct'].concat(ADVICE_COLS) }),
 ];
 
 function cleanScreens(input) {
@@ -4103,7 +4014,7 @@ async function standAside(res) {
 // ---- API: stocks (the screener data) ---------------------------------------
 
 // Compute the full screener payload live from the API. As-of mode (asOf set)
-// recomputes momentum as it looked on that date (plus forward returns); fundamentals
+// recomputes the row as it looked on that date (plus forward returns); fundamentals
 // are skipped — they aren't point-in-time. Returns {ok, payload} or {ok:false, status, error}.
 // Where a refresh round's wall clock goes. One line per round in the logs —
 // added 2026-09-15, when a plain refresh went from 15s to 140s after the bar
@@ -4516,7 +4427,7 @@ async function computeStocks(asOf, opts = {}) {
             rsi: rsi(pv, 14), volTrend: volumeTrendPct(pv),
           };
         })(),
-        // Momentum inputs. All derived from the same daily bars, so they cost
+        // Bar-derived inputs. All from the same daily bars, so they cost
         // no additional API credits.
         mom12_1: windowReturn(values, ONE_YEAR, ONE_MONTH), // 12 months, skipping the last
         pctFromLow: pctFromLow(values),
@@ -4536,19 +4447,19 @@ async function computeStocks(asOf, opts = {}) {
     });
 
     // Scores each row. This used to have to wait until every row existed,
-    // because momentum was ranked across the universe; it no longer is, so the
+    // because the scores were once ranked across the universe; they are not, so the
     // pass is here only because the rows are built by now anyway.
     applyScores(stocks);
     scoreActionInto(stocks);
 
     // The trend ribbon's year, as dated runs, for the assistant. Bar-derived,
-    // so honestly replayable — which is why it survived the momentum cull that
+    // so honestly replayable — which is why it survived the cull that
     // took the past-score columns this window used to share.
     try {
       T.mark('score');
       // FROM THE SERIES ALREADY IN HAND, not a second read of the archive.
       // This was `trendBars()` — its own 650-day window over the universe —
-      // left behind when pastMomentum(), the read it used to share, was
+      // left behind when the scoring history read it used to share was
       // retired. Measured against production at 767 stocks it had become
       // 290,277 rows and 101.5s of a 296.5s rebuild, on top of the 470-day
       // read the price series had just done: the same bars, twice, in one
@@ -4695,7 +4606,7 @@ async function pullPricesFor(syms, depthFor, deadline) {
 
 const LIGHT_BARS = Number(process.env.TD_LIGHT_BARS || 12);
 const DEEP_BARS = 300;
-// Below this the archive cannot carry the scoring window (momentum needs ~260
+// Below this the archive cannot carry the scoring window (the rules need ~260
 // sessions), so the symbol is pulled deep and the archive is not consulted.
 const LIGHT_MIN_ARCHIVE = 300;
 
@@ -5134,7 +5045,7 @@ function btBand(m, pool, n, seed) {
   return { p10, p50, p90, finals, trials: draws.length };
 }
 
-const BT_RANKS = ['cushion', 'momentum', 'random'];
+const BT_RANKS = ['cushion', 'random'];
 
 // Choose the Top N. Ranked on what was knowable ON THE START DATE, never on
 // what happened afterwards.
@@ -5160,7 +5071,7 @@ function btPick(picks, rank, n, seed) {
       const tmp = sorted[k]; sorted[k] = sorted[j]; sorted[j] = tmp;
     }
   } else {
-    const key = rank === 'momentum' ? 'momentum' : 'cushion';
+    const key = 'cushion';
     sorted.sort((a, b) => {
       // Tier first, metric second — the screener's own rule, where sorting by an
       // advice column breaks ties on cushion. A Buy should not outrank a Strong
@@ -5333,8 +5244,8 @@ function btSimulate(opts) {
 // offered as a ranking: measured over 307,965 stock-days it orders the
 // downside BACKWARDS, because "more room" is mostly "more extended".
 function btRankMetrics(row, rows, i, cfg) {
-  const newestFirst = rows.slice(0, i + 1).reverse();   // momentum.js's orientation
-  const rv = Momentum.realisedVol(newestFirst);
+  const newestFirst = rows.slice(0, i + 1).reverse();   // barmath.js's orientation
+  const rv = BarMath.realisedVol(newestFirst);
   // exitDistance takes a NORMALISED shape, not a snapshot row — it rescales
   // each field as it walks the price down, so it has to know which is which.
   // Handing it the row gave every field as undefined and a null cushion for
@@ -5349,11 +5260,9 @@ function btRankMetrics(row, rows, i, cfg) {
     // under it. Ranking a Max Risk run on Balanced's cushion would rank it by
     // a threshold that run never uses.
   }, cfg || ACTION_CFG);
-  const ms = Momentum.scoreBars(newestFirst);
   return {
     cushion: (ed && ed.drop != null && rv != null && isFinite(rv) && rv > 0)
       ? Math.round((ed.drop / (rv / Math.sqrt(12))) * 100) / 100 : null,
-    momentum: ms ? ms.score : null,
   };
 }
 
@@ -5410,7 +5319,7 @@ function btEvalAt(sym, p, i, today, was, earnings, atDate, cfg, also) {
   const nextEarn = (earnings[sym] || []).find((d) => d > atDate) || null;
   const row = { ...today, ...(was || {}), ...tech, symbol: sym, latestDate: p.dates[i],
     nextEarningsDate: nextEarn || today.nextEarningsDate || null,
-    // Momentum.rsiSeriesAt is the app's own Wilder RSI, fed newest-first the
+    // BarMath.rsiSeriesAt is the app's own Wilder RSI, fed newest-first the
     // way it expects.
     rsi: rsiAt(p.rows, i) };
   // The run's own rule set, defaulting to ACTION_CFG — the resolved Balanced
@@ -5506,7 +5415,7 @@ function btRun(opts) {
     const m = btRankMetrics(row, rows, i, use);
     picks.push({ symbol: sym, name: today.shortName || today.name || sym,
       action: v.action, flag: v.flag, type: v.type,
-      cushion: m.cushion, momentum: m.momentum,
+      cushion: m.cushion,
       tierRank: Action.ACTIONS.indexOf(v.action),
       fundAsOf: was ? was.asOf : null,
       priceThen: closes[i], dateThen: dates[i],
@@ -5652,10 +5561,6 @@ function chatRules(asOf, count) {
     '  - no history beyond roughly 14 months, so no multi-year or all-time figures',
     '  - nothing about the user\'s holdings, position sizes, cost basis or tax position',
     '  - no stock outside the table below',
-    '  - NO momentum or Overall scores. They exist in the product but are deliberately withheld',
-    '    from you while the owner reworks the momentum model. Asked about momentum, say exactly',
-    '    that and point at the table\'s Mom. column — and do NOT improvise a momentum verdict out',
-    '    of the raw returns you do have.',
     '',
     'WHEN A QUESTION FALLS OUTSIDE THAT DATA:',
     '  Name the specific gap, then give what the table DOES show on the subject. "I have no news,',
@@ -5825,38 +5730,6 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
       .sort((a, b) => a.symbol.localeCompare(b.symbol)),
     updatedAt: snap.updatedAt || null,
   });
-}));
-
-// The momentum calculation as a spreadsheet, for one symbol. Built by the same
-// module the CLI uses, so the workbook a reader downloads cannot drift from the
-// one generated locally. ~35 KB and well under a second, so it is generated per
-// request rather than cached — a cached copy would go stale on the next refresh
-// and quietly disagree with the page it was downloaded from.
-app.get('/api/model', requireAuth, route(async (req, res) => {
-  const symbol = String(req.query.symbol || '').trim().toUpperCase();
-  if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
-  if ((await isGuest(req)) && !guestSet.has(symbol)) {
-    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
-  }
-  logAct(req, 'model', symbol);
-
-  const rows = await store.readBars(symbol, MODEL_ROWS);
-  if (rows.length < MODEL_MIN_BARS) {
-    // Too young to have a momentum score at all, so there is nothing to model.
-    return res.status(422).json({
-      error: `${symbol} has ${rows.length} sessions stored; the model needs ${MODEL_MIN_BARS}.`,
-    });
-  }
-  // readBars returns newest-first with `datetime`; the builder wants `d`.
-  const bars = rows.map((b) => ({ d: b.datetime, high: Number(b.high), close: Number(b.close) }));
-  const snap = await readSnapshot();
-  const live = (snap && snap.stocks || []).find((x) => x.symbol === symbol) || null;
-
-  const buf = buildModel(symbol, bars, live);
-  res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.set('Content-Disposition', `attachment; filename="momentum-model-${symbol}.xlsx"`);
-  res.set('Cache-Control', 'no-store');
-  res.send(buf);
 }));
 
 // Everything /lab needs for one symbol: the price series and what happened
@@ -6326,7 +6199,8 @@ app.get('/api/m/screen', requireAuth, route(async (req, res) => {
     if (!screen) return res.status(404).json({ error: 'No such screen.' });
     picked = Filters.screenRows(screen.def || {}, rows);
   } else {
-    picked = picked.slice().sort((a, b) => (b.overallRating || 0) - (a.overallRating || 0));
+    // Biggest first, the screener's own default now that Overall is gone.
+    picked = picked.slice().sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0));
   }
   const out = picked.slice(0, limit).map((x) => mobileRow(x, view.fields));
   // Charts are opt-in, and the toggle controls the PAYLOAD as much as the
@@ -6599,16 +6473,7 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   for (const k of Object.keys(src).slice(0, 40)) {
     if (/^[a-z]{1,16}$/.test(k)) collapsed[k] = !!src[k];
   }
-  // Which momentum weighting the pages are showing: a preset id, and — only
-  // for 'custom' — the map behind it. The map goes through the same
-  // cleanWeights() the browser uses, so only the eight known factors survive,
-  // as integers inside the slider's range. Anything else is dropped rather than
-  // stored, which is what keeps this row from becoming free per-user storage.
   const out = { collapsed };
-  const wid = /^[a-z]{1,16}$/.test(String(incoming.weights || '')) ? String(incoming.weights) : null;
-  if (wid) out.weights = wid;
-  const custom = Screens.cleanWeights(incoming.customWeights);
-  if (custom) out.customWeights = custom;
   // Which optional advice columns the table shows beside Balanced (which is
   // always shown and never stored). Ids from the fixed four only — there is
   // deliberately no custom profile, so nothing free-form can get in.
@@ -7830,22 +7695,12 @@ async function finishLiveRefresh(payload, ctx = {}) {
   return { loaded, total: rows.length, done: running ? covered : true };
 }
 
-// The horizons the Past Momentum column offers. Fixed rather than free-form, so
-// every one is precomputed at refresh and switching between them is instant —
-// the alternative is a round trip and a fresh scoring pass on every change of a
-// dropdown, which is a lot of machinery for five useful answers.
-//
-// `move` is how far the median name's score actually travels over that horizon,
-// measured across the live universe. A fixed threshold cannot work here: five
-// points is half the table at a fortnight and nearly all of it at three months,
-// so the arrow and the Delta column scale their deadband with the horizon.
 // Enough calendar days for the trend ribbon's year: 252 sessions of output
 // plus the 200 its moving average needs is about 640 calendar days. This used
-// to be sized for momentum's run-up as well, and came out at the same number.
+// to be sized for a longer scoring run-up as well, and came out the same.
 const TREND_WINDOW_DAYS = 650;
 
-// The bar window the trend timeline is built from. One read for the universe,
-// the same shape the momentum pass used to make before it was retired.
+// The bar window the trend timeline is built from. One read for the universe.
 // Kept for the window constant alone; the trend timeline is built from the
 // price series the round already holds (see computeStocks), because reading
 // the same bars a second time cost 101.5s of a 296.5s rebuild.
@@ -8094,7 +7949,7 @@ app.get('/api/turso-usage', requireAdmin, route(async (req, res) => {
 // page says they are estimates.
 const DQ_TTL_MS = 5 * 60 * 1000;
 // What each threshold actually gates, so the flags mean something specific.
-const DQ_MIN_SCORE_BARS = 274;    // momentum needs this many (MIN_BARS)
+const DQ_MIN_SCORE_BARS = 274;    // the advice rules' own history floor
 const DQ_MIN_5Y_BARS = 1260;      // the 5Y column's window
 const DQ_SESSIONS_PER_DAY = 0.69; // trading days per calendar day, for the estimate
 let dqCache = null;
@@ -8372,7 +8227,7 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
   // no cushion — and a cut made mostly on unrankable rows is an arbitrary cut,
   // which the page has to be able to say.
   const rankable = rank === 'random' ? r.picks.length
-    : r.picks.filter((p) => p[rank === 'momentum' ? 'momentum' : 'cushion'] != null).length;
+    : r.picks.filter((p) => p.cushion != null).length;
 
   // With no cut, the selection IS the tier and there is no spread to draw.
   const held = top
@@ -8439,7 +8294,7 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
           if (!ok) continue;
           set.add(sym);
           // Ranked only when a cut has to be made, and only on the qualifying
-          // names: the momentum score is a pass over the bars, and doing it for
+          // names: the cushion is a pass over the bars, and doing it for
           // the whole universe at every mark would be the expensive half of the
           // run for a number nothing would read.
           if (recut) cand.push({ symbol: sym, tierRank: Action.ACTIONS.indexOf(ev.v.action),
@@ -8910,7 +8765,7 @@ app.delete('/api/cron/refresh', route(async (req, res) => {
 app.get('/api/stocks', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store'); // never let the browser serve a stale copy
 
-  // ?asOf=YYYY-MM-DD recomputes momentum as it looked on that date and reports the
+  // ?asOf=YYYY-MM-DD recomputes the table as it looked on that date and reports the
   // returns since — a forward-returns view, not a backtest. The real one is /strategy.
   const asOfRaw = String(req.query.asOf || '').trim();
   const asOf = /^\d{4}-\d{2}-\d{2}$/.test(asOfRaw) ? asOfRaw : null;

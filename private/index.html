@@ -113,7 +113,7 @@
     .jump:disabled { opacity: 0.25; cursor: default; }
     .jump:disabled:hover { background: none; color: var(--faint); }
     /* Action: two hues, not six. Most of the table sits on Hold, and the
-       momentum arrow already made the argument — light every row and the
+       chevron already made the argument — light every row and the
        column stops carrying information. Weight separates the extremes. */
     td.act { font-family: var(--sans); font-size: 12px; white-space: nowrap; cursor: pointer; text-align: left; }
     td.av-col { font-size: 11.5px; }
@@ -529,9 +529,6 @@
        face — these hold numbers and belong in the mono one. */
     /* When a non-default weighting is in play the three columns it changes say
        so — this reaches the Rank column and the CSV, so it must not be subtle. */
-    body.lensed th[data-key="overallScore"],
-    body.lensed th[data-key="momentumScore"],
-    body.lensed th.lens-col { color: var(--accent); }
     /* The weighting chip: the bar's whole remaining say in the matter, shown
        only while a non-default weighting is tinting the two score columns. */
     .lenschip {
@@ -547,8 +544,6 @@
 
     /* A tint down the whole column, not a border per cell: a bottom rule on
        every row draws a line between each pair of them and reads as a ladder. */
-    body.lensed td.lens-col { background: rgba(124, 156, 255, 0.07); }
-    body.lensed tbody tr:hover td.lens-col { background: rgba(124, 156, 255, 0.12); }
     /* The Advice rules profile: when it is not Balanced the six Advice
        columns are re-scored in the browser, and the tint says so — a changed
        verdict must not look like the shared Balanced one. */
@@ -703,7 +698,7 @@
       background: color-mix(in srgb, currentColor 12%, transparent); }
 
     /* #tip lives in app.css — the stock page explains the same three numbers. */
-    /* Direction of travel beside the momentum rating. Its own colour, not the
+    /* Direction of travel beside a rating. Its own colour, not the
        rating's: green here means "improving", which is a different statement
        from the green that means "a high score". */
     .momarrow { width: 11px; height: 11px; margin-left: 3px; vertical-align: -1px;
@@ -1050,7 +1045,6 @@
             <!-- Shown only while a weighting other than Default is in force, so
                  the tinted score columns are never unexplained now that the
                  picker that used to say so has moved to the console. -->
-            <span class="lenschip" id="lensChip" style="display:none"></span>
             <a class="btn" href="/chat" title="Ask questions about this data">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chat" /></svg>Ask
             </a>
@@ -1270,7 +1264,7 @@
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="shortName" title="What a person would call it — shortened from the legal name by rule, and editable by the owner. The full legal name is in the tooltip on each row.">Name</th>
         <th class="group grp-info" data-group="info" colspan="9">Info</th>
-        <th class="group grp-rank" data-group="rank" colspan="3">Scores</th>
+        <th class="group grp-rank" data-group="rank" colspan="1">Scores</th>
         <th class="group grp-act" data-group="act" colspan="12">Advice</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="6">Short-term %</th>
@@ -1294,9 +1288,7 @@
         <th class="left grp-info" data-key="capBand" title="The size band, from the market cap beside it: Mega $200B+, Large $50-200B, Mid-Large $10-50B, Mid $2-10B, Small $300M-2B, Micro under $300M. The $50B line inside Large is this site's own cut, not a standard — without it 69% of the screen sat in one bucket. Thresholds are fixed, never derived from the current universe. Blank for ETFs, which report AUM rather than capitalisation.">Size</th>
         <th class="grp-info" data-key="newsAge" title="How long ago the latest stored headline was published, and how many this stock has from the last week. Click a cell to read them. A dot means we have not checked this stock yet — headlines are fetched a few stocks at a time.">News</th>
         <th class="grp-info" data-key="nextEarningsDate" ="Next earnings date — confirmed if the feed has it, else estimated (~91d after last report). Hover for last date + surprise.">Next<br>Earn</th>
-        <th class="grp-rank ta-c" data-key="overallScore" title="Overall 1–10: blend of Momentum (65%) and Quality (35%). Hover a cell for the split.">Overall</th>
-        <th class="grp-rank ta-c" data-key="momentumScore" title="Momentum 1–10: price strength on a fixed scale, not against the rest of the list — risk-adjusted 12-1, 6M and 3M returns, distance from the 52-week high, trend regime and month-to-month consistency, less a one-month reversal check. Hover a cell for the factors.">Mom.</th>
-        <th class="grp-rank ta-c" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all and Overall falls back to momentum. Hover a cell for the factor split and the confidence figure.">Qual.</th>
+        <th class="grp-rank ta-c" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all. Hover a cell for the factor split and the confidence figure.">Qual.</th>
         <th class="grp-act left" data-key="companyType" title="Established, Early or ETF — decided from raw fundamentals (size, profitability, cash flow, sane pricing), because an early-stage company must be judged on different rules than an established one. Recomputed daily, so a company migrates the day it earns it.">Type</th>
         <th class="grp-act left" data-key="actionTrend" title="The price-trend reading, one word — the most severe condition that holds, on the same ladder the rules check: Breakdown → Downtrend → Below 200D → Above 200D → Strong uptrend. Trend answers whether you may.">Trend</th>
         <th class="grp-act left" data-key="actionEntry" title="The timing reading: Clean (a base or shallow pullback with RSI 45–65), Clean near the high, Extended (up too far, too fast — do not chase), or None. Entry answers whether now.">Entry</th>
@@ -1334,7 +1326,7 @@
         <th class="grp-trend" data-key="vs50ma" title="Price vs 50-day moving average">vs 50D<br>MA</th>
         <th class="grp-trend" data-key="vs200ma" title="Price vs 200-day moving average">vs 200D<br>MA</th>
         <th class="left grp-trend" data-key="maCrossRank" title="50/200-day MA cross: Golden (50 above 200) or Death, with trading days since the last cross">MA<br>Cross</th>
-        <th class="grp-trend" data-key="macdHist" title="MACD histogram (12/26/9) = MACD line − signal; positive = bullish momentum">MACD</th>
+        <th class="grp-trend" data-key="macdHist" title="MACD histogram (12/26/9) = MACD line − signal; positive = bullish">MACD</th>
         <th class="grp-vol" data-key="volTrend" title="5-day avg volume vs 20-day avg (rising = volume expanding)">Vol<br>Trend</th>
         <th class="grp-vol" data-key="volX" title="Today's volume against its own 20-day average — 2.0× is twice a normal day. Mid-session this is the volume so far.">Rel<br>vol</th>
         <th class="grp-vol" data-key="volume" title="Shares traded today (so far, mid-session).">Volume</th>
@@ -1356,7 +1348,7 @@
         <th class="grp-fund" data-key="roe" title="Return on equity (TTM)">ROE</th>
         <th class="grp-fund" data-key="forwardPe" title="Forward price/earnings ratio. Shown for reference but excluded from the Quality score when the company is loss-making, where it carries no meaning.">Fwd<br>P/E</th>
         <th class="grp-fund" data-key="peg" title="PEG ratio — &lt;1 cheap, &gt;2 expensive. Shown for reference but excluded from the Quality score when the company is loss-making: the feed still returns a healthy-looking figure there (0.16 for a company losing $878M), which is meaningless.">PEG</th>
-        <th class="grp-fund" data-key="shortPctFloat" title="Short interest as % of float — high = crowded short / squeeze potential (feeds the Momentum score)">Short<br>% Fl</th>
+        <th class="grp-fund" data-key="shortPctFloat" title="Short interest as % of float — high = crowded short / squeeze potential">Short<br>% Fl</th>
         <th class="grp-fund" data-key="trailingPe" title="Trailing price/earnings — the last twelve months of actual earnings, unlike the Fwd P/E beside it, which is an estimate. Blank or meaningless for a loss-maker.">Trail<br>P/E</th>
         <th class="grp-fund" data-key="priceToBook" title="Price ÷ book value per share, most recent quarter. The classic value measure; of little use for asset-light software and misleading for banks.">P/B</th>
         <th class="grp-fund" data-key="priceToSales" title="Price ÷ revenue per share (TTM). The one valuation measure that still works for a company with no profits.">P/S</th>
@@ -1396,7 +1388,6 @@
     </div>
   </main>
 
-  <script src="/screens.js"></script>
   <script src="/action.js"></script>
   <script src="/filters.js"></script>
   <script src="/rowcard.js"></script>
@@ -1409,14 +1400,14 @@
     // them knowing about it.
     let baseStocks = [];
     let stocks = [];
-    let weightPreset = 'default';
-    let customWeights = null;      // the saved slider set, or null until one exists
     let portfolios = [];       // ordered portfolio names
     let activeTab = 'All';
-    let sortKey = 'overallScore';
+    // Biggest company first. It was Overall until that composite was removed
+    // on 2026-09-23; market cap is the one ordering every row has.
+    let sortKey = 'marketCap';
     let sortDir = -1;          // -1 desc, 1 asc
     let lastUpdated = null;    // when /api/stocks was last pulled (live data)
-    let asOfDate = null;       // forward-returns view: momentum as of this past date (YYYY-MM-DD)
+    let asOfDate = null;       // forward-returns view: the table as of this past date (YYYY-MM-DD)
     let isAdmin = true;        // may add/remove tickers, refresh, rewind (true = open/local or owner)
     let isGuest = false;       // the login page's guest cookie — filtered preview, no account
     let authRequired = false;  // server has an ADMIN_PASSWORD set (published, sign-in required)
@@ -2796,14 +2787,14 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="87">${s.error}</td>
+            <td class="na" colspan="85">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
         const price = fmtNum(s.price, 1);
         const mktCap = fmtMktCap(s.marketCap, s.currency);
         const updatedStr = lastUpdated ? fmtTime(lastUpdated) : 'n/a';
-        // Freshness tooltips: price/momentum are live; sector/fundamentals/analyst are cached.
+        // Freshness tooltips: prices are live; sector/fundamentals/analyst are cached.
         const liveTitle = asOfDate
           ? `Historical — as of ${asOfDate}`
           : `Live — price as of ${s.latestDate || 'n/a'}, pulled ${updatedStr}`;
@@ -2825,8 +2816,6 @@
           ${capBandCell(s)}
           ${newsCell(s)}
           ${earningsCell(s, cacheTitle)}
-          ${ratingCell(s.overallRating, s.symbol, 'overall', 'grp-rank ta-c lens-col')}
-          ${ratingCell(s.momentumRating, s.symbol, 'momentum', 'grp-rank ta-c lens-col')}
           ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank ta-c')}
           ${typeCell(s)}
           ${stateCell(s.actionTrend, TREND_DANGER, 'trend')}
@@ -2915,7 +2904,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 92;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 90;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -2970,7 +2959,7 @@
       const art = tileSpark(s.symbol);
       const chips = [];
       if (tileCfg.scores) {
-        for (const [k, n] of [['Overall', s.overallRating], ['Mom', s.momentumRating], ['Qual', s.qualityRating]]) {
+        for (const [k, n] of [['Qual', s.qualityRating]]) {
           if (n != null) chips.push({ k, v: n });
         }
       }
@@ -3053,7 +3042,6 @@
       renderSizeTrigger();
       renderAdviceTrigger();
       renderChangedChip();
-      renderLensChip();
       const tbody = $('tbody');
       const rows = visibleStocks();
       markSortedColumn();
@@ -3086,7 +3074,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="89">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="87">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -3379,7 +3367,7 @@
     }
 
     function applyGroups() {
-      // The horizon picker drives the Price Momentum columns, so it follows them
+      // The horizon picker drives the forward-return columns, so it follows them
       // in and out of view. Collapsing a group runs through here rather than
       // render(), which is why the trigger is redrawn from both.
       hideCollapsedCells();
@@ -3458,46 +3446,11 @@
       else wrap.scrollBy({ left: left || 0, top: top || 0, behavior: 'smooth' });
     });
 
-    // ---- momentum weight lens -------------------------------------------------
-    // Re-scores every row in the browser from the factor sub-scores already in
-    // the payload. Nothing is refetched and the shared snapshot is untouched —
-    // but unlike the analysis page, here the lens reaches the Rank column, the
-    // sort and the CSV, so it is marked loudly rather than quietly.
-    // The weighting in force: a preset's, or the slider set when Custom is on.
-    // Custom with nothing saved yet falls back to Default rather than to nothing.
-    function activeWeights() {
-      if (weightPreset === 'custom') return customWeights || Screens.defaultWeights();
-      return Screens.presetById(weightPreset).weights;
-    }
-    const lensOn = () => weightPreset !== 'default';
-
-    function applyLens() {
-      const w = activeWeights();
-      let out = !lensOn()
-        ? baseStocks
-        : baseStocks.map((x) => (x.error ? x : Screens.applyWeights(x, w)));
-      stocks = out;
-      document.body.classList.toggle('lensed', lensOn());
-    }
-
     // A local escaper: the only `esc` on this page is scoped inside the CSV
     // export, and reaching for it here throws and takes render() down with it.
     const we = (t) => String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-    const weightLabel = () =>
-      (weightPreset === 'custom' ? 'Custom' : Screens.presetById(weightPreset).label);
-
-    function renderLensChip() {
-      const chip = $('lensChip');
-      chip.style.display = lensOn() ? '' : 'none';
-      if (!lensOn()) return;
-      chip.innerHTML =
-        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>' +
-        `<span>Weights: ${we(weightLabel())}</span>`;
-      chip.title = `Momentum and Overall are re-scored under ${weightLabel()}, so the sort follows it. ` +
-        'The nightly email, the assistant and the stored snapshot stay on Default. Change it on /admin.';
-    }
 
     // The five advice columns are permanent members of the Advice group since
     // 2026-09-15 — the Rules picker that toggled four of them was removed, and
@@ -3535,8 +3488,6 @@
         const res = await api('GET', '/api/prefs');
         if (res && Array.isArray(res.siteHidden)) siteHidden = new Set(res.siteHidden);
         if (res && res.tile) tileCfg = res.tile;
-        const savedC = res && res.prefs && Screens.cleanWeights(res.prefs.customWeights);
-        if (savedC) customWeights = Object.assign(Screens.defaultWeights(), savedC);
         if (res && res.prefs && res.prefs.tickerOff === true) tickerOff = true;
         if (res && res.prefs && /^(auto|[2-6])$/.test(String(res.prefs.tileCols || ''))) tileCols = String(res.prefs.tileCols);
         if (res && Array.isArray(res.ranges)) cardRanges = res.ranges;
@@ -3547,8 +3498,6 @@
           filterRowOn = true;
           document.body.classList.add('filtering');
         }
-        const savedW = res && res.prefs && res.prefs.weights;
-        if (savedW === 'custom' || Screens.WEIGHT_PRESETS.some((w) => w.id === savedW)) weightPreset = savedW;
         const saved = res && res.prefs && res.prefs.collapsed;
         if (saved) {
           for (const g of GROUPS) {
@@ -3572,7 +3521,7 @@
         const out = {};
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
-          prefs: { collapsed: out, weights: weightPreset, customWeights,
+          prefs: { collapsed: out,
             filterRow: filterRowOn, tickerOff, activeView: activeViewId, layout, tileCols },
         }).catch(() => {});
       }, 600);
@@ -4578,7 +4527,7 @@
         lastUpdated = data.updatedAt;
         baseStocks = data.stocks || [];
         scoreActionRows(baseStocks);
-        applyLens();
+        stocks = baseStocks;
         portfolios = data.portfolios || [];
         if (!tabExists(activeTab)) activeTab = 'All';
         collapsed.fwd = !asOfDate;      // forward-return columns only with an as-of date
@@ -4586,7 +4535,7 @@
         render();
         renderRefreshNote(asOfDate ? null : (data.refreshing || null));
         if (asOfDate) {
-          setStatus(`Forward returns — momentum as of ${asOfDate}`);
+          setStatus(`Forward returns — as of ${asOfDate}`);
         } else if (!data.updatedAt) {
           setStatus(isAdmin ? 'No data yet — click ↻ Refresh to pull.' : 'No data available yet.');
         } else {
@@ -4649,7 +4598,7 @@
           lastUpdated = data.updatedAt;
           baseStocks = data.stocks || [];
           scoreActionRows(baseStocks);
-          applyLens();
+          stocks = baseStocks;
           portfolios = data.portfolios || [];
           if (!tabExists(activeTab)) activeTab = 'All';
           render();
@@ -4696,7 +4645,7 @@
       // A symbol that has never been through a refresh has no row yet. Give it
       // the placeholder the `s.error` branch already renders: it IS in the
       // portfolio, so it belongs in the table and in the count, and saying it
-      // has no data yet beats it silently not appearing. applyLens() skips
+      // has no data yet beats it silently not appearing. The renderer skips
       // error rows already, so nothing downstream needs to know.
       for (const sym of inScreener) {
         if (!baseStocks.some((r) => r.symbol === sym)) {
@@ -4705,7 +4654,7 @@
         }
       }
       if (!tabExists(activeTab)) activeTab = 'All';
-      applyLens();
+      stocks = baseStocks;
       render();
     }
 

@@ -22,8 +22,8 @@
 // WHAT THE RULES MAY READ: raw fundamentals, raw returns, and four standard
 // indicators the table already shows as plain columns (% vs 50D and 200D
 // averages, RSI, % from the 52-week high). The owner's own composite scores —
-// Momentum, Quality, Overall — are EXCLUDED BY DEFAULT because they are custom
-// built and he said so; `use_quality` / `use_momentum` switch the original
+// Quality — is EXCLUDED BY DEFAULT because it is custom
+// built and he said so; `use_quality` switches the original
 // gates back on. MA Cross, MACD and PEG are not read at all.
 //
 // Two holes in the source brief are closed here, both toggleable:
@@ -59,7 +59,6 @@
     // The owner's composites, off by default at his instruction ("custom
     // built"). Turning one on restores the brief's original gates.
     use_quality: false,
-    use_momentum: false,
     use_vol_trend: true,          // Vol Trend % is custom too, but it only ever BLOCKS buys
 
     company_type: {
@@ -81,7 +80,6 @@
       near_high: -10,             // % from 52W high counted as "near the high"
       buy_max_drawdown: -20,      // a plain Buy must not be deeper in a hole than this
       strong_buy_vs200: 10,       // Strong Buy needs a real uptrend, not a wobble above the line
-      momentum_min: 7,            // only read when use_momentum is on
       uptrend_vs50: -8,           // uptrend = above 200D and vs50 above this
     },
 
@@ -362,7 +360,6 @@
       heavyShort: gt(sf, cfg.exit.early_avoid_short_float),
       earningsSoon: cfg.earnings.enabled && dte != null && dte <= cfg.earnings.blackout_days,
       thinHistory: lt(hist, cfg.history.min_days),
-      momentumOk: !cfg.use_momentum || gte(num(s.momentumRating), cfg.entry.momentum_min),
     };
     return d;
   }
@@ -419,7 +416,7 @@
     if (d.earningsSoon) return ['Hold', 'Earnings soon'];
     if (d.extended) return ['Hold', 'Extended — wait for a pullback'];
 
-    if (d.strongUptrend && d.cleanEntry && d.nearHigh && fund === 'strong' && d.momentumOk) {
+    if (d.strongUptrend && d.cleanEntry && d.nearHigh && fund === 'strong') {
       return ['Strong Buy', 'Strong Buy: uptrend, clean entry, near high, strong fundamentals'];
     }
     if (!d.below200 && d.cleanEntry && (fund === 'ok' || fund === 'strong') && d.shallowEnough) {
@@ -459,7 +456,7 @@
 
     const need = cfg.early.buy_requires === 'ok' ? (fund === 'ok' || fund === 'strong') : fund === 'strong';
     if (cfg.early.allow_buy && d.strongUptrend && d.cleanEntry && need
-      && d.shallowEnough && d.momentumOk) {
+      && d.shallowEnough) {
       if (cfg.early.allow_strong_buy && d.nearHigh && fund === 'strong') {
         return ['Strong Buy', 'Strong Buy (early): enabled by profile'];
       }
@@ -478,7 +475,7 @@
     if (cfg.fixes.blank_trend_holds && d.blankTrend) return ['Hold', 'No trend data'];
     if (d.thinHistory) return ['Hold', 'Thin history'];
     if (d.extended) return ['Hold', 'Extended — wait for a pullback'];
-    if (d.strongUptrend && d.cleanEntry && d.nearHigh && d.momentumOk) {
+    if (d.strongUptrend && d.cleanEntry && d.nearHigh) {
       return ['Strong Buy', 'Strong Buy: uptrend, clean entry, near high'];
     }
     if (d.cleanEntry) return ['Buy', 'Buy: clean entry'];
@@ -699,7 +696,6 @@
       earnCond: () => ({ label: `Earnings within ${cfg.earnings.blackout_days} days`, met: d.earningsSoon,
         gauge: gauge('dte', d.dte, [0, cfg.earnings.blackout_days], 'd') }),
       blankCond: () => cB('No 200D average yet', d.blankTrend),
-      mom: () => (cfg.use_momentum ? [cB(`Momentum rating at least ${en.momentum_min}`, d.momentumOk)] : []),
       nearHigh: () => cGT(`Within ${-en.near_high}% of the 52W high`, 'fh', d.fh, en.near_high),
       strongUp: () => cGT(`vs 200D above ${n2(en.strong_buy_vs200)}%`, 'v200', d.v200, en.strong_buy_vs200),
       shallow: () => cGT(`Drawdown shallower than ${-en.buy_max_drawdown}%`, 'fh', d.fh, en.buy_max_drawdown),
@@ -731,7 +727,7 @@
       r.push(R('cap', 'Hold', 'Extended — wait for a pullback', extended()));
 
       r.push(R('setup', 'Strong Buy', 'Strong Buy: uptrend, clean entry, near high, strong fundamentals',
-        [strongUp()].concat(clean(), [nearHigh(), cB('Fundamentals Strong', fund === 'strong')], mom())));
+        [strongUp()].concat(clean(), [nearHigh(), cB('Fundamentals Strong', fund === 'strong')])));
       r.push(R('setup', 'Buy', 'Buy: clean entry, fundamentals OK',
         [above200ish()].concat(clean(), [cB('Fundamentals OK or Strong', fundOK), shallow()])));
       if (!cfg.trend_gate.never_buy_below_200d) {
@@ -773,11 +769,11 @@
         needStrong ? fund === 'strong' : fundOK);
       if (cfg.early.allow_buy && cfg.early.allow_strong_buy) {
         r.push(R('setup', 'Strong Buy', 'Strong Buy (early): enabled by profile',
-          [strongUp()].concat(clean(), [nearHigh(), cB('Fundamentals Strong', fund === 'strong'), shallow()], mom())));
+          [strongUp()].concat(clean(), [nearHigh(), cB('Fundamentals Strong', fund === 'strong'), shallow()])));
       }
       if (cfg.early.allow_buy) {
         r.push(R('setup', 'Buy', 'Buy (early): strong growth in an uptrend',
-          [strongUp()].concat(clean(), [needCond(), shallow()], mom())));
+          [strongUp()].concat(clean(), [needCond(), shallow()])));
       }
       r.push(R('setup', 'Buy with Risk', 'Buy with Risk (early)',
         clean().concat([cB('Fundamentals OK or Strong', fundOK)])));
@@ -790,7 +786,7 @@
       r.push(thin());
       r.push(R('cap', 'Hold', 'Extended — wait for a pullback', extended()));
       r.push(R('setup', 'Strong Buy', 'Strong Buy: uptrend, clean entry, near high',
-        [strongUp()].concat(clean(), [nearHigh()], mom())));
+        [strongUp()].concat(clean(), [nearHigh()])));
       r.push(R('setup', 'Buy', 'Buy: clean entry', clean()));
       r.push(R('setup', 'Hold', 'No clean entry', clean(), true));
     }

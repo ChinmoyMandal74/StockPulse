@@ -46,7 +46,7 @@
     // gaps), a light round decides what pulling them COSTS.
     //
     // Measured on run 66, at 742 stocks: an ordinary round reads a 650-day bar
-    // window across the whole universe, rescores momentum, re-runs advice and
+    // window across the whole universe, rescores quality, re-runs advice and
     // rewrites the 1.3MB snapshot — 101s median, 233s worst — to fold in the
     // seven profiles it fetched. Forty rounds took 2h28m and still did not
     // finish, because nobody keeps a tab open that long: seven of the last

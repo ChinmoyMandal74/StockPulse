@@ -112,7 +112,7 @@
     /* The same primary button the screener uses for Export to Excel: both hand
        you a spreadsheet, so they should not look like different kinds of action.
        .btn-primary and its nub come from app.css. Hidden entirely when there is
-       no momentum score — a link that downloads an error is worse than none. */
+       no quality score — a link that downloads an error is worse than none. */
     .sec-h .model { text-decoration: none; }
     .sec-h .deeper { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .sec-h .study { text-decoration: none; }
@@ -432,7 +432,6 @@
     <p class="lede" id="status">Loading…</p>
   </main>
 
-  <script src="/screens.js"></script>
   <script src="/rowcard.js"></script>
   <script src="/action.js"></script>
   <script src="/track.js"></script>
@@ -1202,17 +1201,11 @@
 
         <section class="bezel card"><div class="core">
           <div class="sec-h"><h2>Everything the screener knows</h2>
-            ${stock.momentumScore != null ? `<span class="deeper">
+            <span class="deeper">
               <a class="btn study" href="/lab/${encodeURIComponent(stock.symbol)}"
                 title="Build a short-horizon indicator on ${esc(stock.symbol)} and watch what it does">
                 <svg class="ic ic-sm" aria-hidden="true"><use href="#i-sliders" /></svg>Indicator lab</a>
-              <a class="btn btn-primary model" id="modelLink"
-                href="/api/model?symbol=${encodeURIComponent(stock.symbol)}"
-                title="An Excel workbook of the momentum calculation for ${esc(stock.symbol)} — every cell a live formula over the daily bars">
-                <span class="lbl">Momentum model</span>
-                <span class="nub"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-download" /></svg></span>
-              </a>
-            </span>` : ''}
+            </span>
           </div>
           <div class="fields">${RowCard.buildSections(stock, {
             colors: RowCard.GROUP_COLORS, labels: RowCard.GROUP_LABELS,

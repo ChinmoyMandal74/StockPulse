@@ -1,7 +1,7 @@
-// Does a momentum move predict the next move in price?
+// Does an indicator move predict the next move in price?
 //
 // Pure functions over pairs of numbers — no database, no API, no framework, for
-// the same reason momentum.js is: this is the arithmetic that decides whether a
+// the same reason indicators.js is: this is the arithmetic that decides whether a
 // chart says "signal" or "noise", so it has to be checkable on its own.
 //
 // The honesty lives here rather than in the page. Three things make a weak
@@ -116,7 +116,7 @@ function median(xs) {
 // beats how often the price rose anyway.
 //
 // `xSplit` is where "high" begins, and it is not always zero. A delta straddles
-// zero so zero is its natural divider, but a momentum score runs 0-100 and is
+// zero so zero is its natural divider, but a 0-100 reading is
 // never negative: splitting it at zero put every row on the high side, which
 // made the hit rate identical to the base rate and the lift exactly 0.0 for
 // every horizon. A level has to be split at its median.
@@ -152,7 +152,7 @@ function verdict(r, eff, lift) {
   const a = Math.abs(r);
   const pts = lift == null ? '' : ` The hit rate is ${lift >= 0 ? '+' : ''}${(lift * 100).toFixed(1)} points against the base rate.`;
   if (eff < 30) return `Too few independent observations (${eff}) to judge. Treat anything below as decorative.`;
-  if (a < 0.10) return `No usable relationship: the momentum move explains essentially none of what the price did next.${pts}`;
+  if (a < 0.10) return `No usable relationship: the indicator explains essentially none of what the price did next.${pts}`;
   if (a < 0.20) return `A faint relationship at best (r ${r.toFixed(3)}), inside what ${eff} independent observations can throw up by chance.${pts}`;
   if (a < 0.35) return `A modest ${r > 0 ? 'positive' : 'negative'} relationship (r ${r.toFixed(3)}). Worth testing on data this was not chosen from.${pts}`;
   return `A strong ${r > 0 ? 'positive' : 'negative'} relationship (r ${r.toFixed(3)}) — strong enough to be worth checking for a mistake before believing.${pts}`;

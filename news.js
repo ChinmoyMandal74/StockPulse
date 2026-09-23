@@ -1,5 +1,5 @@
 // Per-stock headlines, from a swappable provider — parsing and selection
-// only, no database and no schedule, the same shape momentum.js has. The
+// only, no database and no schedule, the same shape barmath.js has. The
 // server orchestrates fetch/store/serve; this file is the part a test can
 // hold still.
 //

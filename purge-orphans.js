@@ -9,7 +9,7 @@
 // mid-edit, which is deliberately non-fatal there.
 //
 // THIS IS NOT REVERSIBLE FOR ALL OF IT. Bars come back for one API credit at
-// any depth and momentum is recomputed from bars, but fundamentals history
+// any depth and every indicator is recomputed from bars, but fundamentals history
 // cannot be rebuilt: the API only ever returns today's numbers, so a deleted
 // row is gone and re-adding the ticker starts that series from zero. The dry
 // run prints exactly what would go, per table, so the trade is visible before

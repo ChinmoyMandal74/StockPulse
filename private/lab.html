@@ -78,7 +78,7 @@
       background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer;
       font-family: var(--sans); font-size: 12.5px; transition: all 0.3s var(--ease); }
     .hor:hover { color: var(--text); border-color: var(--hair-2); }
-    .hor.on { color: var(--text); border-color: var(--mom); background: rgba(34, 211, 238, 0.12); }
+    .hor.on { color: var(--text); border-color: var(--cyan); background: rgba(34, 211, 238, 0.12); }
     .pick2 { padding: 6px 13px; border-radius: 999px; border: 1px solid var(--hair);
       background: rgba(255, 255, 255, 0.02); color: var(--muted); cursor: pointer;
       font-family: var(--sans); font-size: 13px; transition: all 0.3s var(--ease); }
@@ -117,13 +117,13 @@
     /* Two eras, two colours. The split is the whole point of the page, and a
        reader should not have to consult a card to see it. */
     .plot .d-pre { fill: var(--accent); fill-opacity: 0.30; }
-    .plot .d-post { fill: var(--mom); fill-opacity: 0.42; }
+    .plot .d-post { fill: var(--cyan); fill-opacity: 0.42; }
     .plot .dot.off { fill: var(--amber); fill-opacity: 0.55; }
     .plot .dot.hi { fill: var(--text); fill-opacity: 1; }
     .plot .fitln { stroke-width: 1.4; stroke-dasharray: 6 5; fill: none;
                    vector-effect: non-scaling-stroke; }
     .plot .fitln.pre { stroke: var(--accent); opacity: 0.75; }
-    .plot .fitln.post { stroke: var(--mom); opacity: 0.75; }
+    .plot .fitln.post { stroke: var(--cyan); opacity: 0.75; }
     .plot .tick { fill: var(--faint); font-family: var(--mono); font-size: 9px; }
     .plot .axname { fill: var(--muted); font-family: var(--sans); font-size: 10px;
                     letter-spacing: 0.08em; text-transform: uppercase; }
@@ -152,7 +152,7 @@
     /* deciles */
     .bars .bar { fill: var(--amber); fill-opacity: 0.55; }
     .bars .bar.neg { fill: var(--red); fill-opacity: 0.5; }
-    .bars .mean { stroke: var(--mom); stroke-width: 1.2; stroke-dasharray: 5 4;
+    .bars .mean { stroke: var(--cyan); stroke-width: 1.2; stroke-dasharray: 5 4;
                   vector-effect: non-scaling-stroke; }
     .bars .base { stroke: var(--hair-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
     .bars .lab { fill: var(--faint); font-family: var(--mono); font-size: 9px; }
@@ -560,7 +560,7 @@
         `<button class="lg${show.pre ? '' : ' off'}" data-era="pre">` +
         `<span class="sw" style="background:var(--accent)"></span>Before 2020 <b>${f('pre')}</b></button>` +
         `<button class="lg${show.post ? '' : ' off'}" data-era="post">` +
-        `<span class="sw" style="background:var(--mom)"></span>2020 onward <b>${f('post')}</b></button>`;
+        `<span class="sw" style="background:var(--cyan)"></span>2020 onward <b>${f('post')}</b></button>`;
     }
     $('legend').addEventListener('click', (e) => {
       const b = e.target.closest('[data-era]');
@@ -618,7 +618,7 @@
     // non-monotonic indicator. A correlation measures a straight line, so a
     // relationship where both ends pay and the middle does not cancels itself
     // out and reports zero — which is exactly the shape RSI is supposed to have,
-    // and why the momentum model's own rsiScore() is a curve rather than a slope.
+    // and why a curve beats a slope for a non-monotonic reading.
     function drawDeciles() {
       const vis = pairs.filter((q) => (q.d < '2020-01-01' ? show.pre : show.post));
       if (vis.length < 200) { $('deciles').innerHTML = ''; $('decNote').textContent = 'Not enough observations to bucket.'; return; }
@@ -657,7 +657,7 @@
       const lastTall = bs[bs.length - 1].yMean > overall;
       g += `<line class="mean" x1="${B.l}" y1="${Y(overall).toFixed(1)}" x2="${B.w - B.r}" y2="${Y(overall).toFixed(1)}"/>` +
         `<text class="qlab" x="${lastTall ? B.l + 4 : B.w - B.r}" y="${(Y(overall) - 6).toFixed(1)}" ` +
-        `text-anchor="${lastTall ? 'start' : 'end'}" fill="var(--mom)" font-family="var(--sans)" font-size="9">` +
+        `text-anchor="${lastTall ? 'start' : 'end'}" fill="var(--cyan)" font-family="var(--sans)" font-size="9">` +
         `overall mean ${pct(overall)}</text>`;
       g += `<text class="axname" x="${(B.l + B.w - B.r) / 2}" y="${B.h - 8}" text-anchor="middle">` +
         `Decile of ${esc(ind().label.toLowerCase())} — lowest to highest</text>`;

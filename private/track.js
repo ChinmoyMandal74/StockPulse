@@ -29,7 +29,7 @@
     } catch (e) { /* never the page's problem */ }
   }
 
-  // track('sort', 'overallScore:desc', 81) — kind from the server's allowlist,
+  // track('sort', 'marketCap:desc', 81) — kind from the server's allowlist,
   // detail a short fact string, and an OPTIONAL duration in milliseconds.
   // Anything else is dropped server-side.
   //

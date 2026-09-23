@@ -2,10 +2,10 @@
 // and a spreadsheet library would be a fourth dependency. Same reasoning that
 // sends mail over plain fetch.
 //
-// It was inside momentum-model.js until 2026-09-22, when the export page needed
+// It was inside the Excel model builder until 2026-09-22, when the export page needed
 // the same machinery. Two copies of a zip writer is exactly the drift rowcard.js,
-// screens.js and action.js exist to prevent — so the GENERIC half moved here and
-// the model kept only the part that is about momentum. Proven by rebuilding the
+// action.js and rowcard.js exist to prevent — so the GENERIC half moved here and
+// the model kept only the part specific to it. Proven by rebuilding the
 // same workbook before and after and comparing SHA-256: byte-identical, which is
 // the only check that matters for a file format nobody reads by eye.
 //

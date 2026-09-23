@@ -82,9 +82,6 @@
                                 }],
     ['info',  'Next Earn',      (s) => s.nextEarningsDate
                                   ? { t: (s.nextEarningsEstimated ? '~' : '') + shortDate(s.nextEarningsDate), c: '' } : null],
-    ['rank',  'Overall',        (s) => V.rating(s.overallRating)],
-    ['rank',  'Mom.',           (s) => V.rating(s.momentumRating)],
-    ['rank',  'Mom. score',     (s) => (s.momentumScore == null ? null : { t: s.momentumScore.toFixed(1), c: '' })],
     ['rank',  'Qual.',          (s) => V.rating(s.qualityRating)],
     ['act',   'Type',           (s) => V.text(s.companyType)],
     ['act',   'Trend',          (s) => V.text(s.actionTrend)],
@@ -342,9 +339,6 @@
     const o = opts || {};
     const vols = o.volumes && o.volumes.length === closes.length ? o.volumes : null;
     const rsis = o.rsi && o.rsi.length === closes.length ? o.rsi : null;
-    // Momentum is stored, not derived here — it needs a year of run-up the chart
-    // window does not have, so the caller reads it from the archive.
-    const moms = o.momentum && o.momentum.length === closes.length ? o.momentum : null;
     const W = 600;
 
     // Indicator panes stack below the price, in the order RSI then volume, each
@@ -356,11 +350,7 @@
     const PANE_GAP = 13;
     const PANE_H = 44;
     const RSI_H = 58;
-    // Momentum sits directly under the price, before RSI: it is the closest
-    // thing to a second reading of the same line, where RSI and volume describe
-    // how the move happened.
-    const MOM_H = 52;
-    const anyPane = vols || rsis || moms;
+    const anyPane = vols || rsis;
     // The price panel is taller than the panes under it, twice over at the
     // owner's request (2026-09-21): 150 -> 195 -> 254 viewBox units, each step
     // 30% on the one before and the volume and RSI bands left alone both times.
@@ -377,8 +367,7 @@
     // tile/phone stock card, which pass no panes and were not asked about.
     const PRICE_H = anyPane ? 254 : 104;
     let cursor = PRICE_H;
-    let momTop = 0, momBot = 0, rsiTop = 0, rsiBot = 0, volTop = 0, volBot = 0;
-    if (moms) { cursor += PANE_GAP; momTop = cursor; momBot = cursor + MOM_H; cursor = momBot; }
+    let rsiTop = 0, rsiBot = 0, volTop = 0, volBot = 0;
     if (rsis) { cursor += PANE_GAP; rsiTop = cursor; rsiBot = cursor + RSI_H; cursor = rsiBot; }
     if (vols) { cursor += PANE_GAP; volTop = cursor; volBot = cursor + PANE_H; cursor = volBot; }
     const H = anyPane ? cursor + 6 : 104;
@@ -423,28 +412,6 @@
 
     // RSI pane: 0-100 on its own scale, with the 30 and 70 lines that make the
     // reading mean anything, and a faint 50 midline.
-    // Momentum runs 0-100 on a fixed scale, so 50 is a real midpoint rather
-    // than an average of the list — the line crossing it means something.
-    let momPane = '';
-    if (moms) {
-      const my = (v) => momBot - (Math.max(0, Math.min(100, v)) / 100) * (momBot - momTop);
-      momPane += `<rect class="pane-bg" x="0" y="${momTop}" width="${W}" height="${(momBot - momTop).toFixed(1)}"/>`;
-      for (const [lvl, cls] of [[70, 'hi'], [50, 'mid'], [30, 'lo']]) {
-        momPane += `<line class="mom-gl ${cls}" x1="0" y1="${my(lvl).toFixed(1)}" ` +
-                   `x2="${W}" y2="${my(lvl).toFixed(1)}"/>`;
-      }
-      let md = '', pen = false;
-      for (let i = 0; i < moms.length; i++) {
-        const v = moms[i];
-        // A gap in the stored history breaks the line rather than joining
-        // across it, the same rule the moving averages follow.
-        if (v == null) { pen = false; continue; }
-        md += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + my(v).toFixed(1);
-        pen = true;
-      }
-      if (md) momPane += `<path class="mom-ln" d="${md}"/>`;
-    }
-
     let rsiPane = '';
     if (rsis) {
       const ry = (v) => rsiBot - (Math.max(0, Math.min(100, v)) / 100) * (rsiBot - rsiTop);
@@ -491,8 +458,6 @@
       price: { top: 0, bottom: PRICE_H / H, at: (v) => y(v) / H, lo, hi },
       rsi: rsis ? { top: rsiTop / H, bottom: rsiBot / H,
                     at: (v) => (rsiBot - (v / 100) * (rsiBot - rsiTop)) / H } : null,
-      momentum: moms ? { top: momTop / H, bottom: momBot / H,
-                         at: (v) => (momBot - (v / 100) * (momBot - momTop)) / H } : null,
       volume: vols ? { top: volTop / H, bottom: volBot / H } : null,
     };
 
@@ -527,7 +492,6 @@
       `<line class="base" x1="0" y1="${baseY}" x2="${W}" y2="${baseY}"/>` +
       `<path class="ln" d="${d}"/>` +
       overlayPaths +
-      momPane +
       rsiPane +
       `<circle class="dot" cx="${x(closes.length - 1).toFixed(1)}" cy="${y(closes[closes.length - 1]).toFixed(1)}" r="2.6"/>` +
       bars +
@@ -658,47 +622,21 @@
       `<span class="tip-bar"><i style="width:${pct}%"></i></span><span class="val">${pct}</span></div>`;
   }
 
-  // The two halves of Overall, as bars.
-  function overallRows(s) {
-    const parts = [];
-    if (s.momentumScore != null) parts.push(['Momentum', s.momentumScore, 65]);
-    if (s.qualityScore != null) parts.push(['Quality', s.qualityScore, 35]);
-    const rows = parts.map(([lbl, sc, w]) => {
-      const pct = Math.round(sc);
-      return `<div class="tip-row"><span class="lbl">${lbl} <em>${parts.length > 1 ? w + '%' : 'only'}</em></span>` +
-        `<span class="tip-bar"><i style="width:${pct}%"></i></span><span class="val">${pct}</span></div>`;
-    }).join('');
-    const note = parts.length > 1
-      ? 'Overall = 65% Momentum + 35% Quality.'
-      : 'Overall = Momentum only (no company data).';
-    return { rows, note, count: parts.length };
-  }
-
-  // kind: 'overall' | 'momentum' | 'quality'. `pulled` is the "as of" line.
+  // kind: 'quality' — the only composite left. Overall and Momentum were
+  // removed on 2026-09-23 (docs/momentum-scoring.md); the parameter stays so
+  // callers read as they did and an unknown kind simply explains nothing.
   // Returns null when there is nothing to explain, so a caller can skip showing.
   function scoreTip(s, kind, opts) {
     const o = opts || {};
     const foot = o.pulled ? ` · pulled ${esc(o.pulled)}` : '';
-
-    if (kind === 'overall') {
-      if (s.overallRating == null) return null;
-      const { rows, note } = overallRows(s);
-      return `<div class="tip-head">Overall ${s.overallRating}/10 ` +
-        `<span>· score ${s.overallScore}/100</span></div>` + rows +
-        `<div class="tip-foot">${note}${foot}</div>`;
-    }
-
-    const quality = kind === 'quality';
-    const bd = quality ? s.qualityBreakdown : s.momentumBreakdown;
+    if (kind !== 'quality') return null;
+    const bd = s.qualityBreakdown;
     if (!bd) return null;
-    const rating = quality ? s.qualityRating : s.momentumRating;
-    const score = quality ? s.qualityScore : s.momentumScore;
-    const label = quality ? 'Quality' : 'Momentum';
     const totalW = bd.reduce((a, b) => a + b.weight, 0);
     const availW = bd.reduce((a, b) => a + (b.sub != null ? b.weight : 0), 0);
     const conf = totalW ? Math.round((availW / totalW) * 100) : 0;
-    return `<div class="tip-head">${label} ${rating}/10 ` +
-      `<span>· score ${score}/100 · ${conf}% of factors</span></div>` +
+    return `<div class="tip-head">Quality ${s.qualityRating}/10 ` +
+      `<span>· score ${s.qualityScore}/100 · ${conf}% of factors</span></div>` +
       bd.map(factorRow).join('') +
       `<div class="tip-foot">Confidence ${conf}%: share of factor-weight with data ` +
       `(rest excluded &amp; renormalized).${foot}</div>`;
@@ -723,7 +661,7 @@
   // Which rank-group rows carry a breakdown, when a caller asks for them.
   // Off by default: inside the hover card these rows are already in a tooltip,
   // and a tooltip on a tooltip helps nobody.
-  const ROW_TIPS = { 'Overall': 'overall', 'Mom.': 'momentum', 'Qual.': 'quality' };
+  const ROW_TIPS = { 'Qual.': 'quality' };
   // Which groups carry rows that can explain themselves.
   const TIP_GROUPS = ['rank'];
 

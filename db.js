@@ -445,7 +445,7 @@ const SCHEMA = [
 
   // Headlines per stock: headline / source / url / timestamp, never bodies.
   // The id is a hash of the url, so the same story from two fetches is one row.
-  // RESTORED 2026-09-15: these two were deleted from the schema by the momentum
+  // RESTORED 2026-09-15: these two were deleted from the schema by the scoring
   // cleanup (ca2efed) and nothing noticed, because production already had the
   // tables — a fresh database would have failed every news write. Copied back
   // from the live `sqlite_master`, so they match what is deployed exactly.
@@ -2038,7 +2038,7 @@ const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'new
 // Remove a symbol from the database entirely.
 //
 // Two of these come back on their own — bars cost one API credit to re-pull at
-// any depth, and momentum is computed from bars — but FUNDAMENTALS HISTORY DOES
+// any depth, and every indicator is computed from bars — but FUNDAMENTALS HISTORY DOES
 // NOT. The API only ever returns today's values, so a row that is deleted is
 // gone for good and re-adding the ticker starts its series from zero. That is
 // the price of the caller's request to drop everything, and it is why this

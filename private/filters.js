@@ -5,7 +5,7 @@
 // mobile page asks the server to run a screen and send back the twenty rows it
 // matched rather than shipping the 1.3MB table to a phone, so this had to stop
 // living inside index.html: two implementations of `>=3` would have drifted
-// inside a week, the same reason momentum.js, action.js and screens.js exist.
+// inside a week, the same reason action.js and rowcard.js exist.
 //
 // Nothing here touches the DOM. What it cannot know on its own — a member's
 // personal portfolios — is passed in as `ctx`.
@@ -18,7 +18,7 @@
 
   // A score column filters on the 1-10 rating the cell shows, not the 0-100
   // score behind it.
-  const RATING_FOR = { overallScore: 'overallRating', qualityScore: 'qualityRating', momentumScore: 'momentumRating' };
+  const RATING_FOR = { qualityScore: 'qualityRating' };
   const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios']);
   const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh',
     'exchange', 'capBand']);
@@ -41,7 +41,7 @@
   // cap is $33.4B and splitting there would balance the chart beautifully — and
   // would be percentiles wearing a band's name: "mid cap" would stop meaning the
   // same thing next year, and a stock would change band because someone added a
-  // ticker. The momentum centres record the same rule for the same reason.
+  // ticker. A band that moves with the data is a percentile in disguise.
   //
   // SAFE TO BAND IN DOLLARS, verified rather than assumed: market cap comes back
   // in USD even when the rest of the row does not — Ericsson reads a $33.2B cap

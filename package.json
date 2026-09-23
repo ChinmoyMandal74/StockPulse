@@ -1,7 +1,7 @@
 {
-  "name": "stock-momentum-screener-poc",
+  "name": "tickr-lab",
   "version": "0.1.0",
-  "description": "Proof-of-concept momentum screener: track stock tickers and view multi-timeframe % changes (Twelve Data, no database).",
+  "description": "Tickr Lab — a nightly stock screener: returns, trend, quality and mechanical Advice rules over a twenty-year daily bar archive.",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {

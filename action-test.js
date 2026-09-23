@@ -40,7 +40,7 @@ const EST = {
   earningsGrowthYoY: 20, revenueGrowthYoY: 15, grossMargin: 55, shortPctFloat: 2,
   vs200ma: 6, vs50ma: 4, rsi: 55, oneMonthPct: 3, threeMonthPct: 8,
   pctFromHigh: -8, volTrend: 2, historyDays: 400,
-  nextEarningsDate: '2026-10-20', latestDate: '2026-09-11', momentumRating: 8,
+  nextEarningsDate: '2026-10-20', latestDate: '2026-09-11',
 };
 // A well-behaved Early base: small, unprofitable, fast-growing.
 const EARLY = {
@@ -50,7 +50,7 @@ const EARLY = {
   earningsGrowthYoY: null, revenueGrowthYoY: 35, grossMargin: 55, shortPctFloat: 5,
   vs200ma: 12, vs50ma: 4, rsi: 55, oneMonthPct: 4, threeMonthPct: 10,
   pctFromHigh: -12, volTrend: 2, historyDays: 400,
-  nextEarningsDate: '2026-10-20', latestDate: '2026-09-11', momentumRating: 8,
+  nextEarningsDate: '2026-10-20', latestDate: '2026-09-11',
 };
 const row = (base, over) => Object.assign({}, base, over);
 
@@ -176,11 +176,6 @@ check('Aggressive: 30% month is not yet "extended"',
   run(row(EST, { oneMonthPct: 30 }), null, 'Aggressive')[1], 'Buy');
 
 console.log('\nCOMPOSITES OFF BY DEFAULT, ON BY CONFIG');
-check('Momentum ignored by default (rating 2 still Strong Buy)',
-  run(row(EST, { vs200ma: 15, pctFromHigh: -5, momentumRating: 2 }))[1], 'Strong Buy');
-check('use_momentum on: the same row is gated down',
-  run(row(EST, { vs200ma: 15, pctFromHigh: -5, momentumRating: 2 }), { use_momentum: true })[1],
-  'Buy');
 check('use_quality on: Quality 3 makes an otherwise-strong row Weak → Hold',
   run(row(EST, { qualityRating: 3 }), { use_quality: true })[1], 'Hold');
 
@@ -303,13 +298,13 @@ console.log('\nTHE LADDER (explain / ladder)');
     oneMonthPct: pick(-30, 35), threeMonthPct: pick(-45, 50), pctFromHigh: pick(-55, 0),
     volTrend: pick(-25, 25), historyDays: pick(50, 600),
     nextEarningsDate: rnd() < 0.5 ? '2026-09-' + (12 + Math.floor(rnd() * 18)) : '2026-10-20',
-    latestDate: '2026-09-11', momentumRating: pick(1, 10),
+    latestDate: '2026-09-11',
   });
   const profiles = [cfg(), cfg(null, 'Conservative'), cfg(null, 'Aggressive'),
     cfg(null, 'Trend Rider'), cfg(null, 'Max Risk'), cfg(null, 'Dip Buyer'),
     cfg({ trend_gate: { never_buy_below_200d: false } }),
     cfg({ fixes: { blank_trend_holds: false, weak_blocks_buy_with_risk: false } }),
-    cfg({ use_quality: true, use_momentum: true }),
+    cfg({ use_quality: true }),
     cfg({ early: { allow_strong_buy: true, buy_requires: 'ok' } }),
     cfg({ earnings: { enabled: false }, use_vol_trend: false }),
     cfg({ whipsaw: { neutral_band_pct: 3 } })];

@@ -404,7 +404,7 @@
         $('note').innerHTML = 'Sessions are <b>estimated</b> from the first and last bar, not counted: '
           + 'counting rows per symbol would read the whole archive, which is what caused a database '
           + 'quota warning once. Two seeks per stock read two rows instead. '
-          + `"Too short to score" is under ${DATA.thresholds.score} sessions, which is what momentum needs; `
+          + `"Too short to score" is under ${DATA.thresholds.score} sessions, the rules' own history floor; `
           + `"no 5Y" is under ${DATA.thresholds.fiveYear}. Cached five minutes — use Check again after a refresh.`;
       } catch (e) {
         $('tb').innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--red);padding:22px">${we(e.message)}</td></tr>`;

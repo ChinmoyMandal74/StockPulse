@@ -93,34 +93,6 @@
     .said.bad { color: var(--red); }
     .said.good { color: var(--green); }
 
-    /* ---- the weights editor --------------------------------------------- */
-    .presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; }
-    .preset { text-align: left; padding: 13px 15px; border-radius: 13px; cursor: pointer;
-              border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.025); color: var(--text);
-              font: inherit; transition: border-color .25s var(--ease), background .25s var(--ease); }
-    .preset:hover { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.05); }
-    .preset.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-    .preset .nm { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; }
-    .preset .nm .chk { opacity: 0; color: var(--accent); }
-    .preset.on .nm .chk { opacity: 1; }
-    .preset em { display: block; margin-top: 4px; font-size: 11.5px; font-style: normal;
-                 color: var(--faint); line-height: 1.45; }
-
-    .sliders { margin-top: 12px; padding: 14px 15px 4px; border-top: 1px solid var(--hair); }
-    .wrow { display: grid; grid-template-columns: 1fr 210px 42px 46px; align-items: center;
-            gap: 12px; padding: 7px 0; }
-    .wrow .wn { font-size: 13px; }
-    .wrow .wv { font: 600 13px var(--mono); text-align: right; }
-    .wrow .ws { font: 500 12px var(--mono); text-align: right; color: var(--faint); }
-    .wrow input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
-    @media (max-width: 720px) { .wrow { grid-template-columns: 1fr 58px 46px; }
-                                .wrow input[type="range"] { grid-column: 1 / -1; } }
-    .wfoot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
-             padding: 12px 0 14px; font-size: 11.5px; color: var(--faint); }
-
-    .note { margin: 6px 4px 0; font-size: 11.5px; color: var(--faint); line-height: 1.6; max-width: 82ch; }
-    .note a { color: var(--muted); }
-    @media (max-width: 640px) { .page { padding: 0 18px; } }
     /* Theme ordering. A colour swatch per row, because colour follows the NAME
        now and a reader should see that reordering does not move it. */
     .ord { list-style: none; margin: 0; padding: 0; max-height: 330px; overflow-y: auto;
@@ -260,7 +232,7 @@
             <button class="btn" id="asOfGo">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-calendar" /></svg>Open that view</button>
           </div>
-          <p class="said" id="asOfSaid">Momentum and returns are recomputed as they looked on that date, and the
+          <p class="said" id="asOfSaid">The table and its returns are recomputed as they looked on that date, and the
             Forward columns show what happened next. Fundamentals are hidden — they are not point-in-time.</p>
         </div>
       </div></div>
@@ -312,18 +284,6 @@
               <span class="hint">The views the phone page offers, and what each row shows. Configured here; the phone only picks between them.</span></span></a>
         </div>
       </div></div>
-      <div class="bezel card"><div class="core">
-        <div class="form">
-          <span class="lbl">Momentum weighting</span>
-          <div class="presets" id="presets"></div>
-          <div id="sliderBox"></div>
-          <p class="said" id="wSaid"></p>
-        </div>
-      </div></div>
-      <p class="note">This changes the Momentum and Overall columns on the screener, and therefore the sort — the two score columns are tinted while a
-        non-default weighting is in force. The nightly email, the assistant and the stored snapshot always stay on
-        Default, so the shared score remains one comparable measurement.
-        <a href="/help#weights">What does each factor mean?</a></p>
     </section>
 
     <!-- ================= reference data ================= -->
@@ -391,7 +351,6 @@
     </section>
   </main>
 
-  <script src="/screens.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const we = (t) => String(t == null ? '' : t)
@@ -489,94 +448,6 @@
       location.href = '/?asOf=' + encodeURIComponent(v);
     });
 
-    // ---- the momentum weighting -------------------------------------------
-    // The EDITOR is here and nowhere else. The screener scores the table from
-    // whatever is saved and /analysis reads it too, but neither edits it: two
-    // editors would double the work and drift apart, which is the same rule
-    // that kept this in one place when it lived in the screener's bar.
-    let prefs = {};                    // everything this page does not edit, kept verbatim
-    let preset = 'default';
-    let custom = null;
-
-    function presetRows() {
-      return Screens.WEIGHT_PRESETS.concat([{ id: 'custom', label: 'Custom',
-        note: 'Your own weighting — set it with the sliders below.' }]);
-    }
-    function paintPresets() {
-      $('presets').innerHTML = presetRows().map((w) =>
-        `<button class="preset ${w.id === preset ? 'on' : ''}" data-w="${we(w.id)}" aria-pressed="${w.id === preset}">` +
-        `<span class="nm"><svg class="ic ic-sm chk" aria-hidden="true"><use href="#i-check" /></svg>${we(w.label)}</span>` +
-        `<em>${we(w.note)}</em></button>`).join('');
-      $('presets').querySelectorAll('[data-w]').forEach((b) =>
-        b.addEventListener('click', () => setPreset(b.dataset.w)));
-    }
-    function paintSliders() {
-      if (preset !== 'custom') { $('sliderBox').innerHTML = ''; return; }
-      const w = custom || Screens.defaultWeights();
-      $('sliderBox').innerHTML = '<div class="sliders">' +
-        Screens.FACTORS.map((f) =>
-          `<label class="wrow" data-wrow="${we(f.key)}"><span class="wn">${we(f.label)}</span>` +
-          `<input type="range" min="0" max="${Screens.MAX_WEIGHT}" step="1" value="${w[f.key] ?? 0}" data-wkey="${we(f.key)}" />` +
-          `<span class="wv">${w[f.key] ?? 0}</span><span class="ws"></span></label>`).join('') +
-        '<div class="wfoot"><button class="btn" id="wReset">Copy Default</button>' +
-        '<span>Weights need not total 100 — the second number is each factor\'s share once the rest are counted.</span>' +
-        '</div></div>';
-      $('sliderBox').querySelectorAll('[data-wkey]').forEach((inp) =>
-        inp.addEventListener('input', () => {
-          custom = Object.assign({}, custom || Screens.defaultWeights(), { [inp.dataset.wkey]: Number(inp.value) });
-          paintShares();
-          save();
-        }));
-      $('wReset').addEventListener('click', () => {
-        custom = Screens.defaultWeights();
-        paintSliders();
-        save();
-      });
-      paintShares();
-    }
-    // Just the numbers beside each slider, so a drag stays cheap.
-    function paintShares() {
-      const shares = Screens.weightShares(custom || Screens.defaultWeights());
-      $('sliderBox').querySelectorAll('[data-wrow]').forEach((row) => {
-        const k = row.dataset.wrow;
-        row.querySelector('.wv').textContent = (custom || Screens.defaultWeights())[k];
-        row.querySelector('.ws').textContent = shares[k] + '%';
-      });
-    }
-    function setPreset(id) {
-      if (id === preset) return;
-      preset = id;
-      if (id === 'custom' && !custom) custom = Screens.defaultWeights();
-      paintPresets();
-      paintSliders();
-      save();
-    }
-
-    // A drag fires on every step, so the write waits for the hand to stop.
-    let saveTimer = null;
-    function save() {
-      clearTimeout(saveTimer);
-      say('wSaid', 'Saving…');
-      saveTimer = setTimeout(async () => {
-        try {
-          // Hand back everything this page does not edit. A prefs PUT replaces
-          // the whole row, so sending only the weighting would silently reset
-          // the saved column layout, the Past horizon and the advice columns —
-          // which is exactly how /analysis once wiped every collapsed group.
-          await api('PUT', '/api/prefs', {
-            prefs: Object.assign({}, prefs, { weights: preset, customWeights: custom }),
-          });
-          const label = preset === 'custom' ? 'Custom' : Screens.presetById(preset).label;
-          // A screener tab that was already open still holds the old weighting
-          // and would write it back on its next pref change, so say plainly
-          // that it needs a reload rather than letting the two disagree.
-          say('wSaid', `Saved — reload the screener and it will score on ${label}.`, 'good');
-        } catch (err) {
-          say('wSaid', 'Could not save: ' + err.message, 'bad');
-        }
-      }, 400);
-    }
-
     // ---- boot ---------------------------------------------------------------
     (async function boot() {
       try {
@@ -587,18 +458,6 @@
       } catch (err) {
         say('addSaid', 'Could not read the portfolios: ' + err.message, 'bad');
       }
-      try {
-        const r = await api('GET', '/api/prefs');
-        prefs = (r && r.prefs) || {};
-        const c = Screens.cleanWeights(prefs.customWeights);
-        if (c) custom = Object.assign(Screens.defaultWeights(), c);
-        const w = prefs.weights;
-        if (w === 'custom' || Screens.WEIGHT_PRESETS.some((x) => x.id === w)) preset = w;
-      } catch (err) { /* the editor still works; the first save writes the rest */ }
-      paintPresets();
-      paintSliders();
-      const label = preset === 'custom' ? 'Custom' : Screens.presetById(preset).label;
-      say('wSaid', `The screener is scoring on ${label}.`);
       // the as-of field is a date, and a date in the future has no ranking
       $('asOf').max = new Date().toISOString().slice(0, 10);
     })();

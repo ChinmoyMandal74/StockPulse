@@ -251,7 +251,6 @@
           <label for="rank">Rank by</label>
           <select id="rank" disabled>
             <option value="cushion" selected>Cushion (room to the exit)</option>
-            <option value="momentum">Momentum score</option>
             <option value="random">Random (the control)</option>
           </select>
         </div>
@@ -342,7 +341,7 @@
     const cls = (v) => (v == null ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : '');
     // One writer for the ranking's name: the cards, the legend and the trade
     // log all print it, and three copies would disagree the first time one moved.
-    const rankLabel = (k) => ({ cushion: 'thickest cushion', momentum: 'highest momentum',
+    const rankLabel = (k) => ({ cushion: 'thickest cushion',
       random: 'at random' }[k] || k);
 
     // Two months back, and never today: the cap is the API's too, but saying it

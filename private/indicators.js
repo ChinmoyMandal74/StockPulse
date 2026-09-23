@@ -6,7 +6,7 @@
 // grid built against the local SQLite copy — and a second implementation of
 // "vol-normalised 10-day return" would have drifted from the first within a week.
 //
-// Series are OLDEST-FIRST here, unlike momentum.js which works newest-first
+// Series are OLDEST-FIRST here, unlike barmath.js which works newest-first
 // because that is the shape the API returns. Charts and rolling windows both
 // read forward, and flipping once at the boundary is cheaper than reasoning
 // about a reversed index in every loop below.
@@ -15,9 +15,9 @@
 // wherever there is not yet enough history. A null must break a line rather
 // than be drawn as zero — the same rule the moving averages follow.
 //
-// An indicator is handed the whole bundle — `{ closes, score, dates }` — and
+// An indicator is handed the whole bundle — `{ closes, dates }` — and
 // takes what it needs. That is why `compute` does not simply take closes: the
-// slope indicator reads the momentum score, which is different data with a
+// each reads what it needs, which may be different data with a
 // different start date, and threading two signatures through three surfaces
 // would have been worse than one bundle everywhere.
 
@@ -30,7 +30,7 @@
   // `Number(null)` is 0 and `Number('')` is 0, both of which are finite — so the
   // obvious one-liner turned every missing value into a real zero. It never
   // showed while the only input was closes, which are never null; the moment the
-  // score series arrived, with 273 blank sessions before a symbol is scoreable
+  // series arrived with blank sessions at the front
   // at all, slopes were being fitted from a fabricated 0 up to the first real
   // reading. Reject the empties before coercing, not after.
   const num = (v) => {
@@ -40,9 +40,8 @@
   };
 
   // Annualised realised volatility of log returns, as a percentage — the same
-  // definition and the same 252 as momentum.js, so an indicator built here is
-  // in the same units as the risk-adjusted factors already in the score.
-  // Verified equal to Momentum.realisedVol on the same window.
+  // definition and the same 252 as barmath.js, so an indicator built here is
+  // in comparable units. Verified equal to BarMath.realisedVol on the same window.
   function realisedVolSeries(closes, window) {
     const n = closes.length;
     const out = new Array(n).fill(null);
@@ -57,7 +56,7 @@
       const drop = i - window;
       if (drop >= 1 && r[drop] != null) { sum -= r[drop]; sumsq -= r[drop] * r[drop]; count--; }
       // The FULL window is required, which is where this deliberately differs
-      // from momentum.js. That function scores one date from whatever history
+      // from barmath.js. That function reads one date from whatever history
       // it has; this one draws a line, and a line whose early points were
       // computed over 20 returns and whose later ones use 126 is not the same
       // measurement along its length. Blank until it can be done properly —
@@ -86,8 +85,8 @@
     return out;
   }
 
-  // Wilder's RSI at every date. Oldest-first here, where momentum.js works
-  // newest-first — verified equal to Momentum.rsiSeriesAt, which is itself
+  // Wilder's RSI at every date. Oldest-first here, where barmath.js works
+  // newest-first — verified equal to BarMath.rsiSeriesAt, which is itself
   // checked against the screener's own RSI column to four decimals.
   //
   // Wilder is recursive from a seed, so this is one forward pass: a simple
@@ -146,11 +145,11 @@
   // so the page renders its sliders from this without knowing anything else.
   const BOUNDS = {
     lookback: { min: 2, max: 40, label: 'Lookback', unit: ' sessions',
-      help: 'How far back the return is measured. Below about five days you are measuring noise; above twenty you are measuring the medium term the score already covers.' },
+      help: 'How far back the return is measured. Below about five days you are measuring noise; above twenty you are measuring the medium term.' },
     skip: { min: 0, max: 10, label: 'Skip', unit: ' sessions',
-      help: 'Sessions left out at the recent end. This is what 12-1 momentum does with its final month — the most recent days are where reversal lives.' },
+      help: 'Sessions left out at the recent end. The classic 12-1 window does the same with its final month — the most recent days are where reversal lives.' },
     volWindow: { min: 20, max: 126, label: 'Vol window', unit: ' sessions',
-      help: 'The window the volatility is measured over. Shorter reacts faster and is noisier; 126 is what the momentum score uses.' },
+      help: 'The window the volatility is measured over. Shorter reacts faster and is noisier; 126 is about six months.' },
     period: { min: 2, max: 50, label: 'Period', unit: ' sessions',
       help: 'Wilder’s RSI period. 14 is the convention and what the screener’s own RSI column uses; shorter reacts faster and swings wider.' },
     smooth: { min: 1, max: 15, label: 'Smoothing', unit: '-day EMA',
@@ -163,7 +162,7 @@
       label: 'Risk-adjusted velocity',
       needs: 'closes',
       blurb: 'A short-horizon return divided by the stock’s own volatility. ' +
-        'The missing short end of the ladder already in the momentum score, which ' +
+        'The short end of the ladder, which ' +
         'risk-adjusts at 3, 6 and 12 months and at nothing below that.',
       params: ['lookback', 'skip', 'volWindow', 'smooth'],
       defaults: { lookback: 10, skip: 0, volWindow: 60, smooth: 1 },
@@ -182,7 +181,7 @@
     id: 'rsi',
     label: 'RSI',
     needs: 'closes',
-    blurb: 'Wilder’s RSI, the plain reading — not the sub-score the momentum model ' +
+    blurb: 'Wilder’s RSI, the plain reading — not a derived sub-score ' +
       'derives from it. Worth looking at with the deciles rather than the correlation: ' +
       'the hypothesis about RSI is that both ends matter and the middle does not, and a ' +
       'correlation measures a straight line, so a U would cancel itself out and report zero.',
