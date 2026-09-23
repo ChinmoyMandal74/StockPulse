@@ -1897,8 +1897,9 @@
     /* ---- the artboard ---------------------------------------------------
        The board the card is drawn on: 1080 wide, its own ground and aura, and
        the padding every card lays out inside. It lived in promo.html AND in
-       cards.html as two copies until the phone needed a third (2026-09-16) —
-       so it moved here, beside the cards it holds. A host sets the height,
+       the since-deleted cards.html as two copies until the phone needed a
+       third (2026-09-16) — so it moved here, beside the cards it holds. Only
+       the studio and the phone host it now. A host sets the height,
        which is the one thing that follows the chosen size. */
     .s-art { width: 1080px; position: relative; overflow: hidden; background: #050505;
              transform-origin: top left; font-family: var(--sans); color: var(--text); }

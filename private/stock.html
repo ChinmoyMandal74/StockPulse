@@ -13,8 +13,8 @@
   <script src="/wmark.js" defer></script>
   <!-- The card and the rasteriser, both shared: cards.js owns what a card
        looks like and says, cardshot.js turns one into a PNG at its true
-       1080px. The studio, /cards, the phone and now this page all take the
-       same shot — three copies of it was two too many. -->
+       1080px. The studio, the phone and this page all take the same shot —
+       three copies of it was two too many. -->
   <script src="/cards.js"></script>
   <script src="/cardshot.js"></script>
   <style>
@@ -1483,7 +1483,7 @@
       const shrMenu = document.getElementById('shrMenu');
       const shrMsg = document.getElementById('shrMsg');
 
-      // Guests are refused, the way /cards and /promo refuse them. A guest sees
+      // Guests are refused, the way /promo refuses them. A guest sees
       // five preview stocks; handing them a branded, dated image of one is the
       // one thing the preview is not for.
       fetch('/api/me', { cache: 'no-store' })
