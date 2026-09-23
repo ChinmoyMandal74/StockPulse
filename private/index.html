@@ -2790,7 +2790,7 @@
         const price = fmtNum(s.price, 1);
         const mktCap = fmtMktCap(s.marketCap, s.currency);
         const updatedStr = lastUpdated ? fmtTime(lastUpdated) : 'n/a';
-        // Freshness tooltips: prices are live; sector/fundamentals/analyst are cached.
+        // Freshness tooltips: prices are live; sector and fundamentals are cached.
         const liveTitle = asOfDate
           ? `Historical — as of ${asOfDate}`
           : `Live — price as of ${s.latestDate || 'n/a'}, pulled ${updatedStr}`;

@@ -108,13 +108,8 @@ const ADMIN_COOKIE = 'st_admin';
 // allowed) and still costs credits, so it's OFF by default. Set ENABLE_FUNDAMENTALS
 // =true in .env once you're on a Pro+ plan to populate those columns.
 const FUNDAMENTALS_ENABLED = process.env.ENABLE_FUNDAMENTALS === 'true';
-// Analyst consensus + price targets (/recommendations, /price_target) require a
-// Twelve Data ULTRA+ plan. On Pro they 403 for real tickers (only the AAPL demo
-// works) and still cost credits, so they're OFF by default. Set ENABLE_ANALYST=true
-// in .env once you're on Ultra+ to populate the Analyst columns.
-const ANALYST_ENABLED = process.env.ENABLE_ANALYST === 'true';
 // A cold profile fetch hits several endpoints — /profile, /statistics, /earnings,
-// and — when analyst is on — /recommendations + /price_target. Costs are not
+// and /earnings. Costs are not
 // uniform: a symbol in a batched time_series call is 1 credit, but /statistics
 // is 50, measured off the Api-Credits-Used header in Sep 2026. Against a 610
 // credits/minute Pro limit that makes six cold profiles about 300 credits, so
@@ -132,8 +127,8 @@ const ANALYST_ENABLED = process.env.ENABLE_ANALYST === 'true';
 // threw away eighteen quarters of surprise history that the PEAD study
 // needs and that nothing else can reconstruct.
 const EARNINGS_QUARTERS = 40;
-const MAX_PROFILE_FETCHES_PER_CALL = ANALYST_ENABLED ? 4 : 6;
-const PROFILE_CAP_ARCHIVE_ROUND = ANALYST_ENABLED ? 4 : 7;   // 7 x 80 = 560 <= 610
+const MAX_PROFILE_FETCHES_PER_CALL = 6;
+const PROFILE_CAP_ARCHIVE_ROUND = 7;   // 7 x 80 = 560 <= 610
 const CREDITS_PER_MINUTE = 610;
 const CREDITS_PER_PROFILE = 80;
 // How many symbols one round may price LIVE. The credit ceiling already caps a
@@ -1654,24 +1649,10 @@ function membershipOf(symbol, portfolios) {
 // Sector is static; fundamentals move slowly. We cache per symbol and refresh at
 // most once a day, so a normal refresh stays a single time_series call.
 
-// Consensus label + 1–5 score from analyst buy/hold/sell counts.
-function analystConsensus(c) {
-  const total = c.strongBuy + c.buy + c.hold + c.sell + c.strongSell;
-  if (total === 0) return { label: null, score: null, total: 0 };
-  const score = (c.strongBuy * 5 + c.buy * 4 + c.hold * 3 + c.sell * 2 + c.strongSell * 1) / total;
-  let label = 'Hold';
-  if (score >= 4.5) label = 'Strong Buy';
-  else if (score >= 3.5) label = 'Buy';
-  else if (score >= 2.5) label = 'Hold';
-  else if (score >= 1.5) label = 'Sell';
-  else label = 'Strong Sell';
-  return { label, score, total };
-}
-
-// Fetch sector (/profile), fundamentals (/statistics), and analyst data
-// (/recommendations, /price_target) for one symbol. Best-effort: any field stays
-// null if the endpoint errors or omits it. The analyst/fundamentals endpoints
-// require a Twelve Data Pro+ plan, so they're gated behind FUNDAMENTALS_ENABLED.
+// Fetch sector (/profile), fundamentals (/statistics) and the earnings
+// quarters (/earnings) for one symbol. Best-effort: any field stays null if
+// the endpoint errors or omits it. /statistics requires a Twelve Data Pro+
+// plan, so it is gated behind FUNDAMENTALS_ENABLED.
 // ---- short names ----------------------------------------------------------
 // The feed has one name field and it is the legal one: "Space Exploration
 // Technologies Corp. Class A", "SK hynix Inc. American Depositary Receipt".
@@ -1849,13 +1830,6 @@ function emptyProfile() {
     lastSurprise: null,
     nextEarningsDate: null,
     nextEarningsEstimated: false,
-    analystScore: null,
-    analystLabel: null,
-    analystTotal: null,
-    analystCounts: null,
-    targetMean: null,
-    targetHigh: null,
-    targetLow: null,
   };
 }
 
@@ -2043,41 +2017,6 @@ async function fetchProfile(symbol) {
       }
     } catch {
       /* leave earnings null */
-    }
-  }
-  if (ANALYST_ENABLED) {
-    try {
-      const rec = await fetchJson(`${TD_BASE}/recommendations?symbol=${enc}&apikey=${API_KEY}`);
-      const t = rec?.trends?.current_month;
-      if (t) {
-        const counts = {
-          strongBuy: t.strong_buy || 0,
-          buy: t.buy || 0,
-          hold: t.hold || 0,
-          sell: t.sell || 0,
-          strongSell: t.strong_sell || 0,
-        };
-        const cons = analystConsensus(counts);
-        if (cons.total > 0) {
-          out.analystCounts = counts;
-          out.analystTotal = cons.total;
-          out.analystScore = cons.score;
-          out.analystLabel = cons.label;
-        }
-      }
-    } catch {
-      /* leave analyst consensus null */
-    }
-    try {
-      const pt = await fetchJson(`${TD_BASE}/price_target?symbol=${enc}&apikey=${API_KEY}`);
-      const p = pt?.price_target;
-      if (p) {
-        out.targetMean = p.average ?? null;
-        out.targetHigh = p.high ?? null;
-        out.targetLow = p.low ?? null;
-      }
-    } catch {
-      /* leave price target null */
     }
   }
   const m = creditMeter.getStore();
@@ -2558,19 +2497,6 @@ function range52Pos(values, lookback = 252) {
   return ((latest - low) / (high - low)) * 100;
 }
 
-// Return between two points, both measured back from the latest bar.
-// windowReturn(values, 252, 21) is the classic 12-1 window: a year of return
-// that stops a month short of today. The skip is deliberate — the most recent
-// month tends to reverse rather than continue, which is why the standard
-// this construction leaves it out.
-function windowReturn(values, fromDaysAgo, toDaysAgo = 0) {
-  if (!Array.isArray(values) || values.length <= fromDaysAgo) return null;
-  const a = parseFloat(values[toDaysAgo].close);
-  const b = parseFloat(values[fromDaysAgo].close);
-  if (!isFinite(a) || !isFinite(b) || b === 0) return null;
-  return ((a - b) / b) * 100;
-}
-
 // Annualised realised volatility (%), from daily log returns. The Cushion is
 // divided by this so a 40% move in a quiet name outranks the same move in one
 // that swings 40% routinely.
@@ -2588,21 +2514,6 @@ function realisedVol(values, lookback = 126) {
   const mean = r.reduce((t, x) => t + x, 0) / r.length;
   const varc = r.reduce((t, x) => t + (x - mean) ** 2, 0) / (r.length - 1);
   return Math.sqrt(varc * 252) * 100;
-}
-
-// Share (%) of the last `months` 21-day blocks that closed higher than they
-// started — it separates a steady climber from one that gapped once on news
-// and has drifted ever since.
-function positiveMonths(values, months = 12, span = 21) {
-  if (!Array.isArray(values) || values.length < months * span + 1) return null;
-  let up = 0;
-  for (let k = 0; k < months; k++) {
-    const a = parseFloat(values[k * span].close);
-    const b = parseFloat(values[(k + 1) * span].close);
-    if (!isFinite(a) || !isFinite(b) || b === 0) return null;
-    if (a > b) up++;
-  }
-  return (up / months) * 100;
 }
 
 // A ratio of two absolutes, as a percentage. Derived server-side so the value
@@ -3648,7 +3559,7 @@ app.delete('/api/tickers/:symbol', requireAdmin, route(async (req, res) => {
   res.json(await portfolioAnswer({ purged }));
 }));
 
-// Expire the per-symbol profile cache (sector / fundamentals / analyst) so the
+// Expire the per-symbol profile cache (sector / fundamentals) so the
 // next refresh re-pulls it. Company names are static, so they're kept.
 //
 // Expire rather than delete: the backfill only manages a few symbols per call,
@@ -4276,11 +4187,6 @@ async function computeStocks(asOf, opts = {}) {
           : null;
 
       const price = ok ? parseFloat(values[0].close) : null;
-      const targetUpside =
-        price != null && price > 0 && prof.targetMean != null
-          ? ((prof.targetMean - price) / price) * 100
-          : null;
-
       const mc = maCross(values); // 50/200 regime + days since cross
       const mac = macdCalc(values); // MACD histogram + line + signal
       // Sort key so "most bullish" sorts to the top: fresh golden high, fresh death low.
@@ -4349,12 +4255,6 @@ async function computeStocks(asOf, opts = {}) {
         lastSurprise: prof.lastSurprise ?? null,
         nextEarningsDate: prof.nextEarningsDate ?? null,
         nextEarningsEstimated: prof.nextEarningsEstimated ?? false,
-        analystConsensus: prof.analystLabel ?? null,
-        analystScore: prof.analystScore ?? null,
-        analystTotal: prof.analystTotal ?? null,
-        analystCounts: prof.analystCounts ?? null,
-        targetMean: prof.targetMean ?? null,
-        targetUpside,
         price,
         // The PROFILE first: it survives an archive-priced round, where the
         // price call's meta does not exist at all.
@@ -4363,7 +4263,7 @@ async function computeStocks(asOf, opts = {}) {
         micCode: prof.micCode || s.meta?.mic_code || null,
         historyDays: ok ? values.length : 0,
         latestDate: ok ? values[0].datetime : null,
-        profileFetchedAt: prof.fetchedAt ?? null, // when sector/fundamentals/analyst were cached
+        profileFetchedAt: prof.fetchedAt ?? null, // when sector and fundamentals were cached
         todayPct: pctChange(values, TODAY),
         yesterdayPct: singleDayChange(values, 1),
         oneWeekPct: pctChange(values, ONE_WEEK),
@@ -4419,13 +4319,11 @@ async function computeStocks(asOf, opts = {}) {
         })(),
         // Bar-derived inputs. All from the same daily bars, so they cost
         // no additional API credits.
-        mom12_1: windowReturn(values, ONE_YEAR, ONE_MONTH), // 12 months, skipping the last
         pctFromLow: pctFromLow(values),
         fcfYield: yieldPct(prof.fcfTtm, prof.marketCap),      // FCF / market cap
         netCashPct: yieldPct(prof.netCash, prof.marketCap),   // net cash as % of market cap
         range52Pos: range52Pos(values),   // 0 = on the 52w low, 100 = on the high
         realisedVol: rvol,
-        posMonths: positiveMonths(values),
         fwd1M,
         fwd3M,
         fwd6M,
@@ -5498,7 +5396,6 @@ const CHAT_FIELDS = [
   ['macdHist', 'MACD histogram'],
   ['volTrend', '5-day average volume vs 20-day, %'],
   ['realisedVol', 'annualised volatility, %'],
-  ['posMonths', 'share of the last 12 months that closed up, %'],
   ['revenueTtm', 'revenue, trailing twelve months'],
   ['revenueGrowthYoY', 'quarterly revenue growth year on year, %'],
   ['grossProfitTtm', 'gross profit TTM'],
@@ -7722,7 +7619,7 @@ async function liveRefreshOpts() {
   // Fill missing prices ONLY the stocks with no bars at all, in its first
   // round; everything else comes off the archive. notePriceRound then stamps
   // prices_at, so every later round is an archive round.
-  if (running && running.mode === 'missing' && !archivePrices && !ANALYST_ENABLED) {
+  if (running && running.mode === 'missing' && !archivePrices) {
     const dates = await store.barsMaxDates(universe);
     const slice = universe.filter((s) => !dates.has(s)).slice(0, CREDITS_PER_MINUTE - 1);
     return {
@@ -7735,10 +7632,10 @@ async function liveRefreshOpts() {
       priceTotal: universe.length,
     };
   }
-  if (archivePrices || ANALYST_ENABLED) {
+  if (archivePrices) {
     return {
       archivePrices,
-      profileCap: ANALYST_ENABLED ? MAX_PROFILE_FETCHES_PER_CALL : PROFILE_CAP_ARCHIVE_ROUND,
+      profileCap: PROFILE_CAP_ARCHIVE_ROUND,
       running,
     };
   }

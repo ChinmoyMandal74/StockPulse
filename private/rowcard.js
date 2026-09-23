@@ -154,6 +154,13 @@
       return { t, c: s.maBullish ? 'pos' : 'neg' };
     }],
     ['trend', 'MACD',           (s) => V.macd(s.macdHist)],
+    // The two halves the histogram is the difference of. Computed on every row
+    // since the MACD column was built and shown nowhere until now; the
+    // histogram is the reading, these say where it came from. Neutral, because
+    // a MACD line above zero is not by itself good news — the sign that means
+    // something is on the histogram above.
+    ['trend', 'MACD line',      (s) => V.num(s.macdLine, 2)],
+    ['trend', 'MACD signal',    (s) => V.num(s.macdSignal, 2)],
     ['vol',   'Vol trend',      (s) => V.pct(s.volTrend)],
     ['vol',   'Rel. volume',    (s) => (ok(s.volX) ? { t: s.volX.toFixed(2) + '\u00d7', c: s.volX >= 1.5 ? 'warn' : '' } : null)],
     ['vol',   '$ volume',       (s) => V.money(s.dollarVolume, s.currency || 'USD')],
@@ -168,6 +175,10 @@
     ['size',  'Debt',           (s) => V.money(s.totalDebt, s.currency)],
     ['size',  'EBITDA',         (s) => V.money(s.ebitda, s.currency)],
     ['size',  'Operating cash', (s) => V.money(s.operatingCashFlowTtm, s.currency)],
+    // Market cap plus debt, less cash — what the whole business costs rather
+    // than what the equity costs. Stored since the profile call started being
+    // kept in full and never surfaced.
+    ['size',  'Enterprise value',(s) => V.money(s.enterpriseValue, s.currency)],
     ['fund',  'Earn grth Q YoY',(s) => V.pct(s.earningsGrowthYoY)],
     ['fund',  'Rev grth Q YoY', (s) => V.pct(s.revenueGrowthYoY)],
     ['fund',  'Profit margin',  (s) => V.pct(s.profitMargin)],
@@ -184,7 +195,17 @@
     ['fund',  'EPS TTM',        (s) => V.num(s.dilutedEpsTtm, 2)],
     ['fund',  'Debt / equity',  (s) => V.num(s.debtToEquity)],
     ['fund',  'Current ratio',  (s) => V.num(s.currentRatio)],
+    // Both are price-divided, so they move with the price every day — the
+    // reason the refresh email excludes them from its moved-fields list. Fine
+    // to read, misleading to watch for changes.
+    ['fund',  'FCF yield',      (s) => V.lvl(s.fcfYield)],
+    ['fund',  'Net cash %',     (s) => V.lvl(s.netCashPct)],
     ['fund',  'Dividend yield', (s) => V.lvl(s.divYield)],
+    // The cash amount behind the yield, per share and in the trading currency.
+    // Not V.money: that abbreviates for market caps and renders a $1.00
+    // dividend as "$1".
+    ['fund',  'Dividend rate',  (s) => (ok(s.divRate)
+      ? { t: curSym(s.currency) + s.divRate.toFixed(2), c: '' } : null)],
     ['fund',  'Payout ratio',   (s) => V.lvl(s.payoutRatio)],
     ['fund',  'Ex-dividend',    (s) => (s.exDivDate ? { t: shortDate(s.exDivDate), c: '' } : null)],
     ['own',   'Shares out',     (s) => V.count(s.sharesOutstanding)],
