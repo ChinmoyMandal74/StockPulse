@@ -498,15 +498,6 @@
       <label>Size</label>
       <div class="sizes" id="sizeList"></div>
 
-      <label>Motion</label>
-      <div class="sizes">
-        <button id="motOff" class="on">Still</button>
-        <button id="motOn">Animate</button>
-        <button id="motReplay" title="Play it again">Replay</button>
-      </div>
-      <p class="hint" style="margin-top:6px">Animate previews the motion; a screen recorder is how
-        it becomes a video.</p>
-
       <button class="btn" id="dlBtn" title="Render this card to a PNG at its exact pixel size">Download PNG</button>
       <p class="hint" id="dlMsg"></p>
       <button class="btn" id="reloadBtn">Re-pull tonight's data</button>
@@ -642,7 +633,6 @@
       stage.innerHTML = '<div class="s-aura"></div>' +
         `<div class="s-in">${buildCard()}</div>`;
       fit();
-      if (motionOn) Cards.motion(stage);
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
       $('movBox').style.display = tpl === 'movers' ? 'block' : 'none';
       // two rankings in half the width apiece leaves no room for a verdict
@@ -770,18 +760,6 @@
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
     $('intSlide').addEventListener('change', () => { if (tpl === 'intro') render(); });
-    let motionOn = false;
-    function setMotion(on) {
-      motionOn = on;
-      $('motOn').classList.toggle('on', on);
-      $('motOff').classList.toggle('on', !on);
-      if (on) Cards.motion($('stage'));
-      else $('stage').classList.remove('motion');
-    }
-    $('motOn').addEventListener('click', () => setMotion(true));
-    $('motOff').addEventListener('click', () => setMotion(false));
-    $('motReplay').addEventListener('click', () => { setMotion(true); });
-
     $('reloadBtn').addEventListener('click', () => load(true));
 
     // When the prices were pulled, and what day they belong to — two different
@@ -919,13 +897,6 @@
       try {
         const fontCss = await ensureFontCss();
         const stage = $('stage');
-        // A card caught mid-animation would export at whatever opacity the
-        // frame happened to be on, so the still is always taken still.
-        const wasMoving = stage.classList.contains('motion');
-        if (wasMoving) {
-          Cards.unfreeze(stage);
-          await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-        }
         const blob = await shoot(fontCss, 'image/png');
         const a = document.createElement('a');
         const date = new Date().toISOString().slice(0, 10);
@@ -935,7 +906,6 @@
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-        if (wasMoving) Cards.motion(stage);
         msg.textContent = `Saved ${a.download} (1080\u00d7${size.h}).`;
       } catch (err) {
         msg.textContent = 'Could not render: ' + err.message + ' A screenshot of the artboard still works.';

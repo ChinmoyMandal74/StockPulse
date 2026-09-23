@@ -716,10 +716,8 @@
             `<path class="carea" d="${path(hero.P)}L${x(last).toFixed(1)} ${(H - PB).toFixed(1)}L${x(first).toFixed(1)} ${(H - PB).toFixed(1)}Z" fill="url(#pfill)" stroke="none"/>`;
         }
       }
-      // pathLength="1" normalises the geometry, so one dash rule draws any
-      // line in Motion without measuring it — see the motion styles below.
       const strokes = L.map((l) =>
-        `<path class="cl" pathLength="1" d="${path(l.P)}" fill="none" stroke="${l.color}" stroke-width="${l.width || 2}" stroke-linejoin="round" stroke-linecap="round" opacity="${l.dim ? 0.7 : 1}"/>`).join('');
+        `<path class="cl" d="${path(l.P)}" fill="none" stroke="${l.color}" stroke-width="${l.width || 2}" stroke-linejoin="round" stroke-linecap="round" opacity="${l.dim ? 0.7 : 1}"/>`).join('');
       const tags = L.map((l) => {
         let last = null, li = -1;
         for (let i = l.P.length - 1; i >= 0 && last == null; i--) { last = l.P[i]; li = i; }
@@ -1018,7 +1016,7 @@
       const wash = color === '#34d399' ? 'rgba(52,211,153,0.13)' : 'rgba(251,113,133,0.13)';
       return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` + zero +
         `<path d="${area}" fill="${wash}" stroke="none"/>` +
-        `<path class="cl" pathLength="1" d="${d}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+        `<path class="cl" d="${d}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
     }
 
     function tplSparks() {
@@ -2251,108 +2249,16 @@
 
     .s-empty { margin-top: 60px; font-size: 30px; color: var(--muted); line-height: 1.5; max-width: 30ch; }`;
 
-  // ---- Motion -----------------------------------------------------------
-  // A card is a still by default; Motion makes it perform for three seconds
-  // so a screen recording is a finished reel. Everything is CSS on the same
-  // markup — no second renderer, and the PNG export is untouched because the
-  // host strips the class before it serialises.
-  const STAGGER = ['.rows > *', '.atally > *', '.flow > *', '.rungs > *', '.stmts > *',
-                   '.tiers > *', '.frule', '.pcard', '.vrow', '.band', '.feat', '.mockrow'];
-  const MOTION = `
-@keyframes cRise { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
-@keyframes cFade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes cGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-@keyframes cDraw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-.motion .s-top { animation: cFade .55s cubic-bezier(.22,1,.36,1) both; }
-.motion .s-kick { animation: cRise .5s .1s cubic-bezier(.22,1,.36,1) both; }
-.motion .s-title { animation: cRise .65s .18s cubic-bezier(.22,1,.36,1) both; }
-.motion .s-sub, .motion .mockcap { animation: cFade .7s .75s ease both; }
-.motion .s-empty { animation: cRise .6s .3s cubic-bezier(.22,1,.36,1) both; }
-.motion .dots, .motion .chips, .motion .s-foot { animation: cFade .7s 1.15s ease both; }
-.motion .rowhead { animation: cFade .5s .25s ease both; }
-.motion .bar, .motion .afill, .motion .band .fill {
-  transform-origin: left center; animation: cGrow .85s .3s cubic-bezier(.22,1,.36,1) both; }
-.motion .abar { transform-origin: left center; animation: cGrow .9s .25s cubic-bezier(.22,1,.36,1) both; }
-.motion .flowend { animation: cRise .6s 1s cubic-bezier(.22,1,.36,1) both; }
-.motion .mock { animation: cFade .6s .25s ease both; }
-.motion .cl { stroke-dasharray: 1; animation: cDraw 1.5s .3s cubic-bezier(.33,.9,.5,1) both; }
-.motion .carea { animation: cFade .8s 1.2s ease both; }
-.motion svg text { animation: cFade .6s 1.35s ease both; }
-` + Array.from({ length: 18 }, (_, i) =>
-    `.motion ${STAGGER.map((sel) => `${sel}:nth-child(${i + 1})`).join(', .motion ')}` +
-    ` { animation: cRise .55s ${(0.28 + i * 0.06).toFixed(2)}s cubic-bezier(.22,1,.36,1) both; }`).join('\n');
-
-  // Numbers land by counting, which is the difference between a screenshot
-  // that moves and something that reads as video. The whole timeline is a
-  // pure function of elapsed milliseconds — the live preview walks it with
-  // rAF and the video exporter samples it frame by frame, so the two cannot
-  // disagree. The original text is stashed on the element the first time it
-  // is read, since later frames overwrite it.
-  const NUM_DELAY = 320, NUM_DUR = 950;
-  const MOTION_MS = 2600;                 // the animation's own length
-  function numberTargets(root) {
-    const out = [];
-    root.querySelectorAll('.val, .cmp, .ac, .fn, .n, .fa').forEach((el) => {
-      if (el.dataset.raw == null) el.dataset.raw = el.textContent;
-      const raw = el.dataset.raw;
-      const m = /^(\D*)(-?\d[\d,]*(?:\.\d+)?)(.*)$/.exec(raw.trim());
-      if (!m) return;
-      const target = parseFloat(m[2].replace(/,/g, ''));
-      if (!isFinite(target)) return;
-      out.push({ el, raw, pre: m[1], target,
-        dec: (m[2].split('.')[1] || '').length, post: m[3] });
-    });
-    return out;
-  }
-  function setNumbersAt(list, t) {
-    const p = Math.max(0, Math.min(1, (t - NUM_DELAY) / NUM_DUR));
-    const e = 1 - Math.pow(1 - p, 3);
-    list.forEach((n) => {
-      n.el.textContent = p >= 1 ? n.raw : n.pre + (n.target * e).toFixed(n.dec) + n.post;
-    });
-  }
-
-  // Restarting means removing the class, forcing a reflow and putting it
-  // back: without the reflow the browser coalesces the two changes and
-  // nothing replays.
-  function motion(root) {
-    if (!root) return;
-    root.classList.remove('motion');
-    void root.offsetWidth;
-    root.classList.add('motion');
-    const list = numberTargets(root);
-    const t0 = performance.now();
-    const step = (t) => {
-      const el = t - t0;
-      setNumbersAt(list, el);
-      if (el < NUM_DELAY + NUM_DUR) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }
-
-  // The exporter's half: pin every animation to one instant so the card can
-  // be photographed at that instant. CSS animations are real Animation
-  // objects, so seeking them is exact rather than a re-implementation.
-  function unfreeze(root) {
-    if (!root) return;
-    root.getAnimations({ subtree: true }).forEach((a) => { try { a.cancel(); } catch (e) {} });
-    root.classList.remove('motion');
-    root.querySelectorAll('[data-raw]').forEach((el) => {
-      el.textContent = el.dataset.raw;
-      delete el.dataset.raw;
-    });
-  }
-
   function injectStyle() {
     if (document.getElementById('cards-style')) return;
     const el = document.createElement('style');
     el.id = 'cards-style';
-    el.textContent = STYLE + MOTION;
+    el.textContent = STYLE;
     document.head.appendChild(el);
   }
 
   global.Cards = {
-    STYLE, MOTION, injectStyle, motion, unfreeze, MOTION_MS,
+    STYLE, injectStyle,
     ids: Object.keys(BUILDERS),
     ADV_PROFILES,
     MOV_PERIODS,
