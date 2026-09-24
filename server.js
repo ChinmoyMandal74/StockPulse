@@ -4329,9 +4329,20 @@ async function computeStocks(asOf, opts = {}) {
         volX: volumeX(values),             // today's volume / its prior 20-day average
         // Today's shares traded and their value — what "most active" means. A
         // mid-session refresh sees the volume so far, which is what it is.
-        volume: (() => { const v = Number(values[0] && values[0].volume); return isFinite(v) && v > 0 ? v : null; })(),
+        //
+        // THESE TWO ARE THE ONLY PLACES IN THE ROW THAT TOUCH `values` WITHOUT
+        // A GUARD, and it took the whole universe down on 2026-09-24. They
+        // check `values[0]` and not `values`, so a series that is UNDEFINED
+        // rather than empty throws — and a batched time_series reply carries a
+        // per-symbol error object with no `values` key at all for a symbol the
+        // provider cannot serve, which the top-level `status === 'error'` test
+        // never sees. One such symbol threw a TypeError out of the whole map
+        // and 1,165 stocks got no refresh. `ok` is what every sibling field
+        // uses, and it is `Array.isArray(values) && values.length > 0`.
+        volume: (() => { const v = ok ? Number(values[0].volume) : NaN; return isFinite(v) && v > 0 ? v : null; })(),
         dollarVolume: (() => {
-          const v = Number(values[0] && values[0].volume); const c = parseFloat(values[0] && values[0].close);
+          if (!ok) return null;
+          const v = Number(values[0].volume); const c = parseFloat(values[0].close);
           return isFinite(v) && v > 0 && isFinite(c) ? Math.round(v * c) : null;
         })(),
         daysSince52wHigh: extremeAges(values).hi,
@@ -4462,7 +4473,22 @@ async function computeStocks(asOf, opts = {}) {
     return { ok: true, payload: { stocks, portfolios: portfolioNames, asOf,
       phases: line || null, phaseSteps: steps, updatedAt: new Date().toISOString() } };
   } catch (err) {
-    return { ok: false, status: 502, error: `Failed to reach Twelve Data: ${netReason(err)}` };
+    // NOT EVERYTHING IN HERE IS THE PROVIDER, and calling it all that cost an
+    // afternoon on 2026-09-24: a TypeError from our own code was reported as
+    // "Failed to reach Twelve Data: Cannot read properties of undefined", which
+    // reads as a provider wobble and is a bug in this file. A network failure
+    // arrives as a TypeError too (undici's `fetch failed`), so the test is the
+    // CAUSE CHAIN — undici hangs the real reason off `err.cause`, and our own
+    // faults have none.
+    const ours = err instanceof TypeError && !err.cause;
+    // The stack is the only thing that names the line, and it was being
+    // discarded. Vercel does not show stdout for a function, so this has to be
+    // console.error, and it has to happen before the message is flattened.
+    console.error('refresh failed:', err && err.stack ? err.stack : err);
+    return { ok: false, status: 502,
+      error: ours
+        ? `Refresh failed inside the app (not the provider): ${err.message}`
+        : `Failed to reach Twelve Data: ${netReason(err)}` };
   }
 }
 
