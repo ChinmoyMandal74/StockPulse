@@ -665,6 +665,26 @@ Which column groups a user has collapsed — and which starter screens they have
 - `/refreshes` shows the kind as *Intraday prices*, `skipped` runs with their reason, and a line in the Last nightly tile: today's intraday runs, the last one, failures and skips.
 - **Setting it up is on cron-job.org, not in this repo** — nothing runs until that job exists.
 
+#### A single-round refresh re-priced the same 500 stocks for ever (2026-09-24)
+**The owner asked why only 500 of 1,165 stocks were being refreshed, and the answer was worse than the slice size: it was the same 500 every time.** Measured on production after the first scheduled intraday run:
+
+| | |
+|---|---|
+| freshly priced | **500 of 1,164 (43%)** |
+| of the FIRST 500 in universe order | **500** |
+| of the remaining 665 | **0** |
+| the tail's price age | **90 to 119 minutes, and climbing all session** |
+
+**The pacing worked; its cursor did not exist outside a run.** `liveRefreshOpts` took the offset from `refresh_state.priced`, and that row is only written by a MULTI-ROUND run. A plain Refresh and the intraday schedule deliberately write no such row -- one there raises the "refreshing" banner for every viewer, thirteen times a trading day -- so `done` was always 0. `notePriceRound` opened with `if (!opts.running) return`, and **the intraday route never called it at all**.
+
+- **The cursor lives in `app_meta` under `price_cursor`**, not in `refresh_state`: one integer, no flag, no banner, and it survives the cold start a process variable would not. `readPriceCursor` / `writePriceCursor` follow the `hidden_columns` pattern.
+- **It wraps**, so the universe rotates. At 1,165 symbols against a 500 slice that is three rounds -- 500, 500, 165 -- and with the schedule at 30 minutes every stock is priced about every 90 minutes instead of never.
+- **A cursor past the end restarts** rather than slicing nothing, which is what happens the first time the universe shrinks below where the cursor had reached.
+- **Inside a run the cursor is ignored.** A Refresh all inheriting whatever offset the schedule happened to leave would skip every stock before it and still report itself complete.
+- **`PRICE_SLICE` is not the problem and was not touched.** 500 is measured: at 609 a round took 170s on a good day and 423s on a bad one and produced two 504s, so 500 holds a round near 155s against the platform's 300s kill.
+
+Verified: 10 checks driving the REAL endpoint with the provider stubbed, reading who got priced out of `price_state` -- the per-symbol clock the Price pulled column uses -- rather than recomputing the slice arithmetic, which would only prove the same sum can be done twice. The fixture is 12 symbols against a slice of 5, so a cycle is 5 + 5 + 2 and **the wrap lands on a short round**, the case an even division would hide. **Proved by reverting**: the old line gives S00-S04 three times and 5 of 12 covered, which is the production symptom in miniature.
+
 ### Running the intraday schedule from a laptop (2026-09-24, owner's request)
 **The intraday refresh had never once fired.** `GET /api/cron/intraday` shipped on 2026-09-15 with the note *"Setting it up is on cron-job.org, not in this repo -- nothing runs until that job exists"*, and that job was never created: on 2026-09-24 the run history held **95 runs, every one `trigger=manual`, and zero of kind `intraday`.** The owner asked for the schedule to run from their laptop instead.
 

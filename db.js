@@ -1058,6 +1058,37 @@ async function writeHiddenColumns(ids) {
   return list;
 }
 
+// How far a SINGLE-ROUND price refresh has walked the universe.
+//
+// The paced price slice already existed, but its cursor lived on
+// `refresh_state.priced` — a row that only exists during a MULTI-ROUND run.
+// A plain Refresh and the intraday schedule write no such row (on purpose: a
+// row there raises the "refreshing" banner for every viewer, thirteen times a
+// trading day), so `done` was always 0 and every one of them re-priced
+// `universe.slice(0, PRICE_SLICE)`. Measured on 2026-09-24 at 1,165 symbols:
+// the same 500 every run, and the other 665 carried prices 90 to 119 minutes
+// old with nothing in the session that would ever touch them.
+//
+// So the cursor for those runs lives here instead — one integer in app_meta,
+// no flag, no banner, and it survives the cold start that a process variable
+// would not.
+async function readPriceCursor() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'price_cursor'");
+  const n = r.rows.length ? Number(r.rows[0].value) : 0;
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+}
+
+async function writePriceCursor(n) {
+  await init();
+  const v = Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('price_cursor', ?)",
+    args: [String(v)],
+  });
+  return v;
+}
+
 // ---- earnings history -----------------------------------------------------
 
 // One batch for a whole refresh round rather than one write per symbol. Rows
@@ -3418,6 +3449,8 @@ module.exports = {
   deletePost,
   readHiddenColumns,
   writeHiddenColumns,
+  readPriceCursor,
+  writePriceCursor,
   writeEarnings,
   readEarnings,
   writeNames,

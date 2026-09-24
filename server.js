@@ -7776,7 +7776,18 @@ async function liveRefreshOpts() {
   // this round takes the next slice, anything outside it comes from the archive
   // (yesterday's close, replaced when its own slice comes round), and only the
   // round that reaches the end stamps prices_at.
-  const done = (running && running.priced) || 0;
+  // WHERE THIS ROUND STARTS. Inside a multi-round run the marker is on the run
+  // itself; outside one it is the stored cursor, so a plain Refresh and the
+  // intraday schedule CONTINUE round the universe instead of re-pricing the
+  // same opening slice for ever. Before the cursor existed they all started at
+  // 0: at 1,165 symbols that was the same 500 every time and 665 stocks that
+  // never saw an intraday price at all.
+  //
+  // A cursor at or past the end has wrapped — start again rather than slicing
+  // nothing, which is also what happens the first time the universe shrinks
+  // below where the cursor had reached.
+  const stored = running ? 0 : await store.readPriceCursor().catch(() => 0);
+  const done = running ? (running.priced || 0) : (stored < universe.length ? stored : 0);
   const left = Math.max(0, universe.length - done);
   // SPY is fetched live on every round, priced or archived, so it is always
   // one credit off the top.
@@ -7806,7 +7817,18 @@ async function liveRefreshOpts() {
 // symbol has actually been priced. Both callers go through here so the two
 // cannot drift apart, the same rule finishLiveRefresh follows.
 async function notePriceRound(opts) {
-  if (!opts || !opts.running || opts.archivePrices) return;
+  if (!opts || opts.archivePrices) return;
+  // OUTSIDE a run there is no marker to move and no prices_at to stamp — but
+  // the cursor still has to advance, or the next single-round refresh prices
+  // the identical slice. Wraps at the end, so the universe rotates: at 1,165
+  // symbols and a 500 slice that is three rounds, and every stock is priced
+  // once every three.
+  if (!opts.running) {
+    if (!opts.priceSlice) return;             // the whole universe fitted; nothing to page
+    const next = opts.pricedAfter >= opts.priceTotal ? 0 : opts.pricedAfter;
+    await store.writePriceCursor(next).catch(() => {});
+    return;
+  }
   if (opts.priceSlice) {
     await store.markPriced(opts.pricedAfter);
     if (opts.pricedAfter >= opts.priceTotal) await store.markRefreshPrices();
@@ -8690,6 +8712,14 @@ app.all('/api/cron/intraday', route(async (req, res) => {
     await trackSafe(store.finishRun(runId, { status: 'failed', error: r.error }));
     return res.status(r.status).json({ error: r.error, runId });
   }
+  // MOVE THE PRICE CURSOR ON. This call was missing entirely, which is what
+  // made the schedule re-price `universe.slice(0, 500)` every thirty minutes
+  // and leave the other 665 stocks on a price from hours earlier. Outside a
+  // multi-round run this only advances the cursor — no flag is raised and no
+  // banner appears, which is why the schedule can page through the universe
+  // without every viewer being told a refresh is in progress thirteen times a
+  // day.
+  await notePriceRound(opts);
   const fin = await finishLiveRefresh(r.payload, { startedAt, actor, runId });
   // the market check's credit belongs to this run too
   m.credits += market.known ? 1 : 0;
