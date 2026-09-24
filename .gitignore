@@ -26,3 +26,6 @@ analysis.db-shm
 
 .vercel
 .env*
+
+# the local intraday scheduler keeps its own log beside the script
+intraday-ping.log
