@@ -1112,7 +1112,7 @@
             `<div class="arow"><span class="an" style="color:${tint}">${esc(label)}</span>` +
             `<span class="arail"><span class="afill" style="display:block;width:${Math.max(2, counts[i] / mx * 100)}%;background:${tint}"></span></span>` +
             `<span class="ac">${counts[i]}</span><span class="ap">${Math.round(counts[i] / total * 100)}%</span></div>`).join('')}</div>` +
-          `<p class="s-sub" style="font-size:19px;margin-top:28px">${counts[0]} of ${total} sit in the top fifth of their own 52-week range, ` +
+          `<p class="s-sub wide" style="font-size:19px;margin-top:28px">${counts[0]} of ${total} sit in the top fifth of their own 52-week range, ` +
           `${counts[4]} in the bottom. Each stock measured against its own year, not against each other.</p>` +
           '</div></div>' + chromeFoot();
       }
@@ -1149,7 +1149,7 @@
               `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
               `<span class="val ${neg ? 'neg' : 'pos'}">${pct(v)}</span></div>`;
           }).join('')}</div>` +
-          `<p class="s-sub" style="font-size:18px;margin-top:22px">${esc(label[0].toUpperCase() + label.slice(1))}` +
+          `<p class="s-sub wide" style="font-size:18px;margin-top:22px">${esc(label[0].toUpperCase() + label.slice(1))}` +
           (wide ? ', bars on a log scale so one outlier does not flatten the rest' : '') +
           '. Each measured against its own year.</p>' +
           '</div></div>' + chromeFoot();
@@ -1188,7 +1188,7 @@
             '</div>';
         }).join('')}</div>` +
         '<div class="tkey"><span>left edge \u00b7 the 52-week low</span><span>right edge \u00b7 the high</span></div>' +
-        '<p class="s-sub" style="font-size:18px;margin-top:16px">Each track is one stock\u2019s own year: the marker is where it trades now, ' +
+        '<p class="s-sub wide" style="font-size:18px;margin-top:16px">Each track is one stock\u2019s own year: the marker is where it trades now, ' +
         'the first number is how far it has come off its low, the second how far it still sits below its high. ' +
         'The lighter leg behind each marker is the past month, so a stock that has turned shows it.</p>' +
         '</div></div>' + chromeFoot();
@@ -1735,7 +1735,7 @@
       + (inner ? ' and ' + esc(inner[0].toLowerCase()) : '') + '</span></h2>'
       + '<div class="zlegend">' + legend + '</div>'
       + '<div class="zgrid" style="grid-template-columns:repeat(' + cols + ',1fr)">' + body + '</div>'
-      + '<p class="s-sub zsub" style="font-size:17px;margin-top:20px">Circle AREA is the measure, not its width. '
+      + '<p class="s-sub wide" style="font-size:17px;margin-top:20px">Circle AREA is the measure, not its width. '
       + 'The largest here is ' + (ratio >= 100 ? Math.round(ratio) : ratio.toFixed(1)) + '× the smallest.'
       + (inner && inner[2] === 'money'
         ? ' The second disc shares that scale, so its share of the first is the ratio between them.' : '')
@@ -2422,13 +2422,21 @@
        rather than given a swatch — a colour chip beside it would suggest the
        card encodes it by colour, which is exactly what it does not do. */
     .bkey.btx { font-family: var(--mono); font-size: 16px; }
-    /* .s-sub is capped at 40ch for the templates that set a sentence beside a
-       chart. This card's note runs under a full-width grid, so that cap
-       squeezes it into a narrow column in the corner.
+    /* .s-sub is capped at 40ch, which is right for the templates that set a
+       sentence BESIDE a chart. A note that runs UNDER full-width content wants
+       the full width too, or it reads as a narrow column stranded in the
+       corner with empty space to its right.
+       Opt-in per card rather than lifting the cap for everyone: the 40ch
+       measure is what keeps the beside-a-chart notes readable.
+       Compound with .s-sub on purpose. A bare .wide in this stylesheet would
+       be the seventh unscoped class on this project to capture later markup,
+       and STYLE is injected into whatever page hosts a card.
+       !important because .sz-story .s-sub carries its own max-width at the
+       same specificity, and order alone is a fragile way to win that.
        NO BACKTICKS ANYWHERE IN HERE: STYLE is itself a template literal, so
        one inside a comment ends the string and the whole module stops
        parsing. */
-    .zsub { max-width: none !important; }
+    .s-sub.wide { max-width: none !important; }
     .sz-story .zname { font-size: 25px; }
     .sz-story .zval { font-size: 22px; }
     .sz-story .zthird { font-size: 19px; }
