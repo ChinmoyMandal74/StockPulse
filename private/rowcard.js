@@ -169,6 +169,12 @@
     ['rel',   '52W high set',   (s) => (ok(s.daysSince52wHigh) ? { t: s.daysSince52wHigh === 0 ? 'today' : s.daysSince52wHigh + ' sessions ago', c: '' } : null)],
     ['rel',   '52W low set',    (s) => (ok(s.daysSince52wLow) ? { t: s.daysSince52wLow === 0 ? 'today' : s.daysSince52wLow + ' sessions ago', c: '' } : null)],
     ['rel',   '52W range',      (s) => V.num(s.range52Pos, 0)],
+    // How straight the year's path was, and how much of it was spent below the
+    // running high. Descriptive, like Cushion: neither has been shown to
+    // predict anything, and consistency as a PREDICTOR was measured and came
+    // back noise (see docs/momentum-delta.md).
+    ['rel',   'Steadiness',     (s) => V.num(s.steadiness, 0)],
+    ['rel',   'Ulcer',          (s) => V.num(s.ulcer, 1)],
     ['rel',   'RSI',            (s) => V.rsi(s.rsi)],
     ['trend', 'vs 50D MA',      (s) => V.pct(s.vs50ma)],
     ['trend', 'vs 200D MA',     (s) => V.pct(s.vs200ma)],

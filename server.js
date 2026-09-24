@@ -2523,6 +2523,78 @@ function range52Pos(values, lookback = 252) {
   return ((latest - low) / (high - low)) * 100;
 }
 
+// ---- how STEADY the year was, and how much it hurt -------------------------
+// Two columns rather than one score, because they are nearly independent
+// (rank correlation 0.25 over 421 symbols) and a composite would hide which of
+// the two a stock is bad at.
+//
+// WHY NOT "months up out of 12", which is the obvious measure: over the same
+// 421 symbols it takes only TEN distinct values, so it ties ~42 stocks at every
+// level and cannot rank a universe; it is blind to magnitude (a +0.1% month
+// counts like +20%) and to order (up-down-up-down scores like a steady climb);
+// and it is 0.72 rank-correlated with the plain return, so most of what it says
+// the return column already said.
+//
+// AND WHY NOT SHARPE, WHICH IS THE OTHER OBVIOUS ONE: measured on the same
+// year, Sharpe is **0.96** rank-correlated with total return, Sortino 0.97 and
+// gain-to-pain 0.96 -- and all three are 1.00 with EACH OTHER. Inside a return
+// decile they reorder almost nothing. Over a one-year window, ranking by Sharpe
+// is very nearly ranking by return: the RS-vs-S&P trap in momentum-scoring.md,
+// where a factor correlated 1.000 with the 3M return and could not reorder
+// anything while consuming a quarter of the weight.
+
+// R^2 of log price against time: how much of the year's movement is the trend
+// rather than noise. 100 is a ruler-straight path, 0 is chop.
+//
+// IT IS DELIBERATELY DIRECTION-BLIND, and signing it was measured and rejected:
+// multiplying by sign(slope) takes the correlation with return from 0.34 to
+// 0.89 and halves the separation it achieves among stocks that made the same
+// money, because "which way" is mostly "how much". Slope x R^2 is worse still
+// at 0.94. So direction stays where it already is -- the return columns, the
+// trend state, the moving averages -- and this number answers only "how
+// straight". 61 of 421 symbols fall STEADILY, so that is a real reading and not
+// a hypothetical; the column header says so.
+function steadiness(values, lookback = 252) {
+  if (!Array.isArray(values) || values.length < lookback) return null;
+  // `values` is newest-first everywhere in this file; a regression against time
+  // needs it the other way round or the slope's sign is inverted.
+  const n = lookback;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0, syy = 0, used = 0;
+  for (let i = 0; i < n; i++) {
+    const c = parseFloat(values[n - 1 - i].close);
+    if (!isFinite(c) || c <= 0) return null;          // a log needs a positive price
+    const y = Math.log(c);
+    sx += i; sy += y; sxx += i * i; sxy += i * y; syy += y * y; used++;
+  }
+  if (used < lookback) return null;
+  const varX = sxx - (sx * sx) / used;
+  const varY = syy - (sy * sy) / used;
+  const cov = sxy - (sx * sy) / used;
+  if (!(varX > 0) || !(varY > 0)) return null;        // a flat line explains nothing
+  const r2 = (cov * cov) / (varX * varY);
+  return Math.max(0, Math.min(1, r2)) * 100;
+}
+
+// Ulcer index: the root-mean-square drawdown from the running high, in percent.
+// Depth AND duration, so a long shallow slide and a brief deep one are told
+// apart -- which is the half "months up" cannot see at all. Low is calm.
+function ulcerIndex(values, lookback = 252) {
+  if (!Array.isArray(values) || values.length < lookback) return null;
+  let peak = 0, sq = 0, n = 0;
+  for (let i = lookback - 1; i >= 0; i--) {          // oldest to newest
+    const c = parseFloat(values[i].close);
+    // A FULL year of usable closes or nothing. Skipping the bad ones and
+    // averaging over what is left would quietly make this a four-month figure
+    // on a row whose neighbours are twelve-month ones, and the column has to
+    // mean the same thing down the whole table. `steadiness` bails the same way.
+    if (!isFinite(c) || c <= 0) return null;
+    if (c > peak) peak = c;
+    const dd = (c / peak - 1) * 100;
+    sq += dd * dd; n++;
+  }
+  return n === lookback ? Math.sqrt(sq / n) : null;
+}
+
 // Annualised realised volatility (%), from daily log returns. The Cushion is
 // divided by this so a 40% move in a quiet name outranks the same move in one
 // that swings 40% routinely.
@@ -4504,6 +4576,8 @@ async function computeStocks(asOf, opts = {}) {
         fcfYield: yieldPct(prof.fcfTtm, prof.marketCap),      // FCF / market cap
         netCashPct: yieldPct(prof.netCash, prof.marketCap),   // net cash as % of market cap
         range52Pos: range52Pos(values),   // 0 = on the 52w low, 100 = on the high
+        steadiness: steadiness(values),   // R² of log price vs time, 0-100, direction-blind
+        ulcer: ulcerIndex(values),        // RMS drawdown from the running high, %
         realisedVol: rvol,
         fwd1M,
         fwd3M,
