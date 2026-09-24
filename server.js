@@ -2812,6 +2812,10 @@ function cleanMyPortfolios(raw, universe) {
 // each id and the page ignores ids it does not recognise — so adding a column
 // never needs a matching edit here.
 const VIEWS_MAX = 10;
+// How many starter screens one account may star. A ceiling on what /api/prefs
+// will store, not a limit anyone should meet: there are 22 screens today, so
+// this clears the whole list four times over and still bounds the row.
+const FAVS_MAX = 100;
 const VIEW_COLUMNS_MAX = 80;
 const VIEW_ID_RE = /^[a-z0-9]{8}$/;
 const VIEW_COL_RE = /^[A-Za-z0-9:_ \-]{1,40}$/;
@@ -6487,6 +6491,23 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   if (/^(auto|[2-6])$/.test(String(incoming.tileCols || ''))) out.tileCols = String(incoming.tileCols);
   // Which column view the screener opens in: 'standard' or a view's id.
   if (/^(standard|[a-z0-9]{8})$/.test(String(incoming.activeView || ''))) out.activeView = String(incoming.activeView);
+  // Which starter screens this account has starred. The screens themselves are
+  // site-wide and owner-curated; the star is the one thing about them that
+  // belongs to the reader, which is why it lives here rather than on the row.
+  //
+  // SHAPE-CHECKED ONLY, deliberately not validated against the screens table.
+  // Doing that would put a read on every debounced write for no gain: the page
+  // renders from the screens it actually has and ignores an id it no longer
+  // knows, so a deleted screen's star is invisible rather than wrong. The same
+  // division cleanViews keeps, leaving the column list to the screener.
+  //
+  // The cap is a guard against free per-user storage, not a budget — it has to
+  // clear the real list with room to spare, which is the lesson POST_OPT_MAX
+  // taught by silently eating every control past the fortieth.
+  if (Array.isArray(incoming.favScreens)) {
+    out.favScreens = [...new Set(incoming.favScreens
+      .filter((s) => typeof s === 'string' && /^[a-z0-9]{8}$/.test(s)))].slice(0, FAVS_MAX);
+  }
   await store.writePrefs(await prefsKey(req), out);
   res.json({ ok: true });
 }));

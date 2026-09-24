@@ -112,6 +112,16 @@
     .jump:hover { background: rgba(255, 255, 255, 0.07); color: var(--text); }
     .jump:disabled { opacity: 0.25; cursor: default; }
     .jump:disabled:hover { background: none; color: var(--faint); }
+    /* The favourite star on a screen row. SCOPED to the menu: `.fav` loose
+       would be the seventh unscoped class on this project to capture later
+       markup, after .warn, .card, input[type=text], .mk, .sub and .news-when.
+       The rotate on `.jump svg` is for the jump ARROW — a star turned upside
+       down is still a star, but it lands off-centre, so it is undone here
+       rather than with the inline style the other tools carry. */
+    #scrMenu .jump.fav svg { transform: none; }
+    #scrMenu .jump.fav.on { color: var(--amber); }
+    #scrMenu .jump.fav.on svg { fill: currentColor; }
+    #scrMenu .jump.fav.on:hover { background: rgba(251, 191, 36, 0.12); color: var(--amber); }
     /* Action: two hues, not six. Most of the table sits on Hold, and the
        chevron already made the argument — light every row and the
        column stops carrying information. Weight separates the extremes. */
@@ -3597,6 +3607,15 @@
         if (tileRange && !cardRanges.some((r) => r.id === tileRange)) tileRange = null;
         if (res && res.prefs && res.prefs.layout === 'tiles') setLayout('tiles', { save: false });
         if (res && res.prefs && /^(standard|[a-z0-9]{8})$/.test(String(res.prefs.activeView || ''))) activeViewId = res.prefs.activeView;
+        // Starred screens. Shape-filtered on the way in as well as on the way
+        // out: the server stores ids without checking them against the screens
+        // table, so a screen deleted since the star was set arrives as an id
+        // nothing matches. renderScreensMenu builds from `screens`, so such an
+        // id simply never draws — it is not an error and is not cleaned up,
+        // because the owner may put that screen back.
+        if (res && res.prefs && Array.isArray(res.prefs.favScreens)) {
+          favScreens = new Set(res.prefs.favScreens.filter((id) => /^[a-z0-9]{8}$/.test(String(id))));
+        }
         if (res && res.prefs && res.prefs.filterRow === true) {
           filterRowOn = true;
           document.body.classList.add('filtering');
@@ -3625,7 +3644,11 @@
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
           prefs: { collapsed: out,
-            filterRow: filterRowOn, tickerOff, activeView: activeViewId, layout, tileCols },
+            filterRow: filterRowOn, tickerOff, activeView: activeViewId, layout, tileCols,
+            // A prefs PUT replaces the whole row, so every field this page owns
+            // has to ride on every write or the others erase it. This page is
+            // the only writer left, which is the only reason that is safe.
+            favScreens: [...favScreens] },
         }).catch(() => {});
       }, 600);
     }
@@ -3969,6 +3992,30 @@
     let screenColsOff = false;   // a view was picked while the screen was active
     let screenBase = null;       // the table as it was before the first screen
 
+    // The screens are SITE-WIDE and owner-curated; the star is the one thing
+    // about them that belongs to the reader, so it is a pref and every account
+    // keeps its own (2026-09-23, owner's request). A starred screen MOVES to a
+    // Favourites group at the top of the menu rather than being copied there —
+    // no duplicate row to keep in sync, and the menu does not get longer for
+    // using the feature.
+    //
+    // GUESTS HAVE NO PREFS KEY AT ALL (GET returns {} and PUT 403s — a guest
+    // must never touch the 'admin' key), so the star is hidden for them rather
+    // than shown as a control that silently fails.
+    let favScreens = new Set();
+    const canFav = () => !isGuest;
+
+    function toggleFav(id) {
+      if (!canFav()) return;
+      if (favScreens.has(id)) favScreens.delete(id); else favScreens.add(id);
+      window.track && track('picker', 'favscreen:' + (favScreens.has(id) ? 'on' : 'off'));
+      savePrefs();
+      // Repainted in place, menu left open: starring two or three in a row is
+      // the normal case, and a menu that closed on each one would make it a
+      // chore. The columns menu and the star popover already work this way.
+      renderScreensMenu();
+    }
+
     async function loadScreens() {
       try {
         const d = await api('GET', '/api/screens');
@@ -4137,14 +4184,30 @@
     function renderScreensMenu() {
       const pool = tabStocks();
       const groups = [];
+      // A starred screen is LIFTED out of its own heading into Favourites, so
+      // it appears exactly once. An id starred before a screen was deleted
+      // matches nothing here and simply does not draw.
+      const fav = canFav() ? screens.filter((sc) => favScreens.has(sc.id)) : [];
+      const favIds = new Set(fav.map((sc) => sc.id));
+      if (fav.length) groups.push({ name: 'Favourites', items: fav, fav: 1 });
       for (const sc of screens) {
-        let g = groups.find((x) => x.name === sc.group);
+        if (favIds.has(sc.id)) continue;
+        let g = groups.find((x) => x.name === sc.group && !x.fav);
         if (!g) { g = { name: sc.group, items: [] }; groups.push(g); }
         g.items.push(sc);
       }
       const tool = (attr, icon, title) =>
         `<button class="jump" ${attr} title="${we(title)}" aria-label="${we(title)}" style="transform:none">` +
         `<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#${icon}" /></svg></button>`;
+      const star = (sc) => {
+        if (!canFav()) return '';
+        const on = favScreens.has(sc.id);
+        const t = on ? `Unstar ${sc.name} — it goes back under ${sc.group}`
+          : `Star ${sc.name} — it moves to Favourites, at the top of this menu`;
+        return `<button class="jump fav${on ? ' on' : ''}" data-sfav="${sc.id}" ` +
+          `title="${we(t)}" aria-label="${we(t)}" aria-pressed="${on}">` +
+          '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-star" /></svg></button>';
+      };
       let html = '<div class="picker-inner">';
       if (activeScreenId) {
         html += '<button class="pick" data-sclear="1"><span class="nm">Clear screen<em>Put the table back as it was</em></span></button><div class="pick-sep"></div>';
@@ -4159,6 +4222,7 @@
           html += '<div class="pick-row">' +
             `<button class="pick ${on ? 'on' : ''} ${n ? '' : 'zero'}" data-screen="${sc.id}" role="option" aria-selected="${on}">` +
             `<span class="nm">${we(sc.name)}<em>${we(sc.description)}</em></span><span class="count">${n}</span></button>` +
+            star(sc) +
             (canEditScreens ? tool(`data-sedit="${sc.id}"`, 'i-pencil', `Edit ${sc.name} \u2014 its name, heading and columns`) +
               tool(`data-supdate="${sc.id}"`, 'i-refresh', `Replace ${sc.name} with the filters, sort and columns on the table now`) +
               tool(`data-sdel="${sc.id}"`, 'i-trash', `Delete ${sc.name}`) : '') +
@@ -4169,10 +4233,15 @@
         html += '<div class="pick-sep"></div><button class="pick" data-snew="1"><span class="nm">+ Save the table as a starter screen' +
           '<em>Its filters, Sector / Industry / Advice picks, sort and columns</em></span></button>';
       }
-      html += '<div class="pick-hint">Counts are for the theme in view. A screen\u2019s filters show in the filter row; change any and it reads “edited”.</div></div>';
+      html += (canFav()
+        ? '<div class="pick-hint">The star keeps a screen at the top of this menu, for your account only.</div>'
+        : '') +
+        '<div class="pick-hint">Counts are for the theme in view. A screen\u2019s filters show in the filter row; change any and it reads“edited”.</div></div>';
       $('scrMenu').innerHTML = html;
       const m = $('scrMenu');
       m.querySelectorAll('[data-screen]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); applyScreen(b.dataset.screen); }));
+      // Deliberately does NOT close the menu — see toggleFav.
+      m.querySelectorAll('[data-sfav]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); toggleFav(b.dataset.sfav); }));
       m.querySelectorAll('[data-sclear]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); clearScreen(); }));
       m.querySelectorAll('[data-sedit]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); closePickers(); openScreenEditor(b.dataset.sedit); }));
       m.querySelectorAll('[data-supdate]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); closePickers(); updateScreenFromTable(b.dataset.supdate); }));
