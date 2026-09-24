@@ -3769,14 +3769,15 @@ app.get('/api/refresh-profiles', requireAdmin, route(async (req, res) => {
 // price slice at 500 did not rescue the plain Refresh and it still 504'd. The
 // rebuild pays it once, at the end, where it is affordable: Fill missing's
 // closing round did exactly that work in 102s.
-app.get('/api/refresh-prices', requireAdmin, route(async (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  const asked = Number(req.query.run) || null;
-  if (asked && (await trackSafe(store.runStatus(asked))) === 'stopped') {
-    return res.json({ stopped: true, runId: asked });
-  }
-  const running = await readRefreshState();
-  const runId = (running && running.runId) || asked;
+// ONE SLICE OF PRICES: fetch it, archive it, move the cursor on. The body was
+// inline in /api/refresh-prices until the intraday schedule needed the same
+// round — and a second copy of "price the next slice" is exactly the drift
+// this file keeps paying for.
+//
+// The caller owns the run record and the response, because the two callers
+// differ there and nowhere else: the admin loop reports progress against a
+// multi-round run, the schedule attaches its rounds to one run per slot.
+async function runPriceSlice() {
   const started = Date.now();
   const opts = await liveRefreshOpts();
   const universe = await readUniverse();
@@ -3789,10 +3790,7 @@ app.get('/api/refresh-prices', requireAdmin, route(async (req, res) => {
   // universe drops under the slice, which a ticker purge can do at any time.
   const slice = opts.priceSlice || (opts.priceTotal != null ? universe : null);
   // Nothing left to price: say so rather than pulling the first slice again.
-  if (opts.archivePrices || !slice) {
-    return res.json({ priced: universe.length, total: universe.length, done: true, runId,
-      refreshing: running });
-  }
+  if (opts.archivePrices || !slice) return { nothing: true, opts, universe };
   const deadline = Date.now() + PRICE_PHASE_MS;
   const T = phaseTimer();
   const { r: out, m } = await metered(async () => {
@@ -3844,19 +3842,36 @@ app.get('/api/refresh-prices', requireAdmin, route(async (req, res) => {
     T.mark('price-clock');
     return { ok: true, bars, served: served.length };
   });
-  if (!out.ok) {
-    await recordRound(runId, opts, m, Date.now() - started,
-      { error: out.error, refused: out.status === 429, phases: T.steps() });
-    return res.status(out.status).json({ error: out.error });
-  }
+  if (!out.ok) return { ok: false, out, m, ms: Date.now() - started, opts, T };
   // Advances `priced`, and stamps prices_at once the last slice is in — which
   // is what tells the loop the sweep is over.
   await notePriceRound(opts);
+  return { ok: true, out, m, ms: Date.now() - started, opts, T };
+}
+
+app.get('/api/refresh-prices', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const asked = Number(req.query.run) || null;
+  if (asked && (await trackSafe(store.runStatus(asked))) === 'stopped') {
+    return res.json({ stopped: true, runId: asked });
+  }
+  const running = await readRefreshState();
+  const runId = (running && running.runId) || asked;
+  const r = await runPriceSlice();
+  if (r.nothing) {
+    return res.json({ priced: r.universe.length, total: r.universe.length, done: true, runId,
+      refreshing: running });
+  }
+  if (!r.ok) {
+    await recordRound(runId, r.opts, r.m, r.ms,
+      { error: r.out.error, refused: r.out.status === 429, phases: r.T.steps() });
+    return res.status(r.out.status).json({ error: r.out.error });
+  }
   const after = await readRefreshState();
-  await recordRound(runId, opts, m, Date.now() - started,
-    { loaded: opts.pricedAfter, total: opts.priceTotal, phases: T.steps() });
-  res.json({ priced: opts.pricedAfter, total: opts.priceTotal,
-    served: out.served, done: !after || !!after.pricesAt, runId, refreshing: after });
+  await recordRound(runId, r.opts, r.m, r.ms,
+    { loaded: r.opts.pricedAfter, total: r.opts.priceTotal, phases: r.T.steps() });
+  res.json({ priced: r.opts.pricedAfter, total: r.opts.priceTotal,
+    served: r.out.served, done: !after || !!after.pricesAt, runId, refreshing: after });
 }));
 
 // The client calls this when its backfill loop finishes or gives up, so the
@@ -8726,11 +8741,52 @@ app.all('/api/cron/intraday', route(async (req, res) => {
       : running.mode === 'prices' ? 'Refresh prices' : 'Refresh all'})`, true);
   const market = await nyseState();
   if (market.known && !market.open) return skip('NYSE closed (holiday or early close)', true);
-  if (dry) return res.json({ ok: true, ran: false, wouldRun: true, ny: clock.label, market, dry });
+  // The dry call also PLANS the slot, so the scheduler does not have to know
+  // the universe size or the slice width — both move, and a copy of that
+  // arithmetic in a shell script is a copy that goes stale silently.
+  const total = (await readUniverse()).length;
+  const rounds = Math.max(1, Math.ceil(total / PRICE_SLICE));
+  if (dry) {
+    return res.json({ ok: true, ran: false, wouldRun: true, ny: clock.label, market, dry,
+      total, slice: PRICE_SLICE, rounds });
+  }
+
+  // A run is one SLOT, not one call. The light rounds and the closing full
+  // round are rounds of the same run, so /refreshes shows "3 rounds, 1,164
+  // priced" rather than three runs an hour that each look like a whole
+  // refresh. The first call starts it; only the full round closes it. A slot
+  // abandoned half way is swept like any other run that stopped reporting.
+  const asked = Number(req.query.run) || null;
+  const runId = asked
+    || await trackSafe(store.startRun({ kind: 'intraday', trigger: 'scheduled', actor, total, targets: total }));
+
+  // LIGHT: price the next slice, archive it, move the cursor — no 650-day
+  // window, no scoring, no snapshot. That window is the whole reason this mode
+  // exists: an ordinary round pays it EVERY time regardless of how many
+  // symbols it priced, so three ordinary rounds a slot would triple the
+  // database read for no extra prices. Two light rounds and one full one
+  // price the entire universe every thirty minutes at the read cost of one.
+  if (req.query.light === '1') {
+    const r = await runPriceSlice();
+    if (r.nothing) {
+      return res.json({ ok: true, ran: false, light: true, runId, reason: 'nothing left to price',
+        ny: clock.label, total, rounds });
+    }
+    if (!r.ok) {
+      await recordRound(runId, r.opts, r.m, r.ms,
+        { error: r.out.error, refused: r.out.status === 429, phases: r.T.steps() });
+      await trackSafe(store.finishRun(runId, { status: 'failed', error: r.out.error }));
+      return res.status(r.out.status).json({ error: r.out.error, runId });
+    }
+    r.m.credits += market.known ? 1 : 0;
+    await recordRound(runId, r.opts, r.m, r.ms,
+      { loaded: r.opts.pricedAfter, total: r.opts.priceTotal, phases: r.T.steps() });
+    console.log(`intraday: priced ${r.out.served} symbols (light) at ${clock.label} New York`);
+    return res.json({ ok: true, ran: true, light: true, runId, served: r.out.served,
+      priced: r.opts.pricedAfter, total: r.opts.priceTotal, rounds, ny: clock.label });
+  }
 
   const startedAt = Date.now();
-  const total = (await readUniverse()).length;
-  const runId = await trackSafe(store.startRun({ kind: 'intraday', trigger: 'scheduled', actor, total, targets: total }));
   const opts = await liveRefreshOpts();
   const { r, m, ms } = await metered(() => computeStocks(null, opts));
   if (!r.ok) {
