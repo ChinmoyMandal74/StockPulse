@@ -165,6 +165,8 @@
         <select id="movIndustry"><option value="All">All industries</option></select>
         <label>Size</label>
         <select id="movCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="movScreen"><option value="">No screen</option></select>
       </div>
 
       <div id="chtBox">
@@ -191,6 +193,8 @@
         <select id="chtIndustry"><option value="All">All industries</option></select>
         <label>Size</label>
         <select id="chtCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="chtScreen"><option value="">No screen</option></select>
         </div>
         <div id="chtLinesWrap">
           <label>How many lines</label>
@@ -241,6 +245,8 @@
         <select id="spkIndustry"><option value="All">All industries</option></select>
         <label>Size</label>
         <select id="spkCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="spkScreen"><option value="">No screen</option></select>
       </div>
 
       <div id="rngBox">
@@ -281,6 +287,8 @@
         <select id="rngIndustry"><option value="All">All industries</option></select>
         <label>Size</label>
         <select id="rngCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="rngScreen"><option value="">No screen</option></select>
       </div>
 
       <div id="advBox">
@@ -309,6 +317,8 @@
         <select id="advIndustry"><option value="All">All industries</option></select>
         <label>Size</label>
         <select id="advCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="advScreen"><option value="">No screen</option></select>
         </div>
         <div id="advProfWrap">
           <label>Rules</label>
@@ -376,6 +386,8 @@
         <select id="fundIndustry"><option value="All">All industries</option></select>
         <label>Size</label>
         <select id="fundCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="fundScreen"><option value="">No screen</option></select>
         </div>
       </div>
 
@@ -431,6 +443,8 @@
         <select id="sizeIndustry"><option value="All">All industries</option></select>
         <label>Size</label>
         <select id="sizeCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="sizeScreen"><option value="">No screen</option></select>
       </div>
 
       <!-- Bubble. The three measure pickers are filled from Cards.FUND_METRICS
@@ -482,6 +496,8 @@
         <select id="bubIndustry"><option value="All">All industries</option></select>
         <label>Size</label>
         <select id="bubCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="bubScreen"><option value="">No screen</option></select>
       </div>
 
       <div id="intBox">
@@ -563,6 +579,7 @@
     let stocks = [];
     let loadedAt = null;
     let myLists = {};        // the viewer's own portfolios, for the scope picker
+    let screenList = [];     // the starter screens, so a card can be pointed at one
     // Announcement is free text in the brand's own voice, so only the owner
     // gets it; everyone else sees every other template.
     const OWNER_ONLY_TPLS = new Set(['announce']);
@@ -616,14 +633,14 @@
 
     // Every control's value, by id — the module reads no DOM, so the studio
     // hands it the panel's state and gets a card back.
-    const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap',
-      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap',
-      'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap',
-      'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry', 'rngCap',
-      'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap',
-      'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap',
-      'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap',
-      'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap',
+    const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap', 'movScreen',
+      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap', 'chtScreen',
+      'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap', 'spkScreen',
+      'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry', 'rngCap', 'rngScreen',
+      'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap', 'advScreen',
+      'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap', 'fundScreen',
+      'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen',
+      'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
       const o = {};
@@ -632,7 +649,8 @@
     }
     let pulledAt = null;          // when the snapshot behind these rows was written
     const buildCard = () => Cards.build(tpl, {
-      stocks, myLists, size, opts: controlOpts(), getBasket, getHistory, updatedAt: pulledAt,
+      stocks, myLists, screens: screenList, size, opts: controlOpts(), getBasket, getHistory,
+      updatedAt: pulledAt,
     });
 
     // Each Industry picker offers only what its Sector picker's choice holds
@@ -740,13 +758,13 @@
     // read by the builder — and does nothing when you touch it, because
     // nothing re-renders. That is how the Size pickers shipped broken for an
     // hour; a test that changed the control and diffed the card caught it.
-    ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap'].forEach((id) =>
+    ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap', 'movScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'movers') render(); }));
-    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap'].forEach((id) =>
+    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap', 'chtScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'chart') render(); }));
-    ['spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap'].forEach((id) =>
+    ['spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap', 'spkScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'sparks') render(); }));
-    ['rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry', 'rngCap'].forEach((id) =>
+    ['rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry', 'rngCap', 'rngScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'range') render(); }));
 
     const CARD_TOPICS = Cards.topics();
@@ -770,11 +788,11 @@
     $('advTier').innerHTML = ActionRules.ACTIONS.slice().reverse()
       .map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
     $('advProf').innerHTML = Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    ['advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap'].forEach((id) =>
+    ['advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap', 'advScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'advboard') render(); }));
-    ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap'].forEach((id) =>
+    ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap', 'fundScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'fund') render(); }));
-    ['sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap'].forEach((id) =>
+    ['sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'size') render(); }));
 
     // The three measure pickers are filled from the card's own catalogue, so a
@@ -787,7 +805,7 @@
       $('bubY').innerHTML = opts('pm');
       $('bubSize').innerHTML = opts('cap');
     })();
-    ['bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap'].forEach((id) =>
+    ['bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'bubble') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
@@ -983,6 +1001,13 @@
           const mine = await fetch('/api/my/portfolios', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { portfolios: {} }));
           myLists = mine.portfolios || {};
         } catch { myLists = {}; }
+        // The starter screens, so a card can be pointed at one. Optional in the
+        // same way the personal lists are: an unreachable endpoint leaves the
+        // Screen pickers empty rather than stopping the studio loading.
+        try {
+          const sc = await fetch('/api/screens', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null));
+          screenList = (sc && sc.screens) || [];
+        } catch { screenList = []; }
         const keep = $('movScope').value;
         $('movScope').innerHTML = '<option value="All">All screened</option>' +
           portfolioNames.map((nm) => `<option value="${esc(nm)}">${esc(nm)}</option>`).join('') +
@@ -1022,6 +1047,22 @@
           'sizeCap', 'bubCap'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = capOpts;
+          if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
+        });
+        // The screener's own starter screens, grouped as the Screens menu
+        // groups them. Built from what /api/screens returned rather than from a
+        // list here, so a screen the owner adds, renames or deletes shows up
+        // with no edit — the rule cleanViews and cleanPosts already follow.
+        const scrOpts = '<option value="">No screen</option>' +
+          Object.entries(screenList.reduce((m, s) => {
+            (m[s.group || 'Screens'] = m[s.group || 'Screens'] || []).push(s); return m;
+          }, {})).map(([g, list]) => `<optgroup label="${esc(g)}">` +
+            list.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') +
+            '</optgroup>').join('');
+        ['movScreen', 'chtScreen', 'advScreen', 'fundScreen', 'spkScreen', 'rngScreen',
+          'sizeScreen', 'bubScreen'].forEach((id) => {
+          const keep = $(id).value;
+          $(id).innerHTML = scrOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
         });
         syncIndustries(true);

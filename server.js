@@ -6373,6 +6373,12 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   await stampPricedAt(stocks);
   stampCapBand(stocks);
   const myLists = await store.readUserPortfolios(await prefsKey(req));
+  // A post saved with a screen cut needs the screens to resolve it. Optional
+  // like the basket below: a failure here draws the card over the whole screen
+  // rather than refusing to draw it, and scopeOf names no screen in the kicker
+  // when it cannot find one — so the card stays honest about what it shows.
+  let screens = [];
+  try { screens = await store.readScreens(); } catch { screens = []; }
 
   // Two templates read the archive; the rest never touch it.
   let basket = null;
@@ -6403,7 +6409,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   let html = '';
   try {
     html = Cards.build(post.tpl, {
-      stocks, myLists, size, opts: post.opts, getBasket: () => basket,
+      stocks, myLists, screens, size, opts: post.opts, getBasket: () => basket,
       getHistory: () => hist,
       updatedAt: (snap && snap.updatedAt) || null,
     });

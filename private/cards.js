@@ -23,6 +23,9 @@
 
   let stocks = [];
   let myLists = {};
+  // The starter screens, as the host holds them: [{ id, name, group, def }].
+  // A host that does not pass them simply offers no screen cut.
+  let screens = [];
   let size = { id: 'portrait', w: 1080, h: 1350 };
   let O = {};                       // control values, by control id
   let getBasket = () => null;
@@ -132,12 +135,51 @@
       // this is a cut by company size, and a fund is not a company.
       const cap = O[sectorKey.replace(/Sector$/, 'Cap')] || 'All';
       if (cap && cap !== 'All') rows = rows.filter((x) => x.capBand === cap);
-      const cuts = [taxo, cap && cap !== 'All' ? `${cap} caps` : null].filter(Boolean);
+      // A SCREEN is the screener's own question, asked of a card. It shares the
+      // prefix like the three above (movSector -> movScreen), so putting it
+      // here is the one change that gives it to every scoped template at once —
+      // the same reason the size band cost one change.
+      //
+      // The definition is evaluated by `Filters.screenRows`, the module the
+      // server require()s and the screener loads, so a card and the table
+      // cannot disagree about who is in a screen. Read off the global lazily
+      // and guarded: a host that loaded neither the screens nor filters.js
+      // filters nothing rather than throwing, which is how `/cards` used to
+      // ignore the industry control it did not have.
+      const scrId = O[sectorKey.replace(/Sector$/, 'Screen')] || '';
+      let scrName = null;
+      if (scrId) {
+        const F = (typeof globalThis !== 'undefined' && globalThis.Filters) || null;
+        const sc = screens.find((x) => x && x.id === scrId);
+        if (sc && F && F.screenRows) {
+          // screenRows applies the screen's own sector / industry / advice /
+          // move as well as its filters, so this is the whole question and not
+          // just its numeric half. It also sorts; every card re-sorts to its
+          // own measure afterwards, so that is spent rather than wrong.
+          rows = F.screenRows(sc.def || {}, rows);
+          scrName = sc.name;
+        }
+      }
+      // The screen leads the kicker: it is the idea, where a sector or a band
+      // is a narrowing of it.
+      const cuts = [scrName, taxo, cap && cap !== 'All' ? `${cap} caps` : null].filter(Boolean);
+      const base = label;                 // before the cuts are folded in
       if (cuts.length) {
         const cut = cuts.join(' \u00b7 ');
         label = v === 'All' ? cut : `${label} \u00b7 ${cut}`;
       }
-      return { rows, label };
+      // `screen` rides back so a card can tell "the screen caught nobody today"
+      // apart from "this data is not stored yet". They are different facts and
+      // an empty card that blames the wrong one gets posted.
+      //
+      // `labelSansScreen` is for a card that PROMOTES the screen to its title:
+      // the kicker would otherwise print the same words again directly above
+      // the headline. Cards that leave the screen in the kicker use `label`.
+      const sansCuts = cuts.filter((c) => c !== scrName);
+      const labelSansScreen = sansCuts.length
+        ? (v === 'All' ? sansCuts.join(' · ') : `${base} · ${sansCuts.join(' · ')}`)
+        : base;
+      return { rows, label, labelSansScreen, screen: scrName };
     }
     const movScopeRows = () => scopeOf('movScope', 'movSector');
     // A feed reads a company name faster than a ticker, and the screener now
@@ -976,6 +1018,61 @@
     // which is why it is the default rather than the ranking.
     function rangeScope() { return scopeOf('rngScope', 'rngSector'); }
 
+    // A card headline is two lines, the second dimmed. Split a screen's name at
+    // the word boundary nearest its middle rather than at the first space, so
+    // "Reporting in the next 14 days" breaks 3/3 instead of 1/5. One word stays
+    // one line — a dimmed empty second line is a gap, not a design.
+    function twoLines(s) {
+      const w = String(s).trim().split(/\s+/);
+      if (w.length < 2) return esc(w[0] || '');
+      let best = 1, gap = Infinity;
+      const total = w.join(' ').length;
+      for (let i = 1; i < w.length; i++) {
+        const d = Math.abs(w.slice(0, i).join(' ').length - total / 2);
+        if (d < gap) { gap = d; best = i; }
+      }
+      return `${esc(w.slice(0, best).join(' '))}<br><span class="dim">${esc(w.slice(best).join(' '))}</span>`;
+    }
+
+    // WHERE THE STOCK WAS A MONTH AGO, on the same track. The position alone
+    // says how far it fell; it cannot say whether it is still falling, and
+    // "bouncing off the lows" is a claim about BOTH. The leg between the two
+    // markers is the past month, drawn.
+    //
+    // MEASURED ON TODAY'S RANGE, and the caption says so. A month ago the
+    // 52-week window was a different window with a different low and high, so
+    // the honest reading is "the price it traded at then, placed on the ruler
+    // in front of you" — which is the only way the two marks are comparable at
+    // all. Anything else would put two points on two different scales and
+    // invite the eye to measure between them.
+    function recoveryLeg(x, p) {
+      const m = x.oneMonthPct;
+      if (m == null || !isFinite(m) || m === 0) return '';
+      if (x.price == null || x.pctFromLow == null || x.pctFromHigh == null) return '';
+      // Back out the band's ends from the two distances the row already holds.
+      const low = x.price / (1 + x.pctFromLow / 100);
+      const high = x.price / (1 + x.pctFromHigh / 100);
+      const band = high - low;
+      if (!(band > 0)) return '';
+      const then = x.price / (1 + m / 100);
+      // ANCHORED TO THE DRAWN MARKER, not computed from the band on its own.
+      // The dot sits at the stored `range52Pos`; deriving the start position
+      // independently puts the two marks on different footings the moment
+      // those three fields do not perfectly reconcile, and then the leg
+      // between them measures nothing. Taking the TRAVEL and subtracting it
+      // from the dot keeps them on one ruler whatever the row says.
+      const shift = ((x.price - then) / band) * 100;
+      const q = Math.max(0, Math.min(100, p - shift));
+      const a = Math.min(p, q);
+      const w = Math.abs(p - q);
+      if (w < 0.6) return '';                       // a hairline is noise, not a move
+      // Green when the month was up, red when down — the direction IS the
+      // reading, and a single neutral colour would hide half of it.
+      const c = m >= 0 ? 'rgba(52,211,153,0.55)' : 'rgba(251,113,133,0.55)';
+      return `<span class="tleg" style="left:${a}%;width:${w}%;background:${c}"></span>` +
+             `<span class="tthen" style="left:${q}%"></span>`;
+    }
+
     function tplRange() {
       const mode = O.rngMode || 'track';
       const scope = rangeScope();
@@ -983,9 +1080,15 @@
       const has = (x) => x.range52Pos != null && x.pctFromHigh != null && x.pctFromLow != null;
       const rows = scope.rows.filter(has);
       if (!rows.length) {
+        // A screen that caught nobody is a fact about today and is postable;
+        // a missing 52-week range is a fact about the data and is not the
+        // same sentence.
+        const empty = scope.screen
+          ? `Nothing passed ${scope.screen} today${scope.rows.length ? '' : ' in this scope'}.`
+          : `Nothing in ${scope.label} has a 52-week range stored yet.`;
         return chromeTop() + `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}</span>` +
-          '<h2 class="s-title">No range<br><span class="dim">to read</span></h2>' +
-          `<p class="s-empty">Nothing in ${esc(scope.label)} has a 52-week range stored yet.</p>` +
+          `<h2 class="s-title">${scope.screen ? 'Nobody<br><span class="dim">qualified</span>' : 'No range<br><span class="dim">to read</span>'}</h2>` +
+          `<p class="s-empty">${esc(empty)}</p>` +
           '</div></div>' + chromeFoot();
       }
 
@@ -1057,16 +1160,28 @@
       const list = rows.slice()
         .sort((a, b) => (top ? b.range52Pos - a.range52Pos : a.range52Pos - b.range52Pos))
         .slice(0, n);
+      // A CHOSEN SCREEN TITLES THE CARD. "Down at their lows" over the bouncing
+      // screen is true and throws away the half that matters \u2014 those stocks are
+      // low AND turning, and the screen's own name says both. It is also the
+      // name the reader knows the question by from the screener.
+      const title = scope.screen ? twoLines(scope.screen)
+        : (top ? 'Pressed against<br><span class="dim">their highs</span>'
+               : 'Down at<br><span class="dim">their lows</span>');
+      // The kicker drops the screen when the TITLE has taken it \u2014 printing the
+      // same words twice, one line apart, reads as a mistake.
       return chromeTop() +
-        `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 52-week range</span>` +
-        `<h2 class="s-title">${top ? 'Pressed against<br><span class="dim">their highs</span>' : 'Down at<br><span class="dim">their lows</span>'}</h2>` +
+        `<div class="s-body"><div><span class="s-kick">` +
+        `${esc(scope.screen ? scope.labelSansScreen : scope.label)} \u00b7 52-week range</span>` +
+        `<h2 class="s-title">${title}</h2>` +
         `<div class="tracks">${list.map((x) => {
           const p = Math.max(0, Math.min(100, x.range52Pos));
           const tint = p >= 66 ? '#34d399' : p >= 33 ? '#fbbf24' : '#fb7185';
+          const leg = recoveryLeg(x, p);
           return '<div class="trk">' +
             `<span class="ts">${esc(nameOf(x))}</span>` +
             '<span class="trail">' +
             `<span class="tfill" style="width:${p}%;background:linear-gradient(90deg, rgba(255,255,255,0.05), ${tint})"></span>` +
+            leg +
             `<span class="tdot" style="left:${p}%;background:${tint}"></span></span>` +
             `<span class="tlo">${pct(x.pctFromLow)}</span>` +
             `<span class="thi">${pct(x.pctFromHigh)}</span>` +
@@ -1074,7 +1189,8 @@
         }).join('')}</div>` +
         '<div class="tkey"><span>left edge \u00b7 the 52-week low</span><span>right edge \u00b7 the high</span></div>' +
         '<p class="s-sub" style="font-size:18px;margin-top:16px">Each track is one stock\u2019s own year: the marker is where it trades now, ' +
-        'the first number is how far it has come off its low, the second how far it still sits below its high.</p>' +
+        'the first number is how far it has come off its low, the second how far it still sits below its high. ' +
+        'The lighter leg behind each marker is the past month, so a stock that has turned shows it.</p>' +
         '</div></div>' + chromeFoot();
     }
 
@@ -2228,6 +2344,13 @@
     .trk .trail { position: relative; height: 16px; border-radius: 999px;
                   background: rgba(255, 255, 255, 0.05); border: 1px solid var(--hair); }
     .trk .tfill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
+    /* The past month, behind the marker: the leg it travelled and a faint tick
+       where it started. Both sit UNDER .tdot in source order so today's marker
+       is never obscured by its own history. */
+    .trk .tleg { position: absolute; top: 3px; bottom: 3px; border-radius: 999px; }
+    .trk .tthen { position: absolute; top: 50%; width: 3px; height: 16px;
+                  transform: translate(-50%, -50%); border-radius: 2px;
+                  background: rgba(255, 255, 255, 0.5); }
     .trk .tdot { position: absolute; top: 50%; width: 22px; height: 22px; border-radius: 50%;
                  transform: translate(-50%, -50%); border: 3px solid #050505; }
     .trk .tlo { font: 600 21px var(--mono); text-align: right; color: var(--green); }
@@ -2378,6 +2501,7 @@
       // rather than the card inventing a time.
       pulledAt = c.updatedAt || null;
       myLists = c.myLists || {};
+      screens = Array.isArray(c.screens) ? c.screens : [];
       size = c.size || { id: 'portrait', w: 1080, h: 1350 };
       O = c.opts || {};
       getBasket = c.getBasket || (() => null);
