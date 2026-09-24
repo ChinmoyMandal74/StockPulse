@@ -5626,6 +5626,13 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   const stocks = (snap && snap.stocks) || [];
   const stock = stocks.find((x) => String(x.symbol).toUpperCase() === symbol);
   if (!stock) return res.status(404).json({ error: 'Not in the screener.' });
+  // The band, stamped here as it is on every other read path. It was NOT, so
+  // `capBand` came back undefined and the Size row drew nothing on the stock
+  // page and was skipped entirely on /compare — a field that exists, is
+  // offered by both field pickers, and silently has no value, which is the
+  // same defect the bare-string Size getter had and was hiding behind.
+  // Synchronous and free: it reads marketCap and nothing else.
+  stampCapBand([stock]);
 
   res.json({
     stock,
