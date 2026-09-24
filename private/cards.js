@@ -313,7 +313,7 @@
               (cmp ? `<span class="cmp ${c == null ? '' : c < 0 ? 'neg' : 'pos'}">${pct(c)}</span>` : '') +
               '</div>';
           }).join('')}</div>` +
-          (cmp ? `<p class="s-sub" style="font-size:18px;margin-top:22px">Ranked on ${esc(periodLabel)}; the right column is the same stock over the ${esc(cmp[1].replace(/^(this|past) /, ''))}, for context.</p>` : '')
+          (cmp ? `<p class="s-sub" style="--fs:18px;margin-top:22px">Ranked on ${esc(periodLabel)}; the right column is the same stock over the ${esc(cmp[1].replace(/^(this|past) /, ''))}, for context.</p>` : '')
         : `<p class="s-empty">Nothing in ${esc(scope.label)} moved ${both ? 'at all' : (up ? 'up' : 'down')} ${esc(periodLabel)} \u2014 which is its own kind of story.</p>`;
       const title = both
         ? 'The biggest<br><span class="dim">moves</span>'
@@ -396,7 +396,7 @@
           `<div style="margin-top:34px">${top.map(([flag, n]) =>
             `<div class="frule"><span class="fn">\u00d7${n}</span><span class="ft">${esc(flag)}</span>` +
             `<span class="fs">${Math.round(n / rows.length * 100)}% of the list</span></div>`).join('')}</div>` +
-          '<p class="s-sub" style="font-size:19px;margin-top:26px">Every verdict names the one rule that fired first. Counting those rules says what kind of market this is \u2014 not what happens next.</p>' +
+          '<p class="s-sub" style="--fs:19px;margin-top:26px">Every verdict names the one rule that fired first. Counting those rules says what kind of market this is \u2014 not what happens next.</p>' +
           '</div></div>' + chromeFoot();
       }
 
@@ -433,7 +433,7 @@
             `<span class="ft">${esc(flag)}<span style="display:block;font-size:18px;font-weight:500;color:var(--faint);margin-top:4px">` +
             `now ${esc(g.action)} \u00b7 ${esc(g.syms.slice(0, 3).map(symOf).join(', '))}${g.syms.length > 3 ? ` +${g.syms.length - 3}` : ''}</span></span>` +
             '</div>').join('')}</div>` +
-          `<p class="s-sub" style="font-size:19px;margin-top:26px">${changes.length} of ${rows.length} verdicts moved \u2014 ` +
+          `<p class="s-sub" style="--fs:19px;margin-top:26px">${changes.length} of ${rows.length} verdicts moved \u2014 ` +
           `<span style="color:var(--green)">${ups} up</span>, <span style="color:var(--red)">${downs} down</span>. ` +
           'Same rules as yesterday; only the prices changed.</p>' +
           '</div></div>' + chromeFoot();
@@ -455,7 +455,7 @@
             `<div class="pcard"><span class="pn">${esc(r.pn)}</span>` +
             `<span class="pv" style="color:${ADV_TINT[r.action] || 'var(--text)'}">${esc(r.action)}</span>` +
             `<span class="pw">${esc(r.flag || '')}</span></div>`).join('')}</div>` +
-          `<p class="s-sub" style="font-size:19px;margin-top:26px">Same stock, same night, five fixed rule sets \u2014 ${agree ? 'and this time they all read it the same way.' : 'and they do not agree. Each names the rule that decided it, so the disagreement is readable rather than mysterious.'}</p>` +
+          `<p class="s-sub" style="--fs:19px;margin-top:26px">Same stock, same night, five fixed rule sets \u2014 ${agree ? 'and this time they all read it the same way.' : 'and they do not agree. Each names the rule that decided it, so the disagreement is readable rather than mysterious.'}</p>` +
           '</div></div>' + chromeFoot();
       }
 
@@ -475,7 +475,7 @@
           `<h2 class="s-title" style="color:${tint}">${esc(want)}</h2>` +
           `<p class="s-sub">What the ${esc(profile)} rules read as ${esc(want)} tonight, each with the rule that decided it.</p>` +
           body +
-          '<p class="s-sub" style="font-size:18px;margin-top:24px">A mechanical reading of one table, not a recommendation tailored to anyone.</p>' +
+          '<p class="s-sub" style="--fs:18px;margin-top:24px">A mechanical reading of one table, not a recommendation tailored to anyone.</p>' +
           '</div></div>' + chromeFoot();
       }
 
@@ -494,7 +494,7 @@
           `<div class="arow"><span class="an" style="color:${ADV_TINT[a]}">${esc(a)}</span>` +
           `<span class="arail"><span class="afill" style="display:block;width:${Math.max(2, counts[i] / max * 100)}%;background:${ADV_TINT[a]}"></span></span>` +
           `<span class="ac">${counts[i]}</span><span class="ap">${Math.round(counts[i] / total * 100)}%</span></div>`).join('')}</div>` +
-        `<p class="s-sub" style="font-size:19px;margin-top:28px">${bull} of ${total} clear the buy rules tonight. A reading of the tape by fixed rules \u2014 it says what is, never what is next.</p>` +
+        `<p class="s-sub" style="--fs:19px;margin-top:28px">${bull} of ${total} clear the buy rules tonight. A reading of the tape by fixed rules \u2014 it says what is, never what is next.</p>` +
         '</div></div>' + chromeFoot();
     }
 
@@ -640,7 +640,7 @@
         return `<div class="rung ${cls}"><span class="rs">${esc(SEC[g.section] || g.section)}</span>` +
           `<span class="rf">${esc(g.flag)}</span><span class="ra">${esc(right)}</span></div>`;
       }).join('')}</div>` +
-        `<p class="s-sub" style="font-size:18px;margin-top:20px">First match wins, so everything under the lit rung was never consulted — that is why one rule can always be named. This is ${esc(nameOf(r))}, tonight.</p>`;
+        `<p class="s-sub" style="--fs:18px;margin-top:20px">First match wins, so everything under the lit rung was never consulted — that is why one rule can always be named. This is ${esc(nameOf(r))}, tonight.</p>`;
     }
 
     const TIER_DEF = [
@@ -702,7 +702,7 @@
         : sl.kind === 'mock' ? slideMock()
         : sl.kind === 'stmts' ? slideStmts(sl)
         : sl.kind === 'close' ? slideClose()
-        : (sl.sub ? `<p class="s-sub" style="font-size:26px;margin-top:26px">${sl.sub}</p>` : '');
+        : (sl.sub ? `<p class="s-sub" style="--fs:26px;margin-top:26px">${sl.sub}</p>` : '');
       return chromeTop(false) +
         `<div class="s-body"><div><span class="s-kick">${esc(kick)}</span>` +
         `<h2 class="s-title">${title}</h2>${body}` +
@@ -898,7 +898,7 @@
         '<div class="s-body"><div class="stk">' + head +
         lineChart(c.dates || closes.map(() => ''), [{ color: colour, S, width: 4, fill: true }],
           { h: size.id === 'story' ? 1180 : size.id === 'square' ? 470 : 590 }) +
-        `<p class="s-sub" style="font-size:17px;margin-top:18px">${note}</p>` +
+        `<p class="s-sub" style="--fs:17px;margin-top:18px">${note}</p>` +
         '</div></div>' + chromeFoot();
     }
 
@@ -991,7 +991,7 @@
         `<h2 class="s-title">${title}</h2>` +
         lineChart(d.dates, lines, { h: size.id === 'story' ? 1020 : size.id === 'square' ? 470 : 590 }) +
         chartLegend(legend) +
-        `<p class="s-sub" style="font-size:17px;margin-top:18px">${note}</p>` +
+        `<p class="s-sub" style="--fs:17px;margin-top:18px">${note}</p>` +
         '</div></div>' + chromeFoot();
     }
 
@@ -1112,7 +1112,7 @@
             `<div class="arow"><span class="an" style="color:${tint}">${esc(label)}</span>` +
             `<span class="arail"><span class="afill" style="display:block;width:${Math.max(2, counts[i] / mx * 100)}%;background:${tint}"></span></span>` +
             `<span class="ac">${counts[i]}</span><span class="ap">${Math.round(counts[i] / total * 100)}%</span></div>`).join('')}</div>` +
-          `<p class="s-sub wide" style="font-size:19px;margin-top:28px">${counts[0]} of ${total} sit in the top fifth of their own 52-week range, ` +
+          `<p class="s-sub wide" style="--fs:19px;margin-top:28px">${counts[0]} of ${total} sit in the top fifth of their own 52-week range, ` +
           `${counts[4]} in the bottom. Each stock measured against its own year, not against each other.</p>` +
           '</div></div>' + chromeFoot();
       }
@@ -1149,7 +1149,7 @@
               `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
               `<span class="val ${neg ? 'neg' : 'pos'}">${pct(v)}</span></div>`;
           }).join('')}</div>` +
-          `<p class="s-sub wide" style="font-size:18px;margin-top:22px">${esc(label[0].toUpperCase() + label.slice(1))}` +
+          `<p class="s-sub wide" style="--fs:18px;margin-top:22px">${esc(label[0].toUpperCase() + label.slice(1))}` +
           (wide ? ', bars on a log scale so one outlier does not flatten the rest' : '') +
           '. Each measured against its own year.</p>' +
           '</div></div>' + chromeFoot();
@@ -1188,7 +1188,7 @@
             '</div>';
         }).join('')}</div>` +
         '<div class="tkey"><span>left edge \u00b7 the 52-week low</span><span>right edge \u00b7 the high</span></div>' +
-        '<p class="s-sub wide" style="font-size:18px;margin-top:16px">Each track is one stock\u2019s own year: the marker is where it trades now, ' +
+        '<p class="s-sub wide" style="--fs:18px;margin-top:16px">Each track is one stock\u2019s own year: the marker is where it trades now, ' +
         'the first number is how far it has come off its low, the second how far it still sits below its high. ' +
         'The lighter leg behind each marker is the past month, so a stock that has turned shows it.</p>' +
         '</div></div>' + chromeFoot();
@@ -1260,7 +1260,7 @@
             `<span class="sv ${it.end >= 0 ? 'pos' : 'neg'}">${pct(it.end)}</span></div>` +
             sparkSvg(it.S, color) + '</div>';
         }).join('')}</div>` +
-        '<p class="s-sub" style="font-size:18px;margin-top:22px">Each shape is that stock alone, rebased to the start of the window ' +
+        '<p class="s-sub" style="--fs:18px;margin-top:22px">Each shape is that stock alone, rebased to the start of the window ' +
         '\u2014 the heights are not comparable between tiles, the shapes are. Ranked on the window, not a forecast.</p>' +
         '</div></div>' + chromeFoot();
     }
@@ -1332,7 +1332,7 @@
         `<div class="fgrid">${tiles.map(([k, v, note]) =>
           `<div class="ftile"><div class="fk">${esc(k)}</div>` +
           `<div class="fv${neg(v)}">${esc(v)}</div><div class="fn2">${esc(note)}</div></div>`).join('')}</div>` +
-        `<p class="s-sub" style="font-size:18px;margin-top:24px">Quality ${r.qualityRating != null ? r.qualityRating + '/10' : 'not scored'} \u00b7 ` +
+        `<p class="s-sub" style="--fs:18px;margin-top:24px">Quality ${r.qualityRating != null ? r.qualityRating + '/10' : 'not scored'} \u00b7 ` +
         'reported figures, not estimates of what comes next.</p>' +
         '</div></div>' + chromeFoot();
     }
@@ -1358,7 +1358,7 @@
             `<span class="arail"><span class="afill" style="display:block;width:${Math.max(2, n / d * 100)}%;background:${tint}"></span></span>` +
             `<span class="ac">${n}</span><span class="ap">${Math.round(n / d * 100)}%</span></div>`;
         }).join('')}</div>` +
-        '<p class="s-sub" style="font-size:19px;margin-top:28px">Counted out of the companies that report each figure. Facts about businesses, not opinions about prices.</p>' +
+        '<p class="s-sub" style="--fs:19px;margin-top:28px">Counted out of the companies that report each figure. Facts about businesses, not opinions about prices.</p>' +
         '</div></div>' + chromeFoot();
     }
 
@@ -1378,7 +1378,7 @@
         `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 growth against margin</span>` +
         '<h2 class="s-title">Who grows,<br><span class="dim">who earns</span></h2>' +
         scatterSvg(pts, q) +
-        `<p class="s-sub" style="font-size:18px;margin-top:20px">${q.gp} of ${pts.length} are growing revenue AND profitable. ` +
+        `<p class="s-sub" style="--fs:18px;margin-top:20px">${q.gp} of ${pts.length} are growing revenue AND profitable. ` +
         'Each dot is one company: revenue growth across, profit margin up. Reported figures, no forecasts.</p>' +
         '</div></div>' + chromeFoot();
     }
@@ -1418,7 +1418,7 @@
           `<span class="bar-rail"><span class="bar${neg ? ' neg' : ''}" style="width:${w}%;display:block"></span></span>` +
           `<span class="val ${neg ? 'neg' : 'pos'}">${esc(fmtMetric(v, kind))}</span></div>`;
       }).join('')}</div>` +
-      `<p class="s-sub" style="font-size:18px;margin-top:22px">${esc(label)}${kind === 'money' ? ', trailing twelve months' : ''} \u2014 ` +
+      `<p class="s-sub" style="--fs:18px;margin-top:22px">${esc(label)}${kind === 'money' ? ', trailing twelve months' : ''} \u2014 ` +
       'as reported. A fact about the business, not a view on the price.</p>' +
       '</div></div>' + chromeFoot();
   }
@@ -1735,7 +1735,7 @@
       + (inner ? ' and ' + esc(inner[0].toLowerCase()) : '') + '</span></h2>'
       + '<div class="zlegend">' + legend + '</div>'
       + '<div class="zgrid" style="grid-template-columns:repeat(' + cols + ',1fr)">' + body + '</div>'
-      + '<p class="s-sub wide" style="font-size:17px;margin-top:20px">Circle AREA is the measure, not its width. '
+      + '<p class="s-sub wide" style="--fs:17px;margin-top:20px">Circle AREA is the measure, not its width. '
       + 'The largest here is ' + (ratio >= 100 ? Math.round(ratio) : ratio.toFixed(1)) + '× the smallest.'
       + (inner && inner[2] === 'money'
         ? ' The second disc shares that scale, so its share of the first is the ratio between them.' : '')
@@ -1986,7 +1986,7 @@
       + (rd.third ? '<span class="bkey btx">text: ' + esc(rd.third[0]) + '</span>' : '')
       + '</div>'
       + svg
-      + '<p class="s-sub" style="font-size:17px;margin-top:16px">Each circle is one company. '
+      + '<p class="s-sub" style="--fs:17px;margin-top:16px">Each circle is one company. '
       + 'Circle AREA is ' + esc(sl.toLowerCase()) + ', not its width.'
       + (ringed ? ' ' + ringed + ' with no positive ' + esc(sl.toLowerCase())
         + ' are drawn as rings at the smallest size.' : '')
@@ -2049,7 +2049,18 @@
     .s-title { margin: 10px 0 0; font-size: 66px; font-weight: 800; line-height: 1.02;
                letter-spacing: -0.045em; }
     .s-title .dim { color: var(--faint); }
-    .s-sub { margin: 16px 0 0; font-size: 20px; color: var(--muted); line-height: 1.5; max-width: 40ch; }
+    /* A note's size is --fs, NOT an inline font-size. Twenty of the
+       twenty-three notes used to carry style="font-size:18px" and the like,
+       and an inline declaration beats a class rule — so
+       ".sz-story .s-sub { font-size: 25px }" below was DEAD for all of them
+       and every story card printed its footnote at post size. Setting the
+       variable instead keeps each card's own relative choice (17 / 18 / 19 /
+       26) while letting the artboard scale the lot.
+       1.25 is the ratio already chosen for a story note: the default 20px
+       became 25px, so an 18px note becomes 22.5px and stays proportionally
+       what its card asked for. */
+    .s-sub { margin: 16px 0 0; font-size: var(--fs, 20px); color: var(--muted);
+             line-height: 1.5; max-width: 40ch; }
     .s-body { flex: 1; display: flex; flex-direction: column; justify-content: center; min-height: 0; }
     .s-foot { display: flex; align-items: center; gap: 15px; font: 500 18px var(--mono);
               color: var(--faint); border-top: 1px solid var(--hair); padding-top: 26px; }
@@ -2282,7 +2293,7 @@
     .sz-story .s-body > .stk { justify-content: space-between; }
     .sz-story .s-kick { font-size: 21px; margin-top: 30px; }
     .sz-story .s-title { font-size: 84px; }
-    .sz-story .s-sub { font-size: 25px; max-width: 34ch; }
+    .sz-story .s-sub { font-size: calc(var(--fs, 20px) * 1.25); max-width: 34ch; }
     .sz-story .s-foot { font-size: 20px; }
     .sz-story .s-tag { font-size: 18px; }
     .sz-story .s-empty { font-size: 36px; }
