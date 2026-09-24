@@ -130,8 +130,36 @@
     table.led td.k { color: var(--muted); font-family: var(--sans); width: 40%; }
     table.led td.v { text-align: right; font-family: var(--mono);
                      font-variant-numeric: tabular-nums; width: 20%; }
-    table.led td.d { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums;
-                     width: 20%; color: var(--faint); }
+    table.led td.d { width: 24%; color: var(--faint); }
+    /* The bars on the left of the cell and the number on its right, so the bars
+       all start at the same x and the column can be scanned.
+       THE FLEX GOES ON A WRAPPER INSIDE THE CELL, NEVER ON THE `td`. A table
+       cell made a flex container stops participating in the table's column
+       sizing: the first cut put `display:flex` on td.d and the four columns
+       collapsed into each other — "+150%" printed on top of "$100.0B" — while
+       every assertion passed, because they measured the bars' own geometry and
+       nothing checked that the columns still lined up. A screenshot found it;
+       there is a column-overlap check below now. */
+    table.led td.d .dwrap { display: flex; align-items: center; gap: 10px;
+                            justify-content: flex-end; }
+    table.led td.d .dn { font-family: var(--mono); font-variant-numeric: tabular-nums;
+                         flex: none; min-width: 52px; text-align: right; }
+    /* THE TRACK AND THE FILL MUST BOTH BE `display: block`. They are spans, and
+       an inline box ignores width and height — /quality set a percentage width
+       on an inline element and drew NOTHING, while its test passed because it
+       read the style attribute rather than the rendered box. The test below
+       measures getBoundingClientRect(). */
+    .cbars { flex: 1 1 auto; min-width: 60px; max-width: 150px; display: block; position: relative; }
+    .cbars .cb { display: block; position: relative; height: 4px; border-radius: 2px;
+                 background: rgba(255, 255, 255, 0.055); margin: 2px 0; overflow: hidden; }
+    .cbars .cb i { display: block; position: absolute; top: 0; bottom: 0; border-radius: 2px;
+                   min-width: 1px; }
+    .cbars .cb i.a { background: var(--accent); }
+    .cbars .cb i.b { background: var(--accent-2); }
+    /* Where either value is negative the bars grow from the middle, so the
+       middle has to be visible or a bar reads as starting from the left. */
+    .cbars.zero::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0;
+                         width: 1px; background: var(--hair-2); }
     /* The difference is deliberately NEUTRAL. Green on "A's P/E is lower" would
        be this page making the buy/sell call the rest of the product declines to
        make; the column says how far apart they are and nothing more. */
@@ -211,6 +239,12 @@
 
     let A = null, B = null, universe = [];
     const histCache = new Map();          // symbol|days -> payload
+    // Whether rows where the two sides read the same are hidden, and how many
+    // that is. A per-device convenience, so localStorage rather than prefs —
+    // the same call /m makes for its view and chart switches.
+    let hideSame = false;
+    try { hideSame = localStorage.getItem('cmp.hideSame') === '1'; } catch { /* private window */ }
+    let matching = 0;
 
     // MARKET CAP IS THE ONE MONEY FIELD THAT SURVIVES A CROSS-CURRENCY
     // COMPARISON. It comes back in USD even when the rest of the row does not —
@@ -383,19 +417,57 @@
     }
 
     // ---- the ledger -----------------------------------------------------------
+    // Two bars, drawn to scale, in the colours the chart already gives A and B.
+    // Eighty-four rows of digits is a wall: the number tells you the value and
+    // nothing about the size of the gap, so the eye has to read every row and
+    // hold it. A bar answers "how far apart" before you have read anything.
+    //
+    // ONE RULE, not one per unit: each bar is its own value as a share of the
+    // LARGER OF THE PAIR, measured from zero. That is proportional, so it can
+    // never overstate a gap — RSI 61 against 68 draws as 90% against 100% and
+    // correctly reads as "close", where a pair-relative scale would stretch it
+    // to the full width and read as "miles apart".
+    //
+    // WHEN EITHER VALUE IS NEGATIVE the zero moves to the middle and the bars
+    // grow out from it, because a percentage has a meaningful zero and a bar
+    // that ignored the sign would draw a 30% loss as a healthy-looking bar.
+    function bars(va, vb) {
+      if (!va || !vb || !ok(va.n) || !ok(vb.n) || !va.u || va.u !== vb.u) return '';
+      const max = Math.max(Math.abs(va.n), Math.abs(vb.n));
+      if (!max) return '';
+      const neg = va.n < 0 || vb.n < 0;
+      const zero = neg ? 50 : 0;
+      const span = neg ? 50 : 100;
+      const one = (v, cls) => {
+        const w = (Math.abs(v) / max) * span;
+        const left = v >= 0 ? zero : zero - w;
+        return `<span class="cb"><i class="${cls}" style="left:${left.toFixed(2)}%;` +
+               `width:${w.toFixed(2)}%"></i></span>`;
+      };
+      return `<span class="cbars${neg ? ' zero' : ''}">${one(va.n, 'a')}${one(vb.n, 'b')}</span>`;
+    }
+
     function ledger() {
       const va = RowCard.fieldValues(A.stock);
       const vb = RowCard.fieldValues(B.stock);
       const cat = RowCard.fieldCatalogue();
       const byGroup = new Map();
+      matching = 0;
       for (const f of cat) {
         // The forward-returns group belongs to the screener's as-of mode; it is
         // empty on every ordinary row and would be a block of dashes here.
         if (f.group === 'fwd') continue;
         const a = va[f.key], b = vb[f.key];
         if (!a && !b) continue;                  // neither holds it — not a row
+        // A row where both sides render the same string is telling you nothing
+        // — Sector, Industry, Exchange and Size agree on most pairs. Counted so
+        // the toggle can say how many it would take away, and hidden only when
+        // asked: a page called "every field" must not quietly drop rows.
+        const same = !!(a && b && a.t === b.t);
+        if (same) matching++;
+        if (same && hideSame) continue;
         if (!byGroup.has(f.group)) byGroup.set(f.group, []);
-        byGroup.get(f.group).push({ f, a, b });
+        byGroup.get(f.group).push({ f, a, b, same });
       }
       const L = RowCard.GROUP_LABELS || {};
       const C = RowCard.GROUP_COLORS || {};
@@ -410,16 +482,37 @@
           const cell = (v) => v
             ? `<td class="v ${esc(v.c || '')}">${esc(v.t)}</td>`
             : '<td class="v na">—</td>';
-          rows += '<tr>' +
+          // NO BAR WHERE THE DIFFERENCE WAS WITHHELD. Drawing two bars across
+          // currencies, or off a loss, would make exactly the comparison the
+          // line above just refused to make — and a picture is the more
+          // persuasive of the two.
+          const pic = d && !d.off ? bars(r.a, r.b) : '';
+          rows += `<tr${r.same ? ' class="same"' : ''}>` +
             `<td class="k">${esc(r.f.label)}</td>` +
             cell(r.a) +
             `<td class="d${d && d.off ? ' off' : ''}"${d && d.why ? ` title="${esc(d.why)}"` : ''}>` +
-              `${d ? esc(d.t) : ''}</td>` +
+              `<span class="dwrap">${pic}<span class="dn">${d ? esc(d.t) : ''}</span></span></td>` +
             cell(r.b) +
             '</tr>';
         }
       }
       return rows;
+    }
+
+    function paintLedger() {
+      const body = $('ledBody');
+      if (!body) return;
+      body.innerHTML = ledger();              // sets `matching` as it counts
+      const btn = $('sameBtn');
+      if (!btn) return;
+      btn.classList.toggle('on', hideSame);
+      btn.disabled = !matching && !hideSame;
+      btn.textContent = !matching && !hideSame
+        ? 'Nothing matches'
+        : (hideSame ? `Showing all · ${matching} match` : `Hide ${matching} matching`);
+      btn.title = hideSame
+        ? 'Show the rows where both stocks read the same again'
+        : `Hide the ${matching} rows where both stocks read exactly the same — Sector, Exchange and the like`;
     }
 
     // ---- the mastheads --------------------------------------------------------
@@ -515,18 +608,34 @@
           `<span class="ranges">${RANGES.map((r) =>
             `<button class="rng${r.id === range.id ? ' on' : ''}" data-r="${r.id}">${r.label}</button>`
           ).join('')}</span></div><div id="chartBox"></div></section>` +
-        '<section class="blk"><div class="sec-h"><h2>Every field</h2></div>' +
+        '<section class="blk"><div class="sec-h"><h2>Every field</h2><span class="spacer"></span>' +
+          `<button class="rng${hideSame ? ' on' : ''}" id="sameBtn"></button></div>` +
           '<div class="ledwrap"><table class="led"><thead><tr>' +
             '<th>Field</th>' +
             `<th><span class="s">${esc(A.stock.symbol)}</span></th>` +
             '<th>Difference</th>' +
             `<th><span class="s">${esc(B.stock.symbol)}</span></th>` +
-          '</tr></thead><tbody>' + ledger() + '</tbody></table></div>' +
-          '<p class="note">The middle column is <b>' + esc(A.stock.symbol) + ' against ' +
-          esc(B.stock.symbol) + '</b>: percentages in points, everything else as a relative ' +
-          'difference. It is deliberately not coloured and picks no winner — how far apart two ' +
-          'numbers are is a fact, which of them is better is not.</p>' +
+          '</tr></thead><tbody id="ledBody"></tbody></table></div>' +
+          '<p class="note">The bars are each value as a share of the larger of the two, from zero — ' +
+          'so their lengths are in proportion and a small gap looks small. Where either is negative ' +
+          'the zero moves to the middle. A row whose difference is withheld gets no bar either: ' +
+          'drawing one would make the comparison the page just declined to make. ' +
+          'The middle column is <b>' + esc(A.stock.symbol) + ' against ' + esc(B.stock.symbol) +
+          '</b>: percentages in points, everything else as a relative difference. It is deliberately ' +
+          'not coloured and picks no winner — how far apart two numbers are is a fact, which of them ' +
+          'is better is not.</p>' +
         '</section>';
+
+      // The count has to come from a build, so the table is painted first and
+      // the button labelled from what that build actually counted — a hardcoded
+      // number here would be wrong on the first pair that disagreed about
+      // something extra.
+      paintLedger();
+      $('sameBtn').addEventListener('click', () => {
+        hideSame = !hideSame;
+        try { localStorage.setItem('cmp.hideSame', hideSame ? '1' : '0'); } catch { /* private window */ }
+        paintLedger();
+      });
 
       document.querySelectorAll('.rng[data-r]').forEach((b) => b.addEventListener('click', () => {
         range = RANGES.find((r) => r.id === b.dataset.r) || range;
