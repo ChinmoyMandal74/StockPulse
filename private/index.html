@@ -1020,6 +1020,15 @@
            title="Pivot view — count the screen by two dimensions at once">
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>Pivot view
         </a>
+        <!-- Two stocks side by side. The href is rewritten on every render to
+             carry the row on top of the current view, the way the Research
+             menu's per-symbol rows do — so the page opens with one side already
+             filled rather than two empty pickers. Member-only, like the two
+             beside it. -->
+        <a class="btn" id="compareLink" href="/compare" target="_blank" rel="noopener"
+           title="Compare two stocks side by side">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-columns" /></svg>Compare
+        </a>
         <!-- The forward-returns VIEW still belongs to this page: it is a mode of
              the table, with its own banner and its own column group. Only the
              control left — /admin sets the date and links here with ?asOf=. The
@@ -2031,6 +2040,19 @@
           'Add a ticker to reach the per-stock pages.</div>');
       }
       $('researchMenu').innerHTML = '<div class="picker-inner">' + parts.join('') + '</div>';
+      // The Compare link follows the same symbol, and for the same reason: it
+      // opens with one side filled from the top of THIS view rather than two
+      // empty pickers. Only one side — the second stock is the choice the page
+      // exists to make, and guessing it would be presumptuous. Hung off this
+      // function because it is already called from both sites that move
+      // researchSymbol, including the empty-table branch that clears it.
+      const cl = $('compareLink');
+      if (cl) {
+        cl.href = researchSymbol ? '/compare/' + encodeURIComponent(researchSymbol) : '/compare';
+        cl.title = researchSymbol
+          ? `Compare ${researchSymbol} — the top of this view — with another stock, side by side`
+          : 'Compare two stocks side by side';
+      }
     }
 
     function renderPicker() {
@@ -4294,6 +4316,7 @@
         if (ask) ask.style.display = 'none';
         $('promoLink').style.display = 'none';
         if ($('pivotLink')) $('pivotLink').style.display = 'none';
+        if ($('compareLink')) $('compareLink').style.display = 'none';
         const note = $('readonlyNote').querySelector('span');
         if (note) note.innerHTML = '<b>Guest preview.</b> A handful of stocks with every feature live — ' +
           'the full screener, research pages and assistant need an account.';

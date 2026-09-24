@@ -1300,6 +1300,12 @@
               <select class="cmp-pick${compareSym ? ' on' : ''}" id="cmpPick"
                 title="Overlay another stock, rebased to this one's price at the left edge — the gap between the lines is relative performance"
                 aria-label="Compare with another stock"></select>
+              <!-- The overlay answers "which line is higher"; /compare answers
+                   the rest of it. This stock is always the first side, and
+                   whatever is overlaid right now is the second, so the page
+                   opens on the pair already on screen rather than asking again. -->
+              <a class="rng" id="cmpFull" href="/compare/${encodeURIComponent(stock.symbol)}"
+                title="Open both of these on the compare page — every field, side by side">Compare ▸</a>
               <button class="rng th-toggle${showTrendHold ? ' on' : ''}" id="thBtn"
                 title="What holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on">TREND</button></span>
             <span class="share" id="share" hidden>
@@ -1564,10 +1570,24 @@
           universeRows.filter((r) => !taken.has(r.symbol))
             .map((r) => `<option value="${esc(r.symbol)}"${r.symbol === compareSym ? ' selected' : ''}>` +
               `${esc(r.symbol)} — ${esc(r.short || r.name || r.symbol)}</option>`).join('');
+        // The full-comparison link follows the overlay, so the page it opens is
+        // the pair on screen. With nothing overlaid it still carries this stock,
+        // which is the half the reader has already chosen.
+        const cmpFull = document.getElementById('cmpFull');
+        const syncFull = () => {
+          if (!cmpFull) return;
+          cmpFull.href = '/compare/' + encodeURIComponent(SYMBOL)
+            + (compareSym ? '/' + encodeURIComponent(compareSym) : '');
+          cmpFull.title = compareSym
+            ? `Open ${SYMBOL} against ${compareSym} on the compare page — every field, side by side`
+            : 'Open ' + SYMBOL + ' on the compare page and pick a stock to set against it';
+        };
+        syncFull();
         cmpPick.addEventListener('change', () => {
           compareSym = cmpPick.value || '';
           cmpPick.classList.toggle('on', !!compareSym);
           window.track && track('chart', 'compare:' + (compareSym || 'off'));
+          syncFull();
           paintChart();
         });
       }

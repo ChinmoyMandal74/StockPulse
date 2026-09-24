@@ -437,6 +437,8 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/backtest.html': '/backtest', '/quality.html': '/quality',
                       '/trend-backtest.html': '/trend-backtest',
                       '/architecture.html': '/architecture', '/themes.html': '/themes',
+                      // no symbols in that path, so it opens with both pickers empty
+                      '/compare.html': '/compare',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
                       '/export.html': '/export',
                       // The public pages have canonical addresses of their own.
@@ -826,6 +828,30 @@ app.get('/pivot', route(async (req, res) => {
   if (await isGuest(req)) return res.redirect('/');
   logAct(req, 'page', 'pivot');
   res.sendFile(path.join(__dirname, 'private', 'pivot.html'));
+}));
+
+// Two stocks side by side. TWO, never more: the difference column is inherently
+// pairwise, and three columns of ninety fields is a table rather than a
+// comparison — the owner's call, and the reason there is no "add another".
+//
+// The symbols ride in the PATH so a comparison can be bookmarked and sent, and
+// so the stock page can link straight to one with itself already chosen. Both
+// are optional: /compare opens with two empty pickers, /compare/NVDA with the
+// first filled. Nothing is validated here — the page asks /api/stock for each,
+// which is the route that already knows what is in the universe and already
+// refuses a guest a symbol outside the preview. A bad symbol becomes a message
+// on the page rather than a 404 on the whole comparison.
+//
+// Refused to guests like the studio and the pivot beside it. Five preview
+// stocks make ten pairs, and every one of them would be a page explaining what
+// the reader cannot see.
+app.get(['/compare', '/compare/:a', '/compare/:a/:b'], route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  const pair = [req.params.a, req.params.b].filter(Boolean)
+    .map((s) => String(s).toUpperCase().slice(0, 12)).join(':');
+  logAct(req, 'page', 'compare' + (pair ? ':' + pair : ''));
+  res.sendFile(path.join(__dirname, 'private', 'compare.html'));
 }));
 
 // ---- Admin auth (cookie-based, no DB) --------------------------------------

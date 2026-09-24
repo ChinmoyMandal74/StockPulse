@@ -37,25 +37,40 @@
   }
 
   // --- value renderers, mirroring the screener's cell renderers ---------------
+  //
+  // EACH ONE ALSO REPORTS ITS RAW NUMBER (`n`) AND ITS UNIT (`u`), which is what
+  // lets /compare put a difference beside two values without a second list of
+  // fields saying what kind of number each one is. Deriving it from the renderer
+  // is the point: a field added to FIELD_SPEC gets a correct difference for
+  // free, and one can never drift from how it is drawn. The units are what the
+  // number IS, not how it is compared — the page decides that:
+  //   pct   a percentage        -> difference in POINTS
+  //   score a bounded score     -> difference in points (a rating, RSI)
+  //   money the company's own reporting currency -> relative, and only when
+  //         both sides report in the same one (Samsung's revenue is in won)
+  //   num   a plain number or multiple -> relative
+  //   count a share count       -> relative
+  // A renderer with no `u` (text, dates, verdicts) gets no difference at all,
+  // which is the right default and covers most of the card.
   const V = {
     // a change: signed, green up / red down
-    pct: (n) => ok(n) ? { t: (n >= 0 ? '+' : '') + n.toFixed(1) + '%', c: n >= 0 ? 'pos' : 'neg' } : null,
+    pct: (n) => ok(n) ? { t: (n >= 0 ? '+' : '') + n.toFixed(1) + '%', c: n >= 0 ? 'pos' : 'neg', n, u: 'pct' } : null,
     // a level: no leading +, red only when negative
-    lvl: (n) => ok(n) ? { t: n.toFixed(1) + '%', c: n < 0 ? 'neg' : '' } : null,
-    num: (n, d = 1) => ok(n) ? { t: n.toFixed(d), c: '' } : null,
-    money: (n, code) => ok(n) ? { t: fmtMktCap(n, code), c: n < 0 ? 'neg' : '' } : null,
-    signedMoney: (n, code) => ok(n) ? { t: fmtMktCap(n, code), c: n >= 0 ? 'pos' : 'neg' } : null,
-    rating: (n) => ok(n) ? { t: String(n), c: n >= 8 ? 'pos' : n <= 4 ? 'neg' : 'warn', b: 1 } : null,
-    rsi: (n) => ok(n) ? { t: n.toFixed(0), c: n >= 70 ? 'neg' : n <= 30 ? 'pos' : '' } : null,
-    peg: (n) => ok(n) ? { t: n.toFixed(2), c: (n > 0 && n <= 1) ? 'pos' : n >= 2 ? 'neg' : '' } : null,
-    short: (n) => ok(n) ? { t: n.toFixed(1) + '%', c: n >= 20 ? 'neg' : n >= 10 ? 'warn' : '' } : null,
-    macd: (n) => ok(n) ? { t: n.toFixed(2), c: n >= 0 ? 'pos' : 'neg' } : null,
+    lvl: (n) => ok(n) ? { t: n.toFixed(1) + '%', c: n < 0 ? 'neg' : '', n, u: 'pct' } : null,
+    num: (n, d = 1) => ok(n) ? { t: n.toFixed(d), c: '', n, u: 'num' } : null,
+    money: (n, code) => ok(n) ? { t: fmtMktCap(n, code), c: n < 0 ? 'neg' : '', n, u: 'money' } : null,
+    signedMoney: (n, code) => ok(n) ? { t: fmtMktCap(n, code), c: n >= 0 ? 'pos' : 'neg', n, u: 'money' } : null,
+    rating: (n) => ok(n) ? { t: String(n), c: n >= 8 ? 'pos' : n <= 4 ? 'neg' : 'warn', b: 1, n, u: 'score' } : null,
+    rsi: (n) => ok(n) ? { t: n.toFixed(0), c: n >= 70 ? 'neg' : n <= 30 ? 'pos' : '', n, u: 'score' } : null,
+    peg: (n) => ok(n) ? { t: n.toFixed(2), c: (n > 0 && n <= 1) ? 'pos' : n >= 2 ? 'neg' : '', n, u: 'num' } : null,
+    short: (n) => ok(n) ? { t: n.toFixed(1) + '%', c: n >= 20 ? 'neg' : n >= 10 ? 'warn' : '', n, u: 'pct' } : null,
+    macd: (n) => ok(n) ? { t: n.toFixed(2), c: n >= 0 ? 'pos' : 'neg', n, u: 'num' } : null,
     count: (n) => {
       if (!ok(n)) return null;
       const a = Math.abs(n);
       const t = a >= 1e12 ? (n / 1e12).toFixed(2) + 'T' : a >= 1e9 ? (n / 1e9).toFixed(2) + 'B'
         : a >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : Math.round(n).toLocaleString();
-      return { t, c: '' };
+      return { t, c: '', n, u: 'count' };
     },
     text: (t) => (t ? { t: String(t), c: '' } : null),
   };
@@ -71,7 +86,15 @@
     ['info',  'Market Cap',     (s) => V.money(s.marketCap, s.currency)],
     // The band the cap falls in. One entry here puts it in the hover card, the
     // tiles, the phone and the tile/mobile field pickers at once.
-    ['info',  'Size',           (s) => (s.capBand || null)],
+    //
+    // V.text, NOT the bare string it was until 2026-09-23. Every other getter
+    // returns {t, c} and both readers take `.t` off it, so returning 'Large'
+    // gave `undefined` and the row rendered with a LABEL AND NO VALUE on all
+    // four surfaces — present in the catalogue, offered by both field pickers,
+    // and blank wherever it was actually drawn. It passed every structural
+    // check for two days; /compare found it by putting an empty cell next to a
+    // full one. `field-shape-test.js` now sweeps all of them for this.
+    ['info',  'Size',           (s) => V.text(s.capBand)],
     ['info',  'News',           (s) => {
                                   const n = s.newsLatest;
                                   if (!n || !n.headline) return null;
@@ -106,7 +129,11 @@
     // while every mean difference stayed noise.
     ['act',   'Cushion',        (s) => (s.actionCushion == null ? null
                                   : { t: s.actionCushion.toFixed(1) + 'σ',
-                                      c: s.actionCushion >= 2 ? 'pos' : s.actionCushion < 1 ? 'warn' : '' })],
+                                      c: s.actionCushion >= 2 ? 'pos' : s.actionCushion < 1 ? 'warn' : '',
+                                      // Already in the stock's OWN volatility, so two of them
+                                      // compare directly — which is the whole reason this
+                                      // figure exists rather than the raw distance beside it.
+                                      n: s.actionCushion, u: 'score' })],
     // Market days the Balanced verdict has stood. "At least" until the row has
     // been watched changing — the run before that is unknowable, not zero.
     ['act',   'Days held',      (s) => (s.adviceDays == null ? null
@@ -162,7 +189,7 @@
     ['trend', 'MACD line',      (s) => V.num(s.macdLine, 2)],
     ['trend', 'MACD signal',    (s) => V.num(s.macdSignal, 2)],
     ['vol',   'Vol trend',      (s) => V.pct(s.volTrend)],
-    ['vol',   'Rel. volume',    (s) => (ok(s.volX) ? { t: s.volX.toFixed(2) + '\u00d7', c: s.volX >= 1.5 ? 'warn' : '' } : null)],
+    ['vol',   'Rel. volume',    (s) => (ok(s.volX) ? { t: s.volX.toFixed(2) + '\u00d7', c: s.volX >= 1.5 ? 'warn' : '', n: s.volX, u: 'num' } : null)],
     ['vol',   '$ volume',       (s) => V.money(s.dollarVolume, s.currency || 'USD')],
     ['size',  'Revenue TTM',    (s) => V.money(s.revenueTtm, s.currency)],
     ['size',  'Gross profit',   (s) => V.money(s.grossProfitTtm, s.currency)],
@@ -710,14 +737,22 @@
     return out;
   }
 
-  // One row's values under those keys: { t: text, c: colour class } or null.
+  // One row's values under those keys:
+  // { t: text, c: colour class, n?: raw number, u?: unit } or null.
+  //
+  // `n` and `u` ride along for /compare, which needs to subtract two of these
+  // and cannot do it from the formatted text. Both server callers (mobileRow
+  // and /api/m/stock) pick `t` and `c` off this by name, so the phone payload
+  // is not a byte larger for them being here.
   function fieldValues(s) {
     const ctx = {};
     const out = {};
     for (const [g, label, get] of FIELD_SPEC) {
       let v = null;
       try { v = get(s, ctx); } catch { v = null; }
-      out[g + '|' + label] = v ? { t: v.t, c: v.c || '' } : null;
+      out[g + '|' + label] = v
+        ? { t: v.t, c: v.c || '', n: v.n == null ? null : v.n, u: v.u || null }
+        : null;
     }
     return out;
   }

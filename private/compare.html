@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Compare — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <script src="/wmark.js" defer></script>
+  <!-- The field list, the formatters and the chart, all shared. The ledger below
+       is FIELD_SPEC drawn twice with a difference between, so a field added to
+       the screener appears here with no edit and is formatted identically. -->
+  <script src="/rowcard.js"></script>
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 28px; }
+
+    .top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 26px 0 0; }
+    .top h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.03em; }
+    .top .spacer { flex: 1 1 0; }
+    /* Scoped: `.sub` as a bare class captured a table row on /pivot, the fifth
+       unscoped name on this project to do that. */
+    .page > .sub { margin: 10px 0 0; max-width: 78ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+
+    /* --- the two pickers --------------------------------------------------- */
+    .picks { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin: 20px 0 0; }
+    .pick { display: flex; flex-direction: column; gap: 6px; }
+    .pick label { font-size: 10px; font-weight: 500; text-transform: uppercase;
+                  letter-spacing: 0.16em; color: var(--faint); }
+    .pick label .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+                      margin-right: 6px; vertical-align: 0; }
+    .pick label .sw.a { background: var(--accent); }
+    .pick label .sw.b { background: var(--accent-2); }
+    .pick select {
+      appearance: none; -webkit-appearance: none; min-width: 240px; max-width: 320px;
+      padding: 9px 30px 9px 12px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--hair); background: var(--surface); color: var(--text);
+      font: 500 13px var(--sans);
+      background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa3b2' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center; }
+    .pick select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    #swap { padding: 9px 14px; }
+
+    .note { margin: 14px 0 0; font-size: 12px; line-height: 1.6; color: var(--faint); max-width: 96ch; }
+    .note b { color: var(--muted); font-weight: 600; }
+    .note.warn { color: var(--amber); }
+
+    section.blk { margin: 22px 0 0; }
+    .sec-h { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
+    .sec-h h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
+    .sec-h .spacer { flex: 1 1 0; }
+
+    /* --- the masthead pair -------------------------------------------------- */
+    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 780px) { .pair { grid-template-columns: 1fr; } }
+    .mast { padding: 16px 18px; }
+    .mast .sym { display: flex; align-items: baseline; gap: 9px; }
+    .mast .sym b { font: 600 22px var(--sans); letter-spacing: -0.02em; }
+    .mast .sym .tag { width: 8px; height: 8px; border-radius: 50%; flex: none; align-self: center; }
+    .mast.a .sym .tag { background: var(--accent); }
+    .mast.b .sym .tag { background: var(--accent-2); }
+    .mast .co { display: block; margin: 3px 0 0; font-size: 13px; color: var(--muted);
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mast .px { display: flex; align-items: baseline; gap: 9px; margin: 11px 0 0; }
+    .mast .px b { font: 600 19px var(--mono); }
+    .mast .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 11px 0 0; }
+    .mast .chip { font-size: 11px; color: var(--muted); padding: 2px 8px; border-radius: 999px;
+                  border: 1px solid var(--hair); white-space: nowrap; }
+    .mast .verdict { margin: 13px 0 0; padding: 10px 0 0; border-top: 1px solid var(--hair); }
+    .mast .verdict .v { font: 600 15px var(--sans); }
+    .mast .verdict .why { display: block; margin: 3px 0 0; font-size: 12px; color: var(--muted);
+                          line-height: 1.5; }
+    .mast .open { margin: 12px 0 0; display: inline-block; font-size: 12px; }
+
+    /* --- the chart ---------------------------------------------------------- */
+    .ranges { display: flex; gap: 5px; flex-wrap: wrap; }
+    .rng { font: 500 11px var(--sans); padding: 4px 9px; border-radius: 8px; cursor: pointer;
+           border: 1px solid var(--hair); background: transparent; color: var(--muted); }
+    .rng:hover { color: var(--text); border-color: var(--hair-2); }
+    .rng.on { color: var(--text); border-color: var(--accent); background: rgba(124, 156, 255, 0.12); }
+    /* Scoped under .cmp so the two fixed line colours cannot reach any other
+       chart on the site. A and B are the accent pair on purpose and NEVER
+       green/red: those mean up and down here, and two lines coloured by their
+       own direction would both be making a different claim from the one the
+       chart is for. */
+    .rc-chart.cmp { height: 300px; }
+    .rc-chart.cmp .ln { stroke: var(--accent); }
+    .rc-chart.cmp .dot { fill: var(--accent); }
+    .rc-chart.cmp .ov.cmp-b { stroke: var(--accent-2); stroke-width: 1.6; opacity: 1; }
+    .rc-chart.ratio { height: 116px; margin-top: 10px; }
+    .rc-chart.ratio .ln { stroke: var(--muted); }
+    .rc-chart.ratio .dot { fill: var(--muted); }
+    /* The axis labels are HTML and sit OUTSIDE .rc-chart, which is
+       `overflow: hidden` — a label at the very top of the band is clipped in
+       half otherwise, which is how the stock page lost its top price once. So
+       the wrapper is the positioning context and the chart's own bottom margin
+       is zeroed, or the labels would be spread over 12px more than the chart. */
+    .chwrap { position: relative; }
+    .chwrap .rc-chart { margin-bottom: 0; }
+    .axis { position: absolute; inset: 0; pointer-events: none; }
+    .axis span { position: absolute; right: 6px; transform: translateY(-50%);
+                 font: 500 10px var(--mono); color: var(--faint);
+                 background: var(--surface); padding: 0 3px; border-radius: 3px; }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 10px 0 0; font-size: 12px; }
+    .legend i { display: inline-block; width: 16px; height: 2px; vertical-align: 3px;
+                margin-right: 7px; border-radius: 2px; }
+    .legend .a i { background: var(--accent); }
+    .legend .b i { background: var(--accent-2); }
+    .strip-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+               margin: 16px 0 6px; font-size: 11.5px; color: var(--muted); }
+    .strip-h b { color: var(--text); font-weight: 600; }
+    .strip-h span { color: var(--faint); font-size: 11px; }
+    .cap2 { margin: 10px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--muted); }
+    .cap2 b { color: var(--text); font-weight: 600; }
+
+    /* --- the ledger --------------------------------------------------------- */
+    .ledwrap { overflow: auto; border-radius: var(--r-core); }
+    table.led { border-collapse: separate; border-spacing: 0; width: 100%; }
+    table.led th, table.led td { padding: 7px 14px; font-size: 12.5px; white-space: nowrap;
+                                 border-bottom: 1px solid var(--hair); }
+    table.led thead th { position: sticky; top: 0; z-index: 2; background: var(--surface);
+                         font: 600 11px var(--sans); text-transform: uppercase;
+                         letter-spacing: 0.1em; color: var(--faint); text-align: right; }
+    table.led thead th:first-child { text-align: left; }
+    table.led thead th .s { color: var(--text); font-size: 12px; letter-spacing: 0; }
+    table.led td.k { color: var(--muted); font-family: var(--sans); width: 40%; }
+    table.led td.v { text-align: right; font-family: var(--mono);
+                     font-variant-numeric: tabular-nums; width: 20%; }
+    table.led td.d { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums;
+                     width: 20%; color: var(--faint); }
+    /* The difference is deliberately NEUTRAL. Green on "A's P/E is lower" would
+       be this page making the buy/sell call the rest of the product declines to
+       make; the column says how far apart they are and nothing more. */
+    table.led td.d.off { color: var(--faint); opacity: 0.6; }
+    table.led tr.grp th { position: sticky; top: 33px; z-index: 1; background: var(--surface-2);
+                          text-align: left; font: 600 10px var(--sans); text-transform: uppercase;
+                          letter-spacing: 0.16em; padding: 7px 14px; }
+    table.led tr:hover td { background: rgba(255, 255, 255, 0.022); }
+    .na { color: var(--faint); }
+
+    .empty { margin: 40px 0; padding: 26px; text-align: center; color: var(--muted); font-size: 13px; }
+    @media (max-width: 600px) {
+      .page { padding: 0 16px; }
+      .pick select { min-width: 0; width: 100%; max-width: none; }
+      .pick { flex: 1 1 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <main class="page">
+    <header class="top">
+      <h1>Compare</h1>
+      <span class="spacer"></span>
+      <a class="btn" href="/">Back to screener</a>
+    </header>
+    <p class="sub">
+      Two stocks, side by side. The price chart is <b>rebased</b> — both start at 100 on the first
+      session they share — because two share prices are not comparable and the gap between the lines
+      is. The ledger underneath is every field the screener holds, drawn from the same list and
+      formatted the same way, with the distance between them in the middle column.
+      <b>Two only</b>, never three: a difference is a pairwise thing.
+    </p>
+
+    <div class="picks">
+      <div class="pick">
+        <label for="aPick"><span class="sw a"></span>First</label>
+        <select id="aPick" aria-label="First stock"></select>
+      </div>
+      <button class="btn" id="swap" title="Swap the two stocks">⇄ Swap</button>
+      <div class="pick">
+        <label for="bPick"><span class="sw b"></span>Second</label>
+        <select id="bPick" aria-label="Second stock"></select>
+      </div>
+    </div>
+
+    <div id="body"><div class="empty" id="msg">Loading…</div></div>
+  </main>
+
+  <script>
+    'use strict';
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const ok = (n) => n != null && isFinite(n);
+
+    const CUR = { USD:'$', EUR:'€', GBP:'£', JPY:'¥', KRW:'₩', HKD:'HK$', CNY:'¥', INR:'₹',
+                  CAD:'C$', AUD:'A$', CHF:'CHF ', TWD:'NT$', BRL:'R$', SGD:'S$' };
+    const curSym = (c) => (c ? (CUR[c] || c + ' ') : '$');
+
+    // Symbols ride in the path, so a comparison can be sent to someone.
+    const PARTS = location.pathname.split('/').filter(Boolean);   // ['compare', 'A'?, 'B'?]
+    let symA = (PARTS[1] || '').toUpperCase();
+    let symB = (PARTS[2] || '').toUpperCase();
+
+    const RANGES = [
+      { id: '1m', label: '1M', days: 21 },
+      { id: '3m', label: '3M', days: 63 },
+      { id: '6m', label: '6M', days: 126 },
+      { id: '1y', label: '1Y', days: 253 },
+      { id: '5y', label: '5Y', days: 1260 },
+      { id: 'max', label: 'Max', days: 5200 },
+    ];
+    let range = RANGES.find((r) => r.id === (localStorage.getItem('cmp.range') || '1y')) || RANGES[3];
+
+    let A = null, B = null, universe = [];
+    const histCache = new Map();          // symbol|days -> payload
+
+    // MARKET CAP IS THE ONE MONEY FIELD THAT SURVIVES A CROSS-CURRENCY
+    // COMPARISON. It comes back in USD even when the rest of the row does not —
+    // Ericsson reads a $33.2B cap beside 236.7B of revenue in SEK, checked
+    // across eighteen foreign reporters. Everything else in the `money` unit is
+    // in the company's own reporting currency, which is not the same thing.
+    const CUR_SAFE = new Set(['info|Market Cap']);
+
+    // Gross margin and net cash mean nothing for a lender, so the rows stay
+    // (they are what the provider returned) but the DIFFERENCE is withheld
+    // rather than inviting a comparison that cannot be made. The cards already
+    // drop these for banks; here the row has a second stock in it and dropping
+    // it silently would be the worse answer.
+    const BANK_BLIND = new Set(['size|Gross margin', 'size|Net cash', 'fund|Net cash %']);
+    const isBank = (s) => /Financial/i.test((s && s.sector) || '');
+
+    // ---- the difference -------------------------------------------------------
+    // Derived from the unit the renderer reported, never from a second list of
+    // fields. The rule the refresh email already settled: absolutes compared
+    // RELATIVELY, percentages in POINTS — a margin going 18% to 21% is +3pt,
+    // not +17%.
+    //
+    // A relative difference needs BOTH SIDES POSITIVE. That one guard covers
+    // every trap at once: a P/E off a loss (arithmetic, not cheapness), net
+    // income that swung negative, and a MACD line whose sign flipped — each of
+    // which would otherwise print a confident percentage that means nothing.
+    function diffOf(key, va, vb) {
+      if (!va || !vb || !ok(va.n) || !ok(vb.n) || !va.u || va.u !== vb.u) return null;
+      if (va.u === 'money' && !CUR_SAFE.has(key)
+          && (A.stock.currency || null) !== (B.stock.currency || null)) {
+        return { t: '—', off: 1,
+          why: 'These are in each company’s own reporting currency — '
+             + (A.stock.currency || '?') + ' against ' + (B.stock.currency || '?')
+             + ' — so the two numbers are not on one scale.' };
+      }
+      if (BANK_BLIND.has(key) && (isBank(A.stock) || isBank(B.stock))) {
+        return { t: '—', off: 1,
+          why: 'Not compared: this figure does not mean the same thing for a lender.' };
+      }
+      const d = va.n - vb.n;
+      if (va.u === 'pct' || va.u === 'score') {
+        const unit = va.u === 'pct' ? 'pt' : '';
+        return { t: (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(1) + unit };
+      }
+      // money, num, count — relative, and only where that is arithmetic.
+      if (va.n > 0 && vb.n > 0) {
+        const r = (va.n / vb.n - 1) * 100;
+        const t = Math.abs(r) >= 1000 ? (va.n / vb.n).toFixed(1) + '×'
+          : (r >= 0 ? '+' : '−') + Math.abs(r).toFixed(0) + '%';
+        return { t };
+      }
+      return { t: '—', off: 1,
+        why: 'A percentage difference off a negative or zero value is arithmetic rather than a comparison.' };
+    }
+
+    // ---- the pickers ----------------------------------------------------------
+    function fillPick(sel, chosen, other) {
+      const opts = ['<option value="">Pick a stock…</option>'].concat(universe.map((u) => {
+        const label = u.symbol + (u.short || u.name ? ' — ' + (u.short || u.name) : '');
+        // The other side is never offered: comparing a stock with itself is a
+        // page of zeroes, and the swap button covers wanting them the other way.
+        const dis = u.symbol === other ? ' disabled' : '';
+        return `<option value="${esc(u.symbol)}"${u.symbol === chosen ? ' selected' : ''}${dis}>${esc(label)}</option>`;
+      }));
+      sel.innerHTML = opts.join('');
+    }
+
+    const go = (a, b) => {
+      const p = '/compare' + (a ? '/' + encodeURIComponent(a) : '') + (b ? '/' + encodeURIComponent(b) : '');
+      location.href = p;
+    };
+    $('aPick').addEventListener('change', (e) => go(e.target.value, symB));
+    $('bPick').addEventListener('change', (e) => go(symA, e.target.value));
+    $('swap').addEventListener('click', () => { if (symA && symB) go(symB, symA); });
+
+    // ---- history --------------------------------------------------------------
+    async function history(sym, days) {
+      const k = sym + '|' + days;
+      if (histCache.has(k)) return histCache.get(k);
+      const p = fetch(`/api/history?symbol=${encodeURIComponent(sym)}&days=${days}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      histCache.set(k, p);
+      return p;
+    }
+
+    // Both series on the dates they actually SHARE. Two stocks do not trade the
+    // same calendar — a foreign listing misses US sessions, a recent listing
+    // starts late — so a chart drawn on the union would either invent prices or
+    // slide one line against the other. The intersection is the only window in
+    // which the comparison is true, and the caption says how long it is.
+    function align(ha, hb) {
+      if (!ha || !hb || !ha.dates || !hb.dates) return null;
+      const m = new Map();
+      for (let i = 0; i < hb.dates.length; i++) m.set(hb.dates[i], hb.closes[i]);
+      const dates = [], a = [], b = [];
+      for (let i = 0; i < ha.dates.length; i++) {
+        const d = ha.dates[i];
+        if (!m.has(d)) continue;
+        const bv = m.get(d);
+        if (!ok(ha.closes[i]) || !ok(bv) || ha.closes[i] <= 0 || bv <= 0) continue;
+        dates.push(d); a.push(ha.closes[i]); b.push(bv);
+      }
+      return dates.length >= 2 ? { dates, a, b } : null;
+    }
+
+    const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    function longDate(iso) {
+      const p = String(iso).split('-');
+      return p.length === 3 ? `${+p[2]} ${MON[+p[1] - 1]} ${p[0]}` : iso;
+    }
+
+    function axisHTML(ticks, fmt) {
+      return '<div class="axis">' + ticks.filter((t) => t.drawn).map((t) =>
+        `<span style="top:${(t.top * 100).toFixed(2)}%">${esc(fmt(t.v))}</span>`).join('') + '</div>';
+    }
+
+    async function paintChart() {
+      const box = $('chartBox');
+      if (!box) return;
+      document.querySelectorAll('.rng[data-r]').forEach((b) =>
+        b.classList.toggle('on', b.dataset.r === range.id));
+      box.innerHTML = '<div class="chwrap"><div class="rc-chart cmp"><div class="msg">Drawing…</div></div></div>';
+
+      const [ha, hb] = await Promise.all([history(symA, range.days), history(symB, range.days)]);
+      const al = align(ha, hb);
+      if (!al) {
+        box.innerHTML = '<p class="note warn">These two share no price history over this window, '
+          + 'so there is nothing to draw. Try a shorter range.</p>';
+        return;
+      }
+      // Rebased to 100 at the first SHARED session — the only anchor that makes
+      // the two lines answer one question.
+      const ra = al.a.map((v) => (v / al.a[0]) * 100);
+      const rb = al.b.map((v) => (v / al.b[0]) * 100);
+      // Above 100, the first stock has outperformed since that anchor. It is the
+      // gap between the lines above, drawn as one line — which is the reading
+      // most people are trying to take off a two-line chart and mostly cannot.
+      const ratio = ra.map((v, i) => (v / rb[i]) * 100);
+
+      const main = RowCard.chartSVG(ra, { overlays: [{ values: rb, cls: 'cmp-b' }], ticks: 4 });
+      const rat = RowCard.chartSVG(ratio, { ticks: 3 });
+      const pa = ra[ra.length - 1] - 100, pb = rb[rb.length - 1] - 100;
+      const lead = pa - pb;
+      const n1 = A.stock.shortName || A.stock.symbol;
+      const n2 = B.stock.shortName || B.stock.symbol;
+      const sgn = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '%';
+
+      box.innerHTML =
+        `<div class="chwrap"><div class="rc-chart cmp">${main.svg}</div>` +
+        axisHTML(main.ticks, (v) => v.toFixed(0)) + '</div>' +
+        `<div class="legend">` +
+          `<span class="a"><i></i>${esc(n1)} <b>${esc(sgn(pa))}</b></span>` +
+          `<span class="b"><i></i>${esc(n2)} <b>${esc(sgn(pb))}</b></span>` +
+        `</div>` +
+        // The strip needs to say what it is where it is drawn. Its explanation
+        // is in the caption below, which on a laptop is under the fold — and an
+        // unlabelled second chart is a reader wondering what the third line is.
+        `<div class="strip-h">Ratio · <b>${esc(n1)}</b> against <b>${esc(n2)}</b>` +
+        `<span>above 100, ${esc(n1)} is ahead since the anchor</span></div>` +
+        `<div class="chwrap"><div class="rc-chart ratio">${rat.svg}</div>` +
+        axisHTML(rat.ticks, (v) => v.toFixed(0)) + '</div>' +
+        `<p class="cap2">Both rebased to <b>100</b> on <b>${esc(longDate(al.dates[0]))}</b>, the first of ` +
+        `<b>${al.dates.length}</b> sessions they share. Over that window <b>${esc(n1)}</b> returned ` +
+        `<b>${esc(sgn(pa))}</b> and <b>${esc(n2)}</b> <b>${esc(sgn(pb))}</b> — a gap of ` +
+        `<b>${esc(Math.abs(lead).toFixed(1))} points</b> in favour of ` +
+        `<b>${esc(lead >= 0 ? n1 : n2)}</b>. The lower line is the ratio between them: above 100, ` +
+        `${esc(n1)} is ahead of where it started against ${esc(n2)}.` +
+        (main.log ? ' The price axis is logarithmic over this range.' : '') +
+        `</p>`;
+    }
+
+    // ---- the ledger -----------------------------------------------------------
+    function ledger() {
+      const va = RowCard.fieldValues(A.stock);
+      const vb = RowCard.fieldValues(B.stock);
+      const cat = RowCard.fieldCatalogue();
+      const byGroup = new Map();
+      for (const f of cat) {
+        // The forward-returns group belongs to the screener's as-of mode; it is
+        // empty on every ordinary row and would be a block of dashes here.
+        if (f.group === 'fwd') continue;
+        const a = va[f.key], b = vb[f.key];
+        if (!a && !b) continue;                  // neither holds it — not a row
+        if (!byGroup.has(f.group)) byGroup.set(f.group, []);
+        byGroup.get(f.group).push({ f, a, b });
+      }
+      const L = RowCard.GROUP_LABELS || {};
+      const C = RowCard.GROUP_COLORS || {};
+      let rows = '';
+      for (const g of RowCard.GROUP_ORDER) {
+        const list = byGroup.get(g);
+        if (!list || !list.length) continue;
+        rows += `<tr class="grp"><th colspan="4" style="color:${esc(C[g] || 'var(--accent)')}">` +
+                `${esc(L[g] || g)}</th></tr>`;
+        for (const r of list) {
+          const d = diffOf(r.f.key, r.a, r.b);
+          const cell = (v) => v
+            ? `<td class="v ${esc(v.c || '')}">${esc(v.t)}</td>`
+            : '<td class="v na">—</td>';
+          rows += '<tr>' +
+            `<td class="k">${esc(r.f.label)}</td>` +
+            cell(r.a) +
+            `<td class="d${d && d.off ? ' off' : ''}"${d && d.why ? ` title="${esc(d.why)}"` : ''}>` +
+              `${d ? esc(d.t) : ''}</td>` +
+            cell(r.b) +
+            '</tr>';
+        }
+      }
+      return rows;
+    }
+
+    // ---- the mastheads --------------------------------------------------------
+    function mast(side, p) {
+      const s = p.stock;
+      const price = ok(s.price) ? curSym(s.currency) + s.price.toFixed(2) : '—';
+      const t = s.todayPct;
+      const chips = [s.sector, s.industry, s.capBand ? s.capBand + ' cap' : null, s.exchange]
+        .filter(Boolean).map((c) => `<span class="chip">${esc(c)}</span>`).join('');
+      const v = s.action || null;
+      return `<div class="bezel card"><div class="core mast ${side}">` +
+        `<div class="sym"><span class="tag"></span><b>${esc(s.symbol)}</b></div>` +
+        `<span class="co" title="${esc(s.name || '')}">${esc(s.name || '')}</span>` +
+        `<div class="px"><b>${esc(price)}</b><span class="${t == null ? 'na' : t >= 0 ? 'pos' : 'neg'}">` +
+          `${t == null ? '—' : (t >= 0 ? '+' : '') + t.toFixed(2) + '% today'}</span></div>` +
+        `<div class="chips">${chips}</div>` +
+        `<div class="verdict"><span class="v ${v && /Buy/.test(v) ? 'pos' : v && /Sell|Avoid/.test(v) ? 'neg' : ''}">` +
+          `${esc(v || 'No verdict')}</span>` +
+          `<span class="why">${esc(s.actionFlag || 'The rules could not read this row.')}</span></div>` +
+        `<a class="btn open" href="/stock/${encodeURIComponent(s.symbol)}">Open ${esc(s.symbol)}</a>` +
+        '</div></div>';
+    }
+
+    // ---- boot -----------------------------------------------------------------
+    async function load(sym) {
+      if (!sym) return null;
+      const r = await fetch(`/api/stock?symbol=${encodeURIComponent(sym)}`, { cache: 'no-store' });
+      if (r.status === 401) { location.href = '/login'; return null; }
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j || !j.stock) return { error: (j && j.error) || `Could not load ${sym}.`, symbol: sym };
+      return j;
+    }
+
+    (async () => {
+      const [ra, rb] = await Promise.all([load(symA), load(symB)]);
+      A = ra && !ra.error ? ra : null;
+      B = rb && !rb.error ? rb : null;
+
+      // The universe comes off whichever side loaded — /api/stock already holds
+      // the whole snapshot in memory to answer, so the list costs nothing there
+      // and a second endpoint for it would be a second thing to keep in step.
+      // With neither side chosen there is nothing to take it from, so the
+      // portfolio route supplies the symbols on its own.
+      if (A) universe = A.universe || [];
+      else if (B) universe = B.universe || [];
+      else {
+        const pr = await fetch('/api/portfolios', { cache: 'no-store' })
+          .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        universe = ((pr && pr.universe) || []).map((s) => ({ symbol: s, name: '', short: '' }));
+      }
+      fillPick($('aPick'), symA, symB);
+      fillPick($('bPick'), symB, symA);
+      $('swap').disabled = !(symA && symB);
+
+      const fail = [ra, rb].filter((x) => x && x.error);
+      if (fail.length) {
+        $('body').innerHTML = `<p class="note warn">${fail.map((f) =>
+          esc(f.symbol + ': ' + f.error)).join(' ')}</p>`;
+        if (!A || !B) return;
+      }
+      if (!A || !B) {
+        $('body').innerHTML = '<div class="empty">Pick ' + (!A && !B ? 'two stocks' : 'one more stock')
+          + ' above to compare them.</div>';
+        return;
+      }
+
+      document.title = `${A.stock.symbol} vs ${B.stock.symbol} — Tickr Lab`;
+
+      const notes = [];
+      if ((A.stock.currency || null) !== (B.stock.currency || null)) {
+        notes.push('<b>These two report in different currencies</b> — ' +
+          esc(A.stock.currency || '?') + ' and ' + esc(B.stock.currency || '?') +
+          '. Revenue, profit and every other absolute figure is in the company’s own currency, ' +
+          'so those differences are withheld rather than converted at a rate this app does not hold. ' +
+          'Percentages, multiples and market cap are unaffected — a cap comes back in USD for everyone.');
+      }
+      if (isBank(A.stock) || isBank(B.stock)) {
+        notes.push('One of these is a <b>financial</b>: gross margin and net cash do not mean for a ' +
+          'lender what they mean for a manufacturer, so those differences are withheld too.');
+      }
+      // Depth is not equal and a silent side-by-side implies it is.
+      const dA = A.stock.historyDays, dB = B.stock.historyDays;
+      if (ok(dA) && ok(dB) && Math.min(dA, dB) < 260) {
+        notes.push(`<b>${esc(Math.min(dA, dB) === dA ? A.stock.symbol : B.stock.symbol)}</b> holds only ` +
+          `${esc(String(Math.min(dA, dB)))} sessions of history, so its longer returns are blank and ` +
+          'the chart can only go back as far as it does.');
+      }
+
+      $('body').innerHTML =
+        `<div class="pair">${mast('a', A)}${mast('b', B)}</div>` +
+        (notes.length ? notes.map((n) => `<p class="note">${n}</p>`).join('') : '') +
+        '<section class="blk"><div class="sec-h"><h2>Price, rebased</h2><span class="spacer"></span>' +
+          `<span class="ranges">${RANGES.map((r) =>
+            `<button class="rng${r.id === range.id ? ' on' : ''}" data-r="${r.id}">${r.label}</button>`
+          ).join('')}</span></div><div id="chartBox"></div></section>` +
+        '<section class="blk"><div class="sec-h"><h2>Every field</h2></div>' +
+          '<div class="ledwrap"><table class="led"><thead><tr>' +
+            '<th>Field</th>' +
+            `<th><span class="s">${esc(A.stock.symbol)}</span></th>` +
+            '<th>Difference</th>' +
+            `<th><span class="s">${esc(B.stock.symbol)}</span></th>` +
+          '</tr></thead><tbody>' + ledger() + '</tbody></table></div>' +
+          '<p class="note">The middle column is <b>' + esc(A.stock.symbol) + ' against ' +
+          esc(B.stock.symbol) + '</b>: percentages in points, everything else as a relative ' +
+          'difference. It is deliberately not coloured and picks no winner — how far apart two ' +
+          'numbers are is a fact, which of them is better is not.</p>' +
+        '</section>';
+
+      document.querySelectorAll('.rng[data-r]').forEach((b) => b.addEventListener('click', () => {
+        range = RANGES.find((r) => r.id === b.dataset.r) || range;
+        try { localStorage.setItem('cmp.range', range.id); } catch { /* private window */ }
+        paintChart();
+      }));
+      paintChart();
+    })();
+  </script>
+</body>
+</html>
