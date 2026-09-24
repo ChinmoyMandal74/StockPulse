@@ -235,6 +235,83 @@ this list is the one place to look:
 
 ---
 
+## 9. A control plane for scheduled jobs — parked 2026-09-24
+
+The owner asked how hard a front end for the laptop's intraday job would be,
+then said they plan to move the nightly onto the laptop too and expect "more
+processes like this". After the measurements below they chose to **keep running
+the nightly by hand for now** and revisit. Nothing was built. This is here so
+the next attempt starts from the numbers rather than re-deriving them.
+
+### The live defect found on the way, which is independent of all of it
+
+**No SCHEDULED nightly has been recorded since 2026-09-20.** The four nights
+after it were manual rescues (#62/#63/#64 on the 21st, #80 on the 22nd, #94 on
+the 23rd, #113 on the 24th). Either GitHub is not firing inside the 16:00 New
+York window, or it is firing late and the timezone guard is correctly refusing
+— both are the scheduler failing.
+
+**And the watchdog cannot see it.** `nightVerdicts()` judges a night by the
+newest nightly-kind run started that day, **any trigger — a workflow_dispatch
+counts**. So a human noticing and re-running by hand makes a dead scheduler
+report a good night. It cannot distinguish "the schedule worked" from "someone
+rescued it". That blind spot matters more, not less, on a laptop.
+
+Fixing it is small and does not need the rest of this entry: judge the SCHEDULE
+separately from the DATA, so a manual run still counts the night's data as
+present while the missed firing is reported on its own.
+
+### Why the nightly is the wrong job to move first
+
+Measured from `refresh_runs` on 2026-09-24:
+
+| | intraday slot | nightly |
+|---|---|---|
+| duration | **2.5 min** | **25–72 min**, 19–22 rounds |
+| a missed one | invisible, self-heals next slot | **permanent** |
+
+`fundamentals_history` cannot be backfilled — the provider only ever returns
+today's numbers — so a night not recorded is gone. The laptop would have to stay
+awake, plugged in and online **ten to thirty times longer**, starting at 4:15pm,
+which is when a laptop is most likely to be shut and carried somewhere. 4 of the
+last 11 nightlies already ended `abandoned`.
+
+**The proposal was not to choose.** Let GitHub and the laptop both fire and let
+the run record settle it: the route already answers `{done:true}` at once for a
+run that is already complete (the 2026-09-19 fix), so the loser costs one HTTP
+call. Two weak hosts racing beat either alone, and neither is then a single
+point of failure.
+
+### The shape, if it is built
+
+Not N toggles — a registry, of which the off switch is the least important part:
+
+- a **jobs table** (id, name, enabled, expected cadence), so a new job is a row;
+- **one gate** — the runner asks "should I run?" and gets yes or a reason, which
+  is the shape `/api/cron/intraday` already has with four gates (weekend,
+  9:38–16:00 New York, another refresh running, NYSE closed). A fifth for
+  "paused" belongs there, before the NYSE check, which costs a credit;
+- a **heartbeat keyed on the SCHEDULE rather than on the data** — the defect
+  above;
+- one page: last seen, next expected, on/off, recent outcomes. `/refreshes` is
+  most of it already.
+
+Roughly half a day for registry, gate and page. **The off switch is the easy
+part; noticing silence is the hard one**, and it is the only part that pays for
+itself on a laptop.
+
+### What already works and needs nothing
+
+Task Scheduler can disable the task today — `Disable-ScheduledTask -TaskName
+"TickrLab intraday prices"`, or `.\intraday-task.ps1 -Remove`. It only works at
+the machine, which is the single reason to want a server-side flag at all.
+
+**Do NOT build** a web UI that drives the Windows task. It needs an agent on the
+laptop polling the cloud for commands: more moving parts and a new security
+surface, to duplicate what a server-side gate does better.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
