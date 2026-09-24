@@ -3140,6 +3140,115 @@ async function fetchNasdaqExchange(exchange) {
   })).filter((r) => r.symbol);
 }
 
+// ---- today's most active, from Yahoo --------------------------------------
+// The stored NASDAQ file carries a `volume` column, so "most active" looked
+// like a sort we already had. It is not, for two measured reasons.
+//
+// FRESHNESS: that file is refreshed by hand, and on 2026-09-24 it was 9.9 days
+// old — an "active today" ranking off a ten-day-old number is a wrong answer
+// wearing a useful label.
+//
+// AND SHARE VOLUME IS THE WRONG MEASURE. Measured the same day, top 100 of
+// each: NASDAQ by share volume gives 20 names under $1, 39 under $5 and 35
+// under a $2B cap — the penny-stock end, which is the category the universe
+// deliberately purged. Yahoo's most_actives gives 0 under $1 and 0 under $2B,
+// every row `quoteType: EQUITY`, every row USD on a US exchange. The two
+// top-100s share only 65 names, so this is a different list and not a filter
+// of the same one.
+//
+// It is one unauthenticated call with no crumb — checked, since Yahoo has put
+// neighbouring endpoints behind one — and `count=250` returns the whole list
+// (166 today), so there is no paging.
+const YAHOO_ACTIVE_URL = 'https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved' +
+  '?scrIds=most_actives&count=250&formatted=false';
+const YAHOO_TIMEOUT_MS = 20000;
+// Undocumented and outside our control, so the page must not go blank when it
+// changes shape: a short cache, and a failure that degrades to a sentence.
+const ACTIVE_TTL_MS = 60000;
+let activeCache = { at: 0, payload: null };
+
+const yNum = (v) => {
+  const n = Number(v && typeof v === 'object' && 'raw' in v ? v.raw : v);
+  return Number.isFinite(n) ? n : null;
+};
+
+// THE LISTING IS THE TEST, NOT THE DOMICILE — and this is the first place in
+// the app that can actually apply it. The bulk-add path can only warn when a
+// symbol is ABSENT from the NASDAQ file, never when it is present but resolves
+// to a foreign exchange, which is exactly how BBX arrived as an Australian
+// listing. Yahoo names the exchange, so a non-US one is dropped here.
+const usListed = (ex) => /^(Nasdaq|NYSE)/i.test(String(ex || ''));
+
+async function fetchMostActive() {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), YAHOO_TIMEOUT_MS);
+  let body;
+  try {
+    const res = await fetch(YAHOO_ACTIVE_URL, {
+      headers: { 'User-Agent': NASDAQ_UA, Accept: 'application/json', 'Accept-Language': 'en-US,en;q=0.9' },
+      signal: ac.signal,
+    });
+    if (!res.ok) throw new Error(`Yahoo returned ${res.status}`);
+    body = await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+  const r = body && body.finance && body.finance.result && body.finance.result[0];
+  const quotes = (r && r.quotes) || [];
+  if (!quotes.length) throw new Error('Yahoo returned no rows');
+
+  // Counted separately rather than summed, because "not a company" and "not
+  // listed here" are different facts and the page says which.
+  let notEquity = 0, notUs = 0;
+  const rows = [];
+  let asOf = null;
+  for (const q of quotes) {
+    if (q.quoteType !== 'EQUITY') { notEquity++; continue; }
+    const ex = q.fullExchangeName || q.exchange;
+    if (!usListed(ex) || (q.currency && q.currency !== 'USD')) { notUs++; continue; }
+    const t = yNum(q.regularMarketTime);
+    if (t && (!asOf || t > asOf)) asOf = t;
+    const price = yNum(q.regularMarketPrice);
+    const volume = yNum(q.regularMarketVolume);
+    rows.push({
+      symbol: String(q.symbol || '').trim().toUpperCase().slice(0, 20),
+      // Deliberately the SAME field names the stored listing uses, so the page
+      // sorts, filters, ticks and adds these rows with no second code path.
+      exchange: nasdaqText(ex),
+      name: nasdaqText(q.shortName || q.longName),
+      last_sale: price,
+      net_change: yNum(q.regularMarketChange),
+      pct_change: yNum(q.regularMarketChangePercent),
+      market_cap: yNum(q.marketCap),
+      country: null, ipo_year: null, sector: null, industry: null,
+      volume,
+      // The honest ranking, and the reason this list is worth having: it is
+      // what separates a company from a penny stock trading hands all day.
+      dollar_volume: price != null && volume != null ? Math.round(price * volume) : null,
+      url: null,
+    });
+  }
+  if (!rows.length) throw new Error('Yahoo returned rows but none were US-listed equities');
+  return { rows, asOf: asOf ? asOf * 1000 : null, dropped: { notEquity, notUs }, source: 'Yahoo Finance' };
+}
+
+app.get('/api/active', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const fresh = req.query.fresh === '1';
+  if (!fresh && activeCache.payload && Date.now() - activeCache.at < ACTIVE_TTL_MS) {
+    return res.json({ ...activeCache.payload, cached: true });
+  }
+  try {
+    const payload = await fetchMostActive();
+    activeCache = { at: Date.now(), payload };
+    res.json({ ...payload, cached: false });
+  } catch (err) {
+    // A source we do not control must not take the page down: say what failed
+    // and let the stored listing still be usable beside it.
+    res.status(502).json({ error: `Could not read the most-active list: ${err.message}` });
+  }
+}));
+
 // The whole list, for a page that filters in the browser. ~7,100 rows and
 // about 1.2 MB — heavy for a table row, trivial for one admin page load, and
 // it makes every filter on it instant.
@@ -3319,6 +3428,17 @@ app.post('/api/universe/bulk', requireAdmin, route(async (req, res) => {
     try {
       const [names, listings] = await Promise.all([readNames(), store.readNasdaqListings()]);
       const bySym = new Map(listings.map((l) => [nasdaqToSymbol(l.symbol), l.name]));
+      // A stock added from the LIVE most-active list is not in that file, so it
+      // would arrive as a bare ticker until the next profile pull named it.
+      // The names came from the provider server-side and are already in hand;
+      // the cache object is kept past its TTL (only reads check the age), so it
+      // still answers for a page that has been open a while. Second, not first:
+      // the stored listing stays the authority where it has an entry.
+      if (activeCache.payload) {
+        for (const r of activeCache.payload.rows) {
+          if (r.name && !bySym.has(r.symbol)) bySym.set(r.symbol, r.name);
+        }
+      }
       const fill = {};
       for (const sym of added) {
         const nm = cleanListingName(bySym.get(sym));

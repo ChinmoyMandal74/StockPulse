@@ -144,6 +144,10 @@
     </div>
 
     <div class="bezel bar"><div class="core">
+      <select id="src" aria-label="Which list">
+        <option value="stored">All US listings (stored)</option>
+        <option value="active">Most active today (live)</option>
+      </select>
       <input type="search" id="q" placeholder="Symbol or name" aria-label="Search symbol or name" />
       <select id="fEx" aria-label="Exchange"><option value="">All exchanges</option></select>
       <select id="fCap" aria-label="Minimum market cap">
@@ -256,6 +260,11 @@
       ['last_sale', 'Last', ''],
       ['pct_change', 'Chg', ''],
       ['volume', 'Volume', ''],
+      // Volume x price, and the column the most-active list is really about:
+      // ranked by shares alone the busiest names are sub-dollar stocks (20 of
+      // the top 100 under $1, measured 2026-09-24). Derived for BOTH sources
+      // so the two rank on the same measure.
+      ['dollar_volume', '$ Volume', ''],
       ['sector', 'Sector (NASDAQ)', 'l tx'],
       ['industry', 'Industry (NASDAQ)', 'l tx'],
       ['ipo_year', 'IPO', ''],
@@ -344,6 +353,7 @@
           `<td>${price(r.last_sale)}</td>` +
           `<td class="${chg == null ? '' : chg < 0 ? 'neg' : 'pos'}">${pct(chg)}</td>` +
           `<td>${num(r.volume)}</td>` +
+          `<td>${money(r.dollar_volume)}</td>` +
           `<td class="l tx" title="${we(r.sector || '')}">${we(r.sector || '—')}</td>` +
           `<td class="l tx" title="${we(r.industry || '')}">${we(r.industry || '—')}</td>` +
           `<td>${r.ipo_year || '—'}</td>` +
@@ -429,13 +439,27 @@
       fill('fInd', uniq((r) => r.industry), 'All industries');
     }
 
-    function paintStats(meta) {
+    function paintStats(meta, live) {
       $('sTotal').textContent = rows.length.toLocaleString();
       $('sBig').textContent = rows.filter((r) => r.market_cap >= 1e8).length.toLocaleString();
-      const at = meta && meta.fetchedAt;
+      // The live list is stamped by the market, the stored one by the last
+      // pull. Both answer "how old is this", which for a most-active ranking
+      // is the question that decides whether it means anything.
+      const at = live ? live.asOf : (meta && meta.fetchedAt);
       $('sWhen').textContent = at
         ? new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
         : 'never';
+      if (live) {
+        const d = live.dropped || {};
+        // Counted apart, because "not a company" and "not listed here" are
+        // different facts and folding them together hides which rule fired.
+        const bits = [];
+        if (d.notEquity) bits.push(`${d.notEquity} not equities`);
+        if (d.notUs) bits.push(`${d.notUs} not US-listed`);
+        say(`${rows.length} most active from ${live.source}` +
+          (bits.length ? ` — ${bits.join(', ')} dropped` : '') +
+          (live.cached ? ' (cached, up to a minute old)' : ''), 'good');
+      }
     }
 
     // ---- the refresh: one exchange per request ----------------------------
@@ -445,6 +469,26 @@
     let busy = false;
     async function refreshAll() {
       if (busy) return;
+      // The live list is one call and is already current; "refresh" there means
+      // skip the cache, not run the three-exchange pull.
+      if (src() === 'active') {
+        busy = true;
+        $('refreshBtn').disabled = true;
+        try {
+          const d = await api('GET', '/api/active?fresh=1');
+          rows = d.rows || [];
+          window.__exchanges = [...new Set(rows.map((r) => r.exchange).filter(Boolean))].sort();
+          paintFilters();
+          paintStats(null, d);
+          paint();
+        } catch (err) {
+          say(err.message, 'bad');
+        } finally {
+          busy = false;
+          $('refreshBtn').disabled = false;
+        }
+        return;
+      }
       busy = true;
       $('refreshBtn').disabled = true;
       let done = 0, total = 0, meta = null, runId = null;
@@ -472,9 +516,46 @@
       }
     }
 
+    // WHICH LIST. Two sources, one table: the live rows arrive under the same
+    // field names as the stored ones, so the sort, the filters, the tick boxes,
+    // the cost preview and the add all work on either with no second path.
+    const src = () => $('src').value;
+
+    // The live list carries no sector, industry or listing year -- Yahoo's
+    // screener does not return them. A control that silently matches nothing
+    // is worse than one that is visibly off, so they are disabled and say why.
+    const LIVE_BLIND = ['fSec', 'fInd', 'fIpo'];
+    function applySource() {
+      const live = src() === 'active';
+      for (const id of LIVE_BLIND) {
+        const el = $(id);
+        el.disabled = live;
+        if (live) el.value = '';
+        el.title = live ? 'The live most-active list does not carry this field' : '';
+      }
+      $('refreshBtn').lastChild.nodeValue = live ? 'Refresh most active' : 'Refresh from NASDAQ';
+      $('sTotal').nextElementSibling.textContent = live ? 'Most active today' : 'Listings stored';
+    }
+
     async function load() {
+      applySource();
+      if (src() === 'active') {
+        const d = await api('GET', '/api/active');
+        rows = d.rows || [];
+        // Every exchange the live rows actually name, so the filter still works.
+        window.__exchanges = [...new Set(rows.map((r) => r.exchange).filter(Boolean))].sort();
+        paintFilters();
+        paintStats(null, d);
+        paint();
+        return;
+      }
       const d = await api('GET', '/api/nasdaq');
-      rows = d.rows || [];
+      // Derived here rather than stored: it is price x volume and both are
+      // already on the row, so a column costs nothing and cannot go stale
+      // separately from the two numbers it comes from.
+      rows = (d.rows || []).map((r) => ({ ...r,
+        dollar_volume: r.last_sale != null && r.volume != null
+          ? Math.round(r.last_sale * r.volume) : null }));
       window.__exchanges = d.exchanges;
       paintFilters();
       paintStats(d.meta);
@@ -492,6 +573,19 @@
         paint();
       });
       $('more').addEventListener('click', () => { shown += 500; paint(); });
+      // ?src=active is how the admin console links straight to the live list.
+      if (new URLSearchParams(location.search).get('src') === 'active') {
+        $('src').value = 'active';
+        sortKey = 'dollar_volume';   // or the deep link lands sorted by cap
+      }
+      $('src').addEventListener('change', async () => {
+        selected.clear();           // a tick means a row, and the rows changed
+        shown = 500;
+        sortKey = src() === 'active' ? 'dollar_volume' : 'market_cap';
+        sortDir = -1;
+        say('Loading…');
+        try { await load(); } catch (err) { rows = []; paint(); say(err.message, 'bad'); }
+      });
       $('refreshBtn').addEventListener('click', refreshAll);
       $('selAdd').addEventListener('click', addSelected);
       $('selClear').addEventListener('click', () => { selected.clear(); paint(); });
