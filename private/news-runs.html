@@ -173,6 +173,7 @@
     <div class="hist-bar">
       <h2>History</h2>
       <select id="fTrig" aria-label="Trigger"><option value="">Every trigger</option>
+        <option value="scheduled">Schedule</option><option value="manual">Refresh news</option>
         <option value="refresh">Refresh rounds</option><option value="page">Stock pages</option></select>
       <select id="fStatus" aria-label="Outcome"><option value="">Every outcome</option>
         <option value="complete">complete</option><option value="partial">partial</option>
@@ -243,8 +244,13 @@
       return h < 1 ? Math.max(1, Math.round(h * 60)) + ' min ago' : h < 48 ? Math.round(h) + ' h ago' : Math.round(h / 24) + ' days ago';
     };
     const badge = (st) => `<span class="badge s-${we(st)}">${we(st)}</span>`;
+    // 'manual' has been falling through to "Refresh round" since the button
+    // stopped riding a refresh, which is a batch labelled as the thing it was
+    // deliberately taken out of. 'scheduled' would have joined it.
     const triggerLabel = (r) => r.trigger === 'page' ? 'Stock page'
-      : (REFRESH_KINDS[r.refreshKind] ? REFRESH_KINDS[r.refreshKind] + ' round' : 'Refresh round');
+      : r.trigger === 'scheduled' ? 'Schedule'
+        : r.trigger === 'manual' ? 'Refresh news'
+          : (REFRESH_KINDS[r.refreshKind] ? REFRESH_KINDS[r.refreshKind] + ' round' : 'Refresh round');
 
     let runs = [];
 

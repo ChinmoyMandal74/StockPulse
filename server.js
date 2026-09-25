@@ -7410,31 +7410,36 @@ async function runNewsBatch(picksIn, meta) {
 // rather than the whole universe: the fetches are a dozen network round trips
 // and a serverless function must not be asked to hold hundreds of them. The
 // caller loops, which is the same shape the price refreshes use.
-app.post('/api/news/refresh', requireAdmin, route(async (req, res) => {
-  if (NEWS_OFF) return res.status(400).json({ error: 'The news provider is switched off.' });
-  const size = Math.max(1, Math.min(40, Number(req.query.n) || NEWS_TOPUP_PER_REFRESH));
+// WHO IS STALE, AND IN WHAT ORDER — one definition, because two callers now
+// ask: the admin button on /news-runs and the laptop's schedule. The loop's
+// termination depends on the picker and the `remaining` count using the SAME
+// test, so two copies of it is the one duplication here that could hang a run
+// rather than merely drift.
+//
+// Staleness is purely the CLOCK. Holding no headlines is a reason to be
+// fetched EARLIER (the `order` boost) and never a reason to be fetched again
+// in the same pass — a stock the provider has nothing on would otherwise be
+// re-picked forever while the run reported itself done.
+async function newsStalePlan(windowMs) {
   const universe = await store.readUniverse();
-  if (!universe.length) return res.json({ done: true, fetched: 0, remaining: 0 });
-
   const names = await readNames().catch(() => ({}));
   const state = await store.readNewsState();
   let held = {};
   try { held = (await store.newsHoldings()).perSymbol; } catch { /* plain stalest order */ }
-  // Same rule the refresh used: a stock holding nothing whose fetch is past the
-  // TTL goes to the front, so an empty feed is retried rather than waiting its
-  // turn with nothing to show.
   const order = { ...state };
   for (const sym of universe) {
-    if (!held[sym] && state[sym] && Date.now() - state[sym] > NEWS_TTL_MS) order[sym] = 0;
+    if (!held[sym] && state[sym] && Date.now() - state[sym] > windowMs) order[sym] = 0;
   }
-  // Staleness is purely the CLOCK, and must be the same test the `remaining`
-  // count uses below or the loop cannot terminate: holding no headlines is a
-  // reason to be fetched EARLIER (the `order` boost above), never a reason to
-  // be fetched again in the same pass -- a stock the provider has nothing on
-  // would otherwise be re-picked forever while the run reported itself done.
-  const cutoff = Date.now() - NEWS_TTL_MS;
+  const cutoff = Date.now() - windowMs;
   const isStale = (sym, clock) => !clock[sym] || clock[sym] < cutoff;
-  const stale = universe.filter((sym) => isStale(sym, state));
+  return { universe, names, order, isStale, stale: universe.filter((sym) => isStale(sym, state)) };
+}
+
+app.post('/api/news/refresh', requireAdmin, route(async (req, res) => {
+  if (NEWS_OFF) return res.status(400).json({ error: 'The news provider is switched off.' });
+  const size = Math.max(1, Math.min(40, Number(req.query.n) || NEWS_TOPUP_PER_REFRESH));
+  const { universe, names, order, isStale, stale } = await newsStalePlan(NEWS_TTL_MS);
+  if (!universe.length) return res.json({ done: true, fetched: 0, remaining: 0 });
   if (!stale.length) return res.json({ done: true, fetched: 0, remaining: 0, universe: universe.length });
 
   const pick = News.pickStalest(stale, order, size);
@@ -7456,6 +7461,65 @@ app.post('/api/news/refresh', requireAdmin, route(async (req, res) => {
     remaining: left,
     universe: universe.length,
     runId: (out && out.runId) || null,
+  });
+}));
+
+// The same batch, asked for by a scheduler instead of a person (2026-09-25,
+// owner's request: three times a day from the laptop, weekends included).
+//
+// A SEPARATE ROUTE RATHER THAN A SESSION, for the reason the nightly one
+// records: the secret satisfies this one route, so a leak cannot delete a
+// portfolio. It is deliberately NOT admin.
+//
+// NO MARKET-HOURS GATE, unlike the intraday one. Headlines are published at
+// weekends and in the evening, the provider is free and keyless, and this
+// costs no Twelve Data credits — so there is nothing for a clock to protect
+// and a gate would only make a slot the owner asked for silently do nothing.
+//
+// ONE BATCH PER CALL, and the caller loops. A serverless function must not be
+// asked to hold a thousand network fetches, which is the whole reason the
+// admin page loops too; the laptop is simply a second thing that can.
+app.all('/api/cron/news', route(async (req, res) => {
+  if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'GET or POST.' });
+  if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
+  const dry = req.query.dry === '1';
+  if (NEWS_OFF) return res.json({ ok: true, ran: false, done: true, reason: 'the news provider is switched off', dry });
+
+  // The window is a PARAMETER because the schedule and the app want different
+  // things: the stock page's six hours is "fresh enough to show you", while
+  // three slots a day at 8, 1 and 5 are four to five hours apart — at six
+  // hours the middle slot would find nothing stale and quietly do nothing.
+  const hours = Math.max(1, Math.min(72, Number(req.query.hours) || 6));
+  const size = Math.max(1, Math.min(40, Number(req.query.n) || NEWS_TOPUP_PER_REFRESH));
+  const { universe, names, order, isStale, stale } = await newsStalePlan(hours * 3600 * 1000);
+
+  if (dry) {
+    return res.json({ ok: true, ran: false, dry, wouldRun: stale.length > 0,
+      universe: universe.length, stale: stale.length, size, hours,
+      batches: Math.ceil(stale.length / size) });
+  }
+  if (!universe.length) return res.json({ ok: true, ran: false, done: true, reason: 'no stocks yet' });
+  if (!stale.length) {
+    return res.json({ ok: true, ran: false, done: true, remaining: 0,
+      reason: `nothing fetched longer ago than ${hours}h`, universe: universe.length });
+  }
+
+  const pick = News.pickStalest(stale, order, size);
+  const out = await runNewsBatch(
+    pick.map((sym) => ({ symbol: sym, name: names[sym] && (names[sym].shortName || names[sym].name) })),
+    { trigger: 'scheduled', actor: 'news schedule', refreshRunId: null });
+  // Re-read the clock rather than assuming the batch moved it: a symbol the
+  // provider refused is still stale, and counting it as done is how a loop
+  // reports itself finished over work it never did.
+  const after = await store.readNewsState();
+  const left = universe.filter((sym) => isStale(sym, after)).length;
+  const rs = (out && out.results) || [];
+  res.json({
+    ok: true, ran: true, done: left === 0,
+    fetched: pick.length,
+    served: rs.filter((x) => x.ok).length,
+    added: rs.reduce((n, x) => n + (x.added || 0), 0),
+    remaining: left, universe: universe.length, runId: (out && out.runId) || null,
   });
 }));
 
