@@ -82,77 +82,95 @@ function say(line) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// HOW THIS EXITS, because it bit once and the symptom was a lie. Calling
+// process.exit() while a fetch's socket is still closing crashes Node on
+// Windows -- "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)" -- and
+// the scheduler then records 127 for a run that did its work perfectly. So
+// nothing here calls process.exit: `Stop` carries the code up to one catch,
+// which sets process.exitCode and returns. Measured: Node's keep-alive sockets
+// do not hold the loop open, so the process still ends in well under a second.
+class Stop extends Error {
+  constructor(code) { super('stop'); this.code = code; }
+}
+
 (async () => {
-  const secret = fromEnvFile('CRON_SECRET');
-  const base = (fromEnvFile('APP_URL') || 'https://www.tickrlab.com').replace(/\/+$/, '');
-  if (!secret) {
-    say('FAILED  CRON_SECRET is not in .env -- copy it from the Vercel project settings.');
-    process.exit(1);
-  }
-
-  // One call. Returns the parsed body, or exits -- an unreachable server or a
-  // refused secret is the same answer whichever round hits it.
-  async function call(query) {
-    const url = `${base}/api/cron/intraday${query}`;
-    // A round is minutes of work and the platform kills the function at about
-    // 300s; a ceiling above that lets the scheduler's own next firing find
-    // this one still waiting.
-    const signal = AbortSignal.timeout(330000);
-    const t0 = Date.now();
-    let res, body;
-    try {
-      res = await fetch(url, { method: 'GET', signal, headers: { Authorization: 'Bearer ' + secret } });
-      body = await res.text();
-    } catch (e) {
-      say(`FAILED  could not reach ${base} -- ${e.name === 'TimeoutError' ? 'timed out' : e.message}`);
-      process.exit(1);
+  try {
+    const secret = fromEnvFile('CRON_SECRET');
+    const base = (fromEnvFile('APP_URL') || 'https://www.tickrlab.com').replace(/\/+$/, '');
+    if (!secret) {
+      say('FAILED  CRON_SECRET is not in .env -- copy it from the Vercel project settings.');
+      throw new Stop(1);
     }
-    const secs = ((Date.now() - t0) / 1000).toFixed(1);
-    let j = null;
-    try { j = JSON.parse(body); } catch { /* an HTML gateway page is not JSON */ }
-    if (res.status === 401) {
-      say('FAILED  the server refused the secret (401) -- CRON_SECRET does not match production.');
-      process.exit(1);
-    }
-    return { res, j, body, secs };
-  }
 
-  // PLAN. The dry call runs every gate and reports how many rounds a lap takes.
-  const plan = await call('?dry=1');
-  if (!plan.res.ok || !plan.j) {
-    say(`FAILED  HTTP ${plan.res.status} in ${plan.secs}s -- ${String(plan.body).slice(0, 120)}`);
-    process.exit(1);
-  }
-  if (DRY) {
-    if (plan.j.wouldRun) say(`would run  (${plan.j.ny}) -- ${plan.j.rounds} round(s) for ${plan.j.total} stocks, dry`);
-    else say(`skipped    ${plan.j.reason}`);
-    process.exit(0);
-  }
-  if (!plan.j.wouldRun) { say(`skipped    ${plan.j.reason}`); process.exit(0); }
-
-  const rounds = Math.min(MAX_ROUNDS, Math.max(1, Number(plan.j.rounds) || 1));
-  let runId = null;
-  let served = 0;
-
-  for (let i = 1; i <= rounds; i++) {
-    // The FULL round is always last, so the snapshot it writes is built on top
-    // of the bars every light round before it has already archived.
-    const light = i < rounds;
-    const q = `?${light ? 'light=1' : ''}${runId ? `${light ? '&' : ''}run=${runId}` : ''}`;
-    const { res, j, body, secs } = await call(q.length > 1 ? q : '');
-    if (!res.ok || !j) {
-      say(`FAILED  round ${i}/${rounds} HTTP ${res.status} in ${secs}s -- ${String(body).slice(0, 120)}`);
-      process.exit(1);
+    // One call. Returns the parsed body, or exits -- an unreachable server or a
+    // refused secret is the same answer whichever round hits it.
+    async function call(query) {
+      const url = `${base}/api/cron/intraday${query}`;
+      // A round is minutes of work and the platform kills the function at about
+      // 300s; a ceiling above that lets the scheduler's own next firing find
+      // this one still waiting.
+      const signal = AbortSignal.timeout(330000);
+      const t0 = Date.now();
+      let res, body;
+      try {
+        res = await fetch(url, { method: 'GET', signal, headers: { Authorization: 'Bearer ' + secret } });
+        body = await res.text();
+      } catch (e) {
+        say(`FAILED  could not reach ${base} -- ${e.name === 'TimeoutError' ? 'timed out' : e.message}`);
+        throw new Stop(1);
+      }
+      const secs = ((Date.now() - t0) / 1000).toFixed(1);
+      let j = null;
+      try { j = JSON.parse(body); } catch { /* an HTML gateway page is not JSON */ }
+      if (res.status === 401) {
+        say('FAILED  the server refused the secret (401) -- CRON_SECRET does not match production.');
+        throw new Stop(1);
+      }
+      return { res, j, body, secs };
     }
-    if (j.runId) runId = j.runId;
-    if (j.ran === false) { say(`skipped    ${j.reason} (round ${i}/${rounds})`); process.exit(0); }
-    if (light) {
-      served += Number(j.served) || 0;
-      say(`priced     round ${i}/${rounds} in ${secs}s -- ${j.served} symbols, ${j.priced}/${j.total} through the universe`);
-      await sleep(GAP_MS);
-    } else {
-      say(`REFRESHED  round ${i}/${rounds} in ${secs}s -- rebuilt${served ? `, ${served} priced by the light rounds before it` : ''}`);
+
+    // PLAN. The dry call runs every gate and reports how many rounds a lap takes.
+    const plan = await call('?dry=1');
+    if (!plan.res.ok || !plan.j) {
+      say(`FAILED  HTTP ${plan.res.status} in ${plan.secs}s -- ${String(plan.body).slice(0, 120)}`);
+      throw new Stop(1);
     }
+    if (DRY) {
+      if (plan.j.wouldRun) say(`would run  (${plan.j.ny}) -- ${plan.j.rounds} round(s) for ${plan.j.total} stocks, dry`);
+      else say(`skipped    ${plan.j.reason}`);
+      throw new Stop(0);
+    }
+    if (!plan.j.wouldRun) { say(`skipped    ${plan.j.reason}`); throw new Stop(0); }
+
+    const rounds = Math.min(MAX_ROUNDS, Math.max(1, Number(plan.j.rounds) || 1));
+    let runId = null;
+    let served = 0;
+
+    for (let i = 1; i <= rounds; i++) {
+      // The FULL round is always last, so the snapshot it writes is built on top
+      // of the bars every light round before it has already archived.
+      const light = i < rounds;
+      const q = `?${light ? 'light=1' : ''}${runId ? `${light ? '&' : ''}run=${runId}` : ''}`;
+      const { res, j, body, secs } = await call(q.length > 1 ? q : '');
+      if (!res.ok || !j) {
+        say(`FAILED  round ${i}/${rounds} HTTP ${res.status} in ${secs}s -- ${String(body).slice(0, 120)}`);
+        throw new Stop(1);
+      }
+      if (j.runId) runId = j.runId;
+      if (j.ran === false) { say(`skipped    ${j.reason} (round ${i}/${rounds})`); throw new Stop(0); }
+      if (light) {
+        served += Number(j.served) || 0;
+        say(`priced     round ${i}/${rounds} in ${secs}s -- ${j.served} symbols, ${j.priced}/${j.total} through the universe`);
+        await sleep(GAP_MS);
+      } else {
+        say(`REFRESHED  round ${i}/${rounds} in ${secs}s -- rebuilt${served ? `, ${served} priced by the light rounds before it` : ''}`);
+      }
+    }
+    throw new Stop(0);
+  } catch (err) {
+    if (err instanceof Stop) { process.exitCode = err.code; return; }
+    // Anything unforeseen is still a failure the scheduler should show red.
+    say('FAILED  ' + (err && err.message ? err.message : String(err)));
+    process.exitCode = 1;
   }
-  process.exit(0);
 })();
