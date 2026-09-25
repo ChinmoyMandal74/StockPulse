@@ -522,6 +522,18 @@
 
       <button class="btn" id="dlBtn" title="Render this card to a PNG at its exact pixel size">Download PNG</button>
       <p class="hint" id="dlMsg"></p>
+
+      <!-- The same shot, kept rather than downloaded: it becomes a blog draft
+           with the picture in the right-hand rail and prompts down the left.
+           Admin only — the two routes behind it are requireAdmin, so a member
+           who found the button would be refused; hiding it is so nobody is
+           offered something that cannot work. NOT a "post" in this page's other
+           sense: everything named post* here is a saved CARD PRESET. -->
+      <div id="blogBox" hidden>
+        <button class="btn" id="blogBtn" title="Store this card as a picture and start a blog draft around it">Post to blog</button>
+        <p class="hint" id="blogMsg"></p>
+      </div>
+
       <button class="btn" id="reloadBtn">Re-pull tonight's data</button>
 
       <!-- Saved posts: the card as it stands, named and kept, so it can be
@@ -964,6 +976,133 @@
     }
     $('dlBtn').addEventListener('click', downloadPng);
 
+    // ---- Post to blog -------------------------------------------------------
+    // The same rasteriser, stored instead of downloaded. Three steps and each
+    // one already existed: shoot the artboard, put the bytes in `post_images`
+    // (content-hashed, so clicking twice on an unchanged card stores one row),
+    // and write a DRAFT around the URL that comes back.
+    //
+    // A DRAFT, never published. The card is the finished half; the words are
+    // not written yet, and nothing here should be able to put a page carrying
+    // "One sentence on…" in front of a reader.
+    const blogSay = (t) => { $('blogMsg').textContent = t; };
+
+    const blobToDataUrl = (blob) => new Promise((ok, no) => {
+      const fr = new FileReader();
+      fr.onload = () => ok(fr.result);
+      fr.onerror = () => no(new Error('the rendered image could not be read back.'));
+      fr.readAsDataURL(blob);
+    });
+
+    // The same shape as the server's `slugify`, and deliberately conservative:
+    // what this produces is already `[a-z0-9-]`, so the server slugifying it
+    // again cannot change it. 72 rather than 80 leaves room for the `-2` a
+    // second card on the same day takes.
+    const blogSlug = (s) => String(s || '').toLowerCase().normalize('NFKD')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 72);
+
+    // THE CARD'S OWN DATE, read off what it drew rather than computed a second
+    // time here. A card is dated by its DATA — a Saturday card carries
+    // Thursday's date — so a title derived from `new Date()` would disagree
+    // with the picture directly beneath it. A card that prints no date (the
+    // avatar) simply contributes none.
+    function cardDate() {
+      const el = $('stage').querySelector('.s-date');
+      return el ? String(el.textContent).split('·')[0].trim() : '';
+    }
+
+    // The card's own headline, for the figure's caption — NOT the post title,
+    // which is the card's name and its date. A caption repeating the heading
+    // directly above it is the duplication this blog has been pulled up on
+    // before, and it wastes the one line that could say what the picture shows.
+    //
+    // innerText, never textContent: a `<br>` contributes no whitespace to
+    // textContent, so a two-line headline comes back as one run-on word.
+    function cardHeadline() {
+      const el = $('stage').querySelector('.s-title');
+      const t = el ? String(el.innerText || '').replace(/\s+/g, ' ').trim() : '';
+      return t.slice(0, 90);
+    }
+
+    // The picture is the FIRST block and carries NO width word, which on the
+    // post page means the right-hand rail at its full width: the two-column
+    // shape, image on the right, prose running down the left beside it. The
+    // alt text becomes the figure's caption, so it names the card rather than
+    // describing it to nobody.
+    //
+    // Everything under it is a PROMPT. The card already carries the numbers;
+    // what they were worth saying is the half only a person can write, and the
+    // headings are the ones the blog's own templates use so a studio draft and
+    // a hand-started post read alike. The closing caveat is the house line,
+    // which is the one part that should survive being edited.
+    const blogBody = (url, caption) =>
+      `![${caption}](${url})\n\n`
+      + '## What this shows\n\nOne sentence on what the card is ranking, over what window, '
+      + 'and which list it was drawn from.\n\n'
+      + '## What stands out\n\n- **NAME** — why this one is worth a second look\n'
+      + '- **NAME** — and this one\n\n'
+      + '## What it does not tell you\n\nThe honest caveat. A card reports what the screen and '
+      + 'the rules did; it is not a forecast.\n';
+
+    async function postToBlog() {
+      const btn = $('blogBtn');
+      btn.disabled = true;
+      try {
+        blogSay('Rendering…');
+        const fontCss = await ensureFontCss();
+        const blob = await shoot(fontCss, 'image/png');
+
+        // A PNG, like the download, and for the reason the editor's own
+        // uploader states: re-encoding a picture that is mostly text as JPEG is
+        // how you get mush. A card is text on flat colour, which is the case
+        // PNG compresses well.
+        blogSay(`Storing the picture (${Math.round(blob.size / 1024)} KB)…`);
+        const up = await fetch('/api/admin/posts/image', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ dataUrl: await blobToDataUrl(blob) }),
+        });
+        const img = await up.json().catch(() => ({}));
+        if (!up.ok) throw new Error(img.error || `the picture could not be stored (HTTP ${up.status}).`);
+
+        const name = (TPLS.find((t) => t.id === tpl) || {}).name || tpl;
+        const when = cardDate();
+        const title = when ? `${name} — ${when}` : name;
+        const base = blogSlug(title) || 'card';
+        // A card with no headline of its own (the avatar) falls back to the
+        // title rather than captioning the figure with nothing.
+        const body = blogBody(img.url, cardHeadline() || title);
+
+        blogSay('Creating the draft…');
+        // A 409 means a draft for this card and this date is already there.
+        // Make the next one rather than overwriting it: `was` is what an EDIT
+        // sends, and this is not an edit — silently replacing a draft somebody
+        // had started writing is the one outcome worth ruling out.
+        let slug = base, n = 1, post = null;
+        while (n <= 9) {
+          const r = await fetch('/api/admin/posts', {
+            method: 'PUT', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ title, slug, body, status: 'draft' }),
+          });
+          const d = await r.json().catch(() => ({}));
+          if (r.ok) { post = d.post; break; }
+          if (r.status === 409) { slug = `${base}-${++n}`; continue; }
+          throw new Error(d.error || `the draft could not be saved (HTTP ${r.status}).`);
+        }
+        if (!post) throw new Error('nine drafts already exist for this card and date.');
+
+        // The slug is `[a-z0-9-]` by construction, so this is safe to write as
+        // markup — and a link is the point: a message naming a draft you then
+        // have to go and find is most of the work left undone.
+        $('blogMsg').innerHTML = 'Draft created — <a href="/posts?slug='
+          + encodeURIComponent(post.slug) + '" target="_blank" rel="noopener">write it up</a>. '
+          + `The picture is ${Math.round(img.size / 1024)} KB, in the right-hand column.`;
+      } catch (err) {
+        blogSay('Could not post: ' + err.message);
+      }
+      btn.disabled = false;
+    }
+    $('blogBtn').addEventListener('click', postToBlog);
+
     Cards.injectStyle();
 
     async function load(reload) {
@@ -976,6 +1115,7 @@
         }
         canAnnounce = !!me.admin;
         $('postsBox').hidden = !me.admin;
+        $('blogBox').hidden = !me.admin;
         if (me.admin) loadPosts();
         if (!canAnnounce && OWNER_ONLY_TPLS.has(tpl)) tpl = 'movers';
         const data = await fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json());

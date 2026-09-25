@@ -818,7 +818,15 @@
 
     paintTemplates();
     countWords();
-    load();
+    // `?slug=` opens that post rather than only the list. The studio's Post to
+    // blog hands back a link to the draft it has just made, and a link that
+    // lands you in front of a list you then have to search is not a link to the
+    // thing. An unknown slug is ignored rather than reported: the address bar
+    // is not a form, and the list is a perfectly good place to arrive.
+    load().then(() => {
+      const want = new URLSearchParams(location.search).get('slug');
+      if (want && posts.some((p) => p.slug === want)) open(want);
+    });
   </script>
 </body>
 </html>
