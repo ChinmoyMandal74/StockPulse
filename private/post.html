@@ -18,6 +18,13 @@
   <style>
     body { min-height: 100dvh; overflow-x: clip; }
     .page { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; padding: 0 28px 90px; }
+    /* A two-column post needs a wider page, and the class that says so sits on
+       a DESCENDANT — so the container asks about its own contents rather than
+       the server stamping a second class further up. If :has() is ever missing
+       the page stays 760px and the text column merely gets narrow: cramped, not
+       broken. */
+    :root { --rail: 320px; --railgap: 36px; }
+    .page:has(.body.two) { max-width: 1140px; }
     .aura { background:
       radial-gradient(48vw 42vw at 6% -10%, rgba(124, 156, 255, 0.12), transparent 62%),
       radial-gradient(46vw 40vw at 98% 2%, rgba(52, 211, 153, 0.10), transparent 64%); }
@@ -70,6 +77,32 @@
       max-width: none;
       margin-left: 50%; transform: translateX(-50%);
     }
+
+    /* ---- two columns: text left, pictures in a rail on the right ----------
+       FLOAT, not grid. A grid gives each child its own row, so a picture would
+       sit in the right column on a row of its own and tear a hole in the text
+       beside it. A float keeps the text flowing.
+       `clear: right` is what stacks consecutive pictures down the rail instead
+       of letting them sit side by side, and the RESERVED PADDING is what stops
+       the text reclaiming the full width once it has passed the last one —
+       without it the layout stops being two columns half way down the page. */
+    .body.two { padding-right: calc(var(--rail) + var(--railgap)); }
+    .body.two .pimg {
+      float: right; clear: right;
+      width: var(--rail);
+      margin: 6px 0 18px calc(var(--railgap) / 2);
+      margin-right: calc((var(--rail) + var(--railgap)) * -1);
+      max-width: var(--rail);
+    }
+    /* The escape hatch: a chart that genuinely needs the width drops out of the
+       rail and spans the text column instead of being crushed into 320px. */
+    .body.two .pimg.wide {
+      float: none; clear: both; width: 100%; max-width: 100%;
+      margin: 26px 0 0; transform: none;
+    }
+    .body.two .pimg.small, .body.two .pimg.medium { max-width: var(--rail); }
+    /* Nothing may straddle the rail. */
+    .body.two h2, .body.two h3, .body.two hr { clear: none; }
     .body strong { color: var(--text); }
     .body code { font-family: var(--mono); font-size: 13px; background: rgba(255, 255, 255, 0.06);
                  padding: 2px 6px; border-radius: 6px; color: var(--text); }
@@ -88,6 +121,18 @@
              display: flex; flex-wrap: wrap; gap: 16px; font-size: 12.5px; color: var(--faint); }
     footer a { color: var(--muted); text-decoration: none; }
     footer a:hover { color: var(--text); text-decoration: underline; }
+    /* A 320px rail beside a readable text column needs about 1040px of window.
+       Below that the rail is dropped and the post reads as one column — the
+       pictures stay in the flow, in order, which is what they were written
+       into. Everything here UNSETS rather than overrides, so there is one
+       description of two columns rather than two that can drift. */
+    @media (max-width: 1040px) {
+      .page:has(.body.two) { max-width: 760px; }
+      .body.two { padding-right: 0; }
+      .body.two .pimg {
+        float: none; clear: both; width: 100%; max-width: 100%; margin: 26px 0 0;
+      }
+    }
     @media (max-width: 640px) { .page { padding: 0 16px 60px; } article { padding-top: 38px; } .after .btn { margin-left: 0; } }
   </style>
 </head>
@@ -115,7 +160,7 @@
       <h1>%TITLE%</h1>
       <p class="summary">%SUMMARY%</p>
       <hr class="rule" />
-      <div class="body">%BODY%</div>
+      <div class="%BODYCLASS%">%BODY%</div>
     </article>
 
     <div class="bezel after"><div class="core">

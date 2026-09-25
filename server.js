@@ -729,6 +729,10 @@ app.get('/blog/:slug', route(async (req, res, next) => {
     .replace('%CANONICAL%', htmlEsc(`${base}/blog/${p.slug}`))
     .replace('%META%', meta)
     .replace('%SUMMARY%', htmlEsc(summary))
+    // The layout is a class on the body wrapper, not a second template: the
+    // markup is identical either way and only the CSS differs, which is what
+    // keeps one column and two from drifting apart.
+    .replace('%BODYCLASS%', p.layout === 'two' ? 'body two' : 'body')
     .replace('%BODY%', renderMarkdown(p.body));
   res.type('html').send(summary ? html : html.replace('<p class="summary"></p>', ''));
 }));
@@ -6297,9 +6301,13 @@ app.put('/api/admin/posts', requireAdmin, route(async (req, res) => {
     // Stamped once, on the first publish: an edit later must not reorder the list.
     publishedAt: status === 'published' ? ((prev && prev.publishedAt) || new Date().toISOString()) : (prev && prev.publishedAt) || null,
     createdAt: (prev && prev.createdAt) || Date.now(),
+    // Only 'two' is a layout; anything else, the field being absent included,
+    // is one column. An older editor that does not send it therefore cannot
+    // silently flip a post's shape.
+    layout: b.layout === 'two' ? 'two' : 'one',
   });
   logAct(req, 'post', `${status}:${slug}`.slice(0, 80));
-  res.json({ ok: true, post, html: renderMarkdown(post.body) });
+  res.json({ ok: true, post, html: renderMarkdown(post.body), layout: post.layout });
 }));
 
 app.delete('/api/admin/posts/:slug', requireAdmin, route(async (req, res) => {

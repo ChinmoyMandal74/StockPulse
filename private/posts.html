@@ -62,7 +62,7 @@
     .mdbar .md.m { font-family: var(--mono); }
     .mdsep { width: 1px; height: 16px; background: var(--hair); margin: 0 3px; }
     .mdcount { font-size: 11.5px; color: var(--faint); font-family: var(--mono); }
-    #tpl { background: rgba(255,255,255,0.04); border: 1px solid var(--hair); color: var(--muted);
+    #tpl, #layout { background: rgba(255,255,255,0.04); border: 1px solid var(--hair); color: var(--muted);
            border-radius: 9px; padding: 7px 10px; font: 500 12.5px var(--sans); cursor: pointer; }
     #tpl:disabled { opacity: 0.45; cursor: default; }
     .said { font-size: 12.5px; color: var(--muted); }
@@ -84,6 +84,14 @@
     .preview .pimg.small  { max-width: 240px; margin-left: auto; margin-right: auto; }
     .preview .pimg.medium { max-width: 380px; margin-left: auto; margin-right: auto; }
     .preview .pimg.wide   { max-width: 100%; }
+    .preview .body.two { padding-right: 236px; }
+    .preview .body.two .pimg {
+      float: right; clear: right; width: 220px; max-width: 220px;
+      margin: 4px 0 14px 12px; margin-right: -236px;
+    }
+    .preview .body.two .pimg.wide {
+      float: none; clear: both; width: 100%; max-width: 100%; margin: 14px 0 0;
+    }
     .preview pre { margin: 14px 0 0; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--hair); overflow-x: auto; }
     .preview blockquote { margin: 14px 0 0; padding-left: 16px; border-left: 2px solid rgba(52,211,153,.5); color: var(--muted); }
     .k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
@@ -169,6 +177,10 @@
             <textarea id="body" spellcheck="true" placeholder="# A heading&#10;&#10;Write in markdown. Headings, **bold**, *italic*, `code`, lists, > quotes, ```code blocks``` and [links](https://example.com)."></textarea>
           </div>
           <div class="bar">
+            <select id="layout" title="One column, or text on the left with the pictures in a rail down the right">
+              <option value="one">One column</option>
+              <option value="two">Two — pictures right</option>
+            </select>
             <select id="tpl" title="Start from a template — only offered while the post is still empty">
               <option value="">Start from a template…</option>
             </select>
@@ -183,7 +195,7 @@
 
         <div class="bezel preview" id="preview" hidden><div class="core">
           <span class="k">Preview — exactly what the page will render</span>
-          <div id="previewBody"></div>
+          <div id="previewBody" class="body"></div>
         </div></div>
       </div>
     </div>
@@ -407,6 +419,7 @@
       $('slug').value = p ? p.slug : '';
       $('summary').value = p ? (p.summary || '') : '';
       $('body').value = p ? p.body : '';
+      $('layout').value = p && p.layout === 'two' ? 'two' : 'one';
       $('delBtn').hidden = !p;
       $('pubBtn').textContent = p && p.status === 'published' ? 'Update the live post' : 'Publish';
       $('preview').hidden = true;
@@ -460,6 +473,7 @@
         summary: $('summary').value.trim(),
         body: $('body').value,
         status,
+        layout: $('layout').value === 'two' ? 'two' : 'one',
         was: current || '',
       };
       if (!payload.title) return say('It needs a title.', 'bad');
@@ -478,6 +492,7 @@
         say(d.post.status === 'published'
           ? `Published — it is live at /blog/${d.post.slug}.`
           : 'Saved as a draft. Nobody else can see it.', 'good');
+        $('previewBody').className = 'body' + ($('layout').value === 'two' ? ' two' : '');
         $('previewBody').innerHTML = d.html;
         $('preview').hidden = false;
       } catch (e) {
@@ -504,6 +519,7 @@
         current = d.post.slug;
         $('slug').value = d.post.slug;
         echoSlug();
+        $('previewBody').className = 'body' + ($('layout').value === 'two' ? ' two' : '');
         $('previewBody').innerHTML = d.html;
         $('preview').hidden = false;
         await load();

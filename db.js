@@ -569,6 +569,11 @@ function parseAddColumn(stmt) {
 }
 
 const ADDED_COLUMNS = [
+  // One column, or text left with the pictures in a rail on the right. Per
+  // POST, because a piece with six screenshots and a piece with none want
+  // different shapes. Null means one column, so every post that already exists
+  // keeps the layout it was written for.
+  "alter table posts add column layout text",
   // Each step of a round and what it cost, as JSON — so a slow round can be
   // explained after the fact. The phases used to ride the HTTP response only,
   // which meant the one round you most wanted to understand, the one that
@@ -994,6 +999,9 @@ async function writeMobileConfig(cfg) {
 const postRow = (x) => ({
   slug: x.slug, title: x.title, summary: x.summary, body: x.body, status: x.status,
   author: x.author, publishedAt: x.published_at,
+  // Only 'two' is a layout; anything else, including the null every existing
+  // row has, reads as one column.
+  layout: x.layout === 'two' ? 'two' : 'one',
   createdAt: Number(x.created_at) || null, updatedAt: Number(x.updated_at) || null,
 });
 
@@ -1005,7 +1013,7 @@ async function readPosts({ publishedOnly = true } = {}) {
   const r = await db.execute(publishedOnly
     ? { sql: `select slug, title, summary, '' as body, status, author, published_at, created_at, updated_at
                 from posts where status = 'published' order by published_at desc`, args: [] }
-    : { sql: `select slug, title, summary, '' as body, status, author, published_at, created_at, updated_at
+    : { sql: `select slug, title, summary, '' as body, status, author, published_at, created_at, updated_at, layout
                 from posts order by coalesce(published_at, '') desc, updated_at desc`, args: [] });
   return r.rows.map(postRow);
 }
@@ -1025,14 +1033,15 @@ async function writePost(p) {
   await init();
   const now = Date.now();
   await db.execute({
-    sql: `insert into posts (slug, title, summary, body, status, author, published_at, created_at, updated_at)
-          values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    sql: `insert into posts (slug, title, summary, body, status, author, published_at, created_at, updated_at, layout)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           on conflict(slug) do update set
             title = excluded.title, summary = excluded.summary, body = excluded.body,
             status = excluded.status, author = excluded.author,
-            published_at = excluded.published_at, updated_at = excluded.updated_at`,
+            published_at = excluded.published_at, updated_at = excluded.updated_at,
+            layout = excluded.layout`,
     args: [p.slug, p.title, p.summary || null, p.body, p.status, p.author || null,
-      p.publishedAt || null, p.createdAt || now, now],
+      p.publishedAt || null, p.createdAt || now, now, p.layout === 'two' ? 'two' : null],
   });
   return readPost(p.slug, { publishedOnly: false });
 }
