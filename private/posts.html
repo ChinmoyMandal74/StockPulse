@@ -84,14 +84,43 @@
     .preview .pimg.small  { max-width: 240px; margin-left: auto; margin-right: auto; }
     .preview .pimg.medium { max-width: 380px; margin-left: auto; margin-right: auto; }
     .preview .pimg.wide   { max-width: 100%; }
-    .preview .body.two { padding-right: 236px; }
+    /* The rail, scaled down: this box is narrower than the article, so the real
+       page's 320 would leave no text beside it. The BEHAVIOUR is what has to
+       match, which is why the two numbers are named once here and used
+       everywhere below — including by the guides. */
+    .preview .body.two { --prail: 220px; --pgap: 16px; }
+    /* flow-root for the same reason the real page needs it: a float does not
+       grow its parent, so a picture-heavy post spilled its rail out of the box. */
+    .preview .body.two { display: flow-root; padding-right: calc(var(--prail) + var(--pgap)); }
     .preview .body.two .pimg {
-      float: right; clear: right; width: 220px; max-width: 220px;
-      margin: 4px 0 14px 12px; margin-right: -236px;
+      float: right; clear: right; width: var(--prail); max-width: var(--prail);
+      margin: 4px 0 14px 12px;
+      margin-right: calc((var(--prail) + var(--pgap)) * -1);
     }
     .preview .body.two .pimg.wide {
       float: none; clear: both; width: 100%; max-width: 100%; margin: 14px 0 0;
     }
+    /* ---- the Guides tick ---------------------------------------------------
+       DELIBERATELY UNLABELLED, unlike the real page's. This box is not the
+       article's width, so any number printed here would be a number no reader
+       will ever see — the shape is the honest part, and the link beside the
+       tick goes to the real page at the real width for the figures. */
+    .preview .body.guides > * { outline: 1px dashed rgba(124,156,255,.35); outline-offset: 2px; }
+    .preview .body.two.guides {
+      background:
+        linear-gradient(to right, rgba(124,156,255,.85) 0 100%)
+          right calc(var(--prail) + var(--pgap)) top / 1px 100% no-repeat,
+        linear-gradient(to right, rgba(251,191,36,.10) 0 100%)
+          right var(--prail) top / var(--pgap) 100% no-repeat,
+        linear-gradient(to right, rgba(52,211,153,.07) 0 100%)
+          right / var(--prail) 100% no-repeat;
+    }
+    .preview .body.two.guides .pimg { outline-color: rgba(52,211,153,.55); }
+    .gtick { display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
+             font-size: 12px; color: var(--muted); cursor: pointer; }
+    .phead { display: flex; align-items: center; gap: 12px; }
+    .phead a { font-size: 12px; color: var(--accent); text-decoration: none; }
+    .phead a:hover { text-decoration: underline; }
     .preview pre { margin: 14px 0 0; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--hair); overflow-x: auto; }
     .preview blockquote { margin: 14px 0 0; padding-left: 16px; border-left: 2px solid rgba(52,211,153,.5); color: var(--muted); }
     .k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
@@ -194,7 +223,11 @@
         </div></div>
 
         <div class="bezel preview" id="preview" hidden><div class="core">
-          <span class="k">Preview — exactly what the page will render</span>
+          <div class="phead">
+            <span class="k">Preview — exactly what the page will render</span>
+            <label class="gtick"><input type="checkbox" id="guides" /> Column edges</label>
+            <a id="guidesLink" href="#" target="_blank" rel="noopener" hidden>at the real width ↗</a>
+          </div>
           <div id="previewBody" class="body"></div>
         </div></div>
       </div>
@@ -466,6 +499,23 @@
       } catch (e) { say(e.message, 'bad'); }
     }
 
+    // ONE painter, because the class carries three independent things (the
+    // layout, the guides tick and the base class) and two call sites setting
+    // className by hand is how one of them silently loses one of them.
+    function paintPreview(html) {
+      const b = $('previewBody');
+      if (html != null) b.innerHTML = html;
+      b.className = 'body'
+        + ($('layout').value === 'two' ? ' two' : '')
+        + ($('guides').checked ? ' guides' : '');
+      // The figures belong on the real page at the real width; this box is
+      // narrower than the article, so its edges are a shape and not a measure.
+      const link = $('guidesLink');
+      link.hidden = !($('guides').checked && current);
+      if (current) link.href = '/blog/' + encodeURIComponent(current) + '?guides=1';
+      $('preview').hidden = false;
+    }
+
     async function save(status) {
       const payload = {
         title: $('title').value.trim(),
@@ -492,9 +542,7 @@
         say(d.post.status === 'published'
           ? `Published — it is live at /blog/${d.post.slug}.`
           : 'Saved as a draft. Nobody else can see it.', 'good');
-        $('previewBody').className = 'body' + ($('layout').value === 'two' ? ' two' : '');
-        $('previewBody').innerHTML = d.html;
-        $('preview').hidden = false;
+        paintPreview(d.html);
       } catch (e) {
         say(e.message, 'bad');
       } finally {
@@ -504,6 +552,8 @@
 
     // The preview renders through the SERVER's markdown, so what you see is
     // what the page will show — a second renderer here would drift from it.
+    // IT IS ALSO A SAVE, so it must send every field: leaving `layout` out
+    // stored 'two' posts back as one column just for looking at them.
     async function preview() {
       if (!$('body').value.trim()) return say('Nothing to preview yet.', 'bad');
       say('Rendering…');
@@ -514,14 +564,13 @@
           summary: $('summary').value.trim(),
           body: $('body').value,
           status: 'draft',
+          layout: $('layout').value === 'two' ? 'two' : 'one',
           was: current || '',
         });
         current = d.post.slug;
         $('slug').value = d.post.slug;
         echoSlug();
-        $('previewBody').className = 'body' + ($('layout').value === 'two' ? ' two' : '');
-        $('previewBody').innerHTML = d.html;
-        $('preview').hidden = false;
+        paintPreview(d.html);
         await load();
         say('Saved as a draft and rendered below.', 'good');
       } catch (e) { say(e.message, 'bad'); }
@@ -544,6 +593,11 @@
     $('saveBtn').addEventListener('click', () => save('draft'));
     $('pubBtn').addEventListener('click', () => save('published'));
     $('previewBtn').addEventListener('click', preview);
+    // Both repaint from what is already rendered — neither costs a round trip,
+    // so switching layout while the preview is open shows the other shape at
+    // once instead of asking for the markdown back.
+    $('guides').addEventListener('change', () => paintPreview(null));
+    $('layout').addEventListener('change', () => { if (!$('preview').hidden) paintPreview(null); });
     $('delBtn').addEventListener('click', del);
 
     // ---- toolbar, pictures, templates, and not losing your work ------------

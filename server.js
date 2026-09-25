@@ -732,7 +732,14 @@ app.get('/blog/:slug', route(async (req, res, next) => {
     // The layout is a class on the body wrapper, not a second template: the
     // markup is identical either way and only the CSS differs, which is what
     // keeps one column and two from drifting apart.
-    .replace('%BODYCLASS%', p.layout === 'two' ? 'body two' : 'body')
+    //
+    // ?guides=1 draws the column boundaries over the real page at the real
+    // width, which is the only place the allocation can be seen honestly -- the
+    // editor's preview box is a different width, so its proportions would be a
+    // different answer. Opt-in by URL, so no reader ever meets it, and pure CSS,
+    // because this page carries no script and is not going to start.
+    .replace('%BODYCLASS%', (p.layout === 'two' ? 'body two' : 'body')
+      + (req.query.guides === '1' ? ' guides' : ''))
     .replace('%BODY%', renderMarkdown(p.body));
   res.type('html').send(summary ? html : html.replace('<p class="summary"></p>', ''));
 }));

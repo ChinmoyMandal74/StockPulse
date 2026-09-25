@@ -23,7 +23,17 @@
        the server stamping a second class further up. If :has() is ever missing
        the page stays 760px and the text column merely gets narrow: cramped, not
        broken. */
-    :root { --rail: 320px; --railgap: 36px; }
+    /* THE THREE NUMBERS AND THEIR LABELS LIVE TOGETHER, because CSS cannot read
+       a length back out as text and the labels would otherwise drift away from
+       the widths they describe. `layout-test.js` measures the drawn columns and
+       compares them against these strings, so a change to one without the other
+       fails rather than quietly lying on screen. */
+    :root {
+      --rail: 320px;      --rail-label: "rail 320";
+      --railgap: 36px;    --gap-label: "gap 36";
+      --text-label: "text 728";   /* 1140 - 28 - 28 - 320 - 36 */
+      --one-label: "text 704";    /*  760 - 28 - 28              */
+    }
     .page:has(.body.two) { max-width: 1140px; }
     .aura { background:
       radial-gradient(48vw 42vw at 6% -10%, rgba(124, 156, 255, 0.12), transparent 62%),
@@ -86,7 +96,13 @@
        of letting them sit side by side, and the RESERVED PADDING is what stops
        the text reclaiming the full width once it has passed the last one —
        without it the layout stops being two columns half way down the page. */
-    .body.two { padding-right: calc(var(--rail) + var(--railgap)); }
+    /* CONTAIN THE FLOATS. A float does not grow its parent, so a post with more
+       pictures than text ran the tail of its rail straight over the footer —
+       invisible until the guides drew the wrapper's own edge. `flow-root` is
+       the one-word version of a clearfix and, unlike `overflow: hidden`, it
+       does not clip the rail, which sits in the padding by negative margin.
+       The ::after clearfix is not available here: the guides own it. */
+    .body.two { display: flow-root; padding-right: calc(var(--rail) + var(--railgap)); }
     .body.two .pimg {
       float: right; clear: right;
       width: var(--rail);
@@ -103,6 +119,48 @@
     .body.two .pimg.small, .body.two .pimg.medium { max-width: var(--rail); }
     /* Nothing may straddle the rail. */
     .body.two h2, .body.two h3, .body.two hr { clear: none; }
+
+    /* ---- ?guides=1 : where the width actually goes ------------------------
+       An authoring aid, reached only by putting ?guides=1 on the URL, so no
+       reader can arrive at it. CSS only -- this page carries no script. */
+    .body.guides { position: relative; }
+    .body.guides > * { outline: 1px dashed rgba(124, 156, 255, 0.35); outline-offset: 2px; }
+    .body.guides::before, .body.guides::after {
+      position: absolute; top: -26px; font: 500 10px/1 var(--mono);
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
+      pointer-events: none; white-space: nowrap;
+    }
+    /* One column: the whole measure is the text, so one label and no boundary.
+       It is a DIFFERENT number from the two-column text column (704 against
+       728), and printing the wider one here would be the guide lying about the
+       very thing it exists to show. */
+    .body.guides::before { left: 0; content: var(--one-label); }
+
+    .body.two.guides::before { content: var(--text-label); }
+    /* The boundary itself: a rule down the full height at the rail's left edge,
+       which is the thing being asked about. */
+    .body.two.guides::after {
+      content: var(--rail-label) " · " var(--gap-label);
+      right: 0; text-align: right;
+    }
+    .body.two.guides {
+      /* The rail band, drawn as a background rather than an element so it
+         cannot disturb the layout it is describing. */
+      background:
+        /* THE BORDER BEING ASKED FOR: a 1px rule exactly where the text column
+           ends and the reserved rail begins. Measured from the RIGHT, because
+           that is where both bands are anchored and the text column is simply
+           whatever is left. */
+        linear-gradient(to right, rgba(124, 156, 255, 0.85) 0 100%)
+          right calc(var(--rail) + var(--railgap)) top / 1px 100% no-repeat,
+        /* the gap */
+        linear-gradient(to right, rgba(251, 191, 36, 0.10) 0 100%)
+          right var(--rail) top / var(--railgap) 100% no-repeat,
+        /* the rail */
+        linear-gradient(to right, rgba(52, 211, 153, 0.07) 0 100%)
+          right / var(--rail) 100% no-repeat;
+    }
+    .body.two.guides .pimg { outline-color: rgba(52, 211, 153, 0.55); }
     .body strong { color: var(--text); }
     .body code { font-family: var(--mono); font-size: 13px; background: rgba(255, 255, 255, 0.06);
                  padding: 2px 6px; border-radius: 6px; color: var(--text); }
@@ -132,6 +190,14 @@
       .body.two .pimg {
         float: none; clear: both; width: 100%; max-width: 100%; margin: 26px 0 0;
       }
+      /* The guides describe the two-column allocation, and there is no longer
+         one. The dashed outlines stay; the bands and the labels go, rather than
+         naming widths the page has stopped using. Below this width the measure
+         is the WINDOW's, not a number anyone chose, so there is nothing to
+         label honestly. */
+      .body.two.guides { background: none; }
+      .body.guides::before, .body.guides::after,
+      .body.two.guides::before, .body.two.guides::after { content: none; }
     }
     @media (max-width: 640px) { .page { padding: 0 16px 60px; } article { padding-top: 38px; } .after .btn { margin-left: 0; } }
   </style>
