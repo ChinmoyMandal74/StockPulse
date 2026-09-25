@@ -435,6 +435,10 @@
 
     let posts = [];
     let current = null;          // the slug being edited, null for a new post
+    // PREVIEW IS A SAVE, and it has to save the post as it IS. Sending a literal
+    // 'draft' took a published post off the live site just for looking at it —
+    // a 404 for every reader, with nothing on screen to say it had happened.
+    let currentStatus = 'draft';
 
     function paintList() {
       $('plist').innerHTML = posts.length ? posts.map((p) =>
@@ -448,6 +452,7 @@
 
     function fill(p) {
       current = p ? p.slug : null;
+      currentStatus = p && p.status === 'published' ? 'published' : 'draft';
       $('title').value = p ? p.title : '';
       $('slug').value = p ? p.slug : '';
       $('summary').value = p ? (p.summary || '') : '';
@@ -533,6 +538,7 @@
       try {
         const d = await api('PUT', '/api/admin/posts', payload);
         current = d.post.slug;
+        currentStatus = d.post.status;
         $('slug').value = d.post.slug;
         echoSlug();
         await load();
@@ -552,8 +558,10 @@
 
     // The preview renders through the SERVER's markdown, so what you see is
     // what the page will show — a second renderer here would drift from it.
-    // IT IS ALSO A SAVE, so it must send every field: leaving `layout` out
-    // stored 'two' posts back as one column just for looking at them.
+    // IT IS ALSO A SAVE, so it must send the post as it IS. Two fields were
+    // being invented here rather than sent: `layout`, which stored a
+    // two-column post back as one, and `status`, which UNPUBLISHED a live post
+    // the moment anyone looked at it.
     async function preview() {
       if (!$('body').value.trim()) return say('Nothing to preview yet.', 'bad');
       say('Rendering…');
@@ -563,16 +571,19 @@
           slug: $('slug').value.trim() || $('title').value.trim() || 'untitled-draft',
           summary: $('summary').value.trim(),
           body: $('body').value,
-          status: 'draft',
+          status: currentStatus,
           layout: $('layout').value === 'two' ? 'two' : 'one',
           was: current || '',
         });
         current = d.post.slug;
+        currentStatus = d.post.status;
         $('slug').value = d.post.slug;
         echoSlug();
         paintPreview(d.html);
         await load();
-        say('Saved as a draft and rendered below.', 'good');
+        say(d.post.status === 'published'
+          ? 'Saved and rendered below — the post is still live.'
+          : 'Saved as a draft and rendered below.', 'good');
       } catch (e) { say(e.message, 'bad'); }
     }
 
