@@ -137,7 +137,7 @@
        exists where the columns exist cannot be left behind where they do not.
        The pair is 1041 / 1040: CSS cannot share one number between a min-width
        and a max-width, so they are written together here. */
-    .page { max-width: 1240px; }
+    .page { max-width: 1120px; }
     .body { display: flow-root; padding-right: calc(50% + var(--railgap) / 2); }
     .body .pimg {
       float: right; clear: right;
@@ -160,16 +160,26 @@
        to fill it when the rail was 320px, where 300 and 460 had nothing left to
        be small against; at half the page that reasoning is gone and the three
        size buttons in the editor would otherwise all do the same thing.
-       They need the negative margin RESTATED, and that is the whole subtlety:
-       `.body .pimg.small` also carries `margin-right: auto` from the centring
-       rule above, which is more specific than `.body .pimg` and so beat the
+
+       THEY HANG OFF THE RAIL'S LEFT EDGE (2026-09-25, owner, from a screenshot
+       with the empty strip ringed in red). Flush right put the slack BETWEEN
+       the text and the picture, which is the one place on the page where a gap
+       reads as a mistake rather than as margin; against the left edge the
+       slack falls at the outside of the page where nothing is looking.
+
+       The shift has to be THE BOX'S OWN WIDTH plus the gap, not `100%`. A float
+       starts at its container's right edge, so shifting it by (width + gap)
+       lands its left edge exactly at the rail's. `100%` is the text column, and
+       is only the same number when the picture fills the rail — which is why
+       the full-width rule above can use it and these two cannot.
+
+       They also need the margin RESTATED at all, which is the subtlety:
+       `.body .pimg.small` carries `margin-right: auto` from the centring rule
+       further up, which is more specific than `.body .pimg` and so beat the
        pull — leaving a 300px picture floated inside the TEXT column with the
-       prose wrapping round it, which is the one thing two columns must not do.
-       Restated here, the box lands flush with the rail's right edge whatever
-       its width, so every picture on the page shares one edge. */
-    .body .pimg.small, .body .pimg.medium {
-      margin-right: calc(-100% - var(--railgap));
-    }
+       prose wrapping round it, the one thing two columns must not do. */
+    .body .pimg.small  { margin-right: calc(-300px - var(--railgap)); }
+    .body .pimg.medium { margin-right: calc(-460px - var(--railgap)); }
     /* Nothing may straddle the rail. */
     .body h2, .body h3, .body hr { clear: none; }
     }   /* end of the two columns inside the article */
@@ -201,10 +211,15 @@
 
     /* Three columns only where all three fit. Between here and the collapse the
        article keeps its two and the rail drops underneath it — a 260px column
-       taken out of a 1200px window is 260px the pictures do not get.
-       1240 + 44 + 260 + 56 of gutters = 1600. */
-    @media (min-width: 1600px) {
-      .page { max-width: 1604px; }
+       taken out of a 1120px window is 260px the pictures do not get.
+
+       1400 - 56 of gutters - 260 rail - 44 gap = 1040 of article, so the two
+       inner columns are 502 each. That is the WHOLE PAGE at 1400 rather than
+       the 1604 it was: the owner asked for it narrower, and a 502px measure is
+       about 65 characters, which is the middle of the readable band rather
+       than the top of it. */
+    @media (min-width: 1400px) {
+      .page { max-width: 1400px; }
       .shell { grid-template-columns: minmax(0, 1fr) var(--side); }
       /* Sticky, so the navigation is still there at the foot of a long piece.
          Its own scroll is a guard for the day the list outgrows a short window;
@@ -290,7 +305,7 @@
     /* Below three columns the rail is a block under the article, not a column
        beside it, so its label would hang over the last paragraph naming a
        width nothing is using. The outline stays; the figure goes. */
-    @media (max-width: 1599px) {
+    @media (max-width: 1399px) {
       .guides .side::before { content: none; }
     }
     @media (max-width: 640px) { .page { padding: 0 16px 60px; } article { padding-top: 38px; } .after .btn { margin-left: 0; } }

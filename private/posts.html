@@ -97,12 +97,24 @@
       margin: 4px 0 14px 12px;
       margin-right: calc(-100% - var(--pgap));
     }
-    /* "wide" spans BOTH columns here too, or the preview shows a shape the page
-       will not use — which is the one thing a preview must not do. */
+    /* "wide" spans BOTH columns here too, and the smaller two hang off the
+       rail's LEFT edge, or the preview shows a shape the page will not use —
+       which is the one thing a preview must not do. The shift is the box's own
+       width plus the gap, the real page's arithmetic at this box's smaller
+       scale; `100%` would be the text column and only agrees when the picture
+       fills the rail. */
     .preview .body .pimg.wide {
       float: none; clear: both;
       width: calc(200% + var(--pgap)); max-width: none; margin: 14px 0 0;
     }
+    /* The max-width has to be RESTATED here, unlike on the real page, and the
+       reason is a specificity tie rather than an oversight: `.preview
+       .pimg.small` and `.preview .body .pimg` are both three classes, so source
+       order decided it and the full-width rule won — the named sizes had been
+       silently doing nothing in this box. On the real page `.body .pimg.small`
+       is three against `.body .pimg`'s two, so it wins outright. */
+    .preview .body .pimg.small  { max-width: 240px; margin-right: calc(-240px - var(--pgap)); }
+    .preview .body .pimg.medium { max-width: 380px; margin-right: calc(-380px - var(--pgap)); }
     /* ---- the Guides tick ---------------------------------------------------
        DELIBERATELY UNLABELLED, unlike the real page's. This box is not the
        article's width, so any number printed here would be a number no reader
