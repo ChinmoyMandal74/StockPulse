@@ -18,31 +18,28 @@
   <style>
     body { min-height: 100dvh; overflow-x: clip; }
     .page { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; padding: 0 28px 90px; }
-    /* A two-column post needs a wider page, and the class that says so sits on
-       a DESCENDANT — so the container asks about its own contents rather than
-       the server stamping a second class further up. If :has() is ever missing
-       the page stays 760px and the text column merely gets narrow: cramped, not
-       broken. */
-    /* THE SPLIT IS A RATIO, NOT A WIDTH (2026-09-25, owner: "make the
-       proportion 50/50"). A fixed 320px rail meant the halves were only ever
-       equal at one page width and drifted at every other; expressed as a
-       percentage they stay equal at 1500px, at 1280 and at the collapse.
-       That is also why the labels name a SHARE rather than a number of pixels:
-       CSS cannot read a length back out as text, so a printed "rail 320" would
-       be a string that goes stale the moment the window moves.
-       `layout-test.js` measures the two drawn columns and asserts they are
-       equal, which is a stronger check than matching a string. */
+    /* EVERY POST IS THE SAME SHAPE (2026-09-25, owner: "I do not need the one
+       column, let's make the system easy"). There was a per-post choice and it
+       is gone — no `layout` field, no picker, no `.two` class, one description
+       of the page. A wide window gets three columns:
+
+           text            pictures          recent posts
+           <-- 50% --> gap <-- 50% -->  gap  <- 260px ->
+           \________ the article ________/   \_ aside _/
+
+       THE SPLIT IS A RATIO, NOT A WIDTH. A fixed rail is only ever equal at one
+       page width and drifts at every other; as a percentage the halves stay
+       equal at any width, which is also why the guide labels name a SHARE
+       rather than pixels — CSS cannot read a length back as text, so a printed
+       "rail 320" is a string that goes stale the moment the window moves.
+       `layout-test.js` measures the drawn columns and asserts they are equal,
+       which is a stronger check than matching a string ever was. */
     :root {
       --railgap: 36px;    --gap-label: "gap 36";
       --rail-label: "rail 50%";
       --text-label: "text 50%";
-      --one-label: "text 704";    /* 760 - 28 - 28 — a one-column post */
+      --side: 260px;      --sidegap: 44px;   --side-label: "recent 260";
     }
-    /* The wider page for a two-column post is set WITH the two-column layout,
-       inside its min-width, and deliberately not here: left unconditional it
-       would widen a collapsed post to 1040px between 760 and 1040 while a
-       one-column post stayed at 760 — the two reading the same content at two
-       different measures, which is exactly what the collapse exists to avoid. */
     .aura { background:
       radial-gradient(48vw 42vw at 6% -10%, rgba(124, 156, 255, 0.12), transparent 62%),
       radial-gradient(46vw 40vw at 98% 2%, rgba(52, 211, 153, 0.10), transparent 64%); }
@@ -125,78 +122,122 @@
        ALL OF IT LIVES INSIDE A min-width, and that is a correctness fix rather
        than tidiness. It used to sit unconditionally with a max-width block
        below undoing it, and undoing by later source order DOES NOT WORK here:
-       `.body.two .pimg.wide` is more specific than `.body.two .pimg`, so it
+       `.body .pimg.wide` is more specific than `.body .pimg`, so it once
        survived the collapse it was supposed to be cancelled by and drew a
        752px picture on a 390px phone, with real sideways scroll. A rule that
        only exists where two columns exist cannot need cancelling.
        The pair is 1041 / 1040 — CSS cannot share one number between a
        min-width and a max-width, so they are written together here. */
     @media (min-width: 1041px) {
-    /* 1500 - 28 - 28 = 1444; (1444 - 36) / 2 = 704, which is EXACTLY the
-       one-column reading measure. So a two-column post does not squeeze the
-       text to make room for the rail — the page grows and the prose is read at
-       the width it is read at everywhere else. */
-    .page:has(.body.two) { max-width: 1500px; }
-    .body.two { display: flow-root; padding-right: calc(50% + var(--railgap) / 2); }
-    .body.two .pimg {
+    /* Two columns inside the article. The page stays 760 below this width, so
+       a phone never applies any of it and there is nothing to cancel — undoing
+       by later source order does NOT work here, because `.pimg.wide` is more
+       specific than `.pimg` and once survived the very block written to
+       cancel it, drawing a 752px picture on a 390px phone. A rule that only
+       exists where the columns exist cannot be left behind where they do not.
+       The pair is 1041 / 1040: CSS cannot share one number between a min-width
+       and a max-width, so they are written together here. */
+    .page { max-width: 1240px; }
+    .body { display: flow-root; padding-right: calc(50% + var(--railgap) / 2); }
+    .body .pimg {
       float: right; clear: right;
       width: 100%; max-width: 100%;
       margin: 6px 0 18px calc(var(--railgap) / 2);
       margin-right: calc(-100% - var(--railgap));
     }
     /* The escape hatch: a chart that genuinely needs the width drops out of the
-       rail and spans BOTH columns. At 50/50 the old behaviour — span the text
-       column — was no width at all, since the text column and the rail are now
-       the same size, so "wide" would have drawn the same picture in a different
-       place. 200% of the text column plus the gap is exactly the page.
-       The over-constrained margin is simply ignored, which is what lets the box
-       overflow its own column to the right. */
-    .body.two .pimg.wide {
+       rail and spans BOTH columns. Spanning the text column alone is no width
+       at all now that the two halves are the same size — it would draw the same
+       picture in a different place. 200% of the text column plus the gap is
+       exactly the article. The over-constrained margin is simply ignored, which
+       is what lets the box overflow its own column to the right. */
+    .body .pimg.wide {
       float: none; clear: both;
       width: calc(200% + var(--railgap)); max-width: none;
       margin: 26px 0 0; transform: none;
     }
-    /* In a rail, "small" and "medium" have nothing to be small against — the
-       column is already the constraint, so they fill it. */
-    .body.two .pimg.small, .body.two .pimg.medium { max-width: 100%; }
+    /* "small" and "medium" KEEP THEIR OWN WIDTHS in the rail. They were forced
+       to fill it when the rail was 320px, where 300 and 460 had nothing left to
+       be small against; at half the page that reasoning is gone and the three
+       size buttons in the editor would otherwise all do the same thing.
+       They need the negative margin RESTATED, and that is the whole subtlety:
+       `.body .pimg.small` also carries `margin-right: auto` from the centring
+       rule above, which is more specific than `.body .pimg` and so beat the
+       pull — leaving a 300px picture floated inside the TEXT column with the
+       prose wrapping round it, which is the one thing two columns must not do.
+       Restated here, the box lands flush with the rail's right edge whatever
+       its width, so every picture on the page shares one edge. */
+    .body .pimg.small, .body .pimg.medium {
+      margin-right: calc(-100% - var(--railgap));
+    }
     /* Nothing may straddle the rail. */
-    .body.two h2, .body.two h3, .body.two hr { clear: none; }
-    }   /* end of the two-column layout */
+    .body h2, .body h3, .body hr { clear: none; }
+    }   /* end of the two columns inside the article */
+
+    /* ---- the third column: recent posts -----------------------------------
+       A SIBLING of the article, never part of the body. The pictures' float
+       arithmetic halves whatever width the body is given, so the rail simply
+       makes that width smaller and nothing inside has to know it exists.
+       It is the LAST thing in the source order too, which is what a screen
+       reader and a text browser want: the piece, then the navigation. */
+    .shell { display: grid; gap: var(--sidegap); align-items: start; }
+    .side { min-width: 0; }
+    .sidein { border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 14px; }
+    .sidehd { margin: 0 0 12px; font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+              letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint); }
+    .sidelist { list-style: none; margin: 0; padding: 0; }
+    .sidelist li { padding: 9px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+    .sidelist a, .sidenow { display: block; font-size: 14px; line-height: 1.4; letter-spacing: -0.01em; }
+    .sidelist a { color: var(--muted); text-decoration: none; }
+    .sidelist a:hover { color: var(--text); }
+    /* The post you are reading stays in the list and is marked, because losing
+       your place in a list of eight is worse than one row you cannot click. */
+    .sidenow { color: var(--text); font-weight: 600; }
+    .sidewhen { display: block; margin-top: 3px; font-family: var(--mono); font-size: 10.5px;
+                letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .sideempty { margin: 0; font-size: 13px; color: var(--faint); }
+    .sideall { display: inline-block; margin-top: 14px; font-size: 12.5px; color: var(--accent); text-decoration: none; }
+    .sideall:hover { text-decoration: underline; }
+
+    /* Three columns only where all three fit. Between here and the collapse the
+       article keeps its two and the rail drops underneath it — a 260px column
+       taken out of a 1200px window is 260px the pictures do not get.
+       1240 + 44 + 260 + 56 of gutters = 1600. */
+    @media (min-width: 1600px) {
+      .page { max-width: 1604px; }
+      .shell { grid-template-columns: minmax(0, 1fr) var(--side); }
+      /* Sticky, so the navigation is still there at the foot of a long piece.
+         Its own scroll is a guard for the day the list outgrows a short window;
+         at eight rows it never triggers. */
+      .sidein { position: sticky; top: 92px; max-height: calc(100dvh - 120px); overflow-y: auto; }
+    }
 
     /* ---- ?guides=1 : where the width actually goes ------------------------
        An authoring aid, reached only by putting ?guides=1 on the URL, so no
-       reader can arrive at it. CSS only -- this page carries no script. */
-    .body.guides { position: relative; }
-    .body.guides > * { outline: 1px dashed rgba(124, 156, 255, 0.35); outline-offset: 2px; }
-    .body.guides::before, .body.guides::after {
+       reader can arrive at it. CSS only -- this page carries no script.
+       The class sits on the SHELL, because there are three columns to describe
+       and the third is the body's sibling rather than one of its children. */
+    .guides .body { position: relative; }
+    .guides .body > * { outline: 1px dashed rgba(124, 156, 255, 0.35); outline-offset: 2px; }
+    .guides .body::before, .guides .body::after, .guides .side::before {
       position: absolute; top: -26px; font: 500 10px/1 var(--mono);
       letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
       pointer-events: none; white-space: nowrap;
     }
-    /* One column: the whole measure is the text, so one label and no boundary.
-       It is a DIFFERENT number from the two-column text column (704 against
-       728), and printing the wider one here would be the guide lying about the
-       very thing it exists to show. */
-    .body.guides::before { left: 0; content: var(--one-label); }
-
-    .body.two.guides::before { content: var(--text-label); }
-    /* The boundary itself: a rule down the full height at the rail's left edge,
-       which is the thing being asked about. */
-    .body.two.guides::after {
+    .guides .body::before { left: 0; content: var(--text-label); }
+    .guides .body::after {
       content: var(--rail-label) " · " var(--gap-label);
       right: 0; text-align: right;
     }
-    .body.two.guides {
-      /* The rail band, drawn as a background rather than an element so it
-         cannot disturb the layout it is describing. */
+    .guides .body {
+      /* The bands are drawn as a BACKGROUND rather than as elements, so they
+         cannot disturb the layout they are describing. A background percentage
+         resolves against the padding box — the same 50% arithmetic as the
+         layout above, so a band cannot drift from the column it names. */
       background:
         /* THE BORDER BEING ASKED FOR: a 1px rule exactly where the text column
            ends and the reserved rail begins. Measured from the RIGHT, because
-           that is where both bands are anchored and the text column is simply
-           whatever is left. */
-        /* A background percentage resolves against the PADDING box, which here
-           is the whole page width — so the same 50% arithmetic as the layout
-           above, and the bands cannot drift from the columns they describe. */
+           that is where both bands are anchored and the text is what is left. */
         linear-gradient(to right, rgba(124, 156, 255, 0.85) 0 100%)
           right calc(50% + var(--railgap) / 2) top / 1px 100% no-repeat,
         /* the gap */
@@ -206,7 +247,12 @@
         linear-gradient(to right, rgba(52, 211, 153, 0.07) 0 100%)
           right / calc(50% - var(--railgap) / 2) 100% no-repeat;
     }
-    .body.two.guides .pimg { outline-color: rgba(52, 211, 153, 0.55); }
+    /* The third column names a PIXEL width, and honestly: it is 260px, fixed,
+       not a share of anything. The two inside the article are shares, so they
+       are labelled as shares. The guide says what each one actually is. */
+    .guides .side { position: relative; outline: 1px dashed rgba(167, 139, 250, 0.4); outline-offset: 2px; }
+    .guides .side::before { left: 0; content: var(--side-label); color: var(--accent-2); }
+    .guides .body .pimg { outline-color: rgba(52, 211, 153, 0.55); }
     .body strong { color: var(--text); }
     .body code { font-family: var(--mono); font-size: 13px; background: rgba(255, 255, 255, 0.06);
                  padding: 2px 6px; border-radius: 6px; color: var(--text); }
@@ -238,9 +284,14 @@
          naming widths the page has stopped using. Below this width the measure
          is the WINDOW's, not a number anyone chose, so there is nothing to
          label honestly. */
-      .body.two.guides { background: none; }
-      .body.guides::before, .body.guides::after,
-      .body.two.guides::before, .body.two.guides::after { content: none; }
+      .guides .body { background: none; }
+      .guides .body::before, .guides .body::after { content: none; }
+    }
+    /* Below three columns the rail is a block under the article, not a column
+       beside it, so its label would hang over the last paragraph naming a
+       width nothing is using. The outline stays; the figure goes. */
+    @media (max-width: 1599px) {
+      .guides .side::before { content: none; }
     }
     @media (max-width: 640px) { .page { padding: 0 16px 60px; } article { padding-top: 38px; } .after .btn { margin-left: 0; } }
   </style>
@@ -264,13 +315,27 @@
   </div>
 
   <main class="page">
-    <article>
-      <div class="meta">%META%</div>
-      <h1>%TITLE%</h1>
-      <p class="summary">%SUMMARY%</p>
-      <hr class="rule" />
-      <div class="%BODYCLASS%">%BODY%</div>
-    </article>
+    <div class="%SHELLCLASS%">
+      <article>
+        <div class="meta">%META%</div>
+        <h1>%TITLE%</h1>
+        <p class="summary">%SUMMARY%</p>
+        <hr class="rule" />
+        <div class="body">%BODY%</div>
+      </article>
+
+      <!-- The third column. It is a SIBLING of the article, not part of the
+           body, so the pictures' float arithmetic inside the body is untouched
+           by it: the body still splits its own width in half, and that width
+           is simply smaller. -->
+      <aside class="side" aria-label="Recent posts">
+        <div class="sidein">
+          <h2 class="sidehd">Recent posts</h2>
+          %RECENT%
+          <a class="sideall" href="/blog">All posts →</a>
+        </div>
+      </aside>
+    </div>
 
     <div class="bezel after"><div class="core">
       <p><b>From data to decisions.</b> Tickr Lab scores every stock it tracks the same way every night,

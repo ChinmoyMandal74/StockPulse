@@ -715,9 +715,35 @@ app.get('/blog/img/:id', route(async (req, res, next) => {
   res.send(img.bytes);
 }));
 
+// How many other posts the rail offers. Enough to navigate, short enough that
+// the column is a list rather than a second page.
+const RECENT_MAX = 8;
+
+// The recent-posts rail, RENDERED SERVER-SIDE like the rest of this page: a
+// blog that needs JavaScript to show its own navigation is one a crawler
+// cannot follow. The post being read is kept in the list and marked rather
+// than dropped — losing your place in a list of eight is worse than a row you
+// cannot click.
+const recentRail = (posts, currentSlug) => {
+  const rows = posts.slice(0, RECENT_MAX);
+  if (rows.length <= 1) {
+    return '<p class="sideempty">This is the first one. More soon.</p>';
+  }
+  return '<ol class="sidelist">' + rows.map((p) => {
+    const when = `<span class="sidewhen">${htmlEsc(postDate(p.publishedAt))}</span>`;
+    const title = htmlEsc(p.title);
+    return p.slug === currentSlug
+      ? `<li aria-current="page"><span class="sidenow">${title}</span>${when}</li>`
+      : `<li><a href="/blog/${encodeURIComponent(p.slug)}">${title}</a>${when}</li>`;
+  }).join('') + '</ol>';
+};
+
 app.get('/blog/:slug', route(async (req, res, next) => {
   const p = await store.readPost(req.params.slug, { publishedOnly: true });
   if (!p) return next();                     // falls through to the 404 handler
+  // One extra read of a table holding a dozen rows with no bodies selected —
+  // the rail is worth that, and there is nothing here to cache against.
+  const others = await store.readPosts({ publishedOnly: true }).catch(() => []);
   logAct(req, 'page', 'post:' + String(req.params.slug).slice(0, 60));
   const base = APP_URL || `https://${req.headers.host}`;
   const meta = [postDate(p.publishedAt), p.author ? htmlEsc(p.author) : '', `${readingMinutes(p.body)} min read`]
@@ -729,17 +755,16 @@ app.get('/blog/:slug', route(async (req, res, next) => {
     .replace('%CANONICAL%', htmlEsc(`${base}/blog/${p.slug}`))
     .replace('%META%', meta)
     .replace('%SUMMARY%', htmlEsc(summary))
-    // The layout is a class on the body wrapper, not a second template: the
-    // markup is identical either way and only the CSS differs, which is what
-    // keeps one column and two from drifting apart.
-    //
     // ?guides=1 draws the column boundaries over the real page at the real
     // width, which is the only place the allocation can be seen honestly -- the
     // editor's preview box is a different width, so its proportions would be a
     // different answer. Opt-in by URL, so no reader ever meets it, and pure CSS,
     // because this page carries no script and is not going to start.
-    .replace('%BODYCLASS%', (p.layout === 'two' ? 'body two' : 'body')
-      + (req.query.guides === '1' ? ' guides' : ''))
+    //
+    // It sits on the SHELL rather than on the body, because there are three
+    // columns to describe now and the third one is the body's sibling.
+    .replace('%SHELLCLASS%', 'shell' + (req.query.guides === '1' ? ' guides' : ''))
+    .replace('%RECENT%', recentRail(others, p.slug))
     .replace('%BODY%', renderMarkdown(p.body));
   res.type('html').send(summary ? html : html.replace('<p class="summary"></p>', ''));
 }));
@@ -6308,13 +6333,9 @@ app.put('/api/admin/posts', requireAdmin, route(async (req, res) => {
     // Stamped once, on the first publish: an edit later must not reorder the list.
     publishedAt: status === 'published' ? ((prev && prev.publishedAt) || new Date().toISOString()) : (prev && prev.publishedAt) || null,
     createdAt: (prev && prev.createdAt) || Date.now(),
-    // Only 'two' is a layout; anything else, the field being absent included,
-    // is one column. An older editor that does not send it therefore cannot
-    // silently flip a post's shape.
-    layout: b.layout === 'two' ? 'two' : 'one',
   });
   logAct(req, 'post', `${status}:${slug}`.slice(0, 80));
-  res.json({ ok: true, post, html: renderMarkdown(post.body), layout: post.layout });
+  res.json({ ok: true, post, html: renderMarkdown(post.body) });
 }));
 
 app.delete('/api/admin/posts/:slug', requireAdmin, route(async (req, res) => {
