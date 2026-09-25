@@ -3008,6 +3008,41 @@ const STARTER_SCREENS = [
   sc('mostactv', 'Market movers', 'Most active', 'Everything, by the value of shares traded today.',
     { filters: {}, sort: { key: 'dollarVolume', dir: -1 },
       columns: ['todayPct', 'volume', 'dollarVolume', 'volX', 'marketCap'] }),
+  // ---- How it moved: the SHAPE of the year, not the size of the move -------
+  // Steadiness (R^2 of log price against time), Crossings (times the price
+  // crossed its own median) and Ulcer (RMS drawdown) are descriptive readings,
+  // and this group is where they are findable rather than one screen deep under
+  // Technical. EVERY THRESHOLD IS SIZED AGAINST THE LIVE UNIVERSE -- the 1,150
+  // stocks holding a full year of bars -- because a screen returning nothing is
+  // a dead box and one returning a fifth of the screen is not a screen.
+  sc('strline0', 'How it moved', 'Climbing in a straight line', 'Up over the year, and it got there smoothly rather than in one jump. About 8% of the screen.',
+    { filters: { steadiness: '>=80', oneYearPct: '>10' },
+      sort: { key: 'steadiness', dir: -1 },
+      columns: ['steadiness', 'ulcer', 'oneYearPct', 'sixMonthPct', 'actionTrend', 'av:Balanced'] }),
+  // The case that Steadiness being DIRECTION-BLIND exists to make visible: a
+  // stock falling in a ruler-straight line scores 100 too, and this is where
+  // they show up instead of hiding among the smooth risers.
+  sc('strdown0', 'How it moved', 'Falling in a straight line', 'Down over the year in a steady grind — the case a direction-blind steadiness reading is for. About 4%.',
+    { filters: { steadiness: '>=80', oneYearPct: '<-10' },
+      sort: { key: 'steadiness', dir: -1 },
+      columns: ['steadiness', 'ulcer', 'oneYearPct', 'pctFromHigh', 'actionTrend', 'av:Balanced'] }),
+  // Three legs, each excluding a different impostor: the net move rules out a
+  // trender, the band rules out a rollercoaster oscillating across an 80% span,
+  // and the crossings rule out a random walk that merely ended where it began.
+  // Tightened from band<45/cross>=12, which matched 22% of the live screen.
+  // Identification only -- range TRADING was tested on this archive and came
+  // back flat, the faint direction running toward continuation rather than
+  // reversion (docs/momentum-delta.md).
+  sc('inrange0', 'How it moved', 'Trading in a range', 'Went nowhere over the year, inside a contained band, crossing its own median again and again. About 7%.',
+    { filters: { oneYearPct: '-15..15', bandPct: '<30', crossings: '>=20' },
+      sort: { key: 'crossings', dir: -1 },
+      columns: ['crossings', 'bandPct', 'steadiness', 'oneYearPct', 'range52Pos', 'rsi', 'av:Balanced'] }),
+  // What Ulcer is for, and what Steadiness cannot say on its own: the same gain
+  // bought with a far worse ride.
+  sc('roughup0', 'How it moved', 'Up, but a rough ride', 'Gained over the year and spent much of it well below its own high. About 4%.',
+    { filters: { oneYearPct: '>20', ulcer: '>=20' },
+      sort: { key: 'ulcer', dir: -1 },
+      columns: ['ulcer', 'oneYearPct', 'steadiness', 'bandPct', 'range52Pos', 'av:Balanced'] }),
   sc('undgrwth', 'Value and growth', 'Undervalued growth', 'Earnings growing 25%+, forward P/E under 20, PEG under 1.',
     { filters: { earningsGrowthYoY: '>=25', forwardPe: '0..20', peg: '0..1' }, sort: { key: 'peg', dir: 1 },
       columns: ['earningsGrowthYoY', 'revenueGrowthYoY', 'forwardPe', 'peg', 'marketCap', 'oneMonthPct'] }),
@@ -3041,18 +3076,6 @@ const STARTER_SCREENS = [
   sc('wakingup', 'Technical', 'Just started moving', 'Up more than 5% in a fortnight, still down over three months.',
     { filters: { twoWeekPct: '>5', threeMonthPct: '<0' }, sort: { key: 'twoWeekPct', dir: -1 },
       columns: ['twoWeekPct', 'oneMonthPct', 'threeMonthPct', 'actionTrend', 'actionEntry'] }),
-  // The three legs are deliberate and each excludes a different impostor: the
-  // net move rules out a trender, the band rules out a rollercoaster that
-  // oscillates across an 80% span, and the crossings rule out a random walk
-  // that merely ended up where it started. Measured over 421 symbols this picks
-  // about one stock in six, and the names are the ones you would expect --
-  // XEL, BRK.A, PG, JPM. Identification only: range TRADING was tested on this
-  // archive and came back flat, with the faint direction running toward
-  // continuation rather than reversion (docs/momentum-delta.md).
-  sc('inrange0', 'Technical', 'Trading in a range', 'Went nowhere over the year, inside a contained band, crossing its own median again and again.',
-    { filters: { oneYearPct: '-15..15', bandPct: '<45', crossings: '>=12' },
-      sort: { key: 'crossings', dir: -1 },
-      columns: ['crossings', 'bandPct', 'steadiness', 'oneYearPct', 'range52Pos', 'rsi', 'av:Balanced'] }),
   sc('overextd', 'Technical', 'Overextended', 'RSI above 75 and more than 12% above the 50-day average.',
     { filters: { rsi: '>75', vs50ma: '>12' }, sort: { key: 'rsi', dir: -1 },
       columns: ['rsi', 'vs50ma', 'oneMonthPct', 'actionEntry', 'av:Balanced'] }),
