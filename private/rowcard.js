@@ -175,6 +175,8 @@
     // back noise (see docs/momentum-delta.md).
     ['rel',   'Steadiness',     (s) => V.num(s.steadiness, 0)],
     ['rel',   'Ulcer',          (s) => V.num(s.ulcer, 1)],
+    ['rel',   'Crossings',      (s) => V.count(s.crossings)],
+    ['rel',   'Band',           (s) => V.num(s.bandPct, 0)],
     ['rel',   'RSI',            (s) => V.rsi(s.rsi)],
     ['trend', 'vs 50D MA',      (s) => V.pct(s.vs50ma)],
     ['trend', 'vs 200D MA',     (s) => V.pct(s.vs200ma)],

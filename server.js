@@ -2595,6 +2595,56 @@ function ulcerIndex(values, lookback = 252) {
   return n === lookback ? Math.sqrt(sq / n) : null;
 }
 
+// ---- is it trading in a RANGE? ---------------------------------------------
+// "No trend" is not "in a range": a random walk has no trend either, it just
+// wanders off and never comes back. Measured over 421 symbols, the 40 LEAST
+// steady stocks were 24 genuine ranges, 12 rollercoasters (no net move but a
+// huge band) and 4 that crashed or spiked -- so low Steadiness alone is 60%
+// precise and the other two readings are what fix it.
+//
+// Kaufman's efficiency ratio was the obvious candidate and was REJECTED on the
+// same measurement: rank correlation 0.79 with the absolute return, so it
+// mostly restates how far the thing went. The same trap that sank Sharpe for
+// the consistency rating.
+
+// How often the price crosses its own median for the window. A trender crosses
+// once or twice; something oscillating crosses twenty-five to thirty-five
+// times. **Rank correlation with volatility 0.07** -- which is the property
+// that matters, because it means this finds stocks that go back and forth
+// rather than merely stocks that are quiet.
+function medianCrossings(values, lookback = 252) {
+  if (!Array.isArray(values) || values.length < lookback) return null;
+  const c = [];
+  for (let i = lookback - 1; i >= 0; i--) {          // oldest to newest
+    const x = parseFloat(values[i].close);
+    if (!isFinite(x) || x <= 0) return null;         // a full window or nothing
+    c.push(x);
+  }
+  const med = [...c].sort((a, b) => a - b)[Math.floor(c.length / 2)];
+  let n = 0;
+  for (let i = 1; i < c.length; i++) if ((c[i - 1] - med) * (c[i] - med) < 0) n++;
+  return n;
+}
+
+// The width of the window's range as a share of its median. Deliberately NOT an
+// independent signal -- it is 0.89 rank-correlated with volatility, which is
+// exactly right: it is the volatility CONSTRAINT, and it is what excludes the
+// twelve rollercoasters that oscillate beautifully across an 80% span.
+function bandPct(values, lookback = 252) {
+  if (!Array.isArray(values) || values.length < lookback) return null;
+  let hi = -Infinity, lo = Infinity;
+  const c = [];
+  for (let i = lookback - 1; i >= 0; i--) {
+    const x = parseFloat(values[i].close);
+    if (!isFinite(x) || x <= 0) return null;
+    if (x > hi) hi = x;
+    if (x < lo) lo = x;
+    c.push(x);
+  }
+  const med = [...c].sort((a, b) => a - b)[Math.floor(c.length / 2)];
+  return med > 0 ? ((hi - lo) / med) * 100 : null;
+}
+
 // Annualised realised volatility (%), from daily log returns. The Cushion is
 // divided by this so a 40% move in a quiet name outranks the same move in one
 // that swings 40% routinely.
@@ -2991,6 +3041,18 @@ const STARTER_SCREENS = [
   sc('wakingup', 'Technical', 'Just started moving', 'Up more than 5% in a fortnight, still down over three months.',
     { filters: { twoWeekPct: '>5', threeMonthPct: '<0' }, sort: { key: 'twoWeekPct', dir: -1 },
       columns: ['twoWeekPct', 'oneMonthPct', 'threeMonthPct', 'actionTrend', 'actionEntry'] }),
+  // The three legs are deliberate and each excludes a different impostor: the
+  // net move rules out a trender, the band rules out a rollercoaster that
+  // oscillates across an 80% span, and the crossings rule out a random walk
+  // that merely ended up where it started. Measured over 421 symbols this picks
+  // about one stock in six, and the names are the ones you would expect --
+  // XEL, BRK.A, PG, JPM. Identification only: range TRADING was tested on this
+  // archive and came back flat, with the faint direction running toward
+  // continuation rather than reversion (docs/momentum-delta.md).
+  sc('inrange0', 'Technical', 'Trading in a range', 'Went nowhere over the year, inside a contained band, crossing its own median again and again.',
+    { filters: { oneYearPct: '-15..15', bandPct: '<45', crossings: '>=12' },
+      sort: { key: 'crossings', dir: -1 },
+      columns: ['crossings', 'bandPct', 'steadiness', 'oneYearPct', 'range52Pos', 'rsi', 'av:Balanced'] }),
   sc('overextd', 'Technical', 'Overextended', 'RSI above 75 and more than 12% above the 50-day average.',
     { filters: { rsi: '>75', vs50ma: '>12' }, sort: { key: 'rsi', dir: -1 },
       columns: ['rsi', 'vs50ma', 'oneMonthPct', 'actionEntry', 'av:Balanced'] }),
@@ -4578,6 +4640,8 @@ async function computeStocks(asOf, opts = {}) {
         range52Pos: range52Pos(values),   // 0 = on the 52w low, 100 = on the high
         steadiness: steadiness(values),   // R² of log price vs time, 0-100, direction-blind
         ulcer: ulcerIndex(values),        // RMS drawdown from the running high, %
+        crossings: medianCrossings(values),  // times the price crossed its own 1y median
+        bandPct: bandPct(values),            // (high-low)/median over the year, %
         realisedVol: rvol,
         fwd1M,
         fwd3M,

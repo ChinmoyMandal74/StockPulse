@@ -1292,7 +1292,7 @@
         <th class="group grp-short" data-group="short" colspan="6">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="4">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
-        <th class="group grp-rel" data-group="rel" colspan="9">Relative</th>
+        <th class="group grp-rel" data-group="rel" colspan="11">Relative</th>
         <th class="group grp-trend" data-group="trend" colspan="4">Trend</th>
         <th class="group grp-vol" data-group="vol" colspan="4">Volume</th>
         <th class="group grp-size" data-group="size" colspan="11">Size</th>
@@ -1346,6 +1346,8 @@
         <th class="grp-rel" data-key="range52Pos" title="Where the price sits in its 52-week range: 0 is on the low, 100 on the high.">52W<br>range</th>
         <th class="grp-rel" data-key="steadiness" title="How straight the last year's path was: the R² of log price against time, 0 to 100. 100 is a ruler-straight line, 0 is chop. DIRECTION-BLIND on purpose — a stock falling steadily also scores high, so read it beside the return and the trend columns. Signing it was measured and rejected: it takes the correlation with plain return from 0.34 to 0.89 and halves what the column adds. Needs a full year of bars.">Steadi-<br>ness</th>
         <th class="grp-rel" data-key="ulcer" title="Ulcer index: the root-mean-square drawdown from the running high over the last year, in percent. Depth AND time spent underwater, so a long shallow slide and one brief crash are told apart. Low is a calm ride. Descriptive, not a forecast.">Ulcer</th>
+        <th class="grp-rel" data-key="crossings" title="How many times the price crossed its own median over the last year. A trending stock crosses once or twice; something trading in a range crosses twenty-five to thirty-five times. Nearly independent of volatility (rank correlation 0.07), so it finds stocks that go back and forth rather than merely quiet ones. Needs a full year of bars.">Cross-<br>ings</th>
+        <th class="grp-rel" data-key="bandPct" title="The width of the last year's range as a share of its median price. Not an independent reading — it is 0.89 correlated with volatility — but it is the constraint that separates a real range from a rollercoaster that oscillates across an 80% span.">Band</th>
         <th class="grp-rel" data-key="rsi" title="Relative Strength Index (14-day)">RSI</th>
         <th class="grp-trend" data-key="vs50ma" title="Price vs 50-day moving average">vs 50D<br>MA</th>
         <th class="grp-trend" data-key="vs200ma" title="Price vs 200-day moving average">vs 200D<br>MA</th>
@@ -2871,7 +2873,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="87">${s.error}</td>
+            <td class="na" colspan="89">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -2932,6 +2934,8 @@
           ${rangeCell(s.range52Pos, 'grp-rel', liveTitle)}
           ${rangeCell(s.steadiness, 'grp-rel', liveTitle)}
           ${numCell(s.ulcer, 'grp-rel', liveTitle)}
+          ${rangeCell(s.crossings, 'grp-rel', liveTitle)}
+          ${rangeCell(s.bandPct, 'grp-rel', liveTitle)}
           ${rsiCell(s.rsi, 'grp-rel', liveTitle)}
           ${pctCell(s.vs50ma, 'grp-trend', liveTitle)}
           ${pctCell(s.vs200ma, 'grp-trend', liveTitle)}
@@ -2990,7 +2994,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 92;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 94;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3162,7 +3166,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="89">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="91">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
