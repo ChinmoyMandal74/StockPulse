@@ -564,14 +564,25 @@ function renderMarkdown(src) {
     .replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')
-    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, src) =>
+    // SIZE RIDES IN MARKDOWN'S OWN TITLE SLOT -- `![alt](src "small")` -- rather
+    // than in an invented grammar or in the alt, which belongs to screen
+    // readers. A title that is not one of the known widths stays a real title
+    // attribute, so nothing standard is lost by the reuse.
+    //
+    // The class comes from an ALLOWLIST, never from the text: it is being
+    // written into a class attribute, and a caption is author input.
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;([^&]*)&quot;)?\)/g, (m, alt, src, title) => {
       // Our own uploads, or a plain https picture. Anything else keeps its
       // words and loses its tag, the rule links already follow -- and it stops
       // the blog becoming an open proxy for data: and javascript: srcs.
-      (/^\/blog\/img\/[a-f0-9]{8,64}$/.test(src) || /^https:\/\//i.test(src))
-        ? `<figure class="pimg"><img src="${src}" alt="${alt}" loading="lazy" />`
-          + (alt ? `<figcaption>${alt}</figcaption>` : '') + '</figure>'
-        : alt)
+      if (!(/^\/blog\/img\/[a-f0-9]{8,64}$/.test(src) || /^https:\/\//i.test(src))) return alt;
+      const t = String(title || '').trim().toLowerCase();
+      const size = ['small', 'medium', 'wide'].includes(t) ? t : '';
+      const attr = (!size && title) ? ` title="${title}"` : '';
+      return `<figure class="pimg${size ? ' ' + size : ''}">`
+        + `<img src="${src}" alt="${alt}" loading="lazy"${attr} />`
+        + (alt ? `<figcaption>${alt}</figcaption>` : '') + '</figure>';
+    })
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, text, href) =>
       (/^https?:\/\//i.test(href) || /^\//.test(href))
         ? `<a href="${href}"${/^https?:/i.test(href) ? ' target="_blank" rel="noopener"' : ''}>${text}</a>`
@@ -604,7 +615,7 @@ function renderMarkdown(src) {
     // into a <figure>, and a figure inside a <p> is invalid -- the browser
     // auto-closes the paragraph and leaves an empty one behind, which shows up
     // as a phantom gap above every picture.
-    if (/^!\[[^\]]*\]\([^)\s]+\)$/.test(line.trim())) {
+    if (/^!\[[^\]]*\]\([^)\s]+(\s+"[^"]*")?\)$/.test(line.trim())) {
       closePara(); closeList(); closeQuote();
       out.push(inline(line.trim()));
       continue;

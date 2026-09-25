@@ -46,6 +46,30 @@
     .body ul, .body ol { margin: 16px 0 0; padding-left: 22px; }
     .body li { margin: 7px 0; }
     .body a { color: var(--accent); }
+
+    /* ---- pictures ---------------------------------------------------------
+       DEFAULT IS THE COLUMN, not the file's own size. max-width:100% with
+       height:auto is the whole of the bug fix; the named widths below are the
+       control, set in markdown's title slot: ![alt](src "small").            */
+    .body .pimg { margin: 26px 0 0; }
+    .body .pimg img {
+      display: block; width: 100%; height: auto; max-width: 100%;
+      border-radius: 12px; border: 1px solid var(--hair); background: var(--surface-2);
+    }
+    .body .pimg figcaption {
+      margin-top: 8px; font-size: 12.5px; line-height: 1.5; color: var(--faint); text-align: center;
+    }
+    .body .pimg.small  { max-width: 300px; margin-left: auto; margin-right: auto; }
+    .body .pimg.medium { max-width: 460px; margin-left: auto; margin-right: auto; }
+    /* WIDE breaks out of the reading column, which is the point: a screenshot
+       of an eighty-column table is unreadable at 704px. It can never be wider
+       than the window has room for, so it does not reintroduce a sideways
+       scroll on a phone -- the one thing the page must not do. */
+    .body .pimg.wide {
+      width: min(1040px, calc(100vw - 40px));
+      max-width: none;
+      margin-left: 50%; transform: translateX(-50%);
+    }
     .body strong { color: var(--text); }
     .body code { font-family: var(--mono); font-size: 13px; background: rgba(255, 255, 255, 0.06);
                  padding: 2px 6px; border-radius: 6px; color: var(--text); }

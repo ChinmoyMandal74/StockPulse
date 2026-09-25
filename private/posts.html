@@ -75,6 +75,15 @@
     .preview p { margin: 13px 0 0; font-size: 14.5px; line-height: 1.75; color: #cfd6e2; }
     .preview ul, .preview ol { margin: 13px 0 0; padding-left: 22px; color: #cfd6e2; font-size: 14.5px; line-height: 1.7; }
     .preview code { font-family: var(--mono); font-size: 12.5px; background: rgba(255,255,255,.06); padding: 2px 6px; border-radius: 6px; }
+    .preview .pimg { margin: 16px 0 0; }
+    .preview .pimg img {
+      display: block; width: 100%; height: auto; max-width: 100%;
+      border-radius: 10px; border: 1px solid var(--hair); background: var(--surface-2);
+    }
+    .preview .pimg figcaption { margin-top: 6px; font-size: 12px; color: var(--faint); text-align: center; }
+    .preview .pimg.small  { max-width: 240px; margin-left: auto; margin-right: auto; }
+    .preview .pimg.medium { max-width: 380px; margin-left: auto; margin-right: auto; }
+    .preview .pimg.wide   { max-width: 100%; }
     .preview pre { margin: 14px 0 0; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--hair); overflow-x: auto; }
     .preview blockquote { margin: 14px 0 0; padding-left: 16px; border-left: 2px solid rgba(52,211,153,.5); color: var(--muted); }
     .k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
@@ -147,6 +156,12 @@
               <span class="mdsep"></span>
               <button type="button" class="md" data-md="link"  title="Link (Ctrl+K)">Link</button>
               <button type="button" class="md" id="imgBtn"     title="Upload a picture and place it here">Image</button>
+              <select id="imgSize" class="md" title="How wide the next picture goes in. Change the word in the markdown to alter one later.">
+                <option value="">Full column</option>
+                <option value="wide">Wide — past the text</option>
+                <option value="medium">Medium</option>
+                <option value="small">Small</option>
+              </select>
               <input type="file" id="imgFile" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
               <span class="sp"></span>
               <span class="mdcount" id="mdCount"></span>
@@ -331,10 +346,16 @@
       try {
         const d = await api('POST', '/api/admin/posts/image', { dataUrl });
         const alt = file.name.replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim();
+        // The width goes in markdown's title slot, so it stays editable as plain
+        // text afterwards rather than being locked into whatever was picked at
+        // upload time. Full column is the default and writes nothing.
+        const size = $('imgSize').value;
+        const tail = size ? ' "' + size + '"' : '';
         // Its own line with blank lines either side, which is what makes the
         // renderer treat it as a block rather than wrapping it in a paragraph.
-        putText($('body'), '\n\n![' + alt + '](' + d.url + ')\n\n');
-        say('Added ' + file.name + ' — ' + Math.round(d.size / 1024) + ' KB stored.', 'good');
+        putText($('body'), '\n\n![' + alt + '](' + d.url + tail + ')\n\n');
+        say('Added ' + file.name + ' — ' + Math.round(d.size / 1024) + ' KB stored'
+          + (size ? ', ' + size + '.' : '.') + ' Change the width by editing the word in quotes.', 'good');
       } catch (e) { say(e.message, 'bad'); }
     }
 
