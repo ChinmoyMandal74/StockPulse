@@ -1289,7 +1289,7 @@
         <th class="group grp-rank" data-group="rank" colspan="1">Scores</th>
         <th class="group grp-act" data-group="act" colspan="12">Advice</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
-        <th class="group grp-short" data-group="short" colspan="6">Short-term %</th>
+        <th class="group grp-short" data-group="short" colspan="7">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="4">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
         <th class="group grp-rel" data-group="rel" colspan="11">Relative</th>
@@ -1326,6 +1326,7 @@
         <th class="grp-chart" data-col="spark90" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
         <th class="grp-short" data-key="pricedAt" title="When this stock’s price was last fetched from the provider — a per-symbol clock, not the time the refresh ran. The two differ: price rounds are paced once the universe is large, so a round prices only the slice that fits inside the minute and reads the rest from the archive. It says we ASKED, which is a different fact from whether anything came back — a stock can be pulled on time and still carry a stale close, so read it beside the bar date rather than instead of it. Amber past a day.">Price<br>pulled</th>
         <th class="grp-short" data-key="todayPct">Today</th>
+        <th class="grp-short" data-key="capChangeToday" title="Roughly how much market value the company added or lost today: its market cap times today's move. A big percentage on a small company is a small number here, which is the point — it answers where the money actually went rather than which line moved furthest. The cap behind it is the last one the provider reported and rotates weekly, so read this as a ranking rather than a figure to the cent. Blank for anything with no market cap, such as a fund.">Value<br>added</th>
         <th class="grp-short" data-key="yesterdayPct">YDAY</th>
         <th class="grp-short" data-key="oneWeekPct">1W</th>
         <th class="grp-short" data-key="twoWeekPct">2W</th>
@@ -2873,7 +2874,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="89">${s.error}</td>
+            <td class="na" colspan="90">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -2914,6 +2915,7 @@
           <td class="spark grp-chart" data-spark="${s.symbol}">${sparkCache[s.symbol] || ''}</td>
           ${pulledCell(s)}
           ${pctCell(s.todayPct, 'grp-short', liveTitle)}
+          ${bigNumCell(s.capChangeToday, s.currency || 'USD', 'grp-short', liveTitle)}
           ${pctCell(s.yesterdayPct, 'grp-short', liveTitle)}
           ${pctCell(s.oneWeekPct, 'grp-short', liveTitle)}
           ${pctCell(s.twoWeekPct, 'grp-short', liveTitle)}
@@ -2994,7 +2996,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 94;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 95;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3166,7 +3168,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="91">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="92">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

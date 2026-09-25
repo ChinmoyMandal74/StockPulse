@@ -199,6 +199,9 @@
     ['vol',   'Vol trend',      (s) => V.pct(s.volTrend)],
     ['vol',   'Rel. volume',    (s) => (ok(s.volX) ? { t: s.volX.toFixed(2) + '\u00d7', c: s.volX >= 1.5 ? 'warn' : '', n: s.volX, u: 'num' } : null)],
     ['vol',   '$ volume',       (s) => V.money(s.dollarVolume, s.currency || 'USD')],
+    // Value added today lives in the Short-term group on the table, beside the
+    // percentage it is derived from; here it sits with the other money.
+    ['vol',   'Value added',    (s) => V.money(s.capChangeToday, s.currency || 'USD')],
     ['size',  'Revenue TTM',    (s) => V.money(s.revenueTtm, s.currency)],
     ['size',  'Gross profit',   (s) => V.money(s.grossProfitTtm, s.currency)],
     ['size',  'Gross margin',   (s) => V.lvl(s.grossMargin)],

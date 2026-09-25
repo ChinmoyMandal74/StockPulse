@@ -2118,11 +2118,33 @@ async function stampPricedAt(rows) {
 //
 // Synchronous and free: no query, no API call. It reads `marketCap` and nothing
 // else, so it can run wherever rows are about to be served.
-function stampCapBand(rows) {
+// The two things derived from market cap, stamped on the way out like the
+// short name and the cap band beside them: a snapshot written before either
+// field existed still carries them, and both are free — they read what is
+// already on the row.
+//
+// VALUE ADDED TODAY is cap x today's move, and the base being the PREVIOUS
+// day's cap is what makes that the right arithmetic rather than
+// cap x r / (1 + r). Measured on the live snapshot: regressing the gap between
+// `price x shares` and the stored cap against today's move gives a slope of
+// 0.795, so the stored cap overwhelmingly predates today. It is a cached
+// figure from the last profile pull and rotates weekly, so it can be a few
+// days stale — which is why the column says "about" and why this is a number
+// to RANK by rather than to quote to the cent.
+//
+// NOT price x shares, which is the obvious alternative and is wrong: for an
+// ADR the share count is the ORDINARY count against an ADR price, and the two
+// disagree by 2,900% on CX and 900% on Vodafone.
+//
+// A fund has no market cap, so it has no value added — blank, never zero.
+function stampCapDerived(rows) {
   if (!Array.isArray(rows)) return;
   for (const r of rows) {
     if (!r || !r.symbol) continue;
     r.capBand = Filters.capBandOf(r.marketCap);
+    const cap = Number(r.marketCap);
+    const pct = Number(r.todayPct);
+    r.capChangeToday = (cap > 0 && Number.isFinite(pct)) ? cap * pct / 100 : null;
   }
 }
 
@@ -3155,7 +3177,7 @@ const serveStamps = (rows) => [
 ];
 // The two that need no round trip, and therefore wait for the portfolios.
 function finishServe(rows, pf) {
-  stampCapBand(rows);
+  stampCapDerived(rows);
   for (const x of rows) x.portfolios = membershipOf(x.symbol, pf);
 }
 
@@ -3351,6 +3373,21 @@ const STARTER_SCREENS = [
   sc('daylosrs', 'Market movers', 'Day losers', 'Down 3% or more today.',
     { filters: { todayPct: '<=-3' }, sort: { key: 'todayPct', dir: 1 },
       columns: ['todayPct', 'oneWeekPct', 'volX', 'dollarVolume', 'marketCap', 'av:Balanced'] }),
+  // THE SAME DAY, ASKED IN DOLLARS. A percentage says which line moved
+  // furthest; this says where the money went, and they rarely agree —
+  // measured on one ordinary session, Microsoft's +3.7% added $135.9B while
+  // the day's biggest percentage riser, at +13.2%, added $511M.
+  //
+  // The $1B floor is tuned against the real distribution rather than chosen
+  // for roundness: on that session 463 stocks cleared $100M, 117 cleared $1B
+  // and only 8 cleared $10B. A tighter cut empties the screen on a quiet day,
+  // which is the failure the /analysis thresholds were tuned to avoid.
+  sc('capgainr', 'Market movers', 'Day gainers by value', 'Added a billion or more in market value today.',
+    { filters: { capChangeToday: '>=1B' }, sort: { key: 'capChangeToday', dir: -1 },
+      columns: ['capChangeToday', 'todayPct', 'marketCap', 'capBand', 'dollarVolume', 'av:Balanced'] }),
+  sc('caplosrs', 'Market movers', 'Day losers by value', 'Lost a billion or more in market value today.',
+    { filters: { capChangeToday: '<=-1B' }, sort: { key: 'capChangeToday', dir: 1 },
+      columns: ['capChangeToday', 'todayPct', 'marketCap', 'capBand', 'dollarVolume', 'av:Balanced'] }),
   sc('rec52hi0', 'Market movers', 'Recent 52-week highs', 'Set a new 52-week high in the last five sessions.',
     { filters: { daysSince52wHigh: '..4' }, sort: { key: 'oneMonthPct', dir: -1 },
       columns: ['daysSince52wHigh', 'pctFromHigh', 'oneMonthPct', 'threeMonthPct', 'actionTrend', 'actionEntry'] }),
@@ -6310,7 +6347,7 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   // offered by both field pickers, and silently has no value, which is the
   // same defect the bare-string Size getter had and was hiding behind.
   // Synchronous and free: it reads marketCap and nothing else.
-  stampCapBand([stock]);
+  stampCapDerived([stock]);
 
   res.json({
     stock,
@@ -6882,7 +6919,7 @@ async function mobileRows(req) {
   await stampShortNames(rows);
   await stampAdviceAge(rows);
   await stampPricedAt(rows);
-  stampCapBand(rows);
+  stampCapDerived(rows);
   return rows;
 }
 
@@ -7173,7 +7210,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   await stampShortNames(stocks);
   await stampAdviceAge(stocks);
   await stampPricedAt(stocks);
-  stampCapBand(stocks);
+  stampCapDerived(stocks);
   const myLists = await store.readUserPortfolios(await prefsKey(req));
   // A post saved with a screen cut needs the screens to resolve it. Optional
   // like the basket below: a failure here draws the card over the whole screen
