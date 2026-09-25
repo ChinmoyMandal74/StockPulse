@@ -39,12 +39,38 @@
 
     .posts { margin-top: 42px; display: grid; gap: 12px; }
     a.post { text-decoration: none; color: inherit; display: block; }
-    a.post .core { padding: 24px 26px; transition: border-color .18s var(--ease), transform .18s var(--ease); }
+    a.post .core { padding: 22px 24px; transition: border-color .18s var(--ease), transform .18s var(--ease);
+                   display: flex; gap: 22px; align-items: flex-start; }
     a.post:hover .core { border-color: rgba(52, 211, 153, 0.35); transform: translateY(-1px); }
-    .meta { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.06em; color: var(--faint); text-transform: uppercase; }
+    /* `min-width: 0` or a long unbroken title refuses to shrink and pushes the
+       picture off the card — the flex default is min-content, not zero. */
+    .ptext { flex: 1 1 auto; min-width: 0; }
+    /* ---- the thumbnail ------------------------------------------------------
+       ON THE RIGHT, which is not only to echo the post page's picture rail: a
+       left-hand thumbnail would start each row's text at a different place
+       depending on whether that post happens to have a picture, and a list of
+       four where two are indented reads as broken rather than as varied.
+       On the right, every title lines up and a post without one simply has
+       nothing there. */
+    .pthumb { flex: 0 0 200px; display: block; width: 200px; aspect-ratio: 4 / 3;
+              border-radius: 10px; overflow: hidden; border: 1px solid var(--hair);
+              background: var(--surface-2); }
+    /* `cover` keeps every card the same shape; `top` is what makes that safe.
+       These pictures are posters and screenshots rather than photographs, so
+       the part worth seeing is the headline at the top — a centred crop takes
+       the middle band of a 4:5 promo card and shows nobody anything. */
+    .pthumb img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+    .meta { display: block; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.06em; color: var(--faint); text-transform: uppercase; }
     a.post h2 { margin: 10px 0 0; font-size: clamp(19px, 2.4vw, 25px); font-weight: 600; letter-spacing: -0.025em; line-height: 1.2; }
     a.post p { margin: 10px 0 0; font-size: 14px; line-height: 1.65; color: var(--muted); }
-    .more { margin-top: 14px; font-size: 13px; color: var(--green); }
+    .more { display: block; margin-top: 14px; font-size: 13px; color: var(--green); }
+    /* Narrow: the picture goes ABOVE the text, which is what a card does on a
+       phone. `order` rather than a reversed DOM, so the heading still comes
+       first for a screen reader and for anything reading the markup. */
+    @media (max-width: 620px) {
+      a.post .core { flex-direction: column; gap: 14px; }
+      .pthumb { flex: none; width: 100%; aspect-ratio: 16 / 9; order: -1; }
+    }
     .empty { padding: 40px 4px; color: var(--faint); font-size: 14px; }
     footer { margin-top: 56px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 24px;
              display: flex; flex-wrap: wrap; gap: 16px; font-size: 12.5px; color: var(--faint); }

@@ -1006,10 +1006,16 @@ const postRow = (x) => ({
 // The list. `publishedOnly` is what every public route passes; the editor asks
 // for everything. Bodies are left out — a list page does not need them and a
 // dozen posts of markdown is a payload nobody reads.
-async function readPosts({ publishedOnly = true } = {}) {
+//
+// `withBody` is the one exception, and exactly one caller passes it: the blog
+// index, which pulls each post's first picture out of its markdown to use as a
+// thumbnail. It is opt-in rather than the default so the sitemap, the editor's
+// list and the recent-posts rail keep reading the cheap version.
+async function readPosts({ publishedOnly = true, withBody = false } = {}) {
   await init();
+  const bodyCol = withBody ? 'body' : "'' as body";
   const r = await db.execute(publishedOnly
-    ? { sql: `select slug, title, summary, '' as body, status, author, published_at, created_at, updated_at
+    ? { sql: `select slug, title, summary, ${bodyCol}, status, author, published_at, created_at, updated_at
                 from posts where status = 'published' order by published_at desc`, args: [] }
     : { sql: `select slug, title, summary, '' as body, status, author, published_at, created_at, updated_at
                 from posts order by coalesce(published_at, '') desc, updated_at desc`, args: [] });

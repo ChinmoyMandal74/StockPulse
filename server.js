@@ -557,6 +557,25 @@ const slugify = (s) => String(s || '').toLowerCase().normalize('NFKD')
 // accident. Supported: #/##/### headings, - and 1. lists, > quotes, ```code```,
 // **bold**, *italic*, `code`, [text](href) with http(s) and internal links
 // only, --- rules, and blank-line paragraphs.
+// Our own uploads, or a plain https picture. Anything else keeps its words and
+// loses its tag, the rule links already follow — and it stops the blog becoming
+// an open proxy for data: and javascript: srcs. ONE definition, because the
+// index's thumbnail must never show a src the post itself would have refused.
+const safeImgSrc = (src) => /^\/blog\/img\/[a-f0-9]{8,64}$/.test(src) || /^https:\/\//i.test(src);
+
+// The first picture in a post, for the index's thumbnail. Read off the MARKDOWN
+// rather than the rendered HTML: the renderer escapes before it formats, so
+// scraping its output means matching `&quot;` and unpicking entities to get a
+// src back — parsing our own output to recover what the input already said.
+const firstImage = (md) => {
+  const re = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+  let m;
+  while ((m = re.exec(String(md || '')))) {
+    if (safeImgSrc(m[2])) return { src: m[2], alt: m[1] };
+  }
+  return null;
+};
+
 // ONE PARSER, TWO SKINS. The page wants classes and a stylesheet; an email
 // wants inline styles on every tag and a table where each figure is, because
 // Outlook renders through Word and most clients strip a <style> block. A
@@ -595,7 +614,7 @@ function renderMarkdown(src, skin) {
       // Our own uploads, or a plain https picture. Anything else keeps its
       // words and loses its tag, the rule links already follow -- and it stops
       // the blog becoming an open proxy for data: and javascript: srcs.
-      if (!(/^\/blog\/img\/[a-f0-9]{8,64}$/.test(src) || /^https:\/\//i.test(src))) return alt;
+      if (!safeImgSrc(src)) return alt;
       const t = String(title || '').trim().toLowerCase();
       const size = ['small', 'medium', 'wide'].includes(t) ? t : '';
       const attr = (!size && title) ? ` title="${title}"` : '';
@@ -707,15 +726,26 @@ const postDate = (iso) => {
 
 app.get('/blog', route(async (req, res) => {
   logAct(req, 'page', 'blog');
-  const posts = await store.readPosts({ publishedOnly: true });
+  // The one caller that wants the bodies — see readPosts. It needs them only to
+  // find each post's first picture, which never reaches the browser as markdown.
+  const posts = await store.readPosts({ publishedOnly: true, withBody: true });
   const list = posts.length ? posts.map((p) => {
     const bits = [postDate(p.publishedAt), p.author ? htmlEsc(p.author) : '', `${readingMinutes(p.summary || '')} min read`]
       .filter(Boolean);
+    const pic = firstImage(p.body);
+    // THE THUMBNAIL IS DECORATIVE, so its alt is empty on purpose: the title is
+    // the next thing in the same link, and a screen reader announcing the
+    // picture's caption first would read the row twice.
+    const thumb = pic
+      ? `<span class="pthumb"><img src="${htmlEsc(pic.src)}" alt="" loading="lazy" decoding="async" /></span>`
+      : '';
     return `<a class="post bezel" href="/blog/${encodeURIComponent(p.slug)}"><div class="core">` +
-      `<div class="meta">${bits.slice(0, 2).join(' · ')}</div>` +
+      '<span class="ptext">' +
+      `<span class="meta">${bits.slice(0, 2).join(' · ')}</span>` +
       `<h2>${htmlEsc(p.title)}</h2>` +
       (p.summary ? `<p>${htmlEsc(p.summary)}</p>` : '') +
-      '<div class="more">Read it &rarr;</div>' +
+      '<span class="more">Read it &rarr;</span>' +
+      '</span>' + thumb +
       '</div></a>';
   }).join('\n') : '<div class="empty">No posts yet. The first one is being written.</div>';
   res.type('html').send(pageTemplate('blog.html').replace('%POSTS%', list));
