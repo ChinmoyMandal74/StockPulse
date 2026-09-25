@@ -66,6 +66,9 @@
            border-radius: 9px; padding: 7px 10px; font: 500 12.5px var(--sans); cursor: pointer; }
     #tpl:disabled { opacity: 0.45; cursor: default; }
     .said { font-size: 12.5px; color: var(--muted); }
+    .openlink { font-size: 12.5px; color: var(--green); text-decoration: none;
+                border-bottom: 1px solid rgba(52, 211, 153, 0.35); }
+    .openlink:hover { border-bottom-color: var(--green); }
     .said.good { color: var(--green); } .said.bad { color: var(--red); }
     .danger { color: var(--red); border-color: rgba(251, 113, 133, 0.4); }
     .preview { margin-top: 16px; }
@@ -235,6 +238,7 @@
             <button class="btn" id="previewBtn">Preview</button>
             <button class="btn" id="mailBtn" hidden>Send as email</button>
             <span class="said" id="said"></span>
+            <a class="openlink" id="openLink" target="_blank" rel="noopener" hidden>Open the post &#8599;</a>
             <span class="sp"></span>
             <button class="btn danger" id="delBtn" hidden>Delete</button>
           </div>
@@ -496,6 +500,7 @@
       // but a button that exists in order to be refused is worse than none.
       $('mailBtn').hidden = !(p && p.status === 'published');
       $('mailBox').hidden = true;
+      paintPostLink();
       $('pubBtn').textContent = p && p.status === 'published' ? 'Update the live post' : 'Publish';
       $('preview').hidden = true;
       echoSlug();
@@ -541,6 +546,19 @@
       } catch (e) { say(e.message, 'bad'); }
     }
 
+    // A LINK MAY ONLY POINT AT SOMETHING A READER CAN OPEN, so it follows the
+    // SAVED slug and the saved status — never what is being typed. The address
+    // hint under the slug field echoes the box as you type, which is right for
+    // a hint and would be a 404 as a link; and a draft has no link at all,
+    // because /blog/<draft> is a 404 even for the owner. Preview is the way to
+    // see one, and it is the button next door.
+    function paintPostLink() {
+      const live = currentStatus === 'published' && !!current;
+      const a = $('openLink');
+      a.hidden = !live;
+      if (live) a.href = '/blog/' + encodeURIComponent(current);
+    }
+
     // ONE painter, because two call sites setting className by hand is how one
     // of them silently loses a piece of it — which is what happened when the
     // class also carried the per-post layout.
@@ -567,6 +585,9 @@
       };
       if (!payload.title) return say('It needs a title.', 'bad');
       if (!payload.body.trim()) return say('It needs something in the body.', 'bad');
+      // Read BEFORE the save: afterwards both branches look identical, and a
+      // first publish would report itself as an update.
+      const wasLive = currentStatus === 'published';
       $('saveBtn').disabled = $('pubBtn').disabled = true;
       say('Saving…');
       try {
@@ -579,9 +600,10 @@
         $('delBtn').hidden = false;
         $('pubBtn').textContent = d.post.status === 'published' ? 'Update the live post' : 'Publish';
         $('mailBtn').hidden = d.post.status !== 'published';
+        paintPostLink();
         dirty = false;
         say(d.post.status === 'published'
-          ? `Published — it is live at /blog/${d.post.slug}.`
+          ? (wasLive ? 'Updated — the live post now says this.' : 'Published — it is live.')
           : 'Saved as a draft. Nobody else can see it.', 'good');
         paintPreview(d.html);
       } catch (e) {
@@ -613,6 +635,7 @@
         $('slug').value = d.post.slug;
         echoSlug();
         paintPreview(d.html);
+        paintPostLink();
         await load();
         say(d.post.status === 'published'
           ? 'Saved and rendered below — the post is still live.'
