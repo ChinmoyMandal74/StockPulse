@@ -1761,9 +1761,20 @@ const MAIL_READY = !!(RESEND_KEY && MAIL_FROM && APP_URL);
 
 // MAIL_FROM may be a bare address or a "Name <addr>" pair. Either way the name
 // shown to a reader is the app's own.
-function fromHeader() {
-  const m = /<([^>]+)>/.exec(MAIL_FROM);
-  const addr = (m ? m[1] : MAIL_FROM).trim();
+// BULK MAY LEAVE FROM A DIFFERENT DOMAIN THAN TRANSACTIONAL, and that is the
+// one thing worth being able to change without a code edit: a newsletter and a
+// password reset sent from the same subdomain share one reputation, so a bad
+// complaint week on the list can push resets into spam. Set MAIL_FROM_BULK to
+// an address on a verified second domain (news.tickrlab.com, say) and the list
+// moves there; unset, it is MAIL_FROM and nothing changes.
+//
+// The display name still comes from BRAND either way, so the two cannot drift
+// into looking like two different senders.
+const MAIL_FROM_BULK = String(process.env.MAIL_FROM_BULK || '').trim();
+function fromHeader(bulk) {
+  const src = (bulk && MAIL_FROM_BULK) || MAIL_FROM;
+  const m = /<([^>]+)>/.exec(src);
+  const addr = (m ? m[1] : src).trim();
   return `${BRAND} <${addr}>`;
 }
 
@@ -2070,7 +2081,7 @@ function textShell({ heading, intro, lines = [], note = '' }) {
 // RESEND. Losing one copy beats sending two.
 //
 // `sendMail` keeps its boolean, so none of the transactional callers change.
-async function sendMailResult({ to, subject, text, html, replyTo, headers }) {
+async function sendMailResult({ to, subject, text, html, replyTo, headers, bulk }) {
   if (!MAIL_READY) return { ok: false, status: 0, retryable: false };
   try {
     const r = await fetch('https://api.resend.com/emails', {
@@ -2080,7 +2091,7 @@ async function sendMailResult({ to, subject, text, html, replyTo, headers }) {
         ...(headers && Object.keys(headers).length ? { headers } : {}),
         // The address is configuration; the display name is the product's, so a
         // rename cannot leave a stale name sitting in everyone's inbox.
-        from: fromHeader(),
+        from: fromHeader(bulk),
         to: [to],
         subject,
         text,
@@ -7112,7 +7123,7 @@ async function sendPostToList(req, res, p) {
     // No reply-to: a broadcast is not from a person, and pointing replies at the
     // owner's own inbox invites a conversation the footer does not promise.
     const out = await sendMailResult({
-      to: sub.email, subject: p.title, text, html,
+      to: sub.email, subject: p.title, text, html, bulk: true,
       replyTo: process.env.MAIL_REPLY_TO || undefined,
       headers: listHeaders(base, sub, topic),
     });
