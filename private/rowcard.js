@@ -201,7 +201,10 @@
     ['vol',   '$ volume',       (s) => V.money(s.dollarVolume, s.currency || 'USD')],
     // Value added today lives in the Short-term group on the table, beside the
     // percentage it is derived from; here it sits with the other money.
-    ['vol',   'Value added',    (s) => V.money(s.capChangeToday, s.currency || 'USD')],
+    // signedMoney, not money: this is a CHANGE, so it takes the up/down colour
+    // the percentage beside it on the table takes, and a zero reads positive in
+    // both for the same reason.
+    ['vol',   'Value added',    (s) => V.signedMoney(s.capChangeToday, s.currency || 'USD')],
     ['size',  'Revenue TTM',    (s) => V.money(s.revenueTtm, s.currency)],
     ['size',  'Gross profit',   (s) => V.money(s.grossProfitTtm, s.currency)],
     ['size',  'Gross margin',   (s) => V.lvl(s.grossMargin)],

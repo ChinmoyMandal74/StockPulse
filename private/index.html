@@ -2915,7 +2915,7 @@
           <td class="spark grp-chart" data-spark="${s.symbol}">${sparkCache[s.symbol] || ''}</td>
           ${pulledCell(s)}
           ${pctCell(s.todayPct, 'grp-short', liveTitle)}
-          ${bigNumCell(s.capChangeToday, s.currency || 'USD', 'grp-short', liveTitle)}
+          ${netCashCell(s.capChangeToday, s.currency || 'USD', 'grp-short', liveTitle)}
           ${pctCell(s.yesterdayPct, 'grp-short', liveTitle)}
           ${pctCell(s.oneWeekPct, 'grp-short', liveTitle)}
           ${pctCell(s.twoWeekPct, 'grp-short', liveTitle)}
