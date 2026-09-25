@@ -442,6 +442,23 @@
       </aside>
     </div>
 
+    <!-- A SIBLING of the shell, like the call-to-action below it, so the rail's
+         column arithmetic does not apply to it and it runs the full width. The
+         form is plain HTML: this page deliberately loads no JavaScript. -->
+    <section class="subbox">
+      <h2>Get new posts by email</h2>
+      <p>An email when something new goes up — a few a month at most. Nothing else, and no
+        sharing your address with anyone.</p>
+      <form method="post" action="/subscribe">
+        <input type="hidden" name="source" value="post:%SLUG%" />
+        <input type="email" name="email" required autocomplete="email"
+               placeholder="you@example.com" aria-label="Your email address" />
+        <button type="submit">Subscribe</button>
+      </form>
+      <p class="fine">You will get one email asking you to confirm. Every message after that has a
+        one-click unsubscribe, and it works without signing in.</p>
+    </section>
+
     <div class="bezel after"><div class="core">
       <p><b>From data to decisions.</b> Tickr Lab scores every stock it tracks the same way every night,
         and shows its working.</p>

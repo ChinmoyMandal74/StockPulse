@@ -159,6 +159,17 @@
                      letter-spacing: 0.16em; color: var(--faint); margin-bottom: 6px; }
     .mailbox textarea { min-height: 0; font-family: var(--sans); font-size: 13.5px; }
     .mailbox .bar { margin-top: 10px; }
+    /* `.mailbox label` above is a BLOCK, uppercase, letter-spaced caption rule
+       written for the field headings — and it captures the radio labels too,
+       which is how the tile dialog once rendered every field name as a caption
+       floating above its checkbox. Undone by name here rather than by hoping
+       source order wins, since the two selectors tie on specificity. */
+    .mailbox .audience { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+    .mailbox label.aud { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 0;
+                         font-size: 13px; text-transform: none; letter-spacing: 0;
+                         color: var(--text); cursor: pointer; }
+    .mailbox label.aud input { margin: 0; accent-color: var(--accent); }
+    .mailbox label.aud.off { color: var(--faint); cursor: not-allowed; }
     .gtick { display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
              font-size: 12px; color: var(--muted); cursor: pointer; }
     .phead { display: flex; align-items: center; gap: 12px; }
@@ -271,7 +282,19 @@
                reaches people who are not you, so it does not sit open beside
                Save. -->
           <div class="mailbox" id="mailBox" hidden>
-            <label for="mailTo">Send this post to</label>
+            <!-- TWO AUDIENCES, AND THEY ARE DIFFERENT ACTS. Typed addresses are
+                 person-to-person — a few people you know, nothing stored, no
+                 unsubscribe, because they are not on a list. The subscribers
+                 option is a broadcast, and every message it sends carries the
+                 unsubscribe link and the one-click headers. The radio makes the
+                 reader choose rather than leaving it to a default. -->
+            <label>Send this post to</label>
+            <div class="audience">
+              <label class="aud"><input type="radio" name="aud" value="addresses" checked />
+                <span>People I name</span></label>
+              <label class="aud"><input type="radio" name="aud" value="subscribers" id="audSubs" />
+                <span id="audSubsLabel">Everyone subscribed</span></label>
+            </div>
             <textarea id="mailTo" rows="2" spellcheck="false"
               placeholder="you@example.com, someone@else.com — commas, spaces or one per line"></textarea>
             <p class="hint" id="mailHint"></p>
@@ -694,12 +717,51 @@
     // appear at once rather than asking for the markdown back.
     $('guides').addEventListener('change', () => paintPreview(null));
 
-    // ---- send this post to a few people ----------------------------------
-    // Deliberately NOT a subscriber list: nothing is stored, nobody is
-    // subscribed, and each recipient gets their own copy so no one sees the
-    // others' addresses. The server enforces all of that; this is the door.
+    // ---- send this post --------------------------------------------------
+    // Two audiences. Typed addresses are person-to-person: nothing stored,
+    // nobody subscribed, each recipient gets their own copy so no one sees the
+    // others' addresses. The list is a broadcast, batched because a serverless
+    // function cannot hold hundreds of sends. The server enforces both.
     let myEmail = null;
+    let subStats = null;
     fetch('/api/me').then((r) => r.json()).then((m) => { myEmail = m && m.email; }).catch(() => {});
+
+    const audience = () => (document.querySelector('input[name="aud"]:checked') || {}).value || 'addresses';
+    const say2 = (t, k) => { const e = $('mailSaid'); e.textContent = t; e.className = 'said ' + (k || ''); };
+
+    // The count is fetched when the box opens rather than held: "everyone
+    // subscribed" is a promise about a number, and a stale one is the wrong
+    // promise. With nobody on the list the option is disabled and SAYS SO —
+    // a radio that silently sends to no one reads as a broken send.
+    async function loadSubCount() {
+      const lbl = $('audSubsLabel');
+      lbl.textContent = 'Everyone subscribed…';
+      try {
+        const d = await api('GET', '/api/admin/subscribers');
+        subStats = d.stats;
+        const n = d.stats.active;
+        lbl.textContent = n ? `Everyone subscribed (${n})` : 'Everyone subscribed (nobody yet)';
+        $('audSubs').disabled = !n;
+        $('audSubs').closest('label').classList.toggle('off', !n);
+        if (!n && audience() === 'subscribers') document.querySelector('input[value="addresses"]').checked = true;
+      } catch (e) {
+        lbl.textContent = 'Everyone subscribed (count unavailable)';
+      }
+      paintAudience();
+    }
+
+    function paintAudience() {
+      const list = audience() === 'subscribers';
+      $('mailTo').hidden = list;
+      $('mailHint').textContent = list
+        ? `Goes to everyone who confirmed a subscription${subStats ? ' — ' + subStats.active + ' of them' : ''}. `
+          + 'Each message carries its own unsubscribe link, and anyone already sent this post is skipped, '
+          + 'so a second press cannot send it twice.'
+        : 'Each person gets their own copy — nobody sees the other addresses. '
+          + 'It arrives as one column: an email cannot put the pictures in a rail beside the text.';
+    }
+    document.querySelectorAll('input[name="aud"]').forEach((r) =>
+      r.addEventListener('change', paintAudience));
 
     $('mailBtn').addEventListener('click', () => {
       const box = $('mailBox');
@@ -708,30 +770,63 @@
       // Your own address first, so the sensible first send — one to yourself,
       // to see what it looks like — costs no typing.
       if (!$('mailTo').value.trim() && myEmail) $('mailTo').value = myEmail;
-      $('mailHint').textContent = 'Each person gets their own copy — nobody sees the other addresses. '
-        + 'It arrives as one column: an email cannot put the pictures in a rail beside the text.';
-      $('mailSaid').textContent = '';
+      say2('');
+      loadSubCount();
       $('mailTo').focus();
     });
     $('mailCancel').addEventListener('click', () => { $('mailBox').hidden = true; });
 
+    // ONE BATCH PER CALL AND THE PAGE LOOPS, the shape the refreshes use. The
+    // server answers with how many are left, so the loop ends on its say-so
+    // rather than on a count this page worked out for itself.
+    async function sendToList() {
+      const url = '/api/admin/posts/' + encodeURIComponent(current) + '/email';
+      let sent = 0, failed = [], rounds = 0;
+      for (;;) {
+        const d = await api('POST', url, { audience: 'subscribers' });
+        if (d.message && !d.sent.length && !d.remaining) { say2(d.message, 'good'); return; }
+        sent += d.sent.length;
+        failed = failed.concat(d.failed);
+        rounds++;
+        if (!d.remaining) {
+          const bits = ['Sent to ' + sent + ' subscriber' + (sent === 1 ? '' : 's')];
+          if (failed.length) bits.push(failed.length + ' failed (' + failed.slice(0, 5).join(', ') + ')');
+          say2(bits.join('; ') + '.', failed.length ? 'bad' : 'good');
+          return;
+        }
+        say2(`Sent ${sent}, ${d.remaining} to go…`);
+        // A guard against a server that never reports progress, so a bug here
+        // cannot become an endless mailing loop.
+        if (rounds > 200) { say2('Stopped after 200 batches — check the subscriber list.', 'bad'); return; }
+      }
+    }
+
     $('mailSend').addEventListener('click', async () => {
-      const to = $('mailTo').value.trim();
-      const say2 = (t, k) => { const e = $('mailSaid'); e.textContent = t; e.className = 'said ' + (k || ''); };
-      if (!to) return say2('Nobody to send it to.', 'bad');
       if (!current) return say2('Save it first.', 'bad');
+      const list = audience() === 'subscribers';
+      const to = $('mailTo').value.trim();
+      if (!list && !to) return say2('Nobody to send it to.', 'bad');
+      // A BROADCAST IS NOT UNDOABLE, so it asks first. Naming the number is the
+      // point of the question — "are you sure" alone tells you nothing.
+      if (list) {
+        const n = subStats ? subStats.active : 0;
+        if (!window.confirm(`Email this post to ${n} subscriber${n === 1 ? '' : 's'}?\n\n`
+          + 'This cannot be taken back once it is sent.')) return;
+      }
       $('mailSend').disabled = true;
       say2('Sending…');
       try {
-        const d = await api('POST', '/api/admin/posts/' + encodeURIComponent(current) + '/email', { to });
-        // Report per address rather than "done": one bad address among twenty
-        // must not read as a clean send, and it is the only way to know which.
-        const bits = [];
-        if (d.sent.length) bits.push('Sent to ' + d.sent.length + ' — ' + d.sent.join(', '));
-        if (d.failed.length) bits.push('failed for ' + d.failed.join(', '));
-        if (d.invalid.length) bits.push("could not read " + d.invalid.join(', '));
-        say2(bits.join('; ') + '.', d.ok ? 'good' : 'bad');
-        if (d.ok) $('mailTo').value = '';
+        if (list) { await sendToList(); } else {
+          const d = await api('POST', '/api/admin/posts/' + encodeURIComponent(current) + '/email', { to });
+          // Report per address rather than "done": one bad address among twenty
+          // must not read as a clean send, and it is the only way to know which.
+          const bits = [];
+          if (d.sent.length) bits.push('Sent to ' + d.sent.length + ' — ' + d.sent.join(', '));
+          if (d.failed.length) bits.push('failed for ' + d.failed.join(', '));
+          if (d.invalid.length) bits.push("could not read " + d.invalid.join(', '));
+          say2(bits.join('; ') + '.', d.ok ? 'good' : 'bad');
+          if (d.ok) $('mailTo').value = '';
+        }
       } catch (e) { say2(e.message, 'bad'); }
       finally { $('mailSend').disabled = false; }
     });

@@ -448,7 +448,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       // no symbols in that path, so it opens with both pickers empty
                       '/compare.html': '/compare',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
-                      '/export.html': '/export',
+                      '/export.html': '/export', '/subscribers.html': '/subscribers',
                       // The public pages have canonical addresses of their own.
                       '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
                       '/about.html': '/about',
@@ -539,6 +539,12 @@ app.get('/news-runs', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'news-runs');
   res.sendFile(path.join(__dirname, 'private', 'news-runs.html'));
+}));
+
+app.get('/subscribers', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'subscribers');
+  res.sendFile(path.join(__dirname, 'private', 'subscribers.html'));
 }));
 
 // ---- the blog --------------------------------------------------------------
@@ -811,6 +817,65 @@ app.get('/blog/img/:id', route(async (req, res, next) => {
   res.send(img.bytes);
 }));
 
+// ---- the mailing list -------------------------------------------------------
+// WHAT CAN BE SENT, defined once. Adding a second mailing is an entry here plus
+// something that sends it; the column on the row is a JSON array from day one
+// precisely so the second one costs no migration and no re-consent.
+//
+// The id is stored on every subscriber row, so a topic may be renamed but NEVER
+// re-keyed: the id is what a stored consent points at.
+const SUB_TOPICS = [
+  { id: 'posts', name: 'New posts', note: 'An email when something new goes up on the blog. A few a month at most.' },
+];
+const SUB_TOPIC_IDS = new Set(SUB_TOPICS.map((t) => t.id));
+const subTopicName = (id) => (SUB_TOPICS.find((t) => t.id === id) || {}).name || id;
+
+// Kept only where it is asked for, so a tick nobody offered cannot arrive by
+// hand-rolled POST. An empty list falls back to every topic, which is what the
+// blog's own box means when it offers no choice.
+const cleanTopics = (v) => {
+  const want = Array.isArray(v) ? v.map(String) : [];
+  const keep = [...new Set(want.filter((t) => SUB_TOPIC_IDS.has(t)))];
+  return keep.length ? keep : SUB_TOPICS.map((t) => t.id);
+};
+
+// CAN-SPAM wants a real postal address in commercial bulk mail. Unset, the list
+// still works and the admin page says what is missing rather than the server
+// inventing one — a fabricated address is worse than none.
+const MAIL_POSTAL = String(process.env.MAIL_POSTAL_ADDRESS || '').trim();
+
+const subBase = (req) => APP_URL || `https://${req.headers.host}`;
+const unsubUrl = (base, token, topic) =>
+  `${base}/unsubscribe?t=${encodeURIComponent(token)}` + (topic ? `&topic=${encodeURIComponent(topic)}` : '');
+
+// Every list message carries this, in the footer line the shell already keeps
+// for "why did I get this" — which is the honest place for it, because that is
+// the question and this is the answer.
+const listNote = (base, sub, topic) => {
+  const link = unsubUrl(base, sub.unsubToken, topic);
+  return `You are getting this because ${mailEsc(sub.email)} asked for ${mailEsc(subTopicName(topic))} from ${BRAND}. `
+    + `<a href="${link}" style="color:${MC.mute}">Unsubscribe</a>.`
+    + (MAIL_POSTAL ? `<br>${mailEsc(MAIL_POSTAL)}` : '');
+};
+const listNoteText = (base, sub, topic) =>
+  `You are getting this because ${sub.email} asked for ${subTopicName(topic)} from ${BRAND}.\n`
+  + `Unsubscribe: ${unsubUrl(base, sub.unsubToken, topic)}`
+  + (MAIL_POSTAL ? `\n${MAIL_POSTAL}` : '');
+
+// The headers that make it ONE CLICK in Gmail and Yahoo. The POST variant is
+// what turns the client's own Unsubscribe button into a real request rather
+// than a mailto a human has to send.
+const listHeaders = (base, sub, topic) => ({
+  'List-Unsubscribe': `<${unsubUrl(base, sub.unsubToken, topic)}>`,
+  'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  'List-Id': `${subTopicName(topic)} <${topic}.${(APP_URL || '').replace(/^https?:\/\//, '') || 'tickrlab.com'}>`,
+});
+
+// How many go out per call. A serverless function cannot hold hundreds of
+// sends and nothing may run after the response, so the admin page loops — the
+// shape `/api/news/refresh` already uses.
+const MAIL_LIST_BATCH = 20;
+
 // How many other posts the rail offers. Enough to navigate, short enough that
 // the column is a list rather than a second page.
 const RECENT_MAX = 8;
@@ -861,6 +926,10 @@ app.get('/blog/:slug', route(async (req, res, next) => {
     // columns to describe now and the third one is the body's sibling.
     .replace('%SHELLCLASS%', 'shell' + (req.query.guides === '1' ? ' guides' : ''))
     .replace('%RECENT%', recentRail(others, p.slug))
+    // Which post the subscribe box was filled in from, kept as the consent
+    // record's `source`. Escaped like everything else, though a slug is already
+    // [a-z0-9-] by the time it is stored.
+    .split('%SLUG%').join(htmlEsc(p.slug))
     .replace('%BODY%', renderMarkdown(p.body));
   res.type('html').send(summary ? html : html.replace('<p class="summary"></p>', ''));
 }));
@@ -871,6 +940,177 @@ app.get('/posts', route(async (req, res) => {
   logAct(req, 'page', 'posts');
   res.sendFile(path.join(__dirname, 'private', 'posts.html'));
 }));
+
+// ---- subscribing, confirming, leaving ---------------------------------------
+// All three are PUBLIC and none needs a session: the blog is public, so most
+// subscribers will never have an account, and an unsubscribe that asks someone
+// to sign in first is an unsubscribe that does not work.
+
+// A tiny page shared by confirm and unsubscribe. Server-rendered like the rest
+// of the blog, in the site's own voice, because landing on a bare line of text
+// after clicking a link in an email reads as a broken site.
+function subPage({ title, heading, body, base }) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8">`
+    + `<meta name="viewport" content="width=device-width,initial-scale=1">`
+    + `<meta name="robots" content="noindex">`
+    + `<title>${htmlEsc(title)} · ${BRAND}</title>`
+    + `<link rel="stylesheet" href="/app.css"><link rel="icon" href="/favicon.svg">`
+    + `<style>body{margin:0;background:var(--void);color:var(--text);font-family:var(--sans)}`
+    + `.wrap{max-width:560px;margin:0 auto;padding:18vh 24px 80px}`
+    + `h1{font-size:30px;line-height:1.2;margin:0 0 14px;letter-spacing:-.02em}`
+    + `p{color:var(--muted);line-height:1.65;margin:0 0 14px;font-size:15px}`
+    + `.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}`
+    + `.b{display:inline-block;padding:10px 16px;border-radius:10px;border:1px solid var(--hair-2);`
+    + `color:var(--text);text-decoration:none;font-size:14px;cursor:pointer;background:transparent;font-family:inherit}`
+    + `.b.p{background:var(--text);color:var(--void);border-color:var(--text)}`
+    + `</style></head><body><div class="wrap"><h1>${htmlEsc(heading)}</h1>${body}`
+    + `<div class="row"><a class="b" href="${base}/blog">Read the blog</a>`
+    + `<a class="b" href="${base}/">Home</a></div></div></body></html>`;
+}
+
+// The sign-up itself. ANSWERS THE SAME WHATEVER HAPPENS — already subscribed,
+// brand new, throttled, or not a real address. `/api/forgot` follows the rule
+// for the same reason: otherwise the form is an oracle for whether an address
+// is on the list, which is other people's business given away.
+//
+// TWO DOORS, ONE BODY. The blog's own form is a plain HTML post, because
+// neither blog page loads any JavaScript and a subscribe box is no reason to
+// start; `/api/subscribe` is the same thing for a caller that wants JSON.
+// Content negotiation is deliberately NOT how they are told apart — a browser's
+// fetch sends the same Accept header as a navigation, which this codebase has
+// already been bitten by once.
+async function doSubscribe(req, res, wantsJson) {
+  const base = subBase(req);
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const said = 'Check your email — there is a link to confirm. It expires in a week.';
+  const generic = { ok: true, message: said };
+  const page = (title, heading, body, code) => res.status(code || 200).type('html')
+    .send(subPage({ base, title, heading, body }));
+  const bad = (msg) => (wantsJson ? res.status(400).json({ error: msg })
+    : page('Check the address', 'That does not look like an email address',
+      `<p>${htmlEsc(msg)} Go back and try again.</p>`, 400));
+  const fine = () => (wantsJson ? res.json(generic)
+    : page('Almost there', 'Check your email',
+      '<p>There is a link on its way to confirm the address. It expires in a week, and nothing '
+      + 'is sent until you click it.</p>'));
+
+  if (!EMAIL_RE.test(email) || email.length > 160) return bad('We could not read that as an address.');
+  if (!MAIL_READY) {
+    console.warn('subscribe: mail is not configured (RESEND_API_KEY / MAIL_FROM / APP_URL)');
+    return fine();
+  }
+  const topics = cleanTopics(req.body && req.body.topics);
+  const source = String(req.body?.source || 'blog').slice(0, 60);
+  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || '';
+  const started = await store.startSubscribe({ email, topics, source, ip });
+  if (!started.token) return fine();   // already on, or asked a moment ago
+
+  const link = `${base}/subscribe/confirm?t=${encodeURIComponent(started.token)}`;
+  const what = topics.map(subTopicName).join(', ');
+  await sendMail({
+    to: email,
+    subject: `Confirm your ${BRAND} subscription`,
+    text: textShell({
+      heading: 'One click to confirm',
+      intro: `Confirm that you want ${what} from ${BRAND}.`,
+      lines: [link, '', 'The link expires in a week.'],
+      note: 'If you did not ask for this, ignore it — nothing is sent until the link is clicked.',
+    }),
+    html: emailShell({
+      heading: 'One click to confirm',
+      intro: `Confirm that you want ${what} from ${BRAND}.`,
+      body: mailButton(link, 'Confirm subscription')
+        + `<p style="margin:0;font-size:13.5px;color:${MC.mute}">The link expires in a week. `
+        + 'If the button does not work, paste this into your browser:<br>'
+        + `<span style="word-break:break-all;color:${MC.faint}">${mailEsc(link)}</span></p>`,
+      // THE WHOLE POINT OF CONFIRMING: anyone can type anyone's address into a
+      // form, so this message has to be harmless to receive by mistake.
+      note: 'If you did not ask for this, ignore it — nothing is sent until the link is clicked.',
+    }),
+  });
+  return fine();
+}
+
+app.post('/subscribe', express.urlencoded({ extended: false }), route((req, res) =>
+  doSubscribe(req, res, false)));
+app.post('/api/subscribe', route((req, res) => doSubscribe(req, res, true)));
+
+app.get('/subscribe/confirm', route(async (req, res) => {
+  const base = subBase(req);
+  const done = await store.confirmSubscribe(String(req.query.t || ''));
+  if (!done) {
+    return res.status(404).type('html').send(subPage({ base, title: 'Link not recognised',
+      heading: 'That link has already been used',
+      body: '<p>Confirmation links work once. If you have already confirmed, you are on the list '
+        + 'and there is nothing more to do.</p>' }));
+  }
+  if (done.expired) {
+    return res.status(410).type('html').send(subPage({ base, title: 'Link expired',
+      heading: 'That link has expired',
+      body: '<p>Confirmation links last a week. Subscribe again from the blog and a fresh one '
+        + 'will arrive.</p>' }));
+  }
+  logAct(req, 'account', 'subscribed');
+  res.type('html').send(subPage({ base, title: 'Subscribed', heading: 'You are on the list',
+    body: `<p>${htmlEsc(done.email)} will get ${htmlEsc(done.topics.map(subTopicName).join(', ').toLowerCase())}. `
+      + 'Every message carries an unsubscribe link, and it works without signing in.</p>' }));
+}));
+
+// GET SHOWS A BUTTON; THE POST IS WHAT ACTS. A GET that unsubscribes looks
+// friendlier and is a trap: corporate link scanners and inbox previewers follow
+// every URL in a message, so people would be unsubscribed by software they
+// never touched. The mail client's own one-click button sends the POST, which
+// is exactly what List-Unsubscribe-Post asks for, so nobody clicks twice there.
+app.get('/unsubscribe', route(async (req, res) => {
+  const base = subBase(req);
+  const token = String(req.query.t || '');
+  const topic = String(req.query.topic || '');
+  const sub = await store.subscriberByToken(token);
+  if (!sub) {
+    return res.status(404).type('html').send(subPage({ base, title: 'Link not recognised',
+      heading: 'We cannot find that subscription',
+      body: '<p>The link may be from a very old email, or the address has already been removed. '
+        + 'Either way, nothing further will be sent to it.</p>' }));
+  }
+  if (sub.status === 'unsubscribed') {
+    return res.type('html').send(subPage({ base, title: 'Already unsubscribed',
+      heading: 'You are already unsubscribed',
+      body: `<p>Nothing more will be sent to ${htmlEsc(sub.email)}.</p>` }));
+  }
+  const one = topic && SUB_TOPIC_IDS.has(topic) && sub.topics.length > 1;
+  res.type('html').send(subPage({ base, title: 'Unsubscribe', heading: 'Unsubscribe?',
+    body: `<p>This will stop ${one ? htmlEsc(subTopicName(topic).toLowerCase()) : 'all email'} to `
+      + `<strong style="color:var(--text)">${htmlEsc(sub.email)}</strong>.</p>`
+      + `<form method="post" action="/unsubscribe" style="margin:0">`
+      + `<input type="hidden" name="t" value="${htmlEsc(token)}">`
+      + (one ? `<input type="hidden" name="topic" value="${htmlEsc(topic)}">` : '')
+      + `<button class="b p" type="submit" style="margin-top:8px">Yes, unsubscribe</button></form>` }));
+}));
+
+async function doUnsubscribe(req, res, wantsJson) {
+  const base = subBase(req);
+  const token = String((req.body && req.body.t) || req.query.t || '');
+  const topic = String((req.body && req.body.topic) || req.query.topic || '');
+  const done = await store.unsubscribe(token, SUB_TOPIC_IDS.has(topic) ? topic : '');
+  // AN UNKNOWN TOKEN STILL ANSWERS OK. A mail client firing one-click does not
+  // want an error, and there is nothing to protect: either way that address is
+  // not going to be mailed.
+  if (wantsJson) return res.json({ ok: true });
+  if (!done) {
+    return res.type('html').send(subPage({ base, title: 'Unsubscribed', heading: 'Nothing more will be sent',
+      body: '<p>That subscription is no longer on file.</p>' }));
+  }
+  logAct(req, 'account', 'unsubscribed');
+  const left = done.topics.length;
+  res.type('html').send(subPage({ base, title: 'Unsubscribed', heading: 'Done — you are unsubscribed',
+    body: `<p>${htmlEsc(done.email)} ${left ? 'will still get ' + htmlEsc(done.topics.map(subTopicName).join(', ').toLowerCase())
+      : 'will not be emailed again'}. No hard feelings, and you can always come back from the blog.</p>` }));
+}
+
+// Form posts arrive urlencoded, which express.json() does not read.
+app.post('/unsubscribe', express.urlencoded({ extended: false }), route((req, res) =>
+  doUnsubscribe(req, res, false)));
+app.post('/api/unsubscribe', route((req, res) => doUnsubscribe(req, res, true)));
 
 // Public pages want to be findable, which is most of the point of a blog.
 app.get('/robots.txt', route(async (req, res) => {
@@ -1792,13 +2032,19 @@ function textShell({ heading, intro, lines = [], note = '' }) {
   return out.join('\n');
 }
 
-async function sendMail({ to, subject, text, html, replyTo }) {
+// `headers` carries List-Unsubscribe for list mail. It is NOT decoration: Gmail
+// and Yahoo require a working one-click unsubscribe from bulk senders, and it
+// is the single thing that most decides whether a newsletter lands in the inbox
+// or the spam folder. Transactional mail passes none and must not — a password
+// reset is not something anyone can opt out of.
+async function sendMail({ to, subject, text, html, replyTo, headers }) {
   if (!MAIL_READY) return false;
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${RESEND_KEY}` },
       body: JSON.stringify({
+        ...(headers && Object.keys(headers).length ? { headers } : {}),
         // The address is configuration; the display name is the product's, so a
         // rename cannot leave a stale name sitting in everyone's inbox.
         from: fromHeader(),
@@ -6674,6 +6920,41 @@ function parseAddresses(raw) {
   return { good, bad };
 }
 
+// ---- the subscriber list, for the owner -------------------------------------
+app.get('/api/admin/subscribers', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const all = await store.listSubscribers();
+  const count = (s) => all.filter((x) => x.status === s).length;
+  res.json({
+    subscribers: all,
+    topics: SUB_TOPICS,
+    stats: { active: count('active'), pending: count('pending'), unsubscribed: count('unsubscribed'), total: all.length },
+    // Surfaced rather than enforced: the list works without it, and a
+    // fabricated postal address would be worse than an absent one.
+    postalAddress: MAIL_POSTAL || null,
+    mailReady: MAIL_READY,
+  });
+}));
+
+// Deleting is for junk and for a right-to-erasure request — NOT for tidying
+// away an unsubscribe, which has to stay on file as the record that the address
+// asked to stop.
+app.delete('/api/admin/subscribers/:email', requireAdmin, route(async (req, res) => {
+  const gone = await store.deleteSubscriber(req.params.email);
+  if (!gone) return res.status(404).json({ error: 'Not on the list.' });
+  logAct(req, 'account', 'sub-delete');
+  res.json({ ok: true });
+}));
+
+// ---- sending a post ----------------------------------------------------------
+// TWO AUDIENCES THROUGH ONE ROUTE, and they are genuinely different acts. Typed
+// addresses are person-to-person: a handful of people the owner knows, no list,
+// nothing stored, and NO unsubscribe link — offering to remove someone from a
+// list they were never on is a lie. The subscriber list is a broadcast, and
+// every message it sends carries the unsubscribe link and the headers.
+//
+// The two must never share a send path. That is the whole reason the audience
+// is decided once, here, and each branch builds its own mail.
 app.post('/api/admin/posts/:slug/email', requireAdmin, route(async (req, res) => {
   if (!MAIL_READY) {
     return res.status(503).json({ error: 'Email is not configured on this server, so nothing can be sent.' });
@@ -6685,6 +6966,11 @@ app.post('/api/admin/posts/:slug/email', requireAdmin, route(async (req, res) =>
   if (p.status !== 'published') {
     return res.status(400).json({ error: 'Publish it first — a draft 404s for anyone who follows the link.' });
   }
+
+  if (req.body && req.body.audience === 'subscribers') {
+    return sendPostToList(req, res, p);
+  }
+
   const { good, bad } = parseAddresses(req.body && req.body.to);
   if (!good.length) {
     return res.status(400).json({
@@ -6724,6 +7010,65 @@ app.post('/api/admin/posts/:slug/email', requireAdmin, route(async (req, res) =>
   logAct(req, 'post', `emailed:${p.slug} ${sent.length}/${good.length}`.slice(0, 80));
   res.json({ ok: failed.length === 0, sent, failed, invalid: bad });
 }));
+
+// ONE BATCH PER CALL, and the editor loops — the `/api/news/refresh` shape, for
+// the same two reasons: a serverless function must not be asked to hold
+// hundreds of network calls, and nothing may run after the response.
+//
+// Resumable and idempotent, because the one thing a newsletter must never do is
+// arrive twice. Each address is CLAIMED in `post_sends` before its send is
+// attempted, so a function killed mid-batch loses a send rather than doubling
+// one — the right way round.
+async function sendPostToList(req, res, p) {
+  const topic = 'posts';
+  const base = subBase(req);
+  const url = `${base}/blog/${p.slug}`;
+  const intro = p.summary || `A new post on ${BRAND}.`;
+
+  const [subs, already] = await Promise.all([
+    store.activeSubscribers(topic),
+    store.readSentFor(p.slug),
+  ]);
+  const due = subs.filter((s) => !already.has(s.email));
+  if (!subs.length) {
+    return res.json({ ok: true, audience: 'subscribers', sent: [], failed: [], remaining: 0, total: 0,
+      message: `Nobody has subscribed to ${subTopicName(topic)} yet.` });
+  }
+  if (!due.length) {
+    return res.json({ ok: true, audience: 'subscribers', sent: [], failed: [], remaining: 0,
+      total: subs.length, message: `All ${subs.length} subscribers already have this post.` });
+  }
+
+  const batch = due.slice(0, MAIL_LIST_BATCH);
+  await store.claimSends(p.slug, batch.map((s) => s.email));
+
+  const sent = [], failed = [];
+  for (const sub of batch) {
+    // Built PER RECIPIENT: the unsubscribe link carries their own token, so one
+    // reader's click can never remove somebody else.
+    const html = emailShell({
+      heading: p.title, intro, body: postEmail(p, url), note: listNote(base, sub, topic),
+    });
+    const txt = postAsText(p, url);
+    const text = textShell({
+      heading: p.title, intro,
+      lines: txt.lines.concat(['', 'Read it on the site: ' + url]),
+      note: listNoteText(base, sub, topic),
+    });
+    // No reply-to: a broadcast is not from a person, and pointing replies at the
+    // owner's own inbox invites a conversation the footer does not promise.
+    const okSend = await sendMail({
+      to: sub.email, subject: p.title, text, html,
+      replyTo: process.env.MAIL_REPLY_TO || undefined,
+      headers: listHeaders(base, sub, topic),
+    });
+    await store.noteSendResult(p.slug, sub.email, okSend);
+    (okSend ? sent : failed).push(sub.email);
+  }
+  const remaining = due.length - batch.length;
+  logAct(req, 'post', `list:${p.slug} ${sent.length}/${batch.length} left ${remaining}`.slice(0, 80));
+  res.json({ ok: failed.length === 0, audience: 'subscribers', sent, failed, remaining, total: subs.length });
+}
 
 app.delete('/api/admin/posts/:slug', requireAdmin, route(async (req, res) => {
   const gone = await store.deletePost(req.params.slug);

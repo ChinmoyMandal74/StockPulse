@@ -230,6 +230,42 @@ const SCHEMA = [
      size       integer,
      created_at integer
    )`,
+  // Who has asked to be mailed, and about what (2026-09-25). DELIBERATELY NOT A
+  // COLUMN ON `users`: an account is not consent. Someone who signed up to use
+  // the screener has not agreed to a newsletter, the blog is public so most
+  // subscribers will never have an account at all, and a consent record needs
+  // somewhere to say WHEN and HOW it was given — which a user row has not.
+  //
+  // An unsubscribed row is KEPT, never deleted. The row IS the record that the
+  // address asked to stop, and deleting it would lose both the audit trail and
+  // the reason the next import must not pick them up again.
+  `create table if not exists subscribers (
+     email           text primary key,
+     status          text not null,
+     topics          text not null,
+     unsub_token     text not null,
+     confirm_hash    text,
+     confirm_sent_at integer,
+     created_at      integer not null,
+     confirmed_at    integer,
+     unsubscribed_at integer,
+     source          text,
+     ip              text
+   )`,
+  `create index if not exists idx_subs_status on subscribers (status)`,
+  `create unique index if not exists idx_subs_unsub on subscribers (unsub_token)`,
+  // One row per address per post actually sent. A broadcast is looped a batch
+  // at a time (a serverless function cannot hold hundreds of sends), so the
+  // loop has to be RESUMABLE AND IDEMPOTENT: without a ledger a retried batch
+  // mails the same people twice, which is the one failure a newsletter must not
+  // have. Written before the send is attempted, for the same reason.
+  `create table if not exists post_sends (
+     slug    text not null,
+     email   text not null,
+     sent_at integer not null,
+     ok      integer not null,
+     primary key (slug, email)
+   )`,
   `create table if not exists app_meta (
      key   text primary key,
      value text
@@ -1104,6 +1140,181 @@ async function deletePostImage(id) {
   await init();
   const r = await db.execute({ sql: 'delete from post_images where id = ?', args: [String(id)] });
   return Number(r.rowsAffected || 0) > 0;
+}
+
+// ---- the mailing list -------------------------------------------------------
+// TWO TOKENS, AND THEY FOLLOW OPPOSITE RULES, which is the thing to get right
+// here. The CONFIRM token is the password-reset shape — hashed at rest, single
+// use, short-lived — because it is a one-time proof that the person owns the
+// address. The UNSUBSCRIBE token is the reverse: stored in the clear, never
+// expiring, reused in every message, because a link in a mail from a year ago
+// must still work and the reader is not signed in. Copying the reset rules onto
+// it would silently break unsubscribe for anyone who did not act at once, and
+// an unsubscribe that does not work is how you collect spam complaints instead
+// of quiet exits.
+//
+// Plaintext is the right call for that token: the worst a leak buys is
+// unsubscribing somebody, against a reset token's account takeover. Deriving it
+// from ADMIN_PASSWORD (the guest-cookie trick) was rejected — rotating the
+// password would break every unsubscribe link ever sent.
+const SUB_CONFIRM_TTL_MS = 7 * 86400000;   // a week: nobody reads mail at once
+const SUB_MIN_GAP_MS = 60000;              // one confirmation a minute, the /api/forgot rule
+const subEmail = (e) => String(e || '').trim().toLowerCase().slice(0, 160);
+
+function subRow(x) {
+  if (!x) return null;
+  let topics = [];
+  try { topics = JSON.parse(x.topics || '[]'); } catch { /* a broken row has no topics */ }
+  return {
+    email: String(x.email), status: String(x.status),
+    topics: Array.isArray(topics) ? topics : [],
+    unsubToken: String(x.unsub_token),
+    createdAt: Number(x.created_at || 0),
+    confirmedAt: x.confirmed_at == null ? null : Number(x.confirmed_at),
+    unsubscribedAt: x.unsubscribed_at == null ? null : Number(x.unsubscribed_at),
+    source: x.source == null ? null : String(x.source),
+  };
+}
+
+async function readSubscriber(email) {
+  await init();
+  const r = await db.execute({ sql: 'select * from subscribers where email = ?', args: [subEmail(email)] });
+  return subRow(r.rows[0]);
+}
+
+// Returns the confirm token to mail, or null when one was issued moments ago.
+// An address that is ALREADY ACTIVE returns null too and the caller says nothing
+// different — re-confirming a live subscriber is a mail they did not ask for,
+// and telling the sender which it was turns this into an address checker.
+async function startSubscribe({ email, topics, source, ip }) {
+  await init();
+  const e = subEmail(email);
+  const now = Date.now();
+  const want = JSON.stringify(Array.isArray(topics) ? topics : []);
+  const existing = await readSubscriber(e);
+
+  if (existing && existing.status === 'active') return { token: null, already: true };
+  const r = await db.execute({
+    sql: 'select confirm_sent_at from subscribers where email = ?', args: [e],
+  });
+  const last = r.rows[0] && r.rows[0].confirm_sent_at;
+  if (last != null && now - Number(last) < SUB_MIN_GAP_MS) return { token: null, throttled: true };
+
+  const token = crypto.randomBytes(32).toString('hex');
+  if (existing) {
+    // Re-subscribing after an unsubscribe is allowed — it is their address and
+    // their choice — but it goes back through confirmation rather than simply
+    // flipping the row, and the unsubscribe token is REISSUED so links in old
+    // mail cannot unsubscribe the new subscription.
+    await db.execute({
+      sql: `update subscribers set status = 'pending', topics = ?, confirm_hash = ?, confirm_sent_at = ?,
+              unsub_token = ?, source = ?, ip = ? where email = ?`,
+      args: [want, hashToken(token), now, crypto.randomBytes(24).toString('hex'),
+        String(source || '').slice(0, 60) || null, String(ip || '').slice(0, 60) || null, e],
+    });
+  } else {
+    await db.execute({
+      sql: `insert into subscribers (email, status, topics, unsub_token, confirm_hash, confirm_sent_at,
+              created_at, source, ip) values (?, 'pending', ?, ?, ?, ?, ?, ?, ?)`,
+      args: [e, want, crypto.randomBytes(24).toString('hex'), hashToken(token), now, now,
+        String(source || '').slice(0, 60) || null, String(ip || '').slice(0, 60) || null],
+    });
+  }
+  return { token, expiresAt: now + SUB_CONFIRM_TTL_MS };
+}
+
+// Single use: the hash is cleared as it is read, so a confirmation link cannot
+// be replayed. An expired one is refused rather than quietly honoured.
+async function confirmSubscribe(token) {
+  await init();
+  const h = hashToken(token);
+  const r = await db.execute({ sql: 'select * from subscribers where confirm_hash = ?', args: [h] });
+  const row = subRow(r.rows[0]);
+  if (!row) return null;
+  const sentAt = Number(r.rows[0].confirm_sent_at || 0);
+  if (Date.now() - sentAt > SUB_CONFIRM_TTL_MS) return { expired: true, email: row.email };
+  const now = Date.now();
+  await db.execute({
+    sql: `update subscribers set status = 'active', confirm_hash = null, confirmed_at = ?,
+            unsubscribed_at = null where email = ?`,
+    args: [now, row.email],
+  });
+  return { ...row, status: 'active', confirmedAt: now };
+}
+
+async function subscriberByToken(unsubToken) {
+  await init();
+  const t = String(unsubToken || '');
+  if (!/^[a-f0-9]{16,64}$/.test(t)) return null;
+  const r = await db.execute({ sql: 'select * from subscribers where unsub_token = ?', args: [t] });
+  return subRow(r.rows[0]);
+}
+
+// One topic or all of them. Dropping the last topic IS unsubscribing — a row
+// left active with nothing ticked would be a subscriber who receives nothing
+// and still reads as subscribed on the admin page.
+async function unsubscribe(unsubToken, topic) {
+  const row = await subscriberByToken(unsubToken);
+  if (!row) return null;
+  const left = topic ? row.topics.filter((t) => t !== topic) : [];
+  const now = Date.now();
+  if (left.length) {
+    await db.execute({ sql: 'update subscribers set topics = ? where email = ?',
+      args: [JSON.stringify(left), row.email] });
+    return { ...row, topics: left, status: row.status };
+  }
+  await db.execute({
+    sql: `update subscribers set status = 'unsubscribed', topics = '[]', unsubscribed_at = ? where email = ?`,
+    args: [now, row.email],
+  });
+  return { ...row, topics: [], status: 'unsubscribed', unsubscribedAt: now };
+}
+
+// Everyone who has asked for this topic and confirmed it. The ONLY read the
+// send path may use: a status filter that forgot 'active', or a topic filter
+// that forgot to check membership, is a mail to somebody who never agreed.
+async function activeSubscribers(topic) {
+  await init();
+  const r = await db.execute({ sql: "select * from subscribers where status = 'active'" });
+  return r.rows.map(subRow).filter((s) => s && (!topic || s.topics.includes(topic)));
+}
+
+async function listSubscribers() {
+  await init();
+  const r = await db.execute('select * from subscribers order by created_at desc');
+  return r.rows.map(subRow);
+}
+
+async function deleteSubscriber(email) {
+  await init();
+  const r = await db.execute({ sql: 'delete from subscribers where email = ?', args: [subEmail(email)] });
+  return Number(r.rowsAffected || 0) > 0;
+}
+
+// ---- who has already been sent which post -----------------------------------
+async function readSentFor(slug) {
+  await init();
+  const r = await db.execute({ sql: 'select email from post_sends where slug = ?', args: [String(slug)] });
+  return new Set(r.rows.map((x) => String(x.email)));
+}
+
+// Claimed BEFORE the send is attempted, so a function killed mid-batch cannot
+// cause a second copy on the retry. The cost is that a crash can lose a send
+// rather than duplicate one, which is the right way round for a newsletter.
+async function claimSends(slug, emails) {
+  await init();
+  const now = Date.now();
+  if (!emails.length) return;
+  await db.batch(emails.map((e) => ({
+    sql: 'insert or ignore into post_sends (slug, email, sent_at, ok) values (?, ?, ?, 0)',
+    args: [String(slug), subEmail(e), now],
+  })), 'write');
+}
+
+async function noteSendResult(slug, email, ok) {
+  await init();
+  await db.execute({ sql: 'update post_sends set ok = ? where slug = ? and email = ?',
+    args: [ok ? 1 : 0, String(slug), subEmail(email)] });
 }
 
 // ---- site-wide column visibility ------------------------------------------
@@ -3522,6 +3733,19 @@ module.exports = {
   readPostImage,
   listPostImages,
   deletePostImage,
+  // the mailing list
+  SUB_CONFIRM_TTL_MS,
+  readSubscriber,
+  startSubscribe,
+  confirmSubscribe,
+  subscriberByToken,
+  unsubscribe,
+  activeSubscribers,
+  listSubscribers,
+  deleteSubscriber,
+  readSentFor,
+  claimSends,
+  noteSendResult,
   writePost,
   renamePost,
   deletePost,

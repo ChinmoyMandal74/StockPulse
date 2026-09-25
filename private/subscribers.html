@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Subscribers · Tickr Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <link rel="icon" href="/favicon.svg" />
+  <style>
+    body { margin: 0; background: var(--void); color: var(--text); font-family: var(--sans); }
+    .page { max-width: 1000px; margin: 0 auto; padding: 26px 24px 90px; }
+    h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.02em; }
+    .lede { color: var(--muted); font-size: 13.5px; line-height: 1.65; max-width: 72ch; margin: 0 0 22px; }
+    .nav { display: flex; gap: 14px; font-size: 13px; margin-bottom: 18px; }
+    .nav a { color: var(--muted); text-decoration: none; }
+    .nav a:hover { color: var(--text); text-decoration: underline; }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+             gap: 12px; margin-bottom: 20px; }
+    /* `.card` sits on the bezel AND the core in the double-bezel pattern, so a
+       descendant selector counts every card twice — the /quality trap. Scoped
+       to the shell here, and nothing selects `.card` loosely. */
+    .scard { border: 1px solid var(--hair); border-radius: 12px; padding: 13px 15px;
+             background: rgba(255,255,255,0.02); }
+    .scard .n { font: 600 24px/1 var(--mono); }
+    .scard .k { display: block; margin-top: 5px; font-size: 10.5px; text-transform: uppercase;
+                letter-spacing: 0.14em; color: var(--faint); }
+    .scard.warnc { border-color: rgba(251,191,36,0.4); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.14em;
+         color: var(--faint); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--hair); }
+    td { padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,0.045); vertical-align: top; }
+    td.em { font-family: var(--mono); font-size: 12.5px; }
+    td.when { color: var(--faint); font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+            border: 1px solid var(--hair-2); color: var(--muted); }
+    .pill.on { color: var(--green); border-color: rgba(52,211,153,0.4); }
+    .pill.pend { color: var(--amber); border-color: rgba(251,191,36,0.4); }
+    .pill.off { color: var(--faint); }
+    .x { background: none; border: 0; color: var(--faint); cursor: pointer; font-size: 15px;
+         line-height: 1; padding: 2px 6px; border-radius: 6px; font-family: inherit; }
+    .x:hover { color: var(--red); background: rgba(251,113,133,0.1); }
+    .said { font-size: 12.5px; color: var(--muted); margin-left: 10px; }
+    .said.bad { color: var(--red); }
+    .said.good { color: var(--green); }
+    .note { margin-top: 20px; font-size: 12.5px; color: var(--faint); line-height: 1.7; max-width: 76ch; }
+    .note b { color: var(--muted); font-weight: 600; }
+    .empty { padding: 26px 10px; color: var(--faint); font-size: 13px; }
+    @media (max-width: 560px) { .hide-sm { display: none; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <nav class="nav">
+      <a href="/admin">← Admin</a><a href="/posts">Posts</a><a href="/blog">The blog</a>
+    </nav>
+    <h1>Subscribers</h1>
+    <p class="lede">Who has asked to be emailed, and about what. Everyone here confirmed their own
+      address by clicking a link — nobody is added by hand and no account is subscribed by having
+      signed up to the screener.</p>
+
+    <div class="cards" id="cards"></div>
+    <div id="warn"></div>
+    <table>
+      <thead><tr><th>Address</th><th>Status</th><th class="hide-sm">Wants</th>
+        <th class="hide-sm">Came from</th><th class="hide-sm">When</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="note" id="note"></p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const when = (ms) => (ms ? new Date(ms).toLocaleDateString(undefined,
+      { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
+
+    let data = null;
+
+    async function api(method, url) {
+      const r = await fetch(url, { method, cache: 'no-store' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      return d;
+    }
+
+    function paint() {
+      const s = data.stats;
+      const topicName = (id) => (data.topics.find((t) => t.id === id) || {}).name || id;
+      $('cards').innerHTML = [
+        ['n', s.active, 'Confirmed'],
+        ['n', s.pending, 'Awaiting confirmation'],
+        ['n', s.unsubscribed, 'Unsubscribed'],
+      ].map(([, n, k]) => `<div class="scard"><span class="n">${n}</span><span class="k">${we(k)}</span></div>`).join('');
+
+      // Said out loud rather than enforced: the list works without a postal
+      // address and US bulk-mail law wants one, so the page names what is
+      // missing instead of the server inventing something.
+      const gaps = [];
+      if (!data.mailReady) gaps.push('<b>Email is not configured on this server</b> — nothing can be sent until RESEND_API_KEY, MAIL_FROM and APP_URL are set.');
+      if (!data.postalAddress) gaps.push('<b>No postal address is set.</b> CAN-SPAM asks for a real one in commercial bulk email; set <code>MAIL_POSTAL_ADDRESS</code> and it appears in the footer of every list message.');
+      $('warn').innerHTML = gaps.length
+        ? `<div class="scard warnc" style="margin-bottom:18px"><div style="font-size:13px;line-height:1.7;color:var(--muted)">${gaps.join('<br>')}</div></div>`
+        : '';
+
+      const rows = data.subscribers;
+      $('rows').innerHTML = rows.length ? rows.map((x) => {
+        const pill = x.status === 'active' ? '<span class="pill on">confirmed</span>'
+          : x.status === 'pending' ? '<span class="pill pend">unconfirmed</span>'
+          : '<span class="pill off">unsubscribed</span>';
+        const wants = x.topics.length ? x.topics.map(topicName).join(', ') : '—';
+        const at = x.status === 'unsubscribed' ? x.unsubscribedAt : (x.confirmedAt || x.createdAt);
+        return `<tr><td class="em">${we(x.email)}</td><td>${pill}</td>`
+          + `<td class="hide-sm">${we(wants)}</td>`
+          + `<td class="hide-sm" style="color:var(--faint)">${we(x.source || '—')}</td>`
+          + `<td class="when hide-sm">${we(when(at))}</td>`
+          + `<td style="text-align:right"><button class="x" data-del="${we(x.email)}" `
+          + `title="Remove ${we(x.email)} from the list entirely">×</button></td></tr>`;
+      }).join('') : '<tr><td colspan="6" class="empty">Nobody yet. The box is at the foot of the blog and of every post.</td></tr>';
+
+      $('rows').querySelectorAll('[data-del]').forEach((b) =>
+        b.addEventListener('click', () => del(b.dataset.del)));
+
+      $('note').innerHTML = 'An <b>unsubscribed row stays on the list</b> on purpose — it is the record '
+        + 'that the address asked to stop, and deleting it would lose both that and the reason a later '
+        + 'import must not pick them up again. The × is for junk and for an erasure request, not for tidying. '
+        + 'Subscribing again is allowed and goes back through confirmation.';
+    }
+
+    async function del(email) {
+      if (!window.confirm('Remove ' + email + ' from the list entirely?\n\n'
+        + 'This erases the record that they asked to stop. Unsubscribing already stops all email — '
+        + 'use this only for junk or an erasure request.')) return;
+      try {
+        await api('DELETE', '/api/admin/subscribers/' + encodeURIComponent(email));
+        await load();
+      } catch (e) { alert(e.message); }
+    }
+
+    async function load() {
+      try {
+        data = await api('GET', '/api/admin/subscribers');
+        paint();
+      } catch (e) {
+        $('rows').innerHTML = '<tr><td colspan="6" class="empty">' + we(e.message) + '</td></tr>';
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

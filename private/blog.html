@@ -106,6 +106,22 @@
 
     <div class="posts">%POSTS%</div>
 
+    <!-- A plain form, posted and server-rendered like everything else here: this
+         page loads no JavaScript and a subscribe box is no reason to start. -->
+    <section class="subbox">
+      <h2>Get new posts by email</h2>
+      <p>An email when something new goes up — a few a month at most. Nothing else, and no
+        sharing your address with anyone.</p>
+      <form method="post" action="/subscribe">
+        <input type="hidden" name="source" value="blog" />
+        <input type="email" name="email" required autocomplete="email"
+               placeholder="you@example.com" aria-label="Your email address" />
+        <button type="submit">Subscribe</button>
+      </form>
+      <p class="fine">You will get one email asking you to confirm. Every message after that has a
+        one-click unsubscribe, and it works without signing in.</p>
+    </section>
+
     <footer>
       <span class="ftag">From data to decisions</span>
       <a href="/">Home</a>

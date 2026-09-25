@@ -501,3 +501,28 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 .sc-chg.dn, .sc-win b.dn, .sc-v.dn, .sc-v.down, .sc-fields .v.dn,
 .sc-fields .v.down, .sc-fields .v.neg { color: var(--red); }
 .sc-fields .v.warn { color: var(--amber); }
+
+/* ---- the blog's subscribe box ----------------------------------------------
+   Shared by the index and the post page, so it lives here rather than in two
+   inline blocks that would drift — the rule the rest of this file follows.
+   EVERYTHING IS SCOPED UNDER `.subbox`: eight unscoped class names on this
+   project have captured later markup (.warn, .card, input[type=text], .mk,
+   .sub, .news-when, .fav), and `.sub` in particular is already taken on
+   /pivot. It is also a plain HTML form on purpose — neither blog page loads
+   any JavaScript, and a subscribe box is no reason to start. */
+.subbox { margin-top: 48px; border: 1px solid var(--hair); border-radius: 14px;
+          padding: 20px 22px; background: rgba(255, 255, 255, 0.015); }
+.subbox h2 { margin: 0 0 6px; font-size: 17px; letter-spacing: -0.01em; }
+.subbox p { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; line-height: 1.6; max-width: 56ch; }
+.subbox form { display: flex; gap: 8px; flex-wrap: wrap; }
+.subbox input[type="email"] {
+  flex: 1 1 240px; min-width: 0; padding: 9px 12px; border-radius: 10px;
+  border: 1px solid var(--hair-2); background: var(--surface); color: var(--text);
+  font-family: var(--sans); font-size: 14px;
+}
+.subbox input[type="email"]:focus { outline: none; border-color: var(--accent); }
+.subbox button { padding: 9px 16px; border-radius: 10px; border: 1px solid var(--text);
+                 background: var(--text); color: var(--void); font-family: var(--sans);
+                 font-size: 14px; font-weight: 600; cursor: pointer; }
+.subbox button:hover { opacity: 0.88; }
+.subbox .fine { margin: 12px 0 0; font-size: 12px; color: var(--faint); }
