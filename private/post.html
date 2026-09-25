@@ -38,11 +38,11 @@
       --text-label: "text 50%";
       --one-label: "text 704";    /* 760 - 28 - 28 — a one-column post */
     }
-    /* 1500 - 28 - 28 = 1444; (1444 - 36) / 2 = 704, which is EXACTLY the
-       one-column reading measure. So a two-column post does not squeeze the
-       text to make room for the rail — the page grows and the prose is read at
-       the width it is read at everywhere else. */
-    .page:has(.body.two) { max-width: 1500px; }
+    /* The wider page for a two-column post is set WITH the two-column layout,
+       inside its min-width, and deliberately not here: left unconditional it
+       would widen a collapsed post to 1040px between 760 and 1040 while a
+       one-column post stayed at 760 — the two reading the same content at two
+       different measures, which is exactly what the collapse exists to avoid. */
     .aura { background:
       radial-gradient(48vw 42vw at 6% -10%, rgba(124, 156, 255, 0.12), transparent 62%),
       radial-gradient(46vw 40vw at 98% 2%, rgba(52, 211, 153, 0.10), transparent 64%); }
@@ -120,7 +120,23 @@
                                          clear of the text and leaves exactly
                                          `gap` between them.
        Reaching for `width: 50%` on the float instead gives a quarter of the
-       page, because its containing block is already the halved text column. */
+       page, because its containing block is already the halved text column.
+
+       ALL OF IT LIVES INSIDE A min-width, and that is a correctness fix rather
+       than tidiness. It used to sit unconditionally with a max-width block
+       below undoing it, and undoing by later source order DOES NOT WORK here:
+       `.body.two .pimg.wide` is more specific than `.body.two .pimg`, so it
+       survived the collapse it was supposed to be cancelled by and drew a
+       752px picture on a 390px phone, with real sideways scroll. A rule that
+       only exists where two columns exist cannot need cancelling.
+       The pair is 1041 / 1040 — CSS cannot share one number between a
+       min-width and a max-width, so they are written together here. */
+    @media (min-width: 1041px) {
+    /* 1500 - 28 - 28 = 1444; (1444 - 36) / 2 = 704, which is EXACTLY the
+       one-column reading measure. So a two-column post does not squeeze the
+       text to make room for the rail — the page grows and the prose is read at
+       the width it is read at everywhere else. */
+    .page:has(.body.two) { max-width: 1500px; }
     .body.two { display: flow-root; padding-right: calc(50% + var(--railgap) / 2); }
     .body.two .pimg {
       float: right; clear: right;
@@ -145,6 +161,7 @@
     .body.two .pimg.small, .body.two .pimg.medium { max-width: 100%; }
     /* Nothing may straddle the rail. */
     .body.two h2, .body.two h3, .body.two hr { clear: none; }
+    }   /* end of the two-column layout */
 
     /* ---- ?guides=1 : where the width actually goes ------------------------
        An authoring aid, reached only by putting ?guides=1 on the URL, so no
@@ -208,17 +225,14 @@
              display: flex; flex-wrap: wrap; gap: 16px; font-size: 12.5px; color: var(--faint); }
     footer a { color: var(--muted); text-decoration: none; }
     footer a:hover { color: var(--text); text-decoration: underline; }
-    /* A half-page rail beside a readable text column needs about 1040px of window.
-       Below that the rail is dropped and the post reads as one column — the
-       pictures stay in the flow, in order, which is what they were written
-       into. Everything here UNSETS rather than overrides, so there is one
-       description of two columns rather than two that can drift. */
+    /* A half-page rail beside a readable text column needs about 1040px of
+       window. Below that the post reads as one column, and there is NOTHING
+       HERE TO UNDO IT: the two-column rules live inside their own min-width
+       above, so a phone never applies them in the first place and a collapsed
+       two-column post is byte-for-byte a one-column post — same page width,
+       same measure, same picture sizes, `wide` and `medium` included.
+       Undoing by source order was tried and did not work; see the note there. */
     @media (max-width: 1040px) {
-      .page:has(.body.two) { max-width: 760px; }
-      .body.two { padding-right: 0; }
-      .body.two .pimg {
-        float: none; clear: both; width: 100%; max-width: 100%; margin: 26px 0 0;
-      }
       /* The guides describe the two-column allocation, and there is no longer
          one. The dashed outlines stay; the bands and the labels go, rather than
          naming widths the page has stopped using. Below this width the measure
