@@ -294,6 +294,13 @@
                 <span>People I name</span></label>
               <label class="aud"><input type="radio" name="aud" value="subscribers" id="audSubs" />
                 <span id="audSubsLabel">Everyone subscribed</span></label>
+              <!-- The same message a subscriber gets, to your own address. It is
+                   here because the other self-send — naming yourself under
+                   "People I name" — goes out on the person-to-person path with
+                   none of the list headers, so it cannot show you the thing
+                   that actually gets filtered. -->
+              <label class="aud"><input type="radio" name="aud" value="test" id="audTest" />
+                <span>Just me, as a test</span></label>
             </div>
             <textarea id="mailTo" rows="2" spellcheck="false"
               placeholder="you@example.com, someone@else.com — commas, spaces or one per line"></textarea>
@@ -751,14 +758,21 @@
     }
 
     function paintAudience() {
-      const list = audience() === 'subscribers';
-      $('mailTo').hidden = list;
-      $('mailHint').textContent = list
-        ? `Goes to everyone who confirmed a subscription${subStats ? ' — ' + subStats.active + ' of them' : ''}. `
-          + 'Each message carries its own unsubscribe link, and anyone already sent this post is skipped, '
-          + 'so a second press cannot send it twice.'
-        : 'Each person gets their own copy — nobody sees the other addresses. '
-          + 'It arrives as one column: an email cannot put the pictures in a rail beside the text.';
+      const a = audience();
+      $('mailTo').hidden = a !== 'addresses';
+      $('mailHint').textContent =
+        a === 'subscribers'
+          ? `Goes to everyone who confirmed a subscription${subStats ? ' — ' + subStats.active + ' of them' : ''}. `
+            + 'Each message carries its own unsubscribe link, and anyone already sent this post is skipped, '
+            + 'so a second press cannot send it twice.'
+        : a === 'test'
+          // Identical is the whole point, so the hint says so plainly rather
+          // than promising "a preview", which would suggest an approximation.
+          ? 'One copy to your own address, byte for byte what a subscriber gets — the same unsubscribe '
+            + 'footer and the same list headers, which are what a spam filter actually reads. Nobody is '
+            + 'marked as sent, so the real send is unaffected. The unsubscribe link in it is a dummy.'
+          : 'Each person gets their own copy — nobody sees the other addresses. '
+            + 'It arrives as one column: an email cannot put the pictures in a rail beside the text.';
     }
     document.querySelectorAll('input[name="aud"]').forEach((r) =>
       r.addEventListener('change', paintAudience));
@@ -819,9 +833,25 @@
 
     $('mailSend').addEventListener('click', async () => {
       if (!current) return say2('Save it first.', 'bad');
-      const list = audience() === 'subscribers';
+      const mode = audience();
+      const list = mode === 'subscribers';
       const to = $('mailTo').value.trim();
-      if (!list && !to) return say2('Nobody to send it to.', 'bad');
+      if (mode === 'addresses' && !to) return say2('Nobody to send it to.', 'bad');
+
+      // No confirm: it goes to one address, the sender's own, and is undone by
+      // deleting it. The broadcast asks because a broadcast cannot be taken back.
+      if (mode === 'test') {
+        $('mailSend').disabled = true;
+        say2('Sending the test…');
+        try {
+          const url = '/api/admin/posts/' + encodeURIComponent(current) + '/email';
+          const d = await api('POST', url, { audience: 'test' });
+          say2(`Sent to ${d.to} — ${Math.round((d.bytes || 0) / 1024)} KB of HTML. `
+            + 'If it is not in the inbox in a minute, check spam: that is the answer you came for.', 'good');
+        } catch (e) { say2(e.message, 'bad'); }
+        finally { $('mailSend').disabled = false; }
+        return;
+      }
       // A BROADCAST IS NOT UNDOABLE, so it asks first. Naming the number is the
       // point of the question — "are you sure" alone tells you nothing.
       if (list) {

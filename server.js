@@ -7065,6 +7065,9 @@ app.post('/api/admin/posts/:slug/email', requireAdmin, route(async (req, res) =>
   if (req.body && req.body.audience === 'subscribers') {
     return sendPostToList(req, res, p);
   }
+  if (req.body && req.body.audience === 'test') {
+    return sendPostTest(req, res, p);
+  }
 
   const { good, bad } = parseAddresses(req.body && req.body.to);
   if (!good.length) {
@@ -7114,6 +7117,75 @@ app.post('/api/admin/posts/:slug/email', requireAdmin, route(async (req, res) =>
 // arrive twice. Each address is CLAIMED in `post_sends` before its send is
 // attempted, so a function killed mid-batch loses a send rather than doubling
 // one — the right way round.
+// ONE DEFINITION OF THE BROADCAST MESSAGE, because the test send exists in
+// order to be IDENTICAL to it. A second copy for the preview would be a preview
+// of something nobody receives, which is worse than no preview at all — the
+// drift this codebase keeps writing down, in the one place where the whole
+// feature is the sameness.
+//
+// Built PER RECIPIENT: the unsubscribe link and headers carry that reader's own
+// token, so one person's click can never remove somebody else.
+//
+// No reply-to beyond MAIL_REPLY_TO: a broadcast is not from a person, and
+// pointing replies at the owner's own inbox invites a conversation the footer
+// does not promise.
+function listMessage(p, { base, url, intro, sub, topic, postal }) {
+  const txt = postAsText(p, url);
+  return {
+    to: sub.email,
+    subject: p.title,
+    bulk: true,
+    replyTo: process.env.MAIL_REPLY_TO || undefined,
+    headers: listHeaders(base, sub, topic),
+    html: emailShell({
+      heading: p.title, intro, body: postEmail(p, url), note: listNote(base, sub, topic, postal),
+    }),
+    text: textShell({
+      heading: p.title, intro,
+      lines: txt.lines.concat(['', 'Read it on the site: ' + url]),
+      note: listNoteText(base, sub, topic, postal),
+    }),
+  };
+}
+
+// Send the post to the owner exactly as a subscriber would get it, so what
+// lands in an inbox can be seen BEFORE it goes to anybody else. It exists
+// because the only previous way to mail yourself a post was the
+// person-to-person path, which carries none of the list headers — so it could
+// not reproduce the thing that actually gets filtered.
+//
+// TOUCHES NOTHING. No ledger row, no subscriber row, no claim: a test that
+// marked somebody as sent would cost them the real copy.
+async function sendPostTest(req, res, p) {
+  const topic = 'posts';
+  const base = subBase(req);
+  const who = await currentUser(req);
+  // `operatorEmail()` rather than `ownerEmail()`: it is the one that honours
+  // REPORT_TO, which is the same address every other operational message goes
+  // to, and it is the only thing that resolves in open mode where there is no
+  // account behind the session at all.
+  const to = (who && who.email) || (await operatorEmail());
+  if (!to) {
+    return res.status(400).json({ error: 'No address to send to — sign in with an account, or set REPORT_TO.' });
+  }
+  // A THROWAWAY TOKEN, never a real subscriber's. Using the owner's own would
+  // mean a mail client's one-click unsubscribe silently removing them from the
+  // list they were testing. This one is well-formed, so the headers are valid
+  // and the link is real; it simply answers "we cannot find that subscription".
+  const sub = { email: to, unsubToken: crypto.randomBytes(12).toString('hex') };
+  const msg = listMessage(p, {
+    base, url: `${base}/blog/${p.slug}`,
+    intro: p.summary || `A new post on ${BRAND}.`, sub, topic,
+    postal: await postalAddress(),
+  });
+  const out = await sendMailResult(msg);
+  logAct(req, 'post', `list-test:${p.slug}`.slice(0, 80));
+  if (!out.ok) {
+    return res.status(502).json({ error: `The provider refused it (HTTP ${out.status}).`, audience: 'test' });
+  }
+  res.json({ ok: true, audience: 'test', to, id: out.id, bytes: Buffer.byteLength(msg.html) });
+}
+
 async function sendPostToList(req, res, p) {
   const topic = 'posts';
   const base = subBase(req);
@@ -7143,24 +7215,7 @@ async function sendPostToList(req, res, p) {
   for (const sub of batch) {
     if (!first) await pause(MAIL_RATE_MS);
     first = false;
-    // Built PER RECIPIENT: the unsubscribe link carries their own token, so one
-    // reader's click can never remove somebody else.
-    const html = emailShell({
-      heading: p.title, intro, body: postEmail(p, url), note: listNote(base, sub, topic, postal),
-    });
-    const txt = postAsText(p, url);
-    const text = textShell({
-      heading: p.title, intro,
-      lines: txt.lines.concat(['', 'Read it on the site: ' + url]),
-      note: listNoteText(base, sub, topic, postal),
-    });
-    // No reply-to: a broadcast is not from a person, and pointing replies at the
-    // owner's own inbox invites a conversation the footer does not promise.
-    const out = await sendMailResult({
-      to: sub.email, subject: p.title, text, html, bulk: true,
-      replyTo: process.env.MAIL_REPLY_TO || undefined,
-      headers: listHeaders(base, sub, topic),
-    });
+    const out = await sendMailResult(listMessage(p, { base, url, intro, sub, topic, postal }));
     if (out.retryable) {
       // The provider refused before it sent, so this reader is still owed their
       // copy: give the claim back and let the next batch pick them up.
