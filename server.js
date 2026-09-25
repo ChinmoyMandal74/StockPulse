@@ -842,7 +842,21 @@ const cleanTopics = (v) => {
 // CAN-SPAM wants a real postal address in commercial bulk mail. Unset, the list
 // still works and the admin page says what is missing rather than the server
 // inventing one — a fabricated address is worse than none.
-const MAIL_POSTAL = String(process.env.MAIL_POSTAL_ADDRESS || '').trim();
+//
+// EDITED ON /subscribers, not set in the environment: it is content the owner
+// writes and changes without a deploy, and the one legal requirement of this
+// feature should not be reachable only from a hosting dashboard. The env var
+// still wins if it is set, so an operator who prefers config keeps it.
+const MAIL_POSTAL_ENV = String(process.env.MAIL_POSTAL_ADDRESS || '').trim();
+let postalCache = { at: 0, v: '' };
+async function postalAddress() {
+  if (MAIL_POSTAL_ENV) return MAIL_POSTAL_ENV;
+  if (Date.now() - postalCache.at < 60000) return postalCache.v;
+  try {
+    postalCache = { at: Date.now(), v: await store.readPostalAddress() };
+  } catch { /* a footer line is not worth failing a send over */ }
+  return postalCache.v;
+}
 
 const subBase = (req) => APP_URL || `https://${req.headers.host}`;
 const unsubUrl = (base, token, topic) =>
@@ -851,16 +865,16 @@ const unsubUrl = (base, token, topic) =>
 // Every list message carries this, in the footer line the shell already keeps
 // for "why did I get this" — which is the honest place for it, because that is
 // the question and this is the answer.
-const listNote = (base, sub, topic) => {
+const listNote = (base, sub, topic, postal) => {
   const link = unsubUrl(base, sub.unsubToken, topic);
   return `You are getting this because ${mailEsc(sub.email)} asked for ${mailEsc(subTopicName(topic))} from ${BRAND}. `
     + `<a href="${link}" style="color:${MC.mute}">Unsubscribe</a>.`
-    + (MAIL_POSTAL ? `<br>${mailEsc(MAIL_POSTAL)}` : '');
+    + (postal ? `<br>${mailEsc(postal)}` : '');
 };
-const listNoteText = (base, sub, topic) =>
+const listNoteText = (base, sub, topic, postal) =>
   `You are getting this because ${sub.email} asked for ${subTopicName(topic)} from ${BRAND}.\n`
   + `Unsubscribe: ${unsubUrl(base, sub.unsubToken, topic)}`
-  + (MAIL_POSTAL ? `\n${MAIL_POSTAL}` : '');
+  + (postal ? `\n${postal}` : '');
 
 // The headers that make it ONE CLICK in Gmail and Yahoo. The POST variant is
 // what turns the client's own Unsubscribe button into a real request rather
@@ -875,6 +889,16 @@ const listHeaders = (base, sub, topic) => ({
 // sends and nothing may run after the response, so the admin page loops — the
 // shape `/api/news/refresh` already uses.
 const MAIL_LIST_BATCH = 20;
+
+// PACED, BECAUSE RESEND REFUSES AT 2 REQUESTS A SECOND by default. Sent
+// back-to-back, most of a batch comes back 429 — and since each address is
+// claimed in the ledger before its attempt, those copies would be recorded as
+// tried and never sent. A broadcast that silently reaches a fifth of the list
+// is worse than one that takes a few seconds longer. 600ms leaves margin under
+// the documented limit; 20 sends is about twelve seconds, well inside the
+// platform's ceiling. `MAIL_RATE_MS` can lower it if the plan is raised.
+const MAIL_RATE_MS = Number(process.env.MAIL_RATE_MS || 600);
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // How many other posts the rail offers. Enough to navigate, short enough that
 // the column is a list rather than a second page.
@@ -2037,8 +2061,17 @@ function textShell({ heading, intro, lines = [], note = '' }) {
 // is the single thing that most decides whether a newsletter lands in the inbox
 // or the spam folder. Transactional mail passes none and must not — a password
 // reset is not something anyone can opt out of.
-async function sendMail({ to, subject, text, html, replyTo, headers }) {
-  if (!MAIL_READY) return false;
+// WHY a send failed decides whether it may be tried again, which is the same
+// rule `fetchJson` already follows for Twelve Data: retry only when the attempt
+// provably did nothing. A 429 is the provider refusing before it sent, so that
+// address is still owed its copy; anything else is either a permanent refusal
+// (a bad address will fail the same way for ever) or ambiguous (a dropped
+// socket may have delivered), and for a newsletter ambiguous means DO NOT
+// RESEND. Losing one copy beats sending two.
+//
+// `sendMail` keeps its boolean, so none of the transactional callers change.
+async function sendMailResult({ to, subject, text, html, replyTo, headers }) {
+  if (!MAIL_READY) return { ok: false, status: 0, retryable: false };
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -2061,13 +2094,18 @@ async function sendMail({ to, subject, text, html, replyTo, headers }) {
       // The body can echo the request, and the key travels in the same headers.
       const body = await r.json().catch(() => ({}));
       console.error('resend error', r.status, body && body.name);
-      return false;
+      return { ok: false, status: r.status, retryable: r.status === 429 };
     }
-    return true;
+    return { ok: true, status: r.status, retryable: false };
   } catch (err) {
+    // A dropped socket may have delivered. Not retryable, deliberately.
     console.error('resend call failed', err.message);
-    return false;
+    return { ok: false, status: 0, retryable: false };
   }
+}
+
+async function sendMail(opts) {
+  return (await sendMailResult(opts)).ok;
 }
 
 // ---- Contact ---------------------------------------------------------------
@@ -6931,9 +6969,21 @@ app.get('/api/admin/subscribers', requireAdmin, route(async (req, res) => {
     stats: { active: count('active'), pending: count('pending'), unsubscribed: count('unsubscribed'), total: all.length },
     // Surfaced rather than enforced: the list works without it, and a
     // fabricated postal address would be worse than an absent one.
-    postalAddress: MAIL_POSTAL || null,
+    postalAddress: (await postalAddress()) || null,
+    postalFromEnv: !!MAIL_POSTAL_ENV,
     mailReady: MAIL_READY,
   });
+}));
+
+app.put('/api/admin/subscribers/postal', requireAdmin, route(async (req, res) => {
+  if (MAIL_POSTAL_ENV) {
+    return res.status(409).json({ error: 'MAIL_POSTAL_ADDRESS is set in the environment and wins over this. '
+      + 'Unset it there to edit the address here.' });
+  }
+  const v = await store.writePostalAddress(req.body && req.body.address);
+  postalCache = { at: 0, v: '' };   // so the next send reads what was just saved
+  logAct(req, 'account', 'postal-address');
+  res.json({ ok: true, postalAddress: v || null });
 }));
 
 // Deleting is for junk and for a right-to-erasure request — NOT for tidying
@@ -7024,6 +7074,7 @@ async function sendPostToList(req, res, p) {
   const base = subBase(req);
   const url = `${base}/blog/${p.slug}`;
   const intro = p.summary || `A new post on ${BRAND}.`;
+  const postal = await postalAddress();
 
   const [subs, already] = await Promise.all([
     store.activeSubscribers(topic),
@@ -7042,32 +7093,47 @@ async function sendPostToList(req, res, p) {
   const batch = due.slice(0, MAIL_LIST_BATCH);
   await store.claimSends(p.slug, batch.map((s) => s.email));
 
-  const sent = [], failed = [];
+  const sent = [], failed = [], deferred = [];
+  let first = true;
   for (const sub of batch) {
+    if (!first) await pause(MAIL_RATE_MS);
+    first = false;
     // Built PER RECIPIENT: the unsubscribe link carries their own token, so one
     // reader's click can never remove somebody else.
     const html = emailShell({
-      heading: p.title, intro, body: postEmail(p, url), note: listNote(base, sub, topic),
+      heading: p.title, intro, body: postEmail(p, url), note: listNote(base, sub, topic, postal),
     });
     const txt = postAsText(p, url);
     const text = textShell({
       heading: p.title, intro,
       lines: txt.lines.concat(['', 'Read it on the site: ' + url]),
-      note: listNoteText(base, sub, topic),
+      note: listNoteText(base, sub, topic, postal),
     });
     // No reply-to: a broadcast is not from a person, and pointing replies at the
     // owner's own inbox invites a conversation the footer does not promise.
-    const okSend = await sendMail({
+    const out = await sendMailResult({
       to: sub.email, subject: p.title, text, html,
       replyTo: process.env.MAIL_REPLY_TO || undefined,
       headers: listHeaders(base, sub, topic),
     });
-    await store.noteSendResult(p.slug, sub.email, okSend);
-    (okSend ? sent : failed).push(sub.email);
+    if (out.retryable) {
+      // The provider refused before it sent, so this reader is still owed their
+      // copy: give the claim back and let the next batch pick them up.
+      await store.releaseSend(p.slug, sub.email);
+      deferred.push(sub.email);
+      continue;
+    }
+    await store.noteSendResult(p.slug, sub.email, out.ok);
+    (out.ok ? sent : failed).push(sub.email);
   }
-  const remaining = due.length - batch.length;
+  // Recounted rather than subtracted: a deferred address is still due, so
+  // `due.length - batch.length` would tell the loop it had finished while
+  // somebody was still waiting for the post.
+  const done = await store.readSentFor(p.slug);
+  const remaining = subs.filter((s) => !done.has(s.email)).length;
   logAct(req, 'post', `list:${p.slug} ${sent.length}/${batch.length} left ${remaining}`.slice(0, 80));
-  res.json({ ok: failed.length === 0, audience: 'subscribers', sent, failed, remaining, total: subs.length });
+  res.json({ ok: failed.length === 0, audience: 'subscribers', sent, failed,
+    deferred, remaining, total: subs.length });
 }
 
 app.delete('/api/admin/posts/:slug', requireAdmin, route(async (req, res) => {

@@ -29,6 +29,16 @@
     .scard .k { display: block; margin-top: 5px; font-size: 10.5px; text-transform: uppercase;
                 letter-spacing: 0.14em; color: var(--faint); }
     .scard.warnc { border-color: rgba(251,191,36,0.4); }
+    .wtxt { font-size: 13px; line-height: 1.7; color: var(--muted); }
+    .prow2 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+    .prow2 input { flex: 1 1 320px; min-width: 0; padding: 8px 11px; border-radius: 9px;
+                   border: 1px solid var(--hair-2); background: var(--surface); color: var(--text);
+                   font-family: var(--sans); font-size: 13px; }
+    .prow2 input:focus { outline: none; border-color: var(--accent); }
+    .pbtn { padding: 8px 14px; border-radius: 9px; border: 1px solid var(--hair-2);
+            background: transparent; color: var(--text); font-family: inherit; font-size: 13px;
+            cursor: pointer; }
+    .pbtn:hover { border-color: var(--text); }
 
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.14em;
@@ -100,13 +110,30 @@
 
       // Said out loud rather than enforced: the list works without a postal
       // address and US bulk-mail law wants one, so the page names what is
-      // missing instead of the server inventing something.
-      const gaps = [];
-      if (!data.mailReady) gaps.push('<b>Email is not configured on this server</b> — nothing can be sent until RESEND_API_KEY, MAIL_FROM and APP_URL are set.');
-      if (!data.postalAddress) gaps.push('<b>No postal address is set.</b> CAN-SPAM asks for a real one in commercial bulk email; set <code>MAIL_POSTAL_ADDRESS</code> and it appears in the footer of every list message.');
-      $('warn').innerHTML = gaps.length
-        ? `<div class="scard warnc" style="margin-bottom:18px"><div style="font-size:13px;line-height:1.7;color:var(--muted)">${gaps.join('<br>')}</div></div>`
-        : '';
+      // missing instead of the server inventing something — and then lets it
+      // be fixed HERE, because the one legal requirement of this feature
+      // should not be reachable only from a hosting dashboard.
+      const set = !!data.postalAddress;
+      $('warn').innerHTML =
+        (data.mailReady ? '' : '<div class="scard warnc" style="margin-bottom:12px">'
+          + '<div class="wtxt"><b>Email is not configured on this server</b> — nothing can be sent '
+          + 'until RESEND_API_KEY, MAIL_FROM and APP_URL are set.</div></div>')
+        + `<div class="scard${set ? '' : ' warnc'}" style="margin-bottom:18px"><div class="wtxt">`
+        + (set ? '<b>Postal address</b> — printed in the footer of every list message.'
+          : '<b>No postal address is set.</b> CAN-SPAM asks for a real one in commercial bulk email. '
+            + 'Whatever goes here is printed in the footer of every list message.')
+        + (data.postalFromEnv
+          ? '<br><span style="color:var(--faint)">Set by MAIL_POSTAL_ADDRESS in the environment, '
+            + 'which wins over this page.</span>'
+          : '<div class="prow2"><input type="text" id="postal" maxlength="300" '
+            + `placeholder="Tickr Lab, 1 Example Street, Town, Country" value="${we(data.postalAddress || '')}" />`
+            + '<button class="pbtn" id="postalSave">Save</button>'
+            + '<span class="said" id="postalSaid"></span></div>')
+        + '</div></div>';
+      if (!data.postalFromEnv) {
+        $('postalSave').addEventListener('click', savePostal);
+        $('postal').addEventListener('keydown', (e) => { if (e.key === 'Enter') savePostal(); });
+      }
 
       const rows = data.subscribers;
       $('rows').innerHTML = rows.length ? rows.map((x) => {
@@ -130,6 +157,25 @@
         + 'that the address asked to stop, and deleting it would lose both that and the reason a later '
         + 'import must not pick them up again. The × is for junk and for an erasure request, not for tidying. '
         + 'Subscribing again is allowed and goes back through confirmation.';
+    }
+
+    async function savePostal() {
+      const said = $('postalSaid');
+      said.textContent = 'Saving…'; said.className = 'said';
+      try {
+        const r = await fetch('/api/admin/subscribers/postal', {
+          method: 'PUT', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ address: $('postal').value }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Save failed.');
+        said.textContent = d.postalAddress ? 'Saved.' : 'Cleared.';
+        said.className = 'said good';
+        data.postalAddress = d.postalAddress;
+        // Repainted so the amber border follows the value rather than staying
+        // on whatever it was when the page loaded.
+        paint();
+      } catch (e) { said.textContent = e.message; said.className = 'said bad'; }
     }
 
     async function del(email) {

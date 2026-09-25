@@ -781,7 +781,7 @@
     // rather than on a count this page worked out for itself.
     async function sendToList() {
       const url = '/api/admin/posts/' + encodeURIComponent(current) + '/email';
-      let sent = 0, failed = [], rounds = 0;
+      let sent = 0, failed = [], rounds = 0, stalls = 0;
       for (;;) {
         const d = await api('POST', url, { audience: 'subscribers' });
         if (d.message && !d.sent.length && !d.remaining) { say2(d.message, 'good'); return; }
@@ -794,6 +794,22 @@
           say2(bits.join('; ') + '.', failed.length ? 'bad' : 'good');
           return;
         }
+        // A WHOLE BATCH DEFERRED means the provider is refusing everything —
+        // rate-limited harder than the server's pacing expects. Those copies
+        // are still owed, so backing off and trying again is right; doing it
+        // for ever is not, and neither is hammering a provider that is already
+        // saying no.
+        if (!d.sent.length && (d.deferred || []).length) {
+          if (++stalls > 3) {
+            say2(`Stopped: the mail provider is rate-limiting. ${sent} sent, ${d.remaining} still to go — `
+              + 'press Send again later and it will carry on from where it stopped.', 'bad');
+            return;
+          }
+          say2(`Rate-limited, waiting… ${sent} sent, ${d.remaining} to go`);
+          await new Promise((r) => setTimeout(r, 5000 * stalls));
+          continue;
+        }
+        stalls = 0;
         say2(`Sent ${sent}, ${d.remaining} to go…`);
         // A guard against a server that never reports progress, so a bug here
         // cannot become an endless mailing loop.

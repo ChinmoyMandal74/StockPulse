@@ -1311,6 +1311,15 @@ async function claimSends(slug, emails) {
   })), 'write');
 }
 
+// Give a claim back, for the one case where the provider PROVED it sent
+// nothing (a rate-limit refusal). Anything ambiguous keeps its claim: an
+// address that might already have a copy must never be handed a second one.
+async function releaseSend(slug, email) {
+  await init();
+  await db.execute({ sql: 'delete from post_sends where slug = ? and email = ?',
+    args: [String(slug), subEmail(email)] });
+}
+
 async function noteSendResult(slug, email, ok) {
   await init();
   await db.execute({ sql: 'update post_sends set ok = ? where slug = ? and email = ?',
@@ -1323,6 +1332,27 @@ async function noteSendResult(slug, email, ok) {
 // holding a JSON array of column ids — site settings, not per-account, so it
 // has no business in `prefs` (which is keyed per user and rewritten by three
 // pages under the hand-back rule).
+// The postal address that US bulk-mail law wants in the footer of a mailing.
+// A SITE SETTING, not an env var: it is content the owner writes, it changes
+// without a deploy, and putting it in the environment would mean the one legal
+// requirement of this feature could only be met from a hosting dashboard.
+async function readPostalAddress() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'mail_postal'");
+  return r.rows.length ? String(r.rows[0].value || '') : '';
+}
+
+async function writePostalAddress(text) {
+  await init();
+  const v = String(text || '').trim().slice(0, 300);
+  await db.execute({
+    sql: "insert into app_meta (key, value) values ('mail_postal', ?) "
+       + 'on conflict(key) do update set value = excluded.value',
+    args: [v],
+  });
+  return v;
+}
+
 async function readHiddenColumns() {
   await init();
   const r = await db.execute("select value from app_meta where key = 'hidden_columns'");
@@ -3745,10 +3775,13 @@ module.exports = {
   deleteSubscriber,
   readSentFor,
   claimSends,
+  releaseSend,
   noteSendResult,
   writePost,
   renamePost,
   deletePost,
+  readPostalAddress,
+  writePostalAddress,
   readHiddenColumns,
   writeHiddenColumns,
   readPriceCursor,
