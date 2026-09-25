@@ -214,6 +214,22 @@ const SCHEMA = [
      updated_at   integer
    )`,
   `create index if not exists idx_posts_published on posts (status, published_at)`,
+  // Images for blog posts. THIS IS THE ONLY STORE THE APP HAS: a serverless
+  // filesystem discards writes, `public/` is a git directory served by the CDN
+  // (so "upload" there means a commit and a deploy), and no blob service is
+  // configured. At blog scale that is fine -- the editor resizes before upload,
+  // so a row is tens of KB, not megabytes.
+  //
+  // The id is a CONTENT HASH, which buys two things: uploading the same picture
+  // twice stores it once, and the URL can never point at different bytes, so it
+  // is safe to cache for a year.
+  `create table if not exists post_images (
+     id         text primary key,
+     mime       text not null,
+     bytes      blob not null,
+     size       integer,
+     created_at integer
+   )`,
   `create table if not exists app_meta (
      key   text primary key,
      value text
@@ -1029,6 +1045,52 @@ async function renamePost(from, to) {
 async function deletePost(slug) {
   await init();
   const r = await db.execute({ sql: 'delete from posts where slug = ?', args: [String(slug)] });
+  return Number(r.rowsAffected || 0) > 0;
+}
+
+// ---- blog images -----------------------------------------------------------
+
+// Idempotent by construction: the id IS the hash of the bytes, so re-uploading
+// the same picture returns the same row rather than a second copy.
+async function writePostImage({ id, mime, bytes }) {
+  await init();
+  await db.execute({
+    sql: `insert into post_images (id, mime, bytes, size, created_at) values (?, ?, ?, ?, ?)
+          on conflict(id) do nothing`,
+    args: [String(id), String(mime), bytes, bytes.length, Date.now()],
+  });
+  return { id: String(id), mime: String(mime), size: bytes.length };
+}
+
+async function readPostImage(id) {
+  await init();
+  const r = await db.execute({ sql: 'select mime, bytes, size from post_images where id = ?', args: [String(id)] });
+  if (!r.rows.length) return null;
+  const row = r.rows[0];
+  // A blob comes back as an ArrayBuffer from one driver and a Uint8Array from
+  // another, and it MUST leave here as a real Buffer. `res.send()` only treats
+  // a Buffer as bytes: hand it a plain Uint8Array and Express serialises the
+  // thing as JSON, so 28KB of PNG went out as 294KB of decimal numbers under a
+  // `charset=utf-8` content type. Buffer is a Uint8Array subclass, so the
+  // obvious `instanceof Uint8Array` test passes for both and fixes neither.
+  const b = row.bytes;
+  const bytes = Buffer.isBuffer(b) ? b : Buffer.from(b);
+  return { mime: String(row.mime), bytes, size: Number(row.size || bytes.length) };
+}
+
+// Deliberately does NOT select `bytes` -- this answers "what is stored" for the
+// editor's manager, and pulling every image into memory to count them would be
+// the readSnapshot mistake in a new place.
+async function listPostImages() {
+  await init();
+  const r = await db.execute('select id, mime, size, created_at from post_images order by created_at desc');
+  return r.rows.map((x) => ({ id: String(x.id), mime: String(x.mime),
+    size: Number(x.size || 0), createdAt: Number(x.created_at || 0) }));
+}
+
+async function deletePostImage(id) {
+  await init();
+  const r = await db.execute({ sql: 'delete from post_images where id = ?', args: [String(id)] });
   return Number(r.rowsAffected || 0) > 0;
 }
 
@@ -3444,6 +3506,10 @@ module.exports = {
   writeTileConfig,
   readPosts,
   readPost,
+  writePostImage,
+  readPostImage,
+  listPostImages,
+  deletePostImage,
   writePost,
   renamePost,
   deletePost,

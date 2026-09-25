@@ -161,6 +161,14 @@ const MAX_FAILED = 8;
 const LOCK_MS = 15 * 60 * 1000;
 
 app.set('trust proxy', 1); // so req.secure reflects an HTTPS reverse proxy when published
+// ONE ROUTE MAY SEND MORE THAN 100kb, and it has to be mounted ahead of the
+// global parser rather than on the route itself: `express.json()` below runs
+// first for every request, so a picture would be rejected with an HTML error
+// page long before reaching a handler with a larger limit of its own. Parsing
+// is idempotent — the second parser sees `req._body` and stands aside — so this
+// raises the ceiling for blog image uploads and nothing else. Base64 costs a
+// third on top of the 2MB the route itself allows.
+app.use('/api/admin/posts/image', express.json({ limit: '4mb' }));
 app.use(express.json());
 
 // When this request arrived, so `logAct` can say how long the operation took.
@@ -556,6 +564,14 @@ function renderMarkdown(src) {
     .replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, src) =>
+      // Our own uploads, or a plain https picture. Anything else keeps its
+      // words and loses its tag, the rule links already follow -- and it stops
+      // the blog becoming an open proxy for data: and javascript: srcs.
+      (/^\/blog\/img\/[a-f0-9]{8,64}$/.test(src) || /^https:\/\//i.test(src))
+        ? `<figure class="pimg"><img src="${src}" alt="${alt}" loading="lazy" />`
+          + (alt ? `<figcaption>${alt}</figcaption>` : '') + '</figure>'
+        : alt)
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, text, href) =>
       (/^https?:\/\//i.test(href) || /^\//.test(href))
         ? `<a href="${href}"${/^https?:/i.test(href) ? ' target="_blank" rel="noopener"' : ''}>${text}</a>`
@@ -584,6 +600,15 @@ function renderMarkdown(src) {
       continue;
     }
     if (/^(-{3,}|\*{3,})$/.test(line)) { closePara(); closeList(); closeQuote(); out.push('<hr />'); continue; }
+    // An image ALONE on a line is a block, not a paragraph. `inline()` turns it
+    // into a <figure>, and a figure inside a <p> is invalid -- the browser
+    // auto-closes the paragraph and leaves an empty one behind, which shows up
+    // as a phantom gap above every picture.
+    if (/^!\[[^\]]*\]\([^)\s]+\)$/.test(line.trim())) {
+      closePara(); closeList(); closeQuote();
+      out.push(inline(line.trim()));
+      continue;
+    }
     if ((m = /^>\s?(.*)$/.exec(line))) {
       closePara(); closeList();
       if (!quote) { out.push('<blockquote>'); quote = true; }
@@ -665,6 +690,18 @@ app.get('/blog', route(async (req, res) => {
       '</div></a>';
   }).join('\n') : '<div class="empty">No posts yet. The first one is being written.</div>';
   res.type('html').send(pageTemplate('blog.html').replace('%POSTS%', list));
+}));
+
+// Public, because the blog is. The id is a content hash, so these bytes can
+// never change under this URL -- hence `immutable` and a year, which keeps the
+// function out of the path on every page view after the first.
+app.get('/blog/img/:id', route(async (req, res, next) => {
+  if (!/^[a-f0-9]{8,64}$/.test(String(req.params.id || ''))) return next();
+  const img = await store.readPostImage(req.params.id);
+  if (!img) return res.status(404).type('text/plain').send('No such image.');
+  res.set('Content-Type', img.mime);
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  res.send(img.bytes);
 }));
 
 app.get('/blog/:slug', route(async (req, res, next) => {
@@ -6258,6 +6295,52 @@ app.delete('/api/admin/posts/:slug', requireAdmin, route(async (req, res) => {
   const gone = await store.deletePost(req.params.slug);
   if (!gone) return res.status(404).json({ error: 'No such post.' });
   logAct(req, 'post', 'delete:' + req.params.slug.slice(0, 60));
+  res.json({ ok: true });
+}));
+
+// ---- blog images ------------------------------------------------------------
+// Stored in Turso because it is the only store there is: a serverless
+// filesystem discards writes, and `public/` is a git directory the CDN serves,
+// so "upload" there would mean a commit and a deploy.
+//
+// THE EDITOR RESIZES BEFORE IT SENDS, which is what makes that affordable -- a
+// 4MB phone photo arrives as tens of KB. The cap here is the backstop, not the
+// mechanism, and it is generous enough that a legitimate resize never hits it.
+const IMG_MAX_BYTES = 2 * 1024 * 1024;
+const IMG_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+
+app.post('/api/admin/posts/image', requireAdmin, route(async (req, res) => {
+  const dataUrl = String(req.body?.dataUrl || '');
+  const m = /^data:([a-z]+\/[a-z+.-]+);base64,([A-Za-z0-9+/=]+)$/i.exec(dataUrl);
+  if (!m) return res.status(400).json({ error: 'Send the image as a base64 data URL.' });
+  const mime = m[1].toLowerCase();
+  if (!IMG_MIME[mime]) {
+    return res.status(400).json({ error: `That is a ${mime}. Use a JPEG, PNG, WebP or GIF.` });
+  }
+  const bytes = Buffer.from(m[2], 'base64');
+  if (!bytes.length) return res.status(400).json({ error: 'That file is empty.' });
+  if (bytes.length > IMG_MAX_BYTES) {
+    return res.status(413).json({
+      error: `That is ${(bytes.length / 1048576).toFixed(1)}MB and the ceiling is 2MB. `
+        + 'The editor normally shrinks a picture before sending it, so this one may have arrived another way.' });
+  }
+  // The id IS the content, so the same picture twice is one row and the URL can
+  // never come to mean different bytes -- which is what lets it be cached for a
+  // year rather than revalidated on every page view.
+  const id = crypto.createHash('sha256').update(bytes).digest('hex').slice(0, 24);
+  const saved = await store.writePostImage({ id, mime, bytes });
+  logAct(req, 'post', `image:${id.slice(0, 12)}`);
+  res.json({ ok: true, ...saved, url: `/blog/img/${id}` });
+}));
+
+app.get('/api/admin/posts/images', requireAdmin, route(async (req, res) => {
+  res.json({ images: (await store.listPostImages()).map((i) => ({ ...i, url: `/blog/img/${i.id}` })) });
+}));
+
+app.delete('/api/admin/posts/image/:id', requireAdmin, route(async (req, res) => {
+  const gone = await store.deletePostImage(req.params.id);
+  if (!gone) return res.status(404).json({ error: 'No such image.' });
+  logAct(req, 'post', 'image-delete:' + String(req.params.id).slice(0, 24));
   res.json({ ok: true });
 }));
 
