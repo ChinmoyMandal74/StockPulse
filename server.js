@@ -2135,7 +2135,13 @@ async function sendMailResult({ to, subject, text, html, replyTo, headers, bulk 
       console.error('resend error', r.status, body && body.name);
       return { ok: false, status: r.status, retryable: r.status === 429 };
     }
-    return { ok: true, status: r.status, retryable: false };
+    // THE PROVIDER'S MESSAGE ID, kept rather than discarded. "Accepted" and
+    // "delivered" are different facts — the Price pulled column's lesson in a
+    // new place — and without this id there is nothing to take to Resend when
+    // somebody says a message never arrived, which is exactly what happened
+    // the first time the list was used.
+    const okBody = await r.json().catch(() => ({}));
+    return { ok: true, status: r.status, retryable: false, id: (okBody && okBody.id) || null };
   } catch (err) {
     // A dropped socket may have delivered. Not retryable, deliberately.
     console.error('resend call failed', err.message);
@@ -7132,7 +7138,7 @@ async function sendPostToList(req, res, p) {
   const batch = due.slice(0, MAIL_LIST_BATCH);
   await store.claimSends(p.slug, batch.map((s) => s.email));
 
-  const sent = [], failed = [], deferred = [];
+  const sent = [], failed = [], deferred = [], ids = [];
   let first = true;
   for (const sub of batch) {
     if (!first) await pause(MAIL_RATE_MS);
@@ -7162,7 +7168,8 @@ async function sendPostToList(req, res, p) {
       deferred.push(sub.email);
       continue;
     }
-    await store.noteSendResult(p.slug, sub.email, out.ok);
+    await store.noteSendResult(p.slug, sub.email, out.ok, out.id);
+    if (out.ok) ids.push({ email: sub.email, id: out.id });
     (out.ok ? sent : failed).push(sub.email);
   }
   // Recounted rather than subtracted: a deferred address is still due, so
@@ -7171,6 +7178,10 @@ async function sendPostToList(req, res, p) {
   const done = await store.readSentFor(p.slug);
   const remaining = subs.filter((s) => !done.has(s.email)).length;
   logAct(req, 'post', `list:${p.slug} ${sent.length}/${batch.length} left ${remaining}`.slice(0, 80));
+  // Printed, not only stored: Vercel does not show a function's stdout in its
+  // log view by default, but this is the id Resend needs to say what became of
+  // a message, and it is worth having in the response the page already reads.
+  if (sent.length) console.log(`list send ${p.slug}:`, ids.map((x) => `${x.email}=${x.id || 'no-id'}`).join(' '));
   res.json({ ok: failed.length === 0, audience: 'subscribers', sent, failed,
     deferred, remaining, total: subs.length });
 }

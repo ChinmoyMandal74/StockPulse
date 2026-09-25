@@ -605,6 +605,11 @@ function parseAddColumn(stmt) {
 }
 
 const ADDED_COLUMNS = [
+  // Resend's own id for the message. `ok` records only that the provider
+  // ACCEPTED it, which is not the same as delivered — the first real use of
+  // the list hit exactly that gap, and without an id there is nothing to ask
+  // Resend about when a reader says nothing arrived.
+  "alter table post_sends add column provider_id text",
   // DEAD since 2026-09-25 and kept only so the schema matches everywhere it is
   // already deployed: nothing reads or writes it. There was a per-post choice
   // of one column or two, and the owner removed the choice — every post is the
@@ -1320,10 +1325,15 @@ async function releaseSend(slug, email) {
     args: [String(slug), subEmail(email)] });
 }
 
-async function noteSendResult(slug, email, ok) {
+// `providerId` is Resend's own id for the message. Kept because `ok` means
+// only that the provider ACCEPTED it: when a reader says nothing arrived, this
+// is the single thing that makes the question answerable rather than a shrug.
+async function noteSendResult(slug, email, ok, providerId) {
   await init();
-  await db.execute({ sql: 'update post_sends set ok = ? where slug = ? and email = ?',
-    args: [ok ? 1 : 0, String(slug), subEmail(email)] });
+  await db.execute({
+    sql: 'update post_sends set ok = ?, provider_id = ? where slug = ? and email = ?',
+    args: [ok ? 1 : 0, providerId == null ? null : String(providerId), String(slug), subEmail(email)],
+  });
 }
 
 // ---- site-wide column visibility ------------------------------------------
