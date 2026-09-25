@@ -111,6 +111,78 @@
       margin-left: 50%; transform: translateX(-50%);
     }
 
+    /* ---- galleries: one picture at a time, or a grid ----------------------
+       NO SCRIPT. `scroll-snap` is the Instagram gesture natively: swipe on a
+       phone, two fingers on a trackpad, arrow keys once the strip has focus.
+       Every picture is in the HTML either way, so a crawler and a text browser
+       still see all of them — which is the reason a carousel is allowable on
+       this page at all.
+
+       THE PEEK IS LOAD-BEARING. At 100% a slide fills the strip and nothing
+       says there is more; at 88% the next one shows its edge, which is the only
+       thing that makes anyone swipe on a desktop. It is also why the scrollbar
+       is styled rather than hidden — without script there is no dot to light
+       up, and the bar is then the only indication of where you are. */
+    .gal {
+      display: flex; gap: 14px; margin: 30px 0 0;
+      overflow-x: auto; overscroll-behavior-x: contain;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.22) transparent;
+      padding-bottom: 10px;
+    }
+    .gal:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+    .gal::-webkit-scrollbar { height: 6px; }
+    .gal::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.22); border-radius: 99px; }
+    .gal .gslide { flex: 0 0 88%; scroll-snap-align: center; margin: 0; min-width: 0; }
+    /* CAPPED BY HEIGHT, not stretched to the slide. A gallery mixes shapes — a
+       4:5 promo card beside a 16:9 screenshot — and at `width: 100%` the card
+       becomes 1144px tall while the screenshot is 515, so the strip's height is
+       set by the tallest and every other slide floats in a void. Capping the
+       height instead lets a wide picture fill the slide and a tall one sit
+       centred at a sane size, and the cap is in `vh` because the thing it is
+       really competing with is the window, not the column. */
+    .gal .gslide img {
+      display: block; width: auto; max-width: 100%; height: auto; max-height: 68vh;
+      margin-left: auto; margin-right: auto;
+      border-radius: 12px; border: 1px solid var(--hair); background: var(--surface-2);
+    }
+    .gal .gslide figcaption {
+      margin-top: 8px; font-size: 12.5px; line-height: 1.5; color: var(--faint); text-align: center;
+    }
+    /* The same markup, laid out as a grid: everything at once, nothing to
+       swipe, and no scroll container — so the snap and the scrollbar have to be
+       unset rather than merely overridden. */
+    .gal.grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      overflow: visible; scroll-snap-type: none; padding-bottom: 0;
+    }
+    .gal.grid .gslide { flex: none; }
+    /* EVEN CELLS, AND NOTHING CROPPED. Left to their own shapes the pictures
+       bottom out at four different heights and the captions stagger — which is
+       not a grid, it is a row of pictures. A fixed cell height with `contain`
+       lines the captions up while every picture keeps its proportions; the
+       border goes with it, because a wide bordered box around a narrow portrait
+       outlines the box rather than the picture. `cover` would align them too,
+       and would crop a promo card's headline off to do it. */
+    .gal.grid .gslide img {
+      width: 100%; height: 200px; max-height: none; object-fit: contain;
+      border: 0; background: none; border-radius: 8px;
+    }
+    /* A gallery is a block, not a picture beside a paragraph, so it spans BOTH
+       columns and clears the rail — `clear: both` is what keeps it from landing
+       beside a float and breaking the two-column layout it sits inside. The
+       width is the rail's own arithmetic: 200% of the text column plus the gap
+       is exactly the article. */
+    @media (min-width: 1041px) {
+      .body .gal { clear: both; width: calc(200% + var(--railgap)); }
+    }
+    @media (prefers-reduced-motion: no-preference) { .gal { scroll-behavior: smooth; } }
+    /* Print and reader modes cannot scroll: show them all rather than one. */
+    @media print {
+      .gal { display: block; overflow: visible; }
+      .gal .gslide { break-inside: avoid; margin-bottom: 14px; }
+    }
+
     /* ---- two columns: text left, pictures in a rail on the right ----------
        FLOAT, not grid. A grid gives each child its own row, so a picture would
        sit in the right column on a row of its own and tear a hole in the text

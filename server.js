@@ -593,6 +593,23 @@ const PAGE_SKIN = {
     `<figure class="pimg${size ? ' ' + size : ''}">`
     + `<img src="${src}" alt="${alt}" loading="lazy"${titleAttr} />`
     + (alt ? `<figcaption>${alt}</figcaption>` : '') + '</figure>',
+  // NO SCRIPT, which is the whole reason this is worth having on this page: a
+  // flex row with scroll-snap is the Instagram gesture natively — swipe on a
+  // phone, two fingers on a trackpad, arrow keys once focused. Every picture is
+  // in the HTML, so a crawler and a text browser see all of them, and where
+  // scroll-snap is missing it degrades to a strip you can still scroll.
+  //
+  // tabindex makes it reachable by keyboard: a scroll container that cannot
+  // take focus cannot be scrolled without a mouse.
+  gallery: (items, mode) =>
+    `<div class="gal${mode === 'grid' ? ' grid' : ''}" tabindex="0" role="group" `
+    + `aria-label="${items.length} pictures${mode === 'grid' ? '' : ', scroll sideways'}">`
+    + items.map((i) =>
+      '<figure class="gslide">'
+      + `<img src="${i.src}" alt="${i.alt}" loading="lazy" />`
+      + (i.alt ? `<figcaption>${i.alt}</figcaption>` : '')
+      + '</figure>').join('')
+    + '</div>',
 };
 
 function renderMarkdown(src, skin) {
@@ -630,12 +647,42 @@ function renderMarkdown(src, skin) {
   const closePara = () => { if (para.length) { out.push(`<p${S.p}>${inline(para.join(' '))}</p>`); para = []; } };
   const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
   const closeQuote = () => { if (quote) { out.push('</blockquote>'); quote = false; } };
+  // A GALLERY IS ASKED FOR, never inferred. Two pictures next to each other in
+  // a post are two pictures; grouping them because they happen to be adjacent
+  // would take away the ability to write that. So it is a fence with a name.
+  let gal = null;
+  const closeGallery = () => {
+    if (!gal) return;
+    // A carousel of one is a picture. Fall back rather than build a scroll
+    // container with nothing to scroll.
+    if (gal.items.length === 1) {
+      const it = gal.items[0];
+      out.push(S.fig(it.src, it.alt, '', ''));
+    } else if (gal.items.length) {
+      out.push(S.gallery(gal.items, gal.mode));
+    }
+    gal = null;
+  };
   for (const raw of lines) {
     const line = raw.replace(/\s+$/, '');
     if (/^```/.test(line)) {
       closePara(); closeList(); closeQuote();
+      const info = line.slice(3).trim().toLowerCase();
+      if (gal) { closeGallery(); continue; }            // the closing fence
+      if (!code && (info === 'gallery' || info === 'grid')) {
+        gal = { mode: info, items: [] };
+        continue;
+      }
       out.push(code ? '</code></pre>' : `<pre${S.pre}><code${S.precode}>`);
       code = !code;
+      continue;
+    }
+    // Inside a gallery only pictures count. Anything else is dropped rather
+    // than rendered somewhere surprising — a caption belongs in the alt, which
+    // is where every other picture on this page already keeps it.
+    if (gal) {
+      const g = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)\s*$/.exec(line.trim());
+      if (g && safeImgSrc(g[2])) gal.items.push({ alt: g[1], src: g[2] });
       continue;
     }
     if (code) { out.push(esc(raw)); continue; }
@@ -678,6 +725,7 @@ function renderMarkdown(src, skin) {
     closeList(); closeQuote();
     para.push(line.trim());
   }
+  closeGallery();
   closePara(); closeList(); closeQuote();
   if (code) out.push('</code></pre>');
   return out.join('\n');
@@ -1634,13 +1682,22 @@ const emailSkin = () => ({
         : '')
       + '</table>';
   },
+  // THE EMAIL STACKS THEM. A carousel cannot exist here — no script, and no
+  // scroll container a mail client will honour — so the same pictures run down
+  // the page in order, each with its caption, which is what the reader would
+  // have seen anyway had they swiped through all of them.
+  gallery: (items) => items.map((i) => emailSkin().fig(i.src, i.alt, '', '')).join(''),
 });
 
 // The plain-text half. Derived from the MARKDOWN rather than from the HTML,
 // because stripping tags out of the rendered version reintroduces every
 // escaping question the renderer just answered.
 function postAsText(p, url) {
-  const lines = String(p.body || '').replace(/\r\n/g, '\n').split('\n').map((l) => l
+  const lines = String(p.body || '').replace(/\r\n/g, '\n').split('\n')
+    // The fence is markup, not words. Left in, a plain-text mail reads
+    // "```gallery" at the reader.
+    .filter((l) => !/^```(gallery|grid)?\s*$/i.test(l.trim()))
+    .map((l) => l
     .replace(/^#{1,4}\s+/, '')
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, (m, alt) => (alt ? `[picture: ${alt}]` : '[picture]'))
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '$1 ($2)')

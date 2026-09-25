@@ -62,7 +62,7 @@
     .mdbar .md.m { font-family: var(--mono); }
     .mdsep { width: 1px; height: 16px; background: var(--hair); margin: 0 3px; }
     .mdcount { font-size: 11.5px; color: var(--faint); font-family: var(--mono); }
-    #tpl { background: rgba(255,255,255,0.04); border: 1px solid var(--hair); color: var(--muted);
+    #tpl, #galMode { background: rgba(255,255,255,0.04); border: 1px solid var(--hair); color: var(--muted);
            border-radius: 9px; padding: 7px 10px; font: 500 12.5px var(--sans); cursor: pointer; }
     #tpl:disabled { opacity: 0.45; cursor: default; }
     .said { font-size: 12.5px; color: var(--muted); }
@@ -118,6 +118,25 @@
        is three against `.body .pimg`'s two, so it wins outright. */
     .preview .body .pimg.small  { max-width: 240px; margin-right: calc(-240px - var(--pgap)); }
     .preview .body .pimg.medium { max-width: 380px; margin-right: calc(-380px - var(--pgap)); }
+    /* The gallery, at this box's scale. The peek is the same 88%: it is the
+       only thing that says the strip scrolls, and a preview that omits it is a
+       preview of a different component. */
+    .preview .gal { display: flex; gap: 10px; margin: 16px 0 0; overflow-x: auto;
+                    scroll-snap-type: x mandatory; scrollbar-width: thin;
+                    scrollbar-color: rgba(255,255,255,.22) transparent; padding-bottom: 8px; }
+    .preview .gal::-webkit-scrollbar { height: 6px; }
+    .preview .gal::-webkit-scrollbar-thumb { background: rgba(255,255,255,.22); border-radius: 99px; }
+    .preview .gal .gslide { flex: 0 0 88%; scroll-snap-align: center; margin: 0; min-width: 0; }
+    .preview .gal .gslide img { display: block; width: 100%; height: auto; border-radius: 10px;
+                                border: 1px solid var(--hair); background: var(--surface-2); }
+    .preview .gal .gslide figcaption { margin-top: 6px; font-size: 12px; color: var(--faint); text-align: center; }
+    .preview .gal.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                         overflow: visible; scroll-snap-type: none; padding-bottom: 0; }
+    .preview .gal.grid .gslide { flex: none; }
+    /* It spans both columns on the real page, so it does here too — and it must
+       clear the rail, or it lands beside a float and the preview lies. */
+    .preview .body .gal { clear: both; width: calc(200% + var(--pgap)); }
+
     /* ---- the Guides tick ---------------------------------------------------
        DELIBERATELY UNLABELLED, unlike the real page's. This box is not the
        article's width, so any number printed here would be a number no reader
@@ -217,6 +236,11 @@
               <span class="mdsep"></span>
               <button type="button" class="md" data-md="link"  title="Link (Ctrl+K)">Link</button>
               <button type="button" class="md" id="imgBtn"     title="Upload a picture and place it here">Image</button>
+              <select id="galMode" class="md" title="Group pictures: a carousel scrolls one at a time, a grid shows them all at once">
+                <option value="">Gallery…</option>
+                <option value="gallery">Carousel — one at a time</option>
+                <option value="grid">Grid — all at once</option>
+              </select>
               <select id="imgSize" class="md" title="How wide the next picture goes in. Change the word in the markdown to alter one later.">
                 <option value="">Full column</option>
                 <option value="wide">Wide — past the text</option>
@@ -358,6 +382,12 @@
       quote: (el) => prefixLines(el, '> '),
       pre: (el) => wrap(el, '```\n', '\n```', 'code block'),
       hr: (el) => putText(el, '\n---\n'),
+      gallery: (el, mode) => {
+        const a = el.selectionStart, b = el.selectionEnd;
+        const sel = el.value.slice(a, b).trim();
+        const inner = sel || '![A caption for this one](paste a picture here)';
+        putText(el, '\n```' + mode + '\n' + inner + '\n```\n');
+      },
       link: (el) => {
         const a = el.selectionStart, b = el.selectionEnd;
         const sel = el.value.slice(a, b);
@@ -746,6 +776,21 @@
       if (!f) return;
       e.preventDefault();
       uploadImage(f);
+    });
+
+    // Each picture keeps its own caption, because a gallery line is an
+    // ordinary image line — the alt is the caption everywhere else on this page
+    // and there is no reason for it to mean something different inside a fence.
+    $('galMode').addEventListener('change', (e) => {
+      const mode = e.target.value;
+      e.target.value = '';
+      if (!mode) return;
+      const el = $('body');
+      MD.gallery(el, mode);
+      el.focus();
+      say(mode === 'grid'
+        ? 'Grid added — put one picture per line inside it. They all show at once.'
+        : 'Carousel added — put one picture per line inside it. Readers swipe sideways.', 'good');
     });
 
     $('tpl').addEventListener('change', () => {
