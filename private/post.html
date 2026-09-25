@@ -61,6 +61,24 @@
     .rule { margin: 34px 0; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.08); }
 
     .body { font-size: 15.5px; line-height: 1.78; color: #cfd6e2; }
+    /* THE FIRST THING IN THE BODY STARTS AT THE TOP OF THE BODY. Its own top
+       margin used to collapse out through `.body` and overlap the rule's, so
+       the two together were 40px; `display: flow-root` — which the picture rail
+       needs, to contain its floats — stops margins collapsing through, and the
+       same two became 74px of nothing under the rule. The owner ringed it.
+       The second selector is for a post that OPENS with a picture: the figure
+       is then the first child and the heading is the second, and levelling both
+       is what makes the text column start at the same height as the rail.
+
+       THE CLASS IS DOUBLED to win on specificity rather than on source order.
+       `.body .pimg` sets its own top margin and `.body .pimg.wide` another, and
+       both sit further down the file — a plain `.body > *:first-child` ties
+       with the first and loses to the second, so a post opening with a picture
+       kept 6px and one opening with a wide picture kept 26. Measured, not
+       reasoned: the levelling check caught exactly that 6px. */
+    .body.body > *:first-child,
+    .body.body > .pimg:first-child,
+    .body.body > .pimg:first-child + * { margin-top: 0; }
     .body h2 { margin: 40px 0 0; font-size: 25px; font-weight: 600; letter-spacing: -0.025em; color: var(--text); line-height: 1.2; }
     .body h3 { margin: 30px 0 0; font-size: 19px; font-weight: 600; letter-spacing: -0.015em; color: var(--text); }
     .body h4 { margin: 24px 0 0; font-size: 16px; font-weight: 600; color: var(--text); }
