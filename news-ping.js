@@ -92,10 +92,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     say('FAILED  CRON_SECRET is not in .env -- copy it from the Vercel project settings.');
     process.exit(1);
   }
-  // Four hours, not the app's six. The slots are 8 AM, 1 PM and 5 PM, which is
-  // five and four hours apart, so at six hours the middle one would find
-  // nothing stale and quietly do nothing.
-  const hours = argOf('--hours', 4);
+  // THREE HOURS, AND THE NUMBER IS DERIVED. The window means "unfetched for
+  // longer than this", so it has to be shorter than the SMALLEST gap between
+  // two slots or the later one finds nothing stale and quietly does nothing.
+  // The slots are 8 AM, 1 PM and 5 PM: gaps of 5h, 4h and 15h overnight. At
+  // the app's six hours both afternoon slots would skip; at four the 5 PM one
+  // would skip too, because a lap started at 1 PM finishes around 1:06 and is
+  // therefore 3h54m old at 5 PM -- under the wire by six minutes. Three hours
+  // clears the tightest gap with an hour to spare, and still means a slot
+  // re-run by StartWhenAvailable minutes later does nothing.
+  const hours = argOf('--hours', 3);
 
   async function call(q) {
     const url = `${base}/api/cron/news?${q}`;
