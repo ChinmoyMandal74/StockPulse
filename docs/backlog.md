@@ -312,6 +312,57 @@ surface, to duplicate what a server-side gate does better.
 
 ---
 
+## 10. A separate sending domain for the newsletter — parked 2026-09-25
+
+**The list broadcasts from `mail.tickrlab.com`, the same subdomain as password
+resets, the contact form and the refresh report.** They share one sender
+reputation, so a bad complaint week on the newsletter can push a password reset
+into somebody's spam folder — and a reset landing in spam is somebody locked out
+of their own account.
+
+**THE CODE IS ALREADY DONE and this is the thing to know.** `MAIL_FROM_BULK` is
+wired and deployed: set it to an address on a verified second domain and
+broadcasts move there while every transactional message stays put. Unset — which
+is how production runs today — it falls back to `MAIL_FROM` and nothing changes.
+The display name comes from `BRAND` either way, so the two can never read as
+different senders. Four checks cover it.
+
+**What is left cannot be done from here.** The Resend API key is restricted to
+sending (`GET /domains` answers `401 restricted_api_key`, which is worth
+keeping — a leaked key cannot reshape the account), so adding a domain is
+dashboard work:
+
+1. Resend → Domains → add `news.tickrlab.com`; it generates three records.
+2. Vercel DNS → add them: SPF `TXT` and the bounce `MX` on
+   `send.news.tickrlab.com`, DKIM `TXT` on `resend._domainkey.news.tickrlab.com`
+   (the same shape the existing domain uses).
+3. Resend → Verify.
+4. Vercel env → `MAIL_FROM_BULK=Tickr Lab <posts@news.tickrlab.com>`, redeploy.
+
+**No DMARC change is needed** — `_dmarc.tickrlab.com` is `p=quarantine`, `sp=`
+is unset so subdomains inherit it, and alignment is relaxed by default.
+
+**What would make it a bad idea, stated honestly: there are zero subscribers.**
+This is infrastructure for a problem the list does not have yet. Double opt-in
+and a blog audience mean a very low complaint rate, and the shared domain will
+be fine for a long time. The single argument for doing it early is that a
+domain's reputation accrues from its first send, so starting the newsletter on
+`news.` means it builds its own history rather than moving later. **Defer until
+the list has real size and nothing is lost but the re-warming.**
+
+**Two smaller things left with the owner the same day**, neither of them code:
+
+- **The postal address on `/subscribers` is unset.** CAN-SPAM wants a real one
+  in commercial bulk mail. It is a field on that page now (an `app_meta` site
+  setting, not an env var, so no deploy and no dashboard), flagged amber until
+  filled. Nobody but the owner can supply a real address, and a fabricated one
+  is worse than none.
+- **Nobody has subscribed yet**, deliberately: a fake address on production
+  bounces, and bounces damage the reputation the resets share. The first
+  confirm → post → unsubscribe walk should be a real one.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
