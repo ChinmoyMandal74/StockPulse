@@ -23,18 +23,26 @@
        the server stamping a second class further up. If :has() is ever missing
        the page stays 760px and the text column merely gets narrow: cramped, not
        broken. */
-    /* THE THREE NUMBERS AND THEIR LABELS LIVE TOGETHER, because CSS cannot read
-       a length back out as text and the labels would otherwise drift away from
-       the widths they describe. `layout-test.js` measures the drawn columns and
-       compares them against these strings, so a change to one without the other
-       fails rather than quietly lying on screen. */
+    /* THE SPLIT IS A RATIO, NOT A WIDTH (2026-09-25, owner: "make the
+       proportion 50/50"). A fixed 320px rail meant the halves were only ever
+       equal at one page width and drifted at every other; expressed as a
+       percentage they stay equal at 1500px, at 1280 and at the collapse.
+       That is also why the labels name a SHARE rather than a number of pixels:
+       CSS cannot read a length back out as text, so a printed "rail 320" would
+       be a string that goes stale the moment the window moves.
+       `layout-test.js` measures the two drawn columns and asserts they are
+       equal, which is a stronger check than matching a string. */
     :root {
-      --rail: 320px;      --rail-label: "rail 320";
       --railgap: 36px;    --gap-label: "gap 36";
-      --text-label: "text 728";   /* 1140 - 28 - 28 - 320 - 36 */
-      --one-label: "text 704";    /*  760 - 28 - 28              */
+      --rail-label: "rail 50%";
+      --text-label: "text 50%";
+      --one-label: "text 704";    /* 760 - 28 - 28 — a one-column post */
     }
-    .page:has(.body.two) { max-width: 1140px; }
+    /* 1500 - 28 - 28 = 1444; (1444 - 36) / 2 = 704, which is EXACTLY the
+       one-column reading measure. So a two-column post does not squeeze the
+       text to make room for the rail — the page grows and the prose is read at
+       the width it is read at everywhere else. */
+    .page:has(.body.two) { max-width: 1500px; }
     .aura { background:
       radial-gradient(48vw 42vw at 6% -10%, rgba(124, 156, 255, 0.12), transparent 62%),
       radial-gradient(46vw 40vw at 98% 2%, rgba(52, 211, 153, 0.10), transparent 64%); }
@@ -102,21 +110,39 @@
        the one-word version of a clearfix and, unlike `overflow: hidden`, it
        does not clip the rail, which sits in the padding by negative margin.
        The ::after clearfix is not available here: the guides own it. */
-    .body.two { display: flow-root; padding-right: calc(var(--rail) + var(--railgap)); }
+    /* THE ARITHMETIC, because it is not obvious and the two percentages resolve
+       against DIFFERENT boxes. Let W be the page's content width.
+         padding-right: 50% + gap/2   →  text column = W/2 - gap/2
+         the float's width: 100%      →  100% of the TEXT column, so the rail
+                                         is the same W/2 - gap/2. Equal halves.
+         margin-right: -100% - gap    →  a percentage margin resolves against
+                                         the same box, so this pushes the float
+                                         clear of the text and leaves exactly
+                                         `gap` between them.
+       Reaching for `width: 50%` on the float instead gives a quarter of the
+       page, because its containing block is already the halved text column. */
+    .body.two { display: flow-root; padding-right: calc(50% + var(--railgap) / 2); }
     .body.two .pimg {
       float: right; clear: right;
-      width: var(--rail);
+      width: 100%; max-width: 100%;
       margin: 6px 0 18px calc(var(--railgap) / 2);
-      margin-right: calc((var(--rail) + var(--railgap)) * -1);
-      max-width: var(--rail);
+      margin-right: calc(-100% - var(--railgap));
     }
     /* The escape hatch: a chart that genuinely needs the width drops out of the
-       rail and spans the text column instead of being crushed into 320px. */
+       rail and spans BOTH columns. At 50/50 the old behaviour — span the text
+       column — was no width at all, since the text column and the rail are now
+       the same size, so "wide" would have drawn the same picture in a different
+       place. 200% of the text column plus the gap is exactly the page.
+       The over-constrained margin is simply ignored, which is what lets the box
+       overflow its own column to the right. */
     .body.two .pimg.wide {
-      float: none; clear: both; width: 100%; max-width: 100%;
+      float: none; clear: both;
+      width: calc(200% + var(--railgap)); max-width: none;
       margin: 26px 0 0; transform: none;
     }
-    .body.two .pimg.small, .body.two .pimg.medium { max-width: var(--rail); }
+    /* In a rail, "small" and "medium" have nothing to be small against — the
+       column is already the constraint, so they fill it. */
+    .body.two .pimg.small, .body.two .pimg.medium { max-width: 100%; }
     /* Nothing may straddle the rail. */
     .body.two h2, .body.two h3, .body.two hr { clear: none; }
 
@@ -151,14 +177,17 @@
            ends and the reserved rail begins. Measured from the RIGHT, because
            that is where both bands are anchored and the text column is simply
            whatever is left. */
+        /* A background percentage resolves against the PADDING box, which here
+           is the whole page width — so the same 50% arithmetic as the layout
+           above, and the bands cannot drift from the columns they describe. */
         linear-gradient(to right, rgba(124, 156, 255, 0.85) 0 100%)
-          right calc(var(--rail) + var(--railgap)) top / 1px 100% no-repeat,
+          right calc(50% + var(--railgap) / 2) top / 1px 100% no-repeat,
         /* the gap */
         linear-gradient(to right, rgba(251, 191, 36, 0.10) 0 100%)
-          right var(--rail) top / var(--railgap) 100% no-repeat,
+          right calc(50% - var(--railgap) / 2) top / var(--railgap) 100% no-repeat,
         /* the rail */
         linear-gradient(to right, rgba(52, 211, 153, 0.07) 0 100%)
-          right / var(--rail) 100% no-repeat;
+          right / calc(50% - var(--railgap) / 2) 100% no-repeat;
     }
     .body.two.guides .pimg { outline-color: rgba(52, 211, 153, 0.55); }
     .body strong { color: var(--text); }
@@ -179,7 +208,7 @@
              display: flex; flex-wrap: wrap; gap: 16px; font-size: 12.5px; color: var(--faint); }
     footer a { color: var(--muted); text-decoration: none; }
     footer a:hover { color: var(--text); text-decoration: underline; }
-    /* A 320px rail beside a readable text column needs about 1040px of window.
+    /* A half-page rail beside a readable text column needs about 1040px of window.
        Below that the rail is dropped and the post reads as one column — the
        pictures stay in the flow, in order, which is what they were written
        into. Everything here UNSETS rather than overrides, so there is one

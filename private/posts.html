@@ -84,18 +84,18 @@
     .preview .pimg.small  { max-width: 240px; margin-left: auto; margin-right: auto; }
     .preview .pimg.medium { max-width: 380px; margin-left: auto; margin-right: auto; }
     .preview .pimg.wide   { max-width: 100%; }
-    /* The rail, scaled down: this box is narrower than the article, so the real
-       page's 320 would leave no text beside it. The BEHAVIOUR is what has to
-       match, which is why the two numbers are named once here and used
-       everywhere below — including by the guides. */
-    .preview .body.two { --prail: 220px; --pgap: 16px; }
-    /* flow-root for the same reason the real page needs it: a float does not
+    /* THE SAME 50/50 ARITHMETIC as the real page, which is the whole reason it
+       is a ratio there: this box is narrower than the article, so a rail in
+       pixels had to be scaled by hand and could only ever approximate the
+       proportion a reader will see. A percentage needs no second number.
+       flow-root for the same reason the real page needs it: a float does not
        grow its parent, so a picture-heavy post spilled its rail out of the box. */
-    .preview .body.two { display: flow-root; padding-right: calc(var(--prail) + var(--pgap)); }
+    .preview .body.two { --pgap: 16px; }
+    .preview .body.two { display: flow-root; padding-right: calc(50% + var(--pgap) / 2); }
     .preview .body.two .pimg {
-      float: right; clear: right; width: var(--prail); max-width: var(--prail);
+      float: right; clear: right; width: 100%; max-width: 100%;
       margin: 4px 0 14px 12px;
-      margin-right: calc((var(--prail) + var(--pgap)) * -1);
+      margin-right: calc(-100% - var(--pgap));
     }
     .preview .body.two .pimg.wide {
       float: none; clear: both; width: 100%; max-width: 100%; margin: 14px 0 0;
@@ -109,11 +109,11 @@
     .preview .body.two.guides {
       background:
         linear-gradient(to right, rgba(124,156,255,.85) 0 100%)
-          right calc(var(--prail) + var(--pgap)) top / 1px 100% no-repeat,
+          right calc(50% + var(--pgap) / 2) top / 1px 100% no-repeat,
         linear-gradient(to right, rgba(251,191,36,.10) 0 100%)
-          right var(--prail) top / var(--pgap) 100% no-repeat,
+          right calc(50% - var(--pgap) / 2) top / var(--pgap) 100% no-repeat,
         linear-gradient(to right, rgba(52,211,153,.07) 0 100%)
-          right / var(--prail) 100% no-repeat;
+          right / calc(50% - var(--pgap) / 2) 100% no-repeat;
     }
     .preview .body.two.guides .pimg { outline-color: rgba(52,211,153,.55); }
     .gtick { display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
