@@ -1457,9 +1457,73 @@ const MC = {
 const mailEsc = (t) => String(t == null ? '' : t)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+// ---- dark mode, ours rather than the client's ------------------------------
+// The email arrived dark and nobody asked it to: a message that declares
+// `color-scheme: light` and carries no dark rules gives a dark-mode client
+// nothing to follow, so it repaints the white card by algorithm — a guess at
+// what every colour should become, which is how a designed email turns muddy.
+// Refusing does not work (Gmail and Outlook.com ignore the opt-out), so the
+// answer is to SAY what dark looks like. This is the site's own palette, which
+// also gets much closer to "similar to the webpage" than the light version
+// ever could, in exactly the clients that were going to go dark anyway.
+//
+// THE LIGHT VERSION IS STILL THE DEFAULT and still entirely inline, so a client
+// that strips <style> — which is most of the reason this file distrusts them —
+// gets the house style unchanged. This block only ever adds.
+//
+// What it cannot reach: a client that BOTH strips <style> and force-inverts.
+// That is the Gmail app signed in to a non-Gmail account, and nothing in the
+// message can speak to it.
+const MAIL_DARK = {
+  bg: '#050505', card: '#0a0c11', foot: '#080a0f', line: '#1e2430',
+  ink: '#e9ecf2', body: '#cfd6e2', mute: '#9aa3b2', faint: '#7d8797',
+  accent: '#7c9cff', code: '#171c26', pre: '#12161f',
+};
+
+// Element selectors under .em-card rather than a class on every tag: the post
+// body is rendered by the markdown skin and classing each of its tags would be
+// a third description of the same document.
+const MAIL_DARK_RULES = (D) => `
+  .em-bg { background: ${D.bg} !important; }
+  .em-card { background: ${D.card} !important; border-color: ${D.line} !important; }
+  .em-card td, .em-card p, .em-card li, .em-card ul, .em-card ol,
+  .em-card blockquote, .em-card span { color: ${D.body} !important; }
+  .em-card h1, .em-card h2, .em-card h3, .em-card h4,
+  .em-card strong, .em-card b { color: ${D.ink} !important; }
+  .em-card a { color: ${D.accent} !important; }
+  .em-card img { border-color: ${D.line} !important; }
+  .em-card pre { background: ${D.pre} !important; border-color: ${D.line} !important; }
+  .em-card code { background: ${D.code} !important; color: ${D.ink} !important; }
+  .em-card hr { border-top-color: ${D.line} !important; }
+  /* Scoped under .em-card deliberately: a bare .em-quiet is one class against
+     .em-card p's class-plus-element and loses, so the kicker and the captions
+     came back at body colour and the hierarchy flattened. */
+  .em-card .em-quiet, .em-card .em-quiet td { color: ${D.faint} !important; }
+  /* Header and card are near neighbours in the dark palette, so the masthead
+     stops reading as a band without a line under it. */
+  .em-head { border-bottom: 1px solid ${D.line} !important; }
+  .em-foot { background: ${D.foot} !important; border-top-color: ${D.line} !important; }
+  .em-foot p, .em-foot a, .em-foot strong { color: ${D.mute} !important; }
+  /* A near-black pill on a near-black card is an invisible button. */
+  .em-btn td { background: #ffffff !important; }
+  .em-btn a { color: #0c0f16 !important; }
+`;
+
+// Outlook.com does not honour prefers-color-scheme; it rewrites the message and
+// stamps the elements it touched with data-ogsc (it changed a colour) and
+// data-ogsb (a background). Those attributes are the only hook there is.
+const MAIL_DARK_CSS = '<style>'
+  + ':root { color-scheme: light dark; supported-color-schemes: light dark; }'
+  + '@media (prefers-color-scheme: dark) {' + MAIL_DARK_RULES(MAIL_DARK) + '}'
+  + '[data-ogsc] {' + MAIL_DARK_RULES(MAIL_DARK).replace(/\n\s*\./g, ' [data-ogsc] .') + '}'
+  + '</style>';
+
 // A pill button that survives Outlook, which ignores border-radius on <a>.
 function mailButton(href, label) {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0">` +
+  // `em-btn` is the hook the dark block needs: a near-black pill on a
+  // near-black card is an invisible button, so in dark mode it flips to
+  // white-on-dark — which is what the site's own primary button does.
+  return `<table class="em-btn" role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0">` +
     `<tr><td style="border-radius:999px;background:${MC.head}">` +
     `<a href="${href}" style="display:inline-block;padding:13px 26px;font-family:` +
     `-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;` +
@@ -1521,7 +1585,7 @@ const emailSkin = () => ({
       + st(`display:block;width:100%;max-width:${w}px;height:auto;border:1px solid ${MC.line};border-radius:8px`)
       + '></td></tr>'
       + (alt
-        ? `<tr><td align="center"${st(`padding:7px 0 0;font-family:${MAIL_SANS};font-size:12.5px;line-height:1.5;color:${MC.faint}`)}>${alt}</td></tr>`
+        ? `<tr><td class="em-quiet" align="center"${st(`padding:7px 0 0;font-family:${MAIL_SANS};font-size:12.5px;line-height:1.5;color:${MC.faint}`)}>${alt}</td></tr>`
         : '')
       + '</table>';
   },
@@ -1543,7 +1607,7 @@ function postAsText(p, url) {
 function postEmail(p, url) {
   const when = postDate(p.publishedAt);
   const mins = `${readingMinutes(p.body)} min read`;
-  const kicker = `<p${st(`margin:0 0 18px;font-family:${MAIL_MONO};font-size:11.5px;letter-spacing:0.08em;`
+  const kicker = `<p class="em-quiet"${st(`margin:0 0 18px;font-family:${MAIL_MONO};font-size:11.5px;letter-spacing:0.08em;`
     + `text-transform:uppercase;color:${MC.faint}`)}>${mailEsc([when, mins].filter(Boolean).join(' · '))}</p>`;
   return kicker + renderMarkdown(p.body, emailSkin())
     + mailButton(url, 'Read it on the site');
@@ -1556,15 +1620,17 @@ function emailShell({ heading, intro, body = '', note = '' }) {
   const site = APP_URL || '';
   return `<!doctype html><html><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width,initial-scale=1">` +
-    `<meta name="color-scheme" content="light"></head>` +
-    `<body style="margin:0;padding:0;background:${MC.panel}">` +
+    `<meta name="color-scheme" content="light dark">` +
+        `<meta name="supported-color-schemes" content="light dark">` +
+        MAIL_DARK_CSS + `</head>` +
+        `<body class="em-bg" style="margin:0;padding:0;background:${MC.panel}">` +
     // Preheader: the grey line clients show beside the subject. Left to the
     // intro rather than invented, and hidden in the body itself.
     `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${mailEsc(intro)}</div>` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ` +
+    `<table class="em-bg" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ` +
     `style="background:${MC.panel};padding:28px 12px">` +
     `<tr><td align="center">` +
-    `<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" ` +
+    `<table class="em-card" role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" ` +
     `style="width:100%;max-width:600px;background:#ffffff;border:1px solid ${MC.line};border-radius:14px;overflow:hidden">` +
 
     // Header. The mark is an image and the wordmark is text, on purpose: most
@@ -1579,7 +1645,7 @@ function emailShell({ heading, intro, body = '', note = '' }) {
     // layout does not jump while it loads, and the cell painted the header
     // colour so a transparent or blocked image is invisible rather than a pale
     // rectangle — which also survives Gmail's dark-mode repainting.
-    `<tr><td style="background:${MC.head};padding:18px 28px">` +
+    `<tr><td class="em-head" style="background:${MC.head};padding:18px 28px">` +
     '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>' +
     (site
       ? `<td style="padding-right:10px;line-height:0;background:${MC.head}">` +
@@ -1602,7 +1668,7 @@ function emailShell({ heading, intro, body = '', note = '' }) {
     `${body}</td></tr>` +
 
     // footer
-    `<tr><td style="padding:18px 28px 22px;border-top:1px solid ${MC.line};background:#fbfcfd">` +
+    `<tr><td class="em-foot" style="padding:18px 28px 22px;border-top:1px solid ${MC.line};background:#fbfcfd">` +
     (note ? `<p style="margin:0 0 10px;font-family:${sans};font-size:12.5px;line-height:1.6;color:${MC.mute}">${note}</p>` : '') +
     `<p style="margin:0;font-family:${sans};font-size:12.5px;line-height:1.6;color:${MC.faint}">` +
     `<strong style="color:${MC.mute}">${BRAND}</strong> — ${BRAND_TAG}` +
