@@ -557,13 +557,33 @@ const slugify = (s) => String(s || '').toLowerCase().normalize('NFKD')
 // accident. Supported: #/##/### headings, - and 1. lists, > quotes, ```code```,
 // **bold**, *italic*, `code`, [text](href) with http(s) and internal links
 // only, --- rules, and blank-line paragraphs.
-function renderMarkdown(src) {
+// ONE PARSER, TWO SKINS. The page wants classes and a stylesheet; an email
+// wants inline styles on every tag and a table where each figure is, because
+// Outlook renders through Word and most clients strip a <style> block. A
+// second renderer would drift from this one inside a week — rowcard.js,
+// action.js and filters.js all exist for exactly that reason — so the block
+// and inline grammar stays here and only the ATTRIBUTES are handed in.
+// PAGE_SKIN is every attribute the page emits today, so its output is
+// byte-for-byte what it was; there is a test that compares the two.
+const PAGE_SKIN = {
+  p: '', h2: '', h3: '', h4: '', ul: '', ol: '', li: '',
+  blockquote: '', hr: '', pre: '', precode: '', code: '', strong: '', em: '',
+  link: (href, text, ext) =>
+    `<a href="${href}"${ext ? ' target="_blank" rel="noopener"' : ''}>${text}</a>`,
+  fig: (src, alt, size, titleAttr) =>
+    `<figure class="pimg${size ? ' ' + size : ''}">`
+    + `<img src="${src}" alt="${alt}" loading="lazy"${titleAttr} />`
+    + (alt ? `<figcaption>${alt}</figcaption>` : '') + '</figure>',
+};
+
+function renderMarkdown(src, skin) {
+  const S = skin || PAGE_SKIN;
   const esc = (t) => String(t == null ? '' : t)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const inline = (t) => esc(t)
-    .replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`)
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')
+    .replace(/`([^`]+)`/g, (_, c) => `<code${S.code}>${c}</code>`)
+    .replace(/\*\*([^*]+)\*\*/g, `<strong${S.strong}>$1</strong>`)
+    .replace(/(^|[^*])\*([^*]+)\*/g, `$1<em${S.em}>$2</em>`)
     // SIZE RIDES IN MARKDOWN'S OWN TITLE SLOT -- `![alt](src "small")` -- rather
     // than in an invented grammar or in the alt, which belongs to screen
     // readers. A title that is not one of the known widths stays a real title
@@ -579,25 +599,23 @@ function renderMarkdown(src) {
       const t = String(title || '').trim().toLowerCase();
       const size = ['small', 'medium', 'wide'].includes(t) ? t : '';
       const attr = (!size && title) ? ` title="${title}"` : '';
-      return `<figure class="pimg${size ? ' ' + size : ''}">`
-        + `<img src="${src}" alt="${alt}" loading="lazy"${attr} />`
-        + (alt ? `<figcaption>${alt}</figcaption>` : '') + '</figure>';
+      return S.fig(src, alt, size, attr);
     })
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, text, href) =>
       (/^https?:\/\//i.test(href) || /^\//.test(href))
-        ? `<a href="${href}"${/^https?:/i.test(href) ? ' target="_blank" rel="noopener"' : ''}>${text}</a>`
+        ? S.link(href, text, /^https?:/i.test(href))
         : text);   // anything else (javascript:, data:) loses its link, keeps its words
   const out = [];
   const lines = String(src || '').replace(/\r\n/g, '\n').split('\n');
   let list = null, quote = false, code = false, para = [];
-  const closePara = () => { if (para.length) { out.push(`<p>${inline(para.join(' '))}</p>`); para = []; } };
+  const closePara = () => { if (para.length) { out.push(`<p${S.p}>${inline(para.join(' '))}</p>`); para = []; } };
   const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
   const closeQuote = () => { if (quote) { out.push('</blockquote>'); quote = false; } };
   for (const raw of lines) {
     const line = raw.replace(/\s+$/, '');
     if (/^```/.test(line)) {
       closePara(); closeList(); closeQuote();
-      out.push(code ? '</code></pre>' : '<pre><code>');
+      out.push(code ? '</code></pre>' : `<pre${S.pre}><code${S.precode}>`);
       code = !code;
       continue;
     }
@@ -607,10 +625,10 @@ function renderMarkdown(src) {
     if ((m = /^(#{1,3})\s+(.*)$/.exec(line))) {
       closePara(); closeList(); closeQuote();
       const n = m[1].length + 1;            // # is an h2: the page owns the h1
-      out.push(`<h${n}>${inline(m[2])}</h${n}>`);
+      out.push(`<h${n}${S['h' + n] || ''}>${inline(m[2])}</h${n}>`);
       continue;
     }
-    if (/^(-{3,}|\*{3,})$/.test(line)) { closePara(); closeList(); closeQuote(); out.push('<hr />'); continue; }
+    if (/^(-{3,}|\*{3,})$/.test(line)) { closePara(); closeList(); closeQuote(); out.push(`<hr${S.hr} />`); continue; }
     // An image ALONE on a line is a block, not a paragraph. `inline()` turns it
     // into a <figure>, and a figure inside a <p> is invalid -- the browser
     // auto-closes the paragraph and leaves an empty one behind, which shows up
@@ -622,20 +640,20 @@ function renderMarkdown(src) {
     }
     if ((m = /^>\s?(.*)$/.exec(line))) {
       closePara(); closeList();
-      if (!quote) { out.push('<blockquote>'); quote = true; }
-      out.push(`<p>${inline(m[1])}</p>`);
+      if (!quote) { out.push(`<blockquote${S.blockquote}>`); quote = true; }
+      out.push(`<p${S.p}>${inline(m[1])}</p>`);
       continue;
     }
     if ((m = /^[-*]\s+(.*)$/.exec(line))) {
       closePara(); closeQuote();
-      if (list !== 'ul') { closeList(); out.push('<ul>'); list = 'ul'; }
-      out.push(`<li>${inline(m[1])}</li>`);
+      if (list !== 'ul') { closeList(); out.push(`<ul${S.ul}>`); list = 'ul'; }
+      out.push(`<li${S.li}>${inline(m[1])}</li>`);
       continue;
     }
     if ((m = /^\d+[.)]\s+(.*)$/.exec(line))) {
       closePara(); closeQuote();
-      if (list !== 'ol') { closeList(); out.push('<ol>'); list = 'ol'; }
-      out.push(`<li>${inline(m[1])}</li>`);
+      if (list !== 'ol') { closeList(); out.push(`<ol${S.ol}>`); list = 'ol'; }
+      out.push(`<li${S.li}>${inline(m[1])}</li>`);
       continue;
     }
     closeList(); closeQuote();
@@ -1447,6 +1465,88 @@ function mailButton(href, label) {
     `-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;` +
     `font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:999px">` +
     `${mailEsc(label)}</a></td></tr></table>`;
+}
+
+// ---- a post, as an email ---------------------------------------------------
+
+// WHAT AN EMAIL CANNOT DO, stated once so the differences read as decisions:
+// no flexbox, no grid, no stylesheet worth relying on (Outlook renders through
+// Word and Gmail strips <style>), and no float that survives a rewrite. So the
+// page's two columns become ONE — a rail beside the text is not expressible —
+// and "wide" is the same width as everything else, because there is nothing to
+// break out of inside a 600px card.
+//
+// The ground is LIGHT on purpose, which is the one place this deliberately
+// differs from the site. The dark header carries the brand; the body does not,
+// because dark-mode-inverting clients repaint a black email unpredictably and
+// a reader who gets a muddy one cannot tell it from a broken one.
+const MAIL_SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+const MAIL_MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace";
+// 600px card less the shell's 28px of padding each side.
+const MAIL_W = 544;
+const MAIL_IMG_W = { small: 300, medium: 440 };
+
+const st = (css) => ` style="${css}"`;
+
+// An email has no origin, so every href and every src has to be absolute or it
+// resolves against the reader's mail client and goes nowhere.
+const mailAbs = (u) => (/^https?:\/\//i.test(u) ? u : (APP_URL || '') + u);
+
+const emailSkin = () => ({
+  p: st(`margin:0 0 16px;font-family:${MAIL_SANS};font-size:15px;line-height:1.65;color:${MC.body}`),
+  h2: st(`margin:28px 0 10px;font-family:${MAIL_SANS};font-size:19px;line-height:1.3;font-weight:700;letter-spacing:-0.3px;color:${MC.ink}`),
+  h3: st(`margin:22px 0 8px;font-family:${MAIL_SANS};font-size:16.5px;line-height:1.35;font-weight:700;color:${MC.ink}`),
+  h4: st(`margin:18px 0 6px;font-family:${MAIL_SANS};font-size:15px;line-height:1.4;font-weight:700;color:${MC.ink}`),
+  ul: st(`margin:0 0 16px;padding-left:22px;font-family:${MAIL_SANS};font-size:15px;line-height:1.65;color:${MC.body}`),
+  ol: st(`margin:0 0 16px;padding-left:22px;font-family:${MAIL_SANS};font-size:15px;line-height:1.65;color:${MC.body}`),
+  li: st('margin:0 0 7px'),
+  blockquote: st(`margin:0 0 16px;padding:2px 0 2px 15px;border-left:3px solid ${MC.accent};color:${MC.mute};font-family:${MAIL_SANS};font-size:15px;line-height:1.6`),
+  hr: st(`border:0;border-top:1px solid ${MC.line};margin:26px 0`),
+  pre: st(`margin:0 0 16px;padding:12px 14px;background:${MC.panel};border:1px solid ${MC.line};border-radius:8px;overflow-x:auto`),
+  precode: st(`font-family:${MAIL_MONO};font-size:12.5px;line-height:1.55;color:${MC.ink}`),
+  code: st(`font-family:${MAIL_MONO};font-size:13px;background:#eef1f6;padding:1px 5px;border-radius:4px;color:${MC.ink}`),
+  strong: st(`color:${MC.ink}`),
+  em: '',
+  // target=_blank means nothing in a mail client and rel even less; dropped
+  // rather than carried along as furniture.
+  link: (href, text) => `<a href="${mailAbs(href)}"${st('color:#2f6bff;text-decoration:underline')}>${text}</a>`,
+  // A TABLE, not a figure: Outlook ignores display on a <figure> and centring a
+  // block by margin is the thing it is least reliable about. The caption is a
+  // second row rather than a sibling element for the same reason.
+  fig: (src, alt, size) => {
+    const w = MAIL_IMG_W[size] || MAIL_W;
+    return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"'
+      + st('margin:0 0 20px') + '><tr><td align="center"'+ st('padding:0') + '>'
+      + `<img src="${mailAbs(src)}" alt="${alt}" width="${w}"`
+      + st(`display:block;width:100%;max-width:${w}px;height:auto;border:1px solid ${MC.line};border-radius:8px`)
+      + '></td></tr>'
+      + (alt
+        ? `<tr><td align="center"${st(`padding:7px 0 0;font-family:${MAIL_SANS};font-size:12.5px;line-height:1.5;color:${MC.faint}`)}>${alt}</td></tr>`
+        : '')
+      + '</table>';
+  },
+});
+
+// The plain-text half. Derived from the MARKDOWN rather than from the HTML,
+// because stripping tags out of the rendered version reintroduces every
+// escaping question the renderer just answered.
+function postAsText(p, url) {
+  const lines = String(p.body || '').replace(/\r\n/g, '\n').split('\n').map((l) => l
+    .replace(/^#{1,4}\s+/, '')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, (m, alt) => (alt ? `[picture: ${alt}]` : '[picture]'))
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '$1 ($2)')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1'));
+  return { lines, url };
+}
+
+function postEmail(p, url) {
+  const when = postDate(p.publishedAt);
+  const mins = `${readingMinutes(p.body)} min read`;
+  const kicker = `<p${st(`margin:0 0 18px;font-family:${MAIL_MONO};font-size:11.5px;letter-spacing:0.08em;`
+    + `text-transform:uppercase;color:${MC.faint}`)}>${mailEsc([when, mins].filter(Boolean).join(' · '))}</p>`;
+  return kicker + renderMarkdown(p.body, emailSkin())
+    + mailButton(url, 'Read it on the site');
 }
 
 // `note` is the one line that says why this particular message arrived — the
@@ -6336,6 +6436,88 @@ app.put('/api/admin/posts', requireAdmin, route(async (req, res) => {
   });
   logAct(req, 'post', `${status}:${slug}`.slice(0, 80));
   res.json({ ok: true, post, html: renderMarkdown(post.body) });
+}));
+
+// Send a post to a handful of people. ONE MESSAGE EACH, never a shared To
+// line — a list of addresses in a header is other people's addresses given
+// away, and there is no way to take it back.
+//
+// Deliberately NOT a subscriber list: there is no sign-up, nothing stored and
+// nobody to unsubscribe, which is what keeps this person-to-person mail rather
+// than a broadcast with legal obligations attached. If it ever becomes a list,
+// it needs confirmed opt-in and a one-click unsubscribe in every message.
+const MAIL_POST_MAX = 25;
+
+// Free text: commas, semicolons, newlines, spaces, and "Name <a@b.com>" pasted
+// out of a mail client. Kept apart into good and bad so the reply can name what
+// it could not read rather than silently dropping it.
+function parseAddresses(raw) {
+  const seen = new Set();
+  const good = [], bad = [];
+  for (const tok of String(raw || '').split(/[\s,;]+/)) {
+    const t = tok.trim().replace(/^</, '').replace(/>$/, '');
+    if (!t) continue;
+    const k = t.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    // `EMAIL_RE` is the one the sign-up and reset paths already use. Splitting
+    // on commas and semicolons first means a token cannot contain either, so
+    // the shared shape is enough and a second, subtly different one is exactly
+    // the kind of near-duplicate that drifts.
+    (EMAIL_RE.test(t) ? good : bad).push(t);
+  }
+  return { good, bad };
+}
+
+app.post('/api/admin/posts/:slug/email', requireAdmin, route(async (req, res) => {
+  if (!MAIL_READY) {
+    return res.status(503).json({ error: 'Email is not configured on this server, so nothing can be sent.' });
+  }
+  const p = await store.readPost(req.params.slug, { publishedOnly: false });
+  if (!p) return res.status(404).json({ error: 'No such post.' });
+  // A draft's link 404s for everyone but you, so the mail would be an invitation
+  // to a page the reader cannot open.
+  if (p.status !== 'published') {
+    return res.status(400).json({ error: 'Publish it first — a draft 404s for anyone who follows the link.' });
+  }
+  const { good, bad } = parseAddresses(req.body && req.body.to);
+  if (!good.length) {
+    return res.status(400).json({
+      error: bad.length ? `No address there that I can read (${bad.slice(0, 3).join(', ')}).` : 'Nobody to send it to.',
+      invalid: bad,
+    });
+  }
+  if (good.length > MAIL_POST_MAX) {
+    return res.status(400).json({ error: `${good.length} addresses — ${MAIL_POST_MAX} at a time is the limit.` });
+  }
+
+  const base = APP_URL || `https://${req.headers.host}`;
+  const url = `${base}/blog/${p.slug}`;
+  const who = await currentUser(req);
+  const from = (who && who.email) || (await ownerEmail());
+  const intro = p.summary || `A new post on ${BRAND}.`;
+  const note = from
+    ? `${mailEsc(from)} sent you this post from ${BRAND}. Reply to reach them directly.`
+    : `Sent from ${BRAND}.`;
+  const html = emailShell({ heading: p.title, intro, body: postEmail(p, url), note });
+  const txt = postAsText(p, url);
+  const text = textShell({
+    heading: p.title, intro,
+    lines: txt.lines.concat(['', 'Read it on the site: ' + url]),
+    note: from ? `${from} sent you this post from ${BRAND}.` : '',
+  });
+
+  // Sequential, with each failure kept rather than thrown: one bad address must
+  // not decide the fate of the other twenty-four. Nothing may run after the
+  // response on this platform, so it is all awaited here — 25 sends is a few
+  // seconds, far inside the platform's ceiling.
+  const sent = [], failed = [];
+  for (const to of good) {
+    const okSend = await sendMail({ to, subject: p.title, text, html, replyTo: from || undefined });
+    (okSend ? sent : failed).push(to);
+  }
+  logAct(req, 'post', `emailed:${p.slug} ${sent.length}/${good.length}`.slice(0, 80));
+  res.json({ ok: failed.length === 0, sent, failed, invalid: bad });
 }));
 
 app.delete('/api/admin/posts/:slug', requireAdmin, route(async (req, res) => {
