@@ -1050,12 +1050,21 @@
       try {
         blogSay('Rendering…');
         const fontCss = await ensureFontCss();
-        const blob = await shoot(fontCss, 'image/png');
-
-        // A PNG, like the download, and for the reason the editor's own
-        // uploader states: re-encoding a picture that is mostly text as JPEG is
-        // how you get mush. A card is text on flat colour, which is the case
-        // PNG compresses well.
+        // JPEG AT FULL 1080, NOT PNG — and the earlier reasoning here was wrong.
+        // "A card is text on flat colour, which PNG compresses well" ignored the
+        // gradient aura behind it, and a smooth gradient is exactly what makes a
+        // lossless encoder enormous. Measured on a real card: PNG 635 KB against
+        // JPEG q0.9 148 KB at the SAME 1080 pixels, and side by side at 2x the
+        // text and the dots are indistinguishable.
+        //
+        // The width is untouched, so nothing is softer on a retina screen; only
+        // the encoder changed. JPEG rather than WebP (71 KB, smaller still)
+        // because this picture goes into an EMAIL as well as onto the page, and
+        // Outlook's WebP support is not something to bet a newsletter on.
+        //
+        // Download PNG stays PNG: that file is for posting elsewhere at full
+        // quality, where the bytes do not matter.
+        const blob = await shoot(fontCss, 'image/jpeg', 0.9);
         blogSay(`Storing the picture (${Math.round(blob.size / 1024)} KB)…`);
         const up = await fetch('/api/admin/posts/image', {
           method: 'POST', headers: { 'content-type': 'application/json' },

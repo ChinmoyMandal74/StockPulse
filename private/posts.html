@@ -458,8 +458,26 @@
           const g = c.getContext('2d');
           g.imageSmoothingQuality = 'high';
           g.drawImage(img, 0, 0, c.width, c.height);
+          // A PNG NORMALLY STAYS A PNG — re-encoding a screenshot of dense
+          // text as JPEG is how you get mush, and that rule stands.
+          //
+          // But a promo card is not that. It carries a gradient aura, and a
+          // smooth gradient is exactly what makes a lossless encoder enormous:
+          // measured on a real card, PNG 635 KB against JPEG q0.9 148 KB at the
+          // SAME pixel width, indistinguishable side by side at 2x. Four of
+          // those went into one post and the email came to 2MB.
+          //
+          // So the test is the OUTCOME, not the file type: try both, and take
+          // JPEG only when it is dramatically smaller. A flat screenshot of a
+          // table compresses well as PNG already and will not clear that bar,
+          // which is what keeps the original rule intact for the case it was
+          // written for. q0.92 rather than 0.82 because this one may be text.
           const png = file.type === 'image/png';
-          const out = c.toDataURL(png ? 'image/png' : 'image/jpeg', png ? undefined : 0.82);
+          let out = c.toDataURL(png ? 'image/png' : 'image/jpeg', png ? undefined : 0.82);
+          if (png) {
+            const asJpeg = c.toDataURL('image/jpeg', 0.92);
+            if (asJpeg.length < out.length * 0.5) out = asJpeg;
+          }
           // NEVER SEND SOMETHING BIGGER THAN WHAT WAS PICKED. A canvas re-encode
           // of a PNG can inflate it badly — measured on a flat-colour 2400px
           // test image, 59KB in and 288KB out — because the browser's encoder is
@@ -496,7 +514,9 @@
         // Its own line with blank lines either side, which is what makes the
         // renderer treat it as a block rather than wrapping it in a paragraph.
         putText($('body'), '\n\n![' + alt + '](' + d.url + tail + ')\n\n');
+        const saved = file.size > d.size ? Math.round((1 - d.size / file.size) * 100) : 0;
         say('Added ' + file.name + ' — ' + Math.round(d.size / 1024) + ' KB stored'
+          + (saved >= 30 ? ' (' + Math.round(file.size / 1024) + ' KB picked, ' + saved + '% smaller)' : '')
           + (size ? ', ' + size + '.' : '.') + ' Change the width by editing the word in quotes.', 'good');
       } catch (e) { say(e.message, 'bad'); }
     }
