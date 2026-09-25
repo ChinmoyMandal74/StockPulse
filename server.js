@@ -198,7 +198,8 @@ app.get(['/', '/index.html'], route(async (req, res, next) => {
       ref: req.headers['referer'] || req.headers['referrer'] || null,
       userEmail: null,
     }).catch(() => { /* a logging failure must never block the page */ });
-    return res.sendFile(path.join(__dirname, 'private', 'landing.html'));
+    return res.type('html').send(
+      pageTemplate('landing.html').replace('%SUBSCRIBE%', subscribeBox('home')));
   }
   // isSignedIn() above already resolved and cached the user on req, so this
   // costs nothing extra. Null means either a pre-accounts row or someone signed
@@ -802,7 +803,9 @@ app.get('/blog', route(async (req, res) => {
       '</span>' + thumb +
       '</div></a>';
   }).join('\n') : '<div class="empty">No posts yet. The first one is being written.</div>';
-  res.type('html').send(pageTemplate('blog.html').replace('%POSTS%', list));
+  res.type('html').send(pageTemplate('blog.html')
+    .replace('%POSTS%', list)
+    .replace('%SUBSCRIBE%', subscribeBox('blog')));
 }));
 
 // Public, because the blog is. The id is a content hash, so these bytes can
@@ -857,6 +860,30 @@ async function postalAddress() {
   } catch { /* a footer line is not worth failing a send over */ }
   return postalCache.v;
 }
+
+// ONE DEFINITION OF THE BOX, filled into `%SUBSCRIBE%` wherever a public page
+// wants it. It was written out by hand in blog.html and post.html, and adding a
+// third copy to the landing page is precisely how three variations of the same
+// promise start drifting — which matters more here than usual, because the fine
+// print IS the consent language.
+//
+// A plain HTML form on purpose: none of these pages loads any JavaScript, and a
+// subscribe box is no reason to start. `source` becomes the consent record's
+// note of where the address was typed.
+const subscribeBox = (source) =>
+  '<section class="subbox">'
+  + '<h2>Get new posts by email</h2>'
+  + '<p>An email when something new goes up — a few a month at most. Nothing else, and no '
+  + 'sharing your address with anyone.</p>'
+  + '<form method="post" action="/subscribe">'
+  + `<input type="hidden" name="source" value="${htmlEsc(source)}" />`
+  + '<input type="email" name="email" required autocomplete="email" '
+  + 'placeholder="you@example.com" aria-label="Your email address" />'
+  + '<button type="submit">Subscribe</button>'
+  + '</form>'
+  + '<p class="fine">You will get one email asking you to confirm. Every message after that has a '
+  + 'one-click unsubscribe, and it works without signing in.</p>'
+  + '</section>';
 
 const subBase = (req) => APP_URL || `https://${req.headers.host}`;
 const unsubUrl = (base, token, topic) =>
@@ -954,6 +981,7 @@ app.get('/blog/:slug', route(async (req, res, next) => {
     // record's `source`. Escaped like everything else, though a slug is already
     // [a-z0-9-] by the time it is stored.
     .split('%SLUG%').join(htmlEsc(p.slug))
+    .replace('%SUBSCRIBE%', subscribeBox('post:' + p.slug))
     .replace('%BODY%', renderMarkdown(p.body));
   res.type('html').send(summary ? html : html.replace('<p class="summary"></p>', ''));
 }));
