@@ -1483,39 +1483,54 @@ const MAIL_DARK = {
 // Element selectors under .em-card rather than a class on every tag: the post
 // body is rendered by the markdown skin and classing each of its tags would be
 // a third description of the same document.
-const MAIL_DARK_RULES = (D) => `
-  .em-bg { background: ${D.bg} !important; }
-  .em-card { background: ${D.card} !important; border-color: ${D.line} !important; }
-  .em-card td, .em-card p, .em-card li, .em-card ul, .em-card ol,
-  .em-card blockquote, .em-card span { color: ${D.body} !important; }
-  .em-card h1, .em-card h2, .em-card h3, .em-card h4,
-  .em-card strong, .em-card b { color: ${D.ink} !important; }
-  .em-card a { color: ${D.accent} !important; }
-  .em-card img { border-color: ${D.line} !important; }
-  .em-card pre { background: ${D.pre} !important; border-color: ${D.line} !important; }
-  .em-card code { background: ${D.code} !important; color: ${D.ink} !important; }
-  .em-card hr { border-top-color: ${D.line} !important; }
-  /* Scoped under .em-card deliberately: a bare .em-quiet is one class against
-     .em-card p's class-plus-element and loses, so the kicker and the captions
-     came back at body colour and the hierarchy flattened. */
-  .em-card .em-quiet, .em-card .em-quiet td { color: ${D.faint} !important; }
-  /* Header and card are near neighbours in the dark palette, so the masthead
-     stops reading as a band without a line under it. */
-  .em-head { border-bottom: 1px solid ${D.line} !important; }
-  .em-foot { background: ${D.foot} !important; border-top-color: ${D.line} !important; }
-  .em-foot p, .em-foot a, .em-foot strong { color: ${D.mute} !important; }
-  /* A near-black pill on a near-black card is an invisible button. */
-  .em-btn td { background: #ffffff !important; }
-  .em-btn a { color: #0c0f16 !important; }
-`;
+// THE RULES ARE DATA, not a finished stylesheet, because they have to be
+// emitted twice with different selectors. The first attempt ran a regex over
+// the rendered CSS to add the Outlook.com prefix, and it produced nested rules
+// with only the first line of each multi-line selector list prefixed — valid
+// enough to parse, worth nothing. A selector list cannot be prefixed by
+// find-and-replace; it has to be prefixed one selector at a time.
+const MAIL_DARK_RULES = (D) => [
+  [['.em-bg'], `background:${D.bg}`],
+  [['.em-card'], `background:${D.card};border-color:${D.line}`],
+  [['.em-card td', '.em-card p', '.em-card li', '.em-card ul', '.em-card ol',
+    '.em-card blockquote', '.em-card span'], `color:${D.body}`],
+  [['.em-card h1', '.em-card h2', '.em-card h3', '.em-card h4',
+    '.em-card strong', '.em-card b'], `color:${D.ink}`],
+  [['.em-card a'], `color:${D.accent}`],
+  [['.em-card img'], `border-color:${D.line}`],
+  [['.em-card pre'], `background:${D.pre};border-color:${D.line}`],
+  [['.em-card code'], `background:${D.code};color:${D.ink}`],
+  [['.em-card hr'], `border-top-color:${D.line}`],
+  // Scoped under .em-card deliberately: a bare .em-quiet is one class against
+  // .em-card p's class-plus-element and loses, so the kicker and the captions
+  // came back at body colour and the hierarchy flattened.
+  [['.em-card .em-quiet', '.em-card .em-quiet td'], `color:${D.faint}`],
+  // Header and card are near neighbours in the dark palette, so the masthead
+  // stops reading as a band without a line under it.
+  [['.em-head'], `border-bottom:1px solid ${D.line}`],
+  [['.em-foot'], `background:${D.foot};border-top-color:${D.line}`],
+  [['.em-foot p', '.em-foot a', '.em-foot strong'], `color:${D.mute}`],
+  // A near-black pill on a near-black card is an invisible button.
+  [['.em-btn td'], 'background:#ffffff'],
+  [['.em-btn a'], 'color:#0c0f16'],
+];
 
-// Outlook.com does not honour prefers-color-scheme; it rewrites the message and
-// stamps the elements it touched with data-ogsc (it changed a colour) and
-// data-ogsb (a background). Those attributes are the only hook there is.
+// Every declaration carries !important: the light version is inline, and an
+// inline style beats any selector without it.
+const mailDarkCss = (D, prefix) => MAIL_DARK_RULES(D).map(([sels, decls]) =>
+  sels.map((sel) => (prefix ? prefix + ' ' + sel : sel)).join(',')
+  + '{' + decls.split(';').filter(Boolean).map((d) => d + ' !important').join(';') + '}').join('');
+
+// Apple Mail, and every client that honours a media query, takes the first
+// block. Outlook.com honours none: it rewrites the message and stamps what it
+// touched with data-ogsc (a colour it changed) or data-ogsb (a background), and
+// those attributes are the only hook there is — so the same rules go out again,
+// unwrapped, keyed on the attribute.
 const MAIL_DARK_CSS = '<style>'
-  + ':root { color-scheme: light dark; supported-color-schemes: light dark; }'
-  + '@media (prefers-color-scheme: dark) {' + MAIL_DARK_RULES(MAIL_DARK) + '}'
-  + '[data-ogsc] {' + MAIL_DARK_RULES(MAIL_DARK).replace(/\n\s*\./g, ' [data-ogsc] .') + '}'
+  + ':root{color-scheme:light dark;supported-color-schemes:light dark;}'
+  + '@media (prefers-color-scheme:dark){' + mailDarkCss(MAIL_DARK, '') + '}'
+  + mailDarkCss(MAIL_DARK, '[data-ogsc]')
+  + mailDarkCss(MAIL_DARK, '[data-ogsb]')
   + '</style>';
 
 // A pill button that survives Outlook, which ignores border-radius on <a>.
