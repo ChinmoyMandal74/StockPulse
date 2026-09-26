@@ -537,7 +537,7 @@
               ['screen', 'var(--green)', 'Screened nightly', 'Returns, trend and a 1–10 Quality score after every close, on an absolute scale — a 7 means the same thing in any market.'],
               ['rules', 'var(--accent)', 'Advice that shows its work', 'Five fixed rule profiles side by side, and every verdict names the ONE rule that fired.'],
               ['trend', 'var(--amber)', 'Twenty years of receipts', 'Trend ribbons, backtests and an indicator lab over the full bar archive — measured, not asserted.'],
-              ['ask', 'var(--accent-2)', 'Ask in plain English', 'An assistant that answers from the same table you see — and says so when the data cannot answer.'],
+              ['ask', 'var(--accent-2)', 'Alerts on what you follow', 'Watch one stock for one thing — a price level, a moving-average cross, a change of verdict — and see it when it happens.'],
               ['guest', 'var(--red)', 'Try it in one click', 'A guest preview: five real stocks, the whole table, every column and every verdict. No account, no card.'],
             ] },
           // The posts are PUBLIC first and the list is the convenience, which

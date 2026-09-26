@@ -154,6 +154,19 @@ const SYMBOL_RE = /^[A-Z0-9.\-]{1,12}$/;
 // that is what makes this a door rather than an open sign-up sheet. Unset (the
 // default) leaves registration open, which is fine locally but not in public.
 const SIGNUP_CODE = process.env.SIGNUP_CODE || '';
+// Approval was mandatory from 2026-09-14 until 2026-09-26, when the owner
+// turned it off for the public launch: a gate somebody has to click is a gate
+// people wait behind, and one registrant had already been pending for days.
+//
+// DEFAULTS TO ON, so nothing changes until the env var is set deliberately —
+// a deploy must never be the thing that opens registration.
+const REQUIRE_APPROVAL = process.env.REQUIRE_APPROVAL !== 'false';
+// Per-IP-per-day ceiling on registrations. The route was unthrottled, so a
+// script could mint accounts and fire one approval email at the owner for
+// each — the data was safe (pending accounts cannot sign in) but the inbox
+// and the Resend quota were not. Generous enough for an office or a carrier
+// NAT to sign several people up in a day.
+const SIGNUP_PER_IP_DAY = Number(process.env.SIGNUP_PER_IP_DAY || 5);
 const SESSION_COOKIE = 'sp_session';
 const SESSION_DAYS = 30;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -305,9 +318,13 @@ app.get('/users', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'private', 'users.html'));
 }));
 
+// ADMIN ONLY since 2026-09-26 (the owner's call, before opening registration).
+// Every question ships the whole table as the system prompt — measured at
+// 930KB of CSV for 1,185 stocks — so the assistant is both the largest
+// variable cost per user and the feature nearest its own ceiling. Members get
+// the screener, the research the account allows, and alerts; not this.
 app.get('/chat', route(async (req, res) => {
-  if (!(await isSignedIn(req))) return res.redirect('/login');
-  if (await isGuest(req)) return res.redirect('/');
+  if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'chat');
   res.sendFile(path.join(__dirname, 'private', 'chat.html'));
 }));
@@ -1558,7 +1575,7 @@ app.get('/api/me', route(async (req, res) => {
 //
 // Never sent for the very first account: that one becomes the owner, so the
 // note would be an email telling you that you had joined your own site.
-async function sendSignupNotice(email, role, name) {
+async function sendSignupNotice(email, role, name, pending = true) {
   if (!MAIL_READY || isAdminRole(role)) return false;
   try {
     const to = await operatorEmail();
@@ -1586,17 +1603,21 @@ async function sendSignupNotice(email, role, name) {
       replyTo: email,
       // The NAME is in the subject because that is where the decision starts:
       // an address alone rarely says who is asking to be let in.
-      subject: `Approval needed: ${name ? `${name} <${email}>` : email}`,
+      subject: `${pending ? 'Approval needed' : 'New account'}: ${name ? `${name} <${email}>` : email}`,
       text: textShell({
-        heading: 'New sign-up awaiting approval',
-        intro: `${name ? `${name} (${email})` : email} registered and is waiting to be let in.`,
+        heading: pending ? 'New sign-up awaiting approval' : 'Someone just signed up',
+        intro: `${name ? `${name} (${email})` : email} ${pending
+          ? 'registered and is waiting to be let in.'
+          : 'just created an account and is already in — approval is switched off.'}`,
         lines: [`Role: ${role}`, `Joined: ${fmtClock(Date.now())}`, `Accounts now: ${total}`]
           .concat(APP_URL ? ['', `Approve or remove: ${APP_URL}/users`] : []),
         note,
       }),
       html: emailShell({
-        heading: 'New sign-up awaiting approval',
-        intro: `${name ? `${name} (${email})` : email} registered and is waiting to be let in.`,
+        heading: pending ? 'New sign-up awaiting approval' : 'Someone just signed up',
+        intro: `${name ? `${name} (${email})` : email} ${pending
+          ? 'registered and is waiting to be let in.'
+          : 'just created an account and is already in — approval is switched off.'}`,
         body: `<table role="presentation" cellpadding="0" cellspacing="0" border="0" ` +
           `style="margin-top:18px">${rows}</table>` +
           (APP_URL ? mailButton(`${APP_URL}/users`, 'Review & approve') : ''),
@@ -1682,14 +1703,26 @@ app.post('/api/register', route(async (req, res) => {
     return res.status(409).json({ error: 'An account with that email already exists.' });
   }
 
+  // Throttled per IP per day, and only once the request is otherwise VALID —
+  // a malformed body must not be able to burn the quota (the chat's rule).
+  // Against the IP rather than the address, because the address is the thing
+  // being made up. Reuses chat_usage, a generic per-key-per-day counter that
+  // happens to be named for its first caller, as the contact form does.
+  const ip = String(req.ip || req.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
+  const seen = await store.noteChatUse(`signup:${ip}`, SIGNUP_PER_IP_DAY);
+  if (!seen.allowed) {
+    return res.status(429).json({ error: 'Too many sign-ups from here today. Please try again tomorrow.' });
+  }
+
   const salt = newSalt();
   const passwordHash = await hashPassword(password, salt);
   const role = (await store.countUsers()) === 0 ? ROLE_ADMIN : 'member';
-  // Every member starts PENDING and cannot sign in until the owner approves
-  // (the first account bootstraps the instance, so it alone skips the gate).
-  // No session is created for a pending account, and getSessionUser refuses
-  // pending rows besides — approval is enforced, not decoration.
-  const status = isAdminRole(role) ? 'active' : 'pending';
+  // WITH APPROVAL ON a member starts PENDING and cannot sign in until the
+  // owner lets them in: no session is created, and getSessionUser refuses
+  // pending rows besides — it is enforced, not decoration. With it off they
+  // are active immediately and `SIGNUP_CODE` is the only door. The first
+  // account bootstraps the instance either way.
+  const status = (isAdminRole(role) || !REQUIRE_APPROVAL) ? 'active' : 'pending';
   const user = await store.createUser({ email, passwordHash, salt, role, status, name });
   logAct(req, 'login', 'signup', email);
 
@@ -1697,7 +1730,7 @@ app.post('/api/register', route(async (req, res) => {
     res.json({ ok: true, pending: true });
     // The sign-up notice to the operator is the approval request; the welcome
     // waits until approval, when it is true.
-    sendSignupNotice(email, role, name).catch(() => {});
+    sendSignupNotice(email, role, name, true).catch(() => {});
     return;
   }
 
@@ -1709,6 +1742,10 @@ app.post('/api/register', route(async (req, res) => {
   // After the response: the account is made and the session is set, so a slow
   // or failing mail provider must not hold up the sign-up or fail it.
   sendWelcome(email, role, name).catch(() => {});
+  // The owner still hears about it with approval off — there is nothing to
+  // approve, but who just joined is worth knowing. Skipped for the very first
+  // account, which is the owner's own.
+  if (!REQUIRE_APPROVAL) sendSignupNotice(email, role, name, false).catch(() => {});
 }));
 
 // Sign in with an account. Passing only a password (no email) still works and
@@ -6591,6 +6628,9 @@ const CHAT_MODEL = process.env.CHAT_MODEL || 'claude-sonnet-5';
 // room to work; everyone else gets enough to be useful without turning a shared
 // login into an open tab on someone else's account.
 const CHAT_DAILY_LIMIT = Number(process.env.CHAT_DAILY_LIMIT || 60);
+// UNREACHABLE while /api/chat is requireAdmin (2026-09-26) — kept rather
+// than deleted because one guard flips it back, unlike the analyst flag,
+// which could never be switched on at all and was removed.
 const CHAT_DAILY_LIMIT_MEMBER = Number(process.env.CHAT_DAILY_LIMIT_MEMBER || 3);
 // Generous on purpose. The model reasons before answering, and that reasoning
 // is billed against max_tokens: at 1200 a ranking question spent the entire
@@ -6732,7 +6772,7 @@ function chatRules(asOf, count) {
   ].join('\n');
 }
 
-app.post('/api/chat', requireMember, route(async (req, res) => {
+app.post('/api/chat', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!ANTHROPIC_KEY) {
     return res.status(503).json({ error: 'The assistant is not configured: ANTHROPIC_API_KEY is unset.' });
@@ -10749,5 +10789,15 @@ app.listen(PORT, () => {
   console.log(`Stock screener POC running at http://localhost:${PORT}`);
   if (!API_KEY) {
     console.warn('WARNING: TWELVE_DATA_API_KEY is not set — /api/stocks will return an error until you add it to .env');
+  }
+  // THE ONE COMBINATION THAT SHOULD NEVER BE REACHED BY ACCIDENT: approval
+  // switched off AND no invite code means anyone who finds /login has a full
+  // member account in one click. It is a legitimate choice, so it is allowed —
+  // but never silently, because the way it happens is setting one env var and
+  // forgetting the other.
+  if (AUTH_REQUIRED && !REQUIRE_APPROVAL && !SIGNUP_CODE) {
+    console.warn('WARNING: registration is WIDE OPEN — REQUIRE_APPROVAL=false and no SIGNUP_CODE. '
+      + 'Anyone who finds /login can create a working account. Set SIGNUP_CODE, or drop '
+      + 'REQUIRE_APPROVAL to put the approval gate back.');
   }
 });
