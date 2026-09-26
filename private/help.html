@@ -171,10 +171,11 @@
       <p>A brokerage terminal gives you four hundred indicators, streaming quotes and no opinion —
         the synthesis is your job, every time, forever. Tickr Lab is the opposite bet: <strong>one
         opinionated, fully-inspectable pipeline</strong> over a small universe you chose. Its defining
-        feature is not any single number but that <strong>every verdict shows its work</strong> —
-        click any Advice cell and you get the exact rule ladder, the one rule that fired, and the
-        thresholds drawn as gauges. There is no "why exactly does this say Buy?" button anywhere
-        else; here it is the whole design.</p>
+        feature is not any single number but that <strong>every verdict names the one rule that
+        fired</strong> — hover any Advice cell and it tells you which rule produced that word,
+        not just the word. There is no "why exactly does this say Buy?" anywhere else; here it is the
+        whole design. The full rule ladder behind it, with every threshold drawn as a gauge, is
+        owner-only.</p>
       <p>The second bet is <strong>institutionalised honesty</strong>. The backtests charge trading
         costs and hold out a period before looking; ideas that measured as noise are recorded so
         they stay dead; the trend line on a stock page refuses to claim any history the price bars
@@ -519,7 +520,7 @@
         &gt; 30%, gross margin &gt; 50%, positive FCF) in a &gt;10% uptrend. Early is never Strong Buy
         unless a profile enables it. <strong>ETF:</strong> the technical rules alone.</p>
 
-      <h3>See the ladder for any stock</h3>
+      <h3>See the ladder for any stock <span class="adm">owner only</span></h3>
       <p><strong>Click a stock's Advice value</strong> to open the rule ladder for that row: every
         rule in the order the model walks them — vetoes, then caps, then the buy setups — with the
         rule that fired lit and everything below it dimmed, because a first-match model never reads
@@ -586,7 +587,7 @@
           200-day with OK fundamentals earns Buy with Risk instead of Hold. Stops stay Balanced.
           The research log does not endorse the mode; this column shows what it says anyway.</li>
       </ul>
-      <h3>Distance to the exit, and Cushion</h3>
+      <h3>Distance to the exit, and Cushion <span class="adm">Cushion is a column; the panel is owner only</span></h3>
       <p>Click any advice cell and the ladder panel ends with <strong>Distance to the exit</strong> — how
         much further the price could fall before that profile's own rules flip the verdict to Avoid or
         worse, and which rule would fire there. It is the honest half of "risk/reward": the reward half

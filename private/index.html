@@ -126,6 +126,9 @@
        chevron already made the argument — light every row and the
        column stops carrying information. Weight separates the extremes. */
     td.act { font-family: var(--sans); font-size: 12px; white-space: nowrap; cursor: pointer; text-align: left; }
+    /* No ladder for a member: the cells keep their colour and their
+       tooltip, and stop pretending to be buttons. */
+    body.no-ladder td.act, body.no-ladder td.ctype, body.no-ladder td.state { cursor: default; }
     td.av-col { font-size: 11.5px; }
     td.act.a-strong-buy { color: var(--green); font-weight: 700; }
     td.act.a-buy { color: var(--green); }
@@ -4405,7 +4408,15 @@
       dot.className = n > 0 ? 'albadge' : '';
     }
 
+    // A pointer cursor on a cell that no longer opens anything is a dead
+    // control, which reads as a bug. The class is on <body> so the three
+    // rules can be undone in CSS rather than per cell on every repaint.
+    function applyLadderUI() {
+      document.body.classList.toggle('no-ladder', !isAdmin);
+    }
+
     function applyAdminUI() {
+      applyLadderUI();
       document.querySelectorAll('.admin-only').forEach((el) => { el.style.display = isAdmin ? '' : 'none'; });
       document.querySelectorAll('.member-only').forEach((el) => { el.style.display = isAdmin ? 'none' : ''; });
       // A guest sees no doors that lead to 403s: the research menu and the
@@ -5688,8 +5699,14 @@
         else openMyPop(star.dataset.my, star);
         return;
       }
-      const act = e.target.closest('td.act');
-      const famTd = act ? null : e.target.closest('td[data-fam]');
+      // THE LADDER IS ADMIN-ONLY (2026-09-26, the owner's call). The verdict
+      // and the one rule that fired both stay on screen for everyone — what
+      // goes is the full rule list with its thresholds and gauges, which is
+      // the one genuinely copyable thing in the model. Gated at the
+      // dispatcher rather than inside each opener, so the Action ladder and
+      // all four family panels are covered by one branch.
+      const act = isAdmin ? e.target.closest('td.act') : null;
+      const famTd = (isAdmin && !act) ? e.target.closest('td[data-fam]') : null;
       if (!act && !famTd) return;
       const cell = act || famTd;
       const sym = cell.closest('tr')?.querySelector('td.sym')?.textContent.trim();
