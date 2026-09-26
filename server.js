@@ -460,6 +460,14 @@ app.get('/terms', (req, res) => {
   res.sendFile(path.join(__dirname, 'private', 'terms.html'));
 });
 
+// The invite-code step of the Google flow. PUBLIC by necessity: the person has
+// proved who they are to Google but has no account here yet, so no session
+// exists to gate on. It is not a door — the page can do nothing without the
+// signed pending cookie the callback set, and says so when there isn't one.
+app.get('/join', (req, res) => {
+  res.sendFile(path.join(__dirname, 'private', 'join.html'));
+});
+
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
@@ -1569,6 +1577,9 @@ app.get('/api/me', route(async (req, res) => {
     user: u ? { email: u.email, name: u.name || null, role: u.role }
       : (admin && AUTH_REQUIRED ? { email: null, name: null, role: ROLE_ADMIN } : null),
     signupCodeRequired: !!SIGNUP_CODE,
+    // Read inside the handler, so the const declared further down the file is
+    // long past its temporal dead zone by the time anything asks.
+    googleReady: GOOGLE_READY,
   });
 }));
 
@@ -1836,6 +1847,245 @@ app.post('/api/logout', route(async (req, res) => {
   res.clearCookie(ADMIN_COOKIE);
   res.clearCookie(GUEST_COOKIE);
   res.json({ ok: true });
+}));
+
+// ---- Sign in with Google ---------------------------------------------------
+// Authorization-code flow over plain `fetch`, the reasoning Resend already
+// follows: a REST call does not justify a dependency. Google answers "who is
+// this, the first time" and the callback then mints the SAME 32-byte sessions
+// row every other sign-in uses — `getSessionUser`, the 30-day expiry and
+// revocation are all untouched, which is why this is small.
+//
+// THE OWNER'S CONSTRAINT, recorded before the code existed: the admin account
+// must never NEED Google, and Google must not be a way INTO it. So a Google
+// signup is ALWAYS a member, and on an empty instance it is refused outright
+// rather than bootstrapping the first (admin) account — `ADMIN_PASSWORD` and
+// the password form stay the only way to that.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+// ADMIN_PASSWORD is in the list because it keys the HMAC below. Unset any of
+// them and the button never renders and every route here answers 404 — off is
+// the default, and no deploy can turn it on by accident.
+const GOOGLE_READY = !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && ADMIN_PASSWORD);
+const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const GOOGLE_FLOW_COOKIE = 'sp_gflow';      // state + nonce, one round trip
+const GOOGLE_PENDING_COOKIE = 'sp_gpend';   // a verified identity with no account yet
+const GOOGLE_PENDING_MS = 15 * 60 * 1000;
+
+// APP_URL is declared further down the file, so this is deliberately a
+// FUNCTION: it is read when a request arrives, long after module evaluation,
+// and never at registration time. A const up here would be the TDZ
+// ReferenceError that `/api/db-stats` and the blog routes each hit once.
+function googleRedirectUri() {
+  return APP_URL + '/api/auth/google/callback';
+}
+const gcookie = (maxAge) => ({
+  httpOnly: true, sameSite: 'lax',
+  secure: process.env.NODE_ENV === 'production', maxAge,
+});
+
+// The carrier between "Google says this is jo@gmail.com" and "jo typed the
+// invite code". It rides in a cookie, so it MUST be signed: unsigned, anyone
+// could hand us an arbitrary verified-looking address and mint an account for
+// it. Keyed on ADMIN_PASSWORD, the guest cookie's trick — rotating the
+// password invalidates anything in flight, which for a 15-minute carrier is
+// free.
+function signPending(obj) {
+  const body = Buffer.from(JSON.stringify(obj)).toString('base64url');
+  const mac = crypto.createHmac('sha256', ADMIN_PASSWORD).update('google-pending-v1.' + body).digest('hex');
+  return body + '.' + mac;
+}
+function readPending(raw) {
+  const s = String(raw || '');
+  const i = s.lastIndexOf('.');
+  if (i < 1) return null;
+  const body = s.slice(0, i);
+  const want = crypto.createHmac('sha256', ADMIN_PASSWORD).update('google-pending-v1.' + body).digest('hex');
+  if (!safeEqual(s.slice(i + 1), want)) return null;
+  let obj = null;
+  try { obj = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch { return null; }
+  // Reject the empty before coercing: Number(undefined) is NaN and NaN > x is
+  // false, so a payload with no exp is refused rather than treated as fresh.
+  if (!obj || typeof obj !== 'object' || !(Number(obj.exp) > Date.now())) return null;
+  return obj;
+}
+
+// THE SIGNATURE IS DELIBERATELY NOT VERIFIED, and Google's own documentation
+// sanctions that: the token arrives in the body of a server-to-server exchange
+// we initiated, to an endpoint we resolved over TLS, authenticated with our
+// client secret. There is no untrusted party in the path, so a JWKS fetch,
+// `kid` matching and RS256 verification would buy nothing and add the only
+// fiddly part of the flow. The CLAIMS still have to be checked, and are.
+function decodeIdToken(idToken) {
+  const parts = String(idToken || '').split('.');
+  if (parts.length !== 3) return null;
+  try { return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')); } catch { return null; }
+}
+
+app.get('/api/auth/google/start', route(async (req, res) => {
+  if (!GOOGLE_READY) return res.status(404).send('Google sign-in is not configured.');
+  const state = crypto.randomBytes(24).toString('hex');
+  const nonce = crypto.randomBytes(24).toString('hex');
+  res.cookie(GOOGLE_FLOW_COOKIE, state + '.' + nonce, gcookie(15 * 60 * 1000));
+  const u = new URL(GOOGLE_AUTH_URL);
+  u.searchParams.set('client_id', GOOGLE_CLIENT_ID);
+  u.searchParams.set('redirect_uri', googleRedirectUri());
+  u.searchParams.set('response_type', 'code');
+  // EXACTLY THESE THREE. They are non-sensitive, so the consent screen needs
+  // no verification review and there is no 100-login cap. Adding anything
+  // else changes that and is not a small decision.
+  u.searchParams.set('scope', 'openid email profile');
+  u.searchParams.set('state', state);
+  u.searchParams.set('nonce', nonce);
+  u.searchParams.set('prompt', 'select_account');
+  res.redirect(u.toString());
+}));
+
+app.get('/api/auth/google/callback', route(async (req, res) => {
+  if (!GOOGLE_READY) return res.status(404).send('Google sign-in is not configured.');
+  // Every failure lands back on the login page with a short reason. The reason
+  // is a SLUG, never the provider's own words: an upstream error body can
+  // restate the request, and the client secret travels in the same exchange.
+  const fail = (why) => res.redirect('/login?gerr=' + encodeURIComponent(why));
+
+  const flow = String(parseCookies(req)[GOOGLE_FLOW_COOKIE] || '');
+  res.clearCookie(GOOGLE_FLOW_COOKIE);
+  const [wantState, wantNonce] = flow.split('.');
+  if (!wantState || !safeEqual(String(req.query.state || ''), wantState)) return fail('state');
+  if (req.query.error) return fail('denied');
+  const code = String(req.query.code || '');
+  if (!code) return fail('nocode');
+
+  let tok = null;
+  try {
+    const r = await fetch(GOOGLE_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code, client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: googleRedirectUri(), grant_type: 'authorization_code',
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    tok = await r.json();
+  } catch (e) {
+    console.error('google token exchange failed:', e.message);
+    return fail('exchange');
+  }
+
+  const c = decodeIdToken(tok && tok.id_token);
+  if (!c) return fail('token');
+  if (c.aud !== GOOGLE_CLIENT_ID) return fail('aud');
+  if (!['accounts.google.com', 'https://accounts.google.com'].includes(String(c.iss))) return fail('iss');
+  if (!(Number(c.exp) * 1000 > Date.now())) return fail('expired');
+  if (!wantNonce || !safeEqual(String(c.nonce || ''), wantNonce)) return fail('nonce');
+  // THE ONE CHECK STANDING BETWEEN THIS AND AN ACCOUNT-TAKEOVER PATH. Linking
+  // to an existing password account on an email match is only safe while
+  // Google asserts the address is verified; without it, anyone could claim
+  // any address and inherit the account under it.
+  if (c.email_verified !== true && c.email_verified !== 'true') return fail('unverified');
+  const email = String(c.email || '').trim().toLowerCase();
+  const sub = String(c.sub || '');
+  if (!EMAIL_RE.test(email) || !sub) return fail('email');
+
+  const signIn = async (user) => {
+    if (String(user.status || 'active') === 'pending') return res.redirect('/login?pending=1');
+    const token = crypto.randomBytes(32).toString('hex');
+    await store.createSession(token, Number(user.id), Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+    setSessionCookie(res, token);
+    logAct(req, 'login', 'google', user.email);
+    return res.redirect('/');
+  };
+
+  const known = await store.findUserByGoogleSub(sub);
+  if (known) return signIn(known);
+
+  const byEmail = await store.findUserByEmail(email);
+  if (byEmail) {
+    await store.linkGoogleSub(byEmail.id, sub);
+    logAct(req, 'account', 'google-linked', byEmail.email);
+    return signIn(byEmail);
+  }
+
+  // Nobody here yet. Hold the VERIFIED identity and go and ask for the code.
+  res.cookie(GOOGLE_PENDING_COOKIE,
+    signPending({ sub, email, name: String(c.name || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 80),
+      exp: Date.now() + GOOGLE_PENDING_MS }),
+    gcookie(GOOGLE_PENDING_MS));
+  return res.redirect('/join');
+}));
+
+// Who Google says is waiting, so /join can greet them by address rather than
+// asking a stranger for a code with no context. Carries no token and cannot
+// create anything.
+app.get('/api/auth/google/pending', route(async (req, res) => {
+  const p = GOOGLE_READY ? readPending(parseCookies(req)[GOOGLE_PENDING_COOKIE]) : null;
+  res.set('Cache-Control', 'no-store');
+  res.json(p ? { waiting: true, email: p.email, name: p.name || null } : { waiting: false });
+}));
+
+app.post('/api/auth/google/finish', route(async (req, res) => {
+  if (!GOOGLE_READY) return res.status(404).json({ error: 'Google sign-in is not configured.' });
+  const p = readPending(parseCookies(req)[GOOGLE_PENDING_COOKIE]);
+  if (!p) return res.status(400).json({ error: 'That took too long. Please sign in with Google again.' });
+
+  // The same tolerant compare the register route uses, and for the same
+  // reason: this is read off a phone and pasted out of WhatsApp.
+  const fold = (x) => String(x).trim().toLowerCase();
+  if (SIGNUP_CODE && !safeEqual(fold(req.body && req.body.code), fold(SIGNUP_CODE))) {
+    return res.status(403).json({ error: 'That invite code is not valid.' });
+  }
+
+  const done = async (user) => {
+    res.clearCookie(GOOGLE_PENDING_COOKIE);
+    if (String(user.status || 'active') === 'pending') return res.json({ ok: true, pending: true });
+    const token = crypto.randomBytes(32).toString('hex');
+    await store.createSession(token, Number(user.id), Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+    setSessionCookie(res, token);
+    return res.json({ ok: true, user: { email: user.email, name: user.name || null, role: user.role } });
+  };
+
+  // Somebody may have registered with this address in the fifteen minutes
+  // since Google answered. Re-check both ways rather than colliding on the
+  // unique index.
+  const known = await store.findUserByGoogleSub(p.sub);
+  if (known) return done(known);
+  const byEmail = await store.findUserByEmail(p.email);
+  if (byEmail) { await store.linkGoogleSub(byEmail.id, p.sub); return done(byEmail); }
+
+  // GOOGLE MAY NOT BOOTSTRAP THE FIRST ACCOUNT. On an empty instance the first
+  // registration becomes the admin, and the owner's constraint is that Google
+  // is never a way into that account.
+  if ((await store.countUsers()) === 0) {
+    return res.status(403).json({ error: 'Set up the first account with a password.' });
+  }
+
+  const ip = String(req.ip || req.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
+  const seen = await store.noteChatUse(`signup:${ip}`, SIGNUP_PER_IP_DAY);
+  if (!seen.allowed) {
+    return res.status(429).json({ error: 'Too many sign-ups from here today. Please try again tomorrow.' });
+  }
+
+  // `password_hash` and `salt` are NOT NULL and SQLite cannot relax that
+  // without rebuilding the table, so a Google-only account gets a RANDOM
+  // unusable password. It is not a placeholder: it means verifyPassword can
+  // never accidentally succeed, and a password attempt against this account
+  // returns the same generic 401 as any other wrong password — "this account
+  // uses Google" is a leak the login route already refuses to make.
+  const salt = newSalt();
+  const passwordHash = await hashPassword(crypto.randomBytes(32).toString('hex'), salt);
+  const status = REQUIRE_APPROVAL ? 'pending' : 'active';
+  const user = await store.createUser({
+    email: p.email, passwordHash, salt, role: 'member', status,
+    name: p.name || null, googleSub: p.sub,
+  });
+  logAct(req, 'login', 'signup-google', p.email);
+
+  await done(user);
+  sendSignupNotice(p.email, 'member', p.name || null, status === 'pending').catch(() => {});
+  if (status === 'active') sendWelcome(p.email, 'member', p.name || null).catch(() => {});
 }));
 
 // The guest door. No body, no password: the button on the login page is the

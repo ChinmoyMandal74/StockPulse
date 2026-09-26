@@ -676,6 +676,13 @@ const ADDED_COLUMNS = [
   // for each of them. Registration asks for one; everything that displays a
   // user falls back to the email, which is what it showed before.
   "alter table users add column name text",
+  // Google's stable subject id, set only for an account that has signed in
+  // with Google. NULLABLE, because every existing account is password-only and
+  // most always will be. `password_hash` and `salt` stay NOT NULL — SQLite
+  // cannot relax that without rebuilding the table — so a Google-only account
+  // is given a random unusable hash instead, which also means verifyPassword
+  // can never accidentally succeed against one.
+  "alter table users add column google_sub text",
   // Resend's own id for the message. `ok` records only that the provider
   // ACCEPTED it, which is not the same as delivered — the first real use of
   // the list hit exactly that gap, and without an id there is nothing to ask
@@ -3664,13 +3671,39 @@ async function findUserByEmail(email) {
   return r.rows[0] || null;
 }
 
-async function createUser({ email, passwordHash, salt, role, status = 'active', name = null }) {
+// MATCHED ON `sub`, NEVER ON EMAIL. Google's `sub` is the stable identifier
+// for an account; the email address under it can change, and treating the
+// address as the identity is how one person's mailbox rename becomes another
+// person's login. No index: `users` holds a handful of rows, it is not in the
+// query-plan test's big-table list, and a unique index here would have to be
+// created AFTER the ALTER that adds the column, which the batched schema step
+// cannot express.
+async function findUserByGoogleSub(sub) {
+  await init();
+  if (!sub) return null;
+  const r = await db.execute({ sql: 'select * from users where google_sub = ?', args: [String(sub)] });
+  return r.rows[0] || null;
+}
+
+// Attaching Google to an account that already has a password. Guarded on the
+// column still being null, so two simultaneous links cannot silently overwrite
+// each other and a sub can never be moved off an account by a later sign-in.
+async function linkGoogleSub(userId, sub) {
+  await init();
+  const r = await db.execute({
+    sql: 'update users set google_sub = ? where id = ? and google_sub is null',
+    args: [String(sub), Number(userId)],
+  });
+  return Number(r.rowsAffected) > 0;
+}
+
+async function createUser({ email, passwordHash, salt, role, status = 'active', name = null, googleSub = null }) {
   await init();
   await db.execute({
-    sql: `insert into users (email, password_hash, salt, role, created_at, status, name)
-          values (?, ?, ?, ?, ?, ?, ?)`,
+    sql: `insert into users (email, password_hash, salt, role, created_at, status, name, google_sub)
+          values (?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [String(email).trim().toLowerCase(), passwordHash, salt, role, new Date().toISOString(),
-      status, name ? String(name).trim().slice(0, 80) || null : null],
+      status, name ? String(name).trim().slice(0, 80) || null : null, googleSub ? String(googleSub) : null],
   });
   return findUserByEmail(email);
 }
@@ -4104,6 +4137,8 @@ module.exports = {
   runRoleMigration,
   countUsers,
   findUserByEmail,
+  findUserByGoogleSub,
+  linkGoogleSub,
   createUser,
   approveUser,
   listUsers,

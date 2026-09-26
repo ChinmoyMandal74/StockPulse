@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Finish setting up — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <meta name="robots" content="noindex" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The login page's shell, deliberately: this is the second half of that
+       screen and arriving somewhere that looks different would read as having
+       been handed off to a stranger. */
+    body { min-height: 100dvh; overflow-x: clip;
+      display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 12% 4%, rgba(52, 211, 153, 0.13), transparent 62%),
+        radial-gradient(50vw 44vw at 92% 96%, rgba(124, 156, 255, 0.13), transparent 64%); }
+    .grain { z-index: 60; }
+    .bezel { position: relative; z-index: 1; width: 100%; max-width: 420px; border-radius: 26px;
+             box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.95); }
+    .bezel > .core {
+      overflow: visible;
+      background:
+        radial-gradient(90% 60% at 0% 0%, rgba(52, 211, 153, 0.07), transparent 60%),
+        radial-gradient(80% 60% at 100% 100%, rgba(124, 156, 255, 0.07), transparent 62%),
+        var(--surface);
+      border-radius: 20px; box-shadow: var(--inset); padding: 30px 28px;
+    }
+    .brand { display: inline-flex; align-items: baseline; gap: 6px; margin: 0;
+             font-size: 19px; font-weight: 600; letter-spacing: -0.03em; }
+    .brand .w2 { background: linear-gradient(100deg, #9aa4b6 10%, #5d6474 92%);
+                 -webkit-background-clip: text; background-clip: text; color: transparent; }
+    h1 { margin: 20px 0 6px; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+    .who { margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+    .who b { color: var(--text); font-weight: 600; }
+    .jfield { margin-bottom: 14px; }
+    .jfield label { display: block; margin-bottom: 6px; font-size: 11px; letter-spacing: 0.1em;
+                    text-transform: uppercase; color: var(--faint); }
+    .jfield input {
+      width: 100%; padding: 11px 13px; border-radius: 12px; background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--hair); color: var(--text); font-family: var(--sans); font-size: 14px;
+    }
+    .jfield input:focus { outline: none; border-color: var(--hair-2); background: rgba(255, 255, 255, 0.06); }
+    .jbtn {
+      width: 100%; padding: 12px; border-radius: 12px; cursor: pointer; border: 0;
+      background: var(--text); color: #05070c; font-family: var(--sans); font-size: 14px; font-weight: 600;
+      transition: opacity 0.4s var(--ease);
+    }
+    .jbtn:hover { opacity: 0.9; }
+    .jbtn[disabled] { opacity: 0.55; cursor: default; }
+    .jmsg { margin: 14px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--red); min-height: 1px; }
+    .jmsg.ok { color: var(--green); }
+    .jnote { margin: 16px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--faint); }
+    .jnote a { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div class="bezel"><div class="core">
+    <h1 class="brand"><span class="w1">Tickr</span> <span class="w2">Lab</span></h1>
+    <div id="body">
+      <h1>One more thing</h1>
+      <p class="who" id="who">Checking…</p>
+    </div>
+  </div></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
+      (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    (async () => {
+      let p = { waiting: false };
+      try {
+        p = await fetch('/api/auth/google/pending', { cache: 'no-store' }).then((r) => r.json());
+      } catch { /* fall through to the nothing-waiting state */ }
+
+      // NOTHING WAITING is the normal state for anyone who opens this address
+      // directly, and for anyone who left it more than fifteen minutes. It is
+      // not an error and is not worded as one.
+      if (!p.waiting) {
+        $('body').innerHTML =
+          '<h1>Nothing to finish</h1>' +
+          '<p class="who">This page completes a Google sign-in, and there is not one in progress — ' +
+          'it may simply have been a while.</p>' +
+          '<a class="jbtn" href="/login" style="display:block;text-align:center;text-decoration:none">Back to sign in</a>';
+        return;
+      }
+
+      $('body').innerHTML =
+        '<h1>One more thing</h1>' +
+        '<p class="who">Google says you are <b>' + esc(p.email) + '</b>.<br>' +
+        'Tickr Lab is invite-only just now, so enter the code you were sent to finish setting up.</p>' +
+        '<div class="jfield"><label for="code">Invite code</label>' +
+        '<input type="text" id="code" autocomplete="off" autocapitalize="none" autocorrect="off" ' +
+        'spellcheck="false" placeholder="Ask whoever invited you" /></div>' +
+        '<button class="jbtn" id="go" type="button">Create my account</button>' +
+        '<p class="jmsg" id="msg"></p>' +
+        '<p class="jnote">By continuing you agree to the <a href="/terms">terms</a> and ' +
+        '<a href="/privacy">privacy policy</a>. Not you? <a href="/login">Start again</a>.</p>';
+
+      const go = $('go'), msg = $('msg'), code = $('code');
+      code.focus();
+      let busy = false;
+
+      async function submit() {
+        if (busy) return;
+        busy = true;
+        msg.className = 'jmsg';
+        msg.textContent = '';
+        go.disabled = true;
+        const was = go.textContent;
+        go.textContent = 'Setting up…';
+        try {
+          const r = await fetch('/api/auth/google/finish', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ code: code.value }),
+          });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(d.error || 'That did not work. Please try again.');
+          if (d.pending) {
+            $('body').innerHTML =
+              '<h1>You are on the list</h1>' +
+              '<p class="who">Your account is made and is waiting to be let in. ' +
+              'You will be able to sign in with Google once it is.</p>' +
+              '<a class="jbtn" href="/login" style="display:block;text-align:center;text-decoration:none">Back to sign in</a>';
+            return;
+          }
+          window.location.href = '/';
+        } catch (e) {
+          busy = false;
+          go.disabled = false;
+          go.textContent = was;
+          msg.textContent = e.message;
+        }
+      }
+      go.addEventListener('click', submit);
+      code.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    })();
+  </script>
+</body>
+</html>
