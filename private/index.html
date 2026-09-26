@@ -546,6 +546,11 @@
        so — this reaches the Rank column and the CSV, so it must not be subtle. */
     /* The weighting chip: the bar's whole remaining say in the matter, shown
        only while a non-default weighting is tinting the two score columns. */
+    /* Scoped to the one element it dresses: a bare `.badge` would collide
+       with the portfolio badges in the Symbol cell. */
+    #alertBtn .albadge { display: inline-flex; align-items: center; justify-content: center;
+      min-width: 16px; height: 16px; margin-left: 6px; padding: 0 4px; border-radius: 999px;
+      background: var(--accent); color: #0a0c11; font: 600 10px/1 var(--mono); }
     .lenschip {
       display: inline-flex; align-items: center; gap: 7px; flex: none;
       padding: 7px 12px; border-radius: 999px; font-size: 11.5px; font-weight: 500;
@@ -928,6 +933,7 @@
     <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
     <symbol id="i-dots" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="2.4"/></symbol>
     <symbol id="i-mail" viewBox="0 0 24 24"><path d="M3.6 6.6h16.8v10.8H3.6z"/><path d="m3.6 7.2 8.4 6 8.4-6"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 15.2V10.4a6 6 0 0 0-12 0v4.8L4.4 17.6h15.2Z"/><path d="M10.2 20.4a2 2 0 0 0 3.6 0"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20.4 12.4a7.6 7.6 0 0 1-10.9 6.9L4.2 20.4l1.1-5.3A7.6 7.6 0 1 1 20.4 12.4Z"/></symbol>
     <symbol id="i-strategy" viewBox="0 0 24 24"><path d="M4 19.5V4.5"/><path d="M4 19.5h16"/><path d="M7.5 16l3.5-5 3 3 4.5-7"/></symbol>
     <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3.6" y="5.2" width="16.8" height="13.6" rx="2.6"/><path d="M9.2 5.2v13.6M14.8 5.2v13.6"/></symbol>
@@ -1069,6 +1075,15 @@
                  picker that used to say so has moved to the console. -->
             <a class="btn" href="/chat" title="Ask questions about this data">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chat" /></svg>Ask
+            </a>
+            <!-- The alert badge. A BADGE YOU CAN IGNORE, never an interstitial:
+                 "shown as soon as someone logs in" is satisfied either way, and
+                 a modal you must dismiss is worse. The count rides /api/prefs,
+                 which the boot chain already awaits, so it costs no round trip.
+                 Hidden for guests, who have no prefs key and so no alerts. -->
+            <a class="btn" id="alertBtn" href="/alerts"
+               title="Alerts you have set on individual stocks">
+              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-bell" /></svg>Alerts<span id="alertDot"></span>
             </a>
             <!-- One door instead of a dozen: refresh, add a ticker, the logs,
                  the research pages, the studio and the weighting all live on
@@ -3612,6 +3627,7 @@
         if (res && res.prefs && res.prefs.tickerOff === true) tickerOff = true;
         if (res && res.prefs && /^(auto|[2-6])$/.test(String(res.prefs.tileCols || ''))) tileCols = String(res.prefs.tileCols);
         if (res && Array.isArray(res.ranges)) cardRanges = res.ranges;
+        if (res && typeof res.alerts === 'number') setAlertBadge(res.alerts);
         if (tileRange && !cardRanges.some((r) => r.id === tileRange)) tileRange = null;
         if (res && res.prefs && res.prefs.layout === 'tiles') setLayout('tiles', { save: false });
         if (res && res.prefs && /^(standard|[a-z0-9]{8})$/.test(String(res.prefs.activeView || ''))) activeViewId = res.prefs.activeView;
@@ -4380,6 +4396,15 @@
       applyAdminUI();
     }
 
+    // The unread count, set from /api/prefs. A dot with a number, or nothing
+    // at all — an empty badge reading 0 is worse than no badge.
+    function setAlertBadge(n) {
+      const dot = $('alertDot');
+      if (!dot) return;
+      dot.textContent = n > 0 ? (n > 9 ? '9+' : String(n)) : '';
+      dot.className = n > 0 ? 'albadge' : '';
+    }
+
     function applyAdminUI() {
       document.querySelectorAll('.admin-only').forEach((el) => { el.style.display = isAdmin ? '' : 'none'; });
       document.querySelectorAll('.member-only').forEach((el) => { el.style.display = isAdmin ? 'none' : ''; });
@@ -4392,6 +4417,7 @@
         const ask = document.querySelector('a.btn[href="/chat"]');
         if (ask) ask.style.display = 'none';
         $('promoLink').style.display = 'none';
+        if ($('alertBtn')) $('alertBtn').style.display = 'none';
         if ($('pivotLink')) $('pivotLink').style.display = 'none';
         if ($('compareLink')) $('compareLink').style.display = 'none';
         const note = $('readonlyNote').querySelector('span');

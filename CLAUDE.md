@@ -195,6 +195,34 @@ Sent through **Resend** over plain `fetch` — a REST call does not justify a fo
 - Admin-only endpoint: `GET /api/visitors` — returns summary + last 500 entries
 - Admin-only page: `/visitors` — same visual system as the screener
 
+## Alerts — five per account, one stock each, in-app only (2026-09-26)
+**`/alerts` (members and admin, guests refused): watch one stock for one thing, and see it the next time you open the site.** Every scope decision was the owner's: a single stock per alert (never a portfolio or the universe), **no email anywhere in the feature**, `ALERTS_MAX` **5**, a fixed list of types rather than the filter grammar, evaluated every intraday slot and the nightly.
+
+- **THEY CANNOT BE REAL-TIME, and the page says so in an amber panel.** Prices land on a schedule, so an alert fires when new data arrives — up to ~30 minutes late in session, next morning outside it. Streaming is ruled out by the 610-credit/minute ceiling. This is a *what changed on my watchlist* feature; a screen implying otherwise disappoints someone at the moment they most trusted it.
+- **`private/alerts.js` is the type registry, defined once** — `require`d by server.js for the pass and `<script>`-loaded by the page, which **draws its form from `fields`**, so a type added there appears in the UI with no edit. Six types: price level, moving-average cross, advice verdict change, RSI level, 52-week extreme, big day.
+- **THE FIXED DROPDOWN IS A UI DECISION AND DELIBERATELY NOT A DATA-LAYER ONE.** Every type reads through `Filters.filterValue(row, key)`, so "price above 150" and the screener's `>150` in the Price column ask the same function the same question. The owner chose the dropdown over the grammar; this is what stops that choice becoming a second implementation of comparison, which is the drift `rowcard.js`, `action.js`, `cards.js` and `filters.js` all exist to prevent.
+- **Never "price target".** `/terms` says *"No price targets — a target is a forecast wearing a decimal point."* The type is a **price level**.
+
+### The whole feature is the edge detector
+`Alerts.evaluate(alert, row)` returns `{side, fire, body}` and is shared by the pass and its tests. Five rules, each one a trap this codebase has met elsewhere:
+
+- **A LEVEL IS NOT AN EVENT.** "Price above 150" is true every round once true, so firing on the level notifies every thirty minutes for ever. `alerts.last_side` remembers the previous reading and only a TRANSITION fires. It is a column on the alert row rather than a state table only because one alert watches one symbol.
+- **`from === null` is ARMING, not a crossing.** An alert created while its condition is already true records the side silently and the row reads *"Arming — it will report the next change."* Announcing a crossing that did not happen is a false statement.
+- **A NULL IS NOT A ZERO.** `Number(null)` is 0 and finite, so a missing price would trip every "below $150" alert at once. A null side means NOT EVALUABLE: it fires nothing, is counted as `skipped`, and **does not overwrite the remembered side** — otherwise the next real reading looks like a transition out of nothing. The `num()` / credits-header / `activity.ms` lesson, and this is where it does the most damage.
+- **A gap counts.** 140 → 160 overnight never touched 150. The test is the **sign of `value − threshold`**, never equality.
+- **Pausing forgets the side.** A resumed alert missed whatever happened while it was off, so it arms silently again rather than firing on a transition it never saw.
+- The **event row is written BEFORE the side moves**. A crash between the two repeats one notification, which beats losing the only record that the thing the reader asked about happened.
+
+### Where it runs, and where it must not
+**`GET /api/cron/alerts`, bearer-authenticated, called by `intraday-ping.js` AFTER a slot's FULL round** — the light rounds write bars without rebuilding the snapshot, so there is nothing new to evaluate until the last one. **Never in the refresh tail**: the news top-up (2026-09-18), `techHistorySpan` (2026-09-19) and `archiveStats` (2026-09-20) were all work added there and all three surfaced as "the refresh failed" over data that was fine. The ping treats a failure here as non-fatal and a 404 as "an older server", so deploy order does not matter.
+
+- **The pass re-scores the snapshot** (`scoreActionInto` + `stampCapDerived`) so an alert can never disagree with the screener about a verdict.
+- **Delivery is a badge, never an interstitial.** The unread count rides `GET /api/prefs`, which every page already awaits before its first render — a second round trip per page load is the six-reads-in-series lesson. "Shown as soon as someone logs in" is satisfied by a badge you can ignore.
+- **Scoping is in the SQL**, not the route: `delete … where id = ? and user_key = ?`. An admin cannot reach another account's alert, and there is a test for exactly that.
+- `alerts` and `alert_events` are in `SYMBOL_TABLES`, so a dropped ticker takes its alerts with it. Events pruned at 90 days beside the other logs.
+- **`/privacy` was updated in the same commit** — it lists every table and its retention, and is written to match the software.
+- Verified: **34 checks** on the edge detector driven through the real route with the snapshot rewritten between passes (arming, the gap, staying true, re-crossing, the null, one-shot, pause/resume, the cap, and that `ACTIONS` really runs worst-first so an upgrade is not labelled a downgrade) plus **20** on the roles (anon, guest, the cron secret, and one member unable to see, silence or delete another's alert even as admin).
+
 ## Activity logging
 **Who did what, fact-only — the `activity` table** (`ts`, `user`, `kind`, `detail`, `ip`), separate from `visitors` on purpose: that one is the anonymous front-door knock, this one is a known account doing a thing. Facts, never content — a chat row says `asked`, not the question. Viewed at **`/activity`** (admin only, linked from the bar and from `/visitors`), which shows per-user and per-kind rollups plus the filterable 500-row tail, and carries a **Clear log** button (`DELETE /api/activity`, confirm-with-count like the visitor one). Pruned to `ACTIVITY_KEEP_DAYS` (60) during every refresh, fire-and-forget.
 

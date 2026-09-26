@@ -36,6 +36,10 @@ const store = require('./db');
 // browser would: the mobile page gets the twenty matching rows, formatted,
 // instead of the 1.3MB table. Both are the same modules the pages load.
 const Filters = require('./private/filters.js');
+// The alert types, for the same reason: the browser draws the form from this
+// list and the server evaluates against it, so neither can invent a type or a
+// comparison the other does not have.
+const Alerts = require('./private/alerts.js');
 require('./private/rowcard.js');
 const RowCard = globalThis.RowCard;
 // The promo cards, so a saved post can be built here and a phone handed
@@ -467,6 +471,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
                       '/about.html': '/about',
                       '/privacy.html': '/privacy', '/terms.html': '/terms',
+                      '/alerts.html': '/alerts',
                       '/posts.html': '/posts',
                       '/mobile.html': '/m', '/mobile-setup.html': '/mobile-setup',
                       '/nasdaq.html': '/nasdaq',
@@ -3976,6 +3981,78 @@ app.put('/api/views/shared', requireAdmin, route(async (req, res) => {
   await store.writeViews('shared', shared);
   logAct(req, 'view', 'shared:' + shared.length);
   res.json({ ok: true, shared });
+}));
+
+// ---- alerts ----------------------------------------------------------------
+// Five per account, one stock each, IN-APP ONLY — the owner's scope
+// (docs/backlog.md 12). No email anywhere in this feature: nothing here can
+// send, so nothing here can mis-send.
+//
+// THEY ARE NOT REAL-TIME AND CANNOT BE. Prices land on a schedule — the
+// nightly and the intraday slots — so an alert fires when new data arrives:
+// up to ~30 minutes late in session, next morning outside it. The page says
+// so, because a screen implying otherwise is the whole product disappointing
+// somebody at the moment they most trusted it.
+const ALERTS_MAX = 5;
+
+const alertOut = (a) => ({ ...a, label: Alerts.label(a) });
+
+app.get('/api/alerts', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const key = await prefsKey(req);
+  const [alerts, events] = await Promise.all([
+    store.readAlerts(key), store.readAlertEvents(key, 50),
+  ]);
+  res.json({ alerts: alerts.map(alertOut), events, max: ALERTS_MAX,
+    types: Alerts.ids.map((id) => ({ id, ...Alerts.TYPES[id],
+      // The functions do not survive JSON and the page does not need them:
+      // it draws the form from `fields` and reads `label` off each alert.
+      side: undefined, fires: undefined, label: undefined, body: undefined, valid: undefined })) });
+}));
+
+app.post('/api/alerts', requireMember, route(async (req, res) => {
+  const key = await prefsKey(req);
+  const symbol = String(req.body?.symbol || '').trim().toUpperCase();
+  // The member-portfolios invariant: an account can never name a stock the
+  // screener does not carry. Validated here, not in the page.
+  const universe = new Set(await readUniverse());
+  if (!universe.has(symbol)) {
+    return res.status(400).json({ error: 'That symbol is not in the screener.' });
+  }
+  const clean = Alerts.clean(req.body);
+  if (!clean) return res.status(400).json({ error: 'That alert is not complete — check the values.' });
+  if ((await store.countAlerts(key)) >= ALERTS_MAX) {
+    return res.status(409).json({ error: `You can have ${ALERTS_MAX} alerts. Delete one to add another.` });
+  }
+  const made = await store.createAlert({ userKey: key, symbol, ...clean });
+  logAct(req, 'alert', `add:${symbol}:${clean.kind}`);
+  res.json({ ok: true, alert: alertOut(made) });
+}));
+
+app.delete('/api/alerts/:id', requireMember, route(async (req, res) => {
+  const ok = await store.deleteAlert(await prefsKey(req), Number(req.params.id));
+  if (!ok) return res.status(404).json({ error: 'No such alert.' });
+  logAct(req, 'alert', 'delete');
+  res.json({ ok: true });
+}));
+
+app.post('/api/alerts/:id/active', requireMember, route(async (req, res) => {
+  const ok = await store.setAlertActive(await prefsKey(req), Number(req.params.id), !!req.body?.active);
+  if (!ok) return res.status(404).json({ error: 'No such alert.' });
+  res.json({ ok: true });
+}));
+
+app.post('/api/alerts/read', requireMember, route(async (req, res) => {
+  res.json({ ok: true, marked: await store.markAlertEventsRead(await prefsKey(req)) });
+}));
+
+// Members only, like the studio and the pivot: a guest has no prefs key, so
+// there is nowhere for an alert to belong.
+app.get('/alerts', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'alerts');
+  res.sendFile(path.join(__dirname, 'private', 'alerts.html'));
 }));
 
 app.get('/api/my/portfolios', requireMember, route(async (req, res) => {
@@ -7909,8 +7986,14 @@ app.get('/api/prefs', requireAuth, route(async (req, res) => {
   // The card's chart ranges ride along too, so the screener's Tiles view and
   // the phone page offer the same windows without either restating the list.
   const ranges = CARD_RANGES.map((r) => ({ id: r.id, short: r.short, label: r.label, days: r.days }));
-  if (await isGuest(req)) return res.json({ prefs: {}, siteHidden, tile, ranges });
-  res.json({ prefs: await store.readPrefs(await prefsKey(req)), siteHidden, tile, ranges });
+  if (await isGuest(req)) return res.json({ prefs: {}, siteHidden, tile, ranges, alerts: 0 });
+  // The unread alert count rides along for the badge. A guest has no alerts
+  // and no prefs key, so it is a flat 0 rather than a read.
+  const key = await prefsKey(req);
+  const [prefs, alerts] = await Promise.all([
+    store.readPrefs(key), store.unreadAlertCount(key).catch(() => 0),
+  ]);
+  res.json({ prefs, siteHidden, tile, ranges, alerts });
 }));
 
 app.put('/api/prefs', requireAuth, route(async (req, res) => {
@@ -10090,6 +10173,76 @@ app.post('/api/refresh-runs/stop', requireAdmin, route(async (req, res) => {
 }));
 
 // The missed-night alarm. Called once a day by a Vercel cron (vercel.json),
+// ---- the alert pass --------------------------------------------------------
+// DELIBERATELY NOT IN THE REFRESH TAIL. Three incidents came from work added
+// there — the news top-up (2026-09-18), techHistorySpan (2026-09-19) and
+// archiveStats (2026-09-20) — and every one surfaced as "the refresh failed"
+// over data that was perfectly fine. This is its own route, called after a
+// slot's FULL round, because the light rounds write bars without rebuilding
+// the snapshot and there is nothing new to evaluate until the last one.
+//
+// Cost: one snapshot read plus one small indexed read, over tens of alerts.
+async function runAlertPass() {
+  const alerts = await store.readActiveAlerts();
+  if (!alerts.length) return { alerts: 0, fired: 0, armed: 0, skipped: 0 };
+
+  // One read of what is already served, scored the way every other reader
+  // sees it — an alert must not be able to disagree with the screener.
+  const snap = await store.readSnapshot();
+  const rows = (snap && snap.stocks) || [];
+  if (!rows.length) return { alerts: alerts.length, fired: 0, armed: 0, skipped: alerts.length };
+  scoreActionInto(rows);
+  stampCapDerived(rows);
+  const by = new Map(rows.map((r) => [r.symbol, r]));
+
+  let fired = 0; let armed = 0; let skipped = 0;
+  for (const a of alerts) {
+    const row = by.get(a.symbol);
+    let out;
+    try {
+      out = Alerts.evaluate(a, row);
+    } catch (err) {
+      console.warn('alert', a.id, 'threw:', err.message);
+      skipped++;
+      continue;
+    }
+    // A null side is NOT EVALUABLE — no price this round, or a field the
+    // provider did not send. It must not be remembered as a side, or the next
+    // real reading looks like a transition out of nothing.
+    if (out.side === null) { skipped++; continue; }
+    if (!out.fire) {
+      if (a.lastSide !== out.side) { await store.noteAlertSide(a.id, out.side, null); armed++; }
+      continue;
+    }
+    const at = Date.now();
+    // The event is written BEFORE the side moves. A crash between the two
+    // repeats one notification, which is a great deal better than losing the
+    // only record that the thing the reader asked about actually happened.
+    await store.addAlertEvent({ alertId: a.id, userKey: a.userKey, symbol: a.symbol, body: out.body, at });
+    await store.noteAlertSide(a.id, out.side, at);
+    if (a.once) await store.disableAlert(a.id);
+    fired++;
+  }
+  return { alerts: alerts.length, fired, armed, skipped };
+}
+
+// Bearer-authenticated like the other cron routes: the secret satisfies this
+// one endpoint, so a leak cannot touch an account. ?dry=1 reports without
+// writing anything.
+app.get('/api/cron/alerts', route(async (req, res) => {
+  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'No.' });
+  if (req.query.dry) {
+    const n = (await store.readActiveAlerts()).length;
+    return res.json({ dry: true, activeAlerts: n });
+  }
+  const t0 = Date.now();
+  const out = await runAlertPass();
+  store.pruneAlertEvents().catch(() => { /* the bars rule */ });
+  console.log(`alerts: ${out.fired} fired, ${out.armed} armed, ${out.skipped} skipped `
+    + `of ${out.alerts} in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  res.json({ ok: true, ...out, ms: Date.now() - t0 });
+}));
+
 // deliberately NOT by GitHub: the failure it exists to catch is GitHub's
 // scheduler not firing at all, and a watchdog on the same scheduler would
 // miss the same night. Mails only when something is wrong; ?dry=1 reports the

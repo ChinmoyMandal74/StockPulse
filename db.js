@@ -290,6 +290,42 @@ const SCHEMA = [
   // The page reads a window ending at now, so the tail is a seek rather than a
   // walk of everything ever sent.
   `create index if not exists idx_mail_at on mail_log (at)`,
+  // Per-account alerts on ONE stock each (2026-09-26). See docs/backlog.md 12.
+  //
+  // `last_side` IS THE WHOLE MECHANISM: an alert fires on a TRANSITION, not on
+  // a level being true, so the previous reading has to be remembered or "price
+  // above 150" would notify on every round for ever. It is on this row rather
+  // than in a state table of its own only because an alert watches exactly one
+  // symbol — a portfolio-scoped alert would need (alert_id, symbol).
+  //
+  // NULL last_side means "not armed yet": the first evaluation records the
+  // side SILENTLY. An alert created while its condition is already true must
+  // not announce a crossing that did not happen.
+  `create table if not exists alerts (
+     id          integer primary key autoincrement,
+     user_key    text not null,
+     symbol      text not null,
+     kind        text not null,
+     params      text,
+     active      integer not null default 1,
+     once        integer not null default 0,
+     last_side   text,
+     last_fired_at integer,
+     created_at  integer not null
+   )`,
+  `create index if not exists idx_alerts_user on alerts (user_key)`,
+  // The in-app inbox. Facts, never instructions — `body` is a rendered
+  // sentence about what the data did, the same rule the cards follow.
+  `create table if not exists alert_events (
+     id        integer primary key autoincrement,
+     alert_id  integer not null,
+     user_key  text not null,
+     symbol    text not null,
+     at        integer not null,
+     body      text not null,
+     read_at   integer
+   )`,
+  `create index if not exists idx_alert_ev_user on alert_events (user_key, at)`,
   `create table if not exists app_meta (
      key   text primary key,
      value text
@@ -1205,6 +1241,153 @@ async function deletePostImage(id) {
   await init();
   const r = await db.execute({ sql: 'delete from post_images where id = ?', args: [String(id)] });
   return Number(r.rowsAffected || 0) > 0;
+}
+
+// ---- alerts -----------------------------------------------------------------
+// Five per account (ALERTS_MAX lives in server.js with the other caps). Every
+// read is keyed on user_key, which is indexed; the whole table is tens of rows.
+const ALERT_EVENT_KEEP_DAYS = Number(process.env.ALERT_EVENT_KEEP_DAYS || 90);
+
+const alertRow = (a) => ({
+  id: Number(a.id),
+  symbol: String(a.symbol),
+  kind: String(a.kind),
+  params: a.params ? JSON.parse(a.params) : {},
+  active: Number(a.active) === 1,
+  once: Number(a.once) === 1,
+  lastSide: a.last_side == null ? null : String(a.last_side),
+  lastFiredAt: a.last_fired_at == null ? null : Number(a.last_fired_at),
+  createdAt: Number(a.created_at),
+});
+
+async function readAlerts(userKey) {
+  await init();
+  const r = await db.execute({
+    sql: 'select * from alerts where user_key = ? order by created_at',
+    args: [String(userKey)],
+  });
+  return r.rows.map(alertRow);
+}
+
+// Every active alert across every account, for one evaluation pass. Carries
+// user_key because the events it writes belong to somebody.
+async function readActiveAlerts() {
+  await init();
+  const r = await db.execute('select * from alerts where active = 1');
+  return r.rows.map((a) => ({ ...alertRow(a), userKey: String(a.user_key) }));
+}
+
+async function countAlerts(userKey) {
+  await init();
+  const r = await db.execute({
+    sql: 'select count(*) as n from alerts where user_key = ?', args: [String(userKey)],
+  });
+  return Number(r.rows[0].n);
+}
+
+async function createAlert({ userKey, symbol, kind, params, once }) {
+  await init();
+  const r = await db.execute({
+    sql: `insert into alerts (user_key, symbol, kind, params, active, once, created_at)
+          values (?, ?, ?, ?, 1, ?, ?) returning *`,
+    args: [String(userKey), String(symbol).toUpperCase(), String(kind),
+      JSON.stringify(params || {}), once ? 1 : 0, Date.now()],
+  });
+  return r.rows.length ? alertRow(r.rows[0]) : null;
+}
+
+// Scoped to the owner in the SQL rather than checked in the route: one account
+// must never be able to delete or silence another's alert by guessing an id.
+async function deleteAlert(userKey, id) {
+  await init();
+  const r = await db.execute({
+    sql: 'delete from alerts where id = ? and user_key = ?', args: [Number(id), String(userKey)],
+  });
+  const n = Number(r.rowsAffected || 0);
+  if (n) await db.execute({ sql: 'delete from alert_events where alert_id = ?', args: [Number(id)] });
+  return n > 0;
+}
+
+async function setAlertActive(userKey, id, active) {
+  await init();
+  // Re-arming DISCARDS the remembered side. A paused alert missed whatever
+  // happened while it was off, so resuming it must not fire on a transition it
+  // never saw — it arms silently again, like a new one.
+  const r = await db.execute({
+    sql: `update alerts set active = ?, last_side = case when ? = 1 then null else last_side end
+          where id = ? and user_key = ?`,
+    args: [active ? 1 : 0, active ? 1 : 0, Number(id), String(userKey)],
+  });
+  return Number(r.rowsAffected || 0) > 0;
+}
+
+// The two writes an evaluation makes. `noteAlertSide` is called for EVERY
+// evaluable alert, fired or not — that is what keeps the edge detector honest.
+async function noteAlertSide(id, side, firedAt) {
+  await init();
+  await db.execute({
+    sql: `update alerts set last_side = ?, last_fired_at = coalesce(?, last_fired_at)
+          where id = ?`,
+    args: [side == null ? null : String(side), firedAt ?? null, Number(id)],
+  });
+}
+
+async function addAlertEvent({ alertId, userKey, symbol, body, at }) {
+  await init();
+  await db.execute({
+    sql: `insert into alert_events (alert_id, user_key, symbol, at, body)
+          values (?, ?, ?, ?, ?)`,
+    args: [Number(alertId), String(userKey), String(symbol), Number(at || Date.now()), String(body)],
+  });
+}
+
+// A one-shot alert switches itself off once it has fired, rather than being
+// deleted: the row is what tells the reader why it stopped.
+async function disableAlert(id) {
+  await init();
+  await db.execute({ sql: 'update alerts set active = 0 where id = ?', args: [Number(id)] });
+}
+
+async function readAlertEvents(userKey, limit) {
+  await init();
+  const r = await db.execute({
+    sql: `select * from alert_events where user_key = ? order by at desc limit ?`,
+    args: [String(userKey), Math.min(200, Number(limit) || 50)],
+  });
+  return r.rows.map((e) => ({
+    id: Number(e.id), alertId: Number(e.alert_id), symbol: String(e.symbol),
+    at: Number(e.at), body: String(e.body),
+    readAt: e.read_at == null ? null : Number(e.read_at),
+  }));
+}
+
+// Rides GET /api/prefs, which every page already awaits before its first
+// render — a badge is not worth a second round trip per page load.
+async function unreadAlertCount(userKey) {
+  await init();
+  const r = await db.execute({
+    sql: 'select count(*) as n from alert_events where user_key = ? and read_at is null',
+    args: [String(userKey)],
+  });
+  return Number(r.rows[0].n);
+}
+
+async function markAlertEventsRead(userKey) {
+  await init();
+  const r = await db.execute({
+    sql: 'update alert_events set read_at = ? where user_key = ? and read_at is null',
+    args: [Date.now(), String(userKey)],
+  });
+  return Number(r.rowsAffected || 0);
+}
+
+async function pruneAlertEvents() {
+  await init();
+  const r = await db.execute({
+    sql: 'delete from alert_events where at < ?',
+    args: [Date.now() - ALERT_EVENT_KEEP_DAYS * 86400000],
+  });
+  return Number(r.rowsAffected || 0);
 }
 
 // ---- what has been emailed ---------------------------------------------------
@@ -2525,7 +2708,7 @@ async function readBarsFor(symbols, since) {
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state',
-  'earnings_history', 'price_state', 'tech_history'];
+  'earnings_history', 'price_state', 'tech_history', 'alerts', 'alert_events'];
 
 // Remove a symbol from the database entirely.
 //
@@ -3861,6 +4044,19 @@ module.exports = {
   clearActivity,
   pruneActivity,
   pruneVisitors,
+  readAlerts,
+  readActiveAlerts,
+  countAlerts,
+  createAlert,
+  deleteAlert,
+  setAlertActive,
+  noteAlertSide,
+  addAlertEvent,
+  disableAlert,
+  readAlertEvents,
+  unreadAlertCount,
+  markAlertEventsRead,
+  pruneAlertEvents,
   readUserPortfolios,
   writeUserPortfolios,
   listAllUserPortfolios,

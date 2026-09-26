@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Alerts — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* Scoped under this page's ids and an `al-` prefix. Eight unscoped class
+       names have captured later markup on this project and app.css is shared
+       by every page here. */
+    body { min-height: 100dvh; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1040px; margin: 0 auto; padding: 0 24px 90px; }
+    .aura { background:
+      radial-gradient(46vw 40vw at 4% -8%, rgba(251, 191, 36, 0.08), transparent 62%),
+      radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.08), transparent 64%); }
+    .nav { display: flex; gap: 14px; font-size: 13px; padding: 22px 0 0; }
+    .nav a { color: var(--muted); text-decoration: none; }
+    .nav a:hover { color: var(--text); text-decoration: underline; }
+    h1 { margin: 20px 0 6px; font-size: clamp(26px, 3vw, 34px); font-weight: 600; letter-spacing: -0.035em; }
+    .lede { margin: 0 0 8px; font-size: 13.5px; color: var(--muted); max-width: 78ch; line-height: 1.7; }
+
+    /* THE LATENCY NOTE IS NOT DECORATION. Prices land on a schedule, so an
+       alert is up to ~30 minutes late in session and next-morning outside it.
+       A page that implied otherwise would disappoint someone at the exact
+       moment they trusted it most. */
+    .al-when { border: 1px solid rgba(251, 191, 36, 0.34); border-radius: 12px; padding: 12px 15px;
+               margin: 16px 0 22px; font-size: 13px; line-height: 1.7; color: var(--muted); }
+    .al-when b { color: var(--text); font-weight: 600; }
+
+    h2 { margin: 26px 0 12px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+    h2 .c { color: var(--faint); font-weight: 400; font-family: var(--mono); font-size: 12px; margin-left: 8px; }
+
+    .al-list { border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; }
+    .al-row { display: flex; gap: 14px; align-items: center; padding: 13px 15px;
+              border-bottom: 1px solid rgba(255, 255, 255, 0.045); }
+    .al-row:last-child { border-bottom: 0; }
+    .al-row.off { opacity: 0.5; }
+    .al-sym { font-family: var(--mono); font-weight: 600; font-size: 13px; min-width: 62px; }
+    .al-txt { flex: 1; min-width: 0; }
+    .al-txt .t { font-size: 13.5px; }
+    .al-txt .s { display: block; margin-top: 3px; font-size: 11.5px; color: var(--faint); }
+    .al-act { display: flex; gap: 6px; flex: none; }
+    .al-act button { padding: 5px 10px; border-radius: 8px; border: 1px solid var(--hair);
+                     background: rgba(255, 255, 255, 0.04); color: var(--muted);
+                     font: 500 11.5px var(--sans); cursor: pointer; }
+    .al-act button:hover { color: var(--text); border-color: var(--hair-2); }
+    .al-act button.del:hover { color: var(--red); border-color: rgba(251, 113, 133, 0.45); }
+    .al-empty { padding: 30px 15px; text-align: center; color: var(--faint); font-size: 13px; }
+
+    .al-new { border: 1px solid var(--hair); border-radius: 12px; padding: 16px;
+              background: rgba(255, 255, 255, 0.02); margin-top: 12px; }
+    .al-new .r { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+    .al-f { display: flex; flex-direction: column; gap: 5px; }
+    .al-f label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--faint); }
+    .al-f input, .al-f select {
+      padding: 8px 10px; border-radius: 9px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.05); color: var(--text); font: 500 13px var(--sans); }
+    .al-f input { width: 120px; }
+    .al-f input.sym { width: 104px; font-family: var(--mono); text-transform: uppercase; }
+    #addBtn { padding: 9px 16px; border-radius: 9px; border: 1px solid rgba(52, 211, 153, 0.45);
+              background: rgba(52, 211, 153, 0.12); color: var(--green);
+              font: 600 13px var(--sans); cursor: pointer; }
+    #addBtn:disabled { opacity: 0.45; cursor: default; }
+    .al-blurb { margin: 10px 0 0; font-size: 12px; color: var(--faint); line-height: 1.6; }
+    .al-msg { margin-top: 10px; font-size: 12.5px; }
+    .al-msg.bad { color: var(--red); } .al-msg.ok { color: var(--green); }
+
+    .al-ev { display: flex; gap: 12px; padding: 12px 15px;
+             border-bottom: 1px solid rgba(255, 255, 255, 0.045); }
+    .al-ev:last-child { border-bottom: 0; }
+    .al-ev.un { background: rgba(124, 156, 255, 0.06); }
+    .al-ev .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; margin-top: 6px;
+                  background: var(--accent); }
+    .al-ev.rd .dot { background: transparent; border: 1px solid var(--hair-2); }
+    .al-ev .b { flex: 1; font-size: 13.5px; line-height: 1.6; }
+    .al-ev .w { flex: none; font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; }
+    @media (max-width: 620px) {
+      .al-row { flex-wrap: wrap; }
+      .al-ev .w { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <main class="page">
+    <nav class="nav"><a href="/">← Screener</a><a href="/help">Help</a></nav>
+    <h1>Alerts</h1>
+    <p class="lede">Watch one stock for one thing. When it happens you will see it here the next
+      time you open the site.</p>
+
+    <div class="al-when" id="whenNote"></div>
+
+    <h2>What you are watching <span class="c" id="cap"></span></h2>
+    <div class="al-list" id="list"></div>
+
+    <div class="al-new">
+      <div class="r">
+        <div class="al-f"><label for="sym">Stock</label>
+          <input id="sym" class="sym" maxlength="10" placeholder="NVDA" autocomplete="off" /></div>
+        <div class="al-f"><label for="kind">Watch for</label><select id="kind"></select></div>
+        <div id="params" style="display:contents"></div>
+        <button id="addBtn">Add alert</button>
+      </div>
+      <p class="al-blurb" id="blurb"></p>
+      <p class="al-msg" id="msg"></p>
+    </div>
+
+    <h2>What has happened <span class="c" id="evc"></span></h2>
+    <div class="al-list" id="events"></div>
+  </main>
+
+  <script src="/filters.js"></script>
+  <script src="/action.js"></script>
+  <script src="/alerts.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const ago = (ms) => {
+      const s = Math.max(0, (Date.now() - ms) / 1000);
+      if (s < 3600) return Math.round(s / 60) + 'm ago';
+      if (s < 86400) return Math.round(s / 3600) + 'h ago';
+      return Math.round(s / 86400) + 'd ago';
+    };
+    let data = { alerts: [], events: [], max: 5, types: [] };
+
+    function paintWhen() {
+      $('whenNote').innerHTML = '<b>These are not live prices.</b> The screener refreshes every '
+        + '30 minutes through the US session and once after the close, and an alert is checked when '
+        + 'new data lands — so expect it up to half an hour late during the day, and the next '
+        + 'morning outside market hours. Good for noticing what changed; not a trading trigger.';
+    }
+
+    function paintTypes() {
+      $('kind').innerHTML = data.types.map((t) =>
+        `<option value="${we(t.id)}">${we(t.name)}</option>`).join('');
+      paintParams();
+    }
+
+    // The form is DRAWN FROM THE TYPE REGISTRY, so a type added in alerts.js
+    // appears here with no edit — the same contract the studio has with cards.
+    function paintParams() {
+      const t = data.types.find((x) => x.id === $('kind').value);
+      if (!t) { $('params').innerHTML = ''; return; }
+      $('params').innerHTML = t.fields.map((f) => {
+        const id = 'p_' + f.k;
+        if (f.t === 'num') {
+          return `<div class="al-f"><label for="${id}">${we(f.label)}</label>`
+            + `<input id="${id}" type="number" step="any" placeholder="${we(f.placeholder || '')}"`
+            + ` value="${t.defaults[f.k] == null ? '' : we(t.defaults[f.k])}" /></div>`;
+        }
+        return `<div class="al-f"><label for="${id}">${we(f.label)}</label><select id="${id}">`
+          + f.opts.map(([v, lab]) =>
+            `<option value="${we(v)}"${t.defaults[f.k] === v ? ' selected' : ''}>${we(lab)}</option>`).join('')
+          + '</select></div>';
+      }).join('');
+      $('blurb').textContent = t.blurb || '';
+    }
+
+    function paint() {
+      $('cap').textContent = `${data.alerts.length} of ${data.max}`;
+      $('addBtn').disabled = data.alerts.length >= data.max;
+      $('list').innerHTML = data.alerts.length ? data.alerts.map((a) => `
+        <div class="al-row ${a.active ? '' : 'off'}">
+          <span class="al-sym">${we(a.symbol)}</span>
+          <span class="al-txt"><span class="t">${we(a.label)}</span>
+            <span class="s">${a.active
+              ? (a.lastSide == null ? 'Arming — it will report the next change'
+                 : 'Watching' + (a.lastFiredAt ? ' · last fired ' + we(ago(a.lastFiredAt)) : ''))
+              : 'Paused'}${a.once ? ' · once only' : ''}</span></span>
+          <span class="al-act">
+            <button data-act="${a.id}" data-on="${a.active ? 0 : 1}">${a.active ? 'Pause' : 'Resume'}</button>
+            <button class="del" data-del="${a.id}">Delete</button>
+          </span>
+        </div>`).join('')
+        : `<div class="al-empty">Nothing yet. Add one below — you can have ${data.max}.</div>`;
+
+      const unread = data.events.filter((e) => e.readAt == null).length;
+      $('evc').textContent = unread ? `${unread} new` : (data.events.length ? `${data.events.length}` : '');
+      $('events').innerHTML = data.events.length ? data.events.map((e) => `
+        <div class="al-ev ${e.readAt == null ? 'un' : 'rd'}">
+          <span class="dot"></span>
+          <span class="b">${we(e.body)}</span>
+          <span class="w">${we(ago(e.at))}</span>
+        </div>`).join('')
+        : '<div class="al-empty">Nothing has fired yet.</div>';
+    }
+
+    async function load() {
+      const r = await fetch('/api/alerts', { cache: 'no-store' });
+      if (!r.ok) { $('list').innerHTML = '<div class="al-empty">Could not load alerts.</div>'; return; }
+      data = await r.json();
+      paintTypes();
+      paint();
+      // Opening the page IS reading them. Marking after the paint means the
+      // blue "new" marks are visible on this visit and gone on the next.
+      if (data.events.some((e) => e.readAt == null)) {
+        fetch('/api/alerts/read', { method: 'POST' }).catch(() => {});
+      }
+    }
+
+    async function add() {
+      const t = data.types.find((x) => x.id === $('kind').value);
+      const params = {};
+      for (const f of t.fields) {
+        const el = $('p_' + f.k);
+        params[f.k] = f.t === 'num' ? el.value : el.value;
+      }
+      const body = { symbol: $('sym').value.trim().toUpperCase(), kind: t.id, params };
+      $('msg').className = 'al-msg';
+      $('msg').textContent = '';
+      const r = await fetch('/api/alerts', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { $('msg').className = 'al-msg bad'; $('msg').textContent = d.error || 'Could not add that.'; return; }
+      $('msg').className = 'al-msg ok';
+      $('msg').textContent = 'Added. It will report the next time this changes.';
+      $('sym').value = '';
+      await load();
+    }
+
+    $('kind').addEventListener('change', paintParams);
+    $('addBtn').addEventListener('click', add);
+    $('list').addEventListener('click', async (e) => {
+      const del = e.target.closest('[data-del]');
+      const act = e.target.closest('[data-act]');
+      if (del) {
+        await fetch('/api/alerts/' + del.dataset.del, { method: 'DELETE' });
+        await load();
+      } else if (act) {
+        await fetch('/api/alerts/' + act.dataset.act + '/active', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ active: act.dataset.on === '1' }) });
+        await load();
+      }
+    });
+    paintWhen();
+    load();
+  </script>
+</body>
+</html>

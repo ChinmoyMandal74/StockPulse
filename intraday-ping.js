@@ -104,8 +104,8 @@ class Stop extends Error {
 
     // One call. Returns the parsed body, or exits -- an unreachable server or a
     // refused secret is the same answer whichever round hits it.
-    async function call(query) {
-      const url = `${base}/api/cron/intraday${query}`;
+    async function call(query, path) {
+      const url = `${base}/api/cron/${path || 'intraday'}${query}`;
       // A round is minutes of work and the platform kills the function at about
       // 300s; a ceiling above that lets the scheduler's own next firing find
       // this one still waiting.
@@ -166,6 +166,26 @@ class Stop extends Error {
         say(`REFRESHED  round ${i}/${rounds} in ${secs}s -- rebuilt${served ? `, ${served} priced by the light rounds before it` : ''}`);
       }
     }
+
+    // ALERTS RUN AFTER THE FULL ROUND, and only after it. The light rounds
+    // write bars without rebuilding the snapshot, so there is nothing new to
+    // evaluate until the last one -- checking earlier would compare this
+    // slot's alerts against the previous slot's table.
+    //
+    // A separate call rather than work bolted onto the refresh: three
+    // incidents on this project came from adding to the refresh tail, and
+    // every one surfaced as "the refresh failed" over data that was fine.
+    // Here, an alert pass that breaks leaves the prices already written.
+    try {
+      const { res, j, secs } = await call('', 'alerts');
+      if (res.status >= 400) say(`alerts     skipped -- HTTP ${res.status}`);
+      else if (j) say(`alerts     ${j.fired} fired, ${j.armed} armed of ${j.alerts} in ${secs}s`);
+    } catch (e) {
+      // Never fatal. The prices are in; the scheduler should not go red
+      // because a notification did not get written.
+      if (!(e instanceof Stop)) say('alerts     skipped -- ' + (e && e.message ? e.message : String(e)));
+    }
+
     throw new Stop(0);
   } catch (err) {
     if (err instanceof Stop) { process.exitCode = err.code; return; }
