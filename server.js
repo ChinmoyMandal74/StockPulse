@@ -6952,7 +6952,8 @@ function peersFor(stock, stocks) {
   // way in this table and another way on the row it came from. It also keeps
   // the payload to ~1KB: six whole snapshot rows would be ~18KB for six cells
   // each.
-  const CELLS = ['info|Price', 'short|Today', 'long|1Y', 'info|Market Cap', 'act|Advice'];
+  const CELLS = ['info|Price', 'short|Today', 'long|1Y', 'info|Market Cap',
+    'fund|Fwd P/E', 'act|Advice'];
   return {
     basis,
     group: basis === 'industry' ? ind : sec,
@@ -6969,6 +6970,15 @@ function peersFor(stock, stocks) {
         const c = v[k];
         out[k.slice(k.indexOf('|') + 1)] = c ? { t: c.t, c: c.c || '' } : null;
       }
+      // A MULTIPLE OFF A LOSS IS ARITHMETIC, NOT CHEAPNESS — the Size card's
+      // rule and the Bubble card's, met a third time and for the sharpest
+      // reason yet. `FIELD_SPEC` renders forward P/E through `V.num`, which
+      // prints a loss-maker's -41.7 verbatim; that is tolerable in a labelled
+      // row on one stock and actively misleading DOWN A COLUMN OF SIX, where
+      // the eye reads the most negative number as the cheapest. Live, 73 of
+      // 1,167 companies carry one. `> 0` rejects the empty before coercing as
+      // well: Number(null) is 0 and 0 is not greater than 0.
+      out['Fwd P/E'] = Number(x.forwardPe) > 0 ? out['Fwd P/E'] : null;
       return out;
     }),
   };

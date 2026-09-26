@@ -691,7 +691,7 @@
       const body = p.rows.map((r) => `<tr>
         <td class="nm"><a class="namelink" href="/stock/${encodeURIComponent(r.symbol)}">${esc(r.name)}</a>
           <span class="sym">${esc(r.symbol)}</span></td>
-        ${cell(r.Price)}${cell(r.Today)}${cell(r['1Y'])}${cell(r['Market Cap'])}
+        ${cell(r.Price)}${cell(r.Today)}${cell(r['1Y'])}${cell(r['Market Cap'])}${cell(r['Fwd P/E'])}
         <td class="av ${r.Advice ? (r.Advice.c || '') : 'na'}"${
           r.why ? ` title="${esc(r.why)}"` : ''}>${esc(r.Advice ? r.Advice.t : '—')}</td>
         <td class="cmp"><a class="rng" href="/compare/${encodeURIComponent(sym)}/${
@@ -703,12 +703,14 @@
           <p class="summary">${basis}</p>
           <div class="ptab"><table>
             <thead><tr><th>Company</th><th>Price</th><th>Today</th><th>1Y</th>
-              <th>Market cap</th><th>Advice</th><th></th></tr></thead>
+              <th>Market cap</th><th>Fwd P/E</th><th>Advice</th><th></th></tr></thead>
             <tbody>${body}</tbody>
           </table></div>
           <p class="note">Same ${p.basis}, ranked by ${p.byName ? 'how close each one is in market cap' : 'size'}.
             It is who else is on this screen measured the same way — not a ranking, and not a list of
-            better alternatives. Advice is the Balanced rule set; hover it for the rule that fired.</p>
+            better alternatives. Advice is the Balanced rule set; hover it for the rule that fired.
+            A dash under Fwd P/E is a company with no positive forward earnings, or none reported —
+            a multiple off a loss is arithmetic, not cheapness.</p>
         </div></section>`;
     }
 
