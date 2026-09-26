@@ -991,10 +991,14 @@
         <h1 class="brand"><span class="w1">Tickr</span> <span class="w2">Lab</span></h1>
         <span class="bar-sep"></span>
 
-        <div class="picker" id="colPicker" data-open="0">
-          <button class="btn picker-btn" id="colBtn" aria-haspopup="listbox" aria-expanded="false"></button>
-          <div class="picker-menu" id="colMenu" role="listbox" aria-multiselectable="true" aria-label="Column views"></div>
-        </div>
+        <!-- Layout first, then View (owner, 2026-09-26). Which SHAPE the rows
+             take is the coarser choice, and the three tile controls travel
+             with the toggle rather than being left behind it — Per row and
+             Range belong beside the thing they configure, and View between
+             them would read as a group boundary that is not there. Safe to
+             reorder because every one of these is reached by id: no sibling
+             or positional selector in either stylesheet touches them, and no
+             script walks the bar's children. -->
         <span class="lay" id="layToggle" role="group" aria-label="Layout">
           <button type="button" data-lay="table" class="on">Table</button>
           <button type="button" data-lay="tiles">Tiles</button>
@@ -1017,6 +1021,11 @@
           <label for="tileRange">Range</label>
           <select id="tileRange" aria-label="Chart range"></select>
         </span>
+
+        <div class="picker" id="colPicker" data-open="0">
+          <button class="btn picker-btn" id="colBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="picker-menu" id="colMenu" role="listbox" aria-multiselectable="true" aria-label="Column views"></div>
+        </div>
         <button class="btn admin-only" id="tileCfgBtn" hidden>Tile setup</button>
         <div class="picker" id="scrPicker" data-open="0">
           <button class="btn picker-btn" id="scrBtn" aria-haspopup="listbox" aria-expanded="false"></button>
