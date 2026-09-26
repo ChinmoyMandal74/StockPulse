@@ -1471,7 +1471,12 @@ async function isSignedIn(req) {
 // ADMIN_PASSWORD revokes every outstanding guest cookie at once.
 const GUEST_COOKIE = 'st_guest';
 const GUEST_HOURS = 24;
-const GUEST_SYMBOLS = String(process.env.GUEST_SYMBOLS || 'NVDA,JPM,PTON,JOBY,DELL')
+// TWENTY since 2026-09-26 (was five), chosen for SPREAD rather than fame:
+// all eleven sectors, all six verdicts, all six cap bands and five of the
+// six trend states, every one with enough history to score. A preview whose
+// rows are all mega-cap technology shows the product's range to nobody, and
+// a row that renders blanks is worse than one row fewer.
+const GUEST_SYMBOLS = String(process.env.GUEST_SYMBOLS || 'NVDA,GOOGL,JNJ,AAPL,AVGO,NFLX,AMZN,WELL,CAT,BRK.B,NEE,XOM,WMT,BHP,BDX,SSB,OLN,AIRO,TSLA,PLD')
   .split(',').map((x) => x.trim().toUpperCase()).filter(Boolean);
 const guestSet = new Set(GUEST_SYMBOLS);
 const guestToken = () =>

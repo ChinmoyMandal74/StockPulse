@@ -538,7 +538,7 @@
               ['rules', 'var(--accent)', 'Advice that shows its work', 'Five fixed rule profiles side by side, and every verdict names the ONE rule that fired.'],
               ['trend', 'var(--amber)', 'Twenty years of receipts', 'Trend ribbons, backtests and an indicator lab over the full bar archive — measured, not asserted.'],
               ['ask', 'var(--accent-2)', 'Alerts on what you follow', 'Watch one stock for one thing — a price level, a moving-average cross, a change of verdict — and see it when it happens.'],
-              ['guest', 'var(--red)', 'Try it in one click', 'A guest preview: five real stocks, the whole table, every column and every verdict. No account, no card.'],
+              ['guest', 'var(--red)', 'Try it in one click', 'A guest preview: twenty real stocks across every sector, the whole table and every verdict. No account, no card.'],
             ] },
           // The posts are PUBLIC first and the list is the convenience, which
           // is the order the slide states them in. Saying the terms on the
@@ -698,7 +698,7 @@
       return '<div class="flowend" style="margin-top:40px">' +
         '<div class="fl">No account needed</div>' +
         '<div class="fa">Try it free</div>' +
-        '<div class="fw">Five real stocks, the whole table and every verdict — one click on the login page.</div></div>' +
+        '<div class="fw">Twenty real stocks, the whole table and every verdict — one click on the login page.</div></div>' +
         '<p class="s-sub wide" style="margin-top:30px">Or have the write-ups sent to you: <b>tickrlab.com/blog</b> — confirmed opt-in, one click to leave, and nothing else ever goes to that address.</p>';
     }
 
