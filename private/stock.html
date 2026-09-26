@@ -107,7 +107,13 @@
     /* Full card width, as asked. The usual 70-80ch reading limit is dropped
        here on purpose: this is four or five sentences read once, not prose you
        work down, and the surrounding cards already run the full width. */
-    .about { margin: 0; font-size: 14px; line-height: 1.7; color: var(--muted); max-width: 1100px; }
+    /* No max-width (owner, 2026-09-26). It carried `max-width: 1100px` — a
+       reading measure, which is the right default for prose and made this the
+       ONLY constrained block on the page: the earnings note, the peers note and
+       the closing line all run the full card, so on a wide monitor the
+       description stopped ~800px short of everything above and below it and
+       read as a layout fault rather than as a measure. */
+    .about { margin: 0; font-size: 14px; line-height: 1.7; color: var(--muted); }
 
     /* The same primary button the screener uses for Export to Excel: both hand
        you a spreadsheet, so they should not look like different kinds of action.
