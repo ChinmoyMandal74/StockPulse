@@ -365,6 +365,12 @@
         if (me.signedIn) { window.location.href = '/'; return; }
       } catch { /* show the form */ }
       setMode('signin');
+      // AFTER setMode, and that ordering is the whole point: setMode ends with
+      // setMsg(''), and it runs here — after an awaited fetch — while this
+      // handler used to run synchronously at parse time. The message was
+      // being set and then wiped a few hundred milliseconds later, so a
+      // failed Google sign-in looked like an ordinary empty login page.
+      showGoogleError();
     })();
 
     $('googleBtn').addEventListener('click', () => {
@@ -376,19 +382,27 @@
     // The callback redirects back here with a reason rather than rendering an
     // error of its own. The slugs are OURS — the provider's words never reach
     // the page, since an upstream error body can restate the request and the
-    // client secret travels in the same exchange.
-    (() => {
+    // client secret travels in the same exchange. CALLED FROM THE BOOT CHAIN,
+    // never at parse time: see the note at the call site.
+    function showGoogleError() {
       const q = new URLSearchParams(location.search);
       if (q.get('pending') === '1') {
         return setMsg('Your account is waiting for approval. You will be able to sign in once it is let in.');
       }
       const e = q.get('gerr');
       if (!e) return;
-      setMsg(e === 'denied' ? 'Google sign-in was cancelled.'
-        : e === 'unverified' ? 'Google has not verified that email address, so it cannot be used to sign in.'
-        : e === 'exchange' ? 'Could not reach Google just now. Please try again.'
-        : 'Google sign-in did not complete. Please try again.');
-    })();
+      // The slug is named in the text as well as explained. It is the only
+      // thing that distinguishes these cases from the outside, and without it
+      // "please try again" is all anyone can report back.
+      const say = {
+        denied: 'Google sign-in was cancelled.',
+        unverified: 'Google has not verified that email address, so it cannot be used to sign in.',
+        exchange: 'Could not complete the exchange with Google.',
+        state: 'The sign-in could not be matched to this browser — cookies may have been blocked.',
+        nonce: 'The sign-in could not be matched to this browser. Please try again.',
+      }[e] || 'Google sign-in did not complete.';
+      setMsg(say + ' (' + e + ')');
+    }
   </script>
 </body>
 </html>
