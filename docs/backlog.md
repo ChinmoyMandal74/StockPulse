@@ -433,8 +433,19 @@ account must not compromise the instance.
   without a table rebuild. Give a Google-only account a random unusable hash
   and salt instead — no migration, and `verifyPassword` can never accidentally
   succeed.
-- **A Google signup still lands `pending`.** Otherwise it is a door beside the
-  gate, and the same reasoning applies to `SIGNUP_CODE`.
+- **THE CALLBACK MUST ENFORCE `SIGNUP_CODE` ITSELF — corrected 2026-09-26,
+  later the same day.** This entry originally said only "a Google signup still
+  lands `pending`", which was true when the approval queue was the gate. It
+  is not any more: `REQUIRE_APPROVAL=false` makes every new account `active`
+  immediately (server.js line ~1751), so "lands pending" becomes a no-op and
+  the invite code is the ONLY door. And `SIGNUP_CODE` is checked in exactly
+  one place — inside `POST /api/register` (line ~1725) — which a Google
+  callback would never pass through. Shipped as first scoped, **Google sign-in
+  would be an unlocked side door past the gate the invite code exists to be**.
+  So the flow has to carry the code (ask for it before the redirect and keep
+  it in the `state`, or collect it on a first-time-here step in the callback)
+  and refuse without it, exactly as the register route does — the same
+  tolerant compare, since it will be typed on a phone.
 - **Sessions are untouched**, which is why this is small: Google answers "who
   is this, the first time" and the callback then mints the same 32-byte
   `sessions` row. `getSessionUser`, the 30-day expiry and revocation all stand.
