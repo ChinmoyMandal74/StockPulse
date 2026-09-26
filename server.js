@@ -6886,6 +6886,94 @@ app.post('/api/chat', requireAdmin, route(async (req, res) => {
 
 // One row out of the snapshot. The stock page needs a single stock, and
 // /api/stocks is 172 KB — most of it about the other 68.
+// ---- similar stocks -------------------------------------------------------
+// The stock page is a dead end: you arrive from the screener, read one stock,
+// and the only way sideways is a picker listing the whole universe
+// alphabetically. A short table of comparable companies at the foot turns a
+// leaf into a graph, and it costs nothing — /api/stock already holds the whole
+// snapshot in memory to find the stock and build that picker, so peers are a
+// filter over rows already in hand. No query, no rows against the meter.
+const PEER_MAX = 6;
+// Below this an industry is not a peer group, it is a coincidence. Measured on
+// the live 1,185: 909 stocks have 6+ industry peers, 174 have 3-5, 66 have 1-2
+// and 14 are alone in theirs — so a fallback at <3 catches 80 stocks (7%) and
+// leaves the other 93% answered by the finer cut.
+const PEER_MIN_INDUSTRY = 3;
+
+function peersFor(stock, stocks) {
+  // A FUND IS NOT A COMPANY AND HAS NO PEERS (owner's call). It carries no
+  // sector and no industry — verified, all 18 on the live screen — so the rule
+  // below would find nothing anyway; refusing by type says so deliberately
+  // rather than leaving it to a blank field, and would still refuse a fund that
+  // one day arrived classified.
+  if (stock.companyType === 'ETF') return null;
+  const me = String(stock.symbol).toUpperCase();
+  // AND IT IS NOT A PEER EITHER — the refusal has to run both ways. A sector
+  // fund is classified into the industry it tracks, so SMH sat in
+  // Semiconductors at a $5.9B "market cap" that is really AUM and placed FIFTH
+  // in the fixture's group, between two real companies. Excluding it only as an
+  // anchor would have shipped a peer table with a fund in it.
+  const pool = stocks.filter((x) => !x.error && x.companyType !== 'ETF'
+    && String(x.symbol).toUpperCase() !== me);
+
+  const ind = stock.industry || null;
+  const sec = stock.sector || null;
+  let group = null, basis = null, thin = 0;
+  if (ind) {
+    const byInd = pool.filter((x) => x.industry === ind);
+    if (byInd.length >= PEER_MIN_INDUSTRY) { group = byInd; basis = 'industry'; }
+    else thin = byInd.length;
+  }
+  if (!group && sec) {
+    const bySec = pool.filter((x) => x.sector === sec);
+    if (bySec.length) { group = bySec; basis = 'sector'; }
+  }
+  // 22 rows carry no industry yet (profiles arrive on rotation) and four of
+  // those carry no sector either. Nothing to compare against is a fact, not a
+  // reason to widen the definition until something turns up.
+  if (!group || !group.length) return null;
+
+  // NEAREST BY MARKET CAP, measured as a RATIO. Caps here span six orders of
+  // magnitude, so a linear distance would mean "the other trillion-dollar
+  // companies" for a mega-cap and "everything under a billion" for a small one.
+  // A log distance means the same thing — about the same size — at every scale.
+  const mine = Number(stock.marketCap);
+  const rank = mine > 0
+    ? (x) => { const c = Number(x.marketCap); return c > 0 ? Math.abs(Math.log(c / mine)) : Infinity; }
+    // The anchor has no cap of its own (13 live rows), so "closest in size" has
+    // no meaning. Largest first instead, and the caption says which it did.
+    : (x) => { const c = Number(x.marketCap); return c > 0 ? -c : Infinity; };
+  const picked = group.slice()
+    .sort((a, b) => (rank(a) - rank(b)) || String(a.symbol).localeCompare(String(b.symbol)))
+    .slice(0, PEER_MAX);
+
+  // Formatted HERE, through RowCard.fieldValues — the same function the hover
+  // card, the tiles and the phone format through — so a number cannot read one
+  // way in this table and another way on the row it came from. It also keeps
+  // the payload to ~1KB: six whole snapshot rows would be ~18KB for six cells
+  // each.
+  const CELLS = ['info|Price', 'short|Today', 'long|1Y', 'info|Market Cap', 'act|Advice'];
+  return {
+    basis,
+    group: basis === 'industry' ? ind : sec,
+    industry: ind,
+    // How thin the industry was, so the page can say why it widened rather than
+    // silently showing a different question from the one it names.
+    thin: basis === 'sector' && ind ? thin : null,
+    byName: mine > 0,
+    total: group.length,
+    rows: picked.map((x) => {
+      const v = RowCard.fieldValues(x);
+      const out = { symbol: x.symbol, name: x.shortName || x.name || x.symbol, why: x.actionFlag || '' };
+      for (const k of CELLS) {
+        const c = v[k];
+        out[k.slice(k.indexOf('|') + 1)] = c ? { t: c.t, c: c.c || '' } : null;
+      }
+      return out;
+    }),
+  };
+}
+
 app.get('/api/stock', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
@@ -6941,6 +7029,11 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
       // picker's filter still matches what it always matched.
       .map((x) => ({ symbol: x.symbol, name: x.name || '', short: x.shortName || '' }))
       .sort((a, b) => a.symbol.localeCompare(b.symbol)),
+    // NOT FOR A GUEST (owner's call). The preview is twenty stocks, so a peer
+    // group filtered to it would be nought to two rows of a table whose whole
+    // claim is "here is the rest of the industry" — a worse advertisement than
+    // no table at all, and one more route that has to remember to narrow.
+    peers: guest ? null : peersFor(stock, stocks),
     updatedAt: snap.updatedAt || null,
   });
 }));
