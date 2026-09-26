@@ -361,6 +361,40 @@ the list has real size and nothing is lost but the re-warming.**
   bounces, and bounces damage the reputation the resets share. The first
   confirm → post → unsubscribe walk should be a real one.
 
+### What the first real broadcast measured — 2026-09-26
+
+**The first post to a real subscriber was DELIVERED, and the owner still did
+not receive it.** `An introduction to TickrLab`, 10.7 KB, to
+`cmandal@investcorp.com`: the email log recorded it accepted (provider id
+`01a0dd43-73bb-715c-b319-8854e5e0a28e`) and Resend's own dashboard shows a
+**Delivered** event one second later. The near-identical copy to Gmail six
+seconds afterwards arrived normally.
+
+- **"Delivered" and "not in the inbox" are CONSISTENT, and that is the thing to
+  remember before diagnosing the next one.** Delivered means the receiving MTA
+  answered 250; where the message is filed afterwards is a second decision by a
+  different system. Proofpoint, Mimecast and Defender all accept at the edge and
+  quarantine internally. A gateway that distrusted the sender would have refused
+  at SMTP or bounced, so this rules out SPF, DKIM, DMARC and domain reputation
+  as the blocker — every one of which was the leading hypothesis beforehand.
+- **It also killed the previous explanation.** The earlier `grid-post` failure
+  was put down to 2 MB of images and 84 words of placeholder text. This message
+  was 10.7 KB of clean prose and was filed the same way, so content weight was
+  never the cause.
+- **The owner deprioritised it** (2026-09-26): Gmail is delivering and a
+  Proofpoint tenant's quarantine policy is not fixable from this side. Releasing
+  it and allowlisting `mail.tickrlab.com` is the recipient-side fix if it ever
+  matters again.
+- **`MAIL_FROM` is `no-reply@mail.tickrlab.com`, which Resend's own insight
+  panel flags.** A no-reply sender announces one-way bulk, which is the
+  classification to avoid. Resend verifies the DOMAIN rather than the address,
+  so `hello@mail.tickrlab.com` needs no DNS and works at once — **but nothing
+  receives mail at `mail.tickrlab.com`** (no MX), so a reply would hard-bounce.
+  The honest version is a forwarder first (ImprovMX or Forward Email, both fine
+  with Vercel DNS), then the env change. Deferred with the postal address, and
+  for the same reason: neither is proven causal here, and both are hygiene for
+  when the list has more than one person on it.
+
 ---
 
 ## What is deliberately NOT on this list
