@@ -918,8 +918,48 @@
     return { hide };
   }
 
+  // ---- Google Finance ------------------------------------------------------
+  // MOVED HERE FROM index.html (2026-09-26) rather than copied, when the stock
+  // page wanted the same link. Two surfaces deriving the same third-party URL
+  // from the same row is exactly the drift this module exists to prevent —
+  // and a Google Finance URL is a small pile of venue trivia that would only
+  // be corrected in one of the copies.
+  //
+  // Maps a Twelve Data MIC / exchange to the code Google uses in its quote URL
+  // (https://www.google.com/finance/quote/SYMBOL:EXCHANGE). The MIC is
+  // authoritative; the free-text exchange is the fallback.
+  const GF_MIC = {
+    XNGS: 'NASDAQ', XNMS: 'NASDAQ', XNCM: 'NASDAQ', XNAS: 'NASDAQ',
+    XNYS: 'NYSE', ARCX: 'NYSEARCA', XASE: 'NYSEAMERICAN',
+    BATS: 'BATS', BATY: 'BATS', EDGX: 'BATS', EDGA: 'BATS',
+    XKRX: 'KRX', XLON: 'LON', XTKS: 'TYO', XHKG: 'HKG', XTSE: 'TSE',
+    XSHG: 'SHA', XSHE: 'SHE', XPAR: 'EPA', XETR: 'ETR', XAMS: 'AMS',
+    XSWX: 'SWX', XNSE: 'NSE', XBOM: 'BOM', XASX: 'ASX',
+  };
+  const GF_EXCH = {
+    NASDAQ: 'NASDAQ', NYSE: 'NYSE', 'NYSE ARCA': 'NYSEARCA', ARCA: 'NYSEARCA',
+    'NYSE AMERICAN': 'NYSEAMERICAN', AMEX: 'NYSEAMERICAN', CBOE: 'BATS', BATS: 'BATS', KRX: 'KRX',
+  };
+  function googleExchange(s) {
+    const mic = String((s && s.micCode) || '').toUpperCase();
+    if (GF_MIC[mic]) return GF_MIC[mic];
+    const ex = String((s && s.exchange) || '').toUpperCase();
+    return GF_EXCH[ex] || ex || null;
+  }
+  // Without a venue Google still resolves the bare symbol, so a row whose
+  // exchange has not arrived yet (it rides the profile, on a weekly rotation)
+  // gets a working link rather than none.
+  function gfUrl(s) {
+    const sym = encodeURIComponent(String((s && s.symbol) || ''));
+    const exch = googleExchange(s);
+    return exch
+      ? `https://www.google.com/finance/quote/${sym}:${encodeURIComponent(exch)}`
+      : `https://www.google.com/finance/quote/${sym}`;
+  }
+
   global.RowCard = {
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
+    gfUrl, googleExchange,
     // used by the stock page
     buildSections, chartSVG, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries,
     scoreTip, placeTip,

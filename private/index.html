@@ -1649,34 +1649,10 @@
       return `<td class="rating ${extraCls}" data-sym="${sym}" data-kind="${kind}" style="font-weight:700;color:${color}">` +
              `${n}</td>`;
     }
-    // Map a Twelve Data MIC / exchange to the code Google Finance uses in its quote URL
-    // (https://www.google.com/finance/quote/SYMBOL:EXCHANGE). MIC is authoritative; the
-    // free-text exchange is a fallback. Covers the common US venues plus a few foreign ones.
-    const GF_MIC = {
-      XNGS: 'NASDAQ', XNMS: 'NASDAQ', XNCM: 'NASDAQ', XNAS: 'NASDAQ',
-      XNYS: 'NYSE', ARCX: 'NYSEARCA', XASE: 'NYSEAMERICAN',
-      BATS: 'BATS', BATY: 'BATS', EDGX: 'BATS', EDGA: 'BATS',
-      XKRX: 'KRX', XLON: 'LON', XTKS: 'TYO', XHKG: 'HKG', XTSE: 'TSE',
-      XSHG: 'SHA', XSHE: 'SHE', XPAR: 'EPA', XETR: 'ETR', XAMS: 'AMS',
-      XSWX: 'SWX', XNSE: 'NSE', XBOM: 'BOM', XASX: 'ASX',
-    };
-    const GF_EXCH = {
-      NASDAQ: 'NASDAQ', NYSE: 'NYSE', 'NYSE ARCA': 'NYSEARCA', ARCA: 'NYSEARCA',
-      'NYSE AMERICAN': 'NYSEAMERICAN', AMEX: 'NYSEAMERICAN', CBOE: 'BATS', BATS: 'BATS', KRX: 'KRX',
-    };
-    function googleExchange(s) {
-      const mic = (s.micCode || '').toUpperCase();
-      if (GF_MIC[mic]) return GF_MIC[mic];
-      const ex = (s.exchange || '').toUpperCase();
-      return GF_EXCH[ex] || ex || null;
-    }
-    function gfUrl(s) {
-      const sym = encodeURIComponent(s.symbol);
-      const exch = googleExchange(s);
-      return exch
-        ? `https://www.google.com/finance/quote/${sym}:${encodeURIComponent(exch)}`
-        : `https://www.google.com/finance/quote/${sym}`;
-    }
+    // The MIC/exchange mapping and the URL live in rowcard.js, because the
+    // stock page needs the identical link and a second copy of a pile of
+    // venue trivia would only ever be corrected in one of them.
+    const gfUrl = (s) => RowCard.gfUrl(s);
     function tickerLink(s) {
       return `<a class="tickerlink" href="${gfUrl(s)}" target="_blank" rel="noopener" title="Open ${s.symbol} in Google Finance ↗">${s.symbol}</a>`;
     }
