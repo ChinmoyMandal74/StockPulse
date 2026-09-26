@@ -2033,6 +2033,52 @@ app.get('/api/auth/google/callback', route(async (req, res) => {
   return res.redirect('/join');
 }));
 
+// IS THE CONFIGURATION ACTUALLY RIGHT? The one thing that cannot be checked
+// from outside a deployment is whether the client secret in the environment
+// is the one Google holds — and a wrong secret and a dozen other faults all
+// surface to the reader as the same `gerr=exchange`.
+//
+// So: deliberately spend a NONSENSE authorization code against the real token
+// endpoint and report what Google calls the failure. It is meant to fail; the
+// error CODE is the answer.
+//   invalid_client        the client id or secret is wrong  <- the useful one
+//   invalid_grant         credentials accepted, the code was junk — CONFIG OK
+//   redirect_uri_mismatch names itself
+// Admin only, and it returns Google's slug and nothing else: never the secret,
+// never the request. Costs one HTTPS round trip and creates nothing.
+app.get('/api/auth/google/selftest', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!GOOGLE_READY) {
+    return res.json({ ready: false,
+      have: { clientId: !!GOOGLE_CLIENT_ID, clientSecret: !!GOOGLE_CLIENT_SECRET, adminPassword: !!ADMIN_PASSWORD },
+      verdict: 'Not configured — see `have` for which piece is missing.' });
+  }
+  let status = null, error = null, note = null;
+  try {
+    const r = await fetch(GOOGLE_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code: 'deliberately-invalid-selftest-code',
+        client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: googleRedirectUri(), grant_type: 'authorization_code',
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    status = r.status;
+    try { error = (JSON.parse(await r.text()) || {}).error || null; } catch { error = null; }
+  } catch (e) {
+    note = 'Could not reach Google: ' + e.message;
+  }
+  const verdict = note ? note
+    : error === 'invalid_grant' ? 'GOOD — Google accepted the client id and secret, and rejected the junk code as it should.'
+    : error === 'invalid_client' ? 'THE CLIENT ID OR SECRET IS WRONG. Check GOOGLE_CLIENT_SECRET in Vercel against the console, and remember a rotated secret needs a redeploy.'
+    : error === 'redirect_uri_mismatch' ? 'The redirect URI does not match the one registered in the console.'
+    : 'Unexpected: ' + JSON.stringify({ status, error });
+  res.json({ ready: true, clientIdTail: GOOGLE_CLIENT_ID.slice(-28), redirectUri: googleRedirectUri(),
+    status, error, verdict });
+}));
+
 // Who Google says is waiting, so /join can greet them by address rather than
 // asking a stranger for a code with no context. Carries no token and cannot
 // create anything.
