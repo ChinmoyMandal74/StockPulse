@@ -1277,6 +1277,39 @@ async function readActiveAlerts() {
   return r.rows.map((a) => ({ ...alertRow(a), userKey: String(a.user_key) }));
 }
 
+// Every alert on the instance, and every firing — the admin's review view.
+// `/users` already exposes each account's portfolios for the same reason:
+// nothing a member creates should be invisible to the person running the site.
+// Joined to `users` so the list reads as people rather than as email strings,
+// and LEFT joined because the legacy 'admin' prefs key has no user row.
+async function readAllAlerts() {
+  await init();
+  const r = await db.execute(`
+    select a.*, u.name as owner_name
+      from alerts a left join users u on u.email = a.user_key
+     order by a.created_at desc`);
+  return r.rows.map((a) => ({
+    ...alertRow(a), userKey: String(a.user_key),
+    ownerName: a.owner_name == null ? null : String(a.owner_name),
+  }));
+}
+
+async function readAllAlertEvents(limit) {
+  await init();
+  const r = await db.execute({
+    sql: `select e.*, u.name as owner_name
+            from alert_events e left join users u on u.email = e.user_key
+           order by e.at desc limit ?`,
+    args: [Math.min(500, Number(limit) || 100)],
+  });
+  return r.rows.map((e) => ({
+    id: Number(e.id), alertId: Number(e.alert_id), userKey: String(e.user_key),
+    ownerName: e.owner_name == null ? null : String(e.owner_name),
+    symbol: String(e.symbol), at: Number(e.at), body: String(e.body),
+    readAt: e.read_at == null ? null : Number(e.read_at),
+  }));
+}
+
 async function countAlerts(userKey) {
   await init();
   const r = await db.execute({
@@ -4045,6 +4078,8 @@ module.exports = {
   pruneActivity,
   pruneVisitors,
   readAlerts,
+  readAllAlerts,
+  readAllAlertEvents,
   readActiveAlerts,
   countAlerts,
   createAlert,

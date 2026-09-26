@@ -79,10 +79,13 @@
                   background: var(--accent); }
     .al-ev.rd .dot { background: transparent; border: 1px solid var(--hair-2); }
     .al-ev .b { flex: 1; font-size: 13.5px; line-height: 1.6; }
+    .al-who { flex: none; min-width: 132px; font-size: 11.5px; color: var(--faint);
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .al-ev .w { flex: none; font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; }
     @media (max-width: 620px) {
       .al-row { flex-wrap: wrap; }
       .al-ev .w { display: none; }
+      .al-who { min-width: 0; width: 100%; }
     }
   </style>
 </head>
@@ -114,6 +117,19 @@
 
     <h2>What has happened <span class="c" id="evc"></span></h2>
     <div class="al-list" id="events"></div>
+
+    <!-- Admin review. Read-only by design: the admin can SEE every alert and
+         cannot pause or delete one, because the SQL on every mutating route is
+         scoped to the owner and reaching past that would make "your alerts"
+         untrue for everybody else. -->
+    <section id="adminWrap" style="display:none">
+      <h2>Everyone&rsquo;s alerts <span class="c" id="allc"></span></h2>
+      <p class="lede" style="margin:-4px 0 12px">Every alert set on this instance, and every
+        time one fired. Read-only — pausing and deleting stay with whoever set them.</p>
+      <div class="al-list" id="allList"></div>
+      <h2>Everything that has fired <span class="c" id="allevc"></span></h2>
+      <div class="al-list" id="allEvents"></div>
+    </section>
   </main>
 
   <script src="/filters.js"></script>
@@ -199,6 +215,7 @@
       data = await r.json();
       paintTypes();
       paint();
+      if (data.admin) loadAll().catch(() => {});
       // Opening the page IS reading them. Marking after the paint means the
       // blue "new" marks are visible on this visit and gone on the next.
       if (data.events.some((e) => e.readAt == null)) {
@@ -224,6 +241,38 @@
       $('msg').textContent = 'Added. It will report the next time this changes.';
       $('sym').value = '';
       await load();
+    }
+
+    // Only asked for when the server says this account is an admin — a member
+    // should never fire a request that would 403.
+    async function loadAll() {
+      const r = await fetch('/api/admin/alerts', { cache: 'no-store' });
+      if (!r.ok) return;
+      const d = await r.json();
+      $('adminWrap').style.display = '';
+      const who = (x) => we(x.ownerName || x.userKey);
+      $('allc').textContent = d.alerts.length;
+      $('allList').innerHTML = d.alerts.length ? d.alerts.map((a) => `
+        <div class="al-row ${a.active ? '' : 'off'}">
+          <span class="al-who" title="${we(a.userKey)}">${who(a)}</span>
+          <span class="al-sym">${we(a.symbol)}</span>
+          <span class="al-txt"><span class="t">${we(a.label)}</span>
+            <span class="s">${a.active
+              ? (a.lastSide == null ? 'Arming' : 'Watching')
+              : 'Paused'}${a.once ? ' · once only' : ''}
+              · set ${we(ago(a.createdAt))}${a.lastFiredAt
+                ? ' · last fired ' + we(ago(a.lastFiredAt)) : ' · never fired'}</span></span>
+        </div>`).join('')
+        : '<div class="al-empty">Nobody has set an alert yet.</div>';
+
+      $('allevc').textContent = d.events.length;
+      $('allEvents').innerHTML = d.events.length ? d.events.map((e) => `
+        <div class="al-ev rd">
+          <span class="al-who" title="${we(e.userKey)}">${who(e)}</span>
+          <span class="b">${we(e.body)}</span>
+          <span class="w">${we(ago(e.at))}</span>
+        </div>`).join('')
+        : '<div class="al-empty">Nothing has fired for anyone yet.</div>';
     }
 
     $('kind').addEventListener('change', paintParams);

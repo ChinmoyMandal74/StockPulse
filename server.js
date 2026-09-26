@@ -4004,6 +4004,7 @@ app.get('/api/alerts', requireMember, route(async (req, res) => {
     store.readAlerts(key), store.readAlertEvents(key, 50),
   ]);
   res.json({ alerts: alerts.map(alertOut), events, max: ALERTS_MAX,
+    admin: await isAdmin(req),
     types: Alerts.ids.map((id) => ({ id, ...Alerts.TYPES[id],
       // The functions do not survive JSON and the page does not need them:
       // it draws the form from `fields` and reads `label` off each alert.
@@ -4040,6 +4041,22 @@ app.post('/api/alerts/:id/active', requireMember, route(async (req, res) => {
   const ok = await store.setAlertActive(await prefsKey(req), Number(req.params.id), !!req.body?.active);
   if (!ok) return res.status(404).json({ error: 'No such alert.' });
   res.json({ ok: true });
+}));
+
+// Admin review: every alert on the instance and every firing. `/users`
+// already does this for member portfolios — nothing an account creates should
+// be invisible to the person running the site, and an alert that never fired
+// is as interesting as one that did.
+//
+// READ-ONLY, deliberately. The admin can see an alert and cannot pause or
+// delete it: the SQL on every mutating route is scoped to the owner, and
+// reaching past that would make "your alerts" untrue for everyone else.
+app.get('/api/admin/alerts', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const [alerts, events] = await Promise.all([
+    store.readAllAlerts(), store.readAllAlertEvents(150),
+  ]);
+  res.json({ alerts: alerts.map(alertOut), events });
 }));
 
 app.post('/api/alerts/read', requireMember, route(async (req, res) => {
