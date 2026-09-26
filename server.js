@@ -427,6 +427,18 @@ app.get('/about', (req, res) => {
   res.sendFile(path.join(__dirname, 'private', 'about.html'));
 });
 
+// Public, unguarded, and deliberately NOT logged: a legal page is not activity
+// worth recording, and a privacy page that logs you reading it is a poor joke.
+// Server-rendered static files for the blog's reason — they must be readable
+// with no JavaScript and indexable.
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, 'private', 'privacy.html'));
+});
+
+app.get('/terms', (req, res) => {
+  res.sendFile(path.join(__dirname, 'private', 'terms.html'));
+});
+
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
@@ -454,6 +466,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       // The public pages have canonical addresses of their own.
                       '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
                       '/about.html': '/about',
+                      '/privacy.html': '/privacy', '/terms.html': '/terms',
                       '/posts.html': '/posts',
                       '/mobile.html': '/m', '/mobile-setup.html': '/mobile-setup',
                       '/nasdaq.html': '/nasdaq',
@@ -1190,6 +1203,7 @@ app.get('/sitemap.xml', route(async (req, res) => {
   res.type('application/xml').send(
     '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
     [url(base + '/'), url(base + '/about'), url(base + '/blog'),
+      url(base + '/privacy'), url(base + '/terms'),
       ...posts.map((p) => url(`${base}/blog/${p.slug}`, p.updatedAt ? new Date(p.updatedAt).toISOString() : p.publishedAt))
     ].join('\n') + '\n</urlset>\n');
 }));
@@ -9127,6 +9141,7 @@ async function finishLiveRefresh(payload, ctx = {}) {
   // Headlines ride along: the stalest few symbols get their news topped up
   // on every refresh, so coverage accrues without a schedule of its own.
   store.pruneActivity(ACTIVITY_KEEP_DAYS).catch(() => { /* the bars rule */ });
+  store.pruneVisitors(ACTIVITY_KEEP_DAYS).catch(() => { /* the bars rule */ });
   store.pruneRuns().catch(() => { /* the bars rule */ });
   store.pruneMailLog().catch(() => { /* the bars rule */ });
 

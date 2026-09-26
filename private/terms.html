@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Terms of use — Tickr Lab</title>
+  <meta name="description" content="The terms you accept by using Tickr Lab. The short version: it is a screener, not advice, and the numbers can be wrong." />
+  <meta property="og:title" content="Terms of use — Tickr Lab" />
+  <meta property="og:description" content="The terms you accept by using Tickr Lab. It is a screener, not advice." />
+  <meta property="og:type" content="website" />
+  <link rel="canonical" href="https://www.tickrlab.com/terms" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* Same scoping rule as /privacy: everything under .doc or an `lg-` prefix. */
+    body { min-height: 100dvh; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 0 28px 0; }
+    .aura { background:
+      radial-gradient(48vw 40vw at 4% -10%, rgba(251, 191, 36, 0.07), transparent 62%),
+      radial-gradient(44vw 38vw at 98% 2%, rgba(124, 156, 255, 0.08), transparent 64%); }
+
+    .nav-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
+                padding: 16px 20px 0; pointer-events: none; }
+    .nav { pointer-events: auto; display: flex; align-items: center; gap: 6px; width: min(900px, 100%);
+           padding: 8px 10px 8px 18px; border-radius: 999px; background: rgba(9, 11, 15, 0.74);
+           backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+           border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+    .nav .mark { display: inline-flex; align-items: center; gap: 9px; margin-right: auto;
+                 text-decoration: none; color: var(--text); font-weight: 600; letter-spacing: -0.02em; }
+    .nav .mark span.l { color: var(--muted); font-weight: 400; }
+    .nav .glyph { display: inline-flex; color: var(--green); }
+    .nav .link { padding: 7px 12px; border-radius: 999px; font-size: 13px; color: var(--muted);
+                 text-decoration: none; }
+    .nav .link:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+
+    .mast { padding: 56px 0 26px; border-bottom: 1px solid var(--hair); }
+    .mast .kick { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase;
+                  color: var(--amber); font-weight: 600; }
+    .mast h1 { margin: 14px 0 12px; font-size: clamp(32px, 4.4vw, 48px); font-weight: 600;
+               letter-spacing: -0.04em; line-height: 1.05; }
+    .mast .lede { margin: 0; font-size: 15.5px; color: var(--muted); line-height: 1.75; max-width: 70ch; }
+    .mast .when { margin-top: 18px; font-family: var(--mono); font-size: 12px; color: var(--faint); }
+
+    .doc { padding: 10px 0 0; }
+    .doc section { padding: 34px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.055); }
+    .doc h2 { margin: 0 0 14px; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;
+              display: flex; gap: 12px; align-items: baseline; }
+    .doc h2 .n { font-family: var(--mono); font-size: 12px; color: var(--amber); font-weight: 500; }
+    .doc p { margin: 0 0 13px; font-size: 14.5px; line-height: 1.78; color: var(--muted); max-width: 74ch; }
+    .doc p:last-child { margin-bottom: 0; }
+    .doc b { color: var(--text); font-weight: 600; }
+    .doc a { color: var(--accent); text-decoration: none; }
+    .doc a:hover { text-decoration: underline; }
+    .doc ul { margin: 0 0 13px; padding-left: 20px; max-width: 74ch; }
+    .doc li { font-size: 14.5px; line-height: 1.78; color: var(--muted); margin-bottom: 7px; }
+    code { font-family: var(--mono); font-size: 0.92em; color: var(--text);
+           background: rgba(255, 255, 255, 0.05); padding: 1px 5px; border-radius: 5px; }
+
+    .lg-note { border: 1px solid rgba(251, 113, 133, 0.34); border-radius: 12px; padding: 16px 18px;
+               background: rgba(251, 113, 133, 0.05); margin: 4px 0 16px; }
+    .lg-note p { color: var(--muted); margin-bottom: 0; }
+    .lg-note p + p { margin-top: 10px; }
+
+    footer { padding: 28px 0 46px; border-top: 1px solid rgba(255, 255, 255, 0.055);
+             display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline;
+             font-size: 12.5px; color: var(--faint); margin-top: 8px; }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+    footer .disc { flex-basis: 100%; line-height: 1.6; max-width: 84ch; }
+    @media (max-width: 640px) { .page { padding: 0 18px; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div class="nav-wrap">
+    <nav class="nav">
+      <a class="mark" href="/">
+        <span class="glyph" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 4 4-7 5 5" /></svg>
+        </span>
+        Tickr <span class="l">Lab</span>
+      </a>
+      <a class="link" href="/about">About</a>
+      <a class="link hide-s" href="/blog">Blog</a>
+      <a class="link" href="/login">Sign in</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="mast">
+      <div class="kick">Terms of use</div>
+      <h1>A screener,<br />not advice</h1>
+      <p class="lede">By using Tickr Lab you accept the terms below. They are short, because the
+        service is small and the important part is the first section.</p>
+      <div class="when">Last updated 26 September 2026</div>
+    </header>
+
+    <div class="doc">
+
+      <section>
+        <h2><span class="n">01</span> This is not investment advice</h2>
+        <div class="lg-note">
+          <p><b>Nothing on this site is investment advice, a recommendation, a solicitation, or an
+            offer to buy or sell any security.</b> Tickr Lab applies fixed, published rules to
+            published market data and reports what they produce. It does not know your
+            circumstances, your goals or your tax position, and it is not a broker, an adviser, or
+            a registered investment professional.</p>
+          <p>Words like <b>Buy</b>, <b>Strong Buy</b>, <b>Avoid</b> and <b>Sell Immediately</b> are
+            labels for the output of a rule, not instructions. Each one names the single rule that
+            produced it precisely so you can judge the rule for yourself. Decisions about your own
+            money are yours, and you are responsible for them.</p>
+        </div>
+        <p>The rules describe what is measurable today. <b>They do not predict what happens next</b>,
+          and the site publishes its own research showing that most of what has been tested here did
+          not predict anything.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">02</span> The data can be wrong</h2>
+        <p>Prices, fundamentals, earnings dates and company details come from third-party providers.
+          They contain errors, arrive late, and are sometimes missing. Figures are cached and may be
+          <b>hours or days out of date</b>; the site shows when data was last pulled, and you should
+          read it.</p>
+        <p>The service is provided <b>as is and as available</b>, without warranty of any kind,
+          express or implied, including accuracy, fitness for a particular purpose, or uninterrupted
+          availability. <b>Verify anything that matters against a primary source before acting on
+          it.</b></p>
+      </section>
+
+      <section>
+        <h2><span class="n">03</span> Accounts</h2>
+        <p>Registration requires a name, an email address and a password. <b>New accounts are
+          reviewed and approved by hand</b> before they can sign in, and approval may be declined
+          without a reason being given.</p>
+        <p>You are responsible for keeping your password to yourself and for what happens under your
+          account. Do not share a login. Tell the owner promptly if you think an account has been
+          used by someone else.</p>
+        <p>An account may be suspended or removed if it is used to attack the site, to scrape it
+          wholesale, or in a way that degrades it for anyone else. You can ask for your account to be
+          deleted at any time.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">04</span> Acceptable use</h2>
+        <p>Please do not:</p>
+        <ul>
+          <li>attempt to break, overload, probe or gain unauthorised access to any part of the site;</li>
+          <li>automate bulk downloading of the data behind it, or redistribute that data as a product;</li>
+          <li>use it for anything unlawful, or in breach of the terms of the underlying data providers;</li>
+          <li>present its output to other people as advice, or as your own research, without saying
+            where it came from.</li>
+        </ul>
+        <p>Reading the site, using it for your own decisions, and sharing a screenshot or a link are
+          all fine and welcome.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">05</span> The mailing list</h2>
+        <p>The list is confirmed opt-in: nothing is sent until you click a link proving the address
+          is yours. <b>Every message carries a one-click unsubscribe</b> that works without signing
+          in and does not expire. Subscribing to the blog does not create an account, and an account
+          does not subscribe you to anything.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">06</span> Availability and change</h2>
+        <p>This is a personal project run by one person on hosted infrastructure. It may be
+          unavailable, slow, or wrong at any time; features may change or be removed; and it may be
+          discontinued. <b>No uptime is promised and none should be relied upon.</b></p>
+      </section>
+
+      <section>
+        <h2><span class="n">07</span> Content and ownership</h2>
+        <p>The site, its design, its rules and its writing belong to Tickr Lab. Underlying market
+          data belongs to its providers and is used under their terms. You may quote and link to
+          what is published here with attribution; you may not republish it wholesale or resell it.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">08</span> Liability</h2>
+        <p>To the fullest extent permitted by law, Tickr Lab is not liable for any loss — including
+          <b>trading or investment loss</b>, lost profit, or loss of data — arising from use of this
+          site or reliance on anything it shows. The service is free, and it is offered on that
+          basis.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">09</span> Governing law</h2>
+        <p>These terms are governed by the laws of the State of New York, United States.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">10</span> Contact and changes</h2>
+        <p>Tickr Lab<br />44-28 Purves Street, Long Island City, NY 11101</p>
+        <p>Signed-in users can use <a href="/contact">the contact form</a>. If these terms change
+          materially the date at the top changes with them; continuing to use the site means
+          accepting the version then published. See also the <a href="/privacy">privacy page</a>.</p>
+      </section>
+    </div>
+
+    <footer>
+      <span>© <span id="yr">2026</span> Tickr Lab</span>
+      <a href="/">Home</a>
+      <a href="/about">About</a>
+      <a href="/blog">Blog</a>
+      <a href="/privacy">Privacy</a>
+      <p class="disc">
+        Tickr Lab reports mechanical readings of published market data. Nothing on this site is
+        investment advice, a recommendation, or an offer to buy or sell any security. Figures are
+        derived from third-party data and may contain errors.
+      </p>
+    </footer>
+  </main>
+  <script>document.getElementById('yr').textContent = new Date().getFullYear();</script>
+</body>
+</html>

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Privacy — Tickr Lab</title>
+  <meta name="description" content="What Tickr Lab stores, why, how long it keeps it, and who else sees it. Written as a description of what the software actually does." />
+  <meta property="og:title" content="Privacy — Tickr Lab" />
+  <meta property="og:description" content="What Tickr Lab stores, why, how long it keeps it, and who else sees it." />
+  <meta property="og:type" content="website" />
+  <link rel="canonical" href="https://www.tickrlab.com/privacy" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* A legal page in the product's palette. Everything is scoped under .doc
+       or an `lg-` prefix — app.css is shared by every page here, and eight
+       unscoped class names have captured later markup on this project. */
+    body { min-height: 100dvh; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 0 28px 0; }
+    .aura { background:
+      radial-gradient(48vw 40vw at 4% -10%, rgba(124, 156, 255, 0.08), transparent 62%),
+      radial-gradient(44vw 38vw at 98% 2%, rgba(52, 211, 153, 0.07), transparent 64%); }
+
+    .nav-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
+                padding: 16px 20px 0; pointer-events: none; }
+    .nav { pointer-events: auto; display: flex; align-items: center; gap: 6px; width: min(900px, 100%);
+           padding: 8px 10px 8px 18px; border-radius: 999px; background: rgba(9, 11, 15, 0.74);
+           backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+           border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+    .nav .mark { display: inline-flex; align-items: center; gap: 9px; margin-right: auto;
+                 text-decoration: none; color: var(--text); font-weight: 600; letter-spacing: -0.02em; }
+    .nav .mark span.l { color: var(--muted); font-weight: 400; }
+    .nav .glyph { display: inline-flex; color: var(--green); }
+    .nav .link { padding: 7px 12px; border-radius: 999px; font-size: 13px; color: var(--muted);
+                 text-decoration: none; }
+    .nav .link:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+
+    .mast { padding: 56px 0 26px; border-bottom: 1px solid var(--hair); }
+    .mast .kick { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase;
+                  color: var(--green); font-weight: 600; }
+    .mast h1 { margin: 14px 0 12px; font-size: clamp(32px, 4.4vw, 48px); font-weight: 600;
+               letter-spacing: -0.04em; line-height: 1.05; }
+    .mast .lede { margin: 0; font-size: 15.5px; color: var(--muted); line-height: 1.75; max-width: 70ch; }
+    .mast .when { margin-top: 18px; font-family: var(--mono); font-size: 12px; color: var(--faint); }
+
+    .doc { padding: 10px 0 0; }
+    .doc section { padding: 34px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.055); }
+    .doc h2 { margin: 0 0 14px; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;
+              display: flex; gap: 12px; align-items: baseline; }
+    .doc h2 .n { font-family: var(--mono); font-size: 12px; color: var(--green); font-weight: 500; }
+    .doc h3 { margin: 24px 0 8px; font-size: 14px; font-weight: 600; color: var(--text); }
+    .doc p { margin: 0 0 13px; font-size: 14.5px; line-height: 1.78; color: var(--muted); max-width: 74ch; }
+    .doc p:last-child { margin-bottom: 0; }
+    .doc b { color: var(--text); font-weight: 600; }
+    .doc a { color: var(--accent); text-decoration: none; }
+    .doc a:hover { text-decoration: underline; }
+    .doc ul { margin: 0 0 13px; padding-left: 20px; max-width: 74ch; }
+    .doc li { font-size: 14.5px; line-height: 1.78; color: var(--muted); margin-bottom: 7px; }
+    code { font-family: var(--mono); font-size: 0.92em; color: var(--text);
+           background: rgba(255, 255, 255, 0.05); padding: 1px 5px; border-radius: 5px; }
+
+    .lg-wrap { overflow-x: auto; margin: 0 0 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 520px; }
+    th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em;
+         color: var(--faint); font-weight: 500; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--hair); }
+    td { padding: 10px 14px 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+         color: var(--muted); line-height: 1.6; vertical-align: top; }
+    td:first-child { color: var(--text); white-space: nowrap; }
+    td code { white-space: nowrap; }
+
+    .lg-note { border: 1px solid rgba(52, 211, 153, 0.32); border-radius: 12px; padding: 16px 18px;
+               background: rgba(52, 211, 153, 0.05); margin: 4px 0 16px; }
+    .lg-note p { color: var(--muted); margin-bottom: 0; }
+    .lg-note p + p { margin-top: 10px; }
+
+    footer { padding: 28px 0 46px; border-top: 1px solid rgba(255, 255, 255, 0.055);
+             display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline;
+             font-size: 12.5px; color: var(--faint); margin-top: 8px; }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+    footer .disc { flex-basis: 100%; line-height: 1.6; max-width: 84ch; }
+    @media (max-width: 640px) { .page { padding: 0 18px; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div class="nav-wrap">
+    <nav class="nav">
+      <a class="mark" href="/">
+        <span class="glyph" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 4 4-7 5 5" /></svg>
+        </span>
+        Tickr <span class="l">Lab</span>
+      </a>
+      <a class="link" href="/about">About</a>
+      <a class="link hide-s" href="/blog">Blog</a>
+      <a class="link" href="/login">Sign in</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="mast">
+      <div class="kick">Privacy</div>
+      <h1>What this site stores,<br />and who else sees it</h1>
+      <p class="lede">This is a description of what the software actually does, written from its own
+        database schema rather than from a template. Where something is kept, it says for how long.
+        Where a third party is involved, it says which and what reaches them.</p>
+      <div class="when">Last updated 26 September 2026</div>
+    </header>
+
+    <div class="doc">
+
+      <section>
+        <h2><span class="n">01</span> The short version</h2>
+        <div class="lg-note">
+          <p>There are <b>no analytics, no tracking pixels, no advertising networks and no third-party
+            trackers</b> on this site. Nothing you do here is sold, shared for marketing, or used to
+            build a profile of you anywhere else.</p>
+          <p>What is kept is what a small site needs to run: an account so you can sign in, a log of
+            what was clicked so the owner can see whether anything is broken, and an email address
+            if — and only if — you asked to be emailed.</p>
+        </div>
+        <p>Tickr Lab is run by one person. Questions, corrections and deletion requests go to
+          <a href="/contact">the contact form</a> if you have an account, or to the address in
+          section 8.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">02</span> If you only visit</h2>
+        <p>Every request to the home page writes one row recording <b>the time, your IP address, your
+          browser's user-agent string and the page that referred you</b>. That is how the owner knows
+          anyone is here at all, since nothing else measures it.</p>
+        <p>These rows are <b>deleted after 60 days</b>. No account, no cookie and no identifier links
+          one visit to another.</p>
+        <p>The site loads its typeface from <b>Google Fonts</b>, which means Google receives your IP
+          address and user-agent when a page loads, as it would on any site using that service. This
+          is the only third-party request a signed-out page makes.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">03</span> If you have an account</h2>
+        <h3>What the account itself holds</h3>
+        <p>Your <b>email address</b>, the <b>name</b> you gave at registration, your role, and when
+          you joined. Your <b>password is never stored</b> — only a <code>scrypt</code> hash of it
+          with a random per-account salt, which cannot be reversed back into the password. A count of
+          failed sign-in attempts is kept so an account can be locked after repeated guesses.</p>
+
+        <h3>The activity log</h3>
+        <p>Signed-in actions are recorded as <b>facts, never content</b>: which page was opened, that
+          a sort or a filter happened, that a question was asked. A chat row records
+          <code>asked</code> — it does not record the question. Rows carry your email, an IP address
+          and how long the action took, and are <b>deleted after 60 days</b>.</p>
+
+        <h3>What you create</h3>
+        <p>Your saved column layout, starred screens, and any personal portfolios you build — kept
+          against your email for as long as the account exists, so they follow you between machines.
+          A per-day counter limits assistant use.</p>
+
+        <h3>Sessions</h3>
+        <p>Signing in sets <code>sp_session</code>, a random token that expires after 30 days and can
+          be revoked. The guest preview sets <code>st_guest</code> for 24 hours and
+          <code>st_gid</code>, a random id used only to keep one guest's log entries together — it is
+          not linked to any person. Your browser also keeps a few display preferences locally
+          (which phone view, which chart range, whether a hint was dismissed); those never leave your
+          device.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">04</span> If you subscribe to the mailing list</h2>
+        <p>Subscribing stores your <b>email address, the date, the page you subscribed from and the IP
+          address that submitted the form</b>. The last two exist to evidence that the subscription
+          was genuinely requested.</p>
+        <p>Nothing is sent until you click a confirmation link. <b>Every message carries a one-click
+          unsubscribe</b> that works for ever and needs no sign-in. Unsubscribing does not delete the
+          row — the row becomes the record that you asked to stop, which is what stops you being
+          added back by accident. Ask and it will be deleted outright.</p>
+        <p>A log of messages sent keeps <b>the recipient, the subject, whether the provider accepted
+          it and its size, for 90 days</b>. <b>No message bodies are stored</b>, ever.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">05</span> Who else sees any of it</h2>
+        <div class="lg-wrap">
+          <table>
+            <thead><tr><th>Service</th><th>What it is for</th><th>What reaches it</th></tr></thead>
+            <tbody>
+              <tr><td>Vercel</td><td>Hosting</td><td>Every request, including your IP address</td></tr>
+              <tr><td>Turso</td><td>The database</td><td>Everything described above, at rest</td></tr>
+              <tr><td>Resend</td><td>Sending email</td><td>The recipient address and the message</td></tr>
+              <tr><td>Anthropic</td><td>The assistant at <code>/chat</code></td><td>Your question and the screener table. Only when you ask something</td></tr>
+              <tr><td>Google Fonts</td><td>The typeface</td><td>Your IP and user-agent, on every page</td></tr>
+              <tr><td>Twelve Data</td><td>Market data</td><td><b>Nothing about you.</b> Ticker symbols only</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>If you sign in with Google, Google tells this site your Google account id, your email
+          address, whether that address is verified, and your name. Nothing is sent back to Google,
+          and no other Google data is requested or accessible.</p>
+        <p>No data is sold, rented, or shared with anyone not named above.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">06</span> How long things are kept</h2>
+        <div class="lg-wrap">
+          <table>
+            <thead><tr><th>What</th><th>Kept for</th></tr></thead>
+            <tbody>
+              <tr><td>Visitor rows (IP, user-agent, referrer)</td><td>60 days</td></tr>
+              <tr><td>Activity log</td><td>60 days</td></tr>
+              <tr><td>Record of emails sent</td><td>90 days</td></tr>
+              <tr><td>Sign-in sessions</td><td>30 days, or until you sign out</td></tr>
+              <tr><td>Your account and what you created</td><td>Until the account is deleted</td></tr>
+              <tr><td>A mailing-list subscription</td><td>Until you ask for it to be removed</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="n">07</span> What you can ask for</h2>
+        <p>You can ask for a copy of what is held about you, ask for it to be corrected, or ask for it
+          to be <b>deleted</b>. Deleting an account removes its sessions, saved layout, personal
+          portfolios and usage counters, and signs it out everywhere. Mailing-list removal is
+          immediate and needs no account.</p>
+        <p>This is a small site run by one person; requests are handled by hand, and quickly.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">08</span> Contact</h2>
+        <p>Tickr Lab<br />44-28 Purves Street, Long Island City, NY 11101</p>
+        <p>Signed-in users can use <a href="/contact">the contact form</a>. Anyone else can reply to
+          any email received from this site — replies reach a real person.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">09</span> Changes</h2>
+        <p>If this page changes materially, the date at the top changes with it. It is written to
+          match the software, so it is updated when the software is — not on a schedule.</p>
+      </section>
+    </div>
+
+    <footer>
+      <span>© <span id="yr">2026</span> Tickr Lab</span>
+      <a href="/">Home</a>
+      <a href="/about">About</a>
+      <a href="/blog">Blog</a>
+      <a href="/terms">Terms</a>
+      <p class="disc">
+        Tickr Lab reports mechanical readings of published market data. Nothing on this site is
+        investment advice, a recommendation, or an offer to buy or sell any security. Figures are
+        derived from third-party data and may contain errors.
+      </p>
+    </footer>
+  </main>
+  <script>document.getElementById('yr').textContent = new Date().getFullYear();</script>
+</body>
+</html>

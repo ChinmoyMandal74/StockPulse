@@ -3247,6 +3247,18 @@ async function pruneActivity(days = 60) {
   await db.execute({ sql: 'delete from activity where ts < ?', args: [cutoff] });
 }
 
+// The SAME window, and it did not exist until 2026-09-26 — `visitors` was the
+// one log with no retention limit at all, so it had been keeping IP addresses
+// for ever. Writing the privacy policy is what surfaced that: a policy has to
+// state a retention period, and the only honest sentence available was
+// "indefinitely". Seeks on idx_visitors_ts, and rides the same refresh tail.
+async function pruneVisitors(days = 60) {
+  await init();
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+  const r = await db.execute({ sql: 'delete from visitors where ts < ?', args: [cutoff] });
+  return Number(r.rowsAffected || 0);
+}
+
 // ---- member portfolios ------------------------------------------------------
 // Ordered like the shared portfolios: position is an explicit column because
 // the picker renders in saved order and insertion order does not survive the
@@ -3848,6 +3860,7 @@ module.exports = {
   readActivityStats,
   clearActivity,
   pruneActivity,
+  pruneVisitors,
   readUserPortfolios,
   writeUserPortfolios,
   listAllUserPortfolios,
