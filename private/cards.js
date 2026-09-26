@@ -531,14 +531,24 @@
         id: 'what', name: 'What Tickr Lab is',
         slides: [
           { kind: 'cover', kick: 'Introducing', title: 'Tickr Lab',
-            sub: 'A stock screener that shows its work — every score, every verdict, every rule, explained on click.' },
+            sub: 'A stock screener that shows its work — every verdict, every rule, every number, explained on click.' },
           { kind: 'steps', kick: 'The short version', title: 'Five things<br><span class="dim">it does</span>',
             rows: [
-              ['screen', 'var(--green)', 'Screened nightly', 'Returns, trend and company quality on a fixed scale after every close — a 7 means the same thing in any market.'],
+              ['screen', 'var(--green)', 'Screened nightly', 'Returns, trend and a 1–10 Quality score after every close, on an absolute scale — a 7 means the same thing in any market.'],
               ['rules', 'var(--accent)', 'Advice that shows its work', 'Five fixed rule profiles side by side, and every verdict names the ONE rule that fired.'],
               ['trend', 'var(--amber)', 'Twenty years of receipts', 'Trend ribbons, backtests and an indicator lab over the full bar archive — measured, not asserted.'],
               ['ask', 'var(--accent-2)', 'Ask in plain English', 'An assistant that answers from the same table you see — and says so when the data cannot answer.'],
-              ['guest', 'var(--red)', 'Try it in one click', 'A guest preview with real stocks and every feature live. No account, no card.'],
+              ['guest', 'var(--red)', 'Try it in one click', 'A guest preview: five real stocks, the whole table, every column and every verdict. No account, no card.'],
+            ] },
+          // The posts are PUBLIC first and the list is the convenience, which
+          // is the order the slide states them in. Saying the terms on the
+          // slide rather than at the form is the point: a list nobody
+          // regrets joining is cheaper than one people report.
+          { kind: 'stmts', kick: 'Where the writing goes', title: 'Read it,<br><span class="dim">or have it sent</span>',
+            rows: [
+              ['y', 'A blog anyone can read', 'What the screen found, and what it did not. No sign-in, no paywall, nothing behind a form.'],
+              ['y', 'New posts by email', 'Confirmed opt-in, one click to leave, and nothing else ever goes to that address.'],
+              ['y', 'The failures are published too', 'The research that came back flat is written up beside the research that did not.'],
             ] },
           { kind: 'close' },
         ],
@@ -547,7 +557,7 @@
         id: 'advice', name: 'How Advice works',
         slides: [
           { kind: 'cover', kick: 'How it works', title: 'Advice,<br><span class="dim">explained</span>',
-            sub: 'Not a score, not a black box: four readings collapse to one word, and the rule that decided it is always named.' },
+            sub: 'Not a score, not a black box: the company type picks the rulebook, four readings collapse to one word, and the rule that decided it is always named.' },
           { kind: 'flow' },
           { kind: 'ladder' },
           { kind: 'tiers', kick: 'The whole vocabulary', title: 'Six words,<br><span class="dim">nothing else</span>',
@@ -565,7 +575,7 @@
               ['x', 'No “stocks to buy”', 'The rules read the tape and say what they read. Nobody here is telling you what to own.'],
               ['x', 'No price targets', 'A target is a forecast wearing a decimal point. We do not have one and will not invent one.'],
               ['x', 'No portfolio tracking', 'No shares, no cost basis, no “you are up 4%”. Lists are lists.'],
-              ['y', 'Only what we measured', 'Five research ideas were tested and four came back flat. That is written down in the app.'],
+              ['y', 'Only what we measured', 'Eight research framings have been tested and seven came back flat. Every one is written down in the app, failures included.'],
             ] },
           { kind: 'close' },
         ],
@@ -644,10 +654,13 @@
     }
 
     const TIER_DEF = [
-      ['Sell', 'var(--red)', 'get out'],
+      // THE PRODUCT'S OWN WORDS, not abbreviations of them. A card posted
+      // beside the Advice board has to use the same six, or the vocabulary
+      // the carousel exists to teach does not match the one on screen.
+      ['Sell Immediately', 'var(--red)', 'get out'],
       ['Avoid', 'var(--red)', 'not now'],
       ['Hold', 'var(--muted)', 'sit still'],
-      ['Buy w/ Risk', 'var(--amber)', 'eyes open'],
+      ['Buy with Risk', 'var(--amber)', 'eyes open'],
       ['Buy', 'var(--green)', 'clean'],
       ['Strong Buy', 'var(--green)', 'everything lines up'],
     ];
@@ -675,12 +688,18 @@
         `<span><b>${esc(h)}</b><span>${esc(p)}</span></span></div>`).join('')}</div>`;
     }
 
+    // THE CLOSE ENDS ALL FOUR CARROUSELS, so it carries both asks: the preview
+    // for anyone who wants to look now, and the list for anyone who would
+    // rather it came to them. It states what the preview ACTUALLY contains —
+    // it read "every feature live" until 2026-09-26, while a guest gets
+    // neither the assistant nor personal lists, both of which the slides
+    // before it promise.
     function slideClose() {
       return '<div class="flowend" style="margin-top:40px">' +
         '<div class="fl">No account needed</div>' +
         '<div class="fa">Try it free</div>' +
-        '<div class="fw">Five real stocks, every feature live, one click on the login page.</div></div>' +
-        '<p class="s-sub" style="margin-top:34px">tickrlab.com — one page, and a set of rules that explain themselves.</p>';
+        '<div class="fw">Five real stocks, the whole table and every verdict — one click on the login page.</div></div>' +
+        '<p class="s-sub wide" style="margin-top:30px">Or have the write-ups sent to you: <b>tickrlab.com/blog</b> — confirmed opt-in, one click to leave, and nothing else ever goes to that address.</p>';
     }
 
     function tplIntro() {
