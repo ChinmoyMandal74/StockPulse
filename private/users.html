@@ -59,6 +59,11 @@
     .role.owner { color: var(--amber); border-color: rgba(251, 191, 36, 0.4);
                   background: rgba(251, 191, 36, 0.1); }
     .role.pending { color: var(--amber); border-color: rgba(251, 191, 36, 0.4); margin-left: 6px; }
+    /* Accent rather than amber: how somebody signs in is a FACT about the
+       account, not a status or a warning, and amber already means "notice
+       this" everywhere else in this app. */
+    .role.gsign { color: var(--accent); border-color: rgba(124, 156, 255, 0.4);
+                  background: rgba(124, 156, 255, 0.1); margin-left: 6px; }
     .approve { font: 600 12px var(--sans); color: var(--green); background: rgba(52, 211, 153, 0.08);
                border: 1px solid rgba(52, 211, 153, 0.35); border-radius: 999px; padding: 5px 14px;
                cursor: pointer; transition: background 0.3s var(--ease); }
@@ -186,6 +191,7 @@
         <td class="email">${u.activeSessions > 0 ? '<span class="dot" title="Signed in"></span>' : ''}${esc(u.email)}${isMe ? '<span class="you">you</span>' : ''}</td>
         <td><span class="role ${isAdminRole(u.role) ? 'owner' : 'member'}">${esc(u.role)}</span>
             ${u.status === 'pending' ? '<span class="role pending">pending</span>' : ''}
+            ${u.google ? '<span class="role gsign" title="Google is linked to this account — they can sign in with it. Whether they also have a working password is not recorded.">Google</span>' : ''}
             ${u.lockedUntil ? `<div class="locked">locked until ${esc(new Date(u.lockedUntil).toLocaleTimeString())}</div>` : ''}</td>
         <td class="when">${esc(when(u.createdAt))}</td>
         <td class="when">${esc(when(u.lastSignIn))}</td>

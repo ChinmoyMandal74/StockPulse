@@ -3724,6 +3724,7 @@ async function listUsers() {
   await init();
   const r = await db.execute({
     sql: `select u.id, u.email, u.name, u.role, u.created_at, u.locked_until, u.status,
+                 u.google_sub,
                  (select count(*) from sessions s
                    where s.user_id = u.id and s.expires_at > ?) as active,
                  (select max(s.created_at) from sessions s where s.user_id = u.id) as last_seen
@@ -3739,6 +3740,11 @@ async function listUsers() {
     createdAt: u.created_at,
     activeSessions: Number(u.active || 0),
     lastSignIn: u.last_seen || null,
+    // WHETHER, never WHICH. The sub is Google's identifier for the person and
+    // the page only needs to draw a badge, so the boolean is what leaves this
+    // function — the same reason the password hash has never been in this
+    // list. Everything here is allowlisted by hand for exactly that.
+    google: !!u.google_sub,
     lockedUntil: u.locked_until != null && Number(u.locked_until) > Date.now()
       ? Number(u.locked_until) : null,
   }));
