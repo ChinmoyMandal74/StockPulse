@@ -1633,7 +1633,20 @@ async function sendSignupNotice(email, role, name, pending = true) {
 // A new account gets one note: what this is, and the one thing worth doing
 // first. Never allowed to fail the registration that triggered it — an account
 // that exists but could not be greeted is still a working account.
+// OFF since 2026-09-26, at the owner's instruction, taken while opening
+// registration. Every account created is one more message from a young
+// sending domain that a corporate gateway is already quarantining, and a
+// welcome is the least necessary mail this app sends: the person is looking
+// at the screener a second after they read it.
+//
+// Gated INSIDE the function rather than at the two call sites, so neither
+// registration nor approval can start sending again by being edited. The
+// shell, the copy and the owner/member split are all kept — this is a switch,
+// not a deletion. `SEND_WELCOME=true` turns it back on.
+const SEND_WELCOME = process.env.SEND_WELCOME === 'true';
+
 async function sendWelcome(email, role, name) {
+  if (!SEND_WELCOME) return false;
   if (!MAIL_READY) return false;
   try {
     const owner = isAdminRole(role);
