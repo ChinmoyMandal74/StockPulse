@@ -311,7 +311,13 @@ const SCHEMA = [
    )`,
   // Accounts. The screener itself is shared — every signed-in user sees the same
   // data — so these exist purely to control who gets through the door.
-  // role: 'owner' can edit tickers / refresh / rewind the table; 'member' is read-only.
+  // role: 'admin' can edit tickers / refresh / rewind the table; 'member' is
+  // read-only. It was 'owner' until 2026-09-26 — ROLE_ADMIN_MIGRATION converts
+  // the stored value on every cold start, and every comparison accepts the old
+  // word too, so a row this has not reached cannot lock anyone out.
+  // NOTE the overload: 'admin' is ALSO the fallback user_key in prefs,
+  // chat_usage and user_portfolios for the legacy password cookie. Different
+  // table, different column, no collision — but the word means two things.
   // failed_count + locked_until throttle password guessing against a known email.
   `create table if not exists users (
      id            integer primary key autoincrement,
@@ -629,6 +635,11 @@ function parseAddColumn(stmt) {
 }
 
 const ADDED_COLUMNS = [
+  // Who the account belongs to. NULLABLE on purpose: four accounts existed
+  // before this column did, and a not-null default would have invented a name
+  // for each of them. Registration asks for one; everything that displays a
+  // user falls back to the email, which is what it showed before.
+  "alter table users add column name text",
   // Resend's own id for the message. `ok` records only that the provider
   // ACCEPTED it, which is not the same as delivered — the first real use of
   // the list hit exactly that gap, and without an id there is nothing to ask
@@ -811,10 +822,24 @@ async function init() {
           if (!/duplicate column/i.test(err.message || '')) throw err;
         }
       }
-      // Every portfolio member belongs to the universe. Idempotent, so it is
-      // safe on every cold start and needs no marker: it is what carried the
-      // 271 portfolio stocks into the table on the first boot after it existed.
-      await db.execute({ sql: UNIVERSE_FROM_PORTFOLIOS, args: [Date.now()] });
+      // Two idempotent data fixes, in ONE round trip rather than two. Both run
+      // on every cold start and neither depends on the other, and a cold start
+      // is paid before the instance can answer anything — the same arithmetic
+      // that made SCHEMA a batch (46 sequential 1.72s, batched 0.04s).
+      //
+      //  1. Every portfolio member belongs to the universe. No marker needed:
+      //     this is what carried the 271 portfolio stocks into the table on
+      //     the first boot after it existed.
+      //  2. 'owner' became 'admin' on 2026-09-26 (the owner's word for the
+      //     role). Here rather than in a script so production, a fresh
+      //     database and the test harness converge with no manual step and no
+      //     window in which an instance serves against the old value. A no-op
+      //     for ever after the first cold start; delete ROLE_ADMIN_MIGRATION
+      //     once no deployment predates it.
+      await db.batch([
+        { sql: UNIVERSE_FROM_PORTFOLIOS, args: [Date.now()] },
+        ROLE_ADMIN_MIGRATION,
+      ], 'write');
     })().catch((err) => {
       // Never cache a failed init: the next request retries instead of the
       // instance serving 500s for the rest of its life.
@@ -860,6 +885,17 @@ async function readPortfolios() {
 
 const UNIVERSE_FROM_PORTFOLIOS =
   'insert or ignore into universe (symbol, added_at) select distinct symbol, ? from theme_tickers';
+
+const ROLE_ADMIN_MIGRATION = "update users set role = 'admin' where role = 'owner'";
+
+// Exported so the migration can be TESTED as a thing rather than only as a
+// side effect of a cold start — it runs against production's single
+// privileged row, which is not a place to find out it was wrong.
+async function runRoleMigration() {
+  await init();
+  const r = await db.execute(ROLE_ADMIN_MIGRATION);
+  return Number(r.rowsAffected || 0);
+}
 
 // The stocks the screener tracks: the universe table, plus any portfolio
 // member not yet in it (belt and braces — writePortfolios keeps them in step).
@@ -3400,12 +3436,13 @@ async function findUserByEmail(email) {
   return r.rows[0] || null;
 }
 
-async function createUser({ email, passwordHash, salt, role, status = 'active' }) {
+async function createUser({ email, passwordHash, salt, role, status = 'active', name = null }) {
   await init();
   await db.execute({
-    sql: `insert into users (email, password_hash, salt, role, created_at, status)
-          values (?, ?, ?, ?, ?, ?)`,
-    args: [String(email).trim().toLowerCase(), passwordHash, salt, role, new Date().toISOString(), status],
+    sql: `insert into users (email, password_hash, salt, role, created_at, status, name)
+          values (?, ?, ?, ?, ?, ?, ?)`,
+    args: [String(email).trim().toLowerCase(), passwordHash, salt, role, new Date().toISOString(),
+      status, name ? String(name).trim().slice(0, 80) || null : null],
   });
   return findUserByEmail(email);
 }
@@ -3425,7 +3462,7 @@ async function approveUser(id) {
 async function listUsers() {
   await init();
   const r = await db.execute({
-    sql: `select u.id, u.email, u.role, u.created_at, u.locked_until, u.status,
+    sql: `select u.id, u.email, u.name, u.role, u.created_at, u.locked_until, u.status,
                  (select count(*) from sessions s
                    where s.user_id = u.id and s.expires_at > ?) as active,
                  (select max(s.created_at) from sessions s where s.user_id = u.id) as last_seen
@@ -3435,6 +3472,7 @@ async function listUsers() {
   return r.rows.map((u) => ({
     id: Number(u.id),
     email: u.email,
+    name: u.name || null,
     role: u.role,
     status: u.status || 'active',
     createdAt: u.created_at,
@@ -3498,7 +3536,7 @@ async function getSessionUser(token) {
   if (!token) return null;
   await init();
   const r = await db.execute({
-    sql: `select u.id, u.email, u.role, s.expires_at
+    sql: `select u.id, u.email, u.name, u.role, s.expires_at
           from sessions s join users u on u.id = s.user_id
           where s.token = ? and u.status <> 'pending'`,
     args: [token],
@@ -3509,7 +3547,7 @@ async function getSessionUser(token) {
     await deleteSession(token);
     return null;
   }
-  return { id: Number(row.id), email: row.email, role: row.role };
+  return { id: Number(row.id), email: row.email, name: row.name || null, role: row.role };
 }
 
 async function deleteSession(token) {
@@ -3819,6 +3857,7 @@ module.exports = {
   verifyPassword,
   setPassword,
   setRole,
+  runRoleMigration,
   countUsers,
   findUserByEmail,
   createUser,

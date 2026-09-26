@@ -52,6 +52,8 @@
     td.when { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
     td.act { text-align: right; }
 
+    .uname { font-weight: 500; }
+    .noname { color: var(--faint); }
     .role { display: inline-flex; padding: 2px 10px; border-radius: 999px;
             border: 1px solid; font-size: 10.5px; font-weight: 500; }
     .role.owner { color: var(--amber); border-color: rgba(251, 191, 36, 0.4);
@@ -144,41 +146,45 @@
       }
 
       const users = data.users || [];
-      const owners = users.filter((u) => u.role === 'owner').length;
+      const admins = users.filter((u) => isAdminRole(u.role)).length;
       const active = users.filter((u) => u.activeSessions > 0).length;
 
       const pending = users.filter((u) => u.status === 'pending').length;
       $('stats').innerHTML = [
         [users.length, 'Accounts'],
-        [owners, owners === 1 ? 'Owner' : 'Owners'],
+        [admins, admins === 1 ? 'Admin' : 'Admins'],
         [active, 'Signed in now'],
         [pending, 'Awaiting approval'],
       ].map(([v, l]) => `<div class="bezel stat"><div class="core">
           <div class="val">${v}</div><div class="lbl">${l}</div></div></div>`).join('');
 
       $('out').innerHTML = `<table><thead><tr>
-          <th>Email</th><th>Role</th><th>Joined</th><th>Last sign-in</th><th>Themes</th><th></th>
-        </tr></thead><tbody>${users.map((u) => row(u, owners)).join('')}</tbody></table>` +
+          <th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th>Last sign-in</th><th>Themes</th><th></th>
+        </tr></thead><tbody>${users.map((u) => row(u)).join('')}</tbody></table>` +
         otherPortfoliosHtml(data.otherPortfolios || []);
 
       // Why a button may be disabled, said once rather than per row.
-      const onlyOwner = owners === 1;
+
       $('note').innerHTML =
         'New registrations wait here as <b>pending</b> until approved — they cannot sign in before that, and Delete is how a request is declined. ' +
         'Deleting an account removes its sessions, saved column layout, personal portfolios and chat usage, and signs it out everywhere. ' +
-        (onlyOwner ? 'The only owner cannot be removed, and nor can the account you are signed in as.'
-                   : 'You cannot remove the account you are signed in as.');
+        'An <b>admin</b> account cannot be deleted at all — change the role to member first — and nor can the account you are signed in as.';
     }
 
-    function row(u, owners) {
+    // 'owner' was renamed to 'admin' on 2026-09-26 and is still accepted on
+    // read, exactly as the server does it.
+    const isAdminRole = (r) => r === 'admin' || r === 'owner';
+
+    function row(u) {
       const isMe = me && me.email && u.email === me.email;
       // Mirrors the two guards the server enforces, so a button is never
       // offered for something the server would refuse anyway.
-      const lastOwner = u.role === 'owner' && owners === 1;
-      const blocked = isMe || lastOwner;
+      // Mirrors the server: NO admin may be deleted, not merely the last.
+      const blocked = isMe || isAdminRole(u.role);
       return `<tr>
+        <td class="uname">${u.name ? esc(u.name) : '<span class="noname">—</span>'}</td>
         <td class="email">${u.activeSessions > 0 ? '<span class="dot" title="Signed in"></span>' : ''}${esc(u.email)}${isMe ? '<span class="you">you</span>' : ''}</td>
-        <td><span class="role ${u.role === 'owner' ? 'owner' : 'member'}">${esc(u.role)}</span>
+        <td><span class="role ${isAdminRole(u.role) ? 'owner' : 'member'}">${esc(u.role)}</span>
             ${u.status === 'pending' ? '<span class="role pending">pending</span>' : ''}
             ${u.lockedUntil ? `<div class="locked">locked until ${esc(new Date(u.lockedUntil).toLocaleTimeString())}</div>` : ''}</td>
         <td class="when">${esc(when(u.createdAt))}</td>

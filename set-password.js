@@ -59,17 +59,22 @@ function askHidden(prompt) {
   }
 
   if (role) {
-    if (!['owner', 'member'].includes(role)) {
-      console.error("--role must be 'owner' or 'member'.");
+    // 'owner' is accepted as an alias for 'admin' and mapped to it, so a
+    // command in an old note or in muscle memory still works and still stores
+    // the one word the app writes.
+    const want = role === 'owner' ? 'admin' : role;
+    if (!['admin', 'member'].includes(want)) {
+      console.error("--role must be 'admin' or 'member'.");
       process.exit(1);
     }
-    // Refuse to demote the last owner — that would leave nobody able to refresh.
-    if (user.role === 'owner' && role === 'member' && users.filter((u) => u.role === 'owner').length === 1) {
-      console.error('That is the only owner; promote someone else first.');
+    const isAdminRole = (r) => r === 'admin' || r === 'owner';
+    // Refuse to demote the last admin — that would leave nobody able to refresh.
+    if (isAdminRole(user.role) && want === 'member' && users.filter((u) => isAdminRole(u.role)).length === 1) {
+      console.error('That is the only admin; promote someone else first.');
       process.exit(1);
     }
-    await store.setRole(user.id, role);
-    console.log(`${user.email} is now ${role}.`);
+    await store.setRole(user.id, want);
+    console.log(`${user.email} is now ${want}.`);
   }
 
   const pw = await askHidden(`New password for ${user.email}: `);

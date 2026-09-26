@@ -1396,14 +1396,23 @@ function setSessionCookie(res, token) {
   });
 }
 
+// The privileged role. Renamed from 'owner' on 2026-09-26 at the owner's
+// instruction; 'owner' is still ACCEPTED on read for ever, because the cost of
+// accepting a word nobody writes any more is one comparison and the cost of
+// not accepting it is an instance whose only privileged account has silently
+// become a member. A migration you can be locked out by is not worth its
+// tidiness. Write ROLE_ADMIN and nothing else.
+const ROLE_ADMIN = 'admin';
+const isAdminRole = (role) => role === ROLE_ADMIN || role === 'owner';
+
 // Admin = the legacy ADMIN_PASSWORD cookie (kept so you can never lock yourself
-// out of your own instance) or a signed-in user whose role is 'owner'.
+// out of your own instance) or a signed-in user holding the admin role.
 async function isAdmin(req) {
   if (!AUTH_REQUIRED) return true; // no password configured → open (local dev)
   const tok = parseCookies(req)[ADMIN_COOKIE];
   if (tok && safeEqual(tok, adminToken())) return true;
   const u = await currentUser(req);
-  return !!u && u.role === 'owner';
+  return !!u && isAdminRole(u.role);
 }
 
 // The door: any signed-in user, or an admin by either route.
@@ -1516,7 +1525,8 @@ app.get('/api/me', route(async (req, res) => {
     admin,
     authRequired: AUTH_REQUIRED,
     signedIn: await isSignedIn(req),
-    user: u ? { email: u.email, role: u.role } : (admin && AUTH_REQUIRED ? { email: null, role: 'owner' } : null),
+    user: u ? { email: u.email, name: u.name || null, role: u.role }
+      : (admin && AUTH_REQUIRED ? { email: null, name: null, role: ROLE_ADMIN } : null),
     signupCodeRequired: !!SIGNUP_CODE,
   });
 }));
@@ -1529,14 +1539,15 @@ app.get('/api/me', route(async (req, res) => {
 //
 // Never sent for the very first account: that one becomes the owner, so the
 // note would be an email telling you that you had joined your own site.
-async function sendSignupNotice(email, role) {
-  if (!MAIL_READY || role === 'owner') return false;
+async function sendSignupNotice(email, role, name) {
+  if (!MAIL_READY || isAdminRole(role)) return false;
   try {
     const to = await operatorEmail();
     if (!to || to.toLowerCase() === email.toLowerCase()) return false;
 
     const total = await store.countUsers();
     const rows = [
+      ...(name ? [['Name', name]] : []),
       ['Email', email],
       ['Role', role],
       ['Joined', fmtClock(Date.now())],
@@ -1554,17 +1565,19 @@ async function sendSignupNotice(email, role) {
       // The address came from the form, but it has just been used to create an
       // account, so a reply reaches the person who typed it.
       replyTo: email,
-      subject: `Approval needed: ${email}`,
+      // The NAME is in the subject because that is where the decision starts:
+      // an address alone rarely says who is asking to be let in.
+      subject: `Approval needed: ${name ? `${name} <${email}>` : email}`,
       text: textShell({
         heading: 'New sign-up awaiting approval',
-        intro: `${email} registered and is waiting to be let in.`,
+        intro: `${name ? `${name} (${email})` : email} registered and is waiting to be let in.`,
         lines: [`Role: ${role}`, `Joined: ${fmtClock(Date.now())}`, `Accounts now: ${total}`]
           .concat(APP_URL ? ['', `Approve or remove: ${APP_URL}/users`] : []),
         note,
       }),
       html: emailShell({
         heading: 'New sign-up awaiting approval',
-        intro: `${email} registered and is waiting to be let in.`,
+        intro: `${name ? `${name} (${email})` : email} registered and is waiting to be let in.`,
         body: `<table role="presentation" cellpadding="0" cellspacing="0" border="0" ` +
           `style="margin-top:18px">${rows}</table>` +
           (APP_URL ? mailButton(`${APP_URL}/users`, 'Review & approve') : ''),
@@ -1580,10 +1593,10 @@ async function sendSignupNotice(email, role) {
 // A new account gets one note: what this is, and the one thing worth doing
 // first. Never allowed to fail the registration that triggered it — an account
 // that exists but could not be greeted is still a working account.
-async function sendWelcome(email, role) {
+async function sendWelcome(email, role, name) {
   if (!MAIL_READY) return false;
   try {
-    const owner = role === 'owner';
+    const owner = isAdminRole(role);
     const intro = owner
       ? `Your ${BRAND} instance is live, and this first account owns it.`
       : `You now have access to ${BRAND} — a stock screener for a watchlist of stocks, ` +
@@ -1633,7 +1646,12 @@ app.post('/api/register', route(async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
   const code = String(req.body?.code || '');
+  // CR and LF are STRIPPED rather than escaped, the contact form's rule: this
+  // string goes into the subject line of the approval request, and a newline
+  // in a header is how a subject becomes extra headers.
+  const name = String(req.body?.name || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 80);
 
+  if (!name) return res.status(400).json({ error: 'Enter your name.' });
   if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
   if (password.length < MIN_PASSWORD) {
     return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD} characters.` });
@@ -1647,31 +1665,31 @@ app.post('/api/register', route(async (req, res) => {
 
   const salt = newSalt();
   const passwordHash = await hashPassword(password, salt);
-  const role = (await store.countUsers()) === 0 ? 'owner' : 'member';
+  const role = (await store.countUsers()) === 0 ? ROLE_ADMIN : 'member';
   // Every member starts PENDING and cannot sign in until the owner approves
   // (the first account bootstraps the instance, so it alone skips the gate).
   // No session is created for a pending account, and getSessionUser refuses
   // pending rows besides — approval is enforced, not decoration.
-  const status = role === 'owner' ? 'active' : 'pending';
-  const user = await store.createUser({ email, passwordHash, salt, role, status });
+  const status = isAdminRole(role) ? 'active' : 'pending';
+  const user = await store.createUser({ email, passwordHash, salt, role, status, name });
   logAct(req, 'login', 'signup', email);
 
   if (status === 'pending') {
     res.json({ ok: true, pending: true });
     // The sign-up notice to the operator is the approval request; the welcome
     // waits until approval, when it is true.
-    sendSignupNotice(email, role).catch(() => {});
+    sendSignupNotice(email, role, name).catch(() => {});
     return;
   }
 
   const token = crypto.randomBytes(32).toString('hex');
   await store.createSession(token, Number(user.id), Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   setSessionCookie(res, token);
-  res.json({ ok: true, user: { email, role } });
+  res.json({ ok: true, user: { email, name, role } });
 
   // After the response: the account is made and the session is set, so a slow
   // or failing mail provider must not hold up the sign-up or fail it.
-  sendWelcome(email, role).catch(() => {});
+  sendWelcome(email, role, name).catch(() => {});
 }));
 
 // Sign in with an account. Passing only a password (no email) still works and
@@ -1724,7 +1742,8 @@ app.post('/api/login', route(async (req, res) => {
   await store.createSession(token, Number(user.id), Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   setSessionCookie(res, token);
   logAct(req, 'login', 'account', user.email);
-  res.json({ ok: true, admin: user.role === 'owner', user: { email: user.email, role: user.role } });
+  res.json({ ok: true, admin: isAdminRole(user.role),
+    user: { email: user.email, name: user.name || null, role: user.role } });
 }));
 
 app.post('/api/logout', route(async (req, res) => {
@@ -2200,7 +2219,7 @@ const CONTACT_DAILY_LIMIT = Number(process.env.CONTACT_DAILY_LIMIT || 10);
 // Where mail to the operator lands. Falls back to the owner's own account, so
 // both the contact form and the nightly report work before any env var is set.
 async function ownerEmail() {
-  const owner = (await store.listUsers()).find((u) => u.role === 'owner');
+  const owner = (await store.listUsers()).find((u) => isAdminRole(u.role));
   return owner ? owner.email : null;
 }
 
@@ -2361,8 +2380,13 @@ app.delete('/api/users/:id', requireAdmin, route(async (req, res) => {
   const users = await store.listUsers();
   const target = users.find((u) => u.id === id);
   if (!target) return res.status(404).json({ error: 'User not found.' });
-  if (target.role === 'owner' && users.filter((u) => u.role === 'owner').length === 1) {
-    return res.status(409).json({ error: 'Cannot remove the only owner.' });
+  // AN ADMIN CANNOT BE DELETED AT ALL (2026-09-26, owner's instruction). It
+  // used to be "not the LAST one", which with a single admin was the same
+  // rule — but only by arithmetic, and it would have stopped protecting the
+  // account the moment a second admin existed. Demote to member first if one
+  // really has to go: two deliberate steps, and neither can be the accident.
+  if (isAdminRole(target.role)) {
+    return res.status(409).json({ error: 'An admin account cannot be deleted. Change the role to member first.' });
   }
   // Deleting the account you are signed in as would revoke your own session
   // mid-request and drop you at the login page. Sign in as another owner if it

@@ -119,6 +119,13 @@
       </div>
 
       <form id="form" autocomplete="on">
+        <!-- Registration only, like the invite code: signing in needs the
+             address and nothing else, and a name box on the sign-in tab would
+             be one more thing to ignore every time. -->
+        <div class="field" id="nameField" style="display:none">
+          <label for="name">Your name</label>
+          <input type="text" id="name" name="name" autocomplete="name" placeholder="Chinmoy Mandal" maxlength="80" />
+        </div>
         <div class="field">
           <label for="email">Email</label>
           <input type="email" id="email" name="email" autocomplete="email" placeholder="you@example.com" required />
@@ -130,7 +137,7 @@
         </div>
         <div class="field" id="codeField" style="display:none">
           <label for="code">Invite code</label>
-          <input type="text" id="code" name="code" autocomplete="off" placeholder="Ask the owner for this" />
+          <input type="text" id="code" name="code" autocomplete="off" placeholder="Ask the admin for this" />
         </div>
         <button class="btn" id="submit" type="submit">Sign in</button>
       </form>
@@ -196,10 +203,14 @@
       $('tabRegister').setAttribute('aria-selected', String(reg));
       $('submit').textContent = reg ? 'Create account' : 'Sign in';
       $('lede').textContent = reg
-        ? 'Create an account — new members are approved by the owner.'
+        ? 'Create an account — new members are approved by the admin.'
         : 'Sign in to view the screener.';
       $('pwHint').style.display = reg ? '' : 'none';
       $('codeField').style.display = reg && signupCodeRequired ? '' : 'none';
+      // `required` is toggled with the field: a hidden input that is still
+      // required blocks submit with a validation bubble pointing at nothing.
+      $('nameField').style.display = reg ? '' : 'none';
+      $('name').required = reg;
       $('forgotWrap').style.display = reg ? 'none' : '';
       $('password').setAttribute('autocomplete', reg ? 'new-password' : 'current-password');
       setMsg('');
@@ -248,6 +259,7 @@
       setMsg('');
       const w = working($('submit'), mode === 'register' ? 'Creating account…' : 'Signing in…');
       const body = {
+        name: $('name').value.trim(),
         email: $('email').value.trim(),
         password: $('password').value,
         code: $('code').value.trim(),
@@ -265,7 +277,7 @@
           // here rather than bouncing to a page that would refuse them.
           w.restore();
           busy = false;
-          setMsg('Account created. The owner has been asked to approve it — ' +
+          setMsg('Account created. The admin has been asked to approve it — ' +
             'you will get a welcome email when you are in.', 'ok');
           return;
         }

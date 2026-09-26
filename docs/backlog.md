@@ -397,6 +397,53 @@ seconds afterwards arrived normally.
 
 ---
 
+## 11. Sign in with Google — scoped 2026-09-26, not built
+
+**Asked about, costed, and deferred.** Google sign-in removes friction at the
+top of a funnel this app deliberately gates at the bottom with owner approval,
+and with four accounts the password form is not what is costing signups. The
+Instagram push is what would produce evidence either way. **Roughly a
+half-session whenever it is wanted.**
+
+**The owner's constraint, recorded before the code exists: the `admin` account
+must never NEED Google, and Google must not be a way INTO it.** The admin keeps
+a password and the `ADMIN_PASSWORD` escape hatch stays. Compromising a Google
+account must not compromise the instance.
+
+**What it needs, and the part that is smaller than it looks:**
+
+- **Console, not code**: a Google Cloud project, consent screen External,
+  **scopes `openid` / `email` / `profile` and nothing more** — those are
+  non-sensitive and avoid the verification review that sensitive scopes
+  trigger. Publish to Production (Testing caps at 100 users and expires tokens
+  after 7 days). Redirect URI `https://www.tickrlab.com/api/auth/google/callback`
+  — **the `www` host**, because URIs match exactly and the bare domain 308s.
+  Two env vars.
+- **No dependency.** Authorization-code flow over plain `fetch`, the reasoning
+  Resend already follows. **The `id_token` signature does NOT need verifying**
+  — Google's own docs sanction skipping it when the token arrives directly
+  from their token endpoint over TLS in a server-to-server exchange, which
+  removes the only fiddly part (JWKS fetch, `kid` matching, RS256). Check
+  `aud`, `iss`, `exp`, `nonce` and **`email_verified`**.
+- **Match on `sub`, never email** — `sub` is stable, an email under it is not.
+  Auto-linking to an existing password account on email match is safe ONLY
+  while `email_verified` is true; that check is the whole thing standing
+  between this and an account-takeover path.
+- **`password_hash` and `salt` are `not null` and SQLite cannot relax that**
+  without a table rebuild. Give a Google-only account a random unusable hash
+  and salt instead — no migration, and `verifyPassword` can never accidentally
+  succeed.
+- **A Google signup still lands `pending`.** Otherwise it is a door beside the
+  gate, and the same reasoning applies to `SIGNUP_CODE`.
+- **Sessions are untouched**, which is why this is small: Google answers "who
+  is this, the first time" and the callback then mints the same 32-byte
+  `sessions` row. `getSessionUser`, the 30-day expiry and revocation all stand.
+- **Enumeration**: a password attempt against a Google-only account must return
+  the same generic 401. "This account uses Google" is a leak, and the login
+  route currently has the non-leaking property — keep it.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
