@@ -1968,8 +1968,24 @@ app.get('/api/auth/google/callback', route(async (req, res) => {
       }),
       signal: AbortSignal.timeout(15000),
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    tok = await r.json();
+    const body = await r.text();
+    if (!r.ok) {
+      // GOOGLE'S OWN ERROR CODE IS THE WHOLE DIAGNOSIS, and `HTTP 400` alone
+      // is not: `invalid_client` means the secret is wrong (the one thing that
+      // cannot be checked from outside), `invalid_grant` means the code was
+      // stale or already spent, `redirect_uri_mismatch` names itself. Logged
+      // SERVER-SIDE only — the reader still gets the slug, because an upstream
+      // body can restate the request and the secret travels in the same
+      // exchange. Google's error_description is a fixed phrase and never
+      // carries the credential.
+      let why = 'HTTP ' + r.status;
+      try {
+        const j = JSON.parse(body);
+        if (j.error) why += ' ' + j.error + (j.error_description ? ' — ' + j.error_description : '');
+      } catch { /* not JSON; the status is all there is */ }
+      throw new Error(why);
+    }
+    tok = JSON.parse(body);
   } catch (e) {
     console.error('google token exchange failed:', e.message);
     return fail('exchange');
