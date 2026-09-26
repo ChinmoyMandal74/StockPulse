@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Email log — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* Everything scoped under this page's own ids and an `em-` prefix. Eight
+       unscoped class names have captured later markup on this project, and
+       app.css is shared by every page here. */
+    body { min-height: 100dvh; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1340px; margin: 0 auto; padding: 0 24px 90px; }
+    .aura { background:
+      radial-gradient(46vw 40vw at 4% -8%, rgba(124, 156, 255, 0.10), transparent 62%),
+      radial-gradient(50vw 42vw at 98% 4%, rgba(52, 211, 153, 0.08), transparent 64%); }
+    .nav { display: flex; gap: 14px; font-size: 13px; padding: 22px 0 0; }
+    .nav a { color: var(--muted); text-decoration: none; }
+    .nav a:hover { color: var(--text); text-decoration: underline; }
+    h1 { margin: 20px 0 6px; font-size: clamp(26px, 3vw, 34px); font-weight: 600; letter-spacing: -0.035em; }
+    .lede { margin: 0 0 22px; font-size: 13.5px; color: var(--muted); max-width: 78ch; line-height: 1.7; }
+
+    /* 104px so all three still sit on one row at 390px — `auto-fit` collapses
+       the empty tracks, so on a wide screen they stay three equal cards. */
+    .em-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+                gap: 12px; margin-bottom: 18px; }
+    .em-card { border: 1px solid var(--hair); border-radius: 12px; padding: 13px 15px;
+               background: rgba(255, 255, 255, 0.02); }
+    .em-card .n { font: 600 24px/1 var(--mono); }
+    .em-card .k { display: block; margin-top: 5px; font-size: 10.5px; text-transform: uppercase;
+                  letter-spacing: 0.14em; color: var(--faint); }
+    .em-card.bad { border-color: rgba(251, 113, 133, 0.4); }
+    .em-card.bad .n { color: var(--red); }
+    .em-warn { border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 12px; padding: 12px 15px;
+               margin-bottom: 18px; font-size: 13px; line-height: 1.7; color: var(--muted); }
+
+    .em-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+    .em-bar select, .em-bar button {
+      padding: 7px 11px; border-radius: 9px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.04); color: var(--text);
+      font: 500 12.5px var(--sans); cursor: pointer; }
+    .em-bar button.on { border-color: rgba(124, 156, 255, 0.5); background: rgba(124, 156, 255, 0.1); }
+    .em-bar .sp { flex: 1; }
+    .em-bar .count { font-size: 12px; color: var(--faint); font-family: var(--mono); }
+
+    .em-wrap { border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; }
+    /* `fixed` so the address and the message id can be clipped to one line
+       rather than wrapping every row to double height — both are single
+       unbroken tokens, and the full value is on the cell's title and is what a
+       selection copies. */
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+    th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em;
+         color: var(--faint); font-weight: 500; padding: 9px 12px;
+         background: var(--surface-2); border-bottom: 1px solid var(--hair); white-space: nowrap; }
+    td { padding: 8px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
+    .one { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    col.c-when { width: 152px; } col.c-kind { width: 130px; } col.c-to { width: 22%; }
+    col.c-subj { width: 30%; } col.c-sent { width: 150px; }
+    td.when { font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+    td.addr { font-family: var(--mono); font-size: 11.5px; }
+    td.subj { color: var(--muted); }
+    td.pid { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+    td.sent { white-space: nowrap; }
+    .em-size { color: var(--faint); font-size: 11px; font-family: var(--mono); }
+    .em-why { display: block; color: var(--faint); font-size: 11px;
+              white-space: normal; line-height: 1.45; margin-top: 2px; }
+    .em-kind { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10.5px;
+               border: 1px solid var(--hair-2); color: var(--muted); white-space: nowrap; }
+    .em-ok { color: var(--green); font-family: var(--mono); font-size: 11.5px; }
+    .em-no { color: var(--red); font-family: var(--mono); font-size: 11.5px; }
+    .em-empty { padding: 34px 14px; color: var(--faint); font-size: 13px; text-align: center; }
+    .em-note { margin-top: 18px; font-size: 12.5px; color: var(--faint); line-height: 1.75; max-width: 82ch; }
+    .em-note b { color: var(--muted); font-weight: 600; }
+    /* Two columns leave the phone, and the widths have to go with them — under
+       `table-layout: fixed` a hidden cell still reserves its column, so the
+       remaining four would sit in the left half with a gap beside them.
+       WHAT IS LEFT STILL DOES NOT FIT, and an email address is one unbroken
+       token: breaking it to fit gave one character per line and a row 300px
+       tall. So the table scrolls inside its own box — the one exception the
+       layout rules allow — and the page itself still does not. */
+    @media (max-width: 760px) {
+      .hide-sm { display: none; }
+      col.c-when, col.c-kind, col.c-to, col.c-subj, col.c-sent, col.c-pid { width: auto; }
+      table { table-layout: auto; min-width: 460px; }
+      .em-wrap { overflow-x: auto; }
+      td.addr, td.when { white-space: nowrap; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <main class="page">
+    <nav class="nav">
+      <a href="/admin">← Admin</a><a href="/subscribers">Subscribers</a>
+      <a href="/posts">Posts</a><a href="/activity">Activity</a>
+    </nav>
+    <h1>Email log</h1>
+    <p class="lede">Every message this app has handed to the provider — who it went to, what the
+      subject was, and whether it was accepted. Facts, never content: no bodies are kept.</p>
+
+    <div class="em-cards" id="cards"></div>
+    <div id="warn"></div>
+
+    <div class="em-bar">
+      <select id="days">
+        <option value="1">Last 24 hours</option>
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+      </select>
+      <select id="kind"><option value="">Every kind</option></select>
+      <button id="failOnly">Failures only</button>
+      <span class="sp"></span>
+      <span class="count" id="count"></span>
+      <button id="reload">Reload</button>
+    </div>
+
+    <div class="em-wrap">
+      <table>
+        <!-- The OUTCOME is the third column, not the fifth. It is what anyone
+             opens this page for, and on a phone the first three are all that
+             fit before the table has to be scrolled. -->
+        <colgroup>
+          <col class="c-when" /><col class="c-kind" /><col class="c-sent" />
+          <col class="c-to" /><col class="c-subj" /><col class="c-pid" />
+        </colgroup>
+        <thead><tr>
+          <th>When</th><th>Kind</th><th>Sent</th><th>To</th>
+          <th class="hide-sm">Subject</th><th class="hide-sm">Provider id</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="em-note" id="note"></p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const when = (ms) => new Date(ms).toLocaleString(undefined,
+      { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    let data = null;
+    let failOnly = false;
+
+    // ACCEPTED, NOT DELIVERED, and the page says so rather than printing a tick
+    // that means more than it should. The provider taking a message is the last
+    // thing this app can observe; what a receiving server then did with it is
+    // Resend's to report, which is why the id is on screen.
+    async function load() {
+      $('rows').innerHTML = '<tr><td colspan="6" class="em-empty">Loading…</td></tr>';
+      try {
+        const r = await fetch('/api/admin/emails?days=' + encodeURIComponent($('days').value),
+          { cache: 'no-store' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        data = d;
+        paintKinds();
+        paint();
+      } catch (e) {
+        $('rows').innerHTML = '<tr><td colspan="6" class="em-empty">' + we(e.message) + '</td></tr>';
+      }
+    }
+
+    function paintKinds() {
+      const kinds = [...new Set(data.counts.map((c) => c.kind))].sort();
+      const cur = $('kind').value;
+      $('kind').innerHTML = '<option value="">Every kind</option>'
+        + kinds.map((k) => `<option value="${we(k)}">${we(k)}</option>`).join('');
+      if (kinds.includes(cur)) $('kind').value = cur;
+    }
+
+    function paint() {
+      const total = data.counts.reduce((a, c) => a + c.n, 0);
+      const failed = data.counts.filter((c) => !c.ok).reduce((a, c) => a + c.n, 0);
+      const kinds = new Set(data.counts.map((c) => c.kind)).size;
+      $('cards').innerHTML = [
+        [total, 'Sent'],
+        [failed, 'Failed', failed ? 'bad' : ''],
+        [kinds, 'Kinds'],
+      ].map(([n, k, cls]) => `<div class="em-card ${cls || ''}">`
+        + `<span class="n">${n}</span><span class="k">${we(k)}</span></div>`).join('');
+
+      const gaps = [];
+      if (!data.mailReady) {
+        gaps.push('<b>Email is not configured on this server.</b> Nothing can be sent until '
+          + 'RESEND_API_KEY, MAIL_FROM and APP_URL are set — attempts are still recorded here, '
+          + 'marked as failed, so the gap is visible rather than silent.');
+      }
+      // An UNNAMED kind means a send path was added without telling the log. It
+      // is shown rather than tidied away, because that is the only way anyone
+      // finds out.
+      if (data.counts.some((c) => c.kind === 'other')) {
+        gaps.push('<b>Some messages are logged as “other”.</b> Every send names what it is, so this '
+          + 'means a new one was added without a kind — worth naming it in <code>server.js</code>.');
+      }
+      $('warn').innerHTML = gaps.length
+        ? `<div class="em-warn">${gaps.join('<br><br>')}</div>` : '';
+
+      const k = $('kind').value;
+      const rows = data.rows.filter((x) => (!k || x.kind === k) && (!failOnly || !x.ok));
+      $('count').textContent = rows.length === data.rows.length
+        ? `${rows.length} shown` : `${rows.length} of ${data.rows.length}`;
+      $('failOnly').classList.toggle('on', failOnly);
+
+      // The size sits beside the OUTCOME rather than beside the id: a message
+      // that was accepted and is two megabytes is the shape of a deliverability
+      // problem, and that is a fact about the send, not about the id.
+      $('rows').innerHTML = rows.length ? rows.map((x) => `<tr>`
+        + `<td class="when one">${we(when(x.at))}</td>`
+        + `<td class="one"><span class="em-kind">${we(x.kind)}</span></td>`
+        + `<td class="sent">${x.ok
+          ? `<span class="em-ok">accepted</span>`
+            + (x.bytes ? ` <span class="em-size">${Math.round(x.bytes / 1024)} KB</span>` : '')
+          : `<span class="em-no">failed</span>`
+            + `<span class="em-why">${we(x.error || 'no reason recorded')}</span>`}</td>`
+        + `<td class="addr one" title="${we(x.to)}">${we(x.to)}</td>`
+        + `<td class="subj one hide-sm" title="${we(x.subject)}">${we(x.subject)}</td>`
+        + `<td class="pid one hide-sm" title="${we(x.providerId || '')}">${we(x.providerId || '—')}</td>`
+        + '</tr>').join('')
+        : '<tr><td colspan="6" class="em-empty">Nothing in this window.</td></tr>';
+
+      $('note').innerHTML = '<b>“Accepted” is not “delivered.”</b> It means the provider took the '
+        + 'message — what a receiving server did next is theirs to report, and the provider id is '
+        + 'what you quote to ask them. A subscriber once reported a post that never arrived while '
+        + 'the row said it was sent, which is the distinction this column exists to keep. '
+        + (data.capped ? '<br><br>Only the newest 500 are listed; the counts above are over the whole window. ' : '')
+        + 'Kept for 90 days, then pruned.';
+    }
+
+    $('days').addEventListener('change', load);
+    $('kind').addEventListener('change', paint);
+    $('failOnly').addEventListener('click', () => { failOnly = !failOnly; paint(); });
+    $('reload').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>

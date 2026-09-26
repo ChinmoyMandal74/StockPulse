@@ -450,6 +450,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/compare.html': '/compare',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
                       '/export.html': '/export', '/subscribers.html': '/subscribers',
+                      '/emails.html': '/emails',
                       // The public pages have canonical addresses of their own.
                       '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
                       '/about.html': '/about',
@@ -540,6 +541,12 @@ app.get('/news-runs', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'news-runs');
   res.sendFile(path.join(__dirname, 'private', 'news-runs.html'));
+}));
+
+app.get('/emails', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'emails');
+  res.sendFile(path.join(__dirname, 'private', 'emails.html'));
 }));
 
 app.get('/subscribers', route(async (req, res) => {
@@ -1060,6 +1067,7 @@ async function doSubscribe(req, res, wantsJson) {
   const link = `${base}/subscribe/confirm?t=${encodeURIComponent(started.token)}`;
   const what = topics.map(subTopicName).join(', ');
   await sendMail({
+    kind: 'subscribe-confirm',
     to: email,
     subject: `Confirm your ${BRAND} subscription`,
     text: textShell({
@@ -1541,6 +1549,7 @@ async function sendSignupNotice(email, role) {
       'Replying to this email answers the applicant directly.';
 
     return await sendMail({
+      kind: 'approval-request',
       to,
       // The address came from the form, but it has just been used to create an
       // account, so a reply reaches the person who typed it.
@@ -1595,6 +1604,7 @@ async function sendWelcome(email, role) {
       `<span style="color:${MC.mute};font-size:14px">${d}</span></td></tr>`).join('');
 
     return await sendMail({
+      kind: 'welcome',
       to: email,
       replyTo: process.env.MAIL_REPLY_TO || undefined,
       subject: `Welcome to ${BRAND}`,
@@ -2109,8 +2119,30 @@ function textShell({ heading, intro, lines = [], note = '' }) {
 // RESEND. Losing one copy beats sending two.
 //
 // `sendMail` keeps its boolean, so none of the transactional callers change.
-async function sendMailResult({ to, subject, text, html, replyTo, headers, bulk }) {
-  if (!MAIL_READY) return { ok: false, status: 0, retryable: false };
+// EVERY message is recorded here, and that is the point of recording it here:
+// twelve call sites all funnel through this one function, so the log cannot
+// miss one by somebody forgetting. `kind` is the only thing a caller adds.
+//
+// The write is AWAITED rather than fire-and-forget. Nothing may run after the
+// response on this platform, so a detached write is simply lost — and a log
+// with holes in it is worse than no log, because it is consulted as if it were
+// complete. It is one small insert against a send that already costs a network
+// round trip, and a failure to log never fails the send: the bars rule.
+async function sendMailResult({ to, subject, text, html, replyTo, headers, bulk, kind }) {
+  const note = async (out, error) => {
+    try {
+      await store.logMail({
+        kind: kind || 'other', to, subject, ok: out.ok, status: out.status,
+        providerId: out.id || null, error: error || null,
+        bytes: html ? Buffer.byteLength(html) : null,
+      });
+    } catch (e) { console.warn('mail log failed (the send is unaffected):', e.message); }
+  };
+  if (!MAIL_READY) {
+    const out = { ok: false, status: 0, retryable: false };
+    await note(out, 'mail is not configured on this server');
+    return out;
+  }
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -2133,7 +2165,9 @@ async function sendMailResult({ to, subject, text, html, replyTo, headers, bulk 
       // The body can echo the request, and the key travels in the same headers.
       const body = await r.json().catch(() => ({}));
       console.error('resend error', r.status, body && body.name);
-      return { ok: false, status: r.status, retryable: r.status === 429 };
+      const out = { ok: false, status: r.status, retryable: r.status === 429 };
+      await note(out, (body && body.name) || ('HTTP ' + r.status));
+      return out;
     }
     // THE PROVIDER'S MESSAGE ID, kept rather than discarded. "Accepted" and
     // "delivered" are different facts — the Price pulled column's lesson in a
@@ -2141,11 +2175,15 @@ async function sendMailResult({ to, subject, text, html, replyTo, headers, bulk 
     // somebody says a message never arrived, which is exactly what happened
     // the first time the list was used.
     const okBody = await r.json().catch(() => ({}));
-    return { ok: true, status: r.status, retryable: false, id: (okBody && okBody.id) || null };
+    const out = { ok: true, status: r.status, retryable: false, id: (okBody && okBody.id) || null };
+    await note(out);
+    return out;
   } catch (err) {
     // A dropped socket may have delivered. Not retryable, deliberately.
     console.error('resend call failed', err.message);
-    return { ok: false, status: 0, retryable: false };
+    const out = { ok: false, status: 0, retryable: false };
+    await note(out, err.message);
+    return out;
   }
 }
 
@@ -2203,6 +2241,7 @@ app.post('/api/contact', requireMember, route(async (req, res) => {
   if (!to) return res.status(503).json({ error: 'No destination address is configured.' });
 
   const ok = await sendMail({
+    kind: 'contact',
     to,
     // Replying in a mail client answers the person, not the server.
     replyTo: who ? who.email : (process.env.MAIL_REPLY_TO || undefined),
@@ -2248,6 +2287,7 @@ app.post('/api/forgot', route(async (req, res) => {
 
   const link = `${APP_URL}/reset?token=${encodeURIComponent(token)}`;
   await sendMail({
+    kind: 'password-reset',
     to: email,
     replyTo: process.env.MAIL_REPLY_TO || undefined,
     subject: `Reset your ${BRAND} password`,
@@ -7020,6 +7060,20 @@ app.get('/api/admin/subscribers', requireAdmin, route(async (req, res) => {
   });
 }));
 
+// The log, and the counts. Two reads rather than one: the tail is CAPPED, so a
+// total derived from it would quietly understate the moment there are more
+// messages than the cap — the kind of number that looks right and is not.
+app.get('/api/admin/emails', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const days = Math.min(90, Math.max(1, Number(req.query.days) || 30));
+  const since = Date.now() - days * 86400000;
+  const [rows, counts] = await Promise.all([
+    store.readMailLog(since, 500),
+    store.mailCounts(since),
+  ]);
+  res.json({ rows, counts, days, mailReady: MAIL_READY, capped: rows.length >= 500 });
+}));
+
 app.put('/api/admin/subscribers/postal', requireAdmin, route(async (req, res) => {
   if (MAIL_POSTAL_ENV) {
     return res.status(409).json({ error: 'MAIL_POSTAL_ADDRESS is set in the environment and wins over this. '
@@ -7102,7 +7156,8 @@ app.post('/api/admin/posts/:slug/email', requireAdmin, route(async (req, res) =>
   // seconds, far inside the platform's ceiling.
   const sent = [], failed = [];
   for (const to of good) {
-    const okSend = await sendMail({ to, subject: p.title, text, html, replyTo: from || undefined });
+    const okSend = await sendMail({
+      kind: 'post-direct', to, subject: p.title, text, html, replyTo: from || undefined });
     (okSend ? sent : failed).push(to);
   }
   logAct(req, 'post', `emailed:${p.slug} ${sent.length}/${good.length}`.slice(0, 80));
@@ -7178,7 +7233,7 @@ async function sendPostTest(req, res, p) {
     intro: p.summary || `A new post on ${BRAND}.`, sub, topic,
     postal: await postalAddress(),
   });
-  const out = await sendMailResult(msg);
+  const out = await sendMailResult({ ...msg, kind: 'post-test' });
   logAct(req, 'post', `list-test:${p.slug}`.slice(0, 80));
   if (!out.ok) {
     return res.status(502).json({ error: `The provider refused it (HTTP ${out.status}).`, audience: 'test' });
@@ -7215,7 +7270,7 @@ async function sendPostToList(req, res, p) {
   for (const sub of batch) {
     if (!first) await pause(MAIL_RATE_MS);
     first = false;
-    const out = await sendMailResult(listMessage(p, { base, url, intro, sub, topic, postal }));
+    const out = await sendMailResult({ ...listMessage(p, { base, url, intro, sub, topic, postal }), kind: 'post-list' });
     if (out.retryable) {
       // The provider refused before it sent, so this reader is still owed their
       // copy: give the claim back and let the next batch pick them up.
@@ -8947,7 +9002,7 @@ async function sendRefreshReport(state, kind = 'all', snap = null) {
     // report is still kept on the run, for /refreshes.
     const to = MAIL_READY && kind !== 'plain' ? await operatorEmail() : null;
     if (to) {
-      ok = await sendMail({ to, subject, text, html });
+      ok = await sendMail({ kind: 'refresh-report', to, subject, text, html });
       console.log(`report: ${kind === 'all' ? 'refresh all' : 'refresh'} summary ` +
         `${ok ? 'sent to ' + to : 'could not be sent'}`);
     }
@@ -9049,6 +9104,7 @@ async function finishLiveRefresh(payload, ctx = {}) {
   // on every refresh, so coverage accrues without a schedule of its own.
   store.pruneActivity(ACTIVITY_KEEP_DAYS).catch(() => { /* the bars rule */ });
   store.pruneRuns().catch(() => { /* the bars rule */ });
+  store.pruneMailLog().catch(() => { /* the bars rule */ });
 
   // Snapshot the day's fundamentals — but only during a Refresh all, which is
   // when the profile cache has actually been re-pulled. An ordinary price
@@ -10029,7 +10085,7 @@ app.get('/api/cron/watchdog', route(async (req, res) => {
       });
       const text = textShell({ heading, intro, lines: link ? [link] : [],
         note: 'Sent by the daily check that watches the nightly job.' });
-      mailed = await sendMail({ to, subject: `[Tickr Lab] ${heading} — ${today.day}`, text, html });
+      mailed = await sendMail({ kind: 'watchdog', to, subject: `[Tickr Lab] ${heading} — ${today.day}`, text, html });
     }
   }
   // Database usage, checked on the same daily pass rather than on its own
@@ -10055,7 +10111,7 @@ app.get('/api/cron/watchdog', route(async (req, res) => {
           note: 'Sent by the daily check that watches the nightly job and the database quota.' });
         const text = textShell({ heading, intro, lines: link ? [link] : [],
           note: 'Sent by the daily check that watches the nightly job and the database quota.' });
-        usageMailed = await sendMail({ to, subject: `[Tickr Lab] ${heading}`, text, html });
+        usageMailed = await sendMail({ kind: 'quota-alert', to, subject: `[Tickr Lab] ${heading}`, text, html });
       }
     }
   } catch (err) {

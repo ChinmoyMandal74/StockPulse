@@ -266,6 +266,30 @@ const SCHEMA = [
      ok      integer not null,
      primary key (slug, email)
    )`,
+  // Every message this app hands to the provider, one row each (2026-09-25).
+  // Built after a subscriber reported a post that never arrived and there was
+  // nothing to look at: the broadcast ledger covered list mail only, so a
+  // password reset or a contact form leaving the building was unrecorded.
+  //
+  // FACTS, NEVER CONTENT — the activity log's rule. Who it went to, what the
+  // subject line was, whether the provider took it and what it called it. No
+  // bodies: they would be a liability to hold and enormous to store, and the
+  // question this table answers is "did it leave, and what became of it".
+  `create table if not exists mail_log (
+     id          integer primary key autoincrement,
+     at          integer not null,
+     kind        text not null,
+     to_addr     text not null,
+     subject     text,
+     ok          integer not null,
+     status      integer,
+     provider_id text,
+     error       text,
+     bytes       integer
+   )`,
+  // The page reads a window ending at now, so the tail is a seek rather than a
+  // walk of everything ever sent.
+  `create index if not exists idx_mail_at on mail_log (at)`,
   `create table if not exists app_meta (
      key   text primary key,
      value text
@@ -1145,6 +1169,62 @@ async function deletePostImage(id) {
   await init();
   const r = await db.execute({ sql: 'delete from post_images where id = ?', args: [String(id)] });
   return Number(r.rowsAffected || 0) > 0;
+}
+
+// ---- what has been emailed ---------------------------------------------------
+// Kept to MAIL_LOG_KEEP_DAYS, pruned on the same rides the other logs use. Low
+// volume: a few hundred rows a month at list scale.
+const MAIL_LOG_KEEP_DAYS = Number(process.env.MAIL_LOG_KEEP_DAYS || 90);
+
+async function logMail(row) {
+  await init();
+  await db.execute({
+    sql: `insert into mail_log (at, kind, to_addr, subject, ok, status, provider_id, error, bytes)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [Date.now(), String(row.kind || 'other').slice(0, 30),
+      String(row.to || '').slice(0, 160), String(row.subject || '').slice(0, 200),
+      row.ok ? 1 : 0, row.status == null ? null : Number(row.status),
+      row.providerId == null ? null : String(row.providerId).slice(0, 80),
+      row.error == null ? null : String(row.error).slice(0, 200),
+      row.bytes == null ? null : Number(row.bytes)],
+  });
+}
+
+async function readMailLog(sinceMs, limit) {
+  await init();
+  const r = await db.execute({
+    sql: `select * from mail_log where at >= ? order by at desc limit ?`,
+    args: [Number(sinceMs) || 0, Math.min(2000, Number(limit) || 500)],
+  });
+  return r.rows.map((x) => ({
+    id: Number(x.id), at: Number(x.at), kind: String(x.kind),
+    to: String(x.to_addr), subject: x.subject == null ? '' : String(x.subject),
+    ok: Number(x.ok) === 1, status: x.status == null ? null : Number(x.status),
+    providerId: x.provider_id == null ? null : String(x.provider_id),
+    error: x.error == null ? null : String(x.error),
+    bytes: x.bytes == null ? null : Number(x.bytes),
+  }));
+}
+
+// Counted in SQL rather than by reading every row: the tail above is capped, so
+// a total taken from it would quietly understate once there are more messages
+// than the cap.
+async function mailCounts(sinceMs) {
+  await init();
+  const r = await db.execute({
+    sql: `select kind, ok, count(*) as n from mail_log where at >= ? group by kind, ok`,
+    args: [Number(sinceMs) || 0],
+  });
+  return r.rows.map((x) => ({ kind: String(x.kind), ok: Number(x.ok) === 1, n: Number(x.n) }));
+}
+
+async function pruneMailLog() {
+  await init();
+  const r = await db.execute({
+    sql: 'delete from mail_log where at < ?',
+    args: [Date.now() - MAIL_LOG_KEEP_DAYS * 86400000],
+  });
+  return Number(r.rowsAffected || 0);
 }
 
 // ---- the mailing list -------------------------------------------------------
@@ -3773,6 +3853,11 @@ module.exports = {
   readPostImage,
   listPostImages,
   deletePostImage,
+  // mail
+  logMail,
+  readMailLog,
+  mailCounts,
+  pruneMailLog,
   // the mailing list
   SUB_CONFIRM_TTL_MS,
   readSubscriber,
