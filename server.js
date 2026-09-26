@@ -1709,7 +1709,15 @@ app.post('/api/register', route(async (req, res) => {
   if (password.length < MIN_PASSWORD) {
     return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD} characters.` });
   }
-  if (SIGNUP_CODE && !safeEqual(code, SIGNUP_CODE)) {
+  // TRIMMED AND CASE-FOLDED before the compare. This is an invite code read
+  // off a phone screen and pasted out of WhatsApp, not a password: a mobile
+  // keyboard capitalises the first letter by default, and a paste carries a
+  // trailing space. Both would otherwise fail with "not valid", which the
+  // person reads as "you are not welcome" rather than "you have a space".
+  // Still constant-time, and the entropy lost to case-folding is nothing
+  // against a 5-per-IP-per-day ceiling.
+  const fold = (x) => String(x).trim().toLowerCase();
+  if (SIGNUP_CODE && !safeEqual(fold(code), fold(SIGNUP_CODE))) {
     return res.status(403).json({ error: 'That invite code is not valid.' });
   }
   if (await store.findUserByEmail(email)) {
