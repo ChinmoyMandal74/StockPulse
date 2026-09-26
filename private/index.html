@@ -30,14 +30,42 @@
       display: block; text-align: right;
       /* basis 0 → invisible to flex line-breaking, so it can never wrap a button */
       flex: 1 1 0; min-width: 0;
-      color: var(--muted); font-size: 12px; line-height: 1.4; white-space: nowrap;
+      font-size: 12px; line-height: 1.4; white-space: nowrap;
       overflow: hidden; text-overflow: ellipsis;
     }
-    .status::before {
+    /* THE BOX IS ON THE CHILD, NEVER ON .status (owner, 2026-09-26 — "the small
+       green blink is hard to see"). .status is `flex: 1 1 0` so that it absorbs
+       the bar's slack and can never wrap a button onto a second line, which
+       means it is as wide as whatever is left over — a background on it would
+       paint a band across half the bar rather than a pill round the words. The
+       child is inline-block, so the box is the size of the text. */
+    .status .pill {
+      display: inline-block; vertical-align: middle; max-width: 100%;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      padding: 3px 11px 3px 9px; border-radius: 999px;
+      color: var(--text); font-weight: 500;
+      border: 1px solid rgba(52, 211, 153, 0.34);
+      background: rgba(52, 211, 153, 0.13);
+      transition: background 0.4s var(--ease), border-color 0.4s var(--ease);
+    }
+    .status .pill::before {
       content: ''; display: inline-block; vertical-align: middle;
-      width: 6px; height: 6px; border-radius: 50%; margin-right: 8px;
+      width: 6px; height: 6px; border-radius: 50%; margin: -1px 8px 0 0;
       background: var(--green); box-shadow: 0 0 10px rgba(52, 211, 153, 0.9);
       animation: pulse 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+    }
+    /* AMBER IS NOT DECORATION HERE. It already means "notice this, it is old"
+       in the Price pulled column, the Turso usage bar and the studio's own
+       freshness line, so spending it on every reading would leave nothing to
+       say a reading is stale — and a badge that is always lit stops being read
+       within a day. Green while the numbers are current, amber once they are
+       not, and the box is what makes both legible. */
+    .status.stale .pill {
+      border-color: rgba(251, 191, 36, 0.55); background: rgba(251, 191, 36, 0.17);
+    }
+    .status.stale .pill::before {
+      background: var(--amber); box-shadow: 0 0 10px rgba(251, 191, 36, 0.9);
+      animation: none;   /* nothing is arriving — a pulse would say otherwise */
     }
     .status:empty { display: none; }
     @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.75); } }
@@ -4334,10 +4362,25 @@
     }
     window.addEventListener('resize', updateStickyOffsets);
 
-    function setStatus(msg) {
+    // How old the numbers may be before the readout says so. 26 hours is the
+    // studio's own freshness threshold, reused rather than reinvented — it
+    // clears an ordinary overnight gap and lights up on a Monday morning
+    // showing Friday's close, which is exactly when a reader should know.
+    const STATUS_STALE_MS = 26 * 60 * 60 * 1000;
+
+    function setStatus(msg, opts) {
       const el = $('status');
-      el.textContent = msg;
+      el.textContent = '';    // also restores :empty, which hides the box entirely
+      el.classList.toggle('stale', !!(opts && opts.stale));
       el.title = msg || '';   // the readout ellipsises when the row is tight
+      if (!msg) return;
+      // BUILT, NEVER INTERPOLATED. Portfolio and theme names arrive here as
+      // free text ("added to \"<name>\"."), so this stays textContent: an
+      // innerHTML pill would turn the one status line into an injection point.
+      const pill = document.createElement('span');
+      pill.className = 'pill';
+      pill.textContent = msg;
+      el.appendChild(pill);
     }
     function setError(msg) { $('error').textContent = msg || ''; }
 
@@ -4819,7 +4862,12 @@
         } else {
           const freshest = stocks.reduce((m, s) => (s.latestDate && s.latestDate > m ? s.latestDate : m), '');
           const prefix = data.fromSnapshot && !isAdmin ? 'As of' : 'Updated';
-          setStatus(`${prefix} ${fmtTime(data.updatedAt)}${freshest ? ' · as of ' + freshest : ''}`);
+          // An unparseable timestamp gives NaN, and NaN > x is false — so a bad
+          // date reads as fresh rather than as alarming, which is the right way
+          // round for a badge whose amber is supposed to mean something.
+          const age = Date.now() - new Date(data.updatedAt).getTime();
+          setStatus(`${prefix} ${fmtTime(data.updatedAt)}${freshest ? ' · as of ' + freshest : ''}`,
+            { stale: age > STATUS_STALE_MS });
         }
       } catch (err) {
         setError(err.message);
