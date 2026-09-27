@@ -1852,11 +1852,18 @@
     // The size band beside the cap it comes from. Blank means the instrument
     // has no capitalisation to band — an ETF reports AUM — and says so, rather
     // than being called the smallest company on the screen.
+    // NO HOVER CARD HERE EITHER (owner, 2026-09-27) — the third column to
+    // opt out, after Sector and Industry. Size is a `td.name`, so the card
+    // had always opened on it; a band name is a one-word reading nobody
+    // needs a field list for, and the card lands over the table on the way
+    // past. `nocard` goes on BOTH branches, valued and blank, for the reason
+    // the other two record: a card on the em-dash rows and not the ones
+    // above them reads as a bug rather than as a rule.
     function capBandCell(s) {
       if (!s.capBand) {
-        return `<td class="name left grp-info na" title="No market capitalisation — a fund reports assets under management instead.">—</td>`;
+        return `<td class="name left grp-info nocard na" title="No market capitalisation — a fund reports assets under management instead.">—</td>`;
       }
-      return `<td class="name left grp-info"${attr(Filters.CAP_RANGE[s.capBand] || '')}>${we(s.capBand)}</td>`;
+      return `<td class="name left grp-info nocard"${attr(Filters.CAP_RANGE[s.capBand] || '')}>${we(s.capBand)}</td>`;
     }
 
     function earningsCell(s, cacheTitle) {
