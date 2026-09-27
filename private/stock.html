@@ -620,9 +620,13 @@
     // screener's own RSI column.
     const RSI_LEN = 14;
     let showRSI = true;
-    // The trend-hold overlay: in only through the green trend states. On by
-    // default — it is the question the ribbon exists to raise.
-    let showTrendHold = true;
+    // THE RIBBON AND THE LINE ARE TWO THINGS, and only one of them is a
+    // hypothesis. The ribbon is a reading of the bars — what the trend rules
+    // said on each session — and is always drawn. The dashed trend-hold line
+    // is a simulated equity curve, and this flag is ONLY that line (with the
+    // legend's return stat and the why card, which both describe it). Off by
+    // default at the owner's instruction: the chart opens as a price chart.
+    let showTrendLine = false;
     let stock = null;
 
     const curSym = (c) => ({ USD: '$', EUR: '€', GBP: '£', JPY: '¥', KRW: '₩', INR: '₹' }[c] || '');
@@ -1271,18 +1275,16 @@
         const rsiAllFull = RowCard.rsiSeries(all, RSI_LEN);   // the replay reads it even when the pane is off
         const rsi = showRSI ? rsiAllFull.slice(from) : null;
         const rsiNow = rsi ? [...rsi].reverse().find((v) => v != null) ?? null : null;
-        // The ribbon's words drive both the strip and the trend-hold line,
-        // and the line must exist before the chart draws it. Thresholds
-        // follow the stock's current type — the classification is not
-        // replayable historically; today's rules, today's type, replayed.
-        // TREND off removes everything the trend machinery draws — the
-        // line, the ribbon, the legend and the why card.
-        const trend = showTrendHold
-          ? trendSeries(all, from, (stock && stock.companyType) || 'Established', rulesCfg()) : null;
+        // ALWAYS computed: the ribbon is a reading of the bars, not an
+        // option, and the crosshair's Trend row comes off the same words.
+        // Thresholds follow the stock's current type — the classification is
+        // not replayable historically; today's rules, today's type, replayed.
+        const trend = trendSeries(all, from, (stock && stock.companyType) || 'Established', rulesCfg());
         // The Balanced verdicts feed the readout's Model row and the why
-        // card only — never the line.
-        const verds = showTrendHold ? verdictSeries(all, from, rulesCfg(), rsiAllFull) : null;
-        const th = showTrendHold ? trendHoldSeries(closes, trend) : null;
+        // card only — never the line. Both of those explain the GAP between
+        // the dashed line and the model, so they follow the line's toggle.
+        const verds = showTrendLine ? verdictSeries(all, from, rulesCfg(), rsiAllFull) : null;
+        const th = showTrendLine ? trendHoldSeries(closes, trend) : null;
         // Resolved before the chart is built, so the legend and the lines are
         // drawn from one list and cannot disagree about which indices are up.
         const drawnBench = wantBench.map((b, i) => {
@@ -1342,7 +1344,9 @@
 
         const strip = document.getElementById('trendStrip');
         if (strip) {
-          const html = showTrendHold ? trendStripHtml(trend, th, thLabel, true) : '';
+          // Always offered; empty only when no session carries a known trend
+          // word, where an unpainted track would say nothing.
+          const html = trendStripHtml(trend, th, thLabel, true);
           strip.innerHTML = html;
           strip.hidden = !html;
           const wl = strip.querySelector('[data-why]');
@@ -1350,7 +1354,7 @@
         }
         const wb = document.getElementById('whyBox');
         if (wb) {
-          if (!showTrendHold) whyOpen = false;
+          if (!showTrendLine) whyOpen = false;
           if (whyOpen) renderWhy();          // a repaint means a new range or rule set
           else { wb.hidden = true; wb.innerHTML = ''; }
         }
@@ -1372,7 +1376,7 @@
     // question "why do these differ" needs a second rule to differ from.
     function renderWhy() {
       const wb = document.getElementById('whyBox');
-      if (!wb || !paintCtx || !showTrendHold || !paintCtx.trend) return;
+      if (!wb || !paintCtx || !showTrendLine || !paintCtx.trend) return;
       const pName = 'Balanced';
       const verds = verdictSeries(paintCtx.all, paintCtx.from, rulesCfg(), paintCtx.rsiAll);
       const cmp = compareRuns(paintCtx.closes, paintCtx.trend, verds);
@@ -1454,8 +1458,8 @@
                    opens on the pair already on screen rather than asking again. -->
               <a class="rng" id="cmpFull" href="/compare/${encodeURIComponent(stock.symbol)}"
                 title="Open both of these on the compare page — every field, side by side">Compare ▸</a>
-              <button class="rng th-toggle${showTrendHold ? ' on' : ''}" id="thBtn"
-                title="What holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on">TREND</button></span>
+              <button class="rng th-toggle${showTrendLine ? ' on' : ''}" id="thBtn"
+                title="Draw the dashed trend-hold line: what holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on. The trend ribbon under the chart is always shown.">TREND</button></span>
             <span class="share" id="share" hidden>
               <button class="rng shr" id="shrBtn" type="button" aria-expanded="false" aria-haspopup="true"
                 title="Save this chart as a branded image, sized for a feed post or a story">
@@ -1746,9 +1750,9 @@
         const b = e.target.closest('.rng');
         if (!b) return;
         if (b.id === 'thBtn') {
-          showTrendHold = !showTrendHold;
-          window.track && track('chart', 'trend:' + (showTrendHold ? 'on' : 'off'));
-          b.classList.toggle('on', showTrendHold);
+          showTrendLine = !showTrendLine;
+          window.track && track('chart', 'trend:' + (showTrendLine ? 'on' : 'off'));
+          b.classList.toggle('on', showTrendLine);
           paintChart();
           return;
         }
