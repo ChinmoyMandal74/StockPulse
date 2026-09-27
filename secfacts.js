@@ -191,14 +191,14 @@ function fill(r) {
 const NO_DIFF = new Set([...INSTANT, 'sharesDiluted', 'epsDiluted']);
 
 function deriveQuarters(rows) {
-  // The latest filing of each distinct (start, end) — a restatement should
-  // feed the subtraction, not the original.
+  // The filing that speaks for each distinct (start, end) — a restatement
+  // should feed the subtraction, but a proxy that mentions one number must
+  // not displace the 10-K that carries the statement. See `outranks`.
   const best = new Map();
   for (const r of rows) {
     if (!r.periodStart || r.derived) continue;
     const k = r.periodStart + '|' + r.periodEnd;
-    const prev = best.get(k);
-    if (!prev || r.filed > prev.filed) best.set(k, r);
+    if (outranks(r, best.get(k))) best.set(k, r);
   }
   // One cumulative ladder per fiscal-year start.
   const chains = new Map();
@@ -285,16 +285,38 @@ function relabel(rows) {
   return rows;
 }
 
-// The latest filing's version of each period — what a reader expects to see,
-// since it is the company's current statement of its own past.
+// ---- which filing speaks for a period ------------------------------------
+//
+// A PROXY IS NOT A FINANCIAL STATEMENT, and "the most recent filing wins" is
+// not enough on its own. Measured on RBLX: FY2025 revenue and cash flow
+// appear in the 10-K of 2026-02-11, while a **DEF 14A of 2026-04-16 carries
+// NetIncomeLoss and nothing else** — so the newest filing for that period was
+// a one-number row, and everything differenced from it lost its inputs. On
+// the page that showed as a Q4 with a net income and eleven dashes.
+//
+// Found by a screenshot of the live card, not by an assertion.
+//
+// So a statement form outranks a mention, and only then does recency decide.
+// The others are still STORED — an 8-K sometimes carries real preliminary
+// results, and the trail is the point — they simply do not get to speak for
+// a period while a real statement exists.
+const STATEMENT_FORM = /^(10-K|10-Q|20-F|40-F)(\/A)?$/i;
+const isStatement = (r) => STATEMENT_FORM.test(String((r && r.form) || ''));
+function outranks(a, b) {
+  if (!b) return true;
+  const sa = isStatement(a); const sb = isStatement(b);
+  if (sa !== sb) return sa;
+  if (a.filed !== b.filed) return a.filed > b.filed;
+  return !a.derived && !!b.derived;     // a filed period beats a computed one
+}
+
+// The current version of each period — what a reader expects to see, since
+// it is the company's own latest statement of its own past.
 function latestPerPeriod(rows) {
   const best = new Map();
   for (const r of rows) {
     const k = r.periodType + '|' + r.periodEnd;
-    const prev = best.get(k);
-    if (!prev || r.filed > prev.filed || (r.filed === prev.filed && !r.derived && prev.derived)) {
-      best.set(k, r);
-    }
+    if (outranks(r, best.get(k))) best.set(k, r);
   }
   return [...best.values()].sort((a, b) => (a.periodEnd < b.periodEnd ? 1 : -1));
 }
@@ -310,5 +332,5 @@ function filingUrl(cik, accn) {
 
 module.exports = {
   CONCEPTS, CONCEPT_KEYS, INSTANT, NO_DIFF,
-  periodType, normalise, deriveQuarters, latestPerPeriod, filingUrl,
+  periodType, normalise, deriveQuarters, latestPerPeriod, filingUrl, isStatement,
 };
