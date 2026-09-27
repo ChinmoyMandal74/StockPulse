@@ -1797,8 +1797,16 @@
     // `s.sector` raw while the industry cell beside it used `we()`, so a
     // provider string carrying markup would have been injected into every row.
     // Latent rather than exploited, and free to close while rewriting the line.
+    // NO HOVER CARD ON THESE TWO COLUMNS (owner, 2026-09-27). The card
+    // attaches to `td.name`, which these are, so it had always opened here —
+    // harmless while the cells were only read, and an ambush once they became
+    // buttons: it lands over the table on the way to the click, which is the
+    // complaint that took the card off touch devices. `nocard` is on EVERY
+    // cell in both columns, valued or blank, because a card that appears on
+    // the em-dash rows and not the ones above them reads as a bug. Name,
+    // Exchange and Size are untouched.
     function classCell(key, val, what, extraCls, title) {
-      const base = 'name left grp-info' + extraCls;
+      const base = 'name left grp-info nocard' + extraCls;
       if (!val) return `<td class="${base}"${attr(title)}>—</td>`;
       return `<td class="${base} cellfil" data-${key}="${we(val)}"` +
         attr(title + ` · click to show only this ${what}`) + `>${we(val)}</td>`;
@@ -3537,7 +3545,10 @@
 
     rowcardApi = RowCard.attach({
       root: $('tbody'),
-      selector: 'td.name',
+      // `.nocard` opts a column out — see classCell. Excluded here rather
+      // than inside the card, so the two columns that filter on click never
+      // race a card into the space the pointer is travelling through.
+      selector: 'td.name:not(.nocard)',
       colors: GROUP_COLORS,
       labels: GROUP_LABELS,
       onShow: () => hideTip(),
