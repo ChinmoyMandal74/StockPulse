@@ -2249,6 +2249,13 @@ const BRAND = 'Tickr Lab';
 // them still matches this string exactly, naming any file that drifts. Same
 // bargain /help takes with the numbers it restates.
 const BRAND_TAG = 'From data to decisions';
+// The Instagram handle, on the same bargain as the tagline: defined here for
+// the mail shells, restated as text on the static public pages because they
+// cannot read a server constant, and `tagline-test.js` names any page that
+// drifts. Stored WITHOUT the @ so the one place a URL is built cannot end up
+// with it in the path — the @ is display, and every surface adds it.
+const BRAND_IG = 'tickr_lab';
+const BRAND_IG_URL = `https://instagram.com/${BRAND_IG}`;
 
 // Colours picked for a light background rather than lifted from the app: mail
 // clients invert or ignore dark themes unpredictably, and a screenshot-black
@@ -2501,6 +2508,9 @@ function emailShell({ heading, intro, body = '', note = '' }) {
     `<p style="margin:0;font-family:${sans};font-size:12.5px;line-height:1.6;color:${MC.faint}">` +
     `<strong style="color:${MC.mute}">${BRAND}</strong> — ${BRAND_TAG}` +
     (site ? `<br><a href="${site}" style="color:${MC.mute};text-decoration:underline">${site.replace(/^https?:\/\//, '')}</a>` : '') +
+    // An absolute https link, never a bare handle: a mail client will not turn
+    // "@tickr_lab" into anything, and the reader is not going to type it.
+    ` &nbsp;·&nbsp; <a href="${BRAND_IG_URL}" style="color:${MC.mute};text-decoration:underline">@${BRAND_IG}</a>` +
     `</p></td></tr>` +
 
     `</table></td></tr></table></body></html>`;
@@ -2515,6 +2525,9 @@ function textShell({ heading, intro, lines = [], note = '' }) {
   if (note) out.push(note);
   out.push(`${BRAND} — ${BRAND_TAG}`);
   if (APP_URL) out.push(APP_URL);
+  // The full URL here too. A plain-text reader gets no markup, so a bare
+  // handle would be a dead string; most clients linkify an https:// one.
+  out.push(`Instagram: ${BRAND_IG_URL}`);
   return out.join('\n');
 }
 
