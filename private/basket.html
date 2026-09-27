@@ -262,15 +262,24 @@
                      '#60a5fa', '#fb7185', '#2dd4bf', '#e879f9', '#facc15', '#94a3b8'];
     const stockColor = (i) => PALETTE[i % PALETTE.length];
 
-    // ---- the one chart: basket + universe + every stock as a thin line ----
-    function chartSvg(dates, a, b, overlays) {
+    // The benchmark lines, in draw order. Accent and violet rather than
+    // green and red: those two already mean up and down on every chart here,
+    // and an index coloured by its own direction would be making a different
+    // claim from the one the chart is for.
+    const BENCH_TINT = { SPY: '#7c9cff', DIA: '#a78bfa' };
+    const benchLines = () => ((curve && curve.bench) || [])
+      .map((b) => ({ ...b, color: BENCH_TINT[b.sym] || '#7d8797' }));
+
+    // ---- the one chart: basket + benchmarks + every stock as a thin line ----
+    function chartSvg(dates, a, marks, overlays) {
       const W = 1000, H = 340, PL = 64, PR = 20, PT = 14, PB = 30;
       const toPct = (arr) => arr.map((v) => (v == null ? null : (v - 1) * 100));
-      const A = toPct(a), B = toPct(b);
+      const A = toPct(a);
+      const M = (marks || []).map((m) => ({ ...m, S: toPct(m.index || []) }));
       const O = (overlays || []).map((o) => ({ sym: o.sym, color: o.color, S: toPct(o.S) }));
       // the scale covers whatever is actually drawn — hide a runaway stock
       // from its chip and the rest get the room back
-      const vals = A.concat(B).concat(...O.map((o) => o.S)).filter((v) => v != null);
+      const vals = A.concat(...M.map((m) => m.S)).concat(...O.map((o) => o.S)).filter((v) => v != null);
       if (!vals.length) return '<div class="empty">No history for this window.</div>';
       let lo = Math.min(...vals, 0), hi = Math.max(...vals, 0);
       const pad = Math.max(1, (hi - lo) * 0.08); lo -= pad; hi += pad;
@@ -302,11 +311,11 @@
       };
       const overlayPaths = O.map((o) =>
         `<path data-line="${esc(o.sym)}" d="${path(o.S)}" fill="none" stroke="${o.color}" stroke-width="1.3" opacity="0.5"/>`).join('');
-      return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Basket vs universe">` + grid +
+      return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="This group against the S&amp;P 500 and the Dow">` + grid +
         overlayPaths +
-        `<path d="${path(B)}" fill="none" stroke="#7c9cff" stroke-width="2" opacity="0.65"/>` +
+        M.map((m) => `<path d="${path(m.S)}" fill="none" stroke="${m.color}" stroke-width="2" opacity="0.65"/>`).join('') +
         `<path d="${path(A)}" fill="none" stroke="#34d399" stroke-width="2.6"/>` +
-        endTag(A, '#34d399') + endTag(B, '#7c9cff') +
+        endTag(A, '#34d399') + M.map((m) => endTag(m.S, m.color)).join('') +
         `<text x="${PL}" y="${H - 8}" font-size="12" fill="#7d8797" font-family="Geist Mono, monospace">${esc(d0)}</text>` +
         `<text x="${W - PR}" y="${H - 8}" text-anchor="end" font-size="12" fill="#7d8797" font-family="Geist Mono, monospace">${esc(d1)}</text></svg>`;
     }
@@ -344,18 +353,27 @@
         const m = mean(rs.map((s) => s[f]));
         return `<td class="${cls(m)}">${pct(m)}</td>`;
       }).join('');
+      // The SAME benchmarks the curve draws, so the picture and the numbers
+      // cannot name different comparisons. An index is one row, so its
+      // "mean" is its own return.
+      const marks = benchLines()
+        .map((b) => ({ ...b, row: allRows.find((s) => s.symbol === b.sym) }))
+        .filter((b) => b.row);
+      const lead = marks[0];
       const diff = HZ.map(([, f]) => {
-        const a = mean(rows.map((s) => s[f])), b = mean(allRows.map((s) => s[f]));
+        const a = mean(rows.map((s) => s[f])), b = lead ? lead.row[f] : null;
         const d = a != null && b != null ? a - b : null;
         return `<td class="${cls(d)}">${pct(d)}</td>`;
       }).join('');
-      return '<section class="bezel card"><div class="core"><h2>Returns, next to the whole screen</h2>' +
+      return '<section class="bezel card"><div class="core"><h2>Returns, against the index</h2>' +
         `<table><thead><tr><th></th>${HZ.map(([h]) => `<th>${h}</th>`).join('')}</tr></thead><tbody>` +
-        `<tr><td>This list (mean of ${rows.length})</td>${cells(rows)}</tr>` +
-        `<tr><td>All ${allRows.length} screened</td>${cells(allRows)}</tr>` +
-        `<tr><td>Difference</td>${diff}</tr>` +
+        `<tr><td>This group (mean of ${rows.length})</td>${cells(rows)}</tr>` +
+        marks.map((b) => `<tr><td>${esc(b.label)}</td>${cells([b.row])}</tr>`).join('') +
+        (lead ? `<tr><td>Difference vs ${esc(lead.label)}</td>${diff}</tr>` : '') +
         '</tbody></table>' +
-        '<p class="note" style="margin-top:10px">Mean of each stock’s own return per horizon — an equal-weight reading, not an account.</p>' +
+        '<p class="note" style="margin-top:10px">Mean of each stock’s own return per horizon — an equal-weight ' +
+        'reading, not an account. The index rows are that ETF’s own return over the same horizon, which tracks ' +
+        'the index and is not the index itself.</p>' +
         '</div></section>';
     }
 
@@ -496,7 +514,9 @@
       return '<section class="bezel card"><div class="core"><h2>Fundamentals, against the whole screen</h2>' +
         '<table><thead><tr><th></th><th>This group</th><th>All screened</th><th>Gap</th><th>n</th></tr></thead>' +
         `<tbody>${body}</tbody></table>` +
-        '<p class="note">Medians, not means — one extreme multiple would drag a mean somewhere no company ' +
+        '<p class="note">Compared against the whole screen rather than an index: the S&P 500 and the Dow ' +
+        'are ETFs here, and a fund has no margin, no growth and no P/E of its own to compare with. ' +
+        'Medians, not means — one extreme multiple would drag a mean somewhere no company ' +
         'in the group sits. A forward P/E at or below zero is excluded: a multiple off a loss is arithmetic, ' +
         'not cheapness.' +
         (dropped ? ` ${dropped} financial${dropped === 1 ? '' : 's'} excluded from gross margin, where a lender's figure means nothing.` : '') +
@@ -550,9 +570,10 @@
       let chips = '';
       if (curve && curve.dates && curve.dates.length) {
         const overlays = showStocks ? items.filter((it) => !hiddenSyms.has(it.sym)) : [];
-        body = chartSvg(curve.dates, curve.basket || [], curve.universe || [], overlays);
+        body = chartSvg(curve.dates, curve.basket || [], benchLines(), overlays);
         const skipped = curve.basketOf - curve.basketUsed;
-        cap = `Equal dollars at the window start, held — a reading of the LIST, not an account.` +
+        cap = 'Equal dollars at the window start, held — a reading of the GROUP, not an account. ' +
+          'The index lines are rebased at the same point, on the same convention.' +
           (skipped > 0 ? ` ${skipped} symbol${skipped > 1 ? 's' : ''} had no history at the start and sat out.` : '') +
           (showStocks ? ' Each thin line is one stock on its own first close. Click a chip to hide or show that stock (the scale re-fits), hover one to lift its line out of the crowd, or use None and add back just the ones you want.' : '');
         if (showStocks) {
@@ -571,7 +592,8 @@
           `${showStocks ? 'Hide' : 'Show'} the ${items.length} stocks</button>` : '') +
         '</div>' +
         `<div id="chartBox">${body}</div>` +
-        '<div class="lgd"><span style="--c:#34d399">This list</span><span style="--c:#7c9cff">All screened, same convention</span></div>' +
+        `<div class="lgd"><span style="--c:#34d399">This group</span>${benchLines()
+          .map((b) => `<span style="--c:${b.color}">${esc(b.label)}</span>`).join('')}</div>` +
         chips +
         (cap ? `<p class="note" style="margin-top:10px">${cap}</p>` : '') +
         '</div></section>';

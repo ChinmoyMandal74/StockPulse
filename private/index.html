@@ -701,6 +701,10 @@
     }
     tbody tr:hover .remove, .remove:focus-visible { opacity: 1; }
     .remove:hover { color: var(--red); background: rgba(251, 113, 133, 0.12); }
+    /* A locked benchmark: still there, visibly not a button. The hover rule
+       above is undone by name, or a disabled × would still light up red. */
+    .remove:disabled { cursor: not-allowed; color: var(--faint); }
+    .remove:disabled:hover { color: var(--faint); background: none; }
 
     /* member-portfolio furniture: the row star, the dashed personal badge,
        and the fixed membership popover the star opens */
@@ -1545,6 +1549,11 @@
     // boot rather than per row; a device that gains a mouse mid-session gets
     // the behaviour back on reload, which is not worth a listener.
     const HOVERS = RowCard.canHover();
+    // The four index ETFs. Mirrors BENCHMARKS in server.js, which is where
+    // the refusal actually lives — this copy only decides whether the button
+    // looks available, and a stale copy here can at worst offer a click the
+    // server then declines with its own sentence.
+    const BENCH_LOCK = new Set(['SPY', 'QQQ', 'IWM', 'DIA']);
     const GROUPS = ['info', 'rank', 'act', 'chart', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund', 'own'];
     const GROUP_COLORS = {
       // Warm neutral, and the only unused region of the palette: every other
@@ -2995,9 +3004,19 @@
     // One row of the table. Pulled out of render() so a window repaint can
     // build a slice of rows without rebuilding the page around them.
     function rowHtml(s, i, freshest) {
-        const rmTitle = activeTab === 'All' ? 'Remove from the screener' : `Remove from ${activeTab}`;
+        // A BENCHMARK CANNOT LEAVE THE SCREENER. Every group page draws its
+        // line, so removing one would take the comparison off pages that
+        // have nothing to do with this row — damage that shows up somewhere
+        // else entirely. The route refuses it (409); the button is disabled
+        // and says why, because a control that looks live and then errors is
+        // worse than one that explains itself. Removing it from a THEME is
+        // untouched — that purges nothing.
+        const locked = activeTab === 'All' && BENCH_LOCK.has(s.symbol);
+        const rmTitle = locked
+          ? `${s.symbol} is a benchmark — the group pages draw its line, so it stays in the screener`
+          : activeTab === 'All' ? 'Remove from the screener' : `Remove from ${activeTab}`;
         const removeBtn = isAdmin
-          ? `<td><button class="remove" data-remove="${s.symbol}" title="${rmTitle}" aria-label="${rmTitle}"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-x" /></svg></button></td>`
+          ? `<td><button class="remove" ${locked ? 'disabled' : `data-remove="${s.symbol}"`} title="${we(rmTitle)}" aria-label="${we(rmTitle)}"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-x" /></svg></button></td>`
           : '<td></td>';
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">

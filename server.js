@@ -19,13 +19,23 @@ const TD_BASE = 'https://api.twelvedata.com';
 // (which fetches it live, since it is deliberately never archived) and the
 // backtest's S&P comparison.
 const BENCHMARK = 'SPY';
-// The index-tracking ETFs. They are ordinary universe rows — a stranger can
-// chart them and the stock page overlays them — but they are EXCLUDED from
-// every "your universe, equal weight" line, because a comparison against a
-// universe containing the thing you are comparing to is circular. Four rows in
-// 431 is under a percent, so this is about the claim rather than the number.
+// The index-tracking ETFs. Ordinary universe rows — a stranger can chart
+// them, the stock page overlays them, and since 2026-09-27 the group pages
+// draw two of them as THE comparison line. `notBenchmark` went with the
+// "your universe, equal weight" line it existed to keep circular rows out
+// of: nothing computes that line any more, and a predicate nothing calls is
+// residue that reads as intent.
 const BENCHMARKS = new Set(['SPY', 'QQQ', 'IWM', 'DIA']);
-const notBenchmark = (sym) => !BENCHMARKS.has(sym);
+// AND THEY CANNOT BE REMOVED FROM THE SCREENER (2026-09-27, owner: "do not
+// allow deleting all 4 benchmark theme stocks"). Pages now draw them as the
+// comparison line rather than deriving one from the universe, so dropping
+// one would quietly take the benchmark off every group page — a deletion
+// whose damage shows up somewhere else entirely. Refused in the route, not
+// only greyed in the UI.
+// The two the group pages draw beside a basket. Labels here rather than in
+// the page, so basket.html restates nothing; stock.html keeps its own list
+// because those are four toggles with their own colours, a different control.
+const PAGE_BENCHMARKS = [['SPY', 'S&P 500'], ['DIA', 'Dow 30']];
 // Persistence lives in Turso (libSQL). The accessors below keep the shapes the
 // old flat-file helpers returned, so this file only had to gain `await`s.
 // See db.js and migrate-to-turso.js.
@@ -5140,6 +5150,11 @@ app.delete('/api/portfolios/:name/tickers/:symbol', requireAdmin, route(async (r
 app.delete('/api/tickers/:symbol', requireAdmin, route(async (req, res) => {
   const symbol = String(req.params.symbol || '').trim().toUpperCase();
   if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Invalid symbol format.' });
+  if (BENCHMARKS.has(symbol)) {
+    return res.status(409).json({
+      error: `${symbol} is a benchmark — every group page draws its line, so it cannot be removed.`,
+    });
+  }
   await store.removeFromUniverse(symbol);
   logAct(req, 'portfolio', 'remove:' + symbol);
   const purged = [];
@@ -9193,7 +9208,7 @@ async function basketPayload(req, rawName, days) {
     return { error: 'No such theme.', status: 404 };
   }
   if (!symbols.length) {
-    return { label, scope, mine: rawName.startsWith('my:'), symbols: [], dates: [], basket: null, universe: null };
+    return { label, scope, mine: rawName.startsWith('my:'), symbols: [], dates: [], basket: null, bench: [] };
   }
 
   const since = new Date(Date.now() - Math.round(days * 1.55 + 14) * 86400000)
@@ -9214,11 +9229,22 @@ async function basketPayload(req, rawName, days) {
     .filter((d) => perDate.get(d) >= busiest * 0.5)
     .sort()
     .slice(-days);
-  if (!dates.length) return { label, scope, mine: rawName.startsWith('my:'), symbols, dates: [], basket: null, universe: null };
+  if (!dates.length) return { label, scope, mine: rawName.startsWith('my:'), symbols, dates: [], basket: null, bench: [] };
 
   const basket = equalWeightIndex(bars, symbols, dates);
-  // The stocks you follow, without the benchmarks that track the market.
-  const universe = equalWeightIndex(bars, all.filter(notBenchmark), dates);
+  // THE COMPARISON IS THE INDEX, NOT YOUR OWN UNIVERSE (2026-09-27, owner's
+  // call). An equal-weight line over everything screened answered "did this
+  // group beat the rest of my list", which changes meaning every time a
+  // ticker is added and means nothing to anyone else. The S&P 500 and the
+  // Dow are fixed, public and what a reader already has a feel for.
+  //
+  // One symbol through the same equal-weight function, so the basket and its
+  // benchmark are rebased on the same convention and the same date axis — a
+  // second code path here is how the two would come to disagree.
+  const bench = PAGE_BENCHMARKS.map(([sym, label]) => {
+    const e = equalWeightIndex(bars, [sym], dates);
+    return { sym, label, index: e.index, used: e.used };
+  }).filter((b) => b.used);   // no history, no line — never a flat one
   return {
     label,
     scope,
@@ -9226,10 +9252,7 @@ async function basketPayload(req, rawName, days) {
     symbols,
     dates,
     basket: basket.index, basketUsed: basket.used, basketOf: symbols.length,
-    // The count must describe the curve, not the table: the benchmarks are
-    // out of the line, so they are out of the number beside it too.
-    universe: universe.index, universeUsed: universe.used,
-    universeOf: all.filter(notBenchmark).length,
+    bench,
     series: symbolSeries(bars, symbols, dates),
   };
 }
