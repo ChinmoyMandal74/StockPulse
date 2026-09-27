@@ -674,6 +674,68 @@ const SCHEMA = [
    )`,
   // The one question this table is for — "what is above N" — is a range scan.
   'create index if not exists idx_nasdaq_cap on nasdaq_listings(market_cap)',
+
+  // ---- SEC EDGAR filings (2026-09-27, owner's request) --------------------
+  // One row per (filing, period). Every concept on a row therefore comes from
+  // ONE document, so a revenue can never be paired with a net income from a
+  // different filing.
+  //
+  // THE RESTATEMENT TRAIL IS KEPT, which is why `accn` is in the key rather
+  // than one row per period: the same period is reported again in later
+  // filings — measured on MSFT, 49 of 63 — and the EARLIEST `filed` for a
+  // period is as-first-reported, the one thing no vendor sells and the one
+  // thing that cannot be recovered once discarded.
+  //
+  // FOR DISPLAY ONLY. Nothing here may reach the Advice engine or the
+  // screener; see secfacts.js and the CLAUDE.md section for the boundary and
+  // the test that enforces it.
+  `create table if not exists sec_facts (
+     symbol        text not null,
+     cik           integer,
+     accn          text not null,
+     form          text,
+     filed         text not null,
+     fy            integer,
+     fp            text,
+     period_start  text,
+     period_end    text not null,
+     period_type   text not null,
+     derived       integer not null default 0,
+     derived_fields text,
+     revenue          real,
+     cost_of_revenue  real,
+     gross_profit     real,
+     operating_income real,
+     net_income       real,
+     eps_diluted      real,
+     operating_cash_flow real,
+     capex            real,
+     free_cash_flow   real,
+     assets           real,
+     liabilities      real,
+     equity           real,
+     cash             real,
+     debt             real,
+     shares_diluted   real,
+     primary key (symbol, accn, period_end, period_type)
+   )`,
+  // The stock page asks for one symbol, newest first — a seek on the primary
+  // key's leading column. The second index is the coverage question the admin
+  // page asks ("who has nothing, who is stale"), which would otherwise scan.
+  'create index if not exists idx_sec_symbol_end on sec_facts (symbol, period_end)',
+
+  // When each symbol's filings were last pulled, and what came back. Separate
+  // from the facts for the reason news_state is separate from news: a company
+  // with nothing filed still has to count as CHECKED, or the refresh picks it
+  // forever and reports itself unfinished.
+  `create table if not exists sec_state (
+     symbol     text primary key,
+     cik        integer,
+     fetched_at integer not null,
+     rows       integer not null default 0,
+     status     text,
+     error      text
+   )`,
 ];
 
 // Columns added after a table shipped. SQLite has no "add column if not
@@ -1871,6 +1933,96 @@ async function readEarnings(symbol) {
   }));
 }
 
+// ---- SEC EDGAR filings ----------------------------------------------------
+//
+// DISPLAY ONLY. These never reach the snapshot, the screener or the Advice
+// engine — see secfacts.js for why that boundary exists.
+
+const SEC_COLS = ['symbol', 'cik', 'accn', 'form', 'filed', 'fy', 'fp',
+  'period_start', 'period_end', 'period_type', 'derived', 'derived_fields',
+  'revenue', 'cost_of_revenue', 'gross_profit', 'operating_income', 'net_income',
+  'eps_diluted', 'operating_cash_flow', 'capex', 'free_cash_flow',
+  'assets', 'liabilities', 'equity', 'cash', 'debt', 'shares_diluted'];
+// camelCase on the row -> snake_case in the table, named once.
+const SEC_FIELD = {
+  cost_of_revenue: 'costOfRevenue', gross_profit: 'grossProfit',
+  operating_income: 'operatingIncome', net_income: 'netIncome',
+  eps_diluted: 'epsDiluted', operating_cash_flow: 'operatingCashFlow',
+  free_cash_flow: 'freeCashFlow', shares_diluted: 'sharesDiluted',
+  period_start: 'periodStart', period_end: 'periodEnd', period_type: 'periodType',
+  derived_fields: 'derivedFields',
+};
+const secVal = (row, col) => {
+  const v = row[SEC_FIELD[col] || col];
+  return v === undefined ? null : v;
+};
+
+// Whole-symbol replace, the profiles rule: a re-pull is the authority on that
+// symbol. MULTI-ROW INSERTS, not one statement per row — measured at 23x on
+// tech_history, where the cost turned out to be per STATEMENT rather than
+// per row. Chunked at 100 so the bound-parameter count stays modest.
+async function writeSecFacts(symbol, rows, meta = {}) {
+  await init();
+  const sym = String(symbol).toUpperCase();
+  const stmts = [{ sql: 'delete from sec_facts where symbol = ?', args: [sym] }];
+  const place = '(' + SEC_COLS.map(() => '?').join(',') + ')';
+  for (let i = 0; i < rows.length; i += 100) {
+    const chunk = rows.slice(i, i + 100);
+    stmts.push({
+      sql: `insert or replace into sec_facts (${SEC_COLS.join(',')}) values ` +
+        chunk.map(() => place).join(','),
+      args: chunk.flatMap((r) => SEC_COLS.map((c) => (c === 'symbol' ? sym : secVal(r, c)))),
+    });
+  }
+  stmts.push({
+    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error)
+          values (?, ?, ?, ?, ?, ?)`,
+    args: [sym, meta.cik == null ? null : Number(meta.cik), Date.now(), rows.length,
+      meta.status || 'ok', meta.error || null],
+  });
+  await db.batch(stmts);
+  return rows.length;
+}
+
+// A symbol that could not be fetched is still CHECKED. Without this the
+// refresh re-picks it forever and can never report itself finished — the
+// news-staleness lesson, which cost a loop that ran until it was stopped.
+async function noteSecMiss(symbol, status, error) {
+  await init();
+  await db.execute({
+    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error)
+          values (?, (select cik from sec_state where symbol = ?), ?, 0, ?, ?)`,
+    args: [String(symbol).toUpperCase(), String(symbol).toUpperCase(), Date.now(),
+      status || 'none', error ? String(error).slice(0, 300) : null],
+  });
+}
+
+async function readSecFacts(symbol) {
+  await init();
+  const r = await db.execute({
+    sql: `select ${SEC_COLS.join(',')} from sec_facts
+            where symbol = ? order by period_end desc, filed desc`,
+    args: [String(symbol).toUpperCase()],
+  });
+  // Named access, never a spread: `{ ...row }` on a libSQL Row gives
+  // POSITIONAL keys, which shipped a page of `undefined` once already.
+  return r.rows.map((x) => {
+    const o = {};
+    for (const c of SEC_COLS) o[SEC_FIELD[c] || c] = x[c];
+    return o;
+  });
+}
+
+async function readSecState() {
+  await init();
+  const r = await db.execute('select symbol, cik, fetched_at, rows, status, error from sec_state');
+  const out = {};
+  for (const x of r.rows) {
+    out[x.symbol] = { cik: x.cik, fetchedAt: x.fetched_at, rows: x.rows, status: x.status, error: x.error };
+  }
+  return out;
+}
+
 // ---- company names --------------------------------------------------------
 
 async function readNames() {
@@ -2827,7 +2979,8 @@ async function readBarsFor(symbols, since) {
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state',
-  'earnings_history', 'price_state', 'tech_history', 'alerts', 'alert_events', 'peer_links'];
+  'earnings_history', 'price_state', 'tech_history', 'alerts', 'alert_events', 'peer_links',
+  'sec_facts', 'sec_state'];
 
 // Remove a symbol from the database entirely.
 //
@@ -4189,6 +4342,7 @@ async function readNewsState() {
 module.exports = {
   db,
   init,
+  writeSecFacts, noteSecMiss, readSecFacts, readSecState,
   clearVisitors,
   logActivity,
   readActivityStats,

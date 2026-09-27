@@ -553,6 +553,43 @@
     /* .rng never resets it, so as an <a> the pill arrives underlined. */
     #peers td.cmp .rng { padding: 2px 8px; font-size: 11px; text-decoration: none; }
     #peers .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
+
+    /* ---- the SEC EDGAR card (2026-09-27, owner's request) -----------------
+       ITS OWN SECTION, MIXED WITH NOTHING — the owner's instruction, and the
+       right call: these are the company's filed statements, on a different
+       basis and a different calendar from the vendor numbers in the cards
+       above. Two revenues on one page that quietly disagree read as a bug,
+       so they are kept apart and the card says where its own come from.
+
+       Scoped to #sec throughout. Seven unscoped class names have captured
+       later markup on this project; a table this wide would be a generous
+       eighth. */
+    #sec .stab { overflow-x: auto; }
+    #sec table { width: 100%; border-collapse: collapse; }
+    #sec th, #sec td { text-align: right; padding: 7px 0 7px 14px; font-size: 12.5px;
+                       border-bottom: 1px solid rgba(255, 255, 255, 0.05); white-space: nowrap; }
+    #sec th { color: var(--faint); font-weight: 500; font-size: 10.5px;
+              text-transform: uppercase; letter-spacing: 0.1em; }
+    #sec td { font-family: var(--mono); color: var(--text); }
+    #sec th:first-child, #sec td:first-child { text-align: left; padding-left: 0; }
+    #sec td.neg { color: var(--red); }
+    #sec td.na { color: var(--faint); }
+    /* A value this app COMPUTED rather than read off a filing — a quarter
+       that was never filed as one. Dotted underline, the language a footnote
+       already has here, plus the reason on the cell's title. */
+    #sec td.dv { border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+                 text-decoration: underline dotted rgba(251, 191, 36, 0.55);
+                 text-underline-offset: 3px; cursor: help; }
+    #sec td.per { font-family: var(--sans); font-weight: 600; }
+    #sec td.per .fp { color: var(--faint); font-weight: 400; margin-left: 7px;
+                      font-family: var(--mono); font-size: 11px; }
+    /* The filing link is the whole argument for this source, so it reads as
+       a link rather than as one more grey date. */
+    #sec td.filed a { color: var(--accent); text-decoration: none; font-size: 11.5px; }
+    #sec td.filed a:hover { text-decoration: underline; }
+    #sec .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
+    #sec .msg { color: var(--muted); font-size: 12.5px; padding: 6px 0; }
+    @media (max-width: 620px) { #sec th, #sec td { padding-left: 10px; } }
     /* On a phone the table scrolls inside its own box, and what you should see
        BEFORE scrolling is a company and what it did — not a company name using
        the whole viewport. The compare pill goes: the row itself already opens
@@ -1611,6 +1648,19 @@
 
         ${peersCard(payload.peers, stock.symbol)}
 
+        <!-- Filled by loadSec() after the chart, and REMOVED ENTIRELY when
+             the company has nothing filed — a fund files no statements, and
+             a heading over an empty table is worse than no heading. -->
+        <section class="bezel card" id="sec" hidden><div class="core">
+          <div class="sec-h"><h2>SEC EDGAR</h2>
+            <span class="deeper">
+              <button class="rng on" id="secQ" type="button">Quarterly</button>
+              <button class="rng" id="secA" type="button">Annual</button>
+            </span>
+          </div>
+          <div id="secBody"><p class="msg">Loading filings…</p></div>
+        </div></section>
+
         <p class="later">Prices as of ${esc(payload.updatedAt ? new Date(payload.updatedAt).toLocaleString() : 'n/a')}.
         More charts will land on this page.</p>
       `;
@@ -1968,8 +2018,107 @@
       shrMenu.querySelectorAll('.shr-row').forEach((b) =>
         b.addEventListener('click', () => saveCard(b.dataset.sz)));
 
+      // ---- SEC EDGAR ---------------------------------------------------------
+      // Its own fetch, after the chart, for the sparklines reason: a section
+      // below the fold must not make the price wait. ~30-60KB against the
+      // page's ~10KB, which is also why it is not folded into /api/stock.
+      let secData = null;
+      let secMode = 'quarterly';
+
+      // Money as filed: compact, signed, and NEVER abbreviated past the point
+      // where -183.0M and -1.83B look alike.
+      const secMoney = (v) => {
+        if (v == null || !Number.isFinite(v)) return null;
+        const a = Math.abs(v);
+        const [d, u] = a >= 1e12 ? [1e12, 'T'] : a >= 1e9 ? [1e9, 'B'] : a >= 1e6 ? [1e6, 'M']
+          : a >= 1e3 ? [1e3, 'K'] : [1, ''];
+        return (v < 0 ? '-' : '') + '$' + (a / d).toFixed(a / d >= 100 ? 0 : a / d >= 10 ? 1 : 2) + u;
+      };
+      const SEC_COLS = [
+        ['revenue', 'Revenue', secMoney], ['grossProfit', 'Gross profit', secMoney],
+        ['operatingIncome', 'Op. income', secMoney], ['netIncome', 'Net income', secMoney],
+        ['epsDiluted', 'EPS dil.', (v) => (v == null ? null : (v < 0 ? '-' : '') + '$' + Math.abs(v).toFixed(2))],
+        ['operatingCashFlow', 'Op. cash flow', secMoney], ['capex', 'Capex', secMoney],
+        ['freeCashFlow', 'FCF', secMoney], ['assets', 'Assets', secMoney],
+        ['equity', 'Equity', secMoney], ['cash', 'Cash', secMoney], ['debt', 'LT debt', secMoney],
+      ];
+
+      function paintSec() {
+        const host = document.getElementById('secBody');
+        if (!host || !secData) return;
+        const rows = secData[secMode] || [];
+        if (!rows.length) {
+          host.innerHTML = '<p class="msg">No ' + secMode + ' periods filed.</p>';
+          return;
+        }
+        const anyDerived = rows.some((r) => r.derived || (r.derivedFields || []).length);
+        let h = '<div class="stab"><table><thead><tr><th>Period</th>' +
+          SEC_COLS.map((c) => '<th>' + esc(c[1]) + '</th>').join('') +
+          '<th>Filed</th></tr></thead><tbody>';
+        for (const r of rows) {
+          h += '<tr><td class="per">' + esc(r.periodEnd) +
+            (r.fp ? '<span class="fp">' + esc(r.fp) + '</span>' : '') + '</td>';
+          for (const [k, label, fmt] of SEC_COLS) {
+            const t = fmt(r[k]);
+            // A value this app computed, not one the filing states. Marked,
+            // with the reason on the cell — passing arithmetic off as a
+            // filing is the one thing this card must not do.
+            const isD = r.derived || (r.derivedFields || []).indexOf(k) >= 0;
+            const cls = [t == null ? 'na' : '', t != null && r[k] < 0 ? 'neg' : '',
+              t != null && isD ? 'dv' : ''].filter(Boolean).join(' ');
+            h += '<td' + (cls ? ' class="' + cls + '"' : '') +
+              (t != null && isD ? ' title="Computed here by differencing the cumulative periods — no filing states this quarter on its own"' : '') +
+              '>' + (t == null ? '—' : esc(t)) + '</td>';
+          }
+          h += '<td class="filed">' + (r.url
+            ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener" title="' +
+              esc((r.form || 'filing') + ' filed ' + r.filed + ' — open it on sec.gov') + '">' +
+              esc(r.filed) + '</a>'
+            : esc(r.filed || '—')) + '</td></tr>';
+        }
+        h += '</tbody></table></div>';
+        // WHY THESE NUMBERS DIFFER FROM THE CARDS ABOVE, said before anyone
+        // has to wonder: a different source, on a fiscal calendar, as filed.
+        h += '<p class="note">Straight from the company’s own filings at ' +
+          '<a class="rc-link" href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=' +
+          esc(String(secData.cik || '')) + '&type=10-&dateb=&owner=include&count=40" target="_blank" rel="noopener">SEC EDGAR</a>' +
+          ', on the company’s fiscal calendar and as reported in the filing named on each row — ' +
+          'so they will not always match the vendor figures elsewhere on this page, which are trailing-twelve-month and restated to today. ' +
+          'Later filings restate earlier periods; each row shows the most recent version. ' +
+          (anyDerived ? 'A dotted value was computed here rather than filed: no company files a fourth quarter, and a cash-flow statement is year-to-date, so those quarters are the difference between the cumulative periods either side. ' : '') +
+          'Nothing on this card feeds the Advice verdict or the screener.</p>';
+        host.innerHTML = h;
+      }
+
+      async function loadSec() {
+        const card = document.getElementById('sec');
+        if (!card) return;
+        try {
+          const r = await fetch('/api/sec?symbol=' + encodeURIComponent(stock.symbol));
+          if (!r.ok) { card.remove(); return; }
+          const j = await r.json();
+          // Nothing filed is the normal answer for a fund. No card at all,
+          // rather than a heading over an empty table.
+          if (!(j.annual || []).length && !(j.quarterly || []).length) { card.remove(); return; }
+          secData = j;
+          secMode = (j.quarterly || []).length ? 'quarterly' : 'annual';
+          card.hidden = false;
+          const qb = document.getElementById('secQ');
+          const ab = document.getElementById('secA');
+          const sync = () => {
+            qb.classList.toggle('on', secMode === 'quarterly');
+            ab.classList.toggle('on', secMode === 'annual');
+            paintSec();
+          };
+          qb.addEventListener('click', () => { secMode = 'quarterly'; sync(); });
+          ab.addEventListener('click', () => { secMode = 'annual'; sync(); });
+          sync();
+        } catch (e) { card.remove(); }
+      }
+
       paintChart();
       loadNews();          // after the chart: a decoration must not make the data wait
+      loadSec();           // and the filings after that, for the same reason
       const nb = document.getElementById('newsBtn');
       if (nb) nb.addEventListener('click', () => loadNews(true));
     })();

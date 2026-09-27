@@ -8781,6 +8781,203 @@ async function newsStalePlan(windowMs) {
   return { universe, names, order, isStale, stale: universe.filter((sym) => isStale(sym, state)) };
 }
 
+// ---- SEC EDGAR filings (2026-09-27, owner's request) ----------------------
+//
+// A company's own filed statements, back to ~2009 for a long-listed name,
+// each figure carrying the date it was published and the document it came
+// from. Every other source here sells today's numbers only.
+//
+// THE BOUNDARY IS THE POINT, and it was the owner's condition for building
+// this at all: "We cannot afford to have incorrect data and wrong logic in
+// there which is the heart of the system and the differentiating factor."
+// So this data feeds the SEC EDGAR card on /stock and NOTHING else — not the
+// snapshot, not the Advice engine, not a screener column. It is never
+// stamped onto a row, so it cannot become filterable, then screenable, then
+// a promo card. `sec-boundary-test.js` asserts that rather than trusting it.
+//
+// The parsing lives in secfacts.js (pure, no network, no database), the
+// orchestration here — the news.js shape.
+const SecFacts = require('./secfacts.js');
+// The SEC refuses an undeclared bot and asks for a way to reach the
+// operator. That address is already in the environment, so this needs no
+// new variable to work — SEC_UA only has to be set to override it.
+const SEC_CONTACT = String(process.env.REPORT_TO || process.env.MAIL_FROM || '').trim();
+const SEC_UA = String(process.env.SEC_UA || (SEC_CONTACT ? `Tickr Lab (${SEC_CONTACT})` : '')).trim();
+const SEC_READY = !!SEC_UA;                       // SEC refuses an undeclared bot
+const SEC_BATCH = Math.max(1, Math.min(20, Number(process.env.SEC_BATCH) || 5));
+// A filing lands quarterly, so "stale" is generous. Coverage, not freshness,
+// is what the admin page is really for.
+const SEC_TIMEOUT_MS = 30000;
+
+// SEC's own ticker -> CIK file. Cached per instance for an hour: it is 800KB
+// and changes when a company lists or renames, neither of which is hourly.
+let cikMap = null;
+let cikAt = 0;
+async function secCikMap() {
+  if (cikMap && Date.now() - cikAt < 3600000) return cikMap;
+  const r = await fetch('https://www.sec.gov/files/company_tickers.json', {
+    headers: { 'User-Agent': SEC_UA, Accept: 'application/json' },
+    signal: AbortSignal.timeout(SEC_TIMEOUT_MS),
+  });
+  if (!r.ok) throw new Error('SEC ticker map: HTTP ' + r.status);
+  const j = await r.json();
+  const m = new Map();
+  for (const v of Object.values(j)) {
+    if (v && v.ticker) m.set(String(v.ticker).toUpperCase(), Number(v.cik_str));
+  }
+  cikMap = m; cikAt = Date.now();
+  return m;
+}
+
+// Our symbols spell a share class with a dot; SEC spells it with a hyphen —
+// the same split Yahoo has (BRK.B / BRK-B). Both are tried rather than one
+// being assumed, because the failure is a silent miss.
+function secLookup(map, symbol) {
+  const s = String(symbol).toUpperCase();
+  return map.get(s) || map.get(s.replace(/\./g, '-')) || null;
+}
+
+// One symbol, end to end. NEVER THROWS: a symbol that cannot be fetched is
+// still recorded as CHECKED, or the refresh re-picks it forever and can
+// never report itself finished — the news-staleness lesson, which cost a
+// loop that ran until it was stopped by hand.
+async function secFetchOne(symbol) {
+  const sym = String(symbol).toUpperCase();
+  try {
+    const map = await secCikMap();
+    const cik = secLookup(map, sym);
+    // No CIK is the normal answer for an ETF, not a failure: a fund files no
+    // financial statements. Thirteen of the universe are in this state by
+    // design, and they get no section on the page rather than an empty one.
+    if (!cik) { await store.noteSecMiss(sym, 'nocik'); return { symbol: sym, status: 'nocik', rows: 0 }; }
+    const url = 'https://data.sec.gov/api/xbrl/companyfacts/CIK' +
+      String(cik).padStart(10, '0') + '.json';
+    const r = await fetch(url, {
+      headers: { 'User-Agent': SEC_UA, Accept: 'application/json' },
+      signal: AbortSignal.timeout(SEC_TIMEOUT_MS),
+    });
+    if (r.status === 404) {
+      await store.noteSecMiss(sym, 'nofacts');
+      return { symbol: sym, status: 'nofacts', rows: 0 };
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const rows = SecFacts.normalise(await r.json(), sym);
+    if (!rows.length) { await store.noteSecMiss(sym, 'empty'); return { symbol: sym, status: 'empty', rows: 0 }; }
+    await store.writeSecFacts(sym, rows, { cik, status: 'ok' });
+    return { symbol: sym, status: 'ok', rows: rows.length, cik };
+  } catch (e) {
+    await store.noteSecMiss(sym, 'error', e.message).catch(() => {});
+    return { symbol: sym, status: 'error', rows: 0, error: e.message };
+  }
+}
+
+// Who still needs pulling. `missing` is the button that gets pressed — "I
+// added tickers" — and `all` is for when a quarter's filings have landed.
+async function secPlan(mode, startedAt) {
+  const universe = await store.readUniverse();
+  const state = await store.readSecState();
+  const stale = universe.filter((sym) => {
+    const st = state[String(sym).toUpperCase()];
+    if (!st) return true;
+    // In `all` mode a symbol counts as done once THIS run has touched it,
+    // so the loop terminates instead of chasing its own tail.
+    return mode === 'all' && st.fetchedAt < startedAt;
+  });
+  return { universe, state, stale };
+}
+
+// ONE BATCH PER CALL, the /api/news/refresh shape, because a serverless
+// function must never be asked to hold hundreds of network fetches — the
+// 2026-09-18 incident, where a refresh was cut mid-tail and logged as
+// abandoned over data that was perfectly fine. The page loops this.
+app.post('/api/sec/refresh', requireAdmin, route(async (req, res) => {
+  if (!SEC_READY) {
+    return res.status(400).json({
+      error: 'No contact address configured. Set MAIL_FROM, REPORT_TO or SEC_UA — the SEC refuses requests that do not declare one.',
+    });
+  }
+  const mode = req.query.mode === 'all' ? 'all' : 'missing';
+  const size = Math.max(1, Math.min(20, Number(req.query.n) || SEC_BATCH));
+  // `all` needs a fixed horizon or every symbol it just wrote looks fresh
+  // and the run can never finish; the page passes its own start time back.
+  const startedAt = Number(req.query.since) || Date.now();
+  const { universe, stale } = await secPlan(mode, startedAt);
+  if (!universe.length) return res.json({ done: true, fetched: 0, remaining: 0, startedAt });
+  if (!stale.length) return res.json({ done: true, fetched: 0, remaining: 0, universe: universe.length, startedAt });
+
+  const pick = stale.slice(0, size);
+  const results = [];
+  // Sequential on purpose: the SEC asks for at most ten requests a second,
+  // and a companyfacts file is 1-5MB, so five in parallel is a burst for no
+  // gain on a route that is already looping.
+  for (const sym of pick) results.push(await secFetchOne(sym));
+  const after = await secPlan(mode, startedAt);
+  logAct(req, 'refresh', 'sec:' + mode + ' ' + pick.length);
+  res.json({
+    done: after.stale.length === 0,
+    fetched: pick.length,
+    remaining: after.stale.length,
+    universe: universe.length,
+    startedAt,
+    rows: results.reduce((n, x) => n + x.rows, 0),
+    ok: results.filter((x) => x.status === 'ok').length,
+    results,
+  });
+}));
+
+// What the admin page draws: coverage, never a row dump.
+app.get('/api/sec/coverage', requireAdmin, route(async (req, res) => {
+  const universe = await store.readUniverse();
+  const state = await store.readSecState();
+  const buckets = { ok: 0, nocik: 0, nofacts: 0, empty: 0, error: 0, never: 0 };
+  const errors = [];
+  let rows = 0;
+  let oldest = null;
+  for (const sym of universe) {
+    const st = state[String(sym).toUpperCase()];
+    if (!st) { buckets.never++; continue; }
+    buckets[st.status] = (buckets[st.status] || 0) + 1;
+    rows += st.rows || 0;
+    if (oldest == null || st.fetchedAt < oldest) oldest = st.fetchedAt;
+    if (st.status === 'error' && errors.length < 20) errors.push({ symbol: sym, error: st.error });
+  }
+  res.json({
+    ready: SEC_READY, universe: universe.length, buckets, rows, oldest, errors,
+    batch: SEC_BATCH, missing: buckets.never,
+  });
+}));
+
+// The page's own read. GUESTS INCLUDED — these are public filings and the
+// owner asked for them to be visible — but symbol-guarded like every other
+// per-stock route, so the preview stays twenty stocks wide.
+app.get('/api/sec', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!symbol) return res.status(400).json({ error: 'symbol required' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  const all = await store.readSecFacts(symbol);
+  const state = (await store.readSecState())[symbol] || null;
+  // The LATEST filing's version of each period is what a reader expects — it
+  // is the company's current statement of its own past. The rest of the
+  // trail stays in the table for the day as-first-reported is wanted.
+  const latest = SecFacts.latestPerPeriod(all);
+  const shape = (r) => Object.assign({}, r, {
+    url: SecFacts.filingUrl(r.cik, r.accn),
+    derivedFields: r.derivedFields ? String(r.derivedFields).split(',') : [],
+  });
+  res.json({
+    symbol,
+    annual: latest.filter((r) => r.periodType === 'FY').map(shape),
+    quarterly: latest.filter((r) => r.periodType === 'Q').map(shape),
+    filings: all.length,
+    checkedAt: state ? state.fetchedAt : null,
+    status: state ? state.status : null,
+    cik: state ? state.cik : null,
+  });
+}));
+
 app.post('/api/news/refresh', requireAdmin, route(async (req, res) => {
   if (NEWS_OFF) return res.status(400).json({ error: 'The news provider is switched off.' });
   const size = Math.max(1, Math.min(40, Number(req.query.n) || NEWS_TOPUP_PER_REFRESH));

@@ -968,6 +968,55 @@ Verified: 10 checks driving the REAL endpoint with the provider stubbed, reading
 - `readEarnings` joins `/api/stock`'s existing `Promise.all` and keeps its own catch; it seeks on the `(symbol, d)` primary key.
 - **A trailing-P/E HISTORY is reconstructible and is not stored.** `fundamentals_history.trailing_pe` only starts at 2026-09-15 and the provider serves no historical ratios — but price ÷ TTM EPS is computable from `bars` and this table for as far back as both reach. Checked: AAPL's last four reported quarters sum to **8.72** against the provider's own `diluted_eps_ttm` of **8.71**. Note the provider's `trailing_pe` implies an EPS about 1% off that, so a reconstructed series and the stored one would show a small step where they meet — compute the whole series one way.
 
+## SEC EDGAR — the filings, on their own card, feeding nothing (2026-09-27)
+
+**`/stock/<SYMBOL>` carries a `SEC EDGAR` section: the company's own filed statements, back to 2007 for a long-listed name, every row linking to the filing it came from.** Asked for after measuring the gap — `bars` holds 1.9M rows back to 2003 and **`fundamentals_history` holds 20 days**, which is why `/backtest` is capped at two months.
+
+**THE OWNER ASKED FOR YAHOO AND THE MEASUREMENT SAID NO.** `finance.yahoo.com/quote/<SYM>/financials/` is drawn from `query1.finance.yahoo.com/ws/fundamentals-timeseries/...` (cookie + crumb, both obtainable, 200 for RBLX) — and it serves **4 annual and 5 quarterly periods**, capped server-side (`period1=0` gets no more), with **no filing date anywhere in the payload** and values restated to today. Twelve Data already sells 6 quarters, so Yahoo's quarterly depth is *worse* than what is paid for, and without a publication date none of it is point-in-time. SEC EDGAR was built instead.
+
+### Why EDGAR, in numbers
+- **Free, official, permitted** with a declared User-Agent. `data.sec.gov/api/xbrl/companyfacts/CIK##########.json`, one file per company, keyed off SEC's own `company_tickers.json`.
+- **99% of the universe maps** — 1,167 of 1,180. The 13 misses are ETFs and two renamed tickers; a fund files no statements, which is the correct answer rather than a gap.
+- **Depth**: MSFT net income to **2007-09-30**, gross profit 2007, operating cash flow 2008. RBLX to its 2021 IPO — each company's whole filed life.
+- **Every observation carries `filed`, `form` and `accn`** — the publication date, the document type and the accession number. Nothing else available here has any of the three.
+- **The restatement trail comes with it**: 49 of MSFT's 63 revenue periods appear in more than one filing, so **as-first-reported is recoverable** by taking the earliest `filed`. That is why the trail is STORED rather than collapsed to the latest — it cannot be recovered once discarded, and re-fetching 1,167 companies to get it back is a twenty-minute penance.
+
+### THE BOUNDARY, which was the owner's condition for building it at all
+> *"We cannot afford to have incorrect data and wrong logic in there which is the heart of the system and the differentiating factor."*
+
+**This data reaches the SEC EDGAR card and nothing else.** No `FIELD_SPEC` entry, no snapshot stamping, no screener column, no filter key — because a column becomes filterable, then screenable, and a screen drives promo cards and the phone. It is **asserted, not intended**: `sec-test.js` fetches the real `/api/stocks` and reads the real rendered header, and fails if any filings field, accession number or filing date appears in either. **Proved by reverting**: stamping `accn` and `epsDiluted` onto the read path fails 2, naming both.
+
+The two things that make it unusable in a verdict anyway are worth recording: **`shortPctFloat` is in no filing** (FINRA publishes it bi-monthly) and it only fires a "weak fundamentals" clause, so a replay would be silently *less* strict; and filings are quarterly steps that would have to be synthesised into daily rows. Fine under a chart, poison in a gate. Of the ten fundamentals the Balanced rules read, seven are reconstructible; `forwardPe`'s only use is ETF detection, which the CIK map answers better.
+
+**The advice BACKTEST is a separate conversation and has not been had.** `/backtest` currently imputes *today's* fundamentals before 2026-08-30 — a look-ahead — so filings with a `filed` date would strictly improve it. Noted because it is the strongest case this data has; it must still never write back into a live verdict.
+
+### Three traps, each found by measuring and each still live
+1. **`periodType` must be read off the SPAN, never off `fp`.** A 10-Q carries the quarter AND the year-to-date figure under the same `fp` — measured on RBLX: 28 quarterly observations, 10 six-month, 8 nine-month. Reading `fp` reports a Q2 at roughly double its real size.
+2. **THERE IS NO Q4, and a cash-flow statement is YEAR-TO-DATE.** RBLX's only quarter-ends are March, June and September; and revenue reaches 86-99% of rows while operating cash flow reaches 56-67% — not a tag problem, the tags are right there. Both holes are consecutive differences down one fiscal year's cumulative ladder (Q1, H, 9M, FY, which share a `periodStart`): **Q2 = H − Q1, Q3 = 9M − H, Q4 = FY − 9M**. Where the quarter WAS filed, only its missing flows are filled and `derivedFields` names exactly which, so the page marks them rather than passing arithmetic off as a filing. FCF coverage went 56% → 81%.
+   - **A POSITION is not a flow.** Assets at year end are assets at year end; a weighted-average share count does not subtract, and neither does a per-share figure computed on a different denominator each quarter. Those stay blank rather than being invented (`NO_DIFF`).
+3. **`fp` LIES ABOUT THE LABEL TOO, one level up — and a screenshot caught it, not an assertion.** `fp` belongs to the FILING, not the observation, so a 10-K (fp=FY) carrying three-month comparatives produced a quarterly table with a column of rows reading **"2020-06-30 FY"**. The label is derived from the period now, against the fiscal year end **asked of the data** rather than assumed to be December — MSFT's ends in June, so September is **Q1**, not Q3.
+
+**THE INVARIANT THAT VALIDATES ALL OF IT: four quarters must sum to the year.** Measured on MSFT across five fiscal years and three concepts — revenue, net income, operating cash flow — **worst gap 0.0000%**. If the span classification, the ladder or the Q4 subtraction were wrong, they would not reconcile. RBLX shows 0.04% on one year, which is restatement drift between filings rather than an arithmetic error, so the test tolerates 0.5% and reports the worst.
+
+### Shape
+- **`secfacts.js`** at the root: pure parsing, no network and no database — the `news.js` shape, orchestration in server.js.
+- **`sec_facts`** keyed **(symbol, accn, period_end, period_type)**, which is how a filing works: every concept on a row comes from ONE document, so a revenue can never be paired with a net income from another. ~350 rows per company, 15 concepts. `sec_state` holds the per-symbol fetch clock, separate for the reason `news_state` is separate. Both in `SYMBOL_TABLES`.
+- **Whole-symbol replace with MULTI-ROW inserts**, chunked at 100 — the `tech_history` measurement, where the cost turned out to be per STATEMENT and batching was 23x.
+- **`GET /api/sec?symbol=`** is its own route, fetched after the chart: ~30-60KB against the stock page's ~10KB, so folding it into `/api/stock` would make the price wait for it. **Guests can read it** (the owner's call — public filings), symbol-guarded like every other per-stock route.
+- **A company with nothing filed gets NO CARD** rather than an empty one, the peers rule.
+
+### Refreshing it
+**A panel on `/admin`, not a page and not a deep link.** The price refreshes live on `/refreshes` because they share a round loop with the screener and that loop must exist once; this shares nothing — it is a batch call in a `while`.
+
+- **`POST /api/sec/refresh` does ONE batch of five and says how many remain**, the `/api/news/refresh` shape, because a serverless function must never hold hundreds of fetches in one request (2026-09-18, a refresh cut mid-tail and logged `abandoned` over data that was fine). The page loops it.
+- **`Fetch missing` is the primary button** — the new-ticker case, and the one that gets pressed. `Refresh all` is for when a quarter's filings land, and passes its own `since` so every symbol it just wrote does not look fresh and leave the loop chasing its tail.
+- **A SYMBOL THAT CANNOT BE FETCHED IS STILL RECORDED AS CHECKED** (`nocik` / `nofacts` / `empty` / `error`). Without it the batch re-picks it for ever and can never report itself done — the news-staleness bug, which ran until it was stopped by hand. The test drives the loop to completion over a fixture containing a fund and a company the SEC 500s on.
+- **No new env var**: `SEC_UA` falls back to `Tickr Lab (<REPORT_TO or MAIL_FROM>)`, a real contact address the SEC will accept. With none configured every route refuses and the panel says which variable to set.
+- **Our dot is the SEC's hyphen** — `BRK.B` is `BRK-B` there, the same split Yahoo has. Both spellings are tried, because the failure is a silent miss.
+- Sequential inside a batch: the SEC asks for at most ten requests a second and a companyfacts file is 1-5MB, so five in parallel is a burst for no gain.
+
+Verified: **72 checks** over two suites — the normaliser against two REAL companyfacts files (a hand-made fixture would not have the traps), the reconciliation invariant, the store round trip, the card measured on the page with its filing links and its derived marking, the fund drawing no card, the loop terminating, and the roles (anonymous gets no DATA — asserted on the body, since a gated page redirects and a status check would pass for the wrong reason; guest yes on a preview stock, 403 outside it and on both admin routes).
+
 ### Six fields that were collected and never shown (2026-09-23)
 **Audited by running the real renderer over a Proxy of a live row and recording every property it touched** — not by reading the source, which got it wrong the first time. 89 of 119 row fields reach the page; of the 30 that did not, most are shown another way (`ma50`/`ma200` are chart overlays, `volume` has its own pane, `realisedVol` feeds the Cushion figure) or are internal (`prevTech`, `trendTimeline`, `maCrossRank`).
 

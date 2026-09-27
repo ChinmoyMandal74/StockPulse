@@ -49,6 +49,14 @@
     .sec-head h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.18em;
                    text-transform: uppercase; color: var(--faint); }
     .sec-head p { margin: 0; font-size: 12.5px; color: var(--faint); }
+    /* Scoped to the panel: eight unscoped class names have captured later
+       markup on this project, and `.secline` beside `.sec-head` would be a
+       ninth waiting to happen. */
+    #filings .secline { margin: 0 0 12px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+    #filings .secline b { color: var(--text); font-weight: 600; }
+    #filings .secline b.warn { color: var(--amber); }
+    #filings .secbtns { display: flex; gap: 10px; flex-wrap: wrap; }
+    #filings .sechint { margin: 12px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--faint); }
     .card > .core { padding: 8px; }
     /* Every name here is scoped with an `ann` prefix. Eight unscoped class
        names have captured later markup on this project. */
@@ -200,6 +208,7 @@
 
     <nav class="jumps" aria-label="Sections">
       <a class="jump" href="#data"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Data</a>
+      <a class="jump" href="#filings"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-list" /></svg>SEC EDGAR</a>
       <a class="jump" href="#research"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-research" /></svg>Research</a>
       <a class="jump" href="#scoring"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-scales" /></svg>Screener</a>
       <a class="jump" href="#listings"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-list" /></svg>Reference</a>
@@ -310,6 +319,34 @@
     </section>
 
     <!-- ================= research ================= -->
+
+    <!-- ---- SEC EDGAR filings (2026-09-27, owner's request) ----------------
+         A panel rather than a page, and a panel rather than a deep link: the
+         price refreshes moved to /refreshes because they share a round loop
+         with the screener and that loop must exist once. This one shares
+         nothing — it is a batch call in a `while`, and the console is where
+         the owner already goes after adding tickers.
+
+         FETCH MISSING IS THE PRIMARY BUTTON because it is the one that gets
+         pressed: new tickers arrive and have no filings. Refresh all is for
+         when a quarter's 10-Qs have landed. -->
+    <section id="filings">
+      <div class="sec-head"><h2>SEC EDGAR</h2>
+        <p>The companies' own filed statements, shown on each stock page. Never used by the Advice verdict or the screener.</p></div>
+      <div class="bezel card"><div class="core">
+        <p class="secline" id="secCov">Checking coverage…</p>
+        <div class="secbtns">
+          <button class="btn warm" id="secMissing" type="button" disabled>Fetch missing</button>
+          <button class="btn" id="secAll" type="button" disabled>Refresh all</button>
+          <button class="btn danger" id="secStop" type="button" hidden>Stop</button>
+        </div>
+        <p class="secline" id="secProg" hidden></p>
+        <p class="sechint">Pulled five companies at a time, because a serverless request must not
+          hold hundreds of fetches — leave the tab open while it runs. A fund has nothing to fetch
+          and is recorded as checked rather than retried for ever.</p>
+      </div></div>
+    </section>
+
     <section id="research">
       <div class="sec-head"><h2>Research</h2><p>The pages that study the data rather than list it.</p></div>
       <div class="bezel card"><div class="core">
@@ -602,6 +639,97 @@
         .then((r) => paint(r.announcement))
         .catch(() => { now.textContent = 'Could not read the current announcement.'; });
     })();
+
+    // ---- SEC EDGAR filings --------------------------------------------------
+    // The batch loop. One call per five symbols, the /api/news/refresh shape,
+    // and the page drives it — a serverless function must never be asked to
+    // hold hundreds of network fetches in one request.
+    (function secPanel() {
+      const cov = document.getElementById('secCov');
+      const prog = document.getElementById('secProg');
+      const bMiss = document.getElementById('secMissing');
+      const bAll = document.getElementById('secAll');
+      const bStop = document.getElementById('secStop');
+      if (!cov) return;
+      let running = false;
+      let stop = false;
+
+      const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+
+      async function paintCoverage() {
+        try {
+          const j = await (await fetch('/api/sec/coverage')).json();
+          if (j.error) { cov.textContent = j.error; return; }
+          const b = j.buckets || {};
+          if (!j.ready) {
+            cov.innerHTML = '<b class="warn">No contact address configured</b> — the SEC refuses ' +
+              'requests that do not declare one. Set MAIL_FROM, REPORT_TO or SEC_UA.';
+            return;
+          }
+          // A fund is not a gap: it files no statements, and saying so stops
+          // the number reading as work outstanding.
+          const done = b.ok || 0;
+          const funds = (b.nocik || 0) + (b.nofacts || 0) + (b.empty || 0);
+          cov.innerHTML = '<b>' + done + '</b> of ' + j.universe + ' companies have filings stored (' +
+            (j.rows || 0).toLocaleString() + ' rows). ' +
+            (funds ? funds + ' file none — funds and the like. ' : '') +
+            (b.error ? '<b class="warn">' + plural(b.error, 'error') + '.</b> ' : '') +
+            (j.missing ? '<b>' + plural(j.missing, 'symbol') + ' not fetched yet.</b>'
+              : 'Nothing outstanding.');
+          bMiss.disabled = running || !j.missing;
+          bAll.disabled = running;
+        } catch (e) { cov.textContent = 'Could not read coverage: ' + e.message; }
+      }
+
+      async function run(mode) {
+        if (running) return;
+        running = true; stop = false;
+        bMiss.disabled = true; bAll.disabled = true;
+        bStop.hidden = false; prog.hidden = false;
+        // `all` needs a fixed horizon, or every symbol it just wrote looks
+        // fresh again and the loop can never finish.
+        const since = Date.now();
+        let fetched = 0; let rows = 0; let rounds = 0;
+        const t0 = Date.now();
+        try {
+          for (;;) {
+            if (stop) { prog.textContent = 'Stopped after ' + plural(fetched, 'company') + '.'; break; }
+            const r = await fetch('/api/sec/refresh?mode=' + mode + '&since=' + since, { method: 'POST' });
+            const j = await r.json();
+            if (!r.ok) { prog.innerHTML = '<b class="warn">' + (j.error || ('HTTP ' + r.status)) + '</b>'; break; }
+            rounds++; fetched += j.fetched || 0; rows += j.rows || 0;
+            const mins = Math.round((Date.now() - t0) / 60000);
+            prog.textContent = plural(fetched, 'company') + ' fetched, ' +
+              rows.toLocaleString() + ' rows, ' + (j.remaining || 0) + ' to go' +
+              (mins ? ' · ' + mins + ' min' : '') + '.';
+            if (j.done || !j.fetched) {
+              prog.textContent = 'Done — ' + plural(fetched, 'company') + ', ' +
+                rows.toLocaleString() + ' rows, ' + rounds + ' rounds.';
+              break;
+            }
+          }
+        } catch (e) {
+          prog.innerHTML = '<b class="warn">Stopped: ' + e.message + '</b>';
+        }
+        running = false;
+        bStop.hidden = true;
+        await paintCoverage();
+      }
+
+      bMiss.addEventListener('click', () => run('missing'));
+      bAll.addEventListener('click', () => {
+        if (confirm('Re-fetch filings for every company. This runs for about twenty minutes at the current universe — leave the tab open. Continue?')) run('all');
+      });
+      bStop.addEventListener('click', () => { stop = true; bStop.disabled = true;
+        setTimeout(() => { bStop.disabled = false; }, 1000); });
+      // A tab closed mid-run loses nothing: every symbol already fetched is
+      // stored, and Fetch missing picks up exactly where it stopped.
+      window.addEventListener('beforeunload', (e) => {
+        if (running) { e.preventDefault(); e.returnValue = ''; }
+      });
+      paintCoverage();
+    })();
+
   </script>
 </body>
 </html>
