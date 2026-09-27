@@ -270,7 +270,26 @@
     }
     .notice .ic { color: var(--faint); }
     .notice b { color: var(--text); font-weight: 600; }
-    #readonlyNote, #fwdViewBar, #refreshBar, #fltBar { margin-top: 8px; }
+    #readonlyNote, #fwdViewBar, #refreshBar, #fltBar, #announceBar { margin-top: 8px; }
+    /* THE LEVEL IS THE COLOUR, and the colours already mean these things here:
+       accent is a fact, amber is "notice this, something is off" (the Price
+       pulled column, the Turso bar, the stale status pill), red is the loud
+       cell. A message the owner sends because something is WRONG should not
+       look like the read-only note beside it. */
+    #announceBar > .core { border: 1px solid transparent; }
+    #announceBar.info > .core { border-color: rgba(124, 156, 255, 0.4); background: rgba(124, 156, 255, 0.1); }
+    #announceBar.warn > .core { border-color: rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.11); }
+    #announceBar.down > .core { border-color: rgba(251, 113, 133, 0.5); background: rgba(251, 113, 133, 0.12); }
+    #announceBar.info .ic { color: var(--accent); }
+    #announceBar.warn .ic { color: var(--amber); }
+    #announceBar.down .ic { color: var(--red); }
+    #announceBar #announceText { color: var(--text); flex: 1 1 260px; min-width: 0; }
+    #announceX {
+      margin-left: auto; flex: none; background: none; border: 0; cursor: pointer;
+      color: var(--faint); font-size: 17px; line-height: 1; padding: 2px 4px;
+      transition: color 0.4s var(--ease);
+    }
+    #announceX:hover { color: var(--text); }
     #phoneBar { flex: none; display: flex; align-items: center; gap: 8px; margin-top: 8px;
       padding: 8px 10px; border: 1px solid var(--hair); border-radius: 12px;
       background: var(--surface); font-size: 13px; color: var(--muted); }
@@ -1199,6 +1218,17 @@
       <span>There is a version built for phones.</span>
       <a href="/m">Open it</a>
       <button type="button" id="phoneBarX" aria-label="Dismiss">&times;</button>
+    </div>
+
+    <!-- The owner's own message, for when something is wrong. First in the
+         column, above the read-only note and the forward-returns bar: if it
+         is up at all it outranks them. -->
+    <div class="bezel notice" id="announceBar" hidden>
+      <div class="core">
+        <svg class="ic" aria-hidden="true"><use href="#i-warn" /></svg>
+        <span id="announceText"></span>
+        <button type="button" id="announceX" aria-label="Dismiss this notice">&times;</button>
+      </div>
     </div>
 
     <div class="bezel notice" id="readonlyNote" style="display:none">
@@ -3635,6 +3665,41 @@
     let prefsReady = false;
     let prefsTimer = null;
 
+    // ---- the owner's announcement -----------------------------------------
+    // Dismissal is keyed on the message's OWN timestamp, not on a bare flag:
+    // that is what lets a follow-up ("fixed now") reach the people who
+    // dismissed the first one. Per device, so localStorage — a guest has no
+    // prefs key at all, and this is a convenience rather than a preference.
+    const ANN_SEEN = 'ann.dismissed';
+    let announcement = null;
+    function paintAnnounce(a) {
+      announcement = a && a.text ? a : null;
+      const bar = $('announceBar');
+      let dismissed = null;
+      try { dismissed = localStorage.getItem(ANN_SEEN); } catch { /* private window */ }
+      const show = !!announcement && String(announcement.at) !== String(dismissed);
+      const was = !bar.hidden;
+      if (show) {
+        // we(), the page's own escaper. The text is the owner's, but it goes
+        // through the same door everything else does.
+        $('announceText').innerHTML = we(announcement.text);
+        bar.className = 'bezel notice ' + (['info', 'warn', 'down'].includes(announcement.level)
+          ? announcement.level : 'info');
+      }
+      bar.hidden = !show;
+      // The windowed table sizes itself from .table-wrap's height and NO
+      // resize event fires when a sibling appears or goes — the news ticker's
+      // rule, and the phone bar's. Without this the table keeps its old
+      // height and the last rows fall off the bottom.
+      if (was !== show && typeof paintWindow === 'function') paintWindow(true);
+    }
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest || !e.target.closest('#announceX')) return;
+      if (announcement) { try { localStorage.setItem(ANN_SEEN, String(announcement.at)); } catch { /* ignore */ } }
+      $('announceBar').hidden = true;
+      if (typeof paintWindow === 'function') paintWindow(true);
+    });
+
     async function loadPrefs() {
       try {
         const res = await api('GET', '/api/prefs');
@@ -3644,6 +3709,7 @@
         if (res && res.prefs && /^(auto|[2-6])$/.test(String(res.prefs.tileCols || ''))) tileCols = String(res.prefs.tileCols);
         if (res && Array.isArray(res.ranges)) cardRanges = res.ranges;
         if (res && typeof res.alerts === 'number') setAlertBadge(res.alerts);
+        if (res) paintAnnounce(res.announcement || null);
         if (tileRange && !cardRanges.some((r) => r.id === tileRange)) tileRange = null;
         if (res && res.prefs && res.prefs.layout === 'tiles') setLayout('tiles', { save: false });
         if (res && res.prefs && /^(standard|[a-z0-9]{8})$/.test(String(res.prefs.activeView || ''))) activeViewId = res.prefs.activeView;

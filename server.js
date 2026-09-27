@@ -8486,6 +8486,25 @@ app.put('/api/columns', requireAdmin, route(async (req, res) => {
   res.json({ ok: true, hidden });
 }));
 
+// The announcement. Read by everyone through /api/prefs; written only here.
+// Deliberately NOT part of the prefs PUT — that endpoint rebuilds a per-user
+// row from an allowlist, and a site-wide message every reader sees has no
+// business travelling on the same request as somebody's collapsed columns.
+app.get('/api/announcement', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ announcement: await store.readAnnouncement() });
+}));
+
+app.put('/api/announcement', requireAdmin, route(async (req, res) => {
+  const body = req.body || {};
+  if (typeof body.text !== 'string') return res.status(400).json({ error: 'Expected a text string.' });
+  const announcement = await store.writeAnnouncement({ text: body.text, level: body.level });
+  // Facts, never content — the activity log's rule. Whether a message is up
+  // and at what level, not what it said.
+  logAct(req, 'account', 'announce:' + (announcement ? announcement.level : 'cleared'));
+  res.json({ ok: true, announcement });
+}));
+
 app.get('/api/prefs', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   // A guest has no user row, so prefsKey() would fall through to the 'admin'
@@ -8493,18 +8512,27 @@ app.get('/api/prefs', requireAuth, route(async (req, res) => {
   // siteHidden rides along because the screener already awaits this call
   // before its first render — a second request would paint the full table and
   // then visibly drop columns.
-  const [siteHidden, tile] = await Promise.all([store.readHiddenColumns(), tileConfig()]);
+  // The announcement rides this call for the same reason siteHidden does: the
+  // screener already awaits it before its first render, and a second request
+  // would paint the table and then drop a banner in above it. A failure to
+  // read it must never cost anyone the screener, so it degrades to none.
+  const [siteHidden, tile, announcement] = await Promise.all([
+    store.readHiddenColumns(), tileConfig(), store.readAnnouncement().catch(() => null),
+  ]);
   // The card's chart ranges ride along too, so the screener's Tiles view and
   // the phone page offer the same windows without either restating the list.
   const ranges = CARD_RANGES.map((r) => ({ id: r.id, short: r.short, label: r.label, days: r.days }));
-  if (await isGuest(req)) return res.json({ prefs: {}, siteHidden, tile, ranges, alerts: 0 });
+  // A GUEST SEES IT TOO. If something is wrong with the data, it is wrong on
+  // the preview as well, and a person deciding whether to sign up should not
+  // be the only one not told.
+  if (await isGuest(req)) return res.json({ prefs: {}, siteHidden, tile, ranges, alerts: 0, announcement });
   // The unread alert count rides along for the badge. A guest has no alerts
   // and no prefs key, so it is a flat 0 rather than a read.
   const key = await prefsKey(req);
   const [prefs, alerts] = await Promise.all([
     store.readPrefs(key), store.unreadAlertCount(key).catch(() => 0),
   ]);
-  res.json({ prefs, siteHidden, tile, ranges, alerts });
+  res.json({ prefs, siteHidden, tile, ranges, alerts, announcement });
 }));
 
 app.put('/api/prefs', requireAuth, route(async (req, res) => {

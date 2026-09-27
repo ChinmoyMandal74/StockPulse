@@ -50,6 +50,45 @@
                    text-transform: uppercase; color: var(--faint); }
     .sec-head p { margin: 0; font-size: 12.5px; color: var(--faint); }
     .card > .core { padding: 8px; }
+    /* Every name here is scoped with an `ann` prefix. Eight unscoped class
+       names have captured later markup on this project. */
+    .annbox { padding: 10px 12px 12px; }
+    .annnow { margin: 0 0 10px; font-size: 12.5px; line-height: 1.55; color: var(--faint); }
+    .annnow b { color: var(--text); font-weight: 600; }
+    .annnow.up { color: var(--muted); }
+    #annText {
+      width: 100%; box-sizing: border-box; resize: vertical; padding: 10px 12px;
+      border-radius: 12px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      color: var(--text); font-family: var(--sans); font-size: 13.5px; line-height: 1.55;
+    }
+    #annText:focus { outline: none; border-color: var(--hair-2); background: rgba(255, 255, 255, 0.06); }
+    .annrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .annlevels { display: inline-flex; gap: 4px; }
+    .annlv {
+      padding: 5px 11px; border-radius: 999px; cursor: pointer; font-size: 12px;
+      font-family: var(--sans); border: 1px solid var(--hair); background: none; color: var(--faint);
+      transition: color 0.3s var(--ease), border-color 0.3s var(--ease), background 0.3s var(--ease);
+    }
+    .annlv:hover { color: var(--muted); }
+    /* The chip is the colour the banner will be, so the choice is previewed
+       rather than described. */
+    .annlv.on[data-lv="info"] { color: var(--accent); border-color: rgba(124, 156, 255, 0.5); background: rgba(124, 156, 255, 0.12); }
+    .annlv.on[data-lv="warn"] { color: var(--amber); border-color: rgba(251, 191, 36, 0.5); background: rgba(251, 191, 36, 0.12); }
+    .annlv.on[data-lv="down"] { color: var(--red); border-color: rgba(251, 113, 133, 0.55); background: rgba(251, 113, 133, 0.13); }
+    .annchars { margin-left: auto; font-size: 11.5px; color: var(--faint); font-family: var(--mono); }
+    .annsave, .annclear {
+      padding: 7px 15px; border-radius: 999px; cursor: pointer; font-size: 12.5px; font-weight: 600;
+      font-family: var(--sans); border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      color: var(--text); transition: background 0.3s var(--ease);
+    }
+    .annsave { background: var(--text); color: #05070c; border-color: transparent; }
+    .annsave:hover { opacity: 0.9; }
+    .annclear:hover { background: rgba(255, 255, 255, 0.08); }
+    .annsave[disabled], .annclear[disabled] { opacity: 0.5; cursor: default; }
+    .annhint { margin: 10px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--faint); }
+    .annhint b { color: var(--muted); font-weight: 600; }
+    .annmsg { margin: 8px 0 0; font-size: 12px; min-height: 1px; color: var(--green); }
+    .annmsg.err { color: var(--red); }
 
     /* ---- rows: the links ------------------------------------------------ */
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 6px; }
@@ -168,6 +207,37 @@
       <a class="jump" href="#people"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-users" /></svg>People &amp; logs</a>
       <a class="jump" href="#reference"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-help" /></svg>Help &amp; contact</a>
     </nav>
+
+    <!-- ================= announcement =================
+         FIRST ON THE PAGE, and inline rather than a link to somewhere else:
+         this is the thing you reach for when something is wrong, and every
+         extra click is paid at exactly the wrong moment. Sitting at the top
+         also means its own state is the first thing the console tells you —
+         whether a banner is up right now. -->
+    <section id="announce">
+      <div class="sec-head"><h2>Announcement</h2><p>A banner on the screener, for when something is wrong.</p></div>
+      <div class="bezel card"><div class="core">
+        <div class="annbox">
+          <p class="annnow" id="annNow">Loading…</p>
+          <textarea id="annText" maxlength="400" rows="2"
+            placeholder="Prices are stale this morning — the overnight refresh failed and I am re-running it."></textarea>
+          <div class="annrow">
+            <span class="annlevels" role="group" aria-label="How serious">
+              <button type="button" class="annlv on" data-lv="info">Notice</button>
+              <button type="button" class="annlv" data-lv="warn">Warning</button>
+              <button type="button" class="annlv" data-lv="down">Something is broken</button>
+            </span>
+            <span class="annchars" id="annChars">400 left</span>
+            <button type="button" class="annclear" id="annClear">Take it down</button>
+            <button type="button" class="annsave" id="annSave">Show it</button>
+          </div>
+          <p class="annhint">Everyone signed in sees it on the screener, guests included, next time
+            they load the page. They can dismiss it — <b>editing the text brings it back for
+            everyone</b>, so a follow-up still lands.</p>
+          <p class="annmsg" id="annMsg"></p>
+        </div>
+      </div></div>
+    </section>
 
     <!-- ================= data ================= -->
     <section id="data">
@@ -466,6 +536,71 @@
       }
       // the as-of field is a date, and a date in the future has no ranking
       $('asOf').max = new Date().toISOString().slice(0, 10);
+    })();
+
+    // ---- the announcement --------------------------------------------------
+    (function announcement() {
+      const text = $('annText'), msg = $('annMsg'), now = $('annNow'), chars = $('annChars');
+      let level = 'info';
+
+      const setLevel = (lv) => {
+        level = lv;
+        for (const b of document.querySelectorAll('.annlv')) b.classList.toggle('on', b.dataset.lv === lv);
+      };
+      const count = () => { chars.textContent = (400 - text.value.length) + ' left'; };
+      const say = (t, bad) => { msg.textContent = t || ''; msg.className = 'annmsg' + (bad ? ' err' : ''); };
+
+      function paint(a) {
+        if (a && a.text) {
+          const when = new Date(a.at).toLocaleString();
+          // WHAT IS LIVE RIGHT NOW, in words, because the textarea below shows
+          // the same thing and the two would otherwise be indistinguishable
+          // from a draft nobody has published.
+          // Built, not interpolated — this page has no escaper of its own,
+          // and reaching for one here would be inventing a second.
+          now.className = 'annnow up';
+          now.textContent = '';
+          const strong = document.createElement('b');
+          strong.textContent = 'A banner is up';
+          now.append(strong, ' — put there ' + when + '.');
+          text.value = a.text;
+          setLevel(a.level || 'info');
+        } else {
+          now.className = 'annnow';
+          now.textContent = 'Nothing is showing at the moment.';
+          text.value = '';
+          setLevel('info');
+        }
+        count();
+      }
+
+      async function save(clear) {
+        const body = { text: clear ? '' : text.value, level };
+        if (!clear && !body.text.trim()) return say('Type something first.', true);
+        $('annSave').disabled = $('annClear').disabled = true;
+        try {
+          const r = await api('PUT', '/api/announcement', body);
+          paint(r.announcement);
+          // Named plainly. "Saved" would not distinguish the two outcomes, and
+          // one of them is "nobody can see it any more".
+          say(r.announcement ? 'Showing now — everyone sees it on their next load.' : 'Taken down.');
+        } catch (err) {
+          say(err.message, true);
+        } finally {
+          $('annSave').disabled = $('annClear').disabled = false;
+        }
+      }
+
+      for (const b of document.querySelectorAll('.annlv')) {
+        b.addEventListener('click', () => { setLevel(b.dataset.lv); say(''); });
+      }
+      text.addEventListener('input', () => { count(); say(''); });
+      $('annSave').addEventListener('click', () => save(false));
+      $('annClear').addEventListener('click', () => save(true));
+
+      api('GET', '/api/announcement')
+        .then((r) => paint(r.announcement))
+        .catch(() => { now.textContent = 'Could not read the current announcement.'; });
     })();
   </script>
 </body>

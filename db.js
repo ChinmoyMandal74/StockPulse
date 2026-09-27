@@ -1712,6 +1712,38 @@ async function readHiddenColumns() {
   } catch { return []; }
 }
 
+// ---- the admin announcement ------------------------------------------------
+// A site setting, so app_meta beside hidden_columns and the rest rather than
+// anyone's prefs. `at` is the version: it changes on every edit, and the
+// screener keys its per-device dismissal on it — so a follow-up ("fixed now")
+// reaches the people who dismissed the first one, which is the whole reason
+// the field exists rather than a bare string.
+async function readAnnouncement() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'announcement'");
+  if (!r.rows.length) return null;
+  try {
+    const v = JSON.parse(r.rows[0].value || 'null');
+    if (!v || typeof v !== 'object' || !v.text) return null;
+    return { text: String(v.text), level: String(v.level || 'info'), at: Number(v.at) || 0 };
+  } catch { return null; }
+}
+
+// Clearing is writing an empty text, and it stores null rather than a row with
+// an empty string in it: "nothing to say" and "something to say, which is
+// blank" must not be two states a reader can end up in.
+async function writeAnnouncement({ text, level } = {}) {
+  await init();
+  const t = String(text == null ? '' : text).replace(/\s+/g, ' ').trim().slice(0, 400);
+  const lv = ['info', 'warn', 'down'].includes(String(level)) ? String(level) : 'info';
+  const value = t ? JSON.stringify({ text: t, level: lv, at: Date.now() }) : JSON.stringify(null);
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('announcement', ?)",
+    args: [value],
+  });
+  return readAnnouncement();
+}
+
 async function writeHiddenColumns(ids) {
   await init();
   const list = [...new Set((ids || []).filter((x) => typeof x === 'string'))];
@@ -4202,6 +4234,8 @@ module.exports = {
   readPostalAddress,
   writePostalAddress,
   readHiddenColumns,
+  readAnnouncement,
+  writeAnnouncement,
   writeHiddenColumns,
   readPriceCursor,
   writePriceCursor,
