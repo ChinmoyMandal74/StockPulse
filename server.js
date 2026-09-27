@@ -9126,6 +9126,9 @@ function symbolSeries(bars, symbols, dates) {
 // 20th. The page marks it rather than quietly comparing a part-month with
 // eleven whole ones.
 const PIVOT_PERIODS = 12;
+// See the guard in the loop below: a close under a cent is a bad bar, not a
+// price, and one of them is enough to destroy a whole column's average.
+const MIN_CLOSE = 0.01;
 const pivotPeriodCache = new Map();          // kind -> { at, body }
 app.get('/api/pivot-periods', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -9168,6 +9171,7 @@ app.get('/api/pivot-periods', requireMember, route(async (req, res) => {
     periods.push({ key: start, label, from: start, partial: i === bounds.length - 1 });
   }
   const returns = {};
+  let junk = 0;          // anchor pairs refused for not being prices
   for (const sym of symbols) {
     const out = [];
     let any = false;
@@ -9177,7 +9181,22 @@ app.get('/api/pivot-periods', requireMember, route(async (req, res) => {
       // opening anchor, and inventing one from its first trade would print a
       // return for a period it did not live through — the survivorship error
       // this project keeps writing down, in miniature.
-      const v = (a && b && a.close > 0) ? (b.close / a.close - 1) * 100 : null;
+      //
+      // AND NEITHER END MAY BE A NON-PRICE. `> 0` was not enough: SOLS holds
+      // closes of about $0.0001 at the head of its archive, which made its
+      // 2025 return **+48,579,901%** and dragged the whole Technology row to
+      // +411,732% — one junk bar destroying a column for everybody. A mean
+      // has no defence against an outlier that size, which is the same
+      // failure `MIN_VOL` exists for in the strategy backtest, where a
+      // zero-volatility hole produced a 3,227,535x position.
+      //
+      // A CENT IS THE FLOOR, and it is deliberately far below any real
+      // price rather than tuned: the lowest legitimate close in this archive
+      // is NVDA's split-adjusted $0.16 from 2007, sixteen times clear of it.
+      // Below a cent is a delisted shell or a bad bar, not a company.
+      const ok = a && b && a.close >= MIN_CLOSE && b.close >= MIN_CLOSE;
+      const v = ok ? (b.close / a.close - 1) * 100 : null;
+      if (a && b && !ok) junk++;
       if (v != null) any = true;
       out.push(v == null ? null : Math.round(v * 100) / 100);
     }
@@ -9186,7 +9205,7 @@ app.get('/api/pivot-periods', requireMember, route(async (req, res) => {
   // Newest first, which is how the owner asked to read it.
   periods.reverse();
   for (const k of Object.keys(returns)) returns[k].reverse();
-  const body = { kind, periods, returns, latest };
+  const body = { kind, periods, returns, latest, junk };
   pivotPeriodCache.set(kind, { at: Date.now(), body });
   res.json(body);
 }));
