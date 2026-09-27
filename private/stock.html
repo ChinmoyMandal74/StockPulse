@@ -117,6 +117,16 @@
     .chip.has-tip:hover { background: rgba(255, 255, 255, 0.06); }
     .chip { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hair);
             background: rgba(255, 255, 255, 0.03); color: var(--muted); }
+    /* A chip that goes somewhere. `text-decoration: none` is not optional —
+       nothing else here resets it, and the `vs` pill on the peer table
+       arrived underlined for exactly that reason. It keeps the chip's own
+       muted colour at rest: a row of tinted pills would shout, and the
+       pointer plus a lift on hover is enough to say it is a door. */
+    a.chip.go { text-decoration: none; cursor: pointer;
+                transition: background 0.35s var(--ease), color 0.35s var(--ease),
+                            border-color 0.35s var(--ease); }
+    a.chip.go:hover { color: var(--text); border-color: var(--hair-2);
+                      background: rgba(255, 255, 255, 0.07); }
 
     /* Full card width, as asked. The usual 70-80ch reading limit is dropped
        here on purpose: this is four or five sentences read once, not prose you
@@ -1404,9 +1414,23 @@
 
       const price = stock.price != null ? curSym(stock.currency) + stock.price.toFixed(2) : '—';
       const today = stock.todayPct;
+      // EVERY CHIP IS A DOOR (owner, 2026-09-27). Each of these four is a
+      // group with a page of its own now — a curve against the S&P and the
+      // Dow, what the group is made of, its leaders and laggards, its
+      // fundamentals against the screen — and the chips were the one place
+      // on this page already naming them.
+      //
+      // Industry and Size were not drawn here at all before: the masthead
+      // carried the sector and the themes only. A chip that goes somewhere
+      // is worth more than one that does not, and two of the four cuts were
+      // simply missing.
+      //
+      // Coarse to fine, then membership: sector, industry, size, themes.
       const chips = []
-        .concat(stock.sector ? [{ t: esc(stock.sector) }] : [])
-        .concat((stock.portfolios || []).map((x) => ({ t: esc(x) })))
+        .concat(stock.sector ? [{ t: esc(stock.sector), href: '/sector/' + encodeURIComponent(stock.sector) }] : [])
+        .concat(stock.industry ? [{ t: esc(stock.industry), href: '/industry/' + encodeURIComponent(stock.industry) }] : [])
+        .concat(stock.capBand ? [{ t: esc(stock.capBand), href: '/size/' + encodeURIComponent(stock.capBand) }] : [])
+        .concat((stock.portfolios || []).map((x) => ({ t: esc(x), href: '/theme/' + encodeURIComponent(x) })))
         ;
 
       document.getElementById('page').innerHTML = `
@@ -1421,8 +1445,9 @@
             </div></div>
           </h1>
           <span class="co">${esc(stock.name || '')}</span>
-          <span class="meta">${chips.map((c) =>
-            `<span class="chip${c.tip ? ' has-tip' : ''}"${c.tip ? ` data-tip="${c.tip}"` : ''}>${c.t}</span>`
+          <span class="meta">${chips.map((c) => (c.href
+            ? `<a class="chip go" href="${c.href}" title="Open ${c.t} — the group aggregated">${c.t}</a>`
+            : `<span class="chip${c.tip ? ' has-tip' : ''}"${c.tip ? ` data-tip="${c.tip}"` : ''}>${c.t}</span>`)
           ).join('')}</span>
           <!-- The same link the screener's ticker cell carries, but said out
                loud: on a page about ONE stock the obvious next move is to go
