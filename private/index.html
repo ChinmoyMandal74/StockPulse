@@ -2706,6 +2706,15 @@
       updateStickyOffsets();
     }
 
+    // The chart-arrow the portfolio picker already carries, for the other
+    // three dimensions: a sector, an industry and a size band all have a
+    // summary page now, and the menu row is where you are already choosing
+    // one. Skipped for "All", which is not a group.
+    const groupJump = (kind, val, label) => (val === 'All' ? '' :
+      `<a class="jump" href="/${kind}/${encodeURIComponent(val)}" target="_blank" rel="noopener" ` +
+      `title="Open ${we(label)} aggregated ↗" style="transform:none">` +
+      '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-chart" /></svg></a>');
+
     // The sectors present in the CURRENT tab, each with its count — a sector
     // holding nothing here is not offered, and the one in force is kept on
     // the list even at zero so it can always be switched off again.
@@ -2716,9 +2725,10 @@
       const names = Object.keys(counts).sort();
       if (sectorFilter !== 'All' && !counts[sectorFilter]) names.push(sectorFilter);
       const row = (val, label, n) =>
+        '<div class="pick-row">' +
         `<button class="pick ${sectorFilter === val ? 'on' : ''}" data-sec="${we(val)}" role="option" ` +
         `aria-selected="${sectorFilter === val}"><span class="nm">${we(label)}</span>` +
-        `<span class="count">${n}</span></button>`;
+        `<span class="count">${n}</span></button>` + groupJump('sector', val, label) + '</div>';
       $('secMenu').innerHTML = '<div class="picker-inner">' +
         row('All', 'All sectors', inTab.length) +
         names.map((n) => row(n, n, counts[n] || 0)).join('') +
@@ -2761,9 +2771,10 @@
       const names = Object.keys(counts).sort();
       if (industryFilter !== 'All' && !counts[industryFilter]) names.push(industryFilter);
       const row = (val, label, n) =>
+        '<div class="pick-row">' +
         `<button class="pick ${industryFilter === val ? 'on' : ''}" data-ind="${we(val)}" role="option" ` +
         `aria-selected="${industryFilter === val}"><span class="nm">${we(label)}</span>` +
-        `<span class="count">${n}</span></button>`;
+        `<span class="count">${n}</span></button>` + groupJump('industry', val, label) + '</div>';
       // The field arrives one profile at a time, as each company's cache
       // expires and is re-pulled — so for a while most rows have no industry,
       // and a menu whose counts do not add up to the total should say why
@@ -2842,9 +2853,11 @@
       // "0 Micro in view" is itself an answer worth reading.
       const names = Filters.CAP_ORDER;
       const row = (val, label, n, hint) =>
+        '<div class="pick-row">' +
         `<button class="pick ${sizeFilter === val ? 'on' : ''}" data-size="${we(val)}" role="option" ` +
         `aria-selected="${sizeFilter === val}"${hint ? ` title="${we(hint)}"` : ''}>` +
-        `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>`;
+        `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>` +
+        groupJump('size', val, label) + '</div>';
       const note = blank
         ? `${blank} ${blank === 1 ? 'row has' : 'rows have'} no market cap — a fund reports assets ` +
           'under management instead, so it sits in no band.'

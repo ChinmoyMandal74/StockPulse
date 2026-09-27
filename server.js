@@ -289,12 +289,19 @@ app.get('/lab/:symbol', route(async (req, res) => {
 // /theme/<name> is the address now; /portfolio/<name> keeps working because
 // links to it have already been shared. Same handler, one canonical URL — the
 // GATED_PAGES funnel's rule.
-app.get(['/theme/:name', '/portfolio/:name'], route(async (req, res) => {
-  if (!(await isSignedIn(req))) return res.redirect('/login');
-  if (await isGuest(req)) return res.redirect('/');
-  logAct(req, 'page', 'basket:' + String(req.params.name || '').slice(0, 30));
-  res.sendFile(path.join(__dirname, 'private', 'basket.html'));
-}));
+// A sector, an industry and a size band are the same page with a different
+// membership rule (2026-09-27), so they are the same handler and the same
+// file — the page reads its scope off the path. One route list rather than
+// four copies of the guard, which is how /theme and /portfolio already share.
+app.get(['/theme/:name', '/portfolio/:name', '/sector/:name', '/industry/:name', '/size/:name'],
+  route(async (req, res) => {
+    if (!(await isSignedIn(req))) return res.redirect('/login');
+    if (await isGuest(req)) return res.redirect('/');
+    const kind = req.path.split('/')[1];
+    logAct(req, 'page', (kind === 'portfolio' ? 'theme' : kind) + ':'
+      + String(req.params.name || '').slice(0, 30));
+    res.sendFile(path.join(__dirname, 'private', 'basket.html'));
+  }));
 
 app.get('/help', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
@@ -9113,6 +9120,42 @@ app.get('/api/period-anchors', requireMember, route(async (req, res) => {
   res.json(body);
 }));
 
+// Sector, Industry and Size as groups, beside the themes (2026-09-27, owner:
+// "I don't think I have anything that summarizes data and charts for a
+// sector, industry, theme or size"). A theme already had this page; these
+// three are the SAME page with a different membership rule, so they resolve
+// to a symbol list here and everything downstream — the axis, the curve, the
+// benchmark, the per-symbol series — is untouched.
+//
+// CACHED, because the resolution needs the snapshot and the page refetches
+// per range. One ~1.3MB read a minute per instance instead of one per range
+// click; the `tile_config` / `mobile_config` pattern. The cost of being a
+// minute stale is a stock that changed sector overnight, which is not a thing
+// that happens between two clicks.
+const GROUP_DIMS = { sector: 'sector', industry: 'industry', size: 'capBand' };
+let groupIdxCache = null;
+async function groupIndex() {
+  if (groupIdxCache && Date.now() - groupIdxCache.at < 60 * 1000) return groupIdxCache.idx;
+  const snap = await readSnapshot();
+  const rows = ((snap && snap.stocks) || []).filter((x) => x && x.symbol && !x.error);
+  // capBand is stamped on the way OUT, never stored, so a snapshot row may
+  // not carry it — derive rather than read, or /size/<band> is empty until
+  // something else happens to have stamped it.
+  stampCapDerived(rows);
+  const idx = {};
+  for (const dim of Object.keys(GROUP_DIMS)) idx[dim] = new Map();
+  for (const r of rows) {
+    for (const [dim, field] of Object.entries(GROUP_DIMS)) {
+      const v = r[field];
+      if (!v) continue;                   // no sector yet is not a group
+      if (!idx[dim].has(v)) idx[dim].set(v, []);
+      idx[dim].get(v).push(r.symbol);
+    }
+  }
+  groupIdxCache = { at: Date.now(), idx };
+  return idx;
+}
+
 // The curve behind the chart and sparkline cards. Lifted out of the route so
 // the phone's saved-posts endpoint can build the same cards server-side
 // without a second copy of the axis rules. Returns the route's own payload,
@@ -9122,7 +9165,20 @@ async function basketPayload(req, rawName, days) {
   const all = await readUniverse();
   let symbols;
   let label = rawName;
-  if (rawName.startsWith('my:')) {
+  let scope = 'theme';
+  const dim = Object.keys(GROUP_DIMS).find((d) => rawName.startsWith(d + ':'));
+  if (dim) {
+    const want = rawName.slice(dim.length + 1);
+    const idx = await groupIndex();
+    const got = idx[dim].get(want);
+    // Named rather than generic: "No such sector" is the whole diagnosis when
+    // a link carries a value the taxonomy has since renamed.
+    if (!got) return { error: `No such ${dim}.`, status: 404 };
+    const uni = new Set(all);
+    symbols = got.filter((x) => uni.has(x));
+    label = want;
+    scope = dim;
+  } else if (rawName.startsWith('my:')) {
     const mine = await store.readUserPortfolios(await prefsKey(req));
     const nm = rawName.slice(3);
     if (!(nm in mine)) return { error: 'No such personal theme.', status: 404 };
@@ -9137,7 +9193,7 @@ async function basketPayload(req, rawName, days) {
     return { error: 'No such theme.', status: 404 };
   }
   if (!symbols.length) {
-    return { label, mine: rawName.startsWith('my:'), symbols: [], dates: [], basket: null, universe: null };
+    return { label, scope, mine: rawName.startsWith('my:'), symbols: [], dates: [], basket: null, universe: null };
   }
 
   const since = new Date(Date.now() - Math.round(days * 1.55 + 14) * 86400000)
@@ -9158,13 +9214,14 @@ async function basketPayload(req, rawName, days) {
     .filter((d) => perDate.get(d) >= busiest * 0.5)
     .sort()
     .slice(-days);
-  if (!dates.length) return { label, mine: rawName.startsWith('my:'), symbols, dates: [], basket: null, universe: null };
+  if (!dates.length) return { label, scope, mine: rawName.startsWith('my:'), symbols, dates: [], basket: null, universe: null };
 
   const basket = equalWeightIndex(bars, symbols, dates);
   // The stocks you follow, without the benchmarks that track the market.
   const universe = equalWeightIndex(bars, all.filter(notBenchmark), dates);
   return {
     label,
+    scope,
     mine: rawName.startsWith('my:'),
     symbols,
     dates,

@@ -65,6 +65,11 @@
     .lede { margin: 8px 0 20px; font-size: 12.5px; }
 
     .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    /* A GRID ITEM IS min-width: auto, so it refuses to shrink below its
+       content — the stock table's 620px floor then pushed the card wider
+       than the phone and `.tblwrap` never got the chance to scroll. The
+       zero has to be on every level between the grid and the scroller. */
+    .grid > .card, .card > .core { min-width: 0; }
     .card > .core { padding: 20px 22px 18px; }
     .card h2 { margin: 0 0 4px; font-size: 12px; font-weight: 600; text-transform: uppercase;
                letter-spacing: 0.14em; color: var(--muted); }
@@ -100,6 +105,58 @@
     td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
     td:first-child { font-family: var(--sans); color: var(--muted); }
     tbody tr:last-child td { border-bottom: none; }
+
+    /* composition — the bar is cap, the number beside it is companies */
+    .complist { display: grid; gap: 2px; margin: 12px 0 10px; }
+    .comp { display: grid; grid-template-columns: minmax(90px, 1.5fr) 3fr 42px 62px;
+            align-items: center; gap: 12px; padding: 5px 8px; border-radius: 9px;
+            font: 500 12.5px var(--sans); color: var(--muted); text-decoration: none; }
+    .comp:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+    .comp .cn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .comp .cb { display: block; height: 8px; border-radius: 999px;
+                background: rgba(255, 255, 255, 0.05); overflow: hidden; }
+    .comp .cb > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+    .comp .cc, .comp .cm { font-family: var(--mono); font-size: 11.5px; text-align: right; color: var(--faint); }
+
+    /* leaders and laggards */
+    .ldrcols { display: grid; grid-template-columns: 1fr; gap: 6px 26px; margin: 10px 0 4px; }
+    @media (min-width: 720px) { .ldrcols { grid-template-columns: 1fr 1fr; } }
+    .ldrcols h3 { margin: 6px 0 4px; font: 500 10.5px var(--sans); text-transform: uppercase;
+                  letter-spacing: 0.12em; color: var(--faint); }
+    .ldr { display: grid; grid-template-columns: 58px 1fr 62px; align-items: baseline; gap: 10px;
+           padding: 5px 8px; border-radius: 9px; text-decoration: none;
+           font: 500 12.5px var(--sans); color: var(--muted); }
+    .ldr:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+    .ldr .ls { font-family: var(--mono); font-size: 12px; color: var(--text); }
+    .ldr .ln { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ldr .lv { font-family: var(--mono); text-align: right; }
+    /* the verdict is context, not the row's subject — it drops on a phone
+       rather than squeezing the name it sits beside */
+    .ldr .la { display: none; font-size: 11px; color: var(--faint); }
+    @media (min-width: 900px) { .ldr { grid-template-columns: 58px 1fr 62px 96px; }
+      .ldr .la { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+
+    /* the stock list — its own scroller, so a long group cannot make the
+       PAGE scroll sideways (seven columns do not fit a phone) */
+    .tblwrap { overflow-x: auto; margin-top: 6px; }
+    .rowtbl { min-width: 620px; }
+    .rowtbl td.nm { font-family: var(--sans); color: var(--muted); text-align: left;
+                    max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rowtbl th:nth-child(2), .rowtbl td:nth-child(2) { text-align: left; }
+    .rowtbl th:last-child, .rowtbl td:last-child { text-align: left; font-family: var(--sans);
+                                                   font-size: 12px; color: var(--muted); }
+    .rowtbl a { color: var(--text); text-decoration: none; }
+    .rowtbl a:hover { text-decoration: underline; }
+    td.dim { color: var(--faint); }
+
+    /* the group picker's search box and its section headings */
+    .pffind { width: calc(100% - 12px); margin: 2px 6px 6px; padding: 7px 10px; border-radius: 10px;
+              border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+              font: 500 12.5px var(--sans); color: var(--text); }
+    .pffind:focus { outline: none; border-color: var(--hair-2); }
+    #pfMenu .mh { padding: 6px 12px 2px; font: 500 10px var(--sans); text-transform: uppercase;
+                  letter-spacing: 0.13em; color: var(--faint); }
+    #pfMenu .pfnone { padding: 10px 12px; font: 500 12.5px var(--sans); color: var(--faint); }
 
     /* per-stock overlays on the one chart: a chip per stock, click to hide */
     .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
@@ -153,14 +210,34 @@
   </main>
 
   <script src="/action.js"></script>
+  <!-- for CAP_ORDER: a size ladder sorted alphabetically reads as nonsense,
+       and the order is defined once in the module the server also requires -->
+  <script src="/filters.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    // Either address reaches this page, so the name is taken from the LAST
-    // path segment rather than from one prefix. Splitting on '/portfolio/'
-    // returned undefined the moment the canonical URL became /theme/.
-    const NAME = decodeURIComponent(location.pathname.replace(/^\/(theme|portfolio)\//, ''));
+    // FOUR SCOPES, ONE PAGE (2026-09-27). A sector, an industry and a size
+    // band differ from a theme only in which stocks are in them, so the path
+    // says which dimension and the value rides in the last segment. The wire
+    // name carries the dimension as a prefix, the way 'my:' already did.
+    //
+    // Both theme addresses still land here, and /portfolio/ normalises to
+    // theme — splitting on one literal prefix returned undefined the moment
+    // the canonical URL became /theme/.
+    const PATH = location.pathname.match(/^\/(theme|portfolio|sector|industry|size)\/(.*)$/);
+    const SCOPE = PATH ? (PATH[1] === 'portfolio' ? 'theme' : PATH[1]) : 'theme';
+    const VALUE = decodeURIComponent(PATH ? PATH[2] : '');
+    const NAME = SCOPE === 'theme' ? VALUE : SCOPE + ':' + VALUE;
+    const SCOPE_WORD = { theme: 'theme', sector: 'sector', industry: 'industry', size: 'size band' };
+    // What a group is best broken down BY. A sector is made of industries; an
+    // industry is one sector by construction, so its only interesting cut is
+    // size; everything else reads as a sector mix.
+    const COMP_BY = { sector: 'industry', industry: 'capBand', size: 'sector', theme: 'sector' };
+    const COMP_WORD = { industry: 'industries', capBand: 'size bands', sector: 'sectors' };
+    // The window's own return field, so the leaders agree with the range
+    // button above them rather than quietly always being a year.
+    const RANGE_FIELD = { '1M': 'oneMonthPct', '3M': 'threeMonthPct', '6M': 'sixMonthPct', '1Y': 'oneYearPct' };
     const RANGES = [
       { id: '1M', days: 21 }, { id: '3M', days: 63 }, { id: '6M', days: 126 }, { id: '1Y', days: 253 },
     ];
@@ -282,6 +359,175 @@
         '</div></section>';
     }
 
+    // ---- the four cards a group needs that a theme page never had ----------
+    const median = (arr) => {
+      const xs = arr.filter((x) => x != null && isFinite(x)).sort((a, b) => a - b);
+      if (!xs.length) return null;
+      const m = Math.floor(xs.length / 2);
+      return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2;
+    };
+    const money = (n) => {
+      if (n == null || !isFinite(n)) return '—';
+      const a = Math.abs(n);
+      for (const [d, s] of [[1e12, 'T'], [1e9, 'B'], [1e6, 'M']]) {
+        if (a >= d) return '$' + (n / d).toFixed(1) + s;
+      }
+      return '$' + Math.round(n);
+    };
+    const nameOf = (s) => s.shortName || s.name || s.symbol;
+
+    // WHAT THE GROUP IS MADE OF. A curve cannot say this, and it is the
+    // difference between "Technology +18%" meaning the sector and meaning two
+    // companies: the share bar is by market cap, the count beside it is by
+    // company, and when those two disagree that IS the finding.
+    function compositionHtml() {
+      const field = COMP_BY[SCOPE];
+      const by = new Map();
+      let blank = 0;
+      for (const s of rows) {
+        const v = s[field];
+        if (!v) { blank++; continue; }
+        const e = by.get(v) || { n: 0, cap: 0 };
+        e.n++;
+        e.cap += Number(s.marketCap) > 0 ? Number(s.marketCap) : 0;
+        by.set(v, e);
+      }
+      if (!by.size) {
+        return '<section class="bezel card"><div class="core"><h2>What it is made of</h2>' +
+          `<div class="empty">No ${COMP_WORD[field]} recorded here yet — the field fills in as each ` +
+          'company profile is next re-pulled.</div></div></section>';
+      }
+      // Ordered by cap where there is any, else by count: a size ladder and a
+      // taxonomy are different questions, but "where is the weight" is the
+      // one this card is opened for.
+      const capTotal = [...by.values()].reduce((a, b) => a + b.cap, 0);
+      let list = [...by.entries()].sort((a, b) => (b[1].cap - a[1].cap) || (b[1].n - a[1].n));
+      if (field === 'capBand' && window.Filters) {
+        const ord = Filters.CAP_ORDER;
+        list = list.sort((a, b) => ord.indexOf(a[0]) - ord.indexOf(b[0]));
+      }
+      const CAP = 12;
+      const shown = list.slice(0, CAP);
+      const rest = list.slice(CAP);
+      const href = (v) => (field === 'capBand' ? '/size/' : field === 'industry' ? '/industry/' : '/sector/')
+        + encodeURIComponent(v);
+      const bars = shown.map(([v, e]) => {
+        const share = capTotal > 0 ? (e.cap / capTotal) * 100 : (e.n / rows.length) * 100;
+        return '<a class="comp" href="' + href(v) + `" title="Open ${esc(v)}">` +
+          `<span class="cn">${esc(v)}</span>` +
+          `<span class="cb"><span style="width:${Math.max(1, share).toFixed(1)}%"></span></span>` +
+          `<span class="cc">${e.n}</span><span class="cm">${money(e.cap)}</span></a>`;
+      }).join('');
+      const more = rest.length
+        ? `<p class="note">…and ${rest.length} more, together ${rest.reduce((a, b) => a + b[1].n, 0)} stocks.</p>` : '';
+      const blankNote = blank
+        ? `<p class="note">${blank} ${blank === 1 ? 'stock has' : 'stocks have'} no ${COMP_WORD[field].replace(/s$/, '')} recorded yet.</p>` : '';
+      return '<section class="bezel card"><div class="core"><h2>What it is made of</h2>' +
+        `<div class="complist">${bars}</div>${more}${blankNote}` +
+        `<p class="note">${by.size} ${esc(COMP_WORD[field])}, the bar by market cap and the number by company —` +
+        ' where those two disagree, a few names carry the group. Each row opens.</p>' +
+        '</div></section>';
+    }
+
+    // WHICH NAMES DID IT. "The sector fell 4%" is not an answer anyone can
+    // act on; these are the same rows, over the window the range buttons
+    // chose, so the two cannot tell different stories.
+    function leadersHtml() {
+      const f = RANGE_FIELD[range.id] || 'oneYearPct';
+      const have = rows.filter((s) => s[f] != null && isFinite(s[f]))
+        .sort((a, b) => b[f] - a[f]);
+      if (!have.length) {
+        return '<section class="bezel card"><div class="core"><h2>Leaders and laggards</h2>' +
+          `<div class="empty">No ${range.id} return stored for anything in this group yet.</div></div></section>`;
+      }
+      const N = Math.min(5, Math.floor(have.length / 2)) || Math.min(3, have.length);
+      const best = have.slice(0, N);
+      const worst = have.slice(-N).reverse();
+      const row = (s) => `<a class="ldr" href="/stock/${encodeURIComponent(s.symbol)}">` +
+        `<span class="ls mono">${esc(s.symbol)}</span><span class="ln">${esc(nameOf(s))}</span>` +
+        `<span class="lv ${cls(s[f])}">${pct(s[f])}</span>` +
+        `<span class="la">${esc(s.action || '')}</span></a>`;
+      // The same stock can top both columns when the group is tiny; saying so
+      // beats printing it twice as if they were different findings.
+      const overlap = best.some((b) => worst.some((w) => w.symbol === b.symbol));
+      return '<section class="bezel card"><div class="core"><h2>Leaders and laggards</h2>' +
+        `<div class="ldrcols"><div><h3>Best over ${esc(range.id)}</h3>${best.map(row).join('')}</div>` +
+        `<div><h3>Worst over ${esc(range.id)}</h3>${worst.map(row).join('')}</div></div>` +
+        (overlap ? '<p class="note">Only a handful of stocks here, so the two columns overlap.</p>' : '') +
+        `<p class="note">${have.length} of ${rows.length} have a ${esc(range.id)} return stored. ` +
+        'The verdict is the Balanced rules’ — a reading, not a recommendation.</p>' +
+        '</div></section>';
+    }
+
+    // CHEAP OR DEAR AGAINST WHAT YOU ACTUALLY TRACK, not in the abstract.
+    // MEDIANS, never means: one 300x P/E drags a mean somewhere no company in
+    // the group is.
+    const FUND_ROWS = [
+      { k: 'forwardPe', label: 'Forward P/E', unit: 'x', dp: 1,
+        // A multiple off a loss is arithmetic, not cheapness — the Size and
+        // Bubble cards' rule, and the peer table's.
+        keep: (s) => Number(s.forwardPe) > 0 },
+      { k: 'grossMargin', label: 'Gross margin', unit: '%', dp: 1,
+        // Meaningless for a lender, and a Financial Services page would be
+        // every row — so it is counted and said, never silently dropped.
+        keep: (s) => s.sector !== 'Financial Services' },
+      { k: 'revenueGrowthYoY', label: 'Revenue growth', unit: '%', dp: 1 },
+      { k: 'profitMargin', label: 'Profit margin', unit: '%', dp: 1 },
+      { k: 'qualityRating', label: 'Quality (1-10)', unit: '', dp: 0 },
+    ];
+    function fundamentalsHtml() {
+      const fmt = (v, r) => (v == null ? '—'
+        : (r.unit === '%' ? (v >= 0 ? '+' : '') + v.toFixed(r.dp) + '%'
+          : v.toFixed(r.dp) + r.unit));
+      let dropped = 0;
+      const body = FUND_ROWS.map((r) => {
+        const mine = rows.filter((s) => (r.keep ? r.keep(s) : true));
+        if (r.k === 'grossMargin') dropped = rows.length - mine.length;
+        const a = median(mine.map((s) => s[r.k]));
+        const b = median(allRows.filter((s) => (r.keep ? r.keep(s) : true)).map((s) => s[r.k]));
+        const d = a != null && b != null ? a - b : null;
+        // A ratio's gap is points of the ratio, not a percentage OF it: 28x
+        // against 19x is nine turns, and "+47%" would be a different claim.
+        return `<tr><td>${esc(r.label)}</td><td class="mono">${fmt(a, r)}</td>` +
+          `<td class="mono dim">${fmt(b, r)}</td>` +
+          `<td class="mono ${cls(d)}">${d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(r.dp)}</td>` +
+          `<td class="mono dim">${mine.filter((s) => s[r.k] != null).length}</td></tr>`;
+      }).join('');
+      return '<section class="bezel card"><div class="core"><h2>Fundamentals, against the whole screen</h2>' +
+        '<table><thead><tr><th></th><th>This group</th><th>All screened</th><th>Gap</th><th>n</th></tr></thead>' +
+        `<tbody>${body}</tbody></table>` +
+        '<p class="note">Medians, not means — one extreme multiple would drag a mean somewhere no company ' +
+        'in the group sits. A forward P/E at or below zero is excluded: a multiple off a loss is arithmetic, ' +
+        'not cheapness.' +
+        (dropped ? ` ${dropped} financial${dropped === 1 ? '' : 's'} excluded from gross margin, where a lender's figure means nothing.` : '') +
+        ' The gap is in the figure’s own units — turns of a multiple, points of a percentage.</p>' +
+        '</div></section>';
+    }
+
+    let listShown = 50;
+    function stocksHtml() {
+      const f = RANGE_FIELD[range.id] || 'oneYearPct';
+      const sorted = rows.slice().sort((a, b) => (Number(b.marketCap) || 0) - (Number(a.marketCap) || 0));
+      const shown = sorted.slice(0, listShown);
+      const body = shown.map((s) => `<tr>` +
+        `<td class="mono"><a href="/stock/${encodeURIComponent(s.symbol)}">${esc(s.symbol)}</a></td>` +
+        `<td class="nm">${esc(nameOf(s))}</td>` +
+        `<td class="mono">${s.price == null ? '—' : '$' + Number(s.price).toFixed(2)}</td>` +
+        `<td class="mono ${cls(s.todayPct)}">${pct(s.todayPct, 2)}</td>` +
+        `<td class="mono ${cls(s[f])}">${pct(s[f])}</td>` +
+        `<td class="mono">${money(s.marketCap)}</td>` +
+        `<td>${esc(s.action || '—')}</td></tr>`).join('');
+      return '<section class="bezel card wide"><div class="core">' +
+        `<h2>The ${rows.length} stocks</h2>` +
+        '<div class="tblwrap"><table class="rowtbl"><thead><tr><th>Symbol</th><th>Name</th><th>Price</th>' +
+        `<th>Today</th><th>${esc(range.id)}</th><th>Market cap</th><th>Balanced</th></tr></thead>` +
+        `<tbody>${body}</tbody></table></div>` +
+        (sorted.length > shown.length
+          ? `<button class="stkToggle" id="moreRows">Show 50 more — ${shown.length} of ${sorted.length}</button>` : '') +
+        '<p class="note">Biggest first. The return column follows the range above, so it says the same thing ' +
+        'the curve does.</p></div></section>';
+    }
+
     function stockItems() {
       const series = (curve && curve.series) || {};
       return ((curve && curve.symbols) || [])
@@ -334,29 +580,94 @@
     function paint() {
       const main = $('main');
       if (!rows.length) {
-        main.innerHTML = `<div class="head"><h1>${esc(curve ? curve.label : NAME)}</h1></div>` +
-          '<div class="bezel card"><div class="core"><div class="empty">This theme has no stocks with data yet.</div></div></div>';
+        main.innerHTML = `<div class="head"><h1>${esc(curve ? curve.label : VALUE)}</h1>` +
+          `<span class="kind" style="font-size:15px">· ${esc(SCOPE_WORD[SCOPE])}</span></div>` +
+          `<div class="bezel card"><div class="core"><div class="empty">No stocks with data in this ${esc(SCOPE_WORD[SCOPE])} yet.</div></div></div>`;
         return;
       }
       const sectors = new Set(rows.map((s) => s.sector).filter(Boolean));
-      const menuRow = (target, label, personal, on) =>
-        `<a href="/theme/${encodeURIComponent(target)}" class="${on ? 'on' : ''}">` +
-        `<span class="pdot" style="background:${personal ? 'var(--green)' : 'var(--accent)'}"></span>` +
-        `${esc(label)}${personal ? '<span class="n">personal</span>' : ''}</a>`;
+      const inds = new Set(rows.map((s) => s.industry).filter(Boolean));
+      // THE MENU CROSSES ALL FOUR DIMENSIONS, because the reason you are on a
+      // sector page is often that you want the industry inside it. Grouped
+      // and searchable: 11 sectors and 6 bands are a list, ~100 industries is
+      // a wall, and one flat list of 130 rows is neither.
+      const dimRow = (href, label, on, note, tint) =>
+        `<a href="${href}" class="${on ? 'on' : ''}" data-f="${esc(label.toLowerCase())}">` +
+        `<span class="pdot" style="background:${tint}"></span>${esc(label)}` +
+        (note ? `<span class="n">${esc(note)}</span>` : '') + '</a>';
+      const themeRows =
+        dimRow('/theme/All', 'All', NAME === 'All', '', 'var(--accent)') +
+        sharedNames.map((n) => dimRow('/theme/' + encodeURIComponent(n), n, NAME === n, '', 'var(--accent)')).join('') +
+        myNames.map((n) => dimRow('/theme/' + encodeURIComponent('my:' + n), n, NAME === 'my:' + n, 'personal', 'var(--green)')).join('');
+      const listOf = (field) => {
+        const c = new Map();
+        for (const s of allRows) if (s[field]) c.set(s[field], (c.get(s[field]) || 0) + 1);
+        return [...c.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      };
+      const sizeList = (() => {
+        const c = new Map();
+        for (const s of allRows) if (s.capBand) c.set(s.capBand, (c.get(s.capBand) || 0) + 1);
+        const ord = (window.Filters && Filters.CAP_ORDER) || [...c.keys()];
+        return ord.filter((b) => c.has(b)).map((b) => [b, c.get(b)]);
+      })();
+      const section = (title, items) => items.length
+        ? `<div class="sep"></div><div class="mh">${esc(title)}</div>` + items : '';
       const menu =
-        menuRow('All', 'All', false, NAME === 'All') +
-        sharedNames.map((n) => menuRow(n, n, false, NAME === n)).join('') +
-        (myNames.length ? '<div class="sep"></div>' +
-          myNames.map((n) => menuRow('my:' + n, n, true, NAME === 'my:' + n)).join('') : '');
+        '<input id="pfFind" class="pffind" type="search" placeholder="Filter…" aria-label="Filter the list" />' +
+        `<div class="mh">Themes</div>${themeRows}` +
+        section('Sectors', listOf('sector').map(([n, k]) =>
+          dimRow('/sector/' + encodeURIComponent(n), n, SCOPE === 'sector' && VALUE === n, String(k), '#22d3ee')).join('')) +
+        section('Size', sizeList.map(([n, k]) =>
+          dimRow('/size/' + encodeURIComponent(n), n, SCOPE === 'size' && VALUE === n, String(k), '#94a3b8')).join('')) +
+        section('Industries', listOf('industry').map(([n, k]) =>
+          dimRow('/industry/' + encodeURIComponent(n), n, SCOPE === 'industry' && VALUE === n, String(k), '#a78bfa')).join('')) +
+        '<div class="pfnone" hidden>Nothing matches.</div>';
+      const kindWord = SCOPE === 'theme'
+        ? (curve && curve.mine ? '· personal theme' : '· theme')
+        : '· ' + SCOPE_WORD[SCOPE];
+      // A chip has to say something the heading does not. "1 sector" on a
+      // sector page is the page's own title counted; an industry names the
+      // sector it sits in, which is the fact you cannot see from here.
+      const chips = `<span class="chip">${rows.length} stocks</span>` +
+        (SCOPE === 'sector' ? `<span class="chip">${inds.size} industr${inds.size === 1 ? 'y' : 'ies'}</span>`
+          : SCOPE === 'industry' ? `<span class="chip">${esc([...sectors][0] || 'no sector recorded')}</span>`
+            : `<span class="chip">${sectors.size} sector${sectors.size === 1 ? '' : 's'}</span>`);
       main.innerHTML =
         `<div class="head"><h1 class="ppick">` +
-        `<button id="pfBtn" aria-expanded="false" aria-haspopup="listbox" title="Pick another theme">` +
-        `${esc(curve ? curve.label : NAME)}<svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9.4 6 6 6-6"/></svg></button>` +
+        `<button id="pfBtn" aria-expanded="false" aria-haspopup="listbox" title="Pick another group">` +
+        `${esc(curve ? curve.label : VALUE)}<svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9.4 6 6 6-6"/></svg></button>` +
         `<div id="pfMenu">${menu}</div>` +
-        `</h1><span class="kind" style="font-size:15px">${curve && curve.mine ? '· personal' : ''}</span>` +
-        `<span class="chip">${rows.length} stocks</span><span class="chip">${sectors.size} sector${sectors.size === 1 ? '' : 's'}</span></div>` +
-        '<p class="lede">A screener’s view of the list as one thing — descriptive throughout, positions nowhere.</p>' +
-        `<div class="grid">${curveCard()}${stanceHtml()}${returnsHtml()}</div>`;
+        `</h1><span class="kind" style="font-size:15px">${esc(kindWord)}</span>${chips}</div>` +
+        '<p class="lede">A screener’s view of the group as one thing — descriptive throughout, positions nowhere.</p>' +
+        `<div class="grid">${curveCard()}${stanceHtml()}${compositionHtml()}${leadersHtml()}` +
+        `${returnsHtml()}${fundamentalsHtml()}${stocksHtml()}</div>`;
+      const more = $('moreRows');
+      if (more) more.addEventListener('click', () => { listShown += 50; paint(); });
+      const find = $('pfFind');
+      if (find) {
+        find.addEventListener('click', (e) => e.stopPropagation());
+        find.addEventListener('input', () => {
+          const q = find.value.trim().toLowerCase();
+          const menuEl = $('pfMenu');
+          let any = 0;
+          menuEl.querySelectorAll('a[data-f]').forEach((a) => {
+            const hit = !q || a.dataset.f.includes(q);
+            a.hidden = !hit;
+            if (hit) any++;
+          });
+          // A heading over nothing, and a separator with no section under it,
+          // both read as a list that lost its rows.
+          menuEl.querySelectorAll('.mh, .sep').forEach((h) => {
+            let n = h.nextElementSibling, seen = false;
+            while (n && !n.classList.contains('mh') && !n.classList.contains('sep')) {
+              if (n.tagName === 'A' && !n.hidden) { seen = true; break; }
+              n = n.nextElementSibling;
+            }
+            h.hidden = !seen;
+          });
+          menuEl.querySelector('.pfnone').hidden = any > 0;
+        });
+      }
       const st = $('stkToggle');
       if (st) st.addEventListener('click', () => { showStocks = !showStocks; paint(); });
       document.querySelectorAll('[data-chip]').forEach((c) => {
@@ -439,7 +750,7 @@
           fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json()),
           fetch(`/api/basket?name=${encodeURIComponent(NAME)}&days=${range.days}`, { cache: 'no-store' }).then(async (r) => {
             const d = await r.json();
-            if (!r.ok) throw new Error(d.error || 'No such theme.');
+            if (!r.ok) throw new Error(d.error || `No such ${SCOPE_WORD[SCOPE]}.`);
             return d;
           }),
           fetch('/api/my/portfolios', { cache: 'no-store' })
@@ -453,7 +764,7 @@
         rows = allRows.filter((s) => set.has(s.symbol));
         curveCache[range.id] = bk;
         curve = bk;
-        document.title = `${bk.label} — Tickr Lab`;
+        document.title = `${bk.label} — ${SCOPE_WORD[SCOPE]} — Tickr Lab`;
         paint();
       } catch (err) {
         $('main').innerHTML = `<div class="bezel card"><div class="core"><div class="error">${esc(err.message)} <a href="/" style="color:var(--accent)">Back to the screener</a>.</div></div></div>`;
