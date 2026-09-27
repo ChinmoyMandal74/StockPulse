@@ -800,9 +800,22 @@
         const extras = (o.extra && o.extra[g]) || [];
         const rows = byGroup[g].concat(extras).map((r) => {
           const tip = o.tips && TIP_GROUPS.includes(g) ? ROW_TIPS[r.k] : null;
-          const val = r.href
-            ? `<a class="rc-link" href="${esc(r.href)}" target="_blank" rel="noopener">${esc(r.t)}</a>`
-            : esc(r.t);
+          // `links` turns a FIELD_SPEC row's value into one or more links —
+          // Sector, Industry, Size and Portfolios each name a group with a
+          // page of its own. OPT-IN and keyed by label, like `extra` and
+          // `tips`: only /stock passes it, so the hover card on the screener
+          // is unchanged (a link inside a card that vanishes when the
+          // pointer leaves the row is a worse offer than no link).
+          //
+          // A PART LIST, not one href, because Portfolios is many values in
+          // one row: two themes are two links, not one link over both names.
+          // Same tab — these are internal, unlike the website row's _blank.
+          const parts = (o.links && o.links[r.k] && r.t !== '—') ? o.links[r.k](s) : null;
+          const val = (parts && parts.length)
+            ? parts.map((p) => `<a class="rc-link go" href="${esc(p.href)}">${esc(p.t)}</a>`).join(', ')
+            : r.href
+              ? `<a class="rc-link" href="${esc(r.href)}" target="_blank" rel="noopener">${esc(r.t)}</a>`
+              : esc(r.t);
           return `<div class="rc-row${tip ? ' has-tip' : ''}"${tip ? ` data-tip="${tip}"` : ''}>` +
             `<span class="rc-k">${esc(r.k)}</span>` +
             `<span class="rc-v ${r.c || ''}"${r.b ? ' style="font-weight:600"' : ''}>${val}</span></div>`;

@@ -117,16 +117,21 @@
     .chip.has-tip:hover { background: rgba(255, 255, 255, 0.06); }
     .chip { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hair);
             background: rgba(255, 255, 255, 0.03); color: var(--muted); }
-    /* A chip that goes somewhere. `text-decoration: none` is not optional —
-       nothing else here resets it, and the `vs` pill on the peer table
-       arrived underlined for exactly that reason. It keeps the chip's own
-       muted colour at rest: a row of tinted pills would shout, and the
-       pointer plus a lift on hover is enough to say it is a door. */
-    a.chip.go { text-decoration: none; cursor: pointer;
-                transition: background 0.35s var(--ease), color 0.35s var(--ease),
-                            border-color 0.35s var(--ease); }
-    a.chip.go:hover { color: var(--text); border-color: var(--hair-2);
-                      background: rgba(255, 255, 255, 0.07); }
+    /* A chip that goes somewhere, and it has to LOOK like one — the first
+       cut kept the chip's muted grey "because a row of tinted pills would
+       shout", and the owner reported the obvious consequence: the links
+       were invisible. ACCENT, the same signal the Google Finance pill on
+       this very masthead already uses, so a reader learns one thing rather
+       than two; a shade lighter than that pill's filled background, which
+       keeps the primary action primary.
+       `text-decoration: none` is not optional — nothing else here resets
+       it, and the peer table's `vs` pill arrived underlined for that. */
+    a.chip.go { text-decoration: none; cursor: pointer; color: var(--accent);
+                border-color: rgba(124, 156, 255, 0.34);
+                background: rgba(124, 156, 255, 0.07);
+                transition: background 0.35s var(--ease), border-color 0.35s var(--ease); }
+    a.chip.go:hover { border-color: rgba(124, 156, 255, 0.6);
+                      background: rgba(124, 156, 255, 0.17); }
 
     /* Full card width, as asked. The usual 70-80ch reading limit is dropped
        here on purpose: this is four or five sentences read once, not prose you
@@ -629,6 +634,23 @@
     // Wilder smoothing converges slowly, so a short warm-up would not match the
     // screener's own RSI column.
     const RSI_LEN = 14;
+    // THE FOUR GROUPS A STOCK BELONGS TO, defined once (2026-09-27). The
+    // masthead chips and the rows in "Everything the screener knows" both
+    // read this, so a chip and the row under it can never point at different
+    // addresses — and the KEYS ARE THE FIELD_SPEC LABELS, which is what lets
+    // the card match them without a second list.
+    //
+    // Each returns a LIST: Portfolios is many values in one row, and two
+    // themes are two links rather than one link over both names. An empty
+    // list is the honest answer for a stock whose profile has not arrived —
+    // fewer chips and a plain row, never /industry/undefined.
+    const GROUP_LINKS = {
+      Sector: (s) => (s.sector ? [{ t: s.sector, href: '/sector/' + encodeURIComponent(s.sector) }] : []),
+      Industry: (s) => (s.industry ? [{ t: s.industry, href: '/industry/' + encodeURIComponent(s.industry) }] : []),
+      Size: (s) => (s.capBand ? [{ t: s.capBand, href: '/size/' + encodeURIComponent(s.capBand) }] : []),
+      Portfolios: (s) => (s.portfolios || []).map((x) => ({ t: x, href: '/theme/' + encodeURIComponent(x) })),
+    };
+    const GROUP_LINK_ORDER = ['Sector', 'Industry', 'Size', 'Portfolios'];
     let showRSI = true;
     // THE RIBBON AND THE LINE ARE TWO THINGS, and only one of them is a
     // hypothesis. The ribbon is a reading of the bars — what the trend rules
@@ -1426,12 +1448,8 @@
       // simply missing.
       //
       // Coarse to fine, then membership: sector, industry, size, themes.
-      const chips = []
-        .concat(stock.sector ? [{ t: esc(stock.sector), href: '/sector/' + encodeURIComponent(stock.sector) }] : [])
-        .concat(stock.industry ? [{ t: esc(stock.industry), href: '/industry/' + encodeURIComponent(stock.industry) }] : [])
-        .concat(stock.capBand ? [{ t: esc(stock.capBand), href: '/size/' + encodeURIComponent(stock.capBand) }] : [])
-        .concat((stock.portfolios || []).map((x) => ({ t: esc(x), href: '/theme/' + encodeURIComponent(x) })))
-        ;
+      const chips = GROUP_LINK_ORDER
+        .flatMap((k) => GROUP_LINKS[k](stock).map((p) => ({ t: esc(p.t), href: p.href })));
 
       document.getElementById('page').innerHTML = `
         <div class="head">
@@ -1527,6 +1545,10 @@
             // Company facts the screener never carries — they come from the
             // profile rather than the snapshot, so only this page has them.
             extra: { info: companyRows(payload.company) },
+            // The same four doors the masthead chips are, in the place the
+            // owner was actually looking. ONE builder per label, so the row
+            // and the chip above it cannot point at different addresses.
+            links: GROUP_LINKS,
           })}</div>
         </section></div>
 

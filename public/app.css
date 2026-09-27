@@ -428,6 +428,12 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 /* a linked value inside a card row — only the stock page uses one so far */
 .rc-link { color: inherit; text-decoration: none; border-bottom: 1px solid var(--hair-2); }
 .rc-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+/* A link to a GROUP page, and it has to LOOK like one: the inherited colour
+   above was invisible in a column of values, which is what the owner
+   reported. Accent at rest, the same signal the Google Finance pill already
+   uses on that page, so a reader has one thing to learn rather than two. */
+.rc-link.go { color: var(--accent); border-bottom-color: rgba(124, 156, 255, 0.35); }
+.rc-link.go:hover { border-bottom-color: var(--accent); }
 
 .rc-row.has-tip { cursor: help; border-radius: 6px; margin: 0 -6px; padding: 0 6px;
                   transition: background 0.35s var(--ease); }
