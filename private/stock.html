@@ -702,7 +702,17 @@
       // Name the rule the table actually used. A peer list that silently
       // widened its definition would be the one place in this app that does
       // not say which cut is on screen.
-      const basis = p.basis === 'industry'
+      // NAMES WHAT IT MEASURED, and nothing more. Co-movement is not the same
+      // business — Bright Horizons turns up beside DraftKings — so this must
+      // not be worded as "similar companies". It says they moved alike,
+      // because that is the only thing that was checked.
+      const basis = p.basis === 'moves'
+        ? (p.thin != null
+          ? `Only ${p.thin} other${p.thin === 1 ? '' : 's'} in <b>${esc(p.industry)}</b>, so these are the
+             <b>${esc(p.group)}</b> stocks whose price has moved most like ${esc(sym)} over the past year.`
+          : `No industry recorded for ${esc(sym)} yet, so these are the <b>${esc(p.group)}</b> stocks whose
+             price has moved most like it over the past year.`)
+        : p.basis === 'industry'
         ? `Others in <b>${esc(p.group)}</b>, ${how} — ${p.total} in the industry.`
         : p.thin != null
           ? `Only ${p.thin} other${p.thin === 1 ? '' : 's'} in <b>${esc(p.industry)}</b>, so this is
@@ -727,7 +737,11 @@
               <th>Market cap</th><th>Fwd P/E</th><th>Advice</th><th></th></tr></thead>
             <tbody>${body}</tbody>
           </table></div>
-          <p class="note">Same ${p.basis}, ranked by ${p.byName ? 'how close each one is in market cap' : 'size'}.
+          <p class="note">${p.basis === 'moves'
+            ? 'Ranked by how closely each one’s daily returns tracked this stock over the past year. '
+              + 'Moving together is not the same as being the same business — it is the closest reading '
+              + 'available when an industry holds too few companies to compare within.'
+            : `Same ${p.basis}, ranked by ${p.byName ? 'how close each one is in market cap' : 'size'}.`}
             It is who else is on this screen measured the same way — not a ranking, and not a list of
             better alternatives. Advice is the Balanced rule set; hover it for the rule that fired.
             A dash under Fwd P/E is a company with no positive forward earnings, or none reported —

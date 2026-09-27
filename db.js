@@ -600,6 +600,22 @@ const SCHEMA = [
      symbol    text primary key,
      pulled_at integer not null
    )`,
+  // Peers picked by CO-MOVEMENT, for the ~80 stocks whose industry is too
+  // thin to have any. Precomputed offline by peer-build.js and read one
+  // seek at a time; nothing on a request path computes a correlation, and
+  // nothing here is needed for a stock whose industry is deep enough — the
+  // taxonomy rule beats this on those and is explainable besides.
+  //
+  // Measured out of sample (select on one window, score on the next): for
+  // the thin cases the current rule lands at 0.207 median return
+  // correlation against a 0.206 random floor, and this lands at 0.420.
+  `create table if not exists peer_links (
+     symbol text not null,
+     peer   text not null,
+     rank   integer not null,
+     corr   real,
+     primary key (symbol, peer)
+   )`,
   // The news job's log: one row per batch of headline fetches (a refresh
   // round's top-up, or a stock page fetching stale headlines), one row per
   // symbol inside it. The /news-runs page reads these.
@@ -1712,6 +1728,37 @@ async function readHiddenColumns() {
   } catch { return []; }
 }
 
+// ---- peers by co-movement ---------------------------------------------------
+// Read one anchor at a time, seeking the primary key. Only the thin-industry
+// stocks have rows at all, so most symbols answer empty and keep the
+// taxonomy rule.
+async function readPeerLinks(symbol) {
+  await init();
+  const r = await db.execute({
+    sql: 'select peer, corr from peer_links where symbol = ? order by rank',
+    args: [String(symbol || '').toUpperCase()],
+  });
+  return r.rows.map((x) => ({ peer: x.peer, corr: x.corr == null ? null : Number(x.corr) }));
+}
+
+// Whole-collection replace, the portfolios rule: the builder recomputes every
+// anchor from scratch, so anything not in this write is a link that should no
+// longer exist. One batch, so a half-written table is not a state.
+async function writePeerLinks(byAnchor) {
+  await init();
+  const stmts = [{ sql: 'delete from peer_links', args: [] }];
+  for (const [symbol, peers] of Object.entries(byAnchor || {})) {
+    peers.slice(0, 12).forEach((p, i) => {
+      stmts.push({
+        sql: 'insert or replace into peer_links (symbol, peer, rank, corr) values (?, ?, ?, ?)',
+        args: [String(symbol).toUpperCase(), String(p.peer).toUpperCase(), i, p.corr == null ? null : Number(p.corr)],
+      });
+    });
+  }
+  await db.batch(stmts);
+  return stmts.length - 1;
+}
+
 // ---- the admin announcement ------------------------------------------------
 // A site setting, so app_meta beside hidden_columns and the rest rather than
 // anyone's prefs. `at` is the version: it changes on every edit, and the
@@ -2780,7 +2827,7 @@ async function readBarsFor(symbols, since) {
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state',
-  'earnings_history', 'price_state', 'tech_history', 'alerts', 'alert_events'];
+  'earnings_history', 'price_state', 'tech_history', 'alerts', 'alert_events', 'peer_links'];
 
 // Remove a symbol from the database entirely.
 //
@@ -4234,6 +4281,8 @@ module.exports = {
   readPostalAddress,
   writePostalAddress,
   readHiddenColumns,
+  readPeerLinks,
+  writePeerLinks,
   readAnnouncement,
   writeAnnouncement,
   writeHiddenColumns,
