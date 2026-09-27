@@ -27,7 +27,12 @@
     .top h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.03em; }
     .top .count { font: 500 12px var(--mono); color: var(--faint); }
     .top .spacer { flex: 1 1 0; }
-    .sub { margin: 10px 0 0; max-width: 78ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    /* FULL WIDTH, as asked (owner, 2026-09-27). The usual 70-80ch reading
+       measure is dropped here for the reason `/stock`'s About block dropped
+       it: this is two sentences read once, under a grid that runs the whole
+       page, and a paragraph stopping two-thirds of the way across reads as a
+       layout fault rather than as a measure. */
+    .sub { margin: 10px 0 0; font-size: 13px; line-height: 1.65; color: var(--muted); }
 
     /* The two dimension pickers and the swap, as one row. */
     .picks { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin: 20px 0 0; }
@@ -260,10 +265,16 @@
       <a class="btn" href="/">Back to screener</a>
     </header>
     <p class="sub">
-      The screen counted by two dimensions at once. Every number is a count of stocks or their
-      total market cap; click a cell and the stocks behind it are listed in full underneath.
-      Nothing here is fetched twice — it is the same
-      snapshot the screener reads, cross-tabulated in the browser.
+      <!-- BOTH CLAIMS HAD GONE STALE the day the time axis shipped: a number
+           is no longer only a count or a market cap, and "nothing here is
+           fetched twice" stopped being true when a period axis started
+           reading the closes at each boundary. A claim has to leave with the
+           feature — and arrive with it. -->
+      The screen counted by two dimensions at once: every number is a count of stocks, their total
+      market cap, or — with a period across the top — the group’s equal-weight return. Click a cell
+      and the stocks behind it are listed in full underneath. The counts are cross-tabulated in the
+      browser from the same snapshot the screener reads rather than fetched again; a period axis
+      adds one cached read of the closing price at each period boundary.
     </p>
 
     <div class="picks">
