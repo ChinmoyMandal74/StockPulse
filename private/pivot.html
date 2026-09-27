@@ -183,6 +183,15 @@
     table.pv tbody tr.kid:hover th, table.pv tbody tr.kid:hover td {
       background-color: rgba(124, 156, 255, 0.085); }
 
+    /* The one control on this grid that nothing announces until the pointer
+       has already arrived (owner, 2026-09-27). The cell tooltips say "click to
+       list them below" and the intro says so too, but the intro is a screen
+       away by the time anyone is reading numbers — a hint belongs where the
+       action is. `ghint`, not `hint`: an unscoped class here would be the
+       sixth on this project to capture later markup, and `.sub` already did it
+       on this very page. */
+    .ghint { margin: 9px 0 0; font-size: 11.5px; color: var(--faint); }
+
     /* ---- the child table -------------------------------------------------
        A cell no longer expands in place; it selects, and the stocks are drawn
        as a real table below the grid (2026-09-21, owner's request: "think of
@@ -269,12 +278,18 @@
            is no longer only a count or a market cap, and "nothing here is
            fetched twice" stopped being true when a period axis started
            reading the closes at each boundary. A claim has to leave with the
-           feature — and arrive with it. -->
+           feature — and arrive with it.
+
+           THE DRILL INSTRUCTION MOVED OUT (2026-09-27, when the footnote under
+           the grid was asked for). Stating it twice inside one screen is the
+           duplication this project has been pulled up on before; this
+           paragraph says what the numbers ARE, the footnote says what to do
+           with them, and it sits where the doing happens. -->
       The screen counted by two dimensions at once: every number is a count of stocks, their total
-      market cap, or — with a period across the top — the group’s equal-weight return. Click a cell
-      and the stocks behind it are listed in full underneath. The counts are cross-tabulated in the
-      browser from the same snapshot the screener reads rather than fetched again; a period axis
-      adds one cached read of the closing price at each period boundary.
+      market cap, or — with a period across the top — the group’s equal-weight return. The counts
+      are cross-tabulated in the browser from the same snapshot the screener reads rather than
+      fetched again; a period axis adds one cached read of the closing price at each period
+      boundary.
     </p>
 
     <div class="picks">
@@ -305,6 +320,12 @@
 
     <p class="note" id="note"></p>
     <div id="out"><div class="msg">Loading the screen…</div></div>
+    <!-- Written by render(), and hidden until there is something to click.
+         It sits BETWEEN the two tables and is hidden while one is open, so it
+         costs `sizePanes()` nothing: that function budgets from the grid's top
+         and the child caption, and anything unaccounted for between them would
+         push both panes off the bottom of the window. -->
+    <p class="ghint" id="ghint" hidden></p>
     <div class="detail" id="detail"></div>
   </main>
 
@@ -1471,6 +1492,19 @@
           render();
         });
       });
+      // The footnote under the grid. Built from what was actually DRAWN rather
+      // than from what the measure ought to produce: a time axis has row
+      // averages and no column totals, and an empty grid has neither, so
+      // promising a control that is not there would be worse than silence.
+      // It goes before paintDetail, which measures the panes — and it is
+      // spent once a selection is open, where the child table's own crumb and
+      // Clear selection say where you are and how to leave.
+      const hint = $('ghint');
+      const anyCell = !!$('out').querySelector('td.cell');
+      hint.textContent = 'Click a cell to list the stocks behind it below' +
+        ($('out').querySelector('td.drill') ? ' — a total opens the same way' : '') + '.';
+      hint.hidden = !!picked || !anyCell;
+
       paintDetail(p);
       // The saved-pivot picker says which preset the screen currently IS, so it
       // follows every change of axis, measure, shading or filter. Safe here:
