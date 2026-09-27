@@ -996,9 +996,32 @@
       : `https://www.google.com/finance/quote/${sym}`;
   }
 
+  // ---- Yahoo Finance -------------------------------------------------------
+  // Here for the reason gfUrl is here at all: a third-party URL derived from a
+  // row belongs in one place, not in whichever pages happen to want it.
+  //
+  // It needs NO venue — https://finance.yahoo.com/quote/MU/ is the whole
+  // thing — which is the one way it is simpler than Google. What it does need
+  // is the share-class spelling: Yahoo writes those with a HYPHEN, and this
+  // universe holds BRK.A, BRK.B and HEI.A.
+  //
+  // THE FAILURE IS SILENT, NOT A 404, which is why this is a rule and not a
+  // guess. Checked against the live site: `quote/BRK.B/` answers **200** with
+  // an empty company name — a quote page with nothing on it — where
+  // `quote/BRK-B/` is Berkshire Hathaway. A status-code check would have
+  // passed over a link that goes nowhere useful.
+  //
+  // Nothing else is translated, and that holds only BECAUSE the universe is
+  // US-listed only: a foreign listing needs Yahoo's own market suffix
+  // (`005930.KS`, `VOD.L`), which is exactly the rule this project keeps.
+  function yfUrl(s) {
+    const sym = String((s && s.symbol) || '').replace(/\./g, '-');
+    return `https://finance.yahoo.com/quote/${encodeURIComponent(sym)}/`;
+  }
+
   global.RowCard = {
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
-    gfUrl, googleExchange, canHover,
+    gfUrl, yfUrl, googleExchange, canHover,
     // used by the stock page
     buildSections, chartSVG, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries,
     scoreTip, placeTip,
