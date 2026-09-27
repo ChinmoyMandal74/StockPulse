@@ -7268,9 +7268,24 @@ function peersFor(stock, stocks) {
     // The anchor has no cap of its own (13 live rows), so "closest in size" has
     // no meaning. Largest first instead, and the caption says which it did.
     : (x) => { const c = Number(x.marketCap); return c > 0 ? -c : Infinity; };
-  const picked = group.slice()
-    .sort((a, b) => (rank(a) - rank(b)) || String(a.symbol).localeCompare(String(b.symbol)))
-    .slice(0, PEER_MAX);
+  // ONE COMPANY, ONE ROW. Eight display names in the universe are shared by
+  // two tickers — BRK.A/BRK.B, FOXA/FOX, NWS/NWSA, Z/ZG, HEI.A/HEI,
+  // LBTYA/LBTYK, plus FI/FISV and SQ/XYZ where a ticker simply changed — so
+  // without this The Trade Desk's table listed "Zillow Group" TWICE, and a
+  // Berkshire class could have appeared beside itself. Deduped by the name
+  // the reader actually sees, keeping whichever survives the sort (the
+  // closest in size), and the anchor's own name is taken first so a share
+  // class can never be its own peer.
+  const seen = new Set([String(stock.shortName || stock.name || me).trim().toLowerCase()]);
+  const picked = [];
+  for (const x of group.slice()
+    .sort((a, b) => (rank(a) - rank(b)) || String(a.symbol).localeCompare(String(b.symbol)))) {
+    const key = String(x.shortName || x.name || x.symbol).trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    picked.push(x);
+    if (picked.length >= PEER_MAX) break;
+  }
 
   // Formatted HERE, through RowCard.fieldValues — the same function the hover
   // card, the tiles and the phone format through — so a number cannot read one
@@ -7287,7 +7302,12 @@ function peersFor(stock, stocks) {
     // silently showing a different question from the one it names.
     thin: basis === 'sector' && ind ? thin : null,
     byName: mine > 0,
-    total: group.length,
+    // COUNTED IN COMPANIES, NOT TICKERS, or the caption contradicts the list
+    // it sits above: the rows are deduped by display name, so "33 in the
+    // industry" must mean 33 companies too. The anchor's own name is already
+    // in `seen`, so a second share class of it is not counted either.
+    total: new Set(group.map((x) => String(x.shortName || x.name || x.symbol).trim().toLowerCase())
+      .filter((k) => k !== String(stock.shortName || stock.name || me).trim().toLowerCase())).size,
     rows: picked.map((x) => {
       const v = RowCard.fieldValues(x);
       const out = { symbol: x.symbol, name: x.shortName || x.name || x.symbol, why: x.actionFlag || '' };
