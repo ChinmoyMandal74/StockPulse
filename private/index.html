@@ -157,6 +157,19 @@
     /* No ladder for a member: the cells keep their colour and their
        tooltip, and stop pretending to be buttons. */
     body.no-ladder td.act, body.no-ladder td.ctype, body.no-ladder td.state { cursor: default; }
+    /* A Sector or Industry cell filters the table to itself. NO COLOUR AT
+       REST: the `.namelink` rule — a thousand tinted cells down two columns
+       would wreck the table, and these are read far more often than clicked.
+       The pointer and a hairline underline on hover are the whole affordance,
+       and only the cells that carry a value get either.
+
+       BOTH SELECTORS NAME BOTH CLASSES. These cells are `td.name`, which sets
+       `cursor: help` further down this sheet: a bare `td.cellfil` ties it on
+       specificity and loses on source order, so the cell reads as a tooltip
+       rather than a control and the whole affordance is gone. */
+    td.name.cellfil { cursor: pointer; }
+    td.name.cellfil:hover { color: var(--text); text-decoration: underline;
+      text-decoration-color: var(--hair-2); text-underline-offset: 2px; }
     td.av-col { font-size: 11.5px; }
     td.act.a-strong-buy { color: var(--green); font-weight: 700; }
     td.act.a-buy { color: var(--green); }
@@ -1770,6 +1783,27 @@
       return `<td class="name left grp-info"${attr(bits.join(' \u00b7 '))}>${we(s.exchange)}</td>`;
     }
 
+    // Sector and Industry: the bar's own pickers in a second place (owner,
+    // 2026-09-27). Clicking a value narrows the table to it, clicking the same
+    // value again clears it — the state is `sectorFilter` / `industryFilter`,
+    // so the cell and the picker are one control and can never disagree.
+    //
+    // A BLANK CELL IS NOT A CONTROL. The field arrives one profile at a time,
+    // so an em-dash here is common; it carries no data attribute, no pointer
+    // and no hover, because a cell that looks clickable and filters to nothing
+    // reads as a bug — the `body.no-ladder` rule.
+    //
+    // The value is ESCAPED. It was not: the sector cell interpolated
+    // `s.sector` raw while the industry cell beside it used `we()`, so a
+    // provider string carrying markup would have been injected into every row.
+    // Latent rather than exploited, and free to close while rewriting the line.
+    function classCell(key, val, what, extraCls, title) {
+      const base = 'name left grp-info' + extraCls;
+      if (!val) return `<td class="${base}"${attr(title)}>—</td>`;
+      return `<td class="${base} cellfil" data-${key}="${we(val)}"` +
+        attr(title + ` · click to show only this ${what}`) + `>${we(val)}</td>`;
+    }
+
     // The size band beside the cap it comes from. Blank means the instrument
     // has no capitalisation to band — an ETF reports AUM — and says so, rather
     // than being called the smallest company on the screen.
@@ -2425,6 +2459,13 @@
         industryFilter = 'All';
       }
     }
+    // Deliberately just the assignment, and the asymmetry is the point: an
+    // industry belongs to exactly one sector, and every way of choosing one —
+    // the menu, the filter cell, the table cell — can only offer an industry
+    // that is already inside the sector in force. So there is never a sector
+    // to correct on the way in, where setting a sector really can strand an
+    // industry. It is a function so that stops being true in one place.
+    function setIndustryFilter(v) { industryFilter = v; }
 
     function headerText(th) {
       const c = th.cloneNode(true);
@@ -2491,7 +2532,7 @@
         if (!el.matches('select.flt')) return;
         const k = el.dataset.fk;
         if (k === 'sector') setSectorFilter(el.value || 'All');
-        else if (k === 'industry') industryFilter = el.value || 'All';
+        else if (k === 'industry') setIndustryFilter(el.value || 'All');
         else if (k === 'capBand') sizeFilter = el.value || 'All';
         else if (k === 'av:Balanced') adviceFilter = el.value || 'All';
         else setColFilter(k, el.value);
@@ -2676,15 +2717,14 @@
         '</div>';
       $('secMenu').querySelectorAll('[data-sec]').forEach((b) => {
         b.addEventListener('click', () => {
-          sectorFilter = b.dataset.sec;
+          // setSectorFilter drops an industry that the new sector does not
+          // hold — one left over from the previous choice would filter the
+          // table down to nothing and look like a bug — and only when it
+          // really is out of scope, so clearing the sector keeps an industry
+          // that still applies. Shared with the filter cell and the table
+          // cell, so the three cannot drift.
+          setSectorFilter(b.dataset.sec);
           window.track && track('picker', 'sector:' + sectorFilter);
-          // An industry sits inside exactly one sector, so one left over from
-          // the previous choice would filter the table down to nothing and
-          // look like a bug. Dropped only when it really is out of scope, so
-          // clearing the sector keeps an industry that still applies.
-          if (industryFilter !== 'All' && !scopedStocks().some((x) => x.industry === industryFilter)) {
-            industryFilter = 'All';
-          }
           closePickers();
           render();
         });
@@ -2734,7 +2774,7 @@
         '</div>';
       $('indMenu').querySelectorAll('[data-ind]').forEach((b) => {
         b.addEventListener('click', () => {
-          industryFilter = b.dataset.ind;
+          setIndustryFilter(b.dataset.ind);
           window.track && track('picker', 'industry:' + industryFilter);
           closePickers();
           render();
@@ -2963,8 +3003,8 @@
           ${shortNameCell(s)}
           <td class="left grp-info">${badges(s.portfolios)}${myBadges(s.symbol)}</td>
           <td class="grp-info"${attr(liveTitle)}>${price != null ? curSym(s.currency) + price : '—'}</td>
-          <td class="name left grp-info"${attr(cacheTitle)}>${s.sector || '—'}</td>
-          <td class="name left grp-info industry"${attr(s.industry || cacheTitle)}>${s.industry ? we(s.industry) : '—'}</td>
+          ${classCell('secval', s.sector, 'sector', '', cacheTitle)}
+          ${classCell('indval', s.industry, 'industry', ' industry', s.industry || cacheTitle)}
           ${exchangeCell(s)}
           <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
           ${capBandCell(s)}
@@ -5808,6 +5848,26 @@
         closePickers(); hideTip(); hideRowCard(); closeActionPanel();
         if (!myPop.hidden && myPopSym === star.dataset.my) closeMyPop();
         else openMyPop(star.dataset.my, star);
+        return;
+      }
+      // A Sector or Industry cell IS the bar's picker, in the place you are
+      // already looking. Click to narrow the table to that value, click the
+      // same value again to clear it — without the second half the only way
+      // back is to go and find the control you were avoiding, and a click
+      // that does nothing the second time reads as broken.
+      //
+      // Delegated here rather than wired per cell: the body is rebuilt on
+      // every sort, every filter and every windowed repaint, so a listener
+      // per cell would be re-attached about forty times a scroll.
+      const fcell = e.target.closest('td[data-secval], td[data-indval]');
+      if (fcell) {
+        e.stopPropagation();
+        closePickers(); hideTip(); hideRowCard(); closeActionPanel();
+        const sec = fcell.dataset.secval, ind = fcell.dataset.indval;
+        if (sec != null) setSectorFilter(sectorFilter === sec ? 'All' : sec);
+        else setIndustryFilter(industryFilter === ind ? 'All' : ind);
+        window.track && track('picker', (sec != null ? 'sector-cell:' : 'industry-cell:') + (sec != null ? sec : ind));
+        render();
         return;
       }
       // THE LADDER IS ADMIN-ONLY (2026-09-26, the owner's call). The verdict
