@@ -9109,6 +9109,88 @@ function symbolSeries(bars, symbols, dates) {
   return out;
 }
 
+// A TIME AXIS FOR THE PIVOT (2026-09-27, owner's request): each stock's
+// return for each of the last twelve months, or the last twelve years, so a
+// sector or a theme can be read across time rather than at one instant.
+//
+// THIRTEEN ANCHORS, NOT A BAR WINDOW. Twelve years of daily bars for the
+// universe is millions of rows and past the response wall this file records
+// at 83MB; the LAST CLOSE BEFORE each of thirteen boundaries is one indexed
+// seek per (symbol, boundary) on the (symbol, d) primary key — about 15,000
+// single-row reads, the shape `closesBefore` was rewritten into when the 5Y
+// anchor went from 748,859 rows to 254. Months and years cost the same,
+// which is why both are offered rather than one.
+//
+// The newest period is deliberately PARTIAL — month-to-date, year-to-date —
+// because that is what "the last twelve months" means to a reader on the
+// 20th. The page marks it rather than quietly comparing a part-month with
+// eleven whole ones.
+const PIVOT_PERIODS = 12;
+const pivotPeriodCache = new Map();          // kind -> { at, body }
+app.get('/api/pivot-periods', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const kind = req.query.kind === 'years' ? 'years' : 'months';
+  const hit = pivotPeriodCache.get(kind);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return res.json(hit.body);
+
+  const snap = await readSnapshot();
+  const rows = ((snap && snap.stocks) || []).filter((x) => x && x.symbol && !x.error);
+  const latest = rows.reduce((m, x) => (x.latestDate && x.latestDate > m ? x.latestDate : m), '');
+  if (!latest) return res.json({ kind, periods: [], returns: {} });
+  const symbols = rows.map((x) => x.symbol);
+
+  // Oldest first. Each boundary is the FIRST day of its period, so the last
+  // close before it is the previous period's final close — the divisor.
+  const day = new Date(latest + 'T12:00:00Z');
+  const bounds = [];
+  // TWELVE PERIODS NEEDS THIRTEEN BOUNDARIES, and the thirteenth is the one
+  // past the newest bar appended below — so this loop makes twelve, not
+  // thirteen. Off by one here is off by one everywhere downstream.
+  for (let i = PIVOT_PERIODS - 1; i >= 0; i--) {
+    const d = new Date(day);
+    if (kind === 'years') { d.setUTCFullYear(day.getUTCFullYear() - i, 0, 1); }
+    else { d.setUTCDate(1); d.setUTCMonth(day.getUTCMonth() - i); }
+    bounds.push(d.toISOString().slice(0, 10));
+  }
+  // …and one past the newest bar, so the same call returns the latest close
+  // rather than the price being read from somewhere else on a second path.
+  const endD = new Date(day);
+  endD.setUTCDate(endD.getUTCDate() + 1);
+  bounds.push(endD.toISOString().slice(0, 10));
+
+  const anchors = await store.closesBefore(bounds, symbols);
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const periods = [];
+  for (let i = 1; i < bounds.length; i++) {
+    const start = bounds[i - 1];
+    const label = kind === 'years' ? start.slice(0, 4)
+      : MONTHS[Number(start.slice(5, 7)) - 1] + ' ' + start.slice(2, 4);
+    periods.push({ key: start, label, from: start, partial: i === bounds.length - 1 });
+  }
+  const returns = {};
+  for (const sym of symbols) {
+    const out = [];
+    let any = false;
+    for (let i = 1; i < bounds.length; i++) {
+      const a = anchors[i - 1][sym], b = anchors[i][sym];
+      // BOTH ENDS OR NOTHING. A stock that listed inside the period has no
+      // opening anchor, and inventing one from its first trade would print a
+      // return for a period it did not live through — the survivorship error
+      // this project keeps writing down, in miniature.
+      const v = (a && b && a.close > 0) ? (b.close / a.close - 1) * 100 : null;
+      if (v != null) any = true;
+      out.push(v == null ? null : Math.round(v * 100) / 100);
+    }
+    if (any) returns[sym] = out;
+  }
+  // Newest first, which is how the owner asked to read it.
+  periods.reverse();
+  for (const k of Object.keys(returns)) returns[k].reverse();
+  const body = { kind, periods, returns, latest };
+  pivotPeriodCache.set(kind, { at: Date.now(), body });
+  res.json(body);
+}));
+
 // Anchors for "this week" and "this month" on the cards: each symbol's last
 // close before the current week (Monday) and the current month began, where
 // "current" is the week and month of the freshest bar in the universe — so a

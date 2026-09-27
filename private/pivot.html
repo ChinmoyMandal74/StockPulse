@@ -104,6 +104,20 @@
       background-image: linear-gradient(rgba(124, 156, 255, var(--h, 0)),
                                         rgba(124, 156, 255, var(--h, 0))); }
     table.pv td.cell:hover { color: var(--accent); }
+    /* A RETURN IS COLOURED BY SIGN, not shaded by size. The heat ramp says
+       "bigger", and a -8% month is not smaller than a +2% one — so a signed
+       measure opts out of it and takes the green/red every other return in
+       this app already uses. The hover and the selection still win, because
+       they come after. */
+    table.pv td.cell.pos { color: var(--green); }
+    table.pv td.cell.neg { color: var(--red); }
+    table.pv td.cell.pos:hover, table.pv td.cell.neg:hover { color: var(--accent); }
+    table.pv tfoot td.pos { color: var(--green); }
+    table.pv tfoot td.neg { color: var(--red); }
+    /* The newest period is a part-period. Saying so on the header beats
+       letting a reader compare three weeks with eleven whole months. */
+    table.pv th .sofar { display: block; font-size: 9.5px; font-weight: 400;
+                         letter-spacing: 0.06em; color: var(--faint); text-transform: none; }
     /* Exactly ONE cell is lit at a time, and it is the only thing tying the
        child table to the grid above it — so it is marked harder than the old
        inline drill needed to be: a filled ground AND an accent outline drawn
@@ -446,6 +460,24 @@
       // dropping them.
       advmove:  { label: 'Advice move', get: (s) => adviceMove(s),
                   order: ['Upgraded', 'Unchanged', 'Downgraded'], tint: 1 },
+      // TIME AS A COLUMN AXIS (2026-09-27, owner: "one column per month...
+      // it will help to see how stocks perform over time"). Columns only —
+      // twelve periods down the side and a taxonomy across the top reads the
+      // wrong way round, and the cell would be the same number either way.
+      //
+      // `multi` because a stock belongs to EVERY period it has a return for,
+      // which is the one case where landing in many cells is not
+      // double-counting: it is the same stock measured at different times.
+      // `noDouble` says so, or the page would warn about it.
+      //
+      // The order is the server's, newest first, so it cannot drift from the
+      // labels — a getter because the periods arrive after this object does.
+      months: { label: 'Last 12 months', time: 'months', multi: true, noDouble: true,
+                get: (s) => periodKeys(s), fmtKey: (k) => periodLabel(k),   /* an arrow, not the reference: DIMS is evaluated before these helpers exist and a bare name is a TDZ throw at load */
+                get order() { return ((periodData && periodData.periods) || []).map((p) => p.key); } },
+      years:  { label: 'Last 12 years', time: 'years', multi: true, noDouble: true,
+                get: (s) => periodKeys(s), fmtKey: (k) => periodLabel(k),   /* an arrow, not the reference: DIMS is evaluated before these helpers exist and a bare name is a TDZ throw at load */
+                get order() { return ((periodData && periodData.periods) || []).map((p) => p.key); } },
     };
     // Past this many values a dimension is collapsed to its largest plus an
     // "Other" bucket. Industry is 87 values over 430 stocks: crossed with
@@ -453,8 +485,10 @@
     // companies. Measured before building, which is why it is capped at all.
     const WIDE_CAP = 24;
 
-    // A dimension that is somebody's child is not offered as a row.
-    const ROW_DIMS = Object.keys(DIMS).filter((k) => !DIMS[k].childOf);
+    // A dimension that is somebody's child is not offered as a row, and
+    // neither is a time axis — twelve periods down the side with a taxonomy
+    // across the top is the same grid read the wrong way round.
+    const ROW_DIMS = Object.keys(DIMS).filter((k) => !DIMS[k].childOf && !DIMS[k].time);
 
     // ---- measures -----------------------------------------------------------
     // A measure is one number per stock; everything else — the ordering, the
@@ -524,9 +558,28 @@
             '</b> up, <b>' + dn + '</b> down. Put <b>Advice move</b> on an axis to see which way, by cell.';
         },
       },
+      // EQUAL WEIGHT, the convention the group pages and the theme page
+      // already use, so the pivot cannot disagree with them about how a
+      // sector did. Cap weighting was offered and declined: it would apply
+      // TODAY's cap to every past period, so a stock that has tripled would
+      // be over-weighted in the year it was small.
+      ret: {
+        label: 'Equal-weight return',
+        agg: 'mean',            // a return is averaged, never summed
+        signed: true,           // and coloured by sign, not shaded by size
+        each: (s, c) => retOf(s, c),
+        fmt: (v) => (v == null || !isFinite(v) ? '—' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%'),
+        noun: 'an equal-weight return',
+        everyStock: true,
+        missing: () => 0,
+      },
     };
     let measure = 'count';
-    const M = () => MEASURES[measure];
+    // The measure a time axis forces, and the only one it can have: a count
+    // of stocks per month is the same number twelve times, and a total market
+    // cap per month is today's cap printed twelve times. The picker says so
+    // rather than offering three choices that mean nothing.
+    const M = () => MEASURES[isTime() ? 'ret' : measure];
 
     // ---- heat ---------------------------------------------------------------
     // A pivot's whole job is "where is the weight", and thirty cells of the
@@ -557,6 +610,73 @@
       return ' style="--h:' + ((v / denom) * HEAT_MAX).toFixed(3) + '"';
     };
     const sumOf = (list) => (list || []).reduce((a, s) => a + M().each(s), 0);
+
+    // ---- the time axis ------------------------------------------------------
+    // A return is a MEAN, not a sum, and it depends on WHICH period — so the
+    // cell value takes the column, where every other measure ignores it. One
+    // function, so the grid, the totals, the child rows and the drill cannot
+    // aggregate three different ways.
+    //
+    // NULL, NEVER ZERO, when nothing in the cell has a return for that period.
+    // A group with no history in 2015 did not return 0% in 2015; a zero there
+    // would be a number nobody earned, and it would drag every total it
+    // touched. The blank-versus-zero rule this page keeps meeting.
+    const cellVal = (list, c) => {
+      if (M().agg !== 'mean') return sumOf(list);
+      let sum = 0, n = 0;
+      for (const s of (list || [])) {
+        const v = M().each(s, c);
+        if (v != null && isFinite(v)) { sum += v; n++; }
+      }
+      return n ? sum / n : null;
+    };
+    const meanOf = (vals) => {
+      const xs = vals.filter((v) => v != null && isFinite(v));
+      return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+    };
+
+    let periodData = null;     // { kind, periods, returns, latest } for the axis in force
+    let periodBusy = false;
+    const periodIdx = () => {
+      const m = new Map();
+      ((periodData && periodData.periods) || []).forEach((p, i) => m.set(p.key, i));
+      return m;
+    };
+    let PIDX = new Map();
+    const retOf = (s, c) => {
+      const r = periodData && periodData.returns[s.symbol];
+      const i = PIDX.get(c);
+      return (r && i != null) ? r[i] : null;
+    };
+    // Which periods this stock has a return for. A stock that listed in 2021
+    // is simply absent from the 2015 column rather than sitting in it at zero.
+    const periodKeys = (s) => {
+      const r = periodData && periodData.returns[s.symbol];
+      if (!r) return [];
+      const out = [];
+      ((periodData && periodData.periods) || []).forEach((p, i) => { if (r[i] != null) out.push(p.key); });
+      return out;
+    };
+    const periodLabel = (k) => {
+      const p = ((periodData && periodData.periods) || []).find((x) => x.key === k);
+      return p ? p.label : k;
+    };
+    const isTime = () => !!(DIMS[colKey] && DIMS[colKey].time);
+    async function ensurePeriods() {
+      const kind = DIMS[colKey] && DIMS[colKey].time;
+      if (!kind) { periodData = null; PIDX = new Map(); return; }
+      if (periodData && periodData.kind === kind) return;
+      periodBusy = true;
+      try {
+        const r = await fetch('/api/pivot-periods?kind=' + kind, { cache: 'no-store' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not read the periods.');
+        periodData = d;
+        PIDX = periodIdx();
+      } catch (err) {
+        periodData = null; PIDX = new Map();
+      } finally { periodBusy = false; }
+    }
 
     // Matches the screener's own fmtMktCap so the same company does not read
     // one way in the table and another here.
@@ -702,7 +822,17 @@
         for (const v of valuesOf(cd, s)) cc.set(v, (cc.get(v) || 0) + w);
       }
       const rFold = collapse(rd, rc, orderKeys(rd, rc));
-      const cFold = collapse(cd, cc, orderKeys(cd, cc));
+      let cFold = collapse(cd, cc, orderKeys(cd, cc));
+      // A TIME AXIS SHOWS ALL TWELVE PERIODS, including ones nothing in the
+      // screen has a return for. Everywhere else a value absent from the data
+      // is not offered — but a period is a fixed ladder like the size bands,
+      // and "2015: nothing here reaches back that far" is an answer, where
+      // silently drawing four columns after asking for twelve is a grid that
+      // looks broken. The empty ones draw the same dot an empty cell does.
+      if (cd.time) {
+        const all = ((periodData && periodData.periods) || []).map((x) => x.key);
+        if (all.length) cFold = { keys: all, folded: 0, map: (k) => k };
+      }
 
       // Second pass: the cells. A stock in two themes lands in two cells, which
       // is what makes the totals exceed the universe — counted here, said out
@@ -726,6 +856,7 @@
       // could have drifted from what the grid draws; derived this way a row
       // total cannot disagree with the row above it, whatever the measure.
       const rowTot = new Map(), colTot = new Map();
+      const rowCells = new Map();   // a mean measure's per-row cell values
       let placements = 0;    // the grand total IN THE ACTIVE MEASURE
       let placeCount = 0;    // how many cell-placements, whatever the measure
       let noValue = 0;       // stocks the measure cannot account for
@@ -736,10 +867,19 @@
         for (const c of cFold.keys) {
           const list = cells.get(r + '|' + c);
           if (!list) continue;
-          const v = sumOf(list);
-          rowTot.set(r, (rowTot.get(r) || 0) + v);
-          colTot.set(c, (colTot.get(c) || 0) + v);
-          placements += v;
+          const v = cellVal(list, c);
+          // A MEAN CANNOT BE SUMMED OUT OF THE CELLS. The row total for a
+          // return is the average of that row's own periods, and the footer
+          // is the benchmark rather than a column sum — both computed below,
+          // where the cell values are still to hand.
+          if (M().agg !== 'mean') {
+            rowTot.set(r, (rowTot.get(r) || 0) + v);
+            colTot.set(c, (colTot.get(c) || 0) + v);
+            placements += v;
+          } else {
+            if (!rowCells.has(r)) rowCells.set(r, []);
+            rowCells.get(r).push(v);
+          }
           // Kept separately because the "counted twice" warning is about ROWS,
           // not about money: with a money measure `placements` is dollars and
           // comparing it to the stock count would be nonsense.
@@ -783,9 +923,13 @@
         // so "the children add up to the parent" holds for money exactly as it
         // does for a count.
         for (const ind of kc.keys()) {
-          let v = 0;
-          for (const c of cFold.keys) v += sumOf(kCells.get(ind + '|' + c));
-          kTot.set(ind, v);
+          if (M().agg === 'mean') {
+            kTot.set(ind, meanOf(cFold.keys.map((c) => cellVal(kCells.get(ind + '|' + c), c))));
+          } else {
+            let v = 0;
+            for (const c of cFold.keys) v += sumOf(kCells.get(ind + '|' + c));
+            kTot.set(ind, v);
+          }
         }
         // No fold: measured on the live screen, the widest sector holds 16
         // industries against a WIDE_CAP of 24, so a child list is always a
@@ -793,10 +937,32 @@
         sub = { of: expanded, keys: orderKeys(DIMS.industry, kc), cells: kCells, tot: kTot };
       }
 
+      // A mean's row total is the AVERAGE OF ITS OWN PERIODS — "the average
+      // month" — which keeps it reduced out of the cells the grid draws, so
+      // it cannot disagree with the row above it. The footer is not a column
+      // sum at all: see `bench` below.
+      if (M().agg === 'mean') {
+        for (const r of rFold.keys) rowTot.set(r, meanOf(rowCells.get(r) || []));
+      }
+      // THE BENCHMARK ROW, not a total. Averaging the group means down a
+      // column would weight a two-stock sector like a two-hundred-stock one;
+      // the S&P's own return for the period is a number a reader already has
+      // a feel for, and it is the comparison the group pages settled on.
+      let bench = null;
+      if (M().agg === 'mean' && periodData) {
+        const spy = periodData.returns.SPY;
+        if (spy) {
+          bench = { label: 'S&P 500', by: new Map() };
+          for (const c of cFold.keys) {
+            const i = PIDX.get(c);
+            bench.by.set(c, i == null ? null : spy[i]);
+          }
+        }
+      }
       return { rd, cd, rows, rKeys: rFold.keys, cKeys: cFold.keys, cells, rowTot, colTot,
         placements, placeCount, noValue, multi: multiStocks.size,
         rFolded: rFold.folded, cFolded: cFold.folded,
-        kids, sub };
+        kids, sub, bench };
     }
 
     function moveCls(v) { return v == null ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : ''; }
@@ -1007,11 +1173,15 @@
         ? '<span class="dot" style="background:' + LADDER_TINT[k] + '"></span>' : '');
       for (const c of p.cKeys) {
         const rg = rangeOf(p.cd, c);
+        const clab = p.cd.fmtKey ? p.cd.fmtKey(c) : c;
+        const part = p.cd.time && ((periodData && periodData.periods) || [])
+          .some((x) => x.key === c && x.partial);
         h += '<th class="' + (c === BLANK ? 'blankdim' : '') + '"' +
-          (rg ? ' title="' + esc(c + ' — ' + rg) + '"' : '') + '>' +
-          dotOf(p.cd, c) + esc(c) + '</th>';
+          (rg ? ' title="' + esc(c + ' — ' + rg) + '"' : '') +
+          (part ? ' title="Still running — this period is not complete"' : '') + '>' +
+          dotOf(p.cd, c) + esc(clab) + (part ? '<span class="sofar">so far</span>' : '') + '</th>';
       }
-      h += '<th class="tot">Total</th></tr></thead><tbody>';
+      h += '<th class="tot">' + (M().agg === 'mean' ? 'Avg' : 'Total') + '</th></tr></thead><tbody>';
 
       // One row of numbers, for a sector and for an industry inside one.
       //
@@ -1028,13 +1198,19 @@
         for (const c of p.cKeys) {
           const list = listOf(c) || [];
           const k = openKey(c);
-          const v = list.length ? sumOf(list) : 0;
-          s += list.length
-            ? '<td class="cell' + (picked && picked.key === k ? ' sel' : '') +
+          const v = list.length ? cellVal(list, c) : null;
+          // A RETURN IS COLOURED BY SIGN, never shaded by size: the heat ramp
+          // says "bigger" and a -8% month is not smaller than a +2% one. The
+          // app already colours every return green or red, so this is the
+          // language a reader has.
+          const sc = M().signed ? moveCls(v) : '';
+          s += (list.length && v != null)
+            ? '<td class="cell ' + sc + (picked && picked.key === k ? ' sel' : '') +
               '" data-k="' + esc(k) + '" data-r="' + esc(label) + '" data-c="' + esc(c) +
               '" data-sub="' + esc(sub || '') + '" title="' +
               esc(list.length + (list.length === 1 ? ' stock' : ' stocks') +
-                ' — click to list them below') + '"' + heatStyle(v, denom) + '>' +
+                ' — click to list them below') + '"' +
+              (M().signed ? '' : heatStyle(v, denom)) + '>' +
               esc(M().fmt(v)) + '</td>'
             : '<td class="zero">·</td>';
         }
@@ -1070,6 +1246,7 @@
       // construction, and therefore telling nobody anything.
       const maxOver = (keys, cellsOf) => {
         let m = 0;
+        if (M().signed) return 0;   // no shading for a signed measure
         for (const k of keys) for (const c of p.cKeys) {
           const v = sumOf(cellsOf(k, c)); if (v > m) m = v;
         }
@@ -1103,7 +1280,7 @@
           '</th>';
         h += cellsFor((c) => p.cells.get(r + '|' + c), (c) => r + '|' + c, r, '',
           denomFor(r, false));
-        h += totCell('tot:r|' + r, p.rowTot.get(r) || 0, r, 'Total', 'tot') + '</tr>';
+        h += totCell('tot:r|' + r, p.rowTot.has(r) ? p.rowTot.get(r) : 0, r, 'Total', 'tot') + '</tr>';
 
         // Then this sector's industries, if it is the open one. Their cells
         // select exactly like their parent's do — the `sub:` prefix is what
@@ -1120,12 +1297,28 @@
           }
         }
       }
+      if (M().agg === 'mean') {
+        // The benchmark, not a total — and NOT drillable: it is one ETF's own
+        // return, so there is no list of stocks behind it to open.
+        h += '</tbody><tfoot>';
+        if (p.bench) {
+          h += '<tr><th>' + esc(p.bench.label) + '</th>';
+          for (const c of p.cKeys) {
+            const v = p.bench.by.get(c);
+            h += '<td class="' + moveCls(v) + '">' + esc(M().fmt(v)) + '</td>';
+          }
+          h += '<td class="tot ' + moveCls(meanOf([...p.bench.by.values()])) + '">' +
+            esc(M().fmt(meanOf([...p.bench.by.values()]))) + '</td></tr>';
+        }
+        h += '</tfoot></table></div>';
+      } else {
       h += '</tbody><tfoot><tr><th>Total</th>';
       for (const c of p.cKeys) {
         h += totCell('tot:c|' + c, p.colTot.get(c) || 0, 'Total', c, '');
       }
       h += totCell('tot:a|', p.placements, 'Total', 'Total', '') +
         '</tr></tfoot></table></div>';
+      }
       $('out').innerHTML = h;
 
       // ---- what the totals mean, said rather than left to be worked out ----
@@ -1147,7 +1340,12 @@
       // The double-counting warning is about ROWS and is judged on placements,
       // never on the measure: with money on screen `placements` is dollars, and
       // comparing dollars to a stock count would be nonsense.
-      if (p.placeCount !== total) {
+      // A TIME AXIS IS NOT DOUBLE-COUNTING. A stock sits in every period it
+      // has a return for, which is the same stock measured twelve times
+      // rather than twelve stocks — the warning below would be true
+      // arithmetic and a false alarm.
+      const noDouble = !!(p.rd.noDouble || p.cd.noDouble);
+      if (p.placeCount !== total && !noDouble) {
         // The count wording is kept word for word: "the cells add up to 9, not
         // 8" states the surprise directly, which a rephrasing lost. Money needs
         // its own sentence only because `placements` is dollars there, and
@@ -1160,6 +1358,22 @@
             total + ' stocks</b>' + why + (M().placeNote || '')
           : '<b class="warn">The cells add up to ' + p.placeCount + ', not ' + total +
             '</b>' + why);
+      } else if (noDouble) {
+        // What a time axis needs said, and none of the sentences above say
+        // it. THE POPULATION MOVES COLUMN BY COLUMN: a stock that listed in
+        // 2021 is absent from 2015 rather than sitting there at zero, so an
+        // early column is an average over fewer companies — the survivorship
+        // point this project keeps writing down, and the one thing that
+        // would quietly flatter a long look back.
+        const ps = (periodData && periodData.periods) || [];
+        const withAll = p.rows.filter((s) => (periodKeys(s).length === ps.length)).length;
+        bits.push('Each cell is the <b>mean of its members’ own returns</b> for that period, ' +
+          'equal weight — the convention the theme and sector pages use. ' +
+          '<b>' + withAll + '</b> of ' + total + ' have a return for all ' + ps.length +
+          ' periods; the rest are <b>absent from the periods they did not trade</b>, ' +
+          'never counted as a flat zero, so an earlier column is an average over fewer companies.' +
+          (ps.some((x) => x.partial)
+            ? ' The newest column is <b>still running</b> and is marked so.' : ''));
       } else if (!everyStock) {
         bits.push('Every stock is counted exactly once, across <b>' + total + '</b> stocks.');
       } else {
@@ -1258,9 +1472,18 @@
       const opts = (keys, sel) => keys.map((k) =>
         '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' +
         esc(DIMS[k].label) + '</option>').join('');
-      $('measure').innerHTML = Object.keys(MEASURES).map((k) =>
-        '<option value="' + k + '"' + (k === measure ? ' selected' : '') + '>' +
+      // A time axis FORCES the return and offers nothing else: a count of
+      // stocks per month is the same number twelve times over, and a market
+      // cap per month is today's cap printed twelve times. The control stays
+      // on screen, showing what it is locked to, rather than vanishing.
+      const mKeys = isTime() ? ['ret'] : Object.keys(MEASURES).filter((k) => k !== 'ret');
+      const mSel = isTime() ? 'ret' : measure;
+      $('measure').innerHTML = mKeys.map((k) =>
+        '<option value="' + k + '"' + (k === mSel ? ' selected' : '') + '>' +
         esc(MEASURES[k].label) + '</option>').join('');
+      $('measure').disabled = isTime();
+      // Shading is off for a signed measure — a return is coloured by sign.
+      $('heat').disabled = !!M().signed;
       $('heat').innerHTML = Object.keys(HEATS).map((k) =>
         '<option value="' + k + '"' + (k === heat ? ' selected' : '') + '>' +
         esc(HEATS[k]) + '</option>').join('');
@@ -1310,9 +1533,16 @@
       if (colKey === rowKey) { colKey = stepAside(rowKey); }
       reset();
     });
-    $('colDim').addEventListener('change', () => {
+    $('colDim').addEventListener('change', async () => {
       colKey = $('colDim').value;
       if (rowKey === colKey) { rowKey = stepAside(colKey); }
+      // A time axis needs its returns before there is anything to draw. One
+      // fetch per kind per visit; the server caches it ten minutes besides.
+      if (DIMS[colKey] && DIMS[colKey].time) {
+        $('out').innerHTML = '<div class="empty">Reading twelve ' +
+          (DIMS[colKey].time === 'years' ? 'years' : 'months') + ' of closes…</div>';
+        await ensurePeriods();
+      }
       reset();
     });
     // Changing the measure keeps both axes and both expansions: it is the same
