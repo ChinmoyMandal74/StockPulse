@@ -48,9 +48,16 @@
                margin-top: 1px; line-height: 1.45; }
     .toc a:hover .td { color: var(--muted); }
 
-    .adm { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em;
-           text-transform: uppercase; color: var(--amber); border: 1px solid var(--hair);
-           border-radius: 999px; padding: 1px 7px; vertical-align: 2px; }
+    /* The `.adm` badge is gone (2026-09-27, owner: "help only applies to users
+       of the system not admin"). It marked owner-only features so members
+       could see what the buttons they lacked did — but those buttons are not
+       in a member's bar at all any more, they are on /admin, so the badge was
+       documenting a console its readers cannot open. The sections it sat on
+       were rewritten around what a member actually gets rather than deleted:
+       the assistant section went, the rule ladder became "every cell names
+       the rule that fired", and Cushion kept its column and lost its panel.
+       The rule itself is removed rather than left unused — residue reads as
+       intent, and the next person would badge something with it. */
     ul { margin: 0 0 10px; padding-left: 18px; }
     li { font-size: 13.5px; line-height: 1.65; color: var(--muted); margin-bottom: 5px;
          max-width: 68ch; }
@@ -127,28 +134,34 @@
         <li><a href="#start"><span class="no">1</span><span><span class="tt">What this is</span>
           <span class="td">The shape of the app, and why it exists at all</span></span></a></li>
         <li><a href="#table"><span class="no">2</span><span><span class="tt">Reading the table</span>
-          <span class="td">Columns, sorting, and getting around 48 of them</span></span></a></li>
+          <span class="td">Ninety columns, views, filters and getting around them</span></span></a></li>
         <li><a href="#quality"><span class="no">3</span><span><span class="tt">The Quality score</span>
           <span class="td">Company numbers, and what happens without earnings</span></span></a></li>
-        <li><a href="#screens"><span class="no">4</span><span><span class="tt">Screens</span>
-          <span class="td">Ready-made filters, one click each</span></span></a></li>
+        <li><a href="#screens"><span class="no">4</span><span><span class="tt">Narrowing it down</span>
+          <span class="td">Screens, favourites, and the pickers in the bar</span></span></a></li>
         <li><a href="#stock"><span class="no">5</span><span><span class="tt">One stock in full</span>
-          <span class="td">The chart, its ranges, and the indicators</span></span></a></li>
-        <li><a href="#ask"><span class="no">6</span><span><span class="tt">Asking questions</span>
-          <span class="td">The assistant, and what it will not do</span></span></a></li>
-        <li><a href="#fresh"><span class="no">7</span><span><span class="tt">How fresh the data is</span>
-          <span class="td">Refresh, Refresh all, and the nightly run</span></span></a></li>
-        <li><a href="#account"><span class="no">8</span><span><span class="tt">Your account</span>
-          <span class="td">What is remembered, and the emails you may get</span></span></a></li>
-        <li><a href="#rules"><span class="no">9</span><span><span class="tt">The Advice column</span>
-          <span class="td">Company Type, the rule lists, and tuning them</span></span></a></li>
-        <li><a href="#tiles"><span class="no">10</span><span><span class="tt">Tiles</span>
+          <span class="td">The chart, its peers, its earnings and its filings</span></span></a></li>
+        <li><a href="#groups"><span class="no">6</span><span><span class="tt">Sectors, industries, sizes and themes</span>
+          <span class="td">A whole group summarised on one page</span></span></a></li>
+        <li><a href="#pivot"><span class="no">7</span><span><span class="tt">The pivot view</span>
+          <span class="td">The screen counted by two things at once</span></span></a></li>
+        <li><a href="#compare"><span class="no">8</span><span><span class="tt">Two stocks side by side</span>
+          <span class="td">Every field, with the distance between them</span></span></a></li>
+        <li><a href="#alerts"><span class="no">9</span><span><span class="tt">Alerts</span>
+          <span class="td">Watch one stock for one thing</span></span></a></li>
+        <li><a href="#fresh"><span class="no">10</span><span><span class="tt">How fresh the data is</span>
+          <span class="td">When prices land, and what the clock on a row means</span></span></a></li>
+        <li><a href="#account"><span class="no">11</span><span><span class="tt">Your account</span>
+          <span class="td">Signing in, your own lists, and what is remembered</span></span></a></li>
+        <li><a href="#rules"><span class="no">12</span><span><span class="tt">The Advice column</span>
+          <span class="td">Company Type, the rule lists, and what each word means</span></span></a></li>
+        <li><a href="#tiles"><span class="no">13</span><span><span class="tt">Tiles</span>
           <span class="td">The same rows as cards, with a chart on each</span></span></a></li>
-        <li><a href="#news"><span class="no">11</span><span><span class="tt">News</span>
+        <li><a href="#news"><span class="no">14</span><span><span class="tt">News</span>
           <span class="td">The column, the panel behind it, and the ticker</span></span></a></li>
-        <li><a href="#phone"><span class="no">12</span><span><span class="tt">On a phone</span>
+        <li><a href="#phone"><span class="no">15</span><span><span class="tt">On a phone</span>
           <span class="td">A page built for one hand, at tickrlab.com/m</span></span></a></li>
-        <li><a href="#share"><span class="no">13</span><span><span class="tt">Cards to share</span>
+        <li><a href="#share"><span class="no">16</span><span><span class="tt">Cards to share</span>
           <span class="td">Making an image of what the screen found</span></span></a></li>
       </ul>
     </div></div>
@@ -158,24 +171,24 @@
       <div class="sec-h"><h2>1 · What this is</h2></div>
       <p>Tickr Lab watches a list of stocks and scores them on how their prices are behaving and how
         the underlying companies are doing. It is a <strong>screener</strong>: it narrows a list down to the
-        few names worth a closer look. The assistant deliberately never offers a
-        verdict of its own; it can report what the <strong>Advice</strong> column concluded and the
-        rule behind it, with attribution. The Advice column does carry a verdict, but it is the output of a plain
-        rule set you can read in full in <a href="#rules">section 12</a> — a consistent reading of
-        today's numbers, not a prediction.</p>
+        few names worth a closer look. The <strong>Advice</strong> column does carry a verdict, but it
+        is the output of a plain rule set you can read in full under
+        <a href="#rules">The Advice column</a> — a consistent reading of today's numbers, not a
+        prediction.</p>
       <p>Stocks are grouped into <strong>themes</strong> — a stock can belong to several — and the
-        picker at the top left switches between them. Prices update after each close; the company
-        numbers behind Quality refresh about once a day.</p>
+        picker at the top left switches between them. They are also cut by <strong>sector</strong>,
+        <strong>industry</strong> and <strong>size</strong>, each with a page of its own. Prices refresh
+        about every half hour through the US session; the company numbers behind Quality are re-pulled
+        on a rotation over about a week.</p>
 
       <h3>Why this exists</h3>
       <p>A brokerage terminal gives you four hundred indicators, streaming quotes and no opinion —
         the synthesis is your job, every time, forever. Tickr Lab is the opposite bet: <strong>one
         opinionated, fully-inspectable pipeline</strong> over a small universe you chose. Its defining
         feature is not any single number but that <strong>every verdict names the one rule that
-        fired</strong> — hover any Advice cell and it tells you which rule produced that word,
-        not just the word. There is no "why exactly does this say Buy?" anywhere else; here it is the
-        whole design. The full rule ladder behind it, with every threshold drawn as a gauge, is
-        owner-only.</p>
+        fired</strong> — every Advice cell carries the rule that produced that word, not just the
+        word. There is no "why exactly does this say Buy?" anywhere else; here it is the whole
+        design.</p>
       <p>The second bet is <strong>institutionalised honesty</strong>. The backtests charge trading
         costs and hold out a period before looking; ideas that measured as noise are recorded so
         they stay dead; the trend line on a stock page refuses to claim any history the price bars
@@ -194,11 +207,14 @@
     <section class="bezel card" id="table"><div class="core">
       <div class="sec-h"><h2>2 · Reading the table</h2></div>
 
-      <p>There are 49 columns, arranged into groups you can collapse: <em>Info</em>, <em>Scores</em>,
-        <em>Chart</em>, <em>Short-term %</em>, <em>Long-term %</em>,
-        <em>Relative</em>, <em>Trend</em>, <em>Volume</em>, <em>Size</em> and <em>Fundamentals</em>. The <strong>View</strong> menu
-        (top left) decides what the table shows. <b>Standard</b> is every column, grouped, and lets you switch whole
-        groups on and off; your choice is remembered against your account.</p>
+      <p>There are around ninety columns, arranged into groups you can collapse: <em>Info</em>,
+        <em>Scores</em>, <em>Advice</em>, <em>Chart</em>, <em>Short-term %</em>, <em>Long-term %</em>,
+        <em>Relative</em>, <em>Trend</em>, <em>Volume</em>, <em>Size</em>, <em>Fundamentals</em> and
+        <em>Ownership</em>. The <strong>View</strong> menu (top left) decides what the table shows.
+        <b>Standard</b> is every column, grouped, and lets you switch whole groups on and off; your
+        choice is remembered against your account.</p>
+      <p>Not every column is switched on for everyone — the site owner hides some site-wide, and those
+        stay hidden whatever view or screen you pick.</p>
 
       <h3>Column views</h3>
       <p>A <b>view</b> is a named set of columns you can switch to with one click from the View menu. Symbol and Name are
@@ -259,8 +275,28 @@
           when the value you want is off to the right.</li>
         <li>Hover the <b>Qual.</b> score to see the factors behind it, each with its
           weight and how this stock scored on it.</li>
+        <li><b>Click a Sector, Industry or Size cell</b> and the table narrows to it. Click the same
+          value again to clear it — it is the picker in the bar, in a second place. Those three
+          columns deliberately have no hover card: the card would land under the pointer on its way
+          to the click.</li>
         <li>The <b>90d</b> column is a sparkline of the last 90 sessions. Read the shape, not the
           level — each line is scaled to its own high and low, so two lines are not comparable.</li>
+      </ul>
+
+      <div class="note"><b>On a touch screen there is no hover card and no score tooltip.</b> A tap
+        would have to be spent dismissing one before you could reach the link underneath, so nothing
+        is wired at all — tap the name to open the whole stock page instead, or use
+        <a href="#phone">the phone page</a>.</div>
+
+      <h3>Two clocks on every row</h3>
+      <ul>
+        <li><b>Price pulled</b> is when <em>that stock's</em> price was last fetched, which genuinely
+          differs row to row — prices are pulled in slices. It turns amber past a day.</li>
+        <li><b>The tooltip names the newest bar beside it</b>, because "we asked" and "something came
+          back" are different facts. Read the two together.</li>
+        <li><b>Days held</b>, in the Advice group, is how long the Balanced verdict has stood. It
+          prints <b>≥</b> until the run has actually been seen to change, because the count only
+          starts from when the column shipped and a bare number would overstate it.</li>
       </ul>
       <a class="top" href="#top">↑ Contents</a>
     </div></section>
@@ -308,7 +344,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="screens"><div class="core">
-      <div class="sec-h"><h2>4 · Screens</h2></div>
+      <div class="sec-h"><h2>4 · Narrowing it down</h2></div>
       <p>The <strong>Screens</strong> menu beside View holds ready-made screens. One click sets the filters, the sort and the
         columns that explain the result — the filters appear in the filter row and the strip above the table, so a screen
         never hides what it means. Each shows how many stocks match right now, for the theme in view.</p>
@@ -318,6 +354,25 @@
         <li>Theme still applies on top: pick a theme first and a screen searches only that list.</li>
         <li>Screens are set by the site owner (hence the lock). They replace the old Analysis page, whose seven screens are
           all here.</li>
+        <li><b>Star the ones you use</b> and they move to a <b>Favourites</b> group at the top of the
+          menu. The star is yours, kept against your account; the screen itself is still shared. It
+          moves rather than copies, so the menu does not get longer for using it.</li>
+      </ul>
+
+      <h3>The pickers in the bar</h3>
+      <p>Beside Screens, five quick cuts that stack with each other and with everything above:</p>
+      <ul>
+        <li><b>Theme</b>, <b>Sector</b>, <b>Industry</b> and <b>Size</b>. Industry nests inside
+          Sector — it only offers industries that are actually in view — and changing the sector
+          drops an industry that no longer applies. Each menu carries live counts, and says how many
+          rows have no value yet, so counts that do not add up are explained rather than puzzling.</li>
+        <li><b>Advice</b> filters to one Balanced verdict.</li>
+        <li><b>Advice move</b> answers <em>which way</em>, not just whether: <b>Moved</b>,
+          <b>Upgraded</b>, <b>Unchanged</b> or <b>Downgraded</b> since the previous session. A stock
+          with no previous verdict matches none of them — nothing to compare against is a different
+          fact from having held — and the menu counts those separately.</li>
+        <li>These are not remembered between visits, deliberately: a filter surviving a reload is a
+          table missing rows for no visible reason.</li>
       </ul>
       <table>
         <thead><tr><th>Group</th><th>Screen</th><th>What it looks for</th></tr></thead>
@@ -356,6 +411,9 @@
       <p>Clicking a company name opens that stock on its own page, in a new tab, with a price chart and
         every column the screener holds. The symbol at the top is also a picker — click it to jump to
         any other stock without going back.</p>
+      <p>Beside it, the <b>chips</b> — sector, industry, size and every theme it belongs to — and each
+        one opens that group's page. Then two pills, <b>Google Finance</b> and <b>Yahoo Finance</b>,
+        which open this stock there in a new tab.</p>
 
       <h3>The chart</h3>
       <ul>
@@ -392,51 +450,159 @@
         <li><b>It is not a ranking and not a shortlist.</b> Nothing is marked as better; it is who else
           is on this screen, measured the same way.</li>
       </ul>
+
+      <h3>Earnings history</h3>
+      <p>One bar per quarter, oldest on the left, green where the company beat the estimate and red
+        where it missed, with a folded table of the estimate, what was reported, the surprise and
+        whether it landed before or after the bell.</p>
+      <ul>
+        <li><b>A quarter with no estimate is neither a beat nor a miss</b> — it is drawn as a hairline
+          and left out of the count, so the summary reads "9 of 11" rather than quietly counting it.</li>
+        <li><b>The scale is robust rather than absolute.</b> A surprise is a ratio against the
+          estimate, so a near-zero estimate makes it enormous; the tallest bar is the 90th percentile
+          of what is there, and anything past it is drawn full height and says so on hover.</li>
+        <li><b>Depth varies a lot.</b> Some names hold six years, the typical one reaches back to
+          2020, and the header says which.</li>
+      </ul>
+
+      <h3>SEC EDGAR</h3>
+      <p>At the foot of the page, the company's <b>own filed statements</b> — quarterly or annual,
+        back to 2007 for a long-listed name — with revenue, margins, earnings, cash flow and the
+        balance sheet. <b>Every row links to the filing it came from</b> on sec.gov.</p>
+      <ul>
+        <li><b>These will not always match the numbers elsewhere on the page.</b> They are on the
+          company's fiscal calendar and as reported in the filing named on the row, where the
+          Fundamentals card is trailing-twelve-month and restated to today. Two different questions,
+          not a disagreement.</li>
+        <li><b>A dotted value was computed here, not filed.</b> No company files a fourth quarter —
+          it files three and then a full year — and a cash-flow statement is year-to-date, so those
+          quarters are the difference between the cumulative periods either side. Hover for the
+          reason.</li>
+        <li><b>Later filings restate earlier periods</b>, and each row shows the most recent version.</li>
+        <li><b>A fund has no section at all</b>, because it files no financial statements. Neither do
+          companies reporting under international standards rather than US GAAP.</li>
+      </ul>
+      <div class="note"><b>Nothing on that card feeds the Advice verdict or the screener.</b> It is
+        there to be read, not to move anything — a deliberate line, so that the rules stay driven by
+        one consistent set of numbers.</div>
       <a class="top" href="#top">↑ Contents</a>
     </div></section>
 
     <!-- ---------------------------------------------------------------- -->
-    <section class="bezel card" id="ask"><div class="core">
-      <div class="sec-h"><h2>6 · Asking questions <span class="adm">owner only</span></h2></div>
-      <p><strong>Ask is not available to member accounts</strong> (since 2026-09-26). Every question
-        hands the assistant the whole table, which is a large cost per question and is close to the
-        limit of what fits in one; it is kept for the owner rather than removed.</p>
-      <p><strong>Ask</strong> puts a question to the same data in plain English — "which names have a
-        margin above 20% and are within 10% of their high", or "what is improving fastest". The whole
-        table is given to the assistant, so it is answering from your actual numbers rather than from
-        memory.</p>
+    <section class="bezel card" id="groups"><div class="core">
+      <div class="sec-h"><h2>6 · Sectors, industries, sizes and themes</h2></div>
+      <p>Every one of those four cuts has its own page, and they are all the same page — a group of
+        stocks summarised. Reach one from the <b>chart arrow</b> beside any row in the Theme, Sector,
+        Industry or Size picker, or from the chips under the symbol on a stock page.</p>
 
-      <h3>What it will not do</h3>
+      <h3>What the page shows</h3>
       <ul>
-        <li><b>No buy, sell or hold verdicts.</b> Not a disclaimer bolted on the end — it will not
-          produce one, for the same reason it will not make up a number.</li>
-        <li><b>It says when something is missing</b> and points you at what is there instead, rather
-          than inventing a plausible answer.</li>
-        <li><b>"Will it go up" is unknowable</b>, and it will say so rather than guessing.</li>
-        <li>General company knowledge is allowed, but flagged as background rather than presented as
-          something your data shows.</li>
+        <li><b>A curve</b> — the group held in equal dollars from the start of the window, against the
+          <b>S&amp;P 500</b> and the <b>Dow 30</b> on the same convention. Ranges from a month to a year.</li>
+        <li><b>What it is made of</b> — a sector breaks into its industries, an industry into size
+          bands, everything else into sectors. The bar is <em>market cap</em> and the number beside it is
+          <em>companies</em>, and where those two disagree is the interesting part: "Technology up 18%"
+          means something different if two names are 60% of it. Each row opens that group.</li>
+        <li><b>Leaders and laggards</b> over the window the range buttons chose, so the list and the
+          curve above it can never tell different stories.</li>
+        <li><b>Fundamentals against the whole screen</b> — medians, not averages, because one 300×
+          multiple drags a mean somewhere no company in the group actually sits.</li>
+        <li><b>The stocks themselves</b>, biggest first.</li>
       </ul>
 
-      <div class="note"><b>There is a daily limit</b> — three questions a day for members, sixty for the
-        owner. It counts against your account rather than your browser, resets at midnight UTC, and a
-        question that fails on a bad request does not consume one.</div>
+      <div class="note"><b>A forward P/E at or below zero is left out of the median</b>, and financials
+        are left out of gross margin — both counted and said rather than quietly dropped. A multiple
+        off a loss is arithmetic, not cheapness.</div>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="pivot"><div class="core">
+      <div class="sec-h"><h2>7 · The pivot view</h2></div>
+      <p><b>Pivot view</b> in the bar counts the screen by two things at once — sector against verdict,
+        theme against trend state, size against sector. Rows and columns are yours to choose, and
+        every number is a count of stocks, their total market cap, or a return.</p>
+
+      <h3>Getting an answer out of it</h3>
+      <ul>
+        <li><b>Click any cell and the stocks behind it are listed underneath</b>, with fifteen columns
+          and a link to each. Row and column totals open the same way.</li>
+        <li><b>A sector row opens into its industries</b> from the caret beside its name, and the
+          children add up to the parent exactly — the page says so, with the sum.</li>
+        <li><b>Last 12 months</b> or <b>Last 12 years</b> across the top turns it into a track record:
+          one column per period, newest first, each cell the group's equal-weight return.</li>
+        <li><b>Saved pivots</b> keep the question — both axes, the measure, the shading and the filter
+          — never the answer, so opening one tomorrow counts tomorrow's screen.</li>
+      </ul>
+
+      <div class="note"><b>The page explains its own totals rather than leaving you to trust them.</b>
+        A stock in two themes is counted once per theme, so the cells can add to more than the
+        universe — it says by how many and why. Stocks with no value for a cut sit in a
+        <b>—</b> bucket rather than being dropped. With a period across the top, a company is
+        <em>absent</em> from periods it did not trade rather than counted as a flat zero, so an early
+        column is an average over fewer companies, and the note says how many have all twelve.</div>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="compare"><div class="core">
+      <div class="sec-h"><h2>8 · Two stocks side by side</h2></div>
+      <p><b>Compare</b> in the bar opens two stocks together — every field, with the distance between
+        them. The screener's button carries whatever is on top of your current view; the stock page's
+        <b>Compare ▸</b> carries that stock and whatever you have overlaid on its chart. Two, never
+        more: a difference is a pairwise thing, and three columns of ninety fields is a table again.</p>
+
+      <h3>Reading it</h3>
+      <ul>
+        <li><b>The chart is rebased</b>, both lines starting together at the first session the two
+          share, so the gap between them <em>is</em> the relative performance. Two raw share prices on
+          one axis would flatten the cheaper one into the floor.</li>
+        <li><b>A ratio strip underneath</b> — above 100, the first stock is ahead of where it started.</li>
+        <li><b>Bars on every row</b> show the size of a gap at a glance, each drawn as its share of the
+          larger of the pair. Where a value is negative, zero moves to the middle.</li>
+        <li><b>Hide matching rows</b> folds away the fields where both read the same, with the count
+          on the button.</li>
+      </ul>
+
+      <div class="note"><b>Nothing is marked as the winner, and that is deliberate.</b> How far apart
+        two numbers are is a fact; which of them is better is not. Some differences are withheld
+        rather than computed — across two currencies, or off a loss — with the reason on the row.</div>
+      <a class="top" href="#top">↑ Contents</a>
+    </div></section>
+
+    <!-- ---------------------------------------------------------------- -->
+    <section class="bezel card" id="alerts"><div class="core">
+      <div class="sec-h"><h2>9 · Alerts</h2></div>
+      <p><b>Alerts</b> in the bar watches one stock for one thing and tells you the next time you open
+        the site. Up to five at a time. Six kinds: a <b>price level</b>, a <b>moving-average cross</b>,
+        an <b>Advice verdict change</b>, an <b>RSI level</b>, a <b>52-week extreme</b> and a
+        <b>big day</b>.</p>
+
+      <h3>Things worth knowing before you set one</h3>
+      <ul>
+        <li><b>They are not real-time, and the page says so in amber.</b> Prices land on a schedule, so
+          an alert fires when new data arrives — up to about half an hour later in the session, and
+          the next morning outside it. This is a <em>what changed on my list</em> feature.</li>
+        <li><b>A level is not an event.</b> "Price above 150" is true every round once it is true, so
+          only the <em>crossing</em> fires — otherwise you would hear about it every half hour for ever.</li>
+        <li><b>Set one whose condition is already true and it arms quietly</b>, reporting the next
+          change instead of announcing a crossing that did not happen. The row says <em>Arming</em>.</li>
+        <li><b>A gap counts.</b> 140 to 160 overnight never touched 150, and it still fires.</li>
+        <li><b>Pausing forgets where it was.</b> A resumed alert arms again rather than firing on a
+          move it never saw.</li>
+      </ul>
+
+      <div class="note"><b>No email, anywhere in this feature.</b> Delivery is a badge on the bar you
+        can ignore. It is also never called a price target — a target is a forecast wearing a decimal
+        point, and this is a level you chose.</div>
       <a class="top" href="#top">↑ Contents</a>
     </div></section>
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="fresh"><div class="core">
-      <div class="sec-h"><h2>7 · How fresh the data is</h2></div>
+      <div class="sec-h"><h2>10 · How fresh the data is</h2></div>
       <p>The bar shows when the data was last pulled and the trading day it covers. Everyone sees the
         same stored snapshot, so two people reading the screener are reading the same numbers.</p>
-
-      <h3>Two kinds of refresh <span class="adm">owner only</span></h3>
-      <ul>
-        <li><b>Refresh</b> re-pulls prices and recomputes the ranking. Seconds, and the company numbers
-          are left as they were.</li>
-        <li><b>Refresh all</b> additionally re-pulls every company profile — sector, market cap,
-          margins, growth. It runs for about thirteen minutes, in batches, because the data provider
-          only allows so much per minute.</li>
-      </ul>
 
       <p><strong>Prices refresh on their own about every half hour through the US session</strong>, and a
         full refresh — prices and the company numbers with them — runs after the close, so the list is
@@ -445,15 +611,25 @@
         in progress every open page shows a notice, and the values already on screen stay put rather than
         blanking out.</p>
 
+      <p>Company numbers — sector, market cap, margins, growth — are on a slower rotation: a share of
+        the list each night, so every company comes round about once a week. That is why a newly added
+        stock can sit with blanks in the Fundamentals and Size groups for a few days, and why the
+        <b>Industry</b> of a recent addition may be empty for a while.</p>
+
       <div class="note"><b>A warning triangle beside a symbol</b> means that stock's most recent price
         is older than the freshest one on the list. Usually it trades on an exchange with a different
-        calendar, not that anything is broken.</div>
+        calendar, not that anything is broken. The <b>Price pulled</b> column gives the same thing per
+        stock, with the time.</div>
+
+      <div class="note"><b>If something is wrong across the board</b>, a coloured banner appears at the
+        top of the screener saying so. Dismiss it with its ×; if the message is later updated, it comes
+        back, so a follow-up reaches you even after you have waved the first one away.</div>
       <a class="top" href="#top">↑ Contents</a>
     </div></section>
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="account"><div class="core">
-      <div class="sec-h"><h2>8 · Your account</h2></div>
+      <div class="sec-h"><h2>11 · Your account</h2></div>
 
       <h3>What is remembered</h3>
       <p>Which column groups you have collapsed, which view you were last in and how you had the table
@@ -471,12 +647,21 @@
         yours, the solid ones are shared.</p>
 
       <h3>Emails</h3>
+      <p>The app sends you almost nothing, on purpose. There is no welcome mail and no digest, and
+        alerts are a badge rather than an inbox.</p>
       <ul>
-        <li>A short <b>welcome</b> when the account is created.</li>
         <li>A <b>password reset link</b> if you ask for one. It works once and expires in thirty
           minutes; asking for a new one cancels the old.</li>
         <li>Replies to anything you send through <b>Contact</b>, which reaches the owner directly.</li>
+        <li><b>New posts</b>, but only if you ask for them — see below.</li>
       </ul>
+
+      <h3>The blog, and the list</h3>
+      <p>Posts at <a href="/blog" style="color:var(--muted)">tickrlab.com/blog</a> are public: no
+        account needed, nothing gated. The box at the foot of each one adds you to the mailing list,
+        which is <strong>confirmed opt-in</strong> — you get one email asking you to confirm, and if
+        you ignore it nothing happens. Every message carries a one-click unsubscribe, and your
+        browser and mail client can both act on it. Nothing else is ever sent to that address.</p>
 
       <h3>The watermark</h3>
       <p>Data pages carry a faint, repeating watermark of your account email. It does not get in the
@@ -488,6 +673,17 @@
         one the guest preview is open to everyone. Change your password from the
         <strong>⋯</strong> menu; doing so signs out your other devices, which is the point. If you are
         locked out after too many attempts, it clears itself after fifteen minutes.</p>
+      <p><strong>Sign in with Google</strong> works too, where it is switched on. The first time, it
+        asks for the same invite code after Google comes back — the code is the door, whichever way
+        you arrive at it — and after that you go straight in. If the address matches an account you
+        already have, the two link up and your password keeps working.</p>
+
+      <h3>The guest preview</h3>
+      <p>Anyone can try the screener without an account, from <b>Try as guest</b> on the sign-in page.
+        It is <strong>twenty real stocks</strong>, chosen to span every sector, size band and verdict
+        rather than to be the famous ones — the whole table, every column and every verdict, on those
+        twenty. What a guest does not get: personal lists, alerts, the pivot, compare, the studio and
+        the research pages.</p>
 
       <div class="note"><b>Something wrong, or a ticker you would like added?</b> Use
         <a href="/contact" style="color:var(--muted)">Contact</a> — it comes from your account, so a
@@ -497,7 +693,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="rules"><div class="core">
-      <div class="sec-h"><h2>9 · The Advice column</h2></div>
+      <div class="sec-h"><h2>12 · The Advice column</h2></div>
       <p><em>&ldquo;Advice&rdquo; here means the output of the fixed rules described below — a mechanical
         reading of the table, not a recommendation tailored to you.</em></p>
       <p>The <strong>Advice</strong> column group shows the whole derivation, left to right:
@@ -542,21 +738,14 @@
         &gt; 30%, gross margin &gt; 50%, positive FCF) in a &gt;10% uptrend. Early is never Strong Buy
         unless a profile enables it. <strong>ETF:</strong> the technical rules alone.</p>
 
-      <h3>See the ladder for any stock <span class="adm">owner only</span></h3>
-      <p><strong>Click a stock's Advice value</strong> to open the rule ladder for that row: every
-        rule in the order the model walks them — vetoes, then caps, then the buy setups — with the
-        rule that fired lit and everything below it dimmed, because a first-match model never reads
-        past its answer. Each condition is drawn as a small track: the shaded zone is what passes,
-        the dot is where the stock sits today. The header repeats the establishment score as a
-        seven-segment bar and the four state words. <em>How is this computed?</em> at the foot
-        switches to the model itself — the full rule list per company type, thresholds only, no
-        stock behind it.</p>
-      <p><strong>Every other cell in the group opens its own panel too.</strong> Trend, Entry and
-        Fundamentals each show that family's own ladder — the states in the order the model checks
-        them, the one that holds lit, the same gauges under each. Type shows the seven
-        establishment points and which were earned. Guards is the one family whose checks are
-        independent rather than first-match, and its panel evaluates both rather than dimming
-        anything.</p>
+      <h3>Why this stock says what it says</h3>
+      <p><strong>Every Advice cell carries the one rule that fired</strong> — the phrase beside the
+        verdict, and the cell's tooltip, name it. That is the whole point of a first-match rule list
+        rather than a score: there is always exactly one reason, and it is written down. The four
+        state columns beside it show the working, so the derivation reads left to right without
+        anything to open.</p>
+      <p>A <strong>chevron</strong> before the word means the verdict moved since the previous
+        session, and names what it was. <b>Advice move</b> in the bar filters to exactly those rows.</p>
 
       <h3>The trend ribbon on the stock page</h3>
       <p>Each stock's page paints a thin strip under the price chart: the Trend word, session by
@@ -611,14 +800,14 @@
           200-day with OK fundamentals earns Buy with Risk instead of Hold. Stops stay Balanced.
           The research log does not endorse the mode; this column shows what it says anyway.</li>
       </ul>
-      <h3>Distance to the exit, and Cushion <span class="adm">Cushion is a column; the panel is owner only</span></h3>
-      <p>Click any advice cell and the ladder panel ends with <strong>Distance to the exit</strong> — how
-        much further the price could fall before that profile's own rules flip the verdict to Avoid or
-        worse, and which rule would fire there. It is the honest half of "risk/reward": the reward half
-        would need a forecast, which this app refuses to make. Technical rules only, with the moving
-        averages, RSI and fundamentals held at today's values — a gauge of where the rules stand, not a
-        stop order. The hover card carries the same number under Balanced.</p>
-      <p><strong>That percentage is not a safety ranking, and it was tested.</strong> Across 307,965
+      <h3>Cushion — how far it can fall before the rules change their mind</h3>
+      <p>Five Strong Buys on one screen leave you with a question the verdict cannot answer: which of
+        these hurts least when it goes wrong. Underneath <strong>Cushion</strong> is a simple measure —
+        <em>the distance the price could fall before the technical rules flip that verdict to Avoid or
+        worse</em>, with the moving averages, RSI and fundamentals held where they are today. It is a
+        gauge of where the rules stand, not a stop order, and it is the honest half of "risk/reward":
+        the reward half would need a forecast, which this app refuses to make.</p>
+      <p><strong>That raw distance is not a safety ranking, though, and it was tested.</strong> Across 307,965
         stock-days of the archive, the stocks with the most room inside an advice tier were the ones that
         had run furthest above their own averages — 25.6% above the 200-day against 13.8%, on 31.7%
         volatility against 24.3% — and their worst cases were <em>worse</em>, not better: a 10th-percentile
@@ -697,7 +886,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="tiles"><div class="core">
-      <div class="sec-h"><h2>10 · Tiles</h2></div>
+      <div class="sec-h"><h2>13 · Tiles</h2></div>
       <p>The <strong>Table / Tiles</strong> switch beside the View menu draws the same rows as cards
         instead of a table. It is the same selection either way: the sort, the theme, the sector,
         industry, advice and advice-move pickers, any screen and every column filter all still
@@ -720,11 +909,11 @@
         window with the window named beside it. That is not the same number as the change beside the
         price, which is today's.</p>
 
-      <h3>What a tile shows <span class="adm">owner sets this</span></h3>
+      <h3>What a tile shows</h3>
       <p>Which fields sit under the chart, how tall the chart is, and which extras appear &mdash; the
         verdict, the rule that fired, the trend word, the score chips, the sector &mdash; are one setting
         for the whole site rather than a personal one, so a tile means the same thing to everyone
-        looking at it. The owner edits it from <strong>Tile setup</strong>, beside the switch.</p>
+        looking at it — the same screenshot means the same thing in two people's hands.</p>
       <p>Tiles stop at sixty with a button for the next sixty: a tile is a great deal more markup than a
         table row, and 271 of them at once is not free.</p>
       <a class="top" href="#top">↑ Contents</a>
@@ -732,7 +921,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="news"><div class="core">
-      <div class="sec-h"><h2>11 · News</h2></div>
+      <div class="sec-h"><h2>14 · News</h2></div>
       <p>Headlines only &mdash; the headline, who published it, when, and a link out. No article text is
         stored anywhere, and nothing here is summarised or interpreted.</p>
 
@@ -765,7 +954,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="phone"><div class="core">
-      <div class="sec-h"><h2>12 · On a phone</h2></div>
+      <div class="sec-h"><h2>15 · On a phone</h2></div>
       <p>The screener is eighty-odd columns on a page that deliberately does not scroll, and it was
         never going to fold onto a phone. <strong>tickrlab.com/m</strong> is a separate page built for
         one hand. On a narrow screen the screener offers you a link to it; it is also
@@ -790,7 +979,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="share"><div class="core">
-      <div class="sec-h"><h2>13 · Cards to share</h2></div>
+      <div class="sec-h"><h2>16 · Cards to share</h2></div>
       <p>A card is a picture of something the screen found &mdash; the week's movers, a chart, what the
         rules concluded &mdash; drawn in the site's own theme at a fixed size, ready to post. Every one
         carries the wordmark, the date the data belongs to, the time the prices were pulled, and the line
@@ -806,7 +995,7 @@
         nothing to crop. A screenshot of the artboard works too, at whatever size your screen happens
         to be.</p>
 
-      <h3>Saved posts <span class="adm">owner sets these</span></h3>
+      <h3>Saved posts</h3>
       <p>A card set up in the studio can be named and kept. A saved post remembers the template, the
         shape and every control &mdash; not a picture &mdash; so opening it tomorrow draws tomorrow's
         numbers. Saved posts appear on the phone under <strong>Posts</strong>, by name; tapping one draws
