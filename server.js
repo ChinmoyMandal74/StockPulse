@@ -8635,6 +8635,10 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   if (incoming.filterRow === true) out.filterRow = true;
   // The news ticker is on by default; only hiding it is stored.
   if (incoming.tickerOff === true) out.tickerOff = true;
+  // The read-only note, dismissed for good. Same shape as the ticker: shown
+  // by default, so only the hiding is worth a row. A guest never reaches
+  // here — they have no prefs key — and keeps the choice per device.
+  if (incoming.noteOff === true) out.noteOff = true;
   // Table or tiles: which shape the screener draws the same rows in.
   if (incoming.layout === 'tiles') out.layout = 'tiles';
   // How many tiles a row holds: 'auto' (fill the width) or a fixed 2-6.

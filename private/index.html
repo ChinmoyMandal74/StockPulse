@@ -303,6 +303,15 @@
       transition: color 0.4s var(--ease);
     }
     #announceX:hover { color: var(--text); }
+    /* The read-only note's own dismiss. Same shape as the announcement's,
+       named separately because that one is transient content and this is a
+       standing preference — they will want to diverge before they merge. */
+    #noteX {
+      margin-left: auto; flex: none; background: none; border: 0; cursor: pointer;
+      color: var(--faint); font-size: 17px; line-height: 1; padding: 2px 4px;
+      transition: color 0.4s var(--ease);
+    }
+    #noteX:hover { color: var(--text); }
     #phoneBar { flex: none; display: flex; align-items: center; gap: 8px; margin-top: 8px;
       padding: 8px 10px; border: 1px solid var(--hair); border-radius: 12px;
       background: var(--surface); font-size: 13px; color: var(--muted); }
@@ -1185,6 +1194,14 @@
                 <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>
                 <span class="nm">News ticker</span>
               </button>
+              <!-- A hide with no way back is a trapdoor, and this one is
+                   permanent by design. The ticker's own toggle set the
+                   precedent; shown only to the people who can see the note,
+                   since an admin never gets one. -->
+              <button class="pick member-only" id="noteToggle">
+                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-lock" /></svg>
+                <span class="nm">Read-only note</span>
+              </button>
               <a class="pick" href="/m">
                 <svg class="ic ic-sm" aria-hidden="true"><use href="#i-phone" /></svg>
                 <span class="nm">Phone version</span>
@@ -1262,6 +1279,7 @@
              are starred is per-account. Claiming the screens would be the
              same overclaim in the other direction. -->
         <span><b>Read-only view.</b> Prices refresh on their own through the trading day and again after the close. Adding stocks is the owner's; your filters, views, themes, starred screens and alerts are your own.</span>
+        <button type="button" id="noteX" aria-label="Hide this note for good">&times;</button>
       </div>
     </div>
 
@@ -3811,6 +3829,20 @@
         if (res && Array.isArray(res.siteHidden)) siteHidden = new Set(res.siteHidden);
         if (res && res.tile) tileCfg = res.tile;
         if (res && res.prefs && res.prefs.tickerOff === true) tickerOff = true;
+        // A GUEST HAS NO PREFS KEY — `prefsKey()` would fall through to
+        // 'admin', which a guest must never touch, so GET returns {} and PUT
+        // 403s. Their dismissal can only be per-device; a member's follows
+        // the account, which is the whole argument for prefs over
+        // localStorage. One flag, two stores, decided by who is asking.
+        if (res && res.prefs && res.prefs.noteOff === true) noteOff = true;
+        if (isGuest) { try { noteOff = localStorage.getItem(NOTE_OFF) === '1'; } catch { /* ignore */ } }
+        // REPAINT, because applyAdminUI() drew the note during checkAuth —
+        // which runs BEFORE this — so the stored flag arrives after the
+        // decision was already made. Without this the dismissal worked and
+        // then came undone on every reload, which is the opposite of "for
+        // ever". Prefs are awaited before the first render, so this settles
+        // it with nothing on screen to flicker.
+        paintNote();
         if (res && res.prefs && /^(auto|[2-6])$/.test(String(res.prefs.tileCols || ''))) tileCols = String(res.prefs.tileCols);
         if (res && Array.isArray(res.ranges)) cardRanges = res.ranges;
         if (res && typeof res.alerts === 'number') setAlertBadge(res.alerts);
@@ -3855,7 +3887,7 @@
         for (const g of GROUPS) if (g !== 'fwd') out[g] = !!collapsed[g];
         api('PUT', '/api/prefs', {
           prefs: { collapsed: out,
-            filterRow: filterRowOn, tickerOff, activeView: activeViewId, layout, tileCols,
+            filterRow: filterRowOn, tickerOff, noteOff, activeView: activeViewId, layout, tileCols,
             // A prefs PUT replaces the whole row, so every field this page owns
             // has to ride on every write or the others erase it. This page is
             // the only writer left, which is the only reason that is safe.
@@ -4645,7 +4677,7 @@
       $('moreBtn').style.display = (isAdmin || (authRequired && signedIn)) ? '' : 'none';
       // The divider above the account block is owned by renderPicker(), which
       // knows whether the portfolio actions are showing above it.
-      $('readonlyNote').style.display = (authRequired && !isAdmin) ? '' : 'none';
+      paintNote();
       const who = $('whoami');
       if (who) {
         who.textContent = currentUser && currentUser.email ? currentUser.email : '';
@@ -4740,6 +4772,8 @@
     // and rebuilt only when its items or the prices change — rebuilding the
     // track restarts the crawl, so a sort or a filter must not touch it.
     let tickerOff = false;
+    let noteOff = false;              // the read-only note, dismissed for good
+    const NOTE_OFF = 'readonly.note.off';   // guests only — they have no prefs key
     let tickerPaused = false;
     let tickerItems = null;
     let tickerKey = '';
@@ -4862,6 +4896,39 @@
       tickerRotate = setInterval(() => { if (!tickerPaused && !$('tkView').matches(':hover')) show(); }, 6000);
     }
     function stopTickerRotate() { clearInterval(tickerRotate); tickerRotate = null; }
+
+    // The read-only note, and the option to be done with it (2026-09-27,
+    // owner: "there should be option to hide this for ever, it is taking
+    // vertical space"). It costs ~67px of a page that never scrolls, and
+    // every one of those pixels comes out of the table's rows.
+    //
+    // PERMANENT, and reversible from the ⋯ menu — the news ticker's bargain.
+    // A hide with no way back is a trapdoor, and the note is the only place
+    // that explains what a member may and may not do.
+    function paintNote() {
+      const el = $('readonlyNote');
+      if (!el) return;
+      const was = el.style.display !== 'none';
+      const show = authRequired && !isAdmin && !noteOff;
+      el.style.display = show ? '' : 'none';
+      const t = $('noteToggle');
+      if (t) t.querySelector('.nm').textContent = noteOff ? 'Show read-only note' : 'Hide read-only note';
+      // The windowed table sizes itself from .table-wrap and NO resize event
+      // fires when a sibling appears or goes — the ticker's rule, the phone
+      // bar's and the announcement's. Without this the table keeps its old
+      // height and the reclaimed space is simply blank.
+      if (was !== show && typeof paintWindow === 'function') paintWindow(true);
+    }
+    function setNoteOff(off) {
+      noteOff = !!off;
+      window.track && track('picker', 'readonly-note:' + (noteOff ? 'off' : 'on'));
+      if (isGuest) {
+        try { localStorage.setItem(NOTE_OFF, noteOff ? '1' : '0'); } catch { /* ignore */ }
+      } else {
+        savePrefs();
+      }
+      paintNote();
+    }
 
     function setTickerOff(off) {
       tickerOff = !!off;
@@ -5447,6 +5514,8 @@
 
     $('tkHide').addEventListener('click', () => setTickerOff(true));
     $('tickerToggle').addEventListener('click', () => { closePickers(); setTickerOff(!tickerOff); });
+    $('noteToggle').addEventListener('click', () => { closePickers(); setNoteOff(!noteOff); });
+    $('noteX').addEventListener('click', () => setNoteOff(true));
     $('tkPause').addEventListener('click', () => {
       tickerPaused = !tickerPaused;
       $('ticker').classList.toggle('paused', tickerPaused);
