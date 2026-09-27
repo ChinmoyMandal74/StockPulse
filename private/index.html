@@ -1251,7 +1251,17 @@
     <div class="bezel notice" id="readonlyNote" style="display:none">
       <div class="core">
         <svg class="ic" aria-hidden="true"><use href="#i-lock" /></svg>
-        <span><b>Read-only view.</b> The data updates when the site owner refreshes. You can sort, collapse column groups and keep your own themes.</span>
+        <!-- WHAT IS READ-ONLY IS THE SHARED DATA, and nothing else. Both
+             halves of the old wording had gone stale: the data has not
+             waited on the owner since the intraday schedule went live
+             (2026-09-24), and "sort, collapse column groups and keep your
+             own themes" was three of a dozen things a member has. The claim
+             has to leave with the feature — and arrive with it. -->
+        <!-- "STARRED screens", not "screens": the screens themselves are
+             the owner's and a member cannot write one, but which of them
+             are starred is per-account. Claiming the screens would be the
+             same overclaim in the other direction. -->
+        <span><b>Read-only view.</b> Prices refresh on their own through the trading day and again after the close. Adding stocks is the owner's; your filters, views, themes, starred screens and alerts are your own.</span>
       </div>
     </div>
 
