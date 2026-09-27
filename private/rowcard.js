@@ -844,9 +844,35 @@
 
   // --- attach hover behaviour to a container ---------------------------------
   // opts: { root, selector, getStock, colors, labels, onShow, actions, onAction }
+  // CAN THE PRIMARY POINTER ACTUALLY HOVER? Asked once, here, so the hover
+  // card and the score tooltip cannot disagree about it.
+  //
+  // WIDTH IS THE WRONG TEST and would fail the exact device this exists for:
+  // an iPad Pro in landscape is 1024-1366px wide, so any sane breakpoint
+  // leaves hover switched ON there — and a 900px laptop window would lose it
+  // while holding a mouse. `(hover: hover) and (pointer: fine)` asks the
+  // question directly: a touch screen answers `hover: none, pointer: coarse`,
+  // a laptop answers fine even if its screen is also a touch screen, which is
+  // right — that person has a mouse.
+  //
+  // It matters because a touch browser SYNTHESISES mouseover on tap: the card
+  // ambushes you as you reach for the link underneath it, and on iOS the first
+  // tap is then spent dismissing it.
+  function canHover() {
+    try {
+      return typeof matchMedia !== 'function'
+        || matchMedia('(hover: hover) and (pointer: fine)').matches;
+    } catch { return true; }   // cannot tell → behave exactly as before
+  }
+
   function attach(opts) {
     const el = document.getElementById('rowcard');
     if (!el) return;
+    // Nothing is wired at all on a touch device — not wired-then-suppressed,
+    // so there is no handler left to fire. The same shape is returned so the
+    // caller needs no null check, and tapping the name still opens the stock
+    // page, which is the better answer on a phone anyway.
+    if (!canHover()) return { hide() {} };
     let timer = null;      // delay before showing
     let hideTimer = null;  // grace period before hiding
     let current = null;    // the stock the open card describes
@@ -959,7 +985,7 @@
 
   global.RowCard = {
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
-    gfUrl, googleExchange,
+    gfUrl, googleExchange, canHover,
     // used by the stock page
     buildSections, chartSVG, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries,
     scoreTip, placeTip,

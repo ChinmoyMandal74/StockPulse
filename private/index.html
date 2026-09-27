@@ -1526,6 +1526,12 @@
     let signedIn = true;       // has a live session (or the app is open/local)
     let currentUser = null;    // { email, role } once signed in
 
+    // Whether this device's primary pointer can actually hover. Asked ONCE,
+    // of RowCard, which is also what gates the hover card itself — so the
+    // card and the score tooltip can never disagree about the answer. Read at
+    // boot rather than per row; a device that gains a mouse mid-session gets
+    // the behaviour back on reload, which is not worth a listener.
+    const HOVERS = RowCard.canHover();
     const GROUPS = ['info', 'rank', 'act', 'chart', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund', 'own'];
     const GROUP_COLORS = {
       // Warm neutral, and the only unused region of the palette: every other
@@ -3086,10 +3092,16 @@
       tbody.querySelectorAll('[data-remove]').forEach((btn) => {
         btn.addEventListener('click', () => removeTicker(btn.dataset.remove));
       });
-      tbody.querySelectorAll('.rating[data-sym]').forEach((el) => {
-        el.addEventListener('mouseenter', () => showTip(el));
-        el.addEventListener('mouseleave', hideTip);
-      });
+      // Same rule as the hover card, and asked of the same function so the two
+      // cannot disagree: on a touch screen the browser synthesises mouseenter
+      // on tap, so the factor breakdown would ambush a finger reaching for the
+      // row. Nothing is wired rather than wired-and-suppressed.
+      if (HOVERS) {
+        tbody.querySelectorAll('.rating[data-sym]').forEach((el) => {
+          el.addEventListener('mouseenter', () => showTip(el));
+          el.addEventListener('mouseleave', hideTip);
+        });
+      }
       // Only the per-cell half of applyGroups: the header styling, the column
       // menu and the sticky offsets have not changed just because you scrolled.
       hideCollapsedCells();
