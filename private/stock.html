@@ -103,17 +103,40 @@
        sharing a class named after one of them is a small wrongness the next
        reader trips on, and unlike a prefs key or a group id a class in one
        page has no stored data behind it. `olink` rather than a bare `link`
-       or `out` — six unscoped names have captured later markup here. */
+       or `out` — six unscoped names have captured later markup here.
+
+       NEUTRAL, NOT A SECOND ACCENT (owner, 2026-09-27: "all the pills are in
+       blue, make google and yahoo more distinct"). They were accent-blue and
+       so are the chips now — the group chips became links the day before and
+       were given the accent deliberately — so the masthead read as one blue
+       row and the two loudest things on it were the two that say least about
+       the stock.
+
+       IT IS NOT ANOTHER SIGNAL COLOUR, and that is the point rather than a
+       compromise. On this page every coloured token already MEANS something
+       about the data: green and red are direction, amber is `notice this, it
+       is old`, violet is RSI in three places (the toggle, the caption and the
+       crosshair readout), and the accent is now `this chip opens its group`.
+       An external link is not a reading about the stock — it is navigation —
+       so it takes the treatment navigation already has here, the `Back to
+       screener` pill: white on glass, a hairline, no hue. That makes it
+       distinct from every chip beside it WITHOUT spending the one unspent
+       colour left in the palette.
+
+       Still louder than a chip, which was the original brief: a filled box at
+       33px against a 26px outline, and --text against --muted. */
     .olink {
       display: inline-flex; align-items: center; gap: 7px; align-self: center;
       padding: 6px 13px; border-radius: 999px; text-decoration: none; white-space: nowrap;
-      font-size: 12.5px; font-weight: 600; color: var(--accent);
-      border: 1px solid rgba(124, 156, 255, 0.42); background: rgba(124, 156, 255, 0.12);
+      font-size: 12.5px; font-weight: 600; color: var(--text);
+      border: 1px solid var(--hair-2); background: rgba(255, 255, 255, 0.075);
       transition: background 0.4s var(--ease), border-color 0.4s var(--ease);
     }
-    .olink:hover { background: rgba(124, 156, 255, 0.2); border-color: rgba(124, 156, 255, 0.6); }
-    .olink .ic { width: 14px; height: 14px; }
-    /* The two sit as a pair, and BOTH keep the accent: they are the same kind
+    .olink:hover { background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.28); }
+    /* The out-arrow stays quieter than the word — it is a repeated glyph on
+       both pills and saying "elsewhere" twice at full strength is noise. */
+    .olink .ic { width: 14px; height: 14px; color: var(--muted); }
+    /* The two sit as a pair and share one treatment: they are the same kind
        of thing going to two places, so colouring them apart would be a
        distinction with nothing behind it. The gap is the pair's, not .head's
        — .head's own gap would space them like the chips. */
