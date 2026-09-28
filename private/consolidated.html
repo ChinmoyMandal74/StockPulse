@@ -101,6 +101,15 @@
         <label for="dim">Group by</label>
         <select id="dim"></select>
       </div>
+      <!-- Industry is a CHILD of sector, never a peer: measured on the live
+           screen, 0 of 99 industries span two sectors, so a flat list of them
+           is ~100 rows of which each is one sector's slice. Shown only when
+           Sector is the grouping, the way the screener's own Industry picker
+           nests and the way /pivot made it a childOf drill. -->
+      <div class="cs-field" id="subField" hidden>
+        <label for="sub">Industry</label>
+        <select id="sub"></select>
+      </div>
       <div class="cs-field">
         <label for="wt">Weighting</label>
         <span class="cs-seg" id="wt" role="group" aria-label="Weighting">
@@ -134,17 +143,35 @@
     const BENCH = [['SPY', 'S&P 500'], ['DIA', 'Dow 30']];
 
     const BLANK = '—';
+    // Industry is deliberately NOT a fourth top-level choice. It is reached
+    // through the child picker below, for the reason /pivot removed it as a
+    // row dimension: every industry belongs to exactly one sector, so a flat
+    // list is a hundred rows each of which is one sector's slice.
     const DIMS = {
       theme: { label: 'Theme', multi: true, get: (s) => s.portfolios || [],
         href: (k) => '/theme/' + encodeURIComponent(k) },
       sector: { label: 'Sector', get: (s) => s.sector,
         href: (k) => '/sector/' + encodeURIComponent(k) },
-      industry: { label: 'Industry', get: (s) => s.industry,
-        href: (k) => '/industry/' + encodeURIComponent(k) },
       capBand: { label: 'Size by market cap', get: (s) => s.capBand,
         href: (k) => '/size/' + encodeURIComponent(k),
         order: (window.Filters && Filters.CAP_ORDER) || null },
     };
+    // The industry drill, as a dimension of the same shape so `build()` and
+    // everything downstream need to know nothing about it.
+    const INDUSTRY = { label: 'Industry', get: (s) => s.industry,
+      href: (k) => '/industry/' + encodeURIComponent(k) };
+    const SUB_OFF = '';        // show the sectors themselves
+    const SUB_ALL = '*';       // every industry, across every sector
+    let sub = SUB_OFF;
+
+    // What the table is actually grouping by right now, and over which stocks.
+    // ONE place answers both, so a heading, a link and a note cannot disagree
+    // about which cut is on screen.
+    function activeDim() {
+      if (dim !== 'sector' || sub === SUB_OFF) return { d: DIMS[dim], rows: stocks, within: null };
+      if (sub === SUB_ALL) return { d: INDUSTRY, rows: stocks, within: null };
+      return { d: INDUSTRY, rows: stocks.filter((s) => s.sector === sub), within: sub };
+    }
 
     let stocks = [];
     let benchRows = [];
@@ -188,11 +215,10 @@
       return { v: n ? sv / sw : null, n, noCap };
     }
 
-    function build() {
-      const d = DIMS[dim];
+    function build(d, rows) {
       const map = new Map();
       let placements = 0;
-      for (const s of stocks) {
+      for (const s of rows) {
         let keys = d.get(s);
         if (!Array.isArray(keys)) keys = [keys];
         keys = keys.filter((k) => k != null && k !== '');
@@ -215,8 +241,7 @@
       return { groups, placements };
     }
 
-    function sortGroups(gs) {
-      const d = DIMS[dim];
+    function sortGroups(gs, d) {
       const val = (g) => sortKey === 'key' ? null
         : sortKey === 'n' ? g.n : sortKey === 'cap' ? g.cap : (g[sortKey] && g[sortKey].v);
       gs.sort((a, b) => {
@@ -246,9 +271,9 @@
     }
 
     function render() {
-      const d = DIMS[dim];
-      const { groups, placements } = build();
-      sortGroups(groups);
+      const { d, rows, within } = activeDim();
+      const { groups, placements } = build(d, rows);
+      sortGroups(groups, d);
 
       const head = '<thead><tr>' + headCell('key', d.label) + headCell('n', 'Stocks') +
         headCell('cap', 'Market cap') +
@@ -288,12 +313,16 @@
         });
       });
 
-      paintNotes(groups, placements);
+      paintNotes(groups, placements, d, rows, within);
     }
 
-    function paintNotes(groups, placements) {
-      const d = DIMS[dim];
+    function paintNotes(groups, placements, d, rows, within) {
       const out = [];
+      if (within) {
+        out.push('Showing the industries <b>inside ' + esc(within) + '</b>, over its ' +
+          rows.length.toLocaleString() + ' stocks. Every industry belongs to exactly one ' +
+          'sector, which is why this is a drill rather than a second list.');
+      }
       out.push(weight === 'cap'
         ? '<b>Cap-weighted</b> — each stock counts in proportion to its market cap, so the largest ' +
           'companies dominate, the way an index behaves.'
@@ -301,27 +330,29 @@
           'convention every group page here already uses.');
       // The number that makes the toggle worth having: say how far apart the
       // two readings are rather than leaving the reader to flip and remember.
-      const eq = agg(stocks, 'oneYearPct', false).v;
-      const cp = agg(stocks, 'oneYearPct', true).v;
+      const eq = agg(rows, 'oneYearPct', false).v;
+      const cp = agg(rows, 'oneYearPct', true).v;
       if (eq != null && cp != null) {
         const gap = Math.abs(eq - cp);
         // Say it either way. "Disagree by 0.0 points, which is the size of the
         // choice you are making" is a sentence that reads as broken on the day
         // the two happen to coincide, and they sometimes do.
         out.push(gap < 0.05
-          ? 'Across the whole screen the two <b>agree</b> over 1Y (' + pct(eq) +
+          ? 'Across ' + (within ? esc(within) : 'the whole screen') +
+            ' the two <b>agree</b> over 1Y (' + pct(eq) +
             ' either way), so on today’s data the choice barely matters — though it ' +
             'will for an individual group.'
-          : 'Across the whole screen the two disagree by <b>' + gap.toFixed(1) +
+          : 'Across ' + (within ? esc(within) : 'the whole screen') +
+            ' the two disagree by <b>' + gap.toFixed(1) +
             ' points</b> over 1Y (' + pct(eq) + ' equal-weight against ' + pct(cp) +
             ' cap-weighted), which is the size of the choice you are making.');
       }
       if (d.multi) {
-        const extra = placements - stocks.length;
+        const extra = placements - rows.length;
         if (extra > 0) {
           out.push('A stock can sit in more than one ' + esc(d.label.toLowerCase()) +
             ', so the rows add up to <b>' + placements.toLocaleString() + ' placements across ' +
-            stocks.length.toLocaleString() + ' stocks</b> — they are not meant to total the screen.');
+            rows.length.toLocaleString() + ' stocks</b> — they are not meant to total the screen.');
         }
       }
       const blank = groups.find((g) => g.key === BLANK);
@@ -330,7 +361,7 @@
           ' recorded yet and sit in their own row rather than being dropped.');
       }
       if (weight === 'cap') {
-        const noCap = stocks.filter((s) => !(s.marketCap > 0)).length;
+        const noCap = rows.filter((s) => !(s.marketCap > 0)).length;
         if (noCap) {
           out.push('<b>' + noCap + '</b> carry no market cap — a fund reports assets under ' +
             'management, not capitalisation — so they cannot carry a weight and leave the ' +
@@ -345,11 +376,43 @@
       $('notes').innerHTML = out.map((t) => '<p>' + t + '</p>').join('');
     }
 
+    // Only the sectors the screen actually holds, so the drill can never offer
+    // a sector that would resolve to nothing.
+    function sectorsPresent() {
+      return [...new Set(stocks.map((s) => s.sector).filter(Boolean))].sort();
+    }
+
+    function fillSub() {
+      const show = dim === 'sector';
+      $('subField').hidden = !show;
+      if (!show) { sub = SUB_OFF; return; }
+      $('sub').innerHTML =
+        `<option value="">Off — show the sectors</option>` +
+        `<option value="${SUB_ALL}">All industries</option>` +
+        '<optgroup label="Industries within">' +
+        sectorsPresent().map((k) => `<option value="${esc(k)}">${esc(k)}</option>`).join('') +
+        '</optgroup>';
+      $('sub').value = sub;
+      // A saved choice that no longer exists falls back rather than filtering
+      // to nothing — the screener's own rule when a sector stops holding an
+      // industry.
+      if ($('sub').value !== sub) { sub = SUB_OFF; $('sub').value = sub; }
+    }
+
     function fillDims() {
       $('dim').innerHTML = Object.entries(DIMS)
         .map(([k, v]) => `<option value="${esc(k)}"${k === dim ? ' selected' : ''}>${esc(v.label)}</option>`)
         .join('');
-      $('dim').addEventListener('change', () => { dim = $('dim').value; render(); });
+      $('dim').addEventListener('change', () => {
+        dim = $('dim').value;
+        // Leaving Sector strands the drill, so it is dropped rather than kept
+        // pointing at a cut that is no longer on screen.
+        sub = SUB_OFF;
+        fillSub();
+        render();
+      });
+      $('sub').addEventListener('change', () => { sub = $('sub').value; render(); });
+      fillSub();
       $('wt').querySelectorAll('button').forEach((b) => {
         b.addEventListener('click', () => {
           weight = b.dataset.w;
