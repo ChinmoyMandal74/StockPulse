@@ -741,9 +741,18 @@
     //   was clicked, so the crumb can read "Technology › Semiconductors".
     let picked = null;
 
-    // The child table's columns. A FIXED set, the owner's call — fifteen
+    // The child table's columns. A FIXED set, the owner's call — fourteen
     // fields, against the four an inline chip could carry. `l` left-aligns a
     // word, `mv` colours a percentage by sign, `f` formats.
+    //
+    // WHAT LEFT, 2026-09-28 (owner): Was, Trend and Cushion, replaced by the
+    // 3M and 6M returns. The three that went were all readings of the advice
+    // engine, and the Advice column beside them already gives the verdict; a
+    // drill opened from a cell is read for "which stocks are in here and how
+    // have they done", so the horizons earn the width more than a second and
+    // third opinion on the same row does. `advicePrev` is still carried on
+    // the row and the Advice move measure still reads it — only the column
+    // went.
     const DETAIL_COLS = [
       { k: 'symbol',        t: 'Symbol',     l: 1, link: 1 },
       { k: 'shortName',     t: 'Name',       l: 1, nm: 1, f: (s) => s.shortName || s.name || '' },
@@ -753,17 +762,15 @@
       { k: 'todayPct',      t: 'Today',      mv: 1 },
       { k: 'oneWeekPct',    t: '1W',         mv: 1 },
       { k: 'oneMonthPct',   t: '1M',         mv: 1 },
+      // In window order, so the row reads left to right as time passing —
+      // the screener's own ordering, and 3M/6M between 1M and 1Y is where
+      // the eye already expects them.
+      { k: 'threeMonthPct', t: '3M',         mv: 1 },
+      { k: 'sixMonthPct',   t: '6M',         mv: 1 },
       { k: 'oneYearPct',    t: '1Y',         mv: 1 },
       { k: 'sector',        t: 'Sector',     l: 1 },
       { k: 'industry',      t: 'Industry',   l: 1 },
       { k: 'action',        t: 'Advice',     l: 1 },
-      // What it was at the previous close, shown only where it MOVED — a column
-      // repeating today's verdict on 800 unchanged rows is noise, and the blank
-      // then means "held", which is the common case and needs no word.
-      { k: 'advicePrev',    t: 'Was',        l: 1,
-        f: (s) => (adviceMoved(s) ? s.advicePrev : null) },
-      { k: 'actionTrend',   t: 'Trend',      l: 1 },
-      { k: 'actionCushion', t: 'Cushion',    f: (s) => (s.actionCushion == null ? null : Number(s.actionCushion).toFixed(2) + 'σ') },
     ];
     // Biggest first, because "who is in this bucket" is answered by the names
     // that carry it. Every column is sortable, so this is only a starting point.
