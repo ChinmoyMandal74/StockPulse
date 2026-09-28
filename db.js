@@ -2123,6 +2123,18 @@ async function writeInsiderQuarter(quarter, rows, meta = {}) {
           values (?, ?, ?, ?, ?)`,
     args: [q, Date.now(), rows.length, meta.status || 'ok', meta.error || null],
   });
+  // A BULK LOAD MUST MOVE THE DAILY CURSOR. The data set covers the whole
+  // quarter, so a cursor left mid-quarter sends the walk back over ninety days
+  // of filings the file has just delivered — ~9,000 document fetches against an
+  // address the SEC has already throttled once. Here rather than in the loader
+  // because this is the one place a quarter is written.
+  // FORWARDS ONLY, and only when the load actually landed: a refused quarter
+  // writes an error row and must leave the walk exactly where it was, and
+  // re-running an OLD quarter must never rewind past days already walked.
+  if (meta.to && (meta.status || 'ok') === 'ok') {
+    const day = await readInsiderDay();
+    if (!day || day < meta.to) await writeInsiderDay(meta.to);
+  }
   return rows.length;
 }
 

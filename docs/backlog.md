@@ -488,6 +488,14 @@ fatal anywhere presenting itself as current.
   trades a few weeks of staleness against hours of SEC traffic for data nothing
   yet depends on.
 
+**There is no front end for the quarterly load, deliberately** — an 11MB zip
+unpacking to ~60MB of TSV has no business in a serverless request, the same
+reason `backfill-bars.js` is local. `/admin`'s insider panel drives only the
+one-day walk. Since 2026-09-27 a quarterly load **advances the day cursor to the
+quarter's last day**, so the walk resumes after the quarter rather than
+re-crawling it; before that fix, loading Q3 would have sent it back over ninety
+days of filings the file had just delivered.
+
 **What would make the first option a bad idea.** It already went wrong once:
 driving the browser loop at the gap made 130 calls, advanced one day and earned
 an HTTP 429 and then a 403. The route now reports a throttle as a wait rather

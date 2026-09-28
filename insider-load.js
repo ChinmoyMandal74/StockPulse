@@ -251,6 +251,16 @@ async function walkDays(limit) {
   console.log('\n' + (COMMIT ? 'wrote ' : 'would write ') + total.toLocaleString() +
     ' transactions across ' + (quarters.length - skipped) + ' quarters in ' +
     ((Date.now() - t0) / 60000).toFixed(1) + ' min');
+  // Say where the walk will pick up. A quarterly load moves the cursor to the
+  // quarter's last day (see writeInsiderQuarter), so this is the proof it did
+  // rather than leaving the daily catch-up to re-crawl what was just written.
+  if (COMMIT) {
+    const day = await store.readInsiderDay();
+    if (day) {
+      console.log('the daily walk resumes from ' +
+        new Date(Date.parse(day) + 86400000).toISOString().slice(0, 10));
+    }
+  }
   if (!COMMIT) console.log('Nothing was written. Re-run with --commit.');
   process.exit(0);
 })().catch((e) => { console.error(e); process.exit(1); });
