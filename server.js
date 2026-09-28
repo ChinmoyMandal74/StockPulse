@@ -3460,12 +3460,30 @@ async function fetchName(symbol) {
 }
 
 // Percent change between the latest close and the close `daysAgo` trading days back.
+// A CLOSE UNDER A CENT IS A BAD BAR, NOT A PRICE, and one of them is enough to
+// make a return meaningless. Measured 2026-09-28: SOLS is stored — and SERVED
+// BY THE PROVIDER — at $0.000099999997 from 2024 to April 2025 and at $56 now,
+// an unadjusted reverse split or a reused ticker, which reported a 1Y return of
+// **+56,129,902%** on the screener and dragged a whole industry's average to
+// +4,677,721%. Re-pulling does NOT fix it: the provider's own data says that.
+//
+// Deliberately far below any real value rather than tuned — the lowest
+// legitimate close in this archive is NVDA's split-adjusted $0.16 from 2007,
+// sixteen times clear of it. The same floor and the same reasoning /pivot
+// already applies to its own anchors; this puts it where the returns are
+// actually computed, so the screener, the cards, the phone and every average
+// built on them are covered at once.
+const MIN_CLOSE = 0.01;
+
 function pctChange(values, daysAgo) {
   // values are newest-first: values[0] = latest close.
   if (!Array.isArray(values) || values.length <= daysAgo) return null;
   const latest = parseFloat(values[0].close);
   const past = parseFloat(values[daysAgo].close);
-  if (!isFinite(latest) || !isFinite(past) || past === 0) return null;
+  if (!isFinite(latest) || !isFinite(past)) return null;
+  // Both ends, as the pivot guards both: a sub-cent reading at either end is
+  // the bad bar, whichever side of the window it lands on.
+  if (past < MIN_CLOSE || latest < MIN_CLOSE) return null;
   return ((latest - past) / past) * 100;
 }
 
@@ -5917,8 +5935,11 @@ async function computeStocks(asOf, opts = {}) {
         sixMonthPct: pctChange(values, SIX_MONTH),
         oneYearPct: pctChange(values, ONE_YEAR),
         fiveYearPct: (() => {
+          // Same floor as pctChange: a sub-cent anchor is a bad bar, and the
+          // 5Y window reaches furthest back, so it meets them first.
           const a = fiveYearAnchor[sym];
-          return a && isFinite(a.close) && a.close > 0 && isFinite(price)
+          return a && isFinite(a.close) && a.close >= MIN_CLOSE && isFinite(price)
+            && price >= MIN_CLOSE
             ? ((price - a.close) / a.close) * 100 : null;
         })(),
         relStrength,
@@ -9541,9 +9562,8 @@ function symbolSeries(bars, symbols, dates) {
 // 20th. The page marks it rather than quietly comparing a part-month with
 // eleven whole ones.
 const PIVOT_PERIODS = 12;
-// See the guard in the loop below: a close under a cent is a bad bar, not a
-// price, and one of them is enough to destroy a whole column's average.
-const MIN_CLOSE = 0.01;
+// MIN_CLOSE is defined beside pctChange, which is where returns are computed;
+// the guard in the loop below is the same rule applied to this page's anchors.
 const pivotPeriodCache = new Map();          // kind -> { at, body }
 app.get('/api/pivot-periods', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');

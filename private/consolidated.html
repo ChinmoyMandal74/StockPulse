@@ -59,7 +59,8 @@
     #tbl thead th:first-child { text-align: left; }
     #tbl thead th[aria-sort] { color: var(--text); }
     #tbl td { text-align: right; font: 500 13px var(--mono); font-variant-numeric: tabular-nums; }
-    #tbl td:first-child { text-align: left; font-family: var(--sans); }
+    #tbl td:first-child, #tbl td.cs-sec { text-align: left; font-family: var(--sans); }
+    #tbl td.cs-sec { color: var(--muted); }
     #tbl tbody tr:hover td { background: rgba(255,255,255,.022); }
     /* The benchmark rows are a different KIND of row, not a better one. */
     #tbl tr.cs-bench td { color: var(--muted); border-top: 1px solid var(--hair-2); }
@@ -168,9 +169,16 @@
     // ONE place answers both, so a heading, a link and a note cannot disagree
     // about which cut is on screen.
     function activeDim() {
-      if (dim !== 'sector' || sub === SUB_OFF) return { d: DIMS[dim], rows: stocks, within: null };
-      if (sub === SUB_ALL) return { d: INDUSTRY, rows: stocks, within: null };
-      return { d: INDUSTRY, rows: stocks.filter((s) => s.sector === sub), within: sub };
+      if (dim !== 'sector' || sub === SUB_OFF) {
+        return { d: DIMS[dim], rows: stocks, within: null, showSector: false };
+      }
+      // ACROSS ALL SECTORS, AN INDUSTRY NAME ALONE IS NOT ENOUGH (owner, from a
+      // screenshot: "it is hard to know which industry is in which sector").
+      // Drilled INTO one sector it would be the same word on every row, and
+      // the note already says which — so the column earns its place in exactly
+      // one of the two modes.
+      if (sub === SUB_ALL) return { d: INDUSTRY, rows: stocks, within: null, showSector: true };
+      return { d: INDUSTRY, rows: stocks.filter((s) => s.sector === sub), within: sub, showSector: false };
     }
 
     let stocks = [];
@@ -235,6 +243,12 @@
       const groups = [...map.entries()].map(([key, rows]) => {
         const r = { key, rows, n: rows.length };
         r.cap = rows.reduce((t, s) => t + (s.marketCap > 0 ? s.marketCap : 0), 0);
+        // DERIVED FROM THE MEMBERS, never assumed. Every industry is supposed
+        // to belong to exactly one sector (measured: 0 of 99 span two), so if
+        // that ever stops being true the cell says "mixed" rather than
+        // silently picking whichever member happened to be first.
+        const secs = [...new Set(rows.map((x) => x.sector).filter(Boolean))];
+        r.sector = secs.length === 1 ? secs[0] : secs.length ? 'mixed (' + secs.length + ')' : null;
         for (const [, f] of HZ) r[f] = agg(rows, f, weight === 'cap');
         return r;
       });
@@ -249,9 +263,16 @@
         // column runs — the pivot's rule.
         if (a.key === BLANK) return 1;
         if (b.key === BLANK) return -1;
-        if (sortKey === 'key') {
-          if (d.order) return (d.order.indexOf(a.key) - d.order.indexOf(b.key)) * -sortDir;
-          return a.key.localeCompare(b.key) * -sortDir;
+        if (sortKey === 'key' || sortKey === 'sector') {
+          const ka = sortKey === 'key' ? a.key : (a.sector || '');
+          const kb = sortKey === 'key' ? b.key : (b.sector || '');
+          if (sortKey === 'key' && d.order) {
+            return (d.order.indexOf(a.key) - d.order.indexOf(b.key)) * -sortDir;
+          }
+          // Sorting by sector groups the industries under it, which is the
+          // point of the column; the industry name breaks the tie so the run
+          // inside each sector is stable rather than arbitrary.
+          return (ka.localeCompare(kb) || a.key.localeCompare(b.key)) * -sortDir;
         }
         const x = val(a), y = val(b);
         // A group with nothing to show sorts last in either direction, so a
@@ -271,12 +292,13 @@
     }
 
     function render() {
-      const { d, rows, within } = activeDim();
+      const { d, rows, within, showSector } = activeDim();
       const { groups, placements } = build(d, rows);
       sortGroups(groups, d);
 
-      const head = '<thead><tr>' + headCell('key', d.label) + headCell('n', 'Stocks') +
-        headCell('cap', 'Market cap') +
+      const head = '<thead><tr>' + headCell('key', d.label) +
+        (showSector ? headCell('sector', 'Sector') : '') +
+        headCell('n', 'Stocks') + headCell('cap', 'Market cap') +
         HZ.map(([h, f]) => headCell(f, h)).join('') + '</tr></thead>';
 
       const cell = (a) => {
@@ -289,7 +311,15 @@
         const name = g.key === BLANK
           ? `<span class="cs-blank" title="no ${esc(d.label.toLowerCase())} recorded yet">${BLANK}</span>`
           : `<a class="cs-g" href="${esc(d.href(g.key))}" target="_blank" rel="noopener">${esc(g.key)}</a>`;
-        return `<tr><td>${name}</td><td>${g.n.toLocaleString()}</td><td>${money(g.cap)}</td>` +
+        // A real sector links; "mixed (n)" is a diagnosis rather than a place
+        // and would point at a 404, and a blank is a blank.
+        const single = g.sector && !/^mixed \(/.test(g.sector);
+        const sec = !showSector ? ''
+          : `<td class="cs-sec${g.sector ? '' : ' cs-blank'}">` +
+            (single
+              ? `<a class="cs-g" href="/sector/${encodeURIComponent(g.sector)}" target="_blank" rel="noopener">${esc(g.sector)}</a>`
+              : esc(g.sector || BLANK)) + '</td>';
+        return `<tr><td>${name}</td>${sec}<td>${g.n.toLocaleString()}</td><td>${money(g.cap)}</td>` +
           HZ.map(([, f]) => cell(g[f])).join('') + '</tr>';
       };
 
@@ -297,7 +327,8 @@
       // number for it. Drawn as its own kind of row rather than mixed into the
       // ranking, because it is not a group of ours.
       const benchHtml = benchRows.map((b) =>
-        `<tr class="cs-bench"><td>${esc(b.label)}</td><td>1</td><td>${money(b.row.marketCap)}</td>` +
+        `<tr class="cs-bench"><td>${esc(b.label)}</td>${showSector ? '<td>' + BLANK + '</td>' : ''}` +
+        `<td>1</td><td>${money(b.row.marketCap)}</td>` +
         HZ.map(([, f]) => {
           const v = b.row[f];
           return `<td class="${cls(v == null ? null : v)}">${v == null ? BLANK : pct(v)}</td>`;
