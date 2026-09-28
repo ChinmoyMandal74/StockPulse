@@ -243,6 +243,13 @@ processes like this". After the measurements below they chose to **keep running
 the nightly by hand for now** and revisit. Nothing was built. This is here so
 the next attempt starts from the numbers rather than re-deriving them.
 
+> **The direction has since reversed — see entry 14 (2026-09-28).** The owner
+> now wants the laptop dependency *removed* rather than the nightly moved onto
+> it. The measurements below still stand and are the reason: a nightly wants a
+> host that stays awake for 25–72 minutes, which a laptop at 4:15pm is not. The
+> defect named next — that the watchdog cannot tell a working schedule from a
+> human rescue — matters more, not less, once the host changes.
+
 ### The live defect found on the way, which is independent of all of it
 
 **No SCHEDULED nightly has been recorded since 2026-09-20.** The four nights
@@ -567,6 +574,78 @@ already draws seven clickable tracks; two more entries would turn "did I
 remember to run Fetch missing after that bulk add" into something you can see.
 That is the change to make first — a gap you can see gets filled, and one you
 cannot does not.
+
+---
+
+## 14. Getting the scheduled jobs off the laptop — 2026-09-28
+
+The owner's question: **as the number of refresh jobs grows, how is the laptop
+dependency removed — is a cloud machine the answer?** Recommendation below;
+nothing built.
+
+**What is actually on the laptop, checked rather than recalled**: two Windows
+tasks, `TickrLab intraday prices` and `TickrLab news`, both **pings** — they
+read `CRON_SECRET` and `APP_URL` from `.env` and ask the deployed app to do the
+work. The nightly is still GitHub Actions; the watchdog is a Vercel cron.
+
+### Sort the jobs by whether they need a COMPUTER or a CLOCK — that decides it
+
+| | jobs | what it needs |
+|---|---|---|
+| **A. clocks** | intraday ping, news ping, the nightly loop | something that stays alive 2–70 min and loops |
+| **B. computers** | `backfill-bars`, `insider-load`, `analysis-db`, the research builders | real disk, RAM, unzip — but **run by hand when something changes, never on a schedule** |
+
+**A VM solves the wrong half.** Type B is the only work that wants a machine,
+and it is manual and occasional — a server does not remove the human, it moves
+where they type. Type A is the actual laptop dependency and needs no machine.
+
+### The awkward detail that rules out the cheap answers
+
+**The pings LOOP, and the server plans the slot.** An intraday slot is 3 rounds
+over **2m34s, of which 130s is two mandatory 62s gaps** (measured), and the
+round count comes from the server (`?dry=1` returns `rounds`) so it stays
+correct as the universe grows. **Vercel cron and cron-job.org each fire one
+request and walk away.** Either could drive it only by re-expressing the slot as
+three fixed cron entries at minute offsets — which works today and **gives up
+the server-side planning**, so the schedule silently under-covers the first time
+`PRICE_SLICE` no longer divides the universe into three.
+
+### The recommendation: a scheduled-container runner, not a VM
+
+Something that runs `node intraday-ping.js` **unchanged**, on a schedule, with
+no OS to maintain: **Render Cron Jobs, Fly.io scheduled machines, or Railway
+cron**. Deploys from this repo, secrets in the platform's env. **Price not
+verified — on the order of $1–7/month**, and which of the three behaves best is
+untested.
+
+- **A VM** (Hetzner, Lightsail, Oracle free tier) also works and suits Type B
+  better, at a real cost beyond money: a **second copy of `.env` carrying
+  production Turso, Twelve Data and `CRON_SECRET`**, OS and Node upkeep, and
+  `insider-load.js` is **Windows-only today** (PowerShell `Expand-Archive`), so
+  it needs an unzip change before it runs on Linux at all.
+- **Not more GitHub Actions.** It is already the nightly's host and already
+  failing — see entry 9: no scheduled nightly since 2026-09-20.
+- **For Type B specifically**, a `workflow_dispatch` job is a better shape than
+  a VM when you do want it off the laptop: a clean Linux box on demand, secrets
+  already in the repo settings, nothing running when it is not needed. Same
+  unzip caveat.
+
+### Two things to do before or alongside the move
+
+1. **Fix the heartbeat blind spot first** (entry 9). `nightVerdicts()` judges a
+   night by its DATA and counts a `workflow_dispatch` rescue as a good night, so
+   a dead scheduler reports green. Moving a job you cannot tell is failing
+   relocates the blind spot rather than closing it.
+2. **Do not move the nightly — race it.** 25–72 minutes and 19–22 rounds is why
+   it needs a live runner. The route already answers `{done:true}` at once for a
+   completed run (the 2026-09-19 fix), so letting GitHub and a new runner both
+   fire costs the loser one HTTP call and leaves neither a single point of
+   failure. The real fix is **entry 5**: give the cron route a fast mode, whose
+   rounds are seconds rather than minutes.
+
+**What makes any of this safe is already built**: the server decides whether to
+act — weekday, 9:38–16:00 New York, nothing else running, NYSE open. A broad,
+dumb schedule from anywhere is fine, which was the design.
 
 ---
 
