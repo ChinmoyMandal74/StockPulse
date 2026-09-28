@@ -26,7 +26,10 @@ const BIG = ['bars', 'fundamentals_history', 'earnings_history', 'news', 'activi
   // ~33k rows a quarter across every SEC filer, so a five-year window is
   // ~660k. It was NOT on this list when it shipped, and the quarter-delete
   // ranged on an unindexed `filed` — a full walk the guard could not see.
-  'insider_trans'];
+  'insider_trans',
+  // ~227k rows: 1,181 symbols x ~24 settlement dates a year back to 2017.
+  // Small next to `bars` and still far past the size where a scan bills.
+  'short_interest'];
 
 // Statements that scan on purpose, each with the reason it is allowed to.
 // A new entry here is a decision, which is the point of naming them.

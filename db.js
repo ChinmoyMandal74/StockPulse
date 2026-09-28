@@ -788,6 +788,43 @@ const SCHEMA = [
      status     text,
      error      text
    )`,
+
+  // FINRA consolidated short interest — the BI-WEEKLY position, never the
+  // daily short-volume file (see shortint.js for why those are different
+  // things). One row per symbol per settlement date, ~24 a year back to 2017,
+  // so ~227k rows at this universe against 4.58M bars.
+  //
+  // Stored AS FILED. `shares` is not split-adjusted — FINRA does not restate
+  // history, it flags the row — so nothing may plot this series raw. The card
+  // draws days to cover, which is a ratio and therefore split-neutral.
+  `create table if not exists short_interest (
+     symbol     text not null,
+     d          text not null,
+     shares     real,
+     prev       real,
+     adv        real,
+     dtc        real,
+     change_pct real,
+     split      integer not null default 0,
+     revised    integer not null default 0,
+     primary key (symbol, d)
+   )`,
+  // The card's only question: this symbol, oldest to newest. The primary key
+  // already seeks it; named so the plan test has something to assert against.
+  'create index if not exists idx_shortint_sym on short_interest (symbol, d)',
+  // When each symbol was last pulled and what came back, separate from the
+  // readings for the reason sec_state is separate from sec_facts: a symbol
+  // FINRA has nothing on still has to count as checked, or the loader picks
+  // it for ever and can never report itself done.
+  `create table if not exists short_state (
+     symbol     text primary key,
+     finra_sym  text,
+     fetched_at integer not null,
+     rows       integer not null default 0,
+     newest     text,
+     status     text,
+     error      text
+   )`,
 ];
 
 // Columns added after a table shipped. SQLite has no "add column if not
@@ -2157,6 +2194,99 @@ async function readInsider(cik, limit = 60) {
   });
 }
 
+// ---- FINRA short interest -------------------------------------------------
+const SI_COLS = ['symbol', 'd', 'shares', 'prev', 'adv', 'dtc', 'change_pct', 'split', 'revised'];
+
+// One symbol's readings, replaced wholesale — a symbol's history is ~210 rows
+// and arrives in ONE call, so there is nothing to merge. MULTI-ROW inserts,
+// chunked: the tech_history measurement found the cost is per STATEMENT, not
+// per row, and batching was 23x.
+async function writeShortInterest(symbol, rows, meta = {}) {
+  await init();
+  const sym = String(symbol).toUpperCase();
+  const stmts = [{ sql: 'delete from short_interest where symbol = ?', args: [sym] }];
+  const CHUNK = 200;
+  const clean = (rows || []).filter((r) => r && r.d);
+  for (let i = 0; i < clean.length; i += CHUNK) {
+    const part = clean.slice(i, i + CHUNK);
+    const args = [];
+    for (const r of part) {
+      args.push(sym, r.d, r.shares, r.prev, r.adv, r.dtc, r.changePct,
+        r.split ? 1 : 0, r.revised ? 1 : 0);
+    }
+    stmts.push({
+      sql: `insert or replace into short_interest (${SI_COLS.join(',')}) values ` +
+        part.map(() => '(' + SI_COLS.map(() => '?').join(',') + ')').join(','),
+      args,
+    });
+  }
+  let newest = null;
+  for (const r of clean) if (!newest || r.d > newest) newest = r.d;
+  stmts.push({
+    sql: `insert or replace into short_state
+            (symbol, finra_sym, fetched_at, rows, newest, status, error)
+          values (?, ?, ?, ?, ?, ?, ?)`,
+    args: [sym, meta.finraSym || null, Date.now(), clean.length, newest,
+      meta.status || 'ok', meta.error || null],
+  });
+  await db.batch(stmts, 'write');
+  return clean.length;
+}
+
+// A symbol FINRA has nothing on is still CHECKED, or the loader picks it for
+// ever and can never report itself done — the news-staleness bug, which ran
+// until it was stopped by hand.
+async function noteShortMiss(symbol, status, error) {
+  await init();
+  await db.execute({
+    sql: `insert or replace into short_state
+            (symbol, finra_sym, fetched_at, rows, newest, status, error)
+          values (?, (select finra_sym from short_state where symbol = ?), ?, 0, null, ?, ?)`,
+    args: [String(symbol).toUpperCase(), String(symbol).toUpperCase(), Date.now(),
+      status || 'empty', error ? String(error).slice(0, 300) : null],
+  });
+}
+
+// One symbol, oldest first — the order the strip draws in. Seeks on the
+// primary key.
+async function readShortInterest(symbol, limit = 400) {
+  await init();
+  const r = await db.execute({
+    sql: `select ${SI_COLS.join(',')} from short_interest
+            where symbol = ? order by d asc limit ?`,
+    args: [String(symbol).toUpperCase(), Math.max(1, Math.min(1000, Number(limit) || 400))],
+  });
+  // Named access, never a spread: `{ ...row }` on a libSQL Row gives
+  // POSITIONAL keys, which shipped a page of `undefined` once already.
+  return r.rows.map((x) => ({
+    d: x.d,
+    shares: x.shares,
+    prev: x.prev,
+    adv: x.adv,
+    dtc: x.dtc,
+    changePct: x.change_pct,
+    split: !!x.split,
+    revised: !!x.revised,
+  }));
+}
+
+// The whole fetch clock — one row per symbol, ~1,181 rows, so a wholesale
+// read is cheap. Used by the loader to decide what to skip.
+async function readShortState() {
+  await init();
+  const r = await db.execute(
+    'select symbol, finra_sym, fetched_at, rows, newest, status, error from short_state');
+  return r.rows.map((x) => ({
+    symbol: x.symbol,
+    finraSym: x.finra_sym,
+    fetchedAt: x.fetched_at,
+    rows: x.rows,
+    newest: x.newest,
+    status: x.status,
+    error: x.error,
+  }));
+}
+
 // One symbol's issuer CIK, already resolved by the filings loader. A
 // targeted seek rather than readSecState(), which would carry 1,182 rows
 // across the wire to answer one number on one page view.
@@ -3181,7 +3311,7 @@ async function readBarsFor(symbols, since) {
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state',
   'earnings_history', 'price_state', 'tech_history', 'alerts', 'alert_events', 'peer_links',
-  'sec_facts', 'sec_state'];
+  'sec_facts', 'sec_state', 'short_interest', 'short_state'];
 
 // Remove a symbol from the database entirely.
 //
@@ -4545,6 +4675,7 @@ module.exports = {
   init,
   writeSecFacts, noteSecMiss, readSecFacts, readSecState,
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
+  writeShortInterest, readShortInterest, readShortState, noteShortMiss,
   readInsiderDay, writeInsiderDay, appendInsider, readUniverseCiks,
   clearVisitors,
   logActivity,

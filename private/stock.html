@@ -712,6 +712,40 @@
     #ins .sum .sold b { color: var(--red); }
     #ins .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
     #ins .msg { color: var(--muted); font-size: 12.5px; padding: 6px 0; }
+
+    /* ---- short interest (2026-09-28) --------------------------------------
+       Scoped to #sint throughout, the reason #sec and #ins are: nine unscoped
+       class names have captured later markup on this project. */
+    #sint .sum { display: flex; gap: 26px; flex-wrap: wrap; margin: 0 0 16px; }
+    #sint .fig { display: flex; flex-direction: column; gap: 3px; }
+    #sint .fig .k { color: var(--faint); font-size: 10.5px; text-transform: uppercase;
+                    letter-spacing: 0.1em; }
+    #sint .fig .v { font-family: var(--mono); font-size: 19px; color: var(--text); }
+    #sint .fig .x { color: var(--muted); font-size: 11.5px; }
+    /* THE STRIP IS DAYS TO COVER AND NOTHING ELSE, and that is a correctness
+       decision rather than a style one. FINRA does not restate history for
+       splits — measured on NVDA's 10:1 of June 2024, the position goes
+       29,202,972 to 315,033,985 across one fortnight — so a raw shares-short
+       series would draw a 40x build-up in bearish bets that never happened.
+       Days to cover is a ratio, so both halves scale and it rides straight
+       through: NVDA sits at ~1.0 on both sides of both splits. */
+    #sint .strip { display: flex; align-items: flex-end; gap: 1px; height: 46px;
+                   margin: 2px 0 8px; }
+    #sint .strip i { flex: 1 1 0; min-width: 0; display: block; background: var(--muted);
+                     opacity: 0.55; border-radius: 1px 1px 0 0; }
+    #sint .strip i.now { background: var(--text); opacity: 1; }
+    /* Past the p90 ceiling a bar is drawn full height and SAYS SO on hover,
+       rather than being silently clipped — the earnings strip's own rule. */
+    #sint .strip i.capped { opacity: 0.9; }
+    /* A split is marked on the strip because the readings either side of it
+       are not comparable as share counts, even though their ratios are. */
+    #sint .strip i.split { background: var(--amber); opacity: 0.8; }
+    #sint .axis { display: flex; justify-content: space-between; color: var(--faint);
+                  font-size: 10.5px; font-family: var(--mono); }
+    #sint .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
+    #sint .note a { color: var(--accent); text-decoration: none; }
+    #sint .note a:hover { text-decoration: underline; }
+    #sint .msg { color: var(--muted); font-size: 12.5px; padding: 6px 0; }
     @media (max-width: 620px) { #ins th, #ins td { padding-left: 10px; } }
     /* On a phone the table scrolls inside its own box, and what you should see
        BEFORE scrolling is a company and what it did — not a company name using
@@ -2051,6 +2085,17 @@
           <div id="insBody"><p class="msg">Loading…</p></div>
         </div></section>
 
+        <!-- Filled by loadShortInt(), removed when FINRA holds nothing.
+             Its own card again: what the company files, what its officers do
+             with their own money, and what the rest of the market has bet
+             against it are three different questions. -->
+        <section class="bezel card" id="sint" hidden><div class="core">
+          <div class="sec-h"><h2>Short interest</h2>
+            <span class="deeper count" id="sintWin"></span>
+          </div>
+          <div id="sintBody"><p class="msg">Loading…</p></div>
+        </div></section>
+
         <p class="later">Prices as of ${esc(payload.updatedAt ? new Date(payload.updatedAt).toLocaleString() : 'n/a')}.
         More charts will land on this page.</p>
       `;
@@ -2586,6 +2631,101 @@
         } catch (e) { card.remove(); }
       }
 
+      // ---- short interest ----------------------------------------------------
+      // FINRA's BI-WEEKLY consolidated position — the shares actually held
+      // short at a settlement date. Deliberately not the RegSHO daily file,
+      // which is short VOLUME: mostly market-maker intermediation, flat again
+      // by the close, and routinely 50-60% on a liquid name.
+      //
+      // Read by nothing else in this app. The Advice rules do read short
+      // interest, but they take it from the profile as they always have; this
+      // table exists to give that number a history.
+      async function loadShortInt() {
+        const card = document.getElementById('sint');
+        if (!card) return;
+        try {
+          const r = await fetch('/api/shortint?symbol=' + encodeURIComponent(stock.symbol));
+          if (!r.ok) { card.remove(); return; }
+          const j = await r.json();
+          const st = j.study;
+          if (!st || !st.series || !st.series.length) { card.remove(); return; }
+          const L = st.latest || {};
+          document.getElementById('sintWin').textContent =
+            st.n + (st.n === 1 ? ' reading' : ' readings') + ' since ' + st.from;
+
+          const n0 = (v, d) => (v == null ? '—' : Number(v).toLocaleString(undefined,
+            { maximumFractionDigits: d == null ? 0 : d }));
+          const fig = (k, v, x) => '<div class="fig"><span class="k">' + esc(k) +
+            '</span><span class="v">' + esc(v) + '</span>' +
+            (x ? '<span class="x">' + esc(x) + '</span>' : '') + '</div>';
+
+          let h = '<div class="sum">';
+          // PERCENT OF FLOAT IS THE LATEST READING ONLY. Float history is not
+          // stored, so dividing a 2019 position by today's float would invent
+          // a series — the figure is shown where today's float is genuinely
+          // contemporaneous, and nowhere else.
+          h += fig('Short interest',
+            L.pctFloat == null ? n0(L.shares) + ' sh' : L.pctFloat.toFixed(2) + '% of float',
+            L.pctFloat == null ? 'float not reported' : n0(L.shares) + ' shares');
+          h += fig('Days to cover', L.dtc == null ? '—' : Number(L.dtc).toFixed(2),
+            L.adv ? 'on ' + n0(L.adv) + ' avg daily volume' : '');
+          // A bare reading means nothing without its own base rate — the
+          // research log's rule, and the Cushion column's.
+          if (L.rank != null) {
+            h += fig('Against its own history', L.rank + 'th pct',
+              'median ' + (st.medianDtc == null ? '—' : Number(st.medianDtc).toFixed(2)) +
+              ' days over ' + st.n + ' readings');
+          }
+          // The change is WITHHELD across a split rather than printed: FINRA
+          // reports NVDA's June 2024 fortnight as +978.77%, which is the 10:1
+          // and not a change in positioning.
+          if (L.changePct != null) {
+            h += fig('Change on the fortnight',
+              (L.changePct >= 0 ? '+' : '') + Number(L.changePct).toFixed(1) + '%',
+              L.prev == null ? '' : 'from ' + n0(L.prev) + ' sh');
+          } else if (L.split) {
+            h += fig('Change on the fortnight', '—', 'a split makes it meaningless');
+          }
+          h += '</div>';
+
+          const scale = st.scale || 2;
+          h += '<div class="strip">';
+          for (const p of st.series) {
+            const capped = p.dtc != null && p.dtc > scale;
+            const frac = p.dtc == null ? 0 : Math.min(1, p.dtc / scale);
+            const px = Math.max(2, Math.round(frac * 44));
+            const cls = [p.d === L.d ? 'now' : '', capped ? 'capped' : '', p.split ? 'split' : '']
+              .filter(Boolean).join(' ');
+            const tip = p.d + ' — ' + (p.dtc == null ? 'no reading'
+              : Number(p.dtc).toFixed(2) + ' days to cover') +
+              (capped ? ' (past the top of the scale)' : '') +
+              (p.split ? ' · a split lands in this fortnight, so the share counts either ' +
+                'side are not comparable' : '');
+            h += '<i class="' + cls + '" style="height:' + px + 'px" title="' + esc(tip) + '"></i>';
+          }
+          h += '</div><div class="axis"><span>' + esc(st.from) + '</span>' +
+            '<span>days to cover, scale to ' + Number(scale).toFixed(1) + '</span>' +
+            '<span>' + esc(st.to) + '</span></div>';
+
+          h += '<p class="note"><b>The bi-weekly consolidated position</b>, not the daily ' +
+            'short-volume file — that one counts shares sold short intraday, most of which ' +
+            'is market-maker inventory that is flat by the close. Settled <b>' + esc(st.to) +
+            '</b> and published about eight business days later, so it is a fortnightly ' +
+            'snapshot rather than a live reading. ' +
+            '<b>The strip is days to cover</b>, because FINRA files share counts as-reported ' +
+            'and never restates them for splits' +
+            (st.splits ? ' (' + st.splits + ' in this history, marked)' : '') +
+            ' — a ratio rides through a split, a share count does not. Percent of float ' +
+            'uses today’s float, so it is shown for the latest reading only. Straight from ' +
+            '<a href="https://www.finra.org/finra-data/browse-catalog/short-interest/files" ' +
+            'target="_blank" rel="noopener">FINRA</a>, and read by nothing else in this app ' +
+            '— not the Advice verdict, not the screener.</p>';
+
+          document.getElementById('sintBody').innerHTML = h;
+          card.hidden = false;
+        } catch (e) { card.remove(); }
+      }
+
       paintChart();
       // The markup is already in the page (it ships with the earnings card);
       // this only attaches the toggle and applies the remembered choice.
@@ -2593,6 +2733,7 @@
       loadNews();          // after the chart: a decoration must not make the data wait
       loadSec();           // and the filings after that, for the same reason
       loadInsider();
+      loadShortInt();
       const nb = document.getElementById('newsBtn');
       if (nb) nb.addEventListener('click', () => loadNews(true));
     })();

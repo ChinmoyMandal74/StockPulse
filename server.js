@@ -9064,6 +9064,40 @@ app.get('/api/sec', requireAuth, route(async (req, res) => {
 const Insider = require('./insider.js');
 const INSIDER_WINDOW_DAYS = Number(process.env.INSIDER_WINDOW_DAYS || 180);
 
+// ---- FINRA short interest -------------------------------------------------
+//
+// DISPLAY ONLY, and asserted rather than intended: `shortint-test.js` reads
+// the real /api/stocks and the real screener header and fails if any field
+// from this table appears in either. The boundary matters more here than it
+// did for the filings card, because `shortPctFloat` is ALREADY an Advice
+// input — read at action.js:360 (an Early company above 25% of float is an
+// Avoid) and again at 379/382 (the weak/ok fundamentals split). The live
+// verdict must keep taking that from the profile; this table exists so the
+// number has a HISTORY, which is a research question and a separate one.
+//
+// Loaded locally by shortint-load.js — there is deliberately no route that
+// fetches from FINRA, so production never talks to them at all.
+const ShortInt = require('./shortint.js');
+
+app.get('/api/shortint', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!symbol) return res.status(400).json({ error: 'symbol required' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  const rows = await store.readShortInterest(symbol, 400);
+  if (!rows.length) return res.json({ symbol, study: null });
+  // Float is read from the profile rather than the snapshot: one row, not the
+  // ~1.3MB blob, and it is applied to the LATEST reading only (see build()).
+  let floatShares = null;
+  try {
+    const prof = await store.readProfile(symbol);
+    floatShares = prof && prof.floatShares != null ? Number(prof.floatShares) : null;
+  } catch (e) { floatShares = null; }
+  res.json({ symbol, study: ShortInt.build(rows, { floatShares }) });
+}));
+
 app.get('/api/insider', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
