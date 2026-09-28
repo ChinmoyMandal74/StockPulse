@@ -118,6 +118,16 @@ splicing.
 
 ## 3. Strategy and Single are describing a universe that no longer exists
 
+> **REBUILT 2026-09-28 — the data half is done, the payload half became entry
+> 15.** Both files now carry the real **1,182** symbols against a 4.58M-bar
+> archive. **This entry's size estimate was right**: it predicted ~27MB raw and
+> ~7MB gzipped for `single-closes.json` and the rebuild measured **32.94MB raw,
+> 8.6MB gzipped**. Its warning that "a rebuild would produce something
+> unservable" was half right — the bundle is fine (`private/` is 49MB against
+> Vercel's 250MB) and the page loads, but 8.6MB on a page load is not something
+> to leave alone. Shipped anyway, because the alternative — capping the depth —
+> changes what the page's numbers mean. The delivery fix is entry 15.
+
 Both read committed JSON built **2026-09-11**, at **93 symbols**. The universe
 is now **943**.
 
@@ -145,6 +155,15 @@ computation, or a sampled universe) before rebuilding.
 ---
 
 ## 4. `lab-grid.json` is stale, and it is the lab's honesty anchor
+
+> **REBUILDING 2026-09-28, and it is NOT "the cheap one" any more.** This entry
+> called it 300KB and a quick offline run. Measured on the deepened archive:
+> `lab-grid.js` **aborted out of memory** (exit 134) because it loads every bar
+> into JS in one statement — `select symbol, d, close from bars order by
+> symbol, d`, which went from 852k rows to **4.58M**. It needs
+> `--max-old-space-size=5120`, and the grid is now **920 parameter sets over
+> 1,182 symbols** rather than 192 over 93: **~2¼ hours**, against the 28.1s
+> recorded below. Re-measure before believing any timing here.
 
 Built **2026-09-15 on 93 symbols**. The universe is 943.
 
@@ -646,6 +665,45 @@ untested.
 **What makes any of this safe is already built**: the server decides whether to
 act — weekday, 9:38–16:00 New York, nothing else running, NYSE open. A broad,
 dumb schedule from anywhere is fine, which was the design.
+
+---
+
+## 15. `/single` now downloads 8.6 MB, and the fix is a page change — 2026-09-28
+
+**Measured after the deep backfill**: `private/single-closes.json` went from
+**2.52 MB to 32.94 MB raw, 8.6 MB gzipped** — the file `/single` downloads in
+full so it can simulate in the browser. This file's own note recorded "~700 KB
+gzipped at 93 symbols (888 KB at 116)"; it is now 1,182 symbols with up to
+twenty years each, and the page weight grew with it.
+
+**Shipped as-is deliberately, and the alternative was rejected on purpose.**
+Capping the depth in `single-data.js` would halve the file and **silently
+change what the page's numbers mean** — its whole argument is a rule swept over
+eighteen years, and a ten-year version reporting the same labels is the quiet
+redefinition this project otherwise refuses. Bandwidth is not a good enough
+reason. It is a members-only research page, not the screener, and the bundle is
+fine: `private/` totals **49 MB** against Vercel's 250 MB.
+
+**The real fix is a page change, not a build flag.** `/single` needs two
+different things and currently gets both from one file:
+
+- **the chosen stock's own history**, at full depth — which
+  `GET /api/history?symbol=&days=` already serves at **~1.9 KB a year**, reads
+  the archive only, and costs no credits. Fetch it on demand.
+- **the universe sweep**, which needs every symbol but is a summary statistic
+  per stock rather than a chart. It could ship far less per symbol, or move
+  server-side the way `/api/m/screen` did when the phone page faced exactly
+  this "do not send the browser 1.3 MB" problem.
+
+Split that way the page loads in kilobytes and keeps every number it reports.
+
+**What it would take**: the fetch-on-demand half is small — the endpoint,
+cache and range handling all exist and `/stock` already uses them. The sweep
+half needs a decision about where it runs, and that is the part to think about
+rather than type.
+
+**Do not "fix" this by trimming the universe or the depth.** Both change the
+answer; only the delivery should change.
 
 ---
 
