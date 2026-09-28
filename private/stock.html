@@ -346,19 +346,25 @@
        hard to read. The bar scale in sintStripHtml moves with it: the two
        are one measurement and must not drift apart. */
     #sintStrip .srug { position: relative; height: 56px; }
-    /* A LEVEL, NOT AN EVENT — which is why these are steps with width rather
-       than the rug's ticks. A short position stands until the next
-       settlement, so each reading is drawn across the fortnight it held for;
-       marks at a point would imply it existed only on that day. */
-    #sintStrip .srug i { position: absolute; bottom: 0; display: block;
-                         background: var(--muted); opacity: 0.5; }
-    /* NEUTRAL, AND DELIBERATELY SO. Green and red are the price's direction
+    #sintStrip .srug svg { display: block; width: 100%; height: 56px; }
+    /* A LEVEL, NOT AN EVENT — a step line, flat until the next settlement.
+       NEUTRAL, AND DELIBERATELY SO: green and red are the price's direction
        on this chart, and "short interest rose" is not a direction the price
-       went — colouring it would make a claim the data does not. The one
-       exception is the split, which is amber because it is the "notice this"
-       colour and the share counts either side of it are not comparable. */
-    #sintStrip .srug i.split { background: var(--amber); opacity: 0.75; }
-    #sintStrip .srug i.capped { opacity: 0.8; }
+       went, so colouring it would make a claim the data does not.
+       `non-scaling-stroke` because the box is stretched to the strip's width
+       — without it the flat runs and the steps draw at different weights. */
+    #sintStrip .srug path.sl { fill: none; stroke: var(--text); stroke-width: 1.4;
+                               opacity: 0.75; vector-effect: non-scaling-stroke;
+                               stroke-linejoin: miter; }
+    /* Transparent hit areas over the line, one per settlement, so every
+       reading keeps its tooltip — a path cannot carry one per segment. */
+    #sintStrip .srug i { position: absolute; top: 0; height: 100%; display: block;
+                         background: transparent; }
+    /* The split is the exception to the no-colour rule: amber is "notice
+       this", and the share counts either side of it are not comparable. The
+       whole fortnight is tinted rather than a line drawn, because it is the
+       period that is untrustworthy, not an instant. */
+    #sintStrip .srug i.split { background: rgba(251, 191, 36, 0.16); }
     #sintStrip .srugnote { color: var(--faint); font-size: 10.5px; margin: 3px 0 0;
                            line-height: 1.5; }
     /* Taller than the ribbon on purpose (the owner: "you can also increase the
@@ -1325,43 +1331,87 @@
 
       const dtcs = seq.map((r) => r.dtc).filter((v) => v != null && isFinite(v));
       if (!dtcs.length) return '';
-      const sorted = dtcs.slice().sort((a, b) => a - b);
-      const scale = Math.max(2, sorted[Math.floor(sorted.length * 0.9)] || 2);
-      const H = 52;    // the .srug height less 4px of headroom — see the CSS
 
-      const posOf = (r, i) => {
+      // A STEP LINE, NOT BARS, AND THE BASELINE IS THE REASON (2026-09-28,
+      // the owner's call after seeing the doubled strip). Days to cover sits
+      // in a narrow band on most stocks — measured across four: MU's whole
+      // year runs 1.00 to 1.22, so zero-based bars put every reading between
+      // 50% and 61% of the track and the strip read as a solid block. The
+      // bottom half was dead space on every symbol.
+      //
+      // Truncating a BAR axis is the classic misleading chart, so the bars
+      // could not simply be given a floor. A LINE carries no such claim — it
+      // is read as a shape rather than as a quantity measured from zero — so
+      // the range becomes the data's own and the variation fills the strip.
+      // The note says the baseline is not zero, because that is the one
+      // thing a reader could otherwise get wrong.
+      const lo = Math.min.apply(null, dtcs);
+      const hi = Math.max.apply(null, dtcs);
+      const PAD = 4;                      // px of headroom top and bottom
+      const H = 56;                       // matches .srug in the CSS
+      const span = hi - lo;
+      // A flat series would divide by zero; draw it down the middle, which
+      // is what "it did not move" looks like.
+      const y = (v) => (span > 1e-9
+        ? PAD + (1 - (v - lo) / span) * (H - PAD * 2)
+        : H / 2);
+
+      const posOf = (r) => {
         if (r.carried) return 0;
         const k = idxAt(r.d);
         return k == null ? 0 : (k / n) * 100;
       };
-      const bars = seq.map((r, i) => {
-        const left = posOf(r, i);
-        const nextL = i + 1 < seq.length ? posOf(seq[i + 1], i + 1) : 100;
-        const w = Math.max(0.35, nextL - left);
-        if (r.dtc == null) return '';
-        const capped = r.dtc > scale;
-        const px = Math.max(2, Math.round(Math.min(1, r.dtc / scale) * H));
+      // x runs 0..1000 in the viewBox; the box is stretched to the strip's
+      // width, so a percentage and a viewBox unit are the same position.
+      const X = (pct) => (pct * 10).toFixed(2);
+
+      let d = '';
+      const hits = [];
+      seq.forEach((r, i) => {
+        if (r.dtc == null) return;
+        const left = posOf(r);
+        const nextL = i + 1 < seq.length ? posOf(seq[i + 1]) : 100;
+        const yy = y(r.dtc).toFixed(2);
+        // Step AFTER: the level holds flat until the next settlement, then
+        // steps. That is what a short position actually does.
+        d += (d ? ' L' : 'M') + X(left) + ',' + yy + ' L' + X(nextL) + ',' + yy;
         const tip = (r.carried ? 'Standing at the left edge, set ' + r.d : r.d) +
           ' — ' + r.dtc.toFixed(2) + ' days to cover' +
           (r.shares != null ? ', ' + Number(r.shares).toLocaleString() + ' shares short' : '') +
-          (capped ? ' — past the scale, so the bar is drawn full height' : '') +
           (r.split ? ' · a split lands in this fortnight, so the share counts either side are not comparable' : '');
-        return `<i class="${r.split ? 'split' : ''}${capped ? ' capped' : ''}"` +
-          ` style="left:${left.toFixed(3)}%;width:${w.toFixed(3)}%;height:${px}px"` +
-          ` title="${esc(tip)}"></i>`;
-      }).join('');
+        hits.push(`<i class="${r.split ? 'split' : ''}"` +
+          ` style="left:${left.toFixed(3)}%;width:${Math.max(0.2, nextL - left).toFixed(3)}%"` +
+          ` title="${esc(tip)}"></i>`);
+      });
+      if (!d) return '';
+
+      // `preserveAspectRatio="none"` stretches x to the strip's width, which
+      // is what keeps the line aligned with the price above it — and is
+      // exactly why the stroke needs `vector-effect: non-scaling-stroke`,
+      // or the horizontal runs and the vertical steps draw at different
+      // weights. No <text> in here for the same reason: a glyph would be
+      // stretched with the box.
+      const svg = `<svg viewBox="0 0 1000 ${H}" preserveAspectRatio="none" aria-hidden="true">` +
+        `<path class="sl" d="${d}" /></svg>`;
 
       // WHAT THE ABSENCE MEANS, the rug's rule. FINRA's record starts in
       // 2017 and the bar archive reaches back to 1998, so on a Max chart a
       // blank left half is "not published", never "nobody was short".
       const earliest = sintRows[0] && sintRows[0].d;
       const gap = earliest && earliest > first
-        ? ` · FINRA's record starts ${earliest}, so anything before that is missing rather than quiet`
+        ? ` FINRA's record starts ${earliest}, so anything before that is missing rather than quiet.`
         : '';
-      return '<div class="srug">' + bars + '</div>' +
-        `<p class="srugnote">${inView.length} settlement${inView.length === 1 ? '' : 's'} in view ` +
-        `— height is days to cover, the scale stopping at ${scale.toFixed(1)}` +
-        `, share counts as filed and never split-adjusted${gap}</p>`;
+      const range = span > 1e-9
+        ? `${lo.toFixed(2)} at the foot to ${hi.toFixed(2)} at the top`
+        : `flat at ${lo.toFixed(2)}`;
+      return '<div class="srug">' + svg + hits.join('') + '</div>' +
+        `<p class="srugnote"><b>Short interest</b> — ${inView.length} ` +
+        `settlement${inView.length === 1 ? '' : 's'} in view, in days to cover ` +
+        `(the position divided by average daily volume), ${range}. ` +
+        `<b>The baseline is the lowest reading in view, not zero</b>, so read the ` +
+        `shape rather than the height. Days to cover is drawn instead of the share ` +
+        `count because FINRA files counts as reported and never restates them for ` +
+        `splits, where a ratio rides straight through.${gap}</p>`;
     }
 
     function paintSintStrip() {
