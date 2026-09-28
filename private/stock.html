@@ -716,6 +716,10 @@
     /* ---- short interest (2026-09-28) --------------------------------------
        Scoped to #sint throughout, the reason #sec and #ins are: nine unscoped
        class names have captured later markup on this project. */
+    /* The heading and its count share a row, and at 390px they overlapped —
+       `.sec-h` is shared with #sec and #ins, so the wrap is scoped here
+       rather than changed underneath them. */
+    #sint .sec-h { flex-wrap: wrap; gap: 4px 12px; }
     #sint .sum { display: flex; gap: 26px; flex-wrap: wrap; margin: 0 0 16px; }
     #sint .fig { display: flex; flex-direction: column; gap: 3px; }
     #sint .fig .k { color: var(--faint); font-size: 10.5px; text-transform: uppercase;
@@ -2650,8 +2654,12 @@
           const st = j.study;
           if (!st || !st.series || !st.series.length) { card.remove(); return; }
           const L = st.latest || {};
+          // Just the count. "210 readings since 2017-12-29" collided with the
+          // heading at 390px, and the from-date is already the left end of
+          // the axis below — so the long version was both broken and a
+          // repetition.
           document.getElementById('sintWin').textContent =
-            st.n + (st.n === 1 ? ' reading' : ' readings') + ' since ' + st.from;
+            st.n + (st.n === 1 ? ' reading' : ' readings');
 
           const n0 = (v, d) => (v == null ? '—' : Number(v).toLocaleString(undefined,
             { maximumFractionDigits: d == null ? 0 : d }));
