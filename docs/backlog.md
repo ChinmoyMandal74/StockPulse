@@ -509,6 +509,67 @@ number is on `/api/insider/coverage` and on `/admin`, amber past a week.
 
 ---
 
+## 13. Onboarding a new ticker is a manual sequence, and one dataset has a hole — 2026-09-27
+
+The owner's note: **stocks keep being added, and there must be a way to backfill
+everything for them — EDGAR and insider trades included.** What follows is what
+actually happens today, checked rather than recalled.
+
+| dataset | what fills it for a new ticker | state |
+|---|---|---|
+| name | the stored NASDAQ listing, at add time, no credits | automatic |
+| bars | `backfill-bars.js --commit --only …`, **local** | manual, and **ordered** |
+| profile, fundamentals, earnings | `Fill missing` on `/admin`, or the nightly gap fill | covered |
+| SEC EDGAR facts | `Fetch missing` on `/admin` — `secPlan()` treats a symbol with no `sec_state` row as stale | covered |
+| insider transactions | **nothing** | see below |
+
+**Bars are ordered, not merely manual.** Run `backfill-bars.js` BEFORE the next
+price refresh or that refresh tries to build every new archive inside one
+serverless request: measured 2026-09-22, **HTTP 504 at 300.128s** with 47 thin
+symbols. `/quality` prints the ready `--only` command.
+
+**Insider is the interesting one, and it is half-covered by accident.**
+`Insider.build()` is pure and **has no universe filter** — the quarterly loader
+stores every filer's open-market rows, ~28,000 a quarter. So a newly added
+ticker's insider history *for the loaded quarters is already in the table*. It
+does not appear on the card only because `readInsider(cik)` needs the issuer
+CIK, and the one thing that resolves a CIK is the filings loader. **So the order
+is: `Fetch missing` first, and the insider card then lights up for free.** That
+dependency is invisible and worth knowing.
+
+**The actual hole is the daily walk.** It filters against `readUniverseCiks()`
+*before fetching*, which is what makes it affordable — but it means **every day
+already walked was filtered to the universe as it stood then**, so a ticker
+added afterwards has a permanent gap over exactly those days, and nothing in the
+app will ever fill it. Today that is one day and worthless; the cost grows with
+the walked window, so this is worth fixing before the walk has covered months.
+
+**What it would take, and it is small:**
+
+- **For days inside a published quarter** — re-load that quarter with
+  `insider-load.js --commit --force --from … --to …`. The bulk file is not
+  universe-filtered, so it picks the new company up with no targeting at all.
+  Measured: **~45 seconds a quarter**.
+- **For days walked past the last published quarter** — a targeted re-walk. A
+  day's index is **one fetch** and the documents are filtered by CIK, so
+  re-walking ninety days for a handful of new tickers is ~90 index reads plus a
+  few dozen documents: minutes, not the hours a full re-walk would cost.
+  `insider-load.js --daily` already has the loop; it needs a from-date and a CIK
+  restriction rather than the cursor.
+- **Do NOT fix it by rewinding the cursor.** That re-fetches every filing for
+  every company over the window — thousands of documents against an address the
+  SEC has already throttled once.
+
+**And make it visible, which is the cheaper half.** `/quality` is the page whose
+job is saying what is held per stock, and it **does not mention `sec_facts` or
+`insider_trans` at all** (checked: zero references). Its per-dataset chart
+already draws seven clickable tracks; two more entries would turn "did I
+remember to run Fetch missing after that bulk add" into something you can see.
+That is the change to make first — a gap you can see gets filled, and one you
+cannot does not.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
