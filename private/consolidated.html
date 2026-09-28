@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Consolidated — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <script src="/wmark.js" defer></script>
+  <!-- For the market-cap bands and their ladder, defined once in the module the
+       server require()s, so this page cannot disagree with the screener's Size
+       column about where a line sits. -->
+  <script src="/filters.js"></script>
+  <style>
+    /* EVERY class here is prefixed `cs-` or scoped under an id. Eight unscoped
+       class names have captured later markup on this project (.warn, .card,
+       input[type=text], .mk, .sub, .news-when, .fav, .tag) and this page is a
+       table of exactly the kind of small pieces that collide. */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1480px; margin: 0 auto; padding: 0 28px; }
+
+    .cs-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 26px 0 0; }
+    .cs-top h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.03em; }
+    .cs-count { font: 500 12px var(--mono); color: var(--faint); }
+    .cs-spacer { flex: 1 1 0; }
+    /* Full width, the reason /pivot's own intro and /stock's About dropped
+       their reading measure: a sentence under a full-width grid that stops
+       two-thirds across reads as a layout fault. */
+    .cs-lede { margin: 10px 0 0; font-size: 13px; line-height: 1.65; color: var(--muted); }
+
+    .cs-picks { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin: 20px 0 0; }
+    .cs-field { display: flex; flex-direction: column; gap: 5px; }
+    .cs-field label { font: 600 10px var(--sans); letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--faint); }
+    .cs-field select { font: 500 13px var(--sans); color: var(--text);
+      background: var(--surface-2); border: 1px solid var(--hair-2);
+      border-radius: 9px; padding: 8px 11px; min-width: 190px; }
+
+    /* The weighting toggle. Two buttons rather than a select: it is a binary
+       with consequences, and the one in force should be readable without
+       opening anything. */
+    .cs-seg { display: inline-flex; border: 1px solid var(--hair-2); border-radius: 9px;
+      overflow: hidden; background: var(--surface-2); }
+    .cs-seg button { font: 500 13px var(--sans); color: var(--muted); background: none;
+      border: 0; padding: 8px 13px; cursor: pointer; transition: color .2s var(--ease); }
+    .cs-seg button:hover { color: var(--text); }
+    .cs-seg button[aria-pressed="true"] { color: var(--void); background: var(--accent); }
+
+    #tbl { width: 100%; border-collapse: collapse; margin: 18px 0 0; }
+    #tbl th, #tbl td { padding: 8px 10px; border-bottom: 1px solid var(--hair);
+      font-size: 13px; white-space: nowrap; }
+    #tbl thead th { position: sticky; top: 0; z-index: 2; background: var(--surface);
+      font: 600 10px var(--sans); letter-spacing: 0.07em; text-transform: uppercase;
+      color: var(--faint); text-align: right; cursor: pointer; user-select: none; }
+    #tbl thead th:first-child { text-align: left; }
+    #tbl thead th[aria-sort] { color: var(--text); }
+    #tbl td { text-align: right; font: 500 13px var(--mono); font-variant-numeric: tabular-nums; }
+    #tbl td:first-child { text-align: left; font-family: var(--sans); }
+    #tbl tbody tr:hover td { background: rgba(255,255,255,.022); }
+    /* The benchmark rows are a different KIND of row, not a better one. */
+    #tbl tr.cs-bench td { color: var(--muted); border-top: 1px solid var(--hair-2); }
+    #tbl tr.cs-bench td:first-child { color: var(--accent); }
+    #tbl a.cs-g { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
+    #tbl a.cs-g:hover { border-bottom-color: var(--hair-2); }
+    #tbl td.cs-blank, #tbl td.cs-na { color: var(--faint); }
+    .cs-wrap { overflow-x: auto; }
+
+    .cs-notes { margin: 18px 0 0; font-size: 12px; line-height: 1.7; color: var(--faint); }
+    .cs-notes b { color: var(--muted); font-weight: 600; }
+    .cs-msg { margin: 26px 0; font-size: 14px; color: var(--muted); }
+    .cs-msg.cs-err { color: var(--red); }
+
+    @media (max-width: 720px) {
+      .page { padding: 0 16px; }
+      .cs-field select { min-width: 150px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <main class="page">
+    <div class="cs-top">
+      <h1>Consolidated</h1>
+      <span class="cs-count" id="count"></span>
+      <span class="cs-spacer"></span>
+      <a class="btn" href="/">
+        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Back to screener
+      </a>
+    </div>
+    <p class="cs-lede" id="lede">One row per group, so the groups can be read against each other
+      rather than one at a time. Returns are the group's own, over the same windows the screener
+      shows. Click a heading to sort; click a group to open its page.</p>
+
+    <div class="cs-picks">
+      <div class="cs-field">
+        <label for="dim">Group by</label>
+        <select id="dim"></select>
+      </div>
+      <div class="cs-field">
+        <label for="wt">Weighting</label>
+        <span class="cs-seg" id="wt" role="group" aria-label="Weighting">
+          <button type="button" data-w="eq" aria-pressed="true">Equal-weight</button>
+          <button type="button" data-w="cap" aria-pressed="false">Cap-weighted</button>
+        </span>
+      </div>
+    </div>
+
+    <div class="cs-wrap"><table id="tbl"></table></div>
+    <div id="notes" class="cs-notes"></div>
+    <div id="msg" class="cs-msg"></div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+    // The horizons the screener already carries on every row. Nothing here is
+    // computed from bars: an equal-weight group return over a window IS the
+    // mean of its members' own returns over that window, and those are stamped
+    // on the snapshot. So this whole page costs ONE /api/stocks read and not a
+    // single archive row — the pivot's economics, for the same reason.
+    const HZ = [['1W', 'oneWeekPct'], ['1M', 'oneMonthPct'], ['3M', 'threeMonthPct'],
+                ['6M', 'sixMonthPct'], ['1Y', 'oneYearPct'], ['5Y', 'fiveYearPct']];
+
+    // The same two the group pages draw, so a comparison here and a curve there
+    // cannot name different benchmarks.
+    const BENCH = [['SPY', 'S&P 500'], ['DIA', 'Dow 30']];
+
+    const BLANK = '—';
+    const DIMS = {
+      theme: { label: 'Theme', multi: true, get: (s) => s.portfolios || [],
+        href: (k) => '/theme/' + encodeURIComponent(k) },
+      sector: { label: 'Sector', get: (s) => s.sector,
+        href: (k) => '/sector/' + encodeURIComponent(k) },
+      industry: { label: 'Industry', get: (s) => s.industry,
+        href: (k) => '/industry/' + encodeURIComponent(k) },
+      capBand: { label: 'Size by market cap', get: (s) => s.capBand,
+        href: (k) => '/size/' + encodeURIComponent(k),
+        order: (window.Filters && Filters.CAP_ORDER) || null },
+    };
+
+    let stocks = [];
+    let benchRows = [];
+    let dim = 'theme';
+    let weight = 'eq';
+    let sortKey = 'oneYearPct';
+    let sortDir = -1;
+
+    const pct = (v) => v == null ? BLANK : (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+    const cls = (v) => v == null ? 'cs-na' : v > 0 ? 'pos' : v < 0 ? 'neg' : '';
+    function money(v) {
+      if (!(v > 0)) return BLANK;
+      const u = [['T', 1e12], ['B', 1e9], ['M', 1e6]];
+      for (const [s, n] of u) if (v >= n) return '$' + (v / n).toFixed(v / n >= 100 ? 0 : 1) + s;
+      return '$' + Math.round(v).toLocaleString();
+    }
+
+    // ONE aggregator, so the two weightings cannot drift into two code paths.
+    //
+    // A MISSING RETURN IS ABSENT, NEVER A ZERO. `Number(null)` is 0 and finite,
+    // and a zero dragged into a mean is a fabricated flat stock — the trap this
+    // project has now met in num(), the credits header, activity.ms, the value
+    // -added column and the insider prices. Reject the empty before coercing.
+    //
+    // Under cap weighting a stock with NO market cap cannot carry a weight at
+    // all (a fund reports AUM, not capitalisation), so it leaves the average
+    // rather than being given an invented one. `w > 0` rejects null and zero in
+    // the same test.
+    function agg(rows, field, weighted) {
+      let n = 0, sw = 0, sv = 0, noCap = 0;
+      for (const s of rows) {
+        const v = s[field];
+        if (v == null || !Number.isFinite(v)) continue;
+        if (weighted) {
+          const w = s.marketCap;
+          if (!(w > 0)) { noCap++; continue; }
+          sw += w; sv += w * v;
+        } else { sw += 1; sv += v; }
+        n++;
+      }
+      return { v: n ? sv / sw : null, n, noCap };
+    }
+
+    function build() {
+      const d = DIMS[dim];
+      const map = new Map();
+      let placements = 0;
+      for (const s of stocks) {
+        let keys = d.get(s);
+        if (!Array.isArray(keys)) keys = [keys];
+        keys = keys.filter((k) => k != null && k !== '');
+        // A stock with no sector is in NO sector, never in one called "null" —
+        // it gets its own bucket and the note counts it, because omitting it
+        // would make every total quietly wrong while looking tidy.
+        if (!keys.length) keys = [BLANK];
+        for (const k of keys) {
+          if (!map.has(k)) map.set(k, []);
+          map.get(k).push(s);
+          placements++;
+        }
+      }
+      const groups = [...map.entries()].map(([key, rows]) => {
+        const r = { key, rows, n: rows.length };
+        r.cap = rows.reduce((t, s) => t + (s.marketCap > 0 ? s.marketCap : 0), 0);
+        for (const [, f] of HZ) r[f] = agg(rows, f, weight === 'cap');
+        return r;
+      });
+      return { groups, placements };
+    }
+
+    function sortGroups(gs) {
+      const d = DIMS[dim];
+      const val = (g) => sortKey === 'key' ? null
+        : sortKey === 'n' ? g.n : sortKey === 'cap' ? g.cap : (g[sortKey] && g[sortKey].v);
+      gs.sort((a, b) => {
+        // The blank bucket is not a group and sorts last whichever way the
+        // column runs — the pivot's rule.
+        if (a.key === BLANK) return 1;
+        if (b.key === BLANK) return -1;
+        if (sortKey === 'key') {
+          if (d.order) return (d.order.indexOf(a.key) - d.order.indexOf(b.key)) * -sortDir;
+          return a.key.localeCompare(b.key) * -sortDir;
+        }
+        const x = val(a), y = val(b);
+        // A group with nothing to show sorts last in either direction, so a
+        // descending click never opens on a column of dashes.
+        if (x == null && y == null) return 0;
+        if (x == null) return 1;
+        if (y == null) return -1;
+        return (x - y) * sortDir;
+      });
+      return gs;
+    }
+
+    function headCell(key, label) {
+      const on = sortKey === key;
+      return `<th data-k="${esc(key)}"${on ? ` aria-sort="${sortDir < 0 ? 'descending' : 'ascending'}"` : ''}>` +
+        esc(label) + (on ? (sortDir < 0 ? ' ↓' : ' ↑') : '') + '</th>';
+    }
+
+    function render() {
+      const d = DIMS[dim];
+      const { groups, placements } = build();
+      sortGroups(groups);
+
+      const head = '<thead><tr>' + headCell('key', d.label) + headCell('n', 'Stocks') +
+        headCell('cap', 'Market cap') +
+        HZ.map(([h, f]) => headCell(f, h)).join('') + '</tr></thead>';
+
+      const cell = (a) => {
+        if (!a || a.v == null) return `<td class="cs-na" title="nothing with this return">${BLANK}</td>`;
+        return `<td class="${cls(a.v)}" title="mean of ${a.n} stock${a.n === 1 ? '' : 's'}` +
+          (a.noCap ? `, ${a.noCap} left out for having no market cap` : '') + '">' + pct(a.v) + '</td>';
+      };
+
+      const rowFor = (g) => {
+        const name = g.key === BLANK
+          ? `<span class="cs-blank" title="no ${esc(d.label.toLowerCase())} recorded yet">${BLANK}</span>`
+          : `<a class="cs-g" href="${esc(d.href(g.key))}" target="_blank" rel="noopener">${esc(g.key)}</a>`;
+        return `<tr><td>${name}</td><td>${g.n.toLocaleString()}</td><td>${money(g.cap)}</td>` +
+          HZ.map(([, f]) => cell(g[f])).join('') + '</tr>';
+      };
+
+      // A benchmark is ONE stock, so equal and cap weighting are the same
+      // number for it. Drawn as its own kind of row rather than mixed into the
+      // ranking, because it is not a group of ours.
+      const benchHtml = benchRows.map((b) =>
+        `<tr class="cs-bench"><td>${esc(b.label)}</td><td>1</td><td>${money(b.row.marketCap)}</td>` +
+        HZ.map(([, f]) => {
+          const v = b.row[f];
+          return `<td class="${cls(v == null ? null : v)}">${v == null ? BLANK : pct(v)}</td>`;
+        }).join('') + '</tr>').join('');
+
+      $('tbl').innerHTML = head + '<tbody>' + groups.map(rowFor).join('') + benchHtml + '</tbody>';
+      $('tbl').querySelectorAll('thead th').forEach((th) => {
+        th.addEventListener('click', () => {
+          const k = th.dataset.k;
+          if (sortKey === k) sortDir = -sortDir;
+          else { sortKey = k; sortDir = k === 'key' ? -1 : -1; }
+          render();
+        });
+      });
+
+      paintNotes(groups, placements);
+    }
+
+    function paintNotes(groups, placements) {
+      const d = DIMS[dim];
+      const out = [];
+      out.push(weight === 'cap'
+        ? '<b>Cap-weighted</b> — each stock counts in proportion to its market cap, so the largest ' +
+          'companies dominate, the way an index behaves.'
+        : '<b>Equal-weight</b> — every stock counts the same, whatever its size. This is the ' +
+          'convention every group page here already uses.');
+      // The number that makes the toggle worth having: say how far apart the
+      // two readings are rather than leaving the reader to flip and remember.
+      const eq = agg(stocks, 'oneYearPct', false).v;
+      const cp = agg(stocks, 'oneYearPct', true).v;
+      if (eq != null && cp != null) {
+        const gap = Math.abs(eq - cp);
+        // Say it either way. "Disagree by 0.0 points, which is the size of the
+        // choice you are making" is a sentence that reads as broken on the day
+        // the two happen to coincide, and they sometimes do.
+        out.push(gap < 0.05
+          ? 'Across the whole screen the two <b>agree</b> over 1Y (' + pct(eq) +
+            ' either way), so on today’s data the choice barely matters — though it ' +
+            'will for an individual group.'
+          : 'Across the whole screen the two disagree by <b>' + gap.toFixed(1) +
+            ' points</b> over 1Y (' + pct(eq) + ' equal-weight against ' + pct(cp) +
+            ' cap-weighted), which is the size of the choice you are making.');
+      }
+      if (d.multi) {
+        const extra = placements - stocks.length;
+        if (extra > 0) {
+          out.push('A stock can sit in more than one ' + esc(d.label.toLowerCase()) +
+            ', so the rows add up to <b>' + placements.toLocaleString() + ' placements across ' +
+            stocks.length.toLocaleString() + ' stocks</b> — they are not meant to total the screen.');
+        }
+      }
+      const blank = groups.find((g) => g.key === BLANK);
+      if (blank) {
+        out.push('<b>' + blank.n.toLocaleString() + '</b> have no ' + esc(d.label.toLowerCase()) +
+          ' recorded yet and sit in their own row rather than being dropped.');
+      }
+      if (weight === 'cap') {
+        const noCap = stocks.filter((s) => !(s.marketCap > 0)).length;
+        if (noCap) {
+          out.push('<b>' + noCap + '</b> carry no market cap — a fund reports assets under ' +
+            'management, not capitalisation — so they cannot carry a weight and leave the ' +
+            'cap-weighted averages entirely. They still count in Stocks.');
+        }
+      }
+      out.push('A column averages only the stocks that have that return, so an older window ' +
+        'covers fewer companies than a recent one; each cell says how many on hover. ' +
+        '<b>Returns are price only</b> — no dividends anywhere in this app.');
+      out.push('These are readings, not rankings of quality: a group at the top moved furthest ' +
+        'over that window and nothing more.');
+      $('notes').innerHTML = out.map((t) => '<p>' + t + '</p>').join('');
+    }
+
+    function fillDims() {
+      $('dim').innerHTML = Object.entries(DIMS)
+        .map(([k, v]) => `<option value="${esc(k)}"${k === dim ? ' selected' : ''}>${esc(v.label)}</option>`)
+        .join('');
+      $('dim').addEventListener('change', () => { dim = $('dim').value; render(); });
+      $('wt').querySelectorAll('button').forEach((b) => {
+        b.addEventListener('click', () => {
+          weight = b.dataset.w;
+          $('wt').querySelectorAll('button').forEach((x) =>
+            x.setAttribute('aria-pressed', x.dataset.w === weight ? 'true' : 'false'));
+          render();
+        });
+      });
+    }
+
+    fetch('/api/stocks')
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then((d) => {
+        const all = (d.stocks || []).filter((s) => !s.error);
+        const bs = new Set(BENCH.map(([s]) => s));
+        // The benchmarks are drawn as their own rows and must not also be
+        // counted inside a group, or the S&P's own ETF sits in Technology.
+        stocks = all.filter((s) => !bs.has(s.symbol));
+        benchRows = BENCH.map(([sym, label]) => ({ sym, label, row: all.find((s) => s.symbol === sym) }))
+          .filter((b) => b.row);
+        $('count').textContent = stocks.length.toLocaleString() + ' stocks' +
+          (d.updatedAt ? ' · ' + new Date(d.updatedAt).toLocaleString() : '');
+        if (!stocks.length) { $('msg').textContent = 'Nothing to consolidate yet.'; return; }
+        fillDims();
+        render();
+      })
+      .catch((e) => {
+        $('msg').className = 'cs-msg cs-err';
+        $('msg').textContent = 'Could not load the screen: ' + e.message;
+      });
+  </script>
+</body>
+</html>

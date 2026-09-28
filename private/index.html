@@ -1124,6 +1124,14 @@
              menu's per-symbol rows do — so the page opens with one side already
              filled rather than two empty pickers. Member-only, like the two
              beside it. -->
+        <!-- One row per group, so themes, sectors, industries and size bands
+             can be read against each other rather than one at a time. Member
+             page like the two above, and hidden for guests for the same
+             reason: a preview of twenty stocks has no groups to compare. -->
+        <a class="btn" id="consolLink" href="/consolidated" target="_blank" rel="noopener"
+           title="Consolidated — every theme, sector, industry and size band side by side">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-layers" /></svg>Consolidated
+        </a>
         <a class="btn" id="compareLink" href="/compare" target="_blank" rel="noopener"
            title="Compare two stocks side by side">
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-columns" /></svg>Compare
@@ -4669,6 +4677,7 @@
         if ($('alertBtn')) $('alertBtn').style.display = 'none';
         if ($('pivotLink')) $('pivotLink').style.display = 'none';
         if ($('compareLink')) $('compareLink').style.display = 'none';
+        if ($('consolLink')) $('consolLink').style.display = 'none';
         const note = $('readonlyNote').querySelector('span');
         if (note) note.innerHTML = '<b>Guest preview.</b> Twenty stocks, one from each sector, with every column ' +
           'and every verdict — the rest of the universe, the research pages, your own lists and alerts ' +

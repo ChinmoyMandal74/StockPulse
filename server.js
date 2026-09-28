@@ -506,6 +506,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/architecture.html': '/architecture', '/themes.html': '/themes',
                       // no symbols in that path, so it opens with both pickers empty
                       '/compare.html': '/compare',
+                      '/consolidated.html': '/consolidated',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
                       '/export.html': '/export', '/subscribers.html': '/subscribers',
                       '/emails.html': '/emails',
@@ -1369,6 +1370,22 @@ app.get('/pivot', route(async (req, res) => {
   if (await isGuest(req)) return res.redirect('/');
   logAct(req, 'page', 'pivot');
   res.sendFile(path.join(__dirname, 'private', 'pivot.html'));
+}));
+
+// One row per group, so the groups can be read against each other. The pivot
+// crosses two dimensions and answers "where is the weight"; this answers "how
+// has each one DONE", which no page did — a group page shows one group against
+// the index and never against another group.
+//
+// It costs one /api/stocks read and NO archive rows: an equal-weight group
+// return over a window is the mean of its members' own returns, and those are
+// stamped on every snapshot row already. Member page, guests refused, like the
+// pivot and the studio beside it.
+app.get('/consolidated', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'consolidated');
+  res.sendFile(path.join(__dirname, 'private', 'consolidated.html'));
 }));
 
 // Two stocks side by side. TWO, never more: the difference column is inherently
