@@ -66,6 +66,10 @@ const Indicators = require('./private/indicators.js');
 // later personal profile can re-score locally without a second implementation.
 const Action = require('./private/action.js');
 const News = require('./news.js');
+// Pure: bars + earnings events -> the aggregate /stock draws. Required at the
+// top rather than beside the route, because /api/stock sits above the point
+// where secfacts.js and insider.js are pulled in.
+const EarnStudy = require('./earnstudy.js');
 const {
   readPortfolios, writePortfolios,
   readNames, writeNames,
@@ -7428,7 +7432,7 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   // nothing — the screener's own Promise.all lesson, unapplied here. Each keeps
   // its own failure: the profile is optional (three display fields), the
   // snapshot is the answer.
-  const [snap, profile, earnings, peerLinks] = await Promise.all([
+  const [snap, profile, earnings, peerLinks, studyBars] = await Promise.all([
     snapshotCached(),
     store.readProfile(symbol).catch(() => null),
     // Seeks on the (symbol, d) primary key. Optional like the profile: a page
@@ -7439,6 +7443,12 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     // whose industry is deep enough. A failure here costs the better peer
     // list, never the page — it falls back to the taxonomy rule.
     store.readPeerLinks(symbol).catch(() => []),
+    // The closes the earnings study aligns on. One seek on the same primary
+    // key, in the same round trip as everything else, and optional like the
+    // rest: no bars means no study, never a failed page. Ten years is about
+    // forty quarters — far more events than the aggregate needs, and the
+    // module caps what it draws.
+    store.readBars(symbol, 2600).catch(() => []),
   ]);
   const stocks = (snap && snap.stocks) || [];
   const stock = stocks.find((x) => String(x.symbol).toUpperCase() === symbol);
@@ -7461,6 +7471,20 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     // Every stored quarter, newest first. Deliberately NOT in the snapshot:
     // it is per-symbol and nothing else on any page reads it.
     earnings,
+    // How this stock has behaved around its OWN earnings — the aggregate, not
+    // the bars. Computed here rather than in the browser because the window it
+    // needs (a fixed span around each of ~24 reports, up to six years back) is
+    // not the range the chart happens to be drawing, and a few hundred bytes
+    // of aggregate beats shipping ten years of closes to work it out again.
+    // DESCRIPTION, NOT A SIGNAL: post-earnings drift is untested here
+    // (docs/backlog.md entry 1) and the card says so.
+    earningsStudy: (() => {
+      try {
+        // readBars returns newest-first with `datetime`; the module sorts and
+        // normalises either shape, so this is just a handover.
+        return EarnStudy.build(studyBars, earnings);
+      } catch (e) { return null; }   // never fail the page over a statistic
+    })(),
     // The symbol picker's list. The whole snapshot is already in memory to work
     // out the rank above, so this costs a map and ~3 KB rather than a query.
     // Alphabetical, because the picker is for reaching a ticker you have in

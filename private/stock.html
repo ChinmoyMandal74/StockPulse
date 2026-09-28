@@ -489,6 +489,57 @@
     }
     @media (max-width: 620px)  { .fields { column-count: 1; } }
 
+    /* ---- around earnings ------------------------------------------------
+       Scoped under #around throughout. `.band`, `.path`, `.fig` and `.rule`
+       are exactly the generic names that have captured later markup on this
+       project eight times. */
+    #around { margin: 0 0 22px; }
+    #around .ahead { display: flex; align-items: baseline; gap: 10px; margin: 0 0 10px; }
+    #around .ahead h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); }
+    #around .ahead .n { font: 500 11px var(--mono); color: var(--faint); }
+    #around .ahead .sp { flex: 1 1 0; }
+    /* The way back is always visible: a hide with no way back is a trapdoor,
+       and this button is labelled with the direction it will go. */
+    #around .tog { font: 500 11.5px var(--sans); color: var(--muted); background: none;
+      border: 1px solid var(--hair-2); border-radius: 7px; padding: 3px 9px; cursor: pointer; }
+    #around .tog:hover { color: var(--text); border-color: var(--hair-2); }
+
+    #around .figs { display: flex; flex-wrap: wrap; gap: 20px 30px; margin: 0 0 14px; }
+    #around .fg { min-width: 132px; }
+    #around .fg .k { font: 600 9.5px var(--sans); letter-spacing: .07em;
+      text-transform: uppercase; color: var(--faint); display: block; margin: 0 0 3px; }
+    #around .fg .v { font: 600 17px var(--mono); color: var(--text); }
+    #around .fg .v.pos { color: var(--green); }
+    #around .fg .v.neg { color: var(--red); }
+    #around .fg .s { display: block; font-size: 11px; color: var(--faint); margin: 2px 0 0; }
+
+    #around .plot { position: relative; height: 190px; margin: 0 0 20px; }
+    #around svg { width: 100%; height: 190px; display: block; overflow: visible; }
+    /* Every stroke non-scaling: the box is stretched to the page width, so
+       without this a horizontal line and a vertical one draw at different
+       weights. */
+    #around svg * { vector-effect: non-scaling-stroke; }
+    #around .qline { fill: rgba(124,156,255,.13); stroke: none; }
+    #around .one { fill: none; stroke: rgba(255,255,255,.13); stroke-width: 1; }
+    #around .med { fill: none; stroke: var(--accent); stroke-width: 2.25; }
+    #around .zero { stroke: var(--hair-2); stroke-width: 1; }
+    #around .evt { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+    /* HTML, never SVG text: the box is stretched, which would distort glyphs —
+       the reason every label on the price chart is HTML too. */
+    #around .xl, #around .yl { position: absolute; font: 500 10px var(--mono);
+      color: var(--faint); pointer-events: none; white-space: nowrap; }
+    #around .xl { transform: translateX(-50%); }
+    #around .xl.first { transform: none; }
+    #around .xl.last { transform: translateX(-100%); }
+    #around .xl.report { color: var(--muted); }
+    #around .yl { right: 100%; padding-right: 6px; transform: translateY(-50%); }
+    #around .note { font-size: 11.5px; line-height: 1.6; color: var(--faint); margin: 26px 0 0; }
+    #around .note b { color: var(--muted); font-weight: 600; }
+    @media (max-width: 620px) {
+      #around .figs { gap: 14px 20px; }
+      #around .fg { min-width: 104px; }
+      #around .fg .v { font-size: 15px; }
+    }
     /* ---- earnings history ---------------------------------------------
        Reported EPS against what was expected, one row per quarter. Scoped to
        #earn throughout: `.bar`, `.hit` and `.miss` are the kind of generic
@@ -819,6 +870,156 @@
     // Rows appended to the Info group. Each is skipped rather than shown empty:
     // a profile that has not been re-pulled since these fields were captured
     // simply has fewer rows, which reads better than a column of em-dashes.
+    // ---- around earnings ---------------------------------------------------
+    //
+    // How this stock has behaved around its OWN reports: one faint line per
+    // quarter rebased to the report-date close, the median over them, and the
+    // interquartile band. The spaghetti is deliberate — it shows the sample
+    // size and the dispersion without asking anyone to read a number.
+    //
+    // DESCRIPTION, NOT A SIGNAL. Post-earnings drift is untested on this data
+    // (docs/backlog.md entry 1) and seven of eight framings in the research
+    // log came back flat. The note says so rather than leaving the chart to
+    // imply otherwise.
+    const AROUND_KEY = 'stock.around';
+    // localStorage rather than prefs: this is a per-device display choice, the
+    // same call /compare's "hide matching rows" and /m's view switch made. A
+    // prefs flag would follow the account but would cost this page a round
+    // trip it does not currently make — and a guest has no prefs key at all.
+    const aroundOn = () => { try { return localStorage.getItem(AROUND_KEY) !== '0'; } catch (e) { return true; } };
+
+    function aroundChart(st) {
+      const W = 720; const H = 190;
+      const pre = st.window.pre; const post = st.window.post;
+      const len = pre + post + 1;
+      let lo = 0; let hi = 0;
+      for (const p of st.paths) for (const v of p.path) { if (v == null) continue; if (v < lo) lo = v; if (v > hi) hi = v; }
+      if (hi - lo < 1) { hi = 1; lo = -1; }
+      const padY = (hi - lo) * 0.08;
+      lo -= padY; hi += padY;
+      const X = (k) => (k / (len - 1)) * W;
+      const Y = (v) => H - ((v - lo) / (hi - lo)) * H;
+      const poly = (arr) => arr.map((v, k) => (v == null ? null : X(k) + ',' + Y(v)))
+        .filter(Boolean).join(' ');
+
+      // The band as one closed path: q3 forward, q1 back.
+      let band = '';
+      if (st.q1 && st.q3) {
+        const up = st.q3.map((v, k) => X(k) + ',' + Y(v)).join(' L ');
+        const dn = st.q1.map((v, k) => X(k) + ',' + Y(v)).reverse().join(' L ');
+        band = `<path class="qline" d="M ${up} L ${dn} Z" />`;
+      }
+      const zeroY = Y(0);
+      const evtX = X(pre);
+      return {
+        svg: `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` +
+          band +
+          `<line class="zero" x1="0" y1="${zeroY}" x2="${W}" y2="${zeroY}" />` +
+          `<line class="evt" x1="${evtX}" y1="0" x2="${evtX}" y2="${H}" />` +
+          st.paths.map((p) => `<polyline class="one" points="${poly(p.path)}" />`).join('') +
+          `<polyline class="med" points="${poly(st.median)}" />` +
+          '</svg>',
+        // Fractions so the HTML labels sit on the same geometry the svg drew.
+        xAt: (k) => (k / (len - 1)) * 100,
+        yAt: (v) => ((hi - v) / (hi - lo)) * 100,
+        lo, hi,
+      };
+    }
+
+    function aroundHtml(st) {
+      if (!st || !st.n || !st.next) return '';
+      const g = aroundChart(st);
+      const pc = (v, d) => (v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(d == null ? 1 : d) + '%');
+      const sgn = (v) => (v == null ? '' : v > 0 ? ' pos' : v < 0 ? ' neg' : '');
+      const nx = st.next;
+
+      const figs = [];
+      figs.push(`<div class="fg"><span class="k">Typical reaction</span>` +
+        `<span class="v${sgn(nx.median)}">${pc(nx.median)}</span>` +
+        `<span class="s">median next session, ${nx.n} quarters</span></div>`);
+      // The size of the event, which the signed median alone hides.
+      figs.push(`<div class="fg"><span class="k">Typical size</span>` +
+        `<span class="v">${nx.absMedian == null ? '—' : '±' + nx.absMedian.toFixed(1) + '%'}</span>` +
+        `<span class="s">whichever way it went</span></div>`);
+      // A HIT RATE WITHOUT ITS BASE RATE SAYS NOTHING — a stock that rises most
+      // days hands a flattering number to a signal that knows nothing.
+      const upPct = Math.round((nx.up / nx.n) * 100);
+      figs.push(`<div class="fg"><span class="k">Rose after</span>` +
+        `<span class="v">${upPct}%</span>` +
+        `<span class="s">${nx.up} of ${nx.n}` +
+        (st.base ? ` · ${st.base.upPct}% on an ordinary session` : '') + `</span></div>`);
+      if (st.driftStat) {
+        figs.push(`<div class="fg"><span class="k">Month after</span>` +
+          `<span class="v${sgn(st.driftStat.median)}">${pc(st.driftStat.median)}</span>` +
+          `<span class="s">from the reaction on, ${st.driftStat.n} quarters</span></div>`);
+      }
+
+      const xs = [[0, '−' + st.window.pre], [st.window.pre, 'report'],
+        [st.window.pre + 1 + st.drift, '+' + st.drift], [st.window.pre + st.window.post, '+' + st.window.post]];
+      const xlabels = xs.map(([k, t], i) =>
+        `<span class="xl${t === 'report' ? ' report' : ''}` +
+        `${i === 0 ? ' first' : ''}${i === xs.length - 1 ? ' last' : ''}"` +
+        ` style="left:${g.xAt(k).toFixed(2)}%;top:100%">${t}</span>`).join('');
+      const ylabels = [g.hi, 0, g.lo].map((v) =>
+        `<span class="yl" style="top:${g.yAt(v).toFixed(2)}%">` +
+        `${Math.round(v) === 0 ? '0%' : pc(v, 0)}</span>`).join('');
+
+      // The split, worded so a thin side teaches the real fact rather than
+      // printing a median of one.
+      const splitBits = [];
+      if (nx.beat) {
+        splitBits.push(nx.beat.median != null
+          ? `after a beat (${nx.beat.n}) the median is <b>${pc(nx.beat.median)}</b>`
+          : `only ${nx.beat.n} were beats`);
+      }
+      if (nx.miss) {
+        splitBits.push(nx.miss.median != null
+          ? `after a miss (${nx.miss.n}) <b>${pc(nx.miss.median)}</b>`
+          : `misses are rare here — ${nx.miss.n} of ${nx.n}, too few to summarise`);
+      }
+
+      const notes = [];
+      notes.push(`<b>${st.n} quarters</b> drawn, ${st.from} to ${st.to}. Each line is one report, ` +
+        'rebased to its own closing price on the day; the bold line is the median and the band the ' +
+        'middle half.');
+      notes.push('Nearly every company here reports <b>after the close</b>, so the market’s answer ' +
+        'is the <b>next</b> session — that is the step at the dashed line, and the window stops at ' +
+        `+${st.window.post} sessions so it does not run into the following report.`);
+      if (splitBits.length) notes.push(splitBits.join('; ') + '.');
+      notes.push('A few dozen quarters is a small sample and this is a <b>description of what ' +
+        'happened</b>, not evidence of what will. Drift after earnings is untested on this data.');
+
+      return '<div id="around">' +
+        '<div class="ahead"><h3>Around earnings</h3>' +
+        `<span class="n">${st.n} quarters</span><span class="sp"></span>` +
+        '<button class="tog" id="aroundTog" type="button"></button></div>' +
+        '<div id="aroundBody">' +
+        `<div class="figs">${figs.join('')}</div>` +
+        `<div class="plot">${g.svg}${xlabels}${ylabels}</div>` +
+        `<p class="note">${notes.join(' ')}</p>` +
+        '</div></div>';
+    }
+
+    function paintAround() {
+      const b = document.getElementById('aroundBody');
+      const t = document.getElementById('aroundTog');
+      if (!b || !t) return;
+      const on = aroundOn();
+      b.hidden = !on;
+      // Labelled with the direction it will GO, the read-only note's rule.
+      t.textContent = on ? 'Hide' : 'Show';
+      t.setAttribute('aria-expanded', on ? 'true' : 'false');
+    }
+    function wireAround() {
+      const t = document.getElementById('aroundTog');
+      if (!t) return;
+      t.addEventListener('click', () => {
+        try { localStorage.setItem(AROUND_KEY, aroundOn() ? '0' : '1'); } catch (e) { /* private window */ }
+        paintAround();
+      });
+      paintAround();
+    }
+
     function companyRows(c) {
       if (!c) return [];
       const rows = [];
@@ -1675,6 +1876,7 @@
           <div class="sec-h"><h2>Earnings history</h2>
             <span class="deeper count">${(payload.earnings || []).length} quarters stored</span>
           </div>
+          ${aroundHtml(payload.earningsStudy)}
           <div id="earnBody"></div>
         </div></section>` : ''}
 
@@ -2236,6 +2438,9 @@
       }
 
       paintChart();
+      // The markup is already in the page (it ships with the earnings card);
+      // this only attaches the toggle and applies the remembered choice.
+      wireAround();
       loadNews();          // after the chart: a decoration must not make the data wait
       loadSec();           // and the filings after that, for the same reason
       loadInsider();
