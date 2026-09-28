@@ -336,20 +336,32 @@
        margin as the trend ribbon, so the ticks land on the plot's own x-axis
        and agree with the crosshair. */
     #earnRug { margin: 7px 52px 0 0; }
-    .erug { position: relative; height: 13px; }
-    /* NEUTRAL, never green or red: those already mean up and down on this
-       chart, and a green "beat" tick beside a red session would be making a
-       different claim from the one the colour carries everywhere else. Beat
-       or miss is in the tooltip, where it cannot be misread as direction. */
-    .erug i { position: absolute; top: 0; bottom: 4px; width: 2px; margin-left: -1px;
-      background: var(--muted); border-radius: 1px; opacity: .72; cursor: help; }
-    .erug i:hover { opacity: 1; background: var(--text); }
-    /* A report whose next session is off the right edge cannot show a
-       reaction, so it is drawn hollow rather than pretending to one. */
-    .erug i.pending { background: none; border-left: 2px dashed var(--muted); }
-    .erug .base { position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
-      background: var(--hair); }
-    .erugnote { margin: 5px 52px 0 0; font-size: 11px; color: var(--faint); }
+    /* Taller than the ribbon on purpose (the owner: "you can also increase the
+       height"): the bar has to carry a magnitude, not just a position. */
+    .erug { position: relative; height: 38px; }
+    .erug .base { position: absolute; left: 0; right: 0; top: 50%; height: 1px;
+      background: var(--hair-2); }
+    /* GREEN AND RED HERE ARE THE SAME WORDS THEY ARE EVERYWHERE ELSE on this
+       chart -- the price went up, the price went down. The earlier objection
+       to colouring these marks was about beat/miss, which really would have
+       collided; the REACTION is direction, so it takes the direction colours.
+       Height is the size of that reaction, against a robust ceiling. */
+    .erug i { position: absolute; width: 3px; margin-left: -1.5px; border-radius: 1px;
+      opacity: .82; cursor: help; }
+    .erug i:hover { opacity: 1; }
+    .erug i.up { bottom: 50%; background: var(--green); }
+    .erug i.dn { top: 50%; background: var(--red); }
+    /* Past the 90th-percentile ceiling: drawn full height with a cap, and the
+       tooltip says so -- the earnings strip's own rule, so a single enormous
+       quarter cannot flatten every honest one. */
+    .erug i.capped { box-shadow: 0 0 0 1px var(--surface), 0 0 0 2px currentColor; }
+    .erug i.up.capped { color: var(--green); }
+    .erug i.dn.capped { color: var(--red); }
+    /* No next session inside the window, so there is no reaction to draw --
+       a neutral stub at the line rather than a bar implying zero. */
+    .erug i.pending { top: calc(50% - 3px); height: 6px; width: 2px;
+      background: var(--muted); opacity: .5; }
+    .erugnote { margin: 6px 52px 0 0; font-size: 11px; color: var(--faint); }
 
     /* ---- trend ribbon --------------------------------------------------
        The Trend column's word, per session, painted under the chart — the
@@ -1131,13 +1143,23 @@
     const RUG_KEY = 'stock.earnrug';
     try { showEarnRug = localStorage.getItem(RUG_KEY) !== '0'; } catch (e) { /* private window */ }
 
+    // The ceiling for the bar heights. The 90th percentile of what is actually
+    // in view, floored at 3% -- the same shape as earnScale() above, and for
+    // the same reason: one enormous quarter would otherwise flatten every
+    // honest one into a sliver.
+    function rugScale(mags) {
+      const a = mags.filter((v) => v != null && isFinite(v)).map(Math.abs).sort((x, y) => x - y);
+      if (!a.length) return 5;
+      return Math.max(3, a[Math.floor(a.length * 0.9)] || 3);
+    }
+
     function earnRugHtml(dates, closes, events) {
       if (!showEarnRug || !Array.isArray(dates) || dates.length < 2) return '';
       const at = new Map();
       dates.forEach((d, i) => at.set(d, i));
       const first = dates[0];
       const last = dates[dates.length - 1];
-      const marks = [];
+      const hits = [];
       let earliest = null;
       for (const e of (events || [])) {
         const d = e && e.date;
@@ -1151,32 +1173,47 @@
           for (let k = dates.length - 1; k >= 0; k--) if (dates[k] <= d) { i = k; break; }
           if (i == null) continue;
         }
-        // THE REACTION IS THE NEXT SESSION — almost every company here reports
+        // THE REACTION IS THE NEXT SESSION -- almost every company here reports
         // after the close, so the bar the tick sits on does not contain the
         // market's answer to it.
         const nx = i + 1 < closes.length && closes[i] > 0
           ? (closes[i + 1] / closes[i] - 1) * 100 : null;
-        const sp = e.surprisePrc == null ? null : Number(e.surprisePrc);
-        const verdict = (e.epsEstimate == null || sp == null || !isFinite(sp)) ? null
-          : sp > 0 ? 'beat' : sp < 0 ? 'missed' : 'met';
-        const tip = d + ' — reported' + (e.time ? ' ' + String(e.time).toLowerCase() : '') +
-          (verdict ? ', ' + verdict + (verdict === 'met' ? ' the estimate' : ' by ' + Math.abs(sp).toFixed(1) + '%') : '') +
-          (nx == null ? '. The next session is past the right edge of this chart.'
-            : '. Next session ' + (nx >= 0 ? '+' : '') + nx.toFixed(1) + '%.');
-        marks.push(`<i class="${nx == null ? 'pending' : ''}" style="left:${
-          ((i / (dates.length - 1)) * 100).toFixed(3)}%" title="${esc(tip)}"></i>`);
+        hits.push({ e, i, nx, d });
       }
-      if (!marks.length) return '';
+      if (!hits.length) return '';
+      const scale = rugScale(hits.map((h) => h.nx));
+      const HALF = 17;                       // px either side of the centre line
+      const marks = hits.map((h) => {
+        const sp = h.e.surprisePrc == null ? null : Number(h.e.surprisePrc);
+        const verdict = (h.e.epsEstimate == null || sp == null || !isFinite(sp)) ? null
+          : sp > 0 ? 'beat' : sp < 0 ? 'missed' : 'met';
+        const left = ((h.i / (dates.length - 1)) * 100).toFixed(3);
+        const tipHead = h.d + ' — reported' + (h.e.time ? ' ' + String(h.e.time).toLowerCase() : '') +
+          (verdict ? ', ' + verdict + (verdict === 'met' ? ' the estimate'
+            : ' by ' + Math.abs(sp).toFixed(1) + '%') : '');
+        if (h.nx == null) {
+          return `<i class="pending" style="left:${left}%" title="${esc(tipHead +
+            '. The next session is past the right edge of this chart.')}"></i>`;
+        }
+        const mag = Math.min(1, Math.abs(h.nx) / scale);
+        const capped = Math.abs(h.nx) > scale;
+        const px = Math.max(2, Math.round(mag * HALF));
+        const tip = tipHead + '. Next session ' + (h.nx >= 0 ? '+' : '') + h.nx.toFixed(1) + '%' +
+          (capped ? ' — past the scale, so the bar is drawn full height.' : '.');
+        return `<i class="${h.nx >= 0 ? 'up' : 'dn'}${capped ? ' capped' : ''}"` +
+          ` style="left:${left}%;height:${px}px" title="${esc(tip)}"></i>`;
+      });
       // WHAT THE ABSENCE MEANS. The bar archive reaches back twenty years and
-      // the earnings record does not, so a stretch with no ticks is "nothing
-      // stored", not "no reports happened" — and on a Max chart that is most
+      // the earnings record does not, so a stretch with no bars is "nothing
+      // stored", not "no reports happened" -- and on a Max chart that is most
       // of the picture.
       const gap = earliest && earliest > first
         ? ` · the stored record starts ${earliest}, so anything before that is missing rather than quiet`
         : '';
       return '<div class="erug"><span class="base"></span>' + marks.join('') + '</div>' +
-        `<p class="erugnote">${marks.length} report${marks.length === 1 ? '' : 's'} in view` +
-        ` — hover for the reaction${gap}</p>`;
+        `<p class="erugnote">${hits.length} report${hits.length === 1 ? '' : 's'} in view ` +
+        `— bar height is the next session’s move, green where it rose, ` +
+        `the scale stopping at ±${scale.toFixed(1)}%${gap}</p>`;
     }
 
     // ---- trend ribbon builders ---------------------------------------
