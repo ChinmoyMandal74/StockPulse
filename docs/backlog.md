@@ -707,6 +707,54 @@ answer; only the delivery should change.
 
 ---
 
+## 16. The offline builders have no sub-cent floor, and the lab grid is wrong without one — 2026-09-28
+
+**`lab-grid.js` rebuilt on the deepened archive and printed decile returns of
+`-179.87%` and `-504.12%` for a one-month forward horizon.** A long position
+floors at −100%, so those are not returns; they are what a sub-cent anchor does
+to an average. The rebuilt file was **reverted rather than committed** — `/lab`
+prints "the best |t| anywhere on the grid" as its honesty anchor, and an anchor
+reading −504% is worse than a stale one.
+
+**The cause is understood and is not a bug in the grid.** `MIN_CLOSE` (a cent)
+was added to `server.js` on the same day and guards `pctChange` and the 5Y
+anchor, so the screener, the cards, the phone and `/consolidated` are covered.
+**The offline builders read the archive directly and have no equivalent**, so
+`lab-grid.js`, `single-data.js` and `strategy-runs.js` still divide by prices
+that are not prices.
+
+**Two symbols do it, and only one was bad data:**
+
+- **SOLS** — stored *and served by the provider* at `$0.000099999997` from 2024
+  to 2025-04-10, then $56. Genuinely corrupt; **removed from the universe**
+  2026-09-28 and purged from production. It survives in the LOCAL
+  `analysis.db`, which predates the removal, so a `--full` rebuild drops it.
+- **APLD** — **1,304 sub-cent bars and they are REAL.** Applied Digital traded
+  as a sub-penny shell ($0.0085 in October 2020) before its 2021 pivot, and is
+  $49.65 now. Nothing to repair: the history is true. But a five-year return of
+  **+291,000%** off a shell price is arithmetically correct and analytically
+  meaningless, and it will dominate any average it enters. **This is the case
+  that matters**, because removing a ticker cannot fix it and the next
+  reverse-merger shell will do the same.
+
+**What it would take.** The floor already exists and is already reasoned about
+in `server.js`; the builders need the same test where they compute a return —
+refuse a window whose anchor is under a cent, and count what was refused rather
+than dropping it silently. That is a few lines each, and the honest version
+reports the count so a rising number is visible.
+
+**What would make it a bad idea**: applying the floor to the PRICES rather than
+to the RETURNS. The bars are not wrong for APLD and must keep drawing its
+chart; only the arithmetic that divides by them needs the guard.
+
+**Also outstanding from the same day**: `analysis.db`, `single-closes.json` and
+the fourteen `strategy-*.json` were rebuilt BEFORE SOLS was removed, so they
+still carry a dead ticker. The documented sequence — `analysis-db.js --full`,
+then `single-data.js`, `strategy-runs.js`, `lab-grid.js` — has to be re-run
+anyway, and the floor should land before the rebuild rather than after it.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
