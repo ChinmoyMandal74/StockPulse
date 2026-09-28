@@ -455,6 +455,52 @@ account must not compromise the instance.
 
 ---
 
+## 12. The insider table is 89 days behind, and waiting is the cheap fix — 2026-09-27
+
+**Measured on production the day the daily walk shipped**: 8 quarters, **224,367
+transactions, through 2026-07-01, 89 days behind** the calendar. The quarterly
+Form 345 data sets are published after a quarter ends, so the table was born
+stale; the daily walk exists to close the recent end and has so far advanced
+**one day** before the SEC began refusing this address.
+
+**It is not currently wrong, only old, and every surface says so.** The card
+prints a filing date on every row, and this staleness is exactly why an insider
+column was refused on the screener. What it costs today: "who bought in the last
+90 days" answers **3 names when the truth is 188** — fine under a dated card,
+fatal anywhere presenting itself as current.
+
+**Two ways to close it, and the second is nearly free:**
+
+- **Walk it locally** — `node --use-system-ca insider-load.js --commit --daily`.
+  Paced at 130ms, filtered before anything is fetched. **Measured**: one real
+  day (2026-07-02, the day after a quarter closed, so a peak) held **819
+  filings for our universe**. **Estimated, not measured**: ~62 trading days at a
+  few hundred filings each is on the order of 15,000–20,000 document fetches —
+  roughly three quarters of an hour of pure pacing, plus the SEC's own response
+  time, so budget hours rather than minutes. The earlier "~5 hours" figure
+  quoted in conversation is a guess with nothing behind it.
+- **Wait for the Q3 bulk file.** Q3 ends 2026-09-30 and the data set is
+  published some weeks after — **the exact lag is not measured**; check
+  `https://www.sec.gov/files/datastandardsinnovation/data/insider-transactions-data-sets/2026q3_form345.zip`.
+  One quarter loads in about **45 seconds** (measured: 8 quarters in 5.9
+  minutes), and it closes everything through 2026-09-30 at once, leaving only
+  the days since to walk. **This is almost certainly the right answer** — it
+  trades a few weeks of staleness against hours of SEC traffic for data nothing
+  yet depends on.
+
+**What would make the first option a bad idea.** It already went wrong once:
+driving the browser loop at the gap made 130 calls, advanced one day and earned
+an HTTP 429 and then a 403. The route now reports a throttle as a wait rather
+than a failure and the console backs off, but **the address is the thing being
+rate-limited** — a long catch-up belongs on one paced machine, not in a
+serverless loop, and not twice in a day. See CLAUDE.md, *Then the first real
+catch-up earned an HTTP 429*.
+
+**Do not treat a nonzero `behind` as work to do without checking which.** The
+number is on `/api/insider/coverage` and on `/admin`, amber past a week.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
