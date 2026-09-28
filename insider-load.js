@@ -12,6 +12,7 @@
 //   node --use-system-ca insider-load.js --commit --quarters 20
 //   node --use-system-ca insider-load.js --commit --from 2019q1 --to 2019q4
 //   node --use-system-ca insider-load.js --commit --force  # reload stored ones
+//   node --use-system-ca insider-load.js --commit --daily  # walk the recent end
 //
 // WINDOWS-ONLY, deliberately: it shells out to PowerShell's Expand-Archive
 // rather than adding a zip dependency to a project that has three. The
@@ -31,6 +32,11 @@ const val = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i + 1] 
 const COMMIT = has('--commit');
 const FORCE = has('--force');
 const QUARTERS = Math.max(1, Number(val('--quarters', 8)));
+const DAILY = has('--daily');
+// The SEC asks for at most ten requests a second and throttles sustained
+// access below that. 130ms is about 7/s and has not been refused.
+const PACE = Math.max(60, Number(val('--pace', 130)));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // The SEC wants a contact string and refuses an undeclared bot. Same
 // fallback the filings loader uses, so this needs no new variable.
@@ -129,11 +135,73 @@ function tsv(file) {
   return out;
 }
 
+// ---- the daily walk, locally -----------------------------------------------
+//
+// A LONG CATCH-UP BELONGS HERE, NOT IN A REQUEST. The server route walks one
+// day and is right for keeping up; ninety days is ~9,000 filing fetches, and
+// driving that from a browser loop against a serverless function earned an
+// HTTP 429 from the SEC on the first real attempt — 130 calls for ONE day of
+// progress. One machine, paced, is the polite way to do it.
+async function walkDays(limit) {
+  const latest = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  let day = await store.readInsiderDay();
+  if (!day) {
+    const r = await store.db.execute('select max(filed) mx from insider_trans');
+    day = (r.rows.length && r.rows[0].mx) ? String(r.rows[0].mx) : latest;
+  }
+  console.log('walking from ' + day + ' to ' + latest + (COMMIT ? '' : '  (dry run)') + '\n');
+  const ours = await store.readUniverseCiks();
+  let days = 0; let total = 0; let empty = 0;
+  const t0 = Date.now();
+  for (let i = 0; i < limit; i++) {
+    const next = new Date(Date.parse(day) + 86400000).toISOString().slice(0, 10);
+    if (next > latest) break;
+    const q = 'QTR' + (Math.floor(Number(next.slice(5, 7)) / 3.01) + 1);
+    const url = 'https://www.sec.gov/Archives/edgar/daily-index/' + next.slice(0, 4) +
+      '/' + q + '/form.' + next.replace(/-/g, '') + '.idx';
+    const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(60000) });
+    await sleep(PACE);
+    if (res.status === 404) {                       // weekend or holiday
+      if (COMMIT) await store.writeInsiderDay(next);
+      day = next; empty++; continue;
+    }
+    if (res.status === 429) {                       // back off and retry the same day
+      process.stdout.write('  throttled, waiting 60s\n');
+      await sleep(60000); i--; continue;
+    }
+    if (!res.ok) { console.log(next + '  index HTTP ' + res.status + ' — stopping'); break; }
+    const seen = new Set();
+    const want = [];
+    for (const f of Insider.parseDailyIndex(await res.text())) {
+      if (!ours.has(f.cik) || seen.has(f.accn)) continue;
+      seen.add(f.accn); want.push(f);
+    }
+    let rows = [];
+    for (const f of want) {
+      const r = await fetch(f.path, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(60000) });
+      await sleep(PACE);
+      if (r.status === 429) { await sleep(60000); continue; }
+      if (!r.ok) continue;
+      rows = rows.concat(Insider.parseForm4(await r.text(),
+        { accn: f.accn, filed: f.filed, form: f.form }));
+    }
+    if (COMMIT) { await store.appendInsider(rows); await store.writeInsiderDay(next); }
+    day = next; days++; total += rows.length;
+    console.log(next + '  ' + String(want.length).padStart(3) + ' filings  ' +
+      String(rows.length).padStart(4) + ' kept   ' + ((Date.now() - t0) / 60000).toFixed(1) + ' min');
+  }
+  console.log('\n' + (COMMIT ? 'walked ' : 'would walk ') + days + ' trading days (' + empty +
+    ' with no index), ' + total.toLocaleString() + ' transactions, ' +
+    ((Date.now() - t0) / 60000).toFixed(1) + ' min');
+  if (!COMMIT) console.log('Nothing was written. Re-run with --commit.');
+}
+
 (async () => {
   if (!UA) {
     console.error('No contact address. Set MAIL_FROM, REPORT_TO or SEC_UA — the SEC refuses requests without one.');
     process.exit(1);
   }
+  if (DAILY) { await walkDays(Number(val('--limit', 400))); process.exit(0); }
   const quarters = quarterList(QUARTERS);
   const done = new Map((await store.readInsiderState()).map((r) => [r.quarter, r]));
   console.log((COMMIT ? 'LOADING' : 'DRY RUN — nothing will be written') + '  ·  ' +

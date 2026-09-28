@@ -1062,6 +1062,17 @@ That comparison found two things a schema reading would not have:
 
 Verified: **+18 checks** on the walk — termination over a weekend, one day per call, the filter-before-fetch ratio, filed-from-the-index against traded-from-the-document, the quarter undisturbed, de-duplication, the staleness reported, and a guest refused — plus **+13** on the parser.
 
+##### Then the first real catch-up earned an HTTP 429, and then a 403 (2026-09-27)
+**Driving that loop against the 88-day gap made 130 calls and advanced ONE day**, then the SEC stopped answering this address at all. The walk itself was correct — a day that fails does not advance the cursor, which is exactly right — and that correctness is what made it a hammer: **~110 of those calls retried a day the SEC had already refused**, because nothing in the response told the caller to stop.
+
+- **A THROTTLE IS A WAIT, NOT A FAILURE, and the response has to say which.** A 429 now answers **HTTP 200** with `throttled: true` and words naming the local loader, rather than a 502 the page's loop treated as "try again immediately". The console backs off 60s, gives up after three in a row, and says a long gap belongs on `insider-load.js --daily`.
+- **A mid-day 429 keeps what landed and does not advance.** The insert is keyed on `(accn, seq)`, so finishing the day later fills the rest without duplicating any of it — but a day cut short is not a day done.
+- **`SEC_DAY_MAX` was 400 and WOULD HAVE SILENTLY TRUNCATED.** Measured on 2026-07-02, the day after a quarter closed: **819 filings for our universe alone**, against my estimate of ~100. `want.slice(0, 400)` would have dropped 419 filings and then marked the day complete — half-done and unrecoverable. It is 900, and a day over the cap is **reported and not advanced** (`tooBig`) rather than trimmed.
+- **120ms between document fetches.** The SEC asks for under ten a second and throttles sustained access below that; a normal day is ~100 filings, so this costs about twelve seconds and keeps the address in good standing. `insider-load.js` paces at 130ms for the same reason.
+- **A serverless request is the wrong host for a long catch-up, and this is why the local loader gained `--daily`.** Ninety days is ~9,000 filing fetches; one machine, paced, is the polite way to do it.
+
+**And the same night Vercel raised a High Severity alert — a spike in 502s on the root route, 01:25 UTC.** Almost certainly self-inflicted and not the app: a 130-call loop holding functions, a 60-round `mode=all` filings refresh, and a 10-minute 224k-row bulk write into the production Turso, all at once. The site was verified healthy afterwards (health 200 in 150ms, `/api/stocks` 200 in 4.9s, no stuck refresh flag, the nightly `complete` at 1182/1182). **The rule this leaves is the one already written for research reads**: heavy work aimed at production is not free, and three heavy things at once is an outage of your own making.
+
 ### Six fields that were collected and never shown (2026-09-23)
 **Audited by running the real renderer over a Proxy of a live row and recording every property it touched** — not by reading the source, which got it wrong the first time. 89 of 119 row fields reach the page; of the 30 that did not, most are shown another way (`ma50`/`ma200` are chart overlays, `volume` has its own pane, `realisedVol` feeds the Cushion figure) or are internal (`prevTech`, `trendTimeline`, `maCrossRank`).
 

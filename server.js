@@ -9041,7 +9041,12 @@ app.get('/api/insider', requireAuth, route(async (req, res) => {
 // So the recent end is walked a day at a time off EDGAR's daily index. ONE
 // DAY PER CALL, the news-refresh shape, because a serverless function must
 // never be asked to hold hundreds of fetches in one request.
-const SEC_DAY_MAX = 400;                    // filings fetched in one day's pass
+// A BUSY DAY IS FAR BIGGER THAN I GUESSED. Measured on 2026-07-02, the day
+// after a quarter closed: **819** filings for our universe alone, against an
+// estimate of ~100. At the pace the SEC asks for that is ~100 seconds, which
+// fits a request — but truncating silently would drop filings and then mark
+// the day done, which is the worst of both.
+const SEC_DAY_MAX = 900;
 
 app.post('/api/insider/daily', requireAdmin, route(async (req, res) => {
   if (!SEC_READY) {
@@ -9082,6 +9087,17 @@ app.post('/api/insider/daily', requireAdmin, route(async (req, res) => {
     return res.json({ done: remaining === 0, day: next, filings: 0, rows: 0,
       skipped: 'no index (weekend or holiday)', remaining });
   }
+  // A THROTTLE IS NOT A FAILURE, AND IT MUST NOT LOOK LIKE ONE. The SEC
+  // answers 429 to sustained automated access, and a 502 here sent the
+  // page's loop straight back at the same day — measured on the first real
+  // catch-up: 130 calls, ONE day of progress, ~110 of them retrying a day
+  // the SEC had already refused. The cursor correctly did not advance; what
+  // was missing was anything telling the caller to stop and wait.
+  if (idxRes.status === 429) {
+    return res.json({ done: false, day: next, rows: 0, remaining,
+      throttled: true,
+      error: 'The SEC is rate-limiting this address. Wait a minute and continue, or run the catch-up locally with insider-load.js --daily.' });
+  }
   if (!idxRes.ok) return res.status(502).json({ error: 'SEC daily index: HTTP ' + idxRes.status, day: next });
 
   const all = Insider.parseDailyIndex(await idxRes.text());
@@ -9100,9 +9116,18 @@ app.post('/api/insider/daily', requireAdmin, route(async (req, res) => {
   let rows = [];
   let fetched = 0;
   let failed = 0;
-  for (const f of want.slice(0, SEC_DAY_MAX)) {
+  let throttled = false;
+  // Over the cap the day is reported and NOT advanced, rather than half done
+  // and marked complete.
+  const tooBig = want.length > SEC_DAY_MAX;
+  for (const f of (tooBig ? [] : want)) {
     try {
+      // Paced. The SEC asks for at most ten requests a second and throttles
+      // sustained access below that; a day is ~100 filings, so this costs
+      // about twelve seconds and keeps the address in good standing.
+      await new Promise((r) => setTimeout(r, 120));
       const r = await fetch(f.path, { headers: head, signal: AbortSignal.timeout(SEC_TIMEOUT_MS) });
+      if (r.status === 429) { throttled = true; break; }
       if (!r.ok) { failed++; continue; }
       fetched++;
       rows = rows.concat(Insider.parseForm4(await r.text(),
@@ -9112,11 +9137,19 @@ app.post('/api/insider/daily', requireAdmin, route(async (req, res) => {
   // Appended, never replacing: this fills the end the quarterly files have
   // not reached, and must not disturb a quarter already loaded.
   const wrote = await store.appendInsider(rows);
-  await store.writeInsiderDay(next);
+  // A DAY CUT SHORT BY A THROTTLE IS NOT DONE. Whatever landed is kept —
+  // the insert is keyed on (accn, seq), so finishing the day later fills
+  // the rest without duplicating any of it — but the cursor stays put.
+  if (!throttled && !tooBig) await store.writeInsiderDay(next);
   logAct(req, 'refresh', 'insider:' + next + ' ' + wrote);
   res.json({
-    done: remaining === 0, day: next, indexed: all.length, ours: want.length,
-    fetched, failed, rows: wrote, remaining,
+    done: !throttled && !tooBig && remaining === 0, day: next, indexed: all.length,
+    ours: want.length, fetched, failed, rows: wrote, remaining, throttled, tooBig,
+    error: tooBig
+      ? want.length + ' filings on this day, over the ' + SEC_DAY_MAX +
+        ' a single request should attempt. Run insider-load.js --daily locally.'
+      : throttled ? 'Rate-limited part way through this day; it will resume where it stopped.'
+        : undefined,
   });
 }));
 

@@ -775,7 +775,7 @@
         if (running) return;
         running = true; stop = false;
         go.disabled = true; stopBtn.hidden = false; prog.hidden = false;
-        let days = 0; let rows = 0; let skipped = 0;
+        let days = 0; let rows = 0; let skipped = 0; let stalls = 0;
         const t0 = Date.now();
         try {
           for (;;) {
@@ -783,6 +783,22 @@
             const r = await fetch('/api/insider/daily', { method: 'POST' });
             const j = await r.json();
             if (!r.ok) { prog.innerHTML = '<b class="warn">' + (j.error || ('HTTP ' + r.status)) + '</b>'; break; }
+            // THE SEC THROTTLES SUSTAINED ACCESS, and going straight back at
+            // it is how a catch-up turns into 110 refused requests for one
+            // day of progress. Wait, then carry on; give up after three in a
+            // row and say the local loader is the right tool for a long gap.
+            if (j.throttled) {
+              stalls++;
+              if (stalls >= 3) {
+                prog.innerHTML = '<b class="warn">The SEC is rate-limiting this address.</b> ' +
+                  days + ' days walked. For a long gap run <code>insider-load.js --daily</code> on your machine.';
+                break;
+              }
+              prog.textContent = 'Rate-limited — waiting 60s (' + days + ' days walked so far)…';
+              await new Promise((z) => setTimeout(z, 60000));
+              continue;
+            }
+            stalls = 0;
             if (j.day) { days++; rows += j.rows || 0; if (j.skipped) skipped++; }
             const mins = Math.round((Date.now() - t0) / 60000);
             prog.textContent = days + ' days walked, ' + rows.toLocaleString() + ' transactions, ' +
