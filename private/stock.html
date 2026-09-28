@@ -341,7 +341,11 @@
        percentage, so the bars, the crosshair and the plot cannot disagree.
        Everything scoped under #sintStrip. */
     #sintStrip { margin: 7px 52px 0 0; }
-    #sintStrip .srug { position: relative; height: 28px; }
+    /* 56px, doubled from 28 at the owner's request (2026-09-28) — at half
+       this the steps were a squat band under a 500px plot and the shape was
+       hard to read. The bar scale in sintStripHtml moves with it: the two
+       are one measurement and must not drift apart. */
+    #sintStrip .srug { position: relative; height: 56px; }
     /* A LEVEL, NOT AN EVENT — which is why these are steps with width rather
        than the rug's ticks. A short position stands until the next
        settlement, so each reading is drawn across the fortnight it held for;
@@ -1323,7 +1327,7 @@
       if (!dtcs.length) return '';
       const sorted = dtcs.slice().sort((a, b) => a - b);
       const scale = Math.max(2, sorted[Math.floor(sorted.length * 0.9)] || 2);
-      const H = 26;
+      const H = 52;    // the .srug height less 4px of headroom — see the CSS
 
       const posOf = (r, i) => {
         if (r.carried) return 0;
