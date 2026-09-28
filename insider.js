@@ -40,6 +40,7 @@ const num = (v) => {
   const n = Number(String(v == null ? '' : v).replace(/,/g, ''));
   return Number.isFinite(n) ? n : null;
 };
+const pos = (n) => (n != null && n > 0 ? n : null);
 
 // SEC dates in these files are `30-JUN-2026`.
 const MONTHS = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12 };
@@ -68,9 +69,27 @@ function isoDate(s) {
 function build(subs, owners, trans) {
   const sub = new Map();
   for (const s of subs) sub.set(s.ACCESSION_NUMBER, s);
-  const own = new Map();
+  // A FILING CAN NAME SEVERAL OWNERS — 1,229 of 56,102 in one quarter
+  // (2.2%), usually a couple filing jointly or a fund and its manager. The
+  // two ingest paths were picking DIFFERENT ones: this took the TSV's row
+  // order and the XML path took document order, so the same trade was
+  // attributed to a different person depending on which loaded it. Caught by
+  // comparing the two sources against each other.
+  //
+  // Both sort by CIK and take the lowest. Arbitrary, but identical
+  // everywhere, which is the property that actually matters. The COUNT is
+  // kept so the card can say "+1 other" rather than quietly crediting one
+  // spouse with the pair's trade.
+  const ownAll = new Map();
   for (const o of owners) {
-    if (!own.has(o.ACCESSION_NUMBER)) own.set(o.ACCESSION_NUMBER, o);   // the first named filer
+    const k = o.ACCESSION_NUMBER;
+    if (!ownAll.has(k)) ownAll.set(k, []);
+    ownAll.get(k).push(o);
+  }
+  const own = new Map();
+  for (const [k, list] of ownAll) {
+    list.sort((a, b) => Number(a.RPTOWNERCIK || 0) - Number(b.RPTOWNERCIK || 0));
+    own.set(k, list[0]);
   }
 
   const out = [];
@@ -82,7 +101,12 @@ function build(subs, owners, trans) {
     const cik = num(s.ISSUERCIK);
     if (!cik) continue;
     const shares = num(t.TRANS_SHARES);
-    const price = num(t.TRANS_PRICEPERSHARE);
+    // A ZERO PRICE IS NOT A PRICE. 79 of one quarter's P/S rows carry
+    // exactly 0 — the bulk extract rounds to two decimals, so a sub-cent
+    // trade lands there — and `shares * 0` would print a confident "$0"
+    // where the honest answer is a dash. Reject the empty before coercing,
+    // the rule this project has now needed in five places.
+    const price = pos(num(t.TRANS_PRICEPERSHARE));
     const o = own.get(t.ACCESSION_NUMBER) || {};
     // FILED is the date it became public and TRANS is the date it happened;
     // both are kept, because anything measuring this must use the first.
@@ -111,6 +135,7 @@ function build(subs, owners, trans) {
       ownerRole: roleOf(o.RPTOWNER_RELATIONSHIP, o.RPTOWNER_TITLE),
       // A 10b5-1 trade was scheduled months ahead, so it says much less about
       // what the insider thinks today. The filer marks it; we keep the mark.
+      owners: (ownAll.get(t.ACCESSION_NUMBER) || [o]).length,
       planned: /1|true|y/i.test(String(s.AFF10B5ONE || '')) ? 1 : 0,
       direct: /^D/i.test(String(t.DIRECT_INDIRECT_OWNERSHIP || '')) ? 1 : 0,
     });
@@ -149,4 +174,141 @@ function summarise(rows, sinceIso) {
   return { since: sinceIso || null, bought: side(true), sold: side(false), trades: within.length };
 }
 
-module.exports = { CODES, KEEP, build, summarise, isoDate, cleanTicker, roleOf };
+// ---- the daily top-up ------------------------------------------------------
+//
+// The quarterly data sets are published AFTER a quarter ends, so a table fed
+// only by them runs up to 90 days behind — measured: the load reached
+// 2026-06-30 while the calendar said 2026-09-28, and asking "who bought in
+// the last 90 days" returned 3 names when the truth was 188. Fine under a
+// card that prints a filing date on every row; a lie anywhere that presents
+// itself as current.
+//
+// So the recent end is filled from the filings themselves. A complete Form 4
+// submission is ~5KB, and the ownership block inside it is regular enough to
+// read without adding an XML dependency to a project that has three.
+//
+// PARSED WITH TARGETED EXTRACTION, NOT A GENERAL PARSER, and validated
+// against the SEC's own quarterly extract of the same filings rather than
+// against my reading of the schema — see insider-xml-test.js.
+
+// Values appear either bare (`<issuerCik>0000001800</issuerCik>`) or wrapped
+// (`<transactionDate><value>2026-09-23</value></transactionDate>`), so the
+// optional <value> is part of the pattern rather than two functions.
+function tagVal(xml, tag) {
+  const m = new RegExp('<' + tag + '>\\s*(?:<value>\\s*)?([^<]*)').exec(xml);
+  const v = m ? m[1].trim() : '';
+  return v === '' ? null : v;
+}
+const blocks = (xml, tag) => {
+  const re = new RegExp('<' + tag + '\\b[^>]*>([\\s\\S]*?)</' + tag + '>', 'g');
+  const out = [];
+  let m;
+  while ((m = re.exec(xml))) out.push(m[1]);
+  return out;
+};
+const truthy = (v) => /^(1|true|y|yes)$/i.test(String(v || '').trim());
+
+// `filed` is NOT in the ownership document — it carries `periodOfReport`,
+// which is when the trade happened. The filing date comes from the daily
+// index that pointed us here, and it is the one that matters: the trade is
+// private until it is filed.
+function parseForm4(raw, meta = {}) {
+  const doc = /<ownershipDocument>([\s\S]*?)<\/ownershipDocument>/.exec(String(raw || ''));
+  if (!doc) return [];
+  const xml = doc[1];
+  const cik = Number(tagVal(xml, 'issuerCik'));
+  if (!Number.isFinite(cik) || cik <= 0) return [];
+  const symbol = cleanTicker(tagVal(xml, 'issuerTradingSymbol'));
+  const issuer = tagVal(xml, 'issuerName');
+  const planned = truthy(tagVal(xml, 'aff10b5One')) ? 1 : 0;
+  const form = tagVal(xml, 'documentType') || meta.form || '4';
+
+  // The SAME rule the bulk path uses — lowest CIK — because taking
+  // "the first one in the document" and "the first row in the TSV" gave
+  // different people for the 2.2% of filings that name several.
+  const owAll = blocks(xml, 'reportingOwner');
+  const ow = owAll.slice().sort((a, b) =>
+    (numOf(tagVal(a, 'rptOwnerCik')) || 0) - (numOf(tagVal(b, 'rptOwnerCik')) || 0))[0] || '';
+  const rel = [
+    truthy(tagVal(ow, 'isDirector')) ? 'Director' : '',
+    truthy(tagVal(ow, 'isOfficer')) ? 'Officer' : '',
+    truthy(tagVal(ow, 'isTenPercentOwner')) ? 'TenPercentOwner' : '',
+  ].filter(Boolean).join(',');
+
+  const out = [];
+  const trs = blocks(xml, 'nonDerivativeTransaction');
+  for (let i = 0; i < trs.length; i++) {
+    const t = trs[i];
+    const code = (tagVal(t, 'transactionCode') || '').toUpperCase();
+    if (!KEEP.has(code)) continue;              // the same filter, in one place
+    const shares = numOf(tagVal(t, 'transactionShares'));
+    const price = pos(numOf(tagVal(t, 'transactionPricePerShare')));
+    const tdate = isoDate(tagVal(t, 'transactionDate'));
+    if (!tdate || !meta.filed) continue;
+    out.push({
+      cik,
+      symbol,
+      issuer,
+      accn: meta.accn || null,
+      // The bulk file's own key is a global sequence we cannot reproduce, so
+      // the position within the filing is used instead. (accn, seq) stays
+      // unique, which is all the primary key needs.
+      seq: i + 1,
+      form,
+      filed: meta.filed,
+      transDate: tdate,
+      code,
+      buy: CODES[code].buy ? 1 : 0,
+      shares,
+      price,
+      value: (shares != null && price != null) ? Math.round(shares * price) : null,
+      sharesAfter: numOf(tagVal(t, 'sharesOwnedFollowingTransaction')),
+      ownerCik: numOf(tagVal(ow, 'rptOwnerCik')),
+      ownerName: tagVal(ow, 'rptOwnerName'),
+      ownerRole: roleOf(rel, tagVal(ow, 'officerTitle')),
+      owners: Math.max(1, owAll.length),
+      planned,
+      direct: /^D/i.test(String(tagVal(t, 'directOrIndirectOwnership') || 'D')) ? 1 : 0,
+    });
+  }
+  return out;
+}
+
+function numOf(v) {
+  const n = Number(String(v == null ? '' : v).replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+// One line of a daily form index:
+//   `4  ABBOTT LABORATORIES  1800  20260925  edgar/data/1800/0001306119-26-000009.txt`
+// Fixed-width in theory; split on runs of spaces in practice, from the right,
+// because a company name contains single spaces and the path never does.
+function parseDailyIndex(text, wantForms = new Set(['4', '4/A', '3', '5'])) {
+  const out = [];
+  for (const line of String(text || '').split(/\r?\n/)) {
+    if (!/^\s*(3|4|5)(\/A)?\s/.test(line)) continue;
+    const parts = line.trim().split(/\s{2,}/);
+    if (parts.length < 5) continue;
+    const form = parts[0].trim();
+    if (!wantForms.has(form)) continue;
+    const path = parts[parts.length - 1].trim();
+    const date = parts[parts.length - 2].trim();
+    const cik = Number(parts[parts.length - 3]);
+    const accn = (/([0-9]{10}-[0-9]{2}-[0-9]{6})/.exec(path) || [])[1] || null;
+    if (!accn || !Number.isFinite(cik)) continue;
+    out.push({
+      form,
+      cik,                                   // the FILER's cik, not the issuer's
+      filed: /^\d{8}$/.test(date)
+        ? date.slice(0, 4) + '-' + date.slice(4, 6) + '-' + date.slice(6, 8) : null,
+      accn,
+      path: path.startsWith('http') ? path : 'https://www.sec.gov/Archives/' + path,
+    });
+  }
+  return out;
+}
+
+module.exports = {
+  CODES, KEEP, build, summarise, isoDate, cleanTicker, roleOf,
+  parseForm4, parseDailyIndex, tagVal,
+};

@@ -9029,16 +9029,120 @@ app.get('/api/insider', requireAuth, route(async (req, res) => {
   });
 }));
 
+// ---- the daily top-up ----------------------------------------------------
+//
+// The quarterly data sets are published after a quarter ends, so the table
+// they fill runs up to 90 days behind. Measured the day this was written:
+// the load reached 2026-06-30 against a calendar of 2026-09-28, and asking
+// "who bought in the last 90 days" returned **3** names when the truth was
+// **188**. That is fine under a card that prints a filing date on every row
+// and fatal anywhere that presents itself as current.
+//
+// So the recent end is walked a day at a time off EDGAR's daily index. ONE
+// DAY PER CALL, the news-refresh shape, because a serverless function must
+// never be asked to hold hundreds of fetches in one request.
+const SEC_DAY_MAX = 400;                    // filings fetched in one day's pass
+
+app.post('/api/insider/daily', requireAdmin, route(async (req, res) => {
+  if (!SEC_READY) {
+    return res.status(400).json({ error: 'No contact address configured. Set MAIL_FROM, REPORT_TO or SEC_UA.' });
+  }
+  // Yesterday in New York: today's index may not be complete, and a filing
+  // is due within two business days anyway, so there is nothing to gain by
+  // reaching for it.
+  const ny = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  ny.setDate(ny.getDate() - 1);
+  const latest = ny.toISOString().slice(0, 10);
+
+  let day = await store.readInsiderDay();
+  if (!day) {
+    // First run: start from the day after the quarterly load reached, so the
+    // two sources meet without a gap and without re-reading a whole quarter.
+    const r = await store.db.execute('select max(filed) mx from insider_trans');
+    const mx = r.rows.length && r.rows[0].mx ? String(r.rows[0].mx) : null;
+    day = mx || latest;
+  }
+  const next = new Date(Date.parse(day) + 86400000).toISOString().slice(0, 10);
+  if (next > latest) {
+    return res.json({ done: true, day: null, through: day, remaining: 0 });
+  }
+
+  const remaining = Math.max(0,
+    Math.round((Date.parse(latest) - Date.parse(next)) / 86400000));
+  const q = 'QTR' + (Math.floor(Number(next.slice(5, 7)) / 3.01) + 1);
+  const url = 'https://www.sec.gov/Archives/edgar/daily-index/' + next.slice(0, 4) +
+    '/' + q + '/form.' + next.replace(/-/g, '') + '.idx';
+
+  const head = { 'User-Agent': SEC_UA, Accept: 'text/plain' };
+  const idxRes = await fetch(url, { headers: head, signal: AbortSignal.timeout(SEC_TIMEOUT_MS) });
+  // A WEEKEND OR A HOLIDAY HAS NO INDEX, and that is not a failure — the day
+  // still has to be marked done or the walk stalls on the first Saturday.
+  if (idxRes.status === 404) {
+    await store.writeInsiderDay(next);
+    return res.json({ done: remaining === 0, day: next, filings: 0, rows: 0,
+      skipped: 'no index (weekend or holiday)', remaining });
+  }
+  if (!idxRes.ok) return res.status(502).json({ error: 'SEC daily index: HTTP ' + idxRes.status, day: next });
+
+  const all = Insider.parseDailyIndex(await idxRes.text());
+  // FILTER BEFORE FETCHING. EDGAR lists a Form 4 under both the issuer and
+  // the reporting owner, so our issuer CIKs match the issuer line; the rest
+  // of the day's ~666 filings are never touched.
+  const ours = await store.readUniverseCiks();
+  const seen = new Set();
+  const want = [];
+  for (const f of all) {
+    if (!ours.has(f.cik) || seen.has(f.accn)) continue;
+    seen.add(f.accn);
+    want.push(f);
+  }
+
+  let rows = [];
+  let fetched = 0;
+  let failed = 0;
+  for (const f of want.slice(0, SEC_DAY_MAX)) {
+    try {
+      const r = await fetch(f.path, { headers: head, signal: AbortSignal.timeout(SEC_TIMEOUT_MS) });
+      if (!r.ok) { failed++; continue; }
+      fetched++;
+      rows = rows.concat(Insider.parseForm4(await r.text(),
+        { accn: f.accn, filed: f.filed, form: f.form }));
+    } catch (e) { failed++; }
+  }
+  // Appended, never replacing: this fills the end the quarterly files have
+  // not reached, and must not disturb a quarter already loaded.
+  const wrote = await store.appendInsider(rows);
+  await store.writeInsiderDay(next);
+  logAct(req, 'refresh', 'insider:' + next + ' ' + wrote);
+  res.json({
+    done: remaining === 0, day: next, indexed: all.length, ours: want.length,
+    fetched, failed, rows: wrote, remaining,
+  });
+}));
+
 // Coverage for the console: which quarters are loaded, how deep it reaches.
 app.get('/api/insider/coverage', requireAdmin, route(async (req, res) => {
   const qs = await store.readInsiderState();
   const ok = qs.filter((q) => q.status === 'ok');
+  // HOW FAR BEHIND is the number that matters here, not how much is stored:
+  // a table that looks full and stops three months ago is the failure this
+  // whole daily path exists to prevent, so the console says it out loud.
+  const through = await store.readInsiderDay();
+  const r = await store.db.execute('select max(filed) mx from insider_trans');
+  const newest = r.rows.length && r.rows[0].mx ? String(r.rows[0].mx) : null;
+  const mark = through || newest;
+  const behind = mark
+    ? Math.max(0, Math.round((Date.now() - Date.parse(mark)) / 86400000))
+    : null;
   res.json({
     quarters: qs,
     loaded: ok.length,
     rows: ok.reduce((n, q) => n + (q.rows || 0), 0),
     from: ok.length ? ok[0].quarter : null,
     to: ok.length ? ok[ok.length - 1].quarter : null,
+    through: mark,
+    newest,
+    behind,
   });
 }));
 

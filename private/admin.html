@@ -344,6 +344,21 @@
         <p class="sechint">Pulled five companies at a time, because a serverless request must not
           hold hundreds of fetches — leave the tab open while it runs. A fund has nothing to fetch
           and is recorded as checked rather than retried for ever.</p>
+
+        <!-- Insider transactions: the QUARTERLY history is loaded locally by
+             insider-load.js (a 60MB zip has no business in a request); this
+             button walks the recent end, a day at a time, off EDGAR's daily
+             index. Without it the table runs up to 90 days behind. -->
+        <hr style="border:0;border-top:1px solid var(--hair);margin:18px 0" />
+        <p class="secline" id="insCov">Checking insider coverage…</p>
+        <div class="secbtns">
+          <button class="btn warm" id="insCatch" type="button" disabled>Catch up to yesterday</button>
+          <button class="btn danger" id="insStop" type="button" hidden>Stop</button>
+        </div>
+        <p class="secline" id="insProg" hidden></p>
+        <p class="sechint">The quarterly history is loaded on your machine with
+          <code>insider-load.js</code>; this fills the months since that quarter closed, one day per
+          call. A weekend has no index and is skipped rather than retried.</p>
       </div></div>
     </section>
 
@@ -728,6 +743,65 @@
         if (running) { e.preventDefault(); e.returnValue = ''; }
       });
       paintCoverage();
+    })();
+
+
+    // ---- insider transactions: walk the recent end --------------------------
+    (function insiderPanel() {
+      const cov = document.getElementById('insCov');
+      const prog = document.getElementById('insProg');
+      const go = document.getElementById('insCatch');
+      const stopBtn = document.getElementById('insStop');
+      if (!cov) return;
+      let running = false;
+      let stop = false;
+
+      async function paint() {
+        try {
+          const j = await (await fetch('/api/insider/coverage')).json();
+          if (j.error) { cov.textContent = j.error; return; }
+          cov.innerHTML = j.loaded
+            ? '<b>' + j.rows.toLocaleString() + '</b> transactions across <b>' + j.loaded +
+              '</b> quarters (' + j.from + ' – ' + j.to + ')' +
+              (j.through ? ', topped up to <b>' + j.through + '</b>' : '') +
+              (j.behind != null ? ' — <b' + (j.behind > 7 ? ' class="warn"' : '') + '>' +
+                j.behind + ' days behind</b>.' : '.')
+            : 'Nothing loaded yet — run <code>insider-load.js --commit</code> on your machine first.';
+          go.disabled = running || !j.loaded;
+        } catch (e) { cov.textContent = 'Could not read coverage: ' + e.message; }
+      }
+
+      async function run() {
+        if (running) return;
+        running = true; stop = false;
+        go.disabled = true; stopBtn.hidden = false; prog.hidden = false;
+        let days = 0; let rows = 0; let skipped = 0;
+        const t0 = Date.now();
+        try {
+          for (;;) {
+            if (stop) { prog.textContent = 'Stopped after ' + days + ' days.'; break; }
+            const r = await fetch('/api/insider/daily', { method: 'POST' });
+            const j = await r.json();
+            if (!r.ok) { prog.innerHTML = '<b class="warn">' + (j.error || ('HTTP ' + r.status)) + '</b>'; break; }
+            if (j.day) { days++; rows += j.rows || 0; if (j.skipped) skipped++; }
+            const mins = Math.round((Date.now() - t0) / 60000);
+            prog.textContent = days + ' days walked, ' + rows.toLocaleString() + ' transactions, ' +
+              (j.remaining || 0) + ' days to go' + (skipped ? ' · ' + skipped + ' with no filings' : '') +
+              (mins ? ' · ' + mins + ' min' : '') + '.';
+            if (j.done) { prog.textContent = 'Up to date — ' + days + ' days walked, ' +
+              rows.toLocaleString() + ' transactions added.'; break; }
+          }
+        } catch (e) { prog.innerHTML = '<b class="warn">Stopped: ' + e.message + '</b>'; }
+        running = false; stopBtn.hidden = true;
+        await paint();
+      }
+
+      go.addEventListener('click', run);
+      stopBtn.addEventListener('click', () => { stop = true; });
+      window.addEventListener('beforeunload', (e) => {
+        if (running) { e.preventDefault(); e.returnValue = ''; }
+      });
+      paint();
     })();
 
   </script>

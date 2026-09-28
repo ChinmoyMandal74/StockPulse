@@ -1045,6 +1045,23 @@ Verified: **72 checks** over two suites — the normaliser against two REAL comp
 
 Verified: **48 checks** — the code filter with grants proved present-in-source and absent-from-output, the fake tickers, nothing filed before it was traded, people-vs-trades, the store round trip, the card measured on the page with its links and its colours, a company with none drawing no card, the CIK regression both ways, the boundary, and the roles (guest yes on a preview stock, 403 outside it and on coverage).
 
+#### The quarterly files run 90 days behind, so the recent end is walked daily
+**Measured the day it shipped: the load reached 2026-06-30 against a calendar of 2026-09-28, and asking "who bought in the last 90 days" returned 3 names when the truth was 188.** The data sets are published after a quarter ends. That is tolerable under a card which prints a filing date on every row, and fatal anywhere that presents itself as current — which is exactly why an insider column on the screener was refused until this existed.
+
+- **`POST /api/insider/daily` walks ONE DAY per call** off EDGAR's daily index, the news-refresh shape; `/admin` loops it. **A weekend or holiday has no index at all, and a 404 marks the day DONE rather than failing** — otherwise the walk stalls on the first Saturday. The test's fixture is two trading days inside 89, so the loop is driven to completion over 87 empty ones.
+- **FILTERED BEFORE ANYTHING IS FETCHED.** 666 ownership forms land daily; EDGAR lists each under both the issuer and the reporting owner, so our issuer CIKs match the issuer line and the rest are never touched. Measured in the test: **2 documents fetched across 89 index reads.**
+- **Appended, never replacing** — the daily path fills what the quarterly files have not published, and must not disturb a loaded quarter. The day cursor lives in `app_meta` beside `price_cursor`.
+- **`/api/insider/coverage` reports how far BEHIND it is**, not just how much is stored, and the console says it in amber past a week. A table that looks full and stopped three months ago is the failure this path exists to prevent.
+
+**THE FORM 4 XML IS PARSED BY TARGETED EXTRACTION, NOT A DEPENDENCY** — a complete submission is ~5KB and the ownership block is regular. **Validated against the SEC's own quarterly extract of the same filings**, which is the only honest test of a hand-written parser: asserting it against my reading of the schema would only prove I read the schema the way I wrote the code. 14 real filings, **every field agreeing**.
+
+That comparison found two things a schema reading would not have:
+- **THE TWO SOURCES DISAGREE ON PRECISION, AND THE FILING IS RIGHT.** The bulk extract rounds a price to two decimals — 69.2232 in the filing is 69.22 there — and **79 of one quarter's P/S rows are rounded all the way to 0**. The parser keeps the filing's own number, and the comparison is made at the data set's precision rather than making the parser throw information away.
+- **A ZERO PRICE IS NOT A PRICE.** Those 79 rows would have printed a confident `$0` from `shares * 0`; both paths reject it and the card shows a dash. **Reject the empty before coercing** — the fifth place this project has needed that sentence.
+- **A FILING CAN NAME SEVERAL OWNERS — 1,229 of 56,102 (2.2%)**, usually a couple filing jointly or a fund and its manager, and **the two ingest paths were picking different ones**: the bulk path took the TSV's row order, the XML path took document order, so the same trade was credited to a different person depending on which loaded it. Both sort by CIK now. The COUNT is stored (`owners`) so a card can say "+1 other" rather than quietly crediting one spouse with the pair's trade.
+
+Verified: **+18 checks** on the walk — termination over a weekend, one day per call, the filter-before-fetch ratio, filed-from-the-index against traded-from-the-document, the quarter undisturbed, de-duplication, the staleness reported, and a guest refused — plus **+13** on the parser.
+
 ### Six fields that were collected and never shown (2026-09-23)
 **Audited by running the real renderer over a Proxy of a live row and recording every property it touched** — not by reading the source, which got it wrong the first time. 89 of 119 row fields reach the page; of the 30 that did not, most are shown another way (`ma50`/`ma200` are chart overlays, `volume` has its own pane, `realisedVol` feeds the Cushion figure) or are internal (`prevTech`, `trendTimeline`, `maCrossRank`).
 

@@ -757,6 +757,7 @@ const SCHEMA = [
      owner_role   text,
      planned      integer not null default 0,
      direct       integer not null default 1,
+     owners       integer not null default 1,
      primary key (accn, seq)
    )`,
   // The one question the card asks: this company, newest first.
@@ -800,6 +801,9 @@ function parseAddColumn(stmt) {
 }
 
 const ADDED_COLUMNS = [
+  // A Form 4 can name several reporting owners — 2.2% do. Added the same
+  // day the table shipped, because production already held it by then.
+  "alter table insider_trans add column owners integer not null default 1",
   // Who the account belongs to. NULLABLE on purpose: four accounts existed
   // before this column did, and a not-null default would have invented a name
   // for each of them. Registration asks for one; everything that displays a
@@ -2089,7 +2093,7 @@ async function readSecState() {
 
 const INS_COLS = ['cik', 'symbol', 'issuer', 'accn', 'seq', 'form', 'filed', 'trans_date',
   'code', 'buy', 'shares', 'price', 'value', 'shares_after', 'owner_cik', 'owner_name',
-  'owner_role', 'planned', 'direct'];
+  'owner_role', 'planned', 'direct', 'owners'];
 const INS_FIELD = { trans_date: 'transDate', shares_after: 'sharesAfter',
   owner_cik: 'ownerCik', owner_name: 'ownerName', owner_role: 'ownerRole' };
 
@@ -2151,6 +2155,54 @@ async function readSecCik(symbol) {
     args: [String(symbol).toUpperCase()],
   });
   return r.rows.length ? r.rows[0].cik : null;
+}
+
+// How far the DAILY top-up has walked. In app_meta beside price_cursor,
+// for the same reason: one value, no flag, and it survives the cold start a
+// process variable would not. A day with no relevant filings still advances
+// it, or a quiet Sunday would stall the catch-up for ever.
+async function readInsiderDay() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'insider_day'");
+  return r.rows.length ? String(r.rows[0].value) : null;
+}
+
+async function writeInsiderDay(iso) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('insider_day', ?)",
+    args: [String(iso)],
+  });
+  return iso;
+}
+
+// Append without disturbing what is there: the daily path adds filings the
+// quarterly one has not published yet, and must never delete a quarter.
+async function appendInsider(rows) {
+  await init();
+  if (!rows.length) return 0;
+  const place = '(' + INS_COLS.map(() => '?').join(',') + ')';
+  for (let i = 0; i < rows.length; i += 200) {
+    const chunk = rows.slice(i, i + 200);
+    await db.execute({
+      sql: `insert or replace into insider_trans (${INS_COLS.join(',')}) values ` +
+        chunk.map(() => place).join(','),
+      args: chunk.flatMap((r) => INS_COLS.map((c) => {
+        const v = r[INS_FIELD[c] || c];
+        return v === undefined ? null : v;
+      })),
+    });
+  }
+  return rows.length;
+}
+
+// Every issuer CIK we care about, for filtering a day's index before any
+// filing is fetched — 666 ownership forms land daily and our universe is a
+// fraction of them.
+async function readUniverseCiks() {
+  await init();
+  const r = await db.execute('select symbol, cik from sec_state where cik is not null');
+  return new Map(r.rows.map((x) => [Number(x.cik), x.symbol]));
 }
 
 async function readInsiderState() {
@@ -4481,6 +4533,7 @@ module.exports = {
   init,
   writeSecFacts, noteSecMiss, readSecFacts, readSecState,
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
+  readInsiderDay, writeInsiderDay, appendInsider, readUniverseCiks,
   clearVisitors,
   logActivity,
   readActivityStats,
