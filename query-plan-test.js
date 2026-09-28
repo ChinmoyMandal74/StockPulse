@@ -22,7 +22,11 @@ const VERBOSE = process.argv.includes('--all');
 const BIG = ['bars', 'fundamentals_history', 'earnings_history', 'news', 'activity', 'visitors', 'snapshot',
   // ~342k rows: 430 symbols x weekly marks back to 2003. The long backtest
   // reads it instead of `bars`, which only helps if these reads seek.
-  'tech_history'];
+  'tech_history',
+  // ~33k rows a quarter across every SEC filer, so a five-year window is
+  // ~660k. It was NOT on this list when it shipped, and the quarter-delete
+  // ranged on an unindexed `filed` — a full walk the guard could not see.
+  'insider_trans'];
 
 // Statements that scan on purpose, each with the reason it is allowed to.
 // A new entry here is a decision, which is the point of naming them.

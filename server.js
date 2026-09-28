@@ -8801,7 +8801,11 @@ const SecFacts = require('./secfacts.js');
 // The SEC refuses an undeclared bot and asks for a way to reach the
 // operator. That address is already in the environment, so this needs no
 // new variable to work — SEC_UA only has to be set to override it.
-const SEC_CONTACT = String(process.env.REPORT_TO || process.env.MAIL_FROM || '').trim();
+// MAIL_FROM is a mail header and carries a display name — the address has
+// to be lifted out, as fromHeader() does. The SEC tolerated the brackets;
+// that is luck, not a contract.
+const secAddress = (s) => (/<([^>]+)>/.exec(String(s || '')) || [, s])[1] || '';
+const SEC_CONTACT = secAddress(process.env.REPORT_TO || process.env.MAIL_FROM || '').trim();
 const SEC_UA = String(process.env.SEC_UA || (SEC_CONTACT ? `Tickr Lab (${SEC_CONTACT})` : '')).trim();
 const SEC_READY = !!SEC_UA;                       // SEC refuses an undeclared bot
 const SEC_BATCH = Math.max(1, Math.min(20, Number(process.env.SEC_BATCH) || 5));
@@ -8857,12 +8861,12 @@ async function secFetchOne(symbol) {
       signal: AbortSignal.timeout(SEC_TIMEOUT_MS),
     });
     if (r.status === 404) {
-      await store.noteSecMiss(sym, 'nofacts');
+      await store.noteSecMiss(sym, 'nofacts', null, cik);
       return { symbol: sym, status: 'nofacts', rows: 0 };
     }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const rows = SecFacts.normalise(await r.json(), sym);
-    if (!rows.length) { await store.noteSecMiss(sym, 'empty'); return { symbol: sym, status: 'empty', rows: 0 }; }
+    if (!rows.length) { await store.noteSecMiss(sym, 'empty', null, cik); return { symbol: sym, status: 'empty', rows: 0, cik }; }
     await store.writeSecFacts(sym, rows, { cik, status: 'ok' });
     return { symbol: sym, status: 'ok', rows: rows.length, cik };
   } catch (e) {
@@ -8975,6 +8979,66 @@ app.get('/api/sec', requireAuth, route(async (req, res) => {
     checkedAt: state ? state.fetchedAt : null,
     status: state ? state.status : null,
     cik: state ? state.cik : null,
+  });
+}));
+
+// ---- insider transactions (Forms 3/4/5, 2026-09-27) ----------------------
+//
+// What the officers, directors and 10% owners of a company did with their
+// own money. Loaded a quarter at a time by insider-load.js, which runs
+// locally because the source is a 60MB zip per quarter.
+//
+// THE SAME BOUNDARY AS THE FILINGS CARD, and for the same reason the owner
+// gave: this is displayed and nothing else. It is not stamped onto a
+// snapshot row, so it cannot become a screener column, then a filter, then
+// a screen, then a promo card. `insider-test.js` asserts that.
+//
+// It is DELIBERATELY NOT A SIGNAL YET. The literature likes open-market
+// purchases by several insiders at once; this project's own research log has
+// taken eight framings and found seven flat, so it is shown as a fact —
+// "three insiders bought, filed on these dates" — the way the volume
+// breakout marker and Cushion are, and tested separately before it is ever
+// allowed to mean anything.
+const Insider = require('./insider.js');
+const INSIDER_WINDOW_DAYS = Number(process.env.INSIDER_WINDOW_DAYS || 180);
+
+app.get('/api/insider', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!symbol) return res.status(400).json({ error: 'symbol required' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  // The join is the issuer's CIK, never the ticker — 1.4% of filings carry
+  // `NONE` as their symbol, and a ticker can be reassigned to another
+  // company entirely. The filings loader already resolved it.
+  const cik = await store.readSecCik(symbol);
+  if (!cik) return res.json({ symbol, cik: null, rows: [], summary: null });
+  const rows = await store.readInsider(cik, 60);
+  const since = new Date(Date.now() - INSIDER_WINDOW_DAYS * 86400000)
+    .toISOString().slice(0, 10);
+  res.json({
+    symbol,
+    cik,
+    windowDays: INSIDER_WINDOW_DAYS,
+    summary: Insider.summarise(rows, since),
+    rows: rows.map((r) => Object.assign({}, r, {
+      url: SecFacts.filingUrl(r.cik, r.accn),
+      word: (Insider.CODES[r.code] || {}).word || r.code,
+    })),
+  });
+}));
+
+// Coverage for the console: which quarters are loaded, how deep it reaches.
+app.get('/api/insider/coverage', requireAdmin, route(async (req, res) => {
+  const qs = await store.readInsiderState();
+  const ok = qs.filter((q) => q.status === 'ok');
+  res.json({
+    quarters: qs,
+    loaded: ok.length,
+    rows: ok.reduce((n, q) => n + (q.rows || 0), 0),
+    from: ok.length ? ok[0].quarter : null,
+    to: ok.length ? ok[ok.length - 1].quarter : null,
   });
 }));
 

@@ -1019,6 +1019,32 @@ The two things that make it unusable in a verdict anyway are worth recording: **
 
 Verified: **72 checks** over two suites — the normaliser against two REAL companyfacts files (a hand-made fixture would not have the traps), the reconciliation invariant, the store round trip, the card measured on the page with its filing links and its derived marking, the fund drawing no card, the loop terminating, and the roles (anonymous gets no DATA — asserted on the body, since a gated page redirects and a status check would pass for the wrong reason; guest yes on a preview stock, 403 outside it and on both admin routes).
 
+### Insider transactions — Forms 3/4/5 (2026-09-27, owner's request)
+
+**A second card on `/stock`: what the officers, directors and 10% owners did with their own money.** Officers must report their own trades within **two business days**, so it is a legally-mandated, near-real-time disclosure with no vendor in between — and it is the only thing in the app that is neither price nor accounting.
+
+**THE TRANSACTION CODE IS THE WHOLE GAME.** Measured on 2026 Q2: of 78,328 non-derivative transactions, **5,326 are open-market purchases (6.8%)**. The rest is compensation machinery — 19,211 grants, 10,783 option exercises, 9,357 lots of shares withheld to pay tax. A grant is not a decision, withholding is automatic, and an exercise is usually a sale in a hat. **Only `P` and `S` are kept**; a screen that counts "insider activity" without that filter is measuring payroll. Across the universe, only **185 of 1,180 symbols had a purchase in a quarter** — a screen-sized answer rather than a wall.
+
+- **KEYED ON THE ISSUER'S CIK, NEVER ITS TICKER.** 763 of 56,102 filings (1.4%) carry `NONE` or `N/A` as the trading symbol — my first cluster count had **`NONE(117)`** at the top, 117 unrelated companies fused into one fake company — while every filing carries a CIK. The ticker rides along for display only.
+- **`filed` and `transDate` are both kept, and anything measuring this must use `filed`.** That is the date it became public; the trade is private until then, so using the trade date buys a look-ahead. Measured lag on purchases: **median 2 days, 59% within two, 87% within five**.
+- **10b5-1 trades are marked.** Half of the quarter's rows carry the flag — a plan set up months ahead says much less about what the insider thinks today.
+- **The summary counts PEOPLE as well as trades.** One director topping up three times is one person's opinion; three directors buying is the thing worth noticing, and a trade count cannot tell them apart. 266 of 1,134 companies had 3+ distinct buyers in the quarter.
+- A trade with no price is counted but **not valued**, and the card says how many — a total over 8 of 11 trades is not a total.
+
+**THE SAME BOUNDARY AS THE FILINGS CARD.** Display only: no `FIELD_SPEC` entry, no snapshot stamping, no screener column. `insider-test.js` reads the real `/api/stocks` and the real header and fails on a leak. **It is deliberately not a signal yet** — the literature likes clustered open-market purchases, and the horizon (1-6 months) is one of the very few that fits the owner's one-to-two-month constraint, but this project's log has taken eight framings and found seven flat. It is shown as a **fact**, the way the volume-breakout marker and Cushion are, and would be tested separately before it is ever allowed to mean anything.
+- **A boundary test cannot use the bare word "insider".** The Ownership group has carried an **Insiders** column since 2026-09-15 — `insiderPct`, the share held by founders and management, off the profile — which is a different fact entirely and belongs where it is. The check names what this feature would add.
+
+**Loading is LOCAL — `insider-load.js`, the `backfill-bars.js` precedent.** The source is the SEC's quarterly **Form 345 data sets**, ~11MB zipped per quarter unpacking to ~60MB of TSV, back to **2006 Q1 (82 quarters)**. That has no business in a serverless request. Dry run by default; `--commit`, `--quarters`, `--from/--to`, `--force`. Measured: **8 quarters, 224,367 transactions, 5.9 minutes.**
+- **THE URL PATH MOVED.** Recent quarters are under `/files/datastandardsinnovation/data/...`, older ones under `/files/structureddata/data/...`. Both are tried, newest first — a loader that knows one silently stops finding new quarters.
+- **Windows-only, deliberately**: it shells out to PowerShell's `Expand-Archive` rather than adding a zip dependency to a project with three. The machine that runs the intraday schedule runs this.
+- `insider_trans` is **not in `SYMBOL_TABLES`** — it holds every filer rather than our universe, so dropping a ticker must not delete a company's filing history. It is replaced a quarter at a time, by filing-date range.
+
+**Two bugs this found, both mine, both in the code it built on:**
+- **`insider_trans` was not on `query-plan-test.js`'s big-table list**, so nothing checked it — and the quarter-delete ranged on an unindexed `filed`, a full walk of ~660k rows, which on this database is a quota event rather than a slow query. The table is on the list now and `idx_insider_filed` exists; **proved by reverting**, which prints `SCAN insider_trans`.
+- **`noteSecMiss` threw away a CIK it had successfully resolved.** Its subquery finds nothing on a symbol's FIRST miss, so the 64 IFRS filers stored `cik = NULL` — and the insider join is on the CIK, so their transactions were in the table and unreachable. Found because TSM, which files 102 purchases a quarter, came back with no card.
+
+Verified: **48 checks** — the code filter with grants proved present-in-source and absent-from-output, the fake tickers, nothing filed before it was traded, people-vs-trades, the store round trip, the card measured on the page with its links and its colours, a company with none drawing no card, the CIK regression both ways, the boundary, and the roles (guest yes on a preview stock, 403 outside it and on coverage).
+
 ### Six fields that were collected and never shown (2026-09-23)
 **Audited by running the real renderer over a Proxy of a live row and recording every property it touched** — not by reading the source, which got it wrong the first time. 89 of 119 row fields reach the page; of the 30 that did not, most are shown another way (`ma50`/`ma200` are chart overlays, `volume` has its own pane, `realisedVol` feeds the Cushion figure) or are internal (`prevTech`, `trendTimeline`, `maCrossRank`).
 

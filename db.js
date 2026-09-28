@@ -724,6 +724,57 @@ const SCHEMA = [
   // page asks ("who has nothing, who is stale"), which would otherwise scan.
   'create index if not exists idx_sec_symbol_end on sec_facts (symbol, period_end)',
 
+  // ---- SEC Forms 3/4/5: insider transactions (2026-09-27) ----------------
+  // Open-market purchases and sales by officers, directors and 10% owners.
+  //
+  // KEYED ON THE ISSUER'S CIK, NOT ITS TICKER. Measured on one quarter: 763
+  // of 56,102 filings carry `NONE` or `N/A` as the trading symbol — which
+  // would collapse 117 unrelated companies into one fake symbol — while
+  // every filing carries a CIK. The ticker rides along for display only.
+  //
+  // NOT in SYMBOL_TABLES, deliberately: this holds every filer rather than
+  // our universe, so dropping a ticker from the screener must not delete a
+  // company's filing history. It is loaded and trimmed by the quarter.
+  //
+  // FOR DISPLAY, like sec_facts. Never the Advice engine, never the screener.
+  `create table if not exists insider_trans (
+     cik          integer not null,
+     symbol       text,
+     issuer       text,
+     accn         text not null,
+     seq          integer not null,
+     form         text,
+     filed        text not null,
+     trans_date   text not null,
+     code         text not null,
+     buy          integer not null default 0,
+     shares       real,
+     price        real,
+     value        real,
+     shares_after real,
+     owner_cik    integer,
+     owner_name   text,
+     owner_role   text,
+     planned      integer not null default 0,
+     direct       integer not null default 1,
+     primary key (accn, seq)
+   )`,
+  // The one question the card asks: this company, newest first.
+  'create index if not exists idx_insider_cik on insider_trans (cik, filed)',
+  // The loader replaces a quarter by its FILING-DATE range, which without
+  // this walks every row — 660k at a five-year window, which on this
+  // database is a quota event rather than a slow query.
+  'create index if not exists idx_insider_filed on insider_trans (filed)',
+  // Which quarterly data set has been loaded, so the admin page can say how
+  // far the history reaches and the loader knows what to skip.
+  `create table if not exists insider_state (
+     quarter    text primary key,
+     loaded_at  integer not null,
+     rows       integer not null default 0,
+     status     text,
+     error      text
+   )`,
+
   // When each symbol's filings were last pulled, and what came back. Separate
   // from the facts for the reason news_state is separate from news: a company
   // with nothing filed still has to count as CHECKED, or the refresh picks it
@@ -1987,12 +2038,18 @@ async function writeSecFacts(symbol, rows, meta = {}) {
 // A symbol that could not be fetched is still CHECKED. Without this the
 // refresh re-picks it forever and can never report itself finished — the
 // news-staleness lesson, which cost a loop that ran until it was stopped.
-async function noteSecMiss(symbol, status, error) {
+// THE CIK IS KEPT EVEN WHEN THERE ARE NO FACTS, and the first version threw
+// it away: the subquery finds nothing on a symbol's FIRST miss, so a company
+// whose CIK resolved fine but whose filings are in the IFRS taxonomy stored
+// a NULL. That silently broke the insider card for all 64 of them — the
+// transactions were there, the join was not. Prefer the caller's value.
+async function noteSecMiss(symbol, status, error, cik) {
   await init();
+  const sym = String(symbol).toUpperCase();
   await db.execute({
     sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error)
-          values (?, (select cik from sec_state where symbol = ?), ?, 0, ?, ?)`,
-    args: [String(symbol).toUpperCase(), String(symbol).toUpperCase(), Date.now(),
+          values (?, coalesce(?, (select cik from sec_state where symbol = ?)), ?, 0, ?, ?)`,
+    args: [sym, cik == null ? null : Number(cik), sym, Date.now(),
       status || 'none', error ? String(error).slice(0, 300) : null],
   });
 }
@@ -2021,6 +2078,86 @@ async function readSecState() {
     out[x.symbol] = { cik: x.cik, fetchedAt: x.fetched_at, rows: x.rows, status: x.status, error: x.error };
   }
   return out;
+}
+
+// ---- insider transactions (Forms 3/4/5) -----------------------------------
+//
+// DISPLAY ONLY, like sec_facts. Loaded a quarter at a time by
+// insider-load.js, which runs locally: the source is a 60MB zip per quarter
+// and that has no business inside a serverless request — the backfill-bars
+// rule.
+
+const INS_COLS = ['cik', 'symbol', 'issuer', 'accn', 'seq', 'form', 'filed', 'trans_date',
+  'code', 'buy', 'shares', 'price', 'value', 'shares_after', 'owner_cik', 'owner_name',
+  'owner_role', 'planned', 'direct'];
+const INS_FIELD = { trans_date: 'transDate', shares_after: 'sharesAfter',
+  owner_cik: 'ownerCik', owner_name: 'ownerName', owner_role: 'ownerRole' };
+
+// Multi-row inserts, chunked — the tech_history measurement, where the cost
+// was per STATEMENT and batching was 23x. A quarter is ~33,000 rows.
+async function writeInsiderQuarter(quarter, rows, meta = {}) {
+  await init();
+  const q = String(quarter).toLowerCase();
+  const place = '(' + INS_COLS.map(() => '?').join(',') + ')';
+  // Replace the quarter rather than the world: re-running one quarter must
+  // not disturb the others.
+  await db.execute({ sql: 'delete from insider_trans where filed >= ? and filed <= ?',
+    args: [meta.from || '0000-00-00', meta.to || '9999-99-99'] });
+  for (let i = 0; i < rows.length; i += 200) {
+    const chunk = rows.slice(i, i + 200);
+    await db.execute({
+      sql: `insert or replace into insider_trans (${INS_COLS.join(',')}) values ` +
+        chunk.map(() => place).join(','),
+      args: chunk.flatMap((r) => INS_COLS.map((c) => {
+        const v = r[INS_FIELD[c] || c];
+        return v === undefined ? null : v;
+      })),
+    });
+  }
+  await db.execute({
+    sql: `insert or replace into insider_state (quarter, loaded_at, rows, status, error)
+          values (?, ?, ?, ?, ?)`,
+    args: [q, Date.now(), rows.length, meta.status || 'ok', meta.error || null],
+  });
+  return rows.length;
+}
+
+// One company, newest filing first. Seeks on (cik, filed).
+async function readInsider(cik, limit = 60) {
+  await init();
+  const n = Number(cik);
+  if (!Number.isFinite(n) || n <= 0) return [];
+  const r = await db.execute({
+    sql: `select ${INS_COLS.join(',')} from insider_trans
+            where cik = ? order by filed desc, trans_date desc limit ?`,
+    args: [n, Math.max(1, Math.min(500, Number(limit) || 60))],
+  });
+  // Named access, never a spread: `{ ...row }` on a libSQL Row gives
+  // POSITIONAL keys, which shipped a page of `undefined` once already.
+  return r.rows.map((x) => {
+    const o = {};
+    for (const c of INS_COLS) o[INS_FIELD[c] || c] = x[c];
+    return o;
+  });
+}
+
+// One symbol's issuer CIK, already resolved by the filings loader. A
+// targeted seek rather than readSecState(), which would carry 1,182 rows
+// across the wire to answer one number on one page view.
+async function readSecCik(symbol) {
+  await init();
+  const r = await db.execute({
+    sql: 'select cik from sec_state where symbol = ?',
+    args: [String(symbol).toUpperCase()],
+  });
+  return r.rows.length ? r.rows[0].cik : null;
+}
+
+async function readInsiderState() {
+  await init();
+  const r = await db.execute('select quarter, loaded_at, rows, status, error from insider_state order by quarter');
+  return r.rows.map((x) => ({ quarter: x.quarter, loadedAt: x.loaded_at, rows: x.rows,
+    status: x.status, error: x.error }));
 }
 
 // ---- company names --------------------------------------------------------
@@ -4343,6 +4480,7 @@ module.exports = {
   db,
   init,
   writeSecFacts, noteSecMiss, readSecFacts, readSecState,
+  writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
   clearVisitors,
   logActivity,
   readActivityStats,

@@ -590,6 +590,44 @@
     #sec .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
     #sec .msg { color: var(--muted); font-size: 12.5px; padding: 6px 0; }
     @media (max-width: 620px) { #sec th, #sec td { padding-left: 10px; } }
+
+    /* ---- insider transactions (2026-09-27) --------------------------------
+       Its own card again, beside the filings one and mixed with nothing.
+       Scoped to #ins throughout — the same reason #sec is. */
+    #ins .stab { overflow-x: auto; }
+    #ins table { width: 100%; border-collapse: collapse; }
+    #ins th, #ins td { text-align: right; padding: 7px 0 7px 14px; font-size: 12.5px;
+                       border-bottom: 1px solid rgba(255, 255, 255, 0.05); white-space: nowrap; }
+    #ins th { color: var(--faint); font-weight: 500; font-size: 10.5px;
+              text-transform: uppercase; letter-spacing: 0.1em; }
+    #ins td { font-family: var(--mono); color: var(--text); }
+    #ins th:first-child, #ins td:first-child { text-align: left; padding-left: 0; }
+    #ins td.who { font-family: var(--sans); max-width: 30ch; overflow: hidden;
+                  text-overflow: ellipsis; }
+    #ins td.who .role { color: var(--faint); font-size: 11px; margin-left: 7px; }
+    /* BOUGHT AND SOLD ARE NOT UP AND DOWN, and on this page green and red
+       already mean the price moved. They are used here anyway, because on a
+       buy/sell column every reader expects them and the WORD carries the
+       meaning on its own — the colour is the second reading, never the only
+       one. It is on the word, never on a number, so nothing in a price
+       column can be misread as a direction. */
+    #ins td.act { font-family: var(--sans); font-weight: 600; }
+    #ins td.act.buy { color: var(--green); }
+    #ins td.act.sell { color: var(--red); }
+    /* A 10b5-1 trade was scheduled months ahead, so it says much less about
+       what the insider thinks today. Marked, quietly. */
+    #ins .plan { color: var(--faint); font-size: 10px; margin-left: 6px;
+                 text-transform: uppercase; letter-spacing: 0.08em; }
+    #ins td.filed a { color: var(--accent); text-decoration: none; font-size: 11.5px; }
+    #ins td.filed a:hover { text-decoration: underline; }
+    #ins .sum { display: flex; gap: 22px; flex-wrap: wrap; margin: 0 0 14px;
+                font-size: 13px; color: var(--muted); }
+    #ins .sum b { color: var(--text); font-weight: 600; }
+    #ins .sum .bought b { color: var(--green); }
+    #ins .sum .sold b { color: var(--red); }
+    #ins .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
+    #ins .msg { color: var(--muted); font-size: 12.5px; padding: 6px 0; }
+    @media (max-width: 620px) { #ins th, #ins td { padding-left: 10px; } }
     /* On a phone the table scrolls inside its own box, and what you should see
        BEFORE scrolling is a company and what it did — not a company name using
        the whole viewport. The compare pill goes: the row itself already opens
@@ -1661,6 +1699,17 @@
           <div id="secBody"><p class="msg">Loading filings…</p></div>
         </div></section>
 
+        <!-- Filled by loadInsider(), and removed when the company has none.
+             A separate card from the filings one on purpose: what a company
+             reports and what the people running it are doing with their own
+             money are two different questions. -->
+        <section class="bezel card" id="ins" hidden><div class="core">
+          <div class="sec-h"><h2>Insider transactions</h2>
+            <span class="deeper count" id="insWin"></span>
+          </div>
+          <div id="insBody"><p class="msg">Loading…</p></div>
+        </div></section>
+
         <p class="later">Prices as of ${esc(payload.updatedAt ? new Date(payload.updatedAt).toLocaleString() : 'n/a')}.
         More charts will land on this page.</p>
       `;
@@ -2116,9 +2165,80 @@
         } catch (e) { card.remove(); }
       }
 
+      // ---- insider transactions ----------------------------------------------
+      // Open-market purchases and sales only. A grant is not a decision and
+      // tax withholding is automatic, so the compensation machinery — which
+      // is 93% of what gets filed — never reaches this card.
+      async function loadInsider() {
+        const card = document.getElementById('ins');
+        if (!card) return;
+        try {
+          const r = await fetch('/api/insider?symbol=' + encodeURIComponent(stock.symbol));
+          if (!r.ok) { card.remove(); return; }
+          const j = await r.json();
+          if (!j.rows || !j.rows.length) { card.remove(); return; }
+          const s = j.summary || { bought: {}, sold: {} };
+          const months = Math.round((j.windowDays || 180) / 30);
+          document.getElementById('insWin').textContent = 'last ' + months + ' months';
+
+          // COUNT PEOPLE, NOT JUST TRADES. One director topping up three
+          // times is one person's opinion; three directors buying is the
+          // thing worth noticing, and a trade count cannot tell them apart.
+          const side = (d, cls, verb) => {
+            if (!d || !d.trades) return '';
+            return '<span class="' + cls + '"><b>' + d.people + '</b> ' +
+              (d.people === 1 ? 'insider ' : 'insiders ') + verb +
+              (d.value ? ' <b>' + secMoney(d.value) + '</b>' : '') +
+              ' <span style="color:var(--faint)">(' + d.trades +
+              (d.trades === 1 ? ' trade' : ' trades') +
+              (d.valued < d.trades ? ', ' + (d.trades - d.valued) + ' without a price' : '') +
+              ')</span></span>';
+          };
+          let h = '<div class="sum">' + (side(s.bought, 'bought', 'bought') ||
+            '<span>No purchases in the window</span>') +
+            (side(s.sold, 'sold', 'sold') || '') + '</div>';
+
+          h += '<div class="stab"><table><thead><tr><th>Filed</th><th>Insider</th>' +
+            '<th>Action</th><th>Shares</th><th>Price</th><th>Value</th><th>Held after</th>' +
+            '<th>Traded</th></tr></thead><tbody>';
+          for (const t of j.rows) {
+            const n = (v, d) => (v == null ? '—' : Number(v).toLocaleString(undefined,
+              { maximumFractionDigits: d == null ? 0 : d }));
+            h += '<tr>' +
+              '<td class="filed">' + (t.url
+                ? '<a href="' + esc(t.url) + '" target="_blank" rel="noopener" title="' +
+                  esc((t.form || 'Form 4') + ' filed ' + t.filed + ' — open it on sec.gov') +
+                  '">' + esc(t.filed) + '</a>'
+                : esc(t.filed)) + '</td>' +
+              '<td class="who" title="' + esc((t.ownerName || '') + (t.ownerRole ? ' — ' + t.ownerRole : '')) + '">' +
+                esc(t.ownerName || '—') +
+                (t.ownerRole ? '<span class="role">' + esc(t.ownerRole) + '</span>' : '') + '</td>' +
+              '<td class="act ' + (t.buy ? 'buy' : 'sell') + '">' + esc(t.word) +
+                (t.planned ? '<span class="plan" title="A 10b5-1 plan is scheduled months ahead, so it says much less about what the insider thinks today">plan</span>' : '') + '</td>' +
+              '<td>' + n(t.shares) + '</td>' +
+              '<td>' + (t.price == null ? '—' : '$' + Number(t.price).toFixed(2)) + '</td>' +
+              '<td>' + (t.value == null ? '—' : esc(secMoney(t.value))) + '</td>' +
+              '<td>' + n(t.sharesAfter) + '</td>' +
+              '<td>' + esc(t.transDate) + '</td></tr>';
+          }
+          h += '</tbody></table></div>';
+          h += '<p class="note"><b>Open-market purchases and sales only.</b> Grants, option ' +
+            'exercises and shares withheld to pay tax are left out — they are compensation ' +
+            'machinery rather than a decision, and they are about 93% of what gets filed. ' +
+            '<b>Filed</b> is the date it became public, which is what you could have known; ' +
+            '<b>Traded</b> is when it happened, usually two business days earlier. ' +
+            'Marked <span class="plan">plan</span> means a 10b5-1 schedule set up months in ' +
+            'advance. Straight from the filer’s own Form 4 at SEC EDGAR, and read by ' +
+            'nothing else in this app — not the Advice verdict, not the screener.</p>';
+          document.getElementById('insBody').innerHTML = h;
+          card.hidden = false;
+        } catch (e) { card.remove(); }
+      }
+
       paintChart();
       loadNews();          // after the chart: a decoration must not make the data wait
       loadSec();           // and the filings after that, for the same reason
+      loadInsider();
       const nb = document.getElementById('newsBtn');
       if (nb) nb.addEventListener('click', () => loadNews(true));
     })();
