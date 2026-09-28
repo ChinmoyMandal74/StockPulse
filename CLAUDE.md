@@ -1156,7 +1156,30 @@ Charts are hand-rolled inline SVG in `rowcard.js` — no library, no build step.
 - The name cell links to `/stock/<SYMBOL>` on **both** the screener and the analysis page; the symbol cell still links out to Google Finance. All of them open in a new tab (`target="_blank" rel="noopener"`), so a click never loses your place in the list. `.namelink` lives in `app.css` because two pages use it; only the frozen-column truncation (`td.frz1 .namelink`) stays in index.html. `.namelink` inherits its colour and only underlines on hover — 69 rows of blue underlines would wreck the table.
 
 ## Bar archive
-The `bars` table keeps one row per symbol per trading day (`open/high/low/close/volume`, keyed on `(symbol, d)`). **Currently 1,708,406 rows across 430 symbols, 2003-01-09 → today** (measured 2026-09-19, after the deep backfill below).
+The `bars` table keeps one row per symbol per trading day (`open/high/low/close/volume`, keyed on `(symbol, d)`). **Currently 4,582,357 rows across 1,182 symbols, 1998-12-23 → today** (measured 2026-09-28, after the backfill below).
+
+### 61% of the universe had fourteen months of history, and nothing would ever have fixed it (2026-09-28)
+**Reported by the owner as "why does URI only go back to July 25 — this is a very old company".** United Rentals has been listed since 1997 and held **303 bars from 2025-07-14**. Everything else about it was fine: SEC facts back to 2009, 26 earnings quarters, a fresh profile and a fresh price. It was the archive alone.
+
+- **The cause is `LIGHT_MIN_ARCHIVE`, and the shape of it is worth remembering.** A new ticker gets one ~300-bar pull; a live refresh is then deliberately shallow (12 bars) and only re-pulls deep when the archive is **under 300**. URI sat at **303 — three bars over the line that would have rescued it**, so it grew forward for ever and never backward. **A threshold that heals the symbols below it strands the ones that land just above it.**
+- **It was not one stock.** Measured off `/api/data-quality`: **750 of 1,182 flagged *no 5Y*, and 722 of those sat in a 300-399 band with only ten distinct start dates clustered in July 2025** — the September 2026 bulk adds, each given one ~300-bar pull. The 2026-09-22 repair had covered only the 47 that were genuinely *under* 300, which is precisely the band the auto-deepening already handles.
+- **`/quality` had the answer all along** — its `thin` list is every stock flagged `no 5Y` or `too short`, 781 of them, with a ready `--only` command. **Ignore its `--depth 1300`**: five years clears the flag and still discards twenty years, and the depth costs the same 1 credit either way.
+
+| | before | after |
+|---|---|---|
+| clean | 401 | **1,070** |
+| no 5Y | 750 | **80** |
+| 300-399 sessions | 722 | **10** |
+| 1,260+ sessions | 401 | **1,071** |
+| archive | ~1.85M rows | **4,582,357**, earliest bar 2003-01-09 → **1998-12-23** |
+
+- **Every one of the 112 still flagged holds exactly what the provider serves** — checked symbol by symbol against the dry run, 0 short of it. The remaining shortfall is the market's, not the archive's, the same conclusion the 2026-09-19 pass reached.
+- **WRITES ARE 8x FASTER THAN THIS FILE SAYS, and the old number would have talked you out of the job.** Measured: **2,934,059 bars in ~16 minutes across seven batches (~203,000 bars/min)**, against the 2026-09-19 reading of 24,259/min. Budgeting from the old figure predicted 2-3 hours and an overlap with the nightly, which is why it was batched at all. Re-measure before planning around either number.
+- **Batched 130 symbols at a time, deepest first**, so an early stop leaves the most valuable symbols done rather than queued — and each batch is independently resumable, since a symbol is replaced wholesale.
+- **`--rate 100`, not the default 580.** An intraday price round needs ~500 credits inside one minute against the plan's 610, so the default starves the live refresh. The fetch side is never the bottleneck here (writes are), so the throttle is free. As it happened the run was pre-market and contended with nothing — see the Git Bash timezone trap above, which is why I thought otherwise.
+- **`FAILED: terminated` with an exit code of 1 does NOT mean the batch failed.** One batch reported `130 symbols ok, 0 failed, 307,264 bars written` and *then* exited 1: the closing `archiveStats()` is a whole-table `count(*)` over what is now 4.5M rows, and the socket was dropped. Spot-checking six of its symbols found all of them written. **Judge a batch by its row count, not its exit code** — the same lesson the `tech_history` build records about silence.
+
+**What this invalidates, and none of it is rebuilt yet**: `tech_history` (the trend backtest's usable floor was 2008 with 278 symbols and could now reach much further), the local analysis copy (`analysis-db.js --full`), and the three derived files built from it — `single-closes.json`, `strategy-*.json`, `lab-grid.json`. Every backtest number on those surfaces still describes the shallow archive.
 
 **It costs no API credits.** Every refresh already fetches ~300 daily bars per symbol and discards them; `persistBars()` writes them instead. Twelve Data charges **1 credit per symbol regardless of `outputsize`** — measured, `Api-Credits-Request: 1` for 5000 bars — which is why the deep backfill was affordable in the first place.
 
@@ -1895,6 +1918,7 @@ Gaps between recorded rounds: 5m38s, 5m30s, **6m08s**. `RUN_ABANDON_MS` was **6 
 - **The contention runs BOTH ways, and this file only documented one.** The `init()` section records that a long refresh makes every other tab cold. The reverse is just as true and bit harder: **a long query makes the refresh miss its deadline.** The round was 106.5s of compute where a normal one is a fraction of that, the start call overran 180 seconds, and nothing called `DELETE`, so the flag aged out and the run was swept to `abandoned`.
 - **A deploy was NOT the cause, though three landed minutes later.** The Actions API settles it: the workflow died at 20:27:56Z and the first push was 16:29:06 EDT, afterwards. Worth checking rather than assuming — `run_started_at` / `updated_at` on `/actions/runs/<id>` is public even when the log is not, and it is the cheapest way to time a workflow's death against anything else.
 - **What it actually cost was small, and reading the run record is how you know that**: prices were pulled live for all 430 and the snapshot was written at 16:26:49, so the day's data was in. The one real gap was the profile rotation — 2 of ~62 — which self-heals, since each night expires the oldest `ceil(N/7)` again. The failure email described a night that had mostly succeeded, for the third time (see 2026-09-18 news and 2026-09-19 tech-history).
+- **DO NOT ASK GIT BASH WHAT TIME IT IS IN NEW YORK.** On this machine `TZ=America/New_York date` **silently ignores `TZ` and prints UTC** — measured 2026-09-28, when it read 12:36 against a true 08:36 EDT. A four-hour error in the wrong direction puts a heavy job straight into the window the rule below exists to protect, and it reads as a plausible time, so nothing looks wrong. The bare `date` is right (it printed `08:36:22 EDT`), and `node -e "new Date().toLocaleString('en-US',{timeZone:'America/New_York'})"` is right. **It cost a wrong diagnosis the day it was found**: the intraday schedule was reported broken and the screener stale, when it was simply pre-market and the first slot was an hour away. The ping's own log is what caught it, by disagreeing.
 - **The rule this leaves: research reads belong on the LOCAL copy, and anything whole-table aimed at production must not run between 4:15 and 4:45 PM Eastern.** `analysis-db.js` exists precisely so a 100MB question never has to be asked of the live database; the benchmark above had a reason to hit production (it was measuring production's own wall) and still should have waited for the window to clear.
 
 ## The trend-only backtest (built and measured)
