@@ -336,6 +336,27 @@
        margin as the trend ribbon, so the ticks land on the plot's own x-axis
        and agree with the crosshair. */
     #earnRug { margin: 7px 52px 0 0; }
+    /* The short-interest layer, aligned by the rug's own trick: the same
+       52px right margin to clear the price axis, children placed by
+       percentage, so the bars, the crosshair and the plot cannot disagree.
+       Everything scoped under #sintStrip. */
+    #sintStrip { margin: 7px 52px 0 0; }
+    #sintStrip .srug { position: relative; height: 28px; }
+    /* A LEVEL, NOT AN EVENT — which is why these are steps with width rather
+       than the rug's ticks. A short position stands until the next
+       settlement, so each reading is drawn across the fortnight it held for;
+       marks at a point would imply it existed only on that day. */
+    #sintStrip .srug i { position: absolute; bottom: 0; display: block;
+                         background: var(--muted); opacity: 0.5; }
+    /* NEUTRAL, AND DELIBERATELY SO. Green and red are the price's direction
+       on this chart, and "short interest rose" is not a direction the price
+       went — colouring it would make a claim the data does not. The one
+       exception is the split, which is amber because it is the "notice this"
+       colour and the share counts either side of it are not comparable. */
+    #sintStrip .srug i.split { background: var(--amber); opacity: 0.75; }
+    #sintStrip .srug i.capped { opacity: 0.8; }
+    #sintStrip .srugnote { color: var(--faint); font-size: 10.5px; margin: 3px 0 0;
+                           line-height: 1.5; }
     /* Taller than the ribbon on purpose (the owner: "you can also increase the
        height"): the bar has to carry a magnitude, not just a position. */
     .erug { position: relative; height: 38px; }
@@ -1254,6 +1275,99 @@
         `the scale stopping at ±${scale.toFixed(1)}%${gap}</p>`;
     }
 
+    // ---- the short-interest layer -------------------------------------
+    // The same bargain as the rug: a chart LAYER with its own toggle,
+    // remembered per device, self-gating so a window with no settlement in
+    // it is clean without a rule about which ranges may have one.
+    //
+    // It arrives on its own fetch rather than with the page — /api/shortint
+    // is a separate route precisely so the price never waits on it — so the
+    // series lands AFTER the first paint and the strip is drawn again then.
+    // `sintRows` and `lastDates` are script scope for the reason earnRows is:
+    // paintChart cannot see the boot IIFE's locals, and reaching for one is
+    // a ReferenceError that kills the whole chart.
+    let showSintStrip = true;
+    let sintRows = null;
+    let lastDates = null;
+    const SINT_KEY = 'stock.sintstrip';
+    try { showSintStrip = localStorage.getItem(SINT_KEY) !== '0'; } catch (e) { /* private window */ }
+
+    function sintStripHtml(dates) {
+      if (!showSintStrip || !Array.isArray(dates) || dates.length < 2) return '';
+      if (!sintRows || !sintRows.length) return '';
+      const first = dates[0];
+      const last = dates[dates.length - 1];
+      const n = dates.length - 1;
+      // The index of the session at or before a settlement date — a
+      // settlement can land on a non-trading day.
+      const idxAt = (d) => {
+        for (let k = dates.length - 1; k >= 0; k--) if (dates[k] <= d) return k;
+        return null;
+      };
+      // THE READING BEFORE THE WINDOW IS PART OF THE PICTURE. A position
+      // stands until the next settlement, so the level in force at the left
+      // edge was set by the last reading BEFORE it — dropping that would
+      // leave the first fortnight of every chart blank and imply the shorts
+      // arrived later than they did.
+      let carried = null;
+      const inView = [];
+      for (const r of sintRows) {
+        if (r.d < first) { carried = r; continue; }
+        if (r.d > last) continue;
+        inView.push(r);
+      }
+      const seq = (carried ? [Object.assign({}, carried, { carried: true })] : []).concat(inView);
+      if (!seq.length) return '';
+
+      const dtcs = seq.map((r) => r.dtc).filter((v) => v != null && isFinite(v));
+      if (!dtcs.length) return '';
+      const sorted = dtcs.slice().sort((a, b) => a - b);
+      const scale = Math.max(2, sorted[Math.floor(sorted.length * 0.9)] || 2);
+      const H = 26;
+
+      const posOf = (r, i) => {
+        if (r.carried) return 0;
+        const k = idxAt(r.d);
+        return k == null ? 0 : (k / n) * 100;
+      };
+      const bars = seq.map((r, i) => {
+        const left = posOf(r, i);
+        const nextL = i + 1 < seq.length ? posOf(seq[i + 1], i + 1) : 100;
+        const w = Math.max(0.35, nextL - left);
+        if (r.dtc == null) return '';
+        const capped = r.dtc > scale;
+        const px = Math.max(2, Math.round(Math.min(1, r.dtc / scale) * H));
+        const tip = (r.carried ? 'Standing at the left edge, set ' + r.d : r.d) +
+          ' — ' + r.dtc.toFixed(2) + ' days to cover' +
+          (r.shares != null ? ', ' + Number(r.shares).toLocaleString() + ' shares short' : '') +
+          (capped ? ' — past the scale, so the bar is drawn full height' : '') +
+          (r.split ? ' · a split lands in this fortnight, so the share counts either side are not comparable' : '');
+        return `<i class="${r.split ? 'split' : ''}${capped ? ' capped' : ''}"` +
+          ` style="left:${left.toFixed(3)}%;width:${w.toFixed(3)}%;height:${px}px"` +
+          ` title="${esc(tip)}"></i>`;
+      }).join('');
+
+      // WHAT THE ABSENCE MEANS, the rug's rule. FINRA's record starts in
+      // 2017 and the bar archive reaches back to 1998, so on a Max chart a
+      // blank left half is "not published", never "nobody was short".
+      const earliest = sintRows[0] && sintRows[0].d;
+      const gap = earliest && earliest > first
+        ? ` · FINRA's record starts ${earliest}, so anything before that is missing rather than quiet`
+        : '';
+      return '<div class="srug">' + bars + '</div>' +
+        `<p class="srugnote">${inView.length} settlement${inView.length === 1 ? '' : 's'} in view ` +
+        `— height is days to cover, the scale stopping at ${scale.toFixed(1)}` +
+        `, share counts as filed and never split-adjusted${gap}</p>`;
+    }
+
+    function paintSintStrip() {
+      const el = document.getElementById('sintStrip');
+      if (!el) return;
+      const html = sintStripHtml(lastDates);
+      el.innerHTML = html;
+      el.hidden = !html;
+    }
+
     // ---- trend ribbon builders ---------------------------------------
     // The Trend column's ladder replayed over the padded series: one word per
     // drawn bar, through ActionRules.trendAt — the engine's own definitions()
@@ -1855,6 +1969,10 @@
           rug.innerHTML = rh;
           rug.hidden = !rh;
         }
+        // The short-interest series arrives on its own fetch, so the dates
+        // are kept for the repaint that happens when it lands.
+        lastDates = dates;
+        paintSintStrip();
         const strip = document.getElementById('trendStrip');
         if (strip) {
           // Always offered; empty only when no session carries a known trend
@@ -1983,6 +2101,12 @@
                    the window the strip hides itself whatever this says. -->
               <button class="rng er-toggle${showEarnRug ? ' on' : ''}" id="erBtn"
                 title="Mark each earnings report under the plot. Reports land after the close, so the reaction is the next session.">EARN</button>
+              <!-- Another layer, on the same bargain. Self-gating twice
+                   over: nothing is drawn where FINRA has no history for the
+                   company, and nothing where no settlement falls inside the
+                   window. -->
+              <button class="rng er-toggle${showSintStrip ? ' on' : ''}" id="siBtn"
+                title="Short interest under the plot: FINRA's bi-weekly position, drawn as days to cover because share counts are filed as-reported and never split-adjusted.">SHORT</button>
               ${BENCH.map((b) =>
                 `<button class="rng bm-toggle ${b.cls}${b.on ? ' on' : ''}" data-bm="${b.sym}"
                   title="Overlay ${b.label} (${b.sym}), rebased to this stock's price at the left edge — the gap between the lines is relative performance">${b.sym}</button>`
@@ -2013,6 +2137,7 @@
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
           <div id="earnRug" hidden></div>
+          <div id="sintStrip" hidden></div>
           <div id="trendStrip" hidden></div>
           <div id="whyBox" class="bezel" hidden></div>
         </section></div>
@@ -2352,6 +2477,17 @@
           paintChart();
           return;
         }
+        if (b.id === 'siBtn') {
+          showSintStrip = !showSintStrip;
+          try { localStorage.setItem(SINT_KEY, showSintStrip ? '1' : '0'); } catch (e) { /* private window */ }
+          window.track && track('chart', 'shortint:' + (showSintStrip ? 'on' : 'off'));
+          b.classList.toggle('on', showSintStrip);
+          // Only the strip changes, so the chart is not repainted — a full
+          // repaint would rebuild the plot, the ribbon and every overlay to
+          // toggle one layer underneath them.
+          paintSintStrip();
+          return;
+        }
         if (b.dataset.bm) {
           const bm = BENCH.find((x) => x.sym === b.dataset.bm);
           bm.on = !bm.on;
@@ -2653,6 +2789,11 @@
           const j = await r.json();
           const st = j.study;
           if (!st || !st.series || !st.series.length) { card.remove(); return; }
+          // The chart layer reads the same series this card does — one fetch
+          // serves both. It lands after the first paint, so the strip is
+          // drawn now; the chart itself is left alone.
+          sintRows = st.series;
+          paintSintStrip();
           const L = st.latest || {};
           // Just the count. "210 readings since 2017-12-29" collided with the
           // heading at 390px, and the from-date is already the left end of
