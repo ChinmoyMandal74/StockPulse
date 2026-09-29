@@ -112,15 +112,33 @@ async function fetchSymbol(finraSym) {
       continue;
     }
 
-    if (!got.length) {
-      empty++;
-      if (COMMIT) await store.noteShortMiss(sym, 'empty', null);
-    } else {
-      ok++; rows += got.length;
-      if (COMMIT) await store.writeShortInterest(sym, got, { finraSym: used, status: 'ok' });
+    // THE WRITE NEEDS ITS OWN CATCH, and leaving it out cost 412 symbols on
+    // the first real run (2026-09-28). Turso answered one batch with an
+    // HTTP 404 — transient, the database was healthy a minute later — and
+    // because this sat outside the try it threw clean out of the loop and
+    // abandoned the rest of the universe at 65%.
+    //
+    // A blip costs ONE symbol, never the run. The symbol is left unrecorded
+    // rather than marked checked, so `--missing` picks it up next time: the
+    // insider walk's rule, where a day that fails does not advance.
+    try {
+      if (!got.length) {
+        empty++;
+        if (COMMIT) await store.noteShortMiss(sym, 'empty', null);
+      } else {
+        if (COMMIT) await store.writeShortInterest(sym, got, { finraSym: used, status: 'ok' });
+        // Counted AFTER the write lands, or the receipt overstates what is
+        // actually stored — which is the number this job is judged on.
+        ok++; rows += got.length;
+      }
+    } catch (e) {
+      failed++;
+      console.log('  ' + sym.padEnd(8) + 'WRITE FAILED  ' + e.message);
+      await sleep(3000);
+      continue;
     }
 
-    if (i < 12 || i % 100 === 0) {
+    if (i < 12 || i % 50 === 0) {
       const last = got.length ? got.reduce((a, b) => (a.d > b.d ? a : b)) : null;
       console.log('  ' + sym.padEnd(8) + String(got.length).padStart(4) + ' readings' +
         (last ? '   latest ' + last.d + '  ' + Number(last.shares).toLocaleString() +
