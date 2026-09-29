@@ -6940,6 +6940,89 @@ function btEvalAt(sym, p, i, today, was, earnings, atDate, cfg, also) {
   return { row, v, by };
 }
 
+// ---- the rebalance loop, shared by both backtests -------------------------
+//
+// EXTRACTED rather than copied (2026-09-29), when /adjustedbacktest needed
+// the same thing. The only difference between the two pages is WHERE the
+// fundamentals at each rebalance date come from: `/backtest` folds forward a
+// single read of `fundamentals_history`, `/adjustedbacktest` reads the
+// filings that were public on that date. Everything else — the exit-tier
+// rule, the re-cut, the seeded random control, the coverage line, the trade
+// log — is one implementation, because two would drift inside a week the way
+// the two row builders `techrow.js` exists to unify already had.
+//
+// `funds(at)` is called ONCE per rebalance date and returns a per-symbol
+// getter `(sym, prep, i) => overlay | null`. That shape is what lets the
+// fold-forward keep its cursor and the filings version compute a cutoff,
+// without either leaking into here.
+function btRebalance(o) {
+  const { axis, marks, px, symbols, prep, byS, earnings, cfg, tiers, mode,
+    top, rank, seed, costBps, open, funds } = o;
+  const targets = new Map();
+  const coverage = [];
+  // Every verdict at every rebalance date, not only the qualifying ones —
+  // the reason a stock was SOLD is the verdict that disqualified it, which
+  // by definition is not in the target set.
+  const verdicts = new Map();
+  const recut = mode === 'rerun' && top > 0;
+
+  for (const j of marks) {
+    const at = axis[j];
+    const fundsFor = funds(at);
+    const set = new Set();
+    const why = new Map();
+    const cand = [];
+    let real2 = 0, imputed2 = 0;
+    for (const sym of symbols) {
+      const p = prep[sym];
+      if (!p) continue;
+      let i = -1;
+      for (let k = p.dates.length - 1; k >= 0; k--) if (p.dates[k] <= at) { i = k; break; }
+      if (i < 252) continue;
+      const was = fundsFor(sym, p, i);
+      const ev = btEvalAt(sym, p, i, byS.get(sym) || {}, was, earnings, at, cfg);
+      if (!ev) continue;
+      if (was) real2++; else imputed2++;
+      why.set(sym, { a: ev.v.action, f: ev.v.flag || null, real: !!was });
+      // In exit mode a holding survives while its verdict is ABOVE the exit
+      // tier, which is a wider net than the tiers you bought on — you do not
+      // sell a Strong Buy that merely slipped to Hold.
+      const ok = mode === 'exit'
+        ? Action.ACTIONS.indexOf(ev.v.action) > Action.ACTIONS.indexOf(BT_EXIT_TIER)
+        : tiers.indexOf(ev.v.action) >= 0;
+      if (!ok) continue;
+      set.add(sym);
+      // Ranked only when a cut has to be made, and only on the qualifying
+      // names: the cushion is a pass over the bars, and doing it for
+      // the whole universe at every mark would be the expensive half of the
+      // run for a number nothing would read.
+      if (recut) cand.push({ symbol: sym, tierRank: Action.ACTIONS.indexOf(ev.v.action),
+        ...btRankMetrics(ev.row, p.rows, i, cfg) });
+    }
+    // A Top-N cut is part of the strategy, so re-running the rules has to
+    // re-run the CUT as well. Without this, asking for the top 5 and
+    // rebalancing weekly quietly held all 20 from the first mark onward —
+    // invisible until the trade log named the fifteen it bought.
+    //
+    // The seed moves with the mark so the random control draws a fresh
+    // basket each period rather than the same one every time; exit-only is
+    // left alone, since a cut there would sell names for ranking low, which
+    // is not what "sell on downgrade" means.
+    if (recut && cand.length > top) {
+      const keep = new Set(btPick(cand, rank, top, seed + j).map((x) => x.symbol));
+      for (const sym of [...set]) if (!keep.has(sym)) set.delete(sym);
+    }
+    targets.set(j, set);
+    verdicts.set(j, why);
+    coverage.push({ d: at, recorded: real2, imputed: imputed2 });
+  }
+  const sim = btSimulate({ axis, px, open, targets, mode, costBps });
+  if (!sim) return null;
+  return { ...sim, mode, costBps, coverage,
+    marks: marks.map((j) => axis[j]),
+    trades: btTrades(sim.log, verdicts, byS, { want: new Set(tiers), cut: recut }) };
+}
+
 function btRun(opts) {
   const { bars, snapshot, from, tiers, earnings, recorded, only, cfg, compare } = opts;
   btRsiCache.clear();
@@ -11321,78 +11404,22 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
       // Prices on the shared axis for EVERY symbol, not just the opening set:
       // a rerun can buy something that was not in the first basket.
       const full = btMatrix(r.everySeries, asked);
-      const px = full.rows;
       // One read of the whole history, folded forward as the rebalance dates
       // are walked in order. readFundamentalsAsOf would re-read everything for
-      // each date, which gets worse precisely as the archive grows.
+      // each date, which gets worse precisely as the archive grows. The
+      // cursor lives in this closure, which is why `funds` is called once per
+      // mark rather than once per symbol.
       const rows = await store.readFundamentalsRows(today).catch(() => []);
-      const targets = new Map();
-      const coverage = [];
-      // Every verdict at every rebalance date, not only the qualifying ones —
-      // the reason a stock was SOLD is the verdict that disqualified it, which
-      // by definition is not in the target set.
-      const verdicts = new Map();
-      const recut = mode === 'rerun' && top > 0;
       let ptr = 0;
       const stood = {};
-      for (const j of marks) {
-        const at = axis[j];
+      const funds = (at) => {
         while (ptr < rows.length && rows[ptr].d <= at) { stood[rows[ptr].symbol] = rows[ptr]; ptr++; }
-        const set = new Set();
-        const why = new Map();
-        const cand = [];
-        let real2 = 0, imputed2 = 0;
-        for (const sym of Object.keys(bars)) {
-          const p = r.prep[sym];
-          if (!p) continue;
-          let i = -1;
-          for (let k = p.dates.length - 1; k >= 0; k--) if (p.dates[k] <= at) { i = k; break; }
-          if (i < 252) continue;
-          const was = stood[sym] || null;
-          const ev = btEvalAt(sym, p, i, byS2.get(sym) || {}, was, earnings, at, cfg);
-          if (!ev) continue;
-          if (was) real2++; else imputed2++;
-          why.set(sym, { a: ev.v.action, f: ev.v.flag || null, real: !!was });
-          // In exit mode a holding survives while its verdict is ABOVE the exit
-          // tier, which is a wider net than the tiers you bought on — you do not
-          // sell a Strong Buy that merely slipped to Hold.
-          const ok = mode === 'exit'
-            ? Action.ACTIONS.indexOf(ev.v.action) > Action.ACTIONS.indexOf(BT_EXIT_TIER)
-            : tiers.indexOf(ev.v.action) >= 0;
-          if (!ok) continue;
-          set.add(sym);
-          // Ranked only when a cut has to be made, and only on the qualifying
-          // names: the cushion is a pass over the bars, and doing it for
-          // the whole universe at every mark would be the expensive half of the
-          // run for a number nothing would read.
-          if (recut) cand.push({ symbol: sym, tierRank: Action.ACTIONS.indexOf(ev.v.action),
-            ...btRankMetrics(ev.row, p.rows, i, cfg) });
-        }
-        // A Top-N cut is part of the strategy, so re-running the rules has to
-        // re-run the CUT as well. Without this, asking for the top 5 and
-        // rebalancing weekly quietly held all 20 from the first mark onward —
-        // invisible until the trade log named the fifteen it bought.
-        //
-        // The seed moves with the mark so the random control draws a fresh
-        // basket each period rather than the same one every time; exit-only is
-        // left alone, since a cut there would sell names for ranking low, which
-        // is not what "sell on downgrade" means.
-        if (recut && cand.length > top) {
-          const keep = new Set(btPick(cand, rank, top, seed + j).map((x) => x.symbol));
-          for (const sym of [...set]) if (!keep.has(sym)) set.delete(sym);
-        }
-        targets.set(j, set);
-        verdicts.set(j, why);
-        coverage.push({ d: at, recorded: real2, imputed: imputed2 });
-      }
-      const sim = btSimulate({ axis, px, open: chosen.map((x) => x.symbol),
-        targets, mode, costBps });
-      if (sim) {
-        rebal = { ...sim, every, mode, costBps, coverage,
-          marks: marks.map((j) => axis[j]),
-          trades: btTrades(sim.log, verdicts, byS2,
-            { want: new Set(tiers), cut: recut }) };
-      }
+        return (sym) => stood[sym] || null;
+      };
+      rebal = btRebalance({ axis, marks, px: full.rows, symbols: Object.keys(bars),
+        prep: r.prep, byS: byS2, earnings, cfg, tiers, mode, top, rank, seed,
+        costBps, open: chosen.map((x) => x.symbol), funds });
+      if (rebal) rebal.every = every;
     } catch (err) {
       rebalError = err.message;      // a failed simulation never fails the run
       console.error('rebalance failed:', err.message);
@@ -11584,7 +11611,12 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
   if (themeAsked && !theme) return res.status(404).json({ error: `No theme called "${themeAsked}".` });
   const only = theme ? new Set(themes[theme]) : null;
 
-  const key = [asked, hz, rules, theme || '', tiers.slice().sort().join('|')].join('~');
+  // EVERY control that changes the answer, or a second run with a different
+  // cut would be served the first one's numbers.
+  const key = [asked, hz, rules, theme || '', tiers.slice().sort().join('|'),
+    String(req.query.top || ''), String(req.query.rank || ''),
+    String(req.query.every || ''), String(req.query.mode || ''),
+    String(req.query.cost || '')].join('~');
   const warm = adjBtCached(key);
   if (warm) return res.json(Object.assign({}, warm, { cached: true }));
 
@@ -11617,7 +11649,10 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
   const [bars, facts, shorts, state, earnings, snap] = await Promise.all([
     timed('bars', store.readBarsWindow(universe, since, until)),
     timed('filings', store.readSecFactsSince(universe, factSince, asked)),
-    timed('short', store.readShortAsOfFor(universe, Adjusted.shortCutoff(asked))),
+    // A RUN of readings rather than one: the rebalancer needs the newest
+    // visible at each of its marks, and a read per mark would be a read per
+    // week of the horizon.
+    timed('short', store.readShortRecentFor(universe, Adjusted.shortCutoff(end))),
     timed('secState', store.readSecState()),
     timed('earnings', store.readEarningsDates(asked, end)),
     timed('snapshot', readSnapshot()),
@@ -11631,6 +11666,16 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
   // A symbol with no usable filings is DROPPED rather than falling back to
   // today's vendor figures — that fallback is exactly the look-ahead this
   // page exists to remove, and leaving it in would make the result a blend.
+  // The newest FINRA reading VISIBLE at a date — rows come back newest-first,
+  // so the first one on or before the cutoff is it.
+  const startCut = Adjusted.shortCutoff(asked);
+  const shortAt = (sym, cut) => {
+    const rows = shorts.get(sym);
+    if (!rows || !cut) return null;
+    for (const x of rows) if (x.d <= cut) return x;
+    return null;
+  };
+
   const tOverlay = Date.now();
   const recorded = {};
   const scoped = {};
@@ -11651,7 +11696,7 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
     }
     if (!(px > 0)) { noFilings++; continue; }
     const s = byS.get(sym) || {};
-    const ov = Adjusted.overlayFrom(sec, shorts.get(sym) || null, s.floatShares, px);
+    const ov = Adjusted.overlayFrom(sec, shortAt(sym, startCut), s.floatShares, px);
     if (!sec.ttmTo) noTtm++;
     if (ov.marketCap == null) noCap++;
     // `asOf` is what btRun reports as the fundamentals date on each pick.
@@ -11671,7 +11716,90 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
 
   const r = btRun({ bars: scoped, snapshot: stocks, from: asked, tiers, earnings,
     recorded, only, cfg });
-  const basket = btCurve(r.heldSeries, asked);
+  const tier = btCurve(r.heldSeries, asked);
+
+  // ---- how many to hold ---------------------------------------------------
+  // The same controls /backtest carries, and the same helpers behind them —
+  // the owner asked for them here after the first cut shipped without.
+  // Seeded off the date and the size so a reload draws the same band.
+  const rank = BT_RANKS.indexOf(String(req.query.rank || '')) >= 0
+    ? String(req.query.rank) : 'cushion';
+  const topAsked = Math.max(0, Math.min(200, parseInt(req.query.top, 10) || 0));
+  const top = topAsked && topAsked < r.picks.length ? topAsked : 0;   // 0 = all of them
+  const seed = Array.from(asked + '|' + top).reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const chosen = btPick(r.picks, rank, top, seed);
+  const chosenSet = new Set(chosen.map((x) => x.symbol));
+  for (const p of r.picks) p.selected = chosenSet.has(p.symbol);
+  // How many the chosen metric could actually rank. `exitDistance` returns
+  // null past a 60% fall, so a cut made mostly on unrankable rows is an
+  // arbitrary cut and the page has to be able to say so.
+  const rankable = rank === 'random' ? r.picks.length
+    : r.picks.filter((p) => p.cushion != null).length;
+
+  const basket = top
+    ? { dates: tier.dates, values: btAverage(tier.matrix, chosen.map((x) => x.symbol)),
+        members: chosen.length, matrix: tier.matrix }
+    : tier;
+  const band = top ? btBand(tier.matrix, r.picks.map((x) => x.symbol), top, seed) : null;
+
+  // ---- rebalancing --------------------------------------------------------
+  // The SAME loop /backtest runs (`btRebalance`), with the one thing that
+  // differs plugged in: where the fundamentals at each mark come from. There
+  // it folds forward a read of `fundamentals_history`; here it asks the
+  // filings what was public on that date, which costs no read at all — the
+  // whole window is already in memory.
+  const every = Math.max(0, Math.min(90, parseInt(req.query.every, 10) || 0));
+  const mode = BT_MODES.indexOf(String(req.query.mode || '')) >= 0
+    ? String(req.query.mode) : 'rerun';
+  const costBps = Math.max(0, Math.min(200, Number(req.query.cost) || 0));
+  let rebal = null, rebalError = null;
+  if (every && tier.dates.length > 2) {
+    try {
+      const marks = btRebalanceDays(tier.dates, every);
+      // `market` above already built this matrix; reuse it rather than
+      // walking every symbol's series a second time.
+      const full = market.matrix || btMatrix(allSeries, asked);
+      // MOST MARKS SEE THE SAME FILINGS AS THE ONE BEFORE, because nothing
+      // was filed in between — so the cache is keyed on the newest filing
+      // VISIBLE at the mark rather than on the mark itself. Measured over
+      // 1,019 filers and six marks: 3.73s recomputing every time, 3.69s with
+      // a per-(symbol, date) memo (which almost never hits), 0.61s this way
+      // — 5,095 of 6,114 lookups reused.
+      const secMemo = new Map();
+      const secAt = (sym, at) => {
+        const rows = facts.get(sym) || [];
+        let newest = '';
+        for (const r of rows) if (r.filed && r.filed <= at && r.filed > newest) newest = r.filed;
+        if (!newest) return null;
+        const k = sym + '|' + newest;
+        if (secMemo.has(k)) return secMemo.get(k);
+        const v = Adjusted.fundamentalsAsOf(SecFacts, rows, at);
+        secMemo.set(k, v);
+        return v;
+      };
+      const funds = (at) => {
+        const cut = Adjusted.shortCutoff(at);
+        return (sym, pr, i) => {
+          const sec = secAt(sym, at);
+          if (!sec) return null;
+          const px2 = pr.closes[i];
+          if (!(px2 > 0)) return null;
+          const ov2 = Adjusted.overlayFrom(sec, shortAt(sym, cut),
+            (byS.get(sym) || {}).floatShares, px2);
+          ov2.asOf = sec.filed;
+          return ov2;
+        };
+      };
+      rebal = btRebalance({ axis: tier.dates, marks, px: full.rows,
+        symbols: Object.keys(scoped), prep: r.prep, byS, earnings, cfg, tiers,
+        mode, top, rank, seed, costBps,
+        open: chosen.map((x) => x.symbol), funds });
+      if (rebal) rebal.every = every;
+    } catch (err) {
+      rebalError = err.message;     // a failed simulation never fails the run
+      console.error('adjusted rebalance failed:', err.message);
+    }
+  }
   clock.evaluate = Date.now() - tRun;
   clock.total = Date.now() - t0;
 
@@ -11692,26 +11820,53 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
   const data = {
     date: asked, end, horizon: hz, rules, theme, tiers,
     ruleSets: RULE_SETS, horizons: Object.keys(ADJBT_HORIZONS), floor: ADJBT_FLOOR,
+    rank, top, every, mode: every ? mode : null, cost: costBps,
+    ranks: BT_RANKS, modes: BT_MODES,
     picks: r.picks.map((p) => ({
       symbol: p.symbol, name: p.name, action: p.action, flag: p.flag, type: p.type,
       priceThen: p.priceThen, dateThen: p.dateThen, priceNow: p.priceNow,
       lastDate: p.lastDate, ret: p.ret, actionNow: p.actionNow,
-      filed: p.fundAsOf || null,
+      filed: p.fundAsOf || null, cushion: p.cushion, selected: !!p.selected,
       reportedInWindow: p.reportedInWindow,
     })),
+    // What the rebalancing actually traded, per rebalance, with the verdict
+    // that fired beside each name — a turnover percentage nobody can check is
+    // not a result.
+    trades: rebal ? rebal.trades : null,
+    rebalError,
     basket: { dates: basket.dates, values: basket.values, members: basket.members },
     market: { dates: market.dates, values: market.values, members: market.members },
+    rebalanced: rebal ? { dates: tier.dates, values: rebal.values } : null,
+    band: band ? { p10: band.p10, p50: band.p50, p90: band.p90 } : null,
     spy, spyError,
     result: {
       basket: pct(lastOf(basket)),
       market: pct(lastOf(market)),
       spy: spy && spy.values.length ? pct(spy.values[spy.values.length - 1]) : null,
+      // The rebalanced run beside the buy-and-hold one it is a variant of,
+      // so the page can say what the rebalancing itself was worth.
+      rebalanced: rebal && rebal.values.length
+        ? pct(rebal.values[rebal.values.length - 1]) : null,
+      rebalances: rebal ? rebal.rebalances : null,
+      turnover: rebal ? rebal.turnover : null,
+      endNames: rebal ? rebal.endNames : null,
+      endCash: rebal ? rebal.endCash : null,
+      rankable,
+      // Where the ranked basket landed among random baskets of the same size.
+      // 50 means the ranking did exactly nothing; this is the number to read
+      // before believing a cut was worth making.
+      bandPct: band && lastOf(basket) != null
+        ? Math.round((band.finals.filter((x) => x < lastOf(basket)).length
+          / band.finals.length) * 100) : null,
+      bandLo: band ? pct(band.p10[band.p10.length - 1]) : null,
+      bandHi: band ? pct(band.p90[band.p90.length - 1]) : null,
+      bandTrials: band ? band.trials : null,
     },
     counts: {
       universe: universe.length,
       scored: r.evaluated, picked: r.picks.length,
       kept, noCik, noFilings, noTtm, noCap, tooShort: r.tooShort,
-      marketMembers: market.members,
+      marketMembers: market.members, held: basket.members,
     },
     ms: clock,
     window: { barsFrom: since, barsTo: until, factsFrom: factSince,

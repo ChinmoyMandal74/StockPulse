@@ -777,7 +777,10 @@ anyway, and the floor should land before the rebuild rather than after it.
 
 > **`/adjustedbacktest` now exists** and does the single-window half: pick a
 > date from 2018, the rules are replayed on filings public then, and the
-> equal-weight basket is drawn against the universe and the S&P. Read the
+> equal-weight basket is drawn against the universe and the S&P — with the
+> same controls `/backtest` carries (how many to hold, rank by, rebalance,
+> what to do on each rebalance, cost), through the **shared** `btRebalance`
+> loop rather than a second copy of it. Read the
 > CLAUDE.md section before this entry — several traps listed below are
 > **solved** there, and one of them (the derived quarter dated by a filing
 > two years later) was not anticipated here at all.
@@ -787,8 +790,12 @@ anyway, and the floor should land before the rebuild rather than after it.
 > 1. **A ROLLING SWEEP. This is the one that turns it from an anecdote into
 >    evidence** — one window is one observation, and four spot readings came
 >    back positive, which the research log says to distrust. Blocked on cost:
->    a single window is 40-55s, dominated by the bar and filing reads, so a
->    200-window sweep is hours. The lever is precomputing an `adjusted_history`
+>    a single window is ~35s on production and 65-80s from a laptop, and
+>    **the bars are nearly all of it** — measured in isolation, 56.0s against
+>    1.6s for the filings and 1.2s for short interest, while the controls add
+>    almost nothing (a top-N cut 0s, a fortnightly rebalance 1.2s). So a
+>    200-window sweep is hours and optimising anything but the bar read is
+>    spent in the wrong place. The lever is precomputing an `adjusted_history`
 >    table the way `tech_history` was precomputed for `/trend-backtest` —
 >    filings change only when one is filed, so a per-symbol point-in-time
 >    overlay per month is a small table and would make a sweep instant.
@@ -801,11 +808,18 @@ anyway, and the floor should land before the rebuild rather than after it.
 >    the date, which is right — that is what a reader had. Taking the EARLIEST
 >    `filed` per period would answer a different and also interesting
 >    question (what was said before any restatement) and is not built.
-> 5. Rebalancing, a top-N cut and the trade log, which `/backtest` has.
+> 5. ~~Rebalancing, a top-N cut and the trade log, which `/backtest` has.~~
+>    **Built 2026-09-29**, at the owner's request the same day
+>    ("you are not giving the option to select How many to hold and
+>    rebalancing options in this adjusted version"). The extraction was
+>    proved inert by diffing `/api/backtest`'s own response over five
+>    parameter sets — 6,171 structural fields, 0 differences, against a
+>    same-code-twice control that isolates the market moving underneath.
 
-`/adjusted` exists and shows the fields; the owner's stated aim is to backtest
-the verdict it produces, and explicitly **not yet** ("I do not want to run the
-back test now, I want to see the advice data first").
+`/adjusted` exists and shows the fields. The owner asked to see those first
+("I do not want to run the back test now, I want to see the advice data
+first") and then asked for the backtest the same day; both are built, and
+what remains open is the list above.
 
 **Why it is the strongest case this data has.** `/backtest` is capped at two
 months because `fundamentals_history` began 2026-08-30 and everything before

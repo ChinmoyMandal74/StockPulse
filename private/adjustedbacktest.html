@@ -88,6 +88,31 @@
     #abTbl td a { color: var(--text); text-decoration: none; }
     #abTbl td a:hover { text-decoration: underline; }
     #abTbl .srt { color: var(--accent); }
+    /* the rebalance trade log */
+    #abTrades { margin: 16px 0 0; }
+    #abTrades details { border: 1px solid var(--hair); border-radius: 10px;
+                        margin-bottom: 8px; background: var(--surface); }
+    #abTrades summary { cursor: pointer; padding: 9px 13px; font-size: 12.5px;
+                        color: var(--text); list-style: none; }
+    #abTrades summary::-webkit-details-marker { display: none; }
+    #abTrades summary .d { font: 600 12px var(--mono); margin-right: 10px; }
+    #abTrades summary .q { color: var(--faint); }
+    #abTrades .body { padding: 2px 13px 11px; }
+    #abTrades .tr { display: grid; grid-template-columns: 62px 78px 1fr 70px;
+                    gap: 8px; font-size: 11.5px; padding: 3px 0;
+                    border-top: 1px solid var(--hair); align-items: baseline; }
+    #abTrades .tr .sym { font: 600 11.5px var(--mono); }
+    #abTrades .tr .side.sell { color: var(--red); }
+    #abTrades .tr .side.buy { color: var(--green); }
+    #abTrades .tr .why { color: var(--muted); }
+    #abTrades .tr .r { text-align: right; font: 500 11.5px var(--mono); }
+    #abTrades h3, #abBandNote h3 { font-size: 12px; margin: 18px 0 8px;
+      text-transform: uppercase; letter-spacing: .06em; color: var(--faint); }
+    #abBandNote { color: var(--muted); font-size: 12.5px; line-height: 1.7;
+                  margin: 10px 0 0; }
+    #abBandNote b { color: var(--text); font-weight: 600; }
+    #abChart .ln.rebal { stroke: var(--amber); stroke-width: 1.5; }
+
     #abMsg { color: var(--muted); font-size: 13px; padding: 18px 4px; }
     #abMsg.err { color: var(--red); }
   </style>
@@ -118,6 +143,43 @@
         <select id="abTheme"><option value="">All stocks</option></select></div>
       <div class="fld"><span class="lbl">Verdicts</span>
         <div id="abTiers"></div></div>
+    </div>
+
+    <div id="abBar">
+      <div class="fld"><span class="lbl">How many to hold</span>
+        <select id="abTop">
+          <option value="0">All of them</option>
+          <option value="3">Top 3</option>
+          <option value="5">Top 5</option>
+          <option value="10">Top 10</option>
+          <option value="15">Top 15</option>
+          <option value="20">Top 20</option>
+          <option value="30">Top 30</option>
+        </select></div>
+      <div class="fld"><span class="lbl">Rank by</span>
+        <select id="abRank">
+          <option value="cushion">Cushion (room to the exit)</option>
+          <option value="random">At random (the control)</option>
+        </select></div>
+      <div class="fld"><span class="lbl">Rebalance</span>
+        <select id="abEvery">
+          <option value="0">Never — buy and hold</option>
+          <option value="7">Every week</option>
+          <option value="14">Every fortnight</option>
+          <option value="30">Every month</option>
+        </select></div>
+      <div class="fld"><span class="lbl">On each rebalance</span>
+        <select id="abMode">
+          <option value="rerun">Re-run the rules</option>
+          <option value="exit">Sell only on a downgrade</option>
+        </select></div>
+      <div class="fld"><span class="lbl">Cost</span>
+        <select id="abCost">
+          <option value="0">None</option>
+          <option value="5">5 bps</option>
+          <option value="10">10 bps</option>
+          <option value="20">20 bps</option>
+        </select></div>
       <button class="btn" id="abGo">Run</button>
     </div>
 
@@ -128,7 +190,9 @@
       <div id="abLegend"></div>
     </div></div>
 
+    <p id="abBandNote"></p>
     <div id="abLimits"></div>
+    <div id="abTrades"></div>
 
     <div class="bezel"><div class="core">
       <div id="abWrap"><table id="abTbl"><thead></thead><tbody></tbody></table></div>
@@ -163,6 +227,9 @@
     function chart() {
       var lines = [];
       if (DATA.basket && DATA.basket.values.length) lines.push({ c: 'basket', s: DATA.basket });
+      if (DATA.rebalanced && DATA.rebalanced.values.length) {
+        lines.push({ c: 'rebal', s: DATA.rebalanced });
+      }
       if (DATA.market && DATA.market.values.length) lines.push({ c: 'market', s: DATA.market });
       if (DATA.spy && DATA.spy.values.length) lines.push({ c: 'spy', s: DATA.spy });
       if (!lines.length) { $('abChartIn').innerHTML = ''; $('abLegend').innerHTML = ''; return; }
@@ -207,8 +274,11 @@
 
       var r = DATA.result;
       $('abLegend').innerHTML =
-        '<span><i style="border-color:var(--accent)"></i>What the rules picked ('
-          + DATA.basket.members + ') ' + pc(r.basket) + '</span>'
+        '<span><i style="border-color:var(--accent)"></i>'
+          + (DATA.top ? 'Top ' + DATA.top + ' held' : 'What the rules picked')
+          + ' (' + DATA.basket.members + ') ' + pc(r.basket) + '</span>'
+      + (DATA.rebalanced ? '<span><i style="border-color:var(--amber)"></i>Rebalanced '
+          + pc(r.rebalanced) + '</span>' : '')
       + '<span><i style="border-color:var(--accent-2)"></i>Every stock, equal weight ('
           + DATA.market.members + ') ' + pc(r.market) + '</span>'
       + (DATA.spy ? '<span><i style="border-color:var(--muted)"></i>S&amp;P 500 '
@@ -220,13 +290,18 @@
       var r = DATA.result, c = DATA.counts;
       var excess = (r.basket == null || r.market == null) ? null : r.basket - r.market;
       var items = [
-        ['the picks', pc(r.basket), r.basket],
+        [DATA.top ? 'top ' + DATA.top : 'the picks', pc(r.basket), r.basket],
+      ];
+      if (r.rebalanced != null) items.push(['rebalanced', pc(r.rebalanced), r.rebalanced]);
+      items.push(
         ['every stock', pc(r.market), r.market],
         ['excess', pc(excess), excess],
         ['picked', String(c.picked), null],
-        ['scored', String(c.scored), null],
-        ['no filings', String(c.noFilings + c.noCik), null],
-      ];
+        ['held', String(c.held), null],
+        ['no filings', String(c.noFilings + c.noCik), null]);
+      if (r.turnover != null) {
+        items.push(['turnover', r.turnover.toFixed(0) + '%', null]);
+      }
       $('abCards').innerHTML = items.map(function (x) {
         var cls = x[2] == null ? '' : (x[2] >= 0 ? ' pos' : ' neg');
         return '<div class="st"><span class="n' + cls + '">' + we(x[1]) + '</span>'
@@ -267,10 +342,75 @@
         + 'exactly the look-ahead this page exists to remove. Of those kept, '
         + c.noTtm + ' had no trailing year and ' + c.noCap + ' no market cap, so their '
         + 'verdicts rest on fewer inputs.</li>'
-      + '<li><b>No costs, no dividends, no rebalancing.</b> Equal dollars at the start, '
-        + 'held to ' + we(DATA.end) + '. Rebalancing, a top-N cut and the trade log exist '
-        + 'on <a href="/backtest">/backtest</a> and are not built here yet.</li>'
+      + '<li><b>No dividends, and costs only if you asked for them.</b> '
+        + (DATA.every
+          ? 'Rebalanced every ' + DATA.every + ' days at ' + DATA.cost + ' bps, '
+            + we(DATA.mode === 'exit' ? 'selling only on a downgrade' : 're-running the rules')
+            + '. At a weekly rebalance across a hundred names, cost is often the '
+            + 'difference between a positive and a negative result.'
+          : 'Equal dollars at the start, held to ' + we(DATA.end) + ' with no rebalancing.')
+        + '</li>'
       + '</ul>';
+    }
+
+    // ---- did the CUT do anything? ---------------------------------------
+    // A top-N basket that lands at the 50th percentile of random baskets of
+    // the same size is a cut that did nothing, and that is the number worth
+    // reading before believing the ranking earned its place.
+    function bandNote() {
+      var r = DATA.result;
+      if (!DATA.top || r.bandPct == null) { $('abBandNote').innerHTML = ''; return; }
+      var verdict = r.bandPct >= 80 ? 'ahead of most of them'
+        : r.bandPct <= 20 ? 'behind most of them' : 'indistinguishable from them';
+      $('abBandNote').innerHTML =
+        '<b>The cut, against luck.</b> Holding the top ' + DATA.top + ' by '
+      + we(DATA.rank === 'random' ? 'a random draw' : 'cushion') + ' landed at the <b>'
+      + r.bandPct + 'th percentile</b> of ' + r.bandTrials + ' random baskets of '
+      + DATA.top + ' drawn from the same ' + DATA.picks.length + ' picks ('
+      + pc(r.bandLo) + ' to ' + pc(r.bandHi) + ') — ' + verdict + '. '
+      + '50 would mean the ranking did nothing.'
+      + (DATA.rank !== 'random' && r.rankable < DATA.picks.length
+        ? ' <b>Only ' + r.rankable + ' of ' + DATA.picks.length + ' could be ranked</b> '
+          + 'on cushion at all, so the rest of the cut was arbitrary.' : '');
+    }
+
+    function trades() {
+      if (!DATA.trades || !DATA.trades.length) { $('abTrades').innerHTML = ''; return; }
+      var open = true;
+      $('abTrades').innerHTML = '<h3>What each rebalance traded</h3>'
+      + DATA.trades.map(function (t) {
+        // UNDER A CUT A HOLDING CAN BE SOLD WITH ITS VERDICT INTACT — it was
+        // ranked out, not downgraded. Without saying so the log reads as
+        // selling a Hold to buy a Hold, which is a contradiction on its face.
+        var reason = function (x, out) {
+          if (out && x.ranked) {
+            return 'Still ' + (x.action || '?') + ' — ranked below the top ' + DATA.top;
+          }
+          return (x.action || '?') + (x.flag ? ' — ' + x.flag : '');
+        };
+        var rows = t.sold.map(function (x) {
+          return '<div class="tr"><span class="sym">' + we(x.sym) + '</span>'
+            + '<span class="side sell">sold</span>'
+            + '<span class="why">' + we(reason(x, true)) + '</span>'
+            + '<span class="r">' + (x.ret == null ? '' : pc(x.ret)) + '</span></div>';
+        }).concat(t.bought.map(function (x) {
+          return '<div class="tr"><span class="sym">' + we(x.sym) + '</span>'
+            + '<span class="side buy">bought</span>'
+            + '<span class="why">' + we(reason(x, false)) + '</span>'
+            + '<span class="r"></span></div>';
+        })).join('');
+        var o = open; open = false;
+        return '<details' + (o ? ' open' : '') + '><summary><span class="d">'
+          + we(t.d) + '</span><span class="q">held ' + t.held + ' \u00b7 sold '
+          + t.soldN + ' \u00b7 bought ' + t.boughtN + ' \u00b7 turnover '
+          + (t.turnover == null ? '\u2014' : t.turnover.toFixed(0) + '%')
+          + '</span></summary><div class="body">' + rows + '</div></details>';
+      }).join('')
+      + '<p style="color:var(--muted);font-size:12px;line-height:1.6;margin:8px 2px 0">'
+      + 'A name that is KEPT is re-weighted rather than traded, so the names listed '
+      + 'will not add up to the turnover above them. The reason beside each is the '
+      + 'verdict that fired for it on that date \u2014 for a sale, the one that '
+      + 'disqualified it.</p>';
     }
 
     // ---- the picks -------------------------------------------------------
@@ -356,6 +496,11 @@
         + '&horizon=' + encodeURIComponent($('abHz').value)
         + '&rules=' + encodeURIComponent($('abRules').value)
         + '&theme=' + encodeURIComponent($('abTheme').value)
+        + '&top=' + encodeURIComponent($('abTop').value)
+        + '&rank=' + encodeURIComponent($('abRank').value)
+        + '&every=' + encodeURIComponent($('abEvery').value)
+        + '&mode=' + encodeURIComponent($('abMode').value)
+        + '&cost=' + encodeURIComponent($('abCost').value)
         + '&tiers=' + encodeURIComponent(tiers.join(','));
       $('abTook').textContent = 'running…';
       $('abMsg').textContent = 'Reading the archive. A cold run takes about a minute — '
@@ -367,7 +512,7 @@
           if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); })
         .then(function (j) {
           DATA = j;
-          note(); cards(); chart(); limits(); head(); rows();
+          note(); cards(); chart(); bandNote(); limits(); trades(); head(); rows();
           $('abTook').textContent = ((Date.now() - t0) / 1000).toFixed(1) + 's'
             + (j.cached ? ' (cached)' : '');
           try { history.replaceState(null, '', location.pathname + q); } catch (e) { /* not fatal */ }
@@ -423,6 +568,29 @@
       $('abRules').appendChild(o);
     });
     $('abRules').value = p.get('rules') || 'Balanced';
+
+    // The five new controls, restored from the address so a run can be sent.
+    [['abTop', 'top', '0'], ['abRank', 'rank', 'cushion'], ['abEvery', 'every', '0'],
+      ['abMode', 'mode', 'rerun'], ['abCost', 'cost', '0']].forEach(function (x) {
+      var v = p.get(x[1]);
+      var el = $(x[0]);
+      // An unknown value would leave the select blank and then send an empty
+      // string, so fall back rather than trusting the address bar.
+      var okv = [].some.call(el.options, function (o) { return o.value === v; });
+      el.value = okv ? v : x[2];
+    });
+    // Ranking and the two rebalance knobs only mean something once there is
+    // something to rank or a rebalance to make; a live control that cannot
+    // change the answer reads as broken.
+    function syncCtl() {
+      $('abRank').disabled = $('abTop').value === '0';
+      var off = $('abEvery').value === '0';
+      $('abMode').disabled = off;
+      $('abCost').disabled = off;
+    }
+    $('abTop').addEventListener('change', syncCtl);
+    $('abEvery').addEventListener('change', syncCtl);
+    syncCtl();
 
     if (p.get('date')) load();
     else {

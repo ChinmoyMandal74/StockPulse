@@ -2313,6 +2313,32 @@ async function readShortInterest(symbol, limit = 400) {
   }));
 }
 
+// A SHORT RUN of recent readings per symbol, so a caller walking several
+// dates can pick the newest visible at each one without a read per date.
+// Short interest is bi-weekly, so 24 rows is about a year — more than any
+// backtest horizon here asks for, and still one bounded seek per symbol.
+async function readShortRecentFor(symbols, onOrBefore, limit = 24) {
+  await init();
+  const syms = [...new Set((symbols || []).map((x) => String(x).toUpperCase()))];
+  const out = new Map();
+  if (!syms.length || !onOrBefore) return out;
+  const n = Math.max(1, Math.min(200, Number(limit) || 24));
+  for (let i = 0; i < syms.length; i += ANCHOR_CHUNK) {
+    const slice = syms.slice(i, i + ANCHOR_CHUNK);
+    const res = await db.batch(slice.map((sym) => ({
+      sql: `select d, shares, split from short_interest
+              where symbol = ? and d <= ? order by d desc limit ?`,
+      args: [sym, onOrBefore, n],
+    })), 'read');
+    res.forEach((r, j) => {
+      if (r.rows.length) {
+        out.set(slice[j], r.rows.map((x) => ({ d: x.d, shares: x.shares, split: !!x.split })));
+      }
+    });
+  }
+  return out;
+}
+
 // The newest reading ON OR BEFORE a settlement date, for many symbols — the
 // point-in-time half of `readShortLatestFor`. Same seek, one extra bound.
 async function readShortAsOfFor(symbols, onOrBefore) {
@@ -4802,6 +4828,7 @@ module.exports = {
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState,
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
   writeShortInterest, readShortInterest, readShortLatestFor, readShortAsOfFor,
+  readShortRecentFor,
   readShortState, noteShortMiss,
   readInsiderDay, writeInsiderDay, appendInsider, readUniverseCiks,
   clearVisitors,
