@@ -718,6 +718,10 @@
        exactly that here. It is NOT a fault — the two are computed on
        different bases and are expected to differ. */
     #sec table.cmp td.warn { color: var(--amber); }
+    /* Each row says which basis it is on, because the margins and the growth
+       lines are deliberately on different ones. */
+    #sec table.cmp td.who .basis { display: block; color: var(--faint); font-size: 10.5px;
+                                   font-weight: 400; margin-top: 2px; }
     #sec .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
     #sec .msg { color: var(--muted); font-size: 12.5px; padding: 6px 0; }
     @media (max-width: 620px) { #sec th, #sec td { padding-left: 10px; } }
@@ -2807,18 +2811,28 @@
         }
         h += '</tbody></table></div>';
 
-        // The newest period against what the engine read. `stock` is the
-        // snapshot row this page already holds, so this costs no fetch.
+        // LIKE FOR LIKE, OR THE STRIP LIBELS THE VENDOR. The engine's MARGINS
+        // are trailing-twelve-month, so they are compared against four filed
+        // quarters summed — measured on MU, a single quarter against them
+        // showed a 33.9-point FCF "gap" that was almost entirely period
+        // length, since its revenue is up 345% year on year. Its GROWTH is
+        // last-quarter-year-on-year, which is why those two lines stay on the
+        // quarterly basis and already agreed to +0.0pt.
         const newest = rows[0];
+        const t = secData.ttm;
         const cmp = [];
         for (const [k, label] of SEC_RATIO_COLS) {
           const ek = ENGINE_KEYS[k];
           if (!ek) continue;
-          const mine = newest[k];
+          const isGrowth = /YoY$/.test(k);
+          const mine = isGrowth ? newest[k] : (t ? t[k] : null);
+          const basis = isGrowth ? 'newest quarter vs a year earlier'
+            : (t ? 'four filed quarters to ' + t.to : null);
           const theirs = stock[ek] == null ? null : Number(stock[ek]);
           if (mine == null && theirs == null) continue;
           const gap = (mine != null && theirs != null) ? mine - theirs : null;
-          cmp.push('<tr><td class="who">' + esc(label) + '</td>' +
+          cmp.push('<tr><td class="who">' + esc(label) +
+            (basis ? '<span class="basis">' + esc(basis) + '</span>' : '') + '</td>' +
             '<td>' + (secPct(mine) || '—') + '</td>' +
             '<td>' + (secPct(theirs) || '—') + '</td>' +
             '<td class="' + (gap == null ? 'na' : Math.abs(gap) >= 2 ? 'warn' : '') + '">' +
@@ -2826,9 +2840,16 @@
         }
         if (cmp.length) {
           h += '<div class="cmpwrap"><table class="cmp"><thead><tr>' +
-            '<th>Newest filed period</th><th>From the filing</th>' +
+            '<th>Against what the verdict read</th><th>From the filings</th>' +
             '<th>What the verdict read</th><th>Gap</th></tr></thead><tbody>' +
             cmp.join('') + '</tbody></table></div>';
+          // A missing TTM is stated rather than left as four em-dashes: four
+          // consecutive quarters is not something every filer has.
+          if (!t) {
+            h += '<p class="note">The margins have no trailing-twelve-month figure here — ' +
+              'that needs four consecutive filed quarters, and this company does not have ' +
+              'them in the window stored.</p>';
+          }
         }
 
         h += '<p class="note"><b>Computed here from the filings above</b>, not taken from ' +
@@ -2837,6 +2858,11 @@
           'Advice verdict used.</b> The engine reads the vendor’s trailing-twelve-month ' +
           'values, restated to today and computed on a different basis, which is why the ' +
           'gap column is rarely zero and is marked once it passes two points. ' +
+          '<b>The comparison is like for like:</b> the margins are four filed quarters ' +
+          'summed, because the vendor’s are trailing-twelve-month, and the growth ' +
+          'lines are the newest quarter against a year earlier, because the vendor’s ' +
+          'are too. Comparing one quarter’s margin against a trailing year shows a ' +
+          'thirty-point gap that is only period length. ' +
           'A growth figure is against the same period a year earlier — hover it for which — ' +
           'and is withheld where the earlier figure was a loss, since growth from a negative ' +
           'base inverts its own sign. Operating margin is shown because it is worth seeing; ' +

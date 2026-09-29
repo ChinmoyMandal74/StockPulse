@@ -402,6 +402,58 @@ function withRatios(rows) {
   });
 }
 
+// ---- trailing twelve months, for a LIKE-FOR-LIKE comparison ---------------
+//
+// A QUARTER'S MARGIN IS NOT THE VENDOR'S MARGIN, and comparing them makes the
+// vendor look wrong. Measured on MU the day this shipped: the filings' latest
+// quarter gave an FCF margin of 42.4% against the vendor's 8.5% — a 33.9-point
+// "gap" that is almost entirely period length, because MU's revenue is up
+// 345% year on year and one quarter looks nothing like its trailing year.
+//
+// The vendor's MARGINS are trailing-twelve-month, so the comparison sums four
+// filed quarters. Its GROWTH is last-quarter-year-on-year (see the screens
+// section in CLAUDE.md), which is why those two lines already agreed to
+// +0.0pt and are left on the quarterly basis.
+const TTM_MIN_DAYS = 300;   // four quarters, with room for a short fiscal one
+const TTM_MAX_DAYS = 430;
+
+function ttm(quarterly) {
+  const q = (Array.isArray(quarterly) ? quarterly : []).slice(0, 4);
+  if (q.length < 4) return null;
+  // They must actually BE four consecutive quarters. A gap in the filings
+  // would otherwise be summed as though it were a year.
+  const end = q[0].periodEnd;
+  const start = q[3].periodStart || q[3].periodEnd;
+  const days = Math.round((Date.parse(end) - Date.parse(start)) / 86400000);
+  if (!isFinite(days) || days < TTM_MIN_DAYS || days > TTM_MAX_DAYS) return null;
+
+  // A SUM IS ONLY A SUM IF EVERY PART IS THERE. One missing quarter would
+  // understate the total and every margin off it — silently, since the
+  // result still looks like a number.
+  const add = (k) => {
+    let t = 0;
+    for (const r of q) {
+      if (r[k] == null || !isFinite(Number(r[k]))) return null;
+      t += Number(r[k]);
+    }
+    return t;
+  };
+  const revenue = add('revenue');
+  if (revenue == null || revenue < MIN_REVENUE) return null;
+  const grossProfit = add('grossProfit');
+  const operatingIncome = add('operatingIncome');
+  const netIncome = add('netIncome');
+  const freeCashFlow = add('freeCashFlow');
+  return {
+    from: start, to: end, quarters: q.length, days,
+    revenue, grossProfit, operatingIncome, netIncome, freeCashFlow,
+    grossMargin: pct(grossProfit, revenue),
+    operatingMargin: pct(operatingIncome, revenue),
+    profitMargin: pct(netIncome, revenue),
+    fcfMargin: pct(freeCashFlow, revenue),
+  };
+}
+
 // sec.gov/Archives/edgar/data/<cik>/<accn without dashes>/<accn>-index.htm —
 // verified 200. Every number on the page can therefore be opened at the
 // document it was taken from, which is the whole argument for this source.
@@ -414,5 +466,5 @@ function filingUrl(cik, accn) {
 module.exports = {
   CONCEPTS, CONCEPT_KEYS, INSTANT, NO_DIFF,
   periodType, normalise, deriveQuarters, latestPerPeriod, filingUrl, isStatement,
-  withRatios, MIN_REVENUE,
+  withRatios, ttm, MIN_REVENUE,
 };
