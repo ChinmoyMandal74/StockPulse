@@ -722,6 +722,20 @@
        lines are deliberately on different ones. */
     #sec table.cmp td.who .basis { display: block; color: var(--faint); font-size: 10.5px;
                                    font-weight: 400; margin-top: 2px; }
+    /* What the rules concluded — the last step in the chain. */
+    #sec .fundv { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+                  margin: 14px 0 0; padding: 11px 13px; border: 1px solid var(--hair);
+                  border-radius: var(--r-core); background: rgba(255, 255, 255, 0.02); }
+    #sec .fundv .k { color: var(--faint); font-size: 10.5px; text-transform: uppercase;
+                     letter-spacing: 0.1em; }
+    #sec .fundv .v { font-family: var(--mono); font-size: 16px; color: var(--text); }
+    /* COLOUR ONLY ON THE DANGER WORD, the Advice group's own rule — and AMBER
+       rather than red, because on this page red is the price falling and a
+       weak balance sheet is not a price move. Amber already means "notice
+       this" here. */
+    #sec .fundv .v.weak { color: var(--amber); }
+    #sec .fundv .x { color: var(--muted); font-size: 12px; flex: 1 1 260px; line-height: 1.5; }
+    #sec .fundv .x b { color: var(--text); }
     #sec .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
     #sec .msg { color: var(--muted); font-size: 12.5px; padding: 6px 0; }
     @media (max-width: 620px) { #sec th, #sec td { padding-left: 10px; } }
@@ -2707,7 +2721,16 @@
         ['epsDiluted', 'EPS dil.', (v) => (v == null ? null : (v < 0 ? '-' : '') + '$' + Math.abs(v).toFixed(2))],
         ['operatingCashFlow', 'Op. cash flow', secMoney], ['capex', 'Capex', secMoney],
         ['freeCashFlow', 'FCF', secMoney], ['assets', 'Assets', secMoney],
+        // Stored since the card shipped and never drawn. Liabilities is the
+        // other half of the balance sheet — assets and equity without it
+        // leave leverage to be inferred — and the diluted share count is how
+        // dilution shows up at all, since every per-share figure hides it.
+        // `costOfRevenue` stays out: it is revenue less gross profit, both
+        // already in the row, so it would be a column restating two others.
+        ['liabilities', 'Liabilities', secMoney],
         ['equity', 'Equity', secMoney], ['cash', 'Cash', secMoney], ['debt', 'LT debt', secMoney],
+        ['sharesDiluted', 'Shares dil.', (v) => (v == null ? null
+          : v >= 1e9 ? (v / 1e9).toFixed(2) + 'B' : (v / 1e6).toFixed(0) + 'M')],
       ];
 
       // THE RATIOS THE RULES READ, computed from the filings. Percentages, so
@@ -2780,6 +2803,41 @@
         host.innerHTML = h;
       }
 
+      // WHAT THE RULES MADE OF THOSE NUMBERS — the last step in the chain the
+      // card walks: what the company filed, what the verdict read, and now
+      // what it concluded. Computed here from the same engine the screener
+      // uses, on the same snapshot row, so the word can never disagree with
+      // the Fund. column there.
+      //
+      // THE THRESHOLDS ARE DELIBERATELY ABSENT. The rule ladder has been
+      // admin-only since 2026-09-26 — a member keeps the verdict and the one
+      // rule that fired, and loses the threshold list, which is the one
+      // genuinely copyable thing in the model. This page has NO admin gate at
+      // all, so anything printed here reaches members and guests: the state
+      // word and the fired rule are already theirs on the screener, and the
+      // numbers behind them are already columns. Nothing more goes here.
+      function secFundHtml() {
+        let ev = null;
+        try { ev = ActionRules.evaluate(stock, RULES_CFG); } catch (e) { return ''; }
+        if (!ev || !ev.states) return '';
+        const word = ev.states.fund;
+        // An ETF is scored on the technical rules alone, so it has no
+        // fundamentals reading — saying "—" without saying why reads as a gap
+        // in the data rather than as the design.
+        const isEtf = ev.type === 'ETF';
+        const cls = word === 'Weak' ? 'weak' : '';
+        return '<div class="fundv">' +
+          '<span class="k">What the rules made of these</span>' +
+          '<span class="v ' + cls + '">' + esc(isEtf ? 'Not scored' : word) + '</span>' +
+          '<span class="x">' + (isEtf
+            ? 'A fund is scored on the technical rules alone — it files no statements and has no fundamentals reading.'
+            : esc(ev.type) + ' company, so the ' +
+              (ev.type === 'Early' ? 'early-stage' : 'established') +
+              ' fundamentals rules apply. The Balanced verdict is <b>' + esc(ev.action) +
+              '</b>' + (ev.flag ? ': ' + esc(ev.flag) : '') + '.') +
+          '</span></div>';
+      }
+
       // The ratios view. The comparison strip is the reason it earns its
       // place: without it a reader sees "Gross margin 61.2%" beside a verdict
       // and assumes that is what the verdict read. It is not — the engine
@@ -2843,6 +2901,7 @@
             '<th>Against what the verdict read</th><th>From the filings</th>' +
             '<th>What the verdict read</th><th>Gap</th></tr></thead><tbody>' +
             cmp.join('') + '</tbody></table></div>';
+          h += secFundHtml();
           // A missing TTM is stated rather than left as four em-dashes: four
           // consecutive quarters is not something every filer has.
           if (!t) {
