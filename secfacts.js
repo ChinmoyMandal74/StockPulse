@@ -368,7 +368,7 @@ function latestFilled(rows) {
     if (!trail.has(k)) trail.set(k, []);
     trail.get(k).push(r);
   }
-  return latestPerPeriod(list).map((top) => {
+  const picked = latestPerPeriod(list).map((top) => {
     const others = (trail.get(top.periodType + '|' + top.periodEnd) || [])
       .filter((r) => r.accn !== top.accn)
       .sort((a, b) => (outranks(a, b) ? -1 : 1));
@@ -381,8 +381,108 @@ function latestFilled(rows) {
       }
     }
     out.filledFrom = filledFrom;
+    out.__trail = others;
     return out;
   });
+  return reconcile(picked);
+}
+
+// ---- A FILING THAT CONTRADICTS ITS OWN EARLIER STATEMENTS -----------------
+//
+// The restatement trail is a free cross-check and it catches two faults that
+// are otherwise invisible, because both leave a number that looks perfectly
+// plausible on its own. Measured across 1,100 filers and 62,101 periods that
+// have a trail to check against: 25 symbols, 51 field-periods.
+//
+//   FDS  quarter to 2018-02-28, as filed by four documents:
+//        10-Q 2018-04-09  335,231,000     10-Q 2019-04-09  335,231,000
+//        10-K 2018-10-30  335,231,000     10-K 2019-10-30      335,231  <- used
+//
+// A thousand times out, and it summed into a trailing year of $1M for a
+// company earning $1.4bn. That is the SOLS lesson again: one junk value
+// destroys a column and the only warning is a figure somebody happens to look
+// at. FactSet's revenue line on /stock fell to nothing in 2018 because of it.
+//
+// NEITHER "PREFER THE NEWEST" NOR "PREFER THE OLDEST" IS THE FIX, because the
+// direction varies — FDS's newest is wrong, while IRDM's OLDEST claims
+// $89.7bn for a quarter that is really $119M. The arbiter has to be the
+// symbol's OWN NEIGHBOURING PERIODS: a value a thousand times off the rest of
+// its series is the wrong one, whichever document it came from. Measured on
+// the six worst cases, that fixes FDS and EXC and correctly leaves IRDM, MKSI
+// and REXR alone — REXR's whole series is simply stated on a different scale
+// and is internally consistent, which is not an error to fix.
+//
+// WHAT IT CANNOT SEE: where a whole RUN of periods carries the same fault the
+// neighbours agree with the bad value and nothing in the trail disagrees
+// enough (ADC's 2011 quarters are all restated together). Those stay wrong.
+const SCALE_LO = 300;      // a ~1000x disagreement, with room for a real restatement
+const SCALE_HI = 3000;
+const NEAR = 4;            // periods either side used to arbitrate
+const CHECKED = ['revenue', 'costOfRevenue', 'grossProfit', 'operatingIncome',
+  'netIncome', 'operatingCashFlow', 'freeCashFlow', 'assets', 'liabilities',
+  'equity', 'cash', 'debt'];
+
+function reconcile(picked) {
+  // Same period type only: a quarter is not evidence about the scale of an
+  // annual, and mixing them would make every Q4 look a quarter of its year.
+  const byType = new Map();
+  for (const r of picked) {
+    if (!byType.has(r.periodType)) byType.set(r.periodType, []);
+    byType.get(r.periodType).push(r);
+  }
+  for (const list of byType.values()) {
+    // `picked` is newest-first, so this is already in order.
+    list.forEach((row, i) => {
+      const others = row.__trail || [];
+      if (!others.length) return;
+      for (const f of CHECKED) {
+        const win = row[f];
+        const alts = others.map((o) => o[f])
+          .filter((v) => v != null && isFinite(v) && Number(v) !== 0);
+        if (!alts.length) continue;
+
+        // A ZERO IS NOT A RESTATEMENT. No company restates real money to
+        // exactly nothing, so a zero beside a filing that states millions is
+        // a value that failed to carry, not a value of zero.
+        if (win === 0) {
+          const alt = alts.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a));
+          row[f] = alt;
+          (row.mended || (row.mended = {}))[f] = 'zero';
+          continue;
+        }
+        if (win == null || !isFinite(win)) continue;
+
+        // A ~1000x disagreement is a scale error. Which side is wrong is
+        // decided by the rest of this symbol's own series, never by which
+        // document is newer.
+        const off = alts.find((v) => {
+          const k = Math.abs(v / win);
+          return k > SCALE_LO && k < SCALE_HI;
+        });
+        if (off === undefined) continue;
+        const near = [];
+        for (let j = Math.max(0, i - NEAR); j <= Math.min(list.length - 1, i + NEAR); j++) {
+          if (j === i) continue;
+          const v = list[j][f];
+          if (v != null && isFinite(v) && Number(v) !== 0) near.push(Math.abs(Number(v)));
+        }
+        if (near.length < 2) continue;              // nothing to arbitrate with
+        near.sort((a, b) => a - b);
+        const med = near[Math.floor(near.length / 2)];
+        if (!(med > 0)) continue;
+        // Compare in ORDERS OF MAGNITUDE: the question is which candidate is
+        // on the same scale as the series, not which is nearer in dollars.
+        const d = (v) => Math.abs(Math.log10(Math.abs(v) / med));
+        if (d(off) < d(win)) {
+          row[f] = off;
+          (row.mended || (row.mended = {}))[f] = 'scale';
+        }
+      }
+      delete row.__trail;
+    });
+  }
+  for (const r of picked) delete r.__trail;
+  return picked;
 }
 
 // ---- WHAT A READER COULD HAVE SEEN ON A GIVEN DAY --------------------------
@@ -615,4 +715,5 @@ module.exports = {
   CONCEPTS, CONCEPT_KEYS, INSTANT, NO_DIFF,
   periodType, normalise, deriveQuarters, latestPerPeriod, latestFilled, visibleAsOf,
   filingUrl, isStatement, withRatios, ttm, ttmSeries, MIN_REVENUE, FILLABLE,
+  reconcile,
 };
