@@ -251,46 +251,19 @@
        PRICE panel went 213 -> 277 -> 361px (two 30% steps, 2026-09-21).
        Change PRICE_H and these must move with it, or the bands silently shrink
        instead of the price growing. */
-    /* The fundamental pane adds PANE_GAP + FUND_H = 65 viewBox units, so there
-       are four combinations rather than two. Each height is derived on the
-       px-per-unit already in force for its RSI state, which is what keeps the
-       existing two byte-identical and every band the size it was:
-
-                                viewBox H        px/unit   height
-         + fundamental          317 + 65 = 382    1.4196    560px
-         + RSI + fundamental    388 + 65 = 453    1.4407    671px           */
     #chart.rc-chart { height: 468px; border-radius: 12px; padding: 0 52px 18px 0;
                       transition: height 0.45s var(--ease); }
     #chart.rc-chart.has-rsi { height: 577px; }
-    #chart.rc-chart.has-fund { height: 560px; }
-    #chart.rc-chart.has-rsi.has-fund { height: 671px; }
     #chart .cap { font-size: 12.5px; }
     #chart .cap.chg { font-size: 17px; }
     /* Pane labels sit against the geometry the chart reports, not a guessed
        percentage — turning RSI on moves the volume band down. */
-    #chart .cap.vol, #chart .cap.rsi, #chart .cap.fund {
+    #chart .cap.vol, #chart .cap.rsi {
       left: 9px; bottom: auto; font-size: 11px;
       text-transform: uppercase; letter-spacing: 0.12em;
       transform: translateY(-125%);
     }
     #chart .cap.rsi { color: var(--accent-2); }
-    /* The top and bottom of the pane's own range, printed against the geometry
-       the chart reports — the baseline is not zero, so the numbers have to be
-       on screen or the shape means nothing. Right-hand gutter, like the RSI
-       thresholds, so they never sit over the step line. */
-    #chart .fund-lbl {
-      position: absolute; right: 56px;
-      font-family: var(--mono); font-size: 10.5px; color: var(--faint);
-      pointer-events: none;
-      text-shadow: 0 0 4px rgba(10, 12, 17, 0.95), 0 0 2px rgba(10, 12, 17, 0.95);
-    }
-    /* CLEAR OF THE LINE, not centred on it. These mark the data's own high and
-       low, so a centred label lands exactly ON the run that reaches them — and
-       on a rising series that is the run at the right edge, where the labels
-       are. Nudged into the 12% of axis padding, which is what it is for. The
-       RSI zone words do the same either side of their thresholds. */
-    #chart .fund-lbl.hi { transform: translateY(-118%); }
-    #chart .fund-lbl.lo { transform: translateY(18%); }
     /* Worded thresholds, sitting just clear of the lines they name — above the
        overbought line, below the oversold one, as a terminal draws them. */
     #chart .rsi-zone {
@@ -394,13 +367,27 @@
     #sintStrip .srug i.split { background: rgba(251, 191, 36, 0.16); }
     #sintStrip .srugnote { color: var(--faint); font-size: 10.5px; margin: 3px 0 0;
                            line-height: 1.5; }
-    /* The fundamental pane is INSIDE the svg, so it has no strip of its own to
-       carry a note — this is its footnote, and it earns its place by saying the
-       two things a reader could otherwise get wrong: the baseline is not zero,
-       and the step is dated to the quarter END rather than to the day the
-       figure became public. */
-    #fundNote { color: var(--faint); font-size: 10.5px; margin: 7px 52px 0 0;
-                line-height: 1.5; }
+    /* The fundamental strip, FIRST of the three layers under the plot (the
+       owner's order, 2026-09-29). Same gutter as the rug and the short strip,
+       so all three align to the plot's own x-axis, and the same shape: a step
+       line on its own range with the caveats in a note beneath it. */
+    #fundStrip { margin: 7px 52px 0 0; }
+    #fundStrip .frug { position: relative; height: 56px; }
+    #fundStrip .frug svg { display: block; width: 100%; height: 56px; }
+    /* NEUTRAL, on the short strip's reasoning: green and red are the PRICE's
+       direction on this chart, and "revenue rose" is not a direction the price
+       went. non-scaling-stroke because a step draws flat runs and vertical
+       risers, which would otherwise come out at different weights under
+       preserveAspectRatio="none". */
+    #fundStrip .frug path.fl { fill: none; stroke: var(--text); stroke-width: 1.4;
+                               stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    /* Drawn only where the DATA spans zero, which for a net-income line is the
+       reading itself. A reference, so it takes no signal colour. */
+    #fundStrip .frug line.fz { stroke: rgba(255, 255, 255, 0.32); stroke-width: 1;
+                               stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+    #fundStrip .frug i { position: absolute; top: 0; height: 100%; display: block; }
+    #fundStrip .frugnote { color: var(--faint); font-size: 10.5px; margin: 3px 0 0;
+                           line-height: 1.5; }
     /* Taller than the ribbon on purpose (the owner: "you can also increase the
        height"): the bar has to carry a magnitude, not just a position. */
     .erug { position: relative; height: 38px; }
@@ -1282,9 +1269,15 @@
     // window and hides when nothing does, so a 1W chart is clean without a
     // rule about which ranges may have it, and a report that DID land in a
     // short window is still shown.
-    let showEarnRug = true;
+    let showEarnRug = false;
     const RUG_KEY = 'stock.earnrug';
-    try { showEarnRug = localStorage.getItem(RUG_KEY) !== '0'; } catch (e) { /* private window */ }
+    // OFF BY DEFAULT, like the other two (the owner, 2026-09-29). `=== '1'`
+    // rather than `!== '0'`: someone who deliberately switched it ON has '1'
+    // stored and keeps it, while someone who never touched it now starts
+    // clean. That chart carries the price, two averages, up to five
+    // overlays, the trend ribbon, an RSI pane and a volume pane before any
+    // of these three.
+    try { showEarnRug = localStorage.getItem(RUG_KEY) === '1'; } catch (e) { /* private window */ }
 
     // The ceiling for the bar heights. The 90th percentile of what is actually
     // in view, floored at 3% -- the same shape as earnScale() above, and for
@@ -1370,23 +1363,25 @@
     // `sintRows` and `lastDates` are script scope for the reason earnRows is:
     // paintChart cannot see the boot IIFE's locals, and reaching for one is
     // a ReferenceError that kills the whole chart.
-    let showSintStrip = true;
+    let showSintStrip = false;
     let sintRows = null;
     let lastDates = null;
     const SINT_KEY = 'stock.sintstrip';
-    try { showSintStrip = localStorage.getItem(SINT_KEY) !== '0'; } catch (e) { /* private window */ }
+    try { showSintStrip = localStorage.getItem(SINT_KEY) === '1'; } catch (e) { /* private window */ }
 
-    // ---- the fundamental pane -----------------------------------------
-    // The third optional layer, on the same bargain as the rug and the short
-    // strip: its own toggle, remembered per device, self-gating. It differs in
-    // being a PANE inside the svg rather than a strip beneath it, so it cannot
-    // be repainted alone — a change means a full paintChart(), which is what
-    // the moving-average toggles already do.
+    // ---- the fundamental strip ----------------------------------------
+    // The FIRST of the three optional layers under the plot, on exactly the
+    // short strip's bargain: its own toggle, remembered per device, drawn in
+    // its own box beneath the chart, self-gating, repainted ALONE when its
+    // series lands.
     //
-    // OFF BY DEFAULT, unlike the rug and the strip. That chart already carries
-    // the price, two averages, up to five overlays, the trend ribbon, an RSI
-    // pane, a volume pane and two strips; a ninth layer earns its place by
-    // being asked for rather than by arriving.
+    // IT WAS A PANE INSIDE THE SVG FOR AN HOUR and the owner moved it out
+    // (2026-09-29). A strip is the better shape twice over: the three layers
+    // now read as one stack in one place rather than one being inside the
+    // chart and two outside, and it drops the four-way coupling a pane forced
+    // between rowcard.js's bands and this page's box heights. What it costs is
+    // the adjacency to the price that a pane had — which is why it leads the
+    // three rather than sitting under the rug.
     const FUND_METRICS = [
       { k: 'revenue', label: 'Revenue TTM' },
       { k: 'netIncome', label: 'Net income TTM' },
@@ -1406,6 +1401,98 @@
     } catch (e) { /* private window */ }
     const fundLabel = () =>
       (FUND_METRICS.find((m) => m.k === fundMetric) || FUND_METRICS[0]).label;
+
+    // A filed figure stepped across the drawn window. `RowCard.stepSeries`
+    // lays the quarterly points onto the session axis — carried forward, never
+    // interpolated, and bounded so a company that stopped filing does not draw
+    // a flat line to today.
+    function fundStripHtml(dates) {
+      if (!showFund || !Array.isArray(dates) || dates.length < 2) return '';
+      if (!secTtm || !secTtm.length) return '';
+      const vals = RowCard.stepSeries(dates, secTtm, fundMetric);
+      const seen = vals.filter((v) => v != null);
+      if (!seen.length) return '';
+
+      const mn = Math.min.apply(null, seen);
+      const mx = Math.max.apply(null, seen);
+      const PAD = 5;                      // px of headroom top and bottom
+      const H = 56;                       // matches .frug in the CSS
+      const span = mx - mn;
+      // A flat series would divide by zero; draw it down the middle, which is
+      // what "it did not move" looks like. The short strip's rule.
+      const y = (v) => (span > 1e-9 ? PAD + (1 - (v - mn) / span) * (H - PAD * 2) : H / 2);
+      const n = dates.length - 1;
+      const X = (i) => ((n ? i / n : 0) * 1000).toFixed(2);
+
+      // A STEP, NEVER A SLOPE: a figure stands until the next filing replaces
+      // it, and a slope would claim it drifted day by day. One command per
+      // CHANGE of level rather than one per session — at Max range the latter
+      // is ~5,200 of them for a line with forty levels.
+      let d = '', pen = false, prev = null, startI = -1, lastI = -1;
+      const hits = [];
+      const close = () => {
+        if (!pen || lastI <= startI) return;
+        d += ' L' + X(lastI) + ',' + y(prev).toFixed(2);
+        hits.push({ from: startI, to: lastI, v: prev });
+      };
+      for (let i = 0; i < vals.length; i++) {
+        const v = vals[i];
+        if (v == null) { close(); pen = false; continue; }
+        if (!pen) { d += (d ? ' M' : 'M') + X(i) + ',' + y(v).toFixed(2); pen = true; prev = v; startI = i; lastI = i; continue; }
+        if (v !== prev) {
+          // Along at the level that was standing, THEN step to the new one —
+          // the other order draws the change a quarter early.
+          d += ' L' + X(i) + ',' + y(prev).toFixed(2) + ' L' + X(i) + ',' + y(v).toFixed(2);
+          hits.push({ from: startI, to: i, v: prev });
+          prev = v; startI = i;
+        }
+        lastI = i;
+      }
+      close();
+      if (!d) return '';
+
+      // ZERO WHERE THE DATA SPANS IT, never where the padded box does — that
+      // distinction is what put a zero line on MU's revenue chart, whose
+      // trailing revenue runs $8.0B to $90.3B and can never be negative.
+      const zero = (mn < 0 && mx > 0)
+        ? `<line class="fz" x1="0" y1="${y(0).toFixed(2)}" x2="1000" y2="${y(0).toFixed(2)}"/>` : '';
+      // preserveAspectRatio="none" stretches x to the strip's width, which is
+      // what keeps the steps aligned with the price above. No <text> inside
+      // for the same reason: a glyph would be stretched with the box.
+      const svg = `<svg viewBox="0 0 1000 ${H}" preserveAspectRatio="none" aria-hidden="true">` +
+        zero + `<path class="fl" d="${d}" /></svg>`;
+      const area = hits.map((h) => {
+        const l = (h.from / (n || 1)) * 100;
+        const w = Math.max(0.2, ((h.to - h.from) / (n || 1)) * 100);
+        const pt = secTtm.filter((x) => x[fundMetric] === h.v).pop();
+        return `<i style="left:${l.toFixed(3)}%;width:${w.toFixed(3)}%"` +
+          ` title="${esc(RowCard.fmtMktCap(h.v) + (pt ? ' — the four quarters to ' + pt.d : ''))}"></i>`;
+      }).join('');
+
+      const newest = seen[seen.length - 1];
+      const pts = secTtm.filter((x) => x[fundMetric] != null);
+      const earliest = pts.length ? pts[0].d : null;
+      const gap = earliest && earliest > dates[0]
+        ? ` The filed record starts ${esc(earliest)}, so anything before that is missing rather than flat.`
+        : '';
+      return '<div class="frug">' + svg + area + '</div>' +
+        `<p class="frugnote"><b>${esc(fundLabel())}</b> — ${esc(RowCard.fmtMktCap(newest))} ` +
+        `at the newest filed quarter, four quarters summed from the company's own SEC ` +
+        `filings, as filed. Stepped because a figure stands until the next filing ` +
+        `replaces it. <b>The baseline is its own range, not zero</b> ` +
+        `(${esc(RowCard.fmtMktCap(mn))} to ${esc(RowCard.fmtMktCap(mx))}), so read the shape ` +
+        `rather than the height. <b>Each step is dated to the quarter END</b>, and the ` +
+        `figure became public some weeks after that — so this cannot be read for lead or ` +
+        `lag against the price.${gap}</p>`;
+    }
+
+    function paintFundStrip() {
+      const el = document.getElementById('fundStrip');
+      if (!el) return;
+      const html = fundStripHtml(lastDates);
+      el.innerHTML = html;
+      el.hidden = !html;
+    }
 
     function sintStripHtml(dates) {
       if (!showSintStrip || !Array.isArray(dates) || dates.length < 2) return '';
@@ -2066,17 +2153,9 @@
           return values ? { ...b, values } : null;
         }).filter(Boolean);
         const thLabel = 'Trend-held';
-        // The filings arrive on their own fetch, after the first paint, so on
-        // load this is null and the pane appears on the repaint loadSec() asks
-        // for. Self-gating: `stepSeries` answers all-nulls where nothing is
-        // filed or nothing falls inside the window, and chartSVG then draws no
-        // pane at all — so a clean 1W chart needs no rule about ranges.
-        const fundVals = showFund && secTtm
-          ? RowCard.stepSeries(dates, secTtm, fundMetric) : null;
         paintCtx = { all, from, closes, dates, trend, rsiAll: rsiAllFull };
         const c = RowCard.chartSVG(closes, {
           volumes, ticks: 5, rsi,
-          fund: fundVals ? { values: fundVals } : null,
           overlays: series.map((x) => ({ values: x.values, cls: x.ma.cls }))
             .concat(th ? [{ values: th.values, cls: 'th-ln' }] : [])
             .concat(drawnBench.map((b) => ({ values: b.values, cls: 'bm-ln ' + b.cls }))),
@@ -2114,21 +2193,6 @@
               `<span class="rsi-zone hi" style="top:${atY(c.panes.rsi.at(70))}">Overbought</span>` +
               `<span class="rsi-zone lo" style="top:${atY(c.panes.rsi.at(30))}">Oversold</span>`
             : '') +
-          (c.panes.fund
-            ? `<span class="cap fund" style="top:${atY(c.panes.fund.top)}">` +
-              `${esc(fundLabel())}${(() => {
-                const now = [...fundVals].reverse().find((v) => v != null);
-                return now == null ? '' : ' &middot; ' + esc(RowCard.fmtMktCap(now));
-              })()}</span>` +
-              // The range, because the baseline is the data's own low rather
-              // than zero — without these two numbers the shape means nothing.
-              // `min`/`max`, NEVER `lo`/`hi`: those carry the axis padding, and
-              // printing them puts a figure on screen that was never filed.
-              `<span class="fund-lbl hi" style="top:${atY(c.panes.fund.at(c.panes.fund.max))}">` +
-              `${esc(RowCard.fmtMktCap(c.panes.fund.max))}</span>` +
-              `<span class="fund-lbl lo" style="top:${atY(c.panes.fund.at(c.panes.fund.min))}">` +
-              `${esc(RowCard.fmtMktCap(c.panes.fund.min))}</span>`
-            : '') +
           `<span class="cap vol" style="top:${atY(c.panes.volume.top)}">Volume</span>` +
           `<span class="yaxis">${yLabels}</span>` +
           `<span class="axis">${ticks.join('')}</span>` +
@@ -2138,32 +2202,6 @@
           '<span class="xdot" hidden></span>' +
           '<span class="xdate" hidden></span>' +
           '<span class="readout" hidden></span>';
-
-        // The box grows for a pane that was DRAWN, never for one that was
-        // merely asked for: `c.panes.fund` is null where the series self-gated,
-        // and sizing off `showFund` would leave 92px of empty box on every
-        // stock with no filings.
-        box.classList.toggle('has-fund', !!c.panes.fund);
-        const fnote = document.getElementById('fundNote');
-        if (fnote) {
-          if (!c.panes.fund) { fnote.hidden = true; fnote.textContent = ''; }
-          else {
-            const pts = secTtm.filter((p) => p[fundMetric] != null);
-            const earliest = pts.length ? pts[0].d : null;
-            const gap = earliest && earliest > dates[0]
-              ? ` The filed record starts ${esc(earliest)}, so anything before that is missing rather than flat.`
-              : '';
-            fnote.hidden = false;
-            fnote.innerHTML = `<b>${esc(fundLabel())}</b> — four quarters summed from ` +
-              `the company's own SEC filings, as filed, stepped because a figure stands ` +
-              `until the next filing replaces it. <b>The baseline is its own range, not ` +
-              `zero</b> (${esc(RowCard.fmtMktCap(c.panes.fund.min))} to ` +
-              `${esc(RowCard.fmtMktCap(c.panes.fund.max))}), so read the shape rather than ` +
-              `the height. <b>Each step is dated to the quarter END</b>, and the figure ` +
-              `became public some weeks after that — so this cannot be read for lead or ` +
-              `lag against the price.${gap}`;
-          }
-        }
 
         const rug = document.getElementById('earnRug');
         if (rug) {
@@ -2177,9 +2215,11 @@
           rug.innerHTML = rh;
           rug.hidden = !rh;
         }
-        // The short-interest series arrives on its own fetch, so the dates
-        // are kept for the repaint that happens when it lands.
+        // Both the fundamental and short-interest series arrive on their own
+        // fetches, so the dates are kept for the repaint that happens when
+        // each lands.
         lastDates = dates;
+        paintFundStrip();
         paintSintStrip();
         const strip = document.getElementById('trendStrip');
         if (strip) {
@@ -2304,6 +2344,19 @@
                 `<button class="rng ma-toggle ${m.cls}${m.on ? ' on' : ''}" data-ma="${m.len}">${m.label}</button>`
               ).join('')}
               <button class="rng rsi-toggle${showRSI ? ' on' : ''}" id="rsiBtn">RSI</button>
+              <!-- FIRST of the three layer toggles, matching the order they
+                   are drawn in below the chart (the owner, 2026-09-29).
+                   Self-gating: no filings, or no trailing year inside the
+                   window, and nothing is drawn whatever this says. -->
+              <button class="rng er-toggle${showFund ? ' on' : ''}" id="fuBtn"
+                title="A filed fundamental in its own strip under the chart: four quarters summed from the company's own SEC filings, stepped because a figure stands until the next filing replaces it. Its baseline is its own range, not zero.">FUND</button>
+              <!-- The picker travels WITH the toggle it configures — the tile
+                   controls' rule. Hidden while the strip is off, since a
+                   control that can change nothing reads as broken. -->
+              <select class="cmp-pick${showFund ? ' on' : ''}" id="fuPick" ${showFund ? '' : 'hidden'}
+                title="Which filed figure the strip draws"
+                aria-label="Fundamental to draw">${FUND_METRICS.map((m) =>
+                  `<option value="${m.k}"${m.k === fundMetric ? ' selected' : ''}>${m.label}</option>`).join('')}</select>
               <!-- A chart LAYER, so it belongs with the other layer toggles
                    rather than in a menu. Self-gating: with no report inside
                    the window the strip hides itself whatever this says. -->
@@ -2315,18 +2368,6 @@
                    window. -->
               <button class="rng er-toggle${showSintStrip ? ' on' : ''}" id="siBtn"
                 title="Short interest under the plot: FINRA's bi-weekly position, drawn as days to cover because share counts are filed as-reported and never split-adjusted.">SHORT</button>
-              <!-- A PANE rather than a strip, and directly under the price: the
-                   point is comparing the shape of the business against the
-                   shape of the price, which below RSI and volume would be an
-                   act of memory. Self-gating like the other two — no filings,
-                   or no trailing year inside the window, and nothing is drawn
-                   whatever this says. -->
-              <button class="rng er-toggle${showFund ? ' on' : ''}" id="fuBtn"
-                title="A filed fundamental in its own pane under the price: four quarters summed from the company's own SEC filings, stepped because a figure stands until the next filing replaces it. Its baseline is its own range, not zero.">FUND</button>
-              <select class="cmp-pick${showFund ? ' on' : ''}" id="fuPick" ${showFund ? '' : 'hidden'}
-                title="Which filed figure the pane draws"
-                aria-label="Fundamental to draw">${FUND_METRICS.map((m) =>
-                  `<option value="${m.k}"${m.k === fundMetric ? ' selected' : ''}>${m.label}</option>`).join('')}</select>
               ${BENCH.map((b) =>
                 `<button class="rng bm-toggle ${b.cls}${b.on ? ' on' : ''}" data-bm="${b.sym}"
                   title="Overlay ${b.label} (${b.sym}), rebased to this stock's price at the left edge — the gap between the lines is relative performance">${b.sym}</button>`
@@ -2356,13 +2397,13 @@
             </span>
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
+          <!-- The three optional layers, in the owner's order (2026-09-29):
+               fundamental, then earnings, then short interest. Each aligns to
+               the plot through the same 52px right gutter. -->
+          <div id="fundStrip" hidden></div>
           <div id="earnRug" hidden></div>
           <div id="sintStrip" hidden></div>
           <div id="trendStrip" hidden></div>
-          <!-- After the strips rather than between them: the rug and the short
-               strip are aligned continuations of the plot, and a paragraph in
-               the middle of that run would break the alignment the eye reads. -->
-          <p id="fundNote" hidden></p>
           <div id="whyBox" class="bezel" hidden></div>
         </section></div>
 
@@ -2687,7 +2728,7 @@
           if (FUND_METRICS.some((m) => m.k === fuPick.value)) fundMetric = fuPick.value;
           try { localStorage.setItem(FUNDM_KEY, fundMetric); } catch (e) { /* private window */ }
           window.track && track('chart', 'fund:' + fundMetric);
-          paintChart();
+          paintFundStrip();
         });
       }
 
@@ -2714,13 +2755,16 @@
           // display choice rather than an account preference, and this page
           // makes no prefs round trip to put it in.
           try { localStorage.setItem(FUND_KEY, showFund ? '1' : '0'); } catch (e) { /* private window */ }
-          window.track && track('chart', 'pane:fund:' + (showFund ? 'on' : 'off'));
+          window.track && track('chart', 'strip:fund:' + (showFund ? 'on' : 'off'));
           b.classList.toggle('on', showFund);
           const fp = document.getElementById('fuPick');
-          // The metric picker cannot change anything while the pane is off, and
-          // a control that does nothing reads as broken.
+          // The metric picker cannot change anything while the strip is off,
+          // and a control that does nothing reads as broken.
           if (fp) { fp.hidden = !showFund; fp.classList.toggle('on', showFund); }
-          paintChart();
+          // The strip alone, never paintChart(): a full repaint would rebuild
+          // the plot, the ribbon and every overlay to switch one layer beneath
+          // them. The short strip's rule.
+          paintFundStrip();
           return;
         }
         if (b.id === 'erBtn') {
@@ -3152,12 +3196,12 @@
           // rather than a heading over an empty table.
           if (!(j.annual || []).length && !(j.quarterly || []).length) { card.remove(); return; }
           secData = j;
-          // The chart pane rides this fetch rather than asking for its own —
+          // The strip rides this fetch rather than asking for its own —
           // /api/sec is already on this page, so the layer costs no endpoint
-          // and no read. It lands AFTER the first paint, so the chart is drawn
-          // again when it does, and only when the pane is actually wanted.
+          // and no read. It lands AFTER the first paint, so the strip is drawn
+          // then, and ALONE.
           secTtm = Array.isArray(j.ttmSeries) ? j.ttmSeries : null;
-          if (showFund && secTtm && secTtm.length) paintChart();
+          paintFundStrip();
           secMode = (j.quarterly || []).length ? 'quarterly' : 'annual';
           card.hidden = false;
           const qb = document.getElementById('secQ');

@@ -312,22 +312,6 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 /* the indicator sits on its own ground, a shade off the chart's */
 .rc-chart .pane-bg { fill: rgba(255, 255, 255, 0.05); stroke: none; }
 
-/* Fundamental pane: a filed figure as a step line, directly under the price.
-   NEUTRAL, on the short-interest strip's reasoning — green and red are the
-   PRICE's direction on this chart, and "revenue rose" is not a direction the
-   price went, so colouring it would make a claim the layer is not making.
-   non-scaling-stroke because a step draws flat runs and vertical risers, which
-   would otherwise come out at different weights under
-   preserveAspectRatio="none". */
-.rc-chart .fund-ln { fill: none; stroke: var(--text); stroke-width: 1.4;
-                     stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-/* Drawn only where the range spans zero, which for a net-income line is the
-   reading itself. A reference, so it takes no signal colour. */
-   At 0.2 it was barely there in a rendering, and on a net-income line whether
-   the company is above or below it is the entire reading. */
-.rc-chart .fund-zero { stroke: rgba(255, 255, 255, 0.32); stroke-width: 1;
-                       stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
-
 /* volume bars sit in their own band under the price; green on an up session,
    red on a down one, dimmed so they never compete with the price line */
 .rc-chart .vb { stroke: none; opacity: 0.55; }

@@ -435,11 +435,6 @@
     const o = opts || {};
     const vols = o.volumes && o.volumes.length === closes.length ? o.volumes : null;
     const rsis = o.rsi && o.rsi.length === closes.length ? o.rsi : null;
-    // A filed fundamental, already stepped onto the session axis by the caller
-    // (see `stepSeries`) — this knows nothing about filings or dates, exactly
-    // as it knows nothing about how the RSI was computed.
-    const fund = o.fund && o.fund.values && o.fund.values.length === closes.length
-      && o.fund.values.some((v) => v != null) ? o.fund : null;
     const W = 600;
 
     // Indicator panes stack below the price, in the order RSI then volume, each
@@ -451,10 +446,7 @@
     const PANE_GAP = 13;
     const PANE_H = 44;
     const RSI_H = 58;
-    // The fundamental band sits between volume's and RSI's: a step line with a
-    // label and a range to print, but no threshold words.
-    const FUND_H = 52;
-    const anyPane = vols || rsis || fund;
+    const anyPane = vols || rsis;
     // The price panel is taller than the panes under it, twice over at the
     // owner's request (2026-09-21): 150 -> 195 -> 254 viewBox units, each step
     // 30% on the one before and the volume and RSI bands left alone both times.
@@ -471,14 +463,7 @@
     // tile/phone stock card, which pass no panes and were not asked about.
     const PRICE_H = anyPane ? 254 : 104;
     let cursor = PRICE_H;
-    let rsiTop = 0, rsiBot = 0, volTop = 0, volBot = 0, fundTop = 0, fundBot = 0;
-    // THE FUNDAMENTAL PANE GOES DIRECTLY UNDER THE PRICE, ahead of the two that
-    // were here first, and that placement IS the feature: comparing the shape
-    // of the business against the shape of the price is the whole reason it
-    // exists, and below RSI and volume it sits ~200px away, which is far enough
-    // to make the comparison an act of memory. It changes no height — the
-    // viewBox total is the sum whatever the order.
-    if (fund) { cursor += PANE_GAP; fundTop = cursor; fundBot = cursor + FUND_H; cursor = fundBot; }
+    let rsiTop = 0, rsiBot = 0, volTop = 0, volBot = 0;
     if (rsis) { cursor += PANE_GAP; rsiTop = cursor; rsiBot = cursor + RSI_H; cursor = rsiBot; }
     if (vols) { cursor += PANE_GAP; volTop = cursor; volBot = cursor + PANE_H; cursor = volBot; }
     const H = anyPane ? cursor + 6 : 104;
@@ -519,71 +504,6 @@
         pen = true;
       }
       if (od) overlayPaths += `<path class="ov ${ov.cls || ''}" d="${od}"/>`;
-    }
-
-    // Fundamental pane: a filed figure as a STEP, on its own scale.
-    let fundPane = '';
-    let fLo = 0, fHi = 1, fMin = 0, fMax = 0;
-    if (fund) {
-      const vals = fund.values.filter((v) => v != null);
-      const mn = Math.min.apply(null, vals);
-      const mx = Math.max.apply(null, vals);
-      fMin = mn; fMax = mx;
-      // ITS OWN RANGE, NOT ZERO — the short-interest strip's rule and its
-      // reason. A trailing year sits in a narrow band over a short window, so
-      // a zero base spends the whole pane on empty space (measured there: four
-      // stocks whose entire year lived above 30% of the track). A LINE carries
-      // no measured-from-zero claim the way a bar does, which is what makes
-      // that legitimate — and the caller says the baseline is not zero.
-      const span = (mx - mn) || Math.abs(mx) || 1;
-      const pad = span * 0.12;
-      fLo = mn - pad; fHi = mx + pad;
-      const fy = (v) => fundBot - ((v - fLo) / (fHi - fLo)) * (fundBot - fundTop);
-      fundPane += `<rect class="pane-bg" x="0" y="${fundTop}" width="${W}" height="${(fundBot - fundTop).toFixed(1)}"/>`;
-      // ZERO IS DRAWN WHENEVER THE DATA SPANS IT, which is the whole
-      // difference between a revenue line and a net-income one: profitable or
-      // not is the reading, and a line with no zero on it cannot say which
-      // side of it the company is.
-      //
-      // THE TEST IS THE DATA, NEVER THE PADDED AXIS, and production is what
-      // caught that. MU's TTM revenue runs $8.0B to $90.3B, so 12% of the span
-      // is larger than the minimum and `fLo` lands at -$1.9B — which drew a
-      // zero line on a REVENUE chart, implying a crossing that cannot happen.
-      // A fixture with a narrow range passes either way; this one needs a wide
-      // positive series to bite.
-      if (fMin < 0 && fMax > 0) {
-        fundPane += `<line class="fund-zero" x1="0" y1="${fy(0).toFixed(1)}" x2="${W}" y2="${fy(0).toFixed(1)}"/>`;
-      }
-      // A STEP, NEVER A SLOPE. A figure stands until the next filing replaces
-      // it; a sloped line between two quarters would claim the revenue drifted
-      // day by day, which is not what was filed.
-      // ONE COMMAND PER CHANGE OF LEVEL, not one per session. A step holds the
-      // same value for a whole quarter, so writing `H` at every bar put ~5,200
-      // of them in a Max chart's path — about 42KB of markup for a line with
-      // forty levels in it. The run is closed at its last point instead.
-      let fd = '', pen = false, prevY = 0, lastI = -1, startI = -1;
-      const closeRun = () => {
-        if (pen && lastI > startI) fd += 'H' + x(lastI).toFixed(1);
-      };
-      for (let i = 0; i < fund.values.length; i++) {
-        const v = fund.values[i];
-        if (v == null) { closeRun(); pen = false; continue; }
-        const yy = fy(v);
-        if (!pen) {
-          fd += 'M' + x(i).toFixed(1) + ' ' + yy.toFixed(1);
-          pen = true; prevY = yy; startI = i; lastI = i;
-          continue;
-        }
-        // Along at the level that was standing, THEN step to the new one — the
-        // other order would draw the change a quarter early.
-        if (Math.abs(yy - prevY) > 0.01) {
-          fd += 'H' + x(i).toFixed(1) + 'V' + yy.toFixed(1);
-          prevY = yy; startI = i;
-        }
-        lastI = i;
-      }
-      closeRun();
-      if (fd) fundPane += `<path class="fund-ln" d="${fd}"/>`;
     }
 
     // RSI pane: 0-100 on its own scale, with the 30 and 70 lines that make the
@@ -635,16 +555,6 @@
       rsi: rsis ? { top: rsiTop / H, bottom: rsiBot / H,
                     at: (v) => (rsiBot - (v / 100) * (rsiBot - rsiTop)) / H } : null,
       volume: vols ? { top: volTop / H, bottom: volBot / H } : null,
-      // THE AXIS BOUNDS AND THE DATA'S OWN RANGE ARE DIFFERENT NUMBERS, and
-      // only the second may be printed. `lo`/`hi` carry 12% of padding so the
-      // line never touches the pane edges — labelling those put "$10.2B" at
-      // the top of a pane whose highest filed figure was $9.0B, which is a
-      // number no company ever reported. A screenshot caught it; every
-      // assertion had passed. Label `min`/`max`, positioned through `at`.
-      fund: fund ? { top: fundTop / H, bottom: fundBot / H, lo: fLo, hi: fHi,
-                     min: fMin, max: fMax,
-                     at: (v) => (fundBot - ((v - fLo) / ((fHi - fLo) || 1)) *
-                                 (fundBot - fundTop)) / H } : null,
     };
 
     // Volume bars. Scaled to the largest bar in view rather than an absolute,
@@ -678,7 +588,6 @@
       `<line class="base" x1="0" y1="${baseY}" x2="${W}" y2="${baseY}"/>` +
       `<path class="ln" d="${d}"/>` +
       overlayPaths +
-      fundPane +
       rsiPane +
       `<circle class="dot" cx="${x(closes.length - 1).toFixed(1)}" cy="${y(closes[closes.length - 1]).toFixed(1)}" r="2.6"/>` +
       bars +
