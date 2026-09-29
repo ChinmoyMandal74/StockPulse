@@ -26,6 +26,23 @@
 
 const BarMath = require('./barmath.js');
 
+// A SUB-CENT CLOSE IS NOT A PRICE TO DIVIDE BY. The same floor and the same
+// value as `MIN_CLOSE` beside `pctChange` in server.js, which guards the
+// screener's returns and the 5Y anchor; this module is the offline half and
+// had only `> 0`, the test that floor replaced.
+//
+// It is needed for a REAL history, not a corrupt one. APLD traded as a
+// sub-penny shell — $0.0085 in October 2020, 1,304 sub-cent bars — before
+// its 2021 pivot, and is ~$50 now. Nothing there is wrong and its chart must
+// keep drawing; but a five-year return of +291,000% off a shell price is
+// arithmetically correct and analytically meaningless, and it dominates any
+// average it enters. The next reverse-merger shell does the same, so removing
+// a ticker cannot fix this.
+//
+// THE FLOOR IS ON THE ARITHMETIC, NEVER ON THE PRICE — `price` below is
+// returned untouched. Only the fields that divide by a close refuse.
+const MIN_CLOSE = 0.01;
+
 // Wilder's RSI for a whole series, oldest-first and index-aligned with the
 // arrays this module's other function takes. BarMath.rsiSeriesAt is the app's
 // own implementation and wants newest-first, so the flip happens here once
@@ -66,16 +83,25 @@ function rowAt(closes, highs, vols, i) {
   }
   const avgVol = vn ? vsum / vn : null;
   const vNow = hasVol ? vols[i] : 0;
-  const back = (n) => (i >= n && closes[i - n] > 0 ? (c / closes[i - n] - 1) * 100 : null);
+  // Both ends have to be a price: a sub-cent ANCHOR inflates the return and a
+  // sub-cent CURRENT close collapses it, and each is as meaningless.
+  const priced = c >= MIN_CLOSE;
+  const back = (n) => (i >= n && priced && closes[i - n] >= MIN_CLOSE
+    ? (c / closes[i - n] - 1) * 100 : null);
   return {
     price: c,
-    vs200ma: s200 > 0 ? (c / s200 - 1) * 100 : null,
-    vs50ma: s50 > 0 ? (c / s50 - 1) * 100 : null,
+    vs200ma: priced && s200 >= MIN_CLOSE ? (c / s200 - 1) * 100 : null,
+    vs50ma: priced && s50 >= MIN_CLOSE ? (c / s50 - 1) * 100 : null,
     oneMonthPct: back(21), threeMonthPct: back(63), sixMonthPct: back(126),
     oneYearPct: back(252), oneWeekPct: back(5), todayPct: back(1),
-    pctFromHigh: hi > 0 ? (c / hi - 1) * 100 : null,
-    pctFromLow: lo < Infinity && lo > 0 ? (c / lo - 1) * 100 : null,
+    pctFromHigh: priced && hi >= MIN_CLOSE ? (c / hi - 1) * 100 : null,
+    pctFromLow: priced && lo < Infinity && lo >= MIN_CLOSE ? (c / lo - 1) * 100 : null,
+    // A POSITION IN A RANGE IS NOT A RETURN — it is bounded 0..100 whatever
+    // the prices are, so a sub-cent low cannot inflate it and it keeps its
+    // own test. The 52-week window is still real information on a shell.
     range52Pos: hi > lo ? ((c - lo) / (hi - lo)) * 100 : null,
+    // Above or below its own average is a COMPARISON, not a division, and
+    // stays true at any price.
     above200: s200 > 0 ? c > s200 : null,
     historyDays: i + 1,
     volX: avgVol > 0 && vNow > 0 ? vNow / avgVol : null,
@@ -88,4 +114,4 @@ function rowAt(closes, highs, vols, i) {
 // `thinHistory` is the honest answer.
 const MIN_SESSIONS = 252;
 
-module.exports = { rowAt, rsiSeries, MIN_SESSIONS };
+module.exports = { rowAt, rsiSeries, MIN_SESSIONS, MIN_CLOSE };

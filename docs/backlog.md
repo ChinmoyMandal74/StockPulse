@@ -737,8 +737,26 @@ that are not prices.
   that matters**, because removing a ticker cannot fix it and the next
   reverse-merger shell will do the same.
 
+**`techrow.js` HAS THE FLOOR NOW (2026-09-28), which leaves three.** It was not
+on the list above and should have been: it stores `m1`, `m3`, `vs200`, `vs50`
+and `from_high` into `tech_history`, every one of them a division by a close.
+Measured on the rebuilt archive before the change — **APLD is the only symbol
+left, 1,304 sub-cent bars spanning 2008-12-11 to 2020-10-22**, and **548 of its
+950 weekly marks** have a 52-week window touching them.
+
+**The floor propagates to the verdict, which is why no second guard was
+needed.** With null trend inputs the engine lands on `No trend data`, so a
+poisoned row cannot qualify for a tier and never enters a `/trend-backtest`
+basket: all 262 shell-era marks read `Hold (No trend data)` and **0** qualify.
+**Proved by reverting**: without it, 11 of them become **`Buy` at $0.0028,
+$0.0029 and $0.0025** — positions that later become $50 and dominate whatever
+window they land in. APLD's ordinary marks are untouched (Buy 55 against 58).
+
+Still outstanding: `lab-grid.js`, `single-data.js` and `strategy-runs.js`.
+
 **What it would take.** The floor already exists and is already reasoned about
-in `server.js`; the builders need the same test where they compute a return —
+in `server.js` and now in `techrow.js`; the rest need the same test where they
+compute a return —
 refuse a window whose anchor is under a cent, and count what was refused rather
 than dropping it silently. That is a few lines each, and the honest version
 reports the count so a rising number is visible.
