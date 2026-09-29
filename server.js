@@ -9145,6 +9145,12 @@ app.get('/api/sec', requireAuth, route(async (req, res) => {
     // the vendor's margins are trailing-twelve-month, and a single quarter
     // against them reads as a 30-point error that is really period length.
     ttm: SecFacts.ttm(latest.filter((r) => r.periodType === 'Q')),
+    // The same trailing year at every quarter-end, for the chart pane. From
+    // `latestFilled` rather than `latest`: filling only ever supplies a figure
+    // the winning filing left BLANK, so this can never disagree with the `ttm`
+    // row above about a NUMBER — it merely has points where that row has none.
+    ttmSeries: SecFacts.ttmSeries(
+      SecFacts.latestFilled(all).filter((r) => r.periodType === 'Q')),
     // What the VERDICT read is deliberately not returned here. The stock page
     // already holds that row, so asking this route for it would mean reading
     // the ~1.3MB snapshot on a path that exists precisely to avoid it.
