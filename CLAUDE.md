@@ -986,9 +986,11 @@ Verified: 10 checks driving the REAL endpoint with the provider stubbed, reading
 
 **This data reaches the SEC EDGAR card and nothing else.** No `FIELD_SPEC` entry, no snapshot stamping, no screener column, no filter key — because a column becomes filterable, then screenable, and a screen drives promo cards and the phone. It is **asserted, not intended**: `sec-test.js` fetches the real `/api/stocks` and reads the real rendered header, and fails if any filings field, accession number or filing date appears in either. **Proved by reverting**: stamping `accn` and `epsDiluted` onto the read path fails 2, naming both.
 
-The two things that make it unusable in a verdict anyway are worth recording: **`shortPctFloat` is in no filing** (FINRA publishes it bi-monthly) and it only fires a "weak fundamentals" clause, so a replay would be silently *less* strict; and filings are quarterly steps that would have to be synthesised into daily rows. Fine under a chart, poison in a gate. Of the ten fundamentals the Balanced rules read, seven are reconstructible; `forwardPe`'s only use is ETF detection, which the CIK map answers better.
+The two things that make it unusable in a verdict anyway are worth recording: **`shortPctFloat` is in no filing** and it only fires a "weak fundamentals" clause, so a replay would be silently *less* strict; and filings are quarterly steps that would have to be synthesised into daily rows. Fine under a chart, poison in a gate. Of the ten fundamentals the Balanced rules read, seven are reconstructible; `forwardPe`'s only use is ETF detection, which the CIK map answers better.
 
-**The advice BACKTEST is a separate conversation and has not been had.** `/backtest` currently imputes *today's* fundamentals before 2026-08-30 — a look-ahead — so filings with a `filed` date would strictly improve it. Noted because it is the strongest case this data has; it must still never write back into a live verdict.
+> **PARTLY SUPERSEDED (2026-09-29).** The short-interest half is no longer true: FINRA is loaded, 217,734 readings back to 2017-12-29 at 100% coverage, so `shortPctFloat` IS reconstructible from 2018. And the reconstruction itself now exists and is on screen — see **Adjusted Advice** below, which assembles the whole engine row from filings plus bars and scores it with the rules unchanged. What has NOT changed is the sentence this paragraph is really about: none of it reaches a live verdict.
+
+**The advice BACKTEST is a separate conversation.** `/backtest` currently imputes *today's* fundamentals before 2026-08-30 — a look-ahead — so filings with a `filed` date would strictly improve it. Noted because it is the strongest case this data has; it must still never write back into a live verdict. **It was had on 2026-09-29 and deliberately not built**: the owner asked to see the fields first, which is what **Adjusted Advice** is. The design, the traps and the one measurement to take before writing any of it are [docs/backlog.md](docs/backlog.md) entry 17.
 
 ### Three traps, each found by measuring and each still live
 1. **`periodType` must be read off the SPAN, never off `fp`.** A 10-Q carries the quarter AND the year-to-date figure under the same `fp` — measured on RBLX: 28 quarterly observations, 10 six-month, 8 nine-month. Reading `fp` reports a Q2 at roughly double its real size.
@@ -1217,6 +1219,75 @@ Six were real and are now card rows, so they reach the stock page, the hover car
   - The flag also sized the credit budget (`MAX_PROFILE_FETCHES_PER_CALL` and `PROFILE_CAP_ARCHIVE_ROUND` were `ANALYST_ENABLED ? 4 : …`), so removing it collapses those to 6 and 7 — the values every real run has used.
   - **REMOVING a key from `emptyProfile()` is safe in a way adding one is not**: `profileGaps()` looks for profiles MISSING a key the app writes, so extra keys in stored blobs are ignored rather than triggering a re-pull of the universe.
 - Verified: 25 checks driving a real refresh and the real page — each removed field absent from the row, the analyst endpoints never called, `posMonths` out of the glossary, and all six new fields rendering both in `fieldValues()` and on `/stock`.
+
+## Adjusted Advice — the same rules, read off the filings (2026-09-29)
+
+**`/adjusted` (admin, a Research row on the console): one line per ticker carrying every field the Advice engine reads, with each technical taken from Twelve Data's price bars and each fundamental from the company's own SEC filings, and the verdict `action.js` produces from that.** The owner's framing: *"a new sheet showing the tickers and all the fields used in the advice calculation, Twelve data for Price and Edgar for fundamental, the rules remain the same"* — and explicitly **not** a backtest yet; see the design note in [docs/backlog.md](docs/backlog.md) entry 17 for where that goes next.
+
+**IT IS NOT A NEW RULE SET.** No rule, threshold or ordering is touched, which is the whole point: the only variable is where the numbers came from, so a difference between the two verdict columns is a difference of SOURCE and nothing else. Inventing rules tuned to filings-native metrics was the alternative and was refused — it would mean fitting thresholds against the same data a backtest would then test on.
+
+**Deliberately plain, at the owner's instruction** ("Nothing fancy, No hover etc."): no hover card, no score tooltip, no ladder panel, no chart. There are checks asserting `#rowcard` and `#tip` do not exist on the page, because "no hover" is a property worth keeping rather than a preference that quietly erodes.
+
+- **`adjusted.js` is pure** — no network, no database, no `store` — the `secfacts.js` / `insider.js` / `news.js` shape, which is what lets every substitution below be tested without a server.
+- **THE BOUNDARY IS UNCHANGED and is the condition of this existing.** Nothing is stamped onto a snapshot row, so it cannot become a screener column, then a filter, then a screen, then a promo card. `adjusted-test.js` asserts that against the real `/api/stocks` payload and the real rendered header, and asserts the screener still serves the LIVE verdict for a stock whose adjusted one differs.
+- **Admin only**, like the two backtests, and for their reason: it shows what a verdict WOULD be under other inputs, which is not a thing this product says anywhere else.
+- **Three reads for the whole universe** — the snapshot, plus batched indexed seeks into `sec_facts` and `short_interest`. `readSecFactsSince` is bounded on purpose, measured against production: `where symbol = ? and period_end >= ?` SEARCHes, while `where period_end >= ?` SCANs all 270,054 rows, which on this database is a quota event rather than a slow query. Bounded: **24,281 rows for 1,093 symbols in 3.6s**; the whole route builds in **3.4-3.8s**, cached 10 minutes, and stands aside for a refresh only when it would actually have to read.
+- **`readShortLatestFor` exists because `readShortInterest` returns a symbol's history OLDEST FIRST** — the card draws a series left to right. Reusing it for "the current reading" hands back the 2017 one, which the first draft of the probe did. There is a test with a 2017 reading at 90% of float and a 2026 one at 3%.
+
+### What comes from where, and the three inputs that come from neither
+
+| engine input | source |
+|---|---|
+| vs200ma, vs50ma, rsi, 1M, 3M, from-high, vol trend, history, price | Twelve Data bars, via the snapshot |
+| revenue/earnings growth, gross/profit/FCF margin, net income TTM, FCF TTM, ROE | SEC EDGAR |
+| market cap | a filed diluted share count at the latest close |
+| shortPctFloat | **FINRA**, over the vendor's float |
+| nextEarningsDate | the vendor's |
+| forwardPe | **substituted** — see below |
+| qualityRating | withheld; Balanced has `use_quality: false` and never reads it |
+
+- **Margins are TRAILING TWELVE MONTHS and growth is the latest quarter**, which is not an inconsistency — it is what the rules already mean, and matching it is what keeps "the rules remain the same" true. Comparing one quarter's margin against a TTM figure manufactured a 33.9-point gap on MU once already.
+- **`forwardPe` is a TRAILING P/E and the page says so on its own face.** Forward estimates are Ultra-plan only and are in no filing. Its only jobs in the engine are one establishment point (`0 < pe <= 40`) and the fund test; a trailing multiple is normally the higher, so a company near the line loses a point here that it keeps on the screener. **80 of the type flips are exactly that**, and it is named rather than buried.
+- **It is market cap over TTM net income, never a sum of quarterly EPS.** Summing `epsDiluted` was the first attempt and returned null for **96% of the universe**: there is no Q4 in a filing, it is differenced out of the annual ladder, and a per-share figure cannot be differenced because each quarter's denominator is its own weighted average — `secfacts.js` correctly leaves it blank (`NO_DIFF`), so almost every trailing year is missing exactly one EPS.
+- **FINRA is the SOURCE the vendor's own short interest is derived from** (measured to 0.00pt when the card was built), so taking it first-hand is the more direct reading rather than a substitution. The float is still the vendor's — no filing states one.
+
+### ABSENCE IN A NEWER FILING IS NOT A RESTATEMENT TO NOTHING — `SecFacts.latestFilled`
+**A real defect in the existing card, found while building this.** `latestPerPeriod` takes the winning filing's row WHOLESALE, which is right for the stock page — every number on a line then comes from the one document the line links to — and it costs an enormous amount of coverage. A 10-Q carries sparse comparatives for older quarters, often a net income and nothing else; being newer and the same form rank, that row wins the period and the revenue the original 10-Q reported is discarded although it is still in the table one filing down:
+
+```
+AVGO  quarter to 2026-05-03   10-Q of 2026-09-10  net income only     <- picked
+                              10-Q of 2026-06-09  revenue 22.19B, gross 15.41B
+```
+
+Confirmed on AVGO, GM, KLAC, SMCI and hundreds of others. The consequence is that a TTM cannot be summed, because one of its four quarters has no revenue.
+
+- **`latestFilled` fills a winning row's BLANKS from the rest of that period's trail, best-ranked first, and never overwrites.** A genuine restatement always wins; the older filing is consulted only where the newer one is silent. `filledFrom` records which accession supplied each borrowed field.
+- Measured across 1,100 filers: **a full TTM 65% → 90%**, profit margin / net income / ROE **65% → 90%**, gross margin **41% → 58%**.
+- **Checked against the invariant that validates all of this — four quarters must sum to the year — filling made ZERO years worse**, while making 871 more years checkable at all (2,062 → 2,933).
+- **The stock page's SEC card still uses `latestPerPeriod` and still shows those dashes.** That is a separate decision: its claim is one row, one filing, and the two should not be changed together without deciding what the card is for. Worth revisiting.
+
+### `notFund` — the one engine change, and it is inert
+`classify()` calls a row an ETF when its theme names say so OR when it has neither a Quality score nor a P/E. That second half is a **heuristic for "we hold no fundamentals for this thing"**, not a rule. Quality is withheld on this page by design, so every loss-maker — no positive earnings, so no honest P/E — was typed as a fund and scored by the all-technical rulebook: **263 of 1,084 rows (24%)**, with nothing on screen looking wrong.
+
+- A caller that KNOWS better may now say so with `notFund`, and the guess is skipped. `/adjusted` sets it from the SEC CIK map, which answers "is this a company that files?" directly. **Nothing in the live path sets it.**
+- **Proved inert**: the whole live snapshot scored under all five rule sets against the engine lifted out of `git show HEAD` — **5,905 evaluations, zero differences** — and the same probe asserts the guard really bites (a no-Quality no-P/E row types ETF without it and Early with it). Comparing the new engine with itself would have proved nothing.
+- **`Adjusted.verdict` still checks the outcome rather than trusting it**: where the engine says ETF and the company files with the SEC, the verdict is WITHHELD with the reason named. A blank with a stated cause beats a wrong word.
+
+### A FILING THAT CONTRADICTS ITSELF — the share-count guard
+**Net income over diluted EPS is the same quantity read a second way out of the same document**, which makes it a free independent check on the one figure the filings cannot otherwise corroborate. It is needed:
+
+- **WAT's two newest 10-Qs state 98,204.0M and 82,139.0M diluted shares** against 59.7M in its own 10-K and 97.8M implied by its own EPS — a factor of **1,004**, which put its market cap at **$43,498B** and would have been by a distance the loudest number on the page. **The SOLS lesson exactly**: one junk value destroys a column and the only warning is a figure somebody happens to look at. A stated count more than 10x from its own EPS-implied one is rejected in favour of the implied one, and the row records what it rejected.
+- **The annuals are consulted when no quarter states a count** — a 20-F filer (CHKP) states it only there — and the EPS reading stands in when nothing states one at all (XOM and other majors use a tag `secfacts.js` does not map; widening that means re-fetching 1,167 companies from an address that has already answered 429 once).
+- Measured after: market cap reproduces the vendor's own figure to a **median 0.2%**, within 15% on **1,000 of 1,048** rows, nulls down from 37 to 24. **The page prints that ratio**, because it is how far to trust the column and the reader should not have to discover it.
+
+### What the first full reading says
+1,181 snapshot rows → **1,074 on the page** (13 funds with no CIK, 94 filers with no usable quarter). **954 agree with the live verdict, 120 differ.**
+
+- **The disagreements are overwhelmingly the company TYPE, not the fundamentals bucket** — Established → Early in 88 of them. The establishment points lost, in order: **free cash flow 151, priced on earnings 80, ROE 42, profitability 35, size 9**.
+- So the binding constraint is **coverage, not disagreement**: FCF margin reaches 54% of filers and gross margin 58%, because capex and cost-of-revenue are not tagged for every quarter of a trailing year. A missing point is not a weaker company, and the counts strip says how many rows have no trailing year (84) and no market cap (24) so that cannot be read as a finding.
+- **A filer with one quarter still gets a row**, with every trailing figure dashed. The rules read a missing fundamental as "the data made no case", which is a state they already handle — but a verdict resting on nine dashes is worth being able to count rather than having to notice.
+- Verified: **97 checks** — the module with no server, `latestFilled` both ways, the route over a fixture where **every company separates the filings from the vendor** (SPLITCO's vendor fundamentals are strong and its filings weak, so a page reading the vendor would return the same verdict for it as for GOODCO), the boundary, the roles, and the page. **Proved by reverting four times**: `latestPerPeriod` in place of `latestFilled` fails 3, dropping `notFund` fails 5, reading the vendor's fundamentals fails 13, and dropping the share-count guard fails 3.
+  - **Two fixture faults worth keeping.** The filings' profit margin was built at exactly 25% and the FCF margin at 20% — which are precisely the vendor's — so "the vendor's number is not what is shown" passed over two identical numbers and proved nothing; every ratio in the fixture is now deliberately unequal. And an assertion that a loss-making quarter is "left alone" by the share guard was simply wrong about the sign: a loss over a negative EPS implies a **positive** count, which is WAT's real case and the one the guard most needs to reach.
 
 ## Charts and the stock page
 Charts are hand-rolled inline SVG in `rowcard.js` — no library, no build step. `chartSVG(closes)` returns `{ svg, log }`.

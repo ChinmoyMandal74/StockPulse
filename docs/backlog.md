@@ -773,6 +773,68 @@ anyway, and the floor should land before the rebuild rather than after it.
 
 ---
 
+## 17. Backtesting Adjusted Advice — designed 2026-09-29, deliberately not built
+
+`/adjusted` exists and shows the fields; the owner's stated aim is to backtest
+the verdict it produces, and explicitly **not yet** ("I do not want to run the
+back test now, I want to see the advice data first").
+
+**Why it is the strongest case this data has.** `/backtest` is capped at two
+months because `fundamentals_history` began 2026-08-30 and everything before
+that imputes *today's* fundamentals — a look-ahead. `/trend-backtest` reaches
+twenty years but reads bars alone. So today you can have an honest verdict or
+a long history, never both. Filings carry a `filed` date, which is the day a
+figure became public, so they are the one fundamental source here that can be
+made genuinely point-in-time.
+
+**What is already in place.** `adjusted.js` assembles the engine row and
+`action.js` scores it unchanged; `sec_facts` carries `filed`/`form`/`accn` per
+observation; FINRA closes the `shortPctFloat` hole back to 2017-12-29 (this
+file and CLAUDE.md both used to say that input was unreconstructible — that is
+stale); `tech_history` already stores every bar-derived input the rules read,
+891,537 rows back to 2001, with the sub-cent floor applied.
+
+**What a backtest must do that the page does not.**
+
+- **Use `filed`, never `periodEnd`.** MU's quarter ended 2026-05-28 and was
+  filed 2026-06-25 — using the period end buys four weeks of look-ahead. The
+  same lesson the insider `filed`/`transDate` split already records.
+- **Take as-first-reported, not the latest restatement.** The page correctly
+  shows the newest version of each period; a backtest must take the EARLIEST
+  `filed`. The trail is stored, so this is recoverable — but only deliberately.
+  Note `latestFilled` fills blanks from *older* filings, which is right for a
+  current view and needs re-thinking under a point-in-time one.
+- **Pin FINRA's dissemination lag** (roughly eight business days after
+  settlement) against their calendar before trusting it.
+- **Expect the company TYPE to vary over time.** It is decided by
+  fundamentals, so a company can move between rulebooks mid-backtest. Correct,
+  and a behaviour nobody has seen yet.
+- **State that our FCF is not the vendor's.** A 20.5pt definitional gap was
+  measured on MU. A backtest on our FCF tests *our* definition and will not
+  reconcile with the live screener.
+
+**The binding constraints, in order.**
+
+1. **Survivorship, which dwarfs everything else.** The universe is today's
+   1,181 names; companies that died are absent. Perfect point-in-time
+   fundamentals on a survivor-only pool is a better-measured biased answer.
+   The SEC `submissions` API (delisted filers) is the lever.
+2. **Coverage, measured 2026-09-29 and worse than the verdict column suggests.**
+   A full trailing year reaches 90% of filers, but FCF margin reaches 54% and
+   gross margin 58%. Establishment points lost against the live engine: free
+   cash flow 151, priced on earnings 80, ROE 42. A backtest would be measuring
+   a rulebook that is systematically short of points, not a different view.
+3. **FINRA floors the honest window at ~2018**, so about 8 years. Earlier is
+   runnable with `shortPctFloat` absent, but it only fires a *weak* clause, so
+   the replay is silently **less strict** and must be labelled.
+
+**The one thing to measure before writing any of it**: for how many
+(symbol, date) pairs a complete point-in-time row can actually be assembled.
+If coverage at a date is what it is today, the answer is thin and worth
+knowing for a few hundred lines of effort rather than a few thousand.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's

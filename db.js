@@ -2111,6 +2111,44 @@ async function readSecFacts(symbol) {
   });
 }
 
+// Many symbols at once, bounded by period — the /adjusted page's read.
+//
+// ONE SEEK PER SYMBOL, NEVER ONE QUERY OVER THE TABLE. Measured 2026-09-29
+// against production, which is also why the `since` bound is not optional:
+//
+//   where symbol = ? and period_end >= ?   SEARCH ... USING COVERING INDEX
+//   where period_end >= ?                  SCAN sec_facts USING COVERING INDEX
+//
+// sec_facts holds 270,054 rows; the scan reads every one of them, which on
+// this database is a quota event rather than a slow query (the closesBefore
+// lesson: 748,859 rows became 254). The bounded seeks read 24,281 rows for
+// 1,093 symbols in 3.6s and answer exactly the same question, because the
+// ratios need two years of quarters and nothing older.
+async function readSecFactsSince(symbols, since) {
+  await init();
+  const syms = [...new Set((symbols || []).map((x) => String(x).toUpperCase()))];
+  const out = new Map();
+  if (!syms.length || !since) return out;
+  for (let i = 0; i < syms.length; i += ANCHOR_CHUNK) {
+    const slice = syms.slice(i, i + ANCHOR_CHUNK);
+    const res = await db.batch(slice.map((sym) => ({
+      sql: `select ${SEC_COLS.join(',')} from sec_facts
+              where symbol = ? and period_end >= ?
+              order by period_end desc, filed desc`,
+      args: [sym, since],
+    })), 'read');
+    res.forEach((r, j) => {
+      if (!r.rows.length) return;
+      out.set(slice[j], r.rows.map((x) => {
+        const o = {};
+        for (const c of SEC_COLS) o[SEC_FIELD[c] || c] = x[c];
+        return o;
+      }));
+    });
+  }
+  return out;
+}
+
 async function readSecState() {
   await init();
   const r = await db.execute('select symbol, cik, fetched_at, rows, status, error from sec_state');
@@ -2268,6 +2306,32 @@ async function readShortInterest(symbol, limit = 400) {
     split: !!x.split,
     revised: !!x.revised,
   }));
+}
+
+// The NEWEST reading for many symbols — one seek each on idx_shortint_sym.
+//
+// Note the direction: `readShortInterest` above returns a symbol's history
+// OLDEST first, because the card draws a series left to right. Reusing it for
+// "the current reading" hands back the 2017 one, which is what the first
+// draft of the /adjusted probe did and why this is its own accessor rather
+// than a limit on that one.
+async function readShortLatestFor(symbols) {
+  await init();
+  const syms = [...new Set((symbols || []).map((x) => String(x).toUpperCase()))];
+  const out = new Map();
+  if (!syms.length) return out;
+  for (let i = 0; i < syms.length; i += ANCHOR_CHUNK) {
+    const slice = syms.slice(i, i + ANCHOR_CHUNK);
+    const res = await db.batch(slice.map((sym) => ({
+      sql: 'select d, shares, split from short_interest where symbol = ? order by d desc limit 1',
+      args: [sym],
+    })), 'read');
+    res.forEach((r, j) => {
+      const x = r.rows[0];
+      if (x) out.set(slice[j], { d: x.d, shares: x.shares, split: !!x.split });
+    });
+  }
+  return out;
 }
 
 // The whole fetch clock — one row per symbol, ~1,181 rows, so a wholesale
@@ -4673,9 +4737,9 @@ async function readNewsState() {
 module.exports = {
   db,
   init,
-  writeSecFacts, noteSecMiss, readSecFacts, readSecState,
+  writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState,
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
-  writeShortInterest, readShortInterest, readShortState, noteShortMiss,
+  writeShortInterest, readShortInterest, readShortLatestFor, readShortState, noteShortMiss,
   readInsiderDay, writeInsiderDay, appendInsider, readUniverseCiks,
   clearVisitors,
   logActivity,

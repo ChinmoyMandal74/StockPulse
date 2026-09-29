@@ -507,6 +507,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
                       '/backtest.html': '/backtest', '/quality.html': '/quality',
                       '/trend-backtest.html': '/trend-backtest',
+                      '/adjusted.html': '/adjusted',
                       '/architecture.html': '/architecture', '/themes.html': '/themes',
                       // no symbols in that path, so it opens with both pickers empty
                       '/compare.html': '/compare',
@@ -1313,6 +1314,15 @@ app.get('/trend-backtest', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'trend-backtest');
   res.sendFile(path.join(__dirname, 'private', 'trend-backtest.html'));
+}));
+
+// Admin only: the same rules read off filings instead of the vendor.
+// Research, like the two backtests — it shows what a verdict WOULD be, which
+// is not what the product says anywhere else, so it is not a member surface.
+app.get('/adjusted', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'adjusted');
+  res.sendFile(path.join(__dirname, 'private', 'adjusted.html'));
 }));
 
 // Admin only: what we actually hold for each stock, and what to run about it.
@@ -9053,6 +9063,136 @@ app.get('/api/sec', requireAuth, route(async (req, res) => {
     status: state ? state.status : null,
     cik: state ? state.cik : null,
   });
+}));
+
+// ---- Adjusted Advice (2026-09-29, owner's request) ------------------------
+//
+// The SAME rules, read off different data: Twelve Data's bars for every
+// technical, the company's own filings for every fundamental. `adjusted.js`
+// assembles the row and `action.js` scores it unchanged.
+//
+// ADMIN ONLY, and research rather than product. It shows what a verdict WOULD
+// be under other inputs, which is not a thing this app says anywhere else;
+// the two backtests sit behind the same door for the same reason.
+//
+// THE BOUNDARY: nothing here is written back. No snapshot stamp, no screener
+// column, no FIELD_SPEC entry — so it cannot become a filter, then a screen,
+// then a promo card. `adjusted-test.js` asserts that against the real
+// /api/stocks and the real rendered screener header.
+const Adjusted = require('./adjusted.js');
+// Two years of periods: the ratios need the newest quarter, the year-ago one
+// it grows against, and four for the trailing sum. Older filings are the
+// restatement trail, which this page does not read.
+const ADJ_WINDOW_DAYS = 800;
+const ADJ_CACHE_MS = 10 * 60 * 1000;
+let adjCache = null;
+
+async function buildAdjusted() {
+  const snap = await store.readSnapshot();
+  const rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && !r.error);
+  const syms = rows.map((r) => r.symbol);
+  const since = new Date(Date.now() - ADJ_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
+  // Three reads for the whole universe, each a batch of indexed seeks.
+  const [facts, shorts, state] = await Promise.all([
+    store.readSecFactsSince(syms, since),
+    store.readShortLatestFor(syms),
+    store.readSecState(),
+  ]);
+  const cfg = ruleCfg('Balanced');
+
+  const out = [];
+  let noCik = 0, noQuarter = 0, withheld = 0, differs = 0, noTtm = 0, noCap = 0;
+  let capCompared = 0, capClose = 0;
+  for (const r of rows) {
+    // A FUND IS NOT A COMPANY, and the CIK map is the direct answer rather
+    // than an inference from two absent vendor fields. No filings, no row —
+    // the SEC card's own rule, and better than drawing a line of dashes.
+    const st = state[r.symbol];
+    if (!st || !st.cik) { noCik++; continue; }
+    const sec = Adjusted.fundamentalsFrom(SecFacts, facts.get(r.symbol) || []);
+    if (!sec) { noQuarter++; continue; }
+    const row = Adjusted.engineRow(r, sec, shorts.get(r.symbol) || null);
+    const v = Adjusted.verdict(Action, row, cfg, true);
+    if (v.withheld) withheld++;
+    else if (v.action !== r.action) differs++;
+    // A COMPANY WITH FILINGS BUT NO TRAILING YEAR STILL GETS A ROW, and every
+    // margin on it is a dash. That is the honest picture — the rules read a
+    // missing fundamental as "the data made no case", which is a legitimate
+    // state they already handle — but a verdict resting on nine dashes is
+    // worth being able to count rather than having to notice. A recent
+    // listing is the usual reason.
+    if (!sec.ttmTo) noTtm++;
+    // A MISSING MARKET CAP IS NOT A SMALL COMPANY, and left uncounted it reads
+    // as one: no cap costs the two Size establishment points AND the P/E
+    // (which is cap over earnings), so the company type drops to Early and
+    // the verdict follows. Measured on 37 filers whose diluted share count
+    // this project does not capture — V, XOM, BRK.A, KKR among them. That is
+    // a data gap wearing the clothes of a finding, so it is counted where the
+    // reader can see it.
+    if (row.marketCap == null) noCap++;
+    // HOW FAR TO TRUST THIS COLUMN, measured rather than asserted. The
+    // vendor's own capitalisation is not an INPUT here — no fundamental on
+    // this page comes from it — but it is a free independent check on the
+    // one figure the filings cannot corroborate for themselves, and the note
+    // prints the answer. A filed diluted count is not always the count: a
+    // handful of filers state a single share class, or state it in
+    // thousands, and the reader should know how often before reading a
+    // company type off it.
+    if (row.marketCap != null && r.marketCap > 0) {
+      capCompared++;
+      if (Math.abs(row.marketCap - r.marketCap) / r.marketCap <= 0.15) capClose++;
+    }
+    out.push({
+      symbol: r.symbol,
+      name: r.shortName || r.name || r.symbol,
+      sector: r.sector || null,
+      fields: row,
+      adjusted: v,
+      // The LIVE verdict beside it, so the page can show where the two
+      // sources disagree. It is the snapshot's own stamped value — read,
+      // never recomputed here, or the comparison would be against a
+      // different machine rather than a different input.
+      live: { action: r.action || null, flag: r.actionFlag || null },
+      asOf: {
+        periodEnd: sec.periodEnd, filed: sec.filed, form: sec.form,
+        accn: sec.accn, url: SecFacts.filingUrl(st.cik, sec.accn),
+        ttmFrom: sec.ttmFrom, ttmTo: sec.ttmTo, ttmDays: sec.ttmDays,
+        yoyAgainst: sec.yoyAgainst, filled: sec.filled,
+        sharesFrom: sec.sharesFrom, sharesBack: sec.sharesBack,
+        sharesBasis: sec.sharesBasis, sharesRejected: sec.sharesRejected,
+      },
+      shortAt: (shorts.get(r.symbol) || {}).d || null,
+    });
+  }
+  out.sort((a, b) => (a.symbol < b.symbol ? -1 : 1));
+  return {
+    rows: out,
+    fields: Adjusted.FIELDS,
+    sources: Adjusted.SOURCES,
+    counts: {
+      universe: rows.length, shown: out.length, noCik, noQuarter, withheld, differs,
+      noTtm, noCap, capCompared, capClose,
+      same: out.length - withheld - differs,
+    },
+    window: { since, days: ADJ_WINDOW_DAYS },
+    pricedAt: (snap && snap.updatedAt) || null,
+    builtAt: new Date().toISOString(),
+  };
+}
+
+app.get('/api/adjusted', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const fresh = req.query.fresh === '1';
+  if (!fresh && adjCache && Date.now() - adjCache.at < ADJ_CACHE_MS) {
+    return res.json(Object.assign({}, adjCache.data, { cached: true }));
+  }
+  // It reads a large slice of the archive in one go, so it stands aside for a
+  // refresh like the other heavy pages — but only when it would actually have
+  // to read. A warm answer costs nothing and is still served.
+  if (await standAside(res)) return null;
+  const data = await buildAdjusted();
+  adjCache = { at: Date.now(), data };
+  return res.json(Object.assign({}, data, { cached: false }));
 }));
 
 // ---- insider transactions (Forms 3/4/5, 2026-09-27) ----------------------

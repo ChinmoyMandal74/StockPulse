@@ -304,7 +304,18 @@
 
     const q = num(s.qualityRating), pe = num(s.forwardPe);
     const names = Array.isArray(s.portfolios) ? s.portfolios.join(' ') : String(s.portfolios || '');
-    if (/etf/i.test(names) || (q == null && pe == null)) return { type: 'ETF', estScore: null, pinned: false };
+    // "No Quality AND no P/E" is a HEURISTIC for "we hold no fundamentals for
+    // this thing", not a rule — a fund is the usual reason a row looks like
+    // that. A caller that KNOWS better may say so with `notFund`, and the
+    // guess is then skipped. Nothing in the live path sets it, so every
+    // existing surface is unchanged; `/adjusted` sets it from the SEC CIK
+    // map, which answers "is this a company that files?" directly instead of
+    // inferring it from two absent vendor fields. Without it a loss-maker —
+    // no positive earnings, so no honest P/E — would be typed as a fund and
+    // scored by the all-technical rulebook, with nothing on screen wrong.
+    if (/etf/i.test(names) || (!s.notFund && q == null && pe == null)) {
+      return { type: 'ETF', estScore: null, pinned: false };
+    }
 
     const mc = num(s.marketCap), ni = num(s.netIncomeTtm), pm = num(s.profitMargin);
     const fcf = num(s.fcfTtm), fm = num(s.fcfMargin), roe = num(s.roe);

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Adjusted Advice — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* DELIBERATELY PLAIN, at the owner's instruction: "Nothing fancy, No
+       hover etc." So there is no hover card, no score tooltip, no ladder
+       panel, no chart and no row highlight — a sheet of numbers you can read
+       and sort, and nothing that moves under the pointer.
+
+       Every class here is scoped under #adj or #adjWrap. Eight unscoped class
+       names have captured later markup on this project (.warn, .card, .mk,
+       .sub, .fav and the rest), and .sub in particular is already taken. */
+    body { min-height: 100dvh; padding: 0 0 70px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1760px; margin: 0 auto; padding: 0 20px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(94, 234, 212, 0.07), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.09), transparent 64%); }
+    .bezel { border-radius: 22px; }
+
+    header.top { display: flex; align-items: center; gap: 12px; padding: 24px 0 12px; flex-wrap: wrap; }
+    header.top h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+    .spacer { margin-left: auto; }
+
+    #adjNote { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; max-width: 104ch;
+               line-height: 1.65; }
+    #adjNote b { color: var(--text); font-weight: 600; }
+    #adjNote .warn { font-weight: 600; }
+
+    /* the counts strip */
+    #adjStats { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+    #adjStats .st { border: 1px solid var(--hair); border-radius: 9px; padding: 7px 11px;
+                    background: var(--surface); }
+    #adjStats .st .n { font: 600 15px var(--mono); display: block; }
+    #adjStats .st .k { font-size: 10.5px; color: var(--faint); text-transform: uppercase;
+                       letter-spacing: .06em; }
+
+    /* controls */
+    #adjBar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+    #adjBar input[type="search"] { width: 190px; }
+    #adjBar label { font-size: 12px; color: var(--muted); display: inline-flex;
+                    align-items: center; gap: 6px; }
+
+    /* the sheet */
+    #adjWrap { overflow: auto; max-height: 74dvh; }
+    #adj { border-collapse: separate; border-spacing: 0; width: 100%; }
+    #adj th, #adj td { padding: 5px 8px; white-space: nowrap; font-size: 11.5px;
+                       border-bottom: 1px solid var(--hair); }
+    #adj td { font: 500 11.5px var(--mono); font-variant-numeric: tabular-nums;
+              text-align: right; }
+    #adj td.t { font-family: var(--sans); text-align: left; }
+    #adj thead th { position: sticky; z-index: 3; background: var(--surface);
+                    font: 600 10px var(--sans); color: var(--faint);
+                    text-transform: uppercase; letter-spacing: .05em;
+                    text-align: right; cursor: pointer; user-select: none; }
+    #adj thead tr.grp th { top: 0; font-size: 9.5px; text-align: center; cursor: default;
+                           border-bottom: 1px solid var(--hair-2); }
+    #adj thead tr.hd th { top: 22px; }
+    #adj thead th.t { text-align: left; }
+    /* Symbol frozen so a 21-column sheet can be read at the right-hand end.
+       --surface must stay opaque for this to mask the cells scrolling under
+       it, which is why app.css says so. */
+    #adj th.frz, #adj td.frz { position: sticky; left: 0; z-index: 2;
+                               background: var(--surface); }
+    #adj thead th.frz { z-index: 4; }
+    #adj td.frz a { color: var(--text); text-decoration: none; }
+    #adj td.frz a:hover { text-decoration: underline; }
+    /* The source of each block, as a colour on the group banner only — the
+       cells stay plain, because a sheet tinted by column is unreadable. */
+    #adj th.g-price { color: #34d399; }
+    #adj th.g-sec { color: #fb7185; }
+    #adj th.g-other { color: #fbbf24; }
+    #adj th.g-out { color: #5eead4; }
+    #adj td.na { color: var(--faint); }
+    #adj td.dif { color: var(--amber); }
+    #adj tbody tr.wh td { color: var(--faint); }
+    #adj .srt { color: var(--accent); }
+    #adjEmpty { color: var(--muted); font-size: 13px; padding: 20px 4px; }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <main class="page">
+    <header class="top">
+      <h1>Adjusted Advice</h1>
+      <span class="count" id="adjTook"></span>
+      <span class="spacer"></span>
+      <button class="btn" id="adjFresh">Rebuild</button>
+      <a class="btn" href="/admin">Admin</a>
+    </header>
+
+    <p id="adjNote"></p>
+    <div id="adjStats"></div>
+
+    <div id="adjBar">
+      <input type="search" id="adjFind" placeholder="Symbol or name" />
+      <label><input type="checkbox" id="adjOnlyDiff" /> only where it differs from live</label>
+      <span class="count" id="adjCount"></span>
+    </div>
+
+    <div class="bezel"><div class="core">
+      <div id="adjWrap"><table id="adj"><thead></thead><tbody></tbody></table></div>
+      <div id="adjEmpty" hidden></div>
+    </div></div>
+  </main>
+
+  <script src="/wmark.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var DATA = null, SORT = { key: 'symbol', dir: 1 };
+
+    // One escaper for the page. Company names are provider text and the
+    // sector cell interpolated one raw on the screener once already.
+    function we(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    // --- formatting ------------------------------------------------------
+    // REJECT THE EMPTY BEFORE COERCING. Number(null) is 0 and finite, which
+    // is how a missing margin becomes a confident zero.
+    function n(v) {
+      if (v == null || v === '') return null;
+      var x = Number(v);
+      return isFinite(x) ? x : null;
+    }
+    function money(v) {
+      var x = n(v); if (x === null) return null;
+      var a = Math.abs(x), s = x < 0 ? '-' : '';
+      if (a >= 1e12) return s + (a / 1e12).toFixed(2) + 'T';
+      if (a >= 1e9) return s + (a / 1e9).toFixed(2) + 'B';
+      if (a >= 1e6) return s + (a / 1e6).toFixed(1) + 'M';
+      if (a >= 1e3) return s + (a / 1e3).toFixed(1) + 'K';
+      return s + a.toFixed(2);
+    }
+    function fmt(v, kind) {
+      if (kind === 'date') return v || null;
+      var x = n(v); if (x === null) return null;
+      if (kind === 'money') return money(x);
+      if (kind === 'int') return String(Math.round(x));
+      if (kind === 'pct') return x.toFixed(1) + '%';
+      return x.toFixed(1);
+    }
+
+    // --- the header ------------------------------------------------------
+    // Two rows: the SOURCE of each block, then the fields. That is the whole
+    // point of the page, so it is the first thing the header says.
+    function head() {
+      var f = DATA.fields, groups = [], last = null;
+      f.forEach(function (x) {
+        var g = x.src === 'price' ? 'price' : x.src === 'sec' ? 'sec' : 'other';
+        if (!last || last.g !== g) { last = { g: g, n: 0, src: x.src }; groups.push(last); }
+        last.n++;
+      });
+      var LBL = { price: 'Twelve Data — price bars', sec: 'SEC EDGAR — filings',
+                  other: 'other sources' };
+      var h = '<tr class="grp"><th class="t frz"></th><th class="t"></th>';
+      groups.forEach(function (g) {
+        h += '<th class="g-' + g.g + '" colspan="' + g.n + '">' + we(LBL[g.g]) + '</th>';
+      });
+      h += '<th class="g-out" colspan="4">the same rules, run on that</th></tr>';
+
+      h += '<tr class="hd"><th class="t frz" data-k="symbol">Symbol</th>'
+         + '<th class="t" data-k="name">Name</th>';
+      f.forEach(function (x) {
+        h += '<th data-k="' + we(x.key) + '" title="' + we(DATA.sources[x.src] || '') + '">'
+           + we(x.label) + '</th>';
+      });
+      h += '<th class="t" data-k="type">Type</th>'
+         + '<th class="t" data-k="adjusted">Adjusted Advice</th>'
+         + '<th class="t" data-k="flag">Rule that fired</th>'
+         + '<th class="t" data-k="live">Live advice</th></tr>';
+      $('adj').tHead.innerHTML = h;
+
+      [].forEach.call($('adj').querySelectorAll('thead tr.hd th'), function (th) {
+        th.addEventListener('click', function () {
+          var k = th.getAttribute('data-k');
+          if (SORT.key === k) SORT.dir = -SORT.dir; else { SORT.key = k; SORT.dir = 1; }
+          paint();
+        });
+      });
+    }
+
+    // --- sorting ---------------------------------------------------------
+    function val(r, k) {
+      if (k === 'symbol') return r.symbol;
+      if (k === 'name') return r.name;
+      if (k === 'type') return r.adjusted.type;
+      if (k === 'adjusted') return r.adjusted.action;
+      if (k === 'flag') return r.adjusted.flag;
+      if (k === 'live') return r.live.action;
+      return r.fields[k];
+    }
+    function cmp(a, b) {
+      var x = val(a, SORT.key), y = val(b, SORT.key);
+      // A BLANK IS NOT A ZERO and must not sort as one — it goes last
+      // whichever way the column is sorted, the treatment every other table
+      // here gives it.
+      var xe = x == null || x === '', ye = y == null || y === '';
+      if (xe && ye) return a.symbol < b.symbol ? -1 : 1;
+      if (xe) return 1;
+      if (ye) return -1;
+      var nx = Number(x), ny = Number(y);
+      if (typeof x !== 'string' && isFinite(nx) && isFinite(ny)) return (nx - ny) * SORT.dir;
+      if (isFinite(nx) && isFinite(ny) && String(x).trim() !== '' && String(y).trim() !== '') {
+        return (nx - ny) * SORT.dir;
+      }
+      return (String(x) < String(y) ? -1 : 1) * SORT.dir;
+    }
+
+    function rows() {
+      var q = ($('adjFind').value || '').trim().toUpperCase();
+      var only = $('adjOnlyDiff').checked;
+      return DATA.rows.filter(function (r) {
+        if (only && (r.adjusted.withheld || r.adjusted.action === r.live.action)) return false;
+        if (!q) return true;
+        return r.symbol.indexOf(q) >= 0 || String(r.name).toUpperCase().indexOf(q) >= 0;
+      }).sort(cmp);
+    }
+
+    function paint() {
+      var list = rows(), f = DATA.fields, out = [];
+      for (var i = 0; i < list.length; i++) {
+        var r = list[i], tr = '<tr' + (r.adjusted.withheld ? ' class="wh"' : '') + '>';
+        tr += '<td class="t frz"><a href="/stock/' + we(r.symbol) + '" target="_blank" '
+            + 'rel="noopener">' + we(r.symbol) + '</a></td>';
+        tr += '<td class="t">' + we(r.name) + '</td>';
+        for (var j = 0; j < f.length; j++) {
+          var t = fmt(r.fields[f[j].key], f[j].fmt);
+          tr += '<td' + (t === null ? ' class="na"' : '') + '>' + (t === null ? '—' : we(t))
+              + '</td>';
+        }
+        var a = r.adjusted;
+        if (a.withheld) {
+          tr += '<td class="t na">—</td><td class="t na" colspan="2" title="'
+              + we(a.withheld) + '">withheld</td>';
+        } else {
+          tr += '<td class="t">' + we(a.type || '—') + '</td>';
+          tr += '<td class="t">' + we(a.action || '—') + '</td>';
+          tr += '<td class="t">' + we(a.flag || '—') + '</td>';
+        }
+        var dif = !a.withheld && a.action !== r.live.action;
+        tr += '<td class="t' + (dif ? ' dif' : '') + '">' + we(r.live.action || '—') + '</td>';
+        out.push(tr + '</tr>');
+      }
+      $('adj').tBodies[0].innerHTML = out.join('');
+      $('adjEmpty').hidden = list.length > 0;
+      $('adjEmpty').textContent = list.length ? '' : 'No rows match.';
+      $('adjCount').textContent = list.length + ' of ' + DATA.rows.length + ' rows';
+      [].forEach.call($('adj').querySelectorAll('thead tr.hd th'), function (th) {
+        th.classList.toggle('srt', th.getAttribute('data-k') === SORT.key);
+      });
+    }
+
+    function stats() {
+      var c = DATA.counts;
+      var items = [
+        ['rows', c.shown], ['agree with live', c.same], ['differ', c.differs],
+        ['no trailing year', c.noTtm], ['no market cap', c.noCap],
+        ['withheld', c.withheld],
+        ['no filings (funds)', c.noCik], ['a filer, no usable quarter', c.noQuarter],
+      ];
+      $('adjStats').innerHTML = items.map(function (x) {
+        return '<div class="st"><span class="n">' + x[1] + '</span>'
+             + '<span class="k">' + we(x[0]) + '</span></div>';
+      }).join('');
+    }
+
+    // The note says what this is and what is NOT the same as the live
+    // verdict, because a reader comparing two columns will otherwise assume
+    // the only difference is the data. It is not.
+    function note() {
+      var w = DATA.window;
+      $('adjNote').innerHTML =
+        'The <b>same Balanced rules</b>, with every technical read from '
+      + '<b>Twelve Data price bars</b> and every fundamental from the company’s own '
+      + '<b>SEC EDGAR filings</b>. No rule, threshold or ordering is changed. Margins are '
+      + 'the trailing twelve months, growth is the latest quarter against a year earlier '
+      + '— the basis the rules already mean. '
+      + '<span class="warn">Three inputs have no counterpart in a filing:</span> '
+      + 'short interest is FINRA’s own figure over the vendor’s float; the next '
+      + 'earnings date is the vendor’s; and P/E is <b>trailing</b> (market cap over '
+      + 'trailing net income), because forward estimates are not in any filing and are not '
+      + 'on this plan — a trailing multiple is usually the higher, so a company near '
+      + 'the threshold can lose an establishment point here that it keeps on the screener. '
+      + 'Market cap is a filed diluted share count at the latest close'
+      + (DATA.counts.capCompared
+        ? ' — which lands within 15% of the vendor’s own figure on <b>'
+          + DATA.counts.capClose + ' of ' + DATA.counts.capCompared + '</b> rows, '
+          + 'the rest being filers that state one share class or state the count '
+          + 'in thousands' : '')
+      + '. This page reads filings back to ' + we(w.since) + ' and is <b>research only</b> '
+      + '— nothing here reaches the screener, the stock page or any verdict the '
+      + 'product shows.';
+    }
+
+    function load(fresh) {
+      $('adjTook').textContent = 'loading…';
+      var t0 = Date.now();
+      fetch('/api/adjusted' + (fresh ? '?fresh=1' : ''), { credentials: 'same-origin' })
+        .then(function (r) {
+          return r.json().then(function (j) {
+            if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+            return j;
+          });
+        })
+        .then(function (j) {
+          DATA = j;
+          note(); stats(); head(); paint();
+          $('adjTook').textContent = ((Date.now() - t0) / 1000).toFixed(1) + 's'
+            + (j.cached ? ' (cached)' : '')
+            + (j.pricedAt ? ' · prices ' + String(j.pricedAt).replace('T', ' ').slice(0, 16) : '');
+          if (window.trackLoad) window.trackLoad('adjusted');
+        })
+        .catch(function (e) {
+          $('adjTook').textContent = '';
+          $('adjEmpty').hidden = false;
+          $('adjEmpty').textContent = e.message;
+        });
+    }
+
+    $('adjFresh').addEventListener('click', function () { load(true); });
+    $('adjFind').addEventListener('input', function () { if (DATA) paint(); });
+    $('adjOnlyDiff').addEventListener('change', function () { if (DATA) paint(); });
+    load(false);
+  }());
+  </script>
+</body>
+</html>

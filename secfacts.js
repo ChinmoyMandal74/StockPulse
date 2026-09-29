@@ -321,6 +321,70 @@ function latestPerPeriod(rows) {
   return [...best.values()].sort((a, b) => (a.periodEnd < b.periodEnd ? 1 : -1));
 }
 
+// ---- ABSENCE IN A NEWER FILING IS NOT A RESTATEMENT TO NOTHING -------------
+//
+// `latestPerPeriod` takes the winning filing's row WHOLESALE, which is right
+// for the card — every number on a line then comes from the one document the
+// line links to. It costs coverage, and measured across the universe it costs
+// a great deal of it.
+//
+// A 10-Q carries sparse comparatives for older quarters: often a net income
+// and nothing else. Being newer and the same form rank, that row wins the
+// period and the revenue the original 10-Q reported is discarded, though it
+// is still sitting in the table one filing down. Measured on 2026-09-29:
+//
+//   AVGO  quarter to 2026-05-03   10-Q of 2026-09-10  net income only  <- picked
+//                                 10-Q of 2026-06-09  revenue 22.19B, gross 15.41B
+//
+// Same shape on GM, KLAC, SMCI and hundreds of others. The consequence is
+// that a TTM cannot be summed, because one of its four quarters has no
+// revenue — a full TTM was available for only 65% of the universe.
+//
+// This fills a winning row's BLANKS from the rest of that period's trail,
+// best-ranked first, and NEVER overwrites a value. So the newest filing still
+// states every figure it actually states — a genuine restatement always wins
+// — and the older filing is consulted only where the newer one is silent.
+//
+// Measured, before and after, across 1,100 filers:
+//   a full TTM        65% -> 90%      profit margin / net income / ROE  65% -> 90%
+//   gross margin      41% -> 58%
+// And against the invariant that validates all of this — four quarters must
+// sum to the year — filling made ZERO years worse, while making 871 more
+// years checkable at all (2,062 -> 2,933).
+//
+// `filledFrom` records which accession supplied each borrowed field, so a row
+// assembled this way can still say where every number came from. It is NOT
+// what the stock page's card uses: that card's claim is one row, one filing.
+const FILLABLE = ['periodStart', 'revenue', 'costOfRevenue', 'grossProfit',
+  'operatingIncome', 'netIncome', 'epsDiluted', 'operatingCashFlow', 'capex',
+  'freeCashFlow', 'assets', 'liabilities', 'equity', 'cash', 'debt',
+  'sharesDiluted'];
+
+function latestFilled(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const trail = new Map();
+  for (const r of list) {
+    const k = r.periodType + '|' + r.periodEnd;
+    if (!trail.has(k)) trail.set(k, []);
+    trail.get(k).push(r);
+  }
+  return latestPerPeriod(list).map((top) => {
+    const others = (trail.get(top.periodType + '|' + top.periodEnd) || [])
+      .filter((r) => r.accn !== top.accn)
+      .sort((a, b) => (outranks(a, b) ? -1 : 1));
+    const out = Object.assign({}, top);
+    const filledFrom = {};
+    for (const f of FILLABLE) {
+      if (out[f] != null) continue;
+      for (const o of others) {
+        if (o[f] != null) { out[f] = o[f]; filledFrom[f] = o.accn; break; }
+      }
+    }
+    out.filledFrom = filledFrom;
+    return out;
+  });
+}
+
 // ---- the ratios, rather than the dollars -----------------------------------
 //
 // The filings state dollars; the Advice rules read RATIOS — gross margin,
@@ -465,6 +529,6 @@ function filingUrl(cik, accn) {
 
 module.exports = {
   CONCEPTS, CONCEPT_KEYS, INSTANT, NO_DIFF,
-  periodType, normalise, deriveQuarters, latestPerPeriod, filingUrl, isStatement,
-  withRatios, ttm, MIN_REVENUE,
+  periodType, normalise, deriveQuarters, latestPerPeriod, latestFilled,
+  filingUrl, isStatement, withRatios, ttm, MIN_REVENUE, FILLABLE,
 };
