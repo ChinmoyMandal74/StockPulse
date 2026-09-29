@@ -773,7 +773,35 @@ anyway, and the floor should land before the rebuild rather than after it.
 
 ---
 
-## 17. Backtesting Adjusted Advice — designed 2026-09-29, deliberately not built
+## 17. Backtesting Adjusted Advice — PARTLY BUILT 2026-09-29
+
+> **`/adjustedbacktest` now exists** and does the single-window half: pick a
+> date from 2018, the rules are replayed on filings public then, and the
+> equal-weight basket is drawn against the universe and the S&P. Read the
+> CLAUDE.md section before this entry — several traps listed below are
+> **solved** there, and one of them (the derived quarter dated by a filing
+> two years later) was not anticipated here at all.
+>
+> **What is still open, in the order it matters:**
+>
+> 1. **A ROLLING SWEEP. This is the one that turns it from an anecdote into
+>    evidence** — one window is one observation, and four spot readings came
+>    back positive, which the research log says to distrust. Blocked on cost:
+>    a single window is 40-55s, dominated by the bar and filing reads, so a
+>    200-window sweep is hours. The lever is precomputing an `adjusted_history`
+>    table the way `tech_history` was precomputed for `/trend-backtest` —
+>    filings change only when one is filed, so a per-symbol point-in-time
+>    overlay per month is a small table and would make a sweep instant.
+> 2. **Survivorship**, unchanged and still the ceiling. See below.
+> 3. **Pin FINRA's dissemination lag.** `SHORT_LAG_DAYS` is a conservative 15
+>    calendar days against a schedule that implies ~10-12; the table stores
+>    settlement dates and nothing else, so it cannot be measured from what is
+>    held. FINRA publishes its own calendar.
+> 4. **As-first-reported.** `visibleAsOf` takes the newest filing public on
+>    the date, which is right — that is what a reader had. Taking the EARLIEST
+>    `filed` per period would answer a different and also interesting
+>    question (what was said before any restatement) and is not built.
+> 5. Rebalancing, a top-N cut and the trade log, which `/backtest` has.
 
 `/adjusted` exists and shows the fields; the owner's stated aim is to backtest
 the verdict it produces, and explicitly **not yet** ("I do not want to run the

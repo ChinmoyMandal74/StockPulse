@@ -250,30 +250,64 @@
     return (s / f) * 100;
   }
 
+  // ---- the fundamental overlay --------------------------------------------
+  //
+  // EVERY FUNDAMENTAL THE ENGINE READS, SET EXPLICITLY — including the ones
+  // the filings could not supply, which are set to null rather than left out.
+  // That is the whole contract: both callers layer this over a snapshot row,
+  // so a field merely OMITTED would let the vendor's value through and make
+  // the result a silent blend of two sources.
+  //
+  // Shared by `/adjusted` (today) and `/adjustedbacktest` (a date in the
+  // past), so the two cannot drift. `price` is whatever close applies —
+  // today's on the card, that session's in a backtest — which is the only
+  // thing that differs between them.
+  function overlayFrom(sec, short, floatShares, price) {
+    const f = sec || {};
+    const p = num(price);
+    const shares = f.sharesDiluted;
+    // A FILED SHARE COUNT AT THE RELEVANT CLOSE. Not the vendor's cached
+    // weekly capitalisation, and not price x shares OUTSTANDING: the filings
+    // state a weighted-average diluted count, which is the one they state.
+    const marketCap = (p != null && shares != null && shares > 0) ? p * shares : null;
+    return {
+      // This company files with the SEC, so it is not a fund — said outright
+      // rather than left to classify()'s "no Quality and no P/E" guess, which
+      // here would be wrong for every loss-maker (see `verdict`).
+      notFund: true,
+      revenueGrowthYoY: f.revenueGrowthYoY == null ? null : f.revenueGrowthYoY,
+      earningsGrowthYoY: f.earningsGrowthYoY == null ? null : f.earningsGrowthYoY,
+      grossMargin: f.grossMargin == null ? null : f.grossMargin,
+      profitMargin: f.profitMargin == null ? null : f.profitMargin,
+      fcfMargin: f.fcfMargin == null ? null : f.fcfMargin,
+      netIncomeTtm: f.netIncomeTtm == null ? null : f.netIncomeTtm,
+      fcfTtm: f.fcfTtm == null ? null : f.fcfTtm,
+      roe: f.roe == null ? null : f.roe,
+      forwardPe: trailingPe(marketCap, f.netIncomeTtm),
+      marketCap,
+      shortPctFloat: shortPctFloat(short && short.shares, floatShares),
+      // NOT READ BY BALANCED (`use_quality: false`), and model output rather
+      // than a measurement, so it is withheld rather than carried across.
+      // It matters only to classify()'s fund test, which `notFund` answers.
+      qualityRating: null,
+    };
+  }
+
   // ---- the engine row ------------------------------------------------------
   //
   // `snap` is the stock's snapshot row (price fields and the float), `sec` is
   // what fundamentalsFrom returned, `short` is the newest FINRA reading.
   //
-  // Every technical is copied straight across. Every fundamental comes from
-  // `sec` or is null — deliberately never falling back to the vendor's, which
-  // would make the page quietly a blend and the comparison meaningless.
+  // Every technical is copied straight across; every fundamental comes from
+  // the overlay above.
   function engineRow(snap, sec, short) {
     const s = snap || {};
-    const f = sec || {};
     const price = num(s.price);
-    const shares = f.sharesDiluted;
-    const marketCap = (price != null && shares != null && shares > 0)
-      ? price * shares : null;
-    return {
+    return Object.assign({
       symbol: s.symbol,
       // the positive ETF test in classify() reads these names; keep it working
       portfolios: s.portfolios,
       latestDate: s.latestDate,
-      // This company files with the SEC, so it is not a fund — said outright
-      // rather than left to classify()'s "no Quality and no P/E" guess, which
-      // on this page would be wrong for every loss-maker (see `verdict`).
-      notFund: true,
       // --- price, from the bars ---
       price,
       vs200ma: num(s.vs200ma),
@@ -284,28 +318,42 @@
       pctFromHigh: num(s.pctFromHigh),
       volTrend: num(s.volTrend),
       historyDays: num(s.historyDays),
-      // --- fundamentals, from the filings ---
-      revenueGrowthYoY: f.revenueGrowthYoY == null ? null : f.revenueGrowthYoY,
-      earningsGrowthYoY: f.earningsGrowthYoY == null ? null : f.earningsGrowthYoY,
-      grossMargin: f.grossMargin == null ? null : f.grossMargin,
-      profitMargin: f.profitMargin == null ? null : f.profitMargin,
-      fcfMargin: f.fcfMargin == null ? null : f.fcfMargin,
-      netIncomeTtm: f.netIncomeTtm == null ? null : f.netIncomeTtm,
-      fcfTtm: f.fcfTtm == null ? null : f.fcfTtm,
-      roe: f.roe == null ? null : f.roe,
-      forwardPe: trailingPe(marketCap, f.netIncomeTtm),
-      // A FILED SHARE COUNT AT TODAY'S CLOSE. Not the vendor's cached weekly
-      // capitalisation, and not price x shares OUTSTANDING: the filings state
-      // a weighted-average diluted count, which is the one they state.
-      marketCap,
-      // --- neither ---
-      shortPctFloat: shortPctFloat(short && short.shares, s.floatShares),
       nextEarningsDate: s.nextEarningsDate || null,
-      // NOT READ BY BALANCED (`use_quality: false`), and model output rather
-      // than a measurement, so it is withheld rather than carried across.
-      // It matters only to classify()'s fund test — see `verdict` below.
-      qualityRating: null,
-    };
+    }, overlayFrom(sec, short, s.floatShares, price));
+  }
+
+  // ---- point in time -------------------------------------------------------
+  //
+  // What the filings said on a given day. `SecFacts.visibleAsOf` does the hard
+  // part — keeping only filings public by then AND re-deriving the quarters
+  // nobody files from those, because a stored derived quarter carries the
+  // filing date of the latest restatement of its year and would otherwise
+  // stay invisible for up to two years after it was actually knowable.
+  function fundamentalsAsOf(SecFacts, rows, asOf) {
+    const seen = SecFacts.visibleAsOf(rows, asOf);
+    if (!seen.length) return null;
+    return fundamentalsFrom(SecFacts, seen);
+  }
+
+  // ---- FINRA's own lag -----------------------------------------------------
+  //
+  // A short-interest position is dated by SETTLEMENT and published about
+  // eight business days later, so a reading settled on the 15th was not
+  // knowable on the 16th. Using the settlement date directly would be a
+  // look-ahead of a fortnight on a field that gates an Avoid rule.
+  //
+  // 15 CALENDAR DAYS, deliberately longer than the ~10-12 the schedule
+  // implies: erring late means a backtest knows LESS than a reader did,
+  // which is the safe direction. It is a constant rather than a measurement
+  // because the table stores the settlement date and nothing else — there is
+  // no publication date here to measure against, and pinning it against
+  // FINRA's own calendar is still owed (docs/backlog.md entry 17).
+  const SHORT_LAG_DAYS = 15;
+
+  function shortCutoff(asOf) {
+    const t = Date.parse(asOf + 'T00:00:00Z');
+    if (!isFinite(t)) return null;
+    return new Date(t - SHORT_LAG_DAYS * 86400000).toISOString().slice(0, 10);
   }
 
   // ---- the verdict ---------------------------------------------------------
@@ -338,8 +386,8 @@
   }
 
   return {
-    FIELDS, SOURCES, SHARES_BAD_RATIO,
-    trailingPe, impliedShares, newestShares, fundamentalsFrom, shortPctFloat,
-    engineRow, verdict,
+    FIELDS, SOURCES, SHARES_BAD_RATIO, SHORT_LAG_DAYS,
+    trailingPe, impliedShares, newestShares, fundamentalsFrom, fundamentalsAsOf,
+    shortPctFloat, shortCutoff, overlayFrom, engineRow, verdict,
   };
 }));

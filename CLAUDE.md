@@ -1289,6 +1289,64 @@ Confirmed on AVGO, GM, KLAC, SMCI and hundreds of others. The consequence is tha
 - Verified: **97 checks** — the module with no server, `latestFilled` both ways, the route over a fixture where **every company separates the filings from the vendor** (SPLITCO's vendor fundamentals are strong and its filings weak, so a page reading the vendor would return the same verdict for it as for GOODCO), the boundary, the roles, and the page. **Proved by reverting four times**: `latestPerPeriod` in place of `latestFilled` fails 3, dropping `notFund` fails 5, reading the vendor's fundamentals fails 13, and dropping the share-count guard fails 3.
   - **Two fixture faults worth keeping.** The filings' profit margin was built at exactly 25% and the FCF margin at 20% — which are precisely the vendor's — so "the vendor's number is not what is shown" passed over two identical numbers and proved nothing; every ratio in the fixture is now deliberately unequal. And an assertion that a loss-making quarter is "left alone" by the share guard was simply wrong about the sign: a loss over a negative EPS implies a **positive** count, which is WAT's real case and the one the guard most needs to reach.
 
+## The adjusted backtest — the same rules, replayed on what was public then (2026-09-29)
+
+**`/adjustedbacktest` (admin, a Research row on the console): pick a date, and the Advice rules are re-run with every fundamental taken from filings PUBLISHED BY THAT DATE and every technical rebuilt from the bars.** The owner's framing: *"another page similar to /backtest ... everything should be based in Adjusted calculation, make sure nothing changes for the Balanced Advice calculation or front-end, this is just research."*
+
+**IT STARTS IN 2018, WHERE `/backtest` STARTS IN JULY.** That is the whole point of it existing. `/backtest` is capped at two months because `fundamentals_history` begins 2026-08-30 and everything earlier imputes today's figures — a look-ahead. A filing carries `filed`, the day the number became public, so a 2018 replay is honest in a way the vendor snapshot can never be. The floor is **FINRA's** (short interest from 2017-12-29), not the filings'.
+
+- **It reuses `btRun`, `btRowAt`, `btCurve` and `btMatrix` unchanged.** The only thing supplied differently is `recorded` — the overlay `btRun` already spreads over the snapshot row. A second row builder would drift from the Advice column inside a week, which is why those were extracted at all, and reusing them is what kept this small.
+- **`Adjusted.overlayFrom` is shared with `/adjusted`**, so the card and the backtest cannot disagree about what a filings-derived fundamental is. The one thing that differs between them is which close the market cap is struck at.
+- **THE BOUNDARY: `/api/backtest`, the Advice column and the screener are untouched.** `adjbt-test.js` asserts all three — including that `/backtest` still refuses a two-month-old date and still runs on a recent one, so "nothing changed" is checked rather than asserted.
+- Admin only, behind `standAside`, cached ten minutes per (date, horizon, rules, theme, tiers).
+
+### THE DERIVED QUARTER WAS DATED BY A FILING MADE TWO YEARS LATER
+**The single finding that made this possible, and it took a non-monotonic measurement to notice.** Filtering the trail on `filed <= asOf` is the obvious move and it is not enough. Coverage measured across the universe — the share of filers with a full trailing year:
+
+| as of | filtering on `filed` alone | re-derived (shipped) |
+|---|---|---|
+| 2018-07-01 | 62% | **81%** |
+| 2020-07-01 | 71% | 89% |
+| 2022-07-01 | 11% | 88% |
+| **2024-07-01** | **7%** | **90%** |
+| 2026-07-01 | 85% | 91% |
+
+**A collapse in the middle is not a story about data depth**, which is what sent me looking. The cause: `deriveQuarters` attributes a derived quarter to `cur.filed` — the FY row it was differenced from — and `outranks` picks the NEWEST restatement of that year. Measured on MSFT:
+
+```
+period 2021-06-30   filed 2023-07-27   759 days after
+period 2022-06-30   filed 2024-07-30   761 days after
+```
+
+That quarter **was** knowable in 2021: the FY2021 10-K and the Q3 10-Q were both public. Hiding it until 2023 understates what a reader had, and since a trailing year needs four consecutive quarters, one invisible Q4 kills the whole TTM — and with it the margins, ROE and the P/E that decides the company type.
+
+- **`SecFacts.visibleAsOf(rows, asOf)`** keeps filings public by the date, **drops the stored derived rows and re-derives from what is left**. `outranks` then picks the newest annual THAT WAS PUBLIC, and the quarter carries its date. More accurate and more honest, not a workaround.
+- **FCF margin went 0% → 70%** and gross margin 36% → 56% on the same measurement, because those depend on the differenced cash-flow ladder even harder than revenue does.
+- **Rows are copied first.** `deriveQuarters` fills holes in its inputs in place and `fill` mutates, so asking a cached trail about the past would otherwise corrupt it. There is a check that the input is byte-identical afterwards.
+- **`/stock`'s SEC card and `/adjusted` still use the stored derived rows**, which is right for them: they answer "what is true now", where the newest restatement IS the best answer.
+
+### The three other point-in-time rules
+- **`filed`, never `periodEnd`.** MU's quarter ending 2026-05-28 was not public until 2026-06-25; filtering on the period end buys four weeks of look-ahead. **Proved by reverting**: swapping the one comparison fails 2.
+- **FINRA is published about eight business days after it SETTLES**, so a reading settled on the 15th was not knowable on the 16th. `SHORT_LAG_DAYS` is **15 calendar days** — deliberately longer than the ~10-12 the schedule implies, because erring late means the backtest knows LESS than a reader did, which is the safe direction. It is a constant rather than a measurement because the table stores settlement dates and nothing else; pinning it against FINRA's own calendar is still owed.
+- **A SYMBOL WITH NO USABLE FILING IS DROPPED, NEVER IMPUTED.** Falling back to today's vendor figures for the stragglers is exactly the look-ahead this page exists to remove, and it would make the result a silent blend of two sources. They are counted on screen instead. **Proved by reverting**: letting them through scores a company whose every filing postdates the date.
+- **The benchmark is NOT narrowed the same way.** Every stock with bars is in the equal-weight line, including the funds and the late filers the rules could not score — narrowing it to the pool the rules selected from would flatter the comparison.
+
+### Two bugs the suite found that every probe had missed
+- **`String(req.query.horizon)` is the STRING `"undefined"` when the parameter is absent.** The first cut looked the default up, found it, and then used the literal `"undefined"` as the key: `hzDays` came back undefined, the date arithmetic produced NaN and the route 500'd inside `toISOString`. **Every hand-run probe had passed a horizon explicitly.** The check that caught it asks for an unknown theme with no horizon given, which is why it reaches the arithmetic at all.
+- **A 3M hold was 98 days.** The bar window was read six days past the horizon "so the last mark is not lost to a weekend" — but `btRun` measures the return to the LAST BAR IN THE WINDOW, so every extra day of bars is an extra day of holding while the page still says 3M. **A screenshot caught it**: the axis ended 2024-04-10 under a panel saying the hold ran to 2024-04-04. The window is the horizon exactly now; where it falls on a weekend the last session before it is the right close.
+
+### The honesty panel is not optional furniture
+Four spot readings came back with positive excess (+1.7, +4.0, +2.6, +0.8 points over the equal-weight universe at 2026-06, 2024-01, 2020-03 and 2018-06). **That is not a finding and the page says so in as many words.** One window is one observation; the research log has taken eight framings and found seven flat; and **survivorship is untouched** — the pool is today's 1,181 tickers, so companies that went bankrupt or were acquired are absent from both the picks and the benchmark. A page that printed a positive excess without that panel would be the failure the whole research log exists to prevent. There are five checks asserting each limitation is on screen.
+
+**What is NOT point-in-time, and is named there**: the share FLOAT that short interest is divided by is today's (no filing states one), and the company names and theme memberships are today's.
+
+### Cost, and what is not built
+- **40-55 seconds cold**, cached ten minutes. The instrumented breakdown is on the response: **the six reads run CONCURRENTLY, so their times OVERLAP and must not be summed** — the first cut subtracted them from the wall clock and reported an overlay phase of MINUS 119 seconds. Evaluating is 0.1s; the whole cost is the archive reads, dominated by bars and filings.
+- **`readBarsWindow` is bounded at both ends and carries three columns**, not five. `readBarsFullFor` is open-ended forward, which suits the live refresh and would have carried six extra years per symbol here — past the ~83MB wall this file records.
+- **Rebalancing, the top-N cut, the random band and the trade log are NOT built** and the page says which page has them. A rolling sweep of many start dates is what would turn this from an anecdote into evidence, and at 40s a window it is out of reach until the read is cheaper — see [docs/backlog.md](docs/backlog.md) entry 17.
+- Verified: **73 checks** — `visibleAsOf` both ways, the input left unmutated, the FINRA cutoff, the overlay setting every field (a field merely OMITTED would let the vendor's value through), and a fixture where **each company separates one mechanism from the others**: TURNED's vendor row is byte-identical to STEADY's and says strong while its 2023 filings say weak, LATEFIL's every filing postdates the date, and SHORTED/CLEAN are the same Early company differing only in FINRA history. Plus the boundary, the roles, the capitalised address, and the page. **Proved by reverting five times**: `periodEnd` for `filed` fails 2, keeping the stored derived rows fails 2, falling back to the vendor fails 1, the newest FINRA reading fails 2 (**the twins come out identical, `Buy with Risk vs Buy with Risk`**), and the six-day slack fails 2.
+  - **Three fixture faults, all the same shape — the fixture did not actually isolate what it claimed.** LATEFIL's filings were pushed 400 days out, which moved only the recent quarters past the date and left the older ones perfectly visible, so it was scored on those. SHORTED was built Established, and **short % of float only gates an EARLY rule** — 95% of float changed nothing. And the twin comparison ran with four tiers, where the squeeze pushes SHORTED to a verdict the run does not ask for, so an absence was being compared against a verdict.
+
 ## Charts and the stock page
 Charts are hand-rolled inline SVG in `rowcard.js` — no library, no build step. `chartSVG(closes)` returns `{ svg, log }`.
 

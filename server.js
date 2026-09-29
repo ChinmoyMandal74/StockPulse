@@ -508,6 +508,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/backtest.html': '/backtest', '/quality.html': '/quality',
                       '/trend-backtest.html': '/trend-backtest',
                       '/adjusted.html': '/adjusted',
+                      '/adjustedbacktest.html': '/adjustedbacktest',
                       '/architecture.html': '/architecture', '/themes.html': '/themes',
                       // no symbols in that path, so it opens with both pickers empty
                       '/compare.html': '/compare',
@@ -1314,6 +1315,12 @@ app.get('/trend-backtest', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'trend-backtest');
   res.sendFile(path.join(__dirname, 'private', 'trend-backtest.html'));
+}));
+
+app.get('/adjustedbacktest', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'adjustedbacktest');
+  res.sendFile(path.join(__dirname, 'private', 'adjustedbacktest.html'));
 }));
 
 // Admin only: the same rules read off filings instead of the vendor.
@@ -11476,6 +11483,242 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
       spyError,
     },
   });
+}));
+
+// ============================================================================
+// The ADJUSTED backtest — the same rules, replayed on what was public then
+// ============================================================================
+// `/backtest` stops two months back because `fundamentals_history` begins
+// 2026-08-30 and everything earlier would have its fundamentals imputed from
+// today — a look-ahead. This asks the same question of the same rules and
+// answers it from filings, which carry `filed`: the day a figure became
+// public. So it runs from 2018 instead of from July.
+//
+// ADMIN ONLY, and research. It reuses `btRun`, `btCurve`, `btMatrix` and
+// `btRowAt` unchanged — a second row builder would drift from the Advice
+// column inside a week, which is why those were extracted at all. The one
+// thing it supplies differently is `recorded`: the fundamentals overlay, built
+// from filings visible on the date rather than from a vendor snapshot.
+//
+// NOTHING HERE TOUCHES THE LIVE VERDICT. No snapshot stamp, no screener
+// column; `/api/backtest` and the Balanced Advice column are untouched, and
+// `adjbt-test.js` asserts both.
+const ADJBT_FLOOR = '2018-01-01';        // FINRA short interest starts 2017-12-29
+const ADJBT_HORIZONS = { '1M': 31, '3M': 92, '6M': 183, '1Y': 366 };
+// Enough sessions before the date for a 52-week window (btRun skips i < 252)
+// plus the 200-day average inside it. 500 calendar days is ~345 sessions.
+const ADJBT_LOOKBACK_DAYS = 500;
+// Two years of periods: the ratios need the newest quarter, the one it grows
+// against, and four for the trailing sum.
+const ADJBT_FACT_DAYS = 800;
+const ADJBT_TTL_MS = 10 * 60 * 1000;
+const adjBtCache = new Map();            // key -> { at, data }
+
+function adjBtCached(key) {
+  const hit = adjBtCache.get(key);
+  if (hit && Date.now() - hit.at < ADJBT_TTL_MS) return hit.data;
+  return null;
+}
+function adjBtPut(key, data) {
+  if (adjBtCache.size > 8) adjBtCache.clear();   // a handful of dates, not a store
+  adjBtCache.set(key, { at: Date.now(), data });
+  return data;
+}
+
+// Forward series from `from`, for the equal-weight benchmark. btRun builds the
+// same shape for the symbols it scores; this covers every symbol with bars,
+// because the benchmark must not be narrowed to the stocks that happened to
+// have filings.
+function adjBtSeries(bars, from) {
+  const out = {};
+  for (const sym of Object.keys(bars)) {
+    const rows = (bars[sym] || []).slice().reverse();   // archive is newest-first
+    const fwd = [];
+    for (const r of rows) {
+      const d = String(r.datetime).slice(0, 10);
+      const c = Number(r.close);
+      if (d >= from && isFinite(c) && c > 0) fwd.push({ d, c });
+    }
+    if (fwd.length > 1) out[sym] = fwd;
+  }
+  return out;
+}
+
+app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const today = new Date().toISOString().slice(0, 10);
+  const asked = String(req.query.date || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asked)) {
+    return res.status(400).json({ error: 'A date is required.' });
+  }
+  if (asked < ADJBT_FLOOR) {
+    return res.status(400).json({ error: `The earliest start date is ${ADJBT_FLOOR}. ` +
+      'FINRA short interest begins 2017-12-29, and short % of float gates an Avoid rule — ' +
+      'running earlier would silently be running a less strict rulebook.' });
+  }
+  // `String(req.query.horizon)` is the STRING "undefined" when the parameter
+  // is absent, so the first cut looked the default up, found it, and then
+  // used the literal "undefined" as the key — `hzDays` came back undefined,
+  // the date arithmetic produced NaN and the route 500'd on toISOString.
+  // Every probe had passed a horizon explicitly; the suite found it.
+  const hzAsked = String(req.query.horizon || '3M');
+  const hz = ADJBT_HORIZONS[hzAsked] ? hzAsked : '3M';
+  const hzDays = ADJBT_HORIZONS[hz];
+  const end = new Date(Date.parse(asked) + hzDays * 86400000).toISOString().slice(0, 10);
+  if (end > today) {
+    return res.status(400).json({ error: `A ${hz} hold from ${asked} ends ${end}, ` +
+      'which has not happened yet. Pick an earlier date or a shorter horizon.' });
+  }
+
+  const tiers = String(req.query.tiers || 'Strong Buy').split(',')
+    .map((x) => x.trim()).filter((x) => Action.ACTIONS.indexOf(x) >= 0);
+  if (!tiers.length) return res.status(400).json({ error: 'Pick at least one verdict.' });
+
+  const rules = RULE_SETS.indexOf(String(req.query.rules || '')) >= 0
+    ? String(req.query.rules) : 'Balanced';
+  const cfg = ruleCfg(rules);
+
+  const themes = await readPortfolios();
+  const themeAsked = String(req.query.theme || '').trim();
+  const theme = themeAsked && themeAsked in themes ? themeAsked : null;
+  if (themeAsked && !theme) return res.status(404).json({ error: `No theme called "${themeAsked}".` });
+  const only = theme ? new Set(themes[theme]) : null;
+
+  const key = [asked, hz, rules, theme || '', tiers.slice().sort().join('|')].join('~');
+  const warm = adjBtCached(key);
+  if (warm) return res.json(Object.assign({}, warm, { cached: true }));
+
+  // Validation first, so a malformed request still gets the 400 that explains
+  // it. Only then does this read a large slice of the archive.
+  if (await standAside(res)) return null;
+
+  const universe = await store.readUniverse();
+  const since = new Date(Date.parse(asked) - ADJBT_LOOKBACK_DAYS * 86400000)
+    .toISOString().slice(0, 10);
+  const factSince = new Date(Date.parse(asked) - ADJBT_FACT_DAYS * 86400000)
+    .toISOString().slice(0, 10);
+  // EXACTLY the horizon, with no slack. The first cut read six days past it
+  // "so the last mark is not lost to a weekend" — which quietly made a 3M
+  // hold 98 days: `btRun` measures the return to the LAST bar in the window,
+  // so every extra day of bars is an extra day of holding. A screenshot
+  // caught it, the axis ending 2024-04-10 under a panel saying the hold ran
+  // to 2024-04-04. Where `end` falls on a weekend the last session before it
+  // is the right close, which is what the bound already gives.
+  const until = end;
+
+  // Timed, because "the page took 40 seconds" is not actionable. THE SIX
+  // READS RUN CONCURRENTLY, so their times OVERLAP and must not be summed —
+  // the first cut subtracted them from the wall clock and reported an
+  // overlay phase of MINUS 119 seconds. Each is how long that read took;
+  // the total is the wall clock, and it is close to the slowest of them.
+  const t0 = Date.now();
+  const clock = {};
+  const timed = async (k, p) => { const a = Date.now(); const v = await p; clock[k] = Date.now() - a; return v; };
+  const [bars, facts, shorts, state, earnings, snap] = await Promise.all([
+    timed('bars', store.readBarsWindow(universe, since, until)),
+    timed('filings', store.readSecFactsSince(universe, factSince, asked)),
+    timed('short', store.readShortAsOfFor(universe, Adjusted.shortCutoff(asked))),
+    timed('secState', store.readSecState()),
+    timed('earnings', store.readEarningsDates(asked, end)),
+    timed('snapshot', readSnapshot()),
+  ]);
+  const stocks = (snap && snap.stocks) || [];
+  await stampShortNames(stocks).catch(() => {});
+  const byS = new Map(stocks.map((x) => [x.symbol, x]));
+
+  // ---- the overlay, per symbol -------------------------------------------
+  // Every fundamental the engine reads, as the filings had it on that date.
+  // A symbol with no usable filings is DROPPED rather than falling back to
+  // today's vendor figures — that fallback is exactly the look-ahead this
+  // page exists to remove, and leaving it in would make the result a blend.
+  const tOverlay = Date.now();
+  const recorded = {};
+  const scoped = {};
+  let noCik = 0, noFilings = 0, noTtm = 0, noCap = 0, kept = 0;
+  for (const sym of Object.keys(bars)) {
+    if (only && !only.has(sym)) continue;
+    const st = state[sym];
+    if (!st || !st.cik) { noCik++; continue; }          // a fund files nothing
+    const sec = Adjusted.fundamentalsAsOf(SecFacts, facts.get(sym) || [], asked);
+    if (!sec) { noFilings++; continue; }
+    // The close on or before the start date — the price the market cap is
+    // struck at, and the reason the overlay cannot be built without bars.
+    const rows = bars[sym] || [];
+    let px = null;
+    for (const r of rows) {                              // newest-first
+      const d = String(r.datetime).slice(0, 10);
+      if (d <= asked) { px = Number(r.close); break; }
+    }
+    if (!(px > 0)) { noFilings++; continue; }
+    const s = byS.get(sym) || {};
+    const ov = Adjusted.overlayFrom(sec, shorts.get(sym) || null, s.floatShares, px);
+    if (!sec.ttmTo) noTtm++;
+    if (ov.marketCap == null) noCap++;
+    // `asOf` is what btRun reports as the fundamentals date on each pick.
+    ov.asOf = sec.filed;
+    recorded[sym] = ov;
+    scoped[sym] = rows;
+    kept++;
+  }
+  clock.overlay = Date.now() - tOverlay;
+
+  // The benchmark is every symbol with bars over the window, equal-weighted —
+  // NOT narrowed to the ones that had filings, or the comparison would be
+  // against a pool the rules were also selecting from.
+  const tRun = Date.now();
+  const allSeries = adjBtSeries(bars, asked);
+  const market = btCurve(allSeries, asked);
+
+  const r = btRun({ bars: scoped, snapshot: stocks, from: asked, tiers, earnings,
+    recorded, only, cfg });
+  const basket = btCurve(r.heldSeries, asked);
+  clock.evaluate = Date.now() - tRun;
+  clock.total = Date.now() - t0;
+
+  // SPY out of the archive, not the API: the live loader asks for 400 bars,
+  // which does not reach 2018. All four benchmarks are archived.
+  let spy = null, spyError = null;
+  try {
+    const sp = allSeries[BENCHMARK];
+    if (sp && sp.length > 1) {
+      const c = btCurve({ [BENCHMARK]: sp }, asked);
+      spy = { dates: c.dates, values: c.values };
+    } else spyError = 'No archived bars for ' + BENCHMARK + ' over this window.';
+  } catch (e) { spyError = 'Benchmark unavailable.'; }
+
+  const lastOf = (c) => (c && c.values.length ? c.values[c.values.length - 1] : null);
+  const pct = (v) => (v == null ? null : (v - 1) * 100);
+
+  const data = {
+    date: asked, end, horizon: hz, rules, theme, tiers,
+    ruleSets: RULE_SETS, horizons: Object.keys(ADJBT_HORIZONS), floor: ADJBT_FLOOR,
+    picks: r.picks.map((p) => ({
+      symbol: p.symbol, name: p.name, action: p.action, flag: p.flag, type: p.type,
+      priceThen: p.priceThen, dateThen: p.dateThen, priceNow: p.priceNow,
+      lastDate: p.lastDate, ret: p.ret, actionNow: p.actionNow,
+      filed: p.fundAsOf || null,
+      reportedInWindow: p.reportedInWindow,
+    })),
+    basket: { dates: basket.dates, values: basket.values, members: basket.members },
+    market: { dates: market.dates, values: market.values, members: market.members },
+    spy, spyError,
+    result: {
+      basket: pct(lastOf(basket)),
+      market: pct(lastOf(market)),
+      spy: spy && spy.values.length ? pct(spy.values[spy.values.length - 1]) : null,
+    },
+    counts: {
+      universe: universe.length,
+      scored: r.evaluated, picked: r.picks.length,
+      kept, noCik, noFilings, noTtm, noCap, tooShort: r.tooShort,
+      marketMembers: market.members,
+    },
+    ms: clock,
+    window: { barsFrom: since, barsTo: until, factsFrom: factSince,
+      shortCutoff: Adjusted.shortCutoff(asked), shortLagDays: Adjusted.SHORT_LAG_DAYS },
+    builtAt: new Date().toISOString(),
+  };
+  return res.json(Object.assign({}, adjBtPut(key, data), { cached: false }));
 }));
 
 app.get('/api/db-stats', requireAdmin, route(async (req, res) => {

@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Adjusted backtest — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* Every class scoped under #ab or an #ab* id. Nine unscoped class names
+       have captured later markup on this project; .card, .sub, .mk and .warn
+       are all taken somewhere already. */
+    body { min-height: 100dvh; padding: 0 0 70px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1360px; margin: 0 auto; padding: 0 20px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(94, 234, 212, 0.07), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(251, 146, 60, 0.08), transparent 64%); }
+    .bezel { border-radius: 22px; }
+
+    header.top { display: flex; align-items: center; gap: 12px; padding: 24px 0 12px; flex-wrap: wrap; }
+    header.top h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+    .spacer { margin-left: auto; }
+
+    #abNote { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; max-width: 104ch;
+              line-height: 1.65; }
+    #abNote b { color: var(--text); font-weight: 600; }
+
+    #abBar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 0 0 14px; }
+    #abBar .fld { display: flex; flex-direction: column; gap: 4px; }
+    #abBar .lbl { font-size: 10px; color: var(--faint); text-transform: uppercase;
+                  letter-spacing: .06em; }
+    #abTiers { display: flex; flex-wrap: wrap; gap: 5px; }
+    #abTiers button { font: 500 11.5px var(--sans); padding: 6px 10px; border-radius: 8px;
+      border: 1px solid var(--hair); background: none; color: var(--muted); cursor: pointer; }
+    #abTiers button[aria-pressed="true"] { border-color: var(--hair-2); background: var(--surface-2);
+      color: var(--text); }
+
+    #abCards { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+    #abCards .st { border: 1px solid var(--hair); border-radius: 9px; padding: 8px 12px;
+                   background: var(--surface); min-width: 96px; }
+    #abCards .st .n { font: 600 17px var(--mono); display: block; }
+    #abCards .st .k { font-size: 10.5px; color: var(--faint); text-transform: uppercase;
+                      letter-spacing: .06em; }
+    #abCards .st .n.pos { color: var(--green); }
+    #abCards .st .n.neg { color: var(--red); }
+
+    /* The chart. Hand-rolled SVG, no library — the app's own call. It keeps
+       its own aspect ratio (no preserveAspectRatio="none"), so SVG text is
+       safe here, unlike every price chart in this app. */
+    #abChart { padding: 14px 16px 6px; }
+    #abChart svg { width: 100%; height: 300px; display: block; }
+    #abChart .gl { stroke: var(--hair); stroke-width: 1; }
+    #abChart .ln { fill: none; stroke-width: 2; }
+    #abChart .ln.basket { stroke: var(--accent); }
+    #abChart .ln.market { stroke: var(--accent-2); }
+    #abChart .ln.spy { stroke: var(--muted); stroke-dasharray: 4 4; stroke-width: 1.5; }
+    #abChart text { fill: var(--faint); font: 500 10px var(--mono); }
+    #abLegend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted);
+                padding: 2px 4px 10px; }
+    #abLegend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid;
+                  vertical-align: middle; margin-right: 6px; }
+
+    /* The honesty panel is NOT optional furniture — see the note in the file. */
+    #abLimits { border: 1px solid var(--hair); border-radius: 12px; padding: 14px 16px;
+                margin: 16px 0; background: var(--surface); }
+    #abLimits h3 { font-size: 12px; margin: 0 0 8px; text-transform: uppercase;
+                   letter-spacing: .06em; color: var(--amber); }
+    #abLimits ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12.5px;
+                   line-height: 1.7; }
+    #abLimits b { color: var(--text); font-weight: 600; }
+
+    #abWrap { overflow: auto; max-height: 62dvh; }
+    #abTbl { border-collapse: separate; border-spacing: 0; width: 100%; }
+    #abTbl th, #abTbl td { padding: 5px 9px; white-space: nowrap; font-size: 11.5px;
+                           border-bottom: 1px solid var(--hair); }
+    #abTbl td { font: 500 11.5px var(--mono); font-variant-numeric: tabular-nums;
+                text-align: right; }
+    #abTbl td.t { font-family: var(--sans); text-align: left; }
+    #abTbl thead th { position: sticky; top: 0; z-index: 2; background: var(--surface);
+      font: 600 10px var(--sans); color: var(--faint); text-transform: uppercase;
+      letter-spacing: .05em; text-align: right; cursor: pointer; user-select: none; }
+    #abTbl thead th.t { text-align: left; }
+    #abTbl td a { color: var(--text); text-decoration: none; }
+    #abTbl td a:hover { text-decoration: underline; }
+    #abTbl .srt { color: var(--accent); }
+    #abMsg { color: var(--muted); font-size: 13px; padding: 18px 4px; }
+    #abMsg.err { color: var(--red); }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <main class="page">
+    <header class="top">
+      <h1>Adjusted backtest</h1>
+      <span class="count" id="abTook"></span>
+      <span class="spacer"></span>
+      <a class="btn" href="/adjusted">Adjusted Advice</a>
+      <a class="btn" href="/admin">Admin</a>
+    </header>
+
+    <p id="abNote"></p>
+
+    <div id="abBar">
+      <div class="fld"><span class="lbl">Start date</span>
+        <input type="date" id="abDate" /></div>
+      <div class="fld"><span class="lbl">Hold for</span>
+        <select id="abHz"></select></div>
+      <div class="fld"><span class="lbl">Rules</span>
+        <select id="abRules"></select></div>
+      <div class="fld"><span class="lbl">Theme</span>
+        <select id="abTheme"><option value="">All stocks</option></select></div>
+      <div class="fld"><span class="lbl">Verdicts</span>
+        <div id="abTiers"></div></div>
+      <button class="btn" id="abGo">Run</button>
+    </div>
+
+    <div id="abCards"></div>
+
+    <div class="bezel"><div class="core" id="abChart">
+      <div id="abChartIn"></div>
+      <div id="abLegend"></div>
+    </div></div>
+
+    <div id="abLimits"></div>
+
+    <div class="bezel"><div class="core">
+      <div id="abWrap"><table id="abTbl"><thead></thead><tbody></tbody></table></div>
+      <div id="abMsg"></div>
+    </div></div>
+  </main>
+
+  <script src="/wmark.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var DATA = null, SORT = { key: 'ret', dir: -1 };
+    var TIERS = ['Strong Buy', 'Buy', 'Buy with Risk', 'Hold', 'Avoid', 'Sell Immediately'];
+    var chosen = { 'Strong Buy': true, Buy: true };
+
+    function we(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    // Reject the empty before coercing: Number(null) is 0 and finite.
+    function n(v) { if (v == null || v === '') return null; var x = Number(v); return isFinite(x) ? x : null; }
+    function pc(v, d) { var x = n(v); return x === null ? '—' : (x >= 0 ? '+' : '') + x.toFixed(d == null ? 1 : d) + '%'; }
+
+    // ---- the chart -------------------------------------------------------
+    // Three equal-weight curves on one shared axis, each rebased to 1.0 at
+    // the start. The BASKET is what the rules picked; the UNIVERSE line is
+    // what every stock with bars did over the same window, and it is the one
+    // that answers "did the rules select" — the index is the flattering
+    // comparison, because this universe is high-beta by construction.
+    function chart() {
+      var lines = [];
+      if (DATA.basket && DATA.basket.values.length) lines.push({ c: 'basket', s: DATA.basket });
+      if (DATA.market && DATA.market.values.length) lines.push({ c: 'market', s: DATA.market });
+      if (DATA.spy && DATA.spy.values.length) lines.push({ c: 'spy', s: DATA.spy });
+      if (!lines.length) { $('abChartIn').innerHTML = ''; $('abLegend').innerHTML = ''; return; }
+
+      var W = 1000, H = 300, PL = 44, PR = 12, PT = 12, PB = 24;
+      var dates = DATA.basket.dates.length ? DATA.basket.dates : DATA.market.dates;
+      var lo = Infinity, hi = -Infinity;
+      lines.forEach(function (L) {
+        L.s.values.forEach(function (v) { if (v != null) { if (v < lo) lo = v; if (v > hi) hi = v; } });
+      });
+      if (!isFinite(lo) || !isFinite(hi)) return;
+      var pad = (hi - lo) * 0.08 || 0.02;
+      lo -= pad; hi += pad;
+      var x = function (i, len) { return PL + (len < 2 ? 0 : (i / (len - 1)) * (W - PL - PR)); };
+      var y = function (v) { return PT + (1 - (v - lo) / (hi - lo)) * (H - PT - PB); };
+
+      var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="equity curves">';
+      for (var g = 0; g <= 4; g++) {
+        var vv = lo + (hi - lo) * (g / 4);
+        var yy = y(vv);
+        svg += '<line class="gl" x1="' + PL + '" y1="' + yy.toFixed(1) + '" x2="' + (W - PR)
+             + '" y2="' + yy.toFixed(1) + '" />';
+        svg += '<text x="' + (PL - 6) + '" y="' + (yy + 3.5).toFixed(1) + '" text-anchor="end">'
+             + ((vv - 1) * 100).toFixed(0) + '%</text>';
+      }
+      lines.forEach(function (L) {
+        var v = L.s.values, len = v.length, d = '', open = false;
+        for (var i = 0; i < len; i++) {
+          if (v[i] == null) { open = false; continue; }
+          d += (open ? 'L' : 'M') + x(i, len).toFixed(1) + ' ' + y(v[i]).toFixed(1) + ' ';
+          open = true;
+        }
+        svg += '<path class="ln ' + L.c + '" d="' + d.trim() + '" />';
+      });
+      if (dates.length) {
+        svg += '<text x="' + PL + '" y="' + (H - 6) + '">' + we(dates[0]) + '</text>';
+        svg += '<text x="' + (W - PR) + '" y="' + (H - 6) + '" text-anchor="end">'
+             + we(dates[dates.length - 1]) + '</text>';
+      }
+      svg += '</svg>';
+      $('abChartIn').innerHTML = svg;
+
+      var r = DATA.result;
+      $('abLegend').innerHTML =
+        '<span><i style="border-color:var(--accent)"></i>What the rules picked ('
+          + DATA.basket.members + ') ' + pc(r.basket) + '</span>'
+      + '<span><i style="border-color:var(--accent-2)"></i>Every stock, equal weight ('
+          + DATA.market.members + ') ' + pc(r.market) + '</span>'
+      + (DATA.spy ? '<span><i style="border-color:var(--muted)"></i>S&amp;P 500 '
+          + pc(r.spy) + '</span>'
+        : '<span>' + we(DATA.spyError || 'No benchmark') + '</span>');
+    }
+
+    function cards() {
+      var r = DATA.result, c = DATA.counts;
+      var excess = (r.basket == null || r.market == null) ? null : r.basket - r.market;
+      var items = [
+        ['the picks', pc(r.basket), r.basket],
+        ['every stock', pc(r.market), r.market],
+        ['excess', pc(excess), excess],
+        ['picked', String(c.picked), null],
+        ['scored', String(c.scored), null],
+        ['no filings', String(c.noFilings + c.noCik), null],
+      ];
+      $('abCards').innerHTML = items.map(function (x) {
+        var cls = x[2] == null ? '' : (x[2] >= 0 ? ' pos' : ' neg');
+        return '<div class="st"><span class="n' + cls + '">' + we(x[1]) + '</span>'
+             + '<span class="k">' + we(x[0]) + '</span></div>';
+      }).join('');
+    }
+
+    // ---- what this is standing on ---------------------------------------
+    // NOT optional furniture. One window is one observation, and this
+    // project's research log records eight framings that came back flat —
+    // a page that prints a positive excess without saying what it cannot
+    // rule out is the failure the whole log exists to prevent.
+    function limits() {
+      var c = DATA.counts, w = DATA.window;
+      $('abLimits').innerHTML = '<h3>What this run cannot tell you</h3><ul>'
+      + '<li><b>This is ONE window — one observation.</b> It cannot separate the rules '
+        + 'from luck, and this project’s research log has taken eight framings and '
+        + 'found seven flat. Read a single positive excess as a coincidence until a '
+        + 'sweep of many start dates says otherwise.</li>'
+      + '<li><b>Survivorship is the ceiling, and it is not fixed here.</b> The pool is '
+        + 'today’s ' + c.universe + ' tickers, so companies that went bankrupt or were '
+        + 'acquired are absent from BOTH the picks and the benchmark. Perfect '
+        + 'point-in-time fundamentals on a survivor-only pool is a better-measured '
+        + 'biased answer.</li>'
+      + '<li><b>What IS point-in-time:</b> every fundamental comes from filings '
+        + 'published on or before ' + we(DATA.date) + ' (<code>filed</code>, not the period '
+        + 'end — a quarter is not knowable until it is filed), and the quarters that '
+        + 'no company files are re-derived from those same filings. Short interest is '
+        + 'FINRA’s, settled on or before ' + we(w.shortCutoff) + ' — '
+        + w.shortLagDays + ' days back, because a position is published about eight '
+        + 'business days after it settles.</li>'
+      + '<li><b>What is NOT:</b> the share FLOAT that short interest is divided by is '
+        + 'today’s — no filing states one — and the company names and theme '
+        + 'memberships are today’s. Both move slowly; neither is replayed.</li>'
+      + '<li><b>' + (c.noFilings + c.noCik) + ' stocks were dropped, not imputed.</b> '
+        + c.noCik + ' file nothing with the SEC (funds), and ' + c.noFilings + ' had no '
+        + 'usable filing by that date. Falling back to today’s vendor figures is '
+        + 'exactly the look-ahead this page exists to remove. Of those kept, '
+        + c.noTtm + ' had no trailing year and ' + c.noCap + ' no market cap, so their '
+        + 'verdicts rest on fewer inputs.</li>'
+      + '<li><b>No costs, no dividends, no rebalancing.</b> Equal dollars at the start, '
+        + 'held to ' + we(DATA.end) + '. Rebalancing, a top-N cut and the trade log exist '
+        + 'on <a href="/backtest">/backtest</a> and are not built here yet.</li>'
+      + '</ul>';
+    }
+
+    // ---- the picks -------------------------------------------------------
+    var COLS = [
+      ['symbol', 'Symbol', 't'], ['name', 'Name', 't'],
+      ['action', 'Verdict then', 't'], ['flag', 'Rule that fired', 't'],
+      ['type', 'Type', 't'], ['filed', 'Filings as of', 't'],
+      ['priceThen', 'Price then', ''], ['priceNow', 'Price after', ''],
+      ['ret', 'Return', ''], ['actionNow', 'Verdict now', 't'],
+    ];
+    function head() {
+      $('abTbl').tHead.innerHTML = '<tr>' + COLS.map(function (c) {
+        return '<th class="' + c[2] + (SORT.key === c[0] ? ' srt' : '') + '" data-k="'
+             + c[0] + '">' + we(c[1]) + '</th>';
+      }).join('') + '</tr>';
+      [].forEach.call($('abTbl').querySelectorAll('thead th'), function (th) {
+        th.addEventListener('click', function () {
+          var k = th.getAttribute('data-k');
+          if (SORT.key === k) SORT.dir = -SORT.dir; else { SORT.key = k; SORT.dir = -1; }
+          head(); rows();
+        });
+      });
+    }
+    function rows() {
+      var list = DATA.picks.slice().sort(function (a, b) {
+        var x = a[SORT.key], y = b[SORT.key];
+        // A blank sorts last whichever way the column is sorted.
+        var xe = x == null || x === '', ye = y == null || y === '';
+        if (xe && ye) return a.symbol < b.symbol ? -1 : 1;
+        if (xe) return 1;
+        if (ye) return -1;
+        if (typeof x === 'number' && typeof y === 'number') return (x - y) * SORT.dir;
+        return (String(x) < String(y) ? -1 : 1) * SORT.dir;
+      });
+      $('abTbl').tBodies[0].innerHTML = list.map(function (p) {
+        return '<tr>'
+        + '<td class="t"><a href="/stock/' + we(p.symbol) + '" target="_blank" rel="noopener">'
+          + we(p.symbol) + '</a></td>'
+        + '<td class="t">' + we(p.name) + '</td>'
+        + '<td class="t">' + we(p.action) + '</td>'
+        + '<td class="t">' + we(p.flag) + '</td>'
+        + '<td class="t">' + we(p.type) + '</td>'
+        + '<td class="t">' + we(p.filed || '—') + '</td>'
+        + '<td>' + (n(p.priceThen) == null ? '—' : p.priceThen.toFixed(2)) + '</td>'
+        + '<td>' + (n(p.priceNow) == null ? '—' : p.priceNow.toFixed(2)) + '</td>'
+        + '<td class="' + (p.ret >= 0 ? 'pos' : 'neg') + '">' + pc(p.ret) + '</td>'
+        + '<td class="t">' + we(p.actionNow || '—') + '</td>'
+        + '</tr>';
+      }).join('');
+      $('abMsg').textContent = list.length ? '' : 'No stock carried one of those verdicts on that date.';
+      $('abMsg').className = '';
+    }
+
+    function note() {
+      $('abNote').innerHTML =
+        'The <b>same rules</b> as the Advice column, replayed on a past date with every '
+      + 'fundamental taken from <b>filings that were public on that date</b> and every '
+      + 'technical rebuilt from the price bars. That is what lets it start in '
+      + we(DATA.floor) + ' rather than two months ago: a filing carries the day it was '
+      + 'published, where the vendor snapshot only carries today. '
+      + '<b>Research only</b> — nothing here reaches the screener, the Advice column or '
+      + '<a href="/backtest">/backtest</a>, which is unchanged.';
+    }
+
+    function paintTiers() {
+      $('abTiers').innerHTML = TIERS.map(function (t) {
+        return '<button type="button" data-t="' + we(t) + '" aria-pressed="'
+             + (chosen[t] ? 'true' : 'false') + '">' + we(t) + '</button>';
+      }).join('');
+      [].forEach.call($('abTiers').querySelectorAll('button'), function (b) {
+        b.addEventListener('click', function () {
+          var t = b.getAttribute('data-t');
+          chosen[t] = !chosen[t];
+          paintTiers();
+        });
+      });
+    }
+
+    function load() {
+      var tiers = TIERS.filter(function (t) { return chosen[t]; });
+      if (!tiers.length) { $('abMsg').textContent = 'Pick at least one verdict.'; return; }
+      var q = '?date=' + encodeURIComponent($('abDate').value)
+        + '&horizon=' + encodeURIComponent($('abHz').value)
+        + '&rules=' + encodeURIComponent($('abRules').value)
+        + '&theme=' + encodeURIComponent($('abTheme').value)
+        + '&tiers=' + encodeURIComponent(tiers.join(','));
+      $('abTook').textContent = 'running…';
+      $('abMsg').textContent = 'Reading the archive. A cold run takes about a minute — '
+        + 'it rebuilds every technical from bars and every fundamental from filings.';
+      $('abMsg').className = '';
+      var t0 = Date.now();
+      fetch('/api/adjusted-backtest' + q, { credentials: 'same-origin' })
+        .then(function (r) { return r.json().then(function (j) {
+          if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); })
+        .then(function (j) {
+          DATA = j;
+          note(); cards(); chart(); limits(); head(); rows();
+          $('abTook').textContent = ((Date.now() - t0) / 1000).toFixed(1) + 's'
+            + (j.cached ? ' (cached)' : '');
+          try { history.replaceState(null, '', location.pathname + q); } catch (e) { /* not fatal */ }
+          if (window.trackLoad) window.trackLoad('adjustedbacktest');
+        })
+        .catch(function (e) {
+          $('abTook').textContent = '';
+          $('abMsg').textContent = e.message;
+          $('abMsg').className = 'err';
+        });
+    }
+
+    // ---- boot ------------------------------------------------------------
+    var p = new URLSearchParams(location.search);
+    ['1M', '3M', '6M', '1Y'].forEach(function (h) {
+      var o = document.createElement('option'); o.value = h; o.textContent = h;
+      $('abHz').appendChild(o);
+    });
+    $('abHz').value = p.get('horizon') || '3M';
+    if (p.get('tiers')) {
+      chosen = {};
+      p.get('tiers').split(',').forEach(function (t) { chosen[t.trim()] = true; });
+    }
+    // A year back on a Monday is a sane default: long enough to have an
+    // answer, recent enough that the filings are dense.
+    var d = p.get('date');
+    if (!d) {
+      var back = new Date(Date.now() - 400 * 86400000);
+      d = back.toISOString().slice(0, 10);
+    }
+    $('abDate').value = d;
+    $('abDate').min = '2018-01-01';
+    $('abDate').max = new Date(Date.now() - 32 * 86400000).toISOString().slice(0, 10);
+    paintTiers();
+    $('abGo').addEventListener('click', load);
+
+    // The rule sets and themes come off endpoints the app already has, so
+    // this page restates neither list.
+    fetch('/api/portfolios', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        var names = Object.keys((j && j.portfolios) || {}).sort();
+        names.forEach(function (nm) {
+          var o = document.createElement('option'); o.value = nm; o.textContent = nm;
+          $('abTheme').appendChild(o);
+        });
+        if (p.get('theme')) $('abTheme').value = p.get('theme');
+      })
+      .catch(function () { /* the picker simply offers All */ });
+
+    ['Balanced', 'Trend Rider', 'Dip Buyer', 'Aggressive', 'Max Risk'].forEach(function (nm) {
+      var o = document.createElement('option'); o.value = nm; o.textContent = nm;
+      $('abRules').appendChild(o);
+    });
+    $('abRules').value = p.get('rules') || 'Balanced';
+
+    if (p.get('date')) load();
+    else {
+      $('abMsg').textContent = 'Pick a start date and press Run.';
+      $('abNote').innerHTML = 'The same rules as the Advice column, replayed on a past '
+        + 'date with every fundamental taken from filings public on that date. '
+        + '<b>Research only</b> — nothing here reaches the screener or the Advice '
+        + 'column, and <a href="/backtest">/backtest</a> is unchanged.';
+    }
+  }());
+  </script>
+</body>
+</html>

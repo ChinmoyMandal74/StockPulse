@@ -2124,7 +2124,7 @@ async function readSecFacts(symbol) {
 // lesson: 748,859 rows became 254). The bounded seeks read 24,281 rows for
 // 1,093 symbols in 3.6s and answer exactly the same question, because the
 // ratios need two years of quarters and nothing older.
-async function readSecFactsSince(symbols, since) {
+async function readSecFactsSince(symbols, since, untilFiled) {
   await init();
   const syms = [...new Set((symbols || []).map((x) => String(x).toUpperCase()))];
   const out = new Map();
@@ -2132,10 +2132,15 @@ async function readSecFactsSince(symbols, since) {
   for (let i = 0; i < syms.length; i += ANCHOR_CHUNK) {
     const slice = syms.slice(i, i + ANCHOR_CHUNK);
     const res = await db.batch(slice.map((sym) => ({
+      // `untilFiled` is what makes a POINT-IN-TIME read possible: it keeps
+      // only filings that were public on that date. It narrows after the
+      // seek — the index is (symbol, period_end) — so it costs nothing and
+      // saves carrying filings the caller would only throw away.
       sql: `select ${SEC_COLS.join(',')} from sec_facts
-              where symbol = ? and period_end >= ?
-              order by period_end desc, filed desc`,
-      args: [sym, since],
+              where symbol = ? and period_end >= ?` +
+           (untilFiled ? ' and filed <= ?' : '') +
+           ` order by period_end desc, filed desc`,
+      args: untilFiled ? [sym, since, untilFiled] : [sym, since],
     })), 'read');
     res.forEach((r, j) => {
       if (!r.rows.length) return;
@@ -2306,6 +2311,28 @@ async function readShortInterest(symbol, limit = 400) {
     split: !!x.split,
     revised: !!x.revised,
   }));
+}
+
+// The newest reading ON OR BEFORE a settlement date, for many symbols — the
+// point-in-time half of `readShortLatestFor`. Same seek, one extra bound.
+async function readShortAsOfFor(symbols, onOrBefore) {
+  await init();
+  const syms = [...new Set((symbols || []).map((x) => String(x).toUpperCase()))];
+  const out = new Map();
+  if (!syms.length || !onOrBefore) return out;
+  for (let i = 0; i < syms.length; i += ANCHOR_CHUNK) {
+    const slice = syms.slice(i, i + ANCHOR_CHUNK);
+    const res = await db.batch(slice.map((sym) => ({
+      sql: `select d, shares, split from short_interest
+              where symbol = ? and d <= ? order by d desc limit 1`,
+      args: [sym, onOrBefore],
+    })), 'read');
+    res.forEach((r, j) => {
+      const x = r.rows[0];
+      if (x) out.set(slice[j], { d: x.d, shares: x.shares, split: !!x.split });
+    });
+  }
+  return out;
 }
 
 // The NEWEST reading for many symbols — one seek each on idx_shortint_sym.
@@ -3351,6 +3378,41 @@ async function readBarsFullFor(symbols, since) {
       datetime: row.d,
       open: row.open, high: row.high, low: row.low, close: row.close, volume: row.volume,
     });
+  }
+  return out;
+}
+
+// A BOUNDED window, and only the three columns a technical row reads.
+//
+// `readBarsFullFor` above is open-ended forward (`d >= since`) and carries
+// open and low, which suits the live refresh: it always wants "up to today".
+// A backtest starting in 2020 wants 2019-2020 and nothing since, and asking
+// the open-ended one for it would carry six extra years of bars for every
+// symbol — measured at the whole-archive wall (441k rows, 158s, ~83MB) this
+// project already records, so the difference is between a page and a timeout.
+//
+// `btRowAt` reads closes, highs and volumes. Open and low are not dropped to
+// be clever; they are simply not asked for by anything on this path.
+async function readBarsWindow(symbols, since, until) {
+  await init();
+  if (!symbols || !symbols.length) return {};
+  const out = {};
+  // Chunked rather than one 1,200-parameter IN list: the same shape
+  // readBarsFullFor uses works, but a bounded window over many symbols is
+  // large enough that one response is worth not betting on.
+  for (let i = 0; i < symbols.length; i += 300) {
+    const slice = symbols.slice(i, i + 300);
+    const r = await db.execute({
+      sql: `select symbol, d, high, close, volume from bars
+            where symbol in (${slice.map(() => '?').join(',')}) and d >= ? and d <= ?
+            order by symbol, d desc`,
+      args: [...slice, since, until],
+    });
+    for (const row of r.rows) {
+      (out[row.symbol] ||= []).push({
+        datetime: row.d, high: row.high, close: row.close, volume: row.volume,
+      });
+    }
   }
   return out;
 }
@@ -4739,7 +4801,8 @@ module.exports = {
   init,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState,
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
-  writeShortInterest, readShortInterest, readShortLatestFor, readShortState, noteShortMiss,
+  writeShortInterest, readShortInterest, readShortLatestFor, readShortAsOfFor,
+  readShortState, noteShortMiss,
   readInsiderDay, writeInsiderDay, appendInsider, readUniverseCiks,
   clearVisitors,
   logActivity,
@@ -4909,7 +4972,8 @@ module.exports = {
   readBars,
   readBarsFor,
   purgeSymbol,
-  markRefreshPrices, readBarsFullFor, notePricePull, readPriceState, readEarningsDates,
+  markRefreshPrices, readBarsFullFor, readBarsWindow, notePricePull, readPriceState,
+  readEarningsDates,
   barsSpan, coverageRollups,
   knownListings,
   readFundamentalsAsOf, readFundamentalsRows,

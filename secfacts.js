@@ -385,6 +385,54 @@ function latestFilled(rows) {
   });
 }
 
+// ---- WHAT A READER COULD HAVE SEEN ON A GIVEN DAY --------------------------
+//
+// `filed` is the date a figure became public, which is the one thing no other
+// source here carries and the whole reason a backtest can be honest. A
+// quarter ending 2026-05-28 was not knowable until 2026-06-25; filtering on
+// `periodEnd` instead would buy four weeks of look-ahead.
+//
+// THE FILTER ALONE IS NOT ENOUGH, AND THE REASON IS SUBTLE. A stored derived
+// quarter carries `filed` from the FY row it was differenced from — and
+// `outranks` picks the NEWEST restatement of that year, so the derived Q4
+// inherits a filing made long afterwards. Measured on MSFT:
+//
+//   period 2021-06-30   filed 2023-07-27   759 days after
+//   period 2022-06-30   filed 2024-07-30   761 days after
+//
+// That quarter WAS knowable in 2021 — the FY2021 10-K and the Q3 10-Q were
+// both public — so hiding it until 2023 understates what a reader had. The
+// damage is not marginal: measured across the universe, the share of filers
+// with a full trailing year read 62% in 2018, **7% in 2024** and 85% in 2026,
+// a collapse in the middle that no story about data depth can explain.
+//
+// So the quarters are RE-DERIVED from the filings visible on the date, which
+// is both more accurate and more honest: `outranks` then picks the newest
+// annual THAT WAS PUBLIC, and the derived quarter carries its date.
+//
+// Rows are copied first — `deriveQuarters` fills holes in its inputs in place
+// and `fill` mutates — so a cached trail cannot be corrupted by asking it a
+// question about the past.
+function visibleAsOf(rows, asOf) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (!asOf) return list;
+  const seen = [];
+  for (const r of list) {
+    // A row with no filing date cannot be placed in time, so it is not
+    // evidence about any particular day.
+    if (!r.filed || r.filed > asOf) continue;
+    if (r.derived) continue;              // re-derived below, from this set
+    seen.push(Object.assign({}, r));
+  }
+  if (!seen.length) return [];
+  const all = seen.concat(deriveQuarters(seen));
+  relabel(all);
+  for (const r of all) fill(r);
+  all.sort((a, b) => (a.periodEnd < b.periodEnd ? 1 : a.periodEnd > b.periodEnd ? -1
+    : (a.filed < b.filed ? 1 : -1)));
+  return all;
+}
+
 // ---- the ratios, rather than the dollars -----------------------------------
 //
 // The filings state dollars; the Advice rules read RATIOS — gross margin,
@@ -529,6 +577,6 @@ function filingUrl(cik, accn) {
 
 module.exports = {
   CONCEPTS, CONCEPT_KEYS, INSTANT, NO_DIFF,
-  periodType, normalise, deriveQuarters, latestPerPeriod, latestFilled,
+  periodType, normalise, deriveQuarters, latestPerPeriod, latestFilled, visibleAsOf,
   filingUrl, isStatement, withRatios, ttm, MIN_REVENUE, FILLABLE,
 };
