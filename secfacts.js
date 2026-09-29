@@ -321,6 +321,87 @@ function latestPerPeriod(rows) {
   return [...best.values()].sort((a, b) => (a.periodEnd < b.periodEnd ? 1 : -1));
 }
 
+// ---- the ratios, rather than the dollars -----------------------------------
+//
+// The filings state dollars; the Advice rules read RATIOS — gross margin,
+// profit margin, FCF margin, revenue growth, earnings growth. Every one is
+// computable from concepts already stored, so this is a second reading of
+// data in hand rather than anything new.
+//
+// IT IS STILL DISPLAY ONLY, and the boundary matters MORE here than it did
+// for the dollars. A reader seeing "Gross margin 61.2%" beside a verdict will
+// assume that is the number the verdict used, and it is not: the engine reads
+// the vendor's figure, which is trailing-twelve-month, restated to today, and
+// computed on a different basis. This file already records them differing by
+// up to ~4 points on the same company. So the card shows BOTH and names the
+// gap rather than quietly presenting one as the other.
+//
+// A MARGIN OFF A LOSS IS STILL A MARGIN — unlike a multiple off a loss, which
+// is arithmetic rather than cheapness. A -30% profit margin is a true and
+// useful statement, so negatives are kept. What is refused is a denominator
+// that cannot carry one.
+const MIN_REVENUE = 1; // dollars; a zero or absent revenue is not a divisor
+
+function pct(part, whole) {
+  if (part == null || whole == null) return null;
+  const p = Number(part), w = Number(whole);
+  if (!isFinite(p) || !isFinite(w) || w < MIN_REVENUE) return null;
+  return (p / w) * 100;
+}
+
+// Year-on-year against the SAME period a year earlier, matched on the date
+// rather than by counting rows back — a company with a gap in its filings,
+// or a changed fiscal year end, would otherwise be compared against whatever
+// happened to sit four rows away.
+function yearAgo(rows, i) {
+  const d = new Date(rows[i].periodEnd + 'T00:00:00Z');
+  if (isNaN(d)) return null;
+  const want = new Date(d);
+  want.setUTCFullYear(want.getUTCFullYear() - 1);
+  let best = null, bestGap = Infinity;
+  for (let k = 0; k < rows.length; k++) {
+    if (k === i) continue;
+    const o = new Date(rows[k].periodEnd + 'T00:00:00Z');
+    if (isNaN(o)) continue;
+    const gap = Math.abs(o - want) / 86400000;
+    if (gap < bestGap) { bestGap = gap; best = rows[k]; }
+  }
+  // Within six weeks of the anniversary. Wider than that and it is a
+  // different period being passed off as a comparison.
+  return bestGap <= 45 ? best : null;
+}
+
+// A growth rate needs a POSITIVE base. From a loss to a smaller loss is not
+// "+40% earnings growth" in any sense a rule should read, and from a negative
+// base the sign inverts — the same trap the refresh report words rather than
+// percentages.
+function growth(now, then) {
+  if (now == null || then == null) return null;
+  const a = Number(now), b = Number(then);
+  if (!isFinite(a) || !isFinite(b) || b <= 0) return null;
+  return ((a - b) / b) * 100;
+}
+
+// Annotates each row with the ratios. `rows` newest-first, as
+// latestPerPeriod returns them.
+function withRatios(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  return list.map((r, i) => {
+    const prior = yearAgo(list, i);
+    const gp = r.grossProfit != null ? r.grossProfit
+      : (r.revenue != null && r.costOfRevenue != null ? r.revenue - r.costOfRevenue : null);
+    return Object.assign({}, r, {
+      grossMargin: pct(gp, r.revenue),
+      operatingMargin: pct(r.operatingIncome, r.revenue),
+      profitMargin: pct(r.netIncome, r.revenue),
+      fcfMargin: pct(r.freeCashFlow, r.revenue),
+      revenueGrowthYoY: prior ? growth(r.revenue, prior.revenue) : null,
+      earningsGrowthYoY: prior ? growth(r.netIncome, prior.netIncome) : null,
+      yoyAgainst: prior ? prior.periodEnd : null,
+    });
+  });
+}
+
 // sec.gov/Archives/edgar/data/<cik>/<accn without dashes>/<accn>-index.htm —
 // verified 200. Every number on the page can therefore be opened at the
 // document it was taken from, which is the whole argument for this source.
@@ -333,4 +414,5 @@ function filingUrl(cik, accn) {
 module.exports = {
   CONCEPTS, CONCEPT_KEYS, INSTANT, NO_DIFF,
   periodType, normalise, deriveQuarters, latestPerPeriod, filingUrl, isStatement,
+  withRatios, MIN_REVENUE,
 };

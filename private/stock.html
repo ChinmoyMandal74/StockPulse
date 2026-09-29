@@ -703,6 +703,21 @@
        a link rather than as one more grey date. */
     #sec td.filed a { color: var(--accent); text-decoration: none; font-size: 11.5px; }
     #sec td.filed a:hover { text-decoration: underline; }
+    /* A hairline between the two switches, so "which periods" and "which
+       columns" read as two questions rather than one row of four buttons. */
+    #sec .secsep { display: inline-block; width: 1px; height: 15px; margin: 0 6px -3px;
+                   background: var(--hair-2); }
+    /* The comparison against what the verdict actually read. Its own table,
+       because it has different columns and answers a different question from
+       the period rows above it. */
+    #sec .cmpwrap { overflow-x: auto; margin: 16px 0 0; }
+    #sec table.cmp { width: auto; min-width: 380px; }
+    #sec table.cmp th:first-child, #sec table.cmp td.who { text-align: left; padding-left: 0;
+                                                           font-family: var(--sans); }
+    /* A gap past two points is worth noticing, and amber already means
+       exactly that here. It is NOT a fault — the two are computed on
+       different bases and are expected to differ. */
+    #sec table.cmp td.warn { color: var(--amber); }
     #sec .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
     #sec .msg { color: var(--muted); font-size: 12.5px; padding: 6px 0; }
     @media (max-width: 620px) { #sec th, #sec td { padding-left: 10px; } }
@@ -2252,6 +2267,13 @@
             <span class="deeper">
               <button class="rng on" id="secQ" type="button">Quarterly</button>
               <button class="rng" id="secA" type="button">Annual</button>
+              <!-- Two switches doing one thing each: WHICH periods, and
+                   whether they are shown as filed dollars or as the ratios
+                   the rules read. One combined control would have to offer
+                   four states to say the same thing. -->
+              <span class="secsep"></span>
+              <button class="rng on" id="secFig" type="button">Figures</button>
+              <button class="rng" id="secRat" type="button">Ratios</button>
             </span>
           </div>
           <div id="secBody"><p class="msg">Loading filings…</p></div>
@@ -2663,6 +2685,8 @@
       // page's ~10KB, which is also why it is not folded into /api/stock.
       let secData = null;
       let secMode = 'quarterly';
+      // Which columns: the filed dollars, or the ratios derived from them.
+      let secView = 'figures';
 
       // Money as filed: compact, signed, and NEVER abbreviated past the point
       // where -183.0M and -1.83B look alike.
@@ -2682,6 +2706,28 @@
         ['equity', 'Equity', secMoney], ['cash', 'Cash', secMoney], ['debt', 'LT debt', secMoney],
       ];
 
+      // THE RATIOS THE RULES READ, computed from the filings. Percentages, so
+      // a loss is a true negative margin and is kept — unlike a multiple off
+      // a loss, which is arithmetic rather than cheapness.
+      const secPct = (v) => (v == null || !isFinite(v) ? null
+        : (v >= 0 ? '+' : '') + Number(v).toFixed(1) + '%');
+      const SEC_RATIO_COLS = [
+        ['grossMargin', 'Gross margin', secPct],
+        ['operatingMargin', 'Op. margin', secPct],
+        ['profitMargin', 'Profit margin', secPct],
+        ['fcfMargin', 'FCF margin', secPct],
+        ['revenueGrowthYoY', 'Revenue YoY', secPct],
+        ['earningsGrowthYoY', 'Earnings YoY', secPct],
+      ];
+      // Which of those the Balanced rules actually read, and under what name
+      // on the snapshot row. Operating margin is shown because it is useful
+      // and is deliberately NOT in this map: no rule reads it.
+      const ENGINE_KEYS = {
+        grossMargin: 'grossMargin', profitMargin: 'profitMargin',
+        fcfMargin: 'fcfMargin', revenueGrowthYoY: 'revenueGrowthYoY',
+        earningsGrowthYoY: 'earningsGrowthYoY',
+      };
+
       function paintSec() {
         const host = document.getElementById('secBody');
         if (!host || !secData) return;
@@ -2690,6 +2736,7 @@
           host.innerHTML = '<p class="msg">No ' + secMode + ' periods filed.</p>';
           return;
         }
+        if (secView === 'ratios') { host.innerHTML = secRatiosHtml(rows); return; }
         const anyDerived = rows.some((r) => r.derived || (r.derivedFields || []).length);
         let h = '<div class="stab"><table><thead><tr><th>Period</th>' +
           SEC_COLS.map((c) => '<th>' + esc(c[1]) + '</th>').join('') +
@@ -2729,6 +2776,75 @@
         host.innerHTML = h;
       }
 
+      // The ratios view. The comparison strip is the reason it earns its
+      // place: without it a reader sees "Gross margin 61.2%" beside a verdict
+      // and assumes that is what the verdict read. It is not — the engine
+      // takes the vendor's trailing-twelve-month figure, restated to today
+      // and computed on a different basis, and this project has measured the
+      // two ~4 points apart on one company. Showing both and naming the gap
+      // turns a confusing discrepancy into the useful half of the card.
+      function secRatiosHtml(rows) {
+        let h = '<div class="stab"><table><thead><tr><th>Period</th>' +
+          SEC_RATIO_COLS.map((c) => '<th>' + esc(c[1]) + '</th>').join('') +
+          '<th>Filed</th></tr></thead><tbody>';
+        for (const r of rows) {
+          h += '<tr><td class="per">' + esc(r.periodEnd) +
+            (r.fp ? '<span class="fp">' + esc(r.fp) + '</span>' : '') + '</td>';
+          for (const [k, , fmt] of SEC_RATIO_COLS) {
+            const t = fmt(r[k]);
+            const cls = [t == null ? 'na' : '', t != null && r[k] < 0 ? 'neg' : '']
+              .filter(Boolean).join(' ');
+            // A growth figure says which period it is against, because a gap
+            // in the filings or a changed fiscal year end moves it.
+            const tip = (/YoY$/.test(k) && r.yoyAgainst)
+              ? ' title="' + esc('against ' + r.yoyAgainst) + '"' : '';
+            h += '<td' + (cls ? ' class="' + cls + '"' : '') + tip + '>' +
+              (t == null ? '—' : esc(t)) + '</td>';
+          }
+          h += '<td class="filed">' + (r.url
+            ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(r.filed) + '</a>'
+            : esc(r.filed || '—')) + '</td></tr>';
+        }
+        h += '</tbody></table></div>';
+
+        // The newest period against what the engine read. `stock` is the
+        // snapshot row this page already holds, so this costs no fetch.
+        const newest = rows[0];
+        const cmp = [];
+        for (const [k, label] of SEC_RATIO_COLS) {
+          const ek = ENGINE_KEYS[k];
+          if (!ek) continue;
+          const mine = newest[k];
+          const theirs = stock[ek] == null ? null : Number(stock[ek]);
+          if (mine == null && theirs == null) continue;
+          const gap = (mine != null && theirs != null) ? mine - theirs : null;
+          cmp.push('<tr><td class="who">' + esc(label) + '</td>' +
+            '<td>' + (secPct(mine) || '—') + '</td>' +
+            '<td>' + (secPct(theirs) || '—') + '</td>' +
+            '<td class="' + (gap == null ? 'na' : Math.abs(gap) >= 2 ? 'warn' : '') + '">' +
+            (gap == null ? '—' : (gap >= 0 ? '+' : '') + gap.toFixed(1) + 'pt') + '</td></tr>');
+        }
+        if (cmp.length) {
+          h += '<div class="cmpwrap"><table class="cmp"><thead><tr>' +
+            '<th>Newest filed period</th><th>From the filing</th>' +
+            '<th>What the verdict read</th><th>Gap</th></tr></thead><tbody>' +
+            cmp.join('') + '</tbody></table></div>';
+        }
+
+        h += '<p class="note"><b>Computed here from the filings above</b>, not taken from ' +
+          'a vendor — each is that period’s own figure divided by that period’s own ' +
+          'revenue, on the company’s fiscal calendar. <b>These are not the numbers the ' +
+          'Advice verdict used.</b> The engine reads the vendor’s trailing-twelve-month ' +
+          'values, restated to today and computed on a different basis, which is why the ' +
+          'gap column is rarely zero and is marked once it passes two points. ' +
+          'A growth figure is against the same period a year earlier — hover it for which — ' +
+          'and is withheld where the earlier figure was a loss, since growth from a negative ' +
+          'base inverts its own sign. Operating margin is shown because it is worth seeing; ' +
+          'no rule reads it. <b>Nothing on this card feeds the Advice verdict or the ' +
+          'screener</b> — it is here so you can see what the company actually filed.</p>';
+        return h;
+      }
+
       async function loadSec() {
         const card = document.getElementById('sec');
         if (!card) return;
@@ -2744,13 +2860,19 @@
           card.hidden = false;
           const qb = document.getElementById('secQ');
           const ab = document.getElementById('secA');
+          const fb = document.getElementById('secFig');
+          const rb = document.getElementById('secRat');
           const sync = () => {
             qb.classList.toggle('on', secMode === 'quarterly');
             ab.classList.toggle('on', secMode === 'annual');
+            if (fb) fb.classList.toggle('on', secView === 'figures');
+            if (rb) rb.classList.toggle('on', secView === 'ratios');
             paintSec();
           };
           qb.addEventListener('click', () => { secMode = 'quarterly'; sync(); });
           ab.addEventListener('click', () => { secMode = 'annual'; sync(); });
+          if (fb) fb.addEventListener('click', () => { secView = 'figures'; sync(); });
+          if (rb) rb.addEventListener('click', () => { secView = 'ratios'; sync(); });
           sync();
         } catch (e) { card.remove(); }
       }

@@ -1007,6 +1007,17 @@ The two things that make it unusable in a verdict anyway are worth recording: **
 - **`GET /api/sec?symbol=`** is its own route, fetched after the chart: ~30-60KB against the stock page's ~10KB, so folding it into `/api/stock` would make the price wait for it. **Guests can read it** (the owner's call — public filings), symbol-guarded like every other per-stock route.
 - **A company with nothing filed gets NO CARD** rather than an empty one, the peers rule.
 
+#### The ratios, not just the dollars (2026-09-28, owner: "you are showing the raw data, can you show the % and margins that are used in the Advice calculation")
+**A `Figures / Ratios` switch beside the `Quarterly / Annual` one** — two switches doing one thing each, because one combined control would need four states to say the same thing. The ratios view shows **gross, operating, profit and FCF margin, and revenue and earnings growth year on year**, every one computed in `secfacts.js` from concepts already stored. No new fetch, no new column in the table.
+
+- **THE COMPARISON STRIP IS THE POINT OF IT, not a footnote.** A reader seeing "Gross margin 60.0%" beside a verdict assumes that is what the verdict read, **and it is not**: the engine takes the vendor's trailing-twelve-month figure, restated to today and computed on a different basis — this file already records the two **~4 points apart on one company**. So the newest period is printed beside what the engine actually read, with the gap named and **marked amber past two points**. Amber because on this page it already means *notice this*; the gap is expected, not a fault.
+- **It costs no read.** The strip compares against `stock`, the snapshot row the page already holds — asking `/api/sec` for it would mean pulling the ~1.3MB snapshot into a route that exists precisely to avoid that. The first cut did exactly that and was reverted before it ran.
+- **A MARGIN OFF A LOSS IS STILL A MARGIN** and is kept — unlike a multiple off a loss, which is arithmetic rather than cheapness. A −5.6% profit margin is a true statement about a quarter.
+- **GROWTH FROM A NEGATIVE BASE IS WITHHELD, because the sign inverts.** A company going from a −200 loss to a −50 loss has cut its losses by three quarters; the arithmetic calls that **−75% earnings growth**. The refresh report words sign changes rather than percentaging them for the same reason. **Proved by reverting**: relaxing the base test to `b === 0` prints exactly that −75%.
+- **Year on year is matched on the DATE, within six weeks of the anniversary** — never by counting four rows back. A gap in the filings or a changed fiscal year end would otherwise compare a quarter against whatever happened to sit nearby; a three-year gap in the fixture is refused.
+- **Operating margin is shown and is deliberately NOT in the comparison**: no rule reads it, and the strip is specifically "what the verdict read".
+- Verified: **34 checks**. **The fixture makes the two sources DISAGREE** — 60.0% filed against 57.5% from the vendor, the shape measured on a real company — because if they agreed the strip would pass while saying nothing. Plus both views' headers, the negative margin, the amber measured as drawn, a sub-two-point gap left unmarked, and the boundary re-asserted on the real `/api/stocks`.
+
 ### Refreshing it
 **A panel on `/admin`, not a page and not a deep link.** The price refreshes live on `/refreshes` because they share a round loop with the screener and that loop must exist once; this shares nothing — it is a batch call in a `while`.
 

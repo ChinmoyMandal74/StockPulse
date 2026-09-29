@@ -9033,10 +9033,17 @@ app.get('/api/sec', requireAuth, route(async (req, res) => {
     url: SecFacts.filingUrl(r.cik, r.accn),
     derivedFields: r.derivedFields ? String(r.derivedFields).split(',') : [],
   });
+  // The ratios are computed per PERIOD TYPE, never across the two: a
+  // quarter's revenue growth is against the same quarter a year before, and
+  // mixing annuals into that comparison would answer a different question.
+  const withR = (rows) => SecFacts.withRatios(rows).map(shape);
   res.json({
     symbol,
-    annual: latest.filter((r) => r.periodType === 'FY').map(shape),
-    quarterly: latest.filter((r) => r.periodType === 'Q').map(shape),
+    annual: withR(latest.filter((r) => r.periodType === 'FY')),
+    quarterly: withR(latest.filter((r) => r.periodType === 'Q')),
+    // What the VERDICT read is deliberately not returned here. The stock page
+    // already holds that row, so asking this route for it would mean reading
+    // the ~1.3MB snapshot on a path that exists precisely to avoid it.
     filings: all.length,
     checkedAt: state ? state.fetchedAt : null,
     status: state ? state.status : null,
