@@ -540,11 +540,18 @@
       fLo = mn - pad; fHi = mx + pad;
       const fy = (v) => fundBot - ((v - fLo) / (fHi - fLo)) * (fundBot - fundTop);
       fundPane += `<rect class="pane-bg" x="0" y="${fundTop}" width="${W}" height="${(fundBot - fundTop).toFixed(1)}"/>`;
-      // ZERO IS DRAWN WHENEVER THE RANGE SPANS IT, which is the whole
+      // ZERO IS DRAWN WHENEVER THE DATA SPANS IT, which is the whole
       // difference between a revenue line and a net-income one: profitable or
       // not is the reading, and a line with no zero on it cannot say which
       // side of it the company is.
-      if (fLo < 0 && fHi > 0) {
+      //
+      // THE TEST IS THE DATA, NEVER THE PADDED AXIS, and production is what
+      // caught that. MU's TTM revenue runs $8.0B to $90.3B, so 12% of the span
+      // is larger than the minimum and `fLo` lands at -$1.9B — which drew a
+      // zero line on a REVENUE chart, implying a crossing that cannot happen.
+      // A fixture with a narrow range passes either way; this one needs a wide
+      // positive series to bite.
+      if (fMin < 0 && fMax > 0) {
         fundPane += `<line class="fund-zero" x1="0" y1="${fy(0).toFixed(1)}" x2="${W}" y2="${fy(0).toFixed(1)}"/>`;
       }
       // A STEP, NEVER A SLOPE. A figure stands until the next filing replaces
