@@ -2846,11 +2846,14 @@
       // two ~4 points apart on one company. Showing both and naming the gap
       // turns a confusing discrepancy into the useful half of the card.
       function secRatiosHtml(rows) {
-        let h = '<div class="stab"><table><thead><tr><th>Period</th>' +
+        // THE COMPARISON LEADS, because it is what the view is for and it was
+        // buried under twenty-six rows of history where nobody found it.
+        let h = '';
+        let table = '<div class="stab"><table><thead><tr><th>Period</th>' +
           SEC_RATIO_COLS.map((c) => '<th>' + esc(c[1]) + '</th>').join('') +
           '<th>Filed</th></tr></thead><tbody>';
         for (const r of rows) {
-          h += '<tr><td class="per">' + esc(r.periodEnd) +
+          table += '<tr><td class="per">' + esc(r.periodEnd) +
             (r.fp ? '<span class="fp">' + esc(r.fp) + '</span>' : '') + '</td>';
           for (const [k, , fmt] of SEC_RATIO_COLS) {
             const t = fmt(r[k]);
@@ -2860,14 +2863,14 @@
             // in the filings or a changed fiscal year end moves it.
             const tip = (/YoY$/.test(k) && r.yoyAgainst)
               ? ' title="' + esc('against ' + r.yoyAgainst) + '"' : '';
-            h += '<td' + (cls ? ' class="' + cls + '"' : '') + tip + '>' +
+            table += '<td' + (cls ? ' class="' + cls + '"' : '') + tip + '>' +
               (t == null ? '—' : esc(t)) + '</td>';
           }
-          h += '<td class="filed">' + (r.url
+          table += '<td class="filed">' + (r.url
             ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(r.filed) + '</a>'
             : esc(r.filed || '—')) + '</td></tr>';
         }
-        h += '</tbody></table></div>';
+        table += '</tbody></table></div>';
 
         // LIKE FOR LIKE, OR THE STRIP LIBELS THE VENDOR. The engine's MARGINS
         // are trailing-twelve-month, so they are compared against four filed
@@ -2898,18 +2901,28 @@
         }
         if (cmp.length) {
           h += '<div class="cmpwrap"><table class="cmp"><thead><tr>' +
-            '<th>Against what the verdict read</th><th>From the filings</th>' +
-            '<th>What the verdict read</th><th>Gap</th></tr></thead><tbody>' +
+            '<th>Against what the verdict reads</th><th>From the filings</th>' +
+            '<th>Twelve Data</th><th>Gap</th></tr></thead><tbody>' +
             cmp.join('') + '</tbody></table></div>';
           h += secFundHtml();
-          // A missing TTM is stated rather than left as four em-dashes: four
-          // consecutive quarters is not something every filer has.
-          if (!t) {
-            h += '<p class="note">The margins have no trailing-twelve-month figure here — ' +
-              'that needs four consecutive filed quarters, and this company does not have ' +
-              'them in the window stored.</p>';
-          }
         }
+        // A missing TTM is stated rather than left as four em-dashes: four
+        // consecutive filed quarters is not something every filer has.
+        if (cmp.length && !t) {
+          h += '<p class="note">The margins have no trailing-twelve-month figure here — ' +
+            'that needs four consecutive filed quarters, and this company does not have ' +
+            'them in the window stored.</p>';
+        }
+        // WHY THERE IS NO VENDOR COLUMN ON EVERY ROW, said before anyone has
+        // to wonder. Twelve Data reports ONE current trailing-twelve-month
+        // figure per field rather than a series, and our own record of those
+        // readings (`fundamentals_history`) only begins 2026-08-30 — months
+        // after most filed periods ended, so there is no vendor value
+        // contemporaneous with them to place alongside.
+        h += '<p class="note"><b>Twelve Data has no per-period history to set beside each ' +
+          'row.</b> It reports one current trailing-twelve-month figure per field rather ' +
+          'than a series, so the two can only be compared on the newest period, above. ' +
+          'Everything below is the filings’ own record, which does go back.</p>' + table;
 
         h += '<p class="note"><b>Computed here from the filings above</b>, not taken from ' +
           'a vendor — each is that period’s own figure divided by that period’s own ' +
