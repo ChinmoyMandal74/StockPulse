@@ -736,6 +736,13 @@
     #sec .fundv .v.weak { color: var(--amber); }
     #sec .fundv .x { color: var(--muted); font-size: 12px; flex: 1 1 260px; line-height: 1.5; }
     #sec .fundv .x b { color: var(--text); }
+    /* The summed year, set apart from the quarters so it reads as a total
+       rather than as another period — and it is what the comparison above
+       is computed from, so it has to be findable. */
+    #sec tr.ttmrow td { background: rgba(255, 255, 255, 0.035);
+                        border-bottom: 1px solid var(--hair-2); }
+    #sec tr.ttmrow td.per { font-family: var(--sans); font-weight: 600; }
+    #sec tr.ttmrow td.per .fp { margin-left: 6px; }
     #sec .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
     #sec .msg { color: var(--muted); font-size: 12.5px; padding: 6px 0; }
     @media (max-width: 620px) { #sec th, #sec td { padding-left: 10px; } }
@@ -2852,6 +2859,33 @@
         let table = '<div class="stab"><table><thead><tr><th>Period</th>' +
           SEC_RATIO_COLS.map((c) => '<th>' + esc(c[1]) + '</th>').join('') +
           '<th>Filed</th></tr></thead><tbody>';
+        // THE SUM HAS TO BE ON SCREEN OR THE COMPARISON CANNOT BE CHECKED.
+        // Reported by the owner from a screenshot: the growth lines above
+        // trace straight to the newest quarter — +345.7% is +345.7% — while
+        // the margins traced to nothing, because they are four quarters
+        // summed and no row showed that sum. 72.6% against a visible 84.6%
+        // reads as a contradiction rather than as a different basis, however
+        // carefully the basis is labelled.
+        const ttmRow = secData.ttm;
+        if (ttmRow) {
+          table += '<tr class="ttmrow"><td class="per">Last 4 quarters' +
+            '<span class="fp">to ' + esc(ttmRow.to) + '</span></td>';
+          for (const [k, , fmt] of SEC_RATIO_COLS) {
+            // Growth is NOT summed over a year — it is the newest quarter
+            // against the one a year before, which is the row below. A
+            // number here would be a third basis nobody asked for.
+            if (/YoY$/.test(k)) {
+              table += '<td class="na" title="' +
+                esc('Growth is compared on the newest quarter, the row below — not over the summed year') +
+                '">—</td>';
+              continue;
+            }
+            const v = fmt(ttmRow[k]);
+            table += '<td class="' + (v == null ? 'na' : (ttmRow[k] < 0 ? 'neg' : '')) + '">' +
+              (v == null ? '—' : esc(v)) + '</td>';
+          }
+          table += '<td class="filed">—</td></tr>';
+        }
         for (const r of rows) {
           table += '<tr><td class="per">' + esc(r.periodEnd) +
             (r.fp ? '<span class="fp">' + esc(r.fp) + '</span>' : '') + '</td>';
@@ -2887,8 +2921,12 @@
           if (!ek) continue;
           const isGrowth = /YoY$/.test(k);
           const mine = isGrowth ? newest[k] : (t ? t[k] : null);
-          const basis = isGrowth ? 'newest quarter vs a year earlier'
-            : (t ? 'four filed quarters to ' + t.to : null);
+          // Name the row each figure comes from. "four filed quarters" told
+          // a reader the basis but not where to look, so a margin that
+          // matched nothing visible read as an error.
+          const basis = isGrowth
+            ? 'the ' + newest.periodEnd + ' row below, against a year earlier'
+            : (t ? 'the “Last 4 quarters” row below' : null);
           const theirs = stock[ek] == null ? null : Number(stock[ek]);
           if (mine == null && theirs == null) continue;
           const gap = (mine != null && theirs != null) ? mine - theirs : null;
