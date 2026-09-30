@@ -474,6 +474,14 @@ The **Size** group carries the absolute-size columns — Revenue TTM, Gross Prof
 
 **The first full reading, over 1,179 profiles**: 1,050 Common Stock, 58 REIT, 52 American Depositary Receipt, 16 ETF, 2 Depositary Receipt, 1 Limited Partnership — **and zero non-equities**, which independently confirms the removal above was complete.
 
+#### A PROFILE FIELD DOES NOT REACH THE ROW UNLESS `computeStocks` NAMES IT
+**Shipped without that line, and the first live check after the deploy is what caught it — every one of the 48 assertions passed over it.** `computeStocks` copies profile fields **one by one** (`currency: prof.currency`, `exchange: prof.exchange`, …) rather than spreading the object, so the value sat on all 1,179 profiles and the column would have been **blank for ever**.
+
+- **The fixture could not have caught it**, and that is the lesson rather than an excuse: the suite writes the SNAPSHOT directly, which is the right way to test a column, a filter and a page — and it bypasses `computeStocks` entirely. So the two halves need different proofs: the display surface by fixture, the profile→row flow against production.
+- The suite gained a **static** assertion that the row build names the field. Weaker than behavioural, and it catches exactly this regression; the note in the test says why it is static.
+- **`/api/stocks` serves the cached snapshot**, so the column stays blank until the next FULL round rebuilds it — about half an hour. Judge a new profile field after a refresh, never immediately after the deploy.
+- `/api/data-quality` also reads `prof.exchange` and does **not** need this field; it was checked rather than assumed.
+
 - Row width is 96 cells (`PAD_SPAN`), the error row 91, the empty row 93, and the Info banner 10.
 - Verified: **48 checks**. The fixture is the test — **every row's NAME says one thing and its type says another**, including a company whose name reads "Pfd" and is common stock and a note whose name reads like ordinary equity, so a column wired to the wrong field cannot pass. Plus every banner spanning exactly its own cells, the dash for a row not yet typed (never the string "null"), the neutral colour measured as drawn, and the dropdown narrowing to exactly the note. **Proved by reverting three times**: the Info banner left at 9 fails 1, dropping `instrumentType` from `CAT_KEYS` fails 4 (the filter becomes a free-text box and matches all seven rows), and violating the boundary fails 2.
   - **Two test faults worth keeping.** The header is **upper-cased by CSS**, so a case-sensitive label check fails over a correct page — the documented trap, met again. And the body carries **two leading anchors AND one trailing action cell** the header has no column for, so the header-to-body offset is **3**, not 2; the suite now asserts that tail cell exists rather than taking the constant on trust.
