@@ -2622,7 +2622,39 @@ When the track's height came back, the headline step-down's revert proof stopped
 
 Verified after the change: **70 checks** in the spotlight suite (every cell addressed BY LABEL rather than by index, since these have been renumbered twice and an index is a statement about today's ordering), the 90-combination sweep, and the theme suite's contrast sweep re-run across all three grounds. **Proved by reverting ten times.**
 
-The control is `spotTheme`, spotlight-scoped on purpose — when this generalises it becomes one `cardTheme` and the `.sp-*` overrides become a token. Control ids **88 against `POST_OPT_MAX` 200**.
+The control is `spotTheme`, spotlight-scoped on purpose — when this generalises it becomes one `cardTheme` and the `.sp-*` overrides become a token. Control ids **88 against `POST_OPT_MAX` 200**. *(It generalised the same day — see below.)*
+
+### Three grounds on EVERY card, and the 76 literals a token could not reach (2026-09-30, owner's request)
+**"Only 3 colors, Dark, Light and Navy... Can you add these all promo cards."** The six grounds built on trial for the day card are removed; the three the owner kept are one shared `cardTheme` control on every template.
+
+- **ONE CONTROL, not thirteen.** The per-template `spotTheme` / `dayTheme` selects are gone and the Ground picker sits once beside the Template picker. **Both legacy KEYS are still read, because a saved post carries them** and a stored post must not lose its ground to a rename.
+  - **A LEGACY KEY BELONGS TO THE TEMPLATE IT WAS SAVED FOR.** Read unconditionally (`cardTheme || spotTheme || dayTheme`) they cross-talk: a day post carrying `dayTheme` opened on the spotlight would colour the spotlight, a ground nobody chose for it. `LEGACY_KEY` maps template to key, so `themeClass('spotlight', {dayTheme:'light'})` is dark. **Caught by the day suite's own independence checks**, which were asserting the previous behaviour and were right to fail.
+- **A REMOVAL NOTHING CHECKS IS A REMOVAL THAT GETS UNDONE.** The trial block in `day-test.js` is replaced by the opposite claim: none of the six can come back — not in the markup, not through `themeOf`, not through a legacy key, and their CSS is gone.
+
+#### THE TOKEN BLOCK WAS "MOST OF THE CARD FOR FREE" — FOR ONE CARD
+The spotlight's note said so and it was true of the spotlight. Extending the grounds to all thirteen templates found what that missed: **17 distinct hex LITERALS across 76 uses**, emitted as presentation attributes and inline styles by the chart, the spark line, the verdict ladder, the bubble tints, the range bands and the fund quadrant. **A CSS variable cannot reach a literal**, and on `#f7f8fa` they run **1.1:1 to 2.6:1** — invisible rather than wrong, the failure that reads as an empty card.
+
+- **One translation table rather than 76 decisions.** `LIGHT_INK` maps each dark value to a light one that keeps its **hue exactly** (solved in HSL, lightness alone moved). `pal.ink(hex)` is **identity on dark and navy**, so navy stays the dark palette on another ground and a future edit to a dark literal carries with no second entry to keep in step.
+- **DARKENED AGAINST A FILLED TILE, NOT THE BARE ARTBOARD.** The first cut of the light values was tuned on the page at 4.68-4.99 and the sweep then caught `--faint` at **4.28:1 inside a spotlight cell**. A token safe on the ground and marginal on the furniture fails wherever a card happens to put it, so every value now clears 4.5:1 on the 0.05 ink tint. Four existing tokens moved a shade (amber, lime, orange, accent) and `--faint` with them.
+- **`LADDER_LIGHT` already existed and `pal.tints` already resolved per theme** — only the spotlight used it. The other five templates printed the **dark** six-tier ladder on the light ground at 1.4-2.5:1: the words the advice board is mostly made of, unreadable. This was a routing problem, not a palette one.
+- **`.avMark` was the only hardcoded colour in the STYLESHEET** (the rest are in JS), at **1.8:1 on light** — the whole avatar card a faint smudge.
+
+#### The instrument, and three ways it was wrong first
+`ground-sweep.js` walks **75 combinations — 3 grounds x 13 templates x every mode** — and measures what is DRAWN against the ground **actually behind each element**, composited up the ancestor chain. It replaced a light-only sweep that read backgrounds and borders.
+
+- **RELATIVE LUMINANCE IS THE WRONG MEASURE FOR VISIBILITY.** The eye is far more sensitive near black, so the same perceptual step is **~38x smaller in dY on the dark ground than on the light one**: a 0.006 dY floor rejected every rail the dark card has shipped with for weeks while accepting the light ones. That is a statement about the measure, not the cards. **CIE L\* is perceptually uniform, so one floor (1.5) serves all three grounds** — the shipped rails land in a 1.65-5.67 band and an un-overridden light rail at ~0.1.
+- **ONLY SHAPES THAT PAINT.** An `<svg>` root or a `<g>` inherits the UA default fill of black and paints nothing with it, so reading `fill` on every SVG node reported "1.03:1" on the dark cards. **The giveaway was that it fired on the ground that has shipped for weeks.** Also `el.className` is an `SVGAnimatedString`, so every SVG finding was labelled `[object SVGAnimatedString]`.
+- **A WASH IS ATMOSPHERE, NOT INFORMATION.** The area fill under a spark line is 13% alpha by intent; a 3:1 contrast floor asks a deliberately faint tint to be a legible graphic. Low-alpha fills take the visibility rule instead.
+- **It visited only each template's DEFAULT MODE**, which is how it reported twelve templates clean while the range bands, the fund quadrant and the bubble channels still carried dark literals. Four templates have a mode switch; those are the four whose other modes had never been swept.
+
+#### TWO FAILURES ARE WRONG-BUT-VISIBLE, and a contrast sweep cannot see either
+Both needed their own correctness check, and the second is the one that proved it:
+
+- **The spark wash was chosen by comparing the line colour against the LITERAL `'#34d399'`.** Routing the line through the palette makes that test false on the light ground, so every spark — rising or falling — would take the **red** wash. Perfectly visible and perfectly wrong. The check is that the wash agrees in **hue** with the line above it.
+- **The range card's marker ring is a cut-out authored in the ground colour**, hardcoded to OLED black, so on light it drew a **black ring**. **The revert of that fix cost nothing until a check existed** — which is exactly the "guard that was never load-bearing" this file already records twice. The claim is simply that the ring IS the ground, so that is what is measured.
+
+Verified: **128 checks over 75 combinations, 0 failed**, plus the spotlight theme suite (26, worst contrast now 5.02 on light against 4.74) and the day suite (89). **Proved by reverting eight times**: the ink table fails 4, the verdict ladder 1, the avatar mark 1, the marker ring 2, the wash comparison 1, the tile-tuned tokens 3, the bubble tints 1, the chart line 1.
+- **`size-scope-test.js`'s `NO_SCOPE` list was stale and failed at HEAD too** — it predates `day`, `spotlight` and `stock` being templates, all three of which are scope-free by design.
 
 ### The Intro copy went stale, and one line of it was false (2026-09-26, owner asked for a review)
 **Reviewed before the first Instagram post.** All 15 slides across the four topics rendered clean against the live snapshot with no errors; **the rendering was never the problem, the words were.** The deck is now 16 slides.

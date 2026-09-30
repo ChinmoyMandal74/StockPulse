@@ -121,6 +121,16 @@
       <select id="tplSelect" aria-label="Template"></select>
       <p class="tplnote" id="tplNote"></p>
 
+      <!-- The ground, for EVERY card. It sits here rather than in a
+           per-template box because it applies to all of them — the same
+           reason the artboard size does. -->
+      <label>Ground</label>
+      <select id="cardTheme" aria-label="Ground">
+        <option value="dark" selected>Dark</option>
+        <option value="light">Light</option>
+        <option value="navy">Navy</option>
+      </select>
+
       <div id="movBox">
         <label>Time window</label>
         <select id="movPeriod">
@@ -537,23 +547,6 @@
         <p class="hint">The floor narrows the movers only. The sectors are the
           Select Sector SPDRs' own returns, and neither the indexes nor the sector
           funds are ever counted among the movers.</p>
-        <label>Ground</label>
-        <select id="dayTheme">
-          <option value="dark" selected>Dark</option>
-          <option value="light">Light</option>
-          <option value="navy">Navy</option>
-          <option value="ink">Ink — warm near-black</option>
-          <option value="aubergine">Aubergine — deep violet</option>
-          <option value="petrol">Petrol — deep teal</option>
-          <option value="oxide">Oxide — indigo</option>
-          <option value="duotone">Duotone — indigo to plum</option>
-          <option value="chrome">Accent chrome — cyan furniture</option>
-        </select>
-        <p class="hint">The six below Navy are on trial on this card only, to be
-          looked at rather than described. Every one is dark, which is why they
-          cost nothing: the whole palette clears 4.5:1 on each, where it fails all
-          seven colours on a light ground. None is green, red or amber — a ground
-          in a signal hue fights the one thing the numbers have to mean.</p>
       </div>
 
       <!-- One stock, in full. Three controls and no scope pickers: the card
@@ -572,12 +565,6 @@
         </select>
         <label>Rules</label>
         <select id="spotProf"></select>
-        <label>Ground</label>
-        <select id="spotTheme">
-          <option value="dark" selected>Dark</option>
-          <option value="light">Light</option>
-          <option value="navy">Navy</option>
-        </select>
         <p class="hint">The window moves the chart alone — the eight figures are
           the stock's own fixed periods, and the range track is always its year.
           A verdict always carries the rule that fired and the rule set's name.</p>
@@ -734,7 +721,10 @@
 
     // Every control's value, by id — the module reads no DOM, so the studio
     // hands it the panel's state and gets a card back.
-    const CONTROL_IDS = ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap', 'movScreen',
+    const CONTROL_IDS = [
+      // The ground applies to every card, so it is not in any template's list.
+      'cardTheme',
+      'movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap', 'movScreen',
       'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap', 'chtScreen',
       'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap', 'spkScreen',
       'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry', 'rngCap', 'rngScreen',
@@ -742,8 +732,8 @@
       'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap', 'fundScreen',
       'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen',
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen',
-      'dayMetric', 'dayCount', 'dayFloor', 'dayTheme',
-      'spotSym', 'spotWin', 'spotProf', 'spotTheme',
+      'dayMetric', 'dayCount', 'dayFloor',
+      'spotSym', 'spotWin', 'spotProf',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
       const o = {};
@@ -855,6 +845,11 @@
       $('sizeList').querySelectorAll('[data-z]').forEach((b) =>
         b.addEventListener('click', () => { size = SIZES.find((z) => z.id === b.dataset.z); paintControls(); render(); }));
     }
+    // The ground is shared, so it is wired ONCE and gated on nothing. Adding
+    // it to one of the ten per-template lists would leave it dead on the
+    // other twelve cards.
+    $('cardTheme').addEventListener('change', render);
+
     $('tplSelect').addEventListener('change', (e) => {
       tpl = e.target.value;
       // an avatar is square by definition; the other cards keep whatever
@@ -927,9 +922,9 @@
     })();
     ['bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'bubble') render(); }));
-    ['dayMetric', 'dayCount', 'dayFloor', 'dayTheme'].forEach((id) =>
+    ['dayMetric', 'dayCount', 'dayFloor'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
-    ['spotSym', 'spotWin', 'spotProf', 'spotTheme'].forEach((id) =>
+    ['spotSym', 'spotWin', 'spotProf'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'spotlight') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });

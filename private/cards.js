@@ -337,7 +337,7 @@
             const av = advWord(s);
             const label = advOf
               ? `<span class="nm2 stack"><span class="nn">${esc(movLabel(s))}</span>` +
-                (av ? `<span class="av" style="color:${ADV_TINT[av] || 'var(--muted)'}">${esc(av)}</span>` : '') +
+                (av ? `<span class="av" style="color:${pal.tints[av] || 'var(--muted)'}">${esc(av)}</span>` : '') +
                 '</span>'
               : `<span class="nm2">${esc(movLabel(s))}</span>`;
             return `<div class="row">${label}` +
@@ -371,6 +371,9 @@
     // always travels with the rule that produced it, which is the whole
     // difference between this and a tip sheet.
     const ADV_PROFILES = ['Balanced', 'Trend Rider', 'Aggressive', 'Max Risk', 'Dip Buyer'];
+    // The DARK ladder. Read only through pal.tints now (LADDER_LIGHT is its
+    // light counterpart), so no template can print it on a ground it does not
+    // clear — which is what five of them were doing until 2026-09-30.
     const ADV_TINT = {
       'Strong Buy': '#34d399', 'Buy': '#a3e635', 'Buy with Risk': '#fbbf24',
       'Hold': '#9aa3b2', 'Avoid': '#fb923c', 'Sell Immediately': '#fb7185',
@@ -462,7 +465,7 @@
           `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}${esc(prof)} \u00b7 since the last session</span>` +
           '<h2 class="s-title">What changed<br><span class="dim">tonight</span></h2>' +
           `<div style="margin-top:32px">${top.map(([flag, g]) =>
-            `<div class="frule"><span class="fn" style="color:${ADV_TINT[g.action] || 'var(--green)'}">\u00d7${g.n}</span>` +
+            `<div class="frule"><span class="fn" style="color:${pal.tints[g.action] || 'var(--green)'}">\u00d7${g.n}</span>` +
             `<span class="ft">${esc(flag)}<span style="display:block;font-size:18px;font-weight:500;color:var(--faint);margin-top:4px">` +
             `now ${esc(g.action)} \u00b7 ${esc(g.syms.slice(0, 3).map(symOf).join(', '))}${g.syms.length > 3 ? ` +${g.syms.length - 3}` : ''}</span></span>` +
             '</div>').join('')}</div>` +
@@ -486,7 +489,7 @@
           `<h2 class="s-title">${agree ? 'All five<br><span class="dim">agree</span>' : 'Where the rules<br><span class="dim">disagree</span>'}</h2>` +
           `<div style="margin-top:32px">${reads.map((r) =>
             `<div class="pcard"><span class="pn">${esc(r.pn)}</span>` +
-            `<span class="pv" style="color:${ADV_TINT[r.action] || 'var(--text)'}">${esc(r.action)}</span>` +
+            `<span class="pv" style="color:${pal.tints[r.action] || 'var(--text)'}">${esc(r.action)}</span>` +
             `<span class="pw">${esc(r.flag || '')}</span></div>`).join('')}</div>` +
           `<p class="s-sub wide" style="--fs:19px;margin-top:26px">Same stock, same night, five fixed rule sets \u2014 ${agree ? 'and this time they all read it the same way.' : 'and they do not agree. Each names the rule that decided it, so the disagreement is readable rather than mysterious.'}</p>` +
           '</div></div>' + chromeFoot();
@@ -496,7 +499,7 @@
         const want = O.advTier || 'Strong Buy';
         const hits = rows.filter((s) => verdict(s) === want)
           .slice(0, size.id === 'story' ? 11 : size.id === 'square' ? 6 : 8);
-        const tint = ADV_TINT[want] || 'var(--text)';
+        const tint = pal.tints[want] || 'var(--text)';
         const body = hits.length
           ? `<div style="margin-top:32px">${hits.map((s) =>
               `<div class="vrow"><span class="vs">${esc(nameOf(s))}</span>` +
@@ -522,10 +525,10 @@
         `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}${esc(prof)}</span>` +
         '<h2 class="s-title">Where the rules<br><span class="dim">stand tonight</span></h2>' +
         `<div class="abar">${order.map((a, i) => counts[i]
-          ? `<div style="width:${counts[i] / total * 100}%;background:${ADV_TINT[a]}"></div>` : '').join('')}</div>` +
+          ? `<div style="width:${counts[i] / total * 100}%;background:${pal.tints[a]}"></div>` : '').join('')}</div>` +
         `<div class="atally">${order.map((a, i) =>
-          `<div class="arow"><span class="an" style="color:${ADV_TINT[a]}">${esc(a)}</span>` +
-          `<span class="arail"><span class="afill" style="display:block;width:${Math.max(2, counts[i] / max * 100)}%;background:${ADV_TINT[a]}"></span></span>` +
+          `<div class="arow"><span class="an" style="color:${pal.tints[a]}">${esc(a)}</span>` +
+          `<span class="arail"><span class="afill" style="display:block;width:${Math.max(2, counts[i] / max * 100)}%;background:${pal.tints[a]}"></span></span>` +
           `<span class="ac">${counts[i]}</span><span class="ap">${Math.round(counts[i] / total * 100)}%</span></div>`).join('')}</div>` +
         `<p class="s-sub wide" style="--fs:19px;margin-top:28px">${bull} of ${total} clear the buy rules tonight. A reading of the tape by fixed rules \u2014 it says what is, never what is next.</p>` +
         '</div></div>' + chromeFoot();
@@ -784,6 +787,7 @@
       off:   { n: 0 },
       ma50:  { n: 50,  label: '50-day average',  color: '#7c9cff' },
       ma200: { n: 200, label: '200-day average', color: '#fbbf24' },
+      // routed through pal.ink() at the point of use, below
     };
     // What the chart card needs fetched, so the studio and the server's saved-post
     // builder ask for the same thing rather than each guessing. Exported.
@@ -870,96 +874,99 @@
     // recoveryLeg emit presentation ATTRIBUTES as string literals, because
     // that markup also travels through the PNG export. Everything else rides
     // the token block in STYLE, which is most of the card for free.
+    // EVERY DARK SIGNAL COLOUR, AND ITS LIGHT SECOND VALUE (2026-09-30).
+    //
+    // The spotlight's own note said the light theme's token block was "most
+    // of the card for free", and it was — for the spotlight. Extending the
+    // grounds to all thirteen templates found what that missed: 17 distinct
+    // hex LITERALS across 76 uses, emitted as presentation attributes and
+    // inline styles by the chart, the spark line, the verdict ladder, the
+    // bubble tints and the range bands. A CSS variable cannot reach a
+    // literal, and on #f7f8fa they run 1.1:1 to 2.6:1 — invisible rather
+    // than wrong, which is the failure that reads as an empty card.
+    //
+    // So one table rather than 76 decisions. Each light value keeps the dark
+    // one's HUE exactly (solved in HSL, lightness alone moved) and is darkened
+    // until it clears 4.5:1 against the strictest surface a card actually puts
+    // it on — NOT the bare artboard, but the 0.05 ink tint of a filled tile,
+    // which is where the first cut of these values landed at 4.2-4.4. One set
+    // that is safe everywhere beats a set that is safe on the page and
+    // marginal on a tile.
+    const LIGHT_INK = {
+      '#34d399': '#157a51',   // green — up
+      '#fb7185': '#c81e37',   // red — down
+      '#9aa3b2': '#5b6675',   // grey — flat
+      '#fbbf24': '#9d5a07',   // amber — notice this
+      '#a3e635': '#4a770e',   // lime — Buy
+      '#fb923c': '#b44902',   // orange — Avoid
+      '#7c9cff': '#2e5fe8',   // accent
+      '#a78bfa': '#6d3fd4',   // accent-2
+      '#22d3ee': '#0d6c80',   // cyan
+      '#f472b6': '#b81b66',   // pink
+      '#f0abfc': '#9420a0',   // fuchsia
+      '#94a3b8': '#5b6675',   // slate
+      '#60a5fa': '#1d4ed8',   // blue
+      '#e9ecf2': '#0d1017',   // ink — text
+      '#cfd6e2': '#46505f',   // dim ink
+      '#7d8797': '#606b7a',   // axis / faint
+    };
+    // Identity on dark and navy, which is the point: navy is the dark palette
+    // on another ground, so a future edit to a dark literal carries to it with
+    // no second entry to keep in step. An unmapped colour is returned as it
+    // is rather than guessed at — the sweep is what finds those.
+    const inkFor = (map) => (hex) => (map && map[hex]) || hex;
     const LADDER_LIGHT = {
-      'Strong Buy': '#157a51', 'Buy': '#4d7c0f', 'Buy with Risk': '#a15c07',
-      'Hold': '#5b6675', 'Avoid': '#bd4d02', 'Sell Immediately': '#c81e37',
+      'Strong Buy': '#157a51', 'Buy': '#4a770e', 'Buy with Risk': '#9d5a07',
+      'Hold': '#5b6675', 'Avoid': '#b44902', 'Sell Immediately': '#c81e37',
     };
     const THEMES = {
       dark: {
-        cls: '',
+        cls: '', ground: '#050505',
         up: '#34d399', down: '#fb7185', flat: '#9aa3b2',
         grid: 'rgba(255,255,255,0.07)', zero: 'rgba(255,255,255,0.2)',
         axis: '#7d8797',
         legUp: 'rgba(52,211,153,0.55)', legDown: 'rgba(251,113,133,0.55)',
-        tints: ADV_TINT,
+        washUp: 'rgba(52,211,153,0.13)', washDown: 'rgba(251,113,133,0.13)',
+        tints: ADV_TINT, ink: inkFor(null),
       },
       light: {
-        cls: 'th-light',
-        up: '#157a51', down: '#c81e37', flat: '#64707f',
+        cls: 'th-light', ground: '#f7f8fa',
+        up: '#157a51', down: '#c81e37', flat: '#5b6675',
         grid: 'rgba(13,16,23,0.10)', zero: 'rgba(13,16,23,0.28)',
-        axis: '#64707f',
+        axis: '#606b7a',
         legUp: 'rgba(21,122,81,0.45)', legDown: 'rgba(200,30,55,0.45)',
-        tints: LADDER_LIGHT,
+        washUp: 'rgba(21,122,81,0.14)', washDown: 'rgba(200,30,55,0.13)',
+        tints: LADDER_LIGHT, ink: inkFor(LIGHT_INK),
       },
       // Navy is the dark palette on a different ground, deliberately — every
       // value below is dark's, and the only entries that exist at all are the
       // class and the tints, so a future edit to the dark palette carries.
       navy: {
-        cls: 'th-navy',
+        cls: 'th-navy', ground: '#0d1a2d',
         up: '#34d399', down: '#fb7185', flat: '#9aa3b2',
         grid: 'rgba(255,255,255,0.07)', zero: 'rgba(255,255,255,0.2)',
         axis: '#8b95a5',
         legUp: 'rgba(52,211,153,0.55)', legDown: 'rgba(251,113,133,0.55)',
-        tints: ADV_TINT,
+        washUp: 'rgba(52,211,153,0.13)', washDown: 'rgba(251,113,133,0.13)',
+        tints: ADV_TINT, ink: inkFor(null),
       },
-      // ---- the six on trial (2026-09-30, owner: "add all these only on the
-      // day template so that I can see how it all looks") -------------------
-      //
-      // EVERY ONE IS DARK, AND THAT IS WHY THEY COST AN HOUR RATHER THAN A
-      // DAY. Measured against all seven palette colours before any was drawn:
-      // on every dark ground here the whole palette clears 4.5:1 and NOTHING
-      // moves, where the same palette on #f7f8fa fails all seven (green 1.8,
-      // amber 1.6). So each of these is a ground and an aura; they inherit
-      // dark's values wholesale, and a later edit to the dark palette carries
-      // to all of them.
-      //
-      // NONE IS ANALOGOUS TO A SIGNAL COLOUR. Green is up, red is down, amber
-      // is "notice this" — a ground in any of those hues fights the one thing
-      // the card's colours have to mean, which rules out most of what "make
-      // it colourful" would otherwise suggest.
-      ink: { cls: 'th-ink', axis: '#8b9099' },
-      aubergine: { cls: 'th-aubergine', axis: '#8f8aa5' },
-      petrol: { cls: 'th-petrol', axis: '#85959a' },
-      oxide: { cls: 'th-oxide', axis: '#8891a5' },
-      duotone: { cls: 'th-duotone', axis: '#8f8aa5' },
-      chrome: { cls: 'th-chrome', axis: '#7d8797' },
     };
-    // The six above are written as a ground plus one lifted token, so fill in
-    // the rest of the dark palette rather than restating it six times — a copy
-    // is a thing to forget when the dark palette next moves.
-    for (const k of ['ink', 'aubergine', 'petrol', 'oxide', 'duotone', 'chrome']) {
-      THEMES[k] = Object.assign({}, THEMES.dark, THEMES[k]);
-    }
-
-    // WHICH GROUNDS A TEMPLATE MAY USE, enforced here rather than only by
-    // which options the markup happens to offer. "Only on the day template"
-    // is then true of the module: a spotlight post carrying `spotTheme: 'ink'`
-    // falls back to dark rather than quietly rendering a ground that card has
-    // never been checked on.
-    const THEME_SET = {
-      spotlight: ['dark', 'light', 'navy'],
-      day: ['dark', 'light', 'navy', 'ink', 'aubergine', 'petrol', 'oxide', 'duotone', 'chrome'],
-    };
-    let pal = THEMES.dark;
-    // WHICH CLASSES THE ARTBOARD NEEDS IS THE MODULE'S QUESTION, NOT A HOST'S.
-    // The builder returns inner HTML only, so the ground lives on a class the
-    // HOST puts on `.s-art` — and there are THREE such places: the studio's
-    // stage, the phone's post sheet and the phone's off-screen rasterise
-    // stage. Left to each host to derive, a saved light post draws a light
-    // chart on a black ground, silently. The `basketDays` lesson: one
-    // pairing, asked of the module.
+    // ONE GROUND FOR EVERY CARD (2026-09-30, owner: "Only 3 colors, Dark,
+    // Light and Navy... Can you add these all promo cards"). This is the
+    // generalisation the spotlight's note predicted.
     //
-    // ONE PAIRING, ASKED OF THE MODULE — the same shape as `basketDays`. Each
-    // themed template keeps its ground under its OWN control id, so a reader
-    // who set the spotlight to navy does not silently change the day card
-    // too. A hardcoded `opts.spotTheme` worked while one card was themed and
-    // would have read the wrong control the moment a second was.
-    const THEME_KEY = { spotlight: 'spotTheme', day: 'dayTheme' };
+    // A LEGACY KEY BELONGS TO THE TEMPLATE IT WAS SAVED FOR. The two keys
+    // that preceded the shared one are still read, because saved posts carry
+    // them and a stored post must not lose its ground to a rename — but read
+    // unconditionally they cross-talk: a day post carrying dayTheme opened on
+    // the spotlight would colour the spotlight, which is a ground nobody
+    // chose for it. Caught by the day suite's own independence checks, which
+    // were asserting the previous behaviour and were right to fail.
+    const LEGACY_KEY = { spotlight: 'spotTheme', day: 'dayTheme' };
     const themeOf = (tpl, opts) => {
-      const want = (opts || {})[THEME_KEY[tpl]];
-      const allowed = THEME_SET[tpl];
-      if (!want || !allowed || allowed.indexOf(want) < 0) return THEMES.dark;
-      return THEMES[want] || THEMES.dark;
+      const o = opts || {};
+      const legacy = LEGACY_KEY[tpl];
+      return THEMES[o.cardTheme || (legacy && o[legacy])] || THEMES.dark;
     };
 
     const CHART_PALETTE = ['#34d399', '#22d3ee', '#a78bfa', '#fbbf24', '#fb923c',
@@ -1063,7 +1070,7 @@
       // Green up, red down — a single line about a single stock, where the
       // direction IS the story. The table's sparkline stays neutral for the
       // opposite reason: five coloured columns already sit beside it.
-      const colour = move >= 0 ? '#34d399' : '#fb7185';
+      const colour = move >= 0 ? pal.up : pal.down;
       const win = esc(c.rangeLabel || 'this window');
       const name = esc(c.name || c.symbol);
       const sym = esc(c.symbol);
@@ -1121,16 +1128,17 @@
         // the y-scale toward the middle so the stock's own shape read flatter
         // than it is. The other two chart modes still carry it, where a
         // comparison is the point.
-        lines = [{ color: '#34d399', S, width: 4, fill: true }];
-        legend = [{ color: '#34d399', label: esc(sym) }];
+        lines = [{ color: pal.up, S, width: 4, fill: true }];
+        legend = [{ color: pal.up, label: esc(sym) }];
         note = 'Price only, rebased to the start of the window \u2014 no dividends, no positions.';
         const ma = CHART_MAS[O.chtMa];
         if (ma && ma.n) {
           const need = chartHistoryNeed(O);
           const MS = maSeries(getHistory(sym, need ? need.days : days + ma.n), d.dates, ma.n);
           if (MS) {
-            lines.push({ color: ma.color, S: MS, width: 2.5 });
-            legend.push({ color: ma.color, label: ma.label });
+            const mc = pal.ink(ma.color);
+            lines.push({ color: mc, S: MS, width: 2.5 });
+            legend.push({ color: mc, label: ma.label });
             // Said out loud, because a reader could reasonably assume the
             // average is computed only from what is on screen \u2014 in which case
             // it would start well to the right of the left edge.
@@ -1150,8 +1158,9 @@
           .sort((a, b) => b.end - a.end)
           .slice(0, n);
         if (!ranked.length) return chromeTop() + `<div class="s-body"><div><p class="s-empty">Nothing in ${esc(scope.label)} has history for this window.</p></div></div>` + chromeFoot();
-        lines = ranked.map((r, i) => ({ color: CHART_PALETTE[i % CHART_PALETTE.length], S: r.S, width: 3 }));
-        legend = ranked.map((r, i) => ({ color: CHART_PALETTE[i % CHART_PALETTE.length], label: `${r.sym} ${pct(r.end)}` }));
+        const cp = (i) => pal.ink(CHART_PALETTE[i % CHART_PALETTE.length]);
+        lines = ranked.map((r, i) => ({ color: cp(i), S: r.S, width: 3 }));
+        legend = ranked.map((r, i) => ({ color: cp(i), label: `${r.sym} ${pct(r.end)}` }));
         kick = `${esc(scope.label)} \u00b7 ${esc(winLabel)}`;
         title = `The leaders<br><span class="dim">${esc(scope.label)}</span>`;
         note = 'Each line is one stock, rebased to the start of the window. Ranked on the window, not a forecast.';
@@ -1161,10 +1170,11 @@
         if (!basket) return chromeTop() + `<div class="s-body"><div><p class="s-empty">Nothing in ${esc(scope.label)} has history for this window.</p></div></div>` + chromeFoot();
         const all = mean(stocks.map((r) => r.symbol));
         const same = O.chtScope === 'All';
-        lines = same ? [{ color: '#34d399', S: basket, width: 4, fill: true }]
-          : [{ color: '#34d399', S: basket, width: 4, fill: true }, { color: '#7c9cff', S: all, width: 2, dim: true }];
-        legend = same ? [{ color: '#34d399', label: 'All screened' }]
-          : [{ color: '#34d399', label: esc(scope.label) }, { color: '#7c9cff', label: 'All screened' }];
+        const acc = pal.ink('#7c9cff');
+        lines = same ? [{ color: pal.up, S: basket, width: 4, fill: true }]
+          : [{ color: pal.up, S: basket, width: 4, fill: true }, { color: acc, S: all, width: 2, dim: true }];
+        legend = same ? [{ color: pal.up, label: 'All screened' }]
+          : [{ color: pal.up, label: esc(scope.label) }, { color: acc, label: 'All screened' }];
         kick = `${esc(scope.label)} \u00b7 ${esc(winLabel)}`;
         title = same ? `The whole<br><span class="dim">screen</span>`
           : `${esc(scope.label)}<br><span class="dim">vs the whole screen</span>`;
@@ -1280,11 +1290,11 @@
       // ---- the spread: how the whole list is distributed through its ranges
       if (mode === 'spread') {
         const bands = [
-          ['Top fifth \u2014 at the highs', 80, 100, '#34d399'],
-          ['Upper middle', 60, 80, '#a3e635'],
-          ['Middle', 40, 60, '#9aa3b2'],
-          ['Lower middle', 20, 40, '#fb923c'],
-          ['Bottom fifth \u2014 at the lows', 0, 20, '#fb7185'],
+          ['Top fifth \u2014 at the highs', 80, 100, pal.ink('#34d399')],
+          ['Upper middle', 60, 80, pal.ink('#a3e635')],
+          ['Middle', 40, 60, pal.ink('#9aa3b2')],
+          ['Lower middle', 20, 40, pal.ink('#fb923c')],
+          ['Bottom fifth \u2014 at the lows', 0, 20, pal.ink('#fb7185')],
         ];
         const total = rows.length;
         const counts = bands.map(([, lo, hi]) =>
@@ -1360,7 +1370,7 @@
         `<h2 class="s-title">${title}</h2>` +
         `<div class="tracks">${list.map((x) => {
           const p = Math.max(0, Math.min(100, x.range52Pos));
-          const tint = p >= 66 ? '#34d399' : p >= 33 ? '#fbbf24' : '#fb7185';
+          const tint = p >= 66 ? pal.up : p >= 33 ? pal.ink('#fbbf24') : pal.down;
           const leg = recoveryLeg(x, p);
           return '<div class="trk">' +
             `<span class="ts">${esc(nameOf(x))}</span>` +
@@ -1398,8 +1408,13 @@
       pts.forEach((p, k) => { d += (k ? 'L' : 'M') + x(p[0]).toFixed(1) + ' ' + y(p[1]).toFixed(1); });
       const area = d + `L${x(pts[pts.length - 1][0]).toFixed(1)} ${H - P}L${x(pts[0][0]).toFixed(1)} ${H - P}Z`;
       const zero = (lo < 0 && hi > 0)
-        ? `<line x1="0" y1="${y(0).toFixed(1)}" x2="${W}" y2="${y(0).toFixed(1)}" stroke="rgba(255,255,255,0.13)" stroke-width="1"/>` : '';
-      const wash = color === '#34d399' ? 'rgba(52,211,153,0.13)' : 'rgba(251,113,133,0.13)';
+        ? `<line x1="0" y1="${y(0).toFixed(1)}" x2="${W}" y2="${y(0).toFixed(1)}" stroke="${pal.zero}" stroke-width="1"/>` : '';
+      // COMPARE AGAINST THE PALETTE, NOT THE LITERAL. This read `color ===
+      // '#34d399'`, which is exactly the kind of test that survives routing
+      // and quietly stops being true: on the light ground the line is
+      // #157a51, so every spark — rising or falling — would have taken the
+      // red wash while looking perfectly fine at a glance.
+      const wash = color === pal.up ? pal.washUp : pal.washDown;
       return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` + zero +
         `<path d="${area}" fill="${wash}" stroke="none"/>` +
         `<path class="cl" d="${d}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
@@ -1439,7 +1454,7 @@
         `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 ${esc(winLabel)}</span>` +
         `<h2 class="s-title">${best ? 'The leaders' : 'The laggards'}<br><span class="dim">${esc(winLabel)}</span></h2>` +
         `<div class="spk" style="grid-template-columns:repeat(${cols},1fr)">${items.map((it) => {
-          const color = it.end >= 0 ? '#34d399' : '#fb7185';
+          const color = it.end >= 0 ? pal.up : pal.down;
           return '<div class="spkt">' +
             `<div class="sh"><span class="ss">${esc(it.label || it.sym)}</span>` +
             `<span class="sv ${it.end >= 0 ? 'pos' : 'neg'}">${pct(it.end)}</span></div>` +
@@ -1527,8 +1542,8 @@
       const rows = scope.rows;
       const bands = [
         ['Profitable', (x) => x.netIncomeTtm != null && x.netIncomeTtm > 0, 'var(--green)', 'netIncomeTtm'],
-        ['Cash generative', (x) => x.fcfTtm != null && x.fcfTtm > 0, '#a3e635', 'fcfTtm'],
-        ['More cash than debt', (x) => x.netCash != null && x.netCash > 0, '#22d3ee', 'netCash'],
+        ['Cash generative', (x) => x.fcfTtm != null && x.fcfTtm > 0, pal.ink('#a3e635'), 'fcfTtm'],
+        ['More cash than debt', (x) => x.netCash != null && x.netCash > 0, pal.ink('#22d3ee'), 'netCash'],
         ['Gross margin over 50%', (x) => x.grossMargin != null && x.grossMargin > 50, 'var(--accent-2)', 'grossMargin'],
         ['Growing revenue', (x) => x.revenueGrowthYoY != null && x.revenueGrowthYoY > 0, 'var(--amber)', 'revenueGrowthYoY'],
       ];
@@ -1672,7 +1687,8 @@
     const isNamed = new Set(named.map((p) => p.sym));
     const dots = pts.map((p) => {
       const s2 = stray(p);
-      const c = s2 ? '#fbbf24' : (p.x > 0 && p.y > 0) ? '#34d399' : (p.y <= 0) ? '#fb7185' : '#7c9cff';
+      const c = s2 ? pal.ink('#fbbf24') : (p.x > 0 && p.y > 0) ? pal.up
+        : (p.y <= 0) ? pal.down : pal.ink('#7c9cff');
       return `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="${isNamed.has(p.sym) ? 9 : 6.5}" fill="${c}" opacity="${s2 ? 1 : 0.72}"/>`;
     }).join('');
     // A name is many times wider than a ticker, so a label on a dot in the
@@ -1682,19 +1698,19 @@
       const cx = X(p.x), right = cx > PL + (W - PL - PR) * 0.55;
       const full = p.label || p.sym;
       const txt = full.length > 22 ? full.slice(0, 21) + '…' : full;
-      return `<text x="${(cx + (right ? -13 : 13)).toFixed(1)}" y="${(Y(p.y) + 6).toFixed(1)}" text-anchor="${right ? 'end' : 'start'}" font-size="18" font-weight="600" fill="#e9ecf2" font-family="Geist, sans-serif">${esc(txt)}</text>`;
+      return `<text x="${(cx + (right ? -13 : 13)).toFixed(1)}" y="${(Y(p.y) + 6).toFixed(1)}" text-anchor="${right ? 'end' : 'start'}" font-size="18" font-weight="600" fill="${pal.ink('#e9ecf2')}" font-family="Geist, sans-serif">${esc(txt)}</text>`;
     }).join('');
     const quad = (tx, ty, anchor, text, tint) =>
       `<text x="${tx}" y="${ty}" text-anchor="${anchor}" font-size="18" font-weight="600" fill="${tint}" font-family="Geist, sans-serif" opacity="0.85">${esc(text)}</text>`;
     return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:26px" role="img" aria-label="growth against margin">` +
-      `<rect x="${zx}" y="${PT}" width="${W - PR - zx}" height="${zy - PT}" fill="rgba(52,211,153,0.05)"/>` +
+      `<rect x="${zx}" y="${PT}" width="${W - PR - zx}" height="${zy - PT}" fill="${pal.washUp}"/>` +
       `<line x1="${PL}" y1="${zy.toFixed(1)}" x2="${W - PR}" y2="${zy.toFixed(1)}" stroke="rgba(255,255,255,0.22)"/>` +
       `<line x1="${zx.toFixed(1)}" y1="${PT}" x2="${zx.toFixed(1)}" y2="${H - PB}" stroke="rgba(255,255,255,0.22)"/>` +
       dots + labels +
-      quad(W - PR - 8, PT + 24, 'end', `growing & profitable \u00b7 ${q.gp}`, '#34d399') +
-      quad(W - PR - 8, H - PB - 12, 'end', `growing & losing \u00b7 ${q.gl}`, '#fb7185') +
-      quad(PL + 8, PT + 24, 'start', `shrinking & profitable \u00b7 ${q.sp}`, '#7c9cff') +
-      quad(PL + 8, H - PB - 12, 'start', `shrinking & losing \u00b7 ${q.sl}`, '#94a3b8') +
+      quad(W - PR - 8, PT + 24, 'end', `growing & profitable \u00b7 ${q.gp}`, pal.up) +
+      quad(W - PR - 8, H - PB - 12, 'end', `growing & losing \u00b7 ${q.gl}`, pal.down) +
+      quad(PL + 8, PT + 24, 'start', `shrinking & profitable \u00b7 ${q.sp}`, pal.ink('#7c9cff')) +
+      quad(PL + 8, H - PB - 12, 'start', `shrinking & losing \u00b7 ${q.sl}`, pal.ink('#94a3b8')) +
       `<text x="${W - PR}" y="${H - 16}" text-anchor="end" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">revenue growth \u2192</text>` +
       `<text x="20" y="${PT + 14}" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">\u2191 profit margin</text>` +
       '</svg>';
@@ -2445,9 +2461,9 @@
 
     const sectors = [...new Set(pts.map((p) => p.sector))].sort();
     const colorOf = (p) => {
-      if (colorBy === 'none') return '#7c9cff';
-      if (colorBy === 'advice') return (p.action && ADV_TINT[p.action]) || '#9aa3b2';
-      return BUB_SECTOR_TINTS[sectors.indexOf(p.sector) % BUB_SECTOR_TINTS.length];
+      if (colorBy === 'none') return pal.ink('#7c9cff');
+      if (colorBy === 'advice') return (p.action && pal.tints[p.action]) || pal.flat;
+      return pal.ink(BUB_SECTOR_TINTS[sectors.indexOf(p.sector) % BUB_SECTOR_TINTS.length]);
     };
 
     // A CIRCLE IS NOT A DOT: it has a radius, and pinning a stray puts its
@@ -2527,10 +2543,10 @@
         const dy = val ? -3 : 6;
         if (!fits(cx, cy + dy, Math.max(txt.length * 10, val.length * 9))) return '';
         return '<text x="' + cx.toFixed(1) + '" y="' + (cy + dy).toFixed(1) + '" text-anchor="middle" '
-          + 'font-size="19" font-weight="600" fill="#e9ecf2" font-family="Geist, sans-serif">'
+          + 'font-size="19" font-weight="600" fill="' + pal.ink('#e9ecf2') + '" font-family="Geist, sans-serif">'
           + esc(txt) + '</text>'
           + (val ? '<text x="' + cx.toFixed(1) + '" y="' + (cy + dy + 21).toFixed(1)
-            + '" text-anchor="middle" font-size="17" fill="#cfd6e2" '
+            + '" text-anchor="middle" font-size="17" fill="' + pal.ink('#cfd6e2') + '" '
             + 'font-family="Geist Mono, monospace">' + esc(val) + '</text>' : '');
       }
       const txt = full.length > 18 ? full.slice(0, 17) + '…' : full;
@@ -2544,7 +2560,7 @@
       if (!fits(cx, ly, Math.max(txt.length * 9, val.length * 9))) return '';
       return '<text x="' + cx.toFixed(1) + '" y="' + ly.toFixed(1)
         + '" text-anchor="middle" font-size="17" font-weight="600" '
-        + 'fill="#cfd6e2" font-family="Geist, sans-serif">' + esc(txt) + '</text>'
+        + 'fill="' + pal.ink('#cfd6e2') + '" font-family="Geist, sans-serif">' + esc(txt) + '</text>'
         + (val ? '<text x="' + cx.toFixed(1) + '" y="' + (ly + 20).toFixed(1)
           + '" text-anchor="middle" font-size="16" fill="#9aa3b2" '
           + 'font-family="Geist Mono, monospace">' + esc(val) + '</text>' : '');
@@ -2571,7 +2587,7 @@
         ? '<span class="bkey">colour: the Balanced verdict</span>'
         : sectors.slice(0, 6).map((s, i) =>
           '<span class="bkey"><i style="background:'
-          + BUB_SECTOR_TINTS[i % BUB_SECTOR_TINTS.length] + '"></i>' + esc(s) + '</span>').join(''));
+          + pal.ink(BUB_SECTOR_TINTS[i % BUB_SECTOR_TINTS.length]) + '"></i>' + esc(s) + '</span>').join(''));
 
     return chromeTop()
       + '<div class="s-body"><div><span class="s-kick">' + esc(scope.label) + ' · reported figures</span>'
@@ -2612,7 +2628,8 @@
        third (2026-09-16) — so it moved here, beside the cards it holds. Only
        the studio and the phone host it now. A host sets the height,
        which is the one thing that follows the chosen size. */
-    .s-art { width: 1080px; position: relative; overflow: hidden; background: #050505;
+    .s-art { width: 1080px; position: relative; overflow: hidden;
+             --card-ground: #050505; background: var(--card-ground);
              transform-origin: top left; font-family: var(--sans); color: var(--text); }
     .s-art .s-aura { position: absolute; inset: 0; pointer-events: none;
       background:
@@ -2757,12 +2774,18 @@
        they are done one at a time.
        (No backticks in here. STYLE is a template literal and one inside a
        CSS comment ends the string.) */
+    /* Every value here clears 4.5:1 against a FILLED TILE (the 0.05 ink
+       tint), not merely against the artboard. The first cut was tuned on the
+       bare page at 4.68-4.99 and the sweep then caught --faint at 4.28 inside
+       a spotlight cell: a token that is safe on the ground and marginal on the
+       furniture is a token that fails wherever a card happens to put it. */
     .s-art.th-light {
-      --text: #0d1017; --muted: #5b6675; --faint: #64707f;
-      --green: #157a51; --red: #c81e37; --amber: #a15c07;
-      --accent: #3060e8; --accent-2: #6d3fd4;
+      --card-ground: #f7f8fa;
+      --text: #0d1017; --muted: #5b6675; --faint: #606b7a;
+      --green: #157a51; --red: #c81e37; --amber: #9d5a07;
+      --accent: #2e5fe8; --accent-2: #6d3fd4;
       --hair: rgba(13, 16, 23, 0.10); --hair-2: rgba(13, 16, 23, 0.17);
-      background: #f7f8fa; color: #0d1017; }
+      background: var(--card-ground); color: #0d1017; }
     /* Three blooms of coloured light are atmosphere on black and stains on
        white, so the light ground gets two at a tenth of the alpha. */
     .s-art.th-light .s-aura {
@@ -2775,6 +2798,36 @@
     .s-art.th-light .sp-head { border-bottom-color: rgba(13, 16, 23, 0.14); }
     .s-art.th-light .sp-cell { background: rgba(13, 16, 23, 0.05); }
     .s-art.th-light .sp-verd { background: rgba(13, 16, 23, 0.035); }
+    /* EVERY OTHER CARD'S white-alpha furniture (2026-09-30, owner: "add
+       these all promo cards"). Found by sweeping all thirteen templates on
+       the light ground and flagging any surface that composites to within a
+       hair of it — an un-overridden one is INVISIBLE rather than wrong, so
+       the eye finds it only by noticing an absence. The .trail rule is the
+       one deleted when the spotlight lost its 52-week track; the Range card
+       draws it, so it comes back for that card rather than on a hunch.
+       (NO BACKTICKS IN HERE. This comment had a pair round a class name and
+       they ended the STYLE template literal — the third time this trap has
+       bitten, and node --check passes every time because it is valid syntax,
+       just an interpolation.) */
+    .s-art.th-light .bar-rail { background: rgba(13, 16, 23, 0.06); }
+    .s-art.th-light .arail { background: rgba(13, 16, 23, 0.06); }
+    .s-art.th-light .trail { background: rgba(13, 16, 23, 0.07); }
+    .s-art.th-light .chipL { background: rgba(13, 16, 23, 0.05); }
+    .s-art.th-light .spkt { background: rgba(13, 16, 23, 0.045); }
+    /* The tile fills, at 0.022-0.03 on dark. They read on a light ground only
+       because each also carries a --hair border, which the token already
+       flips — but a fill nobody can see is still a fill nobody can see. */
+    .s-art.th-light .frule,
+    .s-art.th-light .pcard,
+    .s-art.th-light .vrow,
+    .s-art.th-light .stmt,
+    .s-art.th-light .ftile { background: rgba(13, 16, 23, 0.035); }
+    .s-art.th-light .mock { background: rgba(13, 16, 23, 0.04); }
+    .s-art.th-light .mockrow { background: rgba(13, 16, 23, 0.045); }
+    .s-art.th-light .flowrow .fv { background: rgba(13, 16, 23, 0.055); }
+    /* A pale dot on a pale ground is not a dot. */
+    .s-art.th-light .dots i { background: rgba(13, 16, 23, 0.20); }
+
     /* The day card's own white-alpha furniture. Three surfaces and two bar
        gradients: invisible rather than wrong on a light ground, which is the
        failure that reads as an empty card. The gradient's soft end is the
@@ -2796,88 +2849,13 @@
        6.5, amber 10.5), so nothing else has to move and the white-alpha
        furniture keeps working. --faint alone is lifted: it landed at 4.81,
        the closest to the floor, and it paints the smallest text on the card. */
-    .s-art.th-navy { --faint: #8b95a5; background: #0d1a2d; }
+    .s-art.th-navy { --faint: #8b95a5; --card-ground: #0d1a2d;
+                     background: var(--card-ground); }
     .s-art.th-navy .s-aura {
       background:
         radial-gradient(72% 52% at 6% -6%, rgba(52, 211, 153, 0.13), transparent 64%),
         radial-gradient(78% 56% at 100% 2%, rgba(124, 156, 255, 0.17), transparent 66%),
         radial-gradient(62% 42% at 50% 110%, rgba(34, 211, 238, 0.10), transparent 72%); }
-
-    /* ---- the six on trial, day card only -------------------------------
-       Each is a GROUND and an AURA and nothing else: the dark palette clears
-       4.5:1 on every one of them, measured before any was drawn, so no hue
-       has to be re-valued the way the light theme's seven were. The white-
-       alpha furniture works unchanged for the same reason.
-       (No backticks in here. STYLE is a template literal.) */
-
-    /* INK — warm near-black. Editorial print rather than terminal; the
-       quietest of the six, for when the data should lead. */
-    .s-art.th-ink { --faint: #8b9099; background: #16120f; }
-    .s-art.th-ink .s-aura {
-      background:
-        radial-gradient(70% 50% at 6% -6%, rgba(251, 191, 36, 0.10), transparent 64%),
-        radial-gradient(76% 54% at 100% 2%, rgba(251, 113, 133, 0.09), transparent 66%),
-        radial-gradient(60% 40% at 50% 110%, rgba(255, 214, 170, 0.05), transparent 72%); }
-
-    /* AUBERGINE — the one that stops a scroll. Deep navy is the fintech
-       default, so violet is the least expected ground available that still
-       leaves green and red to mean what they mean. */
-    .s-art.th-aubergine { --faint: #8f8aa5; background: #171029; }
-    .s-art.th-aubergine .s-aura {
-      background:
-        radial-gradient(72% 52% at 6% -6%, rgba(167, 139, 250, 0.20), transparent 64%),
-        radial-gradient(78% 56% at 100% 2%, rgba(236, 72, 153, 0.13), transparent 66%),
-        radial-gradient(62% 42% at 50% 110%, rgba(124, 156, 255, 0.10), transparent 72%); }
-
-    /* PETROL — deep teal. Clears 9.3:1 on green and still reads slightly
-       muted, because a teal ground sits PERCEPTUALLY beside the up-signal in
-       a way a contrast ratio cannot see. Kept so that can be judged by eye. */
-    .s-art.th-petrol { --faint: #85959a; background: #071a1e; }
-    .s-art.th-petrol .s-aura {
-      background:
-        radial-gradient(72% 52% at 6% -6%, rgba(34, 211, 238, 0.16), transparent 64%),
-        radial-gradient(78% 56% at 100% 2%, rgba(52, 211, 153, 0.11), transparent 66%),
-        radial-gradient(62% 42% at 50% 110%, rgba(124, 156, 255, 0.09), transparent 72%); }
-
-    /* OXIDE — desaturated indigo, and close enough to navy that it may prove
-       to be a theme without a look. On trial to settle exactly that. */
-    .s-art.th-oxide { --faint: #8891a5; background: #111524; }
-    .s-art.th-oxide .s-aura {
-      background:
-        radial-gradient(72% 52% at 6% -6%, rgba(124, 156, 255, 0.18), transparent 64%),
-        radial-gradient(78% 56% at 100% 2%, rgba(167, 139, 250, 0.14), transparent 66%),
-        radial-gradient(62% 42% at 50% 110%, rgba(34, 211, 238, 0.08), transparent 72%); }
-
-    /* DUOTONE — a directional wash rather than three soft blooms, which is
-       what makes it read differently at feed size where a flat card reads as
-       one block of colour. BOTH ENDS HAD TO CLEAR, and the lighter one
-       decides: the plum corner is the lightest point at 4.9:1. */
-    .s-art.th-duotone {
-      --faint: #8f8aa5;
-      background: linear-gradient(145deg, #0b0d2b 0%, #150f26 52%, #1d0b24 100%); }
-    .s-art.th-duotone .s-aura {
-      background:
-        radial-gradient(64% 44% at 88% 8%, rgba(236, 72, 153, 0.13), transparent 68%),
-        radial-gradient(58% 40% at 8% 96%, rgba(34, 211, 238, 0.10), transparent 70%); }
-
-    /* ACCENT CHROME — the ground stays near-black and the FURNITURE takes a
-       hue: the kicker, the wordmark tile, the block heads and their rules.
-       THE SIGNALS ARE UNTOUCHED, which is the whole discipline of it — the
-       values stay green and red, so the card gains a character without any
-       number changing what it means. Cyan is chosen because it is the one
-       bright hue in this palette that is not already spent on a meaning. */
-    .s-art.th-chrome { --faint: #7d8797; background: #070708; }
-    .s-art.th-chrome .s-aura {
-      background:
-        radial-gradient(74% 52% at 6% -6%, rgba(34, 211, 238, 0.16), transparent 64%),
-        radial-gradient(70% 50% at 100% 4%, rgba(124, 156, 255, 0.10), transparent 68%); }
-    .s-art.th-chrome .s-kick { color: #22d3ee; }
-    .s-art.th-chrome .dy-head { color: #22d3ee; border-bottom-color: rgba(34, 211, 238, 0.30); }
-    .s-art.th-chrome .dy-head.pos { color: var(--green); }
-    .s-art.th-chrome .dy-head.neg { color: var(--red); }
-    .s-art.th-chrome .s-glyph {
-      background: linear-gradient(160deg, rgba(34, 211, 238, 0.30), rgba(34, 211, 238, 0.08));
-      border-color: rgba(34, 211, 238, 0.45); color: #22d3ee; }
 
     /* ---- the stock spotlight ------------------------------------------
        One company on one artboard: the line, its year, eight figures and the
@@ -3326,7 +3304,7 @@
                   transform: translate(-50%, -50%); border-radius: 2px;
                   background: rgba(255, 255, 255, 0.5); }
     .trk .tdot { position: absolute; top: 50%; width: 22px; height: 22px; border-radius: 50%;
-                 transform: translate(-50%, -50%); border: 3px solid #050505; }
+                 transform: translate(-50%, -50%); border: 3px solid var(--card-ground, #050505); }
     .trk .tlo { font: 600 21px var(--mono); text-align: right; color: var(--green); }
     .trk .thi { font: 600 21px var(--mono); text-align: right; color: var(--red); }
     .tkey { display: flex; justify-content: space-between; margin-top: 16px;
@@ -3434,7 +3412,13 @@
                   place-items: center; }
     .avGlow { position: absolute; width: 76%; aspect-ratio: 1; border-radius: 50%;
               background: radial-gradient(circle, rgba(52, 211, 153, 0.22), transparent 62%); }
-    .avMark { position: relative; width: 46%; height: 46%; stroke: #34d399; fill: none;
+    /* THE MARK IS THE ONE HARDCODED SIGNAL COLOUR IN THIS STYLESHEET, and a
+       token override cannot reach a literal: #34d399 is 1.8:1 on the light
+       ground, so the whole card was a faint smudge there. It is the token
+       now, which is byte-identical on dark and navy (both #34d399) and the
+       darkened #157a51 on light. The sweep could not see it either — that
+       instrument reads backgrounds and borders, and this is a STROKE. */
+    .avMark { position: relative; width: 46%; height: 46%; stroke: var(--green); fill: none;
               stroke-width: 1.45; stroke-linecap: round; stroke-linejoin: round;
               filter: drop-shadow(0 0 26px rgba(52, 211, 153, 0.5)); }
 
