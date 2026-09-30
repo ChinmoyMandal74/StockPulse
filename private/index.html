@@ -388,6 +388,38 @@
     td.news.nw-fresh .nw-n { color: var(--accent); border-color: rgba(124, 156, 255, 0.4); }
     td.news .nw-none { color: var(--faint); opacity: 0.5; }
     td.news:hover .nw-age, td.news:hover .nw-none { color: var(--text); }
+    /* The find box. `.ic` inside it is the app's own sprite glyph, sized
+       down: the icon is the affordance, since a bare input in a bar full of
+       pills does not read as a search. */
+    .find { position: relative; display: inline-flex; align-items: center; gap: 7px;
+            padding: 0 11px 0 10px; height: 34px; border-radius: 999px;
+            border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+            transition: border-color 0.2s var(--ease), background 0.2s var(--ease); }
+    .find:focus-within { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.07); }
+    .find .ic { width: 15px; height: 15px; color: var(--faint); flex: none; }
+    .find:focus-within .ic { color: var(--muted); }
+    /* A FIXED width, and it does not grow on focus. The bar is a flex row
+       that already wraps; an input that widened when clicked would reflow
+       every control after it and can push the bar onto another row at the
+       moment of use, which is the worst possible moment. */
+    #findInput { width: 132px; border: 0; background: none; outline: none; padding: 0;
+                 color: var(--text); font: 500 12.5px var(--sans); }
+    #findInput::placeholder { color: var(--faint); }
+    #findInput::-webkit-search-cancel-button { display: none; }
+    #findMenu { position: fixed; z-index: var(--z-tip); width: min(320px, calc(100vw - 24px));
+                max-height: min(52vh, 420px); overflow: auto; border-radius: 14px;
+                border: 1px solid var(--hair-2); background: rgba(10, 12, 17, 0.97);
+                backdrop-filter: blur(24px); box-shadow: 0 30px 80px -24px rgba(0, 0, 0, 0.95);
+                padding: 6px; }
+    #findMenu .fi { display: flex; align-items: baseline; gap: 9px; width: 100%;
+                    padding: 7px 9px; border-radius: 9px; cursor: pointer;
+                    text-decoration: none; color: inherit; }
+    #findMenu .fi:hover, #findMenu .fi.on { background: rgba(255, 255, 255, 0.07); }
+    #findMenu .fi-s { font: 600 12px var(--mono); color: var(--text); flex: none;
+                      min-width: 52px; }
+    #findMenu .fi-n { font-size: 12px; color: var(--muted); white-space: nowrap;
+                      overflow: hidden; text-overflow: ellipsis; }
+    #findMenu .fi-none { font-size: 12.5px; color: var(--muted); padding: 8px 9px; }
     #newsPop { position: fixed; z-index: var(--z-tip); width: min(420px, calc(100vw - 24px));
                max-height: min(60vh, 520px); overflow: auto; border-radius: 16px; border: 1px solid var(--hair-2);
                background: rgba(10, 12, 17, 0.97); backdrop-filter: blur(24px);
@@ -1026,6 +1058,7 @@
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.4a2.6 2.6 0 1 1 3.4 2.5c-.6.2-.9.7-.9 1.3v.5"/><path d="M12 17.1h.01"/></symbol>
     <symbol id="i-scales" viewBox="0 0 24 24"><path d="M12 4.4v15.2"/><path d="M6.6 19.6h10.8"/><path d="M4 9.2h16"/><path d="M4 9.2 1.8 14.2h4.4z"/><path d="M20 9.2 17.8 14.2h4.4z"/></symbol>
     <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3.6 19.2h16.8"/><path d="M4.4 14.6 9.6 9l3.6 3.4 6.2-6.8"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.2"/><path d="m15.4 15.4 4 4"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.6 6.6 17.4 17.4M17.4 6.6 6.6 17.4"/></symbol>
   </svg>
 
@@ -1035,6 +1068,22 @@
       <div class="core">
         <h1 class="brand"><span class="w1">Tickr</span> <span class="w2">Lab</span></h1>
         <span class="bar-sep"></span>
+
+        <!-- Find one stock and open its page (owner, 2026-09-29). The table
+             can already be narrowed to a ticker from the Symbol box in the
+             filter row; what that cannot answer is "show me everything about
+             this one company", which is what /stock is for — so this
+             NAVIGATES rather than filtering, the owner's call when offered
+             all three. It reads the rows the page already holds, so it costs
+             no request; and because those rows are narrowed server-side, a
+             guest is only ever offered the twenty stocks it may open. -->
+        <span class="find" id="findBox">
+          <svg class="ic" aria-hidden="true"><use href="#i-search" /></svg>
+          <input id="findInput" type="search" placeholder="Find a stock"
+                 autocomplete="off" spellcheck="false"
+                 role="combobox" aria-expanded="false" aria-controls="findMenu"
+                 aria-label="Find a stock by symbol or name" />
+        </span>
 
         <!-- Layout first, then View (owner, 2026-09-26). Which SHAPE the rows
              take is the coarser choice, and the three tile controls travel
@@ -1305,6 +1354,7 @@
     <div id="actionPanel" hidden></div>
     <div id="myPop" hidden></div>
     <div id="newsPop" hidden role="dialog" aria-label="Headlines"></div>
+    <div id="findMenu" role="listbox" aria-label="Matching stocks" hidden></div>
 
     <dialog class="modal" id="tileDialog">
       <div class="core">
@@ -5416,6 +5466,138 @@
     let newsPopFor = null;
     function closeNewsPop() { $('newsPop').hidden = true; newsPopFor = null; }
 
+    // ---- the quick stock finder ----------------------------------------
+    //
+    // It searches the WHOLE universe the reader can see, never the rows left
+    // on screen: the point of it is to reach a stock the current tab, sector
+    // or column filters have hidden, and a finder that could only find what
+    // is already in front of you would be furniture.
+    //
+    // `baseStocks` is the page's own unfiltered copy, so this costs no
+    // request. Rows carrying an error are left out — the same rule the stock
+    // page's own picker follows server-side, since a stock with no data yet
+    // has no page worth opening.
+    const FIND_MAX = 10;
+    let findHits = [];
+    let findAt = -1;
+
+    function closeFind() {
+      const m = $('findMenu');
+      if (m) m.hidden = true;
+      findHits = []; findAt = -1;
+      const i = $('findInput');
+      if (i) i.setAttribute('aria-expanded', 'false');
+    }
+
+    function findMatches(q) {
+      const t = q.trim().toLowerCase();
+      if (!t) return [];
+      const out = [];
+      for (const x of baseStocks) {
+        if (!x || x.error) continue;
+        const sym = String(x.symbol || '');
+        const nm = String(x.shortName || x.name || '');
+        const ls = sym.toLowerCase(), ln = nm.toLowerCase();
+        if (!ls.includes(t) && !ln.includes(t)) continue;
+        // A symbol that STARTS with what was typed is what the typist meant:
+        // "MU" must not be buried under every name containing those letters,
+        // and on the live universe there are a dozen of those.
+        out.push({
+          sym, nm, cap: Number(x.marketCap) || 0,
+          rank: ls === t ? 0 : ls.startsWith(t) ? 1 : ln.startsWith(t) ? 2 : 3,
+        });
+      }
+      // Within a rank, the BIGGER company first rather than the alphabet:
+      // "mic" puts Microchip, Microsoft, MicroStrategy and Micron in one
+      // band, and a reader typing three letters means the one they have
+      // heard of. It is also the table's own default sort, so the finder is
+      // not ordering by a rule that exists nowhere else on the page.
+      out.sort((a, b) => a.rank - b.rank || b.cap - a.cap ||
+        (a.sym < b.sym ? -1 : a.sym > b.sym ? 1 : 0));
+      return out.slice(0, FIND_MAX);
+    }
+
+    function paintFind() {
+      const m = $('findMenu');
+      const inp = $('findInput');
+      if (!m || !inp) return;
+      if (!findHits.length) {
+        m.innerHTML = inp.value.trim()
+          ? '<div class="fi-none">No stock matches that.</div>' : '';
+        if (!inp.value.trim()) { closeFind(); return; }
+      } else {
+        m.innerHTML = findHits.map((h, i) =>
+          `<a class="fi${i === findAt ? ' on' : ''}" role="option" tabindex="-1"` +
+          ` aria-selected="${i === findAt}" data-find="${we(h.sym)}"` +
+          ` href="/stock/${encodeURIComponent(h.sym)}" target="_blank" rel="noopener">` +
+          `<span class="fi-s">${we(h.sym)}</span>` +
+          `<span class="fi-n">${we(h.nm)}</span></a>`).join('');
+      }
+      m.hidden = false;
+      inp.setAttribute('aria-expanded', 'true');
+      const r = $('findBox').getBoundingClientRect();
+      const w = m.offsetWidth, h = m.offsetHeight;
+      m.style.left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8) + 'px';
+      const below = r.bottom + 6;
+      m.style.top = (below + h > window.innerHeight - 8
+        ? Math.max(8, r.top - h - 6) : below) + 'px';
+    }
+
+    // A NEW TAB, which is the screener's own standing rule for reaching a
+    // stock: `.namelink` and the ticker link both carry target=_blank so a
+    // click never loses your place in the list. A finder that navigated in
+    // place would be the one link here that does.
+    function openFind(i) {
+      const h = findHits[i];
+      if (!h) return;
+      window.open('/stock/' + encodeURIComponent(h.sym), '_blank', 'noopener');
+      track('picker', 'find');
+      $('findInput').value = '';
+      closeFind();
+    }
+
+    function markFind(i) {
+      findAt = Math.max(0, Math.min(findHits.length - 1, i));
+      const m = $('findMenu');
+      [...m.querySelectorAll('.fi')].forEach((el, k) => {
+        el.classList.toggle('on', k === findAt);
+        el.setAttribute('aria-selected', String(k === findAt));
+      });
+      const on = m.querySelector('.fi.on');
+      if (on) on.scrollIntoView({ block: 'nearest' });
+    }
+
+    (function wireFind() {
+      const inp = $('findInput');
+      if (!inp) return;
+      const refresh = () => { findHits = findMatches(inp.value); findAt = findHits.length ? 0 : -1; paintFind(); };
+      inp.addEventListener('input', refresh);
+      inp.addEventListener('focus', () => { if (inp.value.trim()) refresh(); });
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); markFind(findAt + 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); markFind(findAt - 1); }
+        else if (e.key === 'Enter') { e.preventDefault(); openFind(findAt); }
+        else if (e.key === 'Escape') {
+          // Two steps, the search-box convention: clear what was typed, and
+          // only let go of the field once there is nothing to clear.
+          e.stopPropagation();
+          if (inp.value) { inp.value = ''; closeFind(); } else { closeFind(); inp.blur(); }
+        }
+      });
+      // Delegated, and the anchor is real: a middle click or ctrl+click opens
+      // the stock page the way the reader asked for it rather than being
+      // swallowed by a handler.
+      $('findMenu').addEventListener('click', (e) => {
+        const a = e.target.closest('.fi');
+        if (!a) return;
+        e.preventDefault();
+        openFind(findHits.findIndex((h) => h.sym === a.dataset.find));
+      });
+      document.addEventListener('click', (e) => {
+        if (!$('findMenu').hidden && !e.target.closest('#findMenu, #findBox')) closeFind();
+      });
+    })();
+
     function placeNewsPop(cell) {
       const pop = $('newsPop');
       const r = cell.getBoundingClientRect();
@@ -6042,11 +6224,12 @@
     menuBtn.addEventListener('click', () => setSheet(!document.body.classList.contains('sheet-open')));
     $('deck').addEventListener('click', (e) => { if (e.target === $('deck')) setSheet(false); });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { setSheet(false); closePickers(); hideTip(); hideRowCard(); closeActionPanel(); closeMyPop(); }
+      if (e.key === 'Escape') { setSheet(false); closePickers(); hideTip(); hideRowCard(); closeActionPanel(); closeMyPop(); closeFind(); }
     });
     window.addEventListener('resize', () => {
       if (window.innerWidth > 768) setSheet(false);
       closePickers();
+      closeFind();                       // it is fixed-position: a resize strands it
       closeActionPanel();
     });
 
