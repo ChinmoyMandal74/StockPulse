@@ -42,6 +42,7 @@
     .panel input:focus-visible, .panel textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     #annBox { display: none; }
     #movBox { display: none; }
+    #dayBox { display: none; }
     .panel select {
       width: 100%; box-sizing: border-box; appearance: none; -webkit-appearance: none;
       padding: 9px 30px 9px 11px; border-radius: 10px; cursor: pointer;
@@ -500,6 +501,37 @@
         <select id="bubScreen"><option value="">No screen</option></select>
       </div>
 
+      <!-- The whole day. Deliberately has NO scope pickers: every other data
+           template answers "which stocks?", and this one answers "what did the
+           market do" \u2014 a sector breakdown of one sector is not a breakdown.
+           So there is no daySector/dayIndustry/dayCap/dayScreen, and
+           INDUSTRY_PREFIXES is left alone. -->
+      <div id="dayBox">
+        <label>Rank the movers by</label>
+        <select id="dayMetric">
+          <option value="pct" selected>Today's move, %</option>
+          <option value="value">Value added, $</option>
+        </select>
+        <label>How many each way</label>
+        <select id="dayCount">
+          <option value="5">Top 5</option>
+          <option value="10" selected>Top 10</option>
+          <option value="15">Top 15</option>
+        </select>
+        <p class="hint">The square holds five a side and a story fifteen, whatever is
+          asked \u2014 a card cannot scroll, so a longer list is trimmed rather than
+          printed over the masthead.</p>
+        <label>Smallest company in the movers</label>
+        <select id="dayFloor">
+          <option value="0">No floor \u2014 every stock</option>
+          <option value="1000000000" selected>Over $1B (97.5% of the screen)</option>
+          <option value="10000000000">Over $10B (67.2%)</option>
+          <option value="50000000000">Over $50B (24.6%)</option>
+        </select>
+        <p class="hint">The floor narrows the movers only. The sectors are always
+          cap-weighted over the whole screen, and the indexes are never part of it.</p>
+      </div>
+
       <div id="intBox">
         <label>Topic</label>
         <select id="intTopic"></select>
@@ -574,6 +606,7 @@
       { id: 'story', label: 'Story 9:16', w: 1080, h: 1920 },
     ];
     const TPLS = [
+      { id: 'day', name: 'The day', note: 'Indexes, sectors and both ends of the move \u2014 one card' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
@@ -653,6 +686,7 @@
       'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap', 'fundScreen',
       'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen',
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen',
+      'dayMetric', 'dayCount', 'dayFloor',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
       const o = {};
@@ -711,6 +745,7 @@
       $('fundBox').style.display = tpl === 'fund' ? 'block' : 'none';
       $('sizeBox').style.display = tpl === 'size' ? 'block' : 'none';
       $('bubBox').style.display = tpl === 'bubble' ? 'block' : 'none';
+      $('dayBox').style.display = tpl === 'day' ? 'block' : 'none';
       const fm = $('fundMode').value;
       $('fundMetricWrap').style.display = fm === 'rank' ? 'block' : 'none';
       $('fundSymWrap').style.display = fm === 'one' ? 'block' : 'none';
@@ -819,6 +854,8 @@
     })();
     ['bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'bubble') render(); }));
+    ['dayMetric', 'dayCount', 'dayFloor'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
     $('intSlide').addEventListener('change', () => { if (tpl === 'intro') render(); });

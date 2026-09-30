@@ -80,6 +80,23 @@
     }
     const pct = (n, d = 1) => (n == null ? '—' : (n >= 0 ? '+' : '') + n.toFixed(d) + '%');
 
+    // ---- the four index funds, and why the list is restated here ----------
+    //
+    // They are ordinary rows in the universe, so anything that aggregates the
+    // market has to take them OUT first or the S&P's own ETF sits inside
+    // Technology and inflates it — /consolidated records exactly that trap.
+    //
+    // server.js owns the authoritative set (it is the delete guard: these four
+    // cannot be removed from the screener, because every group page draws
+    // their line). This module cannot read it: cards.js is deliberately
+    // standalone, with no DOM and no requires, so that a card renders
+    // identically in the browser and in Node. The copy is the cost of that,
+    // and `benchmarks()` is exported so a test can assert the two agree
+    // rather than hoping they do — the treatment BRAND_IG already gets.
+    const BENCH = [['SPY', 'S&P 500'], ['QQQ', 'Nasdaq 100'],
+      ['IWM', 'Russell 2000'], ['DIA', 'Dow 30']];
+    const IS_BENCH = new Set(BENCH.map((b) => b[0]));
+
     // ---- templates ---------------------------------------------------------
     // Gainers and losers are separate cards on purpose — the owner's call:
     // a mixed |move| list buries the story either half tells alone.
@@ -1765,6 +1782,156 @@
       + '</p></div></div>' + chromeFoot();
   }
 
+  // ---- the whole day on one card (2026-09-29, owner's request) ---------
+  //
+  // Every other data template answers ONE question. This answers "what
+  // happened today" — the indexes, the sectors, and the two ends of the
+  // move — which is the thing a market account actually posts.
+  //
+  // THE DENSITY IS THE WHOLE DESIGN PROBLEM. Four indexes, eleven sectors
+  // and two lists of ten is 35 data rows, and a card cannot scroll: a list
+  // too tall does not clip, it prints over the masthead, because .s-body
+  // centres its content. At one row per line that is ~19px a row on the
+  // 4:5 — and a 1080px card renders about 400px wide in a feed, so 19px
+  // on the artboard is ~7px to the reader. "Smaller type" has a floor, and
+  // it is set by where the card is read.
+  //
+  // So the layout is doing the work rather than the font size: the indexes
+  // are a single strip of four chips instead of four rows, the sectors are
+  // a two-column bar chart instead of eleven rows, and the movers are two
+  // columns instead of twenty rows. 35 rows becomes ~17 lines.
+  function tplDay() {
+    const byValue = O.dayMetric === 'value';
+    const field = byValue ? 'capChangeToday' : 'todayPct';
+    const floor = Number(O.dayFloor) || 0;
+    // A card is a fixed artboard: the square cannot hold ten a side beside
+    // everything else at any size still legible once a feed has shrunk it.
+    const CAP = { portrait: 10, square: 5, story: 15 };
+    const want = Number(O.dayCount) || 10;
+    const k = Math.min(want, CAP[size.id] || CAP.portrait);
+
+    // The indexes are the HEADLINE, not part of the market they measure.
+    const bySym = new Map(stocks.map((x) => [x.symbol, x]));
+    const idx = BENCH.map(([sym, label]) => {
+      const r = bySym.get(sym);
+      return r && r.todayPct != null ? { label, v: r.todayPct } : null;
+    }).filter(Boolean);
+    // ...and are therefore removed from every aggregate below.
+    const pool = stocks.filter((x) => x && !IS_BENCH.has(x.symbol));
+
+    // ---- sectors, ALWAYS cap-weighted (the owner's instruction) ---------
+    // Two exclusions, and they are different rules. A missing return is
+    // ABSENT, never zero — Number(null) is 0 and finite, and a fabricated
+    // flat stock drags a mean. A stock with no market cap cannot carry a
+    // weight at all, since a fund reports AUM rather than capitalisation;
+    // `w > 0` rejects null and zero in one test.
+    const agg = new Map();
+    for (const x of pool) {
+      if (!x.sector) continue;            // the blank bucket is not a sector
+      const w = x.marketCap;
+      const v = x.todayPct;
+      if (!(w > 0) || v == null) continue;
+      const a = agg.get(x.sector) || { w: 0, wv: 0, n: 0 };
+      a.w += w; a.wv += w * v; a.n++;
+      agg.set(x.sector, a);
+    }
+    const secs = [...agg.entries()].map(([name, a]) => ({ name, v: a.wv / a.w, n: a.n }))
+      .sort((a, b) => b.v - a.v);
+    const sMax = Math.max(...secs.map((x) => Math.abs(x.v)), 0.01);
+
+    // ---- the two ends of the move ---------------------------------------
+    // A CAP FLOOR, and the measurement is more modest than the argument for
+    // it usually is. I had written "without one the leaders are ten names
+    // nobody has heard of"; measured on this universe (1,177 stocks, an
+    // ordinary session) the unfiltered top ten is NINE recognisable
+    // companies and one $0.2B name — so the floor is not rescuing the list.
+    // What it does is keep the ten comparable in scale, and guard against a
+    // junk bar: a sub-cent close once printed +56,000,000% on the screener
+    // itself. $1B is the default because it keeps 97.5% of the pool (1,147
+    // of 1,177) and drops exactly that one name; $10B keeps 67.2%, and is
+    // the setting for a poster that should read as mega-caps only.
+    const movers = pool.filter((x) => x[field] != null && (!floor || x.marketCap > floor));
+    const ups = movers.filter((x) => x[field] > 0).sort((a, b) => b[field] - a[field]).slice(0, k);
+    const downs = movers.filter((x) => x[field] < 0).sort((a, b) => a[field] - b[field]).slice(0, k);
+    const mMax = Math.max(...ups.concat(downs).map((x) => Math.abs(x[field])), 0.01);
+    // A CHANGE takes a sign, whichever unit it is in — the Value added
+    // column's rule, where a plain `-$32.0B` beside a green `+3.7%` was
+    // distinguished from a gain by its minus sign alone. fmtMoney is the
+    // module's own formatter (the Fund card's), so the digits read here
+    // exactly as they read on every other card; the sign and the $ are
+    // added around it, since it carries neither.
+    const money = (v) => (v < 0 ? '-$' : '+$') + fmtMoney(Math.abs(v));
+    const mv = (x) => (byValue ? money(x[field]) : pct(x[field]));
+
+    // ---- ONE RHYTHM, and the step-down that was measured away -----------
+    // This carried the ranked card's ROOM/RHYTHM machinery — default, then
+    // tight, then tighter, then trimming the lists — because a card cannot
+    // scroll and that is how tplMovers keeps a long list off the masthead.
+    // MEASURED ON THE REAL ARTBOARDS, IT COULD NEVER FIRE. The body has
+    // 958px on the 4:5, 688 on the square and ~1460 on the story, and the
+    // tallest card the controls can reach — a story at fifteen a side —
+    // draws 993px. The step was firing on the square alone, and only because
+    // the estimate I had written put its room 108px too low: forcing the
+    // default rhythm on all 54 swept combinations overflows NOTHING.
+    //
+    // So the protection is the per-artboard CAP above, which IS load-bearing
+    // (reverting it fails four checks), plus the sweep. Code that cannot be
+    // made to fire is residue, and residue reads as intent.
+
+    const chips = idx.length
+      ? '<div class="dy-chips">' + idx.map((x) =>
+        `<span class="dy-chip"><b>${esc(x.label)}</b>` +
+        `<i class="${x.v >= 0 ? 'pos' : 'neg'}">${pct(x.v)}</i></span>`).join('') + '</div>'
+      : '';
+
+    const secBlock = secs.length
+      ? `<div class="dy-block"><div class="dy-head">Sectors · cap-weighted</div>` +
+        '<div class="dy-grid">' + secs.map((x) => {
+          const w = Math.max(4, Math.round(Math.abs(x.v) / sMax * 100));
+          return '<div class="dy-row"><span class="dy-lab">' + esc(x.name) + '</span>' +
+            '<span class="dy-rail"><span class="dy-bar' + (x.v < 0 ? ' neg' : '') +
+            `" style="width:${w}%;display:block"></span></span>` +
+            `<span class="dy-val ${x.v >= 0 ? 'pos' : 'neg'}">${pct(x.v)}</span></div>`;
+        }).join('') + '</div></div>'
+      : '';
+
+    const col = (title, list, neg) =>
+      '<div class="dy-col"><div class="dy-head ' + (neg ? 'neg' : 'pos') + '">' +
+      esc(title) + '</div>' + (list.length ? list.map((x) => {
+        const w = Math.max(5, Math.round(Math.abs(x[field]) / mMax * 100));
+        return '<div class="dy-row"><span class="dy-lab">' + esc(nameOf(x)) + '</span>' +
+          '<span class="dy-rail"><span class="dy-bar' + (neg ? ' neg' : '') +
+          `" style="width:${w}%;display:block"></span></span>` +
+          `<span class="dy-val ${neg ? 'neg' : 'pos'}">${mv(x)}</span></div>`;
+      }).join('') : '<div class="mnone">nothing moved that way</div>') + '</div>';
+
+    // The heading names what is ACTUALLY shown. A card that says "Top 10"
+    // over six rows has made itself untrue, which is the rule the ranked
+    // card already follows when it trims.
+    const movBlock = (ups.length || downs.length)
+      ? '<div class="dy-block"><div class="dy-two">' +
+        col('Top ' + ups.length, ups, false) +
+        col('Bottom ' + downs.length, downs, true) + '</div></div>'
+      : '';
+
+    // The kicker counts the pool the SECTORS are aggregated over, so it says
+    // when a floor is narrowing the movers rather than leaving the reader to
+    // wonder why a familiar small name is missing.
+    const floorNote = floor ? ' · movers over $' + fmtMoney(floor) : '';
+    return chromeTop() +
+      '<div class="s-body"><div>' +
+      `<span class="s-kick">${pool.length.toLocaleString()} stocks${esc(floorNote)}</span>` +
+      // The second line names what the MOVERS are ranked by, not the card:
+      // the sectors are cap-weighted percentages whichever metric is chosen
+      // (the owner's instruction), so a bare "by value added" over the whole
+      // card would describe two of its three blocks wrongly.
+      '<h2 class="s-title">The day<br><span class="dim">' +
+      (byValue ? 'movers by value added' : 'movers by today’s move') +
+      '</span></h2>' +
+      `<div class="dy-wrap">${chips}${secBlock}${movBlock}</div>` +
+      '</div></div>' + chromeFoot();
+  }
+
   function tplAvatar() {
     return '<div class="avatarFull">' +
       '<div class="avGlow"></div>' +
@@ -2023,7 +2190,7 @@
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
-    bubble: tplBubble, stock: tplStock,
+    bubble: tplBubble, stock: tplStock, day: tplDay,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -2170,6 +2337,97 @@
     .mrow .mv.pos { color: var(--green); } .mrow .mv.neg { color: var(--red); }
     .mnone { font-size: 19px; color: var(--faint); padding: 10px 0; }
     /* a long list tightens instead of running off the card */
+    /* ---- the day card -------------------------------------------------
+       Three blocks in one body, so the rhythm is set once on the wrapper and
+       every row inside it follows. Sizes here are the DEFAULT rhythm; the
+       two tighter steps below override them, and tplDay picks the step by
+       estimating the height against the artboard. */
+    .dy-chips { display: flex; gap: 14px; }
+    .dy-chip { flex: 1; min-width: 0; border-radius: 14px; padding: 13px 16px;
+               background: rgba(255, 255, 255, 0.05); display: flex;
+               flex-direction: column; gap: 3px; }
+    .dy-chip b { font: 600 15px var(--mono); text-transform: uppercase;
+                 letter-spacing: 0.1em; color: var(--muted); white-space: nowrap;
+                 overflow: hidden; text-overflow: ellipsis; }
+    .dy-chip i { font: 600 30px var(--mono); font-style: normal; }
+    .dy-chip i.pos { color: var(--green); } .dy-chip i.neg { color: var(--red); }
+    .dy-block { margin-top: 26px; }
+    /* No nowrap here, deliberately. I had added one and called it
+       load-bearing; reverting it wrapped NOTHING, because every head this
+       card writes is short by construction ("Sectors · cap-weighted",
+       "Top 10"). A declaration that cannot be made to matter is residue, and
+       the sweep asserts no head wraps — so a longer one added later fails a
+       check rather than being silently absorbed by a rule nobody remembers. */
+    .dy-head { font: 600 16px var(--mono); text-transform: uppercase;
+               letter-spacing: 0.16em; color: var(--muted);
+               border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+               padding-bottom: 8px; margin-bottom: 10px; }
+    .dy-head.pos { color: var(--green); } .dy-head.neg { color: var(--red); }
+    /* Eleven sectors down one column is 11 lines; in two it is six. */
+    .dy-grid { display: grid; grid-template-columns: 1fr 1fr;
+               column-gap: 34px; row-gap: 0; }
+    /* The sector column is wider than the movers' one, and that is measured
+       rather than a preference: there are exactly eleven sector names and
+       the longest, "Communication Services", DRAWS 197px against the 150 the
+       shared label had — so two of eleven printed with an ellipsis, which a
+       screenshot caught and no assertion did. A company name is arbitrarily
+       long and truncating one is correct, which is why the width is scoped
+       to the grid. (An off-page probe said it needed 156px and was wrong:
+       copying a computed cssText onto a bare span does not carry the font.
+       The honest measure is the element's own scrollWidth.) */
+    .dy-grid .dy-lab { width: 202px; }
+    .dy-two { display: flex; gap: 34px; }
+    .dy-col { flex: 1; min-width: 0; }
+    .dy-row { display: flex; align-items: center; gap: 10px; height: 36px; }
+    .dy-lab { font: 600 17px var(--sans); width: 150px; flex: none;
+              letter-spacing: -0.015em; white-space: nowrap; overflow: hidden;
+              text-overflow: ellipsis; }
+    .dy-rail { flex: 1; min-width: 0; height: 18px; border-radius: 6px;
+               background: rgba(255, 255, 255, 0.045); overflow: hidden; }
+    .dy-bar { height: 100%; border-radius: 6px;
+              background: linear-gradient(90deg, rgba(52, 211, 153, 0.35), var(--green)); }
+    .dy-bar.neg { background: linear-gradient(90deg, rgba(251, 113, 133, 0.35), var(--red)); }
+    .dy-val { font: 600 18px var(--mono); width: 92px; flex: none; text-align: right; }
+    .dy-val.pos { color: var(--green); } .dy-val.neg { color: var(--red); }
+
+    /* There were two tighter steps here, and tplDay's own note records why
+       they are gone: measured against the real artboards the default rhythm
+       fits every card the controls can reach, so nothing could ever select
+       them. */
+
+    /* A story is twice as tall and read at arm's length, so it gets the room
+       back rather than staying at the post's rhythm. FOUND BY SCREENSHOT,
+       not by an assertion: with only the type scaled up the card drew 993px
+       of content in a 1920px frame and the bottom half was empty — which is
+       the fault tplMovers already records for its own story layout, "five
+       rows spread through a story read as lines floating in a frame". The
+       rows are taller AND the three blocks spread through what is left, the
+       treatment that card settled on. The rule .sz-story .s-body > div
+       already makes every template's inner block a full-height flex column,
+       so the wrapper only has to take the room.
+       (No backticks anywhere in here: STYLE is itself a template literal and
+       one inside a CSS comment ends the string. It cost a round of debugging
+       on the Size card and it cost another one here.) */
+    .sz-story .dy-chips { gap: 18px; }
+    .sz-story .dy-chip { padding: 17px 20px; }
+    .sz-story .dy-chip b { font-size: 17px; }
+    .sz-story .dy-chip i { font-size: 38px; }
+    .sz-story .dy-lab { font-size: 21px; width: 214px; }
+    .sz-story .dy-val { font-size: 22px; width: 112px; }
+    .sz-story .dy-head { font-size: 19px; padding-bottom: 11px; margin-bottom: 14px; }
+    .sz-story .dy-row { height: 52px; gap: 14px; }
+    .sz-story .dy-rail { height: 22px; border-radius: 8px; }
+    /* On a story the label scales with everything else and the longest name
+       draws 243px, which would leave the bar 91px of a 459px column. The
+       sector labels therefore stay a size behind the movers' — the bar is
+       what makes eleven rows readable at a glance, and a sector name is
+       read once. */
+    .sz-story .dy-grid .dy-lab { width: 228px; font-size: 19px; }
+    .sz-story .dy-grid .dy-val { width: 92px; }
+    .sz-story .dy-wrap { flex: 1; display: flex; flex-direction: column;
+                         justify-content: space-evenly; }
+    .sz-story .dy-block { margin-top: 0; }
+
     .twocol.dense { gap: 30px; margin-top: 26px; }
     .twocol.dense .mch { font-size: 15px; padding-bottom: 9px; margin-bottom: 10px; }
     .twocol.dense .mrow { gap: 11px; margin-bottom: 8px; }
@@ -2528,6 +2786,10 @@
       .filter((x) => !sector || sector === 'All' || x.sector === sector)
       .map((x) => x.industry).filter(Boolean))].sort(),
     CHART_WINDOWS,
+    // The four index funds as [symbol, label]. Exported so a test can assert
+    // this list is the same set server.js guards, rather than the two copies
+    // drifting in silence.
+    benchmarks: () => BENCH.map((b) => b.slice()),
     // shape only — the host builds its own slide picker from this
     topics: () => TOPICS.map((t) => ({ id: t.id, name: t.name, slides: t.slides.map((sl) => sl.kind) })),
     build(id, ctx) {
