@@ -832,6 +832,71 @@
       });
       return any ? out : null;
     }
+    // ---- the ground a card is drawn on ---------------------------------
+    //
+    // THE SIGNAL COLOURS ARE NOT A THEME'S TO REPAINT, with one exception.
+    // Green is up, red is down, amber is "notice this", and the six-tier
+    // ladder is the same ladder the screener shows — a palette that moved any
+    // of them would make the card say something it does not mean. So a theme
+    // is the GROUND and the FURNITURE.
+    //
+    // The exception is a LIGHT ground, where holding that line is impossible:
+    // measured against #f7f8fa, every one of them fails outright — green
+    // 1.9:1, red 2.7:1, amber 1.7:1, --text 1.2:1. So the light theme keeps
+    // each HUE and darkens it until it clears 4.5:1, which preserves the
+    // meaning (green is still green) while making it legible. Same semantics,
+    // second value. Navy needs none of that: measured on #0d1a2d the whole
+    // dark palette still clears the floor (green 9.1, red 6.5, faint 4.8), so
+    // it is a ground and an aura and nothing else — which is why it cost an
+    // hour against the light theme's day.
+    //
+    // These are the values a CSS variable cannot reach: lineChart and
+    // recoveryLeg emit presentation ATTRIBUTES as string literals, because
+    // that markup also travels through the PNG export. Everything else rides
+    // the token block in STYLE, which is most of the card for free.
+    const LADDER_LIGHT = {
+      'Strong Buy': '#157a51', 'Buy': '#4d7c0f', 'Buy with Risk': '#a15c07',
+      'Hold': '#5b6675', 'Avoid': '#bd4d02', 'Sell Immediately': '#c81e37',
+    };
+    const THEMES = {
+      dark: {
+        cls: '',
+        up: '#34d399', down: '#fb7185', flat: '#9aa3b2', mid: '#fbbf24',
+        grid: 'rgba(255,255,255,0.07)', zero: 'rgba(255,255,255,0.2)',
+        axis: '#7d8797', wash: 'rgba(255,255,255,0.05)',
+        legUp: 'rgba(52,211,153,0.55)', legDown: 'rgba(251,113,133,0.55)',
+        tints: ADV_TINT,
+      },
+      light: {
+        cls: 'th-light',
+        up: '#157a51', down: '#c81e37', flat: '#64707f', mid: '#a15c07',
+        grid: 'rgba(13,16,23,0.10)', zero: 'rgba(13,16,23,0.28)',
+        axis: '#64707f', wash: 'rgba(13,16,23,0.06)',
+        legUp: 'rgba(21,122,81,0.45)', legDown: 'rgba(200,30,55,0.45)',
+        tints: LADDER_LIGHT,
+      },
+      // Navy is the dark palette on a different ground, deliberately — every
+      // value below is dark's, and the only entries that exist at all are the
+      // class and the tints, so a future edit to the dark palette carries.
+      navy: {
+        cls: 'th-navy',
+        up: '#34d399', down: '#fb7185', flat: '#9aa3b2', mid: '#fbbf24',
+        grid: 'rgba(255,255,255,0.07)', zero: 'rgba(255,255,255,0.2)',
+        axis: '#8b95a5', wash: 'rgba(255,255,255,0.05)',
+        legUp: 'rgba(52,211,153,0.55)', legDown: 'rgba(251,113,133,0.55)',
+        tints: ADV_TINT,
+      },
+    };
+    let pal = THEMES.dark;
+    // WHICH CLASSES THE ARTBOARD NEEDS IS THE MODULE'S QUESTION, NOT A HOST'S.
+    // The builder returns inner HTML only, so the ground lives on a class the
+    // HOST puts on `.s-art` — and there are THREE such places: the studio's
+    // stage, the phone's post sheet and the phone's off-screen rasterise
+    // stage. Left to each host to derive, a saved light post draws a light
+    // chart on a black ground, silently. The `basketDays` lesson: one
+    // pairing, asked of the module.
+    const themeOf = (opts) => THEMES[(opts || {}).spotTheme] || THEMES.dark;
+
     const CHART_PALETTE = ['#34d399', '#22d3ee', '#a78bfa', '#fbbf24', '#fb923c',
                            '#f472b6', '#a3e635', '#60a5fa'];
     // Presentation attributes, not classes: this markup also travels through
@@ -858,11 +923,11 @@
       let grid = '';
       for (let g = 0; g <= 4; g++) {
         const v = lo + (g / 4) * (hi - lo);
-        grid += `<line x1="${PL}" y1="${y(v).toFixed(1)}" x2="${W - PR}" y2="${y(v).toFixed(1)}" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>` +
-          `<text x="${PL - 16}" y="${(y(v) + 7).toFixed(1)}" text-anchor="end" font-size="19" fill="#7d8797" font-family="Geist Mono, monospace">${v.toFixed(0)}%</text>`;
+        grid += `<line x1="${PL}" y1="${y(v).toFixed(1)}" x2="${W - PR}" y2="${y(v).toFixed(1)}" stroke="${pal.grid}" stroke-width="1"/>` +
+          `<text x="${PL - 16}" y="${(y(v) + 7).toFixed(1)}" text-anchor="end" font-size="19" fill="${pal.axis}" font-family="Geist Mono, monospace">${v.toFixed(0)}%</text>`;
       }
       if (lo < 0 && hi > 0) {
-        grid += `<line x1="${PL}" y1="${y(0).toFixed(1)}" x2="${W - PR}" y2="${y(0).toFixed(1)}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>`;
+        grid += `<line x1="${PL}" y1="${y(0).toFixed(1)}" x2="${W - PR}" y2="${y(0).toFixed(1)}" stroke="${pal.zero}" stroke-width="1"/>`;
       }
       let area = '';
       const hero = L.find((l) => l.fill);
@@ -887,8 +952,8 @@
         return `<text x="${W - PR + 14}" y="${ty.toFixed(1)}" font-size="24" font-weight="600" fill="${l.color}" font-family="Geist Mono, monospace">${(last >= 0 ? '+' : '') + last.toFixed(1)}%</text>`;
       }).join('');
       const d0 = dates[0], d1 = dates[dates.length - 1];
-      const axis = `<text x="${PL}" y="${H - 10}" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">${esc(d0)}</text>` +
-        `<text x="${W - PR}" y="${H - 10}" text-anchor="end" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">${esc(d1)}</text>`;
+      const axis = `<text x="${PL}" y="${H - 10}" font-size="18" fill="${pal.axis}" font-family="Geist Mono, monospace">${esc(d0)}</text>` +
+        `<text x="${W - PR}" y="${H - 10}" text-anchor="end" font-size="18" fill="${pal.axis}" font-family="Geist Mono, monospace">${esc(d1)}</text>`;
       const mt = opts && opts.mt != null ? opts.mt : 26;
       return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:${mt}px" role="img" aria-label="chart">` +
         area + grid + strokes + tags + axis + '</svg>';
@@ -1123,7 +1188,7 @@
       if (w < 0.6) return '';                       // a hairline is noise, not a move
       // Green when the month was up, red when down — the direction IS the
       // reading, and a single neutral colour would hide half of it.
-      const c = m >= 0 ? 'rgba(52,211,153,0.55)' : 'rgba(251,113,133,0.55)';
+      const c = m >= 0 ? pal.legUp : pal.legDown;
       return `<span class="tleg" style="left:${a}%;width:${w}%;background:${c}"></span>` +
              `<span class="tthen" style="left:${q}%"></span>`;
     }
@@ -2004,7 +2069,7 @@
     // Green up, red down. A single line about a single stock is the case
     // where the direction IS the story — the table's sparkline stays neutral
     // for the opposite reason, five coloured columns already beside it.
-    const colour = move == null ? '#9aa3b2' : move >= 0 ? '#34d399' : '#fb7185';
+    const colour = move == null ? pal.flat : move >= 0 ? pal.up : pal.down;
     const H = size.id === 'story' ? 624 : size.id === 'square' ? 176 : 318;
     // A MISSING SERIES DOES NOT EMPTY THE CARD. The Chart card returns a bare
     // "no stored history" card because the chart IS that card; here the
@@ -2062,13 +2127,13 @@
     let track = '';
     if (has52) {
       const p = Math.max(0, Math.min(100, row.range52Pos));
-      const tint = p >= 66 ? '#34d399' : p >= 33 ? '#fbbf24' : '#fb7185';
+      const tint = p >= 66 ? pal.up : p >= 33 ? pal.mid : pal.down;
       track = '<div class="sp-block"><div class="sp-head">Its own 52-week range</div>' +
         '<div class="tracks"><div class="trk">' +
         '<span class="ts">' + Math.round(p) + '% of its year</span>' +
         '<span class="trail">' +
         '<span class="tfill" style="width:' + p +
-        '%;background:linear-gradient(90deg, rgba(255,255,255,0.05), ' + tint + ')"></span>' +
+        '%;background:linear-gradient(90deg, ' + pal.wash + ', ' + tint + ')"></span>' +
         recoveryLeg(row, p) +
         '<span class="tdot" style="left:' + p + '%;background:' + tint + '"></span></span>' +
         '<span class="tlo">' + pct(row.pctFromLow) + '</span>' +
@@ -2132,7 +2197,7 @@
     let verdict = '';
     if (profile !== 'off') {
       const a = advScored(profile)[sym] || null;
-      const tint = (a && ADV_TINT[a.action]) || '#9aa3b2';
+      const tint = (a && pal.tints[a.action]) || pal.flat;
       verdict = '<div class="sp-block"><div class="sp-head">What the rules read</div>' +
         '<div class="sp-verd" style="border-color:' + tint + '33">' +
         (a && a.action
@@ -2571,6 +2636,49 @@
     .mrow .mv.pos { color: var(--green); } .mrow .mv.neg { color: var(--red); }
     .mnone { font-size: 19px; color: var(--faint); padding: 10px 0; }
     /* a long list tightens instead of running off the card */
+    /* ---- the two alternate grounds -------------------------------------
+       The token block is most of the work: ~35 var() uses in this stylesheet
+       resolve against whatever the theme declares, so the chrome, the type
+       and every hairline follow from it. What a token CANNOT reach is
+       rgba(255,255,255,.0x) — 25 of them, and on a light ground they are
+       invisible rather than wrong, which is the failure that looks like an
+       empty card rather than a broken one. Each one the SPOTLIGHT draws is
+       overridden below; the other templates keep their dark ground until
+       they are done one at a time.
+       (No backticks in here. STYLE is a template literal and one inside a
+       CSS comment ends the string.) */
+    .s-art.th-light {
+      --text: #0d1017; --muted: #5b6675; --faint: #64707f;
+      --green: #157a51; --red: #c81e37; --amber: #a15c07;
+      --accent: #3060e8; --accent-2: #6d3fd4;
+      --hair: rgba(13, 16, 23, 0.10); --hair-2: rgba(13, 16, 23, 0.17);
+      background: #f7f8fa; color: #0d1017; }
+    /* Three blooms of coloured light are atmosphere on black and stains on
+       white, so the light ground gets two at a tenth of the alpha. */
+    .s-art.th-light .s-aura {
+      background:
+        radial-gradient(80% 55% at 6% -8%, rgba(21, 122, 81, 0.07), transparent 66%),
+        radial-gradient(70% 50% at 100% 0%, rgba(48, 96, 232, 0.06), transparent 68%); }
+    .s-art.th-light .s-glyph {
+      background: linear-gradient(160deg, rgba(21, 122, 81, 0.16), rgba(21, 122, 81, 0.05));
+      border-color: rgba(21, 122, 81, 0.34); color: #157a51; }
+    .s-art.th-light .sp-head { border-bottom-color: rgba(13, 16, 23, 0.14); }
+    .s-art.th-light .sp-cell { background: rgba(13, 16, 23, 0.05); }
+    .s-art.th-light .sp-verd { background: rgba(13, 16, 23, 0.035); }
+    .s-art.th-light .trk .trail { background: rgba(13, 16, 23, 0.07); }
+
+    /* NAVY IS A GROUND AND AN AURA, and that is the whole theme. Measured on
+       #0d1a2d the dark palette still clears 4.5:1 everywhere (green 9.1, red
+       6.5, amber 10.5), so nothing else has to move and the white-alpha
+       furniture keeps working. --faint alone is lifted: it landed at 4.81,
+       the closest to the floor, and it paints the smallest text on the card. */
+    .s-art.th-navy { --faint: #8b95a5; background: #0d1a2d; }
+    .s-art.th-navy .s-aura {
+      background:
+        radial-gradient(72% 52% at 6% -6%, rgba(52, 211, 153, 0.13), transparent 64%),
+        radial-gradient(78% 56% at 100% 2%, rgba(124, 156, 255, 0.17), transparent 66%),
+        radial-gradient(62% 42% at 50% 110%, rgba(34, 211, 238, 0.10), transparent 72%); }
+
     /* ---- the stock spotlight ------------------------------------------
        One company on one artboard: the line, its year, eight figures and the
        verdict. The blocks spread through whatever the body leaves, the day
@@ -3144,6 +3252,9 @@
     // server's saved-post builder read the SAME catalogue rather than
     // restating it, the way CHART_WINDOWS already is.
     CHART_MAS, chartHistoryNeed,
+    // Which classes the artboard needs for the chosen ground. Three hosts
+    // draw an .s-art and none of them holds the palette; see themeOf.
+    themeClass: (opts) => themeOf(opts).cls,
     // ...and which templates want the basket at all, with the window each
     // one asks for. Exported for the same reason: two hosts, one pairing.
     basketDays,
@@ -3182,6 +3293,7 @@
       screens = Array.isArray(c.screens) ? c.screens : [];
       size = c.size || { id: 'portrait', w: 1080, h: 1350 };
       O = c.opts || {};
+      pal = themeOf(O);
       getBasket = c.getBasket || (() => null);
       getHistory = c.getHistory || (() => null);
       chartOne = c.chart || null;

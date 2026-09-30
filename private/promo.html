@@ -549,6 +549,12 @@
         </select>
         <label>Rules</label>
         <select id="spotProf"></select>
+        <label>Ground</label>
+        <select id="spotTheme">
+          <option value="dark" selected>Dark</option>
+          <option value="light">Light</option>
+          <option value="navy">Navy</option>
+        </select>
         <p class="hint">The window moves the chart alone \u2014 the eight figures are
           the stock's own fixed periods, and the range track is always its year.
           A verdict always carries the rule that fired and the rule set's name.</p>
@@ -714,7 +720,7 @@
       'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen',
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen',
       'dayMetric', 'dayCount', 'dayFloor',
-      'spotSym', 'spotWin', 'spotProf',
+      'spotSym', 'spotWin', 'spotProf', 'spotTheme',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
       const o = {};
@@ -752,6 +758,9 @@
       const stage = $('stage');
       stage.style.height = size.h + 'px';
       // the card's own styles key off the shape it is being drawn into
+      stage.classList.remove('th-light', 'th-navy');
+      const themeCls = Cards.themeClass(controlOpts());
+      if (themeCls) stage.classList.add(themeCls);
       stage.classList.remove('sz-portrait', 'sz-square', 'sz-story');
       stage.classList.add('sz-' + size.id);
       stage.innerHTML = '<div class="s-aura"></div>' +
@@ -890,7 +899,7 @@
       $(id).addEventListener('change', () => { if (tpl === 'bubble') render(); }));
     ['dayMetric', 'dayCount', 'dayFloor'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
-    ['spotSym', 'spotWin', 'spotProf'].forEach((id) =>
+    ['spotSym', 'spotWin', 'spotProf', 'spotTheme'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'spotlight') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
