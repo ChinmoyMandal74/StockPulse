@@ -81,14 +81,19 @@
                 font: 400 12px var(--sans); }
     .panel .btn { margin-top: 12px; width: 100%; justify-content: center; }
 
-    /* The deck is deliberately NOT the card's black: the artboard edge has
-       to be findable, or a screenshot is guesswork. The dashed guide sits
-       OUTSIDE the stage (outline + offset), so cropping at the card edge
-       never captures it. */
+    /* The deck is deliberately NOT the card's black: the artboard edge has to
+       be findable against it.
+       THE DASHED CROP GUIDE IS GONE (2026-09-30, owner: "I don't need it
+       anymore as I have the download option"), and that is the right reason
+       — it existed for MANUAL SCREENSHOTTING, which Download PNG replaced.
+       It never reached the output: it was an `outline` at `outline-offset`,
+       so it drew outside the element's box while the canvas is sized to the
+       artboard. Verified rather than reasoned — the exported PNG is
+       byte-identical with it and without it. The drop shadow, which does the
+       remaining work of separating the card from the deck, stays. */
     .deck { flex: 1; display: grid; place-items: center; overflow: auto; padding: 28px;
             background: #10141c; }
-    #stage { outline: 2px dashed rgba(124, 156, 255, 0.55); outline-offset: 7px;
-             box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.9); }
+    #stage { box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.9); }
 
     /* ---- the artboard -------------------------------------------------- */
     #stageWrap { flex: none; }
@@ -504,7 +509,7 @@
 
       <!-- The whole day. Deliberately has NO scope pickers: every other data
            template answers "which stocks?", and this one answers "what did the
-           market do" \u2014 a sector breakdown of one sector is not a breakdown.
+           market do" — a sector breakdown of one sector is not a breakdown.
            So there is no daySector/dayIndustry/dayCap/dayScreen, and
            INDUSTRY_PREFIXES is left alone. -->
       <div id="dayBox">
@@ -520,11 +525,11 @@
           <option value="15">Top 15</option>
         </select>
         <p class="hint">The square holds five a side and a story fifteen, whatever is
-          asked \u2014 a card cannot scroll, so a longer list is trimmed rather than
+          asked — a card cannot scroll, so a longer list is trimmed rather than
           printed over the masthead.</p>
         <label>Smallest company in the movers</label>
         <select id="dayFloor">
-          <option value="0">No floor \u2014 every stock</option>
+          <option value="0">No floor — every stock</option>
           <option value="1000000000" selected>Over $1B (97.5% of the screen)</option>
           <option value="10000000000">Over $10B (67.2%)</option>
           <option value="50000000000">Over $50B (24.6%)</option>
@@ -555,7 +560,7 @@
           <option value="light">Light</option>
           <option value="navy">Navy</option>
         </select>
-        <p class="hint">The window moves the chart alone \u2014 the eight figures are
+        <p class="hint">The window moves the chart alone — the eight figures are
           the stock's own fixed periods, and the range track is always its year.
           A verdict always carries the rule that fired and the rule set's name.</p>
       </div>
