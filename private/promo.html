@@ -534,8 +534,15 @@
           <option value="10000000000">Over $10B (67.2%)</option>
           <option value="50000000000">Over $50B (24.6%)</option>
         </select>
-        <p class="hint">The floor narrows the movers only. The sectors are always
-          cap-weighted over the whole screen, and the indexes are never part of it.</p>
+        <p class="hint">The floor narrows the movers only. The sectors are the
+          Select Sector SPDRs' own returns, and neither the indexes nor the sector
+          funds are ever counted among the movers.</p>
+        <label>Ground</label>
+        <select id="dayTheme">
+          <option value="dark" selected>Dark</option>
+          <option value="light">Light</option>
+          <option value="navy">Navy</option>
+        </select>
       </div>
 
       <!-- One stock, in full. Three controls and no scope pickers: the card
@@ -724,7 +731,7 @@
       'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap', 'fundScreen',
       'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen',
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen',
-      'dayMetric', 'dayCount', 'dayFloor',
+      'dayMetric', 'dayCount', 'dayFloor', 'dayTheme',
       'spotSym', 'spotWin', 'spotProf', 'spotTheme',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
@@ -764,7 +771,7 @@
       stage.style.height = size.h + 'px';
       // the card's own styles key off the shape it is being drawn into
       stage.classList.remove('th-light', 'th-navy');
-      const themeCls = Cards.themeClass(controlOpts());
+      const themeCls = Cards.themeClass(tpl, controlOpts());
       if (themeCls) stage.classList.add(themeCls);
       stage.classList.remove('sz-portrait', 'sz-square', 'sz-story');
       stage.classList.add('sz-' + size.id);
@@ -902,7 +909,7 @@
     })();
     ['bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'bubble') render(); }));
-    ['dayMetric', 'dayCount', 'dayFloor'].forEach((id) =>
+    ['dayMetric', 'dayCount', 'dayFloor', 'dayTheme'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
     ['spotSym', 'spotWin', 'spotProf', 'spotTheme'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'spotlight') render(); }));

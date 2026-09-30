@@ -8796,7 +8796,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   res.json({ id: post.id, name: post.name, tpl: post.tpl, size, html, style: Cards.STYLE,
     // The phone does not hold the post's controls, so the ground it has to
     // paint travels with the card rather than being re-derived there.
-    theme: Cards.themeClass(post.opts || {}),
+    theme: Cards.themeClass(post.tpl, post.opts || {}),
     updatedAt: (snap && snap.updatedAt) || null });
 }));
 

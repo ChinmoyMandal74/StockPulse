@@ -97,6 +97,22 @@
       ['IWM', 'Russell 2000'], ['DIA', 'Dow 30']];
     const IS_BENCH = new Set(BENCH.map((b) => b[0]));
 
+    // THE ELEVEN SELECT SECTOR SPDRs, one per GICS sector. Our sector names
+    // map one-to-one onto GICS at sector level, which is what makes this a
+    // complete set rather than a sample.
+    //
+    // Restated here rather than read from the server, for the reason
+    // `benchmarks()` is: this module has no requires and no DOM, which is what
+    // lets a card render identically in Node and the browser. Exported so a
+    // test can assert the two lists agree rather than hope.
+    const SECTOR_ETF = [
+      ['Technology', 'XLK'], ['Financial Services', 'XLF'], ['Healthcare', 'XLV'],
+      ['Energy', 'XLE'], ['Industrials', 'XLI'], ['Consumer Cyclical', 'XLY'],
+      ['Consumer Defensive', 'XLP'], ['Utilities', 'XLU'], ['Real Estate', 'XLRE'],
+      ['Basic Materials', 'XLB'], ['Communication Services', 'XLC'],
+    ];
+    const IS_SECTOR_ETF = new Set(SECTOR_ETF.map((s) => s[1]));
+
     // ---- templates ---------------------------------------------------------
     // Gainers and losers are separate cards on purpose — the owner's call:
     // a mixed |move| list buries the story either half tells alone.
@@ -895,7 +911,15 @@
     // stage. Left to each host to derive, a saved light post draws a light
     // chart on a black ground, silently. The `basketDays` lesson: one
     // pairing, asked of the module.
-    const themeOf = (opts) => THEMES[(opts || {}).spotTheme] || THEMES.dark;
+    //
+    // ONE PAIRING, ASKED OF THE MODULE — the same shape as `basketDays`. Each
+    // themed template keeps its ground under its OWN control id, so a reader
+    // who set the spotlight to navy does not silently change the day card
+    // too. A hardcoded `opts.spotTheme` worked while one card was themed and
+    // would have read the wrong control the moment a second was.
+    const THEME_KEY = { spotlight: 'spotTheme', day: 'dayTheme' };
+    const themeOf = (tpl, opts) =>
+      THEMES[(opts || {})[THEME_KEY[tpl]]] || THEMES.dark;
 
     const CHART_PALETTE = ['#34d399', '#22d3ee', '#a78bfa', '#fbbf24', '#fb923c',
                            '#f472b6', '#a3e635', '#60a5fa'];
@@ -1900,28 +1924,61 @@
       const r = bySym.get(sym);
       return r && r.todayPct != null ? { label, v: r.todayPct } : null;
     }).filter(Boolean);
-    // ...and are therefore removed from every aggregate below.
-    const pool = stocks.filter((x) => x && !IS_BENCH.has(x.symbol));
+    // ...and are therefore removed from every aggregate below — and so are
+    // the SECTOR funds, for exactly the same reason now that the sector block
+    // is drawn from them. A fund listed among the day's movers, directly under
+    // a block that already reports it as its sector, is the index-in-its-own-
+    // market error twice over. They carry a real market cap (a fund reports
+    // AUM) and clear the $1B floor, so nothing else would have excluded them.
+    const pool = stocks.filter((x) => x && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol));
 
-    // ---- sectors, ALWAYS cap-weighted (the owner's instruction) ---------
+    // ---- sectors: THE FUNDS' OWN RETURNS (owner, 2026-09-30) -------------
+    // The sector block used to aggregate our own stocks, cap-weighted. The
+    // fund is the better source and it is not close: it needs no weighting
+    // choice, it is the published tradeable number, and it sidesteps the two
+    // things that made the computed version disagree with it — measured the
+    // same day, our Technology ran 44.9 points above XLK over a year, because
+    // this pool is 214 names against the fund's ~70 and because our cap
+    // weighting is uncapped where a RIC-diversified fund holds nothing near
+    // the 52.2% Alphabet reached in Communication Services here.
+    //
+    // THE COMPUTED AGGREGATE STAYS AS THE FALLBACK, for an instance that does
+    // not hold the funds — the card still draws, and the head says WHICH
+    // basis is on screen rather than leaving two different numbers looking
+    // like one thing.
+    const etfSecs = SECTOR_ETF.map(([name, sym]) => {
+      const r = bySym.get(sym);
+      return (r && r.todayPct != null) ? { name, v: r.todayPct } : null;
+    }).filter(Boolean);
+
     // Two exclusions, and they are different rules. A missing return is
     // ABSENT, never zero — Number(null) is 0 and finite, and a fabricated
     // flat stock drags a mean. A stock with no market cap cannot carry a
     // weight at all, since a fund reports AUM rather than capitalisation;
     // `w > 0` rejects null and zero in one test.
     const agg = new Map();
-    for (const x of pool) {
-      if (!x.sector) continue;            // the blank bucket is not a sector
-      const w = x.marketCap;
-      const v = x.todayPct;
-      if (!(w > 0) || v == null) continue;
-      const a = agg.get(x.sector) || { w: 0, wv: 0, n: 0 };
-      a.w += w; a.wv += w * v; a.n++;
-      agg.set(x.sector, a);
+    if (!etfSecs.length) {
+      for (const x of pool) {
+        if (!x.sector) continue;          // the blank bucket is not a sector
+        const w = x.marketCap;
+        const v = x.todayPct;
+        if (!(w > 0) || v == null) continue;
+        const a = agg.get(x.sector) || { w: 0, wv: 0, n: 0 };
+        a.w += w; a.wv += w * v; a.n++;
+        agg.set(x.sector, a);
+      }
     }
-    const secs = [...agg.entries()].map(([name, a]) => ({ name, v: a.wv / a.w, n: a.n }))
+    const byEtf = etfSecs.length > 0;
+    const secs = (byEtf ? etfSecs
+      : [...agg.entries()].map(([name, a]) => ({ name, v: a.wv / a.w, n: a.n })))
       .sort((a, b) => b.v - a.v);
     const sMax = Math.max(...secs.map((x) => Math.abs(x.v)), 0.01);
+    // Eleven is the whole set; fewer means a fund is not held, and the head
+    // says so rather than quietly showing nine sectors as though that were
+    // all of them.
+    const secHead = byEtf
+      ? 'Sectors · sector funds' + (secs.length < SECTOR_ETF.length ? ' (' + secs.length + ' of ' + SECTOR_ETF.length + ')' : '')
+      : 'Sectors · cap-weighted';
 
     // ---- the two ends of the move ---------------------------------------
     // A CAP FLOOR, and the measurement is more modest than the argument for
@@ -1969,7 +2026,7 @@
       : '';
 
     const secBlock = secs.length
-      ? `<div class="dy-block"><div class="dy-head">Sectors · cap-weighted</div>` +
+      ? `<div class="dy-block"><div class="dy-head">${esc(secHead)}</div>` +
         '<div class="dy-grid">' + secs.map((x) => {
           const w = Math.max(4, Math.round(Math.abs(x.v) / sMax * 100));
           return '<div class="dy-row"><span class="dy-lab">' + esc(x.name) + '</span>' +
@@ -2677,6 +2734,18 @@
     .s-art.th-light .sp-head { border-bottom-color: rgba(13, 16, 23, 0.14); }
     .s-art.th-light .sp-cell { background: rgba(13, 16, 23, 0.05); }
     .s-art.th-light .sp-verd { background: rgba(13, 16, 23, 0.035); }
+    /* The day card's own white-alpha furniture. Three surfaces and two bar
+       gradients: invisible rather than wrong on a light ground, which is the
+       failure that reads as an empty card. The gradient's soft end is the
+       LIGHT green and red, or the bar fades into the page instead of into
+       its own colour. */
+    .s-art.th-light .dy-head { border-bottom-color: rgba(13, 16, 23, 0.14); }
+    .s-art.th-light .dy-chip { background: rgba(13, 16, 23, 0.05); }
+    .s-art.th-light .dy-rail { background: rgba(13, 16, 23, 0.06); }
+    .s-art.th-light .dy-bar {
+      background: linear-gradient(90deg, rgba(21, 122, 81, 0.30), var(--green)); }
+    .s-art.th-light .dy-bar.neg {
+      background: linear-gradient(90deg, rgba(200, 30, 55, 0.30), var(--red)); }
     /* The .trk override that sat here went with the 52-week track: the
        spotlight was its only themed consumer, and a rule nothing can reach
        reads as intent. */
@@ -3271,7 +3340,10 @@
     CHART_MAS, chartHistoryNeed,
     // Which classes the artboard needs for the chosen ground. Three hosts
     // draw an .s-art and none of them holds the palette; see themeOf.
-    themeClass: (opts) => themeOf(opts).cls,
+    // Takes the TEMPLATE as well as the options, because which control
+    // holds the ground depends on which card is being drawn.
+    themeClass: (tpl, opts) => themeOf(tpl, opts).cls,
+    sectorEtfs: () => SECTOR_ETF.map((s) => s.slice()),
     // ...and which templates want the basket at all, with the window each
     // one asks for. Exported for the same reason: two hosts, one pairing.
     basketDays,
@@ -3310,7 +3382,7 @@
       screens = Array.isArray(c.screens) ? c.screens : [];
       size = c.size || { id: 'portrait', w: 1080, h: 1350 };
       O = c.opts || {};
-      pal = themeOf(O);
+      pal = themeOf(id, O);
       getBasket = c.getBasket || (() => null);
       getHistory = c.getHistory || (() => null);
       chartOne = c.chart || null;
