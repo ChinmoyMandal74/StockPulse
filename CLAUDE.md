@@ -2656,6 +2656,26 @@ Both needed their own correctness check, and the second is the one that proved i
 Verified: **128 checks over 75 combinations, 0 failed**, plus the spotlight theme suite (26, worst contrast now 5.02 on light against 4.74) and the day suite (89). **Proved by reverting eight times**: the ink table fails 4, the verdict ladder 1, the avatar mark 1, the marker ring 2, the wash comparison 1, the tile-tuned tokens 3, the bubble tints 1, the chart line 1.
 - **`size-scope-test.js`'s `NO_SCOPE` list was stale and failed at HEAD too** — it predates `day`, `spotlight` and `stock` being templates, all three of which are scope-free by design.
 
+### A `1fr` TRACK HAS A MIN-CONTENT FLOOR, and two cards had been cut off by it (2026-09-30, owner: "the sparkles charts are not centered, they are cutting off from the right")
+**Reported against the light ground and present on every ground since those cards were written.** `.spk` and `.zgrid` both set `grid-template-columns: repeat(N, 1fr)`, and **`1fr` is `minmax(auto, 1fr)`** — that auto floor is the item's MIN-CONTENT, so one long company name holds its column open, the tracks stop being equal, and their sum runs past the grid. Measured on the DARK ground before any fix:
+
+| | tracks in a 952px body | drawn past the artboard |
+|---|---|---|
+| sparks, square x9 | 321 / 349 / 455 | **+142px** |
+| sparks, story x12 | 375 / 464 / 536 | **+400px** |
+| size, story | — | **+1,597px** (3,060px of track spill) |
+
+- **The fix is `repeat(N, minmax(0, 1fr))`**, inline where the column count is known. **ONE MECHANISM, NOT TWO**: `min-width: 0` on the tile and its header fixes it equally well, and the first cut shipped both — so each revert came back clean while the other quietly held the line, which reads exactly like a guard that was never load-bearing. Three rules were deleted once the reverts said so.
+- **THE SIZE CARD HAD A SECOND, INDEPENDENT FAULT the sweep found on its own**: `MAXR` is derived from `CELL`, which is `(size.h - FURNITURE) / gridRows` — **the artboard's HEIGHT and nothing else**. A disc is a square, so it is bounded by the narrower of its cell's height budget and its column's WIDTH; only height was ever considered. It shows on the story alone because that artboard is tall enough that height never binds — a four-column grid drew 326px discs in 232px tracks. **This is the only one of the four that bites when reverted (2 checks).**
+
+#### NOTHING HERE HAD EVER MEASURED WIDTH
+`size-fit`, `note-fit` and the day and spotlight sweeps all measure the body's HEIGHT against the artboard. That is the gap this lived in: a card cannot scroll sideways either, and 400px of a ranked list was simply gone. **`width-sweep.js`** walks 75 artboard x template x mode combinations and reports anything drawn past the body's content box.
+
+- **THE CONTAINER'S OWN RECT IS THE WRONG BOX, and my first overflow check read "clean" over a card that is visibly cut off.** A grid keeps its 952px width while its TRACKS overflow, so `grid.getBoundingClientRect().width` says nothing. The honest measures are the CHILDREN's right edges against the content box, and `scrollWidth` against `clientWidth` — the same wrong-box error as reading `.s-in`'s `scrollHeight` for vertical fit, which this file already records.
+- **A DELIBERATE FULL BLEED IS NOT AN OVERFLOW.** The avatar card undoes the stage's padding with negative side margins so a mark reaches every edge; it measured +128px, which is exactly the two 64px gutters — the feature working. A negative horizontal margin is that intent stated in the style, so such an element and its contents are exempt, and the artboard's own `overflow: hidden` is what makes that safe.
+- **A FIXTURE IS AN INPUT, AND "LONG" IS A MEASUREMENT — met twice in one hour.** The before/after screenshot came out IDENTICAL on a fixture of nine tidy names: the bug needs a name long enough to hold its column open, and the live universe has 58 display names past 28 characters and one of 99. The same lesson the spotlight's headline step-down records.
+- **A CHECK THAT PASSES SILENTLY CANNOT BE COUNTED.** The grid-spill check incremented the tally without printing, so the sweep reported 79 checks while emitting 40 lines — and the revert harness, which counts PASS/FAIL in the output, **refused the baseline as broken and was right to**: a harness that cannot count its own checks cannot tell a clean run from one that never happened. It cost two wasted runs before it was read properly.
+
 ### The Intro copy went stale, and one line of it was false (2026-09-26, owner asked for a review)
 **Reviewed before the first Instagram post.** All 15 slides across the four topics rendered clean against the live snapshot with no errors; **the rendering was never the problem, the words were.** The deck is now 16 slides.
 

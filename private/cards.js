@@ -1453,7 +1453,7 @@
       return chromeTop() +
         `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 ${esc(winLabel)}</span>` +
         `<h2 class="s-title">${best ? 'The leaders' : 'The laggards'}<br><span class="dim">${esc(winLabel)}</span></h2>` +
-        `<div class="spk" style="grid-template-columns:repeat(${cols},1fr)">${items.map((it) => {
+        `<div class="spk" style="grid-template-columns:repeat(${cols},minmax(0,1fr))">${items.map((it) => {
           const color = it.end >= 0 ? pal.up : pal.down;
           return '<div class="spkt">' +
             `<div class="sh"><span class="ss">${esc(it.label || it.sym)}</span>` +
@@ -1868,7 +1868,15 @@
     const NAME_H = size.id === 'story' ? 30 : 26;
     const TEXT_H = NAME_H * 2 + (size.id === 'story' ? 29 : 25) + (O.sizeThird && O.sizeThird !== 'none'
       ? (size.id === 'story' ? 25 : 22) : 0);
-    const MAXR = Math.max(26, Math.min(CELL * 0.39, (CELL - TEXT_H) / 2));
+    // A DISC IS A SQUARE, so it is bounded by the narrower of its cell's
+    // HEIGHT budget and its column's WIDTH — and only the height was ever
+    // considered. It shows on the story alone because that artboard is tall
+    // enough that the height never binds: measured, a four-column grid drew
+    // 326px discs in 232px tracks and spilled 119px off the card. The body's
+    // content box is 952px on every shape (the 64px side padding does not
+    // vary), and .zgrid's column gap is 8px.
+    const COLW = (952 - 8 * (cols - 1)) / cols;
+    const MAXR = Math.max(26, Math.min(CELL * 0.39, (CELL - TEXT_H) / 2, (COLW - 6) / 2));
     // The scale is set by the largest company, so everything else is honestly
     // smaller: r = R * sqrt(v / vmax) keeps AREA proportional to the value.
     const big = rows[0][oField];
@@ -1935,7 +1943,7 @@
       + '<h2 class="s-title">Size<br><span class="dim">' + esc(oLabel.toLowerCase())
       + (inner ? ' and ' + esc(inner[0].toLowerCase()) : '') + '</span></h2>'
       + '<div class="zlegend">' + legend + '</div>'
-      + '<div class="zgrid" style="grid-template-columns:repeat(' + cols + ',1fr)">' + body + '</div>'
+      + '<div class="zgrid" style="grid-template-columns:repeat(' + cols + ',minmax(0,1fr))">' + body + '</div>'
       + '<p class="s-sub wide" style="--fs:17px;margin-top:20px">Circle AREA is the measure, not its width. '
       + 'The largest here is ' + (ratio >= 100 ? Math.round(ratio) : ratio.toFixed(1)) + '× the smallest.'
       + (inner && inner[2] === 'money'
@@ -3316,6 +3324,18 @@
     .sz-story .trk .tlo, .sz-story .trk .thi { font-size: 25px; }
 
     /* sparklines: one small chart per stock, each reading on its own */
+    /* A 1fr TRACK IS minmax(auto, 1fr), AND THAT AUTO FLOOR IS THE
+       ITEM'S MIN-CONTENT — so one long company name held its column open and
+       the tracks summed PAST the grid, which keeps its own width while its
+       tracks spill. Measured before the fix: three tracks of 321/349/455 in
+       a 952px body, the third column drawn 142px off a square artboard and
+       400px off a story. Reported from a screenshot; every fit sweep here
+       measures HEIGHT, so nothing could have caught it.
+       ONE MECHANISM, NOT TWO. A min-width:0 on the tile and its header
+       fixes this equally well, and shipping both meant each revert came
+       back clean while the other quietly held the line — which reads
+       exactly like a guard that was never load-bearing. The floor goes on
+       the TRACK, inline, where the column count is known. */
     .spk { display: grid; gap: 16px; margin-top: 32px; }
     .spkt { padding: 16px 18px 12px; border-radius: 16px; border: 1px solid var(--hair);
             background: rgba(255, 255, 255, 0.024); }
@@ -3332,8 +3352,12 @@
        circle's position never encodes anything — only its area does. Both
        discs are absolutely positioned about the same centre, which is what
        makes them concentric at any pair of sizes. */
+    /* The same 1fr floor as the sparks grid, and far worse here: measured
+       at 1,607px of spill on a post and 3,060px on a story, because a long
+       name under a disc has no ellipsis to shrink into. */
     .zgrid { display: grid; gap: 10px 8px; margin-top: 26px; }
-    .zcell { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+    .zcell { display: flex; flex-direction: column; align-items: center;
+             justify-content: flex-end; }
     .zdisc { position: relative; margin: auto auto 12px; }
     .zc { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
           border-radius: 50%; display: block; }
