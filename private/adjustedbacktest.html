@@ -109,6 +109,19 @@
        neither. Colouring it would put a third claim in a column that makes
        only one. */
     #abTrades .tr .side.keep { color: var(--muted); }
+    #abTrades .tr .side.open { color: var(--accent); }
+    /* THE BOOK, AS A LIST. The rows under it say what CHANGED; this says what
+       is held, which is a different question and the one that was asked
+       twice. It leads each block because it is the answer. */
+    #abTrades .book { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+                      padding: 9px 0 11px; border-bottom: 1px solid var(--hair);
+                      margin-bottom: 4px; }
+    #abTrades .book .bk-l { color: var(--faint); font-size: 10.5px; letter-spacing: 0.1em;
+                            text-transform: uppercase; margin-right: 4px; }
+    #abTrades .book .bk-s { font-family: var(--mono); font-size: 11.5px; color: var(--text);
+                            background: rgba(255, 255, 255, 0.055); border-radius: 6px;
+                            padding: 2px 7px; }
+    #abTrades .book .bk-none { color: var(--muted); font-size: 12px; }
     #abTrades .tr .why { color: var(--muted); }
     #abTrades .tr .r { text-align: right; font: 500 11.5px var(--mono); }
     #abTrades h3, #abBandNote h3 { font-size: 12px; margin: 18px 0 8px;
@@ -389,7 +402,36 @@
     function trades() {
       if (!DATA.trades || !DATA.trades.length) { $('abTrades').innerHTML = ''; return; }
       var open = true;
-      $('abTrades').innerHTML = '<h3>What each rebalance traded</h3>'
+      // THE BOOK AS A LIST, at the head of every block. The rows below it say
+      // what CHANGED at that date; this says what is HELD from it — a
+      // different question, and the one actually asked: "what was the new
+      // position on 1-April". Naming the kept and bought rows answers it only
+      // if the reader adds them up, which is work the page should do.
+      var bookLine = function (label, syms) {
+        return '<div class="book"><span class="bk-l">' + we(label) + '</span>'
+          + (syms.length
+            ? syms.map(function (s) { return '<span class="bk-s">' + we(s) + '</span>'; }).join('')
+            : '<span class="bk-none">nothing held \u2014 in cash until the next rebalance</span>')
+          + '</div>';
+      };
+      // THE OPENING BOOK, which had no block at all: the log started at the
+      // FIRST REBALANCE, so the positions taken on the start date were only
+      // ever visible as ticks in the picks table further down. It is a block
+      // like any other, and it is the one the reader looks for first.
+      var openPicks = (DATA.picks || []).filter(function (p) { return p.selected; });
+      var opening = '<details open><summary><span class="d">' + we(DATA.date)
+        + '</span><span class="q">opening book \u00b7 ' + openPicks.length
+        + ' position' + (openPicks.length === 1 ? '' : 's') + '</span></summary>'
+        + '<div class="body">'
+        + bookLine('Held from ' + DATA.date, openPicks.map(function (p) { return p.symbol; }))
+        + openPicks.map(function (p) {
+          return '<div class="tr"><span class="sym">' + we(p.symbol) + '</span>'
+            + '<span class="side open">opened</span>'
+            + '<span class="why">' + we((p.action || '?') + (p.flag ? ' \u2014 ' + p.flag : ''))
+            + '</span><span class="r"></span></div>';
+        }).join('')
+        + '</div></details>';
+      $('abTrades').innerHTML = '<h3>The book at every date</h3>' + opening
       + DATA.trades.map(function (t) {
         // UNDER A CUT A HOLDING CAN BE SOLD WITH ITS VERDICT INTACT — it was
         // ranked out, not downgraded. Without saying so the log reads as
@@ -412,6 +454,19 @@
               + ' more, not listed.</span><span class="r"></span></div>'
             : '';
         };
+        // Kept and bought ARE the book going forward, so the list is built
+        // from the same two arrays the rows are — it cannot disagree with
+        // them. Capped lists are the one case it can fall short of `held`,
+        // and it says so rather than looking complete.
+        var bookSyms = t.kept.map(function (x) { return x.sym; })
+          .concat(t.bought.map(function (x) { return x.sym; }));
+        var book = bookLine('Held from ' + t.d, bookSyms)
+          + (bookSyms.length < t.held
+            ? '<div class="tr"><span class="sym"></span><span class="side"></span>'
+              + '<span class="why" style="color:var(--faint)">\u2026and '
+              + (t.held - bookSyms.length) + ' more held, not listed.</span>'
+              + '<span class="r"></span></div>'
+            : '');
         var rows = t.kept.map(function (x) {
           // "so far", never a realised figure: this position is still open,
           // and printing it the way a sale's return is printed would be the
@@ -441,11 +496,13 @@
           + we(t.d) + '</span><span class="q">held ' + t.held + ' \u00b7 sold '
           + t.soldN + ' \u00b7 bought ' + t.boughtN + ' \u00b7 turnover '
           + (t.turnover == null ? '\u2014' : t.turnover.toFixed(0) + '%')
-          + '</span></summary><div class="body">' + rows + '</div></details>';
+          + '</span></summary><div class="body">' + book + rows + '</div></details>';
       }).join('')
       + '<p style="color:var(--muted);font-size:12px;line-height:1.6;margin:8px 2px 0">'
-      + 'Every position is listed: <b>held</b> and <b>bought</b> together are the book '
-      + 'going into that period, and they add up to the count beside the date. A name '
+      + 'The first block is the book on the start date; each one after it is the book '
+      + 'from that rebalance onward, listed in full at the top of the block. Under it, '
+      + 'what changed: <b>held</b> and <b>bought</b> together are that book, and they '
+      + 'add up to the count beside the date. A name '
       + 'that is kept is re-weighted rather than traded, so it moves dollars without '
       + 'being a trade \u2014 which is why the names will not add up to the turnover. '
       + 'The reason beside each is the verdict that fired for it on that date; for a '
