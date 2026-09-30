@@ -902,6 +902,43 @@
         legUp: 'rgba(52,211,153,0.55)', legDown: 'rgba(251,113,133,0.55)',
         tints: ADV_TINT,
       },
+      // ---- the six on trial (2026-09-30, owner: "add all these only on the
+      // day template so that I can see how it all looks") -------------------
+      //
+      // EVERY ONE IS DARK, AND THAT IS WHY THEY COST AN HOUR RATHER THAN A
+      // DAY. Measured against all seven palette colours before any was drawn:
+      // on every dark ground here the whole palette clears 4.5:1 and NOTHING
+      // moves, where the same palette on #f7f8fa fails all seven (green 1.8,
+      // amber 1.6). So each of these is a ground and an aura; they inherit
+      // dark's values wholesale, and a later edit to the dark palette carries
+      // to all of them.
+      //
+      // NONE IS ANALOGOUS TO A SIGNAL COLOUR. Green is up, red is down, amber
+      // is "notice this" — a ground in any of those hues fights the one thing
+      // the card's colours have to mean, which rules out most of what "make
+      // it colourful" would otherwise suggest.
+      ink: { cls: 'th-ink', axis: '#8b9099' },
+      aubergine: { cls: 'th-aubergine', axis: '#8f8aa5' },
+      petrol: { cls: 'th-petrol', axis: '#85959a' },
+      oxide: { cls: 'th-oxide', axis: '#8891a5' },
+      duotone: { cls: 'th-duotone', axis: '#8f8aa5' },
+      chrome: { cls: 'th-chrome', axis: '#7d8797' },
+    };
+    // The six above are written as a ground plus one lifted token, so fill in
+    // the rest of the dark palette rather than restating it six times — a copy
+    // is a thing to forget when the dark palette next moves.
+    for (const k of ['ink', 'aubergine', 'petrol', 'oxide', 'duotone', 'chrome']) {
+      THEMES[k] = Object.assign({}, THEMES.dark, THEMES[k]);
+    }
+
+    // WHICH GROUNDS A TEMPLATE MAY USE, enforced here rather than only by
+    // which options the markup happens to offer. "Only on the day template"
+    // is then true of the module: a spotlight post carrying `spotTheme: 'ink'`
+    // falls back to dark rather than quietly rendering a ground that card has
+    // never been checked on.
+    const THEME_SET = {
+      spotlight: ['dark', 'light', 'navy'],
+      day: ['dark', 'light', 'navy', 'ink', 'aubergine', 'petrol', 'oxide', 'duotone', 'chrome'],
     };
     let pal = THEMES.dark;
     // WHICH CLASSES THE ARTBOARD NEEDS IS THE MODULE'S QUESTION, NOT A HOST'S.
@@ -918,8 +955,12 @@
     // too. A hardcoded `opts.spotTheme` worked while one card was themed and
     // would have read the wrong control the moment a second was.
     const THEME_KEY = { spotlight: 'spotTheme', day: 'dayTheme' };
-    const themeOf = (tpl, opts) =>
-      THEMES[(opts || {})[THEME_KEY[tpl]]] || THEMES.dark;
+    const themeOf = (tpl, opts) => {
+      const want = (opts || {})[THEME_KEY[tpl]];
+      const allowed = THEME_SET[tpl];
+      if (!want || !allowed || allowed.indexOf(want) < 0) return THEMES.dark;
+      return THEMES[want] || THEMES.dark;
+    };
 
     const CHART_PALETTE = ['#34d399', '#22d3ee', '#a78bfa', '#fbbf24', '#fb923c',
                            '#f472b6', '#a3e635', '#60a5fa'];
@@ -2761,6 +2802,82 @@
         radial-gradient(72% 52% at 6% -6%, rgba(52, 211, 153, 0.13), transparent 64%),
         radial-gradient(78% 56% at 100% 2%, rgba(124, 156, 255, 0.17), transparent 66%),
         radial-gradient(62% 42% at 50% 110%, rgba(34, 211, 238, 0.10), transparent 72%); }
+
+    /* ---- the six on trial, day card only -------------------------------
+       Each is a GROUND and an AURA and nothing else: the dark palette clears
+       4.5:1 on every one of them, measured before any was drawn, so no hue
+       has to be re-valued the way the light theme's seven were. The white-
+       alpha furniture works unchanged for the same reason.
+       (No backticks in here. STYLE is a template literal.) */
+
+    /* INK — warm near-black. Editorial print rather than terminal; the
+       quietest of the six, for when the data should lead. */
+    .s-art.th-ink { --faint: #8b9099; background: #16120f; }
+    .s-art.th-ink .s-aura {
+      background:
+        radial-gradient(70% 50% at 6% -6%, rgba(251, 191, 36, 0.10), transparent 64%),
+        radial-gradient(76% 54% at 100% 2%, rgba(251, 113, 133, 0.09), transparent 66%),
+        radial-gradient(60% 40% at 50% 110%, rgba(255, 214, 170, 0.05), transparent 72%); }
+
+    /* AUBERGINE — the one that stops a scroll. Deep navy is the fintech
+       default, so violet is the least expected ground available that still
+       leaves green and red to mean what they mean. */
+    .s-art.th-aubergine { --faint: #8f8aa5; background: #171029; }
+    .s-art.th-aubergine .s-aura {
+      background:
+        radial-gradient(72% 52% at 6% -6%, rgba(167, 139, 250, 0.20), transparent 64%),
+        radial-gradient(78% 56% at 100% 2%, rgba(236, 72, 153, 0.13), transparent 66%),
+        radial-gradient(62% 42% at 50% 110%, rgba(124, 156, 255, 0.10), transparent 72%); }
+
+    /* PETROL — deep teal. Clears 9.3:1 on green and still reads slightly
+       muted, because a teal ground sits PERCEPTUALLY beside the up-signal in
+       a way a contrast ratio cannot see. Kept so that can be judged by eye. */
+    .s-art.th-petrol { --faint: #85959a; background: #071a1e; }
+    .s-art.th-petrol .s-aura {
+      background:
+        radial-gradient(72% 52% at 6% -6%, rgba(34, 211, 238, 0.16), transparent 64%),
+        radial-gradient(78% 56% at 100% 2%, rgba(52, 211, 153, 0.11), transparent 66%),
+        radial-gradient(62% 42% at 50% 110%, rgba(124, 156, 255, 0.09), transparent 72%); }
+
+    /* OXIDE — desaturated indigo, and close enough to navy that it may prove
+       to be a theme without a look. On trial to settle exactly that. */
+    .s-art.th-oxide { --faint: #8891a5; background: #111524; }
+    .s-art.th-oxide .s-aura {
+      background:
+        radial-gradient(72% 52% at 6% -6%, rgba(124, 156, 255, 0.18), transparent 64%),
+        radial-gradient(78% 56% at 100% 2%, rgba(167, 139, 250, 0.14), transparent 66%),
+        radial-gradient(62% 42% at 50% 110%, rgba(34, 211, 238, 0.08), transparent 72%); }
+
+    /* DUOTONE — a directional wash rather than three soft blooms, which is
+       what makes it read differently at feed size where a flat card reads as
+       one block of colour. BOTH ENDS HAD TO CLEAR, and the lighter one
+       decides: the plum corner is the lightest point at 4.9:1. */
+    .s-art.th-duotone {
+      --faint: #8f8aa5;
+      background: linear-gradient(145deg, #0b0d2b 0%, #150f26 52%, #1d0b24 100%); }
+    .s-art.th-duotone .s-aura {
+      background:
+        radial-gradient(64% 44% at 88% 8%, rgba(236, 72, 153, 0.13), transparent 68%),
+        radial-gradient(58% 40% at 8% 96%, rgba(34, 211, 238, 0.10), transparent 70%); }
+
+    /* ACCENT CHROME — the ground stays near-black and the FURNITURE takes a
+       hue: the kicker, the wordmark tile, the block heads and their rules.
+       THE SIGNALS ARE UNTOUCHED, which is the whole discipline of it — the
+       values stay green and red, so the card gains a character without any
+       number changing what it means. Cyan is chosen because it is the one
+       bright hue in this palette that is not already spent on a meaning. */
+    .s-art.th-chrome { --faint: #7d8797; background: #070708; }
+    .s-art.th-chrome .s-aura {
+      background:
+        radial-gradient(74% 52% at 6% -6%, rgba(34, 211, 238, 0.16), transparent 64%),
+        radial-gradient(70% 50% at 100% 4%, rgba(124, 156, 255, 0.10), transparent 68%); }
+    .s-art.th-chrome .s-kick { color: #22d3ee; }
+    .s-art.th-chrome .dy-head { color: #22d3ee; border-bottom-color: rgba(34, 211, 238, 0.30); }
+    .s-art.th-chrome .dy-head.pos { color: var(--green); }
+    .s-art.th-chrome .dy-head.neg { color: var(--red); }
+    .s-art.th-chrome .s-glyph {
+      background: linear-gradient(160deg, rgba(34, 211, 238, 0.30), rgba(34, 211, 238, 0.08));
+      border-color: rgba(34, 211, 238, 0.45); color: #22d3ee; }
 
     /* ---- the stock spotlight ------------------------------------------
        One company on one artboard: the line, its year, eight figures and the

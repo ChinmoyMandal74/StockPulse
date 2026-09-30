@@ -542,7 +542,18 @@
           <option value="dark" selected>Dark</option>
           <option value="light">Light</option>
           <option value="navy">Navy</option>
+          <option value="ink">Ink — warm near-black</option>
+          <option value="aubergine">Aubergine — deep violet</option>
+          <option value="petrol">Petrol — deep teal</option>
+          <option value="oxide">Oxide — indigo</option>
+          <option value="duotone">Duotone — indigo to plum</option>
+          <option value="chrome">Accent chrome — cyan furniture</option>
         </select>
+        <p class="hint">The six below Navy are on trial on this card only, to be
+          looked at rather than described. Every one is dark, which is why they
+          cost nothing: the whole palette clears 4.5:1 on each, where it fails all
+          seven colours on a light ground. None is green, red or amber — a ground
+          in a signal hue fights the one thing the numbers have to mean.</p>
       </div>
 
       <!-- One stock, in full. Three controls and no scope pickers: the card
@@ -770,7 +781,14 @@
       const stage = $('stage');
       stage.style.height = size.h + 'px';
       // the card's own styles key off the shape it is being drawn into
-      stage.classList.remove('th-light', 'th-navy');
+      // Strip whatever ground is on the stage, not a list of the ones that
+      // existed when this was written — with two themes the hardcoded pair
+      // worked, and with nine the classes PILED UP, so the stage ended as
+      // `th-ink th-aubergine th-petrol …` and the last rule in the sheet won.
+      // Caught by the suite rather than by eye, which is the only reason it
+      // is not a shipped bug.
+      [...stage.classList].filter((c) => c.startsWith('th-'))
+        .forEach((c) => stage.classList.remove(c));
       const themeCls = Cards.themeClass(tpl, controlOpts());
       if (themeCls) stage.classList.add(themeCls);
       stage.classList.remove('sz-portrait', 'sz-square', 'sz-story');
