@@ -687,6 +687,24 @@
     #peers td.down, #peers td.neg { color: var(--red); }
     #peers td.na { color: var(--faint); }
     #peers td.cmp { padding-left: 10px; }
+    /* The anchor's own row. A TINT and nothing louder: the palette's colours
+       all mean something on this page (green and red are direction, amber is
+       "notice this", the accent is a link), and "this is the stock you are
+       looking at" is not a reading about the data. Same treatment as a
+       hovered row, held on. */
+    #peers tr.me td { background: rgba(255, 255, 255, 0.05); }
+    #peers tr.me td:first-child { border-top-left-radius: 9px; border-bottom-left-radius: 9px; }
+    #peers tr.me td:last-child { border-top-right-radius: 9px; border-bottom-right-radius: 9px; }
+    /* The same box as `.namelink`, because it stands in the same place: a
+       long legal name has to truncate here exactly as a peer's does, or the
+       one row that is not a link is the one row that breaks the column. */
+    #peers td.nm .self { display: inline-block; max-width: 230px; overflow: hidden;
+                         text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;
+                         color: var(--text); font-weight: 600; }
+    #peers .here { display: inline-block; margin-left: 9px; padding: 1px 7px; border-radius: 999px;
+                   border: 1px solid var(--hair); font-family: var(--sans); font-size: 9.5px;
+                   letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint);
+                   vertical-align: 1px; }
     /* .rng never resets it, so as an <a> the pill arrives underlined. */
     #peers td.cmp .rng { padding: 2px 8px; font-size: 11px; text-decoration: none; }
     #peers .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
@@ -848,9 +866,15 @@
        the whole viewport. The compare pill goes: the row itself already opens
        the stock, and /compare is not a phone-shaped page. */
     @media (max-width: 620px) {
-      #peers td.nm .namelink { max-width: 116px; }
+      #peers td.nm .namelink, #peers td.nm .self { max-width: 116px; }
       #peers th, #peers td { padding-left: 10px; }
       #peers td.cmp, #peers th:last-child { display: none; }
+      /* THE CHIP GOES ON A PHONE, and the existing suite is what caught it:
+         "this stock" is ~70px of a 390px screen and it pushed Today off the
+         visible box — the exact fault that rule above was written for. The
+         tint already says which row this is, and on a page titled with the
+         symbol it was never carrying much. */
+      #peers .here { display: none; }
     }
 
     .later { color: var(--faint); font-size: 12px; line-height: 1.6; }
@@ -1229,15 +1253,26 @@
              <b>${esc(p.group)}</b> instead, ${how} — ${p.total} in the sector.`
           : `No industry recorded for ${esc(sym)} yet, so this is <b>${esc(p.group)}</b>,
              ${how} — ${p.total} in the sector.`;
-      const body = p.rows.map((r) => `<tr>
-        <td class="nm"><a class="namelink" href="/stock/${encodeURIComponent(r.symbol)}">${esc(r.name)}</a>
-          <span class="sym">${esc(r.symbol)}</span></td>
+      // One row builder for both, so the anchor cannot drift from the peers
+      // in markup any more than it can in formatting. `me` is the only
+      // difference and it changes exactly three things: the tint, a name
+      // that is not a link to the page you are already on, and no `vs` pill
+      // — comparing a stock with itself is not a comparison.
+      const rowHtml = (r, me) => `<tr${me ? ' class="me"' : ''}>
+        <td class="nm">${me
+          ? `<span class="self">${esc(r.name)}</span>`
+          : `<a class="namelink" href="/stock/${encodeURIComponent(r.symbol)}">${esc(r.name)}</a>`}
+          <span class="sym">${esc(r.symbol)}</span>${me ? '<span class="here">this stock</span>' : ''}</td>
         ${cell(r.Price)}${cell(r.Today)}${cell(r['1Y'])}${cell(r['Market Cap'])}${cell(r['Fwd P/E'])}
         <td class="av ${r.Advice ? (r.Advice.c || '') : 'na'}"${
           r.why ? ` title="${esc(r.why)}"` : ''}>${esc(r.Advice ? r.Advice.t : '—')}</td>
-        <td class="cmp"><a class="rng" href="/compare/${encodeURIComponent(sym)}/${
-          encodeURIComponent(r.symbol)}" title="Open ${esc(r.symbol)} beside ${esc(sym)} — every field, side by side">vs</a></td>
-      </tr>`).join('');
+        <td class="cmp">${me ? '' : `<a class="rng" href="/compare/${encodeURIComponent(sym)}/${
+          encodeURIComponent(r.symbol)}" title="Open ${esc(r.symbol)} beside ${esc(sym)} — every field, side by side">vs</a>`}</td>
+      </tr>`;
+      // An older server sends no `self`; the table simply opens with the
+      // peers, as it did before. Deploy order is not a thing to think about.
+      const body = (p.self ? rowHtml(p.self, true) : '') +
+        p.rows.map((r) => rowHtml(r, false)).join('');
       return `
         <section class="bezel card" id="peers"><div class="core">
           <div class="sec-h"><h2>Similar stocks</h2></div>

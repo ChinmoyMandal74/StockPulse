@@ -7478,6 +7478,28 @@ function peersFor(stock, stocks, links) {
   // each.
   const CELLS = ['info|Price', 'short|Today', 'long|1Y', 'info|Market Cap',
     'fund|Fwd P/E', 'act|Advice'];
+  const peerRow = (x) => {
+    const v = RowCard.fieldValues(x);
+    const out = { symbol: x.symbol, name: x.shortName || x.name || x.symbol, why: x.actionFlag || '' };
+    for (const k of CELLS) {
+      const c = v[k];
+      out[k.slice(k.indexOf('|') + 1)] = c ? { t: c.t, c: c.c || '' } : null;
+    }
+    // A MULTIPLE OFF A LOSS IS ARITHMETIC, NOT CHEAPNESS — the Size card's
+    // rule and the Bubble card's, met a third time and for the sharpest
+    // reason yet. `FIELD_SPEC` renders forward P/E through `V.num`, which
+    // prints a loss-maker's -41.7 verbatim; that is tolerable in a labelled
+    // row on one stock and actively misleading DOWN A COLUMN OF SIX, where
+    // the eye reads the most negative number as the cheapest. Live, 73 of
+    // 1,167 companies carry one. `> 0` rejects the empty before coercing as
+    // well: Number(null) is 0 and 0 is not greater than 0.
+    //
+    // It applies to the ANCHOR too, now that it has a row here: a
+    // loss-making company reading -41.7 at the head of the column it is
+    // meant to be compared against would be the worst place of all for it.
+    out['Fwd P/E'] = Number(x.forwardPe) > 0 ? out['Fwd P/E'] : null;
+    return out;
+  };
   return {
     basis,
     // For a co-movement group the NAME is still the sector it was drawn
@@ -7499,24 +7521,22 @@ function peersFor(stock, stocks, links) {
     // in `seen`, so a second share class of it is not counted either.
     total: new Set(group.map((x) => String(x.shortName || x.name || x.symbol).trim().toLowerCase())
       .filter((k) => k !== String(stock.shortName || stock.name || me).trim().toLowerCase())).size,
-    rows: picked.map((x) => {
-      const v = RowCard.fieldValues(x);
-      const out = { symbol: x.symbol, name: x.shortName || x.name || x.symbol, why: x.actionFlag || '' };
-      for (const k of CELLS) {
-        const c = v[k];
-        out[k.slice(k.indexOf('|') + 1)] = c ? { t: c.t, c: c.c || '' } : null;
-      }
-      // A MULTIPLE OFF A LOSS IS ARITHMETIC, NOT CHEAPNESS — the Size card's
-      // rule and the Bubble card's, met a third time and for the sharpest
-      // reason yet. `FIELD_SPEC` renders forward P/E through `V.num`, which
-      // prints a loss-maker's -41.7 verbatim; that is tolerable in a labelled
-      // row on one stock and actively misleading DOWN A COLUMN OF SIX, where
-      // the eye reads the most negative number as the cheapest. Live, 73 of
-      // 1,167 companies carry one. `> 0` rejects the empty before coercing as
-      // well: Number(null) is 0 and 0 is not greater than 0.
-      out['Fwd P/E'] = Number(x.forwardPe) > 0 ? out['Fwd P/E'] : null;
-      return out;
-    }),
+    // THE ANCHOR ITSELF, at the head of the table (2026-09-29, owner's
+    // request: "I want to see a line for Bristol-Myers on top"). Without it
+    // the reader compares six companies against a seventh they have to
+    // remember, scrolling back up the page for each number.
+    //
+    // It goes through the SAME builder as the peers — that is the whole
+    // point of the row. Formatting it separately would leave the one
+    // comparison this table exists for running between two different
+    // formatters, which is exactly the drift `RowCard.fieldValues` is here
+    // to prevent, and it would look perfectly fine on screen.
+    //
+    // It is NOT a peer and is counted as one nowhere: `total` excludes the
+    // anchor's own name, `seen` already held it before the loop, and the
+    // caption still says "Others in …".
+    self: peerRow(stock),
+    rows: picked.map(peerRow),
   };
 }
 
