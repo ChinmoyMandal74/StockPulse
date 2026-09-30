@@ -3037,6 +3037,25 @@ function emptyProfile() {
     exchange: null,
     micCode: null,
     currency: null,
+    // WHAT THE INSTRUMENT IS — "Common Stock", "Preferred Stock", "American
+    // Depositary Receipt", "Limited Partnership", "REIT", "ETF" (2026-09-30,
+    // owner's request after the second non-equity removal: "is there any field
+    // in api to tell me the type of instrument").
+    //
+    // It exists because NAME-MATCHING is what both removals had to rely on, and
+    // it nearly cost a real company twice. BNS is stored as "Bank Nova Scotia
+    // Halifax Pfd 3" and is Scotiabank's COMMON stock; this field says so.
+    //
+    // From /stocks, a FREE reference endpoint — it sends no credits header at
+    // all — so it costs nothing and is filled from a call of its own rather
+    // than riding /profile, which does not carry it.
+    //
+    // DO NOT USE `cfi_code` INSTEAD, though it is the ISO 10962 standard and
+    // looks stronger: measured, BNH and KKRS are genuine subordinated notes and
+    // both read `ESVUFR` — "Equity / common ordinary shares". It would pass two
+    // of the four non-equities straight through. The vendor's plain label got
+    // all fifteen hard cases right; the standard got thirteen.
+    instrumentType: null,
     marketCap: null,
     forwardPe: null,
     peg: null,
@@ -3136,6 +3155,30 @@ async function fetchProfile(symbol) {
   } catch {
     out.fetchOk = false;
   }
+
+  // What the instrument IS, from the free reference lists. Deliberately does
+  // NOT touch fetchOk: this is a free auxiliary read, and letting it invalidate
+  // a pull would throw away 80 credits of real fundamentals over a reference
+  // miss. A failure leaves the field null, and the key is present either way —
+  // absent is what makes a profile a gap, never null.
+  //
+  // PIN THE COUNTRY. /stocks?symbol=MSFT with no country filter comes back as
+  // the VIENNA listing in EUR, so an unpinned read reports a foreign listing's
+  // type — wrong twice over, given the US-listed-only rule.
+  //
+  // A fund is absent from /stocks entirely and lives on /etf, so that is the
+  // fallback rather than a second guess at the name.
+  try {
+    const ref = await fetchJson(`${TD_BASE}/stocks?symbol=${enc}&country=United States&apikey=${API_KEY}`);
+    const rows = (ref && ref.data) || [];
+    const t = rows.map((r) => r && r.type).find((x) => x);
+    if (t) out.instrumentType = String(t).slice(0, 48);
+    else {
+      const etf = await fetchJson(`${TD_BASE}/etf?symbol=${enc}&country=United States&apikey=${API_KEY}`);
+      if (((etf && etf.data) || []).length) out.instrumentType = 'ETF';
+    }
+  } catch { /* free and optional: a miss leaves it null */ }
+
   if (FUNDAMENTALS_ENABLED) {
     try {
       const st = await fetchJson(`${TD_BASE}/statistics?symbol=${enc}&apikey=${API_KEY}`);

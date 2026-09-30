@@ -21,7 +21,7 @@
   const RATING_FOR = { qualityScore: 'qualityRating' };
   const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios']);
   const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh',
-    'exchange', 'capBand']);
+    'exchange', 'capBand', 'instrumentType']);
 
   // ---- Size by market cap ---------------------------------------------------
   // It lives HERE because four surfaces need it and none of them may own it:

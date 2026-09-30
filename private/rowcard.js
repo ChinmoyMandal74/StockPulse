@@ -83,6 +83,10 @@
     ['info',  'Industry',       (s) => V.text(s.industry)],
     ['info',  'Exchange',       (s) => (s.exchange
       ? { t: s.exchange + (s.micCode ? ' · ' + s.micCode : ''), c: '' } : null)],
+    // What the instrument IS, off the provider's free reference list. A FACT
+    // about the security, not a reading of it — so it carries no colour and
+    // nothing in the engine reads it.
+    ['info',  'Instrument',     (s) => V.text(s.instrumentType)],
     ['info',  'Market Cap',     (s) => V.money(s.marketCap, s.currency)],
     // The band the cap falls in. One entry here puts it in the hover card, the
     // tiles, the phone and the tile/mobile field pickers at once.

@@ -1473,7 +1473,7 @@
       <tr>
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="shortName" title="What a person would call it — shortened from the legal name by rule, and editable by the owner. The full legal name is in the tooltip on each row.">Name</th>
-        <th class="group grp-info" data-group="info" colspan="9">Info</th>
+        <th class="group grp-info" data-group="info" colspan="10">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="1">Scores</th>
         <th class="group grp-act" data-group="act" colspan="12">Advice</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
@@ -1494,6 +1494,7 @@
         <th class="left grp-info" data-key="sector">Sector</th>
         <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — Twelve Data's own taxonomy, not GICS.">Industry</th>
         <th class="left grp-info" data-key="exchange" title="Where the stock actually trades, with its MIC and trading currency on the cell. Stored on the profile rather than read from the price call, so it survives a round that prices from the archive. NOTE: the currency here is the TRADING one — an ADR trades in USD while its financials are in the home currency, so this does not tell you what the money columns are denominated in.">Exchange</th>
+        <th class="left grp-info" data-key="instrumentType" title="What the instrument IS, from the provider's own free reference list: Common Stock, Preferred Stock, American Depositary Receipt, Limited Partnership, REIT or ETF. It exists because a NAME cannot be trusted for this — BNS is stored as 'Bank Nova Scotia Halifax Pfd 3' and is Scotiabank's common stock, while a subordinated note can read as ordinary equity. Filter on it to find anything that is not common stock. It states the fact only: nothing in the Advice engine reads it.">Instrument</th>
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
         <th class="left grp-info" data-key="capBand" title="The size band, from the market cap beside it: Mega $200B+, Large $50-200B, Mid-Large $10-50B, Mid $2-10B, Small $300M-2B, Micro under $300M. The $50B line inside Large is this site's own cut, not a standard — without it 69% of the screen sat in one bucket. Thresholds are fixed, never derived from the current universe. Blank for ETFs, which report AUM rather than capitalisation.">Size</th>
         <th class="grp-info" data-key="newsAge" title="How long ago the latest stored headline was published, and how many this stock has from the last week. Click a cell to read them. A dot means we have not checked this stock yet — headlines are fetched a few stocks at a time.">News</th>
@@ -1876,6 +1877,28 @@
       const bits = [s.micCode ? `MIC ${s.micCode}` : null,
                     s.currency ? `trades in ${s.currency}` : null].filter(Boolean);
       return `<td class="name left grp-info"${attr(bits.join(' \u00b7 '))}>${we(s.exchange)}</td>`;
+    }
+
+    // What the instrument IS \u2014 "Common Stock", "Preferred Stock", "American
+    // Depositary Receipt", "Limited Partnership", "REIT", "ETF". Off the
+    // provider's free reference list, so it costs nothing and is a FACT about
+    // the security rather than a reading of it.
+    //
+    // NO COLOUR and NO THRESHOLD. It deliberately encodes no keep/refuse rule:
+    // the two removal passes each needed a judgement about which labels are
+    // equity, and baking one in here would put a wrong answer on 1,188 rows \u2014
+    // "Depositary Receipt" alone caught STM and ASML, which are New York
+    // Registry Shares and perfectly real. The column states the fact and the
+    // dropdown filter lets you find any label; the judgement stays with a
+    // person.
+    //
+    // `.nocard` because the hover card is an ambush on a cell nobody needs a
+    // field list for, the rule Sector, Industry and Size already follow.
+    function instrumentCell(s) {
+      if (!s.instrumentType) {
+        return `<td class="name left grp-info nocard na" title="Not recorded yet \u2014 it fills in the next time this stock's profile is pulled.">\u2014</td>`;
+      }
+      return `<td class="name left grp-info nocard">${we(s.instrumentType)}</td>`;
     }
 
     // Sector and Industry: the bar's own pickers in a second place (owner,
@@ -3114,7 +3137,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="90">${s.error}</td>
+            <td class="na" colspan="91">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3139,6 +3162,7 @@
           ${classCell('secval', s.sector, 'sector', '', cacheTitle)}
           ${classCell('indval', s.industry, 'industry', ' industry', s.industry || cacheTitle)}
           ${exchangeCell(s)}
+          ${instrumentCell(s)}
           <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
           ${capBandCell(s)}
           ${newsCell(s)}
@@ -3236,7 +3260,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 95;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 96;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3414,7 +3438,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="92">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="93">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
