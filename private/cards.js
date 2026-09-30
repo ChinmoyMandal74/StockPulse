@@ -771,6 +771,24 @@
     };
     // What the chart card needs fetched, so the studio and the server's saved-post
     // builder ask for the same thing rather than each guessing. Exported.
+    // HOW MANY SESSIONS A TEMPLATE NEEDS FROM THE ARCHIVE, or 0 for none.
+    //
+    // Three templates draw a price line and each keeps its window under its
+    // own control id, so both hosts had to know the pairing: server.js listed
+    // `chart -> chtWin, sparks -> spkWin` inline, and promo.html repeated the
+    // template names again in the repaint its fetch triggers. A THIRD such
+    // card is what made that a list rather than a pair — the Stock spotlight
+    // shipped for an hour reading a basket that never arrived, because its
+    // fetch landed and nothing repainted. Asked here instead, the way
+    // chartHistoryNeed already is, so a fourth costs one line in one place.
+    const BASKET_WIN_KEY = { chart: 'chtWin', sparks: 'spkWin', spotlight: 'spotWin' };
+    function basketDays(tpl, opts) {
+      const key = BASKET_WIN_KEY[tpl];
+      if (!key) return 0;
+      const win = CHART_WINDOWS[(opts || {})[key]] || CHART_WINDOWS.m6;
+      return win[0];
+    }
+
     function chartHistoryNeed(opts) {
       const o = opts || {};
       if (o.chtMode !== 'stock') return null;
@@ -871,7 +889,8 @@
       const d0 = dates[0], d1 = dates[dates.length - 1];
       const axis = `<text x="${PL}" y="${H - 10}" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">${esc(d0)}</text>` +
         `<text x="${W - PR}" y="${H - 10}" text-anchor="end" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">${esc(d1)}</text>`;
-      return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:26px" role="img" aria-label="chart">` +
+      const mt = opts && opts.mt != null ? opts.mt : 26;
+      return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:${mt}px" role="img" aria-label="chart">` +
         area + grid + strokes + tags + axis + '</svg>';
     }
 
@@ -1936,6 +1955,217 @@
       '</div></div>' + chromeFoot();
   }
 
+  // ---- Stock spotlight: one company, the whole picture --------------------
+  //
+  // "One card for a single stock" (the owner, 2026-09-30). Three templates
+  // already answer ONE question about one company — the Chart card in `stock`
+  // mode draws its line, the Advice card in `profiles` mode reads the five
+  // rule sets against it, the Fundamentals card in `one` mode lists its
+  // figures — so the whole picture took three posts. This is the poster: what
+  // it is, what it did, what it earns, and what the rules make of it.
+  //
+  // IT IS NOT `stock` (tplStock). That one is the STOCK PAGE's chart export,
+  // fed by ctx.chart — a host that already holds one symbol's own closes —
+  // which is why it is deliberately absent from the studio's picker. This
+  // reads the basket like every other studio card.
+  function tplSpotlight() {
+    const sym = O.spotSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((r) => r.symbol === sym);
+    if (!row) {
+      return chromeTop() + '<div class="s-body"><div>' +
+        '<span class="s-kick">Nothing to spotlight</span>' +
+        '<h2 class="s-title">No row<br><span class="dim">for ' +
+        esc(sym || 'that symbol') + '</span></h2>' +
+        '<p class="s-empty">That symbol is not on this screen.</p>' +
+        '</div></div>' + chromeFoot();
+    }
+    const [days, winLabel] = CHART_WINDOWS[O.spotWin] || CHART_WINDOWS.m6;
+    const d = getBasket(days);
+    if (!d || !d.dates || !d.dates.length) {
+      return chromeTop() +
+        '<div class="s-body"><div><span class="s-kick">Reading the archive</span>' +
+        '<h2 class="s-title">Drawing<br><span class="dim">the chart\u2026</span></h2>' +
+        '</div></div>' + chromeFoot();
+    }
+
+    // ---- the line, rebased, coloured by its own direction ----------------
+    // Through lineChart, the SAME function the Chart card and the stock
+    // page's export use, rather than a second implementation — which is what
+    // makes it survive the PNG export unchanged (presentation attributes, no
+    // classes). Rebased to % because that is the one scale that reads the
+    // same for a $4 stock and a $1,000 one; the dollar price is not lost, it
+    // sits in the header where a reader looks for it.
+    const S = (d.series || {})[sym] || null;
+    const endOf = (A) => {
+      for (let i = A.length - 1; i >= 0; i--) if (A[i] != null) return (A[i] - 1) * 100;
+      return null;
+    };
+    const move = S ? endOf(S) : null;
+    // Green up, red down. A single line about a single stock is the case
+    // where the direction IS the story — the table's sparkline stays neutral
+    // for the opposite reason, five coloured columns already beside it.
+    const colour = move == null ? '#9aa3b2' : move >= 0 ? '#34d399' : '#fb7185';
+    const H = size.id === 'story' ? 624 : size.id === 'square' ? 176 : 318;
+    // A MISSING SERIES DOES NOT EMPTY THE CARD. The Chart card returns a bare
+    // "no stored history" card because the chart IS that card; here the
+    // figures, the range and the verdict are all still worth posting, so the
+    // plot alone stands aside and says why.
+    const plot = S
+      // mt: 0 — the wrap below is a flex column with its own gap, and the
+      // chart's default top margin would be that spacing charged twice. It
+      // measured exactly 26px, which is most of what the 4:5 was short by.
+      ? lineChart(d.dates, [{ color: colour, S, width: 4, fill: true }], { h: H, mt: 0 })
+      : '<p class="s-empty">No stored history for ' + esc(sym) + ' over the ' +
+        esc(winLabel) + '.</p>';
+
+    // ---- the header ------------------------------------------------------
+    // Sector then industry, coarse to fine, the order every other surface
+    // uses. The industry arrives one profile at a time, so a card with only
+    // a sector is the common case rather than an edge one.
+    const kick = [row.sector, row.industry].filter(Boolean).join(' \u00b7 ')
+      || 'One stock, in full';
+    // THE PRICE IS IN THE TRADING CURRENCY, which is the one money field on
+    // this card where that is the right currency — and for a US-listed
+    // universe it is USD, which is what makes the $ safe. The same rule that
+    // makes the dollar market cap below safe; it would NOT hold for a foreign
+    // listing, which is one more thing "US-listed only" quietly buys.
+    const priceStr = row.price != null && isFinite(row.price)
+      ? '$' + Number(row.price).toFixed(2) : null;
+    // Thresholds measured at the drawn size rather than guessed: the body is
+    // 952px wide, and Geist at 800 weight averages a little over half an em,
+    // so ~31 characters fill a line at the full size and ~41 at the middle
+    // one. A name past that wraps to two lines at the SMALL size, which the
+    // sweep has room for; the steps exist so it does not wrap at the big one.
+    const nm = nameOf(row);
+    const tCls = nm.length > 40 ? ' t3' : nm.length > 28 ? ' t2' : '';
+    const head = '<span class="s-kick">' + esc(kick) + '</span>' +
+      '<h2 class="s-title' + tCls + '">' + esc(nm) + '</h2>' +
+      '<div class="sp-sub">' + esc(sym) +
+      (priceStr ? ' \u00b7 ' + esc(priceStr) : '') +
+      (row.todayPct != null
+        ? ' \u00b7 <span class="' + (row.todayPct >= 0 ? 'sp-up' : 'sp-dn') + '">' +
+          esc(pct(row.todayPct, 2)) + ' today</span>'
+        : '') +
+      '</div>';
+
+    // ---- where today sits in its own year --------------------------------
+    // The windowed chart above cannot say this: a six-month line rebased to
+    // its own start says nothing about the year around it. Drawn through the
+    // Range card's own track markup and `recoveryLeg`, so the two surfaces
+    // cannot disagree about what a marker means.
+    //
+    // THE ROW IS LABELLED WITH THE POSITION, NOT THE COMPANY NAME. Printing
+    // the name again on a card whose title is that name is the repetition
+    // this project has been pulled up on before, and the percentage is a
+    // reading that appears nowhere else on the card.
+    const has52 = row.range52Pos != null && row.pctFromHigh != null && row.pctFromLow != null;
+    let track = '';
+    if (has52) {
+      const p = Math.max(0, Math.min(100, row.range52Pos));
+      const tint = p >= 66 ? '#34d399' : p >= 33 ? '#fbbf24' : '#fb7185';
+      track = '<div class="sp-block"><div class="sp-head">Its own 52-week range</div>' +
+        '<div class="tracks"><div class="trk">' +
+        '<span class="ts">' + Math.round(p) + '% of its year</span>' +
+        '<span class="trail">' +
+        '<span class="tfill" style="width:' + p +
+        '%;background:linear-gradient(90deg, rgba(255,255,255,0.05), ' + tint + ')"></span>' +
+        recoveryLeg(row, p) +
+        '<span class="tdot" style="left:' + p + '%;background:' + tint + '"></span></span>' +
+        '<span class="tlo">' + pct(row.pctFromLow) + '</span>' +
+        '<span class="thi">' + pct(row.pctFromHigh) + '</span>' +
+        '</div></div>' +
+        '<div class="tkey"><span>left edge \u00b7 the 52-week low</span>' +
+        '<span>right edge \u00b7 the high</span></div></div>';
+    }
+
+    // ---- eight figures ---------------------------------------------------
+    // Four windows of its own price, then four readings of the business.
+    //
+    // REVENUE IS DELIBERATELY NOT HERE, though it is the obvious size number
+    // beside the cap: an absolute is in the company's own REPORTING currency
+    // (Samsung's revenue is in won, Ericsson's in krona), so a card printing
+    // it with a $ would be confidently wrong. Margins and growth are ratios
+    // and carry the same story with none of that exposure. Market cap is the
+    // one absolute that is always USD, verified across eighteen foreign
+    // reporters, which is why it alone gets a dollar sign.
+    //
+    // Gross margin is meaningless for a lender, so the margin shown is the
+    // PROFIT margin — true for a bank and for a manufacturer alike.
+    const pe = thirdReader('fpe');
+    const peTxt = pe.txt(row);
+    const CELLS = [
+      ['1 week', row.oneWeekPct, 'ret'],
+      ['1 month', row.oneMonthPct, 'ret'],
+      ['3 months', row.threeMonthPct, 'ret'],
+      ['1 year', row.oneYearPct, 'ret'],
+      ['Market cap', row.marketCap, 'cap'],
+      ['Fwd P/E', peTxt, 'raw'],
+      ['Revenue growth', row.revenueGrowthYoY, 'ret'],
+      ['Profit margin', row.profitMargin, 'margin'],
+    ];
+    const cell = (label, v, kind) => {
+      let txt = '\u2014', cls = '';
+      if (kind === 'raw') txt = v == null ? '\u2014' : String(v);
+      else if (kind === 'cap') txt = v != null && isFinite(v) ? '$' + fmtMoney(v) : '\u2014';
+      else if (kind === 'margin') {
+        // A MARGIN TAKES NO SIGN and a RETURN DOES. "+25.0%" as a profit
+        // margin reads as a change rather than a level; a negative one still
+        // takes the colour, because loss-making is the reading.
+        txt = fmtMetric(v, 'pct');
+        cls = v != null && isFinite(v) && v < 0 ? 'neg' : '';
+      } else {
+        txt = pct(v);
+        cls = v == null || !isFinite(v) ? '' : v >= 0 ? 'pos' : 'neg';
+      }
+      return '<div class="sp-cell"><span class="sp-cl">' + esc(label) + '</span>' +
+        '<span class="sp-cv ' + cls + '">' + esc(txt) + '</span></div>';
+    };
+    const figs = '<div class="sp-block"><div class="sp-head">Returns, and the business</div>' +
+      '<div class="sp-grid">' +
+      CELLS.map((c) => cell(c[0], c[1], c[2])).join('') + '</div></div>';
+
+    // ---- what the rules read ---------------------------------------------
+    // THE VERDICT ALWAYS TRAVELS WITH THE RULE THAT FIRED and with the rule
+    // set's name. That is the whole difference between this and a tip sheet,
+    // and it is why the attribution is not a setting.
+    const profile = O.spotProf || 'Balanced';
+    let verdict = '';
+    if (profile !== 'off') {
+      const a = advScored(profile)[sym] || null;
+      const tint = (a && ADV_TINT[a.action]) || '#9aa3b2';
+      verdict = '<div class="sp-block"><div class="sp-head">What the rules read</div>' +
+        '<div class="sp-verd" style="border-color:' + tint + '33">' +
+        (a && a.action
+          ? '<span class="sp-vw" style="color:' + tint + '">' + esc(a.action) + '</span>' +
+            '<span class="sp-vr">' + esc(a.flag || '') + '</span>'
+          : '<span class="sp-vw" style="color:var(--muted)">Not scored</span>' +
+            '<span class="sp-vr">Not enough stored history for the rules to reach a reading.</span>') +
+        '<span class="sp-vp">' + esc(profile) + ' rules</span></div></div>';
+    }
+
+    const dir = move == null ? ''
+      : (move >= 0 ? 'Up ' : 'Down ') + Math.abs(move).toFixed(1) +
+        '% over the ' + winLabel + ' \u2014 price only, rebased. ';
+    const note = dir +
+      (pe.counts.noMultiple
+        ? 'Forward P/E is blank: a multiple off a loss is arithmetic, not cheapness. ' : '') +
+      (pe.counts.notReported ? 'No forward P/E is reported for it. ' : '') +
+      (profile !== 'off'
+        ? 'The verdict is the ' + profile + ' rule set\u2019s mechanical reading, with the one rule that fired.'
+        : 'Every figure is to the close above.');
+
+    // `sp-in` rather than a bare div: the wrapper below has to FILL what the
+    // body leaves, and for that its parent needs a height. Every other
+    // template's inner block is a plain block whose height is its content and
+    // `.s-body` then centres it — which is what left the day card's two empty
+    // bands until it was given the same treatment.
+    return chromeTop() +
+      '<div class="s-body"><div class="sp-in">' + head +
+      '<div class="sp-wrap">' + plot + track + figs + verdict + '</div>' +
+      '<p class="s-sub wide" style="--fs:17px;margin-top:16px">' + esc(note) + '</p>' +
+      '</div></div>' + chromeFoot();
+  }
+
   function tplAvatar() {
     return '<div class="avatarFull">' +
       '<div class="avGlow"></div>' +
@@ -2194,7 +2424,7 @@
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
-    bubble: tplBubble, stock: tplStock, day: tplDay,
+    bubble: tplBubble, stock: tplStock, day: tplDay, spotlight: tplSpotlight,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -2341,6 +2571,111 @@
     .mrow .mv.pos { color: var(--green); } .mrow .mv.neg { color: var(--red); }
     .mnone { font-size: 19px; color: var(--faint); padding: 10px 0; }
     /* a long list tightens instead of running off the card */
+    /* ---- the stock spotlight ------------------------------------------
+       One company on one artboard: the line, its year, eight figures and the
+       verdict. The blocks spread through whatever the body leaves, the day
+       card's treatment, so the card fills every shape rather than stranding
+       the slack at the two ends.
+       (NO BACKTICKS IN HERE. STYLE is itself a template literal and one
+       inside a CSS comment ends the string — three times on the day card
+       alone, and node --check passes every time, because it is valid
+       interpolation rather than a syntax error.) */
+    .sp-in { height: 100%; display: flex; flex-direction: column; }
+    .sp-wrap { flex: 1; display: flex; flex-direction: column;
+               justify-content: space-evenly; gap: 18px; }
+    .sp-up { color: var(--green); } .sp-dn { color: var(--red); }
+    /* The ticker, the price and today's move: the subject's LABEL, not a
+       second headline. Mono, because all three are figures, and muted so the
+       company name stays the loudest thing above the chart. */
+    .sp-sub { margin-top: 10px; font: 600 33px var(--mono); color: var(--muted);
+              letter-spacing: -0.02em; }
+    /* A company name is arbitrarily long and this card sets it alone on a
+       line, so 66px is the wrong default here: "Norwegian Cruise Line
+       Holdings" takes three lines at that size and two at this one, and the
+       room a third line costs comes straight out of the chart. */
+    .sp-in .s-title { font-size: 58px; }
+    .sp-in .s-title.t2 { font-size: 46px; letter-spacing: -0.04em; }
+    .sp-in .s-title.t3 { font-size: 38px; letter-spacing: -0.035em; }
+    .sp-block { min-width: 0; }
+    .sp-head { font: 600 16px var(--mono); text-transform: uppercase;
+               letter-spacing: 0.16em; color: var(--muted);
+               border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+               padding-bottom: 8px; margin-bottom: 14px; }
+    /* The track comes from the Range card, whose own rules assume it is the
+       body of the card: a top margin, and flex:1 on a story so several rows
+       spread down the frame. Here it is one row inside a block, so both are
+       undone rather than the markup being copied and altered. */
+    .sp-block .tracks { margin-top: 0; flex: none; gap: 0; }
+    .sp-block .tkey { margin-top: 12px; }
+    /* Eight cells, four across: two rows on every shape, so the returns read
+       as one line and the business as another. */
+    .sp-grid { display: grid; grid-template-columns: repeat(4, 1fr);
+               gap: 12px; }
+    .sp-cell { min-width: 0; border-radius: 14px; padding: 13px 16px;
+               background: rgba(255, 255, 255, 0.05);
+               display: flex; flex-direction: column; gap: 4px; }
+    .sp-cl { font: 600 14px var(--mono); text-transform: uppercase;
+             letter-spacing: 0.1em; color: var(--faint); white-space: nowrap;
+             overflow: hidden; text-overflow: ellipsis; }
+    .sp-cv { font: 600 30px var(--mono); letter-spacing: -0.02em;
+             font-variant-numeric: tabular-nums; }
+    .sp-cv.pos { color: var(--green); } .sp-cv.neg { color: var(--red); }
+    /* The verdict is the loudest thing under the chart, which is what a
+       spotlight is for — and the rule beside it is what keeps it a reading
+       rather than a tip. */
+    .sp-verd { display: flex; align-items: baseline; flex-wrap: wrap;
+               gap: 8px 18px; border: 1px solid var(--hair-2);
+               border-radius: 18px; padding: 16px 22px;
+               background: rgba(255, 255, 255, 0.035); }
+    .sp-vw { font: 800 40px var(--sans); letter-spacing: -0.035em;
+             line-height: 1.05; }
+    .sp-vr { font: 500 21px var(--sans); color: var(--muted); flex: 1;
+             min-width: 0; line-height: 1.25; }
+    .sp-vp { font: 600 14px var(--mono); text-transform: uppercase;
+             letter-spacing: 0.14em; color: var(--faint); white-space: nowrap; }
+
+    /* The 4:5 has the most room once the chart is sized for it, so part of
+       it goes into the figures rather than all of it into the gaps. */
+    .sz-portrait .sp-cv { font-size: 31px; }
+    .sz-portrait .sp-vw { font-size: 42px; }
+
+    /* A SQUARE IS THE SHORT ARTBOARD and this is the densest card here, so
+       the chart gives up most of what has to be given up (the builder drops
+       it to 212 against the post's 392) and every block tightens with it.
+       Measured on the sweep rather than guessed. */
+    .sz-square .sp-in .s-title { font-size: 50px; }
+    .sz-square .sp-in .s-title.t2 { font-size: 41px; }
+    .sz-square .sp-in .s-title.t3 { font-size: 34px; }
+    .sz-square .sp-sub { font-size: 27px; margin-top: 7px; }
+    .sz-square .sp-wrap { gap: 12px; }
+    .sz-square .sp-head { margin-bottom: 10px; padding-bottom: 6px; font-size: 15px; }
+    .sz-square .sp-cell { padding: 9px 13px; }
+    .sz-square .sp-cv { font-size: 25px; }
+    .sz-square .sp-verd { padding: 12px 18px; border-radius: 15px; }
+    .sz-square .sp-vw { font-size: 31px; }
+    .sz-square .sp-vr { font-size: 18px; }
+    .sz-square .trk .ts { font-size: 20px; }
+    .sz-square .trk .tlo, .sz-square .trk .thi { font-size: 18px; }
+
+    /* A story is twice as tall and read at arm's length, so it takes the room
+       back rather than staying at the post's rhythm — the fault the day card
+       records for its own first cut, where 993px of content sat in a 1920px
+       frame and the bottom half was empty. */
+    .sz-story .sp-in .s-title { font-size: 74px; }
+    .sz-story .sp-in .s-title.t2 { font-size: 58px; }
+    .sz-story .sp-in .s-title.t3 { font-size: 48px; }
+    .sz-story .sp-sub { font-size: 42px; margin-top: 14px; }
+    .sz-story .sp-wrap { gap: 26px; }
+    .sz-story .sp-head { font-size: 19px; padding-bottom: 11px; margin-bottom: 18px; }
+    .sz-story .sp-grid { gap: 16px; }
+    .sz-story .sp-cell { padding: 18px 20px; }
+    .sz-story .sp-cl { font-size: 16px; }
+    .sz-story .sp-cv { font-size: 38px; }
+    .sz-story .sp-verd { padding: 22px 28px; }
+    .sz-story .sp-vw { font-size: 52px; }
+    .sz-story .sp-vr { font-size: 26px; }
+    .sz-story .sp-vp { font-size: 16px; }
+
     /* ---- the day card -------------------------------------------------
        Three blocks in one body, so the rhythm is set once on the wrapper and
        every row inside it follows. Sizes here are the DEFAULT rhythm; the
@@ -2809,6 +3144,9 @@
     // server's saved-post builder read the SAME catalogue rather than
     // restating it, the way CHART_WINDOWS already is.
     CHART_MAS, chartHistoryNeed,
+    // ...and which templates want the basket at all, with the window each
+    // one asks for. Exported for the same reason: two hosts, one pairing.
+    basketDays,
     ids: Object.keys(BUILDERS),
     ADV_PROFILES,
     MOV_PERIODS,

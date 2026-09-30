@@ -8554,8 +8554,12 @@ const POST_OPT_KEY = /^[a-z]{3,6}[A-Z][A-Za-z0-9]{0,20}$/;
 // assertion passed on values that had never left the page.
 //
 // **A cap here must clear CONTROL_IDS in promo.html with room to spare**, since
-// a template is added there and this number is nowhere near it. 100 against 63.
-const POST_OPT_MAX = 100;
+// a template is added there and this number is nowhere near it. It was 100
+// against 63; the Stock spotlight card took the real list to 87 (2026-09-30),
+// which is four more controls from breaching a cap whose whole failure mode is
+// silence. 200 against 87 — this is a guard against a page being used as free
+// storage, not a budget, so the headroom costs nothing.
+const POST_OPT_MAX = 200;
 
 function cleanPosts(raw) {
   const known = new Set(Cards.ids);
@@ -8703,11 +8707,14 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
 
   // Two templates read the archive; the rest never touch it.
   let basket = null;
-  if (post.tpl === 'chart' || post.tpl === 'sparks') {
-    const key = post.tpl === 'chart' ? post.opts.chtWin : post.opts.spkWin;
-    const win = Cards.CHART_WINDOWS[key] || Cards.CHART_WINDOWS.m6;
-    // The studio always reads the whole universe and lets the card narrow it.
-    try { basket = await basketPayload(req, 'All', win[0]); } catch { basket = null; }
+  // WHICH TEMPLATES NEED THE ARCHIVE, AND OVER WHAT WINDOW, is Cards' own
+  // question — it was a hardcoded pair here and a second list of template
+  // names in promo.html, which is how a third such card shipped drawing
+  // nothing. The studio always reads the whole universe and lets the card
+  // narrow it.
+  const bDays = Cards.basketDays(post.tpl, post.opts || {});
+  if (bDays) {
+    try { basket = await basketPayload(req, 'All', bDays); } catch { basket = null; }
   }
   // A one-stock chart with a moving average needs that symbol's closes from
   // BEFORE the window — the basket only carries the window itself. Cards says

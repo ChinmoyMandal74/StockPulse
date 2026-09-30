@@ -43,6 +43,7 @@
     #annBox { display: none; }
     #movBox { display: none; }
     #dayBox { display: none; }
+    #spotBox { display: none; }
     .panel select {
       width: 100%; box-sizing: border-box; appearance: none; -webkit-appearance: none;
       padding: 9px 30px 9px 11px; border-radius: 10px; cursor: pointer;
@@ -532,6 +533,27 @@
           cap-weighted over the whole screen, and the indexes are never part of it.</p>
       </div>
 
+      <!-- One stock, in full. Three controls and no scope pickers: the card
+           IS its scope, so there is no spotSector/spotIndustry/spotCap/
+           spotScreen and INDUSTRY_PREFIXES is left alone. -->
+      <div id="spotBox">
+        <label>Stock</label>
+        <select id="spotSym"></select>
+        <label>Window</label>
+        <select id="spotWin">
+          <option value="w1">Past week</option>
+          <option value="m1">Past month</option>
+          <option value="m3">Past three months</option>
+          <option value="m6" selected>Past six months</option>
+          <option value="y1">Past year</option>
+        </select>
+        <label>Rules</label>
+        <select id="spotProf"></select>
+        <p class="hint">The window moves the chart alone \u2014 the eight figures are
+          the stock's own fixed periods, and the range track is always its year.
+          A verdict always carries the rule that fired and the rule set's name.</p>
+      </div>
+
       <div id="intBox">
         <label>Topic</label>
         <select id="intTopic"></select>
@@ -607,6 +629,7 @@
     ];
     const TPLS = [
       { id: 'day', name: 'The day', note: 'Indexes, sectors and both ends of the move \u2014 one card' },
+      { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
@@ -644,7 +667,11 @@
         .then((r) => r.json())
         .then((d) => {
           chartCache[days] = d; chartPending = null;
-          if (tpl === 'chart' || tpl === 'sparks') render();
+          // WHICH TEMPLATES CARE IS ASKED OF THE MODULE. Listing them here is
+          // how the spotlight shipped drawing nothing: the card asked for a
+          // basket, the fetch landed, and no repaint followed — so it kept
+          // its "Drawing the chart..." placeholder for ever.
+          if (Cards.basketDays(tpl, controlOpts())) render();
         })
         .catch(() => { chartPending = null; });
       return null;
@@ -687,6 +714,7 @@
       'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen',
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen',
       'dayMetric', 'dayCount', 'dayFloor',
+      'spotSym', 'spotWin', 'spotProf',
       'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
     function controlOpts() {
       const o = {};
@@ -746,6 +774,7 @@
       $('sizeBox').style.display = tpl === 'size' ? 'block' : 'none';
       $('bubBox').style.display = tpl === 'bubble' ? 'block' : 'none';
       $('dayBox').style.display = tpl === 'day' ? 'block' : 'none';
+      $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       const fm = $('fundMode').value;
       $('fundMetricWrap').style.display = fm === 'rank' ? 'block' : 'none';
       $('fundSymWrap').style.display = fm === 'one' ? 'block' : 'none';
@@ -835,6 +864,11 @@
     $('advTier').innerHTML = ActionRules.ACTIONS.slice().reverse()
       .map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
     $('advProf').innerHTML = Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    // Balanced is the default here rather than off: the verdict is most of
+    // what a spotlight is for, and it is the reading every other surface
+    // shows. Off stays available for a card that is only about the numbers.
+    $('spotProf').innerHTML = '<option value="off">Don\u2019t show</option>' +
+      Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}"${n === 'Balanced' ? ' selected' : ''}>${esc(n)}</option>`).join('');
     ['advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap', 'advScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'advboard') render(); }));
     ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap', 'fundScreen'].forEach((id) =>
@@ -856,6 +890,8 @@
       $(id).addEventListener('change', () => { if (tpl === 'bubble') render(); }));
     ['dayMetric', 'dayCount', 'dayFloor'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
+    ['spotSym', 'spotWin', 'spotProf'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'spotlight') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
     $('intSlide').addEventListener('change', () => { if (tpl === 'intro') render(); });
@@ -1211,6 +1247,7 @@
         $('sizeScope').innerHTML = $('movScope').innerHTML;
         $('bubScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
+        $('spotSym').innerHTML = $('chtSym').innerHTML;
         // one sector list, built from the rows themselves so it can never
         // offer a sector nothing is in
         const secOpts = '<option value="All">All sectors</option>' +
