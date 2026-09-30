@@ -5987,6 +5987,12 @@ async function computeStocks(asOf, opts = {}) {
         currency: prof.currency || s.meta?.currency || null,
         exchange: prof.exchange || s.meta?.exchange || null,
         micCode: prof.micCode || s.meta?.mic_code || null,
+        // WITHOUT THIS LINE the column is blank for ever: the profile carries
+        // the value and the snapshot row never sees it, because this build
+        // names its profile fields one by one rather than spreading them. The
+        // first live check after the deploy is what caught it — a fixture that
+        // writes the snapshot directly cannot, since it bypasses this function.
+        instrumentType: prof.instrumentType || null,
         historyDays: ok ? values.length : 0,
         latestDate: ok ? values[0].datetime : null,
         profileFetchedAt: prof.fetchedAt ?? null, // when sector and fundamentals were cached
