@@ -1204,6 +1204,66 @@
         '</div></div>' + chromeFoot();
     }
 
+    // ---- the disclaimer ----------------------------------------------------
+    //
+    // THE WORDS ARE /terms's OWN, DISTILLED — not written fresh here. Four
+    // surfaces already state this one position (the terms page, the card
+    // tagline, /help and the Intro close), and this project's standing rule
+    // is that a fact stated in several places must agree everywhere. A card
+    // that softened it, or claimed something the terms do not, would be the
+    // "every feature live" error wearing legal clothes.
+    //
+    // FIXED TEXT, SO IT IS NOT OWNER-ONLY. Announcement is the owner's alone
+    // because it is free text in the brand's voice; there is nothing here a
+    // member could put words into, so every member gets it. That is the
+    // whole difference between the two templates.
+    //
+    // NO SIGNAL COLOUR ANYWHERE ON IT. Green is up, red is down and amber is
+    // "notice this, it is old" — a disclaimer makes none of those readings,
+    // and a card shouting in amber reads as an alert rather than as the
+    // house position. Type and spacing carry it; every value is a token, so
+    // all three grounds follow with nothing to override.
+    const DISCLAIMER = [
+      ['This is not advice',
+       'Nothing here is a recommendation, a solicitation, or an offer to buy or sell any '
+       + 'security. Tickr Lab applies fixed, published rules to published market data and '
+       + 'reports what they produce. It does not know your circumstances, your goals or '
+       + 'your tax position.'],
+      ['A verdict is a label, not an instruction',
+       'Buy, Strong Buy, Avoid and Sell Immediately name the output of a rule. Each one '
+       + 'carries the single rule that produced it, precisely so you can judge the rule '
+       + 'for yourself.'],
+      ['It describes, it does not predict',
+       'The rules read what is measurable today. The site publishes its own research '
+       + 'showing that most of what has been tested here predicted nothing.'],
+      ['The data can be wrong',
+       'Prices, fundamentals and earnings dates come from third-party providers. They '
+       + 'contain errors, arrive late and are sometimes missing. Verify anything that '
+       + 'matters against a primary source.'],
+    ];
+    const DIS_CLOSE = 'Decisions about your own money are yours.';
+
+    function tplDisclaimer() {
+      const full = O.disMode !== 'short';
+      // The short card is the carousel closer and the full one is the
+      // standalone post, so they differ in DEPTH rather than in claim: the
+      // short one keeps every heading and drops the bodies.
+      const items = DISCLAIMER.map(([h, b], i) =>
+        '<li class="dc-item">'
+        + `<span class="dc-n">${String(i + 1).padStart(2, '0')}</span>`
+        + `<div><h3 class="dc-h">${esc(h)}</h3>`
+        + (full ? `<p class="dc-b">${esc(b)}</p>` : '')
+        + '</div></li>').join('');
+      return chromeTop()
+        + '<div class="s-body"><div class="dc-in">'
+        + '<span class="s-kick">Tickr Lab · please read</span>'
+        + '<h2 class="s-title">Not investment<br><span class="dim">advice</span></h2>'
+        + `<ol class="dc-list${full ? '' : ' dc-short'}">${items}</ol>`
+        + `<p class="dc-close">${esc(DIS_CLOSE)}`
+        + '<span class="dc-where">tickrlab.com/terms</span></p>'
+        + '</div></div>' + chromeFoot();
+    }
+
     // ---- render ------------------------------------------------------------
 
     // ---- Range -----------------------------------------------------------
@@ -2624,6 +2684,7 @@
     intro: tplIntro, announce: tplAnnounce,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
     bubble: tplBubble, stock: tplStock, day: tplDay, spotlight: tplSpotlight,
+    disclaimer: tplDisclaimer,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -3219,6 +3280,45 @@
     .chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
 
     /* announcement */
+    /* ---- the disclaimer ------------------------------------------------
+       Every colour here is a TOKEN and there is not one hex literal, so all
+       three grounds resolve with no override block — which is the whole
+       lesson of the 76 literals the light ground had to chase down. No
+       signal colour either: this card makes no up/down/notice reading. */
+    .dc-in { display: flex; flex-direction: column; height: 100%; }
+    .dc-list { list-style: none; margin: 38px 0 0; padding: 0; flex: 1;
+               display: flex; flex-direction: column; justify-content: space-evenly; gap: 26px; }
+    /* The short card is the carousel closer: headings only. It has the whole
+       body to itself, so the type GROWS into it rather than four small lines
+       floating in a frame — the story layout's lesson, and it matters most
+       here because a 1080px card renders about 400px wide in a feed. */
+    .dc-short { gap: 30px; justify-content: space-evenly; }
+    .dc-short .dc-h { font-size: 42px; }
+    .dc-short .dc-n { font-size: 25px; padding-top: 9px; }
+    .sz-square .dc-short .dc-h { font-size: 34px; }
+    .sz-story .dc-short .dc-h { font-size: 56px; }
+    .sz-story .dc-short .dc-n { font-size: 30px; padding-top: 12px; }
+    .dc-item { display: grid; grid-template-columns: 62px minmax(0, 1fr);
+               align-items: start; gap: 4px; }
+    .dc-n { font: 600 21px var(--mono); color: var(--faint);
+            font-variant-numeric: tabular-nums; padding-top: 6px; }
+    .dc-h { margin: 0; font: 700 31px var(--sans); line-height: 1.22;
+            letter-spacing: -0.01em; color: var(--text); }
+    .dc-b { margin: 9px 0 0; font: 400 21px/1.5 var(--sans); color: var(--muted); }
+    .dc-close { margin: 34px 0 0; padding-top: 22px; border-top: 1px solid var(--hair);
+                font: 600 23px var(--sans); color: var(--text);
+                display: flex; justify-content: space-between; align-items: baseline; gap: 20px; }
+    .dc-where { font: 500 20px var(--mono); color: var(--faint); white-space: nowrap; }
+    .sz-square .dc-h { font-size: 27px; }
+    .sz-square .dc-b { font-size: 19px; }
+    .sz-square .dc-list { gap: 18px; margin-top: 26px; }
+    .sz-story .dc-h { font-size: 38px; }
+    .sz-story .dc-b { font-size: 26px; margin-top: 12px; }
+    .sz-story .dc-n { font-size: 26px; }
+    .sz-story .dc-item { grid-template-columns: 76px minmax(0, 1fr); }
+    .sz-story .dc-close { font-size: 28px; }
+    .sz-story .dc-where { font-size: 24px; }
+
     .ann-kick { font-size: 19px; font-weight: 600; letter-spacing: 0.26em; text-transform: uppercase;
                 color: var(--green); }
     .ann-head { margin: 18px 0 0; font-size: 86px; font-weight: 800; line-height: 1.03;

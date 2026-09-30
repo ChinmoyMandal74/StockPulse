@@ -41,6 +41,7 @@
     .panel textarea { min-height: 84px; }
     .panel input:focus-visible, .panel textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     #annBox { display: none; }
+    #disBox { display: none; }
     #movBox { display: none; }
     #dayBox { display: none; }
     #spotBox { display: none; }
@@ -587,6 +588,16 @@
         <textarea id="annBody" maxlength="280">Try the screener on twenty real stocks — no account, no card, one click.</textarea>
       </div>
 
+      <div id="disBox">
+        <label>Depth</label>
+        <select id="disMode">
+          <option value="full" selected>Full &mdash; four points with their wording</option>
+          <option value="short">Short &mdash; headings only, for the end of a carousel</option>
+        </select>
+        <p class="hint">The wording is the terms page's own, distilled. It is fixed on
+          purpose: four surfaces state this one position and they have to agree.</p>
+      </div>
+
       <label>Size</label>
       <div class="sizes" id="sizeList"></div>
 
@@ -656,6 +667,7 @@
       { id: 'bubble', name: 'Bubble', note: 'Two measures against each other, area as a third' },
       { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
+      { id: 'disclaimer', name: 'Disclaimer', note: 'The house position, in the terms page’s own words' },
       { id: 'avatar', name: 'Profile picture', note: 'The mark alone — pick Square, then download' },
     ];
     let tpl = 'movers';
@@ -734,7 +746,8 @@
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen',
       'dayMetric', 'dayCount', 'dayFloor',
       'spotSym', 'spotWin', 'spotProf',
-      'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody'];
+      'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody',
+      'disMode'];
     function controlOpts() {
       const o = {};
       CONTROL_IDS.forEach((id) => { const el = $(id); if (el) o[id] = el.value; });
@@ -787,6 +800,7 @@
         `<div class="s-in">${buildCard()}</div>`;
       fit();
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
+      $('disBox').style.display = tpl === 'disclaimer' ? 'block' : 'none';
       $('movBox').style.display = tpl === 'movers' ? 'block' : 'none';
       // two rankings in half the width apiece leaves no room for a verdict
       $('movAdvWrap').style.display = $('movDir').value === 'split' ? 'none' : 'block';
@@ -858,6 +872,8 @@
       paintControls();
       render();
     });
+    ['disMode'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'disclaimer') render(); }));
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
     $('movAdv').innerHTML = '<option value="off" selected>Don’t show</option>' +
