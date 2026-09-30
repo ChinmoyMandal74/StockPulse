@@ -2442,7 +2442,7 @@ Verified: **54 checks** driving the real studio. The fixture separates all three
 
 **IT IS NOT `stock` (tplStock), which already existed and is not this.** That one is the STOCK PAGE's chart export, fed by `ctx.chart` — a host that already holds one symbol's closes — which is why it is deliberately absent from the studio's picker. This reads the basket like every other studio card. Checked before building rather than after.
 
-**What is on it**, in order: the sector and industry as the kicker; the company NAME as the headline with the ticker, the price and today's move under it as a label; a rebased line over the chosen window; the stock's position in its own 52-week range; eight figures; and the verdict with the rule that fired. Three controls (`spotSym`, `spotWin`, `spotProf`) and **no scope pickers at all** — the card IS its scope — so `INDUSTRY_PREFIXES` is untouched.
+**What is on it**, in order: the sector and industry as the kicker; the company NAME as the headline with the ticker, the price and today's move under it as a label; a rebased line over the chosen window; **twelve figures in three rows — what it did, where it stands, what it is**; and the verdict with the rule that fired. Three controls (`spotSym`, `spotWin`, `spotProf`) and **no scope pickers at all** — the card IS its scope — so `INDUSTRY_PREFIXES` is untouched.
 
 #### The decisions worth keeping
 - **REVENUE IS DELIBERATELY NOT ON IT**, though it is the obvious size number beside the cap. An absolute is in the company's OWN reporting currency (Samsung's is in won, Ericsson's in krona), so a card printing it with a `$` would be confidently wrong. Margins and growth are ratios and carry the same story with none of that exposure. **Market cap is the one absolute that is always USD**, verified across eighteen foreign reporters, which is why it alone gets a dollar sign — and the PRICE is in the trading currency, which for a US-listed universe is USD, one more thing that rule quietly buys. **Proved by reverting**: adding a Revenue cell fails 10.
@@ -2492,6 +2492,31 @@ The builder returns inner HTML only, so the ground lives on a class the HOST put
 - **Colour moves no box**, so the fit sweep should be free — asserted anyway across 18 combinations, so a future theme that touches type or spacing cannot land unnoticed.
 - Verified: **35 checks**, including the phone's OWN sheet measured end to end (the light post really is light there, which is the bug `themeClass` exists to prevent). **Proved by reverting seven times**: the ladder fails 3 (verdict at 1.81), the chart line 3, the axis labels 2, the studio's class 5, the listener list 4, the ground not travelling to the phone 4, the phone's own class 3.
   - **ONE REVERT REPORTED 0 AND IT WAS THE TEST, NOT RESIDUE.** The colour sweep read `querySelector('svg text')` — the FIRST one, a gridline label routed through the palette by a different line — so reverting the *date* labels at the foot was never looked at. `#7d8797` on white is **3.42:1**, a real failure the check walked straight past. It reads every distinct fill now, and the revert then fails 2. *An assertion that samples one of several sibling elements passes over the others.*
+
+
+##### The 52-week track became four figures (2026-09-30, owner's request)
+**The rail went and `% from the 52-week high`, `% from the low`, `RSI` and `vs the 200-day` took its place**, making the grid three rows of four: four windows of its own price, four readings of where it stands, four of the business.
+
+- **TWO OF THEM ARE LEVELS, SO THEY TAKE THE SIGN AND NOT THE COLOUR.** "From the high" is always negative and "from the low" always positive, so green and red there would read as good and bad — when **-3.1% off the high is as good as it gets**. It is the margin rule one step on: a margin drops the sign because zero is not a boundary it crosses; these keep it because the sign IS the label's direction. **Proved by reverting**: colouring them by sign fails the check.
+- **RSI IS AN INDEX, NOT A PERCENTAGE** — no `%`, no `+`. 55 is not 55%. Deliberately uncoloured too: 70 and 30 mean overbought and oversold, but that is a reading this card does not otherwise make and the verdict below already carries it. The stock page paints RSI violet; violet is not in play here and spending it on one cell would make it mean something new on this surface alone. **Proved by reverting**: `pct(v)` prints `+55.0%`.
+- **`vs 200-day` DOES take the colour**, because it is a direction — the trend gate every rule set reads first.
+- **A null is not a zero.** A listing too young for a 200-day average, or with no stored range, dashes rather than printing `0.0%`. The fixture's range-less stock is what holds that down.
+- **WHAT IS LOST IS THE RECOVERY LEG** — the faint month-ago segment behind the marker, which showed whether a stock near its low was still falling. Nothing here replaces it; it is a shape rather than a figure. Worth knowing before it is missed. `recoveryLeg` stays, because the Range card draws it.
+- **`pal.mid` and `pal.wash` went with the track**, along with the light theme's `.trk` override — each had exactly one consumer and residue reads as intent.
+
+**Net it GAINED room**: the track cost more than the extra row, and the tightest card went from 11px of headroom to 36.
+
+##### THE FIXTURE'S "LONG NAME" WAS 38 CHARACTERS AND THE REAL ONE IS 99
+When the track's height came back, the headline step-down's revert proof stopped biting and read as residue. **It is not residue — the fixture was gentle.** Measured against the live universe: **58 display names pass 28 characters, 16 pass 40, 8 pass 60, and the longest is 99** (`Brookfield Renewable Corporation Brookfield Renewable Corporation Class A Subordinate Voting Shares`). On the real string the step-down fails 9 of 90 combinations when reverted, worst **181px** over.
+
+- A **fourth step** (`t4`, 30px on a post) was added for names past 60, because at three steps that name still took three lines and left the 4:5 card **4px**.
+- **4px is luck, not headroom**, so the sweep's floor is **20px** now — roughly half a text line, the standard the kicker-to-tagline gap already holds. That is what makes `t4` and the chart's `mt: 0` load-bearing rather than merely correct.
+- **THE HEADROOM METRIC WAS WRONG TWICE, AND THE SECOND WAY IS THE SUBTLE ONE.** Box-minus-children's-rects misses margins (it once said 80px on a card full to the pixel). Its replacement — one `space-evenly` space multiplied back up — is fooled in the OPPOSITE direction: a top margin on the first child sits inside that space, so **adding** a margin made measured headroom go UP while real headroom went down, which is exactly why the doubled chart margin kept reporting as a guard that does not bite. It reads each child's margins explicitly now: with the margin restored it reports 9px against 36, and the guard bites.
+- **A fixture is an input, and "long" is a measurement rather than an impression.** Ask production for the longest before calling a width guard proven.
+
+**Worth reporting separately**: several of those longest names are **preferred stock and corporate NOTES** — `Apollo Global Management Inc. 7.625% Fixed-Rate Resettable Junior Subordinated Notes due 2053`, `BitMine … 9.5% Series A Perpetual Preferred Stock`. That is precisely the class of 29 instruments removed on 2026-09-21 ("I only care about equities here"); they have re-entered through a later bulk add. Not acted on — removing a ticker is the owner's call — but the screener is carrying non-equities again.
+
+Verified after the change: **70 checks** in the spotlight suite (every cell addressed BY LABEL rather than by index, since these have been renumbered twice and an index is a statement about today's ordering), the 90-combination sweep, and the theme suite's contrast sweep re-run across all three grounds. **Proved by reverting ten times.**
 
 The control is `spotTheme`, spotlight-scoped on purpose — when this generalises it becomes one `cardTheme` and the `.sp-*` overrides become a token. Control ids **88 against `POST_OPT_MAX` 200**.
 

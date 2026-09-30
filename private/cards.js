@@ -861,17 +861,17 @@
     const THEMES = {
       dark: {
         cls: '',
-        up: '#34d399', down: '#fb7185', flat: '#9aa3b2', mid: '#fbbf24',
+        up: '#34d399', down: '#fb7185', flat: '#9aa3b2',
         grid: 'rgba(255,255,255,0.07)', zero: 'rgba(255,255,255,0.2)',
-        axis: '#7d8797', wash: 'rgba(255,255,255,0.05)',
+        axis: '#7d8797',
         legUp: 'rgba(52,211,153,0.55)', legDown: 'rgba(251,113,133,0.55)',
         tints: ADV_TINT,
       },
       light: {
         cls: 'th-light',
-        up: '#157a51', down: '#c81e37', flat: '#64707f', mid: '#a15c07',
+        up: '#157a51', down: '#c81e37', flat: '#64707f',
         grid: 'rgba(13,16,23,0.10)', zero: 'rgba(13,16,23,0.28)',
-        axis: '#64707f', wash: 'rgba(13,16,23,0.06)',
+        axis: '#64707f',
         legUp: 'rgba(21,122,81,0.45)', legDown: 'rgba(200,30,55,0.45)',
         tints: LADDER_LIGHT,
       },
@@ -880,9 +880,9 @@
       // class and the tints, so a future edit to the dark palette carries.
       navy: {
         cls: 'th-navy',
-        up: '#34d399', down: '#fb7185', flat: '#9aa3b2', mid: '#fbbf24',
+        up: '#34d399', down: '#fb7185', flat: '#9aa3b2',
         grid: 'rgba(255,255,255,0.07)', zero: 'rgba(255,255,255,0.2)',
-        axis: '#8b95a5', wash: 'rgba(255,255,255,0.05)',
+        axis: '#8b95a5',
         legUp: 'rgba(52,211,153,0.55)', legDown: 'rgba(251,113,133,0.55)',
         tints: ADV_TINT,
       },
@@ -2102,7 +2102,13 @@
     // one. A name past that wraps to two lines at the SMALL size, which the
     // sweep has room for; the steps exist so it does not wrap at the big one.
     const nm = nameOf(row);
-    const tCls = nm.length > 40 ? ' t3' : nm.length > 28 ? ' t2' : '';
+    // FOUR STEPS, because the provider's names go much further than they
+    // look: measured against the live universe, 58 display names pass 28
+    // characters, 16 pass 40, 8 pass 60 and the longest is NINETY-NINE
+    // ("Brookfield Renewable Corporation Brookfield Renewable Corporation
+    // Class A Subordinate Voting Shares"). At three steps that one still
+    // took three lines and left the 4:5 card 4px of headroom.
+    const tCls = nm.length > 60 ? ' t4' : nm.length > 40 ? ' t3' : nm.length > 28 ? ' t2' : '';
     const head = '<span class="s-kick">' + esc(kick) + '</span>' +
       '<h2 class="s-title' + tCls + '">' + esc(nm) + '</h2>' +
       '<div class="sp-sub">' + esc(sym) +
@@ -2113,38 +2119,19 @@
         : '') +
       '</div>';
 
-    // ---- where today sits in its own year --------------------------------
-    // The windowed chart above cannot say this: a six-month line rebased to
-    // its own start says nothing about the year around it. Drawn through the
-    // Range card's own track markup and `recoveryLeg`, so the two surfaces
-    // cannot disagree about what a marker means.
+    // ---- twelve figures --------------------------------------------------
+    // Three rows, and the order is what it did, then where it stands, then
+    // what it is.
     //
-    // THE ROW IS LABELLED WITH THE POSITION, NOT THE COMPANY NAME. Printing
-    // the name again on a card whose title is that name is the repetition
-    // this project has been pulled up on before, and the percentage is a
-    // reading that appears nowhere else on the card.
-    const has52 = row.range52Pos != null && row.pctFromHigh != null && row.pctFromLow != null;
-    let track = '';
-    if (has52) {
-      const p = Math.max(0, Math.min(100, row.range52Pos));
-      const tint = p >= 66 ? pal.up : p >= 33 ? pal.mid : pal.down;
-      track = '<div class="sp-block"><div class="sp-head">Its own 52-week range</div>' +
-        '<div class="tracks"><div class="trk">' +
-        '<span class="ts">' + Math.round(p) + '% of its year</span>' +
-        '<span class="trail">' +
-        '<span class="tfill" style="width:' + p +
-        '%;background:linear-gradient(90deg, ' + pal.wash + ', ' + tint + ')"></span>' +
-        recoveryLeg(row, p) +
-        '<span class="tdot" style="left:' + p + '%;background:' + tint + '"></span></span>' +
-        '<span class="tlo">' + pct(row.pctFromLow) + '</span>' +
-        '<span class="thi">' + pct(row.pctFromHigh) + '</span>' +
-        '</div></div>' +
-        '<div class="tkey"><span>left edge \u00b7 the 52-week low</span>' +
-        '<span>right edge \u00b7 the high</span></div></div>';
-    }
-
-    // ---- eight figures ---------------------------------------------------
-    // Four windows of its own price, then four readings of the business.
+    // THE SECOND ROW REPLACED THE 52-WEEK TRACK (2026-09-30, owner's
+    // request). The track drew the position as a marker on a rail and put
+    // the two distances at its ends; four cells say the same thing in
+    // numbers and add two readings the card had no room for. What is lost is
+    // the RECOVERY LEG — the faint month-ago segment behind the marker,
+    // which showed whether a stock near its low was still falling. Nothing
+    // here replaces that; it is a shape rather than a figure. Worth knowing
+    // before it is missed. `recoveryLeg` itself stays, because the Range
+    // card draws it.
     //
     // REVENUE IS DELIBERATELY NOT HERE, though it is the obvious size number
     // beside the cap: an absolute is in the company's own REPORTING currency
@@ -2163,6 +2150,26 @@
       ['1 month', row.oneMonthPct, 'ret'],
       ['3 months', row.threeMonthPct, 'ret'],
       ['1 year', row.oneYearPct, 'ret'],
+      // WHERE IT STANDS. These two are LEVELS, not changes, which is why
+      // they take the sign and NOT the colour: "from the high" is always
+      // negative and "from the low" always positive, so green and red here
+      // would read as good and bad when -1.1% off the high is excellent and
+      // +61.5% off the low says nothing on its own. The margin rule, one
+      // step further — a margin drops the sign because zero is not a
+      // boundary it crosses; these keep it because the sign IS the label's
+      // direction.
+      ['From 52w high', row.pctFromHigh, 'lvl'],
+      ['From 52w low', row.pctFromLow, 'lvl'],
+      // RSI is an INDEX, not a percentage, so no % and no sign. Deliberately
+      // uncoloured: 70 and 30 mean overbought and oversold, but that is a
+      // reading this card does not otherwise make and the verdict below
+      // already carries it. The stock page paints RSI violet; violet is not
+      // in play here and spending it on one cell would make it mean
+      // something new on this surface alone.
+      ['RSI', row.rsi, 'idx'],
+      // ...and this one IS a direction, so it takes the colour: above the
+      // 200-day is the trend gate every rule set reads first.
+      ['vs 200-day', row.vs200ma, 'ret'],
       ['Market cap', row.marketCap, 'cap'],
       ['Fwd P/E', peTxt, 'raw'],
       ['Revenue growth', row.revenueGrowthYoY, 'ret'],
@@ -2172,7 +2179,12 @@
       let txt = '\u2014', cls = '';
       if (kind === 'raw') txt = v == null ? '\u2014' : String(v);
       else if (kind === 'cap') txt = v != null && isFinite(v) ? '$' + fmtMoney(v) : '\u2014';
-      else if (kind === 'margin') {
+      else if (kind === 'lvl') txt = pct(v);            // sign, no colour
+      else if (kind === 'idx') {
+        // A null is not a zero: a listing too young for a 200-day average,
+        // or with no stored range, gets a dash rather than a fabricated 0.
+        txt = v == null || !isFinite(v) ? '\u2014' : v.toFixed(1);
+      } else if (kind === 'margin') {
         // A MARGIN TAKES NO SIGN and a RETURN DOES. "+25.0%" as a profit
         // margin reads as a change rather than a level; a negative one still
         // takes the colour, because loss-making is the reading.
@@ -2185,7 +2197,7 @@
       return '<div class="sp-cell"><span class="sp-cl">' + esc(label) + '</span>' +
         '<span class="sp-cv ' + cls + '">' + esc(txt) + '</span></div>';
     };
-    const figs = '<div class="sp-block"><div class="sp-head">Returns, and the business</div>' +
+    const figs = '<div class="sp-block"><div class="sp-head">Returns, position, and the business</div>' +
       '<div class="sp-grid">' +
       CELLS.map((c) => cell(c[0], c[1], c[2])).join('') + '</div></div>';
 
@@ -2226,7 +2238,7 @@
     // bands until it was given the same treatment.
     return chromeTop() +
       '<div class="s-body"><div class="sp-in">' + head +
-      '<div class="sp-wrap">' + plot + track + figs + verdict + '</div>' +
+      '<div class="sp-wrap">' + plot + figs + verdict + '</div>' +
       '<p class="s-sub wide" style="--fs:17px;margin-top:16px">' + esc(note) + '</p>' +
       '</div></div>' + chromeFoot();
   }
@@ -2665,7 +2677,9 @@
     .s-art.th-light .sp-head { border-bottom-color: rgba(13, 16, 23, 0.14); }
     .s-art.th-light .sp-cell { background: rgba(13, 16, 23, 0.05); }
     .s-art.th-light .sp-verd { background: rgba(13, 16, 23, 0.035); }
-    .s-art.th-light .trk .trail { background: rgba(13, 16, 23, 0.07); }
+    /* The .trk override that sat here went with the 52-week track: the
+       spotlight was its only themed consumer, and a rule nothing can reach
+       reads as intent. */
 
     /* NAVY IS A GROUND AND AN AURA, and that is the whole theme. Measured on
        #0d1a2d the dark palette still clears 4.5:1 everywhere (green 9.1, red
@@ -2704,6 +2718,7 @@
     .sp-in .s-title { font-size: 58px; }
     .sp-in .s-title.t2 { font-size: 46px; letter-spacing: -0.04em; }
     .sp-in .s-title.t3 { font-size: 38px; letter-spacing: -0.035em; }
+    .sp-in .s-title.t4 { font-size: 30px; letter-spacing: -0.03em; line-height: 1.12; }
     .sp-block { min-width: 0; }
     .sp-head { font: 600 16px var(--mono); text-transform: uppercase;
                letter-spacing: 0.16em; color: var(--muted);
@@ -2754,6 +2769,7 @@
     .sz-square .sp-in .s-title { font-size: 50px; }
     .sz-square .sp-in .s-title.t2 { font-size: 41px; }
     .sz-square .sp-in .s-title.t3 { font-size: 34px; }
+    .sz-square .sp-in .s-title.t4 { font-size: 27px; }
     .sz-square .sp-sub { font-size: 27px; margin-top: 7px; }
     .sz-square .sp-wrap { gap: 12px; }
     .sz-square .sp-head { margin-bottom: 10px; padding-bottom: 6px; font-size: 15px; }
@@ -2772,6 +2788,7 @@
     .sz-story .sp-in .s-title { font-size: 74px; }
     .sz-story .sp-in .s-title.t2 { font-size: 58px; }
     .sz-story .sp-in .s-title.t3 { font-size: 48px; }
+    .sz-story .sp-in .s-title.t4 { font-size: 38px; }
     .sz-story .sp-sub { font-size: 42px; margin-top: 14px; }
     .sz-story .sp-wrap { gap: 26px; }
     .sz-story .sp-head { font-size: 19px; padding-bottom: 11px; margin-bottom: 18px; }
