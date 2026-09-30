@@ -538,6 +538,24 @@ The **Info** banner spans eight columns — Overall, Mom., Qual., Portfolios, Pr
 - **8 of them carried a market cap** — the parent company's, wrongly attached (AGNCM $28.1B, STRC $30.7B, VLYPO $13.8B…) — so they never appeared in the no-cap list and **would have been banded as Large or Mid-Large** by the feature above. Cleaning first was what stopped the band inheriting that.
 - The 7 genuine ETFs stay. None of the 29 sat in a portfolio. **The snapshot still held them until the next refresh** — it is one JSON blob rewritten wholesale, which is documented and self-healing.
 
+#### FOUR MORE HAD RE-ENTERED, and the near-miss this time was a GARBLED NAME (2026-09-30, owner: "Remove the non equities")
+**Universe 1,192 → 1,188.** Three corporate notes and one preferred, all arrived through later bulk adds — the class removed in September, back by the same door.
+
+| | the feature that survives the 120-char truncation |
+|---|---|
+| **APOS** | Apollo `7.625% … Junior Subordinated Notes due 2053` |
+| **BNH** | Brookfield Finance `4.625% Subordinated Notes due October 16 2080` |
+| **KKRS** | KKR Group Finance `4.625% Subordinated Notes due 2061` |
+| **BMNP** | BitMine `9.5% Series A Perpetual Preferred Stock` |
+
+- **A COUPON RATE IS THE STRONGEST SINGLE TELL** — common stock does not pay a stated rate — and it appears EARLY in a name, right after the company, so it survives the truncation that eats "Preferred Stock" off the end. Beside a debt or preferred word it is decisive; the three notes also carry `due <year>`.
+- **TWO INDEPENDENT TESTS, and neither alone was enough.** The name scan graded by tell; the cross-check asked the orthogonal question — **which rows can the app not SCORE**, since `classify()` types a row ETF when it has neither Quality nor a P/E, which is a heuristic for *we hold no fundamentals for this thing*. They agreed on the three notes (typed ETF, `rev=0`, no Quality, all carrying an **Avoid verdict**). **BMNP was caught by the name test ALONE** — and that is the point of running both.
+- **BMNP IS WORSE THAN A BLANK ROW, which is why the scorability test missed it.** It is typed **Early with Quality 9 and a Hold verdict** on the PARENT's fundamentals wrongly attached — the pattern the September pass recorded when 8 of the 29 carried a parent's market cap. A preferred scored as though it were a company is a wrong answer wearing a verdict, not an empty cell.
+- **THE NEAR-MISS IS A NEW SHAPE: `BNS` — "Bank Nova Scotia Halifax Pfd 3".** The name says `Pfd`, and it is **Scotiabank's COMMON stock** — $25.2B revenue, $6.8B net income, ROE 11.5, P/E 13.9 forward / 17.2 trailing, Quality 8, 1.22B shares outstanding, $112.2B cap, NYSE, Banks – Diversified. September's near-misses were instruments whose names *legitimately* read like a preferred (ADRs, tracking stocks, an MLP's "Common Units"); **this one is simply a wrong name from the provider.** So the rule generalises: **a name is evidence and fundamentals are proof — a preferred series has no revenue, no ROE and no earnings.** Nothing but checking the numbers would have saved it.
+- **Spared and named in the script so a later reader sees the decision**: BNS, AZN (ADS on common), ET (an MLP common unit is real equity), and **SKF** — a genuine leveraged inverse ETF, so a fund rather than a non-equity, and a separate question the owner has not yet answered.
+- **Nothing was stranded**: none of the four sat in a theme, so no theme lost a member, and `fundamentals_history` — the one thing a purge destroys irrecoverably — held only the parent's figures wrongly attached, which is worth nothing for a note.
+- Verified against the DATABASE rather than the route's 200: **0 bars, no profile and no name** for all four; BNS/AZN/ET/SKF intact with 4,434–5,008 bars each; universe table 1,188; **no theme member outside the universe**; Sector Benchmark still 11. The route's own reply prints as `[object Object]` through my logging — cosmetic, and the reason the check is the data.
+
 ### Site-wide hidden columns (the owner's floor)
 **`/columns` (admin, its own page, linked from the console's Screener section) hides columns for EVERYONE (2026-09-15).** It was a panel on `/admin` for an hour; the owner moved it out rather than grow that page — the console stays a door. The page carries search, a per-group tick with an n/total count, Show all, **Undo changes** (back to what the server last confirmed) and a Save that is disabled until something differs. 85 columns is more than most accounts want as a default, and a view is a per-person choice; this is the floor under all of them.
 
