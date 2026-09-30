@@ -1918,8 +1918,12 @@
     // when a floor is narrowing the movers rather than leaving the reader to
     // wonder why a familiar small name is missing.
     const floorNote = floor ? ' · movers over $' + fmtMoney(floor) : '';
+    // `dy-in` rather than a bare div: the wrapper below has to FILL what the
+    // body leaves, and for that its parent needs a height. Every other
+    // template's inner block is a plain block whose height is its content,
+    // and `.s-body` then centres it — which is what left the two empty bands.
     return chromeTop() +
-      '<div class="s-body"><div>' +
+      '<div class="s-body"><div class="dy-in">' +
       `<span class="s-kick">${pool.length.toLocaleString()} stocks${esc(floorNote)}</span>` +
       // The second line names what the MOVERS are ranked by, not the card:
       // the sectors are cap-weighted percentages whichever metric is chosen
@@ -2351,7 +2355,25 @@
                  overflow: hidden; text-overflow: ellipsis; }
     .dy-chip i { font: 600 30px var(--mono); font-style: normal; }
     .dy-chip i.pos { color: var(--green); } .dy-chip i.neg { color: var(--red); }
-    .dy-block { margin-top: 26px; }
+    /* ---- the card FILLS its artboard, on every shape ------------------
+       Measured after the first cut, and the owner marked both bands on a
+       screenshot: the 4:5 left 164px unused (82 above the kicker, 81 under
+       the movers) and the square 74px. They are one slack, split in two by
+       the centring on .s-body, so neither can be fixed on its own. The three
+       blocks spread through what the body leaves instead — the treatment
+       the story already had, applied to all three shapes rather than kept
+       as a special case.
+       The gap is a FLOOR, not the spacing: free space is distributed after
+       gaps are allocated, so a full card keeps 22px between blocks and a
+       sparse one opens up instead of stranding the room at the ends.
+       (No backticks in here. STYLE is a template literal and one inside a
+       CSS comment ends the string; this is the THIRD time on this card,
+       and node --check passes it every time because it is valid
+       interpolation rather than a syntax error.) */
+    .dy-in { height: 100%; display: flex; flex-direction: column; }
+    .dy-wrap { flex: 1; display: flex; flex-direction: column;
+               justify-content: space-evenly; gap: 22px; }
+    .dy-block { margin-top: 0; }
     /* No nowrap here, deliberately. I had added one and called it
        load-bearing; reverting it wrapped NOTHING, because every head this
        card writes is short by construction ("Sectors · cap-weighted",
@@ -2395,6 +2417,27 @@
        fits every card the controls can reach, so nothing could ever select
        them. */
 
+    /* The 4:5 has the most room of the three once the bands were reclaimed,
+       so part of it goes into the rows rather than all of it into the gaps.
+       A 1080px card renders about 400px wide in a feed, so a 36px row is
+       ~13px to the reader and a 40px one is ~15px — which is the whole
+       density argument this card was designed around. The square keeps 36:
+       measured, it had 74px of slack against the post's 164, and eleven
+       rows would eat 66 of it.
+       40 rather than 42, which also fit: the worst reachable card is the
+       4:5 at ten a side (sixteen rows), and at 42 the gap between blocks
+       lands on 29px against the 22px floor — seven pixels from capacity.
+       At 40 it is 37, which is a third of a row of headroom. */
+    .sz-portrait .dy-row { height: 40px; }
+    .sz-portrait .dy-rail { height: 20px; }
+    .sz-portrait .dy-lab { font-size: 18px; }
+    .sz-portrait .dy-val { font-size: 19px; }
+    .sz-portrait .dy-chip i { font-size: 33px; }
+    /* The taller rows came with a bigger label, and "Communication Services"
+       stopped fitting the 202px the sector column had — caught by the
+       no-truncation check rather than by eye this time. */
+    .sz-portrait .dy-grid .dy-lab { width: 216px; }
+
     /* A story is twice as tall and read at arm's length, so it gets the room
        back rather than staying at the post's rhythm. FOUND BY SCREENSHOT,
        not by an assertion: with only the type scaled up the card drew 993px
@@ -2424,9 +2467,6 @@
        read once. */
     .sz-story .dy-grid .dy-lab { width: 228px; font-size: 19px; }
     .sz-story .dy-grid .dy-val { width: 92px; }
-    .sz-story .dy-wrap { flex: 1; display: flex; flex-direction: column;
-                         justify-content: space-evenly; }
-    .sz-story .dy-block { margin-top: 0; }
 
     .twocol.dense { gap: 30px; margin-top: 26px; }
     .twocol.dense .mch { font-size: 15px; padding-bottom: 9px; margin-bottom: 10px; }
