@@ -104,6 +104,11 @@
     #abTrades .tr .sym { font: 600 11.5px var(--mono); }
     #abTrades .tr .side.sell { color: var(--red); }
     #abTrades .tr .side.buy { color: var(--green); }
+    /* NEUTRAL, and that is the point. Green and red here mean bought and
+       sold — a direction of trade — and a position that simply carried on is
+       neither. Colouring it would put a third claim in a column that makes
+       only one. */
+    #abTrades .tr .side.keep { color: var(--muted); }
     #abTrades .tr .why { color: var(--muted); }
     #abTrades .tr .r { text-align: right; font: 500 11.5px var(--mono); }
     #abTrades h3, #abBandNote h3 { font-size: 12px; margin: 18px 0 8px;
@@ -388,17 +393,42 @@
           }
           return (x.action || '?') + (x.flag ? ' — ' + x.flag : '');
         };
-        var rows = t.sold.map(function (x) {
-          return '<div class="tr"><span class="sym">' + we(x.sym) + '</span>'
-            + '<span class="side sell">sold</span>'
-            + '<span class="why">' + we(reason(x, true)) + '</span>'
+        // THE BOOK FIRST, then what left it. The block used to list only the
+        // names that changed hands, so a holding that simply carried on was
+        // invisible — the summary could say "held 2" above a single row.
+        // Kept and bought together ARE the book at this date, which is what
+        // makes the count above reconcile with the rows under it.
+        var more = function (shown, n) {
+          return n > shown
+            ? '<div class="tr"><span class="sym"></span><span class="side"></span>'
+              + '<span class="why" style="color:var(--faint)">\u2026and ' + (n - shown)
+              + ' more, not listed.</span><span class="r"></span></div>'
+            : '';
+        };
+        var rows = t.kept.map(function (x) {
+          // "so far", never a realised figure: this position is still open,
+          // and printing it the way a sale's return is printed would be the
+          // more expensive kind of wrong.
+          var held = x.days == null ? '' : 'held ' + x.days + ' session' + (x.days === 1 ? '' : 's')
+            + (x.from ? ', since ' + x.from : '');
+          return '<div class="tr"' + (held ? ' title="' + we(held) + '"' : '') + '>'
+            + '<span class="sym">' + we(x.sym) + '</span>'
+            + '<span class="side keep">held</span>'
+            + '<span class="why">' + we(reason(x, false)) + '</span>'
             + '<span class="r">' + (x.ret == null ? '' : pc(x.ret)) + '</span></div>';
-        }).concat(t.bought.map(function (x) {
+        }).join('') + more(t.kept.length, t.keptN)
+        + t.bought.map(function (x) {
           return '<div class="tr"><span class="sym">' + we(x.sym) + '</span>'
             + '<span class="side buy">bought</span>'
             + '<span class="why">' + we(reason(x, false)) + '</span>'
             + '<span class="r"></span></div>';
-        })).join('');
+        }).join('') + more(t.bought.length, t.boughtN)
+        + t.sold.map(function (x) {
+          return '<div class="tr"><span class="sym">' + we(x.sym) + '</span>'
+            + '<span class="side sell">sold</span>'
+            + '<span class="why">' + we(reason(x, true)) + '</span>'
+            + '<span class="r">' + (x.ret == null ? '' : pc(x.ret)) + '</span></div>';
+        }).join('') + more(t.sold.length, t.soldN);
         var o = open; open = false;
         return '<details' + (o ? ' open' : '') + '><summary><span class="d">'
           + we(t.d) + '</span><span class="q">held ' + t.held + ' \u00b7 sold '
@@ -407,10 +437,15 @@
           + '</span></summary><div class="body">' + rows + '</div></details>';
       }).join('')
       + '<p style="color:var(--muted);font-size:12px;line-height:1.6;margin:8px 2px 0">'
-      + 'A name that is KEPT is re-weighted rather than traded, so the names listed '
-      + 'will not add up to the turnover above them. The reason beside each is the '
-      + 'verdict that fired for it on that date \u2014 for a sale, the one that '
-      + 'disqualified it.</p>';
+      + 'Every position is listed: <b>held</b> and <b>bought</b> together are the book '
+      + 'going into that period, and they add up to the count beside the date. A name '
+      + 'that is kept is re-weighted rather than traded, so it moves dollars without '
+      + 'being a trade \u2014 which is why the names will not add up to the turnover. '
+      + 'The reason beside each is the verdict that fired for it on that date; for a '
+      + 'sale, the one that disqualified it. A return beside a <b>held</b> row is what '
+      + 'the position has done SO FAR, from the day it was bought to that date; beside '
+      + 'a <b>sold</b> row it is what it did over the whole holding. The opening basket '
+      + 'is the picks table above.</p>';
     }
 
     // ---- the picks -------------------------------------------------------

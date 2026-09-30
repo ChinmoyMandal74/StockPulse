@@ -6801,7 +6801,7 @@ function btSimulate(opts) {
         else cash = total;             // nothing qualifies: sit in cash
       }
       let moved = 0;
-      const sold = [], bought = [];
+      const sold = [], bought = [], kept = [];
       const names = new Set([...before.keys(), ...held.keys()]);
       for (const sym of names) {
         const was = before.get(sym) || 0, now = held.get(sym) || 0;
@@ -6818,6 +6818,23 @@ function btSimulate(opts) {
         } else if (was === 0 && now > 0) {
           bought.push({ sym });
           entry.set(sym, { j, px: px[sym][j] });
+        } else if (was > 0 && now > 0) {
+          // A NAME THAT IS KEPT WAS NAMED NOWHERE (2026-09-30, owner's
+          // request: "I should be able to see position at the start of every
+          // month not just the buy the sell"). It is re-weighted rather than
+          // traded, so it moved no dollars and the diff that names the
+          // trades had nothing to say about it — the log could report
+          // "held 2" and show you one row.
+          //
+          // Its return is measured from ENTRY to this mark, so it is what
+          // the position has done so far rather than anything realised. The
+          // page says which; a number that reads like a sold row's would be
+          // the more expensive kind of wrong.
+          const e = entry.get(sym);
+          const at = px[sym] ? px[sym][j] : null;
+          kept.push({ sym, from: e ? axis[e.j] : null,
+            days: e ? j - e.j : null,
+            ret: e && e.px > 0 && at > 0 ? Math.round((at / e.px - 1) * 1000) / 10 : null });
         }
       }
       traded += moved / total;
@@ -6827,7 +6844,7 @@ function btSimulate(opts) {
       cash *= 1 - fee;
       rebalances++;
       log.push({ d: axis[j], j, held: held.size, cash: Math.round((cash / total) * 1000) / 10,
-        turnover: Math.round((moved / total) * 1000) / 10, sold, bought });
+        turnover: Math.round((moved / total) * 1000) / 10, sold, bought, kept });
     }
     let end = cash;
     for (const v of held.values()) end += v;
@@ -6880,6 +6897,11 @@ function btRankMetrics(row, rows, i, cfg) {
 // there to avoid), buys best-verdict-first, and the full count travels with
 // the list so a trimmed one says so rather than looking complete.
 const BT_TRADE_CAP = 40;
+// The BOOK is not a side of a trade and gets its own ceiling: a re-run with
+// no cut can hold most of a tier, and "held 180" is a list nobody reads. It
+// is higher than the trade cap because this is the thing the reader asked to
+// see, and the count travels with it so a trimmed list says so.
+const BT_BOOK_CAP = 60;
 
 function btTrades(log, verdicts, byS, opts) {
   const { want, cut } = opts || {};
@@ -6904,9 +6926,16 @@ function btTrades(log, verdicts, byS, opts) {
       .sort((a, b) => (a.ret == null ? 1 : b.ret == null ? -1 : a.ret - b.ret));
     const bought = e.bought.map((t) => deco(t, false))
       .sort((a, b) => tier(b.action) - tier(a.action) || a.sym.localeCompare(b.sym));
+    // LONGEST HELD FIRST, deliberately not by return or by verdict: this is
+    // the book, and ordering it by performance would make a descriptive list
+    // into a ranking — the peer table's rule. A trim then drops the newest,
+    // which the bought list beside it names anyway.
+    const kept = (e.kept || []).map((t) => deco(t, false))
+      .sort((a, b) => (b.days || 0) - (a.days || 0) || a.sym.localeCompare(b.sym));
     return { d: e.d, held: e.held, cash: e.cash, turnover: e.turnover,
-      soldN: sold.length, boughtN: bought.length,
-      sold: sold.slice(0, BT_TRADE_CAP), bought: bought.slice(0, BT_TRADE_CAP) };
+      soldN: sold.length, boughtN: bought.length, keptN: kept.length,
+      sold: sold.slice(0, BT_TRADE_CAP), bought: bought.slice(0, BT_TRADE_CAP),
+      kept: kept.slice(0, BT_BOOK_CAP) };
   });
 }
 
