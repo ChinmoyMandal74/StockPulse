@@ -11875,7 +11875,13 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
   const data = {
     date: asked, end, horizon: hz, rules, theme, tiers,
     ruleSets: RULE_SETS, horizons: Object.keys(ADJBT_HORIZONS), floor: ADJBT_FLOOR,
-    rank, top, every, mode: every ? mode : null, cost: costBps,
+    // BOTH NUMBERS, because they differ exactly when a reader is confused.
+    // `top` is the cut that was APPLIED and collapses to 0 — hold them all —
+    // when fewer stocks qualified than the cut asks for, which is correct
+    // and was invisible: the control still read "Top 10" beside a six-stock
+    // book with nothing on the page joining the two. `topAsked` is what the
+    // control says, so the page can say which happened.
+    rank, top, topAsked, every, mode: every ? mode : null, cost: costBps,
     ranks: BT_RANKS, modes: BT_MODES,
     picks: r.picks.map((p) => ({
       symbol: p.symbol, name: p.name, action: p.action, flag: p.flag, type: p.type,

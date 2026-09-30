@@ -384,6 +384,20 @@
     // reading before believing the ranking earned its place.
     function bandNote() {
       var r = DATA.result;
+      // A CUT THAT DID NOT BIND IS NOT A CUT, and the page used to say
+      // nothing at all in that case — the control read "Top 10" beside a
+      // six-stock book and nothing joined the two. It is the correct
+      // behaviour (you cannot hold ten stocks when six qualify) and it was
+      // invisible, which is the half worth fixing.
+      if (!DATA.top && DATA.topAsked > 0) {
+        $('abBandNote').innerHTML = '<b>The Top ' + DATA.topAsked
+          + ' cut had nothing to trim.</b> Only ' + DATA.picks.length + ' stock'
+          + (DATA.picks.length === 1 ? '' : 's') + ' passed the verdicts you chose on '
+          + we(DATA.date) + ', so every one of them is held and the ranking never '
+          + 'ran. It is a ceiling, not a target \u2014 widen the verdicts, or start '
+          + 'from a date with more names, to make it bite.';
+        return;
+      }
       if (!DATA.top || r.bandPct == null) { $('abBandNote').innerHTML = ''; return; }
       var verdict = r.bandPct >= 80 ? 'ahead of most of them'
         : r.bandPct <= 20 ? 'behind most of them' : 'indistinguishable from them';
@@ -421,7 +435,13 @@
       var openPicks = (DATA.picks || []).filter(function (p) { return p.selected; });
       var opening = '<details open><summary><span class="d">' + we(DATA.date)
         + '</span><span class="q">opening book \u00b7 ' + openPicks.length
-        + ' position' + (openPicks.length === 1 ? '' : 's') + '</span></summary>'
+        + ' position' + (openPicks.length === 1 ? '' : 's')
+        // Beside the number, because this is where "why six and not ten?"
+        // is actually asked.
+        + (!DATA.top && DATA.topAsked > 0
+          ? ' \u00b7 every stock that qualified, so the Top ' + DATA.topAsked
+            + ' cut did not bind' : '')
+        + '</span></summary>'
         + '<div class="body">'
         + bookLine('Held from ' + DATA.date, openPicks.map(function (p) { return p.symbol; }))
         + openPicks.map(function (p) {
