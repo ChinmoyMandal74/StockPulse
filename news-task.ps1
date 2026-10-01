@@ -5,10 +5,19 @@
 #   .\news-task.ps1 -Remove    take it away
 #   .\news-task.ps1 -WhatIf    print what it would register and stop
 #
-# THREE FIXED TIMES, EVERY DAY INCLUDING WEEKENDS: 08:00, 13:00, 17:00. Three
+# THREE FIXED TIMES, EVERY DAY INCLUDING WEEKENDS: 09:00, 13:00, 17:00. Three
 # separate daily triggers rather than one repeating one, because the gaps are
-# uneven (5h, 4h, then 15h overnight) and a repetition interval can only be
+# uneven (4h, 4h, then 16h overnight) and a repetition interval can only be
 # one number.
+#
+# THE MORNING SLOT WAS 08:00 AND MOVED TO 09:00 (2026-09-30, owner), because
+# the nightly rotation now fires at 07:30 from this same laptop and takes about
+# 37 minutes. The two jobs do not fight over credits -- news costs none, the
+# provider is free and keyless -- but they do fight over this machine and over
+# the same Vercel instance, and a news lap landing in the middle of a rotation
+# round is the contention this file records elsewhere: a long refresh makes
+# every other call cold, and a heavy call makes the refresh miss its deadline.
+# An hour clears the rotation with room to spare.
 #
 # WEEKENDS ARE DELIBERATE and are why this differs from the price schedule.
 # Prices only move when the market is open; headlines are published all week,
@@ -35,7 +44,7 @@ $ErrorActionPreference = 'Stop'
 $TaskName = 'TickrLab news'
 $Root     = $PSScriptRoot
 $Script   = Join-Path $Root 'news-ping.js'
-$Times    = @('08:00', '13:00', '17:00')
+$Times    = @('09:00', '13:00', '17:00')
 
 if ($Remove) {
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
@@ -54,7 +63,7 @@ $triggers = $Times | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ }
 # is minutes rather than an hour. The limit is a stop for a run that has gone
 # wrong, not a budget for one that has not.
 #
-# IgnoreNew matters here more than it does for prices: a slow 08:00 lap must
+# IgnoreNew matters here more than it does for prices: a slow 09:00 lap must
 # not have 13:00 start a second one on top of it and fetch everything twice.
 $settings = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `
