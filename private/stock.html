@@ -1306,19 +1306,28 @@
       // this group really are the vendor's, struck at the vendor's date, and
       // relabelling them with a filing date they do not come from would be a
       // worse kind of wrong than being late.
+      let filedClause = false;
       if (last && filed && filed > last.date) {
         const gap = Math.round(
           (new Date(filed + 'T12:00:00') - new Date(last.date + 'T12:00:00')) / 86400000);
-        if (gap > RowCard.SEC_BEHIND_DAYS) parts.push('but the company filed with the SEC on ' + d(filed)
-          + ', which the earnings feed has not recorded');
+        if (gap > RowCard.SEC_BEHIND_DAYS) {
+          parts.push('but the company filed with the SEC on ' + d(filed)
+            + ', which the earnings feed has not recorded');
+          filedClause = true;
+        }
       }
       const nd = s.nextEarningsDate;
       const next = d(nd);
       if (next) {
         const about = s.nextEarningsEstimated ? 'about ' : '';
-        parts.push(String(nd) >= today
-          ? 'next due ' + about + next
-          : 'due ' + about + next + ', not yet recorded');
+        if (String(nd) >= today) parts.push('next due ' + about + next);
+        // A LAPSED estimate says the same thing as the clause above it, and
+        // says it worse: "a report was due and has not arrived" when we have
+        // just named the filing that did arrive. Live on VNO the two even
+        // landed on the SAME DAY — the +91 estimate from 4 May is 3 Aug, and
+        // the 10-Q really was filed 3 Aug — so the line read as a
+        // contradiction. Where the filing is known, it is the better fact.
+        else if (!filedClause) parts.push('due ' + about + next + ', not yet recorded');
       }
       const pulled = pulledAt;
       if (pulled) {
