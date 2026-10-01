@@ -70,6 +70,13 @@ const MAX_ROUNDS = FULL ? 200 : 60;
 // Rounds that return nothing usable before giving up. A rate limit, a cold
 // start or a 504 is not a reason to abandon the night; three in a row is.
 const STAGNANT_LIMIT = 3;
+// SEC filings, refreshed after the rotation. 5 a batch matches the route's
+// own default; 20 batches is 100 symbols a run, so the two daily runs cover
+// ~200 and the universe turns over in under a week -- the same cadence the
+// profile rotation keeps.
+const SEC_BATCH = 5;
+const SEC_MAX_BATCHES = Number(process.env.SEC_MAX_BATCHES) || 20;
+const SEC_GAP_MS = 1500;
 
 // Read .env directly rather than depending on the process environment: a
 // scheduled task starts with almost none of the shell's, and the secret has no
@@ -201,6 +208,63 @@ class Stop extends Error {
       throw new Stop(0);
     }
 
+    // ---- SEC filings, AFTER the rotation and never inside it ----------
+    //
+    // A SEPARATE PHASE OF THE *PING*, not of the refresh. Three things have
+    // been added to the refresh tail on this project -- the news top-up
+    // (2026-09-18), techHistorySpan (2026-09-19) and archiveStats
+    // (2026-09-20) -- and all three surfaced as "the refresh failed" over
+    // data that was perfectly fine, because nothing may run after the
+    // response on that platform and the tail has to finish inside the
+    // request. So this is its own HTTP loop, exactly as /admin drives it,
+    // and a failure here cannot touch the night's refresh.
+    //
+    // Why it is here at all: sec_state.last_filed is what tells the screener
+    // the vendor's earnings feed has gone stale, and Twelve Data confirmed in
+    // writing that a missed quarter has NO backfill SLA. A staleness check
+    // that is itself stale is worse than none.
+    //
+    // CAPPED IN BATCHES, not run to completion. The SEC has already answered
+    // 429 and then 403 to this address when a loop hammered it, and a
+    // companyfacts file is 1-5MB. With the rotation cutoff doing the
+    // selecting, ~34 batches a day is steady state across the two runs; the
+    // cap is what stops the FIRST night, when everything is past the cutoff,
+    // trying to fetch the whole universe in one go. It simply catches up
+    // over the following nights.
+    async function secRotate() {
+      let fetched = 0;
+      let batches = 0;
+      for (; batches < SEC_MAX_BATCHES; batches += 1) {
+        let r; let text;
+        try {
+          r = await fetch(`${base}/api/sec/refresh?mode=rotate&n=${SEC_BATCH}`, {
+            method: 'POST',
+            signal: AbortSignal.timeout(300000),
+            headers: { Authorization: 'Bearer ' + secret },
+          });
+          text = await r.text();
+        } catch (e) {
+          say(`sec        stopped after ${batches} batch(es) -- ${e.name === 'TimeoutError' ? 'timed out' : e.message}`);
+          return;
+        }
+        let j = null; try { j = JSON.parse(text); } catch { /* not json */ }
+        if (!r.ok || !j) {
+          say(`sec        stopped after ${batches} batch(es) -- HTTP ${r.status} ${String(text).slice(0, 120)}`);
+          return;
+        }
+        fetched += j.fetched || 0;
+        if (j.done || !j.fetched) {
+          say(`sec        up to date -- ${fetched} refetched in ${batches + 1} batch(es)`);
+          return;
+        }
+        // The SEC asks for under ten requests a second and throttles
+        // sustained access below that. A batch is already sequential inside
+        // itself; this is the gap between batches.
+        await sleep(SEC_GAP_MS);
+      }
+      say(`sec        ${fetched} refetched in ${batches} batch(es) (cap) -- more next run`);
+    }
+
     say(`starting ${FULL ? 'FULL sweep' : 'rotation'} against ${base}`);
     let resp = await call(FULL ? '?start=1&full=1' : '?start=1');
     if (resp.j && resp.j.runId) runId = resp.j.runId;
@@ -234,6 +298,7 @@ class Stop extends Error {
         say(`round ${round}  ${j.loaded}/${j.total} profiles in ${resp.secs}s`);
         if (j.done) {
           say(`DONE       ${j.already ? 'already ' + j.already : 'complete'} -- the server has sent the report`);
+          await secRotate();
           throw new Stop(0);
         }
         stagnant = j.loaded === last ? stagnant + 1 : 0;

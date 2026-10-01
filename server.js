@@ -9201,16 +9201,44 @@ async function secFetchOne(symbol) {
 
 // Who still needs pulling. `missing` is the button that gets pressed — "I
 // added tickers" — and `all` is for when a quarter's filings have landed.
-async function secPlan(mode, startedAt) {
+// `rotate` re-fetches whatever has not been looked at for ROTATE_MS, OLDEST
+// FIRST — the profile rotation's own shape, and the only mode fit for a
+// schedule. The other two cannot do this job:
+//
+//   missing  picks a symbol only when it has NO sec_state row at all, and
+//            noteSecMiss writes one even for a failure, so after the first
+//            backfill it finds nothing but genuinely new tickers.
+//   all      takes the entire universe — ~239 batches against an address
+//            that has already answered 429 and then 403 when hammered.
+//
+// With a cutoff the work is self-limiting: at steady state about a seventh
+// of the universe crosses it each day, which is ~34 batches a night split
+// across the two runs. `done` therefore means something — nothing is older
+// than the cutoff — rather than being unreachable.
+const SEC_ROTATE_DAYS = Math.max(1, Number(process.env.SEC_ROTATE_DAYS) || 7);
+
+async function secPlan(mode, startedAt, rotateMs) {
   const universe = await store.readUniverse();
   const state = await store.readSecState();
-  const stale = universe.filter((sym) => {
+  const cutoff = Date.now() - (rotateMs || SEC_ROTATE_DAYS * 86400000);
+  let stale = universe.filter((sym) => {
     const st = state[String(sym).toUpperCase()];
     if (!st) return true;
     // In `all` mode a symbol counts as done once THIS run has touched it,
     // so the loop terminates instead of chasing its own tail.
-    return mode === 'all' && st.fetchedAt < startedAt;
+    if (mode === 'all') return st.fetchedAt < startedAt;
+    return mode === 'rotate' && Number(st.fetchedAt || 0) < cutoff;
   });
+  // Oldest first, so a capped run always spends its batches on the symbols
+  // that have gone longest unchecked rather than on whatever `readUniverse`
+  // happened to return first.
+  if (mode === 'rotate') {
+    stale = stale.sort((a, b) => {
+      const sa = state[String(a).toUpperCase()];
+      const sb = state[String(b).toUpperCase()];
+      return Number((sa && sa.fetchedAt) || 0) - Number((sb && sb.fetchedAt) || 0);
+    });
+  }
   return { universe, state, stale };
 }
 
@@ -9218,13 +9246,22 @@ async function secPlan(mode, startedAt) {
 // function must never be asked to hold hundreds of network fetches — the
 // 2026-09-18 incident, where a refresh was cut mid-tail and logged as
 // abandoned over data that was perfectly fine. The page loops this.
-app.post('/api/sec/refresh', requireAdmin, route(async (req, res) => {
+app.post('/api/sec/refresh', route(async (req, res) => {
+  // The cron secret OR an admin. The secret already drives /api/cron/refresh
+  // and satisfies one route only, so a leak cannot delete a portfolio; what
+  // it buys here is the ability to fetch public filings, which costs no API
+  // credits and mutates nothing but the filings table. The admin path is
+  // unchanged, so /admin's own loop still works exactly as before.
+  if (!isCron(req) && !(await isAdmin(req))) {
+    return res.status(401).json({ error: 'Admin or the cron secret.' });
+  }
   if (!SEC_READY) {
     return res.status(400).json({
       error: 'No contact address configured. Set MAIL_FROM, REPORT_TO or SEC_UA — the SEC refuses requests that do not declare one.',
     });
   }
-  const mode = req.query.mode === 'all' ? 'all' : 'missing';
+  const mode = req.query.mode === 'all' ? 'all'
+    : req.query.mode === 'rotate' ? 'rotate' : 'missing';
   const size = Math.max(1, Math.min(20, Number(req.query.n) || SEC_BATCH));
   // `all` needs a fixed horizon or every symbol it just wrote looks fresh
   // and the run can never finish; the page passes its own start time back.
