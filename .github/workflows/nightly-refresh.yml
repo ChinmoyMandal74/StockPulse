@@ -11,21 +11,30 @@
 
 name: Nightly refresh
 
+# THE SCHEDULE MOVED TO THE LAPTOP on 2026-10-01 (nightly-task.ps1), and this
+# workflow is now the MANUAL RE-RUN BUTTON and nothing else.
+#
+# Why it moved: GitHub's scheduler missed a night outright. On 2026-09-21 it
+# delivered exactly one firing all day, about two hours late, and the cron
+# that should have run never fired at all. The job itself was never the
+# problem -- it drives the same loop /refreshes drives -- so this is a change
+# of host. Keeping `workflow_dispatch` keeps the one thing GitHub was better
+# at: a re-run you can press from any browser, with its own log, without
+# being at the machine.
+#
+# The two `cron:` entries that lived here, and the "Is it 4:15 PM in New
+# York?" gate step that went with them, were removed together. They belong
+# together: GitHub cron is UTC with no timezone option, so a local time needs
+# BOTH daylight-saving entries plus a guard that throws away whichever one is
+# not 4PM in New York that day. If a schedule ever comes back here, all three
+# pieces have to come back, or it will fire twice a day for half the year.
+#
+# The schedule now runs 07:30 and 19:30 ET on weekdays, as two separate runs
+# rather than one longer one. The server refuses a second `?start=1` while a
+# run is in flight, which is what makes two hosts safe -- the `concurrency`
+# group below only ever saw other GitHub runs.
+
 on:
-  schedule:
-    # 4:15 PM in New York, fifteen minutes after the close.
-    #
-    # GitHub cron is UTC and has no timezone option, so one entry cannot mean a
-    # local time in a place that moves its clocks. BOTH UTC times are registered
-    # — 20:15 while Eastern Daylight Time is in force (UTC-4) and 21:15 while
-    # Eastern Standard Time is (UTC-5) — and the job throws away whichever of
-    # the two is not 4PM in New York on the day.
-    #
-    # The guard asks the tz database rather than hardcoding the changeover
-    # dates, because those move: the US has shifted them before and may again.
-    # So this keeps working without anyone remembering it exists.
-    - cron: '15 20 * * *'     # 4:15 PM EDT (Mar-Nov)
-    - cron: '15 21 * * *'     # 4:15 PM EST (Nov-Mar)
   workflow_dispatch:          # the "Run workflow" button, for a refresh on demand
 
 # A run still going when the next fires would fight it for the refresh flag.
@@ -42,27 +51,7 @@ jobs:
     # finish. MAX_ROUNDS is the round ceiling; this is the wall-clock one.
     timeout-minutes: 90
     steps:
-      # Two crons are registered so one of them lands on 4:15 PM Eastern
-      # whatever the clocks are doing. Exactly one can be right on any given
-      # day; this is where the other one stops. A manual run is never gated.
-      - name: Is it 4:15 PM in New York?
-        id: gate
-        run: |
-          NY=$(TZ=America/New_York date '+%Y-%m-%d %H:%M %Z')
-          HOUR=$(TZ=America/New_York date '+%H')
-          echo "New York: $NY   (UTC $(date -u '+%H:%M'))"
-          if [ "${{ github.event_name }}" != "schedule" ]; then
-            echo "manual run — not gated"
-            echo "go=yes" >> "$GITHUB_OUTPUT"
-          elif [ "$HOUR" = "16" ]; then
-            echo "go=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::$NY is not 4PM Eastern — this is the other daylight-saving cron. Nothing to do."
-            echo "go=no" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Drive a full Refresh all
-        if: steps.gate.outputs.go == 'yes'
         env:
           # APP_URL is not sensitive, so accept it from either tab. "Secrets and
           # variables" puts them side by side and the wrong one is easy to pick.

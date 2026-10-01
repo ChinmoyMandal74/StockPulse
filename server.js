@@ -12500,6 +12500,34 @@ app.post('/api/cron/refresh', route(async (req, res) => {
     return res.json({ ok: true, done: true, runId: askedRun, already: askedStatus });
   }
   if (starting) {
+    // A RUN ALREADY IN FLIGHT MUST NOT BE HIJACKED.
+    //
+    // `?start=1` expired profiles and called beginRefresh() unconditionally,
+    // which overwrites refresh_state and re-points somebody's Fast refresh
+    // or manual Refresh all at this job half way through its sweep. The
+    // intraday route has always stood aside exactly like this; this one
+    // never did. It mattered little while GitHub was the only scheduler —
+    // its `concurrency: nightly-refresh` group serialises GitHub against
+    // GitHub — but that group cannot see a run driven from a laptop or from
+    // /refreshes, which is both of the other ways a run starts here.
+    //
+    // A DEAD RUN CANNOT BLOCK THE NIGHT: readRefreshState() returns null
+    // once the flag has gone REFRESH_STALE_MS without an update, so this
+    // defers only to something genuinely still reporting.
+    const live = await readRefreshState();
+    if (live) {
+      const name = live.mode === 'missing' ? 'Fill missing'
+        : live.mode === 'fast' ? 'Fast refresh'
+          : live.mode === 'prices' ? 'Refresh prices' : 'Refresh all';
+      console.log(`cron: ${name} is already running (${live.actor || 'unknown'}) — standing aside`);
+      // `done` ends the driver's loop; `loaded`/`total` are carried so a
+      // driver written before `skipped` existed still reads a usable round
+      // and exits 0, rather than counting three stagnant rounds and
+      // reporting a failure. Deploy order therefore does not matter.
+      return res.json({ ok: true, done: true, skipped: true,
+        reason: `${name} is already running`,
+        loaded: live.loaded ?? 0, total: live.total ?? 0, runId: live.runId });
+    }
     const total = (await readUniverse()).length;
     // ?full=1 forces the old behaviour — every profile re-pulled tonight. The
     // default rotates: the oldest slice is expired so it comes up for renewal,
