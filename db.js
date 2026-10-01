@@ -2373,6 +2373,104 @@ async function noteShortMiss(symbol, status, error) {
   });
 }
 
+// The newest settlement date we hold anywhere — one small read of short_state
+// (1,192 rows), never `max(d)` over the 220k-row readings table, which on this
+// database is a quota event rather than a slow query.
+//
+// MAX, not min, and that is not laziness: two symbols legitimately lag for
+// ever — SQ stopped reporting when Block renamed its ticker, and FINRA simply
+// has nothing newer for it. The minimum would report us a year behind while
+// 1,190 of 1,192 are current, and a self-pacing job reading that would fetch
+// on every single run.
+async function shortNewest() {
+  await init();
+  const r = await db.execute(
+    'select max(newest) newest, count(*) n from short_state where newest is not null');
+  const x = r.rows[0] || {};
+  return { newest: x.newest || null, symbols: Number(x.n || 0) };
+}
+
+// APPEND one settlement date. The other half of a pair, and the two must never
+// be confused: `writeShortInterest` opens with `delete from short_interest
+// where symbol = ?`, which is right for a full per-symbol load and
+// catastrophic as a top-up — picking up one new fortnight would rewrite all
+// 220,386 stored readings. The screens-incident rule, which cost thirteen
+// screens their filters: a restore or a top-up must not pass through a
+// transforming path.
+//
+// IDEMPOTENT BY CONSTRUCTION. The primary key is (symbol, d), so running the
+// same settlement date twice writes the same rows twice and changes nothing —
+// which is what makes a daily self-pacing check safe to run as often as it
+// likes. `rows` is RECOUNTED rather than incremented for the same reason: an
+// increment would drift upward every time a date was re-applied, and a
+// receipt that overstates what is stored is the exact failure this loader's
+// own history records.
+//
+// `rows[].symbol` must already be OUR spelling, not FINRA's — the caller maps
+// it back, because `readShortInterest` is asked with ours.
+async function appendShortInterest(rows) {
+  await init();
+  const clean = (rows || []).filter((r) => r && r.symbol && r.d && r.shares != null);
+  if (!clean.length) return { readings: 0, symbols: 0, newest: null };
+
+  const stmts = [];
+  const CHUNK = 200;
+  for (let i = 0; i < clean.length; i += CHUNK) {
+    const part = clean.slice(i, i + CHUNK);
+    const args = [];
+    for (const r of part) {
+      args.push(String(r.symbol).toUpperCase(), r.d, r.shares, r.prev, r.adv, r.dtc,
+        r.changePct, r.split ? 1 : 0, r.revised ? 1 : 0);
+    }
+    stmts.push({
+      sql: `insert or replace into short_interest (${SI_COLS.join(',')}) values ` +
+        part.map(() => '(' + SI_COLS.map(() => '?').join(',') + ')').join(','),
+      args,
+    });
+  }
+
+  // The clock, also one statement per chunk. On this database the cost is per
+  // STATEMENT rather than per row — measured at 23x when `tech_history` went
+  // to multi-row inserts — so 1,192 single updates would be the slowest part
+  // of a job whose data write is six statements.
+  const newestOf = {}, countOf = {};
+  for (const r of clean) {
+    const s = String(r.symbol).toUpperCase();
+    if (!newestOf[s] || r.d > newestOf[s]) newestOf[s] = r.d;
+    countOf[s] = (countOf[s] || 0) + 1;
+  }
+  const syms = Object.keys(newestOf);
+  for (let i = 0; i < syms.length; i += CHUNK) {
+    const part = syms.slice(i, i + CHUNK);
+    const args = [];
+    for (const s of part) args.push(s, Date.now(), countOf[s], newestOf[s]);
+    stmts.push({
+      // The subquery recounts from the readings table, which by this point in
+      // the batch already holds the rows inserted above — a batch is one
+      // sequential transaction. A symbol with no state row yet takes the
+      // appended count, which for a new symbol IS its total.
+      //
+      // `newest` only ever moves FORWARD. Re-applying an older date must not
+      // drag a symbol's clock backwards and make it look stale.
+      sql: `insert into short_state (symbol, fetched_at, rows, newest, status)
+            values ${part.map(() => "(?, ?, ?, ?, 'ok')").join(',')}
+            on conflict(symbol) do update set
+              fetched_at = excluded.fetched_at,
+              rows = (select count(*) from short_interest where symbol = short_state.symbol),
+              newest = case when short_state.newest is null or short_state.newest < excluded.newest
+                            then excluded.newest else short_state.newest end,
+              status = 'ok',
+              error = null`,
+      args,
+    });
+  }
+
+  await db.batch(stmts, 'write');
+  let newest = null;
+  for (const r of clean) if (!newest || r.d > newest) newest = r.d;
+  return { readings: clean.length, symbols: syms.length, newest };
+}
+
 // One symbol, oldest first — the order the strip draws in. Seeks on the
 // primary key.
 async function readShortInterest(symbol, limit = 400) {
@@ -4913,7 +5011,7 @@ module.exports = {
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
   writeShortInterest, readShortInterest, readShortLatestFor, readShortAsOfFor,
   readShortRecentFor,
-  readShortState, noteShortMiss,
+  readShortState, noteShortMiss, shortNewest, appendShortInterest,
   readInsiderDay, writeInsiderDay, appendInsider, readUniverseCiks,
   clearVisitors,
   logActivity,

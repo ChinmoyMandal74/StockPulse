@@ -12370,6 +12370,136 @@ app.get('/api/cron/alerts', route(async (req, res) => {
   res.json({ ok: true, ...out, ms: Date.now() - t0 });
 }));
 
+// ---- FINRA short interest, self-pacing ------------------------------------
+// FINRA publishes the consolidated short-interest position TWICE A MONTH, and
+// that is measured rather than assumed: over NVDA's 210 stored settlement
+// dates there are exactly 24 a year every year since 2018, with gaps of 13 to
+// 19 calendar days and not one of 7. So there is no weekly job to run — half
+// of a weekly schedule would find nothing — and a fortnightly CALENDAR cannot
+// line up with a gap that varies by six days.
+//
+// THE DATE IS DISCOVERED BY ASKING FINRA, NEVER BY COMPUTING IT. Settlement
+// dates are the 15th and the month end, rolled back over weekends AND market
+// holidays, so deriving them means maintaining a holiday calendar — which this
+// project refused once already: the intraday gate asks the provider whether
+// the NYSE is open precisely so that "there is no holiday list to maintain".
+// One request for one liquid symbol answers it exactly and cannot drift.
+//
+// So the run is a no-op on almost every day, by design: one small read, one
+// POST, and nothing written. That is what makes a DAILY check the right
+// cadence — it catches a date within hours of publication, needs no calendar,
+// and heals after any number of missed runs. `noteTechMark`'s rule.
+const FINRA_API = 'https://api.finra.org/data/group/otcMarket/name/consolidatedShortInterest';
+const FINRA_BULK = 'https://cdn.finra.org/equity/otcmarket/biweekly/shrt';
+// A liquid name that has reported every fortnight since 2017. Overridable
+// because the one way this breaks is the probe symbol itself being delisted.
+const SHORTINT_PROBE = (process.env.SHORTINT_PROBE || 'NVDA').toUpperCase();
+const SHORTINT_UA = process.env.SEC_UA
+  || ('Tickr Lab (' + (process.env.REPORT_TO || process.env.MAIL_FROM || 'admin@tickrlab.com') + ')');
+
+// FINRA's own newest settlement date, from the one symbol we ask about.
+// The body is the local loader's, field for field — `sortFields` is NOT sent,
+// because the API is partitioned on settlementDate and answers 400 to a sort
+// on anything else. (Measured: a probe that added one got 400 on every symbol
+// and read as FINRA being down.)
+async function finraNewestDate() {
+  const res = await fetch(FINRA_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'User-Agent': SHORTINT_UA, Accept: 'text/plain' },
+    body: JSON.stringify({
+      limit: 1000,
+      fields: ['settlementDate', 'symbolCode', 'currentShortPositionQuantity'],
+      compareFilters: [{ fieldName: 'symbolCode', fieldValue: SHORTINT_PROBE, compareType: 'equal' }],
+    }),
+    signal: AbortSignal.timeout(45000),
+  });
+  if (!res.ok) throw new Error('FINRA API HTTP ' + res.status);
+  const rows = ShortInt.parse(await res.text());
+  let newest = null;
+  for (const r of rows) if (r && r.d && (!newest || r.d > newest)) newest = r.d;
+  return newest;
+}
+
+app.get('/api/cron/shortint', route(async (req, res) => {
+  // 401 here and 403 from requireAdmin, so the status code says which bundle
+  // is live — a 403 moments after a push is deploy lag, not an auth failure.
+  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'No.' });
+  const t0 = Date.now();
+
+  const held = await store.shortNewest();
+  let newest = null;
+  try {
+    newest = await finraNewestDate();
+  } catch (e) {
+    // Unreachable is not a failure of the night. It is published eight
+    // business days after it settles and nothing downstream reads it, so
+    // tomorrow's run costs nothing and catches it.
+    return res.json({ ok: true, done: true, held: held.newest, error: String(e.message || e) });
+  }
+
+  if (req.query.dry) {
+    return res.json({ dry: true, held: held.newest, finra: newest,
+      wouldFetch: !!(newest && (!held.newest || newest > held.newest)), probe: SHORTINT_PROBE });
+  }
+  if (!newest || (held.newest && newest <= held.newest)) {
+    return res.json({ ok: true, done: true, already: held.newest, finra: newest,
+      ms: Date.now() - t0 });
+  }
+
+  // ONE FILE COVERS EVERY SYMBOL — 2.75MB and ~22,595 symbols against 1,192
+  // per-symbol calls for the same ~1,192 rows. The per-symbol API is the right
+  // tool for a cold load of nine years of history; this is the right tool for
+  // one fortnight.
+  const url = FINRA_BULK + newest.replace(/-/g, '') + '.csv';
+  const file = await fetch(url, {
+    headers: { 'User-Agent': SHORTINT_UA }, signal: AbortSignal.timeout(90000),
+  });
+  if (!file.ok) {
+    // The API can know a date before the bulk file is posted. Nothing to do
+    // but wait a day — which is exactly what a self-pacing check does.
+    return res.json({ ok: true, done: true, pending: newest, held: held.newest,
+      reason: 'bulk file not published yet (HTTP ' + file.status + ')', ms: Date.now() - t0 });
+  }
+
+  // `ShortInt.parse` is the one parser, so the bulk file gets the same rules
+  // the API path gets — including the split guard: FINRA does not restate for
+  // splits and ships a changePercent anyway (NVDA's 10:1 reads +978.77%), so
+  // `normalise` withholds that figure wherever stockSplitFlag is set. Going
+  // round the parser would put that number straight into the table.
+  const parsed = ShortInt.parse(await file.text());
+
+  // MAP FINRA'S SPELLING BACK TO OURS, and prefer the spelling that actually
+  // worked for each symbol. FINRA strips separators (BRKB for our BRK.B), but
+  // a handful of symbols matched on our own spelling instead — the loader
+  // recorded which in `short_state.finra_sym`, so this is a lookup rather
+  // than a second guess at the rule.
+  const universe = await store.readUniverse();
+  const state = await store.readShortState();
+  const recorded = new Map(state.map((s) => [s.symbol, s.finraSym]));
+  const back = new Map();
+  for (const sym of universe) {
+    const rec = recorded.get(sym);
+    if (rec) back.set(String(rec).toUpperCase(), sym);
+    back.set(ShortInt.finraSymbol(sym), sym);   // the rule, as the fallback
+  }
+
+  // ONLY OUR UNIVERSE, and only the date we came for. Writing the file whole
+  // would put ~21,000 symbols we do not track into the table.
+  const rows = [];
+  for (const r of parsed) {
+    if (r.d !== newest) continue;
+    const ours = back.get(r.symbol);
+    if (ours) rows.push(Object.assign({}, r, { symbol: ours }));
+  }
+
+  const out = await store.appendShortInterest(rows);
+  console.log(`shortint: ${newest} — ${out.readings} readings for ${out.symbols} symbols `
+    + `(file carried ${parsed.length}) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  res.json({ ok: true, done: true, settlement: newest, was: held.newest,
+    readings: out.readings, symbols: out.symbols, inFile: parsed.length,
+    universe: universe.length, ms: Date.now() - t0 });
+}));
+
 // deliberately NOT by GitHub: the failure it exists to catch is GitHub's
 // scheduler not firing at all, and a watchdog on the same scheduler would
 // miss the same night. Mails only when something is wrong; ?dry=1 reports the

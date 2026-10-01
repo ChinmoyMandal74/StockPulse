@@ -288,6 +288,45 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
       say(`sec        ${fetched} refetched in ${batches} batch(es) (cap) -- more next run`);
     }
 
+    // FINRA short interest. ONE call, and on most nights it writes nothing:
+    // the position is published twice a month, so the route asks FINRA for its
+    // own newest settlement date and acts only when we do not hold it. No
+    // batching and no cap, because there is nothing to pace -- a run is one
+    // small read plus one POST, and twice a month one 2.75MB download.
+    //
+    // NON-FATAL, like secRotate, and for the same reasons: a 404 reads as an
+    // older server so deploy order does not matter, and this data is already
+    // eight business days old when it appears. Losing a night costs nothing
+    // because the check is self-pacing -- tomorrow's run catches it.
+    async function shortRotate() {
+      let r; let text;
+      try {
+        r = await fetch(`${base}/api/cron/shortint`, {
+          signal: AbortSignal.timeout(300000),
+          headers: { Authorization: 'Bearer ' + secret },
+        });
+        text = await r.text();
+      } catch (e) {
+        say(`short      skipped -- ${e.name === 'TimeoutError' ? 'timed out' : e.message}`);
+        return;
+      }
+      let j = null; try { j = JSON.parse(text); } catch { /* not json */ }
+      if (r.status === 404) { say('short      skipped -- older server, no route yet'); return; }
+      if (!r.ok || !j) {
+        say(`short      skipped -- HTTP ${r.status} ${String(text).slice(0, 120)}`);
+        return;
+      }
+      if (j.readings) {
+        say(`short      ${j.settlement} loaded -- ${j.readings} readings for ${j.symbols} symbols (was ${j.was})`);
+      } else if (j.pending) {
+        say(`short      ${j.pending} is dated but not published yet -- holding ${j.held}`);
+      } else if (j.error) {
+        say(`short      FINRA unreachable (${String(j.error).slice(0, 60)}) -- holding ${j.held}`);
+      } else {
+        say(`short      up to date at ${j.already || j.finra || 'unknown'}`);
+      }
+    }
+
     say(`starting ${FULL ? 'FULL sweep' : 'rotation'} against ${base}`);
     let resp = await call(FULL ? '?start=1&full=1' : '?start=1');
     if (resp.j && resp.j.runId) runId = resp.j.runId;
@@ -322,6 +361,7 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
         if (j.done) {
           say(`DONE       ${j.already ? 'already ' + j.already : 'complete'} -- the server has sent the report`);
           await secRotate();
+          await shortRotate();
           throw new Stop(0);
         }
         stagnant = j.loaded === last ? stagnant + 1 : 0;
