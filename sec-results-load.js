@@ -43,6 +43,7 @@
 'use strict';
 require('dotenv').config();
 const store = require('./db.js');
+const SecFacts = require('./secfacts.js');
 
 const argv = process.argv.slice(2);
 const has = (f) => argv.includes(f);
@@ -61,22 +62,10 @@ const UA = process.env.SEC_UA
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// The newest 8-K whose items include 2.02. `items` is a comma-separated
-// string ("2.02,9.01"); a plain includes() is enough and cannot confuse 2.02
-// with 2.021 because no such item exists.
-function newestResults(recent) {
-  if (!recent || !Array.isArray(recent.form)) return null;
-  const items = recent.items || [];
-  let best = null;
-  for (let i = 0; i < recent.form.length; i++) {
-    if (recent.form[i] !== '8-K' && recent.form[i] !== '8-K/A') continue;
-    if (!String(items[i] || '').includes('2.02')) continue;
-    const d = recent.filingDate[i];
-    if (d && (!best || d > best.d)) best = { d, acc: recent.accessionNumber[i] };
-  }
-  return best;
-}
-
+// The extraction lives in secfacts.js, shared with the live SEC refresh in
+// server.js -- a second copy of "which 8-K counts" is exactly the drift that
+// module exists to prevent. This file is now only the BACKFILL: the nightly
+// rotation keeps the dates current by itself.
 (async () => {
   const state = await store.readSecState();
   const universe = await store.readUniverse();
@@ -118,7 +107,7 @@ function newestResults(recent) {
       const buf = await r.arrayBuffer();
       bytes += buf.byteLength;
       const j = JSON.parse(Buffer.from(buf).toString('utf8'));
-      const best = newestResults(j.filings && j.filings.recent);
+      const best = SecFacts.newestResults(j.filings && j.filings.recent);
       ok++;
       if (!best) {
         // Left ALONE rather than written null: a company may simply not have

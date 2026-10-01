@@ -2082,11 +2082,18 @@ async function writeSecFacts(symbol, rows, meta = {}) {
       args: chunk.flatMap((r) => SEC_COLS.map((c) => (c === 'symbol' ? sym : secVal(r, c)))),
     });
   }
+  // `last_results` COALESCES rather than overwrites. It comes from the
+  // submissions API, which is fetched best-effort beside companyfacts — so a
+  // refresh where that one request failed must leave the date it already had
+  // rather than blanking it. The same reasoning as noteSecMiss's subquery,
+  // and the reason this is not simply `meta.lastResults || null`.
   stmts.push({
-    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed)
-          values (?, ?, ?, ?, ?, ?, ?)`,
+    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed, last_results)
+          values (?, ?, ?, ?, ?, ?, ?,
+                  coalesce(?, (select last_results from sec_state where symbol = ?)))`,
     args: [sym, meta.cik == null ? null : Number(meta.cik), Date.now(), rows.length,
-      meta.status || 'ok', meta.error || null, meta.lastFiled || null],
+      meta.status || 'ok', meta.error || null, meta.lastFiled || null,
+      meta.lastResults || null, sym],
   });
   await db.batch(stmts);
   return rows.length;

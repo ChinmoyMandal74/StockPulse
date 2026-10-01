@@ -711,9 +711,46 @@ function filingUrl(cik, accn) {
     String(accn).replace(/-/g, '') + '/' + accn + '-index.htm';
 }
 
+// ---- the announcement date, from the submissions API -----------------------
+//
+// The newest 8-K carrying ITEM 2.02, "Results of Operations and Financial
+// Condition" -- the earnings release. Takes `filings.recent` from
+// data.sec.gov/submissions/CIK##########.json.
+//
+// IT IS HERE RATHER THAN IN ITS TWO CALLERS because both the live SEC refresh
+// (server.js) and the one-off backfill (sec-results-load.js) need the same
+// answer, and a second copy of "which 8-K counts" is the drift this file
+// exists to prevent -- the same reason `isStatement` is here.
+//
+// ITEM 2.02 RATHER THAN ANY 8-K: measured on MU, 10 8-Ks in the last year and
+// exactly 4 carrying 2.02, one per quarter; the rest are officer changes and
+// other events. `includes('2.02')` is safe on the comma-separated string
+// because no item 2.021 exists.
+//
+// ONLY `filings.recent` IS EVER PASSED IN. The older archive lives in
+// `filings.files[]` and is deliberately not fetched: the newest 2.02 is always
+// in the recent block, which halves the traffic.
+//
+// NOT EVERY COMPANY USES IT. 102 of 1,168 have no 2.02 in their recent
+// filings and 51 more announce under 7.01/8.01 -- Energy Fuels has exactly one
+// 2.02 ever, from 2016. Callers get null or a stale date and must say so
+// rather than presenting it as this quarter's news.
+function newestResults(recent) {
+  if (!recent || !Array.isArray(recent.form)) return null;
+  const items = recent.items || [];
+  let best = null;
+  for (let i = 0; i < recent.form.length; i++) {
+    if (recent.form[i] !== '8-K' && recent.form[i] !== '8-K/A') continue;
+    if (!String(items[i] || '').includes('2.02')) continue;
+    const d = recent.filingDate[i];
+    if (d && (!best || d > best.d)) best = { d, acc: recent.accessionNumber[i] };
+  }
+  return best;
+}
+
 module.exports = {
   CONCEPTS, CONCEPT_KEYS, INSTANT, NO_DIFF,
   periodType, normalise, deriveQuarters, latestPerPeriod, latestFilled, visibleAsOf,
   filingUrl, isStatement, withRatios, ttm, ttmSeries, MIN_REVENUE, FILLABLE,
-  reconcile,
+  reconcile, newestResults,
 };

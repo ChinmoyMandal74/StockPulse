@@ -9158,12 +9158,26 @@ function secLookup(map, symbol) {
   return map.get(s) || map.get(s.replace(/\./g, '-')) || null;
 }
 
+// A newly read announcement date, written where the main path could not carry
+// it. NULL IS LEFT ALONE rather than written: a company may simply have no
+// Item 2.02 in its recent filings (a fund never does, and 102 companies do
+// not), and a null would read as "checked, and there is nothing" in a column
+// that cannot tell those two apart. Never throws, for the same reason the
+// fetch above is best effort.
+async function saveResults(sym, d) {
+  if (!d) return;
+  await store.setSecLastResults(sym, d).catch(() => {});
+}
+
 // One symbol, end to end. NEVER THROWS: a symbol that cannot be fetched is
 // still recorded as CHECKED, or the refresh re-picks it forever and can
 // never report itself finished — the news-staleness lesson, which cost a
 // loop that ran until it was stopped by hand.
 async function secFetchOne(symbol) {
   const sym = String(symbol).toUpperCase();
+  // Declared OUTSIDE the try: the catch path writes it too, and a `let`
+  // inside the try block is invisible there.
+  let lastResults = null;
   try {
     const map = await secCikMap();
     const cik = secLookup(map, sym);
@@ -9171,6 +9185,38 @@ async function secFetchOne(symbol) {
     // financial statements. Thirteen of the universe are in this state by
     // design, and they get no section on the page rather than an empty one.
     if (!cik) { await store.noteSecMiss(sym, 'nocik'); return { symbol: sym, status: 'nocik', rows: 0 }; }
+
+    // ---- the ANNOUNCEMENT date, beside the filings (2026-10-01) ------------
+    //
+    // The newest Item 2.02 8-K, so the EDGAR refresh keeps it current instead
+    // of it being a one-off local load. It is a SECOND endpoint because it has
+    // to be: companyfacts carries only XBRL-tagged facts and an earnings 8-K
+    // generally has none (MU's has zero), and item numbers are not in
+    // companyfacts at all.
+    //
+    // BEST EFFORT, AND IT NEVER TOUCHES THE SYMBOL'S OUTCOME. The filings are
+    // the payload here; the announcement rides along. A failure on this
+    // request must not cost a symbol its 1-5MB of real fundamentals, so it is
+    // caught and discarded — the rule the instrumentType reference read
+    // already follows, where letting a free auxiliary lookup invalidate a pull
+    // would discard 80 credits of fundamentals over a reference miss.
+    //
+    // CHEAP: ~0.15MB against companyfacts' 1-5MB, so about a tenth of the
+    // traffic this function already spends. One extra request per symbol keeps
+    // a batch of five at ten sequential requests, inside what the SEC asks.
+    try {
+      const sr = await fetch('https://data.sec.gov/submissions/CIK'
+        + String(cik).padStart(10, '0') + '.json', {
+        headers: { 'User-Agent': SEC_UA, Accept: 'application/json' },
+        signal: AbortSignal.timeout(SEC_TIMEOUT_MS),
+      });
+      if (sr.ok) {
+        const sj = await sr.json();
+        const best = SecFacts.newestResults(sj.filings && sj.filings.recent);
+        if (best) lastResults = best.d;
+      }
+    } catch { /* the filings are the payload; this one rides along */ }
+
     const url = 'https://data.sec.gov/api/xbrl/companyfacts/CIK' +
       String(cik).padStart(10, '0') + '.json';
     const r = await fetch(url, {
@@ -9179,11 +9225,16 @@ async function secFetchOne(symbol) {
     });
     if (r.status === 404) {
       await store.noteSecMiss(sym, 'nofacts', null, cik);
-      return { symbol: sym, status: 'nofacts', rows: 0 };
+      await saveResults(sym, lastResults);
+      return { symbol: sym, status: 'nofacts', rows: 0, results: lastResults };
     }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const rows = SecFacts.normalise(await r.json(), sym);
-    if (!rows.length) { await store.noteSecMiss(sym, 'empty', null, cik); return { symbol: sym, status: 'empty', rows: 0, cik }; }
+    if (!rows.length) {
+      await store.noteSecMiss(sym, 'empty', null, cik);
+      await saveResults(sym, lastResults);
+      return { symbol: sym, status: 'empty', rows: 0, cik, results: lastResults };
+    }
     // The newest STATEMENT filing, computed here because the rows are in
     // hand and nothing else ever has to go looking for it. STATEMENT forms
     // only (10-K/10-Q/20-F/40-F): an 8-K or a DEF 14A is a mention, and
@@ -9191,10 +9242,13 @@ async function secFetchOne(symbol) {
     // `outranks` exists to prevent on the card.
     const lastFiled = rows.reduce(
       (m, r) => (SecFacts.isStatement(r) && r.filed && (!m || r.filed > m) ? r.filed : m), null);
-    await store.writeSecFacts(sym, rows, { cik, status: 'ok', lastFiled });
-    return { symbol: sym, status: 'ok', rows: rows.length, cik };
+    await store.writeSecFacts(sym, rows, { cik, status: 'ok', lastFiled, lastResults });
+    return { symbol: sym, status: 'ok', rows: rows.length, cik, results: lastResults };
   } catch (e) {
     await store.noteSecMiss(sym, 'error', e.message).catch(() => {});
+    // A companyfacts failure does not discard an announcement date we did
+    // manage to read a moment earlier.
+    await saveResults(sym, lastResults);
     return { symbol: sym, status: 'error', rows: 0, error: e.message };
   }
 }
