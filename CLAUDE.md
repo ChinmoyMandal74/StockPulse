@@ -1297,6 +1297,52 @@ The two things that make it unusable in a verdict anyway are worth recording: **
 
 Verified: **72 checks** over two suites — the normaliser against two REAL companyfacts files (a hand-made fixture would not have the traps), the reconciliation invariant, the store round trip, the card measured on the page with its filing links and its derived marking, the fund drawing no card, the loop terminating, and the roles (anonymous gets no DATA — asserted on the body, since a gated page redirects and a status check would pass for the wrong reason; guest yes on a preview stock, 403 outside it and on both admin routes).
 
+### Announced (SEC) — the Item 2.02 date on the screener (2026-10-01, owner's request)
+**A column in the Fundamentals group immediately after `Reported`: the newest 8-K carrying Item 2.02, "Results of Operations and Financial Condition".** A second, independent answer to *has this company reported*, from the company itself rather than from the price feed.
+
+**IT WAS ASKED FOR AS "the 8-K date" AND IS KEYED ON ITEM 2.02 INSTEAD**, because the reason behind the request was the earnings announcement. Measured on MU: **10 8-Ks in the last year, exactly 4 carrying 2.02** — one per quarter; the rest are 5.02 (officer changes) and 8.01 (other events). A latest-any-8-K column would mostly report a director's resignation.
+
+#### IT CANNOT COME FROM `sec_facts`, WHICH IS WHY IT NEEDED A NEW SOURCE
+**We hold ZERO 8-K rows for anyone** — measured across MU, NVDA, AAPL, VNO and JPM, not one between them. `sec_facts` is built from **companyfacts**, which carries only XBRL-TAGGED facts, and an earnings 8-K generally has none: MU's 8-K of 2026-09-30 carries **0 facts**, and companyfacts does not carry item numbers at any rate. The source is the **submissions API** (`data.sec.gov/submissions/CIK##########.json`), which does.
+
+- **It rides on `sec_state`, not a table of its own** — one date per symbol, exactly like `last_filed` — and that is what makes it free: `/api/sec/filed` is **already** fetched after the screener paints, so there is **no new endpoint**, and the display-only boundary holds by construction. `readSecFiled()` now returns `{filed, results}` per symbol; the client keeps a `typeof` branch for the old bare-string shape, so deploy order does not matter.
+- **`noteSecMiss` had to be told to keep it — the THIRD field that function has needed telling.** It comes from a different source, so a transient companyfacts refusal would otherwise blank it and read as *this company never announced*. The same mistake it made once with the CIK, which silently broke the insider card for 64 filers. **Proved by reverting**: the subquery removed fails 1.
+- **NO `data-key`, so no filter box and no sort.** `data-col` gives it a column-view id and a `/columns` entry — the 90d spark column's own treatment — without becoming a filter key. `lastEarningsDate` stays the single thing the column, the filter and `daysSinceEarnings` all mean; the standing boundary is that SEC data never reaches the screener's selection logic. Asserted by counting: of the 20 Fundamentals filter cells, exactly the 19 whose header has a key may hold an input.
+
+#### THE THRESHOLD IS MEASURED, AND THE DISTRIBUTION IS BIMODAL AGAIN
+Over 1,062 comparable companies, `Item 2.02 date − vendor lastEarningsDate` in days:
+
+| gap | companies | |
+|---|---|---|
+| **0** | **888** | 83.6% agree TO THE DAY — the premise, confirmed |
+| 1–10 | 96 | recording lag, still the same quarter |
+| 11–35 | 7 | |
+| **36–45** | **0** | an empty bucket |
+| 46–198 | 20 | a quarter the feed never recorded |
+
+A missed report is at least a quarter (~90 days) and anything under ~35 days is the same quarter recorded differently, so the line belongs in the empty bucket: **`ANN_AHEAD_DAYS` is 40**, flagging **20 of 1,062**. MU reads **+98** (2026-06-24 → 2026-09-30) and is amber; **NVDA reads 0** and is not.
+- **It lands on the same 40 as `SEC_BEHIND_DAYS` and is deliberately a SEPARATE constant.** That one has to clear a structural announce-to-file lag of up to 35 days; these two dates describe the **same event** and have no structural lag at all. Tuning one must not silently move the other.
+- **Proved by reverting**, but only after the fixture gained stocks at **exactly 40 and at 41**: with gaps of 98 and 0 alone, 10 and 40 classify every row identically and the measured number was unproven. A threshold is a step function and every bug lives on its edge.
+
+#### ITEM 2.02 IS NOT EVERY COMPANY'S RESULTS CHANNEL — found by measuring, not anticipated
+**51 of 1,062 have a 2.02 date that PREDATES the feed's own by more than a quarter.** Energy Fuels is the clear case: it announces under Items **7.01 and 8.01** and has exactly **one 2.02 ever, from 2016**. Printing that beside a current `Reported` cell would read as *last reported 2016*, so the cell shows an em-dash and the tooltip says the company announces under a different item and to read `Reported` instead. **Widening to 7.01/8.01 was rejected**: 8.01 is the catch-all "other events", which would put a director's resignation in a results column.
+
+#### The loader
+**`sec-results-load.js`, local, dry run by default** — the `insider-load.js` precedent. Measured: **1,164 symbols, 1,066 dated, 98 with no 2.02, 0 failed, 173MB in 4.9 min** at 130ms pacing. **My 1.15GB estimate was 7x too high** because the five-symbol sample was skewed by JPM at 4.4MB; the real average is ~0.15MB, since most filers' `recent` block is capped.
+- **Only `filings.recent` is read.** The older archive is in `filings.files[]` and is never fetched: the newest 2.02 is always in the recent block, which halves the traffic.
+- **Every symbol's fetch AND write sit inside its own try.** `shortint-load.js` guarded only the fetch, so one transient Turso 404 threw out of the loop and abandoned 412 of 1,181 symbols while the receipt claimed success. A blip costs one symbol, and the symbol is left **unrecorded rather than marked done**, so `--missing` picks it up.
+- **A symbol with no 2.02 is left ALONE, never written null** — the `backfill-instrument-type` rule: a null would read as *checked, and there is nothing*.
+- **A 429 stops the run** and says to re-run with `--missing`, rather than hammering an address that has already answered 429 and then 403.
+- **28 symbols have no CIK** and are skipped — the 24 funds and 4 unmapped tickers. A fund files no 2.02 and the cell reads **NA**, matching the Size/Ownership rule shipped the same day.
+
+#### I CAUSED A SLOT OVERLAP AND IT COST NOTHING, which is worth recording either way
+The load's wait condition had a hole (`m >= 20 && m < 45` was true at minute 44) so it started **one minute into the 14:45 intraday slot** and ran through it. The slot came back **complete, 3 rounds, 1,196 credits — identical to the three before it**. 1,164 single-row updates spread over five minutes is ~4 writes/second, which is not the documented hazard class (a whole-table read, or three heavy things at once). Worth knowing the real cost before next time, and worth not repeating.
+
+- Verified: **29 checks** over a fixture of seven stocks, each separating one case — the MU shape (+98, amber), the NVDA shape (0, not amber), no 2.02 at all, the Energy Fuels wrong-channel shape, **exactly 40 and exactly 41**, and a fund. Plus the store round trip, `noteSecMiss` preserving both dates and the CIK, every banner spanning its own cells, header-to-body alignment at 98, and the boundary re-asserted on the real `/api/stocks` (the served row carries neither date). **Proved by reverting four times**: the threshold 1, the wrong-channel guard 2, `noteSecMiss` 1, the amber signal 3.
+  - **`reported-test.js` carried `=== 19` for the Fundamentals banner and went stale the moment a column was added.** It is removed rather than renumbered — the general check on the next line (every banner against its own class count) is strictly stronger and cannot rot. Its neighbour's wording was also corrected: `Reported` was "the last cell of the group" and is now the second-to-last.
+  - **A ROW-2 INDEX IS THE WRONG INDEX INTO THE FILTER ROW.** `buildFilterRow` builds from row ONE, so it carries the two `rowspan` anchor columns row 2 does not and every index is off by two — my first check read `input=true` on a column that has no box. Count within the group instead, which needs no offset.
+  - **A REVERT THAT ABORTS THE SUITE REPORTS "NOT LOAD-BEARING".** Replacing the `last_results` subquery with a bare `null` left 7 placeholders against 8 args, so the statement errored and only 3 checks ran. `and 1=0` keeps the placeholder and yields NULL — the previous behaviour, which is what a revert has to simulate.
+
 ### Insider transactions — Forms 3/4/5 (2026-09-27, owner's request)
 
 **A second card on `/stock`: what the officers, directors and 10% owners did with their own money.** Officers must report their own trades within **two business days**, so it is a legally-mandated, near-real-time disclosure with no vendor in between — and it is the only thing in the app that is neither price nor accounting.

@@ -843,6 +843,17 @@ const ADDED_COLUMNS = [
   // vendor-vs-filings staleness check never has to ask sec_facts for a
   // `max(filed) group by symbol` -- 270,000 rows, a quota event here.
   "alter table sec_state add column last_filed text",
+  // The newest 8-K carrying ITEM 2.02, "Results of Operations and Financial
+  // Condition" -- the earnings release. It rides on sec_state rather than a
+  // table of its own because it is one date per symbol, exactly like
+  // last_filed, and because sec_state is ALREADY read after the screener
+  // paints: no new endpoint, and the display-only boundary holds for free.
+  //
+  // It is NOT in sec_facts and cannot be: that table is built from
+  // companyfacts, which carries only XBRL-tagged facts, and an earnings 8-K
+  // generally has none. Measured on MU, NVDA, AAPL, VNO and JPM -- zero 8-K
+  // rows between them. The source is the submissions API, loaded locally.
+  "alter table sec_state add column last_results text",
   // A Form 4 can name several reporting owners — 2.2% do. Added the same
   // day the table shipped, because production already held it by then.
   "alter table insider_trans add column owners integer not null default 1",
@@ -2093,16 +2104,22 @@ async function noteSecMiss(symbol, status, error, cik) {
   await init();
   const sym = String(symbol).toUpperCase();
   await db.execute({
-    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed)
+    // `last_results` is preserved by the same subquery trick and for exactly
+    // the same reason: it comes from a DIFFERENT source (the submissions API,
+    // loaded locally) and a companyfacts miss must not wipe it. This is the
+    // third field this function has had to be told to keep.
+    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed, last_results)
           values (?, coalesce(?, (select cik from sec_state where symbol = ?)), ?, 0, ?, ?,
-                  (select last_filed from sec_state where symbol = ?))`,
-    // The trailing `sym` is for the last_filed subquery: a symbol that could
-    // not be FETCHED this time still holds whatever filings it already had,
-    // and blanking the date would make a transient SEC refusal read as "this
-    // company has filed nothing" — the same mistake noteSecMiss already made
-    // once with the CIK, which silently broke the insider card for 64 filers.
+                  (select last_filed from sec_state where symbol = ?),
+                  (select last_results from sec_state where symbol = ?))`,
+    // The two trailing `sym`s are for the last_filed and last_results
+    // subqueries: a symbol that could not be FETCHED this time still holds
+    // whatever it already had, and blanking either date would make a
+    // transient SEC refusal read as "this company has filed nothing" — the
+    // same mistake this function already made once with the CIK, which
+    // silently broke the insider card for 64 filers.
     args: [sym, cik == null ? null : Number(cik), sym, Date.now(),
-      status || 'none', error ? String(error).slice(0, 300) : null, sym],
+      status || 'none', error ? String(error).slice(0, 300) : null, sym, sym],
   });
 }
 
@@ -2193,12 +2210,33 @@ async function setSecLastFiled(symbol, filed) {
   });
 }
 
+// The Item 2.02 announcement date, set by sec-results-load.js. Same shape and
+// same reasoning as setSecLastFiled above: a targeted single-column update,
+// never through writeSecFacts, which replaces every fact row for the symbol.
+async function setSecLastResults(symbol, d) {
+  await init();
+  await db.execute({
+    sql: 'update sec_state set last_results = ? where symbol = ?',
+    args: [d || null, String(symbol).toUpperCase()],
+  });
+}
+
+// Both dates in one small read of a ~1,200-row table. Deliberately NOT
+// `max(filed) group by symbol` over sec_facts, which is 270,000 rows and a
+// quota event on this database rather than a slow query.
+//
+// A row is returned when EITHER date is present, so a symbol that has an
+// announcement but no statement yet still reaches the screener -- which is
+// precisely the MU case this exists for.
 async function readSecFiled() {
   await init();
   const r = await db.execute(
-    'select symbol, last_filed from sec_state where last_filed is not null');
+    'select symbol, last_filed, last_results from sec_state'
+    + ' where last_filed is not null or last_results is not null');
   const out = {};
-  for (const x of r.rows) out[x.symbol] = x.last_filed;
+  for (const x of r.rows) {
+    out[x.symbol] = { filed: x.last_filed || null, results: x.last_results || null };
+  }
   return out;
 }
 
@@ -4864,6 +4902,7 @@ module.exports = {
   db,
   init,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
+  setSecLastResults,
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
   writeShortInterest, readShortInterest, readShortLatestFor, readShortAsOfFor,
   readShortRecentFor,
