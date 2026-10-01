@@ -1208,6 +1208,67 @@
       paintAround();
     }
 
+    // The dates that qualify every figure in the Fundamentals section, named
+    // SEPARATELY rather than fused into one "as of" — the Price pulled
+    // column's rule, where conflating "we asked" with "something came back"
+    // hid the staleness the column existed to show. Four different facts:
+    // the period the figures cover, when the company announced it, when the
+    // next one is due, and when we last pulled.
+    //
+    // THE PERIOD IS THE VENDOR'S OWN and is rounded to month end for a
+    // 52/53-week filer (Micron reads 31 May against a filed 28 May), so it
+    // is right for these figures and must not be printed against a filed
+    // one. Nothing from the SEC card belongs in this line.
+    function fundDates(s, payload) {
+      const d = (v) => {
+        if (!v) return null;
+        // Parsed at local NOON: a bare yyyy-mm-dd is UTC midnight and renders
+        // as the day before west of Greenwich — the card module's own trap.
+        const t = /^\d{4}-\d{2}-\d{2}$/.test(String(v))
+          ? new Date(String(v) + 'T12:00:00') : new Date(v);
+        return Number.isFinite(t.getTime())
+          ? t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+          : null;
+      };
+      const parts = [];
+      const ttm = d(s.mostRecentQuarter);
+      // Without the period there is nothing to qualify, so the line does not
+      // open with a half-claim — it simply says less.
+      if (ttm) parts.push('Trailing twelve months to ' + ttm);
+      // Only when it is NOT December: four companies in five end their year
+      // then, and saying so is noise. It earns its place on the fifth, where
+      // it explains why "Q3" ended in May.
+      const fy = s.fiscalYearEnd;
+      if (fy && !/-12-3[01]$/.test(String(fy))) {
+        const t = /^\d{4}-\d{2}-\d{2}$/.test(String(fy))
+          ? new Date(String(fy) + 'T12:00:00') : null;
+        if (t) parts.push('fiscal year ends ' + t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }));
+      }
+      // The announcement, from the stored quarters the page already holds —
+      // a different fact from the period, and measured 23-29 days after it.
+      // `readEarnings` RENAMES on the way out: the rows carry `date` and
+      // `time`, not the table's `d` and `reported`. Reading the column names
+      // gives undefined and the clause silently vanishes — the same trap as
+      // readScreens returning `group` rather than the column's `grp`.
+      const today = new Date().toISOString().slice(0, 10);
+      const last = (payload.earnings || []).find((e) => e && e.date && e.date <= today);
+      if (last) {
+        const when = d(last.date);
+        if (when) {
+          const t = String(last.time || '').trim();
+          parts.push('reported ' + when + (t ? ', ' + t.toLowerCase() : ''));
+        }
+      }
+      const next = d(s.nextEarningsDate);
+      if (next) parts.push('next due ' + next);
+      const pulled = payload.company && payload.company.fetchedAt;
+      if (pulled) {
+        const days = Math.floor((Date.now() - Number(pulled)) / 86400000);
+        parts.push('pulled ' + (days <= 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago'));
+      }
+      return parts.join(' · ');
+    }
+
     function companyRows(c) {
       if (!c) return [];
       const rows = [];
@@ -2466,6 +2527,11 @@
             // Company facts the screener never carries — they come from the
             // profile rather than the snapshot, so only this page has them.
             extra: { info: companyRows(payload.company) },
+            // WHEN THE FUNDAMENTAL FIGURES ACTUALLY RELATE TO. Every TTM
+            // number in this section is a trailing twelve months, and until
+            // now the page printed about twenty of them with no period
+            // attached at all.
+            captions: { fund: fundDates(stock, payload) },
             // The same four doors the masthead chips are, in the place the
             // owner was actually looking. ONE builder per label, so the row
             // and the chip above it cannot point at different addresses.

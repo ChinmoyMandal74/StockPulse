@@ -253,6 +253,14 @@
       ? { t: curSym(s.currency) + s.divRate.toFixed(2), c: '' } : null)],
     ['fund',  'Payout ratio',   (s) => V.lvl(s.payoutRatio)],
     ['fund',  'Ex-dividend',    (s) => (s.exDivDate ? { t: shortDate(s.exDivDate), c: '' } : null)],
+    // Beside the dividend figures they qualify. A row with no value is
+    // omitted rather than drawn empty, so a non-payer and a company whose
+    // profile predates these fields both simply show fewer rows.
+    ['fund',  'Dividend paid',  (s) => (s.divPayDate ? { t: shortDate(s.divPayDate), c: '' } : null)],
+    // Every per-share figure on the row — EPS, book value, the share count —
+    // is stated after this split, which is the one thing that explains a
+    // discontinuity in them.
+    ['fund',  'Last split',     (s) => (s.lastSplitDate ? { t: shortDate(s.lastSplitDate), c: '' } : null)],
     ['own',   'Shares out',     (s) => V.count(s.sharesOutstanding)],
     ['own',   'Float',          (s) => V.count(s.floatShares)],
     ['own',   'Book value/share',(s) => V.num(s.bookValuePerShare, 2)],
@@ -858,8 +866,16 @@
             `<span class="rc-k">${esc(r.k)}</span>` +
             `<span class="rc-v ${r.c || ''}"${r.b ? ' style="font-weight:600"' : ''}>${val}</span></div>`;
         }).join('');
+        // A DATE THAT QUALIFIES EVERY FIGURE IN A SECTION BELONGS ON THE
+        // SECTION, not on one row among ninety. `captions` is opt-in and
+        // keyed by group, exactly like `extra`, `tips` and `links`, and only
+        // /stock passes it — the hover card is 104px of floating panel and
+        // has no room for a sentence.
+        const cap = (o.captions && o.captions[g]) || '';
         return `<div class="rc-sec"><div class="rc-sec-h" style="color:${c}"><i></i>` +
-               `${esc(labels[g] || g)}</div>${rows}</div>`;
+               `${esc(labels[g] || g)}</div>` +
+               (cap ? `<div class="rc-cap">${esc(cap)}</div>` : '') +
+               `${rows}</div>`;
       }).join('');
   }
 

@@ -3268,6 +3268,39 @@ async function fetchProfile(symbol) {
         out.divRate = nn(dv.forward_annual_dividend_rate);
         out.payoutRatio = pc(dv.payout_ratio);
         out.exDivDate = dv.ex_dividend_date || null;
+        out.divPayDate = dv.dividend_date || null;
+        out.lastSplitDate = dv.last_split_date || null;
+      }
+      // WHEN THE FUNDAMENTALS ACTUALLY RELATE TO. Every TTM figure on this
+      // profile — revenue, the margins, ROE, net income, FCF — is a trailing
+      // twelve months to a date the vendor DOES send and we had been
+      // discarding: `most_recent_quarter`, a sibling of the three
+      // sub-objects read just above, in the /statistics call already charged
+      // at 50 credits. Without it the screener and the stock page print a
+      // dozen figures with no period attached at all.
+      //   Measured before it was taken: the earnings announcement lands
+      // 23-29 days AFTER this date on every symbol checked, so it is the
+      // PERIOD and not a document date — the `fp` trap the SEC card
+      // records, tested for rather than assumed.
+      //   It is the VENDOR's own and is ROUNDED TO MONTH END for a 52/53-week
+      // filer (Micron 2026-05-31 against a real 2026-05-28, NVIDIA 07-31
+      // against 07-26), so it belongs on the vendor's figures and must never
+      // be printed against a filed one.
+      //
+      // DELIBERATELY NOT IN emptyProfile(), and that is the load-bearing
+      // decision rather than an oversight. `PROFILE_FIELDS` is
+      // Object.keys(emptyProfile()) and profileGaps() flags a profile
+      // missing ANY of them — so declaring these four would make all 1,188
+      // stored profiles a "fields" gap at once, and the nightly expires
+      // gaps before it rotates: ~170 rounds at 7 profiles a round, ~2.9
+      // hours against a 90-minute workflow timeout, ~96,000 credits, and a
+      // failed run. `earningsRows` is kept out of PROFILE_FIELDS for exactly
+      // this reason. The cost of staying out is that Fill missing will not
+      // target them; they fill on the ordinary 7-day rotation instead, which
+      // is free and needs nobody to press anything.
+      if (fin) {
+        out.mostRecentQuarter = fin.most_recent_quarter || null;
+        out.fiscalYearEnd = fin.fiscal_year_ends || null;
       }
     } catch {
       out.fetchOk = false;
@@ -5962,6 +5995,14 @@ async function computeStocks(asOf, opts = {}) {
         divRate: prof.divRate ?? null,
         payoutRatio: prof.payoutRatio ?? null,
         exDivDate: prof.exDivDate ?? null,
+        divPayDate: prof.divPayDate ?? null,
+        lastSplitDate: prof.lastSplitDate ?? null,
+        // NAMED EXPLICITLY, because this function copies profile fields one
+        // at a time rather than spreading the object. `instrumentType`
+        // shipped without its line, sat on all 1,179 profiles, reached no
+        // row, and would have been blank for ever with every check passing.
+        mostRecentQuarter: prof.mostRecentQuarter ?? null,
+        fiscalYearEnd: prof.fiscalYearEnd ?? null,
         sharesOutstanding: prof.sharesOutstanding ?? null,
         floatShares: prof.floatShares ?? null,
         shortRatio: prof.shortRatio ?? null,
@@ -7665,6 +7706,12 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
       description: profile.description || null,
       employees: profile.employees ?? null,
       website: profile.website || null,
+      // When the profile was last pulled. The figures on this page are
+      // cached on a weekly rotation, so "as of" is a real question and the
+      // snapshot's own `updatedAt` answers a different one (that is the
+      // PRICE clock). Two facts, named separately — the Price pulled
+      // column's rule.
+      fetchedAt: profile.fetchedAt ?? null,
     } : null,
     // Every stored quarter, newest first. Deliberately NOT in the snapshot:
     // it is per-symbol and nothing else on any page reads it.

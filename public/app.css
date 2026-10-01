@@ -360,6 +360,11 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
                      letter-spacing: 0.14em; margin-bottom: 4px;
                      display: flex; align-items: center; gap: 6px; }
 .rc-sec-h i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none; }
+/* The dates that qualify a whole section. Quieter than a row's key, because
+   it is context for the figures rather than one of them, and it wraps —
+   it is a sentence, not a value. */
+.rc-cap { color: var(--faint); font-size: 10.5px; line-height: 1.5;
+          margin: -1px 0 6px; }
 .rc-row { display: flex; align-items: baseline; gap: 8px; line-height: 1.75; }
 .rc-k { color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rc-v { margin-left: auto; font-family: var(--mono); font-size: 11px;
