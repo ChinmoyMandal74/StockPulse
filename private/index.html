@@ -1872,10 +1872,37 @@
     // Fundamentals group, which is why it sits in that group rather than
     // beside Next Earn in Info: those two are a pair of dates, but this one
     // is a property of the numbers it stands with.
+    // THE VENDOR'S FEED GOES STALE, and our own stored filings can prove it.
+    // Reported against VNO (2026-10-01): this column said 4 May while the
+    // company's 10-Q for the quarter to 30 June was filed 3 August, which the
+    // SEC EDGAR card on that stock's own page was already showing. Measured
+    // across the universe the same morning: 15 of 1,188 symbols are a quarter
+    // or more behind, and a control group of 25 recent reporters agreed with
+    // EDGAR exactly, so this marks a real gap rather than everything.
+    //
+    // THE CELL STILL SHOWS THE VENDOR'S DATE. `lastEarningsDate` is what the
+    // column, the filter and `daysSinceEarnings` all mean, and swapping in a
+    // filing date would make the column a blend of two sources that the
+    // filter beside it could not follow. The filing is named in the tooltip.
+    // `secLastFiled` arrives AFTER the table paints, from its own endpoint,
+    // and is never on the row the server scores — see /api/sec/filed.
+    // One definition, shared with /stock -- see rowcard.js for why 40.
+    const SEC_BEHIND_DAYS = RowCard.SEC_BEHIND_DAYS;
+    function secBehind(s) {
+      const f = s.secLastFiled;
+      if (!f || !s.lastEarningsDate) return 0;
+      // They match EXACTLY when in sync -- 22 of 25 control symbols did, and
+      // VNO's own 4 May is EDGAR's filed date for the quarter before. So a
+      // gap of weeks means a whole report the feed never recorded, and the
+      // threshold only has to clear ordinary disagreement.
+      const d = Math.round((new Date(f + 'T12:00:00') - new Date(s.lastEarningsDate + 'T12:00:00')) / 86400000);
+      return d > SEC_BEHIND_DAYS ? d : 0;
+    }
+
     function reportedCell(s) {
       const iso = s.lastEarningsDate;
       if (!iso) {
-        return `<td class="na grp-fund" title="No report recorded for this stock yet — it fills in the next time its profile is pulled.">—</td>`;
+        return `<td class="na grp-fund" data-rep="${we(s.symbol)}" title="No report recorded for this stock yet — it fills in the next time its profile is pulled.">—</td>`;
       }
       // Local noon: `new Date('2026-06-24')` is UTC midnight and renders as
       // the 23rd west of Greenwich. The card-dating lesson, met again.
@@ -1890,11 +1917,51 @@
       // company has missed its normal cadence and the figures beside this
       // cell are a quarter stale. Amber is already "notice this, it is old"
       // everywhere else here. `.warn` is colour-only, so this stays a cell.
-      const stale = days > 100;
+      const behind = secBehind(s);
+      const stale = days > 100 || behind > 0;
       const title = `Last reported ${iso} — ${days} days ago`
-        + (stale ? ', so the figures in this group are at least a quarter old' : '')
-        + '. This is the ANNOUNCEMENT, not the period it covers: a report lands 23-29 days after the quarter it reports on.';
-      return `<td class="grp-fund${stale ? ' warn' : ''}"${attr(title)}>${label}</td>`;
+        + (days > 100 ? ', so the figures in this group are at least a quarter old' : '')
+        + '. This is the ANNOUNCEMENT, not the period it covers: a report lands 23-29 days after the quarter it reports on.'
+        // The specific, provable half: not "this looks old" but "the company
+        // has filed since and the price feed has not caught up".
+        + (behind ? `\n\nTHE EARNINGS FEED IS BEHIND: this company filed a statement with the SEC on ${s.secLastFiled}`
+            + ` — ${behind} days after the date shown here — which the feed has not recorded.`
+            + ' The figures in this group are the feed’s, so they predate that filing.' : '');
+      return `<td class="grp-fund${stale ? ' warn' : ''}" data-rep="${we(s.symbol)}"${attr(title)}>${label}</td>`;
+    }
+
+    // Repaints just this column once the filing dates land — a full render()
+    // would rebuild every row to change one cell, which is the flash the news
+    // loader's own comment records.
+    function paintReportedCells() {
+      const by = {};
+      for (const s of stocks) by[s.symbol] = s;
+      document.querySelectorAll('td[data-rep]').forEach((td) => {
+        const s = by[td.dataset.rep];
+        if (!s) return;
+        const tmp = document.createElement('tbody');
+        tmp.innerHTML = '<tr>' + reportedCell(s) + '</tr>';
+        const fresh = tmp.querySelector('td');
+        td.className = fresh.className;
+        td.title = fresh.title;
+        td.innerHTML = fresh.innerHTML;
+      });
+    }
+
+    let secFiledLoaded = false;
+    async function loadSecFiled() {
+      if (secFiledLoaded) return;
+      secFiledLoaded = true;
+      try {
+        const data = await api('GET', '/api/sec/filed');
+        const filed = data.filed || {};
+        for (const list of [baseStocks, stocks]) {
+          for (const s of list) s.secLastFiled = filed[s.symbol] || null;
+        }
+        paintReportedCells();
+      } catch (e) {
+        secFiledLoaded = false;   // a later load may succeed
+      }
     }
 
     // Where it trades. The MIC and the trading currency ride on the tooltip
@@ -3537,6 +3604,9 @@
       paintSparklines();
       loadSparklines();
       loadLatestNews();
+      // After the table paints, like the news and the sparklines: a
+      // decoration — or in this case a caveat — must not make the data wait.
+      loadSecFiled();
     }
 
     // Age of the latest headline, with a count when there is more than one.

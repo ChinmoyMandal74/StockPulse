@@ -1219,7 +1219,31 @@
     // 52/53-week filer (Micron reads 31 May against a filed 28 May), so it
     // is right for these figures and must not be printed against a filed
     // one. Nothing from the SEC card belongs in this line.
-    function fundDates(s, payload) {
+    // Rewrites the Fundamentals caption in place, once the filings land.
+    // Text only: the caption is one node, and rebuilding the section would
+    // throw away the reader's scroll for a sentence.
+    //
+    // THE FILING DATE IS PASSED IN, never reached for. `secData` is a local
+    // of the boot IIFE just as `payload` is, so a script-scope helper
+    // reading it saw `undefined` and the clause silently never appeared —
+    // the same trap twice in one change, which is why nothing here now
+    // depends on what scope it happens to be called from.
+    let fundFiled = null;
+    function paintFundCaption(filed) {
+      if (filed !== undefined) fundFiled = filed || null;
+      const secs = [...document.querySelectorAll('.rc-sec')];
+      const f = secs.find((x) => /fundamentals/i.test(
+        (x.querySelector('.rc-sec-h') || {}).textContent || ''));
+      const cap = f && f.querySelector('.rc-cap');
+      if (cap) cap.textContent = fundDates(stock, earnRows, profilePulledAt, fundFiled);
+    }
+
+    // Takes the two things it reads rather than `payload`, which is a LOCAL
+    // of the boot IIFE — paintFundCaption lives at script scope, so calling
+    // it with `payload` threw straight into loadSec's catch and the clause
+    // silently never appeared. The documented trap that took the whole
+    // chart down once already with paintChart.
+    function fundDates(s, earnings, pulledAt, filed) {
       const d = (v) => {
         if (!v) return null;
         // Parsed at local NOON: a bare yyyy-mm-dd is UTC midnight and renders
@@ -1251,7 +1275,7 @@
       // gives undefined and the clause silently vanishes — the same trap as
       // readScreens returning `group` rather than the column's `grp`.
       const today = new Date().toISOString().slice(0, 10);
-      const last = (payload.earnings || []).find((e) => e && e.date && e.date <= today);
+      const last = (earnings || []).find((e) => e && e.date && e.date <= today);
       if (last) {
         const when = d(last.date);
         if (when) {
@@ -1272,6 +1296,22 @@
       // the moment the real report slips past it. So the honest statement is
       // about our own record rather than about the company, which may well
       // have reported without the vendor telling us.
+      // THE PAGE WAS CONTRADICTING ITSELF. For VNO this caption said
+      // "reported 4 May 2026" while the SEC EDGAR card further down the same
+      // page showed the 10-Q for the quarter to 30 June, filed 3 August —
+      // which is what the owner checked against Google. The filings are
+      // already fetched for that card, so saying it costs nothing.
+      //
+      // It NAMES the filing rather than replacing the date: the figures in
+      // this group really are the vendor's, struck at the vendor's date, and
+      // relabelling them with a filing date they do not come from would be a
+      // worse kind of wrong than being late.
+      if (last && filed && filed > last.date) {
+        const gap = Math.round(
+          (new Date(filed + 'T12:00:00') - new Date(last.date + 'T12:00:00')) / 86400000);
+        if (gap > RowCard.SEC_BEHIND_DAYS) parts.push('but the company filed with the SEC on ' + d(filed)
+          + ', which the earnings feed has not recorded');
+      }
       const nd = s.nextEarningsDate;
       const next = d(nd);
       if (next) {
@@ -1280,7 +1320,7 @@
           ? 'next due ' + about + next
           : 'due ' + about + next + ', not yet recorded');
       }
-      const pulled = payload.company && payload.company.fetchedAt;
+      const pulled = pulledAt;
       if (pulled) {
         const days = Math.floor((Date.now() - Number(pulled)) / 86400000);
         parts.push('pulled ' + (days <= 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago'));
@@ -2049,6 +2089,9 @@
     // returns up to 40 quarters for the same 20 credits as 8.
     const EARN_PAGE = 8;
     let earnRows = [];
+    // Script scope for the same reason earnRows is: the caption is redrawn
+    // when the filings land, long after the boot IIFE has returned.
+    let profilePulledAt = null;
     let earnAll = false;
 
     const eps = (v) => (v == null || !isFinite(v) ? null : Number(v));
@@ -2550,7 +2593,8 @@
             // number in this section is a trailing twelve months, and until
             // now the page printed about twenty of them with no period
             // attached at all.
-            captions: { fund: fundDates(stock, payload) },
+            captions: { fund: fundDates(stock, payload.earnings,
+              payload.company && payload.company.fetchedAt) },
             // The caption above already states the announcement, from
             // `earnings_history` — fresher than the profile copy the row
             // reads, and with the time of day. One statement, not two that
@@ -2629,6 +2673,7 @@
       // Filled after the markup lands, so the strip and the fold are built from
       // one function that the Show-all button can call again.
       earnRows = payload.earnings || [];
+      profilePulledAt = (payload.company && payload.company.fetchedAt) || null;
       earnAll = false;
       paintEarnings();
 
@@ -3321,6 +3366,9 @@
           // rather than a heading over an empty table.
           if (!(j.annual || []).length && !(j.quarterly || []).length) { card.remove(); return; }
           secData = j;
+          // The caption above was built before this landed, so it is redrawn
+          // now that the filings are known — the one clause that needs them.
+          paintFundCaption(j.lastFiled);
           // The strip rides this fetch rather than asking for its own —
           // /api/sec is already on this page, so the layer costs no endpoint
           // and no read. It lands AFTER the first paint, so the strip is drawn

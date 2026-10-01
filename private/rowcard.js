@@ -31,6 +31,23 @@
   }
 
   const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  // How far the SEC filing date must lead the vendor's announcement date
+  // before we call the earnings feed BEHIND rather than merely lagging.
+  //
+  // THE DATA CHOSE THIS NUMBER, not judgement. Measured across 1,094
+  // comparable symbols on 2026-10-01, the gap is bimodal with an EMPTY
+  // BUCKET between 36 and 45 days: 950 symbols inside a week (a company
+  // announces, then files the 10-Q days later), 117 at 8-20, 11 at 21-35 —
+  // banks and retailers that announce in mid-July and file in early August —
+  // then nothing at all until 46, and 16 symbols beyond it, every one a
+  // genuinely missing quarter. 40 sits in the gap.
+  //
+  // A LOWER THRESHOLD FLAGS NORMAL BEHAVIOUR: at 20 it marked BLK, PNC, USB
+  // and UNH, whose feeds are perfectly current. Shared because /stock's
+  // caption and the screener's Reported column must agree about what
+  // "behind" means; two copies would drift the first time one was tuned.
+  const SEC_BEHIND_DAYS = 40;
+
   function shortDate(iso) {
     const p = String(iso).split('-');
     return p.length === 3 ? `${MON[+p[1] - 1]} ${+p[2]}` : iso;
@@ -1095,7 +1112,7 @@
     // used by the stock page
     buildSections, chartSVG, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries, stepSeries, fmtMktCap,
     scoreTip, placeTip,
-    GROUP_ORDER, GROUP_COLORS, GROUP_LABELS,
+    GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS,
     fieldCatalogue, fieldValues, fieldProps,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

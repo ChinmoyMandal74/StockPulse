@@ -1121,6 +1121,39 @@ A `FIELD_SPEC` row reaches `/stock` too, where the Fundamentals caption **alread
 - Verified inside `funddate-test.js`, that caption's own suite, which went 32 → **39 checks**: two new fixtures, a LAPSED estimate carrying the Loews shape exactly and a FUTURE one, plus a check that the confirmed date is not hedged. **Proved by reverting twice**: restoring the unconditional `next due` fails 2, and dropping the estimate hedge fails 2.
   - **The heredoc ate a backslash level for the FOURTH time on this project** — `'\n-- …'` in a patch script became a real newline inside a JS string literal and the file would not parse. Use Write/Edit for anything carrying an escape.
 
+#### THE VENDOR'S EARNINGS FEED GOES STALE, AND OUR OWN FILINGS PROVE IT (2026-10-01, owner, from a Google Finance screenshot of VNO)
+**"Our system says last reported 4-May-2026 whereas Google Finance says 3-Aug-2026."** Correct, and it is the vendor rather than us.
+
+- **`/earnings?symbol=VNO` returns 27 rows whose newest is 2026-05-04.** Twelve Data simply does not have VNO's Q2. **The ordering hypothesis was WRONG and was checked first**: `reported` uses `arr.find`, which assumes newest-first where `upcoming` on the next line sorts — but the array IS newest-first and `find` picks exactly what a sort would. Measured before changing anything.
+- **OUR SEMANTICS ARE RIGHT, which the filings confirm**: EDGAR says VNO's 10-Q for the quarter ended 2026-03-31 was filed **2026-05-04** — the same date the feed gives. `lastEarningsDate` really is the announcement; the feed is one quarter behind on this symbol. `/statistics.most_recent_quarter` meanwhile reads **2026-06-30**, so the vendor knows about Q2 on one endpoint and not the other.
+- **Measured against our own stored EDGAR copy**: of the 43 rows whose last report is over 100 days old, **15 are genuinely behind**, 3 agree and 25 file nothing at all (funds, foreign filers). **A control group of 25 recent reporters: 0 behind, 22 agree** — so the check marks a real gap rather than everything.
+
+##### The threshold is 40 days because the data left an empty bucket there
+The gap between the SEC filing date and the vendor's announcement date, over 1,094 comparable symbols, is **bimodal**: 950 inside a week, 117 at 8-20, 11 at 21-35 (banks and retailers that announce in mid-July and file in early August), **nothing at all between 36 and 45**, then 16 symbols from 46 to 197 — every one a missing quarter. 40 sits in the gap.
+
+- **A LOWER THRESHOLD FLAGS NORMAL BEHAVIOUR, and the first cut did.** At 20 it marked BLK, PNC, USB, UNH, SYY and DDS, whose feeds are perfectly current — they had simply announced three weeks before filing. **Only production showed that**: the fixture's three-population shape was written afterwards, so the suite now carries LAGY (+22, must NOT be marked) beside BHND (+91, must be).
+- **MU validates it from the other side**: announced 2026-06-24 after hours, 10-Q filed 2026-06-25. One day. A naive "any difference" check would have flagged a symbol that is exactly in sync.
+- `RowCard.SEC_BEHIND_DAYS`, shared — the screener's column and `/stock`'s caption must agree about what "behind" means, and two copies drift the first time one is tuned.
+
+##### THE BOUNDARY, which the owner overrode knowingly and which still holds where it matters
+The owner was offered "flag it on /stock only" and chose **"flag it on the screener too"**, with the cost named: the SEC card's own rule is *no snapshot stamping, no screener column*. What that rule is really protecting is the **verdict**, and that is intact:
+
+- **IT IS A SEPARATE ENDPOINT FETCHED AFTER THE TABLE PAINTS** (`/api/sec/filed`), the `loadLatestNews` bargain — so nothing is written to the snapshot and the filing date is **never on the row the server scores**. The engine cannot see it even in principle.
+- **`lastEarningsDate` IS NOT TOUCHED.** It derives `nextEarningsDate`, which the Advice engine's earnings guard reads, so a filing date assigned to it would be one rename from moving verdicts. The cell still shows the VENDOR's date and names the filing in its tooltip; the column, the filter and `daysSinceEarnings` all keep meaning one thing.
+- **Asserted behaviourally, not by grep**: every row scored three ways — field absent, present, and **LYING** — and the verdicts must be identical, the proof `instrumentType` had to give. Plus a check that no served row carries `secLastFiled`.
+
+##### Where the date comes from, and why no scan
+`sec_state` gained **`last_filed`**, written by `writeSecFacts`, which already has the rows — so knowing it costs nothing at either end and `/api/sec/filed` is one small read of a ~1,200-row table. **Never `max(filed) group by symbol` over sec_facts**, which is 270,000 rows and a quota event on this database. Statement forms only (`isStatement` — an 8-K or a proxy is a mention, the rule `outranks` already enforces on the card), and `/api/sec` sends `lastFiled` computed the same way so the page needs no second copy of the form list.
+
+- **`noteSecMiss` must NOT blank it.** A symbol that could not be fetched this time still holds the filings it had, and a transient SEC refusal reading as "this company has filed nothing" is the mistake that function already made once with the CIK, silently breaking the insider card for 64 filers.
+- **`backfill-sec-filed.js`** fills the ~1,097 symbols stored before the column existed — local, dry run by default, because it reads the whole of sec_facts. Measured: **1,176 symbols, 1,097 set, 79 with no statements, 99.7s.** It writes through a targeted `setSecLastFiled`, never `writeSecFacts`, which replaces every fact row — the screens-incident rule that a restore must not pass through a transforming path.
+
+##### Three scope traps in one change, all the same one
+- **`payload` is a local of the boot IIFE**, so `paintFundCaption` calling `fundDates(stock, payload)` threw into `loadSec`'s catch and the clause silently never appeared. `fundDates` takes what it reads now (`earnings`, `pulledAt`, `filed`).
+- **`secData` is an IIFE local too**, so a script-scope `secLastFiled()` helper reading it saw `undefined` — the same trap one level deeper, in the same hour. The filing date is **passed into** `paintFundCaption` now; nothing reaches for scope.
+- **`window.baseStocks` is not a global** either, in the sibling suite. Three instances of one lesson: *in these pages, pass it in.*
+- Verified: **17 checks** over a fixture carrying all three live populations (a quarter behind, the ordinary announce-to-file lag, in sync) plus a fund that files nothing. **Proved by reverting six times**: the 40-day threshold fails 2, no threshold 2, not fetching 2, replacing the vendor date 2, the caption clause 1, `lastFiled` on /api/sec 1. Plus `sec` 58, `funddate` 39, `reported` 35, `field-shape` 7 and `cols` 42 re-run unchanged, and `query-plan-test` still passes.
+
 #### A pre-existing defect found in the markup beside it
 **`data-key="nextEarningsDate" ="Next earnings date — …"`** — the word `title` had been **eaten**, so the Next Earn column had carried **no tooltip at all** and the header held an attribute literally named `=`. The shell-mangling trap this file already records for CLAUDE.md prose (`activeDim()` and two test filenames vanishing mid-sentence), in markup this time. Repaired, with a check that the tooltip is back and that no ` ="` remains in the header row.
 

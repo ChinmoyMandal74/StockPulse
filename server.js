@@ -9184,7 +9184,14 @@ async function secFetchOne(symbol) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const rows = SecFacts.normalise(await r.json(), sym);
     if (!rows.length) { await store.noteSecMiss(sym, 'empty', null, cik); return { symbol: sym, status: 'empty', rows: 0, cik }; }
-    await store.writeSecFacts(sym, rows, { cik, status: 'ok' });
+    // The newest STATEMENT filing, computed here because the rows are in
+    // hand and nothing else ever has to go looking for it. STATEMENT forms
+    // only (10-K/10-Q/20-F/40-F): an 8-K or a DEF 14A is a mention, and
+    // letting one of those date the company's last report is the same error
+    // `outranks` exists to prevent on the card.
+    const lastFiled = rows.reduce(
+      (m, r) => (SecFacts.isStatement(r) && r.filed && (!m || r.filed > m) ? r.filed : m), null);
+    await store.writeSecFacts(sym, rows, { cik, status: 'ok', lastFiled });
     return { symbol: sym, status: 'ok', rows: rows.length, cik };
   } catch (e) {
     await store.noteSecMiss(sym, 'error', e.message).catch(() => {});
@@ -9292,8 +9299,17 @@ app.get('/api/sec', requireAuth, route(async (req, res) => {
   // quarter's revenue growth is against the same quarter a year before, and
   // mixing annuals into that comparison would answer a different question.
   const withR = (rows) => SecFacts.withRatios(rows).map(shape);
+  // The newest STATEMENT filing, from the one definition of what a statement
+  // is (`isStatement` — an 8-K or a proxy is a mention). Computed over the
+  // WHOLE trail rather than `latest`, since a period's winning row is not
+  // necessarily the most recently filed document. The caption uses it to say
+  // when the vendor's earnings feed is behind the company's own filings, so
+  // the page stops contradicting the EDGAR card further down it.
+  const lastFiled = all.reduce(
+    (m, r) => (SecFacts.isStatement(r) && r.filed && (!m || r.filed > m) ? r.filed : m), null);
   res.json({
     symbol,
+    lastFiled,
     annual: withR(latest.filter((r) => r.periodType === 'FY')),
     quarterly: withR(latest.filter((r) => r.periodType === 'Q')),
     // Four filed quarters summed, so the card can compare like with like:
@@ -9869,6 +9885,38 @@ app.get('/api/news/latest', requireAuth, route(async (req, res) => {
     byCount = Object.fromEntries(Object.entries(counts).filter(([sym]) => keep(sym)));
   }
   res.json({ items, counts: byCount, checked });
+}));
+
+// The newest STATEMENT filing per symbol, so the screener can say when the
+// VENDOR'S earnings feed is behind the company's own filings.
+//
+// IT IS A SEPARATE ENDPOINT FETCHED AFTER THE TABLE PAINTS, and that shape
+// is the boundary rather than a performance choice. The SEC data must not
+// reach a verdict: `lastEarningsDate` derives `nextEarningsDate`, which the
+// Advice engine's earnings guard reads, so a filing date stamped onto the
+// snapshot would be one rename away from moving verdicts. Delivered this way
+// it is never on the row the server scores — the engine cannot see it even
+// in principle — and nothing is written to the snapshot. `loadLatestNews`
+// is the same bargain for the same reason.
+//
+// One small read of sec_state (~1,200 rows), never a group-by over the
+// 270,000-row sec_facts. Cached ten minutes: a filing lands at most daily.
+let secFiledCache = null;
+let secFiledAt = 0;
+const SEC_FILED_TTL_MS = 10 * 60 * 1000;
+app.get('/api/sec/filed', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!secFiledCache || Date.now() - secFiledAt > SEC_FILED_TTL_MS) {
+    secFiledCache = await store.readSecFiled().catch(() => ({}));
+    secFiledAt = Date.now();
+  }
+  let filed = secFiledCache;
+  // Guests see the preview only, the rule every per-symbol route follows.
+  if (await isGuest(req)) {
+    filed = Object.fromEntries(
+      Object.entries(filed).filter(([sym]) => guestSet.has(String(sym).toUpperCase())));
+  }
+  res.json({ filed });
 }));
 
 // Cached per (days, guest): every signed-in page asks for the same closes, and

@@ -838,6 +838,11 @@ function parseAddColumn(stmt) {
 }
 
 const ADDED_COLUMNS = [
+  // The newest STATEMENT filing (10-K/10-Q/20-F/40-F) we hold for a symbol,
+  // recorded by writeSecFacts, which already has the rows. It exists so the
+  // vendor-vs-filings staleness check never has to ask sec_facts for a
+  // `max(filed) group by symbol` -- 270,000 rows, a quota event here.
+  "alter table sec_state add column last_filed text",
   // A Form 4 can name several reporting owners — 2.2% do. Added the same
   // day the table shipped, because production already held it by then.
   "alter table insider_trans add column owners integer not null default 1",
@@ -2067,10 +2072,10 @@ async function writeSecFacts(symbol, rows, meta = {}) {
     });
   }
   stmts.push({
-    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error)
-          values (?, ?, ?, ?, ?, ?)`,
+    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed)
+          values (?, ?, ?, ?, ?, ?, ?)`,
     args: [sym, meta.cik == null ? null : Number(meta.cik), Date.now(), rows.length,
-      meta.status || 'ok', meta.error || null],
+      meta.status || 'ok', meta.error || null, meta.lastFiled || null],
   });
   await db.batch(stmts);
   return rows.length;
@@ -2088,10 +2093,16 @@ async function noteSecMiss(symbol, status, error, cik) {
   await init();
   const sym = String(symbol).toUpperCase();
   await db.execute({
-    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error)
-          values (?, coalesce(?, (select cik from sec_state where symbol = ?)), ?, 0, ?, ?)`,
+    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed)
+          values (?, coalesce(?, (select cik from sec_state where symbol = ?)), ?, 0, ?, ?,
+                  (select last_filed from sec_state where symbol = ?))`,
+    // The trailing `sym` is for the last_filed subquery: a symbol that could
+    // not be FETCHED this time still holds whatever filings it already had,
+    // and blanking the date would make a transient SEC refusal read as "this
+    // company has filed nothing" — the same mistake noteSecMiss already made
+    // once with the CIK, which silently broke the insider card for 64 filers.
     args: [sym, cik == null ? null : Number(cik), sym, Date.now(),
-      status || 'none', error ? String(error).slice(0, 300) : null],
+      status || 'none', error ? String(error).slice(0, 300) : null, sym],
   });
 }
 
@@ -2161,6 +2172,33 @@ async function readSecState() {
   for (const x of r.rows) {
     out[x.symbol] = { cik: x.cik, fetchedAt: x.fetched_at, rows: x.rows, status: x.status, error: x.error };
   }
+  return out;
+}
+
+// The newest STATEMENT filing we hold per symbol — one small read of a
+// ~1,200-row table, never a `max(filed) group by` over sec_facts, which is
+// 270,000 rows and a quota event on this database rather than a slow query.
+// It is recorded by writeSecFacts, which already has the rows in hand, so
+// knowing it costs nothing at either end.
+// Targeted single-column update, for backfill-sec-filed.js. It deliberately
+// does NOT go through writeSecFacts: that path replaces every fact row for
+// the symbol, and a backfill must never pass through a transforming write —
+// the 2026-09-15 screens incident, where a "restore" ran through a sanitiser
+// and stripped the < and > out of thirteen screens on the way past.
+async function setSecLastFiled(symbol, filed) {
+  await init();
+  await db.execute({
+    sql: 'update sec_state set last_filed = ? where symbol = ?',
+    args: [filed || null, String(symbol).toUpperCase()],
+  });
+}
+
+async function readSecFiled() {
+  await init();
+  const r = await db.execute(
+    'select symbol, last_filed from sec_state where last_filed is not null');
+  const out = {};
+  for (const x of r.rows) out[x.symbol] = x.last_filed;
   return out;
 }
 
@@ -4825,7 +4863,7 @@ async function readNewsState() {
 module.exports = {
   db,
   init,
-  writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState,
+  writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
   writeShortInterest, readShortInterest, readShortLatestFor, readShortAsOfFor,
   readShortRecentFor,
