@@ -1886,6 +1886,16 @@ app.post('/api/login', route(async (req, res) => {
       error: 'Your account is awaiting approval by the owner — you will get an email when it is ready.',
     });
   }
+  // SWITCHED OFF BY THE OWNER. Checked AFTER the password verifies, exactly
+  // like the pending gate above and for the same reason: a wrong password
+  // still gets the generic 401, so this endpoint cannot be used to find out
+  // which addresses have accounts. Telling the person who HAS proved the
+  // password costs nothing and saves them guessing at a broken sign-in.
+  if ((user.status || 'active') !== 'active') {
+    return res.status(403).json({
+      error: 'This account has been switched off. Contact the site owner if you think that is a mistake.',
+    });
+  }
   const token = crypto.randomBytes(32).toString('hex');
   await store.createSession(token, Number(user.id), Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   setSessionCookie(res, token);
@@ -2835,6 +2845,57 @@ app.post('/api/users/:id/approve', requireAdmin, route(async (req, res) => {
     sendWelcome(r.email, 'member').catch(() => {});
   }
   res.json({ ok: true, approved: r.wasPending });
+}));
+
+// Switch an account off, or back on — the reversible half of this page, where
+// Delete is the irreversible one. A disabled account keeps everything it has
+// (its sessions go, but its themes, views, prefs and chat usage all stay), so
+// turning it back on restores the person rather than handing them a new start.
+//
+// ONE ROUTE WITH AN ENUM rather than /disable and /enable, so the set of
+// statuses this can reach is a literal list in one place. It deliberately
+// cannot reach `pending`: that would un-approve somebody, and re-approving
+// them would send the welcome email a second time.
+const USER_STATUS = ['active', 'disabled'];
+
+app.post('/api/users/:id/status', requireAdmin, route(async (req, res) => {
+  const id = Number(req.params.id);
+  const want = String((req.body && req.body.status) || '').trim().toLowerCase();
+  if (!USER_STATUS.includes(want)) {
+    return res.status(400).json({ error: 'status must be active or disabled.' });
+  }
+  const users = await store.listUsers();
+  const target = users.find((u) => u.id === id);
+  if (!target) return res.status(404).json({ error: 'User not found.' });
+
+  // ONE GUARD, NOT DELETE'S TWO (owner, 2026-10-01: "You can disable any user
+  // except me"). Delete refuses an admin outright because it is irreversible
+  // and takes `fundamentals_history`-grade data with it; disable takes nothing
+  // and Enable puts it all back, so the asymmetry is the point rather than an
+  // oversight. An admin may therefore be switched off — including by another
+  // admin — and switched back on.
+  //
+  // The one thing that must not happen is revoking your OWN session
+  // mid-request and landing yourself at the login page. With a single admin
+  // that is also the complete protection of the admin account, since the only
+  // person who could reach this is signed in as it.
+  const me = await currentUser(req);
+  if (me && me.id === id) {
+    return res.status(409).json({ error: 'You cannot switch off the account you are signed in as.' });
+  }
+  // A pending account has its own two controls and no third meaning. Letting
+  // this route touch it would make Enable a second, silent Approve — one that
+  // skips the welcome email approval exists to send.
+  if (target.status === 'pending') {
+    return res.status(409).json({
+      error: 'That registration is still pending. Approve it, or Delete to decline it.',
+    });
+  }
+
+  const r = await store.setUserStatus(id, want);
+  if (!r) return res.status(404).json({ error: 'User not found.' });
+  if (r.was !== want) logAct(req, 'account', (want === 'active' ? 'enabled:' : 'disabled:') + r.email);
+  res.json({ ok: true, status: want, changed: r.was !== want });
 }));
 
 app.delete('/api/users/:id', requireAdmin, route(async (req, res) => {

@@ -4613,6 +4613,32 @@ async function approveUser(id) {
   return { email: r.rows[0].email, wasPending: r.rows[0].status === 'pending' };
 }
 
+// Switch an account off, or back on. The reversible counterpart to
+// `deleteUser`, which destroys the row and everything keyed on it.
+//
+// DISABLING DROPS THE SESSIONS, and without that the feature does nothing you
+// could see: a session lasts 30 days, so the person stays signed in until the
+// cookie expires. `getSessionUser` refusing a non-active status is the belt;
+// deleting the rows is the braces, and it is also what makes the maintenance
+// page's "Signed in now" true the moment the button is pressed. `setPassword`
+// already drops sessions for the same reason.
+//
+// `status` is the caller's business to validate — the route allows exactly
+// active and disabled, so this can never be used to un-approve somebody back
+// to `pending` and make the welcome email send twice.
+async function setUserStatus(id, status) {
+  await init();
+  const r = await db.execute({
+    sql: 'select email, role, status from users where id = ?', args: [id],
+  });
+  if (!r.rows.length) return null;
+  const was = r.rows[0].status || 'active';
+  const stmts = [{ sql: 'update users set status = ? where id = ?', args: [status, id] }];
+  if (status !== 'active') stmts.push({ sql: 'delete from sessions where user_id = ?', args: [id] });
+  await db.batch(stmts, 'write');
+  return { email: r.rows[0].email, role: r.rows[0].role, was, status };
+}
+
 // Includes enough for a maintenance screen to be useful: who is actually
 // signed in somewhere, when they last did, and whether an account is locked
 // out after failed sign-ins.
@@ -4699,9 +4725,15 @@ async function getSessionUser(token) {
   if (!token) return null;
   await init();
   const r = await db.execute({
+    // AN ALLOWLIST, NOT A DENYLIST, and the difference is the point. This read
+    // used to be `u.status <> 'pending'`, which admits any status nobody has
+    // thought about yet — so the day `disabled` was added, every disabled
+    // account's live session would have kept working for up to its full 30
+    // days and the feature would have looked like it did nothing. A gate
+    // should refuse what it does not recognise.
     sql: `select u.id, u.email, u.name, u.role, s.expires_at
           from sessions s join users u on u.id = s.user_id
-          where s.token = ? and u.status <> 'pending'`,
+          where s.token = ? and u.status = 'active'`,
     args: [token],
   });
   const row = r.rows[0];
@@ -5049,7 +5081,7 @@ module.exports = {
   findUserByGoogleSub,
   linkGoogleSub,
   createUser,
-  approveUser,
+  approveUser, setUserStatus,
   listUsers,
   deleteUser,
   noteLoginFailure,
