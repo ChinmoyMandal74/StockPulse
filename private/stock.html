@@ -2532,6 +2532,11 @@
             // now the page printed about twenty of them with no period
             // attached at all.
             captions: { fund: fundDates(stock, payload) },
+            // The caption above already states the announcement, from
+            // `earnings_history` — fresher than the profile copy the row
+            // reads, and with the time of day. One statement, not two that
+            // can disagree by up to the 7-day profile rotation.
+            skip: ['fund|Reported'],
             // The same four doors the masthead chips are, in the place the
             // owner was actually looking. ONE builder per label, so the row
             // and the chip above it cannot point at different addresses.

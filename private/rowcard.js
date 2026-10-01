@@ -224,6 +224,13 @@
     // than what the equity costs. Stored since the profile call started being
     // kept in full and never surfaced.
     ['size',  'Enterprise value',(s) => V.money(s.enterpriseValue, s.currency)],
+    // FIRST in the group because it dates everything under it: these figures
+    // were struck at that announcement, and a reader scanning margins and
+    // multiples should see how old they are before reading them. The DATE
+    // only -- the time of day lives in earnings_history, which a snapshot row
+    // does not carry; /stock's caption has it because that page reads it.
+    ['fund',  'Reported',       (s) => (s.lastEarningsDate
+      ? { t: shortDate(s.lastEarningsDate), c: '' } : null)],
     ['fund',  'Earn grth Q YoY',(s) => V.pct(s.earningsGrowthYoY)],
     ['fund',  'Rev grth Q YoY', (s) => V.pct(s.revenueGrowthYoY)],
     ['fund',  'Profit margin',  (s) => V.pct(s.profitMargin)],
@@ -823,8 +830,17 @@
     const labels = o.labels || {};
     const ctx = {};
 
+    // `skip` drops a FIELD_SPEC row on a page that states the same fact
+    // better elsewhere. Only /stock passes it, for `fund|Reported`: its
+    // caption reads the announcement out of `earnings_history`, which is
+    // rewritten every round and carries the time of day, where the row
+    // reads the PROFILE's copy and so lags by up to the 7-day rotation.
+    // Two different dates under one label is worse than either alone.
+    const skip = new Set(o.skip || []);
+
     const byGroup = {};
     for (const [g, label, get] of FIELD_SPEC) {
+      if (skip.has(g + '|' + label)) continue;
       let v = null;
       try { v = get(s, ctx); } catch { v = null; }
       (byGroup[g] = byGroup[g] || []).push({

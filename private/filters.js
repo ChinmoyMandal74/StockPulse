@@ -112,8 +112,20 @@
       // the rule for blanks everywhere in this grammar.
       return x.pricedAt ? Math.round(((c.now || Date.now()) - x.pricedAt) / 360000) / 10 : null;
     }
-    if (key === 'daysSinceEarnings') {
-      return x.lastEarningsDate ? Math.round((new Date() - new Date(x.lastEarningsDate)) / 86400000) : null;
+    // Days SINCE the last report, mirroring nextEarningsDate's days-to: a raw
+    // date string is nothing anyone can type against, the pricedAt rule. TWO
+    // NAMES, ONE EXPRESSION -- `daysSinceEarnings` is the screen-only key the
+    // starter screens already filter on, `lastEarningsDate` is the column's
+    // own key, and a second copy of this arithmetic is exactly the drift
+    // filters.js exists to prevent.
+    if (key === 'lastEarningsDate' || key === 'daysSinceEarnings') {
+      // LOCAL NOON, not the bare string. `new Date('2026-09-20')` is UTC
+      // midnight, so west of Greenwich it lands on the 19th and every count
+      // here came out a day high -- the cell's tooltip said "10 days ago"
+      // while this said 11, and a `>10` filter then returned rows whose own
+      // tooltip said 10. The card-dating lesson, one line apart.
+      return x.lastEarningsDate
+        ? Math.round((Date.now() - new Date(x.lastEarningsDate + 'T12:00:00').getTime()) / 86400000) : null;
     }
     if (key === 'fresh3mHigh') return x.fresh3mHigh ? 'Yes' : 'No';
     return x[key];
