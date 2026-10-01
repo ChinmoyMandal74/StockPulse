@@ -1480,12 +1480,11 @@
         <th class="group grp-short" data-group="short" colspan="7">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="4">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
-        <th class="group grp-rel" data-group="rel" colspan="11">Relative</th>
+        <th class="group grp-rel" data-group="rel" colspan="15">Relative</th>
         <th class="group grp-trend" data-group="trend" colspan="4">Trend</th>
-        <th class="group grp-vol" data-group="vol" colspan="4">Volume</th>
-        <th class="group grp-size" data-group="size" colspan="11">Size</th>
-        <th class="group grp-fund" data-group="fund" colspan="20">Fundamentals</th>
-        <th class="group grp-own" data-group="own" colspan="6">Ownership</th>
+        <th class="group grp-size" data-group="size" colspan="11">Scale</th>
+        <th class="group grp-fund" data-group="fund" colspan="19">Fundamentals</th>
+        <th class="group grp-own" data-group="own" colspan="7">Ownership</th>
         <th rowspan="2"></th>
       </tr>
       <tr>
@@ -1539,14 +1538,14 @@
         <th class="grp-rel" data-key="crossings" title="How many times the price crossed its own median over the last year. A trending stock crosses once or twice; something trading in a range crosses twenty-five to thirty-five times. Nearly independent of volatility (rank correlation 0.07), so it finds stocks that go back and forth rather than merely quiet ones. Needs a full year of bars.">Cross-<br>ings</th>
         <th class="grp-rel" data-key="bandPct" title="The width of the last year's range as a share of its median price. Not an independent reading — it is 0.89 correlated with volatility — but it is the constraint that separates a real range from a rollercoaster that oscillates across an 80% span.">Band</th>
         <th class="grp-rel" data-key="rsi" title="Relative Strength Index (14-day)">RSI</th>
+        <th class="grp-rel" data-key="volTrend" title="5-day avg volume vs 20-day avg (rising = volume expanding)">Vol<br>Trend</th>
+        <th class="grp-rel" data-key="volX" title="Today's volume against its own 20-day average — 2.0× is twice a normal day. Mid-session this is the volume so far.">Rel<br>vol</th>
+        <th class="grp-rel" data-key="volume" title="Shares traded today (so far, mid-session).">Volume</th>
+        <th class="grp-rel" data-key="dollarVolume" title="The value traded today: volume × price, in the trading currency — what &quot;most active&quot; ranks by.">$<br>Volume</th>
         <th class="grp-trend" data-key="vs50ma" title="Price vs 50-day moving average">vs 50D<br>MA</th>
         <th class="grp-trend" data-key="vs200ma" title="Price vs 200-day moving average">vs 200D<br>MA</th>
         <th class="left grp-trend" data-key="maCrossRank" title="50/200-day MA cross: Golden (50 above 200) or Death, with trading days since the last cross">MA<br>Cross</th>
         <th class="grp-trend" data-key="macdHist" title="MACD histogram (12/26/9) = MACD line − signal; positive = bullish">MACD</th>
-        <th class="grp-vol" data-key="volTrend" title="5-day avg volume vs 20-day avg (rising = volume expanding)">Vol<br>Trend</th>
-        <th class="grp-vol" data-key="volX" title="Today's volume against its own 20-day average — 2.0× is twice a normal day. Mid-session this is the volume so far.">Rel<br>vol</th>
-        <th class="grp-vol" data-key="volume" title="Shares traded today (so far, mid-session).">Volume</th>
-        <th class="grp-vol" data-key="dollarVolume" title="The value traded today: volume × price, in the trading currency — what &quot;most active&quot; ranks by.">$<br>Volume</th>
         <th class="grp-size" data-key="revenueTtm" title="Revenue, trailing twelve months (sum of the last 4 reported quarters), in the company's own reporting currency — do not compare across currencies">Revenue<br>TTM</th>
         <th class="grp-size" data-key="grossProfitTtm" title="Gross profit, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">Gross<br>Profit</th>
         <th class="grp-size" data-key="grossMargin" title="Gross profit ÷ revenue, both trailing twelve months — derived from the two columns to the left so the numbers reconcile">Gross<br>Margin</th>
@@ -1564,7 +1563,6 @@
         <th class="grp-fund" data-key="roe" title="Return on equity (TTM)">ROE</th>
         <th class="grp-fund" data-key="forwardPe" title="Forward price/earnings ratio. Shown for reference but excluded from the Quality score when the company is loss-making, where it carries no meaning.">Fwd<br>P/E</th>
         <th class="grp-fund" data-key="peg" title="PEG ratio — &lt;1 cheap, &gt;2 expensive. Shown for reference but excluded from the Quality score when the company is loss-making: the feed still returns a healthy-looking figure there (0.16 for a company losing $878M), which is meaningless.">PEG</th>
-        <th class="grp-fund" data-key="shortPctFloat" title="Short interest as % of float — high = crowded short / squeeze potential">Short<br>% Fl</th>
         <th class="grp-fund" data-key="trailingPe" title="Trailing price/earnings — the last twelve months of actual earnings, unlike the Fwd P/E beside it, which is an estimate. Blank or meaningless for a loss-maker.">Trail<br>P/E</th>
         <th class="grp-fund" data-key="priceToBook" title="Price ÷ book value per share, most recent quarter. The classic value measure; of little use for asset-light software and misleading for banks.">P/B</th>
         <th class="grp-fund" data-key="priceToSales" title="Price ÷ revenue per share (TTM). The one valuation measure that still works for a company with no profits.">P/S</th>
@@ -1581,6 +1579,7 @@
         <th class="grp-own" data-key="sharesOutstanding" title="Shares outstanding. Watching it fall is a buyback; watching it rise is dilution — and this is the only column that shows either, since market cap mixes the count with the price.">Shares<br>Out</th>
         <th class="grp-own" data-key="floatShares" title="Shares available to trade — outstanding minus closely-held stock.">Float</th>
         <th class="grp-own" data-key="shortRatio" title="Days to cover: shares short ÷ average daily volume. How long the shorts would take to buy back.">Short<br>Ratio</th>
+        <th class="grp-own" data-key="shortPctFloat" title="Short interest as % of float — high = crowded short / squeeze potential. It sits here rather than in Fundamentals because it is a fact about the share register, not about the business, and the Float it is divided by is two columns to the left.">Short<br>% Fl</th>
         <th class="grp-own" data-key="shortPctOutstanding" title="Short interest as % of ALL shares, not just the float — the stricter of the two short measures.">Short<br>% Out</th>
         <th class="grp-own" data-key="insiderPct" title="Percentage of shares held by insiders — founders and management.">Insiders</th>
         <th class="grp-own" data-key="institutionPct" title="Percentage of shares held by institutions — funds, pensions and the like.">Instit.</th>
@@ -1643,13 +1642,17 @@
     // looks available, and a stale copy here can at worst offer a click the
     // server then declines with its own sentence.
     const BENCH_LOCK = new Set(['SPY', 'QQQ', 'IWM', 'DIA']);
-    const GROUPS = ['info', 'rank', 'act', 'chart', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund', 'own'];
+    // Volume was a banner of its own over four columns, three of which are
+    // hidden site-wide — a heading over one visible reading. Its columns sit in
+    // Relative now, where a volume figure measured against the stock's own
+    // 20-day average already belonged.
+    const GROUPS = ['info', 'rank', 'act', 'chart', 'short', 'long', 'fwd', 'rel', 'trend', 'size', 'fund', 'own'];
     const GROUP_COLORS = {
       // Warm neutral, and the only unused region of the palette: every other
       // group is a family of numbers, this one is a picture.
       info: '#7c9cff', rank: '#a3e635', act: '#5eead4', chart: '#a8a29e',
       short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
-      rel:  '#22d3ee', trend: '#fbbf24', vol:  '#f472b6',
+      rel:  '#22d3ee', trend: '#fbbf24',
       size: '#94a3b8', fund: '#fb7185', own: '#f0abfc',
     };
     // Labels live here so adding a group later is: append to GROUPS, give it a
@@ -1657,8 +1660,11 @@
     const GROUP_LABELS = {
       info: 'Info', rank: 'Scores', act: 'Advice', chart: 'Chart',
       short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
-      rel: 'Relative', trend: 'Trend', vol: 'Volume',
-      size: 'Size', fund: 'Fundamentals', own: 'Ownership',
+      rel: 'Relative', trend: 'Trend',
+      // Scale, not Size: there is a Size COLUMN in Info (the cap band), and a
+      // banner and a column answering to one word is a collision. The group id
+      // stays `size`, so no saved view, screen, tile or collapse key moves.
+      size: 'Scale', fund: 'Fundamentals', own: 'Ownership',
     };
     const collapsed = {};
     GROUPS.forEach((g) => (collapsed[g] = false));
@@ -3416,14 +3422,14 @@
           ${rangeCell(s.crossings, 'grp-rel', liveTitle)}
           ${rangeCell(s.bandPct, 'grp-rel', liveTitle)}
           ${rsiCell(s.rsi, 'grp-rel', liveTitle)}
+          ${pctCell(s.volTrend, 'grp-rel', liveTitle)}
+          ${relVolCell(s.volX, 'grp-rel', liveTitle)}
+          ${bigNumCell(s.volume, null, 'grp-rel', liveTitle)}
+          ${bigNumCell(s.dollarVolume, s.currency || 'USD', 'grp-rel', liveTitle)}
           ${pctCell(s.vs50ma, 'grp-trend', liveTitle)}
           ${pctCell(s.vs200ma, 'grp-trend', liveTitle)}
           ${maCrossCell(s)}
           ${macdCell(s)}
-          ${pctCell(s.volTrend, 'grp-vol', liveTitle)}
-          ${relVolCell(s.volX, 'grp-vol', liveTitle)}
-          ${bigNumCell(s.volume, null, 'grp-vol', liveTitle)}
-          ${bigNumCell(s.dollarVolume, s.currency || 'USD', 'grp-vol', liveTitle)}
           ${isFund ? naRun(11, 'grp-size') : `
           ${capCell(s.revenueTtm, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.grossProfitTtm, s.currency, 'grp-size', cacheTitle)}
@@ -3436,14 +3442,13 @@
           ${capCell(s.totalDebt, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.ebitda, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.operatingCashFlowTtm, s.currency, 'grp-size', cacheTitle)}`}
-          ${isFund ? naRun(7, 'grp-fund') : `
+          ${isFund ? naRun(6, 'grp-fund') : `
           ${pctCell(s.earningsGrowthYoY, 'grp-fund', cacheTitle)}
           ${pctCell(s.revenueGrowthYoY, 'grp-fund', cacheTitle)}
           ${pctCell(s.profitMargin, 'grp-fund', cacheTitle)}
           ${pctCell(s.roe, 'grp-fund', cacheTitle)}
           ${numCell(s.forwardPe, 'grp-fund', cacheTitle)}
-          ${pegCell(s.peg, 'grp-fund', cacheTitle)}
-          ${shortCell(s.shortPctFloat, 'grp-fund', cacheTitle)}`}
+          ${pegCell(s.peg, 'grp-fund', cacheTitle)}`}
           ${numCell(s.trailingPe, 'grp-fund', cacheTitle)}
           ${isFund ? naRun(8, 'grp-fund') : `
           ${numCell(s.priceToBook, 'grp-fund', cacheTitle)}
@@ -3458,10 +3463,11 @@
           ${isFund ? naRun(1, 'grp-fund') : marginCell(s.payoutRatio, 'grp-fund', cacheTitle)}
           ${isFund ? naRun(1, 'grp-fund') : reportedCell(s)}
           ${resultsCell(s)}
-          ${isFund ? naRun(6, 'grp-own') : `
+          ${isFund ? naRun(7, 'grp-own') : `
           ${bigNumCell(s.sharesOutstanding, null, 'grp-own', cacheTitle)}
           ${bigNumCell(s.floatShares, null, 'grp-own', cacheTitle)}
           ${numCell(s.shortRatio, 'grp-own', cacheTitle)}
+          ${shortCell(s.shortPctFloat, 'grp-own', cacheTitle)}
           ${shortCell(s.shortPctOutstanding, 'grp-own', cacheTitle)}
           ${marginCell(s.insiderPct, 'grp-own', cacheTitle)}
           ${marginCell(s.institutionPct, 'grp-own', cacheTitle)}`}

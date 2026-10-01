@@ -172,6 +172,13 @@
                                         month: 'short', hour: 'numeric', minute: '2-digit' }),
                                       c: Date.now() - s.pricedAt > 86400000 ? 'warn' : '' })],
     ['short', 'Today',          (s) => V.pct(s.todayPct)],
+    // Beside the percentage it is derived from, which is where the table has
+    // kept it all along — it sat in the Volume group here only because that
+    // was where the other money readings were, and that group has gone.
+    // signedMoney, not money: this is a CHANGE, so it takes the up/down colour
+    // the percentage above it takes, and a zero reads positive in both for the
+    // same reason.
+    ['short', 'Value added',    (s) => V.signedMoney(s.capChangeToday, s.currency || 'USD')],
     ['short', 'YDAY',           (s) => V.pct(s.yesterdayPct)],
     ['short', '1W',             (s) => V.pct(s.oneWeekPct)],
     ['short', '2W',             (s) => V.pct(s.twoWeekPct)],
@@ -199,6 +206,14 @@
     ['rel',   'Crossings',      (s) => V.count(s.crossings)],
     ['rel',   'Band',           (s) => V.num(s.bandPct, 0)],
     ['rel',   'RSI',            (s) => V.rsi(s.rsi)],
+    // Volume used to be a group of its own. Both of these are a volume read
+    // against the stock's OWN recent average — a relative reading by
+    // construction, which is why Relative is where they belong rather than a
+    // banner over them; $ volume comes along because it is the same column
+    // block on the table.
+    ['rel',   'Vol trend',      (s) => V.pct(s.volTrend)],
+    ['rel',   'Rel. volume',    (s) => (ok(s.volX) ? { t: s.volX.toFixed(2) + '×', c: s.volX >= 1.5 ? 'warn' : '', n: s.volX, u: 'num' } : null)],
+    ['rel',   '$ volume',       (s) => V.money(s.dollarVolume, s.currency || 'USD')],
     ['trend', 'vs 50D MA',      (s) => V.pct(s.vs50ma)],
     ['trend', 'vs 200D MA',     (s) => V.pct(s.vs200ma)],
     ['trend', 'MA cross',       (s) => {
@@ -217,15 +232,6 @@
     // something is on the histogram above.
     ['trend', 'MACD line',      (s) => V.num(s.macdLine, 2)],
     ['trend', 'MACD signal',    (s) => V.num(s.macdSignal, 2)],
-    ['vol',   'Vol trend',      (s) => V.pct(s.volTrend)],
-    ['vol',   'Rel. volume',    (s) => (ok(s.volX) ? { t: s.volX.toFixed(2) + '\u00d7', c: s.volX >= 1.5 ? 'warn' : '', n: s.volX, u: 'num' } : null)],
-    ['vol',   '$ volume',       (s) => V.money(s.dollarVolume, s.currency || 'USD')],
-    // Value added today lives in the Short-term group on the table, beside the
-    // percentage it is derived from; here it sits with the other money.
-    // signedMoney, not money: this is a CHANGE, so it takes the up/down colour
-    // the percentage beside it on the table takes, and a zero reads positive in
-    // both for the same reason.
-    ['vol',   'Value added',    (s) => V.signedMoney(s.capChangeToday, s.currency || 'USD')],
     ['size',  'Revenue TTM',    (s) => V.money(s.revenueTtm, s.currency)],
     ['size',  'Gross profit',   (s) => V.money(s.grossProfitTtm, s.currency)],
     ['size',  'Gross margin',   (s) => V.lvl(s.grossMargin)],
@@ -254,7 +260,6 @@
     ['fund',  'ROE',            (s) => V.pct(s.roe)],
     ['fund',  'Fwd P/E',        (s) => V.num(s.forwardPe)],
     ['fund',  'PEG',            (s) => V.peg(s.peg)],
-    ['fund',  'Short % float',  (s) => V.short(s.shortPctFloat)],
     ['fund',  'Trailing P/E',   (s) => V.num(s.trailingPe)],
     ['fund',  'P/B',            (s) => V.num(s.priceToBook)],
     ['fund',  'P/S',            (s) => V.num(s.priceToSales)],
@@ -289,22 +294,29 @@
     ['own',   'Float',          (s) => V.count(s.floatShares)],
     ['own',   'Book value/share',(s) => V.num(s.bookValuePerShare, 2)],
     ['own',   'Short ratio',    (s) => V.num(s.shortRatio)],
+    // It was in Fundamentals and is not a fact about the business: it is the
+    // share register, and the Float it divides by is two rows up. Its two
+    // siblings were already here.
+    ['own',   'Short % float',  (s) => V.short(s.shortPctFloat)],
     ['own',   'Short % out',    (s) => V.short(s.shortPctOutstanding)],
     ['own',   'Insiders',       (s) => V.lvl(s.insiderPct)],
     ['own',   'Institutions',   (s) => V.lvl(s.institutionPct)],
   ];
 
-  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'trend', 'vol', 'size', 'fund', 'own'];
+  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'trend', 'size', 'fund', 'own'];
   // The palette lives here because this file already owns GROUP_ORDER and
   // FIELD_SPEC. index.html keeps its own copy — it also colours the table's
   // group banners and the columns menu — so those two must stay in step.
   const GROUP_COLORS = {
     info: '#7c9cff', rank: '#a3e635', act: '#5eead4', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
-    rel: '#22d3ee', trend: '#fbbf24', vol: '#f472b6', size: '#94a3b8', fund: '#fb7185', own: '#f0abfc',
+    rel: '#22d3ee', trend: '#fbbf24', size: '#94a3b8', fund: '#fb7185', own: '#f0abfc',
   };
+  // `size` is labelled Scale because there is a Size COLUMN in Info (the cap
+  // band). The group ID is unchanged, so every saved key that names it still
+  // resolves — a label is free to change in a way a group id is not.
   const GROUP_LABELS = {
     info: 'Info', rank: 'Scores', act: 'Advice', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
-    rel: 'Relative', trend: 'Trend', vol: 'Volume', size: 'Size', fund: 'Fundamentals', own: 'Ownership',
+    rel: 'Relative', trend: 'Trend', size: 'Scale', fund: 'Fundamentals', own: 'Ownership',
   };
 
   // ---- price history -------------------------------------------------------

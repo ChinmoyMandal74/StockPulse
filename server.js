@@ -8366,11 +8366,14 @@ app.delete('/api/admin/posts/image/:id', requireAdmin, route(async (req, res) =>
 // GROUP_ORDER. The LABEL is only shape-checked: it is rowcard's own text, the
 // browser ignores a key it no longer knows, and renaming a field there should
 // not need an edit here.
-const TILE_GROUPS = ['info', 'rank', 'act', 'chart', 'short', 'long', 'rel', 'trend', 'vol', 'size', 'fund', 'own'];
 // A literal, not a built string: inside a template literal `\|` collapses to a
 // bare pipe, which made this "one of the groups, OR anything at all" — the
 // test caught a field key of `evil|drop table` being stored.
-const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|trend|vol|size|fund|own)\|[^|]{1,32}$/;
+// `vol` is gone from the list because the group is: its columns moved into
+// Relative, so a `vol|…` key names nothing the catalogue can answer. (A
+// `TILE_GROUPS` array sat above this and was read by nothing — a second copy
+// of the list that could only ever drift out of step with the regex.)
+const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|trend|size|fund|own)\|[^|]{1,32}$/;
 const TILE_SPARK_DAYS = [0, 21, 63, 126, 252];
 const TILE_FIELDS_MAX = 6;   // six reads as a tile; eight reads as a table cell
 const TILE_HEIGHTS = [44, 72, 110];

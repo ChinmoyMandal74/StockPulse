@@ -970,6 +970,95 @@ the window's throughput, not its design.
 
 ---
 
+## 19. Rebuilding the phone page — 2026-10-01
+
+**The owner's instruction, given while regrouping the screener's columns:
+"Ignore Mobile app, Lets rebuild it later, Add this to backlog."** So `/m` and
+`/mobile-setup` were deliberately left out of that change, and this entry is
+what a rebuild needs to know before it starts.
+
+### The one real defect, measured rather than inferred
+**A field key the catalogue no longer knows draws a LABELLED ROW WITH AN
+EM-DASH, which reads as missing DATA rather than as a missing field** — the
+more expensive of the two failures, because the reader concludes the figure is
+unavailable for that company.
+
+Measured through the real route on 2026-10-01, not read off the constant:
+
+```
+views offered: move(4) verdict(4) value(4)
+  Move:    names 4 -> draws 4  [Today=+1.2% | 1W=+2.0% | 1M=+3.0% | 1Y=+20.0%]
+  Verdict: names 4 -> draws 4  [Advice=Hold | Trend=No data | Entry=None | Overall=—]
+  Value:   names 4 -> draws 4  [Fwd P/E=22.0 | ROE=+21.0% | Profit margin=+16.0% | Market Cap=$50.0B]
+```
+
+- **`rank|Overall` has been dead since 2026-09-23**, when the composite was
+  removed. It is in `MOBILE_DEFAULT.views`, and **`cleanMobileConfig` filters
+  unknown keys out of a SAVED config and then returns `MOBILE_DEFAULT.views`
+  VERBATIM when nothing is stored** (`views.length ? views : MOBILE_DEFAULT.views`)
+  — so the default is the one list nothing cleans, and it is the list in force.
+- **An earlier note of mine said the view "silently serves 3 of 4 fields". That
+  was wrong and this is the correction**: it serves four, one of them
+  permanently blank. A row that is absent would at least look deliberate.
+- Two candidate fixes, and they are different decisions: run the default
+  through `cleanMobileConfig` like everything else (so the view loses the row),
+  or make `mobileRow` omit a row whose key the catalogue cannot answer (so no
+  stale key anywhere can ever print an em-dash). The second is the one that
+  covers the hazard rather than this instance of it.
+
+### The key scheme is what makes a regrouping a migration
+A stored field key is **`groupId|columnLabel`** (`fieldCatalogue()`:
+`key: g + '|' + label`). So **moving a column between groups, or relabelling
+one, invalidates every saved tile and mobile key that names it** — while a
+*group's* display label is free to change, because `GROUP_LABELS` maps id to
+label separately. That asymmetry is why Size could become Scale for nothing
+and why the other two fixes needed thought.
+
+**What today's regrouping actually cost, measured against production before
+shipping:**
+
+| | |
+|---|---|
+| `mobile_config` | **not set** — the live phone runs `MOBILE_DEFAULT` |
+| `tile_config` | set, 6 keys: `short|1W`, `short|1M`, `rel|% from 52W hi`, `trend|vs 50D MA`, `trend|vs 200D MA`, `fund|Earn grth Q YoY` |
+| keys the change moved | `fund|Short % float` → `own|Short % float`; `vol|Vol trend` / `vol|Rel. volume` / `vol|$ volume` → `rel|…`; `vol|Value added` → `short|Value added` |
+| stored keys broken | **0 of 6 tile keys, 0 mobile keys** |
+| catalogue | 102 fields across 11 groups |
+
+**The column VIEWS, the screens and `/columns` were untouched by the same move,
+because all three key on column IDs** — which survive regrouping by
+construction. That is the argument for a rebuild keying tile and mobile fields
+on something stable too, rather than on a pair of display strings.
+
+### What a rebuild should keep
+Every one of these is load-bearing and was expensive to get right:
+
+- **The rows are formatted SERVER-SIDE through `RowCard.fieldValues()`**, so a
+  number cannot read one way on a phone and another on the screener. `/api/stocks`
+  is ~1.3MB; a trimmed row payload is a few KB.
+- **Screens are evaluated by `private/filters.js`**, the module the server
+  `require`s and the pages load — one definition of the grammar.
+- **`stockCard()` is shared with the desktop's Tiles view.** One renderer, two
+  surfaces.
+- **Guests are narrowed server-side on every route** (`mobileRows()` before any
+  screen is evaluated), which is the CDN incident's lesson.
+- **No poller and no service worker, deliberately**: a reload is how you get new
+  data and it must actually get it. Only three display choices live in
+  `localStorage` (`m.view`, `m.chart`, `m.range`) — per-device conveniences, and
+  a guest has no prefs key at all.
+- **Tile and mobile setup are SITE-WIDE and admin-only** (the owner's call: the
+  tiles are what gets shared, so a per-member choice would make the same
+  screenshot mean different things).
+
+### What is not known
+No scope, no size and no measured cost — the owner said rebuild, not what to
+rebuild. The questions worth putting to them first: whether the phone should
+keep views at all (three of six slots are used and one has been broken for a
+week), and whether it is a page or a shell for the cards, which `stockCard()`
+already draws at 1080px.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
