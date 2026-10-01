@@ -2868,17 +2868,22 @@ app.post('/api/users/:id/status', requireAdmin, route(async (req, res) => {
   const target = users.find((u) => u.id === id);
   if (!target) return res.status(404).json({ error: 'User not found.' });
 
-  // ONE GUARD, NOT DELETE'S TWO (owner, 2026-10-01: "You can disable any user
-  // except me"). Delete refuses an admin outright because it is irreversible
-  // and takes `fundamentals_history`-grade data with it; disable takes nothing
-  // and Enable puts it all back, so the asymmetry is the point rather than an
-  // oversight. An admin may therefore be switched off — including by another
-  // admin — and switched back on.
+  // THE SAME TWO GUARDS DELETE HAS. The owner asked first for "any user
+  // except me" and then, once the gap below was reported, for "don't disable
+  // the admin" — so the rule is the target's ROLE, not who is asking.
   //
-  // The one thing that must not happen is revoking your OWN session
-  // mid-request and landing yourself at the login page. With a single admin
-  // that is also the complete protection of the admin account, since the only
-  // person who could reach this is signed in as it.
+  // THAT DISTINCTION IS THE WHOLE REASON THE SELF-GUARD WAS NOT ENOUGH. A
+  // session minted by the `ADMIN_PASSWORD` escape hatch has no user row, so
+  // `currentUser` is null and the self-guard cannot fire — anyone on that
+  // hatch could have switched the admin row off. Guarding on the role closes
+  // that, because it does not depend on knowing who is asking.
+  if (isAdminRole(target.role)) {
+    return res.status(409).json({ error: 'An admin account cannot be switched off. Change the role to member first.' });
+  }
+  // And still never your own session, which would revoke it mid-request and
+  // land you at the login page. Kept even though the role guard already
+  // covers today's single admin: it is the rule that stays true the day a
+  // member can reach this.
   const me = await currentUser(req);
   if (me && me.id === id) {
     return res.status(409).json({ error: 'You cannot switch off the account you are signed in as.' });

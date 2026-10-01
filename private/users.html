@@ -193,7 +193,7 @@
         'New registrations wait here as <b>pending</b> until approved — they cannot sign in before that, and Delete is how a request is declined. ' +
         '<b>Disable</b> is the reversible one: the account is signed out everywhere and cannot sign in, but its themes, views, saved layout and chat usage are all kept, so Enable puts the person back exactly where they were. ' +
         'Deleting an account destroys all of that and cannot be undone. ' +
-        'Any account can be disabled except the one you are signed in as. An <b>admin</b> account cannot be <b>deleted</b> — change the role to member first — because that one cannot be undone.';
+        'An <b>admin</b> account can be neither disabled nor deleted — change the role to member first — and nor can the account you are signed in as.';
     }
 
     // 'owner' was renamed to 'admin' on 2026-09-26 and is still accepted on
@@ -207,15 +207,12 @@
       // Mirrors the server: NO admin may be deleted, not merely the last.
       const blocked = isMe || isAdminRole(u.role);
       const isOff = u.status === 'disabled';
-      // DELIBERATELY NOT `blocked` — disable has ONE guard where delete has
-      // two. An admin may be switched off (it is reversible and destroys
-      // nothing); only the account you are signed in as may not, because that
-      // would revoke your own session mid-request.
-      //
-      // Pending is excluded for a different kind of reason: that registration
-      // already has Approve and Delete, and Enable on it would be a silent
-      // second Approve that skips the welcome email approval exists to send.
-      const noFlip = isMe || u.status === 'pending';
+      // The same two guards as Delete — an admin is never switched off, and
+      // never the account you are signed in as — plus pending, which is
+      // excluded for a different kind of reason: that registration already
+      // has Approve and Delete, and Enable on it would be a silent second
+      // Approve that skips the welcome email approval exists to send.
+      const noFlip = blocked || u.status === 'pending';
       return `<tr class="${isOff ? 'offrow' : ''}">
         <td class="uname">${u.name ? esc(u.name) : '<span class="noname">—</span>'}</td>
         <td class="email">${u.activeSessions > 0 ? '<span class="dot" title="Signed in"></span>' : ''}${esc(u.email)}${isMe ? '<span class="you">you</span>' : ''}</td>
