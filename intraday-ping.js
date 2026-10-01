@@ -93,6 +93,29 @@ class Stop extends Error {
   constructor(code) { super('stop'); this.code = code; }
 }
 
+// A DEATH OUTSIDE THE TRY LEAVES NO TRACE WITHOUT THIS, and it has happened:
+// news-ping.js lost the 13:00 lap of 2026-10-01 that way -- twelve batches on
+// the server, eleven in the log, exit 1, no FAILED line, no crash record. Task
+// Scheduler discards stderr, so the log is the only record this job has, and
+// every deliberate failure path below writes to it. These two handlers cannot
+// prevent the death; they make it diagnosable. Thirteen firings a day makes a
+// silent one here especially easy to miss.
+//
+// process.exit, against the rule directly above, and it is NOT optional here:
+// registering either handler suppresses Node's own exit, so the process would
+// survive the fault and run on to its normal ending, overwriting exitCode 1
+// with 0 -- a green task with a FAILED line above it. The log write is
+// synchronous and already on disk by then, so even the Windows
+// UV_HANDLE_CLOSING assertion leaves the evidence and a non-zero code, which
+// is all that is asked of a run that has already failed.
+for (const ev of ['uncaughtException', 'unhandledRejection']) {
+  process.on(ev, (err) => {
+    const detail = err && err.stack ? err.stack : String(err);
+    say(`FAILED  ${ev} -- ${detail.split('\n').slice(0, 4).join(' | ')}`);
+    process.exit(1);
+  });
+}
+
 (async () => {
   try {
     const secret = fromEnvFile('CRON_SECRET');

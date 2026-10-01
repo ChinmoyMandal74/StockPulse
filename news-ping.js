@@ -105,6 +105,37 @@ class Stop extends Error {
   constructor(code) { super('stop'); this.code = code; }
 }
 
+// A DEATH OUTSIDE THE TRY USED TO LEAVE NO TRACE AT ALL, and that is how the
+// 13:00 lap of 2026-10-01 was lost: twelve batches landed on the server, the
+// log recorded eleven, and the task reported exit 1 with no FAILED line and no
+// Windows crash record. Every failure path below writes through say(), so a run
+// that dies without one has not reached any catch -- it threw or rejected in a
+// callback outside it, and Node printed the reason to a stderr that Task
+// Scheduler discards. The log is the ONLY record this job has.
+//
+// So the last two exits are covered here. They cannot prevent the death; they
+// make it diagnosable, which is the whole difference between a lap that failed
+// and a lap that merely stopped. The stack is logged rather than the message:
+// the cause is still unknown, and a bare "socket hang up" would not name it.
+//
+// AND THIS IS THE ONE PLACE process.exit IS RIGHT, against the rule directly
+// above. Registering either handler SUPPRESSES Node's own exit, so the process
+// survives the fault and the async body runs on to `DONE` and `throw new
+// Stop(0)` -- which overwrites exitCode 1 with 0. The first cut of this guard
+// did exactly that and turned a loud death into a green task with DONE logged
+// underneath FAILED: strictly worse than no guard at all, and caught by the
+// test rather than by reading it. The log write above is synchronous and
+// already on disk, so even if the UV_HANDLE_CLOSING assertion fires on the way
+// out the evidence survives and the code stays non-zero, which is all that is
+// asked of a run that has already failed.
+for (const ev of ['uncaughtException', 'unhandledRejection']) {
+  process.on(ev, (err) => {
+    const detail = err && err.stack ? err.stack : String(err);
+    say(`FAILED  ${ev} -- ${detail.split('\n').slice(0, 4).join(' | ')}`);
+    process.exit(1);
+  });
+}
+
 (async () => {
   try {
     const secret = fromEnvFile('CRON_SECRET');
