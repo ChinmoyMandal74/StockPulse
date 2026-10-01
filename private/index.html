@@ -1752,6 +1752,25 @@
       if (n == null || !isFinite(n)) return `<td class="na ${cls}"${t}>—</td>`;
       return `<td class="${cls}"${t}>${n.toFixed(1)}</td>`;
     }
+    // ---- NA, for a fund (2026-10-01, owner's request) ----------------------
+    //
+    // Size and Ownership, and most of Fundamentals, do not APPLY to an ETF —
+    // and the vendor's answer is worse than a blank: ten of the eleven Size
+    // columns come back as a real zero, so this table printed `$0` revenue
+    // for SPY. `RowCard.isFund` is the one definition of the test (the
+    // vendor's `instrumentType`, never classify()'s guess) and the reasoning
+    // sits beside it there.
+    //
+    // A RUN AT A TIME rather than a ternary per cell, so a column added
+    // inside one of these groups inherits the rule instead of being the one
+    // cell that still prints a zero. `naRun` is given the count the group's
+    // own banner declares, and `cols-test.js` asserts every banner spans
+    // exactly its own cells — so a run that drifts from its colspan is
+    // caught there rather than silently shifting every header right.
+    const NA_TIP = 'Not applicable — this is a fund';
+    function naRun(n, cls) {
+      return `<td class="na ${cls}" title="${NA_TIP}">NA</td>`.repeat(n);
+    }
     // Absolute money, in the company's own reporting currency.
     function capCell(n, code, cls = '', title = '') {
       const t = attr(title);
@@ -3252,6 +3271,8 @@
               ? `Cached ${fmtDateTime(s.profileFetchedAt)} — auto-refreshes daily (Refresh All to force)`
               : 'Not fetched yet — backfills over the next refreshes');
         const fwdTitle = 'Forward return after the as-of date (what happened next)';
+        // Read ONCE per row, not per cell: 36 of them ask.
+        const isFund = RowCard.isFund(s);
         return `<tr style="--i:${i}">
           ${symbolCell(s, freshest)}
           ${shortNameCell(s)}
@@ -3309,6 +3330,7 @@
           ${relVolCell(s.volX, 'grp-vol', liveTitle)}
           ${bigNumCell(s.volume, null, 'grp-vol', liveTitle)}
           ${bigNumCell(s.dollarVolume, s.currency || 'USD', 'grp-vol', liveTitle)}
+          ${isFund ? naRun(11, 'grp-size') : `
           ${capCell(s.revenueTtm, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.grossProfitTtm, s.currency, 'grp-size', cacheTitle)}
           ${marginCell(s.grossMargin, 'grp-size', cacheTitle)}
@@ -3319,15 +3341,17 @@
           ${capCell(s.totalCash, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.totalDebt, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.ebitda, s.currency, 'grp-size', cacheTitle)}
-          ${capCell(s.operatingCashFlowTtm, s.currency, 'grp-size', cacheTitle)}
+          ${capCell(s.operatingCashFlowTtm, s.currency, 'grp-size', cacheTitle)}`}
+          ${isFund ? naRun(7, 'grp-fund') : `
           ${pctCell(s.earningsGrowthYoY, 'grp-fund', cacheTitle)}
           ${pctCell(s.revenueGrowthYoY, 'grp-fund', cacheTitle)}
           ${pctCell(s.profitMargin, 'grp-fund', cacheTitle)}
           ${pctCell(s.roe, 'grp-fund', cacheTitle)}
           ${numCell(s.forwardPe, 'grp-fund', cacheTitle)}
           ${pegCell(s.peg, 'grp-fund', cacheTitle)}
-          ${shortCell(s.shortPctFloat, 'grp-fund', cacheTitle)}
+          ${shortCell(s.shortPctFloat, 'grp-fund', cacheTitle)}`}
           ${numCell(s.trailingPe, 'grp-fund', cacheTitle)}
+          ${isFund ? naRun(8, 'grp-fund') : `
           ${numCell(s.priceToBook, 'grp-fund', cacheTitle)}
           ${numCell(s.priceToSales, 'grp-fund', cacheTitle)}
           ${numCell(s.evToEbitda, 'grp-fund', cacheTitle)}
@@ -3335,16 +3359,17 @@
           ${pctCell(s.roa, 'grp-fund', cacheTitle)}
           ${numCell(s.dilutedEpsTtm, 'grp-fund', cacheTitle)}
           ${numCell(s.debtToEquity, 'grp-fund', cacheTitle)}
-          ${numCell(s.currentRatio, 'grp-fund', cacheTitle)}
+          ${numCell(s.currentRatio, 'grp-fund', cacheTitle)}`}
           ${marginCell(s.divYield, 'grp-fund', cacheTitle)}
-          ${marginCell(s.payoutRatio, 'grp-fund', cacheTitle)}
-          ${reportedCell(s)}
+          ${isFund ? naRun(1, 'grp-fund') : marginCell(s.payoutRatio, 'grp-fund', cacheTitle)}
+          ${isFund ? naRun(1, 'grp-fund') : reportedCell(s)}
+          ${isFund ? naRun(6, 'grp-own') : `
           ${bigNumCell(s.sharesOutstanding, null, 'grp-own', cacheTitle)}
           ${bigNumCell(s.floatShares, null, 'grp-own', cacheTitle)}
           ${numCell(s.shortRatio, 'grp-own', cacheTitle)}
           ${shortCell(s.shortPctOutstanding, 'grp-own', cacheTitle)}
           ${marginCell(s.insiderPct, 'grp-own', cacheTitle)}
-          ${marginCell(s.institutionPct, 'grp-own', cacheTitle)}
+          ${marginCell(s.institutionPct, 'grp-own', cacheTitle)}`}
           ${removeBtn}
         </tr>`;
     }

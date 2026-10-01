@@ -797,6 +797,57 @@
   // Which groups carry rows that can explain themselves.
   const TIP_GROUPS = ['rank'];
 
+  // ---- a fund has no company fundamentals (2026-10-01, owner's request) ----
+  //
+  // For an ETF the Size and Ownership groups, and most of Fundamentals, are
+  // not merely unknown — they do not apply. And the vendor's answer is WORSE
+  // than silence: measured on the 24 funds in the universe, ten of the eleven
+  // Size columns come back as a real ZERO, so the screener printed `$0`
+  // revenue and `$0` EBITDA for SPY, which reads as a fact about the fund
+  // rather than as an absence. FCF yield and net cash % then render `0.0%`
+  // off those same zeros. So NA here is a correction, not a cosmetic.
+  //
+  // KEYED ON `instrumentType`, the vendor's own label for what the security
+  // IS — never on classify()'s `companyType`, which is a heuristic ("no
+  // Quality and no P/E") that types every loss-maker a fund wherever Quality
+  // is withheld; on /adjusted that was 263 of 1,084 rows. Printing NA over a
+  // real company's revenue is the expensive direction, and `instrumentType`
+  // can only ever UNDER-catch: a fund whose profile predates the field keeps
+  // today's blanks. Measured: all 24 carry it, and classify() agrees on
+  // exactly the same 24, so nothing is lost by taking the safer field.
+  //
+  // FIVE FIELDS A FUND REALLY HAS, and they are deliberately not overwritten.
+  // Measured on the same 24: a distribution yield (22/24, SPY 0.7%), its rate
+  // (22/24, $4.42), the ex-dividend date (22/24), the last split (11/24 —
+  // funds do split) and a weighted trailing P/E (23/24, XLE 12.7 against
+  // XLK 41.5). A distribution yield is one of the most-read numbers about an
+  // ETF; NA there would destroy a true figure to satisfy a rule about the
+  // group it happens to sit in.
+  const FUND_NA_GROUPS = ['size', 'own', 'fund'];
+  const FUND_HAS = new Set([
+    'fund|Trailing P/E', 'fund|Dividend yield', 'fund|Dividend rate',
+    'fund|Ex-dividend', 'fund|Last split',
+  ]);
+
+  function isFund(s) { return !!s && s.instrumentType === 'ETF'; }
+
+  function notApplicable(g, label, s) {
+    return isFund(s) && FUND_NA_GROUPS.indexOf(g) >= 0
+      && !FUND_HAS.has(g + '|' + label);
+  }
+
+  // THE ONE PLACE A GETTER IS EVALUATED, so `buildSections` and `fieldValues`
+  // cannot disagree about a fund — the drift this file exists to prevent, and
+  // the reason this is a helper rather than the same clause written twice.
+  //
+  // No `n`, so /compare withholds the difference and draws no bar: an NA
+  // against a real number is not a gap of any size. No `b` either — that is
+  // the bold flag the ratings use.
+  function readField(g, label, get, s, ctx) {
+    if (notApplicable(g, label, s)) return { t: 'NA', c: 'na' };
+    try { return get(s, ctx); } catch { return null; }
+  }
+
   // Every field a row can show, as a stable key — `group|label`. The tiles pick
   // a SUBSET of these, and reading them from FIELD_SPEC means the tile shows
   // exactly what the hover card shows for the same field, formatted the same
@@ -816,6 +867,11 @@
       const seen = new Set();
       const probe = new Proxy({}, { get: (t, k) => { if (typeof k === 'string') seen.add(k); return undefined; } });
       try { get(probe, {}); } catch { /* a getter that needs a real value still recorded its reads */ }
+      // `readField` consults `instrumentType` for these groups before the
+      // getter is ever called, so a row trimmed to this list would lose the
+      // fund test and silently stop saying NA. Nothing trims by this today;
+      // it is recorded because that is what this function claims to answer.
+      if (FUND_NA_GROUPS.indexOf(g) >= 0 && !FUND_HAS.has(g + '|' + label)) seen.add('instrumentType');
       out[g + '|' + label] = [...seen];
     }
     return out;
@@ -832,8 +888,7 @@
     const ctx = {};
     const out = {};
     for (const [g, label, get] of FIELD_SPEC) {
-      let v = null;
-      try { v = get(s, ctx); } catch { v = null; }
+      const v = readField(g, label, get, s, ctx);
       out[g + '|' + label] = v
         ? { t: v.t, c: v.c || '', n: v.n == null ? null : v.n, u: v.u || null }
         : null;
@@ -858,8 +913,7 @@
     const byGroup = {};
     for (const [g, label, get] of FIELD_SPEC) {
       if (skip.has(g + '|' + label)) continue;
-      let v = null;
-      try { v = get(s, ctx); } catch { v = null; }
+      const v = readField(g, label, get, s, ctx);
       (byGroup[g] = byGroup[g] || []).push({
         k: label,
         t: v ? v.t : '—',
@@ -1113,7 +1167,7 @@
     buildSections, chartSVG, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries, stepSeries, fmtMktCap,
     scoreTip, placeTip,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS,
-    fieldCatalogue, fieldValues, fieldProps,
+    fieldCatalogue, fieldValues, fieldProps, isFund,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
 // Loadable in Node as well as the browser (2026-09-16): the server asks
