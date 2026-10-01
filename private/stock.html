@@ -1259,8 +1259,27 @@
           parts.push('reported ' + when + (t ? ', ' + t.toLowerCase() : ''));
         }
       }
-      const next = d(s.nextEarningsDate);
-      if (next) parts.push('next due ' + next);
+      // TWO things this clause got wrong, both reported against Loews (L),
+      // whose line read "next due 8 Sept 2026" three weeks after that date.
+      //
+      // `nextEarningsEstimated` means WE derived it — the last report plus 91
+      // days — rather than the vendor confirming it. The Next Earn column has
+      // always marked that with a leading `~`; this line stated the estimate
+      // as a fact. And a date in the PAST cannot be "next due" at all.
+      // Measured on the live screen the day it was found: 51 of 1,188 rows
+      // carry a next-earnings date that has passed and EVERY ONE of them is
+      // an estimate — a confirmed date never goes stale, our +91 guess lapses
+      // the moment the real report slips past it. So the honest statement is
+      // about our own record rather than about the company, which may well
+      // have reported without the vendor telling us.
+      const nd = s.nextEarningsDate;
+      const next = d(nd);
+      if (next) {
+        const about = s.nextEarningsEstimated ? 'about ' : '';
+        parts.push(String(nd) >= today
+          ? 'next due ' + about + next
+          : 'due ' + about + next + ', not yet recorded');
+      }
       const pulled = payload.company && payload.company.fetchedAt;
       if (pulled) {
         const days = Math.floor((Date.now() - Number(pulled)) / 86400000);
