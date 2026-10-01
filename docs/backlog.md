@@ -877,6 +877,99 @@ knowing for a few hundred lines of effort rather than a few thousand.
 
 ---
 
+## 18. The EDGAR rotation cannot sustain its own cutoff, and a bulk refresh synchronises it — 2026-10-01
+
+**Asked for by the owner as "fixing the EDGAR refresh", straight after the Item
+2.02 announcement date was folded into it.** The refresh works; what does not
+work is its *cadence*, and the arithmetic is against it in two separate ways.
+
+**Capacity, measured from the constants rather than guessed.** `nightly-ping.js`
+runs `SEC_BATCH` 5 × `SEC_MAX_BATCHES` 20 = **100 symbols per run**, twice a
+weekday (07:30 and 19:30), so **1,000 a week**. The universe is 1,192, of which
+**1,167 have a CIK** and therefore need fetching. So steady-state capacity is
+**86% of what one `SEC_ROTATE_DAYS` (7) cycle requires** — it cannot complete a
+pass inside its own cutoff, and the shortfall grows with every ticker added.
+
+**And the clocks are synchronised, which is worse than the shortfall.**
+Measured on production 2026-10-01:
+
+```
+age of the last EDGAR fetch, in days
+  0..1       3     <- two rotate batches driven by hand
+  3..5    1164     <- every other symbol, one bulk `mode=all` run
+  5..7       0
+  7+         0
+statuses: ok 1100, empty 63, nofacts 4
+```
+
+**1,164 of 1,167 share one timestamp.** A `mode=all` refresh sets every symbol's
+clock to the same moment, so nothing is overdue until day 7 and then *everything*
+is overdue on the same day. The rotation then drains 200 a weekday, taking
+**~6 weekdays** to clear — during which the symbols it fetched first are already
+going stale again. **Effective worst-case staleness is therefore ~13 days, not
+7**: seven to become due plus six to drain. An announcement like MU's (filed
+2026-09-30, found by the backfill the same day) could in principle sit
+uncollected for a fortnight.
+
+**Three fixes, cheapest first. They are not alternatives — the first two
+compose.**
+
+- **Raise `SEC_MAX_BATCHES`.** It is already an env var (`SEC_MAX_BATCHES`,
+  default 20) and nothing else has to change: 30 gives 150 a run, 1,500 a week,
+  which clears 1,167 with headroom. **The cost is SEC traffic and run length,
+  and both are now doubled per symbol** — since 2026-10-01 each symbol makes
+  **two** requests (companyfacts 1–5MB plus submissions ~0.15MB), so 150 symbols
+  is 300 requests. At `SEC_GAP_MS` 1500 between batches that is 45s of pacing
+  plus fetch time, inside the task's 2-hour `ExecutionTimeLimit` but worth
+  measuring before raising it twice. **Not measured**: what a 30-batch run
+  actually costs in wall clock.
+- **Stagger the clocks once**, so the herd stops arriving together. A bulk
+  `mode=all` is what creates the problem, and the repair is a one-off local
+  script spreading `sec_state.fetched_at` across the cutoff window — 1,167
+  single-column updates, the `backfill-sec-filed.js` shape. Then ~166 symbols
+  come due a day and the rotation's own 200/weekday is comfortably enough.
+  **Do this before raising the batch size**, or the batch size is sized against
+  a backlog rather than against the steady state.
+- **Walk the daily index for the recent end.** The sharper fix for
+  announcements specifically, and **nearly free, because the fetch already
+  happens**: `POST /api/insider/daily` reads EDGAR's daily index for the insider
+  walk, and the same index lists 8-K filings with their CIK. Recording which of
+  our CIKs filed an 8-K that day would let the refresh re-read **only those
+  companies'** submissions files — a handful a day instead of 1,167 a week — so
+  an announcement is picked up the next morning rather than within a fortnight.
+  **The daily index carries no item numbers**, so the 2.02 test still needs the
+  submissions file; the index only says who to ask.
+
+**What would make the third option a bad idea, and it is already documented.**
+The insider walk's universe filter **leaves a permanent hole for a ticker added
+later** — every day already walked was filtered to the universe as it stood
+then — so an 8-K ledger built from it inherits that gap (see entry 13). And the
+walk is itself behind (entry 12), so it cannot close the recent end until it is
+current.
+
+**What is NOT wrong, and should not be "fixed" by accident.** The 7-day cutoff
+itself is the right order of magnitude — filings land quarterly, and this file
+has always said coverage rather than freshness is what the SEC path is for. The
+`rotate` mode, its oldest-first ordering and the recorded-miss rule that lets
+the loop terminate are all measured and tested; the problem is the *size* of
+the window's throughput, not its design.
+
+**Two related EDGAR items, carried here so they are not rediscovered separately:**
+
+- **`/stock`'s SEC card still uses `latestPerPeriod`**, so it shows the dashes
+  `latestFilled` fills — correct for a card whose claim is *one row, one
+  filing*, and noted twice in CLAUDE.md as worth revisiting as its own
+  decision.
+- **Three faults `latestFilled`'s reconciliation is blind to**, each with a
+  trail of one and nothing to cross-check against: a tiny revenue on a single
+  filing (REXR files $0.0–0.2M for quarters that are really ~$250M), a
+  **negative** derived revenue (FRHC Q4 to 2023-03-31 differences out at
+  −$566.6M, which revenue cannot be), and a whole run restated together. The
+  first is the one that matters — it lands on REITs and financials, already the
+  sectors with the worst coverage.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
