@@ -4458,6 +4458,26 @@ const STARTER_SCREENS = [
   sc('rec52lo0', 'Market movers', 'Recent 52-week lows', 'Set a new 52-week low in the last five sessions.',
     { filters: { daysSince52wLow: '..4' }, sort: { key: 'oneMonthPct', dir: 1 },
       columns: ['daysSince52wLow', 'pctFromLow', 'oneMonthPct', 'threeMonthPct', 'actionTrend'] }),
+  // NOT "all-time", and the name is the whole decision rather than a wording
+  // preference: 718 of the 1,282 archives begin in 2006 at the provider's
+  // 5,000-bar ceiling, so for most of the universe "all time" would be a claim
+  // about a window that merely happens to be where our data starts. It says
+  // record, exactly as the column it filters does.
+  //
+  // `>= 0` is EXACTLY the record-setters rather than a near-miss band, which is
+  // the owner's call with the cost named: `pctFromAth` is `px / max(stored, px)`
+  // so a stock at or above its record reads a true 0 and anything below reads
+  // negative — there is no epsilon to get wrong. Measured on the day it shipped:
+  // 23 of 1,282, with a median of ~32 a session. A SHARP WEEK CAN EMPTY IT, and
+  // that is a fact about the week rather than a dead box — the description says
+  // so, so nobody reads an empty screen as a broken one.
+  //
+  // Sorted by market cap, not by the filter column: every row reads +0.0% from
+  // its record by construction, so sorting on it would order 23 identical
+  // values. Biggest company at a record first is the reading that is left.
+  sc('atrecord', 'Market movers', 'At a record high', 'Closed at or above its highest close on record. Empty on a falling week, which is the answer rather than a fault.',
+    { filters: { pctFromAth: '>=0' }, sort: { key: 'marketCap', dir: -1 },
+      columns: ['pctFromAth', 'todayPct', 'oneMonthPct', 'oneYearPct', 'marketCap', 'av:Balanced'] }),
   sc('mostactv', 'Market movers', 'Most active', 'Everything, by the value of shares traded today.',
     { filters: {}, sort: { key: 'dollarVolume', dir: -1 },
       columns: ['todayPct', 'volume', 'dollarVolume', 'volX', 'marketCap'] }),
