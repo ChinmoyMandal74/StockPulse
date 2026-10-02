@@ -145,6 +145,18 @@
     .rowtbl th:nth-child(2), .rowtbl td:nth-child(2) { text-align: left; }
     .rowtbl th:last-child, .rowtbl td:last-child { text-align: left; font-family: var(--sans);
                                                    font-size: 12px; color: var(--muted); }
+    /* A HEADING THAT SORTS HAS TO LOOK LIKE A CONTROL, and one that looks
+       like a control has to be one — the `body.no-ladder` rule. Scoped to
+       `.rowtbl th`: `.sortable` loose would be the tenth unscoped class on
+       this project to capture later markup. The arrow's box is reserved on
+       every header, not just the active one, so clicking between columns
+       cannot jog the table's widths. */
+    .rowtbl th.sortable { cursor: pointer; user-select: none; }
+    .rowtbl th.sortable:hover { color: var(--muted); }
+    .rowtbl th.sortable:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+    .rowtbl th.sortable.on { color: var(--text); }
+    .rowtbl th .sarw { display: inline-block; width: 11px; text-align: left;
+      margin-left: 3px; color: var(--accent); }
     .rowtbl a { color: var(--text); text-decoration: none; }
     .rowtbl a:hover { text-decoration: underline; }
     td.dim { color: var(--faint); }
@@ -525,9 +537,57 @@
     }
 
     let listShown = 50;
+    // Sortable since 2026-10-02 (owner's request). Three things make it
+    // honest rather than merely clickable:
+    //
+    // 1. THE SORT IS OVER `rows`, NEVER THE 50 ON SCREEN. The existing code
+    //    already sorted and THEN sliced, so the cap cannot corrupt it — but a
+    //    later edit that reordered those two lines would quietly turn this
+    //    into "sort the page you happen to be looking at", which on a sector
+    //    of 200 names looks perfectly plausible and is wrong.
+    // 2. THE RETURN COLUMN IS THE RANGE, so its key is the LOGICAL `ret`
+    //    rather than a field name. Storing `oneYearPct` would freeze the sort
+    //    on a column the reader then changes with the range buttons.
+    // 3. A LADDER IS NOT THE ALPHABET. Balanced sorts on the engine's own
+    //    ACTIONS order, which runs WORST-FIRST — so the index IS the rank and
+    //    descending puts Strong Buy on top. Sorting those words as text gives
+    //    Avoid, Buy, Hold, Sell Immediately, Strong Buy, which is nonsense
+    //    wearing a sort arrow.
+    let sortKey = 'cap';
+    let sortDir = -1;             // -1 descending, 1 ascending
+    const STOCK_COLS = [
+      { k: 'sym',   label: 'Symbol',     num: false, get: (s) => String(s.symbol || '') },
+      { k: 'name',  label: 'Name',       num: false, get: (s) => nameOf(s) },
+      { k: 'px',    label: 'Price',      num: true,  get: (s) => s.price },
+      { k: 'today', label: 'Today',      num: true,  get: (s) => s.todayPct },
+      { k: 'ret',   label: null,         num: true,  get: (s, f) => s[f] },
+      { k: 'cap',   label: 'Market cap', num: true,  get: (s) => s.marketCap },
+      { k: 'adv',   label: 'Balanced',   num: true,
+        get: (s) => { const i = ActionRules.ACTIONS.indexOf(s.action); return i < 0 ? null : i; } },
+    ];
+    const colOf = (k) => STOCK_COLS.find((c) => c.k === k) || STOCK_COLS[5];
+
+    function stockCmp(f) {
+      const col = colOf(sortKey);
+      return (a, b) => {
+        const x = col.get(a, f), y = col.get(b, f);
+        // A BLANK SORTS LAST IN BOTH DIRECTIONS, never as a zero. A stock
+        // with no verdict is not the worst verdict and one with no return is
+        // not flat — the blank-versus-zero rule, which a bare `|| 0` breaks
+        // silently and in the direction that looks reasonable.
+        const xe = x == null || x === '' || (col.num && !isFinite(Number(x)));
+        const ye = y == null || y === '' || (col.num && !isFinite(Number(y)));
+        if (xe || ye) return xe && ye ? 0 : xe ? 1 : -1;
+        const base = col.num ? Number(x) - Number(y) : String(x).localeCompare(String(y));
+        // Ties break on market cap, so the order is stable and reproducible
+        // rather than whatever the engine's sort happened to do last time.
+        return base * sortDir || (Number(b.marketCap) || 0) - (Number(a.marketCap) || 0);
+      };
+    }
+
     function stocksHtml() {
       const f = RANGE_FIELD[range.id] || 'oneYearPct';
-      const sorted = rows.slice().sort((a, b) => (Number(b.marketCap) || 0) - (Number(a.marketCap) || 0));
+      const sorted = rows.slice().sort(stockCmp(f));
       const shown = sorted.slice(0, listShown);
       const body = shown.map((s) => `<tr>` +
         `<td class="mono"><a href="/stock/${encodeURIComponent(s.symbol)}">${esc(s.symbol)}</a></td>` +
@@ -539,12 +599,30 @@
         `<td>${esc(s.action || '—')}</td></tr>`).join('');
       return '<section class="bezel card wide"><div class="core">' +
         `<h2>The ${rows.length} stocks</h2>` +
-        '<div class="tblwrap"><table class="rowtbl"><thead><tr><th>Symbol</th><th>Name</th><th>Price</th>' +
-        `<th>Today</th><th>${esc(range.id)}</th><th>Market cap</th><th>Balanced</th></tr></thead>` +
+        // THE MARKER IS ALWAYS RENDERED, on every header, with only the
+        // active one carrying a glyph. An arrow that appears and disappears
+        // changes the header's width and jogs the whole column as you click
+        // between them — the screener positions its arrow absolutely for the
+        // same reason.
+        '<div class="tblwrap"><table class="rowtbl"><thead><tr>' +
+        STOCK_COLS.map((c) => {
+          const on = c.k === sortKey;
+          const lbl = c.label == null ? esc(range.id) : esc(c.label);
+          const dir = on ? (sortDir === -1 ? 'descending' : 'ascending') : '';
+          return `<th class="sortable${on ? ' on' : ''}" data-sort="${c.k}" role="button" tabindex="0"` +
+            ` aria-sort="${on ? dir : 'none'}" title="Sort by ${lbl}">${lbl}` +
+            `<span class="sarw">${on ? (sortDir === -1 ? '▾' : '▴') : ''}</span></th>`;
+        }).join('') + '</tr></thead>' +
         `<tbody>${body}</tbody></table></div>` +
         (sorted.length > shown.length
           ? `<button class="stkToggle" id="moreRows">Show 50 more — ${shown.length} of ${sorted.length}</button>` : '') +
-        '<p class="note">Biggest first. The return column follows the range above, so it says the same thing ' +
+        // The note used to open "Biggest first", which stops being true the
+        // moment the table is sortable — a claim outliving its feature, in
+        // the one sentence describing the thing that changed.
+        `<p class="note">Sorted by ${esc(colOf(sortKey).label == null ? range.id : colOf(sortKey).label)}, ` +
+        `${sortDir === -1 ? 'highest first' : 'lowest first'} — click any heading to re-sort` +
+        `${sorted.length > shown.length ? `, which orders all ${sorted.length} rather than the ${shown.length} on screen` : ''}. ` +
+        'Rows with nothing to sort on go last. The return column follows the range above, so it says the same thing ' +
         'the curve does.</p></div></section>';
     }
 
@@ -665,6 +743,29 @@
         `${returnsHtml()}${fundamentalsHtml()}${stocksHtml()}</div>`;
       const more = $('moreRows');
       if (more) more.addEventListener('click', () => { listShown += 50; paint(); });
+      // A FIRST CLICK SHOWS THE INTERESTING END. A number opens descending
+      // (biggest, best, furthest up) and a name opens A-Z, which is what both
+      // mean by "the top"; clicking the column again flips it. The screener's
+      // own rule, and the reason market cap and the verdict do not open at
+      // the smallest company and the worst reading.
+      //
+      // `listShown` is deliberately NOT reset: re-sorting an expanded list
+      // and silently collapsing it back to 50 loses the reader's place for
+      // no reason the sort implies.
+      document.querySelectorAll('.rowtbl th.sortable').forEach((th) => {
+        const go = () => {
+          const k = th.dataset.sort;
+          if (k === sortKey) sortDir = -sortDir;
+          else { sortKey = k; sortDir = colOf(k).num ? -1 : 1; }
+          paint();
+        };
+        th.addEventListener('click', go);
+        // Reachable without a mouse: these are real controls, and `th` is not
+        // focusable on its own — hence the tabindex and role on the markup.
+        th.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+        });
+      });
       const find = $('pfFind');
       if (find) {
         find.addEventListener('click', (e) => e.stopPropagation());
