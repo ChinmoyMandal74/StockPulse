@@ -143,6 +143,10 @@
           <option value="m1">Month (last 30 days)</option>
           <option value="m3">3 months</option>
           <option value="m6">6 months</option>
+          <!-- Calendar, so it sits before its rolling neighbour the way This
+               week and This month do -- and in the screener's own column
+               order, 6M then YTD then 1Y. -->
+          <option value="ytd">This year (since last year's close)</option>
           <option value="y1">1 year</option>
         </select>
         <label>Compare with (optional)</label>
@@ -156,6 +160,7 @@
           <option value="m1">Month (last 30 days)</option>
           <option value="m3">3 months</option>
           <option value="m6">6 months</option>
+          <option value="ytd">This year</option>
           <option value="y1">1 year</option>
         </select>
         <label>How many</label>
