@@ -206,6 +206,12 @@
           <option value="m1">Past month</option>
           <option value="m3">Past three months</option>
           <option value="m6" selected>Past six months</option>
+          <!-- The one CALENDAR window here, so it sits before its rolling
+               neighbour the way the movers picker's do, and in the screener's
+               own column order: 6M, YTD, 1Y. The chart slices the date axis
+               for it; the Sparks and Spotlight pickers deliberately do NOT
+               offer it, because neither card can slice. -->
+          <option value="ytd">This year (since last year's close)</option>
           <option value="y1">Past year</option>
         </select>
         <div id="chtScopeWrap">

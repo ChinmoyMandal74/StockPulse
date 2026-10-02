@@ -959,9 +959,86 @@
     // each symbol's series normalised to its own first close, so the
     // equal-weight line for any subset is just the mean of the lines drawn —
     // the chart can never disagree with its own legend. Cached per window.
+    // A THIRD ELEMENT MARKS A CALENDAR WINDOW, and `ytd` is the only one.
+    //
+    // Every other entry here is a BAR COUNT, which is why year-to-date was
+    // refused on this card when the screener's YTD column shipped: a count of
+    // sessions is not a calendar boundary on any date but one. It is in now
+    // because the mechanism is, not because that reasoning stopped holding —
+    // the count is only the FETCH size (a year of sessions, with headroom),
+    // and `winStart` then finds the boundary in the date axis the host
+    // returned. Nothing else in the module may read `[0]` as the window.
     const CHART_WINDOWS = { w1: [5, 'past week'], m1: [21, 'past month'],
                             m3: [63, 'past three months'], m6: [126, 'past six months'],
+                            ytd: [260, 'this year', 'ytd'],
                             y1: [253, 'past year'] };
+
+    // WHERE A WINDOW STARTS IN A DATE AXIS. A bar count is already the whole
+    // axis the host fetched, so it starts at 0; a calendar window has to be
+    // looked for.
+    //
+    // THE ORIGIN IS THE LAST SESSION BEFORE 1 JANUARY, not the first session
+    // of the year — the same close the screener's ytdPct anchors on. Rebasing
+    // to the first session OF the year would silently drop its own day's move
+    // and leave the card and the column disagreeing by a number nobody could
+    // account for (measured on the fixture: +100.0% against +66.7%).
+    //
+    // IT AGREES WITH THAT COLUMN TO THE PAYLOAD'S OWN PRECISION, NOT EXACTLY,
+    // and the difference is not worth closing. `symbolSeries` rounds each
+    // value to 3dp, so re-dividing two of them compounds that — measured
+    // against production over 1,169 symbols: median 0.03pt, worst 0.31pt, and
+    // the error grows with the move (the worst case is a +430% stock). The
+    // alternatives are worse: more decimals on the wire costs ~0.6MB on a
+    // payload that is already the largest thing the studio fetches, and
+    // taking the end tag from the row's ytdPct instead would print a number
+    // that disagrees with the point it is drawn beside.
+    //
+    // The year is the LOCAL one, never `toISOString`'s: on 1 January the two
+    // disagree west of Greenwich and UTC would ask for last year's boundary —
+    // the card-dating lesson, met again.
+    function winStart(win, dates) {
+      if (!win || win[2] !== 'ytd' || !dates || !dates.length) return 0;
+      const jan = `${new Date().getFullYear()}-01-01`;
+      const i = dates.findIndex((d) => String(d) >= jan);
+      if (i < 0) return dates.length;          // no session this year yet
+      return i > 0 ? i - 1 : 0;
+    }
+
+    // Re-slice the basket payload and RE-REBASE every series to the new
+    // origin. The host's series are rebased to the first session it fetched,
+    // so slicing alone would draw a year-to-date window off a year-ago origin
+    // — the right dates with the wrong numbers, which looks perfectly well
+    // formed. A symbol with no close on the origin falls back to its own
+    // first close in the slice, which is `symbolSeries`' own convention.
+    function sliceBasket(d, i0) {
+      if (!i0) return d;
+      const dates = d.dates.slice(i0);
+      const series = {};
+      for (const sym of Object.keys(d.series || {})) {
+        const S = d.series[sym].slice(i0);
+        let base = null;
+        for (const v of S) if (v != null) { base = v; break; }
+        series[sym] = base ? S.map((v) => (v == null ? null : v / base)) : S.map(() => null);
+      }
+      return Object.assign({}, d, { dates, series });
+    }
+
+    // The label reads as a noun beside the kicker ("AAA vs BBB · this year")
+    // and has to read as a phrase inside a sentence. One helper rather than
+    // two labels per entry, since only the calendar window differs.
+    const winPhrase = (win) => (win && win[2] === 'ytd' ? 'so far this year' : `over the ${win[1]}`);
+
+    // ONLY THE CHART CARD CAN SLICE, so only the chart card may be given a
+    // calendar window. Sparks and the spotlight read this same map and draw
+    // the axis the host fetched as-is — handed `ytd` they would draw a full
+    // YEAR under a heading reading "this year", which is wrong and looks
+    // right. Their pickers do not offer it; this is what stops a hand-edited
+    // saved post reaching them, and what stops the map lying to two of its
+    // three consumers.
+    const barWin = (key) => {
+      const w = CHART_WINDOWS[key];
+      return w && !w[2] ? w : CHART_WINDOWS.m6;
+    };
     // A moving average on the one-stock chart. Colours are the stock page's
     // own, so 50-day and 200-day mean the same thing on both surfaces.
     //
@@ -994,7 +1071,10 @@
     function basketDays(tpl, opts) {
       const key = BASKET_WIN_KEY[tpl];
       if (!key) return 0;
-      const win = CHART_WINDOWS[(opts || {})[key]] || CHART_WINDOWS.m6;
+      // The chart may ask for a calendar window; the other two may not, so
+      // they resolve through barWin and can never request a year by accident.
+      const v = (opts || {})[key];
+      const win = tpl === 'chart' ? (CHART_WINDOWS[v] || CHART_WINDOWS.m6) : barWin(v);
       return win[0];
     }
 
@@ -1300,14 +1380,29 @@
 
     function tplChart() {
       const winKey = O.chtWin;
-      const [days, winLabel] = CHART_WINDOWS[winKey] || CHART_WINDOWS.m6;
+      const win = CHART_WINDOWS[winKey] || CHART_WINDOWS.m6;
+      const [days, winLabel] = win;
       const mode = O.chtMode;
-      const d = getBasket(days);
+      let d = getBasket(days);
       if (!d || !d.dates || !d.dates.length) {
         return chromeTop() +
           '<div class="s-body"><div><span class="s-kick">Reading the archive</span>' +
           '<h2 class="s-title">Drawing<br><span class="dim">the chart\u2026</span></h2></div></div>' + chromeFoot();
       }
+      // ONE SLICE, ABOVE ALL FOUR MODES. Every mode reads `d.dates` and
+      // `series` \u2014 the one-stock line, the pair, the leaders and the two
+      // averages \u2014 so a calendar window applied here reaches all of them,
+      // where four copies could only drift.
+      const i0 = winStart(win, d.dates);
+      // A one-point window is not a line. Two sessions is the least that can
+      // be drawn, and in the first days of January that is what year-to-date
+      // honestly holds; before the year's first session it holds nothing.
+      if (d.dates.length - i0 < 2) {
+        return chromeTop() +
+          '<div class="s-body"><div><p class="s-empty">The year has not opened yet \u2014 ' +
+          'there is no session since 31 December to chart.</p></div></div>' + chromeFoot();
+      }
+      d = sliceBasket(d, i0);
       const series = d.series || {};
       const mean = (syms) => {
         const use = syms.filter((x) => series[x]);
@@ -1400,8 +1495,13 @@
           // already percentages from the same origin, so their difference is a
           // gap in points \u2014 the rule /compare and the refresh email both keep.
           const gap = Math.abs(eA - eB);
-          note = `${eA === eB ? `${esc(symA)} and ${esc(symB)} are level over the ${winLabel.replace(/^Past /, '')}`
-            : `${esc(eA > eB ? symA : symB)} is ahead by ${gap.toFixed(1)} points over the ${winLabel.replace(/^Past /, '')}`}. ` + note;
+          // `over the ${winLabel}` reads as "over the this year" on the
+          // calendar window, so the phrase comes from winPhrase. The
+          // `.replace(/^Past /, '')` that used to sit here could never fire —
+          // every label is lower case — and was residue reading as intent.
+          const over = winPhrase(win);
+          note = `${eA === eB ? `${esc(symA)} and ${esc(symB)} are level ${over}`
+            : `${esc(eA > eB ? symA : symB)} is ahead by ${gap.toFixed(1)} points ${over}`}. ` + note;
         }
         note += ' Price only \u2014 no dividends, no positions.';
       } else if (mode === 'leaders') {
@@ -1435,6 +1535,12 @@
           : `${esc(scope.label)}<br><span class="dim">vs the whole screen</span>`;
         note = 'Equal dollars at the window start, held \u2014 a reading of the list, not an account.';
       }
+
+      // THE CARD NAMES ITS OWN ORIGIN on the calendar window. Every mode's
+      // note says "the start of the window", which on a bar count the kicker
+      // already pins ("past six months") and on this one it does not — and a
+      // posted image has no picker beside it to say where the line begins.
+      if (win[2] === 'ytd') note += ` The window opens on the last close of last year, so the line reads as this year's move.`;
 
       return chromeTop() +
         `<div class="s-body"><div><span class="s-kick">${kick}</span>` +
@@ -1736,7 +1842,7 @@
     }
 
     function tplSparks() {
-      const [days, winLabel] = CHART_WINDOWS[O.spkWin] || CHART_WINDOWS.m6;
+      const [days, winLabel] = barWin(O.spkWin);
       const d = getBasket(days);
       if (!d || !d.dates || !d.dates.length) {
         return chromeTop() +
@@ -2481,7 +2587,7 @@
         '<p class="s-empty">That symbol is not on this screen.</p>' +
         '</div></div>' + chromeFoot();
     }
-    const [days, winLabel] = CHART_WINDOWS[O.spotWin] || CHART_WINDOWS.m6;
+    const [days, winLabel] = barWin(O.spotWin);
     const d = getBasket(days);
     if (!d || !d.dates || !d.dates.length) {
       return chromeTop() +
