@@ -1185,12 +1185,25 @@
         // NAME WHICH ONE, rather than a single message for either \u2014 with two
         // subjects "no stored history" does not say whose.
         if (!SA || !SB) return empty(`No stored history for ${esc(!SA ? symA : symB)} in this window.`);
-        // THE ACCENT PAIR, NEVER GREEN AND RED. Those two already mean up and
-        // down on every chart in this app, so colouring each line by its own
-        // direction would make a different claim from the one the card is
-        // for \u2014 /compare's rule, and the same reason neither line is filled:
-        // a fill marks a hero, and here there are two subjects.
-        const cA = pal.ink('#7c9cff'), cB = pal.ink('#a78bfa');
+        // BLUE AND ORANGE, MEASURED RATHER THAN CHOSEN BY EYE (2026-10-02,
+        // owner: "these two colors look the same"). This shipped as the
+        // accent pair \u2014 periwinkle against violet \u2014 which is \u0394E 19 apart in
+        // normal vision and **\u0394E 3 under deuteranopia**, i.e. at the
+        // just-noticeable threshold: for roughly one man in twelve the two
+        // lines were literally one colour. Blue against orange is the one
+        // divergence that survives both common dichromacies, and its WORST
+        // reading across normal vision, deuteranopia, protanopia and the
+        // light ground's darkened values is \u0394E 102.
+        //
+        // STILL NEVER GREEN AND RED: those mean up and down on every chart
+        // here, so colouring each line by its own direction would make a
+        // different claim from the one the card is for \u2014 /compare's rule, and
+        // the same reason neither line is filled: a fill marks a hero, and
+        // here there are two subjects. Orange sits \u0394E 50 from the red, so it
+        // cannot be read as "down", and the advice ladder where orange means
+        // Avoid is not drawn on this card. Both are already in CHART_PALETTE
+        // and already mapped in LIGHT_INK, so the ground sweep covers them.
+        const cA = pal.ink('#60a5fa'), cB = pal.ink('#fb923c');
         const eA = endOf(SA), eB = endOf(SB);
         lines = [{ color: cA, S: SA, width: 4 }, { color: cB, S: SB, width: 4 }];
         legend = [{ color: cA, label: `${symA} ${pct(eA)}` }, { color: cB, label: `${symB} ${pct(eB)}` }];
