@@ -589,6 +589,15 @@
         <p class="hint" style="margin-top:8px">Download each slide in turn — they post as one carousel.</p>
       </div>
 
+      <div id="howBox">
+        <label>Topic</label>
+        <select id="howTopic"></select>
+        <label>Slide</label>
+        <select id="howSlide"></select>
+        <p class="hint" style="margin-top:8px">Three slides a topic: what it is and who can do it, the steps, then
+          what it does not do. Download each in turn — they post as one carousel.</p>
+      </div>
+
       <div id="annBox">
         <label>Kicker (small line above)</label>
         <input type="text" id="annKick" value="From the Lab" maxlength="40" />
@@ -676,6 +685,7 @@
       { id: 'size', name: 'Size', note: 'Companies as circles — two measures at once' },
       { id: 'bubble', name: 'Bubble', note: 'Two measures against each other, area as a third' },
       { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
+      { id: 'howto', name: 'How to', note: 'Training slides — one topic, three slides, a carousel each' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
       { id: 'disclaimer', name: 'Disclaimer', note: 'The house position, in the terms page’s own words' },
       { id: 'avatar', name: 'Profile picture', note: 'The mark alone — pick Square, then download' },
@@ -756,7 +766,7 @@
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen',
       'dayMetric', 'dayCount', 'dayFloor',
       'spotSym', 'spotWin', 'spotProf',
-      'intTopic', 'intSlide', 'annKick', 'annHead', 'annBody',
+      'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
       'disMode'];
     function controlOpts() {
       const o = {};
@@ -816,6 +826,7 @@
       $('movAdvWrap').style.display = $('movDir').value === 'split' ? 'none' : 'block';
       $('chtBox').style.display = tpl === 'chart' ? 'block' : 'none';
       $('intBox').style.display = tpl === 'intro' ? 'block' : 'none';
+      $('howBox').style.display = tpl === 'howto' ? 'block' : 'none';
       $('advBox').style.display = tpl === 'advboard' ? 'block' : 'none';
       $('spkBox').style.display = tpl === 'sparks' ? 'block' : 'none';
       $('rngBox').style.display = tpl === 'range' ? 'block' : 'none';
@@ -926,6 +937,27 @@
     }
     $('intTopic').innerHTML = CARD_TOPICS.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
     paintSlideList(0);
+
+    // The how-to deck: the same two-picker shape, built from the module's own
+    // list so a topic added in cards.js appears here with no second edit.
+    const HOW_TOPICS = Cards.howtos();
+    const howTopic = (id) => HOW_TOPICS.find((t) => t.id === id) || HOW_TOPICS[0];
+    function paintHowList(keepAt) {
+      const topic = howTopic($('howTopic').value);
+      const at = Math.min(keepAt || 0, topic.slides.length - 1);
+      $('howSlide').innerHTML = topic.slides.map((kind, i) =>
+        `<option value="${i}">${i + 1}. ${esc(kind === 'cover' ? 'What it is, and who can'
+          : kind === 'hsteps' ? 'The steps'
+          : kind === 'stmts' ? 'What it does not do' : kind)}</option>`).join('');
+      $('howSlide').value = String(at);
+    }
+    $('howTopic').innerHTML = HOW_TOPICS.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+    paintHowList(0);
+    // A TWELFTH hardcoded listener list. A control in the markup and in
+    // CONTROL_IDS but not in one of these saves with a post, is read by the
+    // builder, and does nothing when you touch it.
+    $('howTopic').addEventListener('change', () => { paintHowList(0); if (tpl === 'howto') render(); });
+    $('howSlide').addEventListener('change', () => { if (tpl === 'howto') render(); });
     $('advTier').innerHTML = ActionRules.ACTIONS.slice().reverse()
       .map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
     $('advProf').innerHTML = Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');

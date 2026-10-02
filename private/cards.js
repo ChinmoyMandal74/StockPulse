@@ -769,6 +769,191 @@
         '</div></div>' + chromeFoot();
     }
 
+    // ---- the how-to deck ---------------------------------------------------
+    // Training slides, one topic at a time (2026-10-02, owner's request:
+    // "like training slides, focusing on each topic separately").
+    //
+    // A HOW-TO IS INSTRUCTIONS, AND THAT RAISES THE BAR ON EVERY CLAIM IN IT.
+    // This file records four occasions when copy outlived its feature — "every
+    // feature live", the welcome email, "49 columns", the owner-only refresh
+    // buttons. Stale marketing disappoints; a stale STEP sends a reader to a
+    // control they do not have. So every label below was read off index.html
+    // and alerts.html rather than recalled, and every topic states WHO CAN DO
+    // IT — because the answer genuinely differs, and the first topic is the
+    // proof: `New theme` is admin-only while `New personal theme` is the
+    // member's, so "create your own theme" means two different things.
+    //
+    // The close slide is deliberately NOT reused from the Intro deck. That one
+    // ends "No account needed — try it free", which is exactly wrong under a
+    // how-to for a member-only action: it would send the reader to the one
+    // place the feature is not.
+    const HOW_WHO = {
+      member: 'Any signed-in member. A guest can read the screen but has no account to save one.',
+      everyone: 'Everyone signed in, the guest preview included.',
+      applyOnly: 'Everyone signed in can apply one. Starring needs an account; writing one is the owner’s.',
+      readOnly: 'Everyone sees the verdict and the rule that fired. The full rule ladder is the owner’s.',
+    };
+    const HOWTOS = [
+      {
+        id: 'theme', name: 'Themes, and your own lists',
+        slides: [
+          { kind: 'cover', kick: 'How to', title: 'Themes,<br><span class="dim">and your own lists</span>',
+            sub: 'A named group of stocks, read as one line. The shared themes are the site’s; the ones you make are <b>personal themes</b>, private to your account.',
+            who: 'member' },
+          { kind: 'hsteps', kick: 'Four steps', title: 'Star it,<br><span class="dim">name it, read it</span>',
+            rows: [
+              ['Star the row', 'Every row in the screener carries a star beside the ticker. Click it.'],
+              ['Pick a list, or make one', 'Tick an existing personal theme, or choose <b>New personal theme</b>. The menu stays open while you tick.'],
+              ['Switch to it', 'The theme picker at the head of the bar lists your personal themes under the shared ones.'],
+              ['Read it as one line', 'The chart arrow beside a theme opens its own page: the group against the S&amp;P 500 and the Dow, with every stock underneath.'],
+            ] },
+          { kind: 'stmts', kick: 'Worth knowing', title: 'What a theme<br><span class="dim">is not</span>',
+            rows: [
+              ['y', 'Ten of them, following your account', 'Personal themes are stored against your sign-in, so they are there on another machine.'],
+              ['x', 'Not a way to add a stock', 'A personal theme is a filter over the shared screen. A ticker the site does not track cannot go in one.'],
+              ['x', 'Not a portfolio', 'No shares, no cost basis, no profit and loss. Lists are lists.'],
+            ] },
+        ],
+      },
+      {
+        id: 'view', name: 'Views — your own columns',
+        slides: [
+          { kind: 'cover', kick: 'How to', title: 'Views,<br><span class="dim">your own columns</span>',
+            sub: 'The table is ninety-odd columns in twelve groups. A view is a named set of them — Symbol, Name and exactly the ones you picked.',
+            who: 'member' },
+          { kind: 'hsteps', kick: 'Four steps', title: 'Pick the columns<br><span class="dim">you actually read</span>',
+            rows: [
+              ['Open <b>View</b> in the bar', 'Standard is the full grouped table. Under it sit the starter views, then yours.'],
+              ['Choose <b>+ New view</b>', 'It opens on whatever is on screen now, so you are editing rather than starting from nothing.'],
+              ['Tick the columns', 'Grouped and searchable, with a running count and a tick for a whole group at once.'],
+              ['<b>Save view</b>', 'It joins the View menu and follows your account to any machine.'],
+            ] },
+          { kind: 'stmts', kick: 'Worth knowing', title: 'How a view<br><span class="dim">behaves</span>',
+            rows: [
+              ['y', 'Ten views, renamed or deleted any time', 'The starter views are the site’s and carry a lock; the + beside one copies it into yours.'],
+              ['y', 'Columns keep the table’s own order', 'A view chooses WHICH columns, not what order they sit in.'],
+              ['x', 'It cannot bring back a hidden column', 'Columns switched off site-wide stay off. The editor does not offer them, rather than letting a tick do nothing.'],
+            ] },
+        ],
+      },
+      {
+        id: 'screens', name: 'Screens',
+        slides: [
+          { kind: 'cover', kick: 'How to', title: 'Screens',
+            // COUNTED LIVE, never written down. "Twenty-two of them, in six
+            // groups" was the first draft and was already wrong: two starter
+            // screens were inserted directly after the seed. The host hands
+            // the module the real list, so a number that would rot is read
+            // instead — and omitted entirely where the host passes none.
+            sub: () => {
+              const n = (screens || []).length;
+              const g = new Set((screens || []).map((x) => x.group || x.grp).filter(Boolean)).size;
+              return 'A screen is a saved question: its filters, its Sector / Industry / Advice picks, a sort and a column set.'
+                + (n ? ` There are <b>${n}</b>, in ${g} group${g === 1 ? '' : 's'}.` : '');
+            },
+            who: 'applyOnly' },
+          { kind: 'hsteps', kick: 'Four steps', title: 'Ask it,<br><span class="dim">then put it back</span>',
+            rows: [
+              ['Open <b>Screens</b> in the bar', 'Each one carries a live count of how many rows in view pass it right now.'],
+              ['Click one to apply it', 'The table re-sorts, the columns change, and the filter row opens where the screen has something to show.'],
+              ['Star the ones you use', 'A starred screen moves to a Favourites group at the top. It moves rather than copies, so the menu does not get longer.'],
+              ['<b>Clear screen</b>', 'Puts the table back exactly as it was — your sort, your filters, your pickers.'],
+            ] },
+          { kind: 'stmts', kick: 'Worth knowing', title: 'What a screen<br><span class="dim">does not keep</span>',
+            rows: [
+              ['x', 'Filters are never saved', 'A filter surviving a reload is a table missing rows for no visible reason. Whether the filter row is OPEN is remembered; what is typed in it is not.'],
+              ['y', 'Change anything and it says so', 'The menu reads “(edited)” the moment the table stops matching the screen, so you always know which you are looking at.'],
+              ['y', 'The screens are the site’s', 'You apply and star them. Writing and editing them is the owner’s, so everyone is asking the same question.'],
+            ] },
+        ],
+      },
+      {
+        id: 'advice', name: 'Reading Advice',
+        slides: [
+          { kind: 'cover', kick: 'How to', title: 'Reading<br><span class="dim">the Advice group</span>',
+            sub: 'A mechanical reading of the table, not a recommendation. The company type picks the rulebook, four readings collapse to one word, and the rule that decided it is always named.',
+            who: 'readOnly' },
+          { kind: 'hsteps', kick: 'Four steps', title: 'Read it<br><span class="dim">left to right</span>',
+            rows: [
+              ['Start with Type', 'Established, Early or a fund. It decides which rulebook runs — an Early company is never judged on a P/E.'],
+              ['Then Trend, Entry, Fund., Guards', 'May you · now · how much conviction · anything to wait for. Each is one word, and Guards is blank on most rows by design.'],
+              ['Read the verdict, and its reason', 'Hover any Advice cell: it names the ONE rule that fired. Five rule profiles sit side by side, Balanced first.'],
+              ['Check the Cushion', 'How far the price can fall before the rules change their mind, in that stock’s own monthly volatility — so it compares across stocks.'],
+            ] },
+          { kind: 'stmts', kick: 'Worth knowing', title: 'What the verdict<br><span class="dim">is claiming</span>',
+            rows: [
+              ['y', 'Loss avoidance is the ORDER of the list', 'Every Sell, Avoid and Hold rule sits above every Buy rule in the source. That is a property of the code, not a setting.'],
+              ['y', 'Six words, nothing else', 'Sell Immediately · Avoid · Hold · Buy with Risk · Buy · Strong Buy. No scores, no targets, no percentages of confidence.'],
+              ['x', 'It does not pick winners', 'Replayed over twenty years the tiers order the DOWNSIDE correctly and the medians are flat. It manages risk; that is the honest claim.'],
+            ] },
+        ],
+      },
+      {
+        id: 'alerts', name: 'Setting up alerts',
+        slides: [
+          { kind: 'cover', kick: 'How to', title: 'Alerts',
+            sub: 'Watch one stock for one thing, and see it the next time you open the site. Five per account, in the app — no email, ever.',
+            who: 'member' },
+          { kind: 'hsteps', kick: 'Four steps', title: 'One stock,<br><span class="dim">one thing</span>',
+            rows: [
+              ['Open <b>Alerts</b> in the bar', 'Your alerts, and everything they have reported, on one page.'],
+              ['Pick a stock and a type', 'Six: a price level, a moving-average cross, a change of Advice verdict, an RSI level, a 52-week extreme, or a big day.'],
+              ['Press <b>Add alert</b>', 'The form asks only for what that type needs — a direction and a number, or just a direction.'],
+              ['Watch the badge', 'Every page carries the unread count. Nothing interrupts you; it is there when you next look.'],
+            ] },
+          { kind: 'stmts', kick: 'Read this first', title: 'They are not<br><span class="dim">real time</span>',
+            rows: [
+              ['x', 'An alert fires when new data arrives', 'Prices land on a schedule — up to about half an hour during the session, the next morning outside it.'],
+              ['y', 'A level is not an event', '“Above 150” fires on the CROSSING, once, not every time it is still true. Set one that is already true and it arms quietly instead.'],
+              ['y', 'Pausing forgets where it was', 'A resumed alert missed whatever happened while it was off, so it arms again rather than reporting a crossing it never saw.'],
+            ] },
+        ],
+      },
+    ];
+    const howById = (id) => HOWTOS.find((t) => t.id === id) || HOWTOS[0];
+
+    // NUMBERED, and the numbering is TRUE: these are steps performed in order,
+    // which is the one thing that earns a number rather than an icon. The box
+    // is `.feat` — the Intro's own, already proved on all three grounds — with
+    // the icon square carrying a digit, so this adds no surface for the ground
+    // sweep to have to re-clear.
+    function slideHow(sl) {
+      const rows = (size.id === 'square' ? sl.rows.slice(0, 3) : sl.rows);
+      return `<div class="rows" style="margin-top:34px">${rows.map(([h, p], i) =>
+        '<div class="feat"><span class="fi hnum">' + (i + 1) + '</span>' +
+        `<span><h3>${h}</h3><p>${p}</p></span></div>`).join('')}</div>` +
+        (rows.length < sl.rows.length
+          // A trimmed deck must not silently lose a step — the square is the
+          // short artboard and the last step is the one that completes the job.
+          ? `<p class="s-sub" style="margin-top:22px">Step ${rows.length + 1}: ${sl.rows[rows.length][0].replace(/<[^>]+>/g, '')}.</p>`
+          : '');
+    }
+    // WHO CAN DO THIS, on the cover of every topic. It is the fact a reader
+    // needs before following any of the steps, and it is not guessable: the
+    // same screener shows a member a `New personal theme` button and the owner
+    // a `New theme` one.
+    function slideWho(key) {
+      const t = HOW_WHO[key];
+      return t ? `<div class="hwho"><b>Who can do this</b><span>${esc(t)}</span></div>` : '';
+    }
+
+    function tplHowTo() {
+      const topic = howById(O.howTopic);
+      const idx = Math.min(Math.max(Number(O.howSlide) || 0, 0), topic.slides.length - 1);
+      const sl = topic.slides[idx];
+      // A `sub` may be a function, so a slide can count something live rather
+      // than carry a number that goes stale.
+      const sub = typeof sl.sub === 'function' ? sl.sub() : sl.sub;
+      const body = sl.kind === 'hsteps' ? slideHow(sl)
+        : sl.kind === 'stmts' ? slideStmts(sl)
+        : (sub ? `<p class="s-sub" style="--fs:26px;margin-top:26px">${sub}</p>` : '') + slideWho(sl.who);
+      return chromeTop(false) +
+        `<div class="s-body"><div><span class="s-kick">${esc(sl.kick || topic.name)}</span>` +
+        `<h2 class="s-title">${sl.title || esc(topic.name)}</h2>${body}` +
+        dotRow(topic.slides.length, idx) +
+        '</div></div>' + chromeFoot();
+    }
+
     // ---- the chart card ---------------------------------------------------
     // ONE fetch per window serves every mode: /api/basket?name=All returns
     // each symbol's series normalised to its own first close, so the
@@ -2754,7 +2939,7 @@
     intro: tplIntro, announce: tplAnnounce,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
     bubble: tplBubble, stock: tplStock, day: tplDay, spotlight: tplSpotlight,
-    disclaimer: tplDisclaimer,
+    disclaimer: tplDisclaimer, howto: tplHowTo,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -2960,6 +3145,14 @@
     .s-art.th-light .pcard,
     .s-art.th-light .vrow,
     .s-art.th-light .stmt,
+    .s-art.th-light .hwho,
+    /* .feat was missed when this list was written — five of its siblings
+       are here and it is the same 2.8% white tile, invisible on a light
+       ground. Found by the ground sweep once the Intro's and the how-to's
+       STEP slides were swept at all; the sweep had only ever visited each
+       template's default slide, which for the Intro is a cover with no
+       .feat on it. */
+    .s-art.th-light .feat,
     .s-art.th-light .ftile { background: rgba(13, 16, 23, 0.035); }
     .s-art.th-light .mock { background: rgba(13, 16, 23, 0.04); }
     .s-art.th-light .mockrow { background: rgba(13, 16, 23, 0.045); }
@@ -3248,6 +3441,27 @@
                     stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
     .feat h3 { margin: 2px 0 4px; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
     .feat p { margin: 0; font-size: 17.5px; color: var(--muted); line-height: 1.45; }
+    /* The how-to's step number, in the Intro icon square so it inherits a box
+       already proved on all three grounds. Tokens only — no literal — so the
+       light and navy palettes resolve it without an override block. */
+    /* 18%, not the Intro chip's 9%. The ground sweep holds a sub-35% fill to
+       the VISIBILITY rule (ΔL* ≥ 1.5 against what is behind it) and a 9% tint
+       The Intro's step chips, at 9% and 40%, which is what this matches so
+       the two decks read as one family. It was briefly raised to 18% on a
+       ground-sweep failure that turned out to be the SWEEP misreading
+       color-mix output as near-black; measured properly the 9% tint is
+       dL* 5.5 against its tile, comfortably over the 1.5 floor.
+       NO BACKTICKS IN THIS BLOCK: STYLE is itself a template literal, so one
+       inside a CSS comment ends the string and the module stops parsing —
+       and node --check passes it, because it is valid syntax. */
+    .fi.hnum { font: 700 28px var(--mono); color: var(--accent);
+               border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+               background: color-mix(in srgb, var(--accent) 9%, transparent); }
+    .hwho { margin-top: 30px; padding: 18px 24px; border-radius: 15px;
+            border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.028); }
+    .hwho b { display: block; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase;
+              color: var(--faint); margin-bottom: 6px; }
+    .hwho span { font-size: 20px; color: var(--muted); line-height: 1.45; }
 
     /* ---- the advice board ---------------------------------------------- */
     .abar { display: flex; height: 34px; border-radius: 999px; overflow: hidden; margin-top: 36px; }
@@ -3665,6 +3879,9 @@
     benchmarks: () => BENCH.map((b) => b.slice()),
     // shape only — the host builds its own slide picker from this
     topics: () => TOPICS.map((t) => ({ id: t.id, name: t.name, slides: t.slides.map((sl) => sl.kind) })),
+    // The studio builds its two pickers from this, so a topic or a slide
+    // added above appears there with no second edit.
+    howtos: () => HOWTOS.map((t) => ({ id: t.id, name: t.name, slides: t.slides.map((sl) => sl.kind) })),
     build(id, ctx) {
       const c = ctx || {};
       stocks = c.stocks || [];
