@@ -3031,6 +3031,47 @@ async function stampPricedAt(rows) {
   }
 }
 
+// How far each row sits below its own highest close on record, stamped beside
+// the others and for the same reasons.
+//
+// THE STORED MAX DELIBERATELY EXCLUDES TODAY and today is folded in HERE, at
+// read time, against the live price. A bar for a session still in progress
+// carries the current price as its close, and a running max only ever goes up
+// — so storing it would bake a spike that was never a close into the record
+// permanently, where bars self-heal on the next overlap re-upsert. Comparing
+// live costs nothing and cannot rot.
+//
+// `athWindowFrom` RIDES ALONG BECAUSE THE WORD "ALL-TIME" IS NOT AVAILABLE TO
+// US. Measured over the archive: 706 of 1,181 symbols start in 2006-Q4, which
+// is the 5,000-bar API ceiling rather than a listing date. So every surface
+// showing this has to be able to say which window it is claiming, per row,
+// and that answer differs row to row.
+//
+// CLOSING high, never intraday, and the two are not interchangeable: measured
+// across the universe the highest intraday print sits a median 1.07% above the
+// highest close (p90 4.00%), and on the archive's last day 5 symbols were at a
+// closing record against 0 at an intraday one. `techrow.js` and `btRowAt`
+// already drifted on exactly this question for the 52-week high and sat 1.83
+// points apart, which is why it is defined in one place and named on the page.
+async function stampAthDistance(rows) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  let ex = {};
+  try { ex = await store.readPriceExtremes(); } catch (e) { return; }
+  for (const r of rows) {
+    if (!r || !r.symbol) continue;
+    r.pctFromAth = null; r.athDate = null; r.athWindowFrom = null; r.athIsRecord = null;
+    const e = ex[r.symbol];
+    const px = Number(r.price);
+    if (!e || !(px >= MIN_CLOSE) || !(e.athClose >= MIN_CLOSE)) continue;
+    // Today is a candidate for the record and is never stored.
+    const rec = Math.max(e.athClose, px);
+    r.pctFromAth = (px / rec - 1) * 100;
+    r.athIsRecord = px >= e.athClose;
+    r.athDate = r.athIsRecord ? (r.latestDate || null) : e.athDate;
+    r.athWindowFrom = e.firstDate;
+  }
+}
+
 // The market-cap band, stamped beside the others and for the same reason: it
 // derives from a field already on the row, so a snapshot written before the
 // column existed carries it, and moving a threshold moves every surface at once
@@ -4185,11 +4226,19 @@ function ruleCfg(name) {
 // two that way — so this hands back the promises rather than awaiting them, and
 // the export spreads the same list into its own Promise.all. A field added to
 // one reader cannot go missing from the other.
-const serveStamps = (rows) => [
+// ONE PROMISE, NOT A SPREAD LIST, and that is load-bearing rather than tidy:
+// both callers destructure the Promise.all POSITIONALLY, so while this
+// returned an array, adding a fourth stamp silently shifted `pf` by one and
+// every row 500'd with "Cannot convert undefined or null to object" out of
+// membershipOf. The note below already warned that a stamp must not go
+// missing from one reader; it did not protect the LENGTH. Now it cannot:
+// a stamp added here changes nothing any caller can see.
+const serveStamps = (rows) => Promise.all([
   stampShortNames(rows).catch(() => {}),
   stampAdviceAge(rows).catch(() => {}),
   stampPricedAt(rows).catch(() => {}),
-];
+  stampAthDistance(rows).catch(() => {}),
+]);
 // The two that need no round trip, and therefore wait for the portfolios.
 function finishServe(rows, pf) {
   stampCapDerived(rows);
@@ -7820,6 +7869,7 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   await Promise.all([
     stampPricedAt([stock]).catch(() => {}),
     stampAdviceAge([stock]).catch(() => {}),
+    stampAthDistance([stock]).catch(() => {}),
   ]);
 
   res.json({
@@ -8014,7 +8064,7 @@ const EXPORT_DATASETS = {
       // The SAME stamps the screener is served with, from the same list — a
       // capBand or a display name missing here would be a spreadsheet that
       // quietly disagrees with the page it came from.
-      const [, , , pf] = await Promise.all([...serveStamps(all), readPortfolios()]);
+      const [, pf] = await Promise.all([serveStamps(all), readPortfolios()]);
       scoreActionInto(all);
       finishServe(all, pf);
       const rows = scope && scope !== 'All'
@@ -8622,6 +8672,7 @@ async function mobileRows(req) {
   await stampShortNames(rows);
   await stampAdviceAge(rows);
   await stampPricedAt(rows);
+  await stampAthDistance(rows);
   stampCapDerived(rows);
   return rows;
 }
@@ -8917,6 +8968,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   await stampShortNames(stocks);
   await stampAdviceAge(stocks);
   await stampPricedAt(stocks);
+  await stampAthDistance(stocks);
   stampCapDerived(stocks);
   const myLists = await store.readUserPortfolios(await prefsKey(req));
   // A post saved with a screen cut needs the screens to resolve it. Optional
@@ -10736,6 +10788,11 @@ const signed = (n, d = 1) => (n == null || !isFinite(n) ? '—'
 // The two runs differ in one way that matters to a reader: a plain Refresh does
 // not re-pull the profile cache, so every fundamental in the snapshot is
 // yesterday's. Saying so is the difference between a report and a misleading one.
+// A broad day can set a hundred records at once — measured on the archive, the
+// busiest session in the last year had 128. The mail names the biggest
+// companies and counts the rest, the trade-log cap's own bargain.
+const REPORT_RECORD_CAP = 25;
+
 async function buildRefreshReport(state, snap, kind = 'all') {
   const rows = (snap && snap.stocks) || [];
   const live = rows.filter((x) => !x.error);
@@ -10775,9 +10832,23 @@ async function buildRefreshReport(state, snap, kind = 'all') {
   // shows live and neither said anything about the run, which is what this
   // mail is for. Their per-symbol news read went with them — the report path
   // no longer touches the news table at all.
+  // NEW RECORD CLOSES, hung on the payload by `noteRecordCloses` during the
+  // fold. It is the one thing in a run that a reader cannot recover by
+  // reloading the screener: by tomorrow a record is simply the high, and
+  // nothing on the page says it moved today. That is also what keeps it on the
+  // right side of the 2026-09-16 digest removal — the movers and the advice
+  // changes went because each restated a STANDING, where this reports an
+  // EVENT, exactly as `Fundamentals that moved` beside it does.
+  //
+  // NULL means "this run did not compute them" (the give-up paths re-read the
+  // snapshot rather than handing over the payload) and the section is omitted;
+  // an EMPTY ARRAY means "none today" and says so. Collapsing the two would
+  // turn a silence into a claim.
+  const records = (snap && Array.isArray(snap.newRecords)) ? snap.newRecords : null;
+
   return {
     kind, complete, rows, live, loaded, failed, missing, asOf, day, stats,
-    funds,
+    funds, records,
     actor: state.actor || 'unknown',
     startedAt: state.startedAt,
     duration: fmtDuration(Date.now() - state.startedAt),
@@ -10831,6 +10902,10 @@ function refreshReportBodies(r) {
     ? `<a href="${url}/stock/${encodeURIComponent(sym)}" style="color:inherit;text-decoration:none">${escHtml(sym)}</a>`
     : escHtml(sym));
   const line = (k, v) => k.padEnd(14) + v;
+  // A `$` is safe here ONLY because the universe is US-listed by rule, so the
+  // trading currency is USD. It would be wrong the moment a foreign listing
+  // got in — the same thing that makes the cap band safe to express in dollars.
+  const money = (v) => (Number.isFinite(Number(v)) ? '$' + Number(v).toFixed(2) : '—');
   const isAll = r.kind === 'all';
   const runName = r.mode === 'missing' ? 'Fill missing'
     : r.mode === 'fast' ? 'Fast refresh'
@@ -10890,6 +10965,28 @@ function refreshReportBodies(r) {
     if (r.job.trigger) t.push(line('Trigger', r.job.trigger));
     if (r.job.link) t.push(line('Job log', r.job.link));
   }
+  if (r.records) {
+    t.push('', `New record closes  (highest close on record, ${r.day})`);
+    if (!r.records.length) {
+      t.push('  None — no stock closed above its own record today.');
+    } else {
+      for (const x of r.records.slice(0, REPORT_RECORD_CAP)) {
+        // The previous record and ITS date are the whole point: "a record" is
+        // uninteresting without knowing how long the old one had stood.
+        t.push(`  ${x.symbol.padEnd(7)} ${money(x.price)}` +
+          (x.prevDate ? `   past ${money(x.prev)} of ${x.prevDate}` : '') +
+          `   ${x.name}`);
+      }
+      if (r.records.length > REPORT_RECORD_CAP) {
+        t.push(`  …and ${r.records.length - REPORT_RECORD_CAP} more`);
+      }
+    }
+    // The honest qualifier, and it is not boilerplate: 706 of 1,181 archives
+    // start in 2006-Q4 because that is the 5,000-bar API ceiling, so "record"
+    // here means "since this archive begins", which differs per symbol.
+    t.push('  Record means the highest CLOSE we hold, not the highest intraday print,',
+      '  and only as far back as each symbol\'s own archive reaches.');
+  }
   if (isAll && r.funds.prevDay) {
     t.push('', `Fundamentals that moved  (against ${r.funds.prevDay}, the previous recorded set)`);
     if (!r.funds.symbols.length) {
@@ -10914,6 +11011,33 @@ function refreshReportBodies(r) {
   const cell = 'padding:3px 10px 3px 0;font-size:13px';
   const kv = (k, v) => `<tr><td style="${cell};color:#777;white-space:nowrap">${escHtml(k)}</td>` +
     `<td style="${cell}">${escHtml(v)}</td></tr>`;
+  // What a reader cannot get by reloading the screener: which stocks set a
+  // record close TODAY. Tomorrow it is just the high.
+  let recordsBlock = '';
+  if (r.records) {
+    const shown = r.records.slice(0, REPORT_RECORD_CAP);
+    const rows = shown.map((x) =>
+      `<tr><td style="${cell};white-space:nowrap"><b>${symLink(x.symbol)}</b></td>` +
+      `<td style="${cell};white-space:nowrap">${escHtml(money(x.price))}</td>` +
+      `<td style="${cell};color:#777;white-space:nowrap">` +
+      (x.prevDate ? `past ${escHtml(money(x.prev))} of ${escHtml(x.prevDate)}` : '') + '</td>' +
+      `<td style="${cell};color:#777">${escHtml(x.name || '')}</td></tr>`).join('');
+    const more = r.records.length > shown.length
+      ? `<p style="margin:6px 0 0;font-size:12px;color:#999">…and ${r.records.length - shown.length} more.</p>` : '';
+    recordsBlock =
+      '<h3 style="margin:22px 0 2px;font-size:14px">New record closes</h3>' +
+      `<p style="margin:0 0 8px;font-size:12px;color:#999">Closed above their own highest close on record, ${escHtml(r.day)}.</p>` +
+      (shown.length
+        ? `<table style="border-collapse:collapse">${rows}</table>`
+        : '<p style="margin:0;font-size:13px;color:#999">None — no stock closed above its own record today.</p>') +
+      more +
+      // Not boilerplate: 706 of 1,181 archives start in 2006-Q4 because that is
+      // the 5,000-bar API ceiling rather than a listing date, so the window
+      // this is a record over differs by symbol and "all-time" is not ours to say.
+      '<p style="margin:8px 0 0;font-size:12px;color:#999">Highest <b>close</b> we hold, not the highest ' +
+      'intraday print, and only as far back as each symbol\'s own archive reaches.</p>';
+  }
+
   // The section a Refresh all exists for: what changed about the companies,
   // rather than about their prices.
   let fundsBlock = '';
@@ -11004,6 +11128,10 @@ function refreshReportBodies(r) {
     '</table>' +
     problems +
     jobBlock +
+    // Records before fundamentals: both report an event, and this one is about
+    // the session the mail is announcing rather than about a figure that moved
+    // whenever the profile was last re-pulled.
+    recordsBlock +
     fundsBlock +
     '';
 
@@ -11142,6 +11270,112 @@ function marketDay(rows) {
   return latest || new Date().toISOString().slice(0, 10);
 }
 
+// Fold the settled session into each symbol's record close, and report which
+// symbols actually set a new one — the list the nightly email prints.
+//
+// ON THE SAME GATE AS `noteAdvice` AND FOR ITS REASON, which is the whole
+// safety of the feature: a Refresh all runs after the close, so the price on
+// the row IS the settled close for that session. Mid-session the provider
+// serves a bar whose close is the current price, and a running max only ever
+// goes UP — where bars self-heal on the next overlap re-upsert, a max folded
+// from a provisional spike would be a record that never happened, stored for
+// ever. Today is never written; the read-path stamp compares it live instead.
+//
+// THE GAP QUERY IS WHAT MAKES A MISSED NIGHTLY SURVIVABLE. Without it, a
+// session nobody folded is lost from the record permanently unless some later
+// close happens to exceed it — a quietly wrong number on the page, and the
+// nightly has missed a day before (2026-09-21). It is N indexed seeks over
+// the sessions strictly between, grouped by the stored `through` so symbols
+// sharing one need one query, and on an ordinary consecutive run it finds
+// nothing because there is nothing between yesterday and today.
+async function noteRecordCloses(day, rows) {
+  if (!day || !Array.isArray(rows) || !rows.length) return { written: 0, records: [] };
+  const ex = await store.readPriceExtremes();
+  const live = rows.filter((r) => r && !r.error && r.latestDate === day
+    && Number(r.price) >= MIN_CLOSE && Number.isFinite(Number(r.price)));
+  if (!live.length) return { written: 0, records: [] };
+
+  // Repair any sessions between the last fold and this one, grouped by the
+  // `through` they share so the common case is one query rather than 1,182.
+  //
+  // A symbol with NO row yet — a ticker added since the last fold — is the
+  // same problem with `through` at the beginning of time: its whole archive
+  // is the gap. Without that it would record today as its record AND claim
+  // the window started today, understating every earlier high it holds.
+  const byThrough = new Map();
+  const fresh = [];
+  for (const r of live) {
+    const e = ex[r.symbol];
+    const from = e && e.through ? e.through : '';
+    if (!e) fresh.push(r.symbol);
+    if (from < day) {
+      if (!byThrough.has(from)) byThrough.set(from, []);
+      byThrough.get(from).push(r.symbol);
+    }
+  }
+  const gap = {};
+  for (const [through, syms] of byThrough) {
+    try { Object.assign(gap, await store.maxCloseBetween(syms, through, day)); } catch (e) { /* the bars rule */ }
+  }
+  // And their real archive start, which only the bars can answer.
+  let firstBars = {};
+  if (fresh.length) {
+    try { firstBars = await store.firstBarDates(fresh); } catch (e) { /* the bars rule */ }
+  }
+
+  // IS THE SESSION BEING FOLDED ACTUALLY OVER? This is what makes the
+  // provisional-bar guard real rather than an assumption about when the job
+  // runs. `noteAdvice` beside it relies on "a Refresh all runs after the
+  // close", which is true of the nightly and NOT true of a Fill missing the
+  // owner starts by hand at eleven in the morning — and the cost differs: a
+  // miscounted advice run self-corrects, where a record folded from a
+  // provisional close is wrong for ever, because a max only goes up.
+  //
+  // Settled if the session predates today in New York, or the bell has gone.
+  const todayNY = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+  const settled = day < todayNY || nyClock().minutes >= 16 * 60;
+
+  const out = [], records = [];
+  for (const r of live) {
+    const px = Number(r.price);
+    const e = ex[r.symbol];
+    const g = gap[r.symbol];
+    // The best of what was stored and anything missed in between — both of
+    // which are settled sessions by construction.
+    let best = e && e.athClose >= MIN_CLOSE ? e.athClose : -Infinity;
+    let bestD = e && e.athClose >= MIN_CLOSE ? e.athDate : null;
+    if (g && g.close > best) { best = g.close; bestD = g.d; }
+    // STRICTLY greater, so a flat retest of an old record is not a new one.
+    // And mid-session nothing is a record yet: a price that is briefly above
+    // the old high has not closed there, which is the whole distinction.
+    const isNew = settled && e && e.athClose >= MIN_CLOSE && px > best;
+    if (settled && px > best) { best = px; bestD = day; }
+    if (isNew) {
+      records.push({
+        symbol: r.symbol, name: r.shortName || r.name || r.symbol, price: px,
+        cap: Number(r.marketCap) || 0,
+        prev: e.athClose, prevDate: e.athDate, since: e.firstDate,
+      });
+    }
+    out.push({
+      symbol: r.symbol, athClose: best, athDate: bestD,
+      // Never a guess: the stored window, else the archive's own first bar.
+      firstDate: (e && e.firstDate) || firstBars[r.symbol] || day,
+      // `through` only advances over sessions actually folded. Mid-session it
+      // stays put, so the next run's gap query covers today — which is what
+      // makes a mid-session Refresh all lossless rather than merely safe.
+      through: settled ? day : ((e && e.through) || ''),
+    });
+  }
+  let written = 0;
+  try { written = await store.writePriceExtremes(out); } catch (e) { /* the bars rule */ }
+  // Biggest COMPANY first, never biggest price — a $900 share is not a bigger
+  // business than a $30 one. On a broad day this list runs long and the names
+  // a reader knows should lead it, which is the quick finder's own tiebreak.
+  records.sort((a, b) => (b.cap || 0) - (a.cap || 0));
+  return { written, records };
+}
+
 // Everything that happens after a live, non-as-of recompute: cache it, record
 // the day's fundamentals, move the shared flag on, and report when the run ends.
 // Shared by the admin's ?refresh=1 and the cron route so the two cannot drift.
@@ -11203,6 +11437,14 @@ async function finishLiveRefresh(payload, ctx = {}) {
       // was already computed for this row, so nothing is re-read.
       const marked = await noteTechMark(marketDay(rows), rows);
       if (marked) console.log(`tech history: ${marked} marks written for ${marketDay(rows)}`);
+      // The record close, on the same gate and for the same settled-bar
+      // reason. The symbols that set a new one are hung on the payload for
+      // the report to print — it is the one thing in this run that a reader
+      // cannot get by reloading the screener, since by tomorrow the record
+      // is simply the high and nothing says it moved today.
+      const rec = await noteRecordCloses(marketDay(rows), rows);
+      if (rec.written) console.log(`record closes: ${rec.written} folded, ${rec.records.length} new for ${marketDay(rows)}`);
+      payload.newRecords = rec.records;
     } catch (err) {
       // A history write must never fail a refresh — same rule as the bars.
       console.warn('fundamentals: history write failed (screener unaffected):', err.message);
@@ -13027,8 +13269,8 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     // exactly when the database is struggling. The portfolios are deliberately
     // NOT tolerant: memberships are load-bearing for the badges and the tab
     // counts, and silently dropping them would be a wrong table, not a thin one.
-    const [, , , pf, refreshing] = await Promise.all([
-      ...serveStamps(snap.stocks),
+    const [, pf, refreshing] = await Promise.all([
+      serveStamps(snap.stocks),
       readPortfolios(),
       readRefreshState().catch(() => null),
     ]);

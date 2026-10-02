@@ -1480,7 +1480,7 @@
         <th class="group grp-short" data-group="short" colspan="7">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="5">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
-        <th class="group grp-rel" data-group="rel" colspan="15">Relative</th>
+        <th class="group grp-rel" data-group="rel" colspan="16">Relative</th>
         <th class="group grp-trend" data-group="trend" colspan="4">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
         <th class="group grp-fund" data-group="fund" colspan="19">Fundamentals</th>
@@ -1533,6 +1533,7 @@
         <th class="grp-rel" data-key="daysSince52wLow" title="Trading sessions since the 52-week low was set — 0 is today. A new low this week reads 0 to 4.">52W Lo<br>days</th>
         <th class="grp-rel" data-key="pctFromHigh" title="Distance below the 52-week high">% from<br>52W Hi</th>
         <th class="grp-rel" data-key="daysSince52wHigh" title="Trading sessions since the 52-week high was set — 0 is today. A new high this week reads 0 to 4.">52W Hi<br>days</th>
+        <th class="grp-rel" data-key="pctFromAth" title="Distance below the highest CLOSE on record for this symbol. 0.0% means it closed at a record today. Not the highest intraday print — across the universe that sits a median 1.07% higher and the two are not interchangeable. Each cell says how far back its own record reaches: 706 of 1,181 archives begin in 2006 because that is the provider's 5,000-bar ceiling, not a listing date, so this is not an all-time high and is not labelled one.">% from<br>record</th>
         <th class="grp-rel" data-key="range52Pos" title="Where the price sits in its 52-week range: 0 is on the low, 100 on the high.">52W<br>range</th>
         <th class="grp-rel" data-key="steadiness" title="How straight the last year's path was: the R² of log price against time, 0 to 100. 100 is a ruler-straight line, 0 is chop. DIRECTION-BLIND on purpose — a stock falling steadily also scores high, so read it beside the return and the trend columns. Signing it was measured and rejected: it takes the correlation with plain return from 0.34 to 0.89 and halves what the column adds. Needs a full year of bars.">Steadi-<br>ness</th>
         <th class="grp-rel" data-key="ulcer" title="Ulcer index: the root-mean-square drawdown from the running high over the last year, in percent. Depth AND time spent underwater, so a long shallow slide and one brief crash are told apart. Low is a calm ride. Descriptive, not a forecast.">Ulcer</th>
@@ -3355,7 +3356,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="94">${s.error}</td>
+            <td class="na" colspan="95">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3420,6 +3421,9 @@
           ${daysCell(s.daysSince52wLow, 'grp-rel', liveTitle)}
           ${pctCell(s.pctFromHigh, 'grp-rel', liveTitle)}
           ${daysCell(s.daysSince52wHigh, 'grp-rel', liveTitle)}
+          ${pctCell(s.pctFromAth, 'grp-rel', s.pctFromAth == null ? liveTitle
+            : (s.athIsRecord ? 'Closed at a record today' : 'Record close set ' + (s.athDate || 'n/a'))
+              + (s.athWindowFrom ? ` — highest since ${s.athWindowFrom}, where this archive begins` : ''))}
           ${rangeCell(s.range52Pos, 'grp-rel', liveTitle)}
           ${rangeCell(s.steadiness, 'grp-rel', liveTitle)}
           ${numCell(s.ulcer, 'grp-rel', liveTitle)}
@@ -3489,7 +3493,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 99;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 100;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3667,7 +3671,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="96">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="97">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

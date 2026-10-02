@@ -600,6 +600,37 @@ const SCHEMA = [
      symbol    text primary key,
      pulled_at integer not null
    )`,
+  // The highest SETTLED close on record per symbol, so "% from its record
+  // high" is one small read rather than a scan.
+  //
+  // IT EXISTS BECAUSE `max(close) group by symbol` OVER 4.58M ROWS IS A QUOTA
+  // EVENT ON THIS DATABASE, not merely a slow query — the same shape that
+  // produced the 75%-of-quota warning when the 5Y anchor read 748,859 rows a
+  // round. This is folded forward incrementally instead: one row per symbol,
+  // read whole (1,182 rows) and written only for symbols that actually moved.
+  //
+  // `through_d` IS WHAT MAKES IT SAFE, and it is the whole reason this is not
+  // a bare running max. Twelve Data serves a bar for TODAY while the market is
+  // open whose close is the current price, so a mid-session refresh sees a
+  // provisional value. Bars self-heal — the overlap re-upsert replaces them
+  // with the settled close — but **a running max does not: it only goes up**,
+  // so one intraday spike would be baked in permanently as a record close that
+  // never happened. Only SETTLED sessions are ever folded (`noteRecordCloses`
+  // asks New York whether the bell has gone), and `through` advances only over
+  // what was folded, so a mid-session run is lossless rather than merely safe.
+  // Today is otherwise compared live at read time and never stored.
+  //
+  // `first_d` rides along so a surface can name the window it is claiming.
+  // 706 of 1,181 archives start in 2006-Q4 — the 5,000-bar API ceiling rather
+  // than a listing date — so "all-time" is a false word for most of the
+  // universe and the row has to carry its own answer.
+  `create table if not exists price_extremes (
+     symbol    text primary key,
+     ath_close real not null,
+     ath_d     text not null,
+     first_d   text not null,
+     through_d text not null
+   )`,
   // Peers picked by CO-MOVEMENT, for the ~80 stocks whose industry is too
   // thin to have any. Precomputed offline by peer-build.js and read one
   // seek at a time; nothing on a request path computes a correlation, and
@@ -3570,6 +3601,97 @@ async function readPriceState() {
   return out;
 }
 
+// The whole table in one read — 1,182 rows, the `price_state` bargain. Never
+// a join against `bars`, which is the scan this table exists to avoid.
+async function readPriceExtremes() {
+  await init();
+  const r = await db.execute('select symbol, ath_close, ath_d, first_d, through_d from price_extremes');
+  const out = {};
+  for (const row of r.rows) {
+    out[row.symbol] = {
+      athClose: Number(row.ath_close), athDate: row.ath_d,
+      firstDate: row.first_d, through: row.through_d,
+    };
+  }
+  return out;
+}
+
+// The highest close in a date window, as N INDEXED SEEKS rather than a scan.
+//
+// `select symbol, max(close) from bars where d > ? group by symbol` cannot
+// seek — the primary key is (symbol, d), so a filter on the date alone walks
+// all 4.58M rows, which on this database is a quota event rather than a slow
+// query. Naming the symbol makes each one a SEARCH on the primary key.
+//
+// EXCLUSIVE at both ends: `after` is the last session already folded and
+// `before` is the session being folded now, so this answers only "what did I
+// miss in between" — empty on an ordinary consecutive run.
+async function maxCloseBetween(symbols, after, before) {
+  await init();
+  const list = (symbols || []).filter(Boolean);
+  if (!list.length) return {};
+  const out = {};
+  for (let i = 0; i < list.length; i += 200) {
+    const chunk = list.slice(i, i + 200);
+    const res = await db.batch(chunk.map((symbol) => ({
+      sql: `select d, close from bars
+            where symbol = ? and d > ? and d < ? and close >= 0.01
+            order by close desc limit 1`,
+      args: [symbol, after, before],
+    })), 'read');
+    chunk.forEach((symbol, j) => {
+      const row = res[j] && res[j].rows && res[j].rows[0];
+      if (row) out[symbol] = { close: Number(row.close), d: row.d };
+    });
+  }
+  return out;
+}
+
+// The first stored session per symbol — one indexed seek each, so it is safe
+// to ask for a handful. Called ONLY for symbols the extremes table has never
+// seen (a ticker added since the last fold), because a row that guessed its
+// own window would claim the record ran from today and quietly understate
+// every earlier high.
+async function firstBarDates(symbols) {
+  await init();
+  const list = (symbols || []).filter(Boolean);
+  if (!list.length) return {};
+  const out = {};
+  for (let i = 0; i < list.length; i += 200) {
+    const chunk = list.slice(i, i + 200);
+    const res = await db.batch(chunk.map((symbol) => ({
+      sql: 'select d from bars where symbol = ? order by d limit 1',
+      args: [symbol],
+    })), 'read');
+    chunk.forEach((symbol, j) => {
+      const row = res[j] && res[j].rows && res[j].rows[0];
+      if (row) out[symbol] = row.d;
+    });
+  }
+  return out;
+}
+
+// Only the symbols that actually moved. A refresh folds one new session into
+// most rows and nothing into the rest, so writing all 1,182 every round would
+// be the bulk of the work for none of the result.
+async function writePriceExtremes(list) {
+  await init();
+  const rows = (list || []).filter((x) => x && x.symbol && Number.isFinite(x.athClose) && x.athDate && x.firstDate && x.through);
+  if (!rows.length) return 0;
+  for (let i = 0; i < rows.length; i += 200) {
+    await db.batch(rows.slice(i, i + 200).map((x) => ({
+      sql: `insert into price_extremes (symbol, ath_close, ath_d, first_d, through_d)
+            values (?, ?, ?, ?, ?)
+            on conflict(symbol) do update set
+              ath_close = excluded.ath_close, ath_d = excluded.ath_d,
+              first_d   = min(price_extremes.first_d, excluded.first_d),
+              through_d = excluded.through_d`,
+      args: [x.symbol, x.athClose, x.athDate, x.firstDate, x.through],
+    })));
+  }
+  return rows.length;
+}
+
 async function readBarsFullFor(symbols, since) {
   await init();
   if (!symbols || !symbols.length) return {};
@@ -3643,7 +3765,7 @@ async function readBarsFor(symbols, since) {
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state',
-  'earnings_history', 'price_state', 'tech_history', 'alerts', 'alert_events', 'peer_links',
+  'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
   'sec_facts', 'sec_state', 'short_interest', 'short_state'];
 
 // Remove a symbol from the database entirely.
@@ -5214,6 +5336,7 @@ module.exports = {
   readBarsFor,
   purgeSymbol,
   markRefreshPrices, readBarsFullFor, readBarsWindow, notePricePull, readPriceState,
+  readPriceExtremes, writePriceExtremes, maxCloseBetween, firstBarDates,
   readEarningsDates,
   barsSpan, coverageRollups,
   knownListings,

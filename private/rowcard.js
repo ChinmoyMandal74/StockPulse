@@ -199,6 +199,14 @@
     ['rel',   'RS vs S&P',      (s) => V.pct(s.relStrength)],
     ['rel',   '% from 52W lo',  (s) => V.lvl(s.pctFromLow)],
     ['rel',   '% from 52W hi',  (s) => V.pct(s.pctFromHigh)],
+    // Distance below the highest CLOSE on record. Deliberately not called an
+    // all-time high: 706 of 1,181 archives start in 2006 at the provider's
+    // 5,000-bar ceiling, so the window differs by symbol and the next row
+    // names it rather than letting the label overclaim.
+    ['rel',   '% from record',  (s) => V.pct(s.pctFromAth)],
+    ['rel',   'Record set',     (s) => (s.pctFromAth == null ? null
+      : { t: s.athIsRecord ? 'today' : (s.athDate || '—'), c: '' })],
+    ['rel',   'Record since',   (s) => (s.athWindowFrom ? { t: s.athWindowFrom, c: '' } : null)],
     ['rel',   '52W high set',   (s) => (ok(s.daysSince52wHigh) ? { t: s.daysSince52wHigh === 0 ? 'today' : s.daysSince52wHigh + ' sessions ago', c: '' } : null)],
     ['rel',   '52W low set',    (s) => (ok(s.daysSince52wLow) ? { t: s.daysSince52wLow === 0 ? 'today' : s.daysSince52wLow + ' sessions ago', c: '' } : null)],
     ['rel',   '52W range',      (s) => V.num(s.range52Pos, 0)],
