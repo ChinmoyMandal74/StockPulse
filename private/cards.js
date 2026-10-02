@@ -129,6 +129,10 @@
       m1: ['oneMonthPct', 'past month', '30 days'],
       m3: ['threeMonthPct', 'past three months', '3 months'],
       m6: ['sixMonthPct', 'past six months', '6 months'],
+      // Calendar, like wtd and mtd above -- and unlike those two it needs no
+      // stamping from /api/period-anchors, because computeStocks puts ytdPct
+      // on every row.
+      ytd: ['ytdPct', 'this year', 'year to date'],
       y1: ['oneYearPct', 'past year', '1 year'],
     };
     // Every card answers "which stocks?" the same way — a list, then

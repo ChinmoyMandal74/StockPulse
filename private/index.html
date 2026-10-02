@@ -1478,7 +1478,7 @@
         <th class="group grp-act" data-group="act" colspan="12">Advice</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="7">Short-term %</th>
-        <th class="group grp-long" data-group="long" colspan="4">Long-term %</th>
+        <th class="group grp-long" data-group="long" colspan="5">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
         <th class="group grp-rel" data-group="rel" colspan="15">Relative</th>
         <th class="group grp-trend" data-group="trend" colspan="4">Trend</th>
@@ -1521,6 +1521,7 @@
         <th class="grp-short" data-key="oneMonthPct">1M</th>
         <th class="grp-long" data-key="threeMonthPct">3M</th>
         <th class="grp-long" data-key="sixMonthPct">6M</th>
+        <th class="grp-long" data-key="ytdPct" title="Return since the start of this calendar year — measured from the last close before 1 January, which is 31 December or the trading day before it. NOT a rolling window: in January it covers days and in December nearly a year, which is exactly what makes it the number every fund and index is quoted on. Taken from the stored bar archive rather than the refresh window, so it is blank for a stock that listed this year, and in the forward-returns view, where &quot;this year&quot; would mean something else.">YTD</th>
         <th class="grp-long" data-key="oneYearPct">1Y</th>
         <th class="grp-long" data-key="fiveYearPct" title="Five-year price change. Taken from the stored bar archive rather than the refresh window, so it is blank for a stock with less than five years of history here.">5Y</th>
         <th class="grp-fwd" data-key="fwd1M" title="Return in the ~1 month AFTER the as-of date">+1M</th>
@@ -3354,7 +3355,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="93">${s.error}</td>
+            <td class="na" colspan="94">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3405,6 +3406,9 @@
           ${pctCell(s.oneMonthPct, 'grp-short', liveTitle)}
           ${pctCell(s.threeMonthPct, 'grp-long', liveTitle)}
           ${pctCell(s.sixMonthPct, 'grp-long', liveTitle)}
+          ${/* cacheTitle, not liveTitle: YTD is an ARCHIVE anchor like 5Y
+                beside it, not a window over the freshly-pulled series. */''}
+          ${pctCell(s.ytdPct, 'grp-long', cacheTitle)}
           ${pctCell(s.oneYearPct, 'grp-long', liveTitle)}
           ${pctCell(s.fiveYearPct, 'grp-long', cacheTitle)}
           ${pctCell(s.fwd1M, 'grp-fwd', fwdTitle)}
@@ -3485,7 +3489,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 98;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 99;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3663,7 +3667,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="95">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="96">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

@@ -185,6 +185,11 @@
     ['short', '1M',             (s) => V.pct(s.oneMonthPct)],
     ['long',  '3M',             (s) => V.pct(s.threeMonthPct)],
     ['long',  '6M',             (s) => V.pct(s.sixMonthPct)],
+    // Between 6M and 1Y. The one return here that is NOT a fixed window: it
+    // runs from the last close before 1 January, so it covers days in January
+    // and nearly a year in December. One entry puts it in the hover card, the
+    // stock page, the tiles, the phone and /compare at once.
+    ['long',  'YTD',            (s) => V.pct(s.ytdPct)],
     ['long',  '1Y',             (s) => V.pct(s.oneYearPct)],
     ['long',  '5Y',             (s) => V.pct(s.fiveYearPct)],
     ['fwd',   '+1M',            (s) => V.pct(s.fwd1M)],

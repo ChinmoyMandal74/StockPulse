@@ -5939,31 +5939,74 @@ async function computeStocks(asOf, opts = {}) {
     const SIX_MONTH = 126;
     const ONE_YEAR = 252;
 
-    // 5Y comes from the ARCHIVE, not from `values`. A refresh fetches ~300 bars
-    // and an archive round reads 650 days, so a five-year return cannot be a
-    // pctChange over the series the other columns use — it would be null for
-    // every stock. One query for the whole universe instead (the promo studio's
-    // period anchors do the same): the last close before today minus five
-    // years. A stock that listed later simply has no bar before the boundary
-    // and stays blank, and an anchor more than 30 days early is refused so a
-    // hole in the bars cannot quietly turn into a longer window.
+    // 5Y AND YTD COME FROM THE ARCHIVE, not from `values`, and neither can be a
+    // `pctChange` over the series every other column uses.
+    //
+    // For 5Y the reason is depth: a refresh fetches ~300 bars and an archive
+    // round reads 650 days, so a five-year offset would be null for every
+    // stock. For YTD the reason is different and more interesting — **a bar
+    // COUNT cannot express a calendar boundary at all.** The number of
+    // sessions since 1 January is 2 in early January and ~250 in December, so
+    // there is no offset to pass; it has to be an anchored read, which is what
+    // the promo studio's week- and month-to-date windows already are.
+    //
+    // ONE QUERY FOR BOTH, because `closesBefore` takes a list of boundaries
+    // and is N indexed seeks per boundary — the shape it was rewritten into
+    // when the 5Y anchor went from 748,859 rows to 254. Two calls here would
+    // double that for nothing.
+    //
+    // A stock that listed after a boundary simply has no bar before it and
+    // stays BLANK — never a zero, which would read as "it has not moved this
+    // year" for a company that did not exist in January.
+    //
+    // THE GRACE PERIODS DIFFER, and deliberately. 5Y allows 30 days because a
+    // hole five years back is ordinary and the window is approximate anyway.
+    // YTD allows 10: the last close before 1 January is 31 December, or a few
+    // days earlier over a weekend or holiday, so anything older means the
+    // stock stopped trading in December and calling that "year to date" would
+    // be wrong by weeks rather than days.
     const FIVE_YEAR_GRACE_MS = 30 * 86400000;
+    const YTD_GRACE_MS = 10 * 86400000;
     let fiveYearAnchor = {};
+    let ytdAnchor = {};
     if (!asOf) {
+      // Skipped in the forward-returns view for the reason 5Y is: "this year"
+      // there would mean the as-of date's year, which is a different question
+      // from the one the column's header asks.
       const at = new Date();
       at.setFullYear(at.getFullYear() - 5);
-      const boundary = at.toISOString().slice(0, 10);
+      const fiveBound = at.toISOString().slice(0, 10);
+      // The LOCAL year, not UTC's. On 1 January the two disagree west of
+      // Greenwich, and `toISOString` would ask for last year's boundary — the
+      // card-dating lesson, which this file records three times.
+      const ytdBound = `${new Date().getFullYear()}-01-01`;
       try {
-        const [got] = await store.closesBefore([boundary], symbols);
-        for (const [sym, a] of Object.entries(got || {})) {
-          if (Date.parse(boundary) - Date.parse(a.d) <= FIVE_YEAR_GRACE_MS) fiveYearAnchor[sym] = a;
+        const [five, ytd] = await store.closesBefore([fiveBound, ytdBound], symbols);
+        for (const [sym, a] of Object.entries(five || {})) {
+          if (Date.parse(fiveBound) - Date.parse(a.d) <= FIVE_YEAR_GRACE_MS) fiveYearAnchor[sym] = a;
+        }
+        for (const [sym, a] of Object.entries(ytd || {})) {
+          if (Date.parse(ytdBound) - Date.parse(a.d) <= YTD_GRACE_MS) ytdAnchor[sym] = a;
         }
       } catch (err) {
         // A column must never fail a refresh — the bars rule.
-        console.warn('5Y anchors skipped:', err.message);
+        console.warn('5Y/YTD anchors skipped:', err.message);
         fiveYearAnchor = {};
+        ytdAnchor = {};
       }
     }
+    // Both anchored returns are the same arithmetic against the same floor, so
+    // it is written once rather than twice — a sub-cent reading at either end
+    // is a bad bar, which on this archive has already printed +56,129,902% on
+    // a live page.
+    //
+    // `price` IS PASSED IN rather than read from scope: it is a per-row
+    // variable inside the map below and this helper lives outside it, so
+    // reaching for it would resolve to nothing. In these files, pass it in —
+    // the trap `payload`, `secData` and `baseStocks` have each set once.
+    const anchored = (a, px) => (a && isFinite(a.close) && a.close >= MIN_CLOSE
+      && isFinite(px) && px >= MIN_CLOSE
+      ? ((px - a.close) / a.close) * 100 : null);
 
     // Benchmark 3-month return (as of the chosen date, if one is set).
     const spyFull = series[BENCHMARK]?.values;
@@ -6110,15 +6153,12 @@ async function computeStocks(asOf, opts = {}) {
         oneMonthPct: pctChange(values, ONE_MONTH),
         threeMonthPct,
         sixMonthPct: pctChange(values, SIX_MONTH),
+        // Between 6M and 1Y, which is where the owner asked for it and also
+        // where it belongs: for most of the year it covers less than twelve
+        // months and more than six.
+        ytdPct: anchored(ytdAnchor[sym], price),
         oneYearPct: pctChange(values, ONE_YEAR),
-        fiveYearPct: (() => {
-          // Same floor as pctChange: a sub-cent anchor is a bad bar, and the
-          // 5Y window reaches furthest back, so it meets them first.
-          const a = fiveYearAnchor[sym];
-          return a && isFinite(a.close) && a.close >= MIN_CLOSE && isFinite(price)
-            && price >= MIN_CLOSE
-            ? ((price - a.close) / a.close) * 100 : null;
-        })(),
+        fiveYearPct: anchored(fiveYearAnchor[sym], price),
         relStrength,
         pctFromHigh: pctFromHigh(values, 252),
         vs50ma: pctVsMA(values, 50),
@@ -7370,6 +7410,7 @@ const CHAT_FIELDS = [
   ['oneMonthPct', 'return over 1 month, %'],
   ['threeMonthPct', 'return over 3 months, %'],
   ['sixMonthPct', 'return over 6 months, %'],
+  ['ytdPct', 'return since the start of this calendar year, % (not a rolling window)'],
   ['oneYearPct', 'return over 1 year, %'],
   ['pctFromHigh', 'distance below the 52-week high, % (negative)'],
   ['pctFromLow', 'distance above the 52-week low, % (positive)'],

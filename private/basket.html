@@ -348,7 +348,7 @@
 
     function returnsHtml() {
       const HZ = [['1W', 'oneWeekPct'], ['1M', 'oneMonthPct'], ['3M', 'threeMonthPct'],
-                  ['6M', 'sixMonthPct'], ['1Y', 'oneYearPct']];
+                  ['6M', 'sixMonthPct'], ['YTD', 'ytdPct'], ['1Y', 'oneYearPct']];
       const cells = (rs) => HZ.map(([, f]) => {
         const m = mean(rs.map((s) => s[f]));
         return `<td class="${cls(m)}">${pct(m)}</td>`;
