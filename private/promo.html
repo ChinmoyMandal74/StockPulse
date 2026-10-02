@@ -193,6 +193,7 @@
           <option value="list" selected>A list vs the whole screen</option>
           <option value="leaders">The leaders in a list</option>
           <option value="stock">One stock</option>
+          <option value="two">Two stocks</option>
         </select>
         <label>Window</label>
         <select id="chtWin">
@@ -223,9 +224,18 @@
           </select>
         </div>
         <div id="chtSymWrap">
-          <label>Stock</label>
+          <label id="chtSymLab">Stock</label>
           <select id="chtSym"></select>
-          <label style="margin-top:9px">Moving average</label>
+        </div>
+        <div id="chtSym2Wrap">
+          <label>Second stock</label>
+          <select id="chtSym2"></select>
+        </div>
+        <!-- The moving average is the ONE STOCK card's control and has its own
+             wrap for that reason: two stocks with an average each is four lines
+             on a card whose point is the gap between two. -->
+        <div id="chtMaWrap">
+          <label>Moving average</label>
           <select id="chtMa">
             <option value="off">None</option>
             <option value="ma50">50-day</option>
@@ -737,7 +747,7 @@
       // The ground applies to every card, so it is not in any template's list.
       'cardTheme',
       'movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap', 'movScreen',
-      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap', 'chtScreen',
+      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSym2', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap', 'chtScreen',
       'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap', 'spkScreen',
       'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry', 'rngCap', 'rngScreen',
       'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap', 'advScreen',
@@ -828,9 +838,14 @@
       $('advScopeWrap').style.display = am === 'profiles' ? 'none' : 'block';
       $('advProfWrap').style.display = am === 'profiles' ? 'none' : 'block';
       const cm = $('chtMode').value;
-      $('chtScopeWrap').style.display = cm === 'stock' ? 'none' : 'block';
+      const oneOrTwo = cm === 'stock' || cm === 'two';
+      $('chtScopeWrap').style.display = oneOrTwo ? 'none' : 'block';
       $('chtLinesWrap').style.display = cm === 'leaders' ? 'block' : 'none';
-      $('chtSymWrap').style.display = cm === 'stock' ? 'block' : 'none';
+      $('chtSymWrap').style.display = oneOrTwo ? 'block' : 'none';
+      $('chtSym2Wrap').style.display = cm === 'two' ? 'block' : 'none';
+      $('chtMaWrap').style.display = cm === 'stock' ? 'block' : 'none';
+      // With a second picker under it, "Stock" alone no longer says which.
+      $('chtSymLab').textContent = cm === 'two' ? 'First stock' : 'Stock';
     }
     function fit() {
       const deck = document.querySelector('.deck');
@@ -886,7 +901,7 @@
     // hour; a test that changed the control and diffed the card caught it.
     ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap', 'movScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'movers') render(); }));
-    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap', 'chtScreen'].forEach((id) =>
+    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSym2', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap', 'chtScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'chart') render(); }));
     ['spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap', 'spkScreen'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'sparks') render(); }));
@@ -1289,6 +1304,12 @@
         $('chtSym').innerHTML = stocks.slice()
           .sort((a, b) => a.symbol.localeCompare(b.symbol))
           .map((r) => `<option value="${esc(r.symbol)}">${esc(r.symbol)}</option>`).join('');
+        // The second picker defaults to a DIFFERENT stock: both landing on the
+        // same symbol draws one line over itself, which is a comparison with
+        // nothing. The card refuses that case too, in case a saved post or a
+        // deliberate choice reaches it.
+        $('chtSym2').innerHTML = $('chtSym').innerHTML;
+        if ($('chtSym2').options.length > 1) $('chtSym2').selectedIndex = 1;
         $('advScope').innerHTML = $('movScope').innerHTML;
         $('advSym').innerHTML = $('chtSym').innerHTML;
         $('spkScope').innerHTML = $('movScope').innerHTML;

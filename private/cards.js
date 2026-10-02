@@ -1020,13 +1020,28 @@
       }
       const strokes = L.map((l) =>
         `<path class="cl" d="${path(l.P)}" fill="none" stroke="${l.color}" stroke-width="${l.width || 2}" stroke-linejoin="round" stroke-linecap="round" opacity="${l.dim ? 0.7 : 1}"/>`).join('');
-      const tags = L.map((l) => {
-        let last = null, li = -1;
-        for (let i = l.P.length - 1; i >= 0 && last == null; i--) { last = l.P[i]; li = i; }
-        if (last == null) return '';
-        const ty = Math.max(PT + 14, Math.min(H - PB, y(last) + 7));
-        return `<text x="${W - PR + 14}" y="${ty.toFixed(1)}" font-size="24" font-weight="600" fill="${l.color}" font-family="Geist Mono, monospace">${(last >= 0 ? '+' : '') + last.toFixed(1)}%</text>`;
-      }).join('');
+      // TWO END TAGS AT THE SAME HEIGHT PRINT ON TOP OF EACH OTHER, and two
+      // stocks finishing a window a point apart is the ordinary case on the
+      // two-stock card — where those two numbers are the whole comparison.
+      // The leaders card can stack eight. So lay them out in y order against a
+      // minimum gap, then pull the stack back inside the plot if it ran past
+      // the bottom. A single tag resolves to exactly the old clamp.
+      const TAG_GAP = 26;
+      const marks = [];
+      for (const l of L) {
+        let last = null;
+        for (let i = l.P.length - 1; i >= 0 && last == null; i--) last = l.P[i];
+        if (last != null) marks.push({ v: last, color: l.color, y: y(last) + 7 });
+      }
+      marks.sort((a, b) => a.y - b.y);
+      let floor = PT + 14;
+      for (const m of marks) { m.y = Math.max(m.y, floor); floor = m.y + TAG_GAP; }
+      const over = marks.length ? marks[marks.length - 1].y - (H - PB) : 0;
+      // Shifting the whole stack keeps the gaps; the plot is far taller than
+      // eight tags need, so this cannot press them back into the top clamp.
+      if (over > 0) for (const m of marks) m.y = Math.max(PT + 14, m.y - over);
+      const tags = marks.map((m) =>
+        `<text x="${W - PR + 14}" y="${m.y.toFixed(1)}" font-size="24" font-weight="600" fill="${m.color}" font-family="Geist Mono, monospace">${(m.v >= 0 ? '+' : '') + m.v.toFixed(1)}%</text>`).join('');
       const d0 = dates[0], d1 = dates[dates.length - 1];
       const axis = `<text x="${PL}" y="${H - 10}" font-size="18" fill="${pal.axis}" font-family="Geist Mono, monospace">${esc(d0)}</text>` +
         `<text x="${W - PR}" y="${H - 10}" text-anchor="end" font-size="18" fill="${pal.axis}" font-family="Geist Mono, monospace">${esc(d1)}</text>`;
@@ -1153,6 +1168,44 @@
         }
         kick = `${esc(sym)} \u00b7 ${esc(winLabel)}`;
         title = `${esc(sym)}<br><span class="dim">${esc((row && row.name) || '')}</span>`;
+      } else if (mode === 'two') {
+        // TWO STOCKS, REBASED \u2014 the one reading two raw price lines cannot
+        // give. Both are scaled to the window's first session, exactly as
+        // every other line on this card is, so THE GAP BETWEEN THEM IS THE
+        // RELATIVE PERFORMANCE. /compare settled this already: two raw prices
+        // on one axis press the cheaper stock into the floor and the chart
+        // says nothing.
+        const symA = O.chtSym || (stocks[0] && stocks[0].symbol);
+        const symB = O.chtSym2 || ((stocks.find((r) => r.symbol !== symA) || {}).symbol);
+        const empty = (msg) => chromeTop() + `<div class="s-body"><div><p class="s-empty">${msg}</p></div></div>` + chromeFoot();
+        // One stock twice is one line drawn over itself, and the whole card
+        // would then be a comparison with nothing. Say which half is missing.
+        if (!symB || symB === symA) return empty('Pick a second stock to compare against.');
+        const SA = series[symA], SB = series[symB];
+        // NAME WHICH ONE, rather than a single message for either \u2014 with two
+        // subjects "no stored history" does not say whose.
+        if (!SA || !SB) return empty(`No stored history for ${esc(!SA ? symA : symB)} in this window.`);
+        // THE ACCENT PAIR, NEVER GREEN AND RED. Those two already mean up and
+        // down on every chart in this app, so colouring each line by its own
+        // direction would make a different claim from the one the card is
+        // for \u2014 /compare's rule, and the same reason neither line is filled:
+        // a fill marks a hero, and here there are two subjects.
+        const cA = pal.ink('#7c9cff'), cB = pal.ink('#a78bfa');
+        const eA = endOf(SA), eB = endOf(SB);
+        lines = [{ color: cA, S: SA, width: 4 }, { color: cB, S: SB, width: 4 }];
+        legend = [{ color: cA, label: `${symA} ${pct(eA)}` }, { color: cB, label: `${symB} ${pct(eB)}` }];
+        kick = `${esc(symA)} vs ${esc(symB)} \u00b7 ${esc(winLabel)}`;
+        title = `${esc(symA)}<br><span class="dim">vs ${esc(symB)}</span>`;
+        note = 'Both rebased to the start of the window, so the gap between the lines is the relative performance.';
+        if (eA != null && eB != null) {
+          // IN POINTS, never as a percentage of a percentage. Both numbers are
+          // already percentages from the same origin, so their difference is a
+          // gap in points \u2014 the rule /compare and the refresh email both keep.
+          const gap = Math.abs(eA - eB);
+          note = `${eA === eB ? `${esc(symA)} and ${esc(symB)} are level over the ${winLabel.replace(/^Past /, '')}`
+            : `${esc(eA > eB ? symA : symB)} is ahead by ${gap.toFixed(1)} points over the ${winLabel.replace(/^Past /, '')}`}. ` + note;
+        }
+        note += ' Price only \u2014 no dividends, no positions.';
       } else if (mode === 'leaders') {
         const scope = chartScopeSymbols();
         const n = Number(O.chtLines) || 5;
