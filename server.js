@@ -3042,7 +3042,7 @@ async function stampPricedAt(rows) {
 // live costs nothing and cannot rot.
 //
 // `athWindowFrom` RIDES ALONG BECAUSE THE WORD "ALL-TIME" IS NOT AVAILABLE TO
-// US. Measured over the archive: 706 of 1,181 symbols start in 2006-Q4, which
+// US. Measured over the archive (2026-10-02): 718 of 1,282 symbols start in 2006-Q4, which
 // is the 5,000-bar API ceiling rather than a listing date. So every surface
 // showing this has to be able to say which window it is claiming, per row,
 // and that answer differs row to row.
@@ -10981,7 +10981,7 @@ function refreshReportBodies(r) {
         t.push(`  …and ${r.records.length - REPORT_RECORD_CAP} more`);
       }
     }
-    // The honest qualifier, and it is not boilerplate: 706 of 1,181 archives
+    // The honest qualifier, and it is not boilerplate: 718 of 1,282 archives
     // start in 2006-Q4 because that is the 5,000-bar API ceiling, so "record"
     // here means "since this archive begins", which differs per symbol.
     t.push('  Record means the highest CLOSE we hold, not the highest intraday print,',
@@ -11031,7 +11031,7 @@ function refreshReportBodies(r) {
         ? `<table style="border-collapse:collapse">${rows}</table>`
         : '<p style="margin:0;font-size:13px;color:#999">None — no stock closed above its own record today.</p>') +
       more +
-      // Not boilerplate: 706 of 1,181 archives start in 2006-Q4 because that is
+      // Not boilerplate: 718 of 1,282 archives start in 2006-Q4 because that is
       // the 5,000-bar API ceiling rather than a listing date, so the window
       // this is a record over differs by symbol and "all-time" is not ours to say.
       '<p style="margin:8px 0 0;font-size:12px;color:#999">Highest <b>close</b> we hold, not the highest ' +
