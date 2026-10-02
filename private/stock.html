@@ -145,6 +145,14 @@
     .px { margin-left: auto; text-align: right; align-self: flex-end; }
     .px b { display: block; font-family: var(--mono); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
     .px span { font-family: var(--mono); font-size: 12.5px; }
+    /* Metadata, not a reading, so it is the quietest thing in the masthead —
+       and `--faint` is contrast-floored at 5.4:1, so quiet is not unreadable.
+       Scoped under .px: nine unscoped class names on this project have
+       captured later markup. It takes `.warn` for its colour ONLY, which is
+       all `.warn` does in app.css — amber already means "notice this, it is
+       old" everywhere here, which is exactly what a day-old price is. */
+    .px .asof { display: block; color: var(--faint); font-size: 12px; margin-top: 2px; }
+    .px .asof.warn { color: var(--amber); }
     .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
             font-size: 12px; color: var(--faint); }
     .chip.has-tip { cursor: help; border-color: var(--hair-2); }
@@ -1010,6 +1018,40 @@
     let stock = null;
 
     const curSym = (c) => ({ USD: '$', EUR: '€', GBP: '£', JPY: '¥', KRW: '₩', INR: '₹' }[c] || '');
+
+    // HOW OLD IS THIS PAGE — under the price, because that is the number it
+    // qualifies (2026-10-02, owner's request).
+    //
+    // IT EXISTS BECAUSE THE SCREENER SELF-RELOADS AND THIS PAGE DOES NOT. A
+    // visible screener tab polls /api/status every five minutes and reloads
+    // when the snapshot moves; /stock has no poller, so two tabs left open
+    // across an intraday slot show different prices, different returns and
+    // sometimes a different verdict — all correct, none of it dated. The
+    // owner reported exactly that (ASML at $1857.6/+2.7% against the
+    // screener's $1865.5/+3.2%, one slot apart) and neither page said which
+    // was older: the screener has its Price pulled column and status pill,
+    // and this page had nothing.
+    //
+    // THE VALUE COMES FROM FIELD_SPEC'S OWN FORMATTER, never a second copy of
+    // the rule, so the masthead and the screener's column cannot drift on
+    // what counts as stale or how a time is written.
+    //
+    // ASKING IS NOT RECEIVING, and the tooltip carries that rather than
+    // letting a fresh-looking clock imply a fresh bar: ten stocks were once
+    // pulled on time and were not on the day's bar, AVB carrying a close from
+    // five weeks earlier. The pull time and the newest stored bar are two
+    // facts and are named as two.
+    function asOfHtml(s) {
+      const f = RowCard.fieldValues(s)['short|Price pulled'];
+      const bar = s.latestDate ? `Newest stored bar: ${s.latestDate}.` : 'No stored bar yet.';
+      if (!f || f.t == null) {
+        return '<span class="asof" title="No price pull recorded for this symbol yet. ' +
+          esc(bar) + '">Price as of —</span>';
+      }
+      const tip = `Price last pulled for ${s.symbol} at ${f.t}. ${bar} ` +
+        'Asking and receiving are different facts — read the two together.';
+      return `<span class="asof${f.c === 'warn' ? ' warn' : ''}" title="${esc(tip)}">Price as of ${esc(f.t)}</span>`;
+    }
 
     // Axis labels want to be scannable, not precise: decimals on a gridline are
     // noise, but a $2 stock still needs them.
@@ -2500,7 +2542,8 @@
           </span>
           <span class="px"><b>${esc(price)}</b>
             <span class="${today == null ? 'na' : today >= 0 ? 'pos' : 'neg'}">${
-              today == null ? '—' : (today >= 0 ? '+' : '') + today.toFixed(2) + '% today'}</span></span>
+              today == null ? '—' : (today >= 0 ? '+' : '') + today.toFixed(2) + '% today'}</span>
+            ${asOfHtml(stock)}</span>
         </div>
 
         <section class="bezel card"><div class="core">
@@ -2608,7 +2651,13 @@
             // `earnings_history` — fresher than the profile copy the row
             // reads, and with the time of day. One statement, not two that
             // can disagree by up to the 7-day profile rotation.
-            skip: ['fund|Reported'],
+            // `short|Price pulled` joined it on 2026-10-02: the masthead now
+            // carries that clock under the price it qualifies, built from
+            // THIS field's own formatter, so the row below would print a
+            // byte-identical string a screen further down. Unlike Reported
+            // the two cannot disagree — they are one value — which makes this
+            // purely a duplication, and the page already states it better.
+            skip: ['fund|Reported', 'short|Price pulled'],
             // The same four doors the masthead chips are, in the place the
             // owner was actually looking. ONE builder per label, so the row
             // and the chip above it cannot point at different addresses.

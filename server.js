@@ -7806,6 +7806,21 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   // same defect the bare-string Size getter had and was hiding behind.
   // Synchronous and free: it reads marketCap and nothing else.
   stampCapDerived([stock]);
+  // THE SAME DEFECT, TWO FIELDS OVER, AND THE COMMENT ABOVE DID NOT STOP IT.
+  // This route applied ONE of the four read-path stamps, so `pricedAt` and
+  // `adviceDays` were undefined on every stock page — measured on production
+  // across ASML, BRK.B and MU — and the Price pulled and Days held rows each
+  // drew a label with an em-dash, exactly the "field that exists, is offered
+  // by both field pickers, and silently has no value" shape capBand had.
+  // `/compare` withheld both for the same reason.
+  //
+  // IN PARALLEL, each with its own catch, which is the screener's own rule:
+  // they are independent single-row reads, and a slow auxiliary read should
+  // cost one row rather than 500 the page.
+  await Promise.all([
+    stampPricedAt([stock]).catch(() => {}),
+    stampAdviceAge([stock]).catch(() => {}),
+  ]);
 
   res.json({
     stock,
