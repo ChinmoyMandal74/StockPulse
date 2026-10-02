@@ -1059,6 +1059,82 @@ already draws at 1080px.
 
 ---
 
+## 20. Chart patterns — measured 2026-10-02, flat, and worth drawing anyway
+
+**Asked for from a table of classical patterns (head and shoulders, double and
+triple tops, rounding bottoms) with "do you think we can do some of these on
+the individual stock chart".** The fire rate was measured before anything was
+drawn, which is the gate this list exists to impose, and the answer split: the
+patterns **occur often enough to be worth marking and predict nothing**.
+
+### What was measured, against the LOCAL copy
+`analysis.db`, 4.37M bars from 2008, **1,147 symbols after exclusions**, 18.7
+years. A percentage ZigZag over closes gives the pivots; a double top is two
+same-side pivots within `tol` of each other, separated by `minBars`, with a
+retracement of at least `minRetrace` between them and a rise into the first.
+**Dated at the CONFIRMATION close** — the first close through the neckline —
+never at the second peak, which would buy hindsight.
+
+| at 8% zigzag / 3% tolerance / 15% retracement | events | symbols | per symbol per year |
+|---|---|---|---|
+| double top | 565 | 402 (35%) | 0.03 |
+| double bottom | 988 | 610 (53%) | 0.05 |
+
+Tunable from 42 events (a dead box) to 3,083 across 83% of symbols (noise), so
+the middle band is a real answer rather than a tuned one. **The events are not
+clustered into a few crises** — 158 and 185 distinct months, busiest month 3%,
+busiest year 13%, every year from 2008 represented.
+
+### Why it is flat, and the test that settled it
+**TOP MINUS BOTTOM includes zero at every horizon** (−0.31pt at 1M, −1.23pt at
+3M, **+4.20pt at 6M — the sign flips**), 95% intervals from a monthly block
+bootstrap. Two patterns that predict opposite things cannot be told apart.
+And the **bullish** one is reliably bad: the double bottom's 6M interval
+`[−15.34%, −7.62%]` sits wholly below the base rate's `[−6.17%, −3.39%]`.
+
+The reading: **a neckline break selects stocks that just moved sharply in
+EITHER direction, and those lag.** Both patterns inherit it. Full numbers in
+CLAUDE.md's research log, which this is the tenth entry of and the ninth flat.
+
+### What should still be built, and what must not be
+**Build**: swing pivots and double top/bottom as a chart layer on `/stock` —
+a toggle beside FUND / EARN / SHORT, **default off** like all three, confirmed
+patterns only, drawn ON the price plot rather than in a strip (these are price
+geometry; they have no separate scale to need one). It costs **no endpoint and
+no read** — `/api/history` already serves the window and detection is a pure
+function, the earnings rug's bargain.
+
+**Do not build**: any directional wording, a screener column, a filter key, or
+anything `scoreActionInto` can see. The measurement above is the reason rather
+than the usual caution — the label is the volume-breakout dot's, a fact about
+the shape and silent about what follows. **Head and shoulders is dropped**: it
+has strictly more free parameters than the pattern that just failed.
+
+### Three traps, each already paid for once
+- **The detector returned ZERO at all 18 settings on the first run and nearly
+  went in the log as "this never happens".** One extreme tracker in the ZigZag,
+  both update branches live at `dir = 0`, so it followed price both ways and
+  emitted **no pivots at all on 4,714 bars of MU**. Two trackers. Prove the
+  primitive on a synthetic saw, a ramp and real symbols *before* the sweep is
+  allowed to print — `pattern-fire.js` refuses to run until it has.
+- **A monotone ramp HAS a low (its first bar); what it cannot have is a high.**
+  The self-check's first assertion demanded zero pivots and failed over correct
+  code.
+- **Sub-cent closes are not prices** (entry 16). The local copy predates the
+  SOLS purge and APLD carries 1,304 real sub-cent bars, where "two peaks within
+  3%" is trivially true. Each series is truncated past its last sub-cent close.
+
+### What is still owed before drawing it
+- **Intraday highs and lows, not just closes.** Everything above used closes
+  alone; real peaks may define cleaner pivots and could move the fire rate.
+- **Survivorship.** The pool is today's 1,181 tickers, so bankruptcies and
+  acquisitions are absent from both the patterns and the benchmark — and a
+  pattern literature built on failed companies is exactly where that bites.
+- Scripts are in the scratchpad: `pattern-fire.js` (sweep + self-check),
+  `pattern-cluster.js` (clustering), `pattern-sig.js` (block bootstrap).
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
