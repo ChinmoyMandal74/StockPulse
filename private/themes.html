@@ -148,6 +148,9 @@
         <button class="btn" id="bulkCheck">Check</button>
         <button class="btn btn-primary" id="bulkGo" disabled>
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus" /></svg>Add them</button>
+        <!-- A block with no way forward is a dead end: this strips exactly the
+             refused tickers out of the box so the rest can go in. -->
+        <button class="btn" id="bulkDrop" hidden>Remove the unavailable</button>
       </div>
       <p class="said" id="bulkSaid">Adding costs no API credits and pulls nothing &mdash; the data arrives
         with Fill missing or the nightly gap fill.</p>
@@ -316,29 +319,67 @@
       .filter((x) => x && /^[A-Z][A-Z0-9./-]{0,11}$/.test(x)))];
     let bulkReady = null;
 
+    // THE CHECK IS A GATE NOW, NOT A NOTE. It asks the data provider, pinned to
+    // US listings, whether each ticker can be priced at all -- and refuses to
+    // arm the Add button while any of them cannot. Until 2026-10-03 it only
+    // consulted the stored NASDAQ listing, which is EMPTY in production, so it
+    // was advisory about nothing and twenty-four unservable tickers got in.
+    let bulkBad = [];
+
     async function checkBulk() {
       const syms = parseTickers($('bulkText').value);
       $('bulkGo').disabled = true;
+      $('bulkDrop').hidden = true;
       bulkReady = null;
+      bulkBad = [];
       if (!syms.length) { say('bulkSaid', 'Nothing that looks like a ticker in there.', 'err'); return; }
-      say('bulkSaid', 'Checking…');
+      say('bulkSaid', `Asking the data provider about ${syms.length}…`);
       try {
         const chk = await api('POST', '/api/universe/check', { symbols: syms });
         const already = chk.inUniverse || [];
-        const unknown = chk.unlisted || [];
+        const bad = chk.unavailable || [];
+        const unsure = chk.unchecked || [];
         const fresh = syms.filter((s) => !already.includes(s));
         const theme = $('bulkPf').value.trim();
         const isNew = theme && !Object.keys(portfolios).some((n) => n.toLowerCase() === theme.toLowerCase());
-        bulkReady = { symbols: syms, theme, isNew };
+        const good = fresh.filter((s) => !bad.some((b) => b.symbol === s));
+
         const bits = [`${syms.length} ticker${syms.length === 1 ? '' : 's'}`];
         if (already.length) bits.push(`${already.length} already tracked`);
-        if (fresh.length) bits.push(`${fresh.length} new — about ${(fresh.length * 81).toLocaleString()} credits on the next Fill missing`);
+        if (good.length) bits.push(`${good.length} can be priced — about ${(good.length * 81).toLocaleString()} credits on the next Fill missing`);
         if (theme) bits.push(isNew ? `will CREATE the theme "${theme}"` : `into "${theme}"`);
-        say('bulkSaid', bits.join(' · ') + (unknown.length
-          ? ` — ${unknown.length} not in the NASDAQ listing (${unknown.slice(0, 6).join(', ')})` : ''),
-          unknown.length ? 'err' : 'ok');
+        // Could not ask is not the same as cannot price, and it does not block.
+        if (unsure.length) bits.push(`${unsure.length} could not be checked (${unsure.slice(0, 4).map((u) => u.symbol).join(', ')}) — they will be let through`);
+
+        if (bad.length) {
+          bulkBad = bad.map((b) => b.symbol);
+          $('bulkDrop').hidden = false;
+          $('bulkDrop').textContent = `Remove the ${bad.length} unavailable`;
+          say('bulkSaid', bits.join(' · ')
+            + ` — BLOCKED: ${bad.length} cannot be priced by the data provider (`
+            + bulkBad.slice(0, 8).join(', ') + (bulkBad.length > 8 ? ' …' : '')
+            + '). The screener takes US listings only.', 'err');
+          return;
+        }
+        if (!good.length && !unsure.length) {
+          say('bulkSaid', bits.join(' · ') + ' — nothing new to add.', 'err');
+          return;
+        }
+        bulkReady = { symbols: syms, theme, isNew };
+        say('bulkSaid', bits.join(' · '), 'ok');
         $('bulkGo').disabled = false;
       } catch (err) { say('bulkSaid', err.message, 'err'); }
+    }
+
+    // Strip exactly the refused tickers out of the box, then re-check — so the
+    // reader sees the new verdict rather than being handed an armed button.
+    function dropBad() {
+      if (!bulkBad.length) return;
+      const gone = new Set(bulkBad);
+      $('bulkText').value = parseTickers($('bulkText').value).filter((s) => !gone.has(s)).join(', ');
+      $('bulkDrop').hidden = true;
+      bulkBad = [];
+      checkBulk();
     }
 
     async function addBulk() {
@@ -353,9 +394,15 @@
         adopt(r);
         $('bulkText').value = '';
         bulkReady = null;
+        // The server refuses unservable tickers whatever the page decided, so
+        // say when it dropped some rather than reporting a smaller number with
+        // no explanation.
+        const refused = r.unavailable || [];
         say('bulkSaid', `${(r.added || []).length} added, ${(r.already || []).length} already tracked`
           + ((r.invalid || []).length ? `, ${r.invalid.length} rejected` : '')
-          + '. Run Fill missing to pull their data.', 'ok');
+          + (refused.length ? `, ${refused.length} refused by the data provider (`
+            + refused.slice(0, 6).map((x) => x.symbol).join(', ') + ')' : '')
+          + '. Run Fill missing to pull their data.', refused.length ? 'err' : 'ok');
       } catch (err) { say('bulkSaid', err.message, 'err'); $('bulkGo').disabled = false; }
     }
 
@@ -503,8 +550,16 @@
       $('delGo').disabled = true; delReady = null; paintDelList([], []);
     });
     $('bulkGo').addEventListener('click', addBulk);
-    $('bulkText').addEventListener('input', () => { $('bulkGo').disabled = true; bulkReady = null; });
-    $('bulkPf').addEventListener('input', () => { $('bulkGo').disabled = true; bulkReady = null; });
+    $('bulkDrop').addEventListener('click', dropBad);
+    // Editing the box invalidates the verdict, so the refusal banner and its
+    // Remove button have to go with the armed Add button -- otherwise the
+    // reader is offered a one-click strip of a list that no longer applies.
+    const bulkDirty = () => {
+      $('bulkGo').disabled = true; bulkReady = null;
+      $('bulkDrop').hidden = true; bulkBad = [];
+    };
+    $('bulkText').addEventListener('input', bulkDirty);
+    $('bulkPf').addEventListener('input', bulkDirty);
     $('newGo').addEventListener('click', createTheme);
     $('newName').addEventListener('keydown', (e) => { if (e.key === 'Enter') createTheme(); });
 

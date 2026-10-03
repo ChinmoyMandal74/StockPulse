@@ -3662,15 +3662,78 @@ async function fetchJson(url, opts = {}) {
 }
 
 // Fetch a company name for one symbol (1 credit). Best-effort; returns null on failure.
-async function fetchName(symbol) {
-  try {
-    const q = await fetchJson(
-      `${TD_BASE}/quote?symbol=${encodeURIComponent(symbol)}&apikey=${API_KEY}`
-    );
-    return q && q.name ? q.name : null;
-  } catch {
-    return null;
+// ONE PINNED, BATCHED ASK: does the provider serve a US listing for these?
+// Measured 2026-10-03 -- /quote takes a comma-separated batch, charges 1 credit
+// a SYMBOL (4 symbols cost 4), and applies `country` per symbol inside the
+// batch. So this costs exactly what asking one at a time costs and takes one
+// round trip.
+//
+// PINNING IS THE WHOLE POINT, NOT A REFINEMENT. Unpinned, the provider resolves
+// a ticker to whatever listing it prefers. Measured the same day: ARCH comes
+// back as Arch Biopartners on the TSXV, APLS as a London inverse-Apple ETP,
+// CEQP as a Toronto asset-allocation fund and VRTU as a Swedish crypto ETP --
+// four tickers that had sat in the screener since July carrying a FOREIGN
+// instrument's prices under a US company's name. Every one is refused outright
+// once `country=United States` is set. It is also what the standing
+// US-listed-only rule needs in order to be enforceable at all.
+//
+// "THE PROVIDER SAYS NO" AND "WE COULD NOT ASK" ARE DIFFERENT ANSWERS, and
+// conflating them is the expensive direction -- `fetchProfile`'s fetchOk rule.
+// A rate limit, a dropped socket or an HTML gateway page read as "unavailable"
+// would lock an admin out of adding ANYTHING for as long as the provider
+// wobbles. A symbol is marked `no` only when the provider answered and named
+// that symbol as not found; everything else is `unknown`, which never blocks.
+const CHECK_CHUNK = 120;
+async function providerCheck(symbols) {
+  const out = new Map();
+  const syms = [...new Set((symbols || [])
+    .map((s) => String(s || '').trim().toUpperCase()).filter(Boolean))];
+  if (!syms.length) return out;
+  if (!API_KEY) {
+    for (const s of syms) out.set(s, { state: 'unknown', reason: 'No data-provider key is configured.' });
+    return out;
   }
+  for (let i = 0; i < syms.length; i += CHECK_CHUNK) {
+    const slice = syms.slice(i, i + CHECK_CHUNK);
+    let d = null;
+    let failed = null;
+    try {
+      d = await fetchJson(`${TD_BASE}/quote?symbol=${slice.map(encodeURIComponent).join(',')}`
+        + `&country=United%20States&apikey=${API_KEY}`);
+    } catch (err) {
+      failed = (err && err.message) ? String(err.message).slice(0, 160) : 'could not reach the provider';
+    }
+    if (failed || !d || typeof d !== 'object') {
+      for (const s of slice) out.set(s, { state: 'unknown', reason: failed || 'no answer from the provider' });
+      continue;
+    }
+    // A batch of ONE comes back as the quote object itself; two or more come
+    // back keyed by symbol. Reading only the keyed shape makes every
+    // single-symbol check look unavailable -- which is the single add.
+    const byKey = (slice.length === 1 && (d.symbol || d.status)) ? { [slice[0]]: d } : d;
+    for (const s of slice) {
+      const v = byKey[s];
+      if (v && v.symbol) {
+        out.set(s, { state: 'ok', name: v.name || null, exchange: v.exchange || null });
+      } else if (v && (v.status === 'error' || v.message)) {
+        out.set(s, { state: 'no', reason: 'the data provider has no US listing for it' });
+      } else {
+        // Asked for and simply absent from the answer. Not a refusal, so it
+        // must not block -- the rule above.
+        out.set(s, { state: 'unknown', reason: 'the provider did not answer for this symbol' });
+      }
+    }
+  }
+  return out;
+}
+
+// Pinned, through the helper above, so a new ticker can never be named after a
+// foreign instrument that happens to share its symbol. This call was unpinned
+// until 2026-10-03, which is how a London -1x Apple ETP could have supplied the
+// display name for Apellis.
+async function fetchName(symbol) {
+  const v = (await providerCheck([symbol])).get(String(symbol || '').trim().toUpperCase());
+  return (v && v.state === 'ok' && v.name) ? v.name : null;
 }
 
 // Percent change between the latest close and the close `daysAgo` trading days back.
@@ -5052,8 +5115,14 @@ async function portfolioAnswer(extra = {}) {
 // It is returned as well: adding a ticker does not trigger a price pull, so
 // this lookup is the only thing that touches the symbol before the next
 // Refresh, and a name coming back empty is the earliest hint of a typo.
-async function nameForNewTicker(symbol) {
+// `known` is the name the availability check already paid a credit for, so the
+// add route does not ask the provider the same question twice.
+async function nameForNewTicker(symbol, known) {
   let name = (await readNames())[symbol] || null;
+  if (!name && known) {
+    name = known;
+    await writeNames({ [symbol]: name });
+  }
   if (API_KEY && !name) {
     name = await fetchName(symbol);
     if (name) await writeNames({ [symbol]: name });
@@ -5094,8 +5163,35 @@ app.post('/api/universe/check', requireAdmin, route(async (req, res) => {
   let known = new Set();
   try { known = await store.knownListings(syms); } catch { known = null; }
   const have = new Set(await readUniverse());
+
+  // THE PROVIDER IS THE GATE NOW; the NASDAQ listing is the footnote. That
+  // table has been EMPTY in production (listingRows: 0), so its "not in the
+  // listing" warning could never fire and the Check button was advisory about
+  // nothing -- which is how twenty-four unservable tickers got in.
+  //
+  // Only symbols NOT already tracked are asked about: re-confirming a stock
+  // the screener already holds is a credit spent on nothing.
+  const ask = syms.filter((x) => !have.has(x));
+  const seen = await providerCheck(ask);
+  const tradable = [];
+  const unavailable = [];
+  const unchecked = [];
+  for (const s of ask) {
+    const v = seen.get(s);
+    if (v && v.state === 'ok') tradable.push({ symbol: s, name: v.name, exchange: v.exchange });
+    else if (v && v.state === 'no') unavailable.push({ symbol: s, reason: v.reason });
+    else unchecked.push({ symbol: s, reason: (v && v.reason) || 'not checked' });
+  }
+
   res.json({
     inUniverse: syms.filter((x) => have.has(x)),
+    tradable,
+    unavailable,
+    // Asked and not answered. Deliberately its own bucket: the page must be
+    // able to say "could not check" rather than condemn a symbol over an
+    // outage, and the add routes let these through.
+    unchecked,
+    credits: ask.length,
     // null when the listing table is empty or unreadable, so the page can say
     // "not checked" rather than flagging everything as unknown.
     unlisted: known ? syms.filter((x) => !known.has(x)) : null,
@@ -5120,7 +5216,38 @@ app.post('/api/universe/bulk', requireAdmin, route(async (req, res) => {
 
   // Read BEFORE the portfolio write: writePortfolios() records members in the
   // universe, so reading after it would report every new stock as already there.
-  const before = new Set(await readUniverse());
+  const before0 = new Set(await readUniverse());
+
+  // THE REFUSAL IS ENFORCED HERE, not in the page. The Check button asks the
+  // same question first, but a page check is a courtesy -- this route is what
+  // stops a ticker the provider cannot price reaching the universe, whoever
+  // calls it. The CDN incident's rule, applied to a write.
+  //
+  // Only a DEFINITE refusal drops a symbol. `unknown` (an outage, a rate
+  // limit) is let through: a provider wobble must not stop an admin adding
+  // anything, and an unservable ticker is recoverable in a way a blocked
+  // afternoon is not.
+  const unavailable = [];
+  const freshAsk = wanted.filter((s) => !before0.has(s));
+  if (freshAsk.length) {
+    const seen = await providerCheck(freshAsk);
+    for (const s of freshAsk) {
+      const v = seen.get(s);
+      if (v && v.state === 'no') unavailable.push({ symbol: s, reason: v.reason });
+    }
+    if (unavailable.length) {
+      const bad = new Set(unavailable.map((x) => x.symbol));
+      for (let i = wanted.length - 1; i >= 0; i -= 1) if (bad.has(wanted[i])) wanted.splice(i, 1);
+    }
+  }
+  if (!wanted.length) {
+    return res.status(422).json({
+      error: 'None of those can be priced by the data provider, so nothing was added.',
+      unavailable, invalid,
+    });
+  }
+
+  const before = before0;
   let createdPortfolio = null;
   let target = pname;
   if (pname) {
@@ -5181,7 +5308,7 @@ app.post('/api/universe/bulk', requireAdmin, route(async (req, res) => {
   logAct(req, 'portfolio', (`bulk-add:+${added.length}` + (pname ? '>' + pname : '')).slice(0, 80));
   // `createdPortfolio` and `target` so the caller can say what actually
   // happened -- "added to Semis" reads differently from "created Semis".
-  res.json(await portfolioAnswer({ added, already, invalid,
+  res.json(await portfolioAnswer({ added, already, invalid, unavailable,
     portfolio: target || null, createdPortfolio }));
 }));
 
@@ -5192,6 +5319,25 @@ app.post('/api/universe', requireAdmin, route(async (req, res) => {
   if (!symbol) return res.status(400).json({ error: 'Symbol is required.' });
   if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Invalid symbol format.' });
   const already = (await readUniverse()).includes(symbol);
+
+  // ASKED BEFORE ANYTHING IS WRITTEN, and only for a symbol that is actually
+  // new. A ticker the provider cannot serve sits in the universe for ever
+  // producing nothing, re-attempted by every Fill missing -- twenty-four of
+  // exactly those were removed on 2026-10-03, and the nightly rotation had
+  // stalled behind them for days. An outage still lets the add through.
+  let checkedName = null;
+  if (!already) {
+    const v = (await providerCheck([symbol])).get(symbol);
+    if (v && v.state === 'no') {
+      return res.status(422).json({
+        error: `${symbol} was not added — ${v.reason}. `
+          + 'Check the spelling, and note the screener takes US listings only.',
+        unavailable: [{ symbol, reason: v.reason }],
+      });
+    }
+    if (v && v.state === 'ok') checkedName = v.name;
+  }
+
   if (pname) {
     const p = await readPortfolios();
     if (!(pname in p)) return res.status(404).json({ error: 'Theme not found.' });
@@ -5202,7 +5348,7 @@ app.post('/api/universe', requireAdmin, route(async (req, res) => {
     return res.status(409).json({ error: `${symbol} is already in the screener.` });
   }
   await store.addToUniverse(symbol);
-  const name = await nameForNewTicker(symbol);
+  const name = await nameForNewTicker(symbol, checkedName);
   logAct(req, 'portfolio', ('add:' + symbol + (pname ? '>' + pname : '')).slice(0, 80));
   res.json(await portfolioAnswer({ name, added: !already }));
 }));
