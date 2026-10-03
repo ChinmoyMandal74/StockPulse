@@ -62,7 +62,12 @@ const LOG = path.join(ROOT, 'nightly-ping.log');
 // The measured floor between rounds is 62 seconds -- two inside one minute
 // returned "1128 API credits were used, with the current limit being 610".
 // The few seconds on top are for clock skew, not caution.
-const GAP_MS = 65000;
+// OVERRIDABLE SO THIS DRIVER CAN BE TESTED AT ALL, the way SEC_MAX_BATCHES
+// already is. A stall takes STAGNANT_LIMIT rounds, so at 65s the one thing
+// worth asserting here -- that a stalled rotation still runs the tail phases
+// -- costs three and a half minutes a case, and the alternative is to test a
+// PATCHED COPY, which proves something about a file nobody runs.
+const GAP_MS = Number(process.env.NIGHTLY_GAP_MS) || 65000;
 // 60 covers ~2,800 symbols at the default rotation; a `--full` sweep of the
 // present universe needs ~171. Past either, something has misread the
 // universe and the right answer is to stop rather than run all night.
@@ -76,7 +81,7 @@ const STAGNANT_LIMIT = 3;
 // profile rotation keeps.
 const SEC_BATCH = 5;
 const SEC_MAX_BATCHES = Number(process.env.SEC_MAX_BATCHES) || 20;
-const SEC_GAP_MS = 1500;
+const SEC_GAP_MS = Number(process.env.NIGHTLY_SEC_GAP_MS) || 1500;
 
 // Read .env directly rather than depending on the process environment: a
 // scheduled task starts with almost none of the shell's, and the secret has no
@@ -370,6 +375,48 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
       }
     }
 
+    // THE TAIL PHASES ARE INDEPENDENT OF PROFILE COVERAGE, and gating them on
+    // `j.done` meant one unservable ticker could switch all three off.
+    //
+    // Measured 2026-10-02: the rotation stalled at 1225/1302 behind twenty
+    // tickers the provider cannot serve -- a refused pull leaves fetched_at at
+    // 0, the retry sentinel, so the same twenty were re-picked every round and
+    // blocked the sixty good ones behind them. SEC filings, FINRA short
+    // interest and the index holdings import were therefore skipped on every
+    // night it happened, for days, SILENTLY: the night reports itself failed
+    // for the ROTATION's reason and nothing says the other three never ran. A
+    // brand-new scheduled import would never have fired unattended.
+    //
+    // They run after `finish()`, which clears the refresh flag and lets the
+    // server report what it gathered -- so nothing is competing for the
+    // database by the time these start. That ordering is what makes this safe,
+    // and it is why they are NOT run on the two exits where something else is,
+    // or was deliberately put, in charge: a human Stop, and a skip because
+    // another refresh is already in flight.
+    //
+    // The night still reports FAILED and still exits 1. The rotation really did
+    // fail, and a green task would hide that. What changes is only that three
+    // unrelated subsystems no longer fail with it.
+    let tailDone = false;
+    async function tailPhases(why) {
+      if (tailDone) return;
+      tailDone = true;
+      if (why) say(`tail       ${why} -- running SEC, short interest and holdings anyway`);
+      // EACH IS GUARDED SEPARATELY. One of them throwing must not cost the
+      // other two their turn, which is the same mistake one level up that this
+      // whole change exists to undo. All three are internally defensive today,
+      // so reverting this loop currently fails nothing -- it is kept because
+      // adding a FOURTH phase here is a one-line change, and a new phase is
+      // exactly the thing likely to throw.
+      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate]]) {
+        try {
+          await fn();
+        } catch (e) {
+          say(`${name.padEnd(10)} skipped -- ${(e && e.message) ? String(e.message).slice(0, 110) : String(e)}`);
+        }
+      }
+    }
+
     say(`starting ${FULL ? 'FULL sweep' : 'rotation'} against ${base}`);
     let resp = await call(FULL ? '?start=1&full=1' : '?start=1');
     if (resp.j && resp.j.runId) runId = resp.j.runId;
@@ -397,21 +444,21 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
         if (stagnant >= STAGNANT_LIMIT) {
           say(`FAILED  giving up after ${stagnant} rounds without a usable response`);
           await finish();
+          await tailPhases('the rotation gave up');
           throw new Stop(1);
         }
       } else {
         say(`round ${round}  ${j.loaded}/${j.total} profiles in ${resp.secs}s`);
         if (j.done) {
           say(`DONE       ${j.already ? 'already ' + j.already : 'complete'} -- the server has sent the report`);
-          await secRotate();
-          await shortRotate();
-          await holdingsRotate();
+          await tailPhases();
           throw new Stop(0);
         }
         stagnant = j.loaded === last ? stagnant + 1 : 0;
         if (stagnant >= STAGNANT_LIMIT) {
           say(`FAILED  giving up after ${stagnant} rounds with no progress at ${j.loaded}/${j.total}`);
           await finish();
+          await tailPhases(`the rotation stalled at ${j.loaded}/${j.total}`);
           throw new Stop(1);
         }
         last = j.loaded;
@@ -423,6 +470,7 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
 
     say(`FAILED  hit the ${MAX_ROUNDS}-round ceiling without finishing`);
     await finish();
+    await tailPhases(`the rotation hit the ${MAX_ROUNDS}-round ceiling`);
     throw new Stop(1);
   } catch (e) {
     if (e instanceof Stop) { process.exitCode = e.code; return; }
