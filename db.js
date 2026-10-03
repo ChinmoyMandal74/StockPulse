@@ -2731,8 +2731,19 @@ async function appendFundHoldings(fund, asOf, rows) {
   // 23x when tech_history went to multi-row inserts — so 504 single
   // inserts would be the slowest part of a job whose write is three.
   stmts.push({
+    // THE COUNT IS IN BOTH BRANCHES, and it has to be: on the very first
+    // insert for a fund there is no conflict, so the literal in the VALUES
+    // clause is what lands. It was 0 there, and the receipt from the first
+    // live import read "rows: 0" beside 504 stored holdings — found by
+    // reading the response rather than by the suite, which only asserted
+    // `rows` after a SECOND run, where the conflict branch does run.
+    //
+    // Correct in either branch because the holdings inserts are earlier
+    // statements in this same batch, and a batch is one sequential
+    // transaction, so the count already sees them.
     sql: `insert into fund_state (fund, as_of, fetched_at, holdings, rows, status, error)
-          values (?, ?, ?, ?, 0, 'ok', null)
+          values (?, ?, ?, ?,
+                  (select count(*) from fund_holdings where fund = ?), 'ok', null)
           on conflict(fund) do update set
             fetched_at = excluded.fetched_at,
             rows = (select count(*) from fund_holdings where fund = fund_state.fund),
@@ -2751,7 +2762,7 @@ async function appendFundHoldings(fund, asOf, rows) {
                          then excluded.as_of else fund_state.as_of end,
             status = 'ok',
             error = null`,
-    args: [f, asOf, Date.now(), clean.length],
+    args: [f, asOf, Date.now(), clean.length, f],
   });
 
   await db.batch(stmts, 'write');
