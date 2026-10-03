@@ -3701,7 +3701,25 @@ async function providerCheck(symbols) {
       d = await fetchJson(`${TD_BASE}/quote?symbol=${slice.map(encodeURIComponent).join(',')}`
         + `&country=United%20States&apikey=${API_KEY}`);
     } catch (err) {
-      failed = (err && err.message) ? String(err.message).slice(0, 160) : 'could not reach the provider';
+      const m = (err && err.message) ? String(err.message) : '';
+      // A BATCH OF ONE IS THE ODD CASE, and it is what let a dead ticker
+      // through the single add while the bulk add refused the very same
+      // symbol. Measured 2026-10-03: one unknown symbol answers **HTTP 404**
+      // with the provider's own words, while two or more answer 200 and report
+      // the refusal per symbol. fetchJson turns a 404 into a throw, and the
+      // catch was reading every throw as an outage -- which is let through.
+      //
+      // Only a 404 naming the SYMBOL parameter counts, and only on a
+      // single-symbol ask. A 401 names **apikey** and a rate limit names
+      // credits; neither is a statement about a ticker, and condemning every
+      // symbol over a bad key is exactly the failure this split exists to
+      // prevent. A 404 on a MULTI-symbol ask is unexplained, so it stays
+      // unknown rather than condemning the whole slice.
+      if (slice.length === 1 && /^HTTP 404\b/.test(m) && /symbol/i.test(m) && !/apikey/i.test(m)) {
+        out.set(slice[0], { state: 'no', reason: 'the data provider has no US listing for it' });
+        continue;
+      }
+      failed = m.slice(0, 160) || 'could not reach the provider';
     }
     if (failed || !d || typeof d !== 'object') {
       for (const s of slice) out.set(s, { state: 'unknown', reason: failed || 'no answer from the provider' });
