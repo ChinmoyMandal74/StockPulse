@@ -5227,10 +5227,15 @@ app.post('/api/universe/check', requireAdmin, route(async (req, res) => {
   try { known = await store.knownListings(syms); } catch { known = null; }
   const have = new Set(await readUniverse());
 
-  // THE PROVIDER IS THE GATE NOW; the NASDAQ listing is the footnote. That
-  // table has been EMPTY in production (listingRows: 0), so its "not in the
-  // listing" warning could never fire and the Check button was advisory about
-  // nothing -- which is how twenty-four unservable tickers got in.
+  // THE PROVIDER IS THE GATE NOW; the NASDAQ listing is the footnote.
+  //
+  // The listing is a STOCKS file and holds 7,136 rows (measured
+  // 2026-10-03, loaded 2026-09-14 and not refreshed since). It is not
+  // empty -- an earlier comment here said it was, misreading the field
+  // below, which counts the ASKED symbols found rather than the table.
+  // What it genuinely cannot answer for is an ETF, a share class or a
+  // new listing: the eleven sector SPDRs all came back absent, which is
+  // correct and is why its warning is advisory and the provider is not.
   //
   // Only symbols NOT already tracked are asked about: re-confirming a stock
   // the screener already holds is a credit spent on nothing.
@@ -5255,10 +5260,15 @@ app.post('/api/universe/check', requireAdmin, route(async (req, res) => {
     // outage, and the add routes let these through.
     unchecked,
     credits: ask.length,
-    // null when the listing table is empty or unreadable, so the page can say
-    // "not checked" rather than flagging everything as unknown.
+    // null when the listing is unreadable, so the page can say "not
+    // checked" rather than flagging everything as unknown. A symbol is
+    // legitimately absent when it is an ETF, a share class or newly
+    // listed, so this never blocks an add.
     unlisted: known ? syms.filter((x) => !known.has(x)) : null,
-    listingRows: known ? known.size : null,
+    // HOW MANY OF THE ASKED SYMBOLS WERE FOUND, never the table's size.
+    // It was called listingRows and that name was misread as the latter,
+    // twice, in notes that then claimed the table was empty.
+    listingHits: known ? known.size : null,
   });
 }));
 
