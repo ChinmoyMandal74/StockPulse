@@ -260,9 +260,17 @@
     $('cStatus').className = 'big' + (st.status && st.status !== 'ok' ? ' warn' : '');
     $('cSource').textContent = d.label ? d.label + ' · ' + d.fund.toUpperCase() : '';
 
-    $('cRows').textContent = st.rows ? num(st.rows) : '—';
-    $('cDays').textContent = (d.dates || []).length
-      ? (d.dates.length === 1 ? 'one day so far' : d.dates.length + ' days so far') : '';
+    // COUNTED FROM THE DATES, never from the stored counter. `fund_state.rows`
+    // is a cache that has already been wrong once — it read 0 beside 504
+    // stored holdings on the first live import, because a fund's first
+    // insert has no conflict and so never reaches the recount. Summing the
+    // dates the page already has is exact, cannot go stale, and says plainly
+    // what it is counting.
+    var dd = d.dates || [];
+    var tot = dd.reduce(function (a, x) { return a + (x.n || 0); }, 0);
+    $('cRows').textContent = dd.length ? num(tot) : '—';
+    $('cDays').textContent = dd.length
+      ? ('across ' + (dd.length === 1 ? 'one date' : dd.length + ' dates')) : '';
 
     // A refusal or an unreachable source is the thing worth seeing, so it is
     // printed rather than left in a status word nobody expands.
