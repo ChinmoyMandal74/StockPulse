@@ -12884,6 +12884,109 @@ app.get('/api/cron/shortint', route(async (req, res) => {
     universe: universe.length, ms: Date.now() - t0 });
 }));
 
+// --- index membership, from the issuer's own daily holdings file ------
+//
+// WHY THIS SOURCE: see holdings.js, which records the measurement. The
+// short version is that Twelve Data has no index field and no constituents
+// endpoint (composition is Ultra-only), and the free maintained mirrors run
+// days behind — the one measured on 2026-10-02 was eleven days stale and
+// missing a real name.
+const Holdings = require('./holdings.js');
+const SSGA_HOLDINGS = 'https://www.ssga.com/us/en/intermediary/library-content/'
+  + 'products/fund-data/etfs/us/holdings-daily-us-en-';
+// An HONEST agent, checked rather than copied from the NASDAQ loader: that
+// endpoint answers a bot-shaped agent by never replying at all, so a
+// browser-shaped string is load-bearing there. Measured here 2026-10-02 —
+// SSGA serves this file identically with an honest agent, with a browser
+// one, and with none at all, so there is no reason to impersonate anything.
+const SSGA_UA = process.env.SEC_UA
+  || ('Tickr Lab (' + (process.env.REPORT_TO || process.env.MAIL_FROM || 'admin@tickrlab.com') + ')');
+
+// DAILY, and self-pacing on the file's own as-of date. Membership changes
+// perhaps 20-25 times a year — the quarterly rebalance plus ad-hoc for M&A —
+// but WEIGHTS move every session, and the file is published daily and only
+// for today: yesterday's is not retrievable at any price. So a daily check
+// needs no calendar, catches a change within hours, heals after any number
+// of missed runs (`noteTechMark`'s rule), and writes nothing on a day when
+// the as-of date has not moved.
+app.get('/api/cron/holdings', route(async (req, res) => {
+  // 401 here and 403 from requireAdmin, so the status code says which
+  // bundle is live — a 403 moments after a push is deploy lag, not an auth
+  // failure, which cost an hour once on the SEC route.
+  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'No.' });
+  const t0 = Date.now();
+
+  const fund = String(req.query.fund || 'spy').toLowerCase();
+  const cfg = Holdings.FUNDS[fund];
+  if (!cfg) {
+    return res.status(400).json({ error: 'Unknown fund.',
+      known: Object.keys(Holdings.FUNDS) });
+  }
+  const held = await store.fundNewest(fund);
+
+  let file;
+  try {
+    file = await fetch(SSGA_HOLDINGS + fund + '.xlsx', {
+      headers: { 'User-Agent': SSGA_UA }, signal: AbortSignal.timeout(60000),
+    });
+  } catch (e) {
+    // Unreachable is not a failure of the night, and it must not blank a
+    // single holding: the miss is recorded on the clock, the membership
+    // stays. Tomorrow's run costs one 54KB fetch and catches it.
+    await store.noteFundMiss(fund, 'unreachable', e.message || String(e));
+    return res.json({ ok: true, done: true, fund, held: held.asOf,
+      error: String(e.message || e), ms: Date.now() - t0 });
+  }
+  if (!file.ok) {
+    await store.noteFundMiss(fund, 'http', 'HTTP ' + file.status);
+    return res.json({ ok: true, done: true, fund, held: held.asOf,
+      reason: 'HTTP ' + file.status, ms: Date.now() - t0 });
+  }
+
+  // VALIDATE WHAT WAS READ, NEVER THE STATUS CODE. iShares' own holdings
+  // endpoint answers 200 with `content-type: text/csv` and 2.26MB of HTML
+  // in the body (measured 2026-10-02), so a status check passes a page of
+  // markup. `Holdings.parse` throws unless the bytes unzip, carry a Ticker
+  // column, carry an "As of" date, and yield at least the fund's floor of
+  // tickers — and a throw here writes NOTHING, because the file is a full
+  // snapshot and a short one would otherwise apply as hundreds of removals.
+  let parsed;
+  try {
+    parsed = Holdings.parse(Buffer.from(await file.arrayBuffer()), fund);
+  } catch (e) {
+    console.error('holdings: refused the ' + fund + ' file — ' + (e.message || e));
+    await store.noteFundMiss(fund, 'unusable', e.message || String(e));
+    return res.json({ ok: true, done: true, fund, held: held.asOf,
+      refused: String(e.message || e), ms: Date.now() - t0 });
+  }
+
+  if (req.query.dry) {
+    return res.json({ dry: true, fund, index: parsed.index, held: held.asOf,
+      heldCount: held.holdings, fileAsOf: parsed.asOf, inFile: parsed.holdings.length,
+      dropped: parsed.dropped, weightSum: parsed.weightSum,
+      wouldWrite: !held.asOf || parsed.asOf > held.asOf, ms: Date.now() - t0 });
+  }
+
+  if (held.asOf && parsed.asOf <= held.asOf) {
+    return res.json({ ok: true, done: true, fund, already: held.asOf,
+      fileAsOf: parsed.asOf, holdings: held.holdings, ms: Date.now() - t0 });
+  }
+
+  // EVERY HOLDING, not only the ones in our universe. The insider walk
+  // filters before fetching because that is what makes ~9,000 document
+  // fetches affordable, and it pays for it with a permanent hole for any
+  // ticker added afterwards. Here the file is complete and 54KB, so there
+  // is nothing to buy by narrowing — and a stock added to the universe
+  // tomorrow already has its membership and its weight.
+  const out = await store.appendFundHoldings(fund, parsed.asOf, parsed.holdings);
+  console.log(`holdings: ${parsed.index} as of ${parsed.asOf} — ${out.holdings} holdings `
+    + `(was ${held.asOf || 'nothing'}), weights sum ${parsed.weightSum}, `
+    + `${parsed.dropped} non-equity rows dropped, in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  res.json({ ok: true, done: true, fund, index: parsed.index, asOf: parsed.asOf,
+    was: held.asOf, holdings: out.holdings, rows: out.rows, dropped: parsed.dropped,
+    weightSum: parsed.weightSum, ms: Date.now() - t0 });
+}));
+
 // deliberately NOT by GitHub: the failure it exists to catch is GitHub's
 // scheduler not firing at all, and a watchdog on the same scheduler would
 // miss the same night. Mails only when something is wrong; ?dry=1 reports the

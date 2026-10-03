@@ -327,6 +327,49 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
       }
     }
 
+    // Index membership from the issuer's daily holdings file. NON-FATAL and
+    // its own phase, like secRotate and shortRotate above, and never in the
+    // refresh tail: work put there has surfaced as "the refresh failed" over
+    // perfectly good data three times on this project (news 2026-09-18,
+    // techHistorySpan 2026-09-19, archiveStats 2026-09-20).
+    //
+    // A 404 reads as an older server, so deploy order never matters.
+    //
+    // One 54KB fetch, and on most days it writes nothing: the route compares
+    // the file's own as-of date against what is stored and stands down.
+    async function holdingsRotate() {
+      let r; let text;
+      try {
+        r = await fetch(`${base}/api/cron/holdings`, {
+          signal: AbortSignal.timeout(120000),
+          headers: { Authorization: 'Bearer ' + secret },
+        });
+        text = await r.text();
+      } catch (e) {
+        say(`holdings   skipped -- ${e.name === 'TimeoutError' ? 'timed out' : e.message}`);
+        return;
+      }
+      let j = null; try { j = JSON.parse(text); } catch { /* not json */ }
+      if (r.status === 404) { say('holdings   skipped -- older server, no route yet'); return; }
+      if (!r.ok || !j) {
+        say(`holdings   skipped -- HTTP ${r.status} ${String(text).slice(0, 120)}`);
+        return;
+      }
+      if (j.holdings && j.asOf) {
+        say(`holdings   ${j.index || j.fund} as of ${j.asOf} -- ${j.holdings} holdings `
+          + `(was ${j.was || 'nothing'}), weights sum ${j.weightSum}`);
+      } else if (j.refused) {
+        // The floor, the HTML-body guard, or a layout change. Worth a line
+        // that names it: nothing was written, so the stored membership is
+        // intact but is now a day staler than it looks.
+        say(`holdings   REFUSED the file -- ${String(j.refused).slice(0, 110)}`);
+      } else if (j.error || j.reason) {
+        say(`holdings   unreachable (${String(j.error || j.reason).slice(0, 60)}) -- holding ${j.held || 'nothing'}`);
+      } else {
+        say(`holdings   up to date at ${j.already || j.fileAsOf || 'unknown'}`);
+      }
+    }
+
     say(`starting ${FULL ? 'FULL sweep' : 'rotation'} against ${base}`);
     let resp = await call(FULL ? '?start=1&full=1' : '?start=1');
     if (resp.j && resp.j.runId) runId = resp.j.runId;
@@ -362,6 +405,7 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
           say(`DONE       ${j.already ? 'already ' + j.already : 'complete'} -- the server has sent the report`);
           await secRotate();
           await shortRotate();
+          await holdingsRotate();
           throw new Stop(0);
         }
         stagnant = j.loaded === last ? stagnant + 1 : 0;

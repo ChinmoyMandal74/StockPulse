@@ -856,6 +856,50 @@ const SCHEMA = [
      status     text,
      error      text
    )`,
+  // Index membership, taken from the issuer's own daily holdings file —
+  // see holdings.js for why that source and not a maintained list.
+  //
+  // KEYED ON (fund, symbol, d), which makes it the HISTORY rather than a
+  // current state, and that is deliberate: SSGA publishes today's file and
+  // only today's, so yesterday's weights are not retrievable at any price.
+  // `fundamentals_history` exists for exactly that reason, and this project
+  // has already recorded the cost of discarding an irrecoverable daily
+  // reading. ~504 rows a session, so ~126k a year against 4.6M bars.
+  //
+  // `fund` is here from the first day though only SPY is wired. DIA, MDY
+  // and the eleven sector SPDRs all answer at the same URL shape (measured
+  // 2026-10-02), so a second index is a config entry rather than a
+  // migration.
+  //
+  // NOT in SYMBOL_TABLES, the `insider_trans` reasoning: this is a record
+  // of what the INDEX held, not of what we track, so dropping a ticker from
+  // our universe must not delete the index's own history of it.
+  `create table if not exists fund_holdings (
+     fund   text not null,
+     symbol text not null,
+     d      text not null,
+     weight real,
+     shares real,
+     primary key (fund, symbol, d)
+   )`,
+  // "Everything the index held on date X" — the read every display surface
+  // wants, and the one the primary key cannot seek because it leads on
+  // symbol. Without this the whole-set read is a SCAN, which on this
+  // database is a quota event rather than a slow query.
+  'create index if not exists idx_fund_holdings_d on fund_holdings (fund, d)',
+  // The per-fund clock, separate from the holdings for the reason
+  // `short_state` is separate from `short_interest`: a fetch that failed
+  // still has to be recorded as attempted, and recording it must not touch
+  // the holdings themselves.
+  `create table if not exists fund_state (
+     fund       text primary key,
+     as_of      text,
+     fetched_at integer not null,
+     holdings   integer not null default 0,
+     rows       integer not null default 0,
+     status     text,
+     error      text
+   )`,
 ];
 
 // Columns added after a table shipped. SQLite has no "add column if not
@@ -2601,6 +2645,160 @@ async function readShortLatestFor(symbols) {
 
 // The whole fetch clock — one row per symbol, ~1,181 rows, so a wholesale
 // read is cheap. Used by the loader to decide what to skip.
+// --- index membership -------------------------------------------------
+
+const FH_COLS = ['fund', 'symbol', 'd', 'weight', 'shares'];
+
+// The as-of date we already hold for a fund, and how much. One small read
+// of `fund_state` (one row per fund), never `max(d)` over the growing
+// holdings table — the `shortNewest` rule, and the reason that table has a
+// state row at all.
+async function fundNewest(fund) {
+  await init();
+  const r = await db.execute({
+    sql: 'select as_of, holdings, rows, fetched_at, status from fund_state where fund = ?',
+    args: [String(fund).toLowerCase()],
+  });
+  const x = r.rows[0];
+  if (!x) return { asOf: null, holdings: 0, rows: 0, fetchedAt: null, status: null };
+  return {
+    asOf: x.as_of || null,
+    holdings: Number(x.holdings || 0),
+    rows: Number(x.rows || 0),
+    fetchedAt: x.fetched_at == null ? null : Number(x.fetched_at),
+    status: x.status || null,
+  };
+}
+
+// A fetch that could not be used, recorded WITHOUT touching a single
+// holding. The `noteSecMiss` lesson, which this project has now had to
+// learn three times: a transient refusal must never read downstream as
+// "this index holds nothing" — and here the damage would be worse than a
+// blank card, because a membership flag silently emptied looks like 504
+// deletions and there is no way back from it.
+//
+// `as_of` and `holdings` are carried forward from whatever is stored, so
+// the clock keeps saying how old the data genuinely is rather than null.
+async function noteFundMiss(fund, status, error) {
+  await init();
+  const f = String(fund).toLowerCase();
+  await db.execute({
+    sql: `insert into fund_state (fund, as_of, fetched_at, holdings, rows, status, error)
+          values (?, null, ?, 0, 0, ?, ?)
+          on conflict(fund) do update set
+            fetched_at = excluded.fetched_at,
+            status = excluded.status,
+            error = excluded.error`,
+    args: [f, Date.now(), status || 'error', error ? String(error).slice(0, 300) : null],
+  });
+}
+
+// APPEND one day's holdings. Idempotent by construction — the primary key
+// is (fund, symbol, d), so the same file applied twice writes the same rows
+// twice and changes nothing, which is what makes a daily self-pacing check
+// safe to run as often as it likes.
+//
+// `rows` is RECOUNTED rather than incremented, the `appendShortInterest`
+// rule: an increment drifts upward every time a day is re-applied, and a
+// receipt that overstates what is stored is a failure this project has
+// already had. `as_of` only ever moves FORWARD, so re-applying an older
+// file cannot drag the clock back and make current data read as stale.
+async function appendFundHoldings(fund, asOf, rows) {
+  await init();
+  const f = String(fund).toLowerCase();
+  const clean = (rows || []).filter((r) => r && r.symbol && asOf);
+  if (!clean.length) return { fund: f, asOf, holdings: 0, rows: 0 };
+
+  const stmts = [];
+  const CHUNK = 200;
+  for (let i = 0; i < clean.length; i += CHUNK) {
+    const part = clean.slice(i, i + CHUNK);
+    const args = [];
+    for (const r of part) {
+      args.push(f, String(r.symbol).toUpperCase(), asOf,
+        r.weight == null ? null : Number(r.weight),
+        r.shares == null ? null : Number(r.shares));
+    }
+    stmts.push({
+      sql: `insert or replace into fund_holdings (${FH_COLS.join(',')}) values `
+        + part.map(() => '(' + FH_COLS.map(() => '?').join(',') + ')').join(','),
+      args,
+    });
+  }
+
+  // Multi-row inserts, and the clock as one more statement. On this
+  // database the cost is per STATEMENT rather than per row — measured at
+  // 23x when tech_history went to multi-row inserts — so 504 single
+  // inserts would be the slowest part of a job whose write is three.
+  stmts.push({
+    sql: `insert into fund_state (fund, as_of, fetched_at, holdings, rows, status, error)
+          values (?, ?, ?, ?, 0, 'ok', null)
+          on conflict(fund) do update set
+            fetched_at = excluded.fetched_at,
+            rows = (select count(*) from fund_holdings where fund = fund_state.fund),
+            -- as_of and holdings MOVE TOGETHER OR NOT AT ALL. Guarding only
+            -- the date lets the two disagree: applying an older file would
+            -- leave the clock reading the newer date beside the older file's
+            -- count, so the row would claim 504 holdings on a date that had
+            -- 501. Found by a revert proof that predicted the route's own
+            -- cutoff would cost nothing and was wrong.
+            -- (No backticks in here: this SQL is a JS template literal, and
+            --  one would end the string — the Cards.STYLE trap, which
+            --  node --check passes because it is valid interpolation.)
+            holdings = case when fund_state.as_of is null or fund_state.as_of < excluded.as_of
+                            then excluded.holdings else fund_state.holdings end,
+            as_of = case when fund_state.as_of is null or fund_state.as_of < excluded.as_of
+                         then excluded.as_of else fund_state.as_of end,
+            status = 'ok',
+            error = null`,
+    args: [f, asOf, Date.now(), clean.length],
+  });
+
+  await db.batch(stmts, 'write');
+  const after = await fundNewest(f);
+  return { fund: f, asOf, holdings: clean.length, rows: after.rows };
+}
+
+// Everything a fund held on one date. Seeks on idx_fund_holdings_d.
+// `d` omitted means the newest date the state row names — never
+// `max(d)` over the table.
+async function readFundHoldings(fund, d) {
+  await init();
+  const f = String(fund).toLowerCase();
+  let on = d || null;
+  if (!on) on = (await fundNewest(f)).asOf;
+  if (!on) return { fund: f, asOf: null, holdings: [] };
+  const r = await db.execute({
+    sql: 'select symbol, weight, shares from fund_holdings where fund = ? and d = ? order by weight desc',
+    args: [f, on],
+  });
+  return {
+    fund: f,
+    asOf: on,
+    holdings: r.rows.map((x) => ({
+      symbol: x.symbol,
+      weight: x.weight == null ? null : Number(x.weight),
+      shares: x.shares == null ? null : Number(x.shares),
+    })),
+  };
+}
+
+// Every fund's clock, for the admin surface and the tests.
+async function readFundState() {
+  await init();
+  const r = await db.execute(
+    'select fund, as_of, fetched_at, holdings, rows, status, error from fund_state order by fund');
+  return r.rows.map((x) => ({
+    fund: x.fund,
+    asOf: x.as_of || null,
+    fetchedAt: x.fetched_at == null ? null : Number(x.fetched_at),
+    holdings: Number(x.holdings || 0),
+    rows: Number(x.rows || 0),
+    status: x.status || null,
+    error: x.error || null,
+  }));
+}
+
 async function readShortState() {
   await init();
   const r = await db.execute(
@@ -5166,6 +5364,7 @@ module.exports = {
   writeShortInterest, readShortInterest, readShortLatestFor, readShortAsOfFor,
   readShortRecentFor,
   readShortState, noteShortMiss, shortNewest, appendShortInterest,
+  fundNewest, noteFundMiss, appendFundHoldings, readFundHoldings, readFundState,
   readInsiderDay, writeInsiderDay, appendInsider, readUniverseCiks,
   clearVisitors,
   logActivity,
