@@ -956,10 +956,11 @@
     function paintHowList(keepAt) {
       const topic = howTopic($('howTopic').value);
       const at = Math.min(keepAt || 0, topic.slides.length - 1);
-      $('howSlide').innerHTML = topic.slides.map((kind, i) =>
-        `<option value="${i}">${i + 1}. ${esc(kind === 'cover' ? 'What it is, and who can'
-          : kind === 'hsteps' ? 'The steps'
-          : kind === 'stmts' ? 'What it does not do' : kind)}</option>`).join('');
+      // THE LABEL COMES FROM THE MODULE. This was a kind-to-label map here
+      // with a bare `: kind` fallback, so a slide kind added in cards.js read
+      // as `4. hnames` in the dropdown until this file was edited too.
+      $('howSlide').innerHTML = topic.slides.map((sl, i) =>
+        `<option value="${i}">${i + 1}. ${esc(sl.label || sl.kind)}</option>`).join('');
       $('howSlide').value = String(at);
     }
     $('howTopic').innerHTML = HOW_TOPICS.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');

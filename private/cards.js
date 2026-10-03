@@ -793,6 +793,13 @@
       applyOnly: 'Everyone signed in can apply one. Starring needs an account; writing one is the owner’s.',
       readOnly: 'Everyone sees the verdict and the rule that fired. The full rule ladder is the owner’s.',
     };
+    // The default name for each slide kind. A slide may override it with its
+    // own `label` where the generic one would not say what it holds.
+    const HOW_SLIDE_LABEL = {
+      cover: 'What it is, and who can',
+      hsteps: 'The steps',
+      stmts: 'What it does not do',
+    };
     const HOWTOS = [
       {
         id: 'theme', name: 'Themes, and your own lists',
@@ -859,6 +866,8 @@
               ['Star the ones you use', 'A starred screen moves to a Favourites group at the top. It moves rather than copies, so the menu does not get longer.'],
               ['<b>Clear screen</b>', 'Puts the table back exactly as it was — your sort, your filters, your pickers.'],
             ] },
+          { kind: 'hnames', label: 'The screens themselves', kick: 'What is in there',
+            title: 'Questions<br><span class="dim">already asked</span>' },
           { kind: 'stmts', kick: 'Worth knowing', title: 'What a screen<br><span class="dim">does not keep</span>',
             rows: [
               ['x', 'Filters are never saved', 'A filter surviving a reload is a table missing rows for no visible reason. Whether the filter row is OPEN is remembered; what is typed in it is not.'],
@@ -928,6 +937,86 @@
           ? `<p class="s-sub" style="margin-top:22px">Step ${rows.length + 1}: ${sl.rows[rows.length][0].replace(/<[^>]+>/g, '')}.</p>`
           : '');
     }
+    // NAMING THE SCREENS — read live, never written down. The cover already
+    // counts them for the reason recorded there (a hardcoded "twenty-two, in
+    // six groups" was wrong the day it was written), and a slide that LISTS
+    // them is the same hazard with twenty-nine chances to be wrong instead of
+    // two. Both read the same `screens`, so the count and the list cannot
+    // disagree about what is on the site.
+    //
+    // GROUPED BEFORE IT IS CAPPED, which is not merely tidier. Stored order is
+    // position, and a screen appended later sits at the END whatever group it
+    // belongs to — `At a record high` is position 28 and the first group's
+    // eighth member. Capping raw order would drop it while the Screens menu,
+    // which collects a group by NAME, shows it eighth. The card has to agree
+    // with the menu.
+    // Tuned against the measured artboards rather than chosen: the post fits
+    // all 29 with 126px to spare and the story with 425px, so neither cap
+    // binds today and both are headroom against a growing catalogue. The
+    // SQUARE is the short one and is the only cap that bites.
+    // THE 4:5 ARTBOARD'S ID IS `portrait`, NOT `post` — `post` is only its
+    // LABEL in the studio ("Post 4:5"). Keyed on `post` this map never matched
+    // it and silently fell through to the default, which happened to be the
+    // same number, so nothing looked wrong. Caught by a sweep that asserted
+    // the size chip had actually moved rather than trusting the click.
+    const HNAME_CAP = { portrait: 34, square: 26, story: 34 };
+    function slideNames() {
+      const all = (screens || []).filter((s) => s && s.name);
+      // A host that passes no screens gets a sentence rather than a blank
+      // panel: the phone and the studio both pass them, so this is the
+      // off-page case rather than something a reader will meet.
+      if (!all.length) return '<p class="s-sub wide" style="--fs:22px;margin-top:30px">'
+        + 'The list is drawn live from the site, so this slide names whatever is there on the day it is built.</p>';
+
+      const groups = [];
+      for (const s of all) {
+        const g = String(s.group || s.grp || 'Other');
+        let e = groups.find((x) => x.g === g);
+        if (!e) groups.push(e = { g, names: [] });
+        e.names.push(String(s.name));
+      }
+      // WHOLE GROUPS ONLY. Cutting mid-group puts four of Technical's six on
+      // the card under a heading that reads as the complete set, and the tail
+      // then has to count Technical as both shown AND missing — which is what
+      // the square's first reading did ("…and 7 more, across 4 more groups"
+      // over a visible Technical). A group is on the card entire or not at all,
+      // so every heading means what it says.
+      const cap = HNAME_CAP[size.id] || HNAME_CAP.portrait;
+      const out = [];
+      let n = 0;
+      const dropped = [];
+      for (const grp of groups) {
+        if (!dropped.length && n + grp.names.length <= cap) { out.push(grp); n += grp.names.length; }
+        else dropped.push(grp.g);
+      }
+      // The degenerate case: one group alone is bigger than the artboard. Show
+      // what fits of it rather than an empty card, and the tail then counts
+      // rather than naming groups, because the first one is only half there.
+      let partial = false;
+      if (!out.length) {
+        out.push({ g: groups[0].g, names: groups[0].names.slice(0, cap) });
+        n = out[0].names.length;
+        partial = true;
+      }
+      const left = all.length - n;
+      // A trimmed list must say what it dropped, or the slide reads as the
+      // whole catalogue — the square's own step rule, one card along.
+      // Name the groups that lost entries where there are one or two of them;
+      // past that the sentence becomes a list longer than the thing it is
+      // apologising for ("in Value and growth, Technical, Short interest,
+      // Earnings and Advice" was the square's first reading) and a count of
+      // groups says the same thing in four words.
+      const where = partial || dropped.length === 0 ? ''
+        : dropped.length <= 2 ? `, in ${esc(dropped.join(' and '))}`
+        : `, across ${dropped.length} more groups`;
+      const tail = left
+        ? `<p class="s-sub wide" style="--fs:19px;margin-top:20px">…and ${left} more${where}.</p>`
+        : '';
+      return `<div class="hcat">${out.map((grp) =>
+        `<div class="hg"><b>${esc(grp.g)}</b>${grp.names.map((nm) =>
+          `<span>${esc(nm)}</span>`).join('')}</div>`).join('')}</div>` + tail;
+    }
+
     // WHO CAN DO THIS, on the cover of every topic. It is the fact a reader
     // needs before following any of the steps, and it is not guessable: the
     // same screener shows a member a `New personal theme` button and the owner
@@ -946,6 +1035,7 @@
       const sub = typeof sl.sub === 'function' ? sl.sub() : sl.sub;
       const body = sl.kind === 'hsteps' ? slideHow(sl)
         : sl.kind === 'stmts' ? slideStmts(sl)
+        : sl.kind === 'hnames' ? slideNames()
         : (sub ? `<p class="s-sub" style="--fs:26px;margin-top:26px">${sub}</p>` : '') + slideWho(sl.who);
       return chromeTop(false) +
         `<div class="s-body"><div><span class="s-kick">${esc(sl.kick || topic.name)}</span>` +
@@ -3568,6 +3658,16 @@
     .hwho b { display: block; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase;
               color: var(--faint); margin-bottom: 6px; }
     .hwho span { font-size: 20px; color: var(--muted); line-height: 1.45; }
+    /* The screen catalogue. Two newspaper columns with each group kept whole,
+       so a heading is never orphaned from the names under it. Tokens only, no
+       literal: all three grounds resolve with no override block.
+       NO BACKTICKS IN THIS BLOCK — STYLE is itself a template literal. */
+    .hcat { column-count: 2; column-gap: 36px; margin-top: 28px; }
+    .hg { break-inside: avoid; margin: 0 0 20px; }
+    .hg b { display: block; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase;
+            color: var(--faint); margin-bottom: 7px; }
+    .hg span { display: block; font-size: 20.5px; line-height: 1.42; color: var(--text);
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* ---- the advice board ---------------------------------------------- */
     .abar { display: flex; height: 34px; border-radius: 999px; overflow: hidden; margin-top: 36px; }
@@ -3987,7 +4087,15 @@
     topics: () => TOPICS.map((t) => ({ id: t.id, name: t.name, slides: t.slides.map((sl) => sl.kind) })),
     // The studio builds its two pickers from this, so a topic or a slide
     // added above appears there with no second edit.
-    howtos: () => HOWTOS.map((t) => ({ id: t.id, name: t.name, slides: t.slides.map((sl) => sl.kind) })),
+    // THE SLIDE CARRIES ITS OWN LABEL, so the studio's picker needs no
+    // kind-to-label map of its own. It had one, with a bare `: kind` fallback
+    // — which means a slide kind added here reads as `4. hnames` in the
+    // dropdown until somebody remembers to edit a second file. The module
+    // defines the slides, so the module names them.
+    howtos: () => HOWTOS.map((t) => ({
+      id: t.id, name: t.name,
+      slides: t.slides.map((sl) => ({ kind: sl.kind, label: sl.label || HOW_SLIDE_LABEL[sl.kind] || sl.kind })),
+    })),
     build(id, ctx) {
       const c = ctx || {};
       stocks = c.stocks || [];
