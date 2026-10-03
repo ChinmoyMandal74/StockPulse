@@ -106,6 +106,28 @@
     .dchip b { color: var(--text); font-weight: 500; }
     .dchip.on { border-color: var(--accent); color: var(--text); }
     .note { margin: 14px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 84ch; }
+    .btn.sm { font-size: 11.5px; padding: 5px 11px; }
+    .btn.go { border-color: rgba(52, 211, 153, 0.3); color: var(--green); }
+    .miss > .core { padding: 16px 20px; }
+    .mnote { margin: 0 0 12px; font-size: 12px; color: var(--faint); line-height: 1.6; max-width: 86ch; }
+    /* Amber, because it means "notice this, it is old or wrong" everywhere in
+       this app — and a bulk add that has not been backfilled is exactly a
+       thing to notice before the next refresh runs into it. */
+    .mnote.warn { color: var(--amber); }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px;
+            border: 1px solid var(--hair); border-radius: 999px; font-size: 12px;
+            cursor: pointer; user-select: none; }
+    .chip:hover { border-color: var(--hair-2); }
+    .chip input { accent-color: #a3e635; margin: 0; }
+    .chip b { font-family: var(--mono); font-weight: 500; }
+    .chip span { color: var(--faint); font-family: var(--mono); font-size: 11px; }
+    .ok { color: var(--green); }
+    .cmd { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+           background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+           border-radius: 10px; padding: 9px 12px; }
+    .cmd code { font-family: var(--mono); font-size: 11.5px; color: var(--text);
+                word-break: break-all; }
     .empty, .error { padding: 26px; font-size: 13px; color: var(--muted); }
     .error { color: var(--red); }
     @media (max-width: 768px) {
@@ -167,6 +189,20 @@
       <div class="bezel stat"><div class="core"><span class="k">Tracked here</span>
         <div class="val" id="sTracked">—</div></div></div>
     </div>
+
+    <div class="bar-top" id="missBar" hidden>
+      <h2>Missing from the screener</h2>
+      <button class="btn sm" id="selAll">Select all</button>
+      <button class="btn sm go" id="addBtn">Add</button>
+    </div>
+    <div class="bezel miss" id="miss" hidden><div class="core">
+      <p class="mnote" id="mNote"></p>
+      <div class="chips" id="mChips"></div>
+      <div id="mAfter" hidden>
+        <p class="mnote warn" id="mWarn"></p>
+        <div class="cmd"><code id="mCmd"></code><button class="btn sm" id="copyCmd">Copy</button></div>
+      </div>
+    </div></div>
 
     <div class="bar-top"><h2>Dates stored</h2></div>
     <div class="dates" id="dates"></div>
@@ -357,9 +393,98 @@
     }
   }
 
+  // THE QUESTION THIS PAGE IS REALLY FOR: which index members are not in the
+  // screener, and add them. Everything else here is evidence for it.
+  function paintMissing(d) {
+    var miss = (d.holdings || []).filter(function (h) { return !h.held; });
+    $('mAfter').hidden = true;
+    if (!(d.holdings || []).length) { $('miss').hidden = true; $('missBar').hidden = true; return; }
+    $('miss').hidden = false;
+    $('missBar').hidden = false;
+    if (!miss.length) {
+      // A green all-clear is the answer, not an empty panel. "You have all of
+      // them" is what someone opens this to find out.
+      $('mNote').className = 'mnote ok';
+      $('mNote').textContent = 'All ' + d.holdings.length + ' members are in the screener.';
+      $('mChips').innerHTML = '';
+      $('selAll').hidden = true; $('addBtn').hidden = true;
+      return;
+    }
+    $('selAll').hidden = false; $('addBtn').hidden = false;
+    $('mNote').className = 'mnote';
+    $('mNote').textContent = miss.length + (miss.length === 1 ? ' member is' : ' members are')
+      + ' not in the screener. Adding costs no API credits — the name comes from the stored '
+      + 'listing, and the prices and fundamentals arrive with the next Fill missing or the '
+      + 'nightly gap fill.';
+    $('mChips').innerHTML = miss.map(function (h) {
+      return '<label class="chip"><input type="checkbox" value="' + esc(h.symbol) + '" checked />'
+        + '<b>' + esc(h.symbol) + '</b>'
+        + '<span>' + (h.weight == null ? '—' : h.weight.toFixed(3) + '%') + '</span></label>';
+    }).join('');
+    $('addBtn').textContent = 'Add ' + miss.length;
+  }
+
+  function picked() {
+    return [].slice.call(document.querySelectorAll('#mChips input:checked'))
+      .map(function (i) { return i.value; });
+  }
+
+  $('selAll').addEventListener('click', function () {
+    var boxes = document.querySelectorAll('#mChips input');
+    var allOn = [].every.call(boxes, function (b) { return b.checked; });
+    for (var i = 0; i < boxes.length; i++) boxes[i].checked = !allOn;
+  });
+
+  $('addBtn').addEventListener('click', function () {
+    var syms = picked();
+    if (!syms.length) return;
+    var b = $('addBtn');
+    b.disabled = true;
+    b.textContent = 'Adding…';
+    fetch('/api/universe/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbols: syms }),
+    }).then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+      .then(function (x) {
+        b.disabled = false;
+        if (x.s !== 200) {
+          $('mNote').className = 'mnote warn';
+          $('mNote').textContent = x.j.error || ('HTTP ' + x.s);
+          b.textContent = 'Add ' + syms.length;
+          return;
+        }
+        var added = (x.j.added || []).length ? x.j.added : syms;
+        $('mAfter').hidden = false;
+        // THE BACKFILL IS NOT OPTIONAL AND THE PAGE SAYS SO. A ticker with no
+        // bars is pulled DEEP, inside the next price refresh's own request —
+        // on 2026-09-22 a bulk add did exactly that and the refresh answered
+        // HTTP 504 after 300s, leaving the whole universe unrefreshed. The
+        // script exists so that work happens locally and paced.
+        $('mWarn').textContent = 'Added ' + added.length + '. Run this BEFORE the next price '
+          + 'refresh — a ticker with no bars is pulled deep inside the refresh’s own '
+          + 'request, and a bulk add has run one past the 300-second ceiling before.';
+        $('mCmd').textContent = 'node --use-system-ca backfill-bars.js --commit --rate 100 --only '
+          + added.join(',');
+        load();
+      }).catch(function (e) {
+        b.disabled = false; b.textContent = 'Add ' + syms.length;
+        $('mNote').className = 'mnote warn';
+        $('mNote').textContent = String(e && e.message || e);
+      });
+  });
+
+  $('copyCmd').addEventListener('click', function () {
+    navigator.clipboard.writeText($('mCmd').textContent).then(function () {
+      $('copyCmd').textContent = 'Copied';
+      setTimeout(function () { $('copyCmd').textContent = 'Copy'; }, 1500);
+    });
+  });
+
   function paint(d) {
     DATA = d;
     paintClock(d);
+    paintMissing(d);
     paintDates(d);
     var hs = d.holdings || [];
     var sum = hs.reduce(function (a, h) { return a + (h.weight || 0); }, 0);
