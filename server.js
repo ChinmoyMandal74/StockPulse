@@ -515,7 +515,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/consolidated.html': '/consolidated',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
                       '/export.html': '/export', '/subscribers.html': '/subscribers',
-                      '/emails.html': '/emails',
+                      '/emails.html': '/emails', '/holdings.html': '/holdings',
                       // The public pages have canonical addresses of their own.
                       '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
                       '/about.html': '/about',
@@ -614,6 +614,16 @@ app.get('/emails', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'emails');
   res.sendFile(path.join(__dirname, 'private', 'emails.html'));
+}));
+
+// Admin only: what the nightly holdings import has stored. Admin rather
+// than member because nothing has decided yet whether a reconstructed
+// constituent list may be shown to anyone — the question the GICS decision
+// already turned down once. A page behind requireAdmin does not raise it.
+app.get('/holdings', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'holdings');
+  res.sendFile(path.join(__dirname, 'private', 'holdings.html'));
 }));
 
 app.get('/subscribers', route(async (req, res) => {
@@ -12985,6 +12995,46 @@ app.get('/api/cron/holdings', route(async (req, res) => {
   res.json({ ok: true, done: true, fund, index: parsed.index, asOf: parsed.asOf,
     was: held.asOf, holdings: out.holdings, rows: out.rows, dropped: parsed.dropped,
     weightSum: parsed.weightSum, ms: Date.now() - t0 });
+}));
+
+// What the import has stored, for /holdings. Four small reads: the clock,
+// the newest day's rows (an indexed seek on idx_fund_holdings_d, never a
+// scan), the universe, and the names.
+app.get('/api/fund-holdings', requireAdmin, route(async (req, res) => {
+  const fund = String(req.query.fund || 'spy').toLowerCase();
+  const cfg = Holdings.FUNDS[fund];
+  if (!cfg) return res.status(400).json({ error: 'Unknown fund.' });
+
+  const [state, held, universe, names, dates] = await Promise.all([
+    store.fundNewest(fund),
+    store.readFundHoldings(fund, req.query.on || null),
+    store.readUniverse(),
+    store.readNamesFull().catch(() => ({})),
+    store.readFundDates(fund).catch(() => []),
+  ]);
+
+  // WHICH OF THESE WE ACTUALLY TRACK is the cross-reference the page is
+  // opened for, and it costs one Set: the import deliberately stores every
+  // holding rather than only our universe, so the two genuinely differ.
+  const ours = new Set(universe);
+  const rows = held.holdings.map((h) => ({
+    symbol: h.symbol,
+    weight: h.weight,
+    shares: h.shares,
+    held: ours.has(h.symbol),
+    // A name only exists for a symbol we track — an index member we do not
+    // hold has none, and the page says `not tracked` rather than leaving a
+    // blank that reads as missing data.
+    name: (names[h.symbol] && (names[h.symbol].short || names[h.symbol].name)) || null,
+  }));
+
+  res.json({
+    fund, index: cfg.index, label: cfg.label,
+    asOf: held.asOf, state, dates,
+    universe: universe.length,
+    tracked: rows.filter((r) => r.held).length,
+    holdings: rows,
+  });
 }));
 
 // deliberately NOT by GitHub: the failure it exists to catch is GitHub's

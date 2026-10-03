@@ -2656,17 +2656,22 @@ const FH_COLS = ['fund', 'symbol', 'd', 'weight', 'shares'];
 async function fundNewest(fund) {
   await init();
   const r = await db.execute({
-    sql: 'select as_of, holdings, rows, fetched_at, status from fund_state where fund = ?',
+    // `error` is carried too. Without it the admin page can report that the
+    // last attempt failed and never WHY, which is the only thing anyone
+    // opens it to find out — the status word alone ("unreachable") does not
+    // say whether the host is down or the file was refused.
+    sql: 'select as_of, holdings, rows, fetched_at, status, error from fund_state where fund = ?',
     args: [String(fund).toLowerCase()],
   });
   const x = r.rows[0];
-  if (!x) return { asOf: null, holdings: 0, rows: 0, fetchedAt: null, status: null };
+  if (!x) return { asOf: null, holdings: 0, rows: 0, fetchedAt: null, status: null, error: null };
   return {
     asOf: x.as_of || null,
     holdings: Number(x.holdings || 0),
     rows: Number(x.rows || 0),
     fetchedAt: x.fetched_at == null ? null : Number(x.fetched_at),
     status: x.status || null,
+    error: x.error || null,
   };
 }
 
@@ -2792,6 +2797,21 @@ async function readFundHoldings(fund, d) {
       shares: x.shares == null ? null : Number(x.shares),
     })),
   };
+}
+
+// Which dates a fund has accumulated, newest first. A `group by` over a
+// growing table would normally be a quota event here — but (fund, d) is a
+// COVERING index, so SQLite walks it in order and never touches the table,
+// and the plan reads SEARCH rather than SCAN. Bounded at 60 besides: the
+// page shows the series building up, not nine years of it.
+async function readFundDates(fund, limit) {
+  await init();
+  const r = await db.execute({
+    sql: `select d, count(*) n from fund_holdings where fund = ?
+          group by d order by d desc limit ?`,
+    args: [String(fund).toLowerCase(), Math.min(Number(limit) || 60, 400)],
+  });
+  return r.rows.map((x) => ({ d: x.d, n: Number(x.n || 0) }));
 }
 
 // Every fund's clock, for the admin surface and the tests.
@@ -5376,6 +5396,7 @@ module.exports = {
   readShortRecentFor,
   readShortState, noteShortMiss, shortNewest, appendShortInterest,
   fundNewest, noteFundMiss, appendFundHoldings, readFundHoldings, readFundState,
+  readFundDates,
   readInsiderDay, writeInsiderDay, appendInsider, readUniverseCiks,
   clearVisitors,
   logActivity,

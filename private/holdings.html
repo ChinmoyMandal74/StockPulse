@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Index membership — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(163, 230, 53, 0.08), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: #a3e635; box-shadow: 0 0 8px #a3e635; }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 62ch; font-size: 13px; line-height: 1.65; }
+    .masthead { margin: 34px 0 22px; }
+    .k { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+
+    /* The clock. What the page is opened for: did the import run, and how
+       old is what it got. */
+    .clock > .core { padding: 18px 22px; }
+    .clock .row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+    .clock .cell { min-width: 120px; }
+    .clock .big { margin-top: 7px; font-family: var(--mono); font-size: 19px;
+                  font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+    .clock .sub { margin-top: 3px; font-size: 11.5px; color: var(--faint); }
+    .msg { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--faint); }
+    .msg.bad { color: var(--red); }
+
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 16px 0; }
+    .stat .core { padding: 20px 22px; }
+    .val { margin-top: 12px; font-family: var(--mono); font-size: 32px; font-weight: 500;
+           letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+    .stat:nth-child(1) .val { color: #a3e635; }
+    .stat:nth-child(2) .val { color: var(--accent); }
+    .stat:nth-child(3) .val { color: var(--green); }
+    .val small { font-size: 13px; color: var(--faint); letter-spacing: 0; }
+
+    .bar-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 4px 10px; }
+    .bar-top h2 { margin: 0 auto 0 0; font-size: 10px; font-weight: 500; text-transform: uppercase;
+                  letter-spacing: 0.2em; color: var(--faint); }
+    .find { font-family: var(--sans); font-size: 12.5px; color: var(--text);
+            background: rgba(255, 255, 255, 0.04); border: 1px solid var(--hair);
+            border-radius: 9px; padding: 6px 11px; width: 190px; max-width: 46vw; }
+    .find:focus { outline: none; border-color: var(--hair-2); }
+
+    .table-wrap { overflow-x: auto; }
+    table { font-size: 13px; width: 100%; border-collapse: collapse; }
+    thead th { background: var(--surface-2); position: sticky; top: 0; z-index: 1; }
+    th, td { text-align: left; padding: 9px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+             white-space: nowrap; }
+    th { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em;
+         color: var(--faint); border-bottom: 1px solid var(--hair); cursor: pointer; user-select: none; }
+    th:hover { color: var(--text); }
+    th.on { color: var(--accent); }
+    th.n, td.n { text-align: right; }
+    td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    td.sym { font-family: var(--mono); font-weight: 500; }
+    td.nm { color: var(--muted); font-size: 12.5px; max-width: 280px; overflow: hidden;
+            text-overflow: ellipsis; }
+    /* `display: block` on BOTH, the /quality lesson: a percentage width on an
+       inline span draws nothing at all while the style attribute reads
+       perfectly correct. Every measurement here is of the rendered box. */
+    .wbar { display: block; width: 86px; height: 6px; border-radius: 99px;
+            background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+    /* A FLOOR IN PIXELS, not in percent. `Math.max(1, …)` is one percent of
+       an 86px track — 0.9px, which is sub-pixel and reads as no bar at all.
+       The Size card's rule: a small thing drawn at its honest size still has
+       to be visible. The exact figure sits in the column beside it, so the
+       nub is a locator rather than a measurement. */
+    .wbar i { display: block; height: 100%; min-width: 2px; border-radius: 99px; background: #a3e635; }
+    .no { color: var(--faint); font-size: 11px; }
+    .yes { color: var(--green); font-size: 11px; }
+    .dates { display: flex; flex-wrap: wrap; gap: 7px; margin: 2px 4px 0; }
+    .dchip { font-family: var(--mono); font-size: 11px; color: var(--muted); padding: 3px 9px;
+             border: 1px solid var(--hair); border-radius: 99px; }
+    .dchip b { color: var(--text); font-weight: 500; }
+    .dchip.on { border-color: var(--accent); color: var(--text); }
+    .note { margin: 14px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 84ch; }
+    .empty, .error { padding: 26px; font-size: 13px; color: var(--muted); }
+    .error { color: var(--red); }
+    @media (max-width: 768px) {
+      .page { padding: 0 16px; } .hide-sm { display: none !important; }
+      .stats { grid-template-columns: 1fr; } .wbar { display: none; }
+      td.nm { max-width: 130px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.9 13.6A8 8 0 1 1 18.1 7.3"/><path d="M18.7 3.2v4.4h-4.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <button class="btn" id="fetchBtn"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Fetch now</button>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Admin</span>
+      <h1>Index membership</h1>
+      <p class="lede">What the nightly import has taken from the issuer's own daily holdings file —
+        every S&amp;P 500 member with its weight in the index, and whether the screener tracks it.
+        Nothing on the site reads this yet.</p>
+    </header>
+
+    <div class="bezel clock"><div class="core">
+      <div class="row">
+        <div class="cell"><span class="k">Data as of</span><div class="big" id="cAsOf">—</div>
+          <div class="sub" id="cAsOfAge"></div></div>
+        <div class="cell"><span class="k">Last checked</span><div class="big" id="cFetched">—</div>
+          <div class="sub" id="cFetchedAge"></div></div>
+        <div class="cell"><span class="k">Status</span><div class="big" id="cStatus">—</div>
+          <div class="sub" id="cSource"></div></div>
+        <div class="cell"><span class="k">Rows stored</span><div class="big" id="cRows">—</div>
+          <div class="sub" id="cDays"></div></div>
+      </div>
+      <p class="msg" id="cMsg" hidden></p>
+    </div></div>
+
+    <div class="stats">
+      <div class="bezel stat"><div class="core"><span class="k">Holdings</span>
+        <div class="val" id="sCount">—</div></div></div>
+      <div class="bezel stat"><div class="core"><span class="k">Top 10 are</span>
+        <div class="val" id="sTop">—</div></div></div>
+      <div class="bezel stat"><div class="core"><span class="k">Tracked here</span>
+        <div class="val" id="sTracked">—</div></div></div>
+    </div>
+
+    <div class="bar-top"><h2>Dates stored</h2></div>
+    <div class="dates" id="dates"></div>
+
+    <div class="bar-top" style="margin-top:26px">
+      <h2 id="tblHead">Holdings</h2>
+      <input class="find" id="find" type="search" placeholder="Find a symbol" autocomplete="off" />
+    </div>
+    <div class="bezel"><div class="core">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th class="n" data-s="rank">#</th>
+            <th data-s="symbol">Symbol</th>
+            <th data-s="name">Name</th>
+            <th class="n" data-s="weight">Weight</th>
+            <th class="hide-sm"></th>
+            <th class="n" data-s="shares">Shares held</th>
+            <th data-s="held">Tracked</th>
+          </tr></thead>
+          <tbody id="rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div></div>
+
+    <p class="note" id="foot"></p>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  };
+
+  // HOW STALE IS TOO STALE. Reasoned rather than measured, and said so: the
+  // file is published daily with the prior session's date and NOT at
+  // weekends, while the nightly runs weekdays at 07:30 and 19:30. So on a
+  // Monday morning the newest available is Thursday's or Friday's — about
+  // four days old through no fault of ours. Six clears that plus a public
+  // holiday; four days without a CHECK means the job itself has not run,
+  // since it fires twice every weekday.
+  var STALE_ASOF_DAYS = 6;
+  var STALE_FETCH_DAYS = 4;
+
+  var DAY = 86400000;
+  // Parsed at LOCAL NOON. `new Date('2026-10-01')` is UTC midnight and
+  // renders as the 30th west of Greenwich — the card-dating trap, which this
+  // project has met in both the earnings and the fundamentals captions.
+  var dayOf = function (iso) { return new Date(iso + 'T12:00:00'); };
+  var agoDays = function (iso) {
+    if (!iso) return null;
+    return Math.round((Date.now() - dayOf(iso).getTime()) / DAY);
+  };
+  var ago = function (ms) {
+    if (ms == null) return '';
+    var m = Math.round((Date.now() - ms) / 60000);
+    if (m < 60) return m + ' min ago';
+    if (m < 60 * 36) return Math.round(m / 60) + ' hours ago';
+    return Math.round(m / 1440) + ' days ago';
+  };
+  var clock = function (ms) {
+    if (ms == null) return '—';
+    return new Date(ms).toLocaleString('en-US',
+      { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  };
+  var num = function (n) { return Number(n).toLocaleString('en-US'); };
+
+  var DATA = null;
+  var sort = { by: 'rank', dir: 1 };
+
+  function paintClock(d) {
+    var st = d.state || {};
+    var aAge = agoDays(d.asOf);
+    $('cAsOf').textContent = d.asOf || '—';
+    // Amber means "notice this, it is old" everywhere in this app, so it is
+    // spent only when the reading really is stale — not worn permanently.
+    $('cAsOf').className = 'big' + (aAge != null && aAge > STALE_ASOF_DAYS ? ' warn' : '');
+    $('cAsOfAge').textContent = aAge == null ? 'nothing imported yet'
+      : (aAge === 0 ? 'today' : aAge + (aAge === 1 ? ' day old' : ' days old'));
+
+    var fAge = st.fetchedAt == null ? null : (Date.now() - st.fetchedAt) / DAY;
+    $('cFetched').textContent = clock(st.fetchedAt);
+    $('cFetched').className = 'big' + (fAge != null && fAge > STALE_FETCH_DAYS ? ' warn' : '');
+    $('cFetchedAge').textContent = ago(st.fetchedAt);
+
+    $('cStatus').textContent = st.status || '—';
+    $('cStatus').className = 'big' + (st.status && st.status !== 'ok' ? ' warn' : '');
+    $('cSource').textContent = d.label ? d.label + ' · ' + d.fund.toUpperCase() : '';
+
+    $('cRows').textContent = st.rows ? num(st.rows) : '—';
+    $('cDays').textContent = (d.dates || []).length
+      ? (d.dates.length === 1 ? 'one day so far' : d.dates.length + ' days so far') : '';
+
+    // A refusal or an unreachable source is the thing worth seeing, so it is
+    // printed rather than left in a status word nobody expands.
+    if (st.error) {
+      $('cMsg').hidden = false;
+      $('cMsg').className = 'msg bad';
+      $('cMsg').textContent = 'Last attempt: ' + st.error;
+    } else { $('cMsg').hidden = true; }
+  }
+
+  function paintDates(d) {
+    var dd = d.dates || [];
+    $('dates').innerHTML = dd.length
+      ? dd.map(function (x, i) {
+        return '<span class="dchip' + (i === 0 ? ' on' : '') + '">' + esc(x.d)
+          + ' <b>' + num(x.n) + '</b></span>';
+      }).join('')
+      : '<span class="dchip">nothing imported yet</span>';
+  }
+
+  function rowsNow() {
+    var q = ($('find').value || '').trim().toUpperCase();
+    var list = (DATA.holdings || []).map(function (h, i) {
+      return { rank: i + 1, symbol: h.symbol, name: h.name, weight: h.weight,
+        shares: h.shares, held: h.held };
+    });
+    if (q) {
+      list = list.filter(function (r) {
+        return r.symbol.indexOf(q) === 0
+          || (r.name && r.name.toUpperCase().indexOf(q) >= 0);
+      });
+    }
+    var by = sort.by, dir = sort.dir;
+    list.sort(function (a, b) {
+      var x = a[by], y = b[by];
+      if (typeof x === 'string' || typeof y === 'string') {
+        return String(x == null ? '' : x).localeCompare(String(y == null ? '' : y)) * dir;
+      }
+      if (typeof x === 'boolean') { return ((x ? 1 : 0) - (y ? 1 : 0)) * dir; }
+      // A null is not a zero and sorts last whichever way the column goes.
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return (x - y) * dir;
+    });
+    return list;
+  }
+
+  function paintRows() {
+    var list = rowsNow();
+    // The heaviest NON-NULL weight sets the bar scale. A null is not a zero
+    // and not a magnitude: the schema allows one, and reading `.toFixed` off
+    // it threw inside the row map, which the fetch's own catch then rendered
+    // as a single error row where the table should be — the whole page lost
+    // to one absent number.
+    var top = 0;
+    for (var t = 0; t < DATA.holdings.length; t++) {
+      var w = DATA.holdings[t].weight;
+      if (w != null && w > top) top = w;
+    }
+    if (!top) top = 1;
+    $('tblHead').textContent = list.length === (DATA.holdings || []).length
+      ? 'Holdings' : list.length + ' of ' + DATA.holdings.length;
+    $('rows').innerHTML = list.length ? list.map(function (r) {
+      // A missing weight draws an em-dash and NO bar. A zero-width bar would
+      // read as "held at no weight", which is a different claim from "the
+      // file did not report one".
+      var hasW = r.weight != null;
+      var pct = hasW ? Math.max(1, Math.round((r.weight / top) * 100)) : 0;
+      return '<tr>'
+        + '<td class="n">' + r.rank + '</td>'
+        + '<td class="sym">' + esc(r.symbol) + '</td>'
+        + '<td class="nm">' + (r.name ? esc(r.name) : '<span class="no">not tracked</span>') + '</td>'
+        + '<td class="n">' + (hasW ? r.weight.toFixed(3) + '%' : '—') + '</td>'
+        + '<td class="hide-sm">'
+        + (hasW ? '<span class="wbar"><i style="width:' + pct + '%"></i></span>' : '') + '</td>'
+        + '<td class="n">' + (r.shares == null ? '—' : num(r.shares)) + '</td>'
+        + '<td>' + (r.held ? '<span class="yes">yes</span>' : '<span class="no">no</span>') + '</td>'
+        + '</tr>';
+    }).join('') : '<tr><td colspan="7" class="empty">Nothing matches.</td></tr>';
+    var ths = document.querySelectorAll('th[data-s]');
+    for (var i = 0; i < ths.length; i++) {
+      ths[i].className = ths[i].className.replace(/\s*\bon\b/, '')
+        + (ths[i].getAttribute('data-s') === sort.by ? ' on' : '');
+    }
+  }
+
+  function paint(d) {
+    DATA = d;
+    paintClock(d);
+    paintDates(d);
+    var hs = d.holdings || [];
+    var sum = hs.reduce(function (a, h) { return a + (h.weight || 0); }, 0);
+    var top10 = hs.slice(0, 10).reduce(function (a, h) { return a + (h.weight || 0); }, 0);
+    $('sCount').textContent = hs.length || '—';
+    $('sTop').innerHTML = hs.length ? top10.toFixed(1) + '<small>% of the index</small>' : '—';
+    $('sTracked').innerHTML = hs.length
+      ? d.tracked + '<small> of ' + hs.length + '</small>' : '—';
+    paintRows();
+    $('foot').textContent = hs.length
+      ? ('Weights sum to ' + sum.toFixed(2) + '%, which is the issuer’s own figure — '
+        + 'a cash line and rounding both land in it. ' + (hs.length - d.tracked)
+        + ' of these are not in the screener’s ' + num(d.universe) + ' symbols, and the import '
+        + 'stores them anyway so that adding one later needs no backfill. '
+        + 'Weights are the fund’s, which tracks the index rather than being it.')
+      : '';
+  }
+
+  var ths = document.querySelectorAll('th[data-s]');
+  for (var i = 0; i < ths.length; i++) {
+    (function (th) {
+      th.addEventListener('click', function () {
+        var key = th.getAttribute('data-s');
+        if (sort.by === key) { sort.dir = -sort.dir; }
+        else {
+          sort.by = key;
+          // Open on the interesting end: biggest first for a number, A-Z for
+          // a name. Nobody opens a weight column to see the smallest holding.
+          sort.dir = (key === 'symbol' || key === 'name' || key === 'rank') ? 1 : -1;
+        }
+        paintRows();
+      });
+    }(ths[i]));
+  }
+  $('find').addEventListener('input', paintRows);
+
+  $('fetchBtn').addEventListener('click', function () {
+    var b = $('fetchBtn');
+    b.disabled = true;
+    var was = b.textContent;
+    b.textContent = 'Fetching…';
+    fetch('/api/cron/holdings').then(function (r) { return r.json(); }).then(function (j) {
+      b.disabled = false; b.textContent = was;
+      $('cMsg').hidden = false;
+      $('cMsg').className = 'msg' + (j.refused || j.error || j.reason ? ' bad' : '');
+      $('cMsg').textContent = j.refused ? ('Refused the file: ' + j.refused)
+        : (j.error || j.reason) ? ('Could not fetch: ' + (j.error || j.reason))
+          : j.already ? ('Already holding ' + j.already + ' — the file has not moved.')
+            : ('Imported ' + j.holdings + ' holdings as of ' + j.asOf + '.');
+      load();
+    }).catch(function (e) {
+      b.disabled = false; b.textContent = was;
+      $('cMsg').hidden = false; $('cMsg').className = 'msg bad';
+      $('cMsg').textContent = String(e && e.message || e);
+    });
+  });
+
+  function load() {
+    fetch('/api/fund-holdings').then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(paint).catch(function (e) {
+      $('rows').innerHTML = '<tr><td colspan="7" class="error">'
+        + esc(e && e.message || e) + '</td></tr>';
+    });
+  }
+  load();
+}());
+</script>
+</body>
+</html>
