@@ -1473,7 +1473,7 @@
       <tr>
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="shortName" title="What a person would call it — shortened from the legal name by rule, and editable by the owner. The full legal name is in the tooltip on each row.">Name</th>
-        <th class="group grp-info" data-group="info" colspan="10">Info</th>
+        <th class="group grp-info" data-group="info" colspan="11">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="1">Scores</th>
         <th class="group grp-act" data-group="act" colspan="12">Advice</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
@@ -1494,6 +1494,7 @@
         <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — Twelve Data's own taxonomy, not GICS.">Industry</th>
         <th class="left grp-info" data-key="exchange" title="Where the stock actually trades, with its MIC and trading currency on the cell. Stored on the profile rather than read from the price call, so it survives a round that prices from the archive. NOTE: the currency here is the TRADING one — an ADR trades in USD while its financials are in the home currency, so this does not tell you what the money columns are denominated in.">Exchange</th>
         <th class="left grp-info" data-key="instrumentType" title="What the instrument IS, from the provider's own free reference list: Common Stock, Preferred Stock, American Depositary Receipt, Limited Partnership, REIT or ETF. It exists because a NAME cannot be trusted for this — BNS is stored as 'Bank Nova Scotia Halifax Pfd 3' and is Scotiabank's common stock, while a subordinated note can read as ordinary equity. Filter on it to find anything that is not common stock. It states the fact only: nothing in the Advice engine reads it.">Instrument</th>
+        <th class="left grp-info" data-key="spMember" title="Whether the stock is in the S&amp;P 500, from the issuer's own daily holdings file for SPY &mdash; the fund that tracks the index, which is the closest published source there is. The cell names the date the file is from. An em-dash means no holdings file has been imported yet, which is NOT the same as No. The index WEIGHT is deliberately not here: it stays on the admin holdings page. Nothing in the Advice engine reads this.">S&amp;P<br>500</th>
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
         <th class="left grp-info" data-key="capBand" title="The size band, from the market cap beside it: Mega $200B+, Large $50-200B, Mid-Large $10-50B, Mid $2-10B, Small $300M-2B, Micro under $300M. The $50B line inside Large is this site's own cut, not a standard — without it 69% of the screen sat in one bucket. Thresholds are fixed, never derived from the current universe. Blank for ETFs, which report AUM rather than capitalisation.">Size</th>
         <th class="grp-info" data-key="newsAge" title="How long ago the latest stored headline was published, and how many this stock has from the last week. Click a cell to read them. A dot means we have not checked this stock yet — headlines are fetched a few stocks at a time.">News</th>
@@ -2117,6 +2118,29 @@
         return `<td class="name left grp-info nocard na" title="Not recorded yet \u2014 it fills in the next time this stock's profile is pulled.">\u2014</td>`;
       }
       return `<td class="name left grp-info nocard">${we(s.instrumentType)}</td>`;
+    }
+
+    // In the index, or not. BOOLEAN ONLY -- the weight stays on /holdings,
+    // which is the licensing line: membership is a fact about the stock, the
+    // weight is the issuer's dataset.
+    //
+    // A NULL IS NOT A NO. With no holdings file imported, "No" on every row
+    // would be this screener claiming nothing is in the S&P 500. The em-dash
+    // says unknown and the tooltip says why.
+    //
+    // NO COLOUR. Membership is not a direction and not a verdict -- green and
+    // red mean up and down on every row here. `Yes` reads at full strength and
+    // `No` goes muted, so the eye finds members without the cell making a
+    // claim. `.nocard` for the Instrument cell's reason: a hover card on a
+    // Yes/No is an ambush on a cell nobody needs a field list for.
+    function spCell(s) {
+      if (s.spMember == null) {
+        return `<td class="name left grp-info nocard na" title="No index holdings file has been imported yet — this is not the same as No.">—</td>`;
+      }
+      const when = s.spAsOf ? ` as of ${we(s.spAsOf)}` : '';
+      return s.spMember
+        ? `<td class="name left grp-info nocard" title="In the S&amp;P 500${when}, from the issuer's own holdings file.">Yes</td>`
+        : `<td class="name left grp-info nocard na" title="Not in the S&amp;P 500${when}, from the issuer's own holdings file.">No</td>`;
     }
 
     // Sector and Industry: the bar's own pickers in a second place (owner,
@@ -2944,6 +2968,9 @@
         : k === 'actionEntry' ? ActionRules.ENTRY_ORDER
         : k === 'actionFund' ? ActionRules.FUND_ORDER
         : k === 'capBand' ? Filters.CAP_ORDER
+        // A boolean has a natural order and the alphabet gets it backwards:
+        // a reader scanning a Yes/No pair expects Yes first.
+        : k === 'spMember' ? ['Yes', 'No']
         : k.startsWith('av:') ? ActionRules.ACTIONS : null);
       document.querySelectorAll('tr.filterrow select.flt').forEach((el) => {
         if (el === document.activeElement) return;
@@ -3356,7 +3383,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="95">${s.error}</td>
+            <td class="na" colspan="96">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3383,7 +3410,7 @@
           ${classCell('secval', s.sector, 'sector', '', cacheTitle)}
           ${classCell('indval', s.industry, 'industry', ' industry', s.industry || cacheTitle)}
           ${exchangeCell(s)}
-          ${instrumentCell(s)}
+          ${instrumentCell(s)}${spCell(s)}
           <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
           ${capBandCell(s)}
           ${newsCell(s)}
@@ -3493,7 +3520,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 100;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 101;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3671,7 +3698,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="97">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="98">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

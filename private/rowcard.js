@@ -104,6 +104,9 @@
     // about the security, not a reading of it — so it carries no colour and
     // nothing in the engine reads it.
     ['info',  'Instrument',     (s) => V.text(s.instrumentType)],
+    // Boolean only. The index WEIGHT is deliberately not here: it stays on
+    // the admin /holdings page, which is the licensing line the owner drew.
+    ['info',  'S&P 500',        (s) => (s.spMember == null ? null : V.text(s.spMember ? 'Yes' : 'No'))],
     ['info',  'Market Cap',     (s) => V.money(s.marketCap, s.currency)],
     // The band the cap falls in. One entry here puts it in the hover card, the
     // tiles, the phone and the tile/mobile field pickers at once.

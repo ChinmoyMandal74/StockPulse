@@ -21,7 +21,7 @@
   const RATING_FOR = { qualityScore: 'qualityRating' };
   const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios']);
   const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh',
-    'exchange', 'capBand', 'instrumentType']);
+    'exchange', 'capBand', 'instrumentType', 'spMember']);
 
   // ---- Size by market cap ---------------------------------------------------
   // It lives HERE because four surfaces need it and none of them may own it:
@@ -128,6 +128,10 @@
         ? Math.round((Date.now() - new Date(x.lastEarningsDate + 'T12:00:00').getTime()) / 86400000) : null;
     }
     if (key === 'fresh3mHigh') return x.fresh3mHigh ? 'Yes' : 'No';
+    // A NULL IS NOT A NO. With no holdings file imported every row is
+    // unknown, and a dropdown offering only Yes/No would silently filter
+    // those rows away rather than showing them as unanswered.
+    if (key === 'spMember') return x.spMember == null ? '' : (x.spMember ? 'Yes' : 'No');
     return x[key];
   }
 

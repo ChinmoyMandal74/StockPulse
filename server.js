@@ -4324,11 +4324,56 @@ function ruleCfg(name) {
 // membershipOf. The note below already warned that a stamp must not go
 // missing from one reader; it did not protect the LENGTH. Now it cannot:
 // a stamp added here changes nothing any caller can see.
+
+// Is this stock in the index? Read off the newest stored holdings date.
+//
+// BOOLEAN ONLY, NEVER THE WEIGHT — the owner's call when offered both. A
+// reconstructed constituent list WITH its weights is what the licensing
+// question is about, the same question that turned down the datahub mirror's
+// free GICS columns twice; and this column is MEMBER-FACING where `/holdings`
+// is admin. Membership is a fact about the stock. The weight is the issuer's
+// dataset, and it stays on the admin page.
+//
+// CACHED, because `/api/stocks` is the hot path and this would otherwise be
+// two reads on every screener load — the `groupIndex` and `tile_config`
+// reasoning. A minute stale means a stock that joined the index overnight,
+// which does not happen between two page loads.
+const SP_FUND = 'spy';
+const SP_TTL_MS = 60000;
+let spCache = { at: 0, asOf: null, set: null };
+async function spMembers() {
+  if (spCache.set && Date.now() - spCache.at < SP_TTL_MS) return spCache;
+  const st = await store.fundNewest(SP_FUND);
+  if (!st || !st.asOf) { spCache = { at: Date.now(), asOf: null, set: null }; return spCache; }
+  // The newest day's ~504 rows, the indexed seek readFundHoldings already is.
+  // IT RETURNS AN OBJECT, `{ fund, asOf, holdings }`, not an array -- mapping
+  // the return value directly throws, and `serveStamps` catches per stamp, so
+  // the only symptom is a column that is silently absent from every row. Read
+  // a field's shape, never guess it.
+  const { holdings } = await store.readFundHoldings(SP_FUND, st.asOf);
+  spCache = { at: Date.now(), asOf: st.asOf, set: new Set((holdings || []).map((r) => r.symbol)) };
+  return spCache;
+}
+
+// A NULL IS NOT A FALSE, and this is the sharpest place that rule has landed:
+// with no holdings file ever imported, `false` on every row is the screener
+// stating that NO stock is in the S&P 500 — a confident, universal, wrong
+// answer. Unknown until there is a file, and the cell says which.
+async function stampSpMember(rows) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  const { asOf, set } = await spMembers();
+  for (const r of rows) {
+    r.spMember = set ? set.has(r.symbol) : null;
+    r.spAsOf = asOf;
+  }
+}
+
 const serveStamps = (rows) => Promise.all([
   stampShortNames(rows).catch(() => {}),
   stampAdviceAge(rows).catch(() => {}),
   stampPricedAt(rows).catch(() => {}),
   stampAthDistance(rows).catch(() => {}),
+  stampSpMember(rows).catch(() => {}),
 ]);
 // The two that need no round trip, and therefore wait for the portfolios.
 function finishServe(rows, pf) {
@@ -8064,6 +8109,7 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     stampPricedAt([stock]).catch(() => {}),
     stampAdviceAge([stock]).catch(() => {}),
     stampAthDistance([stock]).catch(() => {}),
+    stampSpMember([stock]).catch(() => {}),
   ]);
 
   res.json({
@@ -8867,6 +8913,7 @@ async function mobileRows(req) {
   await stampAdviceAge(rows);
   await stampPricedAt(rows);
   await stampAthDistance(rows);
+  await stampSpMember(rows);
   stampCapDerived(rows);
   return rows;
 }
@@ -9163,6 +9210,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   await stampAdviceAge(stocks);
   await stampPricedAt(stocks);
   await stampAthDistance(stocks);
+  await stampSpMember(stocks);
   stampCapDerived(stocks);
   const myLists = await store.readUserPortfolios(await prefsKey(req));
   // A post saved with a screen cut needs the screens to resolve it. Optional
