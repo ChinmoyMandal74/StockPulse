@@ -215,7 +215,20 @@ app.use((req, _res, next) => { req._t0 = Date.now(); next(); });
 const route = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch((err) => {
     console.error(`${req.method} ${req.originalUrl} failed:`, err);
-    if (!res.headersSent) res.status(500).json({ error: 'Server error. Please try again.' });
+    // A DROPPED DATABASE CONNECTION IS NOT A BUG AND MUST NOT READ AS ONE.
+    // db.js already retries a read once; what reaches here is a write, or a
+    // second drop inside a second. Either way the reader's next move is to
+    // try again, and "Server error. Please try again." gave them no way to
+    // tell that from a fault in the page -- it was reported as a bug, which
+    // was the reasonable reading. The words are OURS, never the driver's:
+    // an upstream message can restate the query, and the auth token travels
+    // in the same request.
+    if (!res.headersSent) {
+      res.status(500).json({ error: store.isNetDrop(err)
+        ? 'The database connection dropped part-way through. Nothing is wrong with '
+          + 'what you asked for — please run it again.'
+        : 'Server error. Please try again.' });
+    }
   });
 
 // Log every public page load before static files are served.

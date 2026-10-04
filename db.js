@@ -31,7 +31,73 @@ if (!url) {
   );
 }
 
-const db = createClient({ url, authToken });
+const rawClient = createClient({ url, authToken });
+
+// ---- one retry when the CONNECTION drops, and READS ONLY ------------------
+// (2026-10-04, the owner: "what is this error" over a 500 on
+// /adjustedbacktest.) Turso closed the TLS socket part-way through one of
+// `readSecFactsSince`'s chunked batches:
+//
+//   LibsqlError: fetch failed ... at async Promise.all (index 1)
+//     cause: SocketError: other side closed  (UND_ERR_SOCKET)
+//
+// That read is one of six the adjusted backtest runs CONCURRENTLY, so one
+// dropped socket rejected the `Promise.all` and threw away the whole
+// thirty-five-second computation. Measured: roughly one cold run in sixteen.
+//
+// WHY A RETRY IS SAFE HERE AND IS NOT SAFE IN GENERAL. `fetchJson`'s rule for
+// Twelve Data is "retry only when the attempt provably did nothing", because
+// a charged call retried is a breach of the credit ceiling. The same question
+// for a database is whether the statement may ALREADY HAVE BEEN APPLIED when
+// the socket died -- and for a SELECT the answer cannot matter, because
+// running it twice changes nothing. For a write it does matter and the answer
+// is unknowable from here, so a write is never retried: most of ours are
+// idempotent upserts, but `chat_usage` and the signup throttle are
+// `set n = n + 1`, and a silent double-count is exactly the kind of wrong
+// nobody would ever notice.
+//
+// THE TEST IS THE SQL, not a flag a caller passes -- the same mechanical
+// guard the production write-block harness used: every statement in the call
+// must begin `select`, `pragma` or `with`, or nothing is retried. A caller
+// cannot forget to opt in, and cannot opt a write in by mistake.
+const NET_DROP = /fetch failed|other side closed|UND_ERR_SOCKET|ECONNRESET|EPIPE|ETIMEDOUT|socket hang up|terminated/i;
+// The reason is usually two or three `cause` levels down -- libSQL wraps
+// undici's TypeError, which wraps the SocketError that names the code. The
+// walk is bounded so a self-referential chain cannot spin.
+function isNetDrop(err) {
+  for (let e = err, hops = 0; e && hops < 8; e = e.cause, hops++) {
+    if (NET_DROP.test(String(e.code || '')) || NET_DROP.test(String(e.message || ''))) return true;
+  }
+  return false;
+}
+const READ_SQL = /^\s*(select|pragma|with)\b/i;
+const sqlOf = (s) => (typeof s === 'string' ? s : (s && s.sql) || '');
+// An EMPTY batch is not a read -- there is nothing to re-run and `every` on
+// an empty array is true, which would make the guard say yes to nothing.
+const readOnly = (stmts) => stmts.length > 0 && stmts.every((s) => READ_SQL.test(sqlOf(s)));
+
+const DB_RETRY_MS = Number(process.env.DB_RETRY_MS || 300);
+async function retryRead(label, stmts, run) {
+  try {
+    return await run();
+  } catch (err) {
+    if (!isNetDrop(err) || !readOnly(stmts)) throw err;
+    // Logged rather than swallowed: a rising count here is a database
+    // problem, and a retry nobody can see is a symptom that has been hidden
+    // rather than fixed.
+    console.warn(`db: ${label} lost its connection (${err && err.message}) — retrying once`);
+    await new Promise((r) => setTimeout(r, DB_RETRY_MS));
+    return run();
+  }
+}
+
+// ONE retry, deliberately. A second socket drop inside a second is a database
+// that is down rather than a blip, and the caller is better served by an
+// error than by a page that takes another thirty-five seconds to fail.
+const db = {
+  execute: (stmt) => retryRead('execute', [stmt], () => rawClient.execute(stmt)),
+  batch: (stmts, mode) => retryRead('batch', stmts || [], () => rawClient.batch(stmts, mode)),
+};
 
 // ---- a deadline on one round trip -----------------------------------------
 // **A DROPPED SOCKET DOES NOT THROW FOR HOURS.** Measured on 2026-09-20 during
@@ -5494,6 +5560,10 @@ async function readNewsState() {
 
 module.exports = {
   db,
+  // Exported so `route()` in server.js can say "the connection dropped"
+  // rather than "Server error", which is the difference between a reader
+  // pressing Run again and a reader reporting a bug.
+  isNetDrop,
   init,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
   setSecLastResults,
