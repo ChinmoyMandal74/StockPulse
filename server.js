@@ -7366,7 +7366,45 @@ function btSimulate(opts) {
     for (const v of held.values()) end += v;
     nav[j] = end;
   }
+  // ---- what each book DID over its own period --------------------------
+  // (2026-10-03, owner: "show me the returns of the stocks held for that
+  // period individually, and also a total return for the held period".)
+  //
+  // A book's period runs from the mark that opened it to the mark that
+  // replaces it, the last one to the end of the window — so the periods
+  // tile the run with no gap and no overlap, and THEIR PRODUCT IS THE
+  // HEADLINE. `nav` is recorded after each rebalance, so
+  // nav[0] -> nav[m1] -> ... -> nav[last] telescopes to the rebalanced
+  // return on the card above. That is the property worth having: every
+  // figure in a block can be checked against a figure already on screen.
+  const pct1 = (a, b) => (a > 0 && b > 0 ? Math.round((b / a - 1) * 1000) / 10 : null);
+  // A ratio cancels the per-symbol rebasing btMatrix applies, so this is a
+  // true price return. Null where the name has no price at either end —
+  // a stock that stopped trading mid-period has no period return, and a
+  // fabricated zero would read as "it went nowhere".
+  const pret = (sym, a, b) => (px[sym] ? pct1(px[sym][a], px[sym][b]) : null);
+  const ends = log.map((e, i) => (i + 1 < log.length ? log[i + 1].j : axis.length - 1));
+  for (let i = 0; i < log.length; i++) {
+    const a = log[i].j, b = ends[i];
+    log[i].to = axis[b];
+    log[i].toEnd = b === axis.length - 1;
+    log[i].periodRet = pct1(nav[a], nav[b]);
+    // The names going forward are exactly kept + bought — the book.
+    for (const t of log[i].kept) t.pret = pret(t.sym, a, b);
+    for (const t of log[i].bought) t.pret = pret(t.sym, a, b);
+  }
+  // THE OPENING BOOK IS A PERIOD TOO, and it had no row to hang one on: the
+  // log starts at the first rebalance. Its members come from the simulator's
+  // own opening set rather than from the picks, so the page cannot show a
+  // position the run did not actually take.
+  const firstMark = log.length ? log[0].j : axis.length - 1;
+  const opening = {
+    from: axis[0], to: axis[firstMark], toEnd: !log.length,
+    ret: pct1(nav[0], nav[firstMark]),
+    members: first.map((sym) => ({ sym, pret: pret(sym, 0, firstMark) })),
+  };
   return { values: nav, turnover: Math.round(traded * 1000) / 10, rebalances, log,
+           opening,
            endNames: held.size, endCash: Math.round((cash / (nav[nav.length - 1] || 1)) * 1000) / 10 };
 }
 
@@ -7449,6 +7487,14 @@ function btTrades(log, verdicts, byS, opts) {
     const kept = (e.kept || []).map((t) => deco(t, false))
       .sort((a, b) => (b.days || 0) - (a.days || 0) || a.sym.localeCompare(b.sym));
     return { d: e.d, held: e.held, cash: e.cash, turnover: e.turnover,
+      // The period this book covers, and what it did over it. `pret` rides
+      // on each kept/bought row through `deco`'s spread. A SOLD row
+      // deliberately gets none: the position is gone at this mark, so a
+      // forward return on it would be "what it went on to do without us",
+      // which reads as a verdict on the rule rather than a fact about the
+      // book — the line the peer table and the picks table both decline to
+      // cross.
+      to: e.to, toEnd: !!e.toEnd, periodRet: e.periodRet,
       soldN: sold.length, boughtN: bought.length, keptN: kept.length,
       sold: sold.slice(0, BT_TRADE_CAP), bought: bought.slice(0, BT_TRADE_CAP),
       kept: kept.slice(0, BT_BOOK_CAP) };
@@ -12709,6 +12755,9 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
     // that fired beside each name — a turnover percentage nobody can check is
     // not a result.
     trades: rebal ? rebal.trades : null,
+    // The opening book's own period. Separate from `trades` because the log
+    // begins at the first rebalance; the page draws the opening block itself.
+    opening: rebal ? rebal.opening : null,
     rebalError,
     basket: { dates: basket.dates, values: basket.values, members: basket.members },
     market: { dates: market.dates, values: market.values, members: market.members },

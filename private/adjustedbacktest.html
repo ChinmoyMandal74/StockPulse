@@ -145,7 +145,7 @@
     #abTrades summary .d { font: 600 12px var(--mono); margin-right: 10px; }
     #abTrades summary .q { color: var(--faint); }
     #abTrades .body { padding: 2px 13px 11px; }
-    #abTrades .tr { display: grid; grid-template-columns: 62px 78px 1fr 70px;
+    #abTrades .tr { display: grid; grid-template-columns: 62px 78px 1fr 78px 84px;
                     gap: 8px; font-size: 11.5px; padding: 3px 0;
                     border-top: 1px solid var(--hair); align-items: baseline; }
     #abTrades .tr .sym { font: 600 11.5px var(--mono); }
@@ -170,6 +170,17 @@
                             padding: 2px 7px; }
     #abTrades .book .bk-none { color: var(--muted); font-size: 12px; }
     #abTrades .tr .why { color: var(--muted); }
+    /* TWO NUMBERS IN A ROW NEED A HEADER, or the reader has to guess which
+       is which. `.rp` is the period return; `.r` is the one that was already
+       there. */
+    #abTrades .tr .rp { text-align: right; font: 600 11.5px var(--mono); }
+    #abTrades .hdr { color: var(--faint); border-top: none; }
+    #abTrades .hdr .rp, #abTrades .hdr .r { font: 600 9.5px var(--sans);
+      text-transform: uppercase; letter-spacing: .06em; color: var(--faint); }
+    #abTrades .tot { border-top: 1px solid var(--hair-2); margin-top: 2px;
+      padding-top: 6px; }
+    #abTrades .tot .why { color: var(--muted); }
+    #abTrades .tot .rp { font-size: 12.5px; }
     #abTrades .tr .r { text-align: right; font: 500 11.5px var(--mono); }
     #abTrades h3, #abBandNote h3 { font-size: 12px; margin: 18px 0 8px;
       text-transform: uppercase; letter-spacing: .06em; color: var(--faint); }
@@ -492,6 +503,42 @@
       // different question, and the one actually asked: "what was the new
       // position on 1-April". Naming the kept and bought rows answers it only
       // if the reader adds them up, which is work the page should do.
+      // A period return, which is always signed: it is a CHANGE, so it takes
+      // the up/down colour the rest of the app gives a change. An em-dash
+      // where the name has no price at one end of the period — a stock that
+      // stopped trading has no period return, and 0.0% would claim it went
+      // nowhere.
+      var pr = function (v) {
+        return v == null ? '<span class="na">\u2014</span>'
+          : '<span class="' + (v >= 0 ? 'pos' : 'neg') + '">' + pc(v) + '</span>';
+      };
+      // The window a block's period covers, in words, so the two numbers in
+      // each row are never ambiguous about which span they measure.
+      var span = function (b, from) {
+        if (!b || !b.to) return 'this period';
+        return from + ' \u2192 ' + b.to + (b.toEnd ? ' (end)' : '');
+      };
+      var colHead = function (b, opening) {
+        return '<div class="tr hdr"><span class="sym"></span><span class="side"></span>'
+          + '<span class="why"></span><span class="rp">This period</span>'
+          + '<span class="r">' + (opening ? '' : 'Since entry') + '</span></div>';
+      };
+      // THE BOOK'S OWN TOTAL, under the column it totals — not the mean of
+      // the rows above it. The two differ by the cash the book may hold, by
+      // the weights drifting in exit-only mode, and by the cost of the trade
+      // that ends the period; claiming the rows add up to it would be a
+      // small lie on the one line a reader checks.
+      var totalRow = function (b, v) {
+        if (!b) return '';
+        return '<div class="tr tot"><span class="sym"></span><span class="side"></span>'
+          + '<span class="why">The book over ' + we(span(b, b.from || b.d)) + '</span>'
+          + '<span class="rp">' + pr(v) + '</span><span class="r"></span></div>';
+      };
+      var sumRet = function (v) {
+        return v == null ? ''
+          : '<span class="q"> \u00b7 ' + (v >= 0 ? '+' : '') + v.toFixed(1)
+            + '% over the period</span>';
+      };
       var bookLine = function (label, syms) {
         return '<div class="book"><span class="bk-l">' + we(label) + '</span>'
           + (syms.length
@@ -504,6 +551,11 @@
       // ever visible as ticks in the picks table further down. It is a block
       // like any other, and it is the one the reader looks for first.
       var openPicks = (DATA.picks || []).filter(function (p) { return p.selected; });
+      // THE PERIOD IS THE SERVER'S, not derived here: it knows the trading
+      // axis and the book's own value at each end, and the page does not.
+      var op = DATA.opening || null;
+      var opret = {};
+      if (op) (op.members || []).forEach(function (m) { opret[m.sym] = m.pret; });
       var opening = '<details open><summary><span class="d">' + we(DATA.date)
         + '</span><span class="q">opening book \u00b7 ' + openPicks.length
         + ' position' + (openPicks.length === 1 ? '' : 's')
@@ -512,15 +564,18 @@
         + (!DATA.top && DATA.topAsked > 0
           ? ' \u00b7 every stock that qualified, so the Top ' + DATA.topAsked
             + ' cut did not bind' : '')
-        + '</span></summary>'
+        + '</span>' + sumRet(op && op.ret) + '</summary>'
         + '<div class="body">'
         + bookLine('Held from ' + DATA.date, openPicks.map(function (p) { return p.symbol; }))
+        + colHead(op, true)
         + openPicks.map(function (p) {
           return '<div class="tr"><span class="sym">' + we(p.symbol) + '</span>'
             + '<span class="side open">opened</span>'
             + '<span class="why">' + we((p.action || '?') + (p.flag ? ' \u2014 ' + p.flag : ''))
-            + '</span><span class="r"></span></div>';
+            + '</span><span class="rp">' + pr(opret[p.symbol]) + '</span>'
+            + '<span class="r"></span></div>';
         }).join('')
+        + totalRow(op, op && op.ret)
         + '</div></details>';
       $('abTrades').innerHTML = '<h3>The book at every date</h3>' + opening
       + DATA.trades.map(function (t) {
@@ -542,7 +597,8 @@
           return n > shown
             ? '<div class="tr"><span class="sym"></span><span class="side"></span>'
               + '<span class="why" style="color:var(--faint)">\u2026and ' + (n - shown)
-              + ' more, not listed.</span><span class="r"></span></div>'
+              + ' more, not listed.</span><span class="rp"></span>'
+              + '<span class="r"></span></div>'
             : '';
         };
         // Kept and bought ARE the book going forward, so the list is built
@@ -556,9 +612,9 @@
             ? '<div class="tr"><span class="sym"></span><span class="side"></span>'
               + '<span class="why" style="color:var(--faint)">\u2026and '
               + (t.held - bookSyms.length) + ' more held, not listed.</span>'
-              + '<span class="r"></span></div>'
+              + '<span class="rp"></span><span class="r"></span></div>'
             : '');
-        var rows = t.kept.map(function (x) {
+        var rows = colHead(t) + t.kept.map(function (x) {
           // "so far", never a realised figure: this position is still open,
           // and printing it the way a sale's return is printed would be the
           // more expensive kind of wrong.
@@ -568,26 +624,33 @@
             + '<span class="sym">' + we(x.sym) + '</span>'
             + '<span class="side keep">held</span>'
             + '<span class="why">' + we(reason(x, false)) + '</span>'
+            + '<span class="rp">' + pr(x.pret) + '</span>'
             + '<span class="r">' + (x.ret == null ? '' : pc(x.ret)) + '</span></div>';
         }).join('') + more(t.kept.length, t.keptN)
         + t.bought.map(function (x) {
           return '<div class="tr"><span class="sym">' + we(x.sym) + '</span>'
             + '<span class="side buy">bought</span>'
             + '<span class="why">' + we(reason(x, false)) + '</span>'
+            + '<span class="rp">' + pr(x.pret) + '</span>'
             + '<span class="r"></span></div>';
         }).join('') + more(t.bought.length, t.boughtN)
         + t.sold.map(function (x) {
           return '<div class="tr"><span class="sym">' + we(x.sym) + '</span>'
             + '<span class="side sell">sold</span>'
             + '<span class="why">' + we(reason(x, true)) + '</span>'
+            // A sold position is gone at this mark, so it has no period
+            // return — see btTrades for why one is not offered.
+            + '<span class="rp"></span>'
             + '<span class="r">' + (x.ret == null ? '' : pc(x.ret)) + '</span></div>';
-        }).join('') + more(t.sold.length, t.soldN);
+        }).join('') + more(t.sold.length, t.soldN)
+        + totalRow(t, t.periodRet);
         var o = open; open = false;
         return '<details' + (o ? ' open' : '') + '><summary><span class="d">'
           + we(t.d) + '</span><span class="q">held ' + t.held + ' \u00b7 sold '
           + t.soldN + ' \u00b7 bought ' + t.boughtN + ' \u00b7 turnover '
           + (t.turnover == null ? '\u2014' : t.turnover.toFixed(0) + '%')
-          + '</span></summary><div class="body">' + book + rows + '</div></details>';
+          + '</span>' + sumRet(t.periodRet)
+          + '</summary><div class="body">' + book + rows + '</div></details>';
       }).join('')
       + '<p style="color:var(--muted);font-size:12px;line-height:1.6;margin:8px 2px 0">'
       + 'The first block is the book on the start date; each one after it is the book '
@@ -599,8 +662,16 @@
       + 'The reason beside each is the verdict that fired for it on that date; for a '
       + 'sale, the one that disqualified it. A return beside a <b>held</b> row is what '
       + 'the position has done SO FAR, from the day it was bought to that date; beside '
-      + 'a <b>sold</b> row it is what it did over the whole holding. The opening basket '
-      + 'is the picks table above.</p>';
+      + 'a <b>sold</b> row it is what it did over the whole holding. '
+      + '<b>This period</b> is the other question: what each name did from THIS date '
+      + 'to the next rebalance, the last block running to the end of the window. A '
+      + 'sold name has none \u2014 it is gone at this date, and what it went on to do '
+      + 'without us is not a fact about the book. The total under that column is the '
+      + 'book\u2019s own value over the period rather than the average of the rows '
+      + 'above it: the two differ by any cash held, by the weights drifting in '
+      + 'exit-only mode, and by the cost of the rebalance that ends the period. The '
+      + 'periods tile the run with no gap, so compounding them gives the rebalanced '
+      + 'return on the card above. The opening basket is the picks table above.</p>';
     }
 
     // ---- the picks -------------------------------------------------------
