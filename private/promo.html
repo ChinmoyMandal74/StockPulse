@@ -190,6 +190,8 @@
         <select id="movCap"><option value="All">All sizes</option></select>
         <label>Screen</label>
         <select id="movScreen"><option value="">No screen</option></select>
+        <label>S&amp;P 500</label>
+        <select id="movSp500"></select>
       </div>
 
       <div id="chtBox">
@@ -225,6 +227,8 @@
         <select id="chtCap"><option value="All">All sizes</option></select>
         <label>Screen</label>
         <select id="chtScreen"><option value="">No screen</option></select>
+        <label>S&amp;P 500</label>
+        <select id="chtSp500"></select>
         </div>
         <div id="chtLinesWrap">
           <label>How many lines</label>
@@ -286,6 +290,8 @@
         <select id="spkCap"><option value="All">All sizes</option></select>
         <label>Screen</label>
         <select id="spkScreen"><option value="">No screen</option></select>
+        <label>S&amp;P 500</label>
+        <select id="spkSp500"></select>
       </div>
 
       <div id="rngBox">
@@ -328,6 +334,8 @@
         <select id="rngCap"><option value="All">All sizes</option></select>
         <label>Screen</label>
         <select id="rngScreen"><option value="">No screen</option></select>
+        <label>S&amp;P 500</label>
+        <select id="rngSp500"></select>
       </div>
 
       <div id="advBox">
@@ -358,6 +366,8 @@
         <select id="advCap"><option value="All">All sizes</option></select>
         <label>Screen</label>
         <select id="advScreen"><option value="">No screen</option></select>
+        <label>S&amp;P 500</label>
+        <select id="advSp500"></select>
         </div>
         <div id="advProfWrap">
           <label>Rules</label>
@@ -427,6 +437,8 @@
         <select id="fundCap"><option value="All">All sizes</option></select>
         <label>Screen</label>
         <select id="fundScreen"><option value="">No screen</option></select>
+        <label>S&amp;P 500</label>
+        <select id="fundSp500"></select>
         </div>
       </div>
 
@@ -484,6 +496,8 @@
         <select id="sizeCap"><option value="All">All sizes</option></select>
         <label>Screen</label>
         <select id="sizeScreen"><option value="">No screen</option></select>
+        <label>S&amp;P 500</label>
+        <select id="sizeSp500"></select>
       </div>
 
       <!-- Bubble. The three measure pickers are filled from Cards.FUND_METRICS
@@ -537,6 +551,8 @@
         <select id="bubCap"><option value="All">All sizes</option></select>
         <label>Screen</label>
         <select id="bubScreen"><option value="">No screen</option></select>
+        <label>S&amp;P 500</label>
+        <select id="bubSp500"></select>
       </div>
 
       <!-- The whole day. Deliberately has NO scope pickers: every other data
@@ -821,14 +837,14 @@
     const CONTROL_IDS = [
       // The ground applies to every card, so it is not in any template's list.
       'cardTheme',
-      'movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap', 'movScreen',
-      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSym2', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap', 'chtScreen',
-      'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap', 'spkScreen',
-      'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry', 'rngCap', 'rngScreen',
-      'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap', 'advScreen',
-      'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap', 'fundScreen',
-      'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen',
-      'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen',
+      'movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap', 'movScreen', 'movSp500',
+      'chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSym2', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap', 'chtScreen', 'chtSp500',
+      'spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap', 'spkScreen', 'spkSp500',
+      'rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry', 'rngCap', 'rngScreen', 'rngSp500',
+      'advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap', 'advScreen', 'advSp500',
+      'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap', 'fundScreen', 'fundSp500',
+      'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen', 'sizeSp500',
+      'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen', 'bubSp500',
       'dayMetric', 'dayCount', 'dayFloor',
       'spotSym', 'spotWin', 'spotProf',
       'evoSym', 'evoMeasure', 'evoWin',
@@ -972,19 +988,19 @@
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
     $('movAdv').innerHTML = '<option value="off" selected>Don’t show</option>' +
       Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}">${esc(n)} rules</option>`).join('');
-    // THESE EIGHT LISTS ARE A SECOND COPY OF CONTROL_IDS, split per template so
+    // THESE LISTS ARE A SECOND COPY OF CONTROL_IDS, split per template so
     // a change only redraws the card it belongs to. A control added to the
     // markup and to CONTROL_IDS but NOT here exists, is saved with a post, is
     // read by the builder — and does nothing when you touch it, because
     // nothing re-renders. That is how the Size pickers shipped broken for an
     // hour; a test that changed the control and diffed the card caught it.
-    ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap', 'movScreen'].forEach((id) =>
+    ['movPeriod', 'movCmp', 'movCount', 'movDir', 'movAdv', 'movScope', 'movSector', 'movIndustry', 'movCap', 'movScreen', 'movSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'movers') render(); }));
-    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSym2', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap', 'chtScreen'].forEach((id) =>
+    ['chtMode', 'chtWin', 'chtScope', 'chtLines', 'chtSym', 'chtSym2', 'chtMa', 'chtSector', 'chtIndustry', 'chtCap', 'chtScreen', 'chtSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'chart') render(); }));
-    ['spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap', 'spkScreen'].forEach((id) =>
+    ['spkWin', 'spkDir', 'spkCount', 'spkScope', 'spkSector', 'spkIndustry', 'spkCap', 'spkScreen', 'spkSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'sparks') render(); }));
-    ['rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry', 'rngCap', 'rngScreen'].forEach((id) =>
+    ['rngMode', 'rngDir', 'rngMeasure', 'rngCount', 'rngScope', 'rngSector', 'rngIndustry', 'rngCap', 'rngScreen', 'rngSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'range') render(); }));
 
     const CARD_TOPICS = Cards.topics();
@@ -1035,11 +1051,11 @@
     // shows. Off stays available for a card that is only about the numbers.
     $('spotProf').innerHTML = '<option value="off">Don\u2019t show</option>' +
       Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}"${n === 'Balanced' ? ' selected' : ''}>${esc(n)}</option>`).join('');
-    ['advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap', 'advScreen'].forEach((id) =>
+    ['advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap', 'advScreen', 'advSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'advboard') render(); }));
-    ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap', 'fundScreen'].forEach((id) =>
+    ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap', 'fundScreen', 'fundSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'fund') render(); }));
-    ['sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen'].forEach((id) =>
+    ['sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen', 'sizeSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'size') render(); }));
 
     // The three measure pickers are filled from the card's own catalogue, so a
@@ -1052,7 +1068,7 @@
       $('bubY').innerHTML = opts('pm');
       $('bubSize').innerHTML = opts('cap');
     })();
-    ['bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen'].forEach((id) =>
+    ['bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen', 'bubSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'bubble') render(); }));
     ['dayMetric', 'dayCount', 'dayFloor'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
@@ -1461,6 +1477,21 @@
           'sizeScreen', 'bubScreen'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = scrOpts;
+          if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
+        });
+        // The S&P 500 cut, from the module that INTERPRETS the value, so the
+        // picker cannot offer a word scopeOf does not know — a host sending
+        // `yes` where the module means `in` would filter nothing and say
+        // nothing. Three fixed values rather than a list built from the rows:
+        // "none are in the index" is an answer, and a control that shrank as
+        // the screen changed would move under the pointer, which is the same
+        // reason the size ladder is fixed.
+        const spOpts = Cards.spCuts().map(([v, lab]) =>
+          `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
+        ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
+          'sizeSp500', 'bubSp500'].forEach((id) => {
+          const keep = $(id).value;
+          $(id).innerHTML = spOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
         });
         syncIndustries(true);

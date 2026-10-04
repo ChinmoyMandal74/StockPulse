@@ -117,6 +117,23 @@
     ];
     const IS_SECTOR_ETF = new Set(SECTOR_ETF.map((s) => s[1]));
 
+    // THE S&P 500 CUT, offered by every scoped template through scopeOf.
+    // Exported, so the studio builds its eight pickers from the catalogue the
+    // card READS rather than from a copy in the markup: a host sending `yes`
+    // where the module means `in` would silently filter nothing, which is the
+    // quiet-fallback class this module exists to keep out.
+    //
+    // Three values and no fourth. "Unknown" is deliberately not offered as a
+    // cut: it is a gap in our own data rather than a fact about a company, and
+    // a card captioned "stocks we have not checked" is not a card.
+    const SP_CUTS = [
+      ['All', 'All stocks'],
+      ['in', 'In the index'],
+      ['out', 'Not in the index'],
+    ];
+    // What the kicker calls each cut. `All` is absent, so it names nothing.
+    const SP_CUT_LABEL = { in: 'S&P 500', out: 'Outside the S&P 500' };
+
     // ---- templates ---------------------------------------------------------
     // Gainers and losers are separate cards on purpose — the owner's call:
     // a mixed |move| list buries the story either half tells alone.
@@ -176,6 +193,25 @@
       // this is a cut by company size, and a fund is not a company.
       const cap = O[sectorKey.replace(/Sector$/, 'Cap')] || 'All';
       if (cap && cap !== 'All') rows = rows.filter((x) => x.capBand === cap);
+      // S&P 500 MEMBERSHIP, on the same prefix again (movSector -> movSp500),
+      // so one change here gives it to every scoped template at once — the
+      // reason the size band and the screen cut each cost one change.
+      //
+      // `=== true` and `=== false`, NEVER truthy/falsy, and that is the whole
+      // guard: `spMember` is THREE-state. It is null until a holdings file has
+      // been imported, and null is not No — "not in the S&P 500" said of a
+      // stock nobody has checked is a confident, wrong answer, which is the
+      // same rule the screener's own column keeps. So an unknown row is in
+      // NEITHER cut, and on an instance with no file both cuts are empty.
+      // That reads correctly, because the kicker names the cut that emptied
+      // the card.
+      //
+      // Membership only. The index WEIGHT never leaves /holdings: a Yes/No for
+      // the stocks we happen to track is derivable from any financial website,
+      // a weighted constituent list is the issuer's dataset.
+      const sp = O[sectorKey.replace(/Sector$/, 'Sp500')] || 'All';
+      if (sp === 'in') rows = rows.filter((x) => x.spMember === true);
+      else if (sp === 'out') rows = rows.filter((x) => x.spMember === false);
       // A SCREEN is the screener's own question, asked of a card. It shares the
       // prefix like the three above (movSector -> movScreen), so putting it
       // here is the one change that gives it to every scoped template at once —
@@ -203,7 +239,8 @@
       }
       // The screen leads the kicker: it is the idea, where a sector or a band
       // is a narrowing of it.
-      const cuts = [scrName, taxo, cap && cap !== 'All' ? `${cap} caps` : null].filter(Boolean);
+      const cuts = [scrName, taxo, cap && cap !== 'All' ? `${cap} caps` : null,
+        SP_CUT_LABEL[sp] || null].filter(Boolean);
       const base = label;                 // before the cuts are folded in
       if (cuts.length) {
         const cut = cuts.join(' \u00b7 ');
@@ -4403,6 +4440,8 @@
     // holds the ground depends on which card is being drawn.
     themeClass: (tpl, opts) => themeOf(tpl, opts).cls,
     sectorEtfs: () => SECTOR_ETF.map((s) => s.slice()),
+    // The S&P 500 cut as [value, label] pairs, for the studio's pickers.
+    spCuts: () => SP_CUTS.map((c) => c.slice()),
     // ...and which templates want the basket at all, with the window each
     // one asks for. Exported for the same reason: two hosts, one pairing.
     basketDays,

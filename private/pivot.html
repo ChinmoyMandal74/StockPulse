@@ -483,6 +483,23 @@
       entry:    { label: 'Entry state',     get: (s) => s.actionEntry, order: ENTRY_ORDER, tint: 1 },
       type:     { label: 'Company type',    get: (s) => s.companyType, order: TYPE_ORDER },
       exchange: { label: 'Exchange',        get: (s) => s.exchange },
+      // S&P 500 membership. ONE entry gives this page three things at once —
+      // a row dimension, a column dimension and the page filter — because the
+      // Filter picker is built from DIMS rather than from a list of its own.
+      //
+      // The value comes from `Filters.filterValue`, never from a ternary here:
+      // that is the one function that already knows `spMember` is THREE-state,
+      // returning '' for a stock no holdings file has been checked against —
+      // which `valuesOf` then buckets as the blank the page already draws and
+      // counts. A `s.spMember ? 'Yes' : 'No'` here would silently call every
+      // unchecked stock a non-member, the confident wrong answer the screener's
+      // own column refuses to give.
+      //
+      // Yes before No: the alphabet gets a two-value boolean backwards, and a
+      // reader scanning one expects Yes first. No `tint` — membership is not a
+      // severity ladder and has no good end.
+      sp500:    { label: 'S&P 500',         get: (s) => Filters.filterValue(s, 'spMember'),
+                  order: ['Yes', 'No'] },
       // Which WAY the Balanced verdict moved since the previous trading day.
       // Direction belongs on an axis rather than in a measure: "Technology 27"
       // says where the churn is, "Technology 15 up 12 down" says what happened,
