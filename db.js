@@ -2367,10 +2367,17 @@ async function readSecFactsSince(symbols, since, untilFiled) {
 
 async function readSecState() {
   await init();
-  const r = await db.execute('select symbol, cik, fetched_at, rows, status, error from sec_state');
+  const r = await db.execute(
+    'select symbol, cik, fetched_at, rows, status, error, last_results from sec_state');
   const out = {};
   for (const x of r.rows) {
-    out[x.symbol] = { cik: x.cik, fetchedAt: x.fetched_at, rows: x.rows, status: x.status, error: x.error };
+    // `lastResults` rides along because /api/sec already makes this read:
+    // the stock page's Announced (SEC) row would otherwise need a second
+    // whole-table query for one date. It is the Item 2.02 8-K date, which
+    // is a DIFFERENT fact from `last_filed` (the newest statement filing)
+    // and is why both columns exist.
+    out[x.symbol] = { cik: x.cik, fetchedAt: x.fetched_at, rows: x.rows, status: x.status,
+      error: x.error, lastResults: x.last_results || null };
   }
   return out;
 }

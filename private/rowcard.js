@@ -53,6 +53,75 @@
     return p.length === 3 ? `${MON[+p[1] - 1]} ${+p[2]}` : iso;
   }
 
+  // THE SAME 40 FOR THE OTHER DIRECTION, and deliberately a SEPARATE
+  // constant. `SEC_BEHIND_DAYS` has to clear a structural announce-to-file
+  // lag of up to 35 days; these two dates describe the SAME event — the
+  // announcement — so in sync they are the same day, and the threshold only
+  // has to clear same-day noise. Tuning one must not silently move the other.
+  //
+  // Shared for the reason its neighbour is: the screener's Announced (SEC)
+  // column and /stock's Announced (SEC) row must agree about what "ahead"
+  // means, and two copies drift the first time one is tuned.
+  const ANN_AHEAD_DAYS = 40;
+
+  // ---- Announced (SEC): the Item 2.02 8-K date ------------------------------
+  //
+  // ONE DECISION, TWO SURFACES — the screener's cell and /stock's row. It was
+  // the screener's alone until 2026-10-04, and the moment the stock page
+  // wanted it the whole thing had to be shared rather than restated: the
+  // wrong-channel rule below is the kind of judgement that silently diverges,
+  // and a /stock row printing "2016" for a company that announces under Item
+  // 7.01 would be wrong in exactly the way the screener learned not to be.
+  //
+  // Returns `{t, c, title}` — the caller wraps it in whatever a cell or a row
+  // is on its page. `pending` is for a surface that has not fetched the
+  // filings yet: a dash is right either way, but "no Item 2.02 recorded" is a
+  // false statement about a company that has one, so the tooltip says it is
+  // still reading rather than claiming an absence it has not established.
+  function announcedSec(s, opts) {
+    const o = opts || {};
+    // A fund files no Item 2.02 — measured, XLK has none and has no CIK at
+    // all. NA rather than an em-dash, the rule the Size and Ownership groups
+    // follow. It needs no fetch, so it is answered before `pending`.
+    if (isFund(s)) return { t: 'NA', c: 'na', title: 'Not applicable — this is a fund' };
+    const iso = s && s.secLastResults;
+    if (!iso) {
+      return o.pending
+        ? { t: '—', c: 'na', title: 'Reading the filings from EDGAR…' }
+        : { t: '—', c: 'na', title: 'No Item 2.02 filing recorded. These dates are loaded locally by'
+            + ' sec-results-load.js; 102 of 1,168 companies have none in their recent filings.' };
+    }
+    const d = new Date(iso + 'T12:00:00');   // local noon, the card-dating rule
+    const vend = s.lastEarningsDate;
+    const gap = vend ? Math.round((d - new Date(vend + 'T12:00:00')) / 86400000) : 0;
+    // ITEM 2.02 IS NOT EVERY COMPANY'S RESULTS CHANNEL, which the measurement
+    // found rather than the design anticipating it: 51 of 1,062 have a 2.02
+    // date that PREDATES the feed's own by more than a quarter. Energy Fuels
+    // is the clear case — it announces under Items 7.01 and 8.01 and has
+    // exactly one 2.02 ever, from 2016. Printing that beside a current
+    // Reported value would read as "last reported 2016", so it says it cannot
+    // answer and the tooltip says why. Widening to 7.01/8.01 was rejected:
+    // 8.01 is the catch-all "other events" and would put a director's
+    // resignation in a results column.
+    if (gap < -ANN_AHEAD_DAYS) {
+      return { t: '—', c: 'na',
+        title: `This company's newest Item 2.02 is ${iso}, which predates the earnings feed's own date (${vend}).`
+          + ' It announces results under a different 8-K item — 7.01 or 8.01 — so Item 2.02 cannot answer for it.'
+          + ' Read Reported instead. 51 of 1,062 companies are like this.' };
+    }
+    const thisYear = d.getFullYear() === new Date().getFullYear();
+    const t = shortDate(iso) + (thisYear ? '' : ` '${String(d.getFullYear()).slice(2)}`);
+    // AHEAD OF THE VENDOR IS THE SIGNAL. Both dates describe the same event,
+    // so in sync they are the same day: measured, NVDA reads 2026-08-26 from
+    // EDGAR and Aug 26 from the feed.
+    const miss = gap > ANN_AHEAD_DAYS;
+    return { t, c: miss ? 'warn' : '',
+      title: `Announced ${iso} — the newest 8-K carrying Item 2.02, from EDGAR`
+        + (miss ? `\n\nTHE EARNINGS FEED HAS MISSED THIS: it still shows ${vend}, ${gap} days earlier.`
+            + ' Every fundamental figure here is the feed’s, so they predate this announcement.'
+          : vend ? '' : '\n\nNo vendor date to compare against.') };
+  }
+
   // --- value renderers, mirroring the screener's cell renderers ---------------
   //
   // EACH ONE ALSO REPORTS ITS RAW NUMBER (`n`) AND ITS UNIT (`u`), which is what
@@ -276,8 +345,12 @@
     ['fund',  'Rev grth Q YoY', (s) => V.pct(s.revenueGrowthYoY)],
     ['fund',  'Profit margin',  (s) => V.pct(s.profitMargin)],
     ['fund',  'ROE',            (s) => V.pct(s.roe)],
-    ['fund',  'Fwd P/E',        (s) => V.num(s.forwardPe)],
+    // PEG leads the three P/E rows rather than sitting between them, the
+    // screener's own column order since 2026-10-04: a PEG is a P/E with
+    // growth divided into it, so it reads beside the multiples and not
+    // through the middle of them.
     ['fund',  'PEG',            (s) => V.peg(s.peg)],
+    ['fund',  'Fwd P/E',        (s) => V.num(s.forwardPe)],
     ['fund',  'Trailing P/E',   (s) => V.num(s.trailingPe)],
     // Deliberately NOT in FUND_HAS: a fund's EPS is not something we hold, so
     // this is NA there even though the provider's Trail P/E above it is real.
@@ -936,11 +1009,16 @@
     const ctx = {};
 
     // `skip` drops a FIELD_SPEC row on a page that states the same fact
-    // better elsewhere. Only /stock passes it, for `fund|Reported`: its
-    // caption reads the announcement out of `earnings_history`, which is
-    // rewritten every round and carries the time of day, where the row
-    // reads the PROFILE's copy and so lags by up to the 7-day rotation.
-    // Two different dates under one label is worse than either alone.
+    // better elsewhere. Only /stock passes it, and only for
+    // `short|Price pulled` now: the masthead carries that clock under the
+    // price it qualifies, built from the same field's own formatter.
+    //
+    // IT HELD `fund|Reported` UNTIL 2026-10-04 on the reasoning that the
+    // caption reads `earnings_history` where the row reads the PROFILE's
+    // copy, so the two could disagree by up to the 7-day rotation. MEASURED
+    // before undoing it, over 95 symbols including the 40 oldest reporters:
+    // they agreed 95 times and differed none, because both come out of the
+    // SAME `/earnings` pull in the same round. The claim was wrong.
     const skip = new Set(o.skip || []);
 
     const byGroup = {};
@@ -964,7 +1042,21 @@
         // passes it: these values are not in the snapshot, so putting them in
         // FIELD_SPEC would print an em-dash in the hover card on every other page.
         const extras = (o.extra && o.extra[g]) || [];
-        const rows = byGroup[g].concat(extras).map((r) => {
+        // AN EXTRA ROW MAY NAME THE ROW IT BELONGS BESIDE (`after`), and a
+        // date is the case that needs it: /stock's Announced (SEC) is read
+        // AGAINST Reported — it is marked when it runs ahead of it — and
+        // appended it would land twenty-five rows below the only value it
+        // can be compared with. Named but not found, and it appends, which
+        // is what every row without an `after` does.
+        //
+        // `|| []` because the filter above admits a group that has ONLY
+        // extras, where `byGroup[g]` is undefined and `.concat` threw.
+        const rows0 = (byGroup[g] || []).slice();
+        for (const x of extras) {
+          const i = x.after ? rows0.findIndex((r) => r.k === x.after) : -1;
+          if (i >= 0) rows0.splice(i + 1, 0, x); else rows0.push(x);
+        }
+        const rows = rows0.map((r) => {
           const tip = o.tips && TIP_GROUPS.includes(g) ? ROW_TIPS[r.k] : null;
           // `links` turns a FIELD_SPEC row's value into one or more links —
           // Sector, Industry, Size and Portfolios each name a group with a
@@ -982,7 +1074,12 @@
             : r.href
               ? `<a class="rc-link" href="${esc(r.href)}" target="_blank" rel="noopener">${esc(r.t)}</a>`
               : esc(r.t);
-          return `<div class="rc-row${tip ? ' has-tip' : ''}"${tip ? ` data-tip="${tip}"` : ''}>` +
+          // An extra row may carry a plain `title`, which is where the
+          // screener puts the same explanation — on the cell. Only an
+          // extra row can have one, so the hover card is unchanged: a
+          // tooltip inside a tooltip helps nobody.
+          const ttl = r.title ? ` title="${esc(r.title)}"` : '';
+          return `<div class="rc-row${tip ? ' has-tip' : ''}"${tip ? ` data-tip="${tip}"` : ''}${ttl}>` +
             `<span class="rc-k">${esc(r.k)}</span>` +
             `<span class="rc-v ${r.c || ''}"${r.b ? ' style="font-weight:600"' : ''}>${val}</span></div>`;
         }).join('');
@@ -1199,7 +1296,7 @@
     // used by the stock page
     buildSections, chartSVG, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries, stepSeries, fmtMktCap,
     scoreTip, placeTip,
-    GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS,
+    GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS, ANN_AHEAD_DAYS, announcedSec,
     fieldCatalogue, fieldValues, fieldProps, isFund,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

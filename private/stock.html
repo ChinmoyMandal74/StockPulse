@@ -1379,6 +1379,46 @@
       return parts.join(' · ');
     }
 
+    // ---- Announced (SEC) ---------------------------------------------
+    //
+    // THE THIRD DATE, and the one the screener has that this page did not.
+    // It is NOT a FIELD_SPEC row: `secLastResults` is stamped client-side
+    // from a separate endpoint and is never on the snapshot, so a FIELD_SPEC
+    // entry would print an em-dash on the tiles, the phone and /compare —
+    // which is exactly what `extra` exists for.
+    //
+    // `after: 'Reported'` because this value is READ AGAINST that one: it is
+    // marked when it runs ahead of it, and appended it would land twenty-five
+    // rows below the only number it can be compared with.
+    //
+    // The decision is `RowCard.announcedSec`, shared with the screener's
+    // column — the wrong-channel rule (a company that announces under Item
+    // 7.01 has a 2.02 from 2016, and printing it here would read as "last
+    // reported 2016") is the kind of judgement that silently diverges when
+    // it is written twice.
+    const ANN_LABEL = 'Announced (SEC)';
+    function annRow(pending) {
+      const v = RowCard.announcedSec(stock, { pending: pending });
+      return { k: ANN_LABEL, t: v.t, c: v.c, title: v.title, after: 'Reported' };
+    }
+
+    // The filings land after the first paint, so the row is drawn with a
+    // "still reading" dash and filled in here — the caption's own bargain,
+    // and for the same reason: rebuilding the section would throw away the
+    // reader's place for one value.
+    function paintAnnRow() {
+      const v = annRow(false);
+      [...document.querySelectorAll('.rc-row')].forEach((row) => {
+        const k = row.querySelector('.rc-k');
+        if (!k || k.textContent !== ANN_LABEL) return;
+        const val = row.querySelector('.rc-v');
+        if (!val) return;
+        val.textContent = v.t;
+        val.className = 'rc-v ' + (v.c || '');
+        row.title = v.title;
+      });
+    }
+
     function companyRows(c) {
       if (!c) return [];
       const rows = [];
@@ -2640,24 +2680,33 @@
             tips: true,
             // Company facts the screener never carries — they come from the
             // profile rather than the snapshot, so only this page has them.
-            extra: { info: companyRows(payload.company) },
+            extra: { info: companyRows(payload.company), fund: [annRow(true)] },
             // WHEN THE FUNDAMENTAL FIGURES ACTUALLY RELATE TO. Every TTM
             // number in this section is a trailing twelve months, and until
             // now the page printed about twenty of them with no period
             // attached at all.
             captions: { fund: fundDates(stock, payload.earnings,
               payload.company && payload.company.fetchedAt) },
-            // The caption above already states the announcement, from
-            // `earnings_history` — fresher than the profile copy the row
-            // reads, and with the time of day. One statement, not two that
-            // can disagree by up to the 7-day profile rotation.
-            // `short|Price pulled` joined it on 2026-10-02: the masthead now
-            // carries that clock under the price it qualifies, built from
-            // THIS field's own formatter, so the row below would print a
-            // byte-identical string a screen further down. Unlike Reported
-            // the two cannot disagree — they are one value — which makes this
-            // purely a duplication, and the page already states it better.
-            skip: ['fund|Period', 'fund|Reported', 'short|Price pulled'],
+            // PERIOD AND REPORTED CAME BACK ON 2026-10-04, at the owner's
+            // instruction — "make sure Period, Reported and Announced (SEC)
+            // are present on the individual stock page". They had been
+            // skipped because the caption above states both, and the
+            // objection recorded for Reported was that the two sources could
+            // disagree by up to the 7-day profile rotation. MEASURED before
+            // undoing it, over 95 symbols including the 40 oldest reporters
+            // on the screen: they agreed 95 times and differed none. Both
+            // come out of the SAME `/earnings` pull in the same round, so
+            // they are written together and cannot drift — the claim was
+            // wrong. What is left is duplication, and a field list is where
+            // a reader looks a value UP; the caption is a sentence that
+            // qualifies the whole group and carries three things no row does
+            // (the time of day, the SEC-behind warning, the pull age).
+            //
+            // `short|Price pulled` stays skipped: the masthead carries that
+            // clock under the price it qualifies, built from THIS field's own
+            // formatter, so the row would print a byte-identical string a few
+            // inches below it.
+            skip: ['short|Price pulled'],
             // The same four doors the masthead chips are, in the place the
             // owner was actually looking. ONE builder per label, so the row
             // and the chip above it cannot point at different addresses.
@@ -3418,8 +3467,20 @@
         if (!card) return;
         try {
           const r = await fetch('/api/sec?symbol=' + encodeURIComponent(stock.symbol));
-          if (!r.ok) { card.remove(); return; }
+          // A refusal has to settle the row too, or it reads "still reading
+          // the filings" for the rest of the session.
+          if (!r.ok) { paintAnnRow(); card.remove(); return; }
           const j = await r.json();
+          // THE ANNOUNCEMENT DATE IS STAMPED BEFORE THE EARLY RETURN BELOW,
+          // and that ordering is load-bearing: the ~64 IFRS filers answer 404
+          // on companyfacts and draw no card at all, yet they still file an
+          // Item 2.02 8-K — so a stamp after the return would leave their row
+          // reading "still reading the filings" for ever. The card is the
+          // statements; the row is a date, and they are different facts.
+          // It rides this response rather than asking /api/sec/filed for a
+          // second copy: one read of sec_state already happened in here.
+          stock.secLastResults = j.lastResults || null;
+          paintAnnRow();
           // Nothing filed is the normal answer for a fund. No card at all,
           // rather than a heading over an empty table.
           if (!(j.annual || []).length && !(j.quarterly || []).length) { card.remove(); return; }

@@ -1564,8 +1564,8 @@
         <th class="grp-fund" data-key="revenueGrowthYoY" title="Revenue growth: the most recent quarter versus the same quarter a year ago. It describes that one quarter, not the Revenue TTM column.">Rev Grth<br>Q YoY</th>
         <th class="grp-fund" data-key="profitMargin" title="Net profit margin (TTM), derived as Net Income ÷ Revenue from the two columns in the Size group — not taken from the data feed, which reports it incorrectly for loss-making companies with small revenue. Dividing those two columns gives exactly this number.">Profit<br>Margin</th>
         <th class="grp-fund" data-key="roe" title="Return on equity (TTM)">ROE</th>
+        <th class="grp-fund" data-key="peg" title="PEG ratio &mdash; &lt;1 cheap, &gt;2 expensive. Shown for reference but excluded from the Quality score when the company is loss-making: the feed still returns a healthy-looking figure there (0.16 for a company losing $878M), which is meaningless. It leads the three P/E columns rather than sitting among them: a PEG is earnings growth priced in, so it belongs beside them and not between them.">PEG</th>
         <th class="grp-fund" data-key="forwardPe" title="Forward price/earnings ratio. Shown for reference but excluded from the Quality score when the company is loss-making, where it carries no meaning.">Fwd<br>P/E</th>
-        <th class="grp-fund" data-key="peg" title="PEG ratio — &lt;1 cheap, &gt;2 expensive. Shown for reference but excluded from the Quality score when the company is loss-making: the feed still returns a healthy-looking figure there (0.16 for a company losing $878M), which is meaningless.">PEG</th>
         <th class="grp-fund" data-key="trailingPe" title="Trailing price/earnings as the DATA PROVIDER reports it — the last twelve months of actual earnings, unlike the Fwd P/E beside it, which is an estimate. It arrives with the company profile, which is re-pulled about weekly, so it is struck at a close up to seven days old and will not divide exactly against the Price column: that is what the Live P/E beside it is for. Blank or meaningless for a loss-maker.">Trail<br>P/E</th>
         <th class="grp-fund" data-key="peLive" title="The same trailing price/earnings, recomputed here from today's Price and the EPS TTM column — so it moves with every intraday refresh and always divides against the Price on this row, where the provider's Trail P/E beside it is struck at whenever the profile was last pulled. A dash where the company loses money: a multiple off a loss is arithmetic, not cheapness, and sorting this column would otherwise put every loss-maker at the top as the cheapest thing on screen. NA for a fund — the provider's weighted figure for the holdings cannot be reproduced from a single EPS.">Live<br>P/E</th>
         <th class="grp-fund" data-key="priceToBook" title="Price ÷ book value per share, most recent quarter. The classic value measure; of little use for asset-light software and misleading for banks.">P/B</th>
@@ -1919,24 +1919,6 @@
     // and is never on the row the server scores — see /api/sec/filed.
     // One definition, shared with /stock -- see rowcard.js for why 40.
     const SEC_BEHIND_DAYS = RowCard.SEC_BEHIND_DAYS;
-    // How far the Item 2.02 date may run from the vendor's own announcement
-    // date before the pair means something. MEASURED across 1,062 comparable
-    // companies rather than chosen for roundness:
-    //
-    //      0 days : 888  <- 83.6% agree TO THE DAY, which is the premise
-    //    1..10    :  96     recording lag, still the same quarter
-    //   11..35    :   7
-    //   36..45    :   0  <- an empty bucket
-    //   46..198   :  20     genuinely a quarter the feed never recorded
-    //
-    // A missed report is at least a quarter (~90 days) and anything under ~35
-    // is the same quarter recorded differently, so the line belongs in that
-    // empty bucket. It lands on the same 40 as SEC_BEHIND_DAYS and is kept a
-    // SEPARATE constant deliberately: that one has to clear a structural
-    // announce-to-file lag of up to 35 days, where these two dates describe
-    // the SAME event and have no structural lag at all. Tuning one must not
-    // silently move the other.
-    const ANN_AHEAD_DAYS = 40;
     function secBehind(s) {
       const f = s.secLastFiled;
       if (!f || !s.lastEarningsDate) return 0;
@@ -2033,52 +2015,14 @@
     // column, the filter and `daysSinceEarnings` all mean. `data-col` gives it
     // a column-view id and a /columns entry without any of that -- the 90d
     // spark column's own treatment.
+    // THE DECISION IS RowCard's, SHARED WITH /stock SINCE 2026-10-04 --
+    // the fund NA, the no-filing dash, the wrong-channel refusal and the
+    // ahead-of-the-vendor mark all moved to `announcedSec`, and this is
+    // the cell it goes in. A second copy of the wrong-channel rule is
+    // exactly the drift rowcard.js exists to prevent.
     function resultsCell(s) {
-      // A fund files no Item 2.02 -- measured, XLK has none and has no CIK at
-      // all. NA rather than an em-dash, the rule the Size and Ownership
-      // groups now follow.
-      if (RowCard.isFund(s)) {
-        return `<td class="na grp-fund" data-ann="${we(s.symbol)}" title="Not applicable — this is a fund">NA</td>`;
-      }
-      const iso = s.secLastResults;
-      if (!iso) {
-        return `<td class="na grp-fund" data-ann="${we(s.symbol)}" title="No Item 2.02 filing recorded. These dates are loaded locally by sec-results-load.js; 102 of 1,168 companies have none in their recent filings.">—</td>`;
-      }
-      const d = new Date(iso + 'T12:00:00');   // local noon, the card-dating rule
-      const vend0 = s.lastEarningsDate;
-      const gap0 = vend0
-        ? Math.round((d - new Date(vend0 + 'T12:00:00')) / 86400000) : 0;
-      // ITEM 2.02 IS NOT EVERY COMPANY'S RESULTS CHANNEL, which the
-      // measurement found rather than the design anticipating it: 51 of 1,062
-      // have a 2.02 date that PREDATES the feed's own by more than a quarter.
-      // Energy Fuels is the clear case — it announces under Items 7.01 and
-      // 8.01 and has exactly one 2.02 ever, from 2016. Printing that date
-      // beside a current Reported cell would read as "last reported 2016",
-      // so the cell says it cannot answer and the tooltip says why. Widening
-      // to 7.01/8.01 was rejected: 8.01 is the catch-all "other events" and
-      // would put a director's resignation in a results column.
-      if (gap0 < -ANN_AHEAD_DAYS) {
-        const t = `This company's newest Item 2.02 is ${iso}, which predates the earnings feed's own date (${vend0}).`
-          + ' It announces results under a different 8-K item — 7.01 or 8.01 — so Item 2.02 cannot answer for it.'
-          + ' Read the Reported column instead. 51 of 1,062 companies are like this.';
-        return `<td class="na grp-fund" data-ann="${we(s.symbol)}"${attr(t)}>—</td>`;
-      }
-      const thisYear = d.getFullYear() === new Date().getFullYear();
-      const label = fmtShortDate(iso) + (thisYear ? '' : ` '${String(d.getFullYear()).slice(2)}`);
-      // AHEAD OF THE VENDOR IS THE SIGNAL. Both dates describe the SAME event
-      // -- the announcement -- so in sync they are the same day: measured,
-      // NVDA reads 2026-08-26 from EDGAR and Aug 26 from the feed, and MU's
-      // previous quarter matches to the day on both. The threshold therefore
-      // only has to clear same-day noise, not a reporting lag.
-      const vend = s.lastEarningsDate;
-      const ahead = vend
-        ? Math.round((d - new Date(vend + 'T12:00:00')) / 86400000) : 0;
-      const miss = ahead > ANN_AHEAD_DAYS;
-      const title = `Announced ${iso} — the newest 8-K carrying Item 2.02, from EDGAR`
-        + (miss ? `\n\nTHE EARNINGS FEED HAS MISSED THIS: it still shows ${vend}, ${ahead} days earlier.`
-            + ' Every figure in this group is the feed’s, so they predate this announcement.'
-          : vend ? '' : '\n\nNo vendor date to compare against.');
-      return `<td class="grp-fund${miss ? ' warn' : ''}" data-ann="${we(s.symbol)}"${attr(title)}>${label}</td>`;
+      const v = RowCard.announcedSec(s);
+      return `<td class="grp-fund${v.c ? ' ' + v.c : ''}" data-ann="${we(s.symbol)}"${attr(v.title)}>${we(v.t)}</td>`;
     }
 
     // Repaints just this column once the filing dates land — a full render()
@@ -3524,8 +3468,8 @@
           ${pctCell(s.revenueGrowthYoY, 'grp-fund', cacheTitle)}
           ${pctCell(s.profitMargin, 'grp-fund', cacheTitle)}
           ${pctCell(s.roe, 'grp-fund', cacheTitle)}
-          ${numCell(s.forwardPe, 'grp-fund', cacheTitle)}
-          ${pegCell(s.peg, 'grp-fund', cacheTitle)}`}
+          ${pegCell(s.peg, 'grp-fund', cacheTitle)}
+          ${numCell(s.forwardPe, 'grp-fund', cacheTitle)}`}
           ${numCell(s.trailingPe, 'grp-fund', cacheTitle)}
           ${isFund ? naRun(9, 'grp-fund') : `
           ${numCell(s.peLive, 'grp-fund', liveTitle)}

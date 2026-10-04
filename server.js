@@ -10054,6 +10054,13 @@ app.get('/api/sec', requireAuth, route(async (req, res) => {
     // What the VERDICT read is deliberately not returned here. The stock page
     // already holds that row, so asking this route for it would mean reading
     // the ~1.3MB snapshot on a path that exists precisely to avoid it.
+    //
+    // The Item 2.02 8-K date, for the page's Announced (SEC) row. It comes
+    // off `sec_state`, which this route already read — never a second
+    // query, and never from `sec_facts`: we hold ZERO 8-K rows for anyone,
+    // because companyfacts carries only XBRL-tagged facts and an earnings
+    // 8-K generally has none.
+    lastResults: state ? state.lastResults || null : null,
     filings: all.length,
     checkedAt: state ? state.fetchedAt : null,
     status: state ? state.status : null,
