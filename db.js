@@ -874,6 +874,41 @@ const SCHEMA = [
   // NOT in SYMBOL_TABLES, the `insider_trans` reasoning: this is a record
   // of what the INDEX held, not of what we track, so dropping a ticker from
   // our universe must not delete the index's own history of it.
+  // A SAVED /adjustedbacktest RESULT, frozen.
+  //
+  // The point of freezing rather than re-running a URL: the same parameters
+  // give a DIFFERENT answer over time. The pool is today's universe (1,181
+  // when the page was written, 1,284 today), restatements arrive on the
+  // nightly SEC rotation, and the float and theme memberships are today's.
+  // A link re-computes; a saved run does not, so the thing you showed
+  // somebody is the thing they see.
+  //
+  // The list columns are explicit rather than parsed out of `payload`, so
+  // listing N runs reads N small rows instead of N x 28 KB — the page shows
+  // the controls and the headline, and only opening one costs the blob.
+  `create table if not exists backtest_runs (
+     id          text primary key,
+     created_at  integer not null,
+     label       text,
+     start_date  text not null,
+     horizon     text,
+     rules       text,
+     theme       text,
+     tiers       text,
+     top_asked   integer,
+     every_days  integer,
+     mode        text,
+     cost_bps    real,
+     rank_by     text,
+     basket_ret  real,
+     market_ret  real,
+     spy_ret     real,
+     picked      integer,
+     universe    integer,
+     payload     text not null
+   )`,
+  // Newest first is the only order the list is ever read in.
+  'create index if not exists idx_btruns_at on backtest_runs (created_at)',
   `create table if not exists fund_holdings (
      fund   text not null,
      symbol text not null,
@@ -2653,6 +2688,104 @@ const FH_COLS = ['fund', 'symbol', 'd', 'weight', 'shares'];
 // of `fund_state` (one row per fund), never `max(d)` over the growing
 // holdings table — the `shortNewest` rule, and the reason that table has a
 // state row at all.
+// ---- saved adjusted-backtest runs -------------------------------------------
+// A cap rather than a budget: this is the owner's own instance and a hundred
+// saved runs is under 3 MB, but a table nothing prunes grows for ever.
+const BT_RUNS_MAX = 200;
+
+// The 28 KB payload is stored verbatim, as the SERVER computed it. A save
+// never takes the client's copy — that would let anything at all be stored
+// under a page that reads as authoritative.
+async function saveBacktestRun(r) {
+  await init();
+  await db.execute({
+    sql: `insert into backtest_runs
+            (id, created_at, label, start_date, horizon, rules, theme, tiers,
+             top_asked, every_days, mode, cost_bps, rank_by,
+             basket_ret, market_ret, spy_ret, picked, universe, payload)
+          values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    args: [r.id, r.createdAt, r.label || null, r.startDate, r.horizon || null,
+      r.rules || null, r.theme || null, r.tiers || null,
+      r.topAsked == null ? null : Number(r.topAsked),
+      r.everyDays == null ? null : Number(r.everyDays),
+      r.mode || null, r.costBps == null ? null : Number(r.costBps), r.rankBy || null,
+      r.basketRet == null ? null : Number(r.basketRet),
+      r.marketRet == null ? null : Number(r.marketRet),
+      r.spyRet == null ? null : Number(r.spyRet),
+      r.picked == null ? null : Number(r.picked),
+      r.universe == null ? null : Number(r.universe),
+      r.payload],
+  });
+  return r.id;
+}
+
+const BT_RUN_COLS = `id, created_at, label, start_date, horizon, rules, theme, tiers,
+  top_asked, every_days, mode, cost_bps, rank_by,
+  basket_ret, market_ret, spy_ret, picked, universe`;
+
+const btRunRow = (row) => ({
+  id: row.id,
+  createdAt: Number(row.created_at),
+  label: row.label || null,
+  startDate: row.start_date,
+  horizon: row.horizon || null,
+  rules: row.rules || null,
+  theme: row.theme || null,
+  // Stored as the joined string the route was given; the page splits it.
+  tiers: row.tiers || null,
+  topAsked: row.top_asked == null ? null : Number(row.top_asked),
+  everyDays: row.every_days == null ? null : Number(row.every_days),
+  mode: row.mode || null,
+  costBps: row.cost_bps == null ? null : Number(row.cost_bps),
+  rankBy: row.rank_by || null,
+  basketRet: row.basket_ret == null ? null : Number(row.basket_ret),
+  marketRet: row.market_ret == null ? null : Number(row.market_ret),
+  spyRet: row.spy_ret == null ? null : Number(row.spy_ret),
+  picked: row.picked == null ? null : Number(row.picked),
+  universe: row.universe == null ? null : Number(row.universe),
+});
+
+// The LIST deliberately does not select `payload`. At 28 KB a run, selecting
+// it would make opening the list cost megabytes to show a dozen lines.
+async function readBacktestRunList(limit) {
+  await init();
+  const n = Math.min(Math.max(1, Number(limit) || BT_RUNS_MAX), BT_RUNS_MAX);
+  const r = await db.execute({
+    sql: `select ${BT_RUN_COLS} from backtest_runs order by created_at desc limit ?`,
+    args: [n],
+  });
+  return r.rows.map(btRunRow);
+}
+
+// One run WITH its frozen payload. Null when there is no such run, which the
+// caller turns into a 404 — a saved run can be deleted, and a link to a
+// deleted one has to say so rather than render an empty page.
+async function readBacktestRun(id) {
+  await init();
+  const r = await db.execute({
+    sql: `select ${BT_RUN_COLS}, payload from backtest_runs where id = ?`,
+    args: [String(id || '')],
+  });
+  if (!r.rows.length) return null;
+  const out = btRunRow(r.rows[0]);
+  try { out.payload = JSON.parse(r.rows[0].payload); } catch { out.payload = null; }
+  return out;
+}
+
+async function deleteBacktestRun(id) {
+  await init();
+  const r = await db.execute({
+    sql: 'delete from backtest_runs where id = ?', args: [String(id || '')],
+  });
+  return Number(r.rowsAffected || 0);
+}
+
+async function countBacktestRuns() {
+  await init();
+  const r = await db.execute('select count(*) as n from backtest_runs');
+  return Number(r.rows[0].n) || 0;
+}
+
 async function fundNewest(fund) {
   await init();
   const r = await db.execute({
@@ -5544,6 +5677,8 @@ module.exports = {
   barsSpan, coverageRollups,
   knownListings,
   readFundamentalsAsOf, readFundamentalsRows,
+  saveBacktestRun, readBacktestRunList, readBacktestRun, deleteBacktestRun,
+  countBacktestRuns, BT_RUNS_MAX,
   readFundamentalsFirstSeen,
   writeTechHistory, readTechMarks, readTechMarksOn, readTechMarkDates,
   techHistorySpan, techHistoryCounts,

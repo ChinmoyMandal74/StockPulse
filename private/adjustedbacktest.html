@@ -52,6 +52,49 @@
     /* The chart. Hand-rolled SVG, no library — the app's own call. It keeps
        its own aspect ratio (no preserveAspectRatio="none"), so SVG text is
        safe here, unlike every price chart in this app. */
+    /* Saved runs. Scoped under #ab* like everything else on this page. */
+    #abFrozen { display: none; border: 1px solid var(--hair-2); border-radius: 10px;
+      background: var(--surface-2); padding: 10px 14px; margin: 0 0 14px;
+      font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+    #abFrozen b { color: var(--text); font-weight: 600; }
+    body.frozen #abFrozen { display: block; }
+    /* THE CONTROLS GO, NOT JUST THEIR EFFECT. A reader who cannot run
+       anything must not be shown a Run button that 403s. */
+    body.frozen #abBar, body.frozen #abRunsBox, body.frozen .top .live { display: none; }
+    body:not(.frozen) .top .shared { display: none; }
+
+    #abSaveMsg { font-size: 12px; color: var(--muted); align-self: center; }
+    #abSaveMsg.err { color: var(--red); }
+    #abName { font: 400 12.5px var(--sans); padding: 7px 9px; border-radius: 8px;
+      border: 1px solid var(--hair); background: var(--surface); color: var(--text);
+      min-width: 190px; }
+
+    #abRunsBox { margin: 0 0 16px; }
+    #abRunsBox > summary { cursor: pointer; font-size: 12.5px; color: var(--muted);
+      padding: 6px 0; list-style: none; }
+    #abRunsBox > summary::-webkit-details-marker { display: none; }
+    #abRunsBox > summary::before { content: '\25B8'; display: inline-block; width: 14px;
+      color: var(--faint); transition: transform .18s var(--ease); }
+    #abRunsBox[open] > summary::before { transform: rotate(90deg); }
+    #abRuns { width: 100%; border-collapse: collapse; font-size: 12px; }
+    #abRuns th { text-align: left; font-size: 10px; color: var(--faint); font-weight: 600;
+      text-transform: uppercase; letter-spacing: .06em; padding: 6px 10px 6px 0;
+      border-bottom: 1px solid var(--hair); white-space: nowrap; }
+    #abRuns td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--hair);
+      vertical-align: top; }
+    #abRuns td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+    #abRuns td.num .pos { color: var(--green); } #abRuns td.num .neg { color: var(--red); }
+    #abRuns .nm { color: var(--text); font-weight: 500; }
+    #abRuns .how { color: var(--faint); font-size: 11px; display: block; margin-top: 2px; }
+    #abRuns .act { white-space: nowrap; text-align: right; }
+    #abRuns .act button, #abRuns .act a { font: 500 11px var(--sans); padding: 4px 8px;
+      margin-left: 4px; border-radius: 7px; border: 1px solid var(--hair);
+      background: none; color: var(--muted); cursor: pointer; text-decoration: none;
+      display: inline-block; }
+    #abRuns .act button:hover, #abRuns .act a:hover { color: var(--text); border-color: var(--hair-2); }
+    #abRuns .act button.del:hover { color: var(--red); border-color: var(--red); }
+    #abRunsMsg { font-size: 12px; color: var(--faint); padding: 8px 0; }
+
     #abChart { padding: 14px 16px 6px; }
     #abChart svg { width: 100%; height: 300px; display: block; }
     #abChart .gl { stroke: var(--hair); stroke-width: 1; }
@@ -144,9 +187,12 @@
       <h1>Adjusted backtest</h1>
       <span class="count" id="abTook"></span>
       <span class="spacer"></span>
-      <a class="btn" href="/adjusted">Adjusted Advice</a>
-      <a class="btn" href="/admin">Admin</a>
+      <a class="btn live" href="/adjusted">Adjusted Advice</a>
+      <a class="btn live" href="/admin">Admin</a>
+      <a class="btn shared" href="/">Tickr Lab</a>
     </header>
+
+    <div id="abFrozen"></div>
 
     <p id="abNote"></p>
 
@@ -199,7 +245,17 @@
           <option value="20">20 bps</option>
         </select></div>
       <button class="btn" id="abGo">Run</button>
+      <div class="fld"><span class="lbl">Name this run</span>
+        <input type="text" id="abName" maxlength="80" placeholder="optional" /></div>
+      <button class="btn" id="abSave" disabled>Save run</button>
+      <span id="abSaveMsg"></span>
     </div>
+
+    <details id="abRunsBox">
+      <summary id="abRunsSum">Saved runs</summary>
+      <table id="abRuns"><thead></thead><tbody></tbody></table>
+      <div id="abRunsMsg"></div>
+    </details>
 
     <div id="abCards"></div>
 
@@ -225,7 +281,8 @@
     <div id="abLimits"></div>
   </main>
 
-  <script src="/wmark.js"></script>
+  <!-- /wmark.js lives in private/ and gateAssets 401s it for a signed-out
+       reader, so the boot loads it only in the live view. -->
   <script>
   (function () {
     'use strict';
@@ -584,14 +641,19 @@
     }
 
     function note() {
-      $('abNote').innerHTML =
+      var common =
         'The <b>same rules</b> as the Advice column, replayed on a past date with every '
       + 'fundamental taken from <b>filings that were public on that date</b> and every '
       + 'technical rebuilt from the price bars. That is what lets it start in '
       + we(DATA.floor) + ' rather than two months ago: a filing carries the day it was '
-      + 'published, where the vendor snapshot only carries today. '
-      + '<b>Research only</b> — nothing here reaches the screener, the Advice column or '
-      + '<a href="/backtest">/backtest</a>, which is unchanged.';
+      + 'published, where the vendor snapshot only carries today.';
+      // The shared view drops the last sentence: it says "Research only" a
+      // second time three lines under the banner, and it links to /backtest,
+      // which a reader with no account cannot open. A dead link and a
+      // repeated caveat are both worse than the shorter paragraph.
+      $('abNote').innerHTML = RUNID ? common : common
+        + ' <b>Research only</b> — nothing here reaches the screener, the Advice column or '
+        + '<a href="/backtest">/backtest</a>, which is unchanged.';
     }
 
     function paintTiers() {
@@ -606,6 +668,161 @@
           paintTiers();
         });
       });
+    }
+
+    // ---- saved runs ------------------------------------------------------
+    // A FROZEN run, not a saved URL. The same parameters give a different
+    // answer over time — the pool is today's universe, restatements arrive on
+    // the nightly SEC rotation, and the float and theme memberships are
+    // today's — so a link re-computes and a saved run does not. That is the
+    // whole reason this exists: the thing you showed somebody is what they
+    // see.
+    var RUNID = (location.pathname.match(/^\/adjustedbacktest\/run\/([0-9a-f]{8,64})$/) || [])[1] || null;
+
+    function stamp(ms) {
+      var x = n(ms);
+      if (x === null) return '';
+      // Local time, deliberately: this is "when I saved it", read by whoever
+      // has the link, and there is no market clock involved.
+      return new Date(x).toLocaleString(undefined,
+        { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+
+    // What the run was set to, in one line, read off the stored row rather
+    // than re-derived — the list and the frozen page must describe it the
+    // same way.
+    function howRun(r) {
+      var bits = [r.horizon || '?', r.rules || 'Balanced'];
+      if (r.theme) bits.push(r.theme);
+      if (r.tiers) bits.push(r.tiers);
+      if (r.topAsked) bits.push('top ' + r.topAsked + ' by ' + (r.rankBy || 'cushion'));
+      if (r.everyDays) {
+        bits.push('rebalanced every ' + r.everyDays + 'd'
+          + (r.mode === 'exit' ? ', exit only' : '')
+          + (r.costBps ? ', ' + r.costBps + ' bps' : ''));
+      }
+      return bits.join(' · ');
+    }
+
+    function runsRows(runs) {
+      var tb = $('abRuns').querySelector('tbody');
+      $('abRuns').querySelector('thead').innerHTML =
+        '<tr><th>Run</th><th>Start</th><th style="text-align:right">Basket</th>'
+        + '<th style="text-align:right">Universe</th><th>Saved</th><th></th></tr>';
+      tb.innerHTML = runs.map(function (r) {
+        var b = n(r.basketRet), m = n(r.marketRet);
+        var url = '/adjustedbacktest/run/' + r.id;
+        return '<tr data-id="' + we(r.id) + '">'
+          + '<td><span class="nm">' + we(r.label || ('Run of ' + r.startDate)) + '</span>'
+          + '<span class="how">' + we(howRun(r)) + '</span></td>'
+          + '<td>' + we(r.startDate) + '</td>'
+          + '<td class="num"><span class="' + (b >= 0 ? 'pos' : 'neg') + '">' + pc(b) + '</span></td>'
+          + '<td class="num"><span class="' + (m >= 0 ? 'pos' : 'neg') + '">' + pc(m) + '</span></td>'
+          + '<td>' + we(stamp(r.createdAt)) + '</td>'
+          + '<td class="act"><a href="' + we(url) + '" target="_blank" rel="noopener">Open</a>'
+          + '<button class="cp" data-url="' + we(url) + '">Copy link</button>'
+          + '<button class="del">Delete</button></td>'
+          + '</tr>';
+      }).join('');
+
+      [].forEach.call(tb.querySelectorAll('button.cp'), function (b) {
+        b.addEventListener('click', function () {
+          var full = location.origin + b.getAttribute('data-url');
+          var done = function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy link'; }, 1400); };
+          // Clipboard access can be refused; showing the address is a worse
+          // answer than copying it and a far better one than silence.
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(full).then(done, function () { window.prompt('Copy this link', full); });
+          } else window.prompt('Copy this link', full);
+        });
+      });
+      [].forEach.call(tb.querySelectorAll('button.del'), function (b) {
+        b.addEventListener('click', function () {
+          var tr = b.closest('tr');
+          var nm = tr.querySelector('.nm').textContent;
+          // CONFIRMED, because it cannot be undone and it breaks a link
+          // somebody may already have been given.
+          if (!window.confirm('Delete "' + nm + '"?\n\nThis cannot be undone, and any '
+            + 'link to it stops working.')) return;
+          b.disabled = true;
+          fetch('/api/adjusted-backtest/runs/' + encodeURIComponent(tr.getAttribute('data-id')),
+            { method: 'DELETE', credentials: 'same-origin' })
+            .then(function (r) { return r.json().then(function (j) {
+              if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); })
+            .then(function () { loadRuns(); })
+            .catch(function (e) { b.disabled = false; $('abRunsMsg').textContent = e.message; });
+        });
+      });
+    }
+
+    function loadRuns() {
+      return fetch('/api/adjusted-backtest/runs', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          var runs = (j && j.runs) || [];
+          $('abRunsSum').textContent = runs.length
+            ? 'Saved runs (' + runs.length + ')' : 'Saved runs';
+          runsRows(runs);
+          $('abRunsMsg').textContent = runs.length ? ''
+            : 'None yet. Run a backtest, then press Save run to keep it.';
+        })
+        .catch(function () { $('abRunsMsg').textContent = 'Could not read the saved runs.'; });
+    }
+
+    function save() {
+      if (!DATA) return;
+      $('abSave').disabled = true;
+      $('abSaveMsg').className = '';
+      $('abSaveMsg').textContent = 'Saving…';
+      fetch('/api/adjusted-backtest/runs', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ label: $('abName').value, data: DATA }),
+      })
+        .then(function (r) { return r.json().then(function (j) {
+          if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); })
+        .then(function (j) {
+          $('abSaveMsg').textContent = 'Saved.';
+          $('abSave').disabled = false;
+          $('abName').value = '';
+          var box = $('abRunsBox');
+          box.open = true;                       // the thing just saved is in there
+          loadRuns();
+        })
+        .catch(function (e) {
+          $('abSave').disabled = false;
+          $('abSaveMsg').className = 'err';
+          $('abSaveMsg').textContent = e.message;
+        });
+    }
+
+    // The frozen view. Everything below the banner is the live page's own
+    // painters over the stored payload, so the shared run cannot drift from
+    // what the owner saw — including the honesty panel, which is the half a
+    // shareable page most needs.
+    function openSaved(id) {
+      document.body.classList.add('frozen');
+      $('abMsg').textContent = 'Loading the saved run…';
+      fetch('/api/adjusted-backtest/run/' + encodeURIComponent(id))
+        .then(function (r) { return r.json().then(function (j) {
+          if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); })
+        .then(function (j) {
+          DATA = j.data;
+          document.title = (j.label ? j.label + ' — ' : '') + 'Saved backtest — Tickr Lab';
+          $('abFrozen').innerHTML = '<b>' + we(j.label || ('Backtest from ' + DATA.date)) + '</b> — '
+            + 'a saved run, frozen as it stood when it was saved on ' + we(stamp(j.savedAt)) + '. '
+            + 'Running the same settings today would not necessarily give these numbers: '
+            + 'the pool of stocks grows, company filings get restated, and the share counts '
+            + 'and theme memberships are whatever they were on the day. '
+            + '<b>Research only</b> — this is not advice, and the limitations below are part of it.';
+          $('abTook').textContent = '';
+          note(); cards(); chart(); bandNote(); limits(); trades(); head(); rows();
+        })
+        .catch(function (e) {
+          $('abMsg').textContent = e.message;
+          $('abMsg').className = 'err';
+          $('abFrozen').textContent = 'This saved run is not available.';
+        });
     }
 
     function load() {
@@ -634,6 +851,8 @@
           note(); cards(); chart(); bandNote(); limits(); trades(); head(); rows();
           $('abTook').textContent = ((Date.now() - t0) / 1000).toFixed(1) + 's'
             + (j.cached ? ' (cached)' : '');
+          $('abSave').disabled = false;
+          $('abSaveMsg').textContent = '';
           try { history.replaceState(null, '', location.pathname + q); } catch (e) { /* not fatal */ }
           if (window.trackLoad) window.trackLoad('adjustedbacktest');
         })
@@ -645,6 +864,18 @@
     }
 
     // ---- boot ------------------------------------------------------------
+    // THE SHARED VIEW EXITS BEFORE ANY OF THE LIVE WIRING. A public reader
+    // has no session, so /api/portfolios, /wmark.js and the activity beacon
+    // would each 401 — noise in the console on the one page strangers see.
+    if (RUNID) { openSaved(RUNID); return; }
+
+    // The watermark is a private asset and signs a member's captures; it is
+    // loaded here rather than in the markup so the shared view never asks
+    // for it.
+    var wm = document.createElement('script');
+    wm.src = '/wmark.js';
+    document.body.appendChild(wm);
+
     var p = new URLSearchParams(location.search);
     ['1M', '3M', '6M', '1Y'].forEach(function (h) {
       var o = document.createElement('option'); o.value = h; o.textContent = h;
@@ -667,6 +898,8 @@
     $('abDate').max = new Date(Date.now() - 32 * 86400000).toISOString().slice(0, 10);
     paintTiers();
     $('abGo').addEventListener('click', load);
+    $('abSave').addEventListener('click', save);
+    loadRuns();
 
     // The rule sets and themes come off endpoints the app already has, so
     // this page restates neither list.

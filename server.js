@@ -200,6 +200,7 @@ app.set('trust proxy', 1); // so req.secure reflects an HTTPS reverse proxy when
 // raises the ceiling for blog image uploads and nothing else. Base64 costs a
 // third on top of the 2MB the route itself allows.
 app.use('/api/admin/posts/image', express.json({ limit: '4mb' }));
+app.use('/api/adjusted-backtest/runs', express.json({ limit: '2mb' }));
 app.use(express.json());
 
 // When this request arrived, so `logAct` can say how long the operation took.
@@ -1325,6 +1326,18 @@ app.get('/trend-backtest', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'trend-backtest');
   res.sendFile(path.join(__dirname, 'private', 'trend-backtest.html'));
+}));
+
+// A SAVED RUN, PUBLIC BY LINK — which is the whole point of the feature: the
+// page it mirrors is admin only, so an owner-only saved run could not be
+// shown to anyone. The id is 16 random hex and is listed nowhere public (not
+// in the sitemap, not in robots.txt, not on the blog index), so a run is
+// reachable only by somebody given the link, and Delete takes it back.
+// ONE LINE TO CHANGE if that is ever the wrong trade: add the isAdmin guard
+// the route below it has.
+app.get('/adjustedbacktest/run/:id', route(async (req, res) => {
+  logAct(req, 'page', 'adjbt-run');
+  res.sendFile(path.join(__dirname, 'private', 'adjustedbacktest.html'));
 }));
 
 app.get('/adjustedbacktest', route(async (req, res) => {
@@ -12298,6 +12311,108 @@ function adjBtSeries(bars, from) {
   }
   return out;
 }
+
+
+// ---- saved adjusted-backtest runs -------------------------------------------
+// A FROZEN result, not a saved URL, and the difference is the whole feature:
+// the same parameters give a DIFFERENT answer over time. The pool is today's
+// universe (1,181 when this page was written, 1,284 now), restatements land
+// on the nightly SEC rotation, and the float, the names and the theme
+// memberships are all today's. A link re-computes; a saved run does not, so
+// what you showed somebody is what they see.
+const BT_LABEL_MAX = 80;
+
+// THE PAYLOAD IS THE CLIENT'S OWN COPY, and that is deliberate rather than
+// lazy. The alternative — recompute server-side on save — cannot give the
+// guarantee this feature exists for: `adjBtCache` is an in-process Map, so on
+// this platform a save almost always lands on an instance that would have to
+// re-read the archive (~35s, a heavy read), and a recompute against a
+// database that has since taken a nightly restatement returns numbers the
+// owner never saw. Freezing what was on screen is the honest thing to store.
+// It is safe because `requireAdmin` means the only caller is the owner, and
+// because the list columns below are derived from the payload itself, so a
+// row can never disagree with the blob it describes.
+app.post('/api/adjusted-backtest/runs', requireAdmin, route(async (req, res) => {
+  const d = req.body && req.body.data;
+  // Shape-checked, not trusted: a body that is not a backtest result would
+  // otherwise be stored behind a page that reads as authoritative.
+  if (!d || typeof d !== 'object' || !/^\d{4}-\d{2}-\d{2}$/.test(String(d.date || ''))
+      || !d.result || typeof d.result !== 'object'
+      || !d.counts || typeof d.counts !== 'object'
+      || !Array.isArray(d.picks) || !d.basket || typeof d.basket !== 'object') {
+    return res.status(400).json({ error: 'That does not look like a backtest result.' });
+  }
+  const n = await store.countBacktestRuns();
+  if (n >= store.BT_RUNS_MAX) {
+    return res.status(409).json({
+      error: `There are already ${n} saved runs, which is the cap. Delete one first.` });
+  }
+  // CR and LF stripped rather than escaped — the contact form's rule. A label
+  // goes on a page and in a list, never in a header, but the habit is cheap
+  // and the next surface might be one.
+  const label = String((req.body && req.body.label) || '')
+    .replace(/[\r\n]+/g, ' ').trim().slice(0, BT_LABEL_MAX);
+
+  // `cached` describes the live ten-minute cache and means nothing once
+  // frozen; a saved run claiming to be cached would be a small lie on a page
+  // whose entire job is provenance. `savedAt` is added on read, not here.
+  const payload = Object.assign({}, d);
+  delete payload.cached;
+  const json = JSON.stringify(payload);
+  if (json.length > 2 * 1024 * 1024) {
+    return res.status(413).json({ error: 'That run is too large to save.' });
+  }
+
+  const r = payload.result || {};
+  const c = payload.counts || {};
+  const id = crypto.randomBytes(8).toString('hex');
+  await store.saveBacktestRun({
+    id,
+    createdAt: Date.now(),
+    label: label || null,
+    startDate: payload.date,
+    horizon: payload.horizon,
+    rules: payload.rules,
+    theme: payload.theme || null,
+    tiers: Array.isArray(payload.tiers) ? payload.tiers.join(', ') : null,
+    topAsked: payload.topAsked,
+    everyDays: payload.every,
+    mode: payload.mode,
+    costBps: payload.cost,
+    rankBy: payload.rank,
+    basketRet: r.basket, marketRet: r.market, spyRet: r.spy,
+    picked: c.picked, universe: c.universe,
+    payload: json,
+  });
+  logAct(req, 'backtest', 'saved:' + id);
+  res.json({ id, url: `/adjustedbacktest/run/${id}` });
+}));
+
+app.get('/api/adjusted-backtest/runs', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  // The list never reads a payload — at 28 KB a run, selecting the blob would
+  // make opening a panel of twenty runs cost half a megabyte to draw twenty
+  // lines. See BT_RUN_COLS in db.js.
+  res.json({ runs: await store.readBacktestRunList(store.BT_RUNS_MAX), max: store.BT_RUNS_MAX });
+}));
+
+app.delete('/api/adjusted-backtest/runs/:id', requireAdmin, route(async (req, res) => {
+  const gone = await store.deleteBacktestRun(req.params.id);
+  if (!gone) return res.status(404).json({ error: 'No such saved run.' });
+  logAct(req, 'backtest', 'unsaved:' + String(req.params.id).slice(0, 32));
+  res.json({ ok: true });
+}));
+
+// PUBLIC, like the page it feeds. A deleted run 404s rather than rendering an
+// empty shell: the link is the thing somebody was handed, and when it stops
+// pointing at anything it has to say so.
+app.get('/api/adjusted-backtest/run/:id', route(async (req, res) => {
+  const run = await store.readBacktestRun(req.params.id);
+  if (!run || !run.payload) {
+    return res.status(404).json({ error: 'That saved run no longer exists.' });
+  }
+  res.json({ id: run.id, label: run.label, savedAt: run.createdAt, data: run.payload });
+}));
 
 app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
