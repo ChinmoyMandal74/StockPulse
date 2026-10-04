@@ -58,6 +58,22 @@
     #adj td { font: 500 11.5px var(--mono); font-variant-numeric: tabular-nums;
               text-align: right; }
     #adj td.t { font-family: var(--sans); text-align: left; }
+    /* THE NAME COLUMN IS CAPPED, and without it one row sets the width of the
+       whole sheet. Measured over 1,155 rows: the median name is 13 characters
+       and the longest is 81 ("Delek Logistics Partners L.P. Common Units
+       representing Limited Partner Interests"), which with nowrap made the
+       column 460px — a third of a 1,546px viewport, on every row — and pushed
+       ROE, P/E, Market cap and six more columns off the right-hand edge.
+       THE CAP GOES ON AN INNER BLOCK, never on the td, and the reason is not
+       the one you would guess -- measured by reverting. max-width on the cell
+       IS honoured here (the column really does come back to 190px), but a td
+       is not a clipping context: overflow/text-overflow on it do nothing, so
+       the text escapes its own box over the next column with no ellipsis and
+       the sheet looks broken rather than tidy. A block inside the cell clips.
+       The screener's frozen name column (td.frz1 .namelink) does the same.
+       The whole name is on the cell's title, so nothing is lost. */
+    #adj td.nm span { display: block; max-width: 190px; overflow: hidden;
+                      text-overflow: ellipsis; }
     #adj thead th { position: sticky; z-index: 3; background: var(--surface);
                     font: 600 10px var(--sans); color: var(--faint);
                     text-transform: uppercase; letter-spacing: .05em;
@@ -175,7 +191,7 @@
       h += '<th class="g-out" colspan="4">the same rules, run on that</th></tr>';
 
       h += '<tr class="hd"><th class="t frz" data-k="symbol">Symbol</th>'
-         + '<th class="t" data-k="name">Name</th>';
+         + '<th class="t nm" data-k="name">Name</th>';
       f.forEach(function (x) {
         h += '<th data-k="' + we(x.key) + '" title="' + we(DATA.sources[x.src] || '') + '">'
            + we(x.label) + '</th>';
@@ -238,7 +254,8 @@
         var r = list[i], tr = '<tr' + (r.adjusted.withheld ? ' class="wh"' : '') + '>';
         tr += '<td class="t frz"><a href="/stock/' + we(r.symbol) + '" target="_blank" '
             + 'rel="noopener">' + we(r.symbol) + '</a></td>';
-        tr += '<td class="t">' + we(r.name) + '</td>';
+        tr += '<td class="t nm" title="' + we(r.name) + '"><span>'
+            + we(r.name) + '</span></td>';
         for (var j = 0; j < f.length; j++) {
           var t = fmt(r.fields[f[j].key], f[j].fmt);
           tr += '<td' + (t === null ? ' class="na"' : '') + '>' + (t === null ? '—' : we(t))
