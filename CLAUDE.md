@@ -2134,6 +2134,36 @@ The position is gone at that mark, so a forward return on it would be *what it w
   - **Two reads had to be made defensive or the reverts aborted** (`result.rebalanced.toFixed` and `$eval('#abTrades .err')` both throw once the data is null), and an aborted suite reports a load-bearing guard as a marginal one.
   - **`.err` is defined only on `#abSaveMsg` and `#abMsg`** on that page, so the new message needed its own scoped rule or it would have drawn as ordinary body text.
 
+### The book rows name the company (2026-10-04, owner's request)
+**"In the table of Book at every date, can you show the name of the stock as well"**, from a screenshot of the opening block — five tickers, "opened", the rule that fired, and a number. A `Name` cell now sits between the symbol and what happened, in the order the picks table lower on the page already uses (Symbol, then Name), so a reader moving between the two does not have to re-learn which column is which.
+
+- **NOT ONE BYTE WAS ADDED TO THE PAYLOAD, which is the whole reason this is small.** `btTrades`' own `deco` has hung a `name` on every kept / bought / sold row since the log was built — **`/backtest` has been drawing it for a year** — and `picks` carries one for the opening book. The adjusted page simply never read it. There is a check that it still arrives, because the page has nothing to fall back on if it stops.
+- **A PAGE CANNOT DERIVE THESE NAMES FROM `picks`, and that was the first idea.** `picks` holds only the stocks that qualified at the START date, so a name **bought at a later rebalance** would draw a blank — which on a cut that churns is most of the log. The fixture runs Top 3 of seven so later blocks really do buy names the opening book never held, and there is a check that the cut bit; without it every name in the log is an opening pick and the whole suite is answered by `picks` rather than by the trade rows.
+- **A NAME THAT HAS COLLAPSED TO ITS TICKER IS OMITTED, not printed twice.** A fund, or a company whose only stored name is its symbol, would otherwise read `NAKED  NAKED` in two columns 70px apart, which looks like a fault. **Proved by reverting**: fails 1.
+- **CLIPPED, NEVER WRAPPED, with the whole value on the cell's `title`.** One wrapped name makes its row twice as tall and a run holds a dozen blocks of them — the email log's rule, where an unbroken token once gave one row 300px.
+- **THE CHIPS ABOVE THE ROWS STAY TICKERS.** `HELD FROM <date>` is a one-line list of the whole book; seven company names on it is a wall, and the rows directly beneath already carry them.
+
+#### Every row is the same shape, or the grid lies quietly
+A cell added to some rows and not others still renders — it slides every later cell one track to the left, so numbers sit under the wrong headings and the table looks perfectly well formed. Eight places emit a `.tr`: the column header, the total, the three trade rows, the opening row, the trimmed-list filler and the capped-book filler. They go through one `nmCell()` builder, called with no arguments where the cell has to hold the column open and carry nothing.
+
+- The suite counts the cells in every row, demands one distinct count, and then asserts **every row starts its cells at the same x**, measured off `getBoundingClientRect()`. **Proved by reverting**: the header alone fails 3, the total 3, the opening row 9, the three trade rows 9.
+- **The fixture is the test.** Seven stocks whose names share not one word with each other and contain no ticker, read **out of the same row as the symbol** — so a cell wired to the wrong lookup, or to the block's first member, comes out wrong rather than coincidentally right.
+
+#### Two measurement faults worth keeping, both about fixtures
+- **A FIXTURE WHOSE `shortName` IS THE TICKER PROVES NOTHING HERE**, and the suite it was copied from has exactly that shape. Worse, letting the derivation rule run makes the expectation a function of the rule: `Zephyr Mining Holdings, Inc.` comes back as **`Zephyr Mining`**, because `deriveShortName` strips a trailing *Holdings* — working exactly as designed, and a test asserting the wrong string. The fixture writes an explicit `names.short_name` **override**, which is the owner-typed path and makes the expected name a constant.
+- **"LONG" IS A MEASUREMENT, NOT AN IMPRESSION — the second time this project has recorded it.** A 66-character name fits the track at 1500px, so the clip was never exercised and its revert read as a guard that never mattered. The longest display name in the live universe is **99 characters**; with that one in the fixture the revert fails.
+
+#### THE PHONE RULE BITES BETWEEN A PHONE AND A LAPTOP, NOT AT 390px
+Below 700px the name track goes to **zero** and the fixed tracks narrow. Measuring that at 390px reported it as not load-bearing, and the reason is the arithmetic: at 390 the fixed tracks already consume the whole row, so **both flexible tracks starve to zero whatever the media query says**. At 560px there is free space, and without the rule the name takes a share of it that the rule column needs far more. The check moved to 560.
+
+- **THE TRACK GOES TO ZERO RATHER THAN THE CELL TO `display: none`.** Removing the item lets every cell after it auto-place one track left — which still renders and is silently the wrong column. A name column is the first thing to go on a phone anyway: the ticker is immediately beside it and the numbers are what the block is read for, the rule the peers table follows below 620px.
+
+#### A pre-existing overflow found while measuring it
+**At 390px the five-track grid already ran 49px past the viewport**, with the `SINCE ENTRY` cells at x=439 on a 390px screen. `1fr` is `minmax(auto, 1fr)`, so the rule column's longest word held the grid open — the documented track trap, in a third place. `minmax(0, …)` on both flexible tracks fixes it, and the narrower fixed tracks on a phone give the rule column real room. **The honest measure is each cell's right edge against the VIEWPORT**: `#abTrades` keeps its own width while its tracks overflow, so a check against the container's box reported `-14px` on a log that was 49px too wide.
+
+- Verified: **29 checks** against the real server on an in-memory database and the real page at 1500, 560 and 390px. **Proved by reverting eight times**, every one load-bearing. `period` 34, `abdefaults` 30, `adjbt`, `btruns` 83 and `rebalaxis` 24 re-run unchanged.
+  - **THREE ROWS SHARE THE SAME LINE WORD FOR WORD** — kept, bought and sold — so the harness's assert-exactly-one-hit guard refused the patch, which reads as a broken harness rather than as the one guard it is. A case names its hit count now.
+
 ### The owner's own settings are the defaults, and the legend is a set of toggles (2026-10-04, owner's request)
 **"Default the fields to what I have chosen here — everything except the start date"**, from a screenshot of the run they actually make, and **"is it possible to give options on the graph to show or hide the metric as needed"**.
 

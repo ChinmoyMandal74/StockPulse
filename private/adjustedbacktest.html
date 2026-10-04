@@ -159,10 +159,20 @@
     #abTrades summary .d { font: 600 12px var(--mono); margin-right: 10px; }
     #abTrades summary .q { color: var(--faint); }
     #abTrades .body { padding: 2px 13px 11px; }
-    #abTrades .tr { display: grid; grid-template-columns: 62px 78px 1fr 78px 84px;
+    #abTrades .tr { display: grid;
+                    grid-template-columns: 62px minmax(0, 1.05fr) 78px minmax(0, 1.6fr) 78px 84px;
                     gap: 8px; font-size: 11.5px; padding: 3px 0;
                     border-top: 1px solid var(--hair); align-items: baseline; }
     #abTrades .tr .sym { font: 600 11.5px var(--mono); }
+    /* THE COMPANY NAME, beside the ticker and in that order — the picks table
+       further down the page is Symbol then Name, and a reader moving between
+       the two should not have to re-learn which column is which.
+       CLIPPED, NEVER WRAPPED, with the whole value on the cell's title: one
+       wrapped name makes its row twice as tall, and a run holds a dozen
+       blocks of them. The email log's rule, where an unbroken token once gave
+       one row 300px. */
+    #abTrades .tr .nm { color: var(--muted); overflow: hidden;
+                        text-overflow: ellipsis; white-space: nowrap; }
     #abTrades .tr .side.sell { color: var(--red); }
     #abTrades .tr .side.buy { color: var(--green); }
     /* NEUTRAL, and that is the point. Green and red here mean bought and
@@ -196,6 +206,21 @@
     #abTrades .tot .why { color: var(--muted); }
     #abTrades .tot .rp { font-size: 12.5px; }
     #abTrades .tr .r { text-align: right; font: 500 11.5px var(--mono); }
+    /* A NAME COLUMN IS THE FIRST THING TO GO ON A PHONE: the ticker is
+       immediately beside it and the numbers are what the block is read for.
+       The peers table stands its compare column aside below 620px for the
+       same reason.
+       THE TRACK GOES TO ZERO RATHER THAN THE CELL TO `display: none` —
+       removing the item would let every cell after it auto-place one track
+       to the left, which still renders and is silently the wrong column.
+       The narrower fixed tracks fix something that was ALREADY WRONG and was
+       found while measuring this: at 390px the five-track grid ran 49px past
+       the viewport, because `1fr` is `minmax(auto, 1fr)` and the rule
+       column's longest word held the grid open. */
+    @media (max-width: 700px) {
+      #abTrades .tr { grid-template-columns: 52px 0 58px minmax(0, 1fr) 62px 62px;
+                      gap: 6px; }
+    }
     #abTrades h3, #abBandNote h3 { font-size: 12px; margin: 18px 0 8px;
       text-transform: uppercase; letter-spacing: .06em; color: var(--faint); }
     #abBandNote { color: var(--muted); font-size: 12.5px; line-height: 1.7;
@@ -572,6 +597,19 @@
         return v == null ? '<span class="na">\u2014</span>'
           : '<span class="' + (v >= 0 ? 'pos' : 'neg') + '">' + pc(v) + '</span>';
       };
+      // THE NAME CELL, from the name the server already sends: `btTrades`
+      // hangs one on every kept/bought/sold row and `picks` carries it for
+      // the opening book, so nothing was added to the payload for this.
+      // OMITTED where it has collapsed to the ticker — a fund, or a company
+      // whose only stored name IS its symbol — because printing the same
+      // word twice in two columns 70px apart reads as a fault. Called with
+      // no arguments for the header, the total and the trimmed-list fillers,
+      // which need the cell to hold the column open and nothing in it.
+      var nmCell = function (sym, name) {
+        var t = name && name !== sym ? String(name) : '';
+        return '<span class="nm"' + (t ? ' title="' + we(t) + '"' : '') + '>'
+          + we(t) + '</span>';
+      };
       // The window a block's period covers, in words, so the two numbers in
       // each row are never ambiguous about which span they measure.
       var span = function (b, from) {
@@ -579,7 +617,8 @@
         return from + ' \u2192 ' + b.to + (b.toEnd ? ' (end)' : '');
       };
       var colHead = function (b, opening) {
-        return '<div class="tr hdr"><span class="sym"></span><span class="side"></span>'
+        return '<div class="tr hdr"><span class="sym"></span>' + nmCell()
+          + '<span class="side"></span>'
           + '<span class="why"></span><span class="rp">This period</span>'
           + '<span class="r">' + (opening ? '' : 'Since entry') + '</span></div>';
       };
@@ -590,7 +629,8 @@
       // small lie on the one line a reader checks.
       var totalRow = function (b, v) {
         if (!b) return '';
-        return '<div class="tr tot"><span class="sym"></span><span class="side"></span>'
+        return '<div class="tr tot"><span class="sym"></span>' + nmCell()
+          + '<span class="side"></span>'
           + '<span class="why">The book over ' + we(span(b, b.from || b.d)) + '</span>'
           + '<span class="rp">' + pr(v) + '</span><span class="r"></span></div>';
       };
@@ -630,6 +670,7 @@
         + colHead(op, true)
         + openPicks.map(function (p) {
           return '<div class="tr"><span class="sym">' + we(p.symbol) + '</span>'
+            + nmCell(p.symbol, p.name)
             + '<span class="side open">opened</span>'
             + '<span class="why">' + we((p.action || '?') + (p.flag ? ' \u2014 ' + p.flag : ''))
             + '</span><span class="rp">' + pr(opret[p.symbol]) + '</span>'
@@ -655,7 +696,8 @@
         // makes the count above reconcile with the rows under it.
         var more = function (shown, n) {
           return n > shown
-            ? '<div class="tr"><span class="sym"></span><span class="side"></span>'
+            ? '<div class="tr"><span class="sym"></span>' + nmCell()
+              + '<span class="side"></span>'
               + '<span class="why" style="color:var(--faint)">\u2026and ' + (n - shown)
               + ' more, not listed.</span><span class="rp"></span>'
               + '<span class="r"></span></div>'
@@ -669,7 +711,8 @@
           .concat(t.bought.map(function (x) { return x.sym; }));
         var book = bookLine('Held from ' + t.d, bookSyms)
           + (bookSyms.length < t.held
-            ? '<div class="tr"><span class="sym"></span><span class="side"></span>'
+            ? '<div class="tr"><span class="sym"></span>' + nmCell()
+              + '<span class="side"></span>'
               + '<span class="why" style="color:var(--faint)">\u2026and '
               + (t.held - bookSyms.length) + ' more held, not listed.</span>'
               + '<span class="rp"></span><span class="r"></span></div>'
@@ -682,6 +725,7 @@
             + (x.from ? ', since ' + x.from : '');
           return '<div class="tr"' + (held ? ' title="' + we(held) + '"' : '') + '>'
             + '<span class="sym">' + we(x.sym) + '</span>'
+            + nmCell(x.sym, x.name)
             + '<span class="side keep">held</span>'
             + '<span class="why">' + we(reason(x, false)) + '</span>'
             + '<span class="rp">' + pr(x.pret) + '</span>'
@@ -689,6 +733,7 @@
         }).join('') + more(t.kept.length, t.keptN)
         + t.bought.map(function (x) {
           return '<div class="tr"><span class="sym">' + we(x.sym) + '</span>'
+            + nmCell(x.sym, x.name)
             + '<span class="side buy">bought</span>'
             + '<span class="why">' + we(reason(x, false)) + '</span>'
             + '<span class="rp">' + pr(x.pret) + '</span>'
@@ -696,6 +741,7 @@
         }).join('') + more(t.bought.length, t.boughtN)
         + t.sold.map(function (x) {
           return '<div class="tr"><span class="sym">' + we(x.sym) + '</span>'
+            + nmCell(x.sym, x.name)
             + '<span class="side sell">sold</span>'
             + '<span class="why">' + we(reason(x, true)) + '</span>'
             // A sold position is gone at this mark, so it has no period
