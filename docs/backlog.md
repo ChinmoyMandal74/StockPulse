@@ -1135,6 +1135,47 @@ has strictly more free parameters than the pattern that just failed.
 
 ---
 
+## 21. A split leaves every per-share profile field wrong for up to a week — 2026-10-04
+
+**Found while verifying the Live P/E column against production, and it is
+wider than that column.** `persistBars` detects a split and rewrites the
+symbol's whole bar history, so the archive is adjusted within one refresh.
+**The stored PROFILE is not**, and it only rotates on `FUND_ROTATION_DAYS`
+(7) — so for up to a week after a split every per-share figure in it is
+quoted in pre-split shares against a post-split price.
+
+**Measured on the live screen the day the Live P/E shipped**: `CTVA` split
+**6.18x on 2026-10-01** (archive: 77.65 to 12.57 in one session, a clean
+round ratio and no gap). Its stored `dilutedEpsTtm` is 1.65, pre-split, so
+the Live P/E column reads **7.2 where the truth is about 44** — and the
+vendor's own `trailingPe` of 47.1 is right, because both halves of its
+ratio are pre-split and a split does not move a ratio. **One symbol of
+1,278 on the day it was looked at**, and it self-heals at the next rotation.
+
+- **The column did not create this and is not the only victim.**
+  `bookValuePerShare` and `dilutedEpsTtm` are both per-share and both wrong
+  over the same window; the Live P/E is simply the first surface that
+  divides one of them by a price and so makes it visible.
+- **THE FIX IS ONE CALL ON THE PATH THAT ALREADY KNOWS.** `persistBars`
+  is the one place a split is detected; expiring that symbol's profile
+  there (`fetched_at = 0`, the existing "pull was refused, retry me"
+  sentinel) puts it at the head of the next round instead of at the back
+  of a seven-day queue. It costs one cold profile (80 credits) per split,
+  which is a handful a year.
+- **NOT DONE, deliberately**, on two grounds. It touches the refresh path,
+  which is the riskiest path in this app and the one whose failures read
+  as "the refresh is broken" over data that is fine — three times on
+  record. And the ask it came out of was a display change. Worth doing as
+  its own commit, with a revert proof that a split really does expire the
+  profile and that an ordinary round does not.
+- **The cheap wrong fix is withholding the Live P/E when it disagrees
+  with the vendor's by more than some factor.** That is exactly the
+  disagreement the column exists to show — SOI and TRIP sit at 460% and
+  78% apart for honest reasons — so it would hide the feature to hide
+  one row.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
