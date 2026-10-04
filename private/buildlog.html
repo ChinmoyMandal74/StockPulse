@@ -124,7 +124,7 @@
     .bl-week summary::-webkit-details-marker { display: none; }
     .bl-week summary:hover { background: rgba(255, 255, 255, 0.025); }
     .bl-week summary .bl-cv { transition: transform 0.25s var(--ease); color: var(--faint); flex: 0 0 auto; }
-    .bl-week[open] summary .bl-cv { transform: rotate(90deg); }
+    .bl-week > .core[open] summary .bl-cv { transform: rotate(90deg); }
     .bl-week summary .bl-wn { margin-left: auto; font-family: var(--mono); font-size: 11.5px;
                               color: var(--muted); white-space: nowrap; }
     .bl-list { border-top: 1px solid var(--hair); }
@@ -430,10 +430,14 @@
          'Days on which at least one change was made, out of the days the project has existed.'],
         ['Busiest day', n(busiest.n), busiest.d ? ' on ' + fmtDay(busiest.d) : '',
          'The most changes made in a single day.'],
+        // FOUR CARDS, NOT FIVE. Five divides cleanly into no row a screen can
+        // hold, so one always sits alone at the end of a row; four fill a row
+        // at every width this page has. The length belongs in the sentence
+        // about explanations anyway — it is what one of them is, not a fifth
+        // thing being counted.
         ['Explained', pct + '%', ' — ' + n(d.withBody) + ' of ' + n(d.total),
-         'Changes that came with a written reason, not just a title.'],
-        ['Typical explanation', n(d.medianLen), ' characters',
-         'The middle length of a change’s full note — roughly two hundred and fifty words.'],
+         'Changes that came with a written reason, not just a title. The middle '
+         + 'one runs to ' + n(d.medianLen) + ' characters, roughly two hundred and fifty words.'],
       ];
       $('blNums').innerHTML = cards.map(function (c) {
         return '<div class="bezel bl-num"><div class="core">'
@@ -526,7 +530,8 @@
       $('blWeeks').innerHTML = order.map(function (k, i) {
         var list = bag[k];
         var end = dt(k); end.setDate(end.getDate() + 6);
-        return '<details class="bezel bl-week"' + (i === 0 ? ' open' : '') + '><div class="core">'
+        return '<div class="bezel bl-week"><details class="core"'
+          + (i === 0 ? ' open' : '') + '>'
           + '<summary><svg class="ic ic-sm bl-cv" aria-hidden="true"><use href="#i-caret" /></svg>'
           + 'Week of ' + we(fmtFull(k))
           + '<span class="bl-wn">' + n(list.length) + ' change'
@@ -543,7 +548,7 @@
               + we(e.sha) + '" target="_blank" rel="noopener">' + we(e.sha.slice(0, 7))
               + '</a></div></div>';
           }).join('') + '</div>'
-          + '</div></details>';
+          + '</details></div>';
       }).join('');
     }
 
