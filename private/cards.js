@@ -3138,6 +3138,17 @@
       return (v == null || !isFinite(v)) ? null : v;
     };
 
+    // THE VALUE PANEL RUNS TO TODAY AND THE BUSINESS PANEL CANNOT, which is
+    // the one asymmetry on this card and the reason the figures row now names
+    // two dates. Prices exist for every session; there is no filing after the
+    // last filed quarter, so revenue and earnings stop where the record does.
+    // `live` is null where the filings are too stale for one more segment to
+    // be honest — see LIVE_MAX_DAYS in adjusted.js.
+    const live = (ev.live && ev.live.d > Z.d) ? ev.live : null;
+    const vDates = live ? dates.concat(live.d) : dates;
+    const vCaps = live ? caps.concat(live.cap) : caps;
+    const V = live || Z;
+
     // `plain` drops the colour. A MULTIPLE RISING IS GOOD FOR A HOLDER AND
     // BAD FOR A BUYER, so green or red on it is an implied verdict -- the
     // one thing this card must not make. Revenue, earnings and market value
@@ -3165,13 +3176,14 @@
     // MEASURED against the real artboards at the WORST name length each one
     // has (evo-budget.js), never chosen: the two charts plus two headings plus
     // the figures row plus the gap have to fit the wrap, and the wrap is what
-    // the headline leaves. The spare at the worst case is 50 / 31 / 66px.
-    const tall = size.id === 'square' ? 194 : size.id === 'story' ? 545 : 330;
-    const shortH = size.id === 'square' ? 136 : size.id === 'story' ? 380 : 232;
+    // the headline leaves. The square alone was retuned when the as-of line
+    // was added (measured: it costs ~30px, and the square had 31px spare).
+    const tall = size.id === 'square' ? 180 : size.id === 'story' ? 537 : 330;
+    const shortH = size.id === 'square' ? 127 : size.id === 'story' ? 374 : 232;
 
     const valuePanel = ev.hasValue
       ? '<div class="evo-p"><span class="evo-h">What the market paid for it</span>'
-        + valueChart(dates, caps, { h: shortH, color: pal.ink(EVO_VAL), fmt: money,
+        + valueChart(vDates, vCaps, { h: shortH, color: pal.ink(EVO_VAL), fmt: money,
           label: 'market value' }) + '</div>'
       // NO SHARE COUNT, NO PANEL — never a fallback to the filed count, which
       // is the forty-fold error `evolutionSeries` exists to avoid.
@@ -3190,12 +3202,22 @@
       + valueChart(dates, series, { h: tall, color: pal.ink(EVO_BIZ), fmt: fmtM,
         label: mLabel }) + '</div>'
       + valuePanel
-      + '<div class="evo-figs">'
+      + '<div class="evo-foot"><div class="evo-figs">'
       + figure('Revenue', at(A, 'revenue'), at(Z, 'revenue'), money)
       + figure('Earnings', at(A, 'netIncome'), at(Z, 'netIncome'), money)
-      + figure('Market value', at(A, 'cap'), at(Z, 'cap'), money)
-      + figure('P/E', at(A, 'pe'), at(Z, 'pe'), peF, true)
-      + '</div></div>'
+      + figure('Market value', at(A, 'cap'), at(V, 'cap'), money)
+      + figure('P/E', at(A, 'pe'), at(V, 'pe'), peF, true)
+      + '</div>'
+      // THE ROW HAD NO DATES AND THAT IS WHAT MISLED A READER: "$2.77T" was
+      // taken for the market value NOW when it was the value at the end of
+      // June, and the same card was read as ending on 30 June for the same
+      // reason. Two of these four figures are as filed and two are as priced,
+      // and a posted image has no picker beside it to say so.
+      + '<p class="evo-asof">' + (live
+          ? 'Revenue and earnings to ' + esc(Z.d) + ' · market value and P/E at the '
+            + esc(live.d) + ' close'
+          : 'All four as of ' + esc(Z.d) + ', the last filed quarter')
+      + '</p></div></div>'
       + '<p class="s-sub wide">Trailing twelve months at every filed quarter, from the '
       + 'company\u2019s own SEC filings. The two panels keep their own scales. '
       + 'Market value is today\u2019s share count at each day\u2019s split-adjusted close, so it '
@@ -3509,6 +3531,17 @@
               color: var(--muted); }
     .evo-fc.pos { color: var(--green); }
     .evo-fc.neg { color: var(--red); }
+    /* The as-of line. Tokens only, no literal, so all three grounds resolve
+       with no override block. It is one line by construction -- the two dates
+       are fixed-width -- and it is deliberately quiet: it qualifies the row
+       above it rather than competing with it. */
+    /* THE FIGURES AND THEIR AS-OF LINE ARE ONE FLEX CHILD, not two. The wrap
+       is a space-evenly column, so a second child buys a whole extra gap on
+       top of its own height -- measured, the line alone cost 70px on the
+       square and overflowed the artboard. Wrapped, it costs its own height. */
+    .evo-foot { min-width: 0; }
+    .evo-asof { margin: 9px 0 0; font: 500 16px var(--sans); color: var(--faint); }
+    .sz-story .evo-asof { font-size: 20px; }
     .sz-square .evo-lab { font-size: 19px; }
     .sz-square .evo-fc { font-size: 18px; }
     .sz-story .evo-lab { font-size: 26px; }

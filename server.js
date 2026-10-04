@@ -9980,6 +9980,10 @@ async function evolutionFor(symbol, years) {
     years,
     points,
     hasValue: out.hasValue,
+    // The value panel's one point at the latest close, or null where the
+    // filings are too stale for it to be honest. Deliberately OUTSIDE the
+    // `years` window filter below: it is today, so every window holds it.
+    live: out.live,
     sharesToday: out.sharesToday,
     // How many quarters the trail holds in total, so the card can say when
     // the window it drew is the whole of what was filed rather than a cut.

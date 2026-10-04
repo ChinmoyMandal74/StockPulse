@@ -162,6 +162,13 @@
   //   rows        — one symbol's sec_facts trail
   //   closes      — [{ d, close }] OLDEST FIRST
   //   sharesToday — the CURRENT share count, or null
+  // About two quarters, so the one segment that reaches today is never more
+  // than twice the length of any other. Measured in `evolutionSeries` below.
+  // Declared ABOVE its reader: a const read from a function defined earlier is
+  // a temporal-dead-zone throw waiting for the first caller, which this
+  // project has shipped twice (/api/db-stats, the pivot's DIMS).
+  const LIVE_MAX_DAYS = 200;
+
   function evolutionSeries(SecFacts, rows, closes, sharesToday) {
     const all = Array.isArray(rows) ? rows : [];
     const bars = Array.isArray(closes) ? closes : [];
@@ -203,8 +210,48 @@
         pe: trailingPe(cap, ni),
       });
     }
+    // ---- and one more point at TODAY'S close -----------------------------
+    //
+    // THE FILINGS STOP AT THE LAST FILED QUARTER AND THE PRICE DOES NOT, and
+    // conflating the two is what made the card's own market value read 39%
+    // below the one on /adjusted for MSFT (2.77T against 3.85T, which is
+    // exactly the price move since 30 June). /adjusted strikes the cap at the
+    // LATEST close, so the value panel does too — same assumption, one place
+    // it was missing. Revenue and earnings are NOT extended: there is no
+    // later filing, and carrying them forward would be inventing a figure.
+    //
+    // THE P/E HERE IS TODAY'S CAP OVER THE LAST FILED TRAILING YEAR, which is
+    // precisely what /adjusted computes. A multiple always pairs a live price
+    // with the newest reported earnings; that is what a trailing P/E IS.
+    const lastPt = points.length ? points[points.length - 1] : null;
+    const newest = bars.length ? bars[bars.length - 1] : null;
+    const nClose = newest ? num(newest.close) : null;
+    let live = null;
+    if (shares != null && lastPt && newest && nClose != null && nClose >= 0.01
+        && newest.d > lastPt.d) {
+      // BOUNDED, because an unbounded extension draws a straight line across
+      // years of unfiled history. Measured across 1,183 symbols: the newest
+      // statement filing is a median 61 days old and 98.4% are inside 180,
+      // then a thin tail of 19 reaching 5,661 days — JPM's own trail stops in
+      // 2014, so one segment would span twelve years of price action it did
+      // not touch. 200 days on the PERIOD END is about two quarters, so the
+      // new segment is never more than twice the length of any other.
+      // UTC ON BOTH ENDS, and this is the one place where local noon -- the
+      // rule everywhere a date is RENDERED -- is wrong. A difference taken in
+      // local time gains an hour across the daylight-saving change, so a gap
+      // of exactly 200 days measured 200.04 and failed its own bound. Caught
+      // by probing the threshold on both sides; a one-sided check passes.
+      const gap = (Date.parse(newest.d + 'T00:00:00Z')
+                 - Date.parse(lastPt.d + 'T00:00:00Z')) / 86400000;
+      if (gap > 0 && gap <= LIVE_MAX_DAYS) {
+        const cap = shares * nClose;
+        live = { d: newest.d, close: nClose, cap, pe: trailingPe(cap, lastPt.netIncome) };
+      }
+    }
+
     return {
       points,
+      live,
       // Whether a market value could be computed AT ALL. A card with no share
       // count draws the business alone and says why, rather than drawing a
       // value panel of nothing or — far worse — falling back to the filed
