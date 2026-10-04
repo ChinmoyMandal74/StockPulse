@@ -2134,6 +2134,41 @@ The position is gone at that mark, so a forward return on it would be *what it w
   - **Two reads had to be made defensive or the reverts aborted** (`result.rebalanced.toFixed` and `$eval('#abTrades .err')` both throw once the data is null), and an aborted suite reports a load-bearing guard as a marginal one.
   - **`.err` is defined only on `#abSaveMsg` and `#abMsg`** on that page, so the new message needed its own scoped rule or it would have drawn as ordinary body text.
 
+### The owner's own settings are the defaults, and the legend is a set of toggles (2026-10-04, owner's request)
+**"Default the fields to what I have chosen here — everything except the start date"**, from a screenshot of the run they actually make, and **"is it possible to give options on the graph to show or hide the metric as needed"**.
+
+#### Four defaults moved, and the date deliberately did not
+| control | was | is |
+|---|---|---|
+| Hold for | 3M | **1Y** |
+| Verdicts | Strong Buy **+ Buy** | **Strong Buy alone** |
+| How many to hold | all of them | **Top 10** |
+| Rebalance | never | **every month** |
+
+Rules, Theme, Rank by, On each rebalance and Cost were already on the chosen value.
+
+- **THE START DATE IS THE ONE FIELD LEFT ALONE, and the owner named it.** It keeps its rolling *400 days back* rule: a date frozen into the page goes stale the day after it is written, and it is the one field anybody changes on every visit. There is a check that it still computes rather than being pinned.
+- **The address bar still beats every default**, or a link somebody sends would reproduce their settings and somebody else's run. **Proved by reverting**: a default that wins fails 1.
+- **Strong Buy ALONE is a real change, not tidying.** Adding Buy roughly triples the basket and takes it most of the way to being the benchmark — which is the documented reason the twenty-year trend sweep's own result was hard to read ("the tier qualifies 108 of 336 stocks, so the basket is nearly the benchmark").
+- **A consequence worth knowing: the page now rebalances on every load.** `every=30` is the default, so the shared `btRebalance` loop runs each time. Measured when it was built: a fortnightly rebalance adds **1.2s of evaluation** against a ~35s run whose cost is almost entirely the bar read, so this is inside the noise.
+- **Top 10 and a monthly rebalance also mean `Rank by`, `On each rebalance` and `Cost` open LIVE rather than greyed**, which `syncCtl` works out for itself — no second place to keep in step. **Proved by reverting**: the old pair fails 3, the third being exactly that.
+
+#### The legend IS the control
+It already names every line and carries its colour, so a second row of tick boxes beside it would be two places saying the same thing — the indicator lab's era chips, in a second place. Each entry is a `button` with `aria-pressed`, delegated on `#abLegend` because the legend is rebuilt on every run.
+
+- **A HIDDEN LINE LEAVES THE SCALE, not just the drawing.** Dropping it from the plot while leaving it in the `lo`/`hi` sweep is the version that looks like it works: hiding the S&P is how you get the other three to use the height, and a frozen axis hands back exactly the squashed chart the reader was trying to escape. **Measured in the suite rather than asserted on labels** — see below.
+- **OFF IS LEGIBLE, NOT INVISIBLE.** The entry stays, dimmed, with a dotted rule and its value struck through. A control that removes itself is a trapdoor — the news ticker's rule — and here it would also take away the only way to bring the line back.
+- **THE LAST VISIBLE LINE CANNOT BE HIDDEN.** An empty chart is not a view of anything, and the reader would be left with nothing to click. The lab's rule, and it matters more here because this chart is the page's headline. **Proved by reverting**: fails 1.
+- **Remembered per device** in `localStorage`, the way the stock page remembers its chart layers and `/compare` its hide-matching toggle. It is deliberately **NOT** stored on a saved run: a saved run freezes the numbers, never where somebody happened to be looking — the pivot preset's own rule, and there is a check that the stored row carries no such state.
+- The frozen view at `/adjustedbacktest/run/<id>` gets the toggles too, because it is the same painter.
+
+- Verified: **30 checks** driving the real page — every default read off the control, the rolling date still computing, the address still overriding, one legend button per drawn line, the entry surviving a hide, the reload, the refusal, and the frozen view's own toggles. **Proved by reverting eight times**, every one load-bearing.
+  - **THE AXIS LABELS CANNOT PROVE THE RESCALE on a fixture whose lines overlap** — they are rounded to whole percent, so hiding a mid-pack line moves `hi` by less than one label and the check failed over a chart that was working. The honest claim is that the SURVIVORS get the height back, so the suite reads the drawn path geometry, works out **which line owns the top of the chart** rather than guessing, hides that one and asserts the others' vertical span grows (198px → 228px). That is also the stronger statement: a chart could relabel its axis without redrawing anything.
+  - **"AT LEAST ONE LINE IS LEFT" PASSED OVER A STALE CHART.** With the refusal removed every line is hidden, and `chart()` then finds no finite values and returns **before** it rewrites either the svg or the legend — so four paths and four lit buttons are still on screen and **the page lies about what is on**. The stored set is written before that return and is the only honest witness; the check reads it.
+  - **A WAIT THAT THROWS ENDS THE RUN.** With the legend reverted to plain spans, `waitForSelector('#abLegend button')` never resolves and took the suite with it at check 13 of 30 — reported as a guard that never mattered. Every wait swallows its timeout now and the assertions decide.
+  - **`adjbt-test.js` asserted the OLD defaults in three places and was CORRECTED, not worked around**: a hardcoded "three curves are drawn" (there are four once the page rebalances — derived from the control now, since this went stale once already), and two checks that `Rank by` / `On each rebalance` / `Cost` open greyed. The behaviour they describe is still right, so they SET the control to zero first and there is a new check that the three are live at the defaults.
+  - The save route's body field is **`data`**, not `payload` — a wrong name answers *"That does not look like a backtest result."*, which reads as a broken payload rather than a wrong key.
+
 ### Saved runs — a frozen result with a link (2026-10-03, owner's request)
 **"I want to save the backtest results so that I can show it to other people", then "I only need this for the Adjusted Backtest, there should be a list of all Adjusted backtest I have run and option to delete".** A `Save run` button beside Run, a `Saved runs` panel under the controls with Open / Copy link / Delete on every row, and **`/adjustedbacktest/run/<id>`**, which anybody with the link can open.
 

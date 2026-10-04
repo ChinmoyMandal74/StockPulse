@@ -111,6 +111,20 @@
                 padding: 2px 4px 10px; }
     #abLegend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid;
                   vertical-align: middle; margin-right: 6px; }
+    /* A LEGEND ENTRY IS A BUTTON, so it has to stop looking like one of the
+       page's filled buttons and start looking like the legend it replaced. */
+    #abLegend button { font: inherit; color: inherit; background: none; border: 0;
+                       padding: 2px 4px; border-radius: 6px; cursor: pointer; }
+    #abLegend button:hover { background: rgba(255,255,255,.06); color: var(--text); }
+    #abLegend button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    /* OFF IS LEGIBLE, NOT INVISIBLE. A hidden line whose legend entry
+       disappeared would be a control with no way back — the news ticker's
+       rule. It stays, dimmed, with its rule struck through, so the entry
+       says both what it is and that it is off. */
+    #abLegend button[aria-pressed="false"] { color: var(--faint); }
+    #abLegend button[aria-pressed="false"] i { border-top-style: dotted; opacity: .5; }
+    #abLegend button[aria-pressed="false"] .lgv { text-decoration: line-through; }
+    #abLegend .hint { color: var(--faint); align-self: center; }
 
     /* The honesty panel is NOT optional furniture — see the note in the file. */
     #abLimits { border: 1px solid var(--hair); border-radius: 12px; padding: 14px 16px;
@@ -304,7 +318,10 @@
     var $ = function (id) { return document.getElementById(id); };
     var DATA = null, SORT = { key: 'ret', dir: -1 };
     var TIERS = ['Strong Buy', 'Buy', 'Buy with Risk', 'Hold', 'Avoid', 'Sell Immediately'];
-    var chosen = { 'Strong Buy': true, Buy: true };
+    // The owner's default: Strong Buy ALONE. Adding Buy roughly triples the
+    // basket and takes it most of the way to being the benchmark, which is
+    // the documented reason the trend sweep's own result was hard to read.
+    var chosen = { 'Strong Buy': true };
 
     function we(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -322,14 +339,20 @@
     // that answers "did the rules select" — the index is the flattering
     // comparison, because this universe is high-beta by construction.
     function chart() {
-      var lines = [];
-      if (DATA.basket && DATA.basket.values.length) lines.push({ c: 'basket', s: DATA.basket });
+      var all = [];
+      if (DATA.basket && DATA.basket.values.length) all.push({ c: 'basket', s: DATA.basket });
       if (DATA.rebalanced && DATA.rebalanced.values.length) {
-        lines.push({ c: 'rebal', s: DATA.rebalanced });
+        all.push({ c: 'rebal', s: DATA.rebalanced });
       }
-      if (DATA.market && DATA.market.values.length) lines.push({ c: 'market', s: DATA.market });
-      if (DATA.spy && DATA.spy.values.length) lines.push({ c: 'spy', s: DATA.spy });
-      if (!lines.length) { $('abChartIn').innerHTML = ''; $('abLegend').innerHTML = ''; return; }
+      if (DATA.market && DATA.market.values.length) all.push({ c: 'market', s: DATA.market });
+      if (DATA.spy && DATA.spy.values.length) all.push({ c: 'spy', s: DATA.spy });
+      if (!all.length) { $('abChartIn').innerHTML = ''; $('abLegend').innerHTML = ''; return; }
+      // A line the reader has switched off is dropped from the drawing AND
+      // from the scale below. Leaving it in the scale is the version that
+      // looks like it works and is not worth having: hiding the S&P is how
+      // you get the other three to use the height, and a frozen axis gives
+      // you back exactly the squashed chart you were trying to escape.
+      var lines = all.filter(function (L) { return !hidden[L.c]; });
 
       var W = 1000, H = 300, PL = 44, PR = 12, PT = 12, PB = 24;
       var dates = DATA.basket.dates.length ? DATA.basket.dates : DATA.market.dates;
@@ -370,18 +393,55 @@
       $('abChartIn').innerHTML = svg;
 
       var r = DATA.result;
+      // THE LEGEND IS THE CONTROL (2026-10-04, owner: "give options on the
+      // graph to show or hide the metric as needed"). It already names every
+      // line and carries its colour, so a second row of tick boxes beside it
+      // would be two places saying the same thing — the lab's era chips, in
+      // a second place.
+      var key = { basket: 'var(--accent)', rebal: 'var(--amber)',
+        market: 'var(--accent-2)', spy: 'var(--muted)' };
+      var btn = function (c, label, val) {
+        var on = !hidden[c];
+        return '<button type="button" data-line="' + c + '" aria-pressed="' + on + '"'
+          + ' title="' + (on ? 'Hide' : 'Show') + ' this line">'
+          + '<i style="border-color:' + key[c] + '"></i>'
+          + '<span class="lgv">' + label + ' ' + val + '</span></button>';
+      };
       $('abLegend').innerHTML =
-        '<span><i style="border-color:var(--accent)"></i>'
-          + (DATA.top ? 'Top ' + DATA.top + ' held' : 'What the rules picked')
-          + ' (' + DATA.basket.members + ') ' + pc(r.basket) + '</span>'
-      + (DATA.rebalanced ? '<span><i style="border-color:var(--amber)"></i>Rebalanced '
-          + pc(r.rebalanced) + '</span>' : '')
-      + '<span><i style="border-color:var(--accent-2)"></i>Every stock, equal weight ('
-          + DATA.market.members + ') ' + pc(r.market) + '</span>'
-      + (DATA.spy ? '<span><i style="border-color:var(--muted)"></i>S&amp;P 500 '
-          + pc(r.spy) + '</span>'
-        : '<span>' + we(DATA.spyError || 'No benchmark') + '</span>');
+        btn('basket', (DATA.top ? 'Top ' + DATA.top + ' held' : 'What the rules picked')
+          + ' (' + DATA.basket.members + ')', pc(r.basket))
+      + (DATA.rebalanced ? btn('rebal', 'Rebalanced', pc(r.rebalanced)) : '')
+      + btn('market', 'Every stock, equal weight (' + DATA.market.members + ')', pc(r.market))
+      + (DATA.spy ? btn('spy', 'S&amp;P 500', pc(r.spy))
+        : '<span>' + we(DATA.spyError || 'No benchmark') + '</span>')
+      + '<span class="hint">click a line to hide it</span>';
     }
+
+    // WHICH LINES ARE OFF IS A PER-DEVICE READING CHOICE, not part of a run.
+    // It is remembered the way the stock page remembers its chart layers and
+    // /compare remembers its hide-matching toggle; it is deliberately NOT
+    // stored on a saved run, which freezes the numbers rather than where
+    // somebody happened to be looking — the pivot preset's own rule.
+    var hidden = {};
+    try { hidden = JSON.parse(localStorage.getItem('ab.hide') || '{}') || {}; } catch (e) { hidden = {}; }
+    function toggleLine(c) {
+      // HIDING THE LAST ONE IS REFUSED. An empty chart is not a view of
+      // anything, and the reader would be left with no line to click back.
+      if (!hidden[c]) {
+        var onNow = ['basket', 'rebal', 'market', 'spy'].filter(function (k) {
+          return !hidden[k] && document.querySelector('#abLegend [data-line="' + k + '"]');
+        });
+        if (onNow.length < 2) return;
+      }
+      if (hidden[c]) delete hidden[c]; else hidden[c] = 1;
+      try { localStorage.setItem('ab.hide', JSON.stringify(hidden)); } catch (e) { /* private window */ }
+      chart();
+    }
+    // Delegated, because the legend is rebuilt on every run.
+    $('abLegend').addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-line]');
+      if (b) toggleLine(b.getAttribute('data-line'));
+    });
 
     function cards() {
       var r = DATA.result, c = DATA.counts;
@@ -966,7 +1026,7 @@
       var o = document.createElement('option'); o.value = h; o.textContent = h;
       $('abHz').appendChild(o);
     });
-    $('abHz').value = p.get('horizon') || '3M';
+    $('abHz').value = p.get('horizon') || '1Y';
     if (p.get('tiers')) {
       chosen = {};
       p.get('tiers').split(',').forEach(function (t) { chosen[t.trim()] = true; });
@@ -1007,7 +1067,11 @@
     $('abRules').value = p.get('rules') || 'Balanced';
 
     // The five new controls, restored from the address so a run can be sent.
-    [['abTop', 'top', '0'], ['abRank', 'rank', 'cushion'], ['abEvery', 'every', '0'],
+    // THE DEFAULTS ARE THE OWNER'S OWN, so the page opens on the run they
+    // actually make rather than on one nobody asked for. A cut of 10 and a
+    // monthly rebalance also mean `abRank`, `abMode` and `abCost` open LIVE
+    // rather than greyed, which `syncCtl` below works out for itself.
+    [['abTop', 'top', '10'], ['abRank', 'rank', 'cushion'], ['abEvery', 'every', '30'],
       ['abMode', 'mode', 'rerun'], ['abCost', 'cost', '0']].forEach(function (x) {
       var v = p.get(x[1]);
       var el = $(x[0]);
