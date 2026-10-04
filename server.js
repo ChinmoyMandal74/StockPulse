@@ -7066,7 +7066,14 @@ async function btLoadSpy() {
 // of it. One alignment rule, one implementation — a second walk of "the last
 // close on or before d" would drift the moment either was fixed, which is why
 // rowcard.js, screens.js and action.js exist at all.
-function btMatrix(series, from) {
+// `axisDates` FORCES the date axis instead of deriving the union, and the
+// rebalancer must pass it. Two matrices built over different symbol sets get
+// different unions -- the basket's picks trade on 253 days where the whole
+// universe trades on 261 -- so a simulation that walks one axis and indexes
+// prices out of the other is reading the wrong day, and where the two do not
+// even START together it reads null on every opening symbol and silently
+// gives up. See the rebalance call sites.
+function btMatrix(series, from, axisDates) {
   const axis = new Set();
   const start = {};
   for (const sym of Object.keys(series)) {
@@ -7074,9 +7081,11 @@ function btMatrix(series, from) {
     const s0 = rows.find((r) => r.d >= from);
     if (!s0) continue;
     start[sym] = s0.c;
-    for (const r of rows) if (r.d >= from) axis.add(r.d);
+    if (!axisDates) for (const r of rows) if (r.d >= from) axis.add(r.d);
   }
-  const dates = [...axis].sort();
+  // A symbol that does not trade on one of these dates carries its last close
+  // forward, which is what the walk below already does.
+  const dates = axisDates || [...axis].sort();
   const syms = Object.keys(start);
   const rows = {};
   for (const sym of syms) {
@@ -12142,9 +12151,12 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
     try {
       const axis = tier.dates;
       const marks = btRebalanceDays(axis, every);
-      // Prices on the shared axis for EVERY symbol, not just the opening set:
-      // a rerun can buy something that was not in the first basket.
-      const full = btMatrix(r.everySeries, asked);
+      // Prices for EVERY symbol, not just the opening set: a rerun can buy
+      // something that was not in the first basket. ON `axis`, which is the
+      // basket's own — this comment said "the shared axis" while passing a
+      // matrix built on the universe's wider union, which is not the same
+      // list of dates.
+      const full = btMatrix(r.everySeries, asked, axis);
       // One read of the whole history, folded forward as the rebalance dates
       // are walked in order. readFundamentalsAsOf would re-read everything for
       // each date, which gets worse precisely as the archive grows. The
@@ -12164,6 +12176,12 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
     } catch (err) {
       rebalError = err.message;      // a failed simulation never fails the run
       console.error('rebalance failed:', err.message);
+    }
+    // A REBALANCE THAT PRODUCES NOTHING HAS TO SAY SO. `btSimulate` returns
+    // null rather than throwing, so without this the chart loses a line, the
+    // trade log loses every block, and the page reports neither.
+    if (!rebal && !rebalError) {
+      rebalError = 'The rebalanced run could not be simulated over this window.';
     }
   }
 
@@ -12599,9 +12617,14 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
   if (every && tier.dates.length > 2) {
     try {
       const marks = btRebalanceDays(tier.dates, every);
-      // `market` above already built this matrix; reuse it rather than
-      // walking every symbol's series a second time.
-      const full = market.matrix || btMatrix(allSeries, asked);
+      // NOT `market.matrix`, though it is already built and reusing it was
+      // the first cut: it is on the UNIVERSE's axis (261 dates) and the
+      // simulation walks the BASKET's (253). Indexing one by the other reads
+      // the wrong session, and on a start date that is a market holiday the
+      // two do not even begin together — every opening symbol is null at
+      // index 0, `btSimulate` returns null, and the rebalance vanishes with
+      // no line, no trade log and no error. Reported 2026-10-03.
+      const full = btMatrix(allSeries, asked, tier.dates);
       // MOST MARKS SEE THE SAME FILINGS AS THE ONE BEFORE, because nothing
       // was filed in between — so the cache is keyed on the newest filing
       // VISIBLE at the mark rather than on the mark itself. Measured over
@@ -12641,6 +12664,10 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
     } catch (err) {
       rebalError = err.message;     // a failed simulation never fails the run
       console.error('adjusted rebalance failed:', err.message);
+    }
+    // See /backtest: a null simulation is silent on its own.
+    if (!rebal && !rebalError) {
+      rebalError = 'The rebalanced run could not be simulated over this window.';
     }
   }
   clock.evaluate = Date.now() - tRun;

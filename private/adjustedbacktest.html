@@ -65,6 +65,10 @@
 
     #abSaveMsg { font-size: 12px; color: var(--muted); align-self: center; }
     #abSaveMsg.err { color: var(--red); }
+    /* Scoped: `.err` is otherwise only defined on #abSaveMsg and #abMsg,
+       so a bare class here would draw as ordinary body text. */
+    #abTrades .err { color: var(--red); font-size: 12.5px; margin: 14px 0 0;
+      line-height: 1.6; }
     #abName { font: 400 12.5px var(--sans); padding: 7px 9px; border-radius: 8px;
       border: 1px solid var(--hair); background: var(--surface); color: var(--text);
       min-width: 190px; }
@@ -471,7 +475,17 @@
     }
 
     function trades() {
-      if (!DATA.trades || !DATA.trades.length) { $('abTrades').innerHTML = ''; return; }
+      // A rebalance that was ASKED for and produced nothing must not leave an
+      // empty space: the owner reported exactly that — "why is the monthly
+      // buy and sell not showing anymore" — against a run where the server
+      // had failed silently.
+      if (!DATA.trades || !DATA.trades.length) {
+        $('abTrades').innerHTML = (DATA.every && DATA.rebalError)
+          ? '<p class="err">Rebalancing did not run: ' + we(DATA.rebalError)
+            + ' The buy-and-hold result above is unaffected.</p>'
+          : '';
+        return;
+      }
       var open = true;
       // THE BOOK AS A LIST, at the head of every block. The rows below it say
       // what CHANGED at that date; this says what is HELD from it — a

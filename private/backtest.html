@@ -479,6 +479,15 @@
     function paintTrades(r) {
       const w = $('tradeWrap');
       const list = r.trades || [];
+      // Asked for and not delivered is a thing to report, not a hidden
+      // section — see the adjusted page's own note.
+      if (r.every && r.rebalError) {
+        w.hidden = false;
+        $('tradeNote').textContent = 'Rebalancing did not run: ' + r.rebalError
+          + ' The buy-and-hold result above is unaffected.';
+        $('trades').innerHTML = '';
+        return;
+      }
       if (!r.every || !list.some((x) => x.soldN || x.boughtN)) { w.hidden = true; return; }
       const rerun = r.mode !== 'exit';
       const nS = list.reduce((a, x) => a + x.soldN, 0);
