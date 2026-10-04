@@ -3143,6 +3143,36 @@ function stampCapDerived(rows) {
     const cap = Number(r.marketCap);
     const pct = Number(r.todayPct);
     r.capChangeToday = (cap > 0 && Number.isFinite(pct)) ? cap * pct / 100 : null;
+    // THE LIVE P/E — the one multiple on the row that moves with the price.
+    // `trailingPe` is the vendor's and arrives with the PROFILE, which rotates
+    // weekly (FUND_ROTATION_DAYS), so it is struck at a close up to seven days
+    // old and does not divide against the Price column beside it. Measured
+    // rather than assumed: the gap between the price its ratio implies and
+    // today's tracks each stock's own 1-week return at r = 0.565, decaying to
+    // 0.439 at two weeks and 0.391 at a month — the signature of a few-day-old
+    // figure. NVDA read 28.9 against a price/EPS of 29.8, struck at $227.21
+    // while the row said $233.95.
+    //
+    // It is stamped rather than stored for exactly that reason: computed here
+    // it is current the moment an intraday round lands, and a snapshot written
+    // before the field existed still carries it. Both inputs are already on
+    // the row, so it costs no read and no credit.
+    //
+    // A MULTIPLE OFF A LOSS IS ARITHMETIC, NOT CHEAPNESS, and this column is
+    // sortable over the whole universe — ascending, every loss-maker would
+    // lead as the cheapest thing on the screen. 213 rows are loss-making, and
+    // they get a dash. `eps > 0` rejects the empty before coercing, since
+    // Number(null) is 0 and finite.
+    //
+    // NO CURRENCY GUARD, and that was measured rather than waved through: the
+    // price is the TRADING currency and an absolute like revenue is the
+    // REPORTING one, so this looked like the ADR trap. It is not — the
+    // vendor's EPS is already per TRADED share, so depositary receipts agree
+    // with the vendor's own ratio to a median 2.24% against 1.17% for
+    // everything else, and the single non-USD row (SKX, EUR) agrees too.
+    const px = Number(r.price);
+    const eps = Number(r.dilutedEpsTtm);
+    r.peLive = (px > 0 && eps > 0) ? px / eps : null;
   }
 }
 

@@ -1483,7 +1483,7 @@
         <th class="group grp-rel" data-group="rel" colspan="16">Relative</th>
         <th class="group grp-trend" data-group="trend" colspan="4">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
-        <th class="group grp-fund" data-group="fund" colspan="19">Fundamentals</th>
+        <th class="group grp-fund" data-group="fund" colspan="20">Fundamentals</th>
         <th class="group grp-own" data-group="own" colspan="7">Ownership</th>
         <th rowspan="2"></th>
       </tr>
@@ -1566,7 +1566,8 @@
         <th class="grp-fund" data-key="roe" title="Return on equity (TTM)">ROE</th>
         <th class="grp-fund" data-key="forwardPe" title="Forward price/earnings ratio. Shown for reference but excluded from the Quality score when the company is loss-making, where it carries no meaning.">Fwd<br>P/E</th>
         <th class="grp-fund" data-key="peg" title="PEG ratio — &lt;1 cheap, &gt;2 expensive. Shown for reference but excluded from the Quality score when the company is loss-making: the feed still returns a healthy-looking figure there (0.16 for a company losing $878M), which is meaningless.">PEG</th>
-        <th class="grp-fund" data-key="trailingPe" title="Trailing price/earnings — the last twelve months of actual earnings, unlike the Fwd P/E beside it, which is an estimate. Blank or meaningless for a loss-maker.">Trail<br>P/E</th>
+        <th class="grp-fund" data-key="trailingPe" title="Trailing price/earnings as the DATA PROVIDER reports it — the last twelve months of actual earnings, unlike the Fwd P/E beside it, which is an estimate. It arrives with the company profile, which is re-pulled about weekly, so it is struck at a close up to seven days old and will not divide exactly against the Price column: that is what the Live P/E beside it is for. Blank or meaningless for a loss-maker.">Trail<br>P/E</th>
+        <th class="grp-fund" data-key="peLive" title="The same trailing price/earnings, recomputed here from today's Price and the EPS TTM column — so it moves with every intraday refresh and always divides against the Price on this row, where the provider's Trail P/E beside it is struck at whenever the profile was last pulled. A dash where the company loses money: a multiple off a loss is arithmetic, not cheapness, and sorting this column would otherwise put every loss-maker at the top as the cheapest thing on screen. NA for a fund — the provider's weighted figure for the holdings cannot be reproduced from a single EPS.">Live<br>P/E</th>
         <th class="grp-fund" data-key="priceToBook" title="Price ÷ book value per share, most recent quarter. The classic value measure; of little use for asset-light software and misleading for banks.">P/B</th>
         <th class="grp-fund" data-key="priceToSales" title="Price ÷ revenue per share (TTM). The one valuation measure that still works for a company with no profits.">P/S</th>
         <th class="grp-fund" data-key="evToEbitda" title="Enterprise value ÷ EBITDA — a valuation that counts debt, so it compares a leveraged company with a debt-free one fairly.">EV/<br>EBITDA</th>
@@ -3383,7 +3384,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="96">${s.error}</td>
+            <td class="na" colspan="97">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3485,7 +3486,8 @@
           ${numCell(s.forwardPe, 'grp-fund', cacheTitle)}
           ${pegCell(s.peg, 'grp-fund', cacheTitle)}`}
           ${numCell(s.trailingPe, 'grp-fund', cacheTitle)}
-          ${isFund ? naRun(8, 'grp-fund') : `
+          ${isFund ? naRun(9, 'grp-fund') : `
+          ${numCell(s.peLive, 'grp-fund', liveTitle)}
           ${numCell(s.priceToBook, 'grp-fund', cacheTitle)}
           ${numCell(s.priceToSales, 'grp-fund', cacheTitle)}
           ${numCell(s.evToEbitda, 'grp-fund', cacheTitle)}
@@ -3520,7 +3522,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 101;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 102;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3698,7 +3700,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="98">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="99">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

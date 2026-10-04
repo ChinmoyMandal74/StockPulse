@@ -277,6 +277,9 @@
     ['fund',  'Fwd P/E',        (s) => V.num(s.forwardPe)],
     ['fund',  'PEG',            (s) => V.peg(s.peg)],
     ['fund',  'Trailing P/E',   (s) => V.num(s.trailingPe)],
+    // Deliberately NOT in FUND_HAS: a fund's EPS is not something we hold, so
+    // this is NA there even though the provider's Trail P/E above it is real.
+    ['fund',  'Live P/E',       (s) => V.num(s.peLive)],
     ['fund',  'P/B',            (s) => V.num(s.priceToBook)],
     ['fund',  'P/S',            (s) => V.num(s.priceToSales)],
     ['fund',  'EV/EBITDA',      (s) => V.num(s.evToEbitda)],
