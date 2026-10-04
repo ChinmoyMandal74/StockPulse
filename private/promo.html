@@ -44,7 +44,7 @@
     #disBox { display: none; }
     #movBox { display: none; }
     #dayBox { display: none; }
-    #spotBox { display: none; }
+    #spotBox, #evoBox { display: none; }
     .panel select {
       width: 100%; box-sizing: border-box; appearance: none; -webkit-appearance: none;
       padding: 9px 30px 9px 11px; border-radius: 10px; cursor: pointer;
@@ -574,6 +574,32 @@
       <!-- One stock, in full. Three controls and no scope pickers: the card
            IS its scope, so there is no spotSector/spotIndustry/spotCap/
            spotScreen and INDUSTRY_PREFIXES is left alone. -->
+      <!-- Evolution. Like the spotlight, the card IS its own scope, so there
+           is no evoSector/evoIndustry/evoCap/evoScreen and INDUSTRY_PREFIXES
+           is left alone. THE WINDOW IS IN YEARS, not bar counts: the series
+           is quarterly, so three months of it is a single point. -->
+      <div id="evoBox">
+        <label>Stock</label>
+        <select id="evoSym"></select>
+        <label>Business measure</label>
+        <select id="evoMeasure">
+          <option value="rev" selected>Revenue</option>
+          <option value="ni">Earnings</option>
+          <option value="margin">Profit margin</option>
+        </select>
+        <label>Window</label>
+        <select id="evoWin">
+          <option value="5">Last 5 years</option>
+          <option value="10" selected>Last 10 years</option>
+          <option value="0">Everything filed</option>
+        </select>
+        <p class="hint">From the company’s own SEC filings — a trailing twelve
+          months at every filed quarter, up to eighteen years. The market-value
+          panel is today’s share count at each day’s split-adjusted close;
+          filed share counts are never restated for splits, so using them would
+          understate NVIDIA’s past value by forty times.</p>
+      </div>
+
       <div id="spotBox">
         <label>Stock</label>
         <select id="spotSym"></select>
@@ -687,6 +713,7 @@
     const TPLS = [
       { id: 'day', name: 'The day', note: 'Indexes, sectors and both ends of the move \u2014 one card' },
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
+      { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
@@ -762,6 +789,33 @@
       return null;
     }
 
+    // ONE symbol's filings series, for the Evolution card. A third channel
+    // beside the basket and the per-symbol closes, for the reason the second
+    // one exists: it answers a different question and neither of the others
+    // could supply it. Keyed on symbol AND window, since a five-year card and
+    // a ten-year one are different reads.
+    //
+    // THE REPAINT IS THE HALF THAT MATTERS. The spotlight shipped drawing
+    // nothing because its fetch landed and no render followed; so the test
+    // for "does this template care" is asked of the module, never listed here.
+    const evoCache = {};
+    const evoPending = {};
+    function getEvolution(symbol, years) {
+      if (!symbol) return null;
+      const key = symbol + '|' + years;
+      if (evoCache[key]) return evoCache[key];
+      if (evoPending[key]) return null;
+      evoPending[key] = true;
+      fetch(`/api/evolution?symbol=${encodeURIComponent(symbol)}&years=${years}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          evoCache[key] = d; delete evoPending[key];
+          if (Cards.evolutionNeed(tpl, controlOpts())) render();
+        })
+        .catch(() => { delete evoPending[key]; });
+      return null;
+    }
+
     // Every control's value, by id — the module reads no DOM, so the studio
     // hands it the panel's state and gets a card back.
     const CONTROL_IDS = [
@@ -777,6 +831,7 @@
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen',
       'dayMetric', 'dayCount', 'dayFloor',
       'spotSym', 'spotWin', 'spotProf',
+      'evoSym', 'evoMeasure', 'evoWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
       'disMode'];
     function controlOpts() {
@@ -786,7 +841,8 @@
     }
     let pulledAt = null;          // when the snapshot behind these rows was written
     const buildCard = () => Cards.build(tpl, {
-      stocks, myLists, screens: screenList, size, opts: controlOpts(), getBasket, getHistory,
+      stocks, myLists, screens: screenList, size, opts: controlOpts(),
+      getBasket, getHistory, getEvolution,
       updatedAt: pulledAt,
     });
 
@@ -850,6 +906,7 @@
       $('bubBox').style.display = tpl === 'bubble' ? 'block' : 'none';
       $('dayBox').style.display = tpl === 'day' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
+      $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       const fm = $('fundMode').value;
       $('fundMetricWrap').style.display = fm === 'rank' ? 'block' : 'none';
       $('fundSymWrap').style.display = fm === 'one' ? 'block' : 'none';
@@ -1001,6 +1058,8 @@
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
     ['spotSym', 'spotWin', 'spotProf'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'spotlight') render(); }));
+    ['evoSym', 'evoMeasure', 'evoWin'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'evolution') render(); }));
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
     $('intSlide').addEventListener('change', () => { if (tpl === 'intro') render(); });
@@ -1363,6 +1422,7 @@
         $('bubScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
+        $('evoSym').innerHTML = $('chtSym').innerHTML;
         // one sector list, built from the rows themselves so it can never
         // offer a sector nothing is in
         const secOpts = '<option value="All">All sectors</option>' +

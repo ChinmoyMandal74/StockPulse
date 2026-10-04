@@ -30,6 +30,10 @@
   let O = {};                       // control values, by control id
   let getBasket = () => null;
   let getHistory = () => null;
+  // One symbol's filings series, for the Evolution card. A third channel
+  // beside the basket and the per-symbol closes, because it answers a
+  // different question from either and both hosts cache it themselves.
+  let getEvolution = () => null;
   // ONE stock's own daily closes — { symbol, name, closes, dates, rangeLabel,
   // price, today }. A plain data field rather than a getter, because the only
   // host that has it (the stock page) already holds it: it drew the chart from
@@ -2876,6 +2880,293 @@
       '</div></div>' + chromeFoot();
   }
 
+  // ---- Evolution: what the business did, and what the market paid for it ---
+  //
+  // The one card drawn from the company's OWN FILINGS rather than from the
+  // vendor row. Trailing-twelve-month revenue and earnings at every filed
+  // quarter — up to eighteen years — with the market's value of the company
+  // on the same time axis underneath.
+  //
+  // TWO PANELS IN DOLLARS, NOT TWO REBASED LINES ON ONE PLOT, and that is a
+  // measurement rather than a preference. Rebasing needs a positive base, and
+  // earnings routinely are not: TSLA is loss-making for 38 of its 63 filed
+  // quarters, PTON for 23 of 28, CRM for 19 of 42. Rebasing a series that
+  // starts negative or crosses zero produces a number that means nothing, so
+  // the shape every other chart card uses cannot be used here. Each panel
+  // keeps its own scale — the stacked-pane convention the stock page's RSI
+  // and volume panes already follow — and the note says so, because a reader
+  // WILL compare the two shapes and is entitled to know they are not one
+  // scale.
+  //
+  // THE GAP BETWEEN THE TWO PANELS IS THE RE-RATING, which is the reading
+  // the card exists for, and the figures row states it as a number so nobody
+  // has to infer it from two pictures.
+  const EVO_MEASURES = {
+    rev: ['revenue', 'Revenue', 'money'],
+    ni: ['netIncome', 'Earnings', 'money'],
+    margin: ['margin', 'Profit margin', 'pct'],
+  };
+  const EVO_WINDOWS = { 5: '5 years', 10: '10 years', 0: 'everything filed' };
+
+  // Which stock, over how many years. Asked of the module by BOTH hosts —
+  // the studio and the phone's saved-post route — for the reason
+  // `basketDays` exists: the pairing was a hardcoded list in each of them
+  // once, and that is how the spotlight shipped drawing nothing at all.
+  function evolutionNeed(tpl, opts) {
+    if (tpl !== 'evolution') return null;
+    const o = opts || {};
+    const years = EVO_WINDOWS[o.evoWin] != null ? Number(o.evoWin) : 10;
+    return { symbol: o.evoSym || null, years };
+  }
+
+  // A raw-value chart with its OWN axis — a sibling of `lineChart` rather
+  // than a flag on it. That one rebases every series to a percentage, which
+  // is right for comparing two stocks and useless for a dollar figure; a
+  // function that draws "everything except" is harder to follow than two
+  // small ones, which is the same reason `sparkSVG` sits beside `chartSVG`.
+  //
+  // A ZERO LINE IS DRAWN ONLY WHERE THE DATA SPANS ZERO, and that is the
+  // whole difference between a revenue panel and an earnings one: profitable
+  // or not is the reading, and a line with no zero on it cannot say which
+  // side it is on. The range is the DATA'S OWN, padded in pixels rather than
+  // in value — padding in value put a zero line on a revenue chart once,
+  // implying a crossing that cannot happen.
+  let evoFillN = 0;
+  function valueChart(dates, vals, o) {
+    // A UNIQUE GRADIENT ID PER CHART. Two panels are two <svg> elements in
+    // ONE document, so a shared id makes url(#...) resolve to whichever came
+    // first -- the market-value panel painted the business panel's lime
+    // gradient, which is visible, wrong, and throws nothing.
+    const fid = 'evofill' + (++evoFillN);
+    const W = 952, H = (o && o.h) || 300, PL = 118, PR = 128, PT = 16, PB = 40;
+    const seen = vals.filter((v) => v != null && isFinite(v));
+    if (seen.length < 2 || dates.length < 2) {
+      return '<p class="s-empty">' + esc((o && o.empty) || 'Not enough filed quarters to draw.') + '</p>';
+    }
+    const fmt = (o && o.fmt) || ((v) => String(v));
+    let lo = Math.min(...seen), hi = Math.max(...seen);
+    if (lo === hi) { lo -= 1; hi += 1; }
+    // Zero belongs on the axis only when the series actually reaches it.
+    if (lo > 0 && lo < (hi - lo)) lo = 0;
+    if (hi < 0 && -hi < (hi - lo)) hi = 0;
+    const PADPX = 14;
+    const x = (i) => PL + (i / (dates.length - 1)) * (W - PL - PR);
+    const span = (H - PT - PB);
+    const y = (v) => PT + PADPX + (1 - (v - lo) / (hi - lo)) * (span - PADPX * 2);
+    let d = '', pen = false, first = -1, last = -1;
+    for (let i = 0; i < vals.length; i++) {
+      const v = vals[i];
+      if (v == null || !isFinite(v)) { pen = false; continue; }
+      if (first < 0) first = i;
+      last = i;
+      d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1);
+      pen = true;
+    }
+    const col = (o && o.color) || pal.ink(EVO_VAL);
+    let grid = '';
+    for (let g = 0; g <= 3; g++) {
+      const v = lo + (g / 3) * (hi - lo);
+      grid += '<line x1="' + PL + '" y1="' + y(v).toFixed(1) + '" x2="' + (W - PR)
+        + '" y2="' + y(v).toFixed(1) + '" stroke="' + pal.grid + '" stroke-width="1"/>'
+        + '<text x="' + (PL - 14) + '" y="' + (y(v) + 7).toFixed(1) + '" text-anchor="end"'
+        + ' font-size="18" fill="' + pal.axis + '" font-family="Geist Mono, monospace">'
+        + esc(fmt(v)) + '</text>';
+    }
+    // A ZERO LINE WITH NO LABEL, on a chart whose whole point is whether
+    // the company crossed it. The gridlines are evenly spaced VALUES, so
+    // zero is almost never one of them -- the label has to be its own, and
+    // is dropped where it would land on a gridline's.
+    if (lo < 0 && hi > 0) {
+      const yz = y(0);
+      grid += '<line x1="' + PL + '" y1="' + yz.toFixed(1) + '" x2="' + (W - PR)
+        + '" y2="' + yz.toFixed(1) + '" stroke="' + pal.zero + '" stroke-width="1.5"/>';
+      let clear = true;
+      for (let g = 0; g <= 3; g++) {
+        if (Math.abs(y(lo + (g / 3) * (hi - lo)) - yz) < 22) clear = false;
+      }
+      if (clear) {
+        grid += '<text x="' + (PL - 14) + '" y="' + (yz + 7).toFixed(1) + '" text-anchor="end"'
+          + ' font-size="18" fill="' + pal.axis + '" font-family="Geist Mono, monospace">'
+          + esc(fmt(0)) + '</text>';
+      }
+    }
+    // The fill is closed to the FLOOR of the plot, never back to the line's
+    // own start — `fill` on the stroke path closes it to its first point and
+    // paints a wedge, which this project has shipped once.
+    let area = '';
+    if (first >= 0 && last > first) {
+      const base = (lo < 0 && hi > 0) ? y(0) : (H - PB);
+      area = '<defs><linearGradient id="' + fid + '" x1="0" y1="0" x2="0" y2="1">'
+        + '<stop offset="0%" stop-color="' + col + '" stop-opacity="0.26"/>'
+        + '<stop offset="100%" stop-color="' + col + '" stop-opacity="0"/></linearGradient></defs>'
+        + '<path d="' + d + 'L' + x(last).toFixed(1) + ' ' + base.toFixed(1)
+        + 'L' + x(first).toFixed(1) + ' ' + base.toFixed(1) + 'Z" fill="url(#' + fid + ')" stroke="none"/>';
+    }
+    const endV = last >= 0 ? vals[last] : null;
+    const tag = endV == null ? '' :
+      '<text x="' + (W - PR + 12) + '" y="' + (y(endV) + 8).toFixed(1) + '" font-size="25"'
+      + ' font-weight="600" fill="' + col + '" font-family="Geist Mono, monospace">'
+      + esc(fmt(endV)) + '</text>';
+    const axis = '<text x="' + PL + '" y="' + (H - 8) + '" font-size="17" fill="' + pal.axis
+      + '" font-family="Geist Mono, monospace">' + esc(dates[0]) + '</text>'
+      + '<text x="' + (W - PR) + '" y="' + (H - 8) + '" text-anchor="end" font-size="17" fill="'
+      + pal.axis + '" font-family="Geist Mono, monospace">' + esc(dates[dates.length - 1]) + '</text>';
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block" role="img"'
+      + ' aria-label="' + esc((o && o.label) || 'chart') + '">'
+      + area + grid
+      + '<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="2.6"'
+      + ' stroke-linejoin="round" stroke-linecap="round"/>'
+      + tag + axis + '</svg>';
+  }
+
+  // then -> now, said the way a person would say it. A multiple reads better
+  // than a four-digit percentage past about 3x ("revenue grew 42 times", not
+  // "+4,135%"), and a sign change is worded rather than percentaged — the
+  // refresh report's own rule, because a company going from a -200 loss to a
+  // -50 one has cut its losses by three quarters and the arithmetic calls
+  // that -75%.
+  function evoChange(a, b) {
+    if (a == null || b == null || !isFinite(a) || !isFinite(b)) return null;
+    if (a < 0 && b >= 0) return { t: 'to profit', c: 'pos' };
+    if (a >= 0 && b < 0) return { t: 'to a loss', c: 'neg' };
+    if (a < 0 && b < 0) {
+      const w = Math.abs(b) > Math.abs(a);
+      return { t: w ? 'deeper loss' : 'smaller loss', c: w ? 'neg' : 'pos' };
+    }
+    if (a === 0) return null;
+    const r = b / a;
+    if (r >= 3) return { t: '\u00d7' + (r >= 10 ? r.toFixed(0) : r.toFixed(1)), c: 'pos' };
+    const p = (r - 1) * 100;
+    return { t: (p >= 0 ? '+' : '') + p.toFixed(0) + '%', c: p >= 0 ? 'pos' : 'neg' };
+  }
+
+  // The two panels' colours, named once. Both are in LIGHT_INK, so
+  // `pal.ink` has a value to give them on the light ground — an unmapped
+  // hex stays dark there and the line vanishes into the page, which is the
+  // failure that reads as an empty card rather than a broken one.
+  const EVO_BIZ = '#a3e635';
+  const EVO_VAL = '#60a5fa';
+
+  function tplEvolution() {
+    const sym = O.evoSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((r) => r.symbol === sym);
+    const need = evolutionNeed('evolution', O);
+    const ev = getEvolution(sym, need ? need.years : 10);
+
+    if (!row) {
+      return chromeTop() + '<div class="s-body"><div>'
+        + '<span class="s-kick">Nothing to chart</span>'
+        + '<h2 class="s-title">No row<br><span class="dim">for ' + esc(sym || 'that symbol') + '</span></h2>'
+        + '<p class="s-empty">That symbol is not on this screen.</p>'
+        + '</div></div>' + chromeFoot();
+    }
+    if (!ev) {
+      return chromeTop() + '<div class="s-body"><div>'
+        + '<span class="s-kick">Reading the filings</span>'
+        + '<h2 class="s-title">Drawing<br><span class="dim">the history\u2026</span></h2>'
+        + '</div></div>' + chromeFoot();
+    }
+    const pts = (ev.points || []).filter((p) => p && p.d);
+    // A COMPANY THAT FILES NOTHING WE CAN READ GETS A REASON, NOT AN EMPTY
+    // CHART. Measured: XOM has 0 usable trailing years, because the majors
+    // use a revenue tag `secfacts.js` does not map, and a fund files no
+    // statements at all. Both are ordinary here rather than edge cases.
+    if (pts.length < 3) {
+      return chromeTop() + '<div class="s-body"><div>'
+        + '<span class="s-kick">' + esc(nameOf(row)) + '</span>'
+        + '<h2 class="s-title">Too little<br><span class="dim">filed history</span></h2>'
+        + '<p class="s-sub wide">A trailing year needs four consecutive filed quarters, and '
+        + esc(nameOf(row)) + ' has too few stored to draw a line. A fund files no statements '
+        + 'at all, and a few large filers use tags this reader does not map.</p>'
+        + '</div></div>' + chromeFoot();
+    }
+
+    const mKey = EVO_MEASURES[O.evoMeasure] ? O.evoMeasure : 'rev';
+    const [field, mLabel, mKind] = EVO_MEASURES[mKey];
+    const dates = pts.map((p) => p.d);
+    const series = pts.map((p) => p[field]);
+    const caps = pts.map((p) => p.cap);
+    const money = (v) => (v == null ? '\u2014' : (v < 0 ? '-$' : '$') + fmtMoney(Math.abs(v)));
+    const fmtM = mKind === 'money' ? money : ((v) => (v == null ? '\u2014' : v.toFixed(0) + '%'));
+
+    // ONE "THEN" AND ONE "NOW" FOR ALL FOUR FIGURES -- the window's own ends,
+    // never each series' first non-null value. A row labelled "then -> now"
+    // whose four "then"s are four different dates is wrong in a way nothing on
+    // the card could say: a loss-making start has no multiple, and reaching
+    // forward for the first quarter that did reported a later one as though it
+    // were the start of the window.
+    const A = pts[0], Z = pts[pts.length - 1];
+    const at = (p, k) => {
+      const v = p ? p[k] : null;
+      return (v == null || !isFinite(v)) ? null : v;
+    };
+
+    // `plain` drops the colour. A MULTIPLE RISING IS GOOD FOR A HOLDER AND
+    // BAD FOR A BUYER, so green or red on it is an implied verdict -- the
+    // one thing this card must not make. Revenue, earnings and market value
+    // keep theirs: those are facts that have a direction.
+    const figure = (label, a, b, fmt, plain) => {
+      const ch = evoChange(a, b);
+      const cls = (ch && !plain) ? ' ' + ch.c : '';
+      return '<div class="evo-f"><span class="evo-fl">' + esc(label) + '</span>'
+        + '<span class="evo-fv">' + esc(fmt(a)) + ' <i>\u2192</i> ' + esc(fmt(b)) + '</span>'
+        + '<span class="evo-fc' + cls + '">' + esc(ch ? ch.t : '\u2014') + '</span></div>';
+    };
+    // A MULTIPLE IS NOT A MONEY FIGURE and has its own formatter: a P/E of
+    // 8,014 is what CRM's multiple really was in a quarter whose earnings
+    // were a rounding error, so it is printed rather than filtered — but it
+    // is printed compactly, and `trailingPe` has already refused the ones
+    // taken off a loss, which are arithmetic rather than cheapness.
+    const peF = (v) => (v == null ? '\u2014' : (v >= 1000 ? Math.round(v).toLocaleString('en-US') : v.toFixed(1)) + '\u00d7');
+
+    const span = dates[0] + ' \u2192 ' + dates[dates.length - 1];
+    const whole = ev.total != null && pts.length >= ev.total;
+    const kick = [row.sector, row.industry].filter(Boolean).join(' \u00b7 ') || 'From the filings';
+    const nm = nameOf(row);
+    const tClass = nm.length > 60 ? ' t4' : nm.length > 40 ? ' t3' : nm.length > 28 ? ' t2' : '';
+
+    // MEASURED against the real artboards at the WORST name length each one
+    // has (evo-budget.js), never chosen: the two charts plus two headings plus
+    // the figures row plus the gap have to fit the wrap, and the wrap is what
+    // the headline leaves. The spare at the worst case is 50 / 31 / 66px.
+    const tall = size.id === 'square' ? 194 : size.id === 'story' ? 545 : 330;
+    const shortH = size.id === 'square' ? 136 : size.id === 'story' ? 380 : 232;
+
+    const valuePanel = ev.hasValue
+      ? '<div class="evo-p"><span class="evo-h">What the market paid for it</span>'
+        + valueChart(dates, caps, { h: shortH, color: pal.ink(EVO_VAL), fmt: money,
+          label: 'market value' }) + '</div>'
+      // NO SHARE COUNT, NO PANEL — never a fallback to the filed count, which
+      // is the forty-fold error `evolutionSeries` exists to avoid.
+      : '<div class="evo-p"><span class="evo-h">What the market paid for it</span>'
+        + '<p class="s-empty">No current share count for ' + esc(row.symbol)
+        + ', so no market value is drawn.</p></div>';
+
+    return chromeTop() + '<div class="s-body"><div class="evo-in">'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title' + tClass + '">' + esc(nm) + '</h2>'
+      + '<p class="evo-lab">' + esc(row.symbol) + ' \u00b7 ' + pts.length + ' filed quarters \u00b7 '
+      + esc(span) + (whole ? ' \u00b7 all of it' : '') + '</p>'
+      + '<div class="evo-wrap">'
+      + '<div class="evo-p"><span class="evo-h">' + esc(mLabel)
+      + ', trailing twelve months</span>'
+      + valueChart(dates, series, { h: tall, color: pal.ink(EVO_BIZ), fmt: fmtM,
+        label: mLabel }) + '</div>'
+      + valuePanel
+      + '<div class="evo-figs">'
+      + figure('Revenue', at(A, 'revenue'), at(Z, 'revenue'), money)
+      + figure('Earnings', at(A, 'netIncome'), at(Z, 'netIncome'), money)
+      + figure('Market value', at(A, 'cap'), at(Z, 'cap'), money)
+      + figure('P/E', at(A, 'pe'), at(Z, 'pe'), peF, true)
+      + '</div></div>'
+      + '<p class="s-sub wide">Trailing twelve months at every filed quarter, from the '
+      + 'company\u2019s own SEC filings. The two panels keep their own scales. '
+      + 'Market value is today\u2019s share count at each day\u2019s split-adjusted close, so it '
+      + 'does not restate past share counts \u2014 a buyback makes the earlier multiple read low. '
+      + 'A multiple is not shown where the company lost money.</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   function tplAvatar() {
     return '<div class="avatarFull">' +
       '<div class="avGlow"></div>' +
@@ -3135,12 +3426,59 @@
     intro: tplIntro, announce: tplAnnounce,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
     bubble: tplBubble, stock: tplStock, day: tplDay, spotlight: tplSpotlight,
-    disclaimer: tplDisclaimer, howto: tplHowTo,
+    disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
   // page and styled in the other is exactly the drift this module prevents.
   const STYLE = `
+    /* ---- Evolution: the business, then what the market paid for it -------
+       Two stacked panels on one time axis plus a figures row. The wrapper
+       FILLS what the body leaves and the blocks spread through it, which is
+       the day card's rule: a block whose height is its content gets the
+       leftover room split evenly at its ends, and that is how a card ends up
+       with two empty bands and nothing in the middle.
+       EVERY VALUE IS A TOKEN. A hex literal here is invisible on the light
+       ground rather than wrong, which is the harder failure to spot. */
+    .evo-in { display: flex; flex-direction: column; height: 100%; }
+    .evo-lab { margin: 10px 0 0; font: 500 21px var(--mono); color: var(--faint);
+               letter-spacing: 0.01em; }
+    .evo-wrap { flex: 1; display: flex; flex-direction: column;
+                justify-content: space-evenly; gap: 10px; min-height: 0; }
+    .evo-p { min-width: 0; }
+    .evo-h { display: block; font: 600 20px var(--sans); letter-spacing: 0.08em;
+             text-transform: uppercase; color: var(--faint); margin: 0 0 4px; }
+    /* A GRID, so the four cells are equal whatever is in them, with a
+       minmax(0,1fr) floor: a plain 1fr is minmax(auto,1fr) and one long
+       figure would hold its column open and push the row past the artboard,
+       which this project has shipped twice. */
+    .evo-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 12px; margin: 4px 0 0; }
+    .evo-f { min-width: 0; border-top: 1px solid var(--hair-2); padding: 12px 0 0; }
+    .evo-fl { display: block; font: 600 17px var(--sans); letter-spacing: 0.08em;
+              text-transform: uppercase; color: var(--faint); }
+    /* A QUARTER OF 952px IS 227px, and "$310.6B -> $466.6B" is seventeen
+       monospace characters -- which does not fit at 25px, and WAS CLIPPED on
+       the 4:5 on the one figure the card is most about. Found by screenshot;
+       there is a check that no figure's text overflows its own cell. */
+    /* NO PER-ARTBOARD SIZE ON THIS ONE. Every artboard is 1080px wide, so a
+       quarter of the figures row is the same 227px on all three -- the story
+       carried 30px and clipped all four figures. */
+    .evo-fv { display: block; margin: 5px 0 0; font: 600 21px var(--mono);
+              color: var(--text); white-space: nowrap; overflow: hidden;
+              text-overflow: ellipsis; }
+    .evo-fv i { font-style: normal; color: var(--faint); padding: 0 2px; }
+    .evo-fc { display: block; margin: 3px 0 0; font: 600 21px var(--mono);
+              color: var(--muted); }
+    .evo-fc.pos { color: var(--green); }
+    .evo-fc.neg { color: var(--red); }
+    .sz-square .evo-lab { font-size: 19px; }
+    .sz-square .evo-fc { font-size: 18px; }
+    .sz-story .evo-lab { font-size: 26px; }
+    .sz-story .evo-h { font-size: 24px; }
+    .sz-story .evo-fl { font-size: 20px; }
+    .sz-story .evo-fc { font-size: 25px; }
+
     /* ---- the artboard ---------------------------------------------------
        The board the card is drawn on: 1080 wide, its own ground and aura, and
        the padding every card lays out inside. It lived in promo.html AND in
@@ -3408,9 +3746,9 @@
        Holdings" takes three lines at that size and two at this one, and the
        room a third line costs comes straight out of the chart. */
     .sp-in .s-title { font-size: 58px; }
-    .sp-in .s-title.t2 { font-size: 46px; letter-spacing: -0.04em; }
-    .sp-in .s-title.t3 { font-size: 38px; letter-spacing: -0.035em; }
-    .sp-in .s-title.t4 { font-size: 30px; letter-spacing: -0.03em; line-height: 1.12; }
+    .sp-in .s-title.t2, .evo-in .s-title.t2 { font-size: 46px; letter-spacing: -0.04em; }
+    .sp-in .s-title.t3, .evo-in .s-title.t3 { font-size: 38px; letter-spacing: -0.035em; }
+    .sp-in .s-title.t4, .evo-in .s-title.t4 { font-size: 30px; letter-spacing: -0.03em; line-height: 1.12; }
     .sp-block { min-width: 0; }
     .sp-head { font: 600 16px var(--mono); text-transform: uppercase;
                letter-spacing: 0.16em; color: var(--muted);
@@ -3459,9 +3797,9 @@
        it to 212 against the post's 392) and every block tightens with it.
        Measured on the sweep rather than guessed. */
     .sz-square .sp-in .s-title { font-size: 50px; }
-    .sz-square .sp-in .s-title.t2 { font-size: 41px; }
-    .sz-square .sp-in .s-title.t3 { font-size: 34px; }
-    .sz-square .sp-in .s-title.t4 { font-size: 27px; }
+    .sz-square .sp-in .s-title.t2, .sz-square .evo-in .s-title.t2 { font-size: 41px; }
+    .sz-square .sp-in .s-title.t3, .sz-square .evo-in .s-title.t3 { font-size: 34px; }
+    .sz-square .sp-in .s-title.t4, .sz-square .evo-in .s-title.t4 { font-size: 27px; }
     .sz-square .sp-sub { font-size: 27px; margin-top: 7px; }
     .sz-square .sp-wrap { gap: 12px; }
     .sz-square .sp-head { margin-bottom: 10px; padding-bottom: 6px; font-size: 15px; }
@@ -3478,9 +3816,9 @@
        records for its own first cut, where 993px of content sat in a 1920px
        frame and the bottom half was empty. */
     .sz-story .sp-in .s-title { font-size: 74px; }
-    .sz-story .sp-in .s-title.t2 { font-size: 58px; }
-    .sz-story .sp-in .s-title.t3 { font-size: 48px; }
-    .sz-story .sp-in .s-title.t4 { font-size: 38px; }
+    .sz-story .sp-in .s-title.t2, .sz-story .evo-in .s-title.t2 { font-size: 58px; }
+    .sz-story .sp-in .s-title.t3, .sz-story .evo-in .s-title.t3 { font-size: 48px; }
+    .sz-story .sp-in .s-title.t4, .sz-story .evo-in .s-title.t4 { font-size: 38px; }
     .sz-story .sp-sub { font-size: 42px; margin-top: 14px; }
     .sz-story .sp-wrap { gap: 26px; }
     .sz-story .sp-head { font-size: 19px; padding-bottom: 11px; margin-bottom: 18px; }
@@ -4053,6 +4391,12 @@
     // server's saved-post builder read the SAME catalogue rather than
     // restating it, the way CHART_WINDOWS already is.
     CHART_MAS, chartHistoryNeed,
+    // Which stock and how many years the Evolution card wants. Asked of the
+    // module by the studio AND by the phone's saved-post route, so the two
+    // cannot ask for different things — the pairing `basketDays` records.
+    evolutionNeed,
+    EVO_WINDOWS,
+    EVO_MEASURES,
     // Which classes the artboard needs for the chosen ground. Three hosts
     // draw an .s-art and none of them holds the palette; see themeOf.
     // Takes the TEMPLATE as well as the options, because which control
@@ -4111,6 +4455,7 @@
       pal = themeOf(id, O);
       getBasket = c.getBasket || (() => null);
       getHistory = c.getHistory || (() => null);
+      getEvolution = c.getEvolution || (() => null);
       chartOne = c.chart || null;
       const fn = BUILDERS[id] || BUILDERS.movers;
       return fn();

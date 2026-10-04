@@ -9339,12 +9339,23 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
     }
   }
 
+  // The Evolution card reads the filings rather than the archive. Which
+  // stock and how many years is Cards' own question — the same bargain
+  // `basketDays` and `chartHistoryNeed` already make, so the studio and this
+  // route cannot ask for different things.
+  let evo = null;
+  const evoNeed = Cards.evolutionNeed(post.tpl, post.opts || {});
+  if (evoNeed && evoNeed.symbol) {
+    try { evo = await evolutionFor(evoNeed.symbol, evoNeed.years); } catch { evo = null; }
+  }
+
   const size = POST_SIZES[post.size];
   let html = '';
   try {
     html = Cards.build(post.tpl, {
       stocks, myLists, screens, size, opts: post.opts, getBasket: () => basket,
       getHistory: () => hist,
+      getEvolution: () => evo,
       updatedAt: (snap && snap.updatedAt) || null,
     });
   } catch (e) {
@@ -9877,6 +9888,89 @@ app.get('/api/sec/coverage', requireAdmin, route(async (req, res) => {
 }));
 
 // The page's own read. GUESTS INCLUDED — these are public filings and the
+// ---- the Evolution card's series ------------------------------------------
+//
+// One company's trailing-twelve-month revenue and earnings at every filed
+// quarter, with the market's value of it alongside. The promo studio and the
+// phone's saved-post route both read it.
+//
+// A ROUTE OF ITS OWN RATHER THAN A FIELD ON `/api/sec`, which every stock page
+// view already fetches: this needs the bar archive and the current share
+// count, and adding either to that route would make the stock page pay for a
+// series one promo template draws. The same reasoning that keeps `/api/sec`
+// off the snapshot.
+//
+// THE SHARE COUNT COMES FROM `readProfile` — ONE ROW. The snapshot would
+// answer too and is ~1.3MB; `/api/sec` records why that is not a trade worth
+// making on a per-stock path.
+//
+// Display only. Nothing here is stamped onto a snapshot row, and the response
+// carries no verdict, no flag and no rule — `evolution-test.js` asserts that
+// against the real payload, because an EDGAR series reaching the Advice
+// column is the one thing this class of feature must never do.
+const EVO_YEARS = { 5: 5, 10: 10, 0: 0 };          // 0 = everything stored
+const evoCache = new Map();
+const EVO_CACHE_MS = 10 * 60 * 1000;
+
+// ONE assembly, two callers — this route and the phone's saved-post route.
+// Two copies would be two chances to get the bars' own ordering wrong, and
+// `readBars` returns NEWEST FIRST under the name `datetime`.
+async function evolutionFor(symbol, years) {
+  const key = symbol + '|' + years;
+  const hit = evoCache.get(key);
+  if (hit && Date.now() - hit.at < EVO_CACHE_MS) return hit.body;
+
+  const [rows, prof, bars] = await Promise.all([
+    store.readSecFacts(symbol),
+    store.readProfile(symbol).catch(() => null),
+    // Deep enough for the longest window the card offers. One symbol, so this
+    // is a few thousand rows on the (symbol, d) primary key, not a scan.
+    store.readBars(symbol, 5200).catch(() => []),
+  ]);
+  const closes = (bars || []).slice().reverse()
+    .map((b) => ({ d: b.datetime, close: b.close }));
+  const out = Adjusted.evolutionSeries(
+    SecFacts, rows, closes, prof ? prof.sharesOutstanding : null);
+
+  // The window is in YEARS because the series is QUARTERLY — a bar count is
+  // the wrong unit for a measure that moves four times a year, and three
+  // months of it would be a single point.
+  let points = out.points;
+  if (years > 0 && points.length) {
+    const cut = new Date();
+    cut.setFullYear(cut.getFullYear() - years);
+    const from = cut.toISOString().slice(0, 10);
+    const inWin = points.filter((p) => p.d >= from);
+    // Never hand back a window too short to be a line. A company with four
+    // filed quarters inside five years still has a history worth drawing.
+    if (inWin.length >= 3) points = inWin;
+  }
+  const body = {
+    symbol,
+    years,
+    points,
+    hasValue: out.hasValue,
+    sharesToday: out.sharesToday,
+    // How many quarters the trail holds in total, so the card can say when
+    // the window it drew is the whole of what was filed rather than a cut.
+    total: out.points.length,
+  };
+  evoCache.set(key, { at: Date.now(), body });
+  return body;
+}
+
+app.get('/api/evolution', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!symbol) return res.status(400).json({ error: 'symbol required' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  const years = EVO_YEARS[String(req.query.years || 10)] != null
+    ? Number(req.query.years || 10) : 10;
+  res.json(await evolutionFor(symbol, years));
+}));
+
 // owner asked for them to be visible — but symbol-guarded like every other
 // per-stock route, so the preview stays twenty stocks wide.
 app.get('/api/sec', requireAuth, route(async (req, res) => {

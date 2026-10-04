@@ -117,6 +117,103 @@
     return c / e;
   }
 
+  // ---- the evolution series, for the Evolution promo card ------------------
+  //
+  // A DISPLAY series and nothing else: it carries no verdict, no rule and no
+  // engine state, so the boundary at the top of this file is untouched. It
+  // lives here because it needs `trailingPe`, and a second copy of "a
+  // multiple off a loss is arithmetic, not cheapness" is the drift this
+  // module exists to prevent.
+  //
+  // MARKET VALUE IS TODAY'S SHARE COUNT AT EACH DAY'S ADJUSTED CLOSE, and
+  // that is the whole reason this function exists rather than the obvious
+  // `sharesDiluted(t) x close(t)`.
+  //
+  // MEASURED 2026-10-04, and the naive version is wrong by FORTY TIMES. The
+  // bar archive is split-adjusted — `persistBars` detects a split and
+  // rewrites the symbol's whole history — while a filing's diluted share
+  // count is AS FILED and is never restated. So a 2015 share count against a
+  // 2015 adjusted close understates the market cap by the cumulative split
+  // factor since. NVDA (4:1 in 2021, 10:1 in 2024) came back with a MEDIAN
+  // P/E of 1.0 and a minimum of 0.3 — NVIDIA has never traded at one times
+  // earnings, which is the only reason it was caught.
+  //
+  // RECOVERING THE SPLIT FACTOR FROM THE SHARE SERIES WAS TRIED AND REFUSED.
+  // The quarter-on-quarter jumps are not clean: AAPL's 7:1 reads x6.8389 and
+  // TSLA's 5:1 reads x5.2090, because an ordinary buyback moves the count in
+  // the same quarter and the filed dates straddle the split; and NVDA's trail
+  // carries a junk row (564.5M -> 0.5M -> 582.6M, a x1017 "jump") that any
+  // threshold would take for a split. A heuristic over junk, producing a
+  // money figure on a card people post publicly, is not a thing to ship.
+  //
+  // An adjusted close is ALREADY expressed in today's share units, so
+  // multiplying it by today's share count is dimensionally consistent at
+  // every date and the split factor cancels EXACTLY. What is left is net
+  // share issuance since t — slow, bounded, and in a knowable direction
+  // (a buyback understates the past multiple, dilution overstates it) —
+  // against a factor of forty. Verified at the anchor: cap* today reconciles
+  // with the vendor's own market cap to within 2% on 11 of 12 symbols.
+  //
+  // THE CARD SAYS SO IN ITS OWN NOTE. The caveat is stated rather than
+  // buried, because "market value" that is not quite the historical market
+  // cap is exactly the kind of thing a reader would otherwise never be told.
+  //
+  //   SecFacts    — passed in, so this module stays loadable in a browser
+  //   rows        — one symbol's sec_facts trail
+  //   closes      — [{ d, close }] OLDEST FIRST
+  //   sharesToday — the CURRENT share count, or null
+  function evolutionSeries(SecFacts, rows, closes, sharesToday) {
+    const all = Array.isArray(rows) ? rows : [];
+    const bars = Array.isArray(closes) ? closes : [];
+    // `latestFilled` rather than `latestPerPeriod`, matching the stock page's
+    // own FUND strip: filling only ever supplies a figure the winning filing
+    // left BLANK, so the two can never disagree about a NUMBER — this merely
+    // has points where that one has none. Measured when it was introduced:
+    // a full trailing year goes from 65% of filers to 90%.
+    const ttm = SecFacts.ttmSeries(all.length
+      ? SecFacts.latestFilled(all).filter((r) => r.periodType === 'Q') : []);
+    // Reject the empty before coercing: Number(null) is 0 and finite, and a
+    // fabricated share count of zero would put every market value at nothing.
+    const sh = num(sharesToday);
+    const shares = (sh != null && sh > 0) ? sh : null;
+
+    // The last close ON OR BEFORE a period end. A quarter end is routinely a
+    // weekend — 31 December, 30 June — so an exact-date lookup would drop
+    // about two points in seven for no reason.
+    let cur = 0;
+    const points = [];
+    for (const t of ttm) {
+      while (cur + 1 < bars.length && bars[cur + 1].d <= t.d) cur++;
+      const bar = (bars.length && bars[cur] && bars[cur].d <= t.d) ? bars[cur] : null;
+      const close = bar ? num(bar.close) : null;
+      const rev = num(t.revenue);
+      const ni = num(t.netIncome);
+      // MIN_CLOSE is the archive's own bad-bar floor: a sub-cent close is a
+      // delisted shell or an unadjusted reverse split, and SOLS printed
+      // +56,129,902% on a live page off exactly that shape.
+      const px = (close != null && close >= 0.01) ? close : null;
+      const cap = (shares != null && px != null) ? shares * px : null;
+      points.push({
+        d: t.d,
+        revenue: rev,
+        netIncome: ni,
+        // A margin off no revenue is a division, not a margin.
+        margin: (rev != null && rev > 0 && ni != null) ? (ni / rev) * 100 : null,
+        cap,
+        pe: trailingPe(cap, ni),
+      });
+    }
+    return {
+      points,
+      // Whether a market value could be computed AT ALL. A card with no share
+      // count draws the business alone and says why, rather than drawing a
+      // value panel of nothing or — far worse — falling back to the filed
+      // count and reintroducing the forty-fold error above.
+      hasValue: shares != null && points.some((p) => p.cap != null),
+      sharesToday: shares,
+    };
+  }
+
   // ---- the share count, and the one junk value that would discredit it -----
   //
   // Net income divided by diluted EPS is the SAME QUANTITY read a second way
@@ -388,6 +485,7 @@
   return {
     FIELDS, SOURCES, SHARES_BAD_RATIO, SHORT_LAG_DAYS,
     trailingPe, impliedShares, newestShares, fundamentalsFrom, fundamentalsAsOf,
+    evolutionSeries,
     shortPctFloat, shortCutoff, overlayFrom, engineRow, verdict,
   };
 }));
