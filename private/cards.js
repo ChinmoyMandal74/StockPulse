@@ -3030,12 +3030,36 @@
     // The fill is closed to the FLOOR of the plot, never back to the line's
     // own start — `fill` on the stroke path closes it to its first point and
     // paints a wedge, which this project has shipped once.
+    //
+    // THE FILL'S STRENGTH FOLLOWS THE BASELINE, and that is a decision about
+    // what the card CLAIMS rather than a style choice. A filled area is read
+    // as a QUANTITY measured from the baseline; a bare line is read as a
+    // shape. So where zero genuinely sits on the axis the area is a true
+    // quantity and earns a solid fill, and where the axis is truncated it
+    // stays the faint wash it has always been -- a solid fill there would be
+    // the misleading bar axis this project already recorded on the
+    // short-interest strip, with the invisible mass below the floor doing the
+    // lying. Measured over 99 series (12 symbols x 3 windows): 62 are already
+    // zero-based and 11 cross zero, so 73 of 99 take the solid fill; forcing
+    // zero on the other 26 would put PG's five-year revenue in the top 10% of
+    // the panel. A reader is never left guessing which they have -- the
+    // bottom gridline is LABELLED, so a solid fill always sits above a $0.
     let area = '';
     if (first >= 0 && last > first) {
-      const base = (lo < 0 && hi > 0) ? y(0) : (H - PB);
+      // ZERO IS ON THE AXIS WHEREVER THE RANGE REACHES IT, which is three
+      // cases and not one: a series that crosses zero, one whose floor the
+      // rule above pulled to zero, and an all-negative one whose CEILING it
+      // pulled to zero. That last was closing to the plot FLOOR, so a
+      // company loss-making across the whole window had its mass drawn
+      // hanging off the bottom of the panel while zero sat at the top --
+      // upside down, and invisible at 0.26 alpha. It hangs from zero now.
+      const zeroBase = lo <= 0 && hi >= 0;
+      const base = zeroBase ? y(0) : (H - PB);
+      const a0 = zeroBase ? '0.42' : '0.26';
+      const a1 = zeroBase ? '0.05' : '0';
       area = '<defs><linearGradient id="' + fid + '" x1="0" y1="0" x2="0" y2="1">'
-        + '<stop offset="0%" stop-color="' + col + '" stop-opacity="0.26"/>'
-        + '<stop offset="100%" stop-color="' + col + '" stop-opacity="0"/></linearGradient></defs>'
+        + '<stop offset="0%" stop-color="' + col + '" stop-opacity="' + a0 + '"/>'
+        + '<stop offset="100%" stop-color="' + col + '" stop-opacity="' + a1 + '"/></linearGradient></defs>'
         + '<path d="' + d + 'L' + x(last).toFixed(1) + ' ' + base.toFixed(1)
         + 'L' + x(first).toFixed(1) + ' ' + base.toFixed(1) + 'Z" fill="url(#' + fid + ')" stroke="none"/>';
     }
