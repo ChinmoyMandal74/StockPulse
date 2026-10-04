@@ -1001,6 +1001,31 @@ const SCHEMA = [
      status     text,
      error      text
    )`,
+
+  // THE BUILD LOG -- one row per commit in this repository's history, which is
+  // the only complete record of what was changed and why. It is a CACHE of a
+  // record that lives elsewhere (git, and GitHub's copy of it), so unlike
+  // `fundamentals_history` nothing here is irrecoverable: delete the table and
+  // one refresh rebuilds it.
+  //
+  // `lead` is the FIRST PARAGRAPH of the commit message, collapsed to one
+  // line. Measured over the 617 commits of 2026-10-04: the full bodies are
+  // 884KB and the lead paragraphs 180KB (median 288 chars, max 896), so the
+  // lead is what a page can ship whole and the full text is one link away on
+  // GitHub. `msg_len` keeps the full length even though the text is not
+  // stored, because "the average change carries 1,400 characters of
+  // explanation" is the statistic the page exists to report.
+  `create table if not exists build_log (
+     sha      text primary key,
+     at       text not null,
+     subject  text not null,
+     lead     text,
+     msg_len  integer not null default 0
+   )`,
+  // The page reads newest-first; without this that is an ordered walk of the
+  // whole table. Small today (617 rows, ~20 a day) and deliberately indexed
+  // anyway, because the read is `order by at desc` on every load.
+  'create index if not exists idx_buildlog_at on build_log (at, sha)',
 ];
 
 // Columns added after a table shipped. SQLite has no "add column if not
@@ -5565,6 +5590,119 @@ async function readNewsState() {
   return Object.fromEntries(r.rows.map((x) => [x.symbol, Number(x.fetched_at)]));
 }
 
+// ===========================================================================
+// The build log. A cache of this repository's own commit history, read by
+// /buildlog. Three operations: read it all, write a batch, and report what is
+// held so a refresh knows where to stop.
+// ===========================================================================
+
+// Newest first, which is the order the page draws. 617 rows at ~350 bytes is
+// one small read; there is no windowing because the page's whole claim is
+// that it shows EVERY change.
+async function readBuildLog() {
+  const r = await db.execute(
+    'select sha, at, subject, lead, msg_len from build_log order by at desc, sha desc');
+  return r.rows.map((x) => ({
+    sha: String(x.sha),
+    at: String(x.at),
+    subject: String(x.subject),
+    lead: x.lead == null ? '' : String(x.lead),
+    msgLen: Number(x.msg_len) || 0,
+  }));
+}
+
+// What is held, for the refresh and for the page's own "last checked" line.
+// Three aggregates over a small table rather than reading it to count.
+async function buildLogState() {
+  const r = await db.execute(
+    'select count(*) as n, max(at) as newest, min(at) as oldest from build_log');
+  const row = r.rows[0] || {};
+  return {
+    n: Number(row.n) || 0,
+    newest: row.newest ? String(row.newest) : null,
+    oldest: row.oldest ? String(row.oldest) : null,
+  };
+}
+
+// THE BUILD LOG'S OWN TWO FACTS, in one app_meta row rather than two.
+//
+// `checked` is WHEN GITHUB WAS LAST ASKED, which is a different fact from the
+// date of the newest change it returned: a log current to Tuesday might have
+// been checked a minute ago or a fortnight ago, and only one of those says
+// the page is being kept up.
+//
+// `complete` is WHETHER THE HISTORY HAS EVER BEEN WALKED TO ITS END, and it
+// is what makes an incremental refresh safe. The refresh normally stops at
+// the first page carrying nothing new, which is one request -- but that rule
+// alone cannot heal a seed that died part-way: a run that read pages 1 and 2
+// and then dropped leaves the store knowing all of page 1, so the next
+// refresh stops there and pages 3 onward are missing FOR EVER. Until a walk
+// has actually run off the end of the history, every refresh walks the whole
+// thing; after that it goes back to one request.
+async function buildLogMeta() {
+  const r = await db.execute("select value from app_meta where key = 'buildlog_meta'");
+  if (!r.rows.length) return { checked: null, complete: false };
+  try {
+    const v = JSON.parse(String(r.rows[0].value || '{}')) || {};
+    return { checked: v.checked || null, complete: v.complete === true };
+  } catch (e) {
+    return { checked: null, complete: false };
+  }
+}
+async function writeBuildLogMeta(meta) {
+  const v = JSON.stringify({
+    checked: (meta && meta.checked) || null,
+    complete: !!(meta && meta.complete),
+  });
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('buildlog_meta', ?)",
+    args: [v],
+  });
+}
+
+// WHICH OF THESE WE ALREADY HOLD. Asked one page of 100 shas at a time, so a
+// refresh never reads the table to find out what it has: the primary key
+// covers `select sha ... where sha in (...)`, which is 100 indexed lookups
+// against reading 617 rows of text to collect the same answer.
+async function buildLogKnown(shas) {
+  const list = (shas || []).map(String).filter(Boolean);
+  if (!list.length) return new Set();
+  const marks = list.map(() => '?').join(', ');
+  const r = await db.execute({
+    sql: `select sha from build_log where sha in (${marks})`,
+    args: list,
+  });
+  return new Set(r.rows.map((x) => String(x.sha)));
+}
+
+// MULTI-ROW INSERTS, chunked -- the `tech_history` measurement, where the
+// cost on this database turned out to be per STATEMENT rather than per row
+// and batching was 23x. A commit never changes once made, so this is an
+// append in practice; `on conflict` makes a re-run idempotent rather than a
+// duplicate-key failure.
+async function upsertBuildLog(rows) {
+  const list = (rows || []).filter((r) => r && r.sha && r.at && r.subject);
+  if (!list.length) return 0;
+  const CH = 100;
+  for (let i = 0; i < list.length; i += CH) {
+    const part = list.slice(i, i + CH);
+    const vals = part.map(() => '(?, ?, ?, ?, ?)').join(', ');
+    const args = [];
+    for (const r of part) {
+      args.push(r.sha, r.at, r.subject, r.lead || '', Number(r.msgLen) || 0);
+    }
+    await db.execute({
+      sql: `insert into build_log (sha, at, subject, lead, msg_len)
+            values ${vals}
+            on conflict(sha) do update set
+              at = excluded.at, subject = excluded.subject,
+              lead = excluded.lead, msg_len = excluded.msg_len`,
+      args,
+    });
+  }
+  return list.length;
+}
+
 module.exports = {
   db,
   // Exported so `route()` in server.js can say "the connection dropped"
@@ -5574,6 +5712,8 @@ module.exports = {
   init,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
   setSecLastResults,
+  readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
+  buildLogMeta, writeBuildLogMeta,
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
   writeShortInterest, readShortInterest, readShortLatestFor, readShortAsOfFor,
   readShortRecentFor,

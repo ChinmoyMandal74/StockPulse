@@ -524,6 +524,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/adjusted.html': '/adjusted',
                       '/adjustedbacktest.html': '/adjustedbacktest',
                       '/architecture.html': '/architecture', '/themes.html': '/themes',
+                      '/buildlog.html': '/buildlog',
                       // no symbols in that path, so it opens with both pickers empty
                       '/compare.html': '/compare',
                       '/consolidated.html': '/consolidated',
@@ -1327,6 +1328,19 @@ app.get('/architecture', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'private', 'architecture.html'));
 }));
 
+// Admin only: what it took to build this, read out of the repository's own
+// commit history. ADMIN ONLY IS A PRESENTATION CHOICE HERE, NOT A
+// CONFIDENTIALITY ONE -- the repository is public, so this same history is
+// already readable on GitHub by anyone who finds it, and every entry on the
+// page links there. The gate exists because the page is written to be SHOWN
+// rather than browsed: it is a narrative with a hand-written half, and the
+// owner should be the one who decides when a reader sees it. Opening it to
+// members later is this one line.
+app.get('/buildlog', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'buildlog');
+  res.sendFile(path.join(__dirname, 'private', 'buildlog.html'));
+}));
 // Admin only: the advice backtest. It is the one page that produces a number
 // that looks like performance, which is exactly why it is not a member surface.
 app.get('/backtest', route(async (req, res) => {
@@ -13912,6 +13926,295 @@ store.init().then(
   () => console.log('Turso: schema ready'),
   (err) => console.error('Turso: schema init failed —', err.message)
 );
+
+// ===========================================================================
+// THE BUILD LOG -- /buildlog, and the two routes behind it.
+//
+// The record of what was changed and why already exists: it is this
+// repository's commit history. Nothing here re-derives it or writes it down a
+// second time; the only work is fetching it, caching it, and grouping it.
+//
+// IT CANNOT COME FROM GIT AT REQUEST TIME. Vercel does not ship the .git
+// directory with the function, so there is no repository on disk to read --
+// which is why the source is GitHub's API rather than a child process, and
+// why a REFRESH is possible at all without a deploy. Measured 2026-10-04: the
+// repository is public, so the commits endpoint answers with no token and
+// serves the full commit message. A token only raises the rate limit.
+// ===========================================================================
+
+const BUILD_REPO = String(process.env.GITHUB_REPO || 'ChinmoyMandal74/StockPulse').trim();
+const GITHUB_TOKEN = String(process.env.GITHUB_TOKEN || '').trim();
+// GitHub refuses a request with no User-Agent. Ours names the app and, where
+// one is configured, a contact -- the same bargain SEC_UA strikes.
+const BUILD_UA = String(process.env.GITHUB_UA
+  || (SEC_CONTACT ? `TickrLab-buildlog (${SEC_CONTACT})` : 'TickrLab-buildlog')).trim();
+const BUILDLOG_PER_PAGE = 100;              // GitHub's own maximum
+const BUILDLOG_MAX_PAGES = Number(process.env.BUILDLOG_MAX_PAGES || 15);
+const BUILDLOG_LEAD_MAX = 600;              // measured max lead is 896; see below
+const BUILDLOG_TTL_MS = 5 * 60 * 1000;
+
+// A commit message is one subject line, a blank line, then the body. GitHub
+// hands over the whole thing in one string, so the split is ours to make.
+function splitCommitMessage(message) {
+  const m = String(message == null ? '' : message).replace(/\r\n/g, '\n');
+  const i = m.indexOf('\n');
+  return {
+    subject: (i < 0 ? m : m.slice(0, i)).trim(),
+    body: i < 0 ? '' : m.slice(i + 1).trim(),
+    len: m.trim().length,
+  };
+}
+
+// THE FIRST PARAGRAPH IS THE THESIS, which is what makes a list of 617
+// changes readable rather than a wall. Measured over the history on
+// 2026-10-04: full bodies are 884KB and first paragraphs 180KB, median 288
+// characters -- so the lead ships whole and the full text is one link away.
+//
+// A body that is NOTHING BUT THE ATTRIBUTION TRAILER has no lead. Those
+// trailers sit in their own paragraph, so they are normally skipped already;
+// this is the case where the trailer is the entire body.
+function leadParagraph(body) {
+  const t = String(body == null ? '' : body).trim();
+  if (!t) return '';
+  let p = t.split(/\n\s*\n/)[0].replace(/\s+/g, ' ').trim();
+  if (/^(Co-Authored-By|Signed-off-by|Generated with)\b/i.test(p)) return '';
+  if (p.length > BUILDLOG_LEAD_MAX) {
+    p = p.slice(0, BUILDLOG_LEAD_MAX - 1).replace(/\s+\S*$/, '') + '…';
+  }
+  return p;
+}
+
+// One page of commits, newest first.
+//
+// THE WORDS IN AN ERROR ARE OURS, NEVER THE PROVIDER'S -- an upstream body can
+// restate the request, and the token travels in the same headers. A throttle
+// is reported as a WAIT rather than a failure, because that is what it is:
+// unauthenticated GitHub allows 60 requests an hour per address and a normal
+// refresh costs one, so being told to come back is not the page breaking.
+async function fetchCommitPage(page) {
+  const url = `https://api.github.com/repos/${BUILD_REPO}/commits`
+    + `?per_page=${BUILDLOG_PER_PAGE}&page=${page}`;
+  const headers = {
+    accept: 'application/vnd.github+json',
+    'user-agent': BUILD_UA,
+    'x-github-api-version': '2022-11-28',
+  };
+  if (GITHUB_TOKEN) headers.authorization = 'Bearer ' + GITHUB_TOKEN;
+
+  let res;
+  try {
+    res = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+  } catch (e) {
+    const err = new Error('Could not reach GitHub.');
+    err.reason = 'unreachable';
+    throw err;
+  }
+  if (res.status === 403 || res.status === 429) {
+    const reset = Number(res.headers.get('x-ratelimit-reset') || 0);
+    const mins = reset
+      ? Math.max(1, Math.ceil((reset * 1000 - Date.now()) / 60000))
+      : null;
+    const err = new Error('GitHub is rate-limiting this address.');
+    err.reason = 'throttled';
+    err.retryMins = mins;
+    throw err;
+  }
+  if (res.status === 404) {
+    const err = new Error('GitHub does not have that repository, or it is private.');
+    err.reason = 'missing';
+    throw err;
+  }
+  if (!res.ok) {
+    const err = new Error('GitHub answered ' + res.status + '.');
+    err.reason = 'status';
+    throw err;
+  }
+  const body = await res.json().catch(() => null);
+  if (!Array.isArray(body)) {
+    const err = new Error('GitHub answered with something that is not a list of commits.');
+    err.reason = 'shape';
+    throw err;
+  }
+  return body;
+}
+
+let buildLogCache = null;      // { at, payload }
+
+// Pull whatever is new. Normally ONE request.
+//
+// IT STOPS WHEN A PAGE YIELDS NOTHING NEW, never at the first commit it
+// recognises. Those sound the same and are not: a run interrupted part-way
+// leaves a hole in the MIDDLE of the history, and stopping at the first
+// recognised commit would leave that hole there for ever. Walking on while
+// any page still carries something new heals it -- noteTechMark's rule.
+app.post('/api/buildlog/refresh', requireAdmin, route(async (req, res) => {
+  const before = await store.buildLogMeta();
+  // A FULL WALK UNTIL THE HISTORY HAS BEEN READ TO ITS END AT LEAST ONCE.
+  // See writeBuildLogMeta: the incremental stop cannot heal a seed that died
+  // part-way, so it is only switched on once a walk has run off the end.
+  const full = String(req.query.full || '') === '1' || !before.complete;
+  let added = 0;
+  let scanned = 0;
+  let pages = 0;
+  let ranOff = false;          // did we reach the end of the history?
+
+  for (let page = 1; page <= BUILDLOG_MAX_PAGES; page++) {
+    let list;
+    try {
+      list = await fetchCommitPage(page);
+    } catch (e) {
+      // A run that reached GitHub and was turned away HAS been a check, so
+      // the clock moves; `complete` is left exactly as it was, because this
+      // run proved nothing about whether the history is whole.
+      await store.writeBuildLogMeta({
+        checked: new Date().toISOString(), complete: before.complete,
+      }).catch(() => {});
+      buildLogCache = null;
+      const after = await store.buildLogState();
+      // A throttle part-way through is not a failed refresh: what landed is
+      // stored, and the next run picks up where this one stopped.
+      if (e.reason === 'throttled') {
+        return res.json({
+          throttled: true, retryMins: e.retryMins || null,
+          added, scanned, pages, total: after.n, complete: before.complete,
+          repo: BUILD_REPO, note: e.message,
+        });
+      }
+      return res.status(502).json({
+        error: e.message, reason: e.reason || 'error',
+        added, scanned, pages, total: after.n, complete: before.complete,
+        repo: BUILD_REPO,
+      });
+    }
+    pages++;
+    if (!list.length) { ranOff = true; break; }
+
+    const known = await store.buildLogKnown(list.map((c) => String(c && c.sha)));
+    const fresh = [];
+    for (const c of list) {
+      scanned++;
+      const sha = String((c && c.sha) || '');
+      if (!sha || known.has(sha)) continue;
+      const parts = splitCommitMessage(c.commit && c.commit.message);
+      if (!parts.subject) continue;
+      const at = String((c.commit && c.commit.author && c.commit.author.date) || '').trim();
+      if (!at) continue;
+      fresh.push({
+        sha, at,
+        subject: parts.subject,
+        lead: leadParagraph(parts.body),
+        msgLen: parts.len,
+      });
+      known.add(sha);
+    }
+    if (fresh.length) added += await store.upsertBuildLog(fresh);
+
+    // A short page IS the end of the history, so the walk has run off it.
+    if (list.length < BUILDLOG_PER_PAGE) { ranOff = true; break; }
+    if (!full && !fresh.length) break;
+  }
+
+  // `complete` only ever becomes true by actually reaching the end, and never
+  // goes back to false: the record is whole from that point and a later
+  // incremental run says nothing against it.
+  await store.writeBuildLogMeta({
+    checked: new Date().toISOString(),
+    complete: before.complete || ranOff,
+  }).catch(() => {});
+
+  buildLogCache = null;
+  const after = await store.buildLogState();
+  logAct(req, 'refresh', 'buildlog:' + added);
+  res.json({
+    added, scanned, pages,
+    total: after.n, newest: after.newest, oldest: after.oldest,
+    complete: before.complete || ranOff,
+    walked: full,
+    repo: BUILD_REPO,
+  });
+}));
+
+// The log itself, with the statistics derived from it. Everything reported
+// here is COMPUTED FROM THE COMMITS, so a refresh keeps every number true --
+// which is the whole reason none of the page's figures are written down.
+app.get('/api/buildlog', requireAdmin, route(async (req, res) => {
+  if (buildLogCache && Date.now() - buildLogCache.at < BUILDLOG_TTL_MS
+      && String(req.query.fresh || '') !== '1') {
+    return res.json(Object.assign({}, buildLogCache.payload, { cached: true }));
+  }
+
+  const [rows, meta] = await Promise.all([
+    store.readBuildLog(),
+    store.buildLogMeta().catch(() => ({ checked: null, complete: false })),
+  ]);
+
+  // THE DAY IS THE AUTHOR'S, NOT UTC's, and that is a correction rather than
+  // a preference. GitHub normalises a commit date to Z and throws the
+  // author's offset away, so a commit made at 17:48 Eastern arrives as
+  // 21:48Z -- and grouping on that pushes every evening of work into the
+  // next day. Measured 2026-10-04: UTC grouping reported a 50-commit day
+  // that never happened, against a true peak of 49 on 2026-09-13, and it
+  // moved six commits between weeks. nyDay is the app's one answer to
+  // "which day did this belong to", shared with the nightly job, and it is
+  // the same timezone every other date this app shows a reader is rendered
+  // in. A date that will not parse falls back to the raw prefix rather than
+  // dropping the commit out of the counts.
+  const day = (iso) => {
+    const ms = Date.parse(iso);
+    return Number.isFinite(ms) ? nyDay(ms) : String(iso || '').slice(0, 10);
+  };
+
+  // One pass for the counts, then the orderings. A commit with a body is one
+  // that carries its reasoning; the few without are counted rather than hidden.
+  const perDay = new Map();
+  const perWeek = new Map();
+  const lens = [];
+  let withBody = 0;
+  for (const r of rows) {
+    const d = day(r.at);
+    perDay.set(d, (perDay.get(d) || 0) + 1);
+    if (r.lead) { withBody++; lens.push(r.msgLen); }
+    // Weeks start on Monday, computed from the date rather than from the
+    // index, so a week with no commits in it simply has no entry.
+    const dt = new Date(d + 'T12:00:00Z');
+    if (!Number.isNaN(dt.getTime())) {
+      const mon = new Date(dt);
+      mon.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
+      const k = mon.toISOString().slice(0, 10);
+      perWeek.set(k, (perWeek.get(k) || 0) + 1);
+    }
+  }
+  lens.sort((a, b) => a - b);
+  const days = [...perDay.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  const busiest = days.reduce((best, x) => (!best || x[1] > best[1] ? x : best), null);
+  const first = rows.length ? day(rows[rows.length - 1].at) : null;
+  const last = rows.length ? day(rows[0].at) : null;
+  const spanDays = first && last
+    ? Math.round((Date.parse(last + 'T00:00:00Z') - Date.parse(first + 'T00:00:00Z')) / 86400000) + 1
+    : 0;
+
+  const payload = {
+    repo: BUILD_REPO,
+    total: rows.length,
+    first, last, spanDays,
+    activeDays: days.length,
+    busiest: busiest ? { d: busiest[0], n: busiest[1] } : null,
+    withBody,
+    medianLen: lens.length ? lens[Math.floor(lens.length / 2)] : 0,
+    perDay: days,
+    weeks: [...perWeek.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1))
+      .map(([start, n]) => ({ start, n })),
+    entries: rows,
+    checkedAt: meta.checked,
+    // Whether the whole history has ever been read. The page says so,
+    // because a record that may be missing its older end is a different
+    // claim from one that is whole.
+    complete: meta.complete,
+    builtAt: new Date().toISOString(),
+  };
+  buildLogCache = { at: Date.now(), payload };
+  res.json(payload);
+}));
 
 // ALWAYS listen. This was briefly guarded by `require.main === module` so a
 // script could require the file for its mail helpers, and it took the site down:

@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>What it took to build this — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* EVERY CLASS HERE IS PREFIXED bl- OR SCOPED UNDER #blPage. Nine
+       unscoped class names on this project have silently captured markup
+       written later -- .warn restyled every amber table cell, .sub inherited
+       the pivot's intro paragraph, .mk drew a bordered pill beside every
+       backtest row. A page-local rule that is not scoped is a trap with a
+       delay on it. */
+    body { min-height: 100dvh; padding: 0 0 90px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(48vw 40vw at 2% -10%, rgba(124, 156, 255, 0.11), transparent 62%),
+        radial-gradient(52vw 44vw at 100% 2%, rgba(167, 139, 250, 0.10), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--accent);
+      background: linear-gradient(160deg, rgba(124, 156, 255, 0.20), rgba(124, 156, 255, 0.04));
+      border: 1px solid rgba(124, 156, 255, 0.24);
+    }
+    .divider { width: 1px; height: 20px; background: var(--hair); }
+
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+                    box-shadow: 0 0 8px var(--accent); }
+    h1 { margin: 20px 0 0; font-size: clamp(36px, 5vw, 58px); font-weight: 600;
+         line-height: 0.95; letter-spacing: -0.045em; text-wrap: balance; }
+    .lede { margin: 16px 0 0; max-width: 66ch; font-size: 14px; line-height: 1.68; color: var(--muted); }
+    .masthead { margin: 34px 0 26px; }
+    #blPage .k { font-size: 10px; font-weight: 500; text-transform: uppercase;
+                 letter-spacing: 0.2em; color: var(--faint); display: block; }
+
+    /* ---- the clock strip ------------------------------------------------ */
+    .bl-clock > .core { padding: 18px 22px; }
+    .bl-crow { display: flex; flex-wrap: wrap; gap: 26px 40px; align-items: flex-start; }
+    .bl-cell { min-width: 0; }
+    .bl-big { margin-top: 5px; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;
+              font-variant-numeric: tabular-nums; }
+    .bl-note { margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+    .bl-note.warn { color: var(--amber); }
+    #blMsg { margin-top: 14px; font-size: 12px; line-height: 1.6; color: var(--muted); }
+    #blMsg.bl-err { color: var(--red); }
+    #blMsg.bl-ok { color: var(--green); }
+
+    /* ---- section furniture ---------------------------------------------- */
+    .bl-sec { margin: 42px 0 0; }
+    .bl-sec > h2 { margin: 0 0 6px; font-size: 21px; font-weight: 600; letter-spacing: -0.025em; }
+    .bl-sec > .bl-intro { margin: 0 0 18px; max-width: 72ch; font-size: 13px;
+                          line-height: 1.68; color: var(--muted); }
+
+    /* ---- the numbers ---------------------------------------------------- */
+    .bl-nums { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+    .bl-num > .core { padding: 18px 20px 17px; height: 100%; box-sizing: border-box; }
+    .bl-n { margin: 6px 0 0; font-size: 30px; font-weight: 600; letter-spacing: -0.035em;
+            font-variant-numeric: tabular-nums; line-height: 1; }
+    .bl-n .bl-unit { font-size: 14px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+    .bl-gloss { margin: 9px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--muted); }
+
+    /* ---- the pace ------------------------------------------------------- */
+    .bl-pace > .core { padding: 20px 22px 16px; }
+    .bl-bars { display: flex; align-items: flex-end; gap: 2px; height: 128px; }
+    .bl-bar { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end;
+              height: 100%; }
+    .bl-bar i { display: block; border-radius: 2px 2px 0 0;
+                background: linear-gradient(180deg, var(--accent), rgba(124, 156, 255, 0.28)); }
+    .bl-bar.bl-zero i { background: rgba(255, 255, 255, 0.07); }
+    .bl-axis { display: flex; margin-top: 9px; font-size: 10px; color: var(--faint);
+               letter-spacing: 0.04em; }
+    .bl-axis span { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; }
+    .bl-axis span:last-child { text-align: right; }
+
+    /* ---- the chapters --------------------------------------------------- */
+    .bl-chaps { display: grid; gap: 12px; }
+    .bl-chap > .core { padding: 18px 22px; display: flex; gap: 20px; align-items: flex-start; }
+    .bl-chap-n { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 11px;
+                 display: inline-flex; align-items: center; justify-content: center;
+                 font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--accent);
+                 background: rgba(124, 156, 255, 0.10); border: 1px solid rgba(124, 156, 255, 0.22); }
+    .bl-chap-b { min-width: 0; }
+    .bl-chap-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+    .bl-chap-h h3 { margin: 0; font-size: 15.5px; font-weight: 600; letter-spacing: -0.015em; }
+    .bl-when { font-family: var(--mono); font-size: 11px; color: var(--faint);
+               white-space: nowrap; }
+    .bl-cnt { font-family: var(--mono); font-size: 11px; color: var(--accent); white-space: nowrap; }
+    .bl-chap-t { margin: 8px 0 0; font-size: 13px; line-height: 1.68; color: var(--muted); }
+    .bl-written { margin: 14px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--faint); }
+
+    /* ---- every change --------------------------------------------------- */
+    .bl-week { margin-bottom: 10px; }
+    .bl-week > .core { padding: 0; overflow: hidden; }
+    .bl-week summary {
+      list-style: none; cursor: pointer; padding: 14px 20px; display: flex;
+      align-items: center; gap: 12px; font-size: 13px; font-weight: 500;
+      transition: background 0.2s var(--ease);
+    }
+    .bl-week summary::-webkit-details-marker { display: none; }
+    .bl-week summary:hover { background: rgba(255, 255, 255, 0.025); }
+    .bl-week summary .bl-cv { transition: transform 0.25s var(--ease); color: var(--faint); flex: 0 0 auto; }
+    .bl-week[open] summary .bl-cv { transform: rotate(90deg); }
+    .bl-week summary .bl-wn { margin-left: auto; font-family: var(--mono); font-size: 11.5px;
+                              color: var(--muted); white-space: nowrap; }
+    .bl-list { border-top: 1px solid var(--hair); }
+    .bl-item { display: flex; gap: 16px; padding: 13px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.035); }
+    .bl-item:last-child { border-bottom: 0; }
+    .bl-d { flex: 0 0 auto; width: 52px; font-family: var(--mono); font-size: 11px;
+            color: var(--faint); padding-top: 2px; font-variant-numeric: tabular-nums; }
+    .bl-body { min-width: 0; flex: 1 1 auto; }
+    .bl-subj { font-size: 13.5px; font-weight: 500; line-height: 1.45; }
+    .bl-lead { margin: 6px 0 0; font-size: 12.5px; line-height: 1.62; color: var(--muted); }
+    .bl-nolead { margin: 6px 0 0; font-size: 12px; color: var(--faint); font-style: italic; }
+    .bl-sha { flex: 0 0 auto; }
+    .bl-sha a { font-family: var(--mono); font-size: 11px; color: var(--faint);
+                text-decoration: none; padding: 2px 7px; border-radius: 7px;
+                border: 1px solid var(--hair); transition: color 0.2s var(--ease), border-color 0.2s var(--ease); }
+    .bl-sha a:hover { color: var(--text); border-color: var(--hair-2); }
+
+    /* ---- limits --------------------------------------------------------- */
+    .bl-limits > .core { padding: 20px 24px; }
+    .bl-limits ul { margin: 12px 0 0; padding-left: 20px; }
+    .bl-limits li { margin: 0 0 9px; font-size: 12.5px; line-height: 1.65; color: var(--muted); }
+    .bl-limits li:last-child { margin-bottom: 0; }
+    .bl-limits b { color: var(--text); font-weight: 600; }
+
+    @media (max-width: 760px) {
+      .page { padding: 0 16px; }
+      .bl-chap > .core { gap: 14px; padding: 16px; }
+      .bl-item { gap: 10px; padding: 12px 14px; }
+      .bl-d { width: 44px; }
+      .bl-sha { display: none; }
+      .bl-bars { height: 96px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.9 13.6A8 8 0 1 1 18.1 7.3"/><path d="M18.7 3.2v4.4h-4.4"/></symbol>
+    <symbol id="i-caret" viewBox="0 0 24 24"><path d="M9 5.5 15.5 12 9 18.5"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <button class="btn" id="blRefresh"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Refresh</button>
+    </nav>
+  </div>
+
+  <main class="page" id="blPage">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>The build log</span>
+      <h1>What it took to build this</h1>
+      <p class="lede">Every change ever made to Tickr Lab, in order, with the reason the person
+        making it wrote down at the time. None of this is a summary written afterwards: software
+        is built in small recorded steps, and this is the record itself.</p>
+    </header>
+
+    <div class="bezel bl-clock"><div class="core">
+      <div class="bl-crow">
+        <div class="bl-cell"><span class="k">Changes recorded</span>
+          <div class="bl-big" id="blTotal">&mdash;</div>
+          <div class="bl-note" id="blSpan"></div></div>
+        <div class="bl-cell"><span class="k">Most recent</span>
+          <div class="bl-big" id="blLast">&mdash;</div>
+          <div class="bl-note" id="blLastAge"></div></div>
+        <div class="bl-cell"><span class="k">Last checked</span>
+          <div class="bl-big" id="blChecked">&mdash;</div>
+          <div class="bl-note" id="blCheckedNote"></div></div>
+        <div class="bl-cell"><span class="k">Source</span>
+          <div class="bl-big" id="blRepo" style="font-size: 14px; font-family: var(--mono);">&mdash;</div>
+          <div class="bl-note">The project's own version-control history</div></div>
+      </div>
+      <div id="blMsg"></div>
+    </div></div>
+
+    <section class="bl-sec">
+      <h2>The shape of it</h2>
+      <p class="bl-intro">Every figure in this section is counted from the record below, so
+        pressing Refresh keeps all of them true. Nothing here is typed in by hand.</p>
+      <div class="bl-nums" id="blNums"></div>
+    </section>
+
+    <section class="bl-sec">
+      <h2>The pace</h2>
+      <p class="bl-intro">One bar per day. A faint bar is a day with no changes at all &mdash;
+        weekends, mostly. The ramp is the real story: the first week carried two changes and
+        the fourth carried over a hundred, because the early work was building the floor
+        everything later stands on.</p>
+      <div class="bezel bl-pace"><div class="core">
+        <div class="bl-bars" id="blBars"></div>
+        <div class="bl-axis" id="blAxis"></div>
+      </div></div>
+    </section>
+
+    <section class="bl-sec">
+      <h2>The chapters</h2>
+      <p class="bl-intro">The record below is complete but relentless, so this is the arc through
+        it. The dates and the writing are mine; <b>the count beside each chapter is counted from
+        the live record</b>, so if a chapter's dates ever stop matching the work, its number will
+        say so rather than the page quietly glossing over it.</p>
+      <div class="bl-chaps" id="blChaps"></div>
+      <p class="bl-written" id="blCover"></p>
+    </section>
+
+    <section class="bl-sec">
+      <h2>Every change</h2>
+      <p class="bl-intro">Newest first, a week at a time. Each entry is the one-line summary the
+        change was filed under, then the opening of the explanation that came with it. The six
+        characters on the right open the full record on GitHub, including the code itself.</p>
+      <div id="blWeeks"></div>
+    </section>
+
+    <section class="bl-sec">
+      <h2>What this cannot tell you</h2>
+      <div class="bezel bl-limits"><div class="core">
+        <ul>
+          <li><b>A note written at the time says what was intended</b>, which is not always what
+            the reader ended up with. Several entries below are corrections of an earlier
+            entry, and a few correct a correction.</li>
+          <li><b>The record starts at the first change and not before it.</b> Whatever thinking
+            happened before that first day left no trace here.</li>
+          <li><b>The failures are mostly invisible.</b> Ten research ideas were tested against
+            twenty years of market data and nine of them came back flat &mdash; and a result that
+            does not work ships nothing, so it appears here as a single entry recording the
+            measurement rather than as the days it took. The same is true of one feature built
+            over roughly forty changes and then deleted when it was measured and found to
+            predict nothing.</li>
+          <li><b>A day is the day the work was done, not the clock in London.</b> Dates are
+            grouped in New York time, because that is where the work happened and where the
+            market this screens is open. Grouping by universal time had reported a
+            fifty-change day that never happened.</li>
+          <li><b>Lines of code are not in here, and deliberately.</b> Counting them rewards
+            writing more of them; several entries below are worth more than the rest and
+            delete things.</li>
+        </ul>
+      </div></div>
+    </section>
+  </main>
+
+  <script src="/track.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    // The page's one escaper. Every string drawn here came from a commit
+    // message, which is free text written by a person.
+    function we(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+               'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    // A bare YYYY-MM-DD read by `new Date` is UTC MIDNIGHT, which renders as
+    // the day before west of Greenwich. Noon cannot shift a date in any
+    // timezone, so every date on this page is parsed at local noon.
+    function dt(d) { return new Date(String(d) + 'T12:00:00'); }
+    function fmtDay(d) { var x = dt(d); return MON[x.getMonth()] + ' ' + x.getDate(); }
+    function fmtFull(d) { var x = dt(d); return x.getDate() + ' ' + MON[x.getMonth()] + ' ' + x.getFullYear(); }
+    function ago(iso) {
+      var ms = Date.parse(iso);
+      if (!isFinite(ms)) return '';
+      var m = Math.round((Date.now() - ms) / 60000);
+      if (m < 1) return 'just now';
+      if (m < 60) return m + (m === 1 ? ' minute ago' : ' minutes ago');
+      var h = Math.round(m / 60);
+      if (h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
+      var dd = Math.round(h / 24);
+      return dd + (dd === 1 ? ' day ago' : ' days ago');
+    }
+    function n(x) { return Number(x || 0).toLocaleString('en-US'); }
+
+    // ---- THE CHAPTERS ---------------------------------------------------
+    // Hand-written, and the one thing on this page that is. Each has a start
+    // and an END THAT MAY BE OPEN: the last chapter runs to the present, so a
+    // change made after this was written lands inside a chapter rather than
+    // falling through the narrative unmentioned. The coverage line under the
+    // list is what reports it if that ever stops being true.
+    var CHAPTERS = [
+      { from: '2026-08-21', to: '2026-08-25', title: 'A table, and a note of who looked at it',
+        text: 'The first version is a page that lists some shares and sorts them. The second '
+            + 'change ever made records who visited. Then the whole look of it is thrown away '
+            + 'and redone, and the product is renamed — twice, as it turns out.' },
+      { from: '2026-08-26', to: '2026-08-28', title: 'Files will not do',
+        text: 'The first real lesson. It was keeping its data in files on disk, which works '
+            + 'perfectly on one computer and not at all on the kind of hosting this runs on, '
+            + 'where the machine answering each request is a different machine that forgets '
+            + 'everything afterwards. Everything moves into a database. Accounts arrive in the '
+            + 'same week, and so does the first attempt at scoring a company out of ten.' },
+      { from: '2026-08-29', to: '2026-09-02', title: 'Keep the prices',
+        text: 'A decision whose consequences run through everything after it: start storing '
+            + 'every day’s closing price instead of fetching what is needed and throwing it '
+            + 'away. The data provider charges the same either way. Charts, a page per company '
+            + 'and every historical measurement in the product are all downstream of this week; '
+            + 'so is a nightly job that updates everything after the market shuts and emails a '
+            + 'report on how it went.' },
+      { from: '2026-09-03', to: '2026-09-10', title: 'A score for whether a share is moving well',
+        text: 'Roughly forty changes build a scoring model: weights you can tune, an Excel '
+            + 'workbook showing the arithmetic, a page for testing variations of it, a chart of '
+            + 'the score through time. Then it is measured against twenty years of prices, and '
+            + 'it does not predict anything. It stays on screen for a fortnight before being '
+            + 'deleted. This is the most honest week in the log, and the most expensive.' },
+      { from: '2026-09-11', to: '2026-09-12', title: 'Rules instead of a score',
+        text: 'The replacement is deliberately dumb: an ordered list of rules where the first '
+            + 'one that matches wins, so every verdict can name the single rule that produced '
+            + 'it. The first attempt is built and reverted on the same day. The second is built '
+            + 'to explain itself — click any verdict and you get the rule, the threshold and '
+            + 'where the company sits against it.' },
+      { from: '2026-09-13', to: '2026-09-16', title: 'A door, and a dozen ways in',
+        text: 'A guest preview so someone can look without an account. A log of what every '
+            + 'signed-in person does. Personal lists. A studio that turns tonight’s numbers '
+            + 'into cards for social media. A phone version. A public home page and a blog. '
+            + 'Also, quietly, the discovery that the pages meant to need a password had never '
+            + 'actually needed one — the host was serving them before the code that checks '
+            + 'ever ran.' },
+      { from: '2026-09-17', to: '2026-09-21', title: 'Making it hold a thousand companies',
+        text: 'None of this is visible and all of it was necessary. The data provider allows a '
+            + 'fixed number of requests a minute, so the nightly update is paced across rounds. '
+            + 'The table draws only the rows on screen. The six database reads behind the main '
+            + 'page, which had been happening one after another, start happening at once. A '
+            + 'page appears whose only job is to say what data is missing and what to run '
+            + 'about it.' },
+      { from: '2026-09-22', to: '2026-09-26', title: 'Letters, sign-in, and saying less',
+        text: 'A mailing list with proper consent and a one-click way out. A log of every email '
+            + 'the app has ever sent, built the morning after one failed to arrive and nothing '
+            + 'could answer why. Sign in with Google. Alerts. And a run of changes that take '
+            + 'things away: a claim on three pages that a guest gets “every feature” was '
+            + 'never true, so it was removed rather than made true.' },
+      { from: '2026-09-27', to: '2026-09-29', title: 'Going to the companies’ own filings',
+        text: 'Until now every number came from one commercial data provider. This week adds a '
+            + 'second, free and official source: the filings companies are legally required to '
+            + 'make, back to 2007 — plus what their own directors bought and sold, and how '
+            + 'much of each company is sold short. Then the same verdict rules are re-run using '
+            + 'only what was publicly knowable on a past date, which is the only honest way to '
+            + 'ask whether they would have worked.' },
+      { from: '2026-09-30', to: '2026-10-02', title: 'Presentation, and a measurement that said no',
+        text: 'Promo cards get three colour grounds, which sounds cosmetic and was two days of '
+            + 'work: the colour of a warning has to still mean warning on a white card. '
+            + 'Meanwhile the classic chart patterns — the double top and double bottom every '
+            + 'trading book teaches — are tested over eighteen years. They predict nothing, '
+            + 'and the way they fail is the useful part: both shapes behave the same, though '
+            + 'they are supposed to mean opposite things.' },
+      { from: '2026-10-03', to: null, title: 'Knowing what is in the index, and refusing bad input',
+        text: 'The index a reader compares everything against is read from the fund’s own '
+            + 'published holdings file each night, so the screen can say whether a company is in '
+            + 'the S&P 500. And adding a company now costs one request to the data provider '
+            + 'first, to ask whether it can price it at all — because two dozen that it '
+            + 'cannot had quietly got in and were jamming the nightly update.' },
+    ];
+
+    var DATA = null;
+
+    function paintClock(d) {
+      $('blTotal').textContent = n(d.total);
+      // WHOLE AND CURRENT ARE TWO DIFFERENT CLAIMS. A record can be up to
+      // date at its newest end and still be missing its older end, if the
+      // first read of the history was interrupted. Saying so is cheap and
+      // the alternative is a page that quietly understates the work.
+      var span = d.first && d.last ? fmtFull(d.first) + ' to ' + fmtFull(d.last) : '';
+      if (d.total && d.complete === false) {
+        $('blSpan').innerHTML = we(span)
+          + '<br><span style="color:var(--amber)">The oldest changes may not have been '
+          + 'read yet \u2014 press Refresh to finish.</span>';
+      } else {
+        $('blSpan').textContent = span;
+      }
+      $('blLast').textContent = d.last ? fmtFull(d.last) : '—';
+      $('blLastAge').textContent = d.entries && d.entries.length
+        ? ago(d.entries[0].at) : '';
+      if (d.checkedAt) {
+        $('blChecked').textContent = ago(d.checkedAt);
+        // AMBER MEANS "NOTICE THIS, IT IS OLD" everywhere in this app, so it
+        // is spent here only once the check is genuinely stale.
+        var hrs = (Date.now() - Date.parse(d.checkedAt)) / 3600000;
+        $('blCheckedNote').textContent = 'Press Refresh to look again';
+        $('blCheckedNote').className = 'bl-note' + (hrs > 36 ? ' warn' : '');
+      } else {
+        $('blChecked').textContent = 'never';
+        $('blCheckedNote').textContent = 'Press Refresh to read the history';
+        $('blCheckedNote').className = 'bl-note warn';
+      }
+      $('blRepo').textContent = d.repo || '—';
+    }
+
+    function paintNums(d) {
+      var busiest = d.busiest || { n: 0, d: null };
+      // A change that carries no written explanation is counted rather than
+      // hidden: the share that DO is the number worth reporting, and it only
+      // means something if the denominator is the whole log.
+      var pct = d.total ? Math.round((d.withBody / d.total) * 100) : 0;
+      var cards = [
+        ['Changes', n(d.total), '',
+         'Each one a self-contained edit, recorded with its own date and explanation.'],
+        ['Days of work', n(d.activeDays), ' of ' + n(d.spanDays),
+         'Days on which at least one change was made, out of the days the project has existed.'],
+        ['Busiest day', n(busiest.n), busiest.d ? ' on ' + fmtDay(busiest.d) : '',
+         'The most changes made in a single day.'],
+        ['Explained', pct + '%', ' — ' + n(d.withBody) + ' of ' + n(d.total),
+         'Changes that came with a written reason, not just a title.'],
+        ['Typical explanation', n(d.medianLen), ' characters',
+         'The middle length of a change’s full note — roughly two hundred and fifty words.'],
+      ];
+      $('blNums').innerHTML = cards.map(function (c) {
+        return '<div class="bezel bl-num"><div class="core">'
+          + '<span class="k">' + we(c[0]) + '</span>'
+          + '<p class="bl-n">' + we(c[1]) + '<span class="bl-unit">' + we(c[2]) + '</span></p>'
+          + '<p class="bl-gloss">' + we(c[3]) + '</p>'
+          + '</div></div>';
+      }).join('');
+    }
+
+    function paintPace(d) {
+      var days = d.perDay || [];
+      if (!days.length) { $('blBars').innerHTML = ''; $('blAxis').innerHTML = ''; return; }
+      // EVERY CALENDAR DAY GETS A BAR, including the ones with nothing on
+      // them. Drawing only the active days would compress the weekends out
+      // and make a burst of work look like steady progress.
+      var have = {};
+      days.forEach(function (p) { have[p[0]] = p[1]; });
+      var start = dt(d.first), end = dt(d.last), out = [];
+      for (var t = new Date(start); t <= end; t.setDate(t.getDate() + 1)) {
+        var key = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0')
+          + '-' + String(t.getDate()).padStart(2, '0');
+        out.push([key, have[key] || 0]);
+      }
+      var max = out.reduce(function (a, p) { return p[1] > a ? p[1] : a; }, 1);
+      $('blBars').innerHTML = out.map(function (p) {
+        // A day with nothing on it still gets 2px: a bar of no height reads
+        // as a gap in the chart rather than as a quiet day.
+        var h = p[1] ? Math.max(3, Math.round((p[1] / max) * 100)) + '%' : '2px';
+        return '<span class="bl-bar' + (p[1] ? '' : ' bl-zero') + '" title="'
+          + we(fmtFull(p[0]) + ' — ' + (p[1] || 'no') + ' change' + (p[1] === 1 ? '' : 's'))
+          + '"><i style="height:' + h + '"></i></span>';
+      }).join('');
+      $('blAxis').innerHTML = '<span>' + we(fmtFull(d.first)) + '</span>'
+        + '<span style="text-align:center">peak ' + n(max) + ' in a day</span>'
+        + '<span>' + we(fmtFull(d.last)) + '</span>';
+    }
+
+    function paintChaps(d) {
+      var entries = d.entries || [];
+      var seen = 0;
+      $('blChaps').innerHTML = CHAPTERS.map(function (c, i) {
+        // THE COUNT IS COUNTED, never written down. A chapter whose dates
+        // stop matching the work shows a number that looks wrong, which is
+        // the only way a hand-written narrative can be held to account by
+        // the record it describes.
+        var k = entries.filter(function (e) {
+          var day = e.at.slice(0, 10);
+          return day >= c.from && (!c.to || day <= c.to);
+        }).length;
+        seen += k;
+        var when = fmtDay(c.from) + ' – ' + (c.to ? fmtDay(c.to) : 'now');
+        return '<div class="bezel bl-chap"><div class="core">'
+          + '<span class="bl-chap-n">' + (i + 1) + '</span>'
+          + '<div class="bl-chap-b"><div class="bl-chap-h">'
+          + '<h3>' + we(c.title) + '</h3>'
+          + '<span class="bl-when">' + we(when) + '</span>'
+          + '<span class="bl-cnt">' + n(k) + ' change' + (k === 1 ? '' : 's') + '</span>'
+          + '</div><p class="bl-chap-t">' + we(c.text) + '</p></div>'
+          + '</div></div>';
+      }).join('');
+      // THE COVERAGE LINE IS THE HONESTY OF THE SECTION. The chapters are
+      // written by hand and the log is not, so the one thing worth stating
+      // is whether the writing still accounts for every change.
+      var gap = d.total - seen;
+      $('blCover').innerHTML = gap === 0
+        ? 'Written on 4 October 2026. The eleven chapters account for all '
+          + n(d.total) + ' changes; the counts above are read from the record each time '
+          + 'this page loads.'
+        : '<span style="color:var(--amber)">Written on 4 October 2026, and now out of date: '
+          + n(gap) + ' of ' + n(d.total) + ' changes fall outside every chapter above. '
+          + 'The record below is still complete.</span>';
+    }
+
+    function paintWeeks(d) {
+      var entries = d.entries || [];
+      var repo = d.repo || '';
+      // Group by the Monday of each change's own week, in the order the
+      // server already sorted them: newest first.
+      var order = [], bag = {};
+      entries.forEach(function (e) {
+        var x = dt(e.at.slice(0, 10));
+        var mon = new Date(x);
+        mon.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+        var k = mon.getFullYear() + '-' + String(mon.getMonth() + 1).padStart(2, '0')
+          + '-' + String(mon.getDate()).padStart(2, '0');
+        if (!bag[k]) { bag[k] = []; order.push(k); }
+        bag[k].push(e);
+      });
+      $('blWeeks').innerHTML = order.map(function (k, i) {
+        var list = bag[k];
+        var end = dt(k); end.setDate(end.getDate() + 6);
+        return '<details class="bezel bl-week"' + (i === 0 ? ' open' : '') + '><div class="core">'
+          + '<summary><svg class="ic ic-sm bl-cv" aria-hidden="true"><use href="#i-caret" /></svg>'
+          + 'Week of ' + we(fmtFull(k))
+          + '<span class="bl-wn">' + n(list.length) + ' change'
+          + (list.length === 1 ? '' : 's') + '</span></summary>'
+          + '<div class="bl-list">' + list.map(function (e) {
+            return '<div class="bl-item">'
+              + '<div class="bl-d">' + we(fmtDay(e.at.slice(0, 10))) + '</div>'
+              + '<div class="bl-body"><div class="bl-subj">' + we(e.subject) + '</div>'
+              + (e.lead
+                ? '<p class="bl-lead">' + we(e.lead) + '</p>'
+                : '<p class="bl-nolead">No explanation was recorded with this one.</p>')
+              + '</div>'
+              + '<div class="bl-sha"><a href="https://github.com/' + we(repo) + '/commit/'
+              + we(e.sha) + '" target="_blank" rel="noopener">' + we(e.sha.slice(0, 7))
+              + '</a></div></div>';
+          }).join('') + '</div>'
+          + '</div></details>';
+      }).join('');
+    }
+
+    function paint(d) {
+      DATA = d;
+      paintClock(d);
+      paintNums(d);
+      paintPace(d);
+      paintChaps(d);
+      paintWeeks(d);
+    }
+
+    function say(text, cls) {
+      var el = $('blMsg');
+      el.textContent = text || '';
+      el.className = cls || '';
+    }
+
+    function load(fresh) {
+      return fetch('/api/buildlog' + (fresh ? '?fresh=1' : ''))
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(function (d) {
+          paint(d);
+          if (!d.total) {
+            say('Nothing has been read yet. Press Refresh to pull the history from GitHub — '
+              + 'the first run reads it all and takes a few seconds.', '');
+          }
+          return d;
+        })
+        .catch(function (e) {
+          say('Could not read the stored history: ' + e.message, 'bl-err');
+        });
+    }
+
+    var busy = false;
+    $('blRefresh').addEventListener('click', function () {
+      if (busy) return;
+      busy = true;
+      $('blRefresh').disabled = true;
+      say('Asking GitHub for anything new…', '');
+      fetch('/api/buildlog/refresh', { method: 'POST' })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          var j = res.j || {};
+          // A THROTTLE IS A WAIT, NOT A FAILURE, and the page says which.
+          // GitHub allows a limited number of requests an hour from one
+          // address; a normal refresh costs exactly one of them.
+          if (j.throttled) {
+            say('GitHub is asking us to wait'
+              + (j.retryMins ? ' about ' + j.retryMins + ' more minute'
+                + (j.retryMins === 1 ? '' : 's') : '')
+              + '. Nothing is wrong — ' + n(j.added || 0) + ' new change'
+              + ((j.added || 0) === 1 ? '' : 's') + ' were stored before it asked.', 'bl-err');
+            return load(true);
+          }
+          if (!res.ok) {
+            say(j.error || 'The refresh did not finish.', 'bl-err');
+            return load(true);
+          }
+          say(j.added
+            ? 'Found ' + n(j.added) + ' new change' + (j.added === 1 ? '' : 's')
+              + '. Read ' + n(j.pages) + ' page' + (j.pages === 1 ? '' : 's') + ' of history; '
+              + n(j.total) + ' changes stored in all.'
+            : 'Nothing new — the record was already current, in one request.', 'bl-ok');
+          return load(true);
+        })
+        .catch(function (e) {
+          say('Could not reach the refresh: ' + e.message, 'bl-err');
+        })
+        .then(function () {
+          busy = false;
+          $('blRefresh').disabled = false;
+        });
+    });
+
+    load(false).then(function () {
+      if (window.trackLoad) window.trackLoad('buildlog');
+    });
+  })();
+  </script>
+</body>
+</html>
