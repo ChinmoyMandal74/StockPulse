@@ -268,6 +268,8 @@
     // multiples should see how old they are before reading them. The DATE
     // only -- the time of day lives in earnings_history, which a snapshot row
     // does not carry; /stock's caption has it because that page reads it.
+    ['fund',  'Period',         (s) => (s.mostRecentQuarter
+      ? { t: shortDate(s.mostRecentQuarter), c: '' } : null)],
     ['fund',  'Reported',       (s) => (s.lastEarningsDate
       ? { t: shortDate(s.lastEarningsDate), c: '' } : null)],
     ['fund',  'Earn grth Q YoY',(s) => V.pct(s.earningsGrowthYoY)],

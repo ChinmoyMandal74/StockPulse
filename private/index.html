@@ -1483,7 +1483,7 @@
         <th class="group grp-rel" data-group="rel" colspan="16">Relative</th>
         <th class="group grp-trend" data-group="trend" colspan="4">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
-        <th class="group grp-fund" data-group="fund" colspan="20">Fundamentals</th>
+        <th class="group grp-fund" data-group="fund" colspan="21">Fundamentals</th>
         <th class="group grp-own" data-group="own" colspan="7">Ownership</th>
         <th rowspan="2"></th>
       </tr>
@@ -1578,6 +1578,7 @@
         <th class="grp-fund" data-key="currentRatio" title="Current assets ÷ current liabilities, most recent quarter. Below 1 means short-term bills exceed short-term assets.">Curr<br>Ratio</th>
         <th class="grp-fund" data-key="divYield" title="Forward annual dividend yield. Every return column on this page is price-only, so a yield here is income the table does not otherwise show.">Div<br>Yield</th>
         <th class="grp-fund" data-key="payoutRatio" title="Dividend as a percentage of earnings. Above 100% the dividend is being paid out of something other than profit.">Payout</th>
+        <th class="grp-fund" data-key="mostRecentQuarter" title="THE PERIOD EVERY FIGURE IN THIS GROUP COVERS &mdash; revenue, the margins, ROE, net income and FCF are all a trailing twelve months ENDING on this date. Reported beside it is a different fact: that is when the company ANNOUNCED, which lands a median 30 days later, and on 1,250 rows measured the two were never the same day. The vendor rounds a 52/53-week fiscal calendar to month end, so it can sit a few days off the filing. Filters on DAYS SINCE the period end. A fund files no statements, so it reads NA.">Period</th>
         <th class="grp-fund" data-key="lastEarningsDate" title="When the company last reported — the announcement, which is what every figure in this group was struck at. It is NOT the period they cover: the announcement lands 23-29 days after the quarter it reports on, so a figure dated here describes a quarter that ended about a month earlier. Filters on DAYS SINCE, like Next Earn filters on days until: &gt;90 finds anything that has not reported in a quarter. Amber past 100 days, where the figures beside it are a quarter stale.">Reported</th>
         <th class="grp-fund" data-col="secResults" title="When the company told the SEC it had results — the newest 8-K carrying Item 2.02, &quot;Results of Operations and Financial Condition&quot;, which is the earnings release. A SECOND, INDEPENDENT answer to &quot;has this company reported&quot;, from the company itself rather than from the price feed: on 2026-10-01 Micron had announced on Sep 30 and the feed still said Jun 24. Amber when it is ahead of the Reported column, which means the feed has missed a report. Blank until the SEC dates are loaded; a fund files no 2.02.">Announced<br>(SEC)</th>
         <th class="grp-own" data-key="sharesOutstanding" title="Shares outstanding. Watching it fall is a buyback; watching it rise is dilution — and this is the only column that shows either, since market cap mixes the count with the price.">Shares<br>Out</th>
@@ -1945,6 +1946,46 @@
       // threshold only has to clear ordinary disagreement.
       const d = Math.round((new Date(f + 'T12:00:00') - new Date(s.lastEarningsDate + 'T12:00:00')) / 86400000);
       return d > SEC_BEHIND_DAYS ? d : 0;
+    }
+
+    // ---- Period: what the fundamentals actually describe ------------------
+    //
+    // The one date this group was missing. `Reported` beside it is the
+    // ANNOUNCEMENT, and that column's own tooltip has always said it is not
+    // this -- measured across the universe the announcement lands a MEDIAN
+    // 30 DAYS after the period it reports on (p10 22, p90 43), and on 1,250
+    // rows carrying both the two are NEVER the same day. Two columns, two
+    // facts, and the figures in between belong to this one.
+    //
+    // NO COLOUR, and that is a measurement rather than restraint. These
+    // dates are month ends, so the ages are discrete: 35, 66, 97, 127, 158,
+    // 188, and then NOTHING until 278. The only defensible threshold sits
+    // in that 90-day empty run, and at it just 8 of 1,278 rows qualify --
+    // 7 of which the Reported column already ambers, leaving ONE. A third
+    // staleness colour on an adjacent column to flag one row is noise. The
+    // cell states the fact and the column beside it does the warning, which
+    // is the rule the Instrument column already follows.
+    function periodCell(s) {
+      const iso = s.mostRecentQuarter;
+      if (!iso) {
+        return '<td class="na grp-fund" title="No period recorded for this stock yet — it fills the next time its profile is pulled.">—</td>';
+      }
+      // Local noon: `new Date('2026-06-30')` is UTC midnight and renders as
+      // the 29th west of Greenwich. The card-dating lesson, met again.
+      const d = new Date(iso + 'T12:00:00');
+      const thisYear = d.getFullYear() === new Date().getFullYear();
+      const label = fmtShortDate(iso) + (thisYear ? '' : ` '${String(d.getFullYear()).slice(2)}`);
+      const days = Math.round((Date.now() - d.getTime()) / 86400000);
+      // The fiscal year end is named ONLY when it is not December, since for
+      // most companies it says nothing -- measured, 291 of 1,254 rows. It is
+      // the one clause that changes how every other figure here reads.
+      const fy = s.fiscalYearEnd && !/-12-/.test(s.fiscalYearEnd)
+        ? ` Its fiscal year ends ${fmtShortDate(s.fiscalYearEnd)}, so this is not a calendar quarter.` : '';
+      const title = `Trailing twelve months to ${iso}, ${days} days ago — the period every figure in this group covers.`
+        + ' Reported beside it is when the company announced, about a month after this.'
+        + fy
+        + ' The vendor rounds a 52/53-week fiscal calendar to month end, so it can differ from the filing by a few days.';
+      return `<td class="grp-fund"${attr(title)}>${label}</td>`;
     }
 
     function reportedCell(s) {
@@ -3384,7 +3425,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="97">${s.error}</td>
+            <td class="na" colspan="98">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3498,6 +3539,7 @@
           ${numCell(s.currentRatio, 'grp-fund', cacheTitle)}`}
           ${marginCell(s.divYield, 'grp-fund', cacheTitle)}
           ${isFund ? naRun(1, 'grp-fund') : marginCell(s.payoutRatio, 'grp-fund', cacheTitle)}
+          ${isFund ? naRun(1, 'grp-fund') : periodCell(s)}
           ${isFund ? naRun(1, 'grp-fund') : reportedCell(s)}
           ${resultsCell(s)}
           ${isFund ? naRun(7, 'grp-own') : `
@@ -3522,7 +3564,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 102;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 103;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3700,7 +3742,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="99">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="100">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

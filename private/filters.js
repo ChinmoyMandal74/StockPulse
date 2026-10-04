@@ -118,6 +118,14 @@
     // starter screens already filter on, `lastEarningsDate` is the column's
     // own key, and a second copy of this arithmetic is exactly the drift
     // filters.js exists to prevent.
+    // The period end filters on DAYS SINCE too, for the reason the
+    // announcement date does: an ISO string is not something a reader
+    // can type a comparison against. Local noon, or every count is a
+    // day high west of Greenwich.
+    if (key === 'mostRecentQuarter') {
+      return x.mostRecentQuarter
+        ? Math.round((Date.now() - new Date(x.mostRecentQuarter + 'T12:00:00').getTime()) / 86400000) : null;
+    }
     if (key === 'lastEarningsDate' || key === 'daysSinceEarnings') {
       // LOCAL NOON, not the bare string. `new Date('2026-09-20')` is UTC
       // midnight, so west of Greenwich it lands on the 19th and every count

@@ -885,6 +885,51 @@ The column is blank for everyone until this runs. **Two indexed seeks per symbol
   - **`screenRows(def, rows)` takes the DEFINITION first**, read off `filters.js` rather than guessed at; the other order throws on `.filter` and says nothing about the screen.
   - The screener's Screens trigger is **`#scrBtn`** (inside `#scrPicker`, menu `#scrMenu`). A guessed `#scrTrigger` clicks nothing, the menu never opens, and the row reads as *absent* — which looks like a missing screen rather than a wrong selector.
 
+### Period — what the fundamentals actually describe, on the screener (2026-10-04, owner's request)
+
+**A `Period` column in the Fundamentals group between Payout and Reported: the trailing-twelve-month END every figure in that group covers.** Asked as *"I don't think we show the last reported period for financials, can you bring that from API and show it"* — and the screener really did not: `Reported` is the ANNOUNCEMENT, and **its own tooltip has said so since the day it shipped** (*"It is NOT the period they cover"*). This is the half that sentence was pointing at.
+
+#### NOTHING WAS BROUGHT FROM THE API — IT WAS ALREADY THERE, AND THAT IS THE FIRST THING TO CHECK
+`most_recent_quarter` rides on the `/statistics` call already charged at 50 credits, `fetchProfile` has stored it since 2026-09-30, and **`computeStocks` already named it on the row** for `/stock`'s caption. So the request cost **no credit, no endpoint, no backfill and no rotation wait** — it is display only. *Before costing a field, grep for it: this one was two lines from being drawn.*
+
+- **Measured rather than assumed: 1,254 of 1,278 rows (98.1%) already carry it**, the rotation having filled it over the four days since it was stored. The 24 blanks are **every one an ETF**, which files no statements — so the group's existing NA rule covers them with no new code.
+
+#### IT IS A DIFFERENT FACT FROM `Reported`, AND THE MEASUREMENT IS WHAT PROVES IT
+A second date column beside an existing one has to earn its width. Over the 1,250 rows carrying both: the announcement lands a **median 30 days after the period** (p10 22, p90 43) and **the two are NEVER the same day — zero rows of 1,250**. The figures belong to the earlier date and were spoken about on the later one.
+
+- **The fixture is built on that property**: every stock's period differs from its own announcement, and there is a check that no row anywhere has the two columns equal. A fixture where they coincided would pass with the cell wired to `lastEarningsDate` and prove nothing. **Proved by reverting**: the body cell left behind fails 10, the header never added 18.
+- **Placed BETWEEN Payout and Reported**, so the three date columns read left to right as the events happen: the quarter ends → the company announces → the 8-K reaches EDGAR.
+
+#### NO COLOUR, AND THAT IS A MEASUREMENT THAT REVERSED MY OWN FIRST READING
+I set out to amber a stale period and had a draft justification for it — *6 of the 15 rows with a period over 150 days are invisible to the Reported column's own amber*. **That was computed at the wrong threshold and does not survive looking at the distribution.** These dates are month ends, so the ages are discrete: **35, 66, 97, 127, 158, 188 — and then nothing at all until 278.** The only defensible line sits in that 90-day empty run, and at it:
+
+| | |
+|---|---|
+| rows with a period ≥ 200 days old | **8 of 1,278** |
+| of those NOT already ambered by `Reported` | **1** (FIG) |
+
+**A third staleness colour on a column adjacent to two that already carry one, to flag a single row, is noise.** The 188-day group I had counted as stale is mostly **semi-annual filers** (VOD, HDB and other ADRs) reporting exactly as they should — the `SEC_BEHIND_DAYS` lesson, where a threshold set below the empty bucket flags normal behaviour. The cell states the fact and the column beside it does the warning: the `instrumentType` rule.
+
+- **Proved by reverting**: colouring it by age fails 3, including a check that reads the DRAWN colour rather than the class name. There is also a check that `Reported` **still** ambers a stale announcement, or the warning would have been lost rather than deliberately placed.
+
+#### The rest
+- **The fiscal year end is named in the tooltip ONLY when it is not December** — measured, **291 of 1,254**. For everyone else it says nothing; for those 291 it is the one clause that changes how every other figure in the group should be read. **Proved by reverting**: printing it unconditionally fails 1.
+- **Days since, never the date string.** `filterValue` converts, exactly as `lastEarningsDate` does and through the same local-noon parse, because an ISO string is nothing a reader can type a comparison against. **Proved by reverting**: fails 2.
+- **Local noon.** `new Date('2026-06-29')` is UTC midnight, so west of Greenwich every age here comes out a day high — and here that is **behavioural rather than static**, because the tooltip prints the count: the revert reads *98 days ago* against a true 97. The card-dating lesson, in a place a test can see it.
+- **One `FIELD_SPEC` row carries it to the hover card, the tiles, the phone and `/compare`** — and it **LEADS the `fund` group**, ahead of `Reported`, which serves that group's existing intent better: a reader should see what period the figures cover before seeing when they were announced.
+- **`/stock` states it better, so the row stands aside there** — `fund|Period` joins `fund|Reported` and `short|Price pulled` in `buildSections({ skip })`. That caption already opens *"Trailing twelve months to 29 Jun 2026"*, reading the same field, so the row would print a byte-identical string a screen lower. Unlike `Reported` the two cannot disagree, so this is pure duplication. **Proved by reverting**: fails 1.
+- **THE BOUNDARY NEEDED NO CHECK, which is worth saying rather than leaving implied.** `mostRecentQuarter` was already on the row before this change, so adding a *column* cannot reach the Advice engine; there is no new field for a rule to read. The three-way scoring proof the `instrumentType` and S&P columns needed does not apply.
+- Constants after the change: the Fundamentals banner **21**, `PAD_SPAN` **103**, the error row **98**, the empty row **100**. `/columns` picked the column up on its own, **95 → 96**, as designed.
+
+- Verified: **41 checks** over a fixture of five stocks that separate every case — the modal 97-day period, a 188-day semi-annual filer, an 827-day one (DRQ's real age, carrying its year), a company with no period, and a fund. **Proved by reverting twelve times, every one load-bearing**: the header 18, the body cell 10, PAD_SPAN 3, amber 3, the banner 2, the filter 2, the FIELD_SPEC row 2, and the error row, the empty row, the fiscal clause, the UTC parse and the `/stock` skip 1 each.
+  - **TWO SORT CHECKS WERE VACUOUS AND THE FIXTURE'S OWN COMMENT CLAIMED OTHERWISE.** It said symbol order disagreed with period order; it did not — `ANOR BSEM COLD` was both the alphabet and the period order, so a sort that never ran passed both. The stocks are `ZNOR BSEM ACOL` now and the market caps are a **third** order again, so neither the alphabet nor the table's own default sort can stand in for the period, and there is a check that the drawn order is neither of them.
+  - **THE THREE STATIC SPANS ARE DERIVED, NOT WRITTEN DOWN.** None is on screen in a five-row fixture, so no behavioural check reaches them; they are read off the source and compared against the DRAWN header (`PAD_SPAN === headers + 3`, the two short rows 5 and 3 below it), which cannot date the way `PAD_SPAN` once sat at 51 with nothing noticing.
+  - **AN ABORTED REVERT REPORTED 14 FAILURES WHERE THERE ARE 18.** With the header reverted away every period cell is null, and `P(s).title.slice(...)` — in a check's **detail argument**, not its condition — threw and ended the run at 25 of 41. The accessor is total now (`Object.assign({}, BLANK, …)`) and the sort click is guarded. *A read in the detail argument aborts a suite just as surely as one in the assertion.*
+  - **`reported-test.js` asserted the OLD arrangement twice and was CORRECTED, not worked around**: *"it sits immediately after payout"* (Period is between them now) and *"it leads the Fundamentals group"* (Period does). Both behaviours it describes are still right, so each now pins **both** neighbours, which is strictly stronger than what it had.
+  - **Two test faults worth keeping.** A fund legitimately reads `NA` in **both** date columns — it files no statements — so the never-equal check had to exempt it rather than report a defect. And the `/stock` caption is `.rc-cap`, read off `buildSections`; a speculative `p, div, span` sweep matched the page's own cards and reported the caption missing on a page that was correct.
+  - **`sitecols-test.js` fails 4 and it is PRE-EXISTING** — confirmed by stashing: 95 at HEAD against its hardcoded 83, 96 after. That the catalogue grew by exactly one is itself the evidence `/columns` registered the column with no edit.
+  - **A `git stash` / `pop` rewrote all four touched files from LF to CRLF mid-session**, the documented hazard met again. Git stores LF either way, so the diff is unaffected — but a patch harness carrying a hardcoded ending would have gone silently inert from that moment.
+
 ### Live P/E — the trailing multiple, struck at today's price (2026-10-04, owner's request)
 **A `Live P/E` column in the Fundamentals group immediately after the provider's `Trail P/E`: today's Price divided by the EPS TTM column, both of which are already on the row.** Asked as *"we show Forward P/E and trailing P/E, can you show the actual P/E"* — which reads as a misunderstanding (a trailing P/E **is** the actual P/E) and turned out to be a real defect when it was measured.
 
