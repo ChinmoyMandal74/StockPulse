@@ -65,6 +65,46 @@
     input::placeholder { color: var(--faint); }
     .hint { margin: 6px 0 0; font-size: 11px; color: var(--faint); }
 
+    /* THE NEWSLETTER TICK. Two unscoped rules above would capture it and both
+       are undone by name, because neither ties on specificity by accident:
+       `input { width: 100% }` turns a checkbox into a full-width bar, and
+       `label` is a 10px uppercase caption with 0.2em tracking, which is right
+       for a field name and unreadable for a sentence. The ninth time an
+       unscoped rule on this project has captured later markup. */
+    .chk { margin: -2px 0 16px; }
+    .chk label { display: flex; gap: 10px; align-items: flex-start; margin: 0;
+                 font-size: 12.5px; font-weight: 400; text-transform: none;
+                 letter-spacing: 0; line-height: 1.5; color: var(--muted);
+                 cursor: pointer; }
+    /* DRAWN RATHER THAN LEFT TO THE BROWSER, for the reason every other input
+       on this page is: the native empty box renders as a PALE FILLED SQUARE
+       on a black card, which on a consent control reads as already ticked —
+       the one impression it must not give. `accent-color` does not help,
+       since it paints the ticked state only, and `color-scheme: dark` was
+       tried and changed nothing. So it takes the same hairline and inset the
+       text fields have, and the ticked state is the accent with a mark on it;
+       keyboard focus keeps a visible ring, which `appearance: none` would
+       otherwise throw away. */
+    .chk input[type="checkbox"] {
+      appearance: none; -webkit-appearance: none;
+      width: 16px; height: 16px; flex: 0 0 auto; margin: 1px 0 0; padding: 0;
+      border: 1px solid var(--hair-2); border-radius: 5px;
+      background: rgba(255, 255, 255, 0.03); box-shadow: var(--inset);
+      cursor: pointer;
+      transition: border-color 0.4s var(--ease), background 0.4s var(--ease);
+    }
+    .chk input[type="checkbox"]:hover { background: rgba(255, 255, 255, 0.075); }
+    .chk input[type="checkbox"]:checked {
+      border-color: var(--accent);
+      background: var(--accent) center/11px no-repeat
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.4l3 3 6-7' fill='none' stroke='%23070910' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    }
+    .chk input[type="checkbox"]:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 2px;
+    }
+    .chk .chkfine { display: block; margin-top: 3px; font-size: 11px;
+                    color: var(--faint); }
+
     .btn {
       width: 100%; justify-content: center; margin-top: 6px; padding: 12px 16px;
       border: 1px solid transparent;
@@ -177,6 +217,19 @@
           <input type="text" id="code" name="code" autocomplete="off" autocapitalize="none"
                  autocorrect="off" spellcheck="false" placeholder="Ask the admin for this" />
         </div>
+        <!-- Registration only, and UNTICKED. A pre-ticked box is not consent
+             — it is the one thing the regulators name outright — and a page
+             that signs you up unless you notice is the opposite of the rest
+             of this product. The fine print is here rather than after the
+             fact, because this is the moment the person decides. -->
+        <div class="field chk" id="subField" style="display:none">
+          <label for="subscribe">
+            <input type="checkbox" id="subscribe" name="subscribe" />
+            <span>Email me when there is a new post
+              <span class="chkfine">A few a month at most. You will get one email asking you to
+                confirm, and every message after that has a one-click unsubscribe.</span></span>
+          </label>
+        </div>
         <button class="btn" id="submit" type="submit">Sign in</button>
       </form>
 
@@ -202,6 +255,7 @@
     const $ = (id) => document.getElementById(id);
     let mode = 'signin';
     let signupCodeRequired = false;
+    let mailReady = false;
 
     function setMsg(text, kind) {
       const box = $('msg');
@@ -251,6 +305,10 @@
       // required blocks submit with a validation bubble pointing at nothing.
       $('nameField').style.display = reg ? '' : 'none';
       $('name').required = reg;
+      // Hidden with no mail provider configured: nothing could be confirmed,
+      // so the box would be a control that does nothing. Hidden on the
+      // sign-in tab too — you are not creating anything to subscribe with.
+      $('subField').style.display = reg && mailReady ? '' : 'none';
       $('forgotWrap').style.display = reg ? 'none' : '';
       $('password').setAttribute('autocomplete', reg ? 'new-password' : 'current-password');
       setMsg('');
@@ -303,6 +361,9 @@
         email: $('email').value.trim(),
         password: $('password').value,
         code: $('code').value.trim(),
+        // A BOOLEAN, never the checkbox's string value: the server
+        // takes `=== true` and nothing else.
+        subscribe: mode === 'register' && $('subscribe').checked,
       };
       try {
         const res = await fetch(mode === 'register' ? '/api/register' : '/api/login', {
@@ -312,18 +373,26 @@
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+        // THE ONE MOMENT THEY CAN BE TOLD. A confirmation is on its way and
+        // the next thing that happens is a navigation, so without a beat here
+        // an explicit tick is answered by silence. Only where one was really
+        // sent: an address already on the list gets no second email, and
+        // saying otherwise would be a promise of mail that is not coming.
+        const subLine = data.subscribed ? ' Check your email to confirm the newsletter.' : '';
         if (mode === 'register' && data.pending) {
           // The account exists but the owner has not let it in yet — say so
           // here rather than bouncing to a page that would refuse them.
           w.restore();
           busy = false;
           setMsg('Account created. The admin has been asked to approve it — ' +
-            'try signing in again shortly.', 'ok');
+            'try signing in again shortly.' + subLine, 'ok');
           return;
         }
         // Not restored: the navigation is already under way.
         w.settled();
-        setMsg(mode === 'register' ? 'Account created — taking you in…' : 'Signed in — taking you in…', 'ok');
+        setMsg((mode === 'register' ? 'Account created — taking you in…' : 'Signed in — taking you in…')
+          + subLine, 'ok');
+        if (subLine) await new Promise((r) => setTimeout(r, 1800));
         window.location.href = '/';
       } catch (err) {
         w.restore();
@@ -361,6 +430,7 @@
       try {
         const me = await fetch('/api/me', { cache: 'no-store' }).then((r) => r.json());
         signupCodeRequired = !!me.signupCodeRequired;
+        mailReady = !!me.mailReady;
         // Shown only when the server says it is configured. A button that
         // leads to a 404 is worse than no button.
         if (me.googleReady) $('googleWrap').style.display = '';

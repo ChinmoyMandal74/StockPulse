@@ -1119,6 +1119,92 @@ function subPage({ title, heading, body, base }) {
     + `<a class="b" href="${base}/">Home</a></div></div></body></html>`;
 }
 
+// ONE DEFINITION OF WHAT SUBSCRIBING MEANS, because there are two doors into
+// the list now: the blog's own box and the tick on the sign-up form. A second
+// copy of the confirmation mail would drift the first time either was edited
+// -- the reason rowcard.js, action.js, filters.js and cards.js all exist.
+//
+// It returns what happened rather than rendering anything, so a caller that
+// has its own page to serve, or no page at all, can use it.
+async function beginSubscription({ email, topics, source, ip, base }) {
+  if (!EMAIL_RE.test(email) || email.length > 160) return { bad: true };
+  if (!MAIL_READY) {
+    console.warn('subscribe: mail is not configured (RESEND_API_KEY / MAIL_FROM / APP_URL)');
+    return { mailOff: true };
+  }
+  const want = cleanTopics(topics);
+  const started = await store.startSubscribe({
+    email, topics: want, source: String(source || 'blog').slice(0, 60), ip });
+  if (!started.token) return { already: !!started.already, throttled: !!started.throttled };
+
+  const link = `${base}/subscribe/confirm?t=${encodeURIComponent(started.token)}`;
+  const what = want.map(subTopicName).join(', ');
+  await sendMail({
+    kind: 'subscribe-confirm',
+    to: email,
+    subject: `Confirm your ${BRAND} subscription`,
+    text: textShell({
+      heading: 'One click to confirm',
+      intro: `Confirm that you want ${what} from ${BRAND}.`,
+      lines: [link, '', 'The link expires in a week.'],
+      note: 'If you did not ask for this, ignore it — nothing is sent until the link is clicked.',
+    }),
+    html: emailShell({
+      heading: 'One click to confirm',
+      intro: `Confirm that you want ${what} from ${BRAND}.`,
+      body: mailButton(link, 'Confirm subscription')
+        + `<p style="margin:0;font-size:13.5px;color:${MC.mute}">The link expires in a week. `
+        + 'If the button does not work, paste this into your browser:<br>'
+        + `<span style="word-break:break-all;color:${MC.faint}">${mailEsc(link)}</span></p>`,
+      // THE WHOLE POINT OF CONFIRMING: anyone can type anyone's address into a
+      // form, so this message has to be harmless to receive by mistake.
+      note: 'If you did not ask for this, ignore it — nothing is sent until the link is clicked.',
+    }),
+  });
+  return { sent: true };
+}
+
+// THE TICK ON THE SIGN-UP FORM (2026-10-04, owner's request), which is a
+// second door into the list and deliberately not a second definition of it.
+//
+// A PENDING ROW AND A CONFIRMATION, NEVER AN ACTIVE ONE. Registration does
+// not verify the address: with approval off, anyone holding the invite code
+// can type anyone's address and be let straight in. So a tick here is an
+// INTENT, not a proof, and recording it as confirmed would mail a newsletter
+// to a person who never asked -- the spam-complaint path confirmed opt-in
+// exists to close, and the domain it would damage is the one password resets
+// depend on.
+//
+// STRICTLY `=== true`, so a hand-rolled POST carrying the STRING "false"
+// cannot subscribe anybody: every non-empty string is truthy.
+//
+// AWAITED, unlike the welcome and the operator notice beside it. Nothing may
+// run after a response on this platform, so a detached send is simply lost --
+// and `startSubscribe` writes the row BEFORE the mail, so losing it leaves a
+// pending subscription with no link anyone can click, and the one-a-minute
+// throttle then blocks the obvious retry. /api/forgot and /contact both await
+// a send on a request path for exactly this reason. The rejection is
+// swallowed, so the route's own rule still holds: a failing mail provider can
+// never fail a sign-up.
+async function subscribeOnSignup(req, email) {
+  if (req.body?.subscribe !== true) return false;
+  try {
+    const r = await beginSubscription({
+      email,
+      topics: req.body.topics,
+      // The consent record says WHEN and HOW it was given, which is the stated
+      // reason this table exists apart from `users` at all.
+      source: 'signup',
+      ip: String(req.ip || req.headers['x-forwarded-for'] || '').split(',')[0].trim(),
+      base: subBase(req),
+    });
+    return !!r.sent;
+  } catch (e) {
+    console.warn('signup subscribe failed (the account is unaffected):', e.message);
+    return false;
+  }
+}
+
 // The sign-up itself. ANSWERS THE SAME WHATEVER HAPPENS — already subscribed,
 // brand new, throttled, or not a real address. `/api/forgot` follows the rule
 // for the same reason: otherwise the form is an oracle for whether an address
@@ -1145,41 +1231,14 @@ async function doSubscribe(req, res, wantsJson) {
       '<p>There is a link on its way to confirm the address. It expires in a week, and nothing '
       + 'is sent until you click it.</p>'));
 
-  if (!EMAIL_RE.test(email) || email.length > 160) return bad('We could not read that as an address.');
-  if (!MAIL_READY) {
-    console.warn('subscribe: mail is not configured (RESEND_API_KEY / MAIL_FROM / APP_URL)');
-    return fine();
-  }
-  const topics = cleanTopics(req.body && req.body.topics);
-  const source = String(req.body?.source || 'blog').slice(0, 60);
-  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || '';
-  const started = await store.startSubscribe({ email, topics, source, ip });
-  if (!started.token) return fine();   // already on, or asked a moment ago
-
-  const link = `${base}/subscribe/confirm?t=${encodeURIComponent(started.token)}`;
-  const what = topics.map(subTopicName).join(', ');
-  await sendMail({
-    kind: 'subscribe-confirm',
-    to: email,
-    subject: `Confirm your ${BRAND} subscription`,
-    text: textShell({
-      heading: 'One click to confirm',
-      intro: `Confirm that you want ${what} from ${BRAND}.`,
-      lines: [link, '', 'The link expires in a week.'],
-      note: 'If you did not ask for this, ignore it — nothing is sent until the link is clicked.',
-    }),
-    html: emailShell({
-      heading: 'One click to confirm',
-      intro: `Confirm that you want ${what} from ${BRAND}.`,
-      body: mailButton(link, 'Confirm subscription')
-        + `<p style="margin:0;font-size:13.5px;color:${MC.mute}">The link expires in a week. `
-        + 'If the button does not work, paste this into your browser:<br>'
-        + `<span style="word-break:break-all;color:${MC.faint}">${mailEsc(link)}</span></p>`,
-      // THE WHOLE POINT OF CONFIRMING: anyone can type anyone's address into a
-      // form, so this message has to be harmless to receive by mistake.
-      note: 'If you did not ask for this, ignore it — nothing is sent until the link is clicked.',
-    }),
+  const r = await beginSubscription({
+    email,
+    topics: req.body && req.body.topics,
+    source: String(req.body?.source || 'blog'),
+    ip: (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || '',
+    base,
   });
+  if (r.bad) return bad('We could not read that as an address.');
   return fine();
 }
 
@@ -1685,6 +1744,10 @@ app.get('/api/me', route(async (req, res) => {
     // Read inside the handler, so the const declared further down the file is
     // long past its temporal dead zone by the time anything asks.
     googleReady: GOOGLE_READY,
+    // What the sign-up form's newsletter tick is gated on: with no mail
+    // provider configured nothing can be confirmed, so the box would be a
+    // control that does nothing. `googleReady`'s own rule, one line up.
+    mailReady: MAIL_READY,
   });
 }));
 
@@ -1868,8 +1931,15 @@ app.post('/api/register', route(async (req, res) => {
   const user = await store.createUser({ email, passwordHash, salt, role, status, name });
   logAct(req, 'login', 'signup', email);
 
+  // ONE CALL SITE, BEFORE THE BRANCH. The newsletter is independent of whether
+  // the account is approved -- the blog is public and most subscribers will
+  // never have an account at all -- so a pending registrant who ticked the box
+  // gets the same confirmation an active one does. Two call sites below would
+  // be one for a later edit to forget.
+  const subscribed = await subscribeOnSignup(req, email);
+
   if (status === 'pending') {
-    res.json({ ok: true, pending: true });
+    res.json({ ok: true, pending: true, subscribed });
     // The sign-up notice to the operator is the approval request; the welcome
     // waits until approval, when it is true.
     sendSignupNotice(email, role, name, true).catch(() => {});
@@ -1879,7 +1949,7 @@ app.post('/api/register', route(async (req, res) => {
   const token = crypto.randomBytes(32).toString('hex');
   await store.createSession(token, Number(user.id), Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   setSessionCookie(res, token);
-  res.json({ ok: true, user: { email, name, role } });
+  res.json({ ok: true, user: { email, name, role }, subscribed });
 
   // After the response: the account is made and the session is set, so a slow
   // or failing mail provider must not hold up the sign-up or fail it.
