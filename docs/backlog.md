@@ -1176,6 +1176,115 @@ ratio are pre-split and a split does not move a ratio. **One symbol of
 
 ---
 
+## 22. Correlation — is a theme one bet or many? — raised 2026-10-04
+
+**From a list of fifteen quant concepts the owner asked about.** Six of them
+are already in this app under other names (Sharpe in `strategy.js`, VaR as
+the per-tier p10, Monte Carlo as the chart-pattern study's block bootstrap,
+Kelly's practical cousin as the volatility targeting on `/strategy`, mean
+reversion as three flat framings in the research log, beta as a thing
+deliberately not stored because the bars reproduce it). Four are impossible
+here for want of data — Black-Scholes, the Greeks and market making need an
+options chain or an order book, and this app has neither. **Three were worth
+building, and this is the first of them.**
+
+**The gap it fills.** The app has themes, sectors, size bands and personal
+lists, and nothing anywhere says how much the members of one move together.
+A seven-stock theme whose members correlate at 0.9 is one bet wearing seven
+tickers, and the equal-weight curve on `/theme/<name>` cannot say so.
+
+**It costs nothing to compute.** `basketPayload` already returns
+`series` — every member rebased on one shared date axis — so the card is a
+loop in the browser over data the page is already holding. No endpoint, no
+query, no extra bytes.
+
+**MEASURED BEFORE BUILDING, and both numbers decided the design:**
+
+- **Returns, never levels.** Correlating the rebased price LEVELS is the
+  classic error and it is not an approximation, it is noise: over 72 real
+  pairs the levels figure sits between **−0.96 and +0.90** away from the
+  returns figure, and flips sign — AAPL/MSFT reads **+0.12 on returns and
+  −0.27 on levels**.
+- **The 3dp rounding in `symbolSeries` is immaterial.** Worst error across
+  those same 72 pairs: **0.0039**. That is what makes computing in the
+  browser, off the rounded payload, the right call rather than a compromise.
+- **The window moves the answer more than anything else.** AAPL/MSFT is
+  **0.12 over 120 sessions and 0.44 over 1,000**. So the card has to follow
+  the page's own range buttons and say which window produced the number.
+
+*(Built 2026-10-04 — this entry is deleted in the commit that ships it.)*
+
+---
+
+## 23. GARCH, but only to make Cushion honest — raised 2026-10-04
+
+**Cushion is distance-to-exit measured in the stock's own TRAILING
+volatility** (`actionRisk.drop ÷ (realisedVol ÷ √12)`). The one thing a
+volatility model adds over a trailing average is the thing the trailing
+average cannot know: **volatility clusters.** A stock that had a shock last
+week is riskier than its 126-day average says, and a stock that has been
+quiet for six months is less risky than a window still carrying one old
+shock.
+
+**Why it is the second of the three.** It needs no new data, no credits and
+no endpoint — `barmath.js` already computes realised volatility from bars —
+and it improves a column that already exists rather than adding one. It is
+also squarely on the display side: Cushion is a reading and a sort tiebreak,
+never an input to a verdict.
+
+**What it would take.** A GARCH(1,1) fitted per symbol is a maximum-likelihood
+optimisation and is more machinery than this is worth. **The cheap 90% is an
+EWMA variance** (RiskMetrics λ = 0.94), which is one line, has no fitting
+step, and captures the clustering that matters. Start there and measure
+whether the full model adds anything before writing one.
+
+**What is already known.** Nothing has been measured. The claim that
+volatility clusters is textbook and is not in doubt; what is NOT measured is
+whether a clustering-aware Cushion orders the realised downside any better
+than the trailing one does. **That is the test**, and `action-backtest.js`
+already has the shape of it — it reports per-verdict p10 over eighteen years,
+and the question is whether splitting a tier by EWMA-Cushion separates the
+tails further than splitting it by today's Cushion.
+
+**What would make it a bad idea.** Shipping it without that measurement. The
+research log is ten framings tested and nine flat; a volatility model is a
+model, and this project's standing rule is that a number goes on screen as a
+FACT or it goes through the backtest first. If the measurement comes back
+flat, the honest outcome is to leave Cushion alone and record it.
+
+---
+
+## 24. Empirical VaR as a column — raised 2026-10-04
+
+**The worst 5% daily move a stock has actually had over the last year**, read
+straight off the bar archive. Not a model, not a distributional assumption,
+not a forecast: the 5th percentile of 253 observations that happened.
+
+**Why it earns a place.** It is the most literal possible answer to "how bad
+is a bad day in this stock", it is one sort away from being useful, and it
+pairs with Cushion — Cushion says how far the exit is in units of
+volatility, this says what a bad day costs in percent.
+
+**What it would take.** One pass over the archive at the same point
+`stampCapDerived` runs, or as part of the refresh's existing 470-day window
+read. The column, a `FIELD_SPEC` row, and the usual four span constants.
+
+**What is already known.** Nothing measured on this universe. The one thing
+worth checking first is whether it says anything the existing `realisedVol`
+does not: for a roughly normal return distribution the 5% quantile is about
+1.65 standard deviations, so **if the two rank the universe identically the
+column is realised volatility with a different label and should not be
+built.** The interesting case is the stock whose bad days are much worse than
+its everyday volatility implies — fat tails — and whether there are enough of
+those to be worth a column is a measurement, not an opinion.
+
+**What would make it a bad idea.** Calling it "Value at Risk". The name
+carries a promise about tomorrow that a percentile of last year does not
+make, and `/terms` already refuses forecasts. **Worst day (5%)** or similar
+says exactly what it is.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
