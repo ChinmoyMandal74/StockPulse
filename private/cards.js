@@ -179,6 +179,27 @@
       ytd: ['ytdPct', 'this year', 'year to date'],
       y1: ['oneYearPct', 'past year', '1 year'],
     };
+    // THE SNAPSHOT'S PERIODS, a SUBSET of MOV_PERIODS rather than a second
+    // mapping -- one catalogue, so the Snapshot and the Movers card can
+    // never disagree about what "past week" reads.
+    //
+    // WHY THESE FIVE. The owner asked for "week, Month, YTD and Year"
+    // beside the day, and that is exactly the screener's own column family:
+    // 1W and 1M are ROLLING (five and 21 sessions), YTD is CALENDAR (since
+    // last year's close) and 1Y is rolling again. The mix looks odd written
+    // down and is the house convention, so the card reads in the same words
+    // as the table it is made from.
+    //
+    // `wtd` and `mtd` are deliberately NOT offered. They need the host to
+    // stamp anchors from /api/period-anchors, which /api/m/post does not do
+    // -- so a saved Snapshot on those would draw blank on the phone, which
+    // is the trap the Movers card already records for its own calendar
+    // windows. YTD needs no stamping: computeStocks puts ytdPct on the row.
+    const SNAP_PERIODS = [
+      ['d', 'Today'], ['w1', 'Past week'], ['m1', 'Past month'],
+      ['ytd', 'This year'], ['y1', 'Past year'],
+    ];
+
     // Every card answers "which stocks?" the same way — a list, then
     // optionally a sector, then optionally an industry inside it — so it is
     // answered in one place. The label is
@@ -2536,8 +2557,23 @@
   // a two-column bar chart instead of eleven rows, and the movers are two
   // columns instead of twenty rows. 35 rows becomes ~17 lines.
   function tplDay() {
-    const byValue = O.dayMetric === 'value';
-    const field = byValue ? 'capChangeToday' : 'todayPct';
+    // ONE PERIOD FOR THE WHOLE CARD. All three blocks read the same window,
+    // or the chips would report one thing and the sectors beneath them
+    // another, with nothing on the artboard saying so.
+    const per = SNAP_PERIODS.some(([k]) => k === O.daySnapPeriod) ? O.daySnapPeriod : 'd';
+    const [pctField, perLabel] = MOV_PERIODS[per];
+    // VALUE ADDED IS TODAY-ONLY, and that is arithmetic rather than a
+    // restriction. `capChangeToday` is cap x todayPct/100, and it is right
+    // BECAUSE the stored market cap PREDATES today -- measured, the gap
+    // between price x shares and the stored cap regresses on today's move
+    // at a slope of 0.795. Over a week or a year the cap already CONTAINS
+    // the move, so the same formula double-counts it; the correct one would
+    // be cap x r/(1+r), which further assumes a share count that has not
+    // changed -- false over a year, with buybacks and issuance. Rather than
+    // print an invented figure the metric falls back to percent, the title
+    // stops claiming it, and the studio greys the option.
+    const byValue = O.dayMetric === 'value' && per === 'd';
+    const field = byValue ? 'capChangeToday' : pctField;
     const floor = Number(O.dayFloor) || 0;
     // A card is a fixed artboard: the square cannot hold ten a side beside
     // everything else at any size still legible once a feed has shrunk it.
@@ -2549,7 +2585,7 @@
     const bySym = new Map(stocks.map((x) => [x.symbol, x]));
     const idx = BENCH.map(([sym, label]) => {
       const r = bySym.get(sym);
-      return r && r.todayPct != null ? { label, v: r.todayPct } : null;
+      return r && r[pctField] != null ? { label, v: r[pctField] } : null;
     }).filter(Boolean);
     // ...and are therefore removed from every aggregate below — and so are
     // the SECTOR funds, for exactly the same reason now that the sector block
@@ -2575,7 +2611,7 @@
     // like one thing.
     const etfSecs = SECTOR_ETF.map(([name, sym]) => {
       const r = bySym.get(sym);
-      return (r && r.todayPct != null) ? { name, v: r.todayPct } : null;
+      return (r && r[pctField] != null) ? { name, v: r[pctField] } : null;
     }).filter(Boolean);
 
     // Two exclusions, and they are different rules. A missing return is
@@ -2588,7 +2624,7 @@
       for (const x of pool) {
         if (!x.sector) continue;          // the blank bucket is not a sector
         const w = x.marketCap;
-        const v = x.todayPct;
+        const v = x[pctField];
         if (!(w > 0) || v == null) continue;
         const a = agg.get(x.sector) || { w: 0, wv: 0, n: 0 };
         a.w += w; a.wv += w * v; a.n++;
@@ -2724,8 +2760,19 @@
       // the sectors are cap-weighted percentages whichever metric is chosen
       // (the owner's instruction), so a bare "by value added" over the whole
       // card would describe two of its three blocks wrongly.
-      '<h2 class="s-title">The day<br><span class="dim">' +
-      (byValue ? 'movers by value added' : 'movers by today’s move') +
+      // THE PERIOD IS THE SUBTITLE, because it is now true of all three
+      // blocks rather than of the movers alone -- a card reading as today
+      // when it is a year is the worst thing this template could do. The
+      // metric clause is appended only when it applies, which is Today.
+      '<h2 class="s-title">Snapshot<br><span class="dim">' +
+      // 'movers by' is dropped from the metric clause and the reason is a
+      // MEASUREMENT: with it the subtitle wraps at story/value/15 and the
+      // gap between blocks falls to 27px against the sweep's 30px floor.
+      // The period has to be stated now that the template is no longer
+      // called "The day", so something had to give, and this clause is
+      // the half the heads below already carry -- the movers are the only
+      // ranked thing on the card, and their columns say "Top 10".
+      esc(perLabel + (byValue ? ' · by value added' : '')) +
       '</span></h2>' +
       `<div class="dy-wrap">${chips}${secBlock}${movBlock}</div>` +
       '</div></div>' + chromeFoot();
@@ -4536,6 +4583,11 @@
     sectorEtfs: () => SECTOR_ETF.map((s) => s.slice()),
     // The S&P 500 cut as [value, label] pairs, for the studio's pickers.
     spCuts: () => SP_CUTS.map((c) => c.slice()),
+    // The Snapshot's periods as [value, label] pairs. Exported for the
+    // reason spCuts is: a copy in the markup could offer a key tplDay does
+    // not know, which falls back to Today and filters nothing -- a picker
+    // that silently draws the wrong window.
+    snapPeriods: () => SNAP_PERIODS.map((p) => p.slice()),
     // ...and which templates want the basket at all, with the window each
     // one asks for. Exported for the same reason: two hosts, one pairing.
     basketDays,

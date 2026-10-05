@@ -3857,6 +3857,31 @@ Measured against the live snapshot (1,284 rows, the 2026-10-02 holdings file, **
   - **A dollar-figure count was weakened to `>= 2` mid-debug and then put back to the exact `=== 4`** the `in` cut produces, so the stamp cannot silently go missing from half the rows while the check still passes.
   - **A python heredoc wrote the literal characters `“` into a comment** in the suite — the escape survived as text rather than becoming the glyph. Harmless where it landed and the sixth instance of that trap; the repair patch is ASCII-only for that reason.
 
+#### The day card became the Snapshot, over five windows (2026-10-05, owner's request)
+**"Expand it to other time periods namely week, Month, YTD and Year. Maybe rename the template to Snapshot."** A `Period` picker on the panel — Today, Past week, Past month, This year, Past year — read by **all three blocks**, so the chips, the sector bars and the movers always describe one window.
+
+- **THE LABEL CHANGED AND THE ID DID NOT.** `day` is a stored key: every saved post names it and `cleanPosts` checks it against `Cards.ids`. The Scale rename's own rule — renaming a label is free, re-keying is not — so existing posts keep working and the picker reads Snapshot.
+- **A SUBSET OF `MOV_PERIODS`, never a second mapping.** `SNAP_PERIODS` names five keys from the catalogue the Movers card already uses, so the two cannot disagree about what *past week* reads.
+- **WHY THOSE FIVE, and the odd-looking mix is the house convention.** 1W and 1M are **rolling** (five and 21 sessions), YTD is **calendar** (since last year's close), 1Y is rolling again — which is exactly the screener's own column family, so the card reads in the same words as the table it is made from.
+- **`wtd` and `mtd` are deliberately NOT offered**, though the catalogue has them: they need the host to stamp anchors from `/api/period-anchors`, which **`/api/m/post` does not do** — so a saved Snapshot on one of those would draw blank on the phone. YTD needs no stamping, because `computeStocks` puts `ytdPct` on the row.
+
+##### VALUE ADDED IS TODAY-ONLY, and that is arithmetic rather than a restriction
+`capChangeToday` is `cap × todayPct / 100`, and it is right **because the stored market cap predates today** — measured when that column was built, the gap between `price × shares` and the stored cap regresses on today's move at a slope of **0.795**. Over a week or a year the cap **already contains** the move, so the same formula double-counts it; the correct one would be `cap × r/(1+r)`, which further assumes a share count that has not changed — false over a year, with buybacks and issuance.
+
+- So rather than print an invented figure the metric **falls back to percent**, the title stops claiming it, and **the studio greys the option and says why** (`Value added, $ (today only)`). A control that looks live and does nothing when you touch it is this page's own documented hazard. **Proved by reverting**: offering it on every window fails 2.
+
+##### THE PERIOD IS THE SUBTITLE, because the template no longer says it
+`The day` carried the window in its name; `Snapshot` does not, so **a YTD card reading as today would be the worst thing this template could do**. The subtitle is the period for the whole card, with the metric clause appended only when it applies.
+
+- **`movers by` was dropped from that clause, and the reason is a measurement.** With it the subtitle wraps at story/value/15 and the gap between blocks falls to **27px against the sweep's own 30px floor** — the card still fits, but it would be sitting on its limit. Something had to give once the period had to be stated, and this clause is the half the columns below already carry: the movers are the only ranked thing on the card and their heads say *Top 10*.
+- Caught by the day card's existing 54-combination fit sweep, not by eye.
+
+- Verified: **28 checks** on the real studio and the real phone route. **The fixture is the test**: every company leads exactly one window and every index and sector fund carries a different value per period, so a block still reading `todayPct` names a different company and prints a number belonging to another window. Plus the picker built from the module, the greyed metric, and a saved post round-tripped through `/api/m/post`. **Proved by reverting ten times, every one load-bearing**: the picker unfilled fails 19, the listener list 15, `CONTROL_IDS` 14, the movers 5, the chips and the sector funds 4 each, the old title 3, the subtitle 2, and value-added everywhere and the old label 1 each.
+  - **ONE REVERT FIRST ABORTED THE SUITE and read as a guard that never mattered.** The hardcoded picker left `lab` referenced by an arrow body that no longer bound it, so the page threw at load and 0 of 28 checks ran. *A revert has to simulate the bug, not an impossible state* — with a valid hardcoded list it fails 19.
+  - **A PRESENCE CHECK WAS VACUOUS and reported a working card as broken.** The phone check asked whether `Ytdco` appeared in the HTML — and it appears in the *day* window's top ten too, just not first, so it was true whatever period the card drew. It reads the FIRST name in the first column now. The failure it masked was real and in the test: the opts were collected by sweeping `#panel select`, which matched nothing, so the post saved without its period and the phone correctly drew Today. **Collect by name, and assert the key is there before saving.**
+  - **A FIXTURE'S OWN SORT ORDER, not the fixture's first row.** The sector block sorts by value, so the leader is the fund with the largest value in that period — XLC, not XLK. Asserting XLK reported five failures on a block that was working perfectly.
+  - `/api/promo-posts` is a **PUT**, not a POST; a POST answers 404 and the save silently does nothing.
+
 ### The Stock spotlight — one company, the whole picture (2026-09-30, owner's request)
 **"One card for a single stock — use your judgement."** A thirteenth template, `spotlight`, second in the studio's picker. Three templates already answered ONE question about one company — the Chart card in `stock` mode draws its line, the Advice card in `profiles` mode reads the five rule sets against it, the Fundamentals card in `one` mode lists its figures — so the whole picture took three posts.
 

@@ -561,9 +561,11 @@
            So there is no daySector/dayIndustry/dayCap/dayScreen, and
            INDUSTRY_PREFIXES is left alone. -->
       <div id="dayBox">
+        <label>Period</label>
+        <select id="daySnapPeriod"></select>
         <label>Rank the movers by</label>
         <select id="dayMetric">
-          <option value="pct" selected>Today's move, %</option>
+          <option value="pct" selected>The move, %</option>
           <option value="value">Value added, $</option>
         </select>
         <label>How many each way</label>
@@ -731,7 +733,7 @@
       { id: 'story', label: 'Story 9:16', w: 1080, h: 1920 },
     ];
     const TPLS = [
-      { id: 'day', name: 'The day', note: 'Indexes, sectors and both ends of the move \u2014 one card' },
+      { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
@@ -849,7 +851,7 @@
       'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap', 'fundScreen', 'fundSp500',
       'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen', 'sizeSp500',
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen', 'bubSp500',
-      'dayMetric', 'dayCount', 'dayFloor', 'daySp500',
+      'daySnapPeriod', 'dayMetric', 'dayCount', 'dayFloor', 'daySp500',
       'spotSym', 'spotWin', 'spotProf',
       'evoSym', 'evoMeasure', 'evoWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
@@ -925,6 +927,16 @@
       $('sizeBox').style.display = tpl === 'size' ? 'block' : 'none';
       $('bubBox').style.display = tpl === 'bubble' ? 'block' : 'none';
       $('dayBox').style.display = tpl === 'day' ? 'block' : 'none';
+      // VALUE ADDED IS TODAY-ONLY -- see tplDay for the arithmetic. Greyed
+      // rather than silently ignored: a control that looks live and does
+      // nothing when you touch it is this page's own documented hazard.
+      const vOpt = $('dayMetric') && $('dayMetric').querySelector('option[value="value"]');
+      if (vOpt) {
+        const today = $('daySnapPeriod').value === 'd' || !$('daySnapPeriod').value;
+        vOpt.disabled = !today;
+        vOpt.textContent = today ? 'Value added, $' : 'Value added, $ (today only)';
+        if (!today && $('dayMetric').value === 'value') $('dayMetric').value = 'pct';
+      }
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       const fm = $('fundMode').value;
@@ -1074,7 +1086,7 @@
     })();
     ['bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen', 'bubSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'bubble') render(); }));
-    ['dayMetric', 'dayCount', 'dayFloor', 'daySp500'].forEach((id) =>
+    ['daySnapPeriod', 'dayMetric', 'dayCount', 'dayFloor', 'daySp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
     ['spotSym', 'spotWin', 'spotProf'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'spotlight') render(); }));
@@ -1498,6 +1510,15 @@
           $(id).innerHTML = spOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
         });
+        // FROM THE MODULE, never a copy in the markup: a key tplDay does not
+        // know falls back to Today and draws the wrong window with nothing
+        // saying so. The spCuts bargain.
+        const snapKeep = $('daySnapPeriod').value;
+        $('daySnapPeriod').innerHTML = Cards.snapPeriods().map(([v, lab]) =>
+          `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
+        if ([...$('daySnapPeriod').options].some((o) => o.value === snapKeep)) {
+          $('daySnapPeriod').value = snapKeep;
+        }
         syncIndustries(true);
         paintControls();
         render();
