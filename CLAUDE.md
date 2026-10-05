@@ -2421,6 +2421,47 @@ The frozen view is the **same file**, the same painters, over the stored payload
   - **A REVERT THAT STOPS THE SUITE RUNNING REPORTS `0 failed`**, indistinguishable from a guard that never mattered: a `false &&` wrapper left an unbalanced paren, the module would not parse, and the harness read it as not load-bearing. It now compares the check COUNT against the baseline and says the run aborted. Neuter the refusal, not the condition.
   - **`db.js` was CRLF on disk while `server.js` and `adjustedbacktest.html` were LF**, in the same working copy, on the same afternoon — the documented hazard, met again. Detect per file, at the moment the patch runs.
 
+### One company, one position (2026-10-05, owner: "Alphabet appears twice, is there a way to fix it")
+**GOOGL and GOOG held two of ten slots in a top-10 book.** They are one filer with two share classes, correlated at essentially 1, so that is **one bet taking two positions** — not a display quirk but a flaw in what the simulation was measuring.
+
+#### KEYED ON THE SEC FILER ID, NOT THE DISPLAY NAME — and the measurement is what decided it
+The peers table already solves this problem by display name, so reusing that key was the obvious move. **Measured against the live universe first, and it would have been wrong.** Ten display names are shared by two tickers; the CIK agrees with the name on seven, cannot judge two, and **contradicts it on one**:
+
+| | | |
+|---|---|---|
+| BRK.A/BRK.B, GOOGL/GOOG, HEI.A/HEI, FOXA/FOX, NWS/NWSA, Z/ZG, LBTYA/LBTYK | same CIK | one company, fold |
+| **OWL / OBDC** — both "Blue Owl Capital" | **1823945 vs 1655888** | **two companies, keep both** |
+| FI/FISV, SQ/XYZ | no CIK stored | the dead renamed tickers |
+
+**OWL is Blue Owl Capital Inc. and OBDC is Blue Owl Capital Corporation** — an asset manager and a BDC. A name key would silently drop a real, independent holding from the book, which is the expensive direction: a missing position looks like the rules simply did not pick it.
+
+- **A SYMBOL WITH NO CIK IS NEVER FOLDED.** Unknown is not *the same as*, so the two the universe cannot key are left as two rows. An under-catch, which is the safe direction, and the measured cost today is nil — both are dead tickers.
+- **It costs no query on `/adjustedbacktest`**: that route already reads `secState` for the overlay (a fund files nothing), so the map is in hand at the cut.
+
+#### THE SURVIVOR IS CHOSEN EX-ANTE — tier, then cushion, then the symbol
+**Never by return.** Keeping whichever class happened to do better is a look-ahead that puts the answer into the question — the trap `btPick`'s own sort already exists to neutralise, where the pick list arrives sorted by realised return and every tie would otherwise resolve by what happened next. **The fixture is built on exactly that**: `ALFAC` has the better cushion and the *worse* return, so a rule resolving the pair by outcome keeps `ALFAA` instead. **Proved by reverting**: sorting by `ret` first fails 3 and keeps the better performer.
+
+#### THE POOL IS CLEANED, NOT THE CUT — one intervention, four surfaces
+`btOneEach` runs inside `btRun` **before the sort by return**, so the picks table, the "all of them" basket, the random control band and the Top-N cut all read one clean list.
+
+- **Deduping the cut alone would have broken the control.** `btBand` draws its 400 random baskets from the same pool, so a cut that cannot hold two Alphabets compared against baskets that can would make the percentile measure the dedupe as well as the ranking. One pool, and the comparison stays honest by construction.
+- **`everySeries` is deliberately untouched** — that is the equal-weight universe line, the benchmark, and narrowing it would flatter every comparison on the page.
+- **`btRebalance` gets the same rule at every mark**, or a later re-cut quietly buys back the class the opening book was careful not to hold. **Proved by reverting**: fails 2.
+
+#### `/backtest` HAD THE IDENTICAL FLAW and is fixed with it
+It shares `btPick`, `btRun` and `btRebalance`, so passing the key on one page and not the other would have made one shared function behave two ways. It needed the CIK map it does not otherwise read: **one small read of a ~1,300-row table against the ~157,000 bars that route already pulls**. Its own correctness here rests on the shared helper (tested) plus `adjbt-test`'s boundary check that the route still refuses an old date and still runs on a recent one — it is not separately fixture-tested, and `bt-test.js` is broken at HEAD.
+
+#### THE DROP IS NAMED, because the reader can see the book
+A ticker missing from a list its sibling is on reads as a missing pick. The page says which went and which it was folded into, and that the match was on the filer id rather than the name — **neutral, not amber**: nothing is wrong and nothing is stale, and amber on this page already means *notice this, it is old*.
+
+#### Worth reporting: the peers table has the same latent fault
+`peersFor` deduplicates by display name, with a comment naming eight pairs — so on a Blue Owl peer table it would drop **OWL or OBDC**, two genuinely different companies, and the reader would never know. **Not fixed here**: it is a different page, it was not what was asked, and it needs the CIK map threading into a path that does not currently read it. One line of the same key would do it.
+
+- Verified: **19 checks** — four on the helper lifted out of server.js, the rest against the real routes and the real page. The fixture's load-bearing properties are that the two classes disagree about which is better (cushion against return) and that two real companies share one display name — so a name key and an outcome-resolved key each come out at a different answer rather than coincidentally the same one. Plus the control band, every rebalanced book rather than just the opening one, and the note's wording and its drawn colour. **Proved by reverting six times, every one load-bearing**: no dedupe fails 8, the page note 4, the look-ahead 3, the name key 2, and the rebalance and the no-filer-id guard 1 each.
+  - **THE NO-FILER-ID GUARD FIRST REPORTED 0 AND IT WAS UNREACHABLE, not unimportant.** `/adjustedbacktest` drops a symbol with no CIK before it can ever be a pick, so only `/backtest` can meet one — and this fixture cannot reach that route. Four checks on the helper lifted straight out of server.js prove the branch, and the revert then fails 1. *A guard that no fixture can reach needs a smaller test, not a quieter claim.*
+  - **The book only exists when the run REBALANCES**, so a page check on a buy-and-hold run finds no `#abTrades` blocks and asserts over nothing — which is what the first run did, reporting an empty list as a failure.
+  - **A `\r\r\n` IN A PATCH, for the second time on this project.** The script joined its replacement lines with the detected CRLF *and then* converted `\n` again in the loop, doubling the CR. **`node --check` passes a file like that** and only `cat -A` shows it. Convert the newline ONCE, at the moment of writing.
+
 ### A saved run names itself (2026-10-05, owner: "come out with a standard naming convention so that I don't have to key in the name")
 **The Name this run field shows the name it will use, and an empty field saves under it.** The formula is the owner's: `2025-08-31 · 1Y · Balanced · Technology · Strong Buy, Buy · Top 10 · monthly` — start date, hold, rules, theme, verdicts, cut, cadence.
 

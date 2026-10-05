@@ -7361,6 +7361,51 @@ const BT_RANKS = ['cushion', 'random'];
 // perfect hindsight — it would report a magnificent result that means nothing.
 // The same look-ahead class the strategy backtest was caught on once already.
 // So this sorts its own copy and the caller's order is never consulted.
+// ONE COMPANY, ONE POSITION. GOOGL and GOOG are one filer with two share
+// classes: holding both is one bet taking two of ten slots, at a
+// correlation of essentially 1. Reported as "Alphabet appears twice" in a
+// top-10 book.
+//
+// KEYED ON THE SEC CIK, NOT THE DISPLAY NAME, and that is a measurement
+// rather than a preference. Ten display names are shared in the live
+// universe and the name is WRONG for one of them: OWL and OBDC are both
+// "Blue Owl Capital" and are two DIFFERENT companies (CIKs 1823945 and
+// 1655888), an asset manager and a BDC -- so a name key would silently
+// drop a real independent holding. The CIK gets all ten right. The peers
+// table keys on the name and has the same latent fault; see CLAUDE.md.
+//
+// A SYMBOL WITH NO CIK IS NEVER FOLDED. Unknown is not "the same as", and
+// the two the universe cannot key (FI and SQ, dead tickers whose filings
+// were never fetched) are better left as two rows than wrongly merged.
+//
+// THE SURVIVOR IS CHOSEN EX-ANTE: tier, then cushion, then the symbol.
+// NEVER by return -- that is the look-ahead btPick's own sort exists to
+// neutralise, and keeping whichever class happened to do better would put
+// the answer into the question.
+function btOneEach(rows, keyOf) {
+  if (typeof keyOf !== 'function') return { kept: rows, dropped: [] };
+  const order = rows.slice().sort((a, b) => {
+    if (a.tierRank !== b.tierRank) return b.tierRank - a.tierRank;
+    const av = a.cushion, bv = b.cushion;
+    if (av != null && bv != null && av !== bv) return bv - av;
+    if (av == null && bv != null) return 1;
+    if (bv == null && av != null) return -1;
+    return String(a.symbol) < String(b.symbol) ? -1 : 1;
+  });
+  const held = new Map();
+  const dropped = [];
+  for (const x of order) {
+    const k = keyOf(x.symbol);
+    if (!k) continue;                       // unkeyable: never folded
+    if (held.has(k)) {
+      dropped.push({ symbol: x.symbol, keptSymbol: held.get(k), name: x.name || null });
+    } else held.set(k, x.symbol);
+  }
+  if (!dropped.length) return { kept: rows, dropped };
+  const out = new Set(dropped.map((d) => d.symbol));
+  return { kept: rows.filter((x) => !out.has(x.symbol)), dropped };
+}
+
 function btPick(picks, rank, n, seed) {
   if (!n || n >= picks.length) return picks.slice();
   // Neutralise the inherited order BEFORE ranking. picks arrives sorted by
@@ -7748,7 +7793,7 @@ function btRebalance(o) {
     const fundsFor = funds(at);
     const set = new Set();
     const why = new Map();
-    const cand = [];
+    let cand = [];
     let real2 = 0, imputed2 = 0;
     for (const sym of symbols) {
       const p = prep[sym];
@@ -7785,6 +7830,15 @@ function btRebalance(o) {
     // basket each period rather than the same one every time; exit-only is
     // left alone, since a cut there would sell names for ranking low, which
     // is not what "sell on downgrade" means.
+    // The same rule at every mark, or a rebalance quietly re-buys the
+    // second share class the opening book was careful not to hold.
+    if (recut) {
+      const one = btOneEach(cand, o.companyKey);
+      if (one.dropped.length) {
+        cand = one.kept;
+        for (const d of one.dropped) set.delete(d.symbol);
+      }
+    }
     if (recut && cand.length > top) {
       const keep = new Set(btPick(cand, rank, top, seed + j).map((x) => x.symbol));
       for (const sym of [...set]) if (!keep.has(sym)) set.delete(sym);
@@ -7801,7 +7855,8 @@ function btRebalance(o) {
 }
 
 function btRun(opts) {
-  const { bars, snapshot, from, tiers, earnings, recorded, only, cfg, compare } = opts;
+  const { bars, snapshot, from, tiers, earnings, recorded, only, cfg, compare,
+    companyKey } = opts;
   btRsiCache.clear();
   const want = new Set(tiers);
   const use = cfg || ACTION_CFG;
@@ -7894,8 +7949,18 @@ function btRun(opts) {
     if (forward.length > 1) heldSeries[sym] = forward;
   }
 
-  picks.sort((a, b) => b.ret - a.ret);
-  return { picks, heldSeries, everySeries, prep,
+  // BEFORE the sort by return, deliberately: see btOneEach. Cleaning the
+  // pool here is what makes the picks table, the "all of them" basket, the
+  // random control band and the cut agree -- all four read this one list,
+  // so deduping the cut alone would leave the control drawing baskets the
+  // cut could not have held, and the percentile would measure the dedupe
+  // as well as the ranking.
+  // `everySeries` is NOT touched: that is the equal-weight universe line,
+  // the benchmark, and narrowing it would flatter the comparison.
+  const one = btOneEach(picks, companyKey);
+  const kept = one.kept;
+  kept.sort((a, b) => b.ret - a.ret);
+  return { picks: kept, dupClasses: one.dropped, heldSeries, everySeries, prep,
            evaluated, tooShort, noFund, real, imputed,
            // Equal dollars at the start, held: for that shape a basket's return
            // IS the mean of its members' returns, so no second simulation is
@@ -12455,8 +12520,16 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
     ? String(req.query.rules) : 'Balanced';
   const cfg = ruleCfg(rules);
 
+  // ONE COMPANY, ONE POSITION -- the same flaw this page shares with
+  // /adjustedbacktest, and the same key. One small read of a ~1,300-row
+  // table against the ~157,000 bars this route already pulls.
+  const secState = await store.readSecState().catch(() => ({}));
+  const companyKey = (sym) => {
+    const st = secState[sym];
+    return st && st.cik ? String(st.cik) : null;
+  };
   const r = btRun({ bars, snapshot: stocks, from: asked, tiers, earnings, recorded, only,
-    cfg, compare: RULE_SETS });
+    cfg, compare: RULE_SETS, companyKey });
   const tier = btCurve(r.heldSeries, asked);        // every pick in the chosen verdicts
 
   // Top N. Seeded off the date + size so the same run draws the same band.
@@ -12513,7 +12586,7 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
         while (ptr < rows.length && rows[ptr].d <= at) { stood[rows[ptr].symbol] = rows[ptr]; ptr++; }
         return (sym) => stood[sym] || null;
       };
-      rebal = btRebalance({ axis, marks, px: full.rows, symbols: Object.keys(bars),
+      rebal = btRebalance({ companyKey, axis, marks, px: full.rows, symbols: Object.keys(bars),
         prep: r.prep, byS: byS2, earnings, cfg, tiers, mode, top, rank, seed,
         costBps, open: chosen.map((x) => x.symbol), funds });
       if (rebal) rebal.every = every;
@@ -12919,8 +12992,14 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
   const allSeries = adjBtSeries(bars, asked);
   const market = btCurve(allSeries, asked);
 
+  // ONE COMPANY, ONE POSITION. The CIK map is already read for the overlay,
+  // so keying on it costs no query. A symbol with no CIK is never folded.
+  const companyKey = (sym) => {
+    const st = state[sym];
+    return st && st.cik ? String(st.cik) : null;
+  };
   const r = btRun({ bars: scoped, snapshot: stocks, from: asked, tiers, earnings,
-    recorded, only, cfg });
+    recorded, only, cfg, companyKey });
   const tier = btCurve(r.heldSeries, asked);
 
   // ---- how many to hold ---------------------------------------------------
@@ -13000,7 +13079,7 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
           return ov2;
         };
       };
-      rebal = btRebalance({ axis: tier.dates, marks, px: full.rows,
+      rebal = btRebalance({ companyKey, axis: tier.dates, marks, px: full.rows,
         symbols: Object.keys(scoped), prep: r.prep, byS, earnings, cfg, tiers,
         mode, top, rank, seed, costBps,
         open: chosen.map((x) => x.symbol), funds });
@@ -13090,6 +13169,10 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
       scored: r.evaluated, picked: r.picks.length,
       kept, noCik, noFilings, noTtm, noCap, tooShort: r.tooShort,
       marketMembers: market.members, held: basket.members,
+      // A SECOND SHARE CLASS DROPPED IS NOT A SILENT EXCLUSION. It is the
+      // one the reader can see for themselves in the book, so the page
+      // names which ticker went and which it was folded into.
+      dupClasses: r.dupClasses || [],
     },
     ms: clock,
     window: { barsFrom: since, barsTo: until, factsFrom: factSince,

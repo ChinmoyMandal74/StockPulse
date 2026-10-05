@@ -291,6 +291,10 @@
     #abBandNote { color: var(--muted); font-size: 12.5px; line-height: 1.7;
                   margin: 10px 0 0; }
     #abBandNote b { color: var(--text); font-weight: 600; }
+    /* Its own line, and NEUTRAL: nothing was wrong and nothing is stale,
+       so neither red nor amber. Amber on this page already means
+       "notice this, it is old". */
+    #abBandNote .dup { display: block; margin-top: 7px; color: var(--faint); }
     #abChart .ln.rebal { stroke: var(--amber); stroke-width: 1.5; }
 
     #abMsg { color: var(--muted); font-size: 13px; padding: 18px 4px; }
@@ -612,6 +616,23 @@
     // A top-N basket that lands at the 50th percentile of random baskets of
     // the same size is a cut that did nothing, and that is the number worth
     // reading before believing the ranking earned its place.
+    // A SECOND SHARE CLASS DROPPED IS NOT A SILENT EXCLUSION. The reader can
+    // see the book, so if GOOG is absent from a list GOOGL is on, the page
+    // has to say which and why -- otherwise it reads as a missing pick.
+    // Appended to whatever bandNote already said, because it is a fact about
+    // the same cut; it draws on its own when no band was computed.
+    function dupLine() {
+      var d = (DATA.counts && DATA.counts.dupClasses) || [];
+      if (!d.length) return '';
+      var bits = d.map(function (x) {
+        return '<b>' + we(x.symbol) + '</b> (same company as ' + we(x.keptSymbol) + ')';
+      });
+      return '<span class="dup">One company, one position: ' + bits.join(', ')
+        + (d.length === 1 ? ' was' : ' were') + ' left out. Two share classes of one '
+        + 'filer are one bet, and holding both would take two slots for it. '
+        + 'Matched on the SEC filer id, not the name.</span>';
+    }
+
     function bandNote() {
       var r = DATA.result;
       // A CUT THAT DID NOT BIND IS NOT A CUT, and the page used to say
@@ -625,10 +646,10 @@
           + (DATA.picks.length === 1 ? '' : 's') + ' passed the verdicts you chose on '
           + we(DATA.date) + ', so every one of them is held and the ranking never '
           + 'ran. It is a ceiling, not a target \u2014 widen the verdicts, or start '
-          + 'from a date with more names, to make it bite.';
+          + 'from a date with more names, to make it bite.' + dupLine();
         return;
       }
-      if (!DATA.top || r.bandPct == null) { $('abBandNote').innerHTML = ''; return; }
+      if (!DATA.top || r.bandPct == null) { $('abBandNote').innerHTML = dupLine(); return; }
       var verdict = r.bandPct >= 80 ? 'ahead of most of them'
         : r.bandPct <= 20 ? 'behind most of them' : 'indistinguishable from them';
       $('abBandNote').innerHTML =
@@ -640,7 +661,7 @@
       + '50 would mean the ranking did nothing.'
       + (DATA.rank !== 'random' && r.rankable < DATA.picks.length
         ? ' <b>Only ' + r.rankable + ' of ' + DATA.picks.length + ' could be ranked</b> '
-          + 'on cushion at all, so the rest of the cut was arbitrary.' : '');
+          + 'on cushion at all, so the rest of the cut was arbitrary.' : '') + dupLine();
     }
 
     function trades() {
