@@ -298,9 +298,10 @@
       <div class="pick"><label for="colDim">Columns</label><select id="colDim"></select></div>
       <div class="pick"><label for="measure">Measure</label><select id="measure"></select></div>
       <div class="pick"><label for="heat">Shading</label><select id="heat"></select></div>
-      <!-- Excel's report filter. Its own row, because it does something
-           different from the two axes: it changes WHICH STOCKS the grid is
-           about, rather than how they are arranged. -->
+      <!-- Both filters change WHICH STOCKS the grid is about rather than how
+           they are arranged, so they sit together, the fixed one first. The
+           generic Filter keeps its dependent "Is" and its Clear beside it. -->
+      <div class="pick"><label for="spCut">Include S&amp;P</label><select id="spCut"></select></div>
       <div class="pick"><label for="pageDim">Filter</label><select id="pageDim"></select></div>
       <div class="pick" id="pageValWrap" hidden><label for="pageVal">Is</label><select id="pageVal"></select></div>
       <button class="btn" id="pageClear" hidden title="Show the whole screen again">Clear filter</button>
@@ -483,23 +484,13 @@
       entry:    { label: 'Entry state',     get: (s) => s.actionEntry, order: ENTRY_ORDER, tint: 1 },
       type:     { label: 'Company type',    get: (s) => s.companyType, order: TYPE_ORDER },
       exchange: { label: 'Exchange',        get: (s) => s.exchange },
-      // S&P 500 membership. ONE entry gives this page three things at once —
-      // a row dimension, a column dimension and the page filter — because the
-      // Filter picker is built from DIMS rather than from a list of its own.
-      //
-      // The value comes from `Filters.filterValue`, never from a ternary here:
-      // that is the one function that already knows `spMember` is THREE-state,
-      // returning '' for a stock no holdings file has been checked against —
-      // which `valuesOf` then buckets as the blank the page already draws and
-      // counts. A `s.spMember ? 'Yes' : 'No'` here would silently call every
-      // unchecked stock a non-member, the confident wrong answer the screener's
-      // own column refuses to give.
-      //
-      // Yes before No: the alphabet gets a two-value boolean backwards, and a
-      // reader scanning one expects Yes first. No `tint` — membership is not a
-      // severity ladder and has no good end.
-      sp500:    { label: 'S&P 500',         get: (s) => Filters.filterValue(s, 'spMember'),
-                  order: ['Yes', 'No'] },
+      // S&P 500 MEMBERSHIP IS NOT A DIMENSION HERE (2026-10-04, owner's
+      // request: "I don't want s&p filter on Rows and Column filter like this,
+      // I want to create a separate filter called Include s&p"). It was one
+      // DIMS entry, which gave it a row axis, a column axis and a slot in the
+      // generic Filter at once — and on an axis it is a two-row grid whose
+      // interesting half is always the other dimension. It is `spCut` below:
+      // its own control, always on screen, ANDed with everything else.
       // Which WAY the Balanced verdict moved since the previous trading day.
       // Direction belongs on an axis rather than in a measure: "Technology 27"
       // says where the churn is, "Technology 15 up 12 down" says what happened,
@@ -740,6 +731,33 @@
     }
 
     let stocks = [];
+    // INCLUDE S&P — its own filter rather than a dimension, and always on
+    // screen. The three-state read is the half that must not be rewritten:
+    // `Filters.filterValue(s, 'spMember')` is the one function that knows
+    // `spMember` is null until a holdings file has been imported, returning
+    // '' rather than guessing. A `s.spMember ? …` test here would call every
+    // unchecked stock a non-member — the confident wrong answer the screener's
+    // own column refuses to give, and on an instance that has never run the
+    // import it would say all 1,278 of them are outside the index.
+    //
+    // So 'out' means KNOWN TO BE OUTSIDE, not "not known to be inside", and
+    // an unchecked stock is excluded by both cuts rather than silently landing
+    // in one. The note says how many that is.
+    //
+    // The values are spelled as `Cards.spCuts()` spells them, so the two can
+    // be unified later by deleting one rather than translating. They are NOT
+    // shared today: that lives in cards.js, which this page does not load, and
+    // a third home for three labels would be worse than two.
+    const SP_CUTS = [
+      ['all', 'All stocks'],
+      ['in',  'In the S&P 500'],
+      ['out', 'Not in the S&P 500'],
+    ];
+    let spCut = 'all';
+    const spOf = (s) => Filters.filterValue(s, 'spMember');
+    const spKeep = (s) => (spCut === 'all' ? true
+      : spCut === 'in' ? spOf(s) === 'Yes' : spOf(s) === 'No');
+
     // THE PAGE FILTER — Excel's report filter: a dimension on neither axis that
     // narrows the whole grid. It is not a third axis; it removes stocks before
     // anything is counted, so every number on the page — the cells, both sets
@@ -812,11 +830,18 @@
       return [v == null || v === '' ? BLANK : String(v)];
     }
 
-    // The stocks the page is about. Everything downstream starts here.
+    // The stocks the page is about. EVERYTHING downstream starts here — the
+    // cells, both sets of totals, the shading denominators, the drill-downs
+    // and the note — so a filter applied in this one place is applied to all
+    // of them without any of them needing to know it exists.
+    //
+    // The two filters are ANDed. They answer different questions and either
+    // can be left alone, so neither replaces the other.
     function pageRows() {
       const dim = DIMS[pageDim];
-      if (!dim || !pageVal) return stocks;
-      return stocks.filter((s) => valuesOf(dim, s).includes(pageVal));
+      const narrowed = (!dim || !pageVal) ? stocks
+        : stocks.filter((s) => valuesOf(dim, s).includes(pageVal));
+      return spCut === 'all' ? narrowed : narrowed.filter(spKeep);
     }
     // What the filter could be set to, with a count beside each — the same
     // shape the bar pickers on the screener use. Counted over the WHOLE
@@ -1394,6 +1419,21 @@
           '</b> — <b>' + total + '</b> of ' + stocks.length + ' stocks. ' +
           'Everything below describes those ' + total + '.');
       }
+      // The S&P cut is said the same way and for the same reason: a reader who
+      // has forgotten it is reading the wrong table with no way to notice.
+      if (spCut !== 'all') {
+        const unknown = stocks.filter((s) => !spOf(s)).length;
+        bits.push('Showing only the stocks <b>' +
+          (spCut === 'in' ? 'in the S&P 500' : 'outside the S&P 500') +
+          '</b> — <b>' + total + '</b> of ' + stocks.length + '.' +
+          // AN UNCHECKED STOCK IS IN NEITHER CUT, so where there are any the
+          // two cuts do not add up to the screen and the page says why rather
+          // than leaving the arithmetic to fail quietly.
+          (unknown ? ' ' + unknown + (unknown === 1
+            ? ' stock has not been checked against a holdings file yet and is'
+            : ' stocks have not been checked against a holdings file yet and are') +
+            ' in neither cut.' : ''));
+      }
       // The double-counting warning is about ROWS and is judged on placements,
       // never on the measure: with money on screen `placements` is dollars, and
       // comparing dollars to a stock count would be nonsense.
@@ -1557,6 +1597,17 @@
       $('heat').innerHTML = Object.keys(HEATS).map((k) =>
         '<option value="' + k + '"' + (k === heat ? ' selected' : '') + '>' +
         esc(HEATS[k]) + '</option>').join('');
+      // Counted over the WHOLE universe, like the Filter's own values and for
+      // the same reason: a menu that described the table you have already
+      // narrowed to could not tell you what you would get back.
+      const spN = { all: stocks.length, in: 0, out: 0 };
+      for (const s of stocks) {
+        const v = spOf(s);
+        if (v === 'Yes') spN.in++; else if (v === 'No') spN.out++;
+      }
+      $('spCut').innerHTML = SP_CUTS.map(([k, lab]) =>
+        '<option value="' + k + '"' + (k === spCut ? ' selected' : '') + '>' +
+        esc(lab) + ' (' + spN[k] + ')</option>').join('');
       $('rowDim').innerHTML = opts(ROW_DIMS, rowKey);
       $('colDim').innerHTML = opts(Object.keys(DIMS), colKey);
       // A dimension already on an axis is not offered: filtering rows by the
@@ -1628,6 +1679,14 @@
     // The drill selection is left alone too: resolvePick re-reads it from the
     // rebuilt cells and clears itself if the cell it named is now empty, so a
     // stale stock list cannot survive a narrowing.
+    // THE CUT CHANGES THE POPULATION, not the arrangement, so the axes stay
+    // put — but the drill and the open sector name stocks that may have just
+    // left the screen, so both are dropped.
+    $('spCut').addEventListener('change', () => {
+      spCut = $('spCut').value;
+      picked = null; expanded = null;
+      fillPicks(); render(); paintPresets();
+    });
     $('pageDim').addEventListener('change', () => {
       pageDim = $('pageDim').value;
       if (pageDim === 'none') pageVal = '';
@@ -1675,10 +1734,14 @@
     // What is on screen now, in the shape the server stores.
     const currentPreset = () => ({
       rowKey, colKey, measure, heat, pageDim, pageVal: pageDim === 'none' ? '' : pageVal,
+      sp: spCut,
     });
 
+    // A preset saved before this existed carries no `sp`, which reads as the
+    // default rather than as a cut nobody chose.
     const samePreset = (p) => p && p.rowKey === rowKey && p.colKey === colKey
       && p.measure === measure && p.heat === heat && p.pageDim === pageDim
+      && (p.sp || 'all') === spCut
       && (p.pageDim === 'none' || p.pageVal === pageVal);
 
     function paintPresets() {
@@ -1711,6 +1774,7 @@
       if (colKey === rowKey) colKey = stepAside(rowKey);
       if (MEASURES[p.measure]) measure = p.measure;
       if (HEATS[p.heat]) heat = p.heat;
+      spCut = SP_CUTS.some(([k]) => k === p.sp) ? p.sp : 'all';
       const dim = p.pageDim && p.pageDim !== 'none' && DIMS[p.pageDim]
         && p.pageDim !== rowKey && p.pageDim !== colKey ? p.pageDim : 'none';
       pageDim = dim;

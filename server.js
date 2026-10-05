@@ -9354,6 +9354,13 @@ function cleanPivots(raw) {
         measure: key(q.measure) || 'count',
         pageDim: key(q.pageDim) || 'none',
         heat: key(q.heat) || 'grid',
+        // The S&P cut, which is its own filter on that page rather than a
+        // dimension. Named here because this function rebuilds a preset from
+        // an EXPLICIT field list, so a key it does not know is dropped — and
+        // the page would then open every saved pivot on the default cut with
+        // nothing saying why. Anything else falls back to 'all'; the page
+        // validates it again against its own list.
+        sp: ['all', 'in', 'out'].includes(String(q.sp || '')) ? String(q.sp) : 'all',
         // A VALUE, not an identifier: it is a sector, a theme or a band name
         // that came out of the data, so anything printable is legitimate.
         // Narrowing this is how every screen silently lost its `<` and `>`
