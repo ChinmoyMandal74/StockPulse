@@ -4325,6 +4325,61 @@ function realisedVol(values, lookback = 126) {
   return Math.sqrt(varc * 252) * 100;
 }
 
+// A BAD DAY, as this stock has actually had them: the 5th percentile of its
+// own daily moves over the last year. One session in twenty was worse than
+// this.
+//
+// NOT CALLED VALUE AT RISK, deliberately. That name carries a promise about
+// tomorrow which a percentile of last year does not make, and /terms already
+// refuses forecasts. This is a description of what happened.
+//
+// MEASURED BEFORE IT WAS BUILT (2026-10-05), and one of the two things the
+// backlog said to check came back AGAINST the idea as pitched. The pitch was
+// fat tails -- the stock whose bad days are worse than its everyday wobble
+// implies. Across 1,155 symbols with a usable year the ratio of the
+// empirical 5% quantile to the 1.645 standard deviations a normal
+// distribution would put there has a MEDIAN OF 0.92 and a p90 of 1.04, and
+// NOT ONE SYMBOL is over 1.3. At the 5% point a fat-tailed distribution is
+// NARROWER than the normal of the same width, not wider; the fatness lives
+// at 1% and beyond. So this is not a tail-risk indicator and the tooltip
+// does not pretend otherwise.
+//
+// What it IS: a concrete, readable number in the units a reader thinks in,
+// for a quantity the screener otherwise never shows -- `realisedVol` is
+// computed on every row and displayed nowhere. It ranks 0.96 with that
+// volatility and puts 8.7% of the universe on the other side of the median,
+// so it is close to it, and close to something invisible is still new.
+//
+// ROBUST TO THE ONE BAD BAR, which is why the 5th percentile and not the
+// worst. At 253 sessions the 5% point is the 13th worst day, so a single
+// junk print -- or an unadjusted split, which this universe has -- moves it
+// not at all, where a `min()` would report the split as the stock's worst
+// day. The SOLS lesson, designed around rather than guarded after.
+// HALF A YEAR OF SESSIONS. A 5% quantile of 40 observations is the
+// second-worst day, which is a different statistic from the one this column
+// claims to be; at 120 the point is the 6th worst, which is a quantile. It is
+// a constant because it is tested TWICE -- once on the bars and again on the
+// returns the sub-cent floor leaves behind -- and two copies of a threshold
+// drift the first time one is tuned.
+const BAD_DAY_MIN = 120;
+
+function badDay(values, lookback = 253) {
+  if (!Array.isArray(values)) return null;
+  const n = Math.min(values.length - 1, lookback);
+  if (n < BAD_DAY_MIN) return null;
+  const r = [];
+  for (let i = 0; i < n; i++) {
+    const a = parseFloat(values[i].close);        // newest first
+    const b = parseFloat(values[i + 1].close);
+    // THE SUB-CENT FLOOR, not `> 0`. A penny bar divides into a six-figure
+    // percentage, which is how SOLS once printed +56,129,902% on a live page.
+    if (isFinite(a) && isFinite(b) && a >= MIN_CLOSE && b >= MIN_CLOSE) r.push(a / b - 1);
+  }
+  if (r.length < BAD_DAY_MIN) return null;
+  r.sort((x, y) => x - y);
+  return Math.round(r[Math.floor(0.05 * (r.length - 1))] * 1000) / 10;
+}
+
 // A ratio of two absolutes, as a percentage. Derived server-side so the value
 // on screen, in the export and in the chatbot's context is one number computed
 // once — the same reason the margins are derived rather than taken from the feed.
@@ -6485,6 +6540,9 @@ async function computeStocks(asOf, opts = {}) {
       const ok = Array.isArray(values) && values.length > 0;
       const prof = profiles[sym] || {};
       const rvol = realisedVol(values); // one pass, reused by every risk-adjusted factor
+      // Same window, already in memory: the refresh reads ~470 sessions per
+      // symbol for the long returns, so this costs a sort and no query.
+      const bad = badDay(values);
 
       const threeMonthPct = pctChange(values, THREE_MONTH);
       const relStrength =
@@ -6659,6 +6717,7 @@ async function computeStocks(asOf, opts = {}) {
         crossings: medianCrossings(values),  // times the price crossed its own 1y median
         bandPct: bandPct(values),            // (high-low)/median over the year, %
         realisedVol: rvol,
+        badDay: bad,
         fwd1M,
         fwd3M,
         fwd6M,

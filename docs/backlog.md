@@ -1176,37 +1176,6 @@ ratio are pre-split and a split does not move a ratio. **One symbol of
 
 ---
 
-## 22. Empirical VaR as a column — raised 2026-10-04
-
-**The worst 5% daily move a stock has actually had over the last year**, read
-straight off the bar archive. Not a model, not a distributional assumption,
-not a forecast: the 5th percentile of 253 observations that happened.
-
-**Why it earns a place.** It is the most literal possible answer to "how bad
-is a bad day in this stock", it is one sort away from being useful, and it
-pairs with Cushion — Cushion says how far the exit is in units of
-volatility, this says what a bad day costs in percent.
-
-**What it would take.** One pass over the archive at the same point
-`stampCapDerived` runs, or as part of the refresh's existing 470-day window
-read. The column, a `FIELD_SPEC` row, and the usual four span constants.
-
-**What is already known.** Nothing measured on this universe. The one thing
-worth checking first is whether it says anything the existing `realisedVol`
-does not: for a roughly normal return distribution the 5% quantile is about
-1.65 standard deviations, so **if the two rank the universe identically the
-column is realised volatility with a different label and should not be
-built.** The interesting case is the stock whose bad days are much worse than
-its everyday volatility implies — fat tails — and whether there are enough of
-those to be worth a column is a measurement, not an opinion.
-
-**What would make it a bad idea.** Calling it "Value at Risk". The name
-carries a promise about tomorrow that a percentile of last year does not
-make, and `/terms` already refuses forecasts. **Worst day (5%)** or similar
-says exactly what it is.
-
----
-
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's

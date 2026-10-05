@@ -1005,6 +1005,58 @@ Price is the **trading** currency and every absolute is the company's **reportin
   - **`regroup-test.js` carried `Fundamentals is 19` one line below its own comment naming that exact rot.** **Corrected, not worked around**: Ownership's 7 is the half that regrouping actually moved and is kept; the Fundamentals literal is dropped, because what the suite really claims about that group — that `Short % float` is not in it — is checked separately and cannot go stale.
   - **Two test faults worth keeping.** The offset calibration hunted for `$120.00` and the Price cell renders **`$120.0`**, so ten checks reported "(price not found)" over a column that was correct; the offset is **measured once and then asserted** at 2, so a change in the leading anchor cells is caught rather than silently absorbed. And the filter inputs carry **`data-fk`**, not `data-key` — a guessed attribute matched nothing and read as a missing filter box on a working control.
 
+### Bad day — the 5th percentile of a stock's own daily moves (2026-10-05, owner's request)
+
+**A `Bad day` column in the Short-term group immediately after Today: the worst 5% daily move this stock has actually had over the last year.** Asked for as *"Empirical VaR as a column"*, off [docs/backlog.md](docs/backlog.md) entry 22, which set two checks before the idea was allowed to be built — **and one of them came back against the pitch**.
+
+- **IT IS NOT CALLED VALUE AT RISK, and the backlog entry said so before the code existed.** That name carries a promise about tomorrow which a percentile of last year does not make, and `/terms` already refuses forecasts. Every surface says *bad day*; there is a check that neither the label nor the tooltip contains `VaR`.
+- **READ IT BESIDE TODAY, which is the whole argument for the column and why it sits there.** `-2.1%` says nothing on its own; against *a bad day here is -12%* it is an ordinary session, and against *-1%* it is the worst day of the year. The two columns are adjacent so the comparison needs no scrolling.
+
+#### THE FAT-TAIL PREMISE IS FALSE ON THIS UNIVERSE, which is the measurement that reshaped the feature
+The pitch was the stock whose bad days are worse than its everyday wobble implies. For a roughly normal distribution the 5% quantile sits at 1.645 standard deviations, so the ratio of the empirical quantile to that is a fat-tail reading. Across **1,155 symbols with a usable year**:
+
+| | |
+|---|---|
+| median ratio | **0.921** |
+| p10 / p90 | 0.836 / **1.036** |
+| symbols over 1.3 | **0** |
+| symbols over 1.5 | 0 |
+
+**At the 5% point a fat-tailed distribution is NARROWER than the normal of the same width, not wider** — the fatness lives at 1% and beyond, and the 5% quantile is paid for out of the middle. So this is not a tail-risk indicator, the tooltip says so in as many words, and the hunt for the ten fattest names returned nothing worth a column.
+
+#### SO THE JUSTIFICATION IS THE OTHER CHECK, AND IT HELD
+The entry's own test was *if the two rank the universe identically the column is realised volatility with a different label and should not be built*. Measured: **Spearman 0.9576**, with **8.7% of the universe on different sides of the median** and 4.9% of the top decile. That is close — and `realisedVol` is **computed on every row and displayed nowhere**, so the column duplicates nothing a reader can see, and puts a readable number in the units a reader thinks in on a quantity that was previously invisible. The GARCH→Cushion study one commit earlier is the comparison: there the estimators agreed at 0.98 **and** the thing they fed was already on screen, so it was refused.
+
+#### THE 5TH PERCENTILE, NOT THE WORST DAY — and this universe is why
+At 253 sessions the 5% point is the **13th worst day**, so a single junk print moves it not at all where a `min()` would report that print as the stock's worst day. That is not hypothetical here: **MLI carries an unadjusted 2-for-1 split** in the archive (133.17 → 67.195 on 2026-06-25), and the 5th percentile rides straight over it. The SOLS lesson designed around rather than guarded after. **Proved by reverting**: taking the worst day fails 5 and reads `-40%` where the column says `-12%`.
+
+- **The sub-cent floor is `MIN_CLOSE`, never `> 0`** — a penny bar divides into a six-figure percentage, which is how SOLS printed **+56,129,902%** on a live page.
+  - **ONE PENNY BAR IS NOT ENOUGH TO MOVE A QUANTILE, and the first fixture passed with the floor reverted.** A single sub-cent print adds one extreme return at each end of the sorted array and the 13th worst does not move. The fixture is a **run** of twenty sub-cent sessions now, which is both the real shape (a shell trading down through a penny) and the one that reaches the quantile. **The revert-proof is what said so.**
+- **`BAD_DAY_MIN` (120) is a named constant because it is tested TWICE** — once on the bars and again on the returns the floor leaves behind — and two copies of a threshold drift the first time one is tuned. It was two literals, and **the revert of one of them came back clean because the other quietly held the line**: two guards for one thing, the trap this file already records for the `getSessionUser` allowlist. Half a year, so the point is the 6th worst of 120 at least; a 5% quantile of 40 observations is the second-worst day, which is a different statistic from the one the column claims to be.
+- **Under that floor it is a dash, never a zero.** `0.0%` would read as *this stock has never had a bad day*.
+
+#### UNCOLOURED, because a column negative on every row says nothing by being red
+`V.mag` in rowcard.js and `magPctCell` in index.html are the same decision in the two places that draw it, so the cell and the hover card cannot disagree. The sign stays — it is part of the number — and the colour goes: **red here means *the price fell*, and a 5th percentile of the last year is not a thing that just happened.** The spotlight card's rule, where *% from the high* takes the same treatment. There are checks that the cell and the card are both neutral **and that Today beside them still carries its direction**, or the fix would read as the colour having been lost rather than placed. **Proved by reverting** twice: painting the cell by sign fails 1, and the card 1.
+
+#### Worth knowing
+- **It costs no query and no credit.** The refresh already reads ~470 sessions per symbol for the long-window returns, so this is a sort over a window already in memory, computed beside `realisedVol` at the same call site.
+- **The cell takes `cacheTitle`**, not `liveTitle`: it is a reading of the archive, not of the freshly-pulled price.
+- **THE BOUNDARY HOLDS, asserted behaviourally rather than by grep** — a grep passes if the engine reads the field under another name. Every row is scored three ways (absent, present, and **lying**) and the verdicts must be identical.
+- One `FIELD_SPEC` row carries it to the hover card, `/stock`, the tiles, the phone and `/compare` at once. Constants after the change: the Short-term banner **8**, `PAD_SPAN` **104**, the error row **99**, the empty row **101**. `/columns` picked the column up on its own, as designed.
+- Verified: **35 checks** over a fixture of five stocks that separate every mechanism — one whose 13th-worst day is `-4%` while its worst is `-9%` (so a `min()` comes out at a different number rather than coincidentally the same one), one whose bad day is `-1%`, one at `-12%` with a single `-40%` session, one with 100 sessions, and one with the sub-cent run. **Proved by reverting twelve times, every one load-bearing**: the field never reaching the row fails 12, the worst day 5, the header without its body cell 4, the `FIELD_SPEC` row 4, `PAD_SPAN` 3, the threshold 3, and the floor, the banner, both short rows, and both uncoloured decisions 1 each.
+  - **THE THREE STATIC SPANS ARE DERIVED, NOT WRITTEN DOWN.** None is on screen in a five-row fixture — `PAD_SPAN` is the windowed spacer and the Refresh-all progress line, and the other two need an error row and an empty table — so no behavioural check reaches them and all three reverts came back **0 failed** at first. They are read out of the source and compared against the DRAWN header (`PAD_SPAN === headers + 3`, the two short rows 5 and 3 below it), which cannot date the way `PAD_SPAN` once sat at 51 with nothing noticing.
+  - **THE HEADER-TO-BODY SHIFT IS 2 AND THE COUNT DIFFERENCE IS 3.** The body carries two leading anchor cells AND a trailing action cell the header has no column for, so deriving the offset from the counts reads one cell too far and reports an em-dash for every row — which is what the first run did, over a table that was correct. It is calibrated against a known Today value and then **asserted**, so a change in the anchor cells is caught rather than silently absorbed.
+  - **A `<br>` CONTRIBUTES NO WHITESPACE to `textContent`**, so the drawn label is `Badday` — the documented trap, met again; the check is `/Bad\s*day/i`.
+  - **A fixture trap worth keeping: `TWELVE_DATA_API_KEY='stub'` reaches the REAL API and 401s.** The provider stub has to be installed at `fetch` before the server loads, which is `ath-test.js`'s own shape. And the fixture is **254 sessions against a 253 lookback**, not 260: a longer archive drops the planted tail at the oldest end and every value read `+0.5%`.
+
+#### MLI AND CORT CARRY UNADJUSTED SPLITS, AND THE PROVIDER SERVES THEM THAT WAY
+Found while measuring this and **reported, not acted on** — removing or repairing a ticker is the owner's call.
+
+- **MLI's archive steps 133.17 → 67.195 on 2026-06-25**, a clean 2.00x, and the level never recovers. `/statistics` independently reports `last_split 2026-07-01, 2-for-1 split` — **so the provider knows about the split and serves the unadjusted series anyway.**
+- **THE APP'S SPLIT DETECTION CANNOT SEE IT, by construction.** `persistBars` detects a split by comparing a stored bar against a **re-fetch**, and the provider's history never changes — so there is nothing to disagree with. Every split this project has caught was one the provider re-priced on its own.
+- **The cost is visible on the screener**: MLI reads a 1Y of **−37.4%** where the adjusted figure is about **+25%**, and its verdict is Avoid. `CORT` shows the same 2.017x shape and the provider reports no split for it at all.
+- A scan of the last 400 sessions across the universe for single-day steps at a simple ratio whose level **held** is in `scratchpad/split-scan.js`. The 5th percentile is unaffected either way, which is the point in favour of the statistic over a `min()`.
+
 ### Sparklines
 The **Chart** group is one column (`90d`) between Scores and Short-term, holding a 90-session price line per row. A group of its own rather than a column inside Info, because the columns menu toggles *groups* — inside Info it could only be hidden by hiding Price, Sector and Market Cap too. The precedent cited here used to be the Volume group, which no longer exists — Chart is the one-column group now, and the Scores group (`colspan="1"` since 2026-09-23) is the other.
 

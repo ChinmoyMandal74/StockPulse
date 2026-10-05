@@ -143,6 +143,13 @@
     pct: (n) => ok(n) ? { t: (n >= 0 ? '+' : '') + n.toFixed(1) + '%', c: n >= 0 ? 'pos' : 'neg', n, u: 'pct' } : null,
     // a level: no leading +, red only when negative
     lvl: (n) => ok(n) ? { t: n.toFixed(1) + '%', c: n < 0 ? 'neg' : '', n, u: 'pct' } : null,
+    // A MAGNITUDE IN PERCENT: the sign is part of the number, the colour is
+    // not. For a reading that is negative on EVERY row -- a bad day -- the
+    // up/down colour paints the whole column red and so says nothing; worse,
+    // red means "the price fell" everywhere else here, and a 5th percentile
+    // of the last year is not a thing that just happened. The spotlight
+    // card's rule, where "% from the high" takes the same treatment.
+    mag: (n) => ok(n) ? { t: n.toFixed(1) + '%', c: '', n, u: 'pct' } : null,
     num: (n, d = 1) => ok(n) ? { t: n.toFixed(d), c: '', n, u: 'num' } : null,
     money: (n, code) => ok(n) ? { t: fmtMktCap(n, code), c: n < 0 ? 'neg' : '', n, u: 'money' } : null,
     signedMoney: (n, code) => ok(n) ? { t: fmtMktCap(n, code), c: n >= 0 ? 'pos' : 'neg', n, u: 'money' } : null,
@@ -243,7 +250,10 @@
                                   : { t: new Date(s.pricedAt).toLocaleString([], { day: 'numeric',
                                         month: 'short', hour: 'numeric', minute: '2-digit' }),
                                       c: Date.now() - s.pricedAt > 86400000 ? 'warn' : '' })],
-    ['short', 'Today',          (s) => V.pct(s.todayPct)],
+    ['short', 'Today', (s) => V.pct(s.todayPct)],
+    // Beside Today for the reason the column is: it is what says whether
+    // today's move is unusual for this stock.
+    ['short', 'Bad day',        (s) => V.mag(s.badDay)],
     // Beside the percentage it is derived from, which is where the table has
     // kept it all along — it sat in the Volume group here only because that
     // was where the other money readings were, and that group has gone.
