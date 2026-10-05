@@ -134,6 +134,29 @@
     // What the kicker calls each cut. `All` is absent, so it names nothing.
     const SP_CUT_LABEL = { in: 'S&P 500', out: 'Outside the S&P 500' };
 
+    // THE THREE-STATE READ, IN ONE PLACE. `=== true` / `=== false`, NEVER
+    // truthy/falsy, and that is the whole guard: `spMember` is three-state.
+    // It is null until a holdings file has been imported, and null is not
+    // No -- "not in the S&P 500" said of a stock nobody has checked is a
+    // confident, wrong answer, which is the same rule the screener's own
+    // column keeps. So an unknown row is in NEITHER cut, and on an instance
+    // with no file both cuts are empty. That reads correctly, because every
+    // caller names the cut that emptied the card.
+    //
+    // Membership only. The index WEIGHT never leaves /holdings: a Yes/No for
+    // the stocks we happen to track is derivable from any financial website,
+    // a weighted constituent list is the issuer's dataset.
+    //
+    // SHARED by scopeOf -- which gives it to the eight scoped templates at
+    // once -- and by tplDay, which has no scope pickers at all and reads its
+    // own control. Two copies of this guard would drift the first time one
+    // was tuned, which is the drift this module exists to prevent.
+    function spFilter(rows, cut) {
+      if (cut === 'in') return rows.filter((x) => x.spMember === true);
+      if (cut === 'out') return rows.filter((x) => x.spMember === false);
+      return rows;
+    }
+
     // ---- templates ---------------------------------------------------------
     // Gainers and losers are separate cards on purpose — the owner's call:
     // a mixed |move| list buries the story either half tells alone.
@@ -195,23 +218,10 @@
       if (cap && cap !== 'All') rows = rows.filter((x) => x.capBand === cap);
       // S&P 500 MEMBERSHIP, on the same prefix again (movSector -> movSp500),
       // so one change here gives it to every scoped template at once — the
-      // reason the size band and the screen cut each cost one change.
-      //
-      // `=== true` and `=== false`, NEVER truthy/falsy, and that is the whole
-      // guard: `spMember` is THREE-state. It is null until a holdings file has
-      // been imported, and null is not No — "not in the S&P 500" said of a
-      // stock nobody has checked is a confident, wrong answer, which is the
-      // same rule the screener's own column keeps. So an unknown row is in
-      // NEITHER cut, and on an instance with no file both cuts are empty.
-      // That reads correctly, because the kicker names the cut that emptied
-      // the card.
-      //
-      // Membership only. The index WEIGHT never leaves /holdings: a Yes/No for
-      // the stocks we happen to track is derivable from any financial website,
-      // a weighted constituent list is the issuer's dataset.
+      // reason the size band and the screen cut each cost one change. The
+      // three-state guard lives on spFilter above, shared with the day card.
       const sp = O[sectorKey.replace(/Sector$/, 'Sp500')] || 'All';
-      if (sp === 'in') rows = rows.filter((x) => x.spMember === true);
-      else if (sp === 'out') rows = rows.filter((x) => x.spMember === false);
+      rows = spFilter(rows, sp);
       // A SCREEN is the screener's own question, asked of a card. It shares the
       // prefix like the three above (movSector -> movScreen), so putting it
       // here is the one change that gives it to every scoped template at once —
@@ -2608,7 +2618,26 @@
     // itself. $1B is the default because it keeps 97.5% of the pool (1,147
     // of 1,177) and drops exactly that one name; $10B keeps 67.2%, and is
     // the setting for a poster that should read as mega-caps only.
-    const movers = pool.filter((x) => x[field] != null && (!floor || x.marketCap > floor));
+    //
+    // THE S&P CUT NARROWS THE MOVERS AND NOTHING ELSE — the floor's own rule
+    // above, and here the only coherent one. It was measured rather than
+    // assumed: the other two blocks are ALREADY index readings and have
+    // nothing in them to filter. The chips ARE the benchmarks; and the sector
+    // block is drawn from the eleven SELECT SECTOR SPDRs, which divide the
+    // S&P 500 by construction — the provider's own names say so ("State
+    // Street Technology Select Sector SPDR ETF"), so cutting that block would
+    // be filtering the index out of itself.
+    //
+    // The computed fallback is deliberately not cut either. Cutting one path
+    // and not the other would make the sectors mean one thing with the funds
+    // held and another without, invisibly — the "two different numbers
+    // looking like one thing" the head wording above already exists to stop.
+    //
+    // Through spFilter, so the day card and the eight scoped templates cannot
+    // disagree about what a null membership means.
+    const spCut = O.daySp500 || 'All';
+    const movers = spFilter(pool, spCut)
+      .filter((x) => x[field] != null && (!floor || x.marketCap > floor));
     const ups = movers.filter((x) => x[field] > 0).sort((a, b) => b[field] - a[field]).slice(0, k);
     const downs = movers.filter((x) => x[field] < 0).sort((a, b) => a[field] - b[field]).slice(0, k);
     const mMax = Math.max(...ups.concat(downs).map((x) => Math.abs(x[field])), 0.01);
@@ -2675,7 +2704,15 @@
     // The kicker counts the pool the SECTORS are aggregated over, so it says
     // when a floor is narrowing the movers rather than leaving the reader to
     // wonder why a familiar small name is missing.
-    const floorNote = floor ? ' · movers over $' + fmtMoney(floor) : '';
+    // THE KICKER NAMES THE CUT, because a posted card has no picker beside
+    // it and nothing else on the artboard could say why a familiar name is
+    // missing. It degrades to exactly the old string when the cut is off.
+    const movWord = spCut === 'in' ? 'S&P 500 movers'
+      : spCut === 'out' ? 'movers outside the S&P 500'
+        : 'movers';
+    const floorNote = (spCut !== 'All' || floor)
+      ? ' · ' + movWord + (floor ? ' over $' + fmtMoney(floor) : '')
+      : '';
     // `dy-in` rather than a bare div: the wrapper below has to FILL what the
     // body leaves, and for that its parent needs a height. Every other
     // template's inner block is a plain block whose height is its content,

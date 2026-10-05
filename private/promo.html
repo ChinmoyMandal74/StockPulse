@@ -582,9 +582,13 @@
           <option value="10000000000">Over $10B (67.2%)</option>
           <option value="50000000000">Over $50B (24.6%)</option>
         </select>
-        <p class="hint">The floor narrows the movers only. The sectors are the
-          Select Sector SPDRs' own returns, and neither the indexes nor the sector
-          funds are ever counted among the movers.</p>
+        <label>S&amp;P 500</label>
+        <select id="daySp500"></select>
+        <p class="hint">Both of these narrow the movers only. The sectors are the
+          eleven Select Sector SPDRs' own returns — those funds divide the S&amp;P 500
+          between them, so that block is already an index reading with nothing in it
+          to cut — and neither the indexes nor the sector funds are ever counted
+          among the movers.</p>
       </div>
 
       <!-- One stock, in full. Three controls and no scope pickers: the card
@@ -845,7 +849,7 @@
       'fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap', 'fundScreen', 'fundSp500',
       'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen', 'sizeSp500',
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen', 'bubSp500',
-      'dayMetric', 'dayCount', 'dayFloor',
+      'dayMetric', 'dayCount', 'dayFloor', 'daySp500',
       'spotSym', 'spotWin', 'spotProf',
       'evoSym', 'evoMeasure', 'evoWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
@@ -1070,7 +1074,7 @@
     })();
     ['bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen', 'bubSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'bubble') render(); }));
-    ['dayMetric', 'dayCount', 'dayFloor'].forEach((id) =>
+    ['dayMetric', 'dayCount', 'dayFloor', 'daySp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
     ['spotSym', 'spotWin', 'spotProf'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'spotlight') render(); }));
@@ -1489,7 +1493,7 @@
         const spOpts = Cards.spCuts().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
-          'sizeSp500', 'bubSp500'].forEach((id) => {
+          'sizeSp500', 'bubSp500', 'daySp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
