@@ -113,7 +113,17 @@
        so a bare class here would draw as ordinary body text. */
     #abTrades .err { color: var(--red); font-size: 12.5px; margin: 14px 0 0;
       line-height: 1.6; }
-    #abName { min-width: 190px; }
+    /* THE FIELD HAS TO SHOW THE NAME IT IS GIVING YOU. At 190px the
+       placeholder clipped to "2024-01-02 . 3M . Balanced . St", which says
+       the convention is working and not what the run will be called -- and
+       reading it is the whole point of not having to type it. Its row holds
+       only this and Save, so the width was already there.
+       `min-width: 0` on the FLEX ITEM is what lets it shrink again on a
+       phone: a flex item's floor is its content, so a 420px basis without
+       it runs straight past a 390px screen -- the `1fr` trap this project
+       has met on the trade log and the sparks grid. */
+    .abrow .fld.wide { flex: 1 1 420px; min-width: 0; max-width: 560px; }
+    .abrow .fld.wide input { width: 100%; }
 
     #abRunsBox { margin: 0 0 16px; }
     #abRunsBox > summary { cursor: pointer; font-size: 12.5px; color: var(--muted);
@@ -347,8 +357,8 @@
           <option value="20">20 bps</option>
         </select></div>
       <button class="btn" id="abGo">Run</button>
-      <div class="fld"><span class="lbl">Name this run</span>
-        <input type="text" id="abName" maxlength="80" placeholder="optional" /></div>
+      <div class="fld wide"><span class="lbl">Name this run</span>
+        <input type="text" id="abName" maxlength="80" placeholder="named for you" /></div>
       <button class="btn" id="abSave" disabled>Save run</button>
       <span id="abSaveMsg"></span>
       </div>
@@ -932,6 +942,69 @@
     // What the run was set to, in one line, read off the stored row rather
     // than re-derived — the list and the frozen page must describe it the
     // same way.
+    // ---- the standard name for a saved run ------------------------------
+    // A run had to be named by hand or it stored nothing and the list fell
+    // back to "Run of <date>", which tells two runs of the same morning
+    // apart by nothing at all. The formula is the owner s: start date, hold,
+    // rules, and the rest of what decides the result.
+    //
+    // RANK BY, ON EACH REBALANCE AND COST ARE DELIBERATELY OUT (the owner
+    // named all three). Each is inert unless another control is set -- rank
+    // and cost do nothing without a cut or a rebalance, and the page greys
+    // them for exactly that reason -- so they would lengthen every name to
+    // separate runs that are mostly identical anyway.
+    //
+    // DEFAULTS ARE OMITTED, not spelled out. "All stocks", "All of them"
+    // and "never rebalanced" are what you get by changing nothing, so a
+    // name that recites them is longer and says less. A part appears when
+    // it was CHOSEN, which is also what makes two names differ exactly
+    // where the two runs do.
+    var NAME_MAX = 80;                 // the input s maxlength and the server s cap
+    var REBAL_WORD = { 7: 'weekly', 14: 'fortnightly', 30: 'monthly' };
+
+    function nameParts(o) {
+      var tiers = Array.isArray(o.tiers) ? o.tiers
+        : String(o.tiers || '').split(',').map(function (s) { return s.trim(); });
+      tiers = tiers.filter(Boolean);
+      var bits = [o.date, o.horizon, o.rules];
+      if (o.theme) bits.push(o.theme);
+      var at = bits.length;            // where the verdicts go
+      bits.push(tiers.join(', '));
+      if (o.top > 0) bits.push('Top ' + o.top);
+      if (o.every > 0) {
+        bits.push(REBAL_WORD[o.every] || ('every ' + o.every + 'd'));
+      }
+      return { bits: bits.filter(Boolean), at: at, n: tiers.length };
+    }
+
+    // THE BUDGET IS THE EXISTING CAP, not a second constant. Listing every
+    // verdict in full is the useful form and all six run to 60 characters on
+    // their own, so the list collapses to a count ONLY when the whole name
+    // would not fit -- which keeps the common one- and two-verdict runs
+    // reading in the page s own words. The ellipsis is the last guard, for a
+    // theme name long enough to blow the budget by itself.
+    function autoName(o) {
+      var p = nameParts(o);
+      var s = p.bits.join(' \u00b7 ');
+      if (s.length > NAME_MAX && p.n > 1) {
+        p.bits[p.at] = p.n + ' verdicts';
+        s = p.bits.join(' \u00b7 ');
+      }
+      return s.length > NAME_MAX ? s.slice(0, NAME_MAX - 1) + '\u2026' : s;
+    }
+
+    // Two shapes for one set of facts: the RESULT payload names them one way
+    // and the stored ROW another (startDate/topAsked/everyDays, tiers as a
+    // joined string). One namer, two adapters -- a second formula would
+    // drift the first time either was tuned, and the list compares the two.
+    function autoFromData(d) {
+      return autoName({ date: d.date, horizon: d.horizon, rules: d.rules,
+        theme: d.theme, tiers: d.tiers, top: d.topAsked, every: d.every });
+    }
+    function autoFromRow(r) {
+      return autoName({ date: r.startDate, horizon: r.horizon, rules: r.rules,
+        theme: r.theme, tiers: r.tiers, top: r.topAsked, every: r.everyDays });
+    }
     function howRun(r) {
       var bits = [r.horizon || '?', r.rules || 'Balanced'];
       if (r.theme) bits.push(r.theme);
@@ -945,6 +1018,19 @@
       return bits.join(' · ');
     }
 
+    // THE THREE THE NAME LEAVES OUT (the owner named them: rank by, on each
+    // rebalance, cost). Each is inert unless another control is set, so each
+    // is shown only when it is live AND not its default -- the guards
+    // `syncCtl` greys them with. Usually this is empty, and an empty subline
+    // is not drawn at all.
+    function restRun(r) {
+      var bits = [];
+      if (r.topAsked > 0 && r.rankBy && r.rankBy !== 'cushion') bits.push('by ' + r.rankBy);
+      if (r.everyDays > 0 && r.mode === 'exit') bits.push('exit only');
+      if (r.everyDays > 0 && r.costBps) bits.push(r.costBps + ' bps');
+      return bits.join(' · ');
+    }
+
     function runsRows(runs) {
       var tb = $('abRuns').querySelector('tbody');
       $('abRuns').querySelector('thead').innerHTML =
@@ -954,8 +1040,19 @@
         var b = n(r.basketRet), m = n(r.marketRet);
         var url = '/adjustedbacktest/run/' + r.id;
         return '<tr data-id="' + we(r.id) + '">'
-          + '<td><span class="nm">' + we(r.label || ('Run of ' + r.startDate)) + '</span>'
-          + '<span class="how">' + we(howRun(r)) + '</span></td>'
+          + '<td><span class="nm">' + we(r.label || autoFromRow(r)) + '</span>'
+          // THE SUBLINE IS THE COMPLEMENT OF THE NAME, not a copy of it.
+          // Where the name is the formula it already says the date, the
+          // hold, the rules, the theme, the verdicts, the cut and the
+          // cadence -- so the line under it carries only the three the
+          // formula leaves out. A run the owner NAMED keeps the full
+          // summary, because its name says none of this.
+          // Derived by comparing the two, so there is no stored flag to
+          // get out of step with the label beside it.
+          + (function (sub) { return sub
+            ? '<span class="how">' + we(sub) + '</span>' : ''; }(
+            r.label && r.label !== autoFromRow(r) ? howRun(r) : restRun(r)))
+          + '</td>'
           + '<td>' + we(r.startDate) + '</td>'
           + '<td class="num"><span class="' + (b >= 0 ? 'pos' : 'neg') + '">' + pc(b) + '</span></td>'
           + '<td class="num"><span class="' + (m >= 0 ? 'pos' : 'neg') + '">' + pc(m) + '</span></td>'
@@ -1018,7 +1115,8 @@
       fetch('/api/adjusted-backtest/runs', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ label: $('abName').value, data: DATA }),
+        body: JSON.stringify({ label: $('abName').value.trim() || autoFromData(DATA),
+          data: DATA }),
       })
         .then(function (r) { return r.json().then(function (j) {
           if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); })
@@ -1089,6 +1187,10 @@
           if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); })
         .then(function (j) {
           DATA = j;
+          // THE NAME IS THE RESULT S, NOT THE CONTROLS . Change a dropdown
+          // after a run and it no longer describes what Save would store,
+          // so this is set here -- where DATA changes -- and nowhere else.
+          $('abName').placeholder = autoFromData(DATA);
           note(); cards(); chart(); bandNote(); limits(); trades(); head(); rows();
           $('abTook').textContent = ((Date.now() - t0) / 1000).toFixed(1) + 's'
             + (j.cached ? ' (cached)' : '');

@@ -2421,6 +2421,40 @@ The frozen view is the **same file**, the same painters, over the stored payload
   - **A REVERT THAT STOPS THE SUITE RUNNING REPORTS `0 failed`**, indistinguishable from a guard that never mattered: a `false &&` wrapper left an unbalanced paren, the module would not parse, and the harness read it as not load-bearing. It now compares the check COUNT against the baseline and says the run aborted. Neuter the refusal, not the condition.
   - **`db.js` was CRLF on disk while `server.js` and `adjustedbacktest.html` were LF**, in the same working copy, on the same afternoon — the documented hazard, met again. Detect per file, at the moment the patch runs.
 
+### A saved run names itself (2026-10-05, owner: "come out with a standard naming convention so that I don't have to key in the name")
+**The Name this run field shows the name it will use, and an empty field saves under it.** The formula is the owner's: `2025-08-31 · 1Y · Balanced · Technology · Strong Buy, Buy · Top 10 · monthly` — start date, hold, rules, theme, verdicts, cut, cadence.
+
+- **RANK BY, ON EACH REBALANCE AND COST ARE OUT, which the owner named.** Each is **inert unless another control is set** — rank does nothing without a cut, mode and cost do nothing without a rebalance, and `syncCtl` greys all three for exactly that reason — so they would lengthen every name to separate runs that are otherwise identical. There is a check that setting all three away from their defaults changes the name by **not one character**.
+- **A DEFAULT SAYS NOTHING; A CHOICE SAYS ITSELF.** *All stocks*, *All of them* and *never rebalanced* are what you get by changing nothing, so a name reciting them is longer and says less. A part appears when it was **chosen**, which is also what makes two names differ exactly where the two runs do — asserted as eight distinct names from eight one-part changes.
+
+#### THE NAME IS THE RESULT'S, NEVER THE CONTROLS'
+It is set where `DATA` changes and nowhere else. Move a dropdown after a run and the controls no longer describe what Save would store — the result is the last one computed — so a name derived from the live controls would be **a label that lies about the thing it is attached to**. **Proved by reverting**: a Save that reads the controls fails 3 and stores a label claiming **1Y** for a run that is **3M** -- the lie, written down.
+
+- It is a **placeholder, not a value**, so a name typed over it is never clobbered and the owner can still write their own. The field's own `maxlength` is the cap the formula budgets against.
+
+#### THE SUBLINE BECAME THE COMPLEMENT OF THE NAME, not a copy of it
+`howRun` already printed horizon · rules · theme · verdicts · top-by-rank · rebalance under every row, so a formula name made the row say all of it **twice**. The first cut dropped the subline outright where the name matched — and that **silently took rank-by, exit-only and cost out of the list entirely**, three facts the owner asked to keep out of the NAME, which is not the same as out of the page.
+
+- `restRun` carries exactly those three, each shown only when its own control is live and not on its default — the same guards `syncCtl` greys them with. Usually it is empty, and an empty subline is not drawn at all.
+- **A run the owner NAMED keeps the full summary**, because its name says none of it. Which line to draw is decided by **comparing the label with the formula at render time**, so there is no stored flag to get out of step with the label beside it.
+- **Proved by reverting**: putting `howRun` back on both paths fails 2, including a plain run that should draw no subline at all drawing one.
+
+#### ONE FORMULA, TWO SHAPES — and that is where a second copy would have drifted
+The result payload names these facts `date`/`topAsked`/`every` with `tiers` an array; the stored row names them `startDate`/`topAsked`/`everyDays` with `tiers` a joined string. One `autoName`, two adapters. **It has to be one**, because the list decides whether to draw a subline by comparing the stored label against the formula recomputed from the row — two implementations that disagreed by a space would print the subline on every auto-named run and nothing would look broken. **Proved by reverting**: reading the row with the payload's field names fails 2, and the two shapes come out at different strings -- a dateless name against a full one.
+
+#### THE BUDGET IS THE EXISTING CAP, and the first version overflowed on an ordinary run
+All six verdicts in full are 60 characters on their own, so the list collapses to `6 verdicts` — **only when the whole name would not otherwise fit**, which keeps the common one- and two-verdict runs reading in the page's own words.
+
+- **`rebalanced monthly` was 18 characters and it broke the commonest shape there is.** A theme, two verdicts, a cut and a monthly rebalance came to **87**, so that name both collapsed its verdicts to a count *and* took an ellipsis. The bare cadence word — `monthly`, which is what the control itself says — costs 11 fewer and brings the same run to **76 with its verdicts still named**. **The unit test is what caught it**, as an expectation that would not match; it is a case in the suite now, by name.
+- The ellipsis is the last guard, for a theme name long enough to blow the budget by itself.
+
+#### Worth knowing
+- **The server's `Run of <date>` fallback is untouched and is now the last resort for a caller that sends no label at all** — an API client rather than the page. It is deliberately NOT the same formula: it cannot be, having no access to the page, and making it so would be a second implementation of the thing the section above exists to keep single.
+- **A FIXTURE TRAP WORTH KEEPING: the page sets its controls from the query and then runs with the CONTROL values.** A `?top=2` the select does not offer is silently dropped and the run uses the default of 10 — which is exactly what the first draft of this suite did, and it reported the code wrong on four checks when the fixture was wrong.
+- **THE FIELD HAS TO SHOW THE NAME IT GIVES YOU.** At the old 190px the placeholder clipped to `2024-01-02 · 3M · Balanced · St` — which says the convention is working and not what the run will be called, and reading it is the whole point of not typing it. Its row holds only this field and Save, so the width was already there. **`min-width: 0` on the flex item is what lets it shrink again on a phone**: a flex item's floor is its content, so a 420px basis without it runs straight past a 390px screen — the `1fr` trap the trade log and the sparks grid have both met. Measured as drawn: **360px of text in a 538px field**, and **296px with no sideways scroll** at 390px.
+- Verified: **20 checks** on the formula with no server and no browser — it is pure, so the budget, the collapse and the two shapes are all reachable that way — plus **14** driving the real page and the real save route. **Proved by reverting eight times, every one load-bearing**: a default spelled out fails 4, the placeholder never set 3, Save reading the controls 3, the subline repeating the name 2, the old cadence 2, the row read with the payload's names 2, and the verdict collapse and the empty-field fallback 1 each.
+  - **ONE OF THEM FIRST REPORTED 0 AND IT WAS THE REVERT, NOT RESIDUE.** The DATA-not-controls guard was reverted on the PLACEHOLDER line, which is written once per run -- so neither version re-runs when a control moves afterwards and the two are indistinguishable. The guard is load-bearing on the SAVE path, where the divergence is actually stored, and it fails 3 there. *A revert has to be put where the bug would do its damage, not where the same words appear.*
+
 ### It wears `/backtest`'s chrome now (2026-10-05, owner: "make the Adjusted Backtest page look nice similar to Backtest")
 **The controls moved into a bezel panel, the labels, inputs and verdict pills took `/backtest`'s treatment, and the stat cards became cards.** Nothing about what the page computes changed — this is the skin, and the skin was the whole of the ask.
 
