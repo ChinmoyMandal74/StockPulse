@@ -3641,6 +3641,33 @@
     square: { lw: 292, rw: 252 },
     story: { lw: 316, rw: 264 },
   };
+  // DRILLED, THE LEFT TRACK HAS TO HOLD AN INDUSTRY NAME, and those are
+  // nearly twice as long as a sector's: 40 characters at the top
+  // ("Drug Manufacturers - Specialty & Generic", "Utilities - Independent
+  // Power Producers") against "Communication Services"' 22. So the drill
+  // gets its own tracks and its own type size -- the svg narrows, which an
+  // alluvial can afford far more easily than a clipped label can.
+  // ONE SET FOR ALL THREE ARTBOARDS, and the story does NOT get bigger type
+  // here as it does in the sector view. Measured: at the story's own sizes
+  // the two tracks need 417 + 292 = 709 of the body's 952, leaving 243px of
+  // horizontal run for a 1120px-tall drawing -- ribbons so steep the chart
+  // stops reading. Nothing requires the type to grow with the height, and
+  // the drawing is the card.
+  //   left  = longest industry name at 15px (289px, "Drug Manufacturers -
+  //           Specialty & Generic") + 10 gap + the return (57) + 4 + 16 = 376
+  //   right = the sub "N industries - NN% of value" (239px at 15px), which
+  //           is wider than "Down over the window" (211) -- and wider than
+  //           the sector view's own sub, because "industries" is four
+  //           characters longer than "sectors". 239 + 20 = 259.
+  const FLOW_TRACKS_DRILL = {
+    portrait: { lw: 380, rw: 268 },
+    square: { lw: 380, rw: 268 },
+    story: { lw: 380, rw: 268 },
+  };
+  // FOURTEEN, and both halves of it are measured -- see the note in the
+  // builder. Named here because it is the number the artboard arithmetic
+  // depends on, not a display preference.
+  const FLOW_MAX_ROWS = 14;
   const FLOW_NW = 13;    // the node bar itself
   // Measured per artboard by the fit sweep, not chosen: everything above the
   // drawing (kicker, two-line title) and below it (the note) is variable, so
@@ -3656,14 +3683,33 @@
     // carry their own determiner, so only the rolling ones need a preposition.
     const phrase = /^past /.test(perLabel) ? 'over the ' + perLabel : perLabel;
     const cut = SP_CUTS.some(([k]) => k === O.flowSp500) ? O.flowSp500 : 'in';
+    // THE DRILL IS SECTOR-SCOPED AND THE SECTOR IS MANDATORY (the owner,
+    // 2026-10-05: "do the industry drill down, Sector has to be mandatory
+    // selection"). One control, so there is no invalid state to guard: the
+    // industry view is simply unreachable without naming a sector.
+    //
+    // A FLAT INDUSTRY VIEW IS NOT OFFERED AND COULD NOT BE DRAWN. Measured:
+    // 138 industries, of which the top twelve are 63% of the index -- so the
+    // pooled tail would be 37% and the biggest element on the chart. Inside
+    // ONE sector the same pooling is a genuine tail (see FLOW_MAX_ROWS).
+    //
+    // NOT CHECKED AGAINST A LIST, deliberately -- unlike the period and the
+    // S&P cut, which are enums this module owns. A sector name is the
+    // PROVIDER's taxonomy arriving as free text on the row, so eleven
+    // hardcoded names would refuse a twelfth the day one was added. A name
+    // that matches no row falls through to the empty state, which says so
+    // by name; silently drawing the eleven-sector card instead would be the
+    // quiet wrong answer.
+    const drillSec = (O.flowSector && O.flowSector !== 'All') ? String(O.flowSector) : null;
 
     // The index funds and the eleven sector funds come out FIRST. A fund that
     // IS a sector, sitting inside that sector's own aggregate, double-counts
     // it -- the trap /consolidated and the Snapshot card both record. They
     // carry a real market cap (a fund reports AUM), so nothing else here
     // would have excluded them.
-    const pool = spFilter(
+    let pool = spFilter(
       stocks.filter((x) => x && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol)), cut);
+    if (drillSec) pool = pool.filter((x) => x.sector === drillSec);
     const capOf = (x) => (Number(x.marketCap) > 0 ? Number(x.marketCap) : 0);
     // Two exclusions and they are DIFFERENT rules. A missing return is
     // ABSENT, never zero -- Number(null) is 0 and finite, and a fabricated
@@ -3671,48 +3717,95 @@
     // carries no weight at all; `> 0` rejects null and zero in one test.
     // The -99 floor keeps a total wipeout out of the begin-weight divide.
     const scored = pool.filter((x) => capOf(x) > 0 && x[field] != null && x[field] > -99);
-    // A BLANK SECTOR IS NOT A SECTOR, and it has to leave before the index is
-    // struck rather than after. A stock whose profile has not been pulled yet
-    // belongs in no band -- the rule /pivot and /consolidated both keep -- so
-    // if it still counted toward the reference return the card would be
-    // measuring eleven sectors against a basket that holds twelve things.
-    // Measured, that is a gap of up to 0.10pt today; it is zero this way, and
-    // the parts then sum to the whole EXACTLY. The dropped rows are named in
-    // the note rather than disappearing.
-    const live = scored.filter((x) => x.sector);
+    // A BLANK GROUP IS NOT A GROUP, and it has to leave before the reference
+    // is struck rather than after. A stock whose profile has not been pulled
+    // yet belongs in no band -- the rule /pivot and /consolidated both keep
+    // -- so if it still counted toward the reference return the card would
+    // be measuring N parts against a basket that holds N+1 things. Measured
+    // on the sectors, that is a gap of up to 0.10pt; it is zero this way,
+    // and the parts then sum to the whole EXACTLY. The dropped rows are
+    // named in the note rather than disappearing.
+    //
+    // DRILLED, THE KEY IS THE INDUSTRY -- and a stock can have a sector and
+    // no industry yet, since both arrive with the same profile but the
+    // taxonomy has been filled at different times. So the test is the key
+    // this card is actually grouping by, never `sector` twice.
+    const gkey = drillSec ? 'industry' : 'sector';
+    const live = scored.filter((x) => x[gkey]);
     const nosec = scored.length - live.length;
 
     // BEGINNING WEIGHTS, so the parts sum to the basket's own return. Today's
     // weight times the window's return does NOT, and that is not a rounding
-    // difference: measured over the year on the index's own members, the
-    // end-weighted parts overstate the basket by 24.7 points, because a
-    // winner has already grown into the weight being applied to it. The
-    // start weight is reconstructed as cap / (1 + r/100), which assumes an
-    // unchanged share count -- an approximation worth stating and the only
-    // one available, since no share count is stored per date.
+    // difference: measured on the index's own members, the end-weighted
+    // parts overstate the basket by 24.6 points over the year and 15.7 this
+    // year, because a winner has already grown into the weight being applied
+    // to it. The start weight is reconstructed as cap / (1 + r/100), which
+    // assumes an unchanged share count -- an approximation worth stating and
+    // the only one available, since no share count is stored per date.
     const capEnd = live.reduce((a, x) => a + capOf(x), 0);
     const capBeg = live.reduce((a, x) => a + capOf(x) / (1 + x[field] / 100), 0);
+    // THE REFERENCE IS WHATEVER THE CARD IS DIVIDING UP, which when drilled
+    // is the SECTOR and not the index. The left column is then share of
+    // Technology's value, so a right half measured against the S&P would
+    // join two ends of one ribbon that describe different wholes -- exactly
+    // the inconsistency that rules out reading the sector funds. It also
+    // keeps the identity: the industries' begin-weighted returns sum to the
+    // sector's own return, as the sectors' sum to the index's.
     const index = capBeg ? (capEnd / capBeg - 1) * 100 : 0;
 
     const agg = new Map();
     for (const x of live) {
       const beg = capOf(x) / (1 + x[field] / 100);
-      const a = agg.get(x.sector) || { n: 0, end: 0, beg: 0, wr: 0 };
+      const a = agg.get(x[gkey]) || { n: 0, end: 0, beg: 0, wr: 0 };
       a.n++; a.end += capOf(x); a.beg += beg; a.wr += beg * x[field];
-      agg.set(x.sector, a);
+      agg.set(x[gkey], a);
     }
     const total = [...agg.values()].reduce((a, s) => a + s.end, 0);
-    const secs = [...agg.entries()].map(([name, a]) => ({
-      name, n: a.n, cap: a.end, wt: a.end / total * 100,
-      ret: a.beg ? a.wr / a.beg : 0,
+    let secs = [...agg.entries()].map(([name, a]) => ({
+      name, n: a.n, cap: a.end, beg: a.beg, wr: a.wr,
+      wt: a.end / total * 100, ret: a.beg ? a.wr / a.beg : 0,
     })).sort((a, b) => b.cap - a.cap);
+
+    // ---- the tail, drilled only -------------------------------------------
+    // FOURTEEN ROWS, measured rather than chosen. Two things set it:
+    //   * the SQUARE's column is 402px, and 19 rows cannot even be drawn at
+    //     the 18px floor (19 x 18 = 342 against 294 available), so the chart
+    //     would overflow its own artboard;
+    //   * at 14, NINE of the eleven sectors show every industry they have,
+    //     and the two that do not pool 4.1% (Industrials, 6 industries) and
+    //     1.7% (Consumer Cyclical, 5). That is a genuine tail. At 10 it is
+    //     14.6% and 6.8%, which is a chart hiding its own content.
+    // The pooled row is a real basket with a real cap-weighted return, so it
+    // is banded like any other and conservation still holds exactly.
+    let pooled = 0;
+    if (drillSec && secs.length > FLOW_MAX_ROWS) {
+      const keep = secs.slice(0, FLOW_MAX_ROWS - 1);
+      const rest = secs.slice(FLOW_MAX_ROWS - 1);
+      pooled = rest.length;
+      const e = rest.reduce((a, s) => a + s.cap, 0);
+      const b = rest.reduce((a, s) => a + s.beg, 0);
+      const wr = rest.reduce((a, s) => a + s.wr, 0);
+      secs = keep.concat([{
+        name: pooled + ' smaller industries', pooledRow: true,
+        n: rest.reduce((a, s) => a + s.n, 0),
+        cap: e, beg: b, wr, wt: e / total * 100, ret: b ? wr / b : 0,
+      }]);
+    }
 
     const cutWord = cut === 'in' ? 'The S&P 500'
       : cut === 'out' ? 'Outside the S&P 500' : 'The whole screen';
-    const refWord = cut === 'in' ? 'the index' : 'the screen';
+    // Drilled, the reference is the sector -- named generically rather than
+    // by name, because the title and the kicker already say which sector and
+    // "Ahead of Communication Services" would not fit the band's own track.
+    const refWord = drillSec ? 'the sector' : cut === 'in' ? 'the index' : 'the screen';
+    const partWord = drillSec ? 'industry' : 'sector';
+    const partsWord = drillSec ? 'industries' : 'sectors';
+    // "A industry that fell" -- caught by eye on the drilled card, not by an
+    // assertion. The article has to follow the word it precedes.
+    const aPart = (drillSec ? 'An ' : 'A ') + partWord;
 
     if (!secs.length || !total) {
-      // THREE DIFFERENT REASONS TO BE EMPTY, and a card that names the wrong
+      // FOUR DIFFERENT REASONS TO BE EMPTY, and a card that names the wrong
       // one is worse than one that says nothing: a posted picture has no
       // picker beside it, so this sentence is the reader's only explanation.
       // The first draft branched on the CUT rather than the CAUSE and told
@@ -3720,44 +3813,48 @@
       // been imported. Found by looking at the rendered card; every
       // assertion had passed.
       const why = !pool.length
-        ? (cut === 'in'
-          ? 'No stock here has been matched against the index yet — no holdings file has been imported.'
-          : cut === 'out'
-            ? 'Every stock on the screen is in the index.'
-            : 'There is nothing on the screen to draw.')
+        ? (drillSec
+          ? 'No stock in ' + esc(drillSec) + ' is ' + (cut === 'out' ? 'outside the index' : 'in this cut') + '.'
+          : cut === 'in'
+            ? 'No stock here has been matched against the index yet — no holdings file has been imported.'
+            : cut === 'out'
+              ? 'Every stock on the screen is in the index.'
+              : 'There is nothing on the screen to draw.')
         : !live.length
           ? 'No stock here has a reading ' + esc(phrase) + ' yet.'
-          : 'No stock here has a sector recorded yet.';
+          : 'No stock here has ' + (drillSec ? 'an industry' : 'a sector') + ' recorded yet.';
       return chromeTop() + '<div class="s-body"><div class="fl-in">' +
-        `<span class="s-kick">${esc(cutWord)}</span>` +
+        `<span class="s-kick">${esc(drillSec || cutWord)}</span>` +
         '<h2 class="s-title">Where the value sits</h2>' +
         `<p class="s-empty">${why}</p></div></div>` + chromeFoot();
     }
 
     // THE ORDER OF THESE THREE TESTS IS WHAT KEEPS THE PALETTE HONEST, and it
-    // is not label hygiene. `r < 0` is asked FIRST, so every sector in Ahead
-    // or Behind is non-negative BY CONSTRUCTION -- which is what makes green
-    // always mark a sector that rose and red always one that fell, exactly
-    // the meanings those two colours carry on every other surface here. Ask
-    // "ahead" first instead and a year with a negative index paints a sector
-    // that lost money green.
+    // is not label hygiene. `r < 0` is asked FIRST, so every part in Ahead or
+    // Behind is non-negative BY CONSTRUCTION -- which is what makes green
+    // always mark a part that rose and red always one that fell, exactly the
+    // meanings those two colours carry on every other surface here. Ask
+    // "ahead" first instead and a window with a negative reference paints a
+    // sector that lost money green.
     //
-    // INDEX-RELATIVE RATHER THAN FIXED BANDS, measured over all five windows
-    // the picker offers. Fixed cuts (>30 / 15-30 / 0-15 / down) COLLAPSE: on
-    // a single day they put TEN OF ELEVEN sectors in one band holding 98% of
-    // the value, which is a chart that says nothing. The index-relative split
-    // never degenerates -- 3 bands today, 3 over a week, 2 over a month, 3
-    // this year, 3 over a year -- and it needs no threshold that goes stale.
+    // RELATIVE TO THE WHOLE RATHER THAN FIXED BANDS, measured over all five
+    // windows the picker offers. Fixed cuts (>30 / 15-30 / 0-15 / down)
+    // COLLAPSE: on a single day they put TEN OF ELEVEN sectors in one band
+    // holding 98% of the value, which is a chart that says nothing. The
+    // relative split never degenerates -- 3 bands today, 3 over a week, 2
+    // over a month, 3 this year, 3 over a year -- and it needs no threshold
+    // that goes stale.
     const bandOf = (r) => (r < 0 ? 'down' : r > index ? 'ahead' : 'behind');
     secs.forEach((s) => { s.band = bandOf(s.ret); });
 
     const H = FLOW_H[size.id] || FLOW_H.portrait;
-    const TR = FLOW_TRACKS[size.id] || FLOW_TRACKS.portrait;
+    const TRS = drillSec ? FLOW_TRACKS_DRILL : FLOW_TRACKS;
+    const TR = TRS[size.id] || TRS.portrait;
     const W = 952 - TR.lw - TR.rw;
     const n = secs.length;
     const avail = H - FLOW_GAP * (n - 1);
 
-    // A SMALL SECTOR STILL HAS TO BE VISIBLE, and the floor is marked rather
+    // A SMALL PART STILL HAS TO BE VISIBLE, and the floor is marked rather
     // than silent -- the Size card's rule, where a disc under 14px is drawn
     // at the floor and says so. Basic Materials is 1.4% of the index, which
     // on this column is seven pixels: thinner than the label beside it, and
@@ -3765,29 +3862,40 @@
     // the slack ABOVE the floor in proportion, so the distortion lands on the
     // big nodes, where it is a few percent, rather than on the small ones,
     // where it would be everything.
+    //
+    // THE FLOOR ITSELF HAS A CEILING, because n x FLOW_MIN can exceed the
+    // column: 19 industries at 18px is 342 against the square's 294, and
+    // the card would have overflowed its own artboard rather than merely
+    // looked cramped. FLOW_MAX_ROWS keeps that unreachable today; this is
+    // the guard that makes it unreachable at any row count.
+    const floor = Math.min(FLOW_MIN, avail / n);
     let hs = secs.map((s) => s.wt / 100 * avail);
-    const need = hs.reduce((a, h) => a + Math.max(0, FLOW_MIN - h), 0);
-    const floored = hs.filter((h) => h < FLOW_MIN).length;
+    const need = hs.reduce((a, h) => a + Math.max(0, floor - h), 0);
+    const floored = hs.filter((h) => h < floor).length;
     if (need > 0) {
-      const slack = hs.reduce((a, h) => a + Math.max(0, h - FLOW_MIN), 0);
-      hs = hs.map((h) => (h < FLOW_MIN ? FLOW_MIN
-        : slack > need ? h - (h - FLOW_MIN) * (need / slack) : FLOW_MIN));
+      const slack = hs.reduce((a, h) => a + Math.max(0, h - floor), 0);
+      hs = hs.map((h) => (h < floor ? floor
+        : slack > need ? h - (h - floor) * (need / slack) : floor));
     }
     secs.forEach((s, i) => { s.h = hs[i]; });
 
-    // LEFT: cap descending, which is what composition is read as.
+    // LEFT: cap descending, which is what composition is read as. The pooled
+    // row is already last by construction and stays there even though its
+    // combined cap can exceed a named one above it -- it is the tail, and
+    // sorting it up into the middle would read as an industry.
     let y = 0;
     secs.forEach((s) => { s.y = y; y += s.h + FLOW_GAP; });
 
     // RIGHT: the bands in order, each the exact sum of the ribbons entering
     // it, with the gaps opened so both columns span the same H. A band keeps
-    // its sectors in the LEFT column's order, which is what stops the
-    // ribbons crossing each other more than the data makes them.
+    // its parts in the LEFT column's order, which is what stops the ribbons
+    // crossing each other more than the data makes them.
     const bands = FLOW_BANDS
       .map(([key, label]) => {
         const mine = secs.filter((s) => s.band === key);
         return {
-          key, label, mine, h: mine.reduce((a, s) => a + s.h, 0),
+          key, label: drillSec ? label.replace('the index', 'the sector') : label,
+          mine, h: mine.reduce((a, s) => a + s.h, 0),
           wt: mine.reduce((a, s) => a + s.wt, 0),
         };
       })
@@ -3823,17 +3931,12 @@
     // this module follows, because the artboard is scaled to the window and
     // a glyph inside a stretched svg is distorted with it.
     const lLabs = secs.map((s) =>
-      `<span class="fl-lab" style="top:${f1(s.y + s.h / 2)}px">` +
+      `<span class="fl-lab${s.pooledRow ? ' fl-rest' : ''}" style="top:${f1(s.y + s.h / 2)}px">` +
       `<b>${esc(s.name)}</b><i class="${s.ret >= 0 ? 'up' : 'dn'}">${pct(s.ret)}</i></span>`).join('');
     const rLabs = bands.map((b) =>
       `<span class="fl-lab fl-blab" style="top:${f1(b.y + b.h / 2)}px">` +
       `<b class="fl-${b.key}">${esc(b.label)}</b>` +
-      // "of value", not "of the value". Measured: the article costs 32px at
-      // 15px and 36 at 17, and this line is the WIDEST thing in the right
-      // track -- with it the sub wrapped mid-phrase on two of the three
-      // artboards and the story's band label wrapped too. The note says
-      // thickness is market value, so the word is not carrying the meaning.
-      `<i>${b.mine.length} sector${b.mine.length === 1 ? '' : 's'} · ` +
+      `<i>${b.mine.length} ${b.mine.length === 1 ? partWord : partsWord} · ` +
       `${b.wt.toFixed(0)}% of value</i></span>`).join('');
 
     // NO COUNT IS WRITTEN DOWN HERE. The first draft said "the eleven parts
@@ -3845,24 +3948,27 @@
     // are the START weights and the percentages drawn are today's share --
     // the SEC ratio card's rule, that a figure on screen has to be checkable
     // against another figure on screen. So the note explains the choice.
-    const note = 'Each ribbon is one sector, as thick as its share of market value, and it '
+    const note = 'Each ribbon is one ' + partWord + ', as thick as its share of market value, and it '
       + 'lands in the band its own cap-weighted return ' + esc(phrase) + ' puts it in — against '
-      + esc(refWord) + '’s ' + pct(index) + '. A sector that fell is Down whatever the index did. '
-      + 'Returns weight each company by what it was worth at the START of the window rather than '
-      + 'today, since a winner has already grown into today’s weight; they are computed over the '
-      + 'companies here rather than taken from the sector funds, which hold a '
+      + esc(refWord) + '’s ' + pct(index) + '. ' + aPart + ' that fell is Down whatever '
+      + esc(refWord) + ' did. Returns weight each company by what it was worth at the START of the '
+      + 'window rather than today, since a winner has already grown into today’s weight; they are '
+      + 'computed over the companies here rather than taken from the sector funds, which hold a '
       + 'different basket.'
+      + (pooled ? ' The ' + pooled + ' smaller industries are pooled into one ribbon, together '
+        + secs[secs.length - 1].wt.toFixed(1) + '% of the sector.' : '')
       + (nosec ? ' ' + (nosec === 1 ? 'One company has' : nosec + ' companies have')
-        + ' no sector recorded and so sit' + (nosec === 1 ? 's' : '') + ' in no band.' : '')
+        + ' no ' + partWord + ' recorded and so sit' + (nosec === 1 ? 's' : '') + ' in no band.' : '')
       + (floored ? ' The ' + (floored === 1 ? 'smallest ribbon carries' : floored + ' smallest ribbons carry')
         + ' a minimum thickness, so ' + (floored === 1 ? 'it can' : 'they can') + ' still be followed.' : '');
 
     return chromeTop() +
       '<div class="s-body"><div class="fl-in">' +
-      `<span class="s-kick">${esc(cutWord)} · ${live.length.toLocaleString()} companies · $${fmtMoney(total)}</span>` +
+      `<span class="s-kick">${esc(drillSec ? drillSec + ' · ' + cutWord : cutWord)}` +
+      ` · ${live.length.toLocaleString()} companies · $${fmtMoney(total)}</span>` +
       '<h2 class="s-title">Where the value sits<br><span class="dim">' +
-      esc('and how each sector has done ' + phrase) + '</span></h2>' +
-      `<div class="fl-wrap" style="height:${H}px">` +
+      esc('and how each ' + partWord + ' has done ' + phrase) + '</span></h2>' +
+      `<div class="fl-wrap${drillSec ? ' fl-drill' : ''}" style="height:${H}px">` +
       `<div class="fl-side" style="width:${TR.lw}px">${lLabs}</div>` +
       `<svg class="fl-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
       paths + lNodes + rNodes + '</svg>' +
@@ -4887,6 +4993,10 @@
     .fl-lab i { font: 600 16px var(--mono); font-style: normal; flex: none;
                 font-variant-numeric: tabular-nums; color: var(--muted); }
     .fl-lab i.up { color: var(--green); } .fl-lab i.dn { color: var(--red); }
+    /* The pooled tail is a real basket with a real return and is banded like
+       any other, so it is not dimmed -- only italicised, because it is the
+       one row that is not an industry. */
+    .fl-rest b { font-style: italic; font-weight: 500; }
     /* The right column reads the other way: the band name first, its share
        under it, both left-aligned off the node. */
     .fl-r .fl-lab { right: auto; left: 16px; justify-content: flex-start;
@@ -4902,6 +5012,23 @@
     .fl-r .fl-lab b.fl-ahead { color: var(--green); }
     .fl-r .fl-lab b.fl-down { color: var(--red); }
     .fl-r .fl-lab b.fl-behind { color: var(--muted); }
+    /* The drill's names run to 40 characters, so they are set smaller and
+       given a wider track. Measured, and the clip check in the suite is
+       what holds it: the 138 industry names are a FIXED SET, so an ellipsis
+       here is a width bug rather than the unavoidable thing it is on a
+       company name.
+       THE CLASS IS ON THE WRAP, not the left side -- .fl-r is a SIBLING of
+       that side, so a class there cannot reach the band labels, and the
+       drill's longer sub ("N industries" against "N sectors") is exactly
+       what needs them.
+       The .sz-story rules below are UNDOING that artboard's own bumps, not
+       adding any: they have to be at (0,3,1) and (0,4,1) to beat the
+       .sz-story rules further down, which tie with a bare .fl-drill. */
+    .fl-drill .fl-lab b { font-size: 15px; }
+    .sz-story .fl-drill .fl-lab b { font-size: 15px; }
+    .sz-story .fl-drill .fl-lab i { font-size: 16px; }
+    .sz-story .fl-drill .fl-r .fl-lab b { font-size: 20px; }
+    .sz-story .fl-drill .fl-r .fl-lab i { font-size: 15px; }
     .sz-square .fl-lab b { font-size: 15px; }
     .sz-square .fl-lab i { font-size: 14px; }
     .sz-square .fl-r .fl-lab b { font-size: 18px; }

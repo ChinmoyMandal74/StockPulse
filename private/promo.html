@@ -593,12 +593,20 @@
           among the movers.</p>
       </div>
 
-      <!-- WHERE THE VALUE SITS. Two controls and no scope pickers, for
-           tplDay's reason: this card answers "what is the market made of and
-           how has each part done", and a sector breakdown of ONE sector is
-           not a breakdown. So there is no flowSector/flowIndustry/flowCap/
-           flowScreen and INDUSTRY_PREFIXES is left alone. -->
+      <!-- WHERE THE VALUE SITS. No SCOPE pickers, for tplDay's reason: this
+           card answers "what is the market made of and how has each part
+           done", so it takes no list, no screen and no size band, and
+           INDUSTRY_PREFIXES is left alone.
+           flowSector is the DRILL, not a scope: it narrows what the card
+           divides up, and a sector is MANDATORY to reach the industry view
+           (the owner, 2026-10-05). -->
       <div id="flowBox">
+        <label>Break down</label>
+        <select id="flowSector"></select>
+        <p class="hint">Pick a sector to drill into its industries. There is no flat
+          industry view and there cannot be one: there are 138 industries and the
+          top twelve are 63&#37; of the index, so the pooled tail would be the biggest
+          ribbon on the chart. Inside one sector the same pooling is a real tail.</p>
         <label>Period</label>
         <select id="flowPeriod"></select>
         <label>S&amp;P 500</label>
@@ -870,7 +878,7 @@
       'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen', 'sizeSp500',
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen', 'bubSp500',
       'daySnapPeriod', 'dayMetric', 'dayCount', 'dayFloor', 'daySp500',
-      'flowPeriod', 'flowSp500',
+      'flowSector', 'flowPeriod', 'flowSp500',
       'spotSym', 'spotWin', 'spotProf',
       'evoSym', 'evoMeasure', 'evoWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
@@ -1109,7 +1117,7 @@
     // A FOURTEENTH hardcoded listener list, and the warning above applies
     // to it exactly: both of these are in the markup and in CONTROL_IDS,
     // so without this they would save with a post and do nothing on screen.
-    ['flowPeriod', 'flowSp500'].forEach((id) =>
+    ['flowSector', 'flowPeriod', 'flowSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'flow') render(); }));
     ['daySnapPeriod', 'dayMetric', 'dayCount', 'dayFloor', 'daySp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
@@ -1542,6 +1550,17 @@
         // card defaults to this year, which is the window the owner asked
         // for; the Snapshot defaults to today, so they are set separately
         // rather than sharing one fill.
+        // THE SECTORS ACTUALLY PRESENT, from the same accessor every other
+        // sector picker on this page uses -- so the drill can never offer a
+        // sector with no stocks behind it. (`Cards.sectors` takes the rows;
+        // calling it bare returns an empty list, which is how a duplicate
+        // export of that name read as a blank picker for an hour.)
+        const flowSecKeep = $('flowSector').value;
+        $('flowSector').innerHTML = '<option value="All">All sectors — the eleven</option>'
+          + Cards.sectors(stocks).map((nm) => `<option value="${esc(nm)}">${esc(nm)}</option>`).join('');
+        if ([...$('flowSector').options].some((o) => o.value === flowSecKeep)) {
+          $('flowSector').value = flowSecKeep;
+        }
         const flowKeep = $('flowPeriod').value;
         $('flowPeriod').innerHTML = Cards.snapPeriods().map(([v, lab]) =>
           `<option value="${esc(v)}"${v === 'ytd' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
