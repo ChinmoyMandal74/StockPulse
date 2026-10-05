@@ -1176,47 +1176,7 @@ ratio are pre-split and a split does not move a ratio. **One symbol of
 
 ---
 
-## 22. Correlation — is a theme one bet or many? — raised 2026-10-04
-
-**From a list of fifteen quant concepts the owner asked about.** Six of them
-are already in this app under other names (Sharpe in `strategy.js`, VaR as
-the per-tier p10, Monte Carlo as the chart-pattern study's block bootstrap,
-Kelly's practical cousin as the volatility targeting on `/strategy`, mean
-reversion as three flat framings in the research log, beta as a thing
-deliberately not stored because the bars reproduce it). Four are impossible
-here for want of data — Black-Scholes, the Greeks and market making need an
-options chain or an order book, and this app has neither. **Three were worth
-building, and this is the first of them.**
-
-**The gap it fills.** The app has themes, sectors, size bands and personal
-lists, and nothing anywhere says how much the members of one move together.
-A seven-stock theme whose members correlate at 0.9 is one bet wearing seven
-tickers, and the equal-weight curve on `/theme/<name>` cannot say so.
-
-**It costs nothing to compute.** `basketPayload` already returns
-`series` — every member rebased on one shared date axis — so the card is a
-loop in the browser over data the page is already holding. No endpoint, no
-query, no extra bytes.
-
-**MEASURED BEFORE BUILDING, and both numbers decided the design:**
-
-- **Returns, never levels.** Correlating the rebased price LEVELS is the
-  classic error and it is not an approximation, it is noise: over 72 real
-  pairs the levels figure sits between **−0.96 and +0.90** away from the
-  returns figure, and flips sign — AAPL/MSFT reads **+0.12 on returns and
-  −0.27 on levels**.
-- **The 3dp rounding in `symbolSeries` is immaterial.** Worst error across
-  those same 72 pairs: **0.0039**. That is what makes computing in the
-  browser, off the rounded payload, the right call rather than a compromise.
-- **The window moves the answer more than anything else.** AAPL/MSFT is
-  **0.12 over 120 sessions and 0.44 over 1,000**. So the card has to follow
-  the page's own range buttons and say which window produced the number.
-
-*(Built 2026-10-04 — this entry is deleted in the commit that ships it.)*
-
----
-
-## 23. GARCH, but only to make Cushion honest — raised 2026-10-04
+## 22. GARCH, but only to make Cushion honest — raised 2026-10-04
 
 **Cushion is distance-to-exit measured in the stock's own TRAILING
 volatility** (`actionRisk.drop ÷ (realisedVol ÷ √12)`). The one thing a
@@ -1254,7 +1214,7 @@ flat, the honest outcome is to leave Cushion alone and record it.
 
 ---
 
-## 24. Empirical VaR as a column — raised 2026-10-04
+## 23. Empirical VaR as a column — raised 2026-10-04
 
 **The worst 5% daily move a stock has actually had over the last year**, read
 straight off the bar archive. Not a model, not a distributional assumption,
