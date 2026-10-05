@@ -139,6 +139,31 @@
     /* the stock list — its own scroller, so a long group cannot make the
        PAGE scroll sideways (seven columns do not fit a phone) */
     .tblwrap { overflow-x: auto; margin-top: 6px; }
+
+    /* ---- how much they move together ---------------------------------- */
+    .cnums { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+    .cn { border: 1px solid var(--hair); border-radius: 12px; padding: 12px 14px;
+          background: rgba(255, 255, 255, 0.02); min-width: 0; }
+    .cn .k { font-size: 10px; font-weight: 500; text-transform: uppercase;
+             letter-spacing: 0.18em; color: var(--faint); }
+    .cn .v { margin: 7px 0 0; font-family: var(--mono); font-size: 25px; font-weight: 600;
+             color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .cn .v .u { font-family: var(--sans); font-size: 13px; font-weight: 500; color: var(--muted); }
+    .cn .g { margin: 6px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--faint); }
+    /* ONE HUE, and the number is in every cell. Correlation has no good end,
+       so green and red — which on every other surface here mean up and down —
+       would be reading a verdict into it. The shade is an aid and the figure
+       is the data; a negative cell is left unfilled and marked, because an
+       unfilled cell at +0.01 and one at −0.50 must not look identical. */
+    table.cmx { border-collapse: separate; border-spacing: 2px; margin-top: 14px; }
+    table.cmx th { font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+                   color: var(--muted); padding: 3px 6px; white-space: nowrap; text-align: right; }
+    table.cmx thead th { text-align: center; }
+    table.cmx td { font-family: var(--mono); font-size: 11px; text-align: center;
+                   padding: 6px 7px; border-radius: 5px; color: var(--text);
+                   font-variant-numeric: tabular-nums; white-space: nowrap; }
+    table.cmx td.cdiag { color: var(--faint); background: rgba(255, 255, 255, 0.015); }
+    table.cmx td[data-neg] { box-shadow: inset 0 0 0 1px var(--hair-2); color: var(--muted); }
     .rowtbl { min-width: 620px; }
     .rowtbl td.nm { font-family: var(--sans); color: var(--muted); text-align: left;
                     max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -677,6 +702,208 @@
         '</div></section>';
     }
 
+    // ---- how much do the members move TOGETHER? (2026-10-04) --------------
+    // The group pages say what a basket DID and nothing says whether it is
+    // one bet or many. A seven-stock theme whose members correlate at 0.9 is
+    // one bet wearing seven tickers, and the equal-weight curve above cannot
+    // tell you that.
+    //
+    // IT COSTS NO QUERY AND NO BYTES. `basketPayload` already returns
+    // `series` — every member rebased on one shared date axis — for the
+    // chart, so this is a loop over data the page is already holding.
+    //
+    // RETURNS, NEVER LEVELS, and that is not a refinement. Correlating the
+    // rebased price LEVELS is the classic error: measured over 72 real pairs
+    // before this was built, the levels figure sits anywhere between −0.96
+    // and +0.90 away from the returns figure AND FLIPS SIGN — AAPL/MSFT is
+    // +0.12 on returns and −0.27 on levels. Two series that both trend
+    // upward correlate on their levels whatever their day-to-day behaviour.
+    //
+    // The payload is rounded to 3dp, which was measured on the same 72 pairs
+    // and is worth 0.0039 at worst — that is what makes computing here, off
+    // the rounded series, the right call rather than a compromise. The same
+    // rounding turns a very small move into an exactly flat one, and a flat
+    // reading is also what a carried-forward price gives for a session a
+    // symbol did not trade; neither is distinguishable from the other in
+    // this payload, and the date axis already drops the sessions where that
+    // would be common. Both are inside the 0.0039.
+    const CORR_MIN_PAIR = 20;      // shared returns before a pair is counted
+    const CORR_MATRIX_MAX = 14;    // beyond this a grid is a wall, not a reading
+    const CORR_MEMBERS_MAX = 150;  // biggest first; paint() runs on every sort
+
+    // Simple returns from the rebased index. A null either side, or a
+    // non-positive base, is no return rather than a zero — the blank-versus-
+    // zero rule, and here a fabricated 0 would drag every correlation it
+    // touched toward the mean.
+    function retsOf(v) {
+      const out = new Array(v.length).fill(null);
+      for (let i = 1; i < v.length; i++) {
+        const a = v[i - 1], b = v[i];
+        if (a != null && b != null && a > 0) out[i] = b / a - 1;
+      }
+      return out;
+    }
+
+    // PAIRWISE COMPLETE: only the sessions where BOTH have a return. A
+    // recent listing has nulls at the left, and dropping the whole pair over
+    // them would silently remove the newest members of a theme.
+    function corrPair(x, y) {
+      let n = 0, sx = 0, sy = 0;
+      for (let i = 0; i < x.length; i++) if (x[i] != null && y[i] != null) { n++; sx += x[i]; sy += y[i]; }
+      if (n < CORR_MIN_PAIR) return null;
+      const mx = sx / n, my = sy / n;
+      let sxy = 0, sxx = 0, syy = 0;
+      for (let i = 0; i < x.length; i++) {
+        if (x[i] == null || y[i] == null) continue;
+        const p = x[i] - mx, q = y[i] - my;
+        sxy += p * q; sxx += p * p; syy += q * q;
+      }
+      return sxx > 0 && syy > 0 ? sxy / Math.sqrt(sxx * syy) : null;
+    }
+
+    // Memoised on the window and the membership, because paint() runs on
+    // every sort click and every Show-more — and at 150 members this is
+    // 11,175 pairs.
+    let corrCache = { key: null, out: null };
+    function correlationOf() {
+      const series = (curve && curve.series) || {};
+      const picked = rows
+        .filter((s) => Array.isArray(series[s.symbol]))
+        .sort((a, b) => (Number(b.marketCap) || 0) - (Number(a.marketCap) || 0))
+        .slice(0, CORR_MEMBERS_MAX);
+      const key = (curve ? range.id + ':' + (curve.dates || []).length : 'x')
+        + '|' + picked.map((s) => s.symbol).join(',');
+      if (corrCache.key === key) return corrCache.out;
+
+      const syms = picked.map((s) => s.symbol);
+      const R = {};
+      for (const s of syms) R[s] = retsOf(series[s]);
+      const m = {};
+      let sum = 0, pairs = 0, thin = 0;
+      let hi = null, lo = null;
+      const rowSum = {}, rowN = {};
+      for (const s of syms) { m[s] = {}; rowSum[s] = 0; rowN[s] = 0; }
+      for (let i = 0; i < syms.length; i++) {
+        for (let j = i + 1; j < syms.length; j++) {
+          const a = syms[i], b = syms[j];
+          const c = corrPair(R[a], R[b]);
+          if (c == null) { thin++; continue; }
+          m[a][b] = c; m[b][a] = c;
+          sum += c; pairs++;
+          rowSum[a] += c; rowN[a]++; rowSum[b] += c; rowN[b]++;
+          if (!hi || c > hi.c) hi = { a, b, c };
+          if (!lo || c < lo.c) lo = { a, b, c };
+        }
+      }
+      const avg = pairs ? sum / pairs : null;
+      // The member that behaves least like the rest — the actionable line,
+      // and the one a matrix makes you hunt for.
+      let odd = null;
+      for (const s of syms) {
+        if (!rowN[s]) continue;
+        const v = rowSum[s] / rowN[s];
+        if (!odd || v < odd.v) odd = { sym: s, v };
+      }
+      // THE N IS THE MEMBERS THAT COULD BE COMPARED, not everyone with a
+      // series. A ticker added to a theme last week shares too few sessions
+      // with anyone to be counted in a single pair -- leaving it in the
+      // denominator would report a basket as better spread than the pairs
+      // actually say, which is the direction that flatters.
+      const nUsed = syms.filter((x) => rowN[x] > 0).length;
+      corrCache = { key, out: { syms, m, avg, pairs, thin, hi, lo, odd, nUsed,
+        n: syms.length, dropped: rows.length - picked.length,
+        sessions: (curve && curve.dates ? curve.dates.length : 0) } };
+      return corrCache.out;
+    }
+
+    const corrShade = (c) => (c == null || c <= 0 ? 'transparent'
+      : 'rgba(124, 156, 255, ' + (0.07 + Math.min(1, c) * 0.42).toFixed(3) + ')');
+    // THE SIGN COMES FROM THE ROUNDED VALUE, not the raw one. An exactly
+    // orthogonal pair lands on -1e-17 and printed "−0.00" while being
+    // marked as a diversifying cell -- a minus sign in front of a zero, and
+    // the +0% lesson from the earnings card in a second place.
+    const corrRound = (c) => Math.round(c * 100) / 100;
+    const corrNeg = (c) => c != null && corrRound(c) < 0;
+    const corrTxt = (c) => {
+      if (c == null) return '—';
+      const r = corrRound(c);
+      return (r < 0 ? '−' : '') + Math.abs(r).toFixed(2);
+    };
+
+    function correlationHtml() {
+      const H = '<section class="bezel card"><div class="core">'
+        + '<h2>How much they move together</h2>';
+      if (!curve || !curve.series) {
+        return H + '<div class="empty">Reading the archive…</div></div></section>';
+      }
+      const d = correlationOf();
+      if (d.n < 2) {
+        return H + '<div class="empty">A correlation needs two members with stored history; '
+          + 'this group has ' + d.n + '.</div></div></section>';
+      }
+      if (d.avg == null) {
+        return H + '<div class="empty">No pair here shares ' + CORR_MIN_PAIR
+          + ' sessions in this window — try a longer one.</div></div></section>';
+      }
+      // N / (1 + (N-1)·rho) is the number of INDEPENDENT holdings that would
+      // give the same variance reduction, exact for an equal-weight basket of
+      // equal-volatility members. Both assumptions are stated rather than
+      // buried: this page's basket really is equal-weight, the volatilities
+      // really are not equal, so it is an indication and the note says so.
+      const nU = d.nUsed;
+      const nEff = d.avg > 0 && nU > 1 ? nU / (1 + (nU - 1) * d.avg) : null;
+      const cell = (a, b) => {
+        if (a === b) return '<td class="cdiag">·</td>';
+        const c = d.m[a] && d.m[a][b] != null ? d.m[a][b] : null;
+        return '<td class="cnum" style="background:' + corrShade(c) + '"'
+          + (corrNeg(c) ? ' data-neg="1"' : '') + '>' + corrTxt(c) + '</td>';
+      };
+      const matrix = d.n <= CORR_MATRIX_MAX
+        ? '<div class="tblwrap"><table class="cmx"><thead><tr><th></th>'
+          + d.syms.map((s) => '<th>' + esc(s) + '</th>').join('') + '</tr></thead><tbody>'
+          + d.syms.map((a) => '<tr><th>' + esc(a) + '</th>'
+            + d.syms.map((b) => cell(a, b)).join('') + '</tr>').join('')
+          + '</tbody></table></div>'
+        : '';
+      const pairTxt = (p) => (p ? esc(p.a) + ' / ' + esc(p.b) + ' at ' + corrTxt(p.c) : '—');
+      return H
+        + '<div class="cnums">'
+        + '<div class="cn"><span class="k">Average pair</span><p class="v">'
+        + corrTxt(d.avg) + '</p><p class="g">Across ' + d.pairs + ' pair'
+        + (d.pairs === 1 ? '' : 's') + ' of daily returns, over the '
+        + d.sessions + ' sessions in this window.</p></div>'
+        + '<div class="cn"><span class="k">Separate bets</span><p class="v">'
+        + (nEff ? nEff.toFixed(1) : String(nU)) + '<span class="u"> of ' + nU + '</span></p>'
+        + '<p class="g">' + (nEff
+          ? 'How many INDEPENDENT holdings would damp the swings as much as these '
+            + nU + ' do. Equal-weight, and it treats every member as equally volatile.'
+          : 'They do not move together on average, so each one is pulling its own weight.')
+        + '</p></div>'
+        + '<div class="cn"><span class="k">Least like the rest</span><p class="v">'
+        + (d.odd ? esc(d.odd.sym) : '—') + '</p><p class="g">'
+        + (d.odd ? 'Averages ' + corrTxt(d.odd.v) + ' against the others — the one doing '
+          + 'something different.' : '') + '</p></div>'
+        + '<div class="cn"><span class="k">Closest pair</span><p class="v" style="font-size:19px">'
+        + pairTxt(d.hi) + '</p><p class="g">Furthest apart: ' + pairTxt(d.lo) + '.</p></div>'
+        + '</div>'
+        + matrix
+        + '<p class="note">Pearson correlation of <b>daily returns</b>, not of prices — two '
+        + 'shares that both drift upward look alike on their price lines whatever they do day '
+        + 'to day. 1.00 is lockstep, 0 is unrelated, below zero is one rising as the other '
+        + 'falls. The figure moves a lot with the window, so it is the one above the chart.'
+        + (d.n > CORR_MATRIX_MAX ? ' A grid of ' + d.n + ' names would be '
+          + (d.n * d.n) + ' cells, so only the readings are shown.' : '')
+        + (d.dropped > 0 ? ' Counted over the ' + d.n + ' largest by market cap of '
+          + rows.length + '.' : '')
+        + (d.thin > 0 ? ' ' + d.thin + ' pair' + (d.thin === 1 ? '' : 's')
+          + ' share fewer than ' + CORR_MIN_PAIR + ' sessions and are left out'
+          + (d.n > nU ? ', which leaves ' + (d.n - nU) + ' member'
+            + (d.n - nU === 1 ? '' : 's') + ' with nothing to compare against' : '')
+          + '.' : '')
+        + ' This is a description of what has happened, not a forecast.</p>'
+        + '</div></section>';
+    }
+
     function paint() {
       const main = $('main');
       if (!rows.length) {
@@ -740,7 +967,7 @@
         `</h1><span class="kind" style="font-size:15px">${esc(kindWord)}</span>${chips}</div>` +
         '<p class="lede">A screener’s view of the group as one thing — descriptive throughout, positions nowhere.</p>' +
         `<div class="grid">${curveCard()}${stanceHtml()}${compositionHtml()}${leadersHtml()}` +
-        `${returnsHtml()}${fundamentalsHtml()}${stocksHtml()}</div>`;
+        `${returnsHtml()}${correlationHtml()}${fundamentalsHtml()}${stocksHtml()}</div>`;
       const more = $('moreRows');
       if (more) more.addEventListener('click', () => { listShown += 50; paint(); });
       // A FIRST CLICK SHOWS THE INTERESTING END. A number opens descending
