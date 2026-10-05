@@ -36,6 +36,34 @@
       border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
     }
 
+    /* ---- the jump bar: every card is one click from the top (2026-10-04,
+       owner's request, after the one on /admin). Its chips are BUILT FROM THE
+       PAGE rather than written down -- see paintJumps(). ------------------- */
+    .jumps { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 20px; }
+    .jump {
+      display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03); color: var(--muted);
+      font-size: 12.5px; font-weight: 500; text-decoration: none; cursor: pointer;
+      transition: color .25s var(--ease), border-color .25s var(--ease), background .25s var(--ease);
+    }
+    .jump:hover { color: var(--text); border-color: var(--hair-2); background: rgba(255, 255, 255, 0.06); }
+    .jump .ic { color: var(--faint); }
+    .jump:hover .ic { color: var(--accent); }
+    /* THE ISLAND IS STICKY AT THE TOP, so a bare anchor jump parks the heading
+       underneath it. Measured rather than guessed: the island's own box plus
+       its wrapper's 10px and a little air. */
+    section.card { scroll-margin-top: 76px; }
+    /* On a phone nine chips wrap to four rows, which is a screen of furniture
+       in front of the thing being read -- so they become ONE row that scrolls
+       sideways inside its own box, the treatment the table columns already
+       take. The page itself still cannot be panned. */
+    @media (max-width: 720px) {
+      .jumps { flex-wrap: nowrap; overflow-x: auto; margin: 2px -20px 16px; padding: 0 20px 4px;
+               scrollbar-width: none; }
+      .jumps::-webkit-scrollbar { display: none; }
+      .jump { flex: 0 0 auto; }
+    }
+
     /* masthead — the chips sit on this row rather than claiming one of their
        own, which was costing a 26px band plus 30px of margins above the chart */
     .head { display: flex; align-items: baseline; gap: 10px 14px; flex-wrap: wrap; margin: 12px 0 0; }
@@ -897,6 +925,15 @@
     <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15.2l5.5-5.7"/></symbol>
     <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9"/><path d="M17 7h3"/><circle cx="15" cy="7" r="2"/><path d="M4 17h3"/><path d="M11 17h9"/><circle cx="9" cy="17" r="2"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3.4 17.6 9 12l3.6 2.7L20.6 6.2"/><path d="M15.2 6.2h5.4v5.4"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3.4 12h3.8l2-5.2 3.4 10.4 2.2-5.2h5.8"/></symbol>
+    <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3.4" y="4.4" width="17.2" height="15.2" rx="2.2"/><path d="M9.2 4.4v15.2"/><path d="M14.8 4.4v15.2"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.6" y="5.2" width="16.8" height="15.2" rx="2.4"/><path d="M3.6 10h16.8"/><path d="M8.4 3.6v3.2"/><path d="M15.6 3.6v3.2"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M9.8 9.6a2.3 2.3 0 0 1 4.4.8c0 1.6-2.2 2-2.2 3.4"/><path d="M12 17.1h.01"/></symbol>
+    <symbol id="i-nodes" viewBox="0 0 24 24"><rect x="3.4" y="3.4" width="6.4" height="5"/><rect x="14.2" y="3.4" width="6.4" height="5"/><rect x="8.8" y="15.6" width="6.4" height="5"/><path d="M6.6 8.4v3.4h10.8V8.4"/><path d="M12 11.8v3.8"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.6h11.4"/><path d="M9 12h11.4"/><path d="M9 17.4h11.4"/><path d="M4.6 6.6h.01"/><path d="M4.6 12h.01"/><path d="M4.6 17.4h.01"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9.4" cy="8.4" r="3.4"/><path d="M3.6 19.4c0-3.2 2.6-5.4 5.8-5.4s5.8 2.2 5.8 5.4"/><path d="M16.4 5.4a3.4 3.4 0 0 1 0 6.6"/><path d="M18 14.4c1.7.7 2.8 2.3 2.8 4.2"/></symbol>
+    <symbol id="i-scales" viewBox="0 0 24 24"><path d="M12 4.4v15.2"/><path d="M6.6 19.6h10.8"/><path d="M4 9.6h16"/><path d="M4 9.6 6.8 15h-5.6Z"/><path d="M20 9.6 22.8 15h-5.6Z"/></symbol>
     <symbol id="i-scatter" viewBox="0 0 24 24"><path d="M4.5 4.5v15h15"/><circle cx="9" cy="15" r="1.2"/><circle cx="12.5" cy="10.5" r="1.2"/><circle cx="16.5" cy="13" r="1.2"/><circle cx="19" cy="7.5" r="1.2"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.6v11.8"/><path d="M7.6 11.2 12 15.6l4.4-4.4"/><path d="M4.6 19.6h14.8"/></symbol>
     <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 4.6h5.4V10"/><path d="M19.4 4.6 11.6 12.4"/><path d="M18 14v5.4H4.6V6h5.4"/></symbol>
@@ -1485,7 +1522,7 @@
       const body = (p.self ? rowHtml(p.self, true) : '') +
         p.rows.map((r) => rowHtml(r, false)).join('');
       return `
-        <section class="bezel card" id="peers"><div class="core">
+        <section class="bezel card" id="peers" data-jump="Similar stocks" data-icon="i-nodes"><div class="core">
           <div class="sec-h"><h2>Similar stocks</h2></div>
           <p class="summary">${basis}</p>
           <div class="ptab"><table>
@@ -2243,6 +2280,67 @@
           : '');
     }
 
+    // ---- the jump bar -------------------------------------------------------
+    // BUILT FROM THE PAGE, never from a list written down beside it. Which
+    // cards exist here is not fixed the way /admin's eight sections are:
+    // Earnings, About and Similar stocks are only rendered when there is
+    // something to render, and SEC EDGAR, Insiders and Short interest start
+    // hidden and are revealed by their own fetches long after the first paint
+    // -- a fund files no statements and gets none of the three. A written list
+    // would offer a chip that jumps to nothing, which is worse than no chip.
+    //
+    // So a card opts in with `data-jump` (its chip's label, which is allowed
+    // to be shorter than its heading) and `data-icon`, and the bar is whatever
+    // is on screen at the time.
+    let jumpSig = null;
+    function paintJumps() {
+      const bar = document.getElementById('jumps');
+      if (!bar) return;
+      const cards = [...document.querySelectorAll('section.card[data-jump][id]')]
+        .filter((el) => !el.hidden);
+      // REWRITTEN ONLY WHEN THE SET CHANGES, and this is NOT an optimisation:
+      // the bar lives inside the subtree the observer below watches, so
+      // rewriting its markup is itself a mutation. Without this line the
+      // observer feeds itself and the page never finishes loading — measured,
+      // `networkidle` is never reached and the navigation times out. It also
+      // happens to stop the chip under the pointer being thrown away on every
+      // chart redraw and every table the page fills in.
+      const sig = cards.map((el) => el.id + '|' + el.getAttribute('data-jump')).join(',');
+      if (sig === jumpSig) return;
+      jumpSig = sig;
+      // One chip is not a bar, it is a button that scrolls to the only thing
+      // there is. Nothing to jump BETWEEN, so nothing is drawn.
+      bar.hidden = cards.length < 2;
+      bar.innerHTML = cards.map((el) => {
+        const icon = el.getAttribute('data-icon');
+        return '<a class="jump" href="#' + esc(el.id) + '">'
+          + (icon ? '<svg class="ic ic-sm" aria-hidden="true"><use href="#' + esc(icon) + '" /></svg>' : '')
+          + esc(el.getAttribute('data-jump')) + '</a>';
+      }).join('');
+    }
+
+    // The three async cards are revealed by setting `hidden` false, and they
+    // land at different times. WATCHING THE DOM rather than calling
+    // paintJumps() from each loader: that would be three call sites to keep in
+    // step and a fourth card later would be the one somebody forgets. One
+    // observer, and a card added afterwards is picked up for nothing.
+    //
+    // `childList` as well as the attribute, because those loaders ALSO call
+    // `card.remove()` — and while every early return removes a card that was
+    // still hidden, the catch at the end of each one can fire AFTER it has
+    // been shown, which would leave a chip pointing at nothing. The signature
+    // guard above is what makes watching the whole subtree affordable.
+    let jumpWatch = null;
+    function watchJumps() {
+      if (jumpWatch) jumpWatch.disconnect();
+      const bar = document.getElementById('jumps');
+      const host = bar && bar.parentNode;
+      if (!host || typeof MutationObserver !== 'function') return;
+      jumpWatch = new MutationObserver(() => paintJumps());
+      jumpWatch.observe(host, {
+        attributes: true, attributeFilter: ['hidden'], childList: true, subtree: true });
+    }
+
     function paintEarnings() {
       const box = document.getElementById('earnBody');
       if (!box) return;
@@ -2586,7 +2684,9 @@
             ${asOfHtml(stock)}</span>
         </div>
 
-        <section class="bezel card"><div class="core">
+        <nav class="jumps" id="jumps" aria-label="Sections on this page"></nav>
+
+        <section class="bezel card" id="price" data-jump="Price" data-icon="i-chart"><div class="core">
           <div class="sec-h"><h2>Price</h2>
             <span class="ranges">${RANGES.map((r) =>
               `<button class="rng${r.id === range.id ? ' on' : ''}" data-r="${r.id}">${r.label}</button>`).join('')}
@@ -2657,7 +2757,7 @@
           <div id="whyBox" class="bezel" hidden></div>
         </section></div>
 
-        <section class="bezel card"><div class="core">
+        <section class="bezel card" id="news" data-jump="News" data-icon="i-pulse"><div class="core">
           <div class="sec-h"><h2>News</h2>
             <span class="news-when" id="newsWhen"></span>
             <button class="rng" id="newsBtn" type="button" title="Check the feed for this stock now, rather than waiting for the next refresh">Check now</button>
@@ -2665,7 +2765,7 @@
           <div id="newsList"><div class="msg">Loading headlines…</div></div>
         </div></section>
 
-        <section class="bezel card"><div class="core">
+        <section class="bezel card" id="allfields" data-jump="All fields" data-icon="i-columns"><div class="core">
           <div class="sec-h"><h2>Everything the screener knows</h2>
             <span class="deeper">
               <a class="btn study" href="/lab/${encodeURIComponent(stock.symbol)}"
@@ -2715,7 +2815,7 @@
         </section></div>
 
         ${(payload.earnings || []).length ? `
-        <section class="bezel card" id="earn"><div class="core">
+        <section class="bezel card" id="earn" data-jump="Earnings" data-icon="i-calendar"><div class="core">
           <div class="sec-h"><h2>Earnings history</h2>
             <span class="deeper count">${(payload.earnings || []).length} quarters stored</span>
           </div>
@@ -2724,7 +2824,7 @@
         </div></section>` : ''}
 
         ${payload.company && payload.company.description ? `
-        <section class="bezel card"><div class="core">
+        <section class="bezel card" id="about" data-jump="About" data-icon="i-help"><div class="core">
           <div class="sec-h"><h2>About ${esc(stock.symbol)}</h2></div>
           <p class="about">${esc(payload.company.description)}</p>
         </div></section>` : ''}
@@ -2734,7 +2834,7 @@
         <!-- Filled by loadSec() after the chart, and REMOVED ENTIRELY when
              the company has nothing filed — a fund files no statements, and
              a heading over an empty table is worse than no heading. -->
-        <section class="bezel card" id="sec" hidden><div class="core">
+        <section class="bezel card" id="sec" data-jump="SEC EDGAR" data-icon="i-list" hidden><div class="core">
           <div class="sec-h"><h2>SEC EDGAR</h2>
             <span class="deeper">
               <button class="rng on" id="secQ" type="button">Quarterly</button>
@@ -2755,7 +2855,7 @@
              A separate card from the filings one on purpose: what a company
              reports and what the people running it are doing with their own
              money are two different questions. -->
-        <section class="bezel card" id="ins" hidden><div class="core">
+        <section class="bezel card" id="ins" data-jump="Insiders" data-icon="i-users" hidden><div class="core">
           <div class="sec-h"><h2>Insider transactions</h2>
             <span class="deeper count" id="insWin"></span>
           </div>
@@ -2766,7 +2866,7 @@
              Its own card again: what the company files, what its officers do
              with their own money, and what the rest of the market has bet
              against it are three different questions. -->
-        <section class="bezel card" id="sint" hidden><div class="core">
+        <section class="bezel card" id="sint" data-jump="Short interest" data-icon="i-scales" hidden><div class="core">
           <div class="sec-h"><h2>Short interest</h2>
             <span class="deeper count" id="sintWin"></span>
           </div>
@@ -2783,6 +2883,8 @@
       profilePulledAt = (payload.company && payload.company.fetchedAt) || null;
       earnAll = false;
       paintEarnings();
+      paintJumps();
+      watchJumps();
 
       // ---- symbol picker ------------------------------------------------------
       // The masthead symbol opens the whole universe, alphabetically, with a
