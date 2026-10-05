@@ -745,6 +745,36 @@
     #peers td.cmp .rng { padding: 2px 8px; font-size: 11px; text-decoration: none; }
     #peers .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
 
+    /* The statements, laid out as statements. Every rule scoped under
+       #stmt: this page already carries .card, .note, .msg and .stab, and
+       an unscoped class here would capture the SEC card below it. */
+    #stmt table.stmt { width: 100%; border-collapse: collapse; }
+    #stmt table.stmt th, #stmt table.stmt td {
+      padding: 6px 10px; text-align: right; white-space: nowrap;
+      border-bottom: 1px solid var(--hair); font: 500 12px var(--mono);
+      font-variant-numeric: tabular-nums; }
+    #stmt table.stmt thead th {
+      font: 600 10px var(--sans); color: var(--faint); text-transform: uppercase;
+      letter-spacing: .06em; white-space: nowrap; }
+    #stmt table.stmt th.li, #stmt table.stmt td.li {
+      text-align: left; font-family: var(--sans); color: var(--text);
+      font-weight: 500; }
+    #stmt table.stmt td.li { font-size: 12.5px; }
+    #stmt table.stmt th.tr, #stmt table.stmt td.tr {
+      text-align: left; width: 1%; padding-right: 18px; }
+    #stmt table.stmt .fp { color: var(--faint); font-size: 9px; display: block;
+      font-family: var(--mono); letter-spacing: 0; }
+    #stmt table.stmt td.na { color: var(--faint); }
+    #stmt table.stmt td.neg { color: var(--red); }
+    /* A value this app computed, not one the filing states -- the SEC
+       card's own marking, carried over. Passing arithmetic off as a filing
+       is the one thing neither surface may do. */
+    #stmt table.stmt td.dv { border-bottom-style: dotted; border-bottom-color: var(--hair-2); }
+    #stmt .sspark .up { fill: var(--accent); }
+    #stmt .sspark .dn { fill: var(--red); }
+    #stmt .sspark .zl { stroke: var(--hair-2); stroke-width: 1; }
+    #stmt .sspark { display: block; }
+
     /* ---- the SEC EDGAR card (2026-09-27, owner's request) -----------------
        ITS OWN SECTION, MIXED WITH NOTHING — the owner's instruction, and the
        right call: these are the company's filed statements, on a different
@@ -2834,6 +2864,20 @@
         <!-- Filled by loadSec() after the chart, and REMOVED ENTIRELY when
              the company has nothing filed — a fund files no statements, and
              a heading over an empty table is worse than no heading. -->
+        <!-- The statements, read as statements. Placed BEFORE the raw card:
+             this is the summary and that is the detail behind it, which is
+             also the order the jump bar then offers them in. -->
+        <section class="bezel card" id="stmt" data-jump="Statements" data-icon="i-columns" hidden><div class="core">
+          <div class="sec-h"><h2>Financial statements</h2>
+            <span class="deeper">
+              <button class="rng on" id="stmtInc" type="button">Income</button>
+              <button class="rng" id="stmtBal" type="button">Balance sheet</button>
+              <button class="rng" id="stmtCf" type="button">Cash flow</button>
+            </span>
+          </div>
+          <div id="stmtBody"><p class="msg">Loading filings…</p></div>
+        </div></section>
+
         <section class="bezel card" id="sec" data-jump="SEC EDGAR" data-icon="i-list" hidden><div class="core">
           <div class="sec-h"><h2>SEC EDGAR</h2>
             <span class="deeper">
@@ -3340,6 +3384,144 @@
         earningsGrowthYoY: 'earningsGrowthYoY',
       };
 
+      // ---- the statements, laid out AS statements ---------------------------
+      // (2026-10-05, owner's request, from two screenshots of a broker's
+      // Financials tab.) The SEC EDGAR card below reads period-per-ROW with
+      // the concepts as columns, which is right for "what did this filing
+      // say" and is NOT how a financial statement is read. This is the
+      // transpose: line items down, periods across, newest first.
+      //
+      // IT SHARES secData AND FETCHES NOTHING. Same rows, same request, a
+      // second reading of them -- which is the whole reason this is small.
+      // The raw card is untouched, deliberately: it carries the filing link
+      // and the per-filing provenance this layout has no room for.
+      let stmtTab = 'income';
+      const STMT_COLS = 5;
+
+      // IN MILLIONS, NO UNIT PER CELL, and that is the one real difference
+      // from secMoney. That formatter picks a unit per value, which is right
+      // for a mixed row and wrong for a COLUMN you read down: $1.2B above
+      // $985.0M is a comparison the eye has to do twice. One scale, thousands
+      // separated, negatives in parentheses -- the convention every statement
+      // uses, and the one the screenshots use.
+      const stmtM = (v) => (v == null || !Number.isFinite(v)) ? null
+        : (v < 0 ? '(' : '') + Math.round(Math.abs(v) / 1e6).toLocaleString() + (v < 0 ? ')' : '');
+      const stmtEps = (v) => (v == null || !Number.isFinite(v)) ? null
+        : (v < 0 ? '(' : '') + Math.abs(v).toFixed(2) + (v < 0 ? ')' : '');
+      const stmtSh = (v) => (v == null || !Number.isFinite(v)) ? null
+        : Math.round(v / 1e6).toLocaleString();
+
+      // THREE STATEMENTS, and every line is a field the filings actually
+      // state. "Total operating expense" is on the reference screenshot and
+      // is NOT here: we do not store it, and revenue minus operating income
+      // is not the same thing -- inventing a line to match a layout is how a
+      // card starts asserting something no filing says.
+      const STMT_DEFS = {
+        income: { label: 'Income statement', rows: [
+          ['revenue', 'Revenue', stmtM],
+          ['costOfRevenue', 'Cost of revenue', stmtM],
+          ['grossProfit', 'Gross profit', stmtM],
+          ['operatingIncome', 'Operating income', stmtM],
+          ['netIncome', 'Net income', stmtM],
+          ['epsDiluted', 'Diluted EPS', stmtEps],
+        ] },
+        balance: { label: 'Balance sheet', rows: [
+          ['assets', 'Total assets', stmtM],
+          ['liabilities', 'Total liabilities', stmtM],
+          ['equity', 'Shareholders’ equity', stmtM],
+          ['cash', 'Cash', stmtM],
+          ['debt', 'Long-term debt', stmtM],
+          ['sharesDiluted', 'Diluted shares', stmtSh],
+        ] },
+        cash: { label: 'Cash flow', rows: [
+          ['operatingCashFlow', 'Operating cash flow', stmtM],
+          ['capex', 'Capital expenditure', stmtM],
+          ['freeCashFlow', 'Free cash flow', stmtM],
+        ] },
+      };
+
+      // A SIGNED bar chart, because half these lines go negative and a chart
+      // that plotted |v| would draw a loss as a gain. Scaled to the largest
+      // magnitude in the row, so each row is read against itself -- a shared
+      // scale would flatten EPS to nothing beside revenue.
+      //
+      // OLDEST TO NEWEST, which runs the OTHER WAY from the columns, and the
+      // header says so. The two conventions genuinely conflict: a statement
+      // puts the newest period first, a sparkline is universally read left to
+      // right as time passing. Matching the columns would draw a trend
+      // backwards, which is the worse of the two errors, so the column is
+      // labelled rather than silently reversed.
+      function stmtSpark(vals) {
+        const has = vals.filter((v) => v != null && Number.isFinite(v));
+        if (has.length < 2) return '';
+        const max = Math.max(...has.map(Math.abs)) || 1;
+        const anyNeg = has.some((v) => v < 0);
+        const H = 22, MID = anyNeg ? H / 2 : H, W = 7, G = 2;
+        const bars = vals.map((v, i) => {
+          if (v == null || !Number.isFinite(v)) return '';
+          const h = Math.max(1, (Math.abs(v) / max) * (anyNeg ? H / 2 : H));
+          const y = v < 0 ? MID : MID - h;
+          return '<rect x="' + (i * (W + G)) + '" y="' + y.toFixed(1) + '" width="' + W +
+            '" height="' + h.toFixed(1) + '" class="' + (v < 0 ? 'dn' : 'up') + '"></rect>';
+        }).join('');
+        const w = vals.length * (W + G) - G;
+        return '<svg class="sspark" viewBox="0 0 ' + w + ' ' + H + '" width="' + w +
+          '" height="' + H + '" aria-hidden="true">' +
+          (anyNeg ? '<line x1="0" y1="' + MID + '" x2="' + w + '" y2="' + MID + '" class="zl"></line>' : '') +
+          bars + '</svg>';
+      }
+
+      function paintStmt() {
+        const host = document.getElementById('stmtBody');
+        if (!host || !secData) return;
+        const all = secData[secMode] || [];
+        if (!all.length) {
+          host.innerHTML = '<p class="msg">No ' + secMode + ' periods filed.</p>';
+          return;
+        }
+        const cols = all.slice(0, STMT_COLS);               // newest first, as filed
+        const def = STMT_DEFS[stmtTab] || STMT_DEFS.income;
+        // A LINE WITH NOTHING IN IT IS DROPPED, never drawn as a row of
+        // dashes: the balance sheet is sparse for some filers and five empty
+        // cells under a label says only that we hold nothing.
+        const live = def.rows.filter(([k]) => cols.some((r) => r[k] != null));
+        if (!live.length) {
+          host.innerHTML = '<p class="msg">Nothing filed for the ' +
+            esc(def.label.toLowerCase()) + ' over these periods.</p>';
+          return;
+        }
+        let anyDerived = false;
+        let h = '<div class="stab"><table class="stmt"><thead><tr><th class="li">' +
+          esc(def.label) + '</th><th class="tr">Trend</th>' +
+          cols.map((r) => '<th>' + esc(r.periodEnd) +
+            (r.fp ? '<span class="fp">' + esc(r.fp) + '</span>' : '') + '</th>').join('') +
+          '</tr></thead><tbody>';
+        for (const [k, label, fmt] of live) {
+          // The spark reads oldest -> newest; the columns read newest first.
+          const series = cols.map((r) => r[k]).slice().reverse();
+          h += '<tr><td class="li">' + esc(label) + '</td>' +
+            '<td class="tr">' + stmtSpark(series) + '</td>';
+          for (const r of cols) {
+            const t = fmt(r[k]);
+            const isD = r.derived || (r.derivedFields || []).indexOf(k) >= 0;
+            if (t != null && isD) anyDerived = true;
+            const cls = [t == null ? 'na' : '', t != null && r[k] < 0 ? 'neg' : '',
+              t != null && isD ? 'dv' : ''].filter(Boolean).join(' ');
+            h += '<td' + (cls ? ' class="' + cls + '"' : '') +
+              (t != null && isD ? ' title="Computed here by differencing the cumulative periods — no filing states this quarter on its own"' : '') +
+              '>' + (t == null ? '—' : esc(t)) + '</td>';
+          }
+          h += '</tr>';
+        }
+        h += '</tbody></table></div>';
+        h += '<p class="note">Figures in millions, except per-share data and the share count. ' +
+          '( ) = negative. Periods run newest first; the trend runs oldest to newest and is ' +
+          'scaled to the largest figure in its own row. ' +
+          (anyDerived ? 'A dotted value was computed here rather than filed — no company files a fourth quarter, and a cash-flow statement is year-to-date. ' : '') +
+          'The same filings as the SEC EDGAR card below, which names the document each row came from.</p>';
+        host.innerHTML = h;
+      }
+
       function paintSec() {
         const host = document.getElementById('secBody');
         if (!host || !secData) return;
@@ -3567,11 +3749,22 @@
       async function loadSec() {
         const card = document.getElementById('sec');
         if (!card) return;
+        // Both cards are the same filings, so they live and die together:
+        // an empty card headed "Financial statements" is worse than none.
+        // ONE removal with THREE callers -- a refused fetch, a company with
+        // no periods, and the catch. Three copies is three places to forget,
+        // which the first cut did: it covered the catch alone and left #stmt
+        // hidden-but-present on the other two.
+        const drop = () => {
+          card.remove();
+          const sb = document.getElementById('stmt');
+          if (sb) sb.remove();
+        };
         try {
           const r = await fetch('/api/sec?symbol=' + encodeURIComponent(stock.symbol));
           // A refusal has to settle the row too, or it reads "still reading
           // the filings" for the rest of the session.
-          if (!r.ok) { paintAnnRow(); card.remove(); return; }
+          if (!r.ok) { paintAnnRow(); drop(); return; }
           const j = await r.json();
           // THE ANNOUNCEMENT DATE IS STAMPED BEFORE THE EARLY RETURN BELOW,
           // and that ordering is load-bearing: the ~64 IFRS filers answer 404
@@ -3585,7 +3778,7 @@
           paintAnnRow();
           // Nothing filed is the normal answer for a fund. No card at all,
           // rather than a heading over an empty table.
-          if (!(j.annual || []).length && !(j.quarterly || []).length) { card.remove(); return; }
+          if (!(j.annual || []).length && !(j.quarterly || []).length) { drop(); return; }
           secData = j;
           // The caption above was built before this landed, so it is redrawn
           // now that the filings are known — the one clause that needs them.
@@ -3602,19 +3795,36 @@
           const ab = document.getElementById('secA');
           const fb = document.getElementById('secFig');
           const rb = document.getElementById('secRat');
+          // ONE PERIOD SWITCH FOR BOTH CARDS. A second Quarterly/Annual pair
+          // on the statements card would be two controls for one question,
+          // and they could be set to disagree.
+          const sb = document.getElementById('stmt');
+          const tabs = [['stmtInc', 'income'], ['stmtBal', 'balance'], ['stmtCf', 'cash']];
           const sync = () => {
             qb.classList.toggle('on', secMode === 'quarterly');
             ab.classList.toggle('on', secMode === 'annual');
             if (fb) fb.classList.toggle('on', secView === 'figures');
             if (rb) rb.classList.toggle('on', secView === 'ratios');
+            for (const [id, key] of tabs) {
+              const el = document.getElementById(id);
+              if (el) el.classList.toggle('on', stmtTab === key);
+            }
             paintSec();
+            paintStmt();
           };
+          if (sb) {
+            sb.hidden = false;
+            for (const [id, key] of tabs) {
+              const el = document.getElementById(id);
+              if (el) el.addEventListener('click', () => { stmtTab = key; sync(); });
+            }
+          }
           qb.addEventListener('click', () => { secMode = 'quarterly'; sync(); });
           ab.addEventListener('click', () => { secMode = 'annual'; sync(); });
           if (fb) fb.addEventListener('click', () => { secView = 'figures'; sync(); });
           if (rb) rb.addEventListener('click', () => { secView = 'ratios'; sync(); });
           sync();
-        } catch (e) { card.remove(); }
+        } catch (e) { drop(); }
       }
 
       // ---- insider transactions ----------------------------------------------

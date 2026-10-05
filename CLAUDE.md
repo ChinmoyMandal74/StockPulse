@@ -1561,6 +1561,38 @@ The owner was offered "flag it on /stock only" and chose **"flag it on the scree
 - `readEarnings` joins `/api/stock`'s existing `Promise.all` and keeps its own catch; it seeks on the `(symbol, d)` primary key.
 - **A trailing-P/E HISTORY is reconstructible and is not stored.** `fundamentals_history.trailing_pe` only starts at 2026-09-15 and the provider serves no historical ratios — but price ÷ TTM EPS is computable from `bars` and this table for as far back as both reach. Checked: AAPL's last four reported quarters sum to **8.72** against the provider's own `diluted_eps_ttm` of **8.71**. Note the provider's `trailing_pe` implies an EPS about 1% off that, so a reconstructed series and the stored one would show a small step where they meet — compute the whole series one way.
 
+### The statements, laid out as statements (2026-10-05, owner's request, from two screenshots)
+**A `Financial statements` card above the SEC EDGAR one: line items down, periods across, newest first, with three tabs — Income, Balance sheet, Cash flow.** The raw card is untouched, which was the owner's condition.
+
+#### IT IS THE TRANSPOSE, and that is why it is not a duplicate
+The SEC EDGAR card reads **period-per-ROW with the concepts as columns**, which is right for *what did this filing say* — it carries the filing link and the per-filing provenance — and is **not how a financial statement is read**. This is the other orientation, which is the one the screenshots show and the one anyone comparing a line across quarters needs.
+
+- **IT FETCHES NOTHING.** Same `secData`, same request, a second reading of the rows already on the page. That is the whole reason the feature is small.
+- **ONE PERIOD SWITCH DRIVES BOTH CARDS.** A second Quarterly/Annual pair would be two controls for one question, and they could be set to disagree. **Proved by reverting**: the Annual switch is asserted to empty both together.
+- **NO DETAIL/SUMMARY TOGGLE, though the reference has one.** We store one level of detail, so it would be a control with nothing behind it — the hazard this project records as *a control that looks live and does nothing when you touch it*.
+
+#### "TOTAL OPERATING EXPENSE" IS ON THE REFERENCE AND IS NOT HERE
+We do not store it, and revenue minus operating income is **not** the same thing — it omits the non-operating lines. Inventing a row to complete a layout is how a card starts asserting something no filing says, which is the line the SEC card's own rules already draw. Every line drawn is a field the filings state.
+
+#### ONE SCALE DOWN A COLUMN, which is the one real formatting difference
+`secMoney` picks a unit per value — right for a mixed row, wrong for a column you read **down**: `$1.2B` above `$985.0M` is a comparison the eye has to make twice. Figures are in millions, thousands separated, negatives in parentheses, which is what every statement does and what the screenshots do. Per-share data and the share count are exempt and the note says so. **Proved by reverting**: per-cell units fail 3.
+
+#### THE TREND RUNS THE OTHER WAY FROM THE COLUMNS, and the note says so
+The two conventions genuinely conflict: a statement puts the newest period first, a sparkline is universally read left to right as time passing. **Matching the columns would draw every trend backwards**, which is the worse error, so the column is labelled rather than silently reversed.
+
+- **SIGNED, scaled to the largest magnitude in its OWN row.** Half these lines go negative, so plotting `|v|` would draw a loss as a gain — **proved by reverting**, which fails 1 — and a shared scale would flatten EPS to nothing beside revenue.
+- **A DERIVED VALUE IS STILL MARKED.** No company files a fourth quarter and a cash-flow statement is year-to-date, so those quarters are differenced here; the dotted cell and its tooltip carry over from the SEC card, because passing arithmetic off as a filing is the one thing neither surface may do. **Proved by reverting**: fails 3.
+- **A LINE WITH NOTHING IN IT IS DROPPED**, never drawn as five dashes: the balance sheet is sparse for some filers, and a labelled row of em-dashes says only that we hold nothing. **Proved by reverting**: fails 1.
+- **Both cards go together when a company files nothing** — an empty card headed *Financial statements* is worse than no card. **Proved by reverting**: fails 1.
+
+- Verified: **34 checks** on the real page. **The fixture is the test**: every concept in every period carries a value nothing else on the page shares, so a row wired to the wrong field or a column read off the wrong period lands on a number that belongs somewhere else; one period is loss-making, which exercises the parentheses, the red and the signed spark together. Plus the raw card asserted **unchanged in shape**, the jump bar offering Statements before SEC EDGAR, and the phone. **Proved by reverting seven times, every one load-bearing**: the periods reversed fails 6, per-cell units 4, an empty line drawn 3, the derived marking 2, and the unsigned trend, the note and the removal 1 each.
+  - **THREE OF THE SEVEN FIRST REPORTED 0, and all three were gaps in the TEST.** The spark check read the bar's CLASS, which comes from the sign, while the revert moved its `y` — so a chart drawing every bar upward in red passed; it asserts the position now. The fixture populated every field in every period, so the drop-an-empty-line rule could never fire; one line is now filed nowhere. And the only symbol had filings, so the removal path was unreachable; there is a second company that files nothing.
+  - **THAT LAST ONE FOUND A REAL DEFECT.** `loadSec` drops its card on THREE paths — a refused fetch, a company with no periods, and the catch — and the first cut covered only the catch, leaving `#stmt` hidden-but-present on the other two. Invisible, because the jump bar filters on `hidden`, and wrong. There is one `drop()` with three callers now.
+  - **`derivedFields` IS A COMMA-JOINED STRING, not an array** — read off `secfacts.js` (`Object.keys(diff).join(',')`) rather than guessed at, which cost one run: an array will not bind to the text column. The existing card's `(r.derivedFields || []).indexOf(k)` works on it only because `indexOf` is a string method too.
+  - **`stock-jumps-test.js` ASSERTED A COUNT OF HIDDEN CARDS and went stale the day this one shipped.** Corrected, not worked around: it names the cards that start hidden rather than counting them, which is strictly stronger and cannot rot the same way.
+  - **A SUITE PRINTING INDENTED `PASS` READ AS 0 passed / 0 failed** in the regression runner, whose grep is anchored at the line start — and that suite had a real failure in it. Second time in one session that a runner's own grep hid a result; run a silent suite directly rather than believing the zero.
+  - **The jump chips ARE the `.jump` elements; the container is `.jumps`.** A `.jump a` selector looks inside a chip, finds nothing, and reports a missing section on a page that has it.
+
 ## SEC EDGAR — the filings, on their own card, feeding nothing (2026-09-27)
 
 **`/stock/<SYMBOL>` carries a `SEC EDGAR` section: the company's own filed statements, back to 2007 for a long-listed name, every row linking to the filing it came from.** Asked for after measuring the gap — `bars` holds 1.9M rows back to 2003 and **`fundamentals_history` holds 20 days**, which is why `/backtest` is capped at two months.
