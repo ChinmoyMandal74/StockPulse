@@ -656,6 +656,33 @@ The **Info** banner spans eight columns — Overall, Mom., Qual., Portfolios, Pr
 - **Two field-name traps, both caught by the dry run**: `readScreens()` returns `group`, not the column's `grp` — the documented rename, met again — and it **does not return `position` at all**, so the append point has to be asked of the table.
 - **Appending at `max(position) + 1` strands nothing under a duplicate heading**: the menu collects a group by NAME, not by run of position. That is what makes the insert genuinely targeted — no existing row is renumbered, so an order the owner set by hand survives.
 
+### The S&P cut as a bar picker (2026-10-05, owner: "add the s&p filter on the screener on top, place it before size filter")
+**A `S&P 500` picker between Industry and Size: All stocks / In the S&P 500 / Not in the S&P 500.** The column had shipped the day before and the only way to use it was the filter row; this is the same cut where the other four quick filters are.
+
+- **IT IS `sizeFilter` IN EVERY RESPECT, deliberately.** Same state shape, same place in `scopedStocks`, same menu counted over the tab + sector + industry already in force, same screen handling. Nothing here is a new mechanism, which is why it is small.
+- **A BOUND KEY, so the bar and the filter row are ONE piece of state.** `spMember` joins `BOUND_KEYS`, so the cell writes `spFilter` and the picker writes the cell — the two can never show different things, and it is **not counted as a column filter**, the rule sector, industry and size already follow. **Proved by reverting three times**: dropping it from `BOUND_KEYS` fails 1, and breaking either direction of the sync fails 1 and 2.
+- **Both values are offered even at zero.** A fixed two-value cut, not an open-ended list, so hiding the empty one would make a short control move under the pointer as the table narrowed — the Size menu's own reasoning.
+
+#### A NULL IS NOT A NO, and here it is the whole guard
+The filter reads **`Filters.filterValue(s, 'spMember')`**, which returns `''` for a row that has never been checked — so an unknown row is in **neither** cut. Reading the raw field truthily would put every unchecked stock in *Not in the S&P 500*, and on an instance that has never imported a holdings file that is **the screener stating that no stock is in the S&P 500**. **Proved by reverting**: the raw read fails 2.
+
+- **The menu says why the two cuts need not add up to the tab**, with its own count, rather than leaving the arithmetic looking broken — and says nothing at all when there is nothing to say. **Proved by reverting**: an unconditional note fails 1.
+
+##### UNKNOWN IS A PROPERTY OF THE FILE, NOT OF A SYMBOL — which the fixture could not express
+`stampSpMember` marks a symbol absent from an imported file as **outside**; `null` means no file has been imported at all. So a fixture that seeds a `fund_state` row cannot produce a per-symbol unknown, and the live instance reads **0 unknown of 1,284**. The first fixture tried anyway and its own sanity check caught it — every assertion about the unknown row was testing a row the code had correctly marked `false`. The branch is driven by **rewriting the response** instead (`page.route`), the technique the day card's S&P suite uses.
+
+- That also means the note is close to dead code in production today. It is kept because the state it describes is reachable the moment a fresh instance exists, and because the alternative is a wrong answer rather than a missing one.
+
+#### Worth knowing
+- **A screen carries it (`def.sp`) and applying one CLEARS it** — `cleanScreens` keeps the key, `screenBase` restores it, `currentScreenDef` captures it, and `screenEdited` compares it. Without the clear, a cut left on from before would silently narrow every screen opened after it; that is the reasoning `sizeFilter` already records, and it is a correctness requirement rather than a nicety.
+- **The empty state names the cut**, since with it in force it is often the thing that emptied the table.
+- Verified: **22 checks** on the real screener. The fixture's load-bearing property is that **the cut CROSSES every other one** — each sector holds members and non-members — so a picker wired to the wrong state produces a different row set rather than coincidentally the same one. **Proved by reverting eight times.**
+  - **A NO-OP REVERT PROVES NOTHING.** The placement case first added a `data-moved` attribute, which does not move anything; it swaps the two picker blocks now, which is what the DOM-order assertion actually reads. Multi-line anchors are safe in a harness that joins with the DETECTED newline — the documented hazard is a hardcoded one.
+  - **`filter-test.js` BROKE EXACTLY AS ITS OWN COMMENT PREDICTED, for the THIRD time.** That harness declares the bar state itself, so a new quick filter throws `spFilter is not defined` out of `scopedStocks` — the note in this file has said to expect it with every new quick filter since `sizeFilter`, and it was right again. Corrected, not worked around.
+  - **TWO SUITES READ AS 0 passed / 0 failed AND WERE FINE.** The harness counts `PASS `/`FAIL ` lines and those two print their own summary format, so a regression runner that trusts its own grep reports a working suite as silent. Confirmed by running them directly — and that is how the real `filter-test` break above was nearly missed.
+  - **THE `BOUND_KEYS` REVERT FIRST REPORTED 0 AND THE TEST WAS AT FAULT.** The change handler branches on the literal key, so `setColFilter` is never reached for `spMember` either way; what bound-ness actually controls is the **absent blank sentinel** in the dropdown and the shared-filter tooltip. Asserting those, it fails 1. *Find what a flag controls before concluding it controls nothing.*
+  - **A SHELL HEREDOC ATE A BACKSLASH LEVEL AGAIN** and left a real newline inside a JS string literal, so the harness would not parse. Seventh time; the file was rewritten with the Write tool.
+
 ### Size as a studio scope and a bar filter (2026-09-21, owner's request)
 **Every scoped studio template gained a Size picker, and the screener gained one in the bar between Industry and Advice.**
 

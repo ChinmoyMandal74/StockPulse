@@ -1138,6 +1138,10 @@
           <button class="btn picker-btn" id="indBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="indMenu" role="listbox" aria-label="Industry"></div>
         </div>
+        <div class="picker" id="spPicker" data-open="0">
+          <button class="btn picker-btn" id="spBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="picker-menu" id="spMenu" role="listbox" aria-label="S&amp;P 500 membership"></div>
+        </div>
         <div class="picker" id="sizePicker" data-open="0">
           <button class="btn picker-btn" id="sizeBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="sizeMenu" role="listbox" aria-label="Size by market cap"></div>
@@ -2468,6 +2472,7 @@
       { root: 'scrPicker', btn: 'scrBtn', menu: 'scrMenu' },
       { root: 'secPicker', btn: 'secBtn', menu: 'secMenu' },
       { root: 'indPicker', btn: 'indBtn', menu: 'indMenu' },
+      { root: 'spPicker', btn: 'spBtn', menu: 'spMenu' },
       { root: 'sizePicker', btn: 'sizeBtn', menu: 'sizeMenu' },
       { root: 'advPicker', btn: 'advBtn', menu: 'advMenu' },
       { root: 'movePicker', btn: 'moveBtn', menu: 'moveMenu' },
@@ -2675,6 +2680,12 @@
     // Balanced only: it is the shared measurement, the one advice column that
     // is always shown, and the one every other surface reads.
     let adviceFilter = 'All';
+    // 'All' | 'Yes' | 'No', matching what Filters.filterValue returns for
+    // spMember -- so the bar picker and the filter row compare like with
+    // like. A row of UNKNOWN membership returns '' and is therefore in
+    // NEITHER cut: null is not No, which is the rule the column itself
+    // keeps and the one that matters on an instance with no holdings file.
+    let spFilter = 'All';
     let sizeFilter = 'All';
     // 'table' or 'tiles'. Saved per account: which shape you read in is a
     // preference, not a property of the data.
@@ -2772,6 +2783,7 @@
       }
       if (sectorFilter !== 'All') rows = rows.filter((s) => s.sector === sectorFilter);
       if (industryFilter !== 'All') rows = rows.filter((s) => s.industry === industryFilter);
+      if (spFilter !== 'All') rows = rows.filter((s) => filterValue(s, 'spMember') === spFilter);
       if (sizeFilter !== 'All') rows = rows.filter((s) => s.capBand === sizeFilter);
       if (adviceFilter !== 'All') rows = rows.filter((s) => filterValue(s, 'av:Balanced') === adviceFilter);
       return rows;
@@ -2908,6 +2920,7 @@
         if (k === 'sector') setSectorFilter(el.value || 'All');
         else if (k === 'industry') setIndustryFilter(el.value || 'All');
         else if (k === 'capBand') sizeFilter = el.value || 'All';
+        else if (k === 'spMember') spFilter = el.value || 'All';
         else if (k === 'av:Balanced') adviceFilter = el.value || 'All';
         else setColFilter(k, el.value);
         window.track && track('picker', 'filter:' + k);
@@ -2933,6 +2946,7 @@
       if (k === 'sector') setSectorFilter('All');
       else if (k === 'industry') industryFilter = 'All';
       else if (k === 'capBand') sizeFilter = 'All';
+      else if (k === 'spMember') spFilter = 'All';
       else if (k === 'av:Balanced') adviceFilter = 'All';
       else setColFilter(k, '');
       syncFilterInputs();
@@ -2989,6 +3003,7 @@
         const cur = k === 'sector' ? (sectorFilter === 'All' ? '' : sectorFilter)
           : k === 'industry' ? (industryFilter === 'All' ? '' : industryFilter)
           : k === 'capBand' ? (sizeFilter === 'All' ? '' : sizeFilter)
+          : k === 'spMember' ? (spFilter === 'All' ? '' : spFilter)
           : k === 'av:Balanced' ? (adviceFilter === 'All' ? '' : adviceFilter)
           : (colFilters[k] || '');
         let names = [...counts.keys()];
@@ -3205,6 +3220,67 @@
           render();
         });
       });
+    }
+
+    // S&P 500 membership, counted over the tab + sector + industry already
+    // in force -- the Size menu's own rule, so a count here can never
+    // describe a different population from the one beside it.
+    //
+    // BOTH VALUES ARE OFFERED EVEN AT ZERO. This is a fixed two-value cut,
+    // not an open-ended list, so hiding the empty one would make a short
+    // control move under the pointer as the table narrowed -- the Size
+    // menu's reasoning, and "0 in the index" is itself an answer.
+    function renderSpMenu(inScope) {
+      let yes = 0, no = 0, unknown = 0;
+      inScope.forEach((s) => {
+        const v = filterValue(s, 'spMember');
+        if (v === 'Yes') yes++; else if (v === 'No') no++; else unknown++;
+      });
+      const row = (val, label, n) =>
+        '<div class="pick-row">' +
+        `<button class="pick ${spFilter === val ? 'on' : ''}" data-sp="${we(val)}" role="option" ` +
+        `aria-selected="${spFilter === val}">` +
+        `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>` +
+        '</div>';
+      // A ROW OF UNKNOWN MEMBERSHIP IS IN NEITHER CUT, so the two counts do
+      // not add up to the tab and the menu says why rather than leaving the
+      // arithmetic looking broken. Unknown means no holdings file has been
+      // imported for it yet -- which is a gap in our own data, never a fact
+      // about the company, and is why it is not offered as a third cut.
+      const note = unknown
+        ? `${unknown} ${unknown === 1 ? 'row has' : 'rows have'} not been checked against the ` +
+          `index file, so ${unknown === 1 ? 'it is' : 'they are'} in neither cut. That is not ` +
+          'the same as being outside it.'
+        : '';
+      $('spMenu').innerHTML = '<div class="picker-inner">' +
+        row('All', 'All stocks', inScope.length) +
+        row('Yes', 'In the S&P 500', yes) +
+        row('No', 'Not in the S&P 500', no) +
+        '<div class="pick-sep"></div><div class="pick-hint">Membership comes from the index ' +
+        'fund&rsquo;s own daily holdings file.' + (note ? ' ' + we(note) : '') + '</div>' +
+        '</div>';
+      $('spMenu').querySelectorAll('[data-sp]').forEach((b) => {
+        b.addEventListener('click', () => {
+          spFilter = b.dataset.sp;
+          window.track && track('picker', 'sp:' + spFilter);
+          closePickers();
+          render();
+        });
+      });
+    }
+
+    function renderSpTrigger() {
+      const on = spFilter !== 'All';
+      $('spBtn').innerHTML =
+        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-shield" /></svg>' +
+        '<span class="picker-label">S&amp;P 500</span>' +
+        `<span class="count">${on ? (spFilter === 'Yes' ? 'In' : 'Not in') : 'All'}</span>` +
+        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>' ;
+      $('spBtn').classList.toggle('on', on);
+      $('spBtn').title = on
+        ? (spFilter === 'Yes' ? 'Showing S&P 500 members only' : 'Showing stocks outside the S&P 500')
+          + ' — open to change or clear'
+        : 'Filter the table to the S&P 500, or to everything outside it';
     }
 
     // The size bands, counted over the tab + sector + industry already in
@@ -3662,6 +3738,7 @@
       renderPicker();
       renderSectorTrigger();
       renderIndustryTrigger();
+      renderSpTrigger();
       renderSizeTrigger();
       renderAdviceTrigger();
       renderMoveTrigger(scopedStocks());
@@ -3684,8 +3761,10 @@
         // table, and the one to clear first.
         const narrowest = industryFilter !== 'All' ? industryFilter
           : sectorFilter !== 'All' ? sectorFilter : 'All';
+        const spWhere = spFilter === 'Yes' ? ' in the S&P 500'
+          : spFilter === 'No' ? ' outside the S&P 500' : '';
         const where = (adviceFilter !== 'All' ? `“${adviceFilter}” in ` : '') +
-          (narrowest === 'All' ? tabName : `${narrowest} in ${tabName}`);
+          (narrowest === 'All' ? tabName : `${narrowest} in ${tabName}`) + spWhere;
         const msg = activeColFilters().length && prefilterStocks().length
           ? 'Nothing matches the column filters \u2014 loosen one, or Clear filters in the bar above the table.'
           : moveFilter === 'Moved'
@@ -4654,6 +4733,7 @@
         && Object.keys(want).every((k) => have[k] === want[k]);
       return !same || screenColsOff
         || (d.sector || 'All') !== sectorFilter || (d.industry || 'All') !== industryFilter
+        || (d.sp || 'All') !== spFilter
         || (d.size || 'All') !== sizeFilter
         || (d.advice || 'All') !== adviceFilter || screenMove(d) !== moveFilter
         || (d.sort && (d.sort.key !== sortKey || d.sort.dir !== sortDir));
@@ -4663,7 +4743,7 @@
       const sc = findScreen(id);
       if (!sc) return;
       if (!activeScreenId) {
-        screenBase = { sortKey, sortDir, sectorFilter, industryFilter, sizeFilter, adviceFilter, moveFilter,
+        screenBase = { sortKey, sortDir, sectorFilter, industryFilter, spFilter, sizeFilter, adviceFilter, moveFilter,
           colFilters: { ...colFilters }, filterRowOn };
       }
       const d = sc.def || {};
@@ -4672,6 +4752,7 @@
       for (const [k, v] of Object.entries(d.filters || {})) setColFilter(k, v);
       sectorFilter = d.sector || 'All';
       industryFilter = d.industry || 'All';
+      spFilter = d.sp || 'All';
       sizeFilter = d.size || 'All';
       adviceFilter = d.advice || 'All';
       moveFilter = screenMove(d);
@@ -4698,6 +4779,7 @@
       if (b) {
         sortKey = b.sortKey; sortDir = b.sortDir;
         sectorFilter = b.sectorFilter; industryFilter = b.industryFilter; adviceFilter = b.adviceFilter;
+        spFilter = b.spFilter || 'All';
         sizeFilter = b.sizeFilter || 'All';
         moveFilter = b.moveFilter || 'All';
         colFilters = {}; fltCompiled = {};
@@ -4732,6 +4814,7 @@
       };
       if (sectorFilter !== 'All') def.sector = sectorFilter;
       if (industryFilter !== 'All') def.industry = industryFilter;
+      if (spFilter !== 'All') def.sp = spFilter;
       if (sizeFilter !== 'All') def.size = sizeFilter;
       if (adviceFilter !== 'All') def.advice = adviceFilter;
       // Saved as `move`, never as the old `changed` flag — a screen saved today
@@ -6100,9 +6183,11 @@
         // replace the slider under the cursor and kill the gesture.
         if (opening && p.root === 'secPicker') renderSectorMenu();
         if (opening && p.root === 'indPicker') renderIndustryMenu();
-        if (opening && p.root === 'sizePicker') renderSizeMenu(tabStocks().filter((s) =>
+        const narrowed = () => tabStocks().filter((s) =>
           (sectorFilter === 'All' || s.sector === sectorFilter)
-          && (industryFilter === 'All' || s.industry === industryFilter)));
+          && (industryFilter === 'All' || s.industry === industryFilter));
+        if (opening && p.root === 'spPicker') renderSpMenu(narrowed());
+        if (opening && p.root === 'sizePicker') renderSizeMenu(narrowed());
         if (opening && p.root === 'advPicker') renderAdviceMenu();
         if (opening && p.root === 'movePicker') renderMoveMenu(scopedStocks());
         if (opening && p.root === 'scrPicker') renderScreensMenu();

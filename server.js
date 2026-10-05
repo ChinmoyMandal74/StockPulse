@@ -4924,7 +4924,7 @@ function cleanScreens(input) {
     // `size` joins these because it gained a bar picker of its own: a screen
     // that could not carry it would silently drop the band when saved, and
     // applying a screen would leave a stale one in force.
-    for (const k of ['sector', 'industry', 'advice', 'size']) {
+    for (const k of ['sector', 'industry', 'advice', 'size', 'sp']) {
       const v = str(d[k], 80);
       if (v && v !== 'All') def[k] = v;
     }
