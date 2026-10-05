@@ -132,7 +132,20 @@
     #abRunsBox > summary::before { content: '\25B8'; display: inline-block; width: 14px;
       color: var(--faint); transition: transform .18s var(--ease); }
     #abRunsBox[open] > summary::before { transform: rotate(90deg); }
+    /* THE TABLE SCROLLS IN ITS OWN BOX, never the page. `body` is
+       `overflow-x: clip` here, so without this the six columns are CLIPPED
+       at 390px rather than reachable -- measured at 82px past the edge,
+       which is exactly the Open / Copy link / Delete cell, and a wheel
+       gesture moves nothing. Pre-existing, and the formula name makes the
+       first column wider, so it is this change's to fix.
+       The house rule: only a wide table may run past the edge, and it gets
+       `overflow-x: auto` on its own container. */
+    #abRunsScroll { overflow-x: auto; }
     #abRuns { width: 100%; border-collapse: collapse; font-size: 12px; }
+    /* A NAME IS NOW A SENTENCE, so it must not hold the column open: at
+       ~76 characters nowrap would push the table half a screen wider. It
+       wraps, which costs row height and nothing else. */
+    #abRuns .nm { overflow-wrap: anywhere; }
     #abRuns th { text-align: left; font-size: 10px; color: var(--faint); font-weight: 600;
       text-transform: uppercase; letter-spacing: .06em; padding: 6px 10px 6px 0;
       border-bottom: 1px solid var(--hair); white-space: nowrap; }
@@ -366,7 +379,7 @@
 
     <details id="abRunsBox">
       <summary id="abRunsSum">Saved runs</summary>
-      <table id="abRuns"><thead></thead><tbody></tbody></table>
+      <div id="abRunsScroll"><table id="abRuns"><thead></thead><tbody></tbody></table></div>
       <div id="abRunsMsg"></div>
     </details>
 
