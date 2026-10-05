@@ -3588,12 +3588,297 @@
       + '</p></div></div>' + chromeFoot();
   }
 
+  // ---- Flow: where the value sits, and how each sector has done ----------
+  //
+  // "I like the Sankey... Left side show the Composition of S&P by Industry,
+  // Right side show the YTD Performance of that Industry" (the owner,
+  // 2026-10-05), then "Just sector at the moment". Time is deliberately
+  // dropped, so this is a ONE-STEP ALLUVIAL rather than the reference's
+  // two-date Sankey -- which is also the only version this data supports:
+  // the holdings table holds TWO days, so a composition-over-time chart has
+  // nothing to flow between.
+  //
+  // PERFORMANCE IS THE DESTINATION, NEVER THE WIDTH, and that one decision
+  // is the whole design. The tempting version starts a ribbon at share of
+  // value and ends it at share of the GAIN, fanning wider or narrower -- and
+  // it cannot be drawn: measured at industry grain, 50 of 112 industries have
+  // a NEGATIVE contribution this year, the positives sum to +16.8% against a
+  // basket of +13.5%, and a ribbon has no negative width, so 3.3 points would
+  // have to be hidden. Market cap flows (always positive) and the return only
+  // decides WHERE it lands. The chart is then conserved by construction:
+  // every band is exactly the sum of the ribbons entering it.
+  //
+  // SECTOR, NOT INDUSTRY, and the owner chose that after the measurement.
+  // At industry grain the top twelve are 63% of the index, so the "Other"
+  // ribbon would be 37% -- the biggest element on the chart, and the one
+  // that says least. Eleven sectors cover 100% with nothing pooled.
+  const FLOW_BANDS = [
+    ['ahead', 'Ahead of the index'],
+    ['behind', 'Behind the index'],
+    ['down', 'Down over the window'],
+  ];
+  // The artboard is always 1080 wide and its body 952 (less the 64px
+  // gutters), so each row of three tracks sums to 952.
+  //
+  // THE LEFT TRACK IS SIZED BY THE LONGEST SECTOR NAME, measured rather than
+  // chosen: there are exactly ELEVEN sector names, the set is fixed, and the
+  // longest -- "Communication Services" -- DRAWS 197px at the label's own
+  // 17px. So an ellipsis here is a width bug rather than the unavoidable
+  // thing it is on a company name, which is arbitrarily long. The track has
+  // to hold that 197 plus the return beside it; the story's bigger type
+  // needs more, which is why these follow the artboard.
+  // MEASURED on the real card with the real faces, not estimated: an
+  // off-page probe that copies a computed cssText onto a bare span does not
+  // carry the font, which this project has been caught by once already.
+  //   left  = "Communication Services" (197px at 17px) + 10 gap + the return
+  //           (57px) + 4 padding + the 16px offset = 284, so 292.
+  //   right = the sub "N sectors - NN% of the value" (220px at 15px), which
+  //           is the WIDER of the two lines -- "Down over the window" needs
+  //           211 -- plus 16 + 4 = 240, so 252. At 240 the box was 220 dead
+  //           on and every band's sub wrapped mid-phrase ("of the / value").
+  const FLOW_TRACKS = {
+    portrait: { lw: 292, rw: 252 },
+    square: { lw: 292, rw: 252 },
+    story: { lw: 316, rw: 264 },
+  };
+  const FLOW_NW = 13;    // the node bar itself
+  // Measured per artboard by the fit sweep, not chosen: everything above the
+  // drawing (kicker, two-line title) and below it (the note) is variable, so
+  // a single constant is a guess at variable content.
+  const FLOW_H = { portrait: 660, square: 402, story: 1120 };
+  const FLOW_GAP = 6;    // between sector nodes
+  const FLOW_MIN = 18;   // the floor a node is drawn at, however small it is
+
+  function tplFlow() {
+    const per = SNAP_PERIODS.some(([k]) => k === O.flowPeriod) ? O.flowPeriod : 'ytd';
+    const [field, perLabel] = MOV_PERIODS[per];
+    // "has done past week" is not English. The catalogue's labels already
+    // carry their own determiner, so only the rolling ones need a preposition.
+    const phrase = /^past /.test(perLabel) ? 'over the ' + perLabel : perLabel;
+    const cut = SP_CUTS.some(([k]) => k === O.flowSp500) ? O.flowSp500 : 'in';
+
+    // The index funds and the eleven sector funds come out FIRST. A fund that
+    // IS a sector, sitting inside that sector's own aggregate, double-counts
+    // it -- the trap /consolidated and the Snapshot card both record. They
+    // carry a real market cap (a fund reports AUM), so nothing else here
+    // would have excluded them.
+    const pool = spFilter(
+      stocks.filter((x) => x && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol)), cut);
+    const capOf = (x) => (Number(x.marketCap) > 0 ? Number(x.marketCap) : 0);
+    // Two exclusions and they are DIFFERENT rules. A missing return is
+    // ABSENT, never zero -- Number(null) is 0 and finite, and a fabricated
+    // flat company drags a weighted mean. A company with no market cap
+    // carries no weight at all; `> 0` rejects null and zero in one test.
+    // The -99 floor keeps a total wipeout out of the begin-weight divide.
+    const scored = pool.filter((x) => capOf(x) > 0 && x[field] != null && x[field] > -99);
+    // A BLANK SECTOR IS NOT A SECTOR, and it has to leave before the index is
+    // struck rather than after. A stock whose profile has not been pulled yet
+    // belongs in no band -- the rule /pivot and /consolidated both keep -- so
+    // if it still counted toward the reference return the card would be
+    // measuring eleven sectors against a basket that holds twelve things.
+    // Measured, that is a gap of up to 0.10pt today; it is zero this way, and
+    // the parts then sum to the whole EXACTLY. The dropped rows are named in
+    // the note rather than disappearing.
+    const live = scored.filter((x) => x.sector);
+    const nosec = scored.length - live.length;
+
+    // BEGINNING WEIGHTS, so the parts sum to the basket's own return. Today's
+    // weight times the window's return does NOT, and that is not a rounding
+    // difference: measured over the year on the index's own members, the
+    // end-weighted parts overstate the basket by 24.7 points, because a
+    // winner has already grown into the weight being applied to it. The
+    // start weight is reconstructed as cap / (1 + r/100), which assumes an
+    // unchanged share count -- an approximation worth stating and the only
+    // one available, since no share count is stored per date.
+    const capEnd = live.reduce((a, x) => a + capOf(x), 0);
+    const capBeg = live.reduce((a, x) => a + capOf(x) / (1 + x[field] / 100), 0);
+    const index = capBeg ? (capEnd / capBeg - 1) * 100 : 0;
+
+    const agg = new Map();
+    for (const x of live) {
+      const beg = capOf(x) / (1 + x[field] / 100);
+      const a = agg.get(x.sector) || { n: 0, end: 0, beg: 0, wr: 0 };
+      a.n++; a.end += capOf(x); a.beg += beg; a.wr += beg * x[field];
+      agg.set(x.sector, a);
+    }
+    const total = [...agg.values()].reduce((a, s) => a + s.end, 0);
+    const secs = [...agg.entries()].map(([name, a]) => ({
+      name, n: a.n, cap: a.end, wt: a.end / total * 100,
+      ret: a.beg ? a.wr / a.beg : 0,
+    })).sort((a, b) => b.cap - a.cap);
+
+    const cutWord = cut === 'in' ? 'The S&P 500'
+      : cut === 'out' ? 'Outside the S&P 500' : 'The whole screen';
+    const refWord = cut === 'in' ? 'the index' : 'the screen';
+
+    if (!secs.length || !total) {
+      // THREE DIFFERENT REASONS TO BE EMPTY, and a card that names the wrong
+      // one is worse than one that says nothing: a posted picture has no
+      // picker beside it, so this sentence is the reader's only explanation.
+      // The first draft branched on the CUT rather than the CAUSE and told
+      // somebody whose holdings file was perfectly fine that it had never
+      // been imported. Found by looking at the rendered card; every
+      // assertion had passed.
+      const why = !pool.length
+        ? (cut === 'in'
+          ? 'No stock here has been matched against the index yet — no holdings file has been imported.'
+          : cut === 'out'
+            ? 'Every stock on the screen is in the index.'
+            : 'There is nothing on the screen to draw.')
+        : !live.length
+          ? 'No stock here has a reading ' + esc(phrase) + ' yet.'
+          : 'No stock here has a sector recorded yet.';
+      return chromeTop() + '<div class="s-body"><div class="fl-in">' +
+        `<span class="s-kick">${esc(cutWord)}</span>` +
+        '<h2 class="s-title">Where the value sits</h2>' +
+        `<p class="s-empty">${why}</p></div></div>` + chromeFoot();
+    }
+
+    // THE ORDER OF THESE THREE TESTS IS WHAT KEEPS THE PALETTE HONEST, and it
+    // is not label hygiene. `r < 0` is asked FIRST, so every sector in Ahead
+    // or Behind is non-negative BY CONSTRUCTION -- which is what makes green
+    // always mark a sector that rose and red always one that fell, exactly
+    // the meanings those two colours carry on every other surface here. Ask
+    // "ahead" first instead and a year with a negative index paints a sector
+    // that lost money green.
+    //
+    // INDEX-RELATIVE RATHER THAN FIXED BANDS, measured over all five windows
+    // the picker offers. Fixed cuts (>30 / 15-30 / 0-15 / down) COLLAPSE: on
+    // a single day they put TEN OF ELEVEN sectors in one band holding 98% of
+    // the value, which is a chart that says nothing. The index-relative split
+    // never degenerates -- 3 bands today, 3 over a week, 2 over a month, 3
+    // this year, 3 over a year -- and it needs no threshold that goes stale.
+    const bandOf = (r) => (r < 0 ? 'down' : r > index ? 'ahead' : 'behind');
+    secs.forEach((s) => { s.band = bandOf(s.ret); });
+
+    const H = FLOW_H[size.id] || FLOW_H.portrait;
+    const TR = FLOW_TRACKS[size.id] || FLOW_TRACKS.portrait;
+    const W = 952 - TR.lw - TR.rw;
+    const n = secs.length;
+    const avail = H - FLOW_GAP * (n - 1);
+
+    // A SMALL SECTOR STILL HAS TO BE VISIBLE, and the floor is marked rather
+    // than silent -- the Size card's rule, where a disc under 14px is drawn
+    // at the floor and says so. Basic Materials is 1.4% of the index, which
+    // on this column is seven pixels: thinner than the label beside it, and
+    // too thin for a ribbon to be followed. The shortfall is taken back from
+    // the slack ABOVE the floor in proportion, so the distortion lands on the
+    // big nodes, where it is a few percent, rather than on the small ones,
+    // where it would be everything.
+    let hs = secs.map((s) => s.wt / 100 * avail);
+    const need = hs.reduce((a, h) => a + Math.max(0, FLOW_MIN - h), 0);
+    const floored = hs.filter((h) => h < FLOW_MIN).length;
+    if (need > 0) {
+      const slack = hs.reduce((a, h) => a + Math.max(0, h - FLOW_MIN), 0);
+      hs = hs.map((h) => (h < FLOW_MIN ? FLOW_MIN
+        : slack > need ? h - (h - FLOW_MIN) * (need / slack) : FLOW_MIN));
+    }
+    secs.forEach((s, i) => { s.h = hs[i]; });
+
+    // LEFT: cap descending, which is what composition is read as.
+    let y = 0;
+    secs.forEach((s) => { s.y = y; y += s.h + FLOW_GAP; });
+
+    // RIGHT: the bands in order, each the exact sum of the ribbons entering
+    // it, with the gaps opened so both columns span the same H. A band keeps
+    // its sectors in the LEFT column's order, which is what stops the
+    // ribbons crossing each other more than the data makes them.
+    const bands = FLOW_BANDS
+      .map(([key, label]) => {
+        const mine = secs.filter((s) => s.band === key);
+        return {
+          key, label, mine, h: mine.reduce((a, s) => a + s.h, 0),
+          wt: mine.reduce((a, s) => a + s.wt, 0),
+        };
+      })
+      .filter((b) => b.mine.length);
+    const bodyH = bands.reduce((a, b) => a + b.h, 0);
+    const bGap = bands.length > 1 ? Math.max(FLOW_GAP, (H - bodyH) / (bands.length - 1)) : 0;
+    let by = 0;
+    bands.forEach((b) => {
+      b.y = by;
+      let inner = by;
+      b.mine.forEach((s) => { s.ry = inner; inner += s.h; });
+      by += b.h + bGap;
+    });
+
+    const colOf = { ahead: pal.up, behind: pal.flat, down: pal.down };
+    const x0 = FLOW_NW;
+    const x1 = W - FLOW_NW;
+    const xc = (x0 + x1) / 2;
+    const f1 = (v) => v.toFixed(1);
+    const ribbon = (s) => `M${x0},${f1(s.y)} C${xc},${f1(s.y)} ${xc},${f1(s.ry)} ${x1},${f1(s.ry)}`
+      + ` L${x1},${f1(s.ry + s.h)} C${xc},${f1(s.ry + s.h)} ${xc},${f1(s.y + s.h)} ${x0},${f1(s.y + s.h)} Z`;
+
+    // Biggest first, so a thin ribbon is never buried under a thick one it
+    // crosses.
+    const paths = secs.slice().sort((a, b) => b.h - a.h).map((s) =>
+      `<path d="${ribbon(s)}" fill="${colOf[s.band]}" fill-opacity="0.32"></path>`).join('');
+    const lNodes = secs.map((s) =>
+      `<rect x="0" y="${f1(s.y)}" width="${FLOW_NW}" height="${f1(s.h)}" rx="2" fill="${colOf[s.band]}"></rect>`).join('');
+    const rNodes = bands.map((b) =>
+      `<rect x="${x1}" y="${f1(b.y)}" width="${FLOW_NW}" height="${f1(b.h)}" rx="2" fill="${colOf[b.key]}"></rect>`).join('');
+
+    // HTML LABELS OVER THE DRAWING, NEVER SVG TEXT -- the rule every chart in
+    // this module follows, because the artboard is scaled to the window and
+    // a glyph inside a stretched svg is distorted with it.
+    const lLabs = secs.map((s) =>
+      `<span class="fl-lab" style="top:${f1(s.y + s.h / 2)}px">` +
+      `<b>${esc(s.name)}</b><i class="${s.ret >= 0 ? 'up' : 'dn'}">${pct(s.ret)}</i></span>`).join('');
+    const rLabs = bands.map((b) =>
+      `<span class="fl-lab fl-blab" style="top:${f1(b.y + b.h / 2)}px">` +
+      `<b class="fl-${b.key}">${esc(b.label)}</b>` +
+      // "of value", not "of the value". Measured: the article costs 32px at
+      // 15px and 36 at 17, and this line is the WIDEST thing in the right
+      // track -- with it the sub wrapped mid-phrase on two of the three
+      // artboards and the story's band label wrapped too. The note says
+      // thickness is market value, so the word is not carrying the meaning.
+      `<i>${b.mine.length} sector${b.mine.length === 1 ? '' : 's'} · ` +
+      `${b.wt.toFixed(0)}% of value</i></span>`).join('');
+
+    // NO COUNT IS WRITTEN DOWN HERE. The first draft said "the eleven parts
+    // add up to the whole" -- true of the index and wrong of every other cut,
+    // and the sort of thing that reads perfectly well while being false.
+    //
+    // Nor does it claim they DO add up, which they do: that is an identity a
+    // reader cannot check off this card, because the weights it would need
+    // are the START weights and the percentages drawn are today's share --
+    // the SEC ratio card's rule, that a figure on screen has to be checkable
+    // against another figure on screen. So the note explains the choice.
+    const note = 'Each ribbon is one sector, as thick as its share of market value, and it '
+      + 'lands in the band its own cap-weighted return ' + esc(phrase) + ' puts it in — against '
+      + esc(refWord) + '’s ' + pct(index) + '. A sector that fell is Down whatever the index did. '
+      + 'Returns weight each company by what it was worth at the START of the window rather than '
+      + 'today, since a winner has already grown into today’s weight; they are computed over the '
+      + 'companies here rather than taken from the sector funds, which hold a '
+      + 'different basket.'
+      + (nosec ? ' ' + (nosec === 1 ? 'One company has' : nosec + ' companies have')
+        + ' no sector recorded and so sit' + (nosec === 1 ? 's' : '') + ' in no band.' : '')
+      + (floored ? ' The ' + (floored === 1 ? 'smallest ribbon carries' : floored + ' smallest ribbons carry')
+        + ' a minimum thickness, so ' + (floored === 1 ? 'it can' : 'they can') + ' still be followed.' : '');
+
+    return chromeTop() +
+      '<div class="s-body"><div class="fl-in">' +
+      `<span class="s-kick">${esc(cutWord)} · ${live.length.toLocaleString()} companies · $${fmtMoney(total)}</span>` +
+      '<h2 class="s-title">Where the value sits<br><span class="dim">' +
+      esc('and how each sector has done ' + phrase) + '</span></h2>' +
+      `<div class="fl-wrap" style="height:${H}px">` +
+      `<div class="fl-side" style="width:${TR.lw}px">${lLabs}</div>` +
+      `<svg class="fl-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
+      paths + lNodes + rNodes + '</svg>' +
+      `<div class="fl-side fl-r" style="width:${TR.rw}px">${rLabs}</div>` +
+      '</div>' +
+      `<p class="s-sub wide" style="--fs:18px">${note}</p>` +
+      '</div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
     bubble: tplBubble, stock: tplStock, day: tplDay, spotlight: tplSpotlight,
     disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution,
+    flow: tplFlow,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -4551,6 +4836,84 @@
     .avMark { position: relative; width: 46%; height: 46%; stroke: var(--green); fill: none;
               stroke-width: 1.45; stroke-linecap: round; stroke-linejoin: round;
               filter: drop-shadow(0 0 26px rgba(52, 211, 153, 0.5)); }
+
+    /* ---- Flow: the one-step alluvial -------------------------------------
+       (No backticks in here. STYLE is a template literal and one inside a
+       CSS comment ends the string -- the FOURTH time on this file, and
+       node --check passes it every time, because it is valid interpolation
+       rather than a syntax error.)
+
+       fl-in fills the body the way dy-in does, and the note takes
+       margin-top: auto so the slack collects in ONE place, between the
+       drawing and the footnote, instead of the body centring a short block
+       and stranding half the room above the kicker -- the two empty bands
+       the day card had to be rebuilt for.
+
+       The wrap is a plain flex ROW of three tracks summing to the body's
+       own 952px. Each takes its width INLINE, from the same map the svg's
+       own width comes from, so the three cannot sum to anything else -- and
+       with flex: none beside it the item never shrinks, so the min-width:
+       auto content floor cannot bind and one 22-character sector name
+       cannot push the drawing off the artboard. (min-width: 0 was here as
+       well and reverted to NOTHING: two mechanisms for one thing, which is
+       the trap this file records elsewhere. The floor HAS bitten the trade
+       log, the sparks grid and the saved-name field -- it is disarmed here
+       by the explicit width, not by luck, and anything that makes these
+       tracks flexible has to put it back.) */
+    .fl-in { height: 100%; display: flex; flex-direction: column; }
+    /* THE SUBTITLE IS A SUBTITLE. Inside .s-title a .dim span inherits the
+       66px display size, which is right for the Snapshot's one-word period
+       and wrong here: "and how each sector has done this year" WRAPS at that
+       size, so the heading took THREE lines and 202px of a card whose whole
+       content is a drawing. Measured, not guessed. */
+    .fl-in .s-title .dim { display: block; font-size: 32px; letter-spacing: -0.02em;
+                           margin-top: 12px; line-height: 1.15; }
+    .sz-square .fl-in .s-title .dim { font-size: 29px; }
+    .sz-story .fl-in .s-title .dim { font-size: 40px; }
+    .fl-in .s-sub { margin-top: auto; padding-top: 24px; }
+    .fl-wrap { display: flex; align-items: stretch; margin-top: 30px; flex: none; }
+    .fl-side { position: relative; flex: none; }
+    .fl-svg { flex: none; display: block; }
+    /* A label is positioned on its node's CENTRE and pulled back half its own
+       height, so a node and its name cannot drift apart as the column is
+       re-proportioned. Absolute, because the nodes are spaced by market value
+       and no flow layout can reproduce that. */
+    .fl-lab { position: absolute; right: 16px; transform: translateY(-50%);
+              display: flex; align-items: baseline; gap: 10px; left: 0;
+              justify-content: flex-end; padding-left: 4px; }
+    .fl-lab b { font: 600 17px var(--sans); letter-spacing: -0.015em;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                min-width: 0; }
+    .fl-lab i { font: 600 16px var(--mono); font-style: normal; flex: none;
+                font-variant-numeric: tabular-nums; color: var(--muted); }
+    .fl-lab i.up { color: var(--green); } .fl-lab i.dn { color: var(--red); }
+    /* The right column reads the other way: the band name first, its share
+       under it, both left-aligned off the node. */
+    .fl-r .fl-lab { right: auto; left: 16px; justify-content: flex-start;
+                    flex-direction: column; align-items: flex-start; gap: 3px;
+                    padding-left: 0; padding-right: 4px; }
+    .fl-r .fl-lab b { white-space: normal; font-size: 20px; }
+    .fl-r .fl-lab i { font-size: 15px; color: var(--faint); }
+    /* SCOPED. Nine unscoped class names on this project have captured
+       later markup -- .warn, .card, input[type=text], .mk, .sub, .news-when,
+       .fav, .bezel > .core and the Evolution card's title steps, which was
+       the same trap from the other side. These are only ever on the band
+       name, so that is what they name. */
+    .fl-r .fl-lab b.fl-ahead { color: var(--green); }
+    .fl-r .fl-lab b.fl-down { color: var(--red); }
+    .fl-r .fl-lab b.fl-behind { color: var(--muted); }
+    .sz-square .fl-lab b { font-size: 15px; }
+    .sz-square .fl-lab i { font-size: 14px; }
+    .sz-square .fl-r .fl-lab b { font-size: 18px; }
+    .sz-square .fl-wrap { margin-top: 22px; }
+    .sz-story .fl-lab b { font-size: 19px; }
+    .sz-story .fl-lab i { font-size: 17px; }
+    /* 22, not 25: at 25px "Down over the window" needs 232px and the story's
+       own track cannot hold it beside a left column wide enough for a
+       22-character sector name at 20px. Measured both ways. */
+    .sz-story .fl-r .fl-lab b { font-size: 22px; }
+    .sz-story .fl-r .fl-lab i { font-size: 17px; }
+    .sz-story .fl-wrap { margin-top: 44px; }
 
     .s-empty { margin-top: 60px; font-size: 30px; color: var(--muted); line-height: 1.5; max-width: 30ch; }`;
 

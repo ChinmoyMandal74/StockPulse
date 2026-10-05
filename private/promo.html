@@ -593,6 +593,23 @@
           among the movers.</p>
       </div>
 
+      <!-- WHERE THE VALUE SITS. Two controls and no scope pickers, for
+           tplDay's reason: this card answers "what is the market made of and
+           how has each part done", and a sector breakdown of ONE sector is
+           not a breakdown. So there is no flowSector/flowIndustry/flowCap/
+           flowScreen and INDUSTRY_PREFIXES is left alone. -->
+      <div id="flowBox">
+        <label>Period</label>
+        <select id="flowPeriod"></select>
+        <label>S&amp;P 500</label>
+        <select id="flowSp500"></select>
+        <p class="hint">The left column is market value, the right is how each
+          sector’s own cap-weighted return compares with the basket on the card.
+          A sector that fell is Down whatever the index did, so green always means
+          a sector that rose. The index funds and the eleven sector funds are left
+          out of both columns — a fund that IS a sector would double-count it.</p>
+      </div>
+
       <!-- One stock, in full. Three controls and no scope pickers: the card
            IS its scope, so there is no spotSector/spotIndustry/spotCap/
            spotScreen and INDUSTRY_PREFIXES is left alone. -->
@@ -736,6 +753,7 @@
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
+      { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
@@ -852,6 +870,7 @@
       'sizeOuter', 'sizeInner', 'sizeThird', 'sizeCount', 'sizeScope', 'sizeSector', 'sizeIndustry', 'sizeCap', 'sizeScreen', 'sizeSp500',
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen', 'bubSp500',
       'daySnapPeriod', 'dayMetric', 'dayCount', 'dayFloor', 'daySp500',
+      'flowPeriod', 'flowSp500',
       'spotSym', 'spotWin', 'spotProf',
       'evoSym', 'evoMeasure', 'evoWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
@@ -937,6 +956,7 @@
         vOpt.textContent = today ? 'Value added, $' : 'Value added, $ (today only)';
         if (!today && $('dayMetric').value === 'value') $('dayMetric').value = 'pct';
       }
+      $('flowBox').style.display = tpl === 'flow' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       const fm = $('fundMode').value;
@@ -1086,6 +1106,11 @@
     })();
     ['bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen', 'bubSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'bubble') render(); }));
+    // A FOURTEENTH hardcoded listener list, and the warning above applies
+    // to it exactly: both of these are in the markup and in CONTROL_IDS,
+    // so without this they would save with a post and do nothing on screen.
+    ['flowPeriod', 'flowSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'flow') render(); }));
     ['daySnapPeriod', 'dayMetric', 'dayCount', 'dayFloor', 'daySp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
     ['spotSym', 'spotWin', 'spotProf'].forEach((id) =>
@@ -1513,6 +1538,30 @@
         // FROM THE MODULE, never a copy in the markup: a key tplDay does not
         // know falls back to Today and draws the wrong window with nothing
         // saying so. The spCuts bargain.
+        // Both pickers come from the module that READS the value. The Flow
+        // card defaults to this year, which is the window the owner asked
+        // for; the Snapshot defaults to today, so they are set separately
+        // rather than sharing one fill.
+        const flowKeep = $('flowPeriod').value;
+        $('flowPeriod').innerHTML = Cards.snapPeriods().map(([v, lab]) =>
+          `<option value="${esc(v)}"${v === 'ytd' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
+        if ([...$('flowPeriod').options].some((o) => o.value === flowKeep)) {
+          $('flowPeriod').value = flowKeep;
+        }
+        // THE FLOW CARD DEFAULTS TO THE INDEX, so it cannot ride the shared
+        // fill above: that loop reads `keep` BEFORE the options exist, gets
+        // the empty string on a first paint, finds it in no option list, and
+        // leaves the select on its FIRST option -- which is All. The page and
+        // the module then disagreed about the default, silently, and every
+        // number on the card was the whole screen's while the module's own
+        // fallback said `in`. Filled with `selected` instead, keeping a
+        // choice already made.
+        const flowSpKeep = $('flowSp500').value;
+        $('flowSp500').innerHTML = Cards.spCuts().map(([v, lab]) =>
+          `<option value="${esc(v)}"${v === 'in' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
+        if ([...$('flowSp500').options].some((o) => o.value === flowSpKeep)) {
+          $('flowSp500').value = flowSpKeep;
+        }
         const snapKeep = $('daySnapPeriod').value;
         $('daySnapPeriod').innerHTML = Cards.snapPeriods().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
