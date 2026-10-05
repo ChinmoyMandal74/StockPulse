@@ -2421,6 +2421,35 @@ The frozen view is the **same file**, the same painters, over the stored payload
   - **A REVERT THAT STOPS THE SUITE RUNNING REPORTS `0 failed`**, indistinguishable from a guard that never mattered: a `false &&` wrapper left an unbalanced paren, the module would not parse, and the harness read it as not load-bearing. It now compares the check COUNT against the baseline and says the run aborted. Neuter the refusal, not the condition.
   - **`db.js` was CRLF on disk while `server.js` and `adjustedbacktest.html` were LF**, in the same working copy, on the same afternoon — the documented hazard, met again. Detect per file, at the moment the patch runs.
 
+### It wears `/backtest`'s chrome now (2026-10-05, owner: "make the Adjusted Backtest page look nice similar to Backtest")
+**The controls moved into a bezel panel, the labels, inputs and verdict pills took `/backtest`'s treatment, and the stat cards became cards.** Nothing about what the page computes changed — this is the skin, and the skin was the whole of the ask.
+
+- **THE DIFFERENCE WAS THE CARD, not the colours.** `/backtest` puts its controls in `<section class="bezel panel"><div class="core panel">`; this page had them bare on the page background, which reads as debug chrome rather than as the instrument. One wrapper is most of the fix.
+- **THE VERDICT PILLS ARE THE OTHER HALF, and they are a legibility fix rather than decoration.** They were grey-on-grey when pressed, so *which* verdicts were selected could not be read without going along all six; `/backtest` paints the ladder — green, light green, amber, grey, rose, red — and `data-t` was already on the button, so this is six CSS rules and no JS.
+- **The cards put the KEY ABOVE THE VALUE**, which is `/backtest`'s order and the right one: the label is what you scan for and the number is what you stop on. `#abCards` is a `repeat(auto-fit, minmax(170px, 1fr))` grid, so they share one width and read as a set instead of as boxes sized by whatever text they happened to hold.
+- **A FLOOR AND A CEILING ON THE SELECTS (150/250px), because this page has TEN against `/backtest`'s eight** and they are wildly uneven on their own: `1Y` is three characters and a theme name is forty. Without the floor the row reads as ragged offcuts; without the ceiling one long option sets a 360px control and pushes the verdicts onto a line of their own.
+- **One rule for every control in the panel, `#abName` included.** It had its own lighter surface (`--surface`/`--hair` against the rest's `--surface-2`/`--hair-2`) and sat visibly apart from its neighbours.
+
+#### TWO ELEMENTS SHARED `id="abBar"`, and wrapping them is what ended it
+`getElementById` returns the first and CSS matches both, so `body.frozen #abBar` really did hide both rows and **nothing was visibly wrong** — which is why it survived. The rows are `.abrow` inside one `#abPanel` now, and the frozen rule hides the panel, so every control inside it goes with one selector rather than relying on a duplicate id to do the work of two.
+
+- **`btruns-test` asserts the frozen view by MEASURING `#abGo`, `#abSave`, `#abDate` and `#abRunsBox` at zero height**, not by naming the container — so hiding the panel instead satisfies it unchanged, and that is the check doing its job rather than luck.
+
+#### Two dead hooks found and NOT shipped
+- **`btn-accent` IS NOT DEFINED ANYWHERE** — not in `app.css`, not in any page's own styles — and **`/backtest`, `/trend-backtest` and nothing else have carried it on their Run buttons all along**, so all three render as a plain `.btn`. It was added here for a few minutes and taken out again: residue reads as intent, and *defining* it would make this page diverge from the one it is meant to match. Worth deciding across all three if a primary action should ever look like one.
+- **`.stb` was a class hook nothing styled.** The bezel does the work on its own.
+- **`.st` IS ON THE CORE ONLY, deliberately.** The `/quality` lesson: that page put `.card` on the bezel AND the core, `querySelectorAll` matched two per card, and one click toggled its filter twice. `#abCards .st` is what `adjbt-test` counts, so it must stay one node per card.
+
+#### THE PANEL'S DEAD FOOT IS THE ONE THING ABOUT `/backtest` NOT WORTH COPYING
+`.panel { padding: 18px 20px; margin-bottom: 18px }` is applied there to **both** the shell and the core, so the core's margin lands *inside* the card — measured here as **18px of empty space under the last control** before it was scoped. `section.abpanel` takes the margin, `.abpanel` takes the padding. The doubled *padding* is kept, because that inset is what gives the reference card its weight.
+
+- **Found by looking at the rendered page**, as every layout fault on this project has been. No assertion would have seen it: the markup was correct and the numbers were right.
+
+#### Worth knowing
+- **The phone keeps one control per row and that is a choice, not an oversight.** Two-up fits at ~134px, which truncates `Never — buy and hold` and `Cushion (room to the exit)` — and **truncating a control's label is worse than truncating a display name**, because the reader cannot tell what is selected. The page scrolls; legibility wins.
+- **The shot harness now phones the LIVE view too.** `btruns-shot.js` only ever phoned the frozen one, where the panel is hidden by design — so the new markup was the half it could not see.
+- Verified: **adjbt (all), abdefaults 30, btruns 83, rebalaxis 24, period 41 and bookname 29 all pass unchanged**, which is the point — a skin that moved a selector any of them reads would have said so.
+
 ## Price as of — how old the stock page is (2026-10-02, owner's request)
 **A quiet line under the price in `/stock`'s masthead: `Price as of Oct 2, 2:09 PM`, amber once the pull is over a day old.** Asked for after the owner reported ASML reading **$1857.6 / +2.7%** on the stock page against **$1865.5 / +3.2%** on the screener, with the verdict differing too (Strong Buy against Hold).
 

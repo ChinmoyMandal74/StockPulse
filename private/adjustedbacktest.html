@@ -20,32 +20,76 @@
       background:
         radial-gradient(46vw 40vw at 4% -8%, rgba(94, 234, 212, 0.07), transparent 62%),
         radial-gradient(50vw 42vw at 98% 4%, rgba(251, 146, 60, 0.08), transparent 64%); }
-    .bezel { border-radius: 22px; }
+    .bezel { border-radius: 26px; }
 
-    header.top { display: flex; align-items: center; gap: 12px; padding: 24px 0 12px; flex-wrap: wrap; }
+    header.top { display: flex; align-items: center; gap: 14px; padding: 26px 0 18px; flex-wrap: wrap; }
     header.top h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
     .spacer { margin-left: auto; }
 
-    #abNote { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; max-width: 104ch;
-              line-height: 1.65; }
+    #abNote { color: var(--muted); font-size: 13px; margin: 0 0 22px; max-width: 84ch;
+              line-height: 1.6; }
     #abNote b { color: var(--text); font-weight: 600; }
 
-    #abBar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 0 0 14px; }
-    #abBar .fld { display: flex; flex-direction: column; gap: 4px; }
-    #abBar .lbl { font-size: 10px; color: var(--faint); text-transform: uppercase;
-                  letter-spacing: .06em; }
-    #abTiers { display: flex; flex-wrap: wrap; gap: 5px; }
-    #abTiers button { font: 500 11.5px var(--sans); padding: 6px 10px; border-radius: 8px;
-      border: 1px solid var(--hair); background: none; color: var(--muted); cursor: pointer; }
-    #abTiers button[aria-pressed="true"] { border-color: var(--hair-2); background: var(--surface-2);
-      color: var(--text); }
+    /* THE CONTROLS SIT IN A PANEL, which is what /backtest does and what
+       this page was asked to look like. Bare on the page background they
+       read as debug chrome; in a card they read as the instrument. Both
+       the shell and the core take the padding, exactly as .panel does
+       there -- the doubled inset is what gives that card its weight. */
+    /* THE MARGIN IS THE SHELL'S, THE PADDING IS BOTH. Put it on the bare
+       class and the CORE carries it too -- 18px of dead space INSIDE the
+       card, under the last control, which is what /backtest's own .panel
+       does and is the one thing about it not worth copying. */
+    section.abpanel { margin-bottom: 18px; }
+    .abpanel { padding: 18px 20px; }
+    .abrow { display: flex; gap: 22px; align-items: flex-end; flex-wrap: wrap; }
+    .abrow + .abrow { margin-top: 18px; }
+    .abrow .fld { display: flex; flex-direction: column; gap: 6px; }
+    .abrow .lbl { font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+                  color: var(--faint); }
+    /* One rule for every control in the panel, #abName included -- it had
+       its own lighter surface and sat visibly apart from its neighbours. */
+    .abrow input[type="date"], .abrow input[type="text"], .abrow select {
+      background: var(--surface-2); border: 1px solid var(--hair-2); color: var(--text);
+      border-radius: 10px; padding: 9px 11px; font: 500 13px var(--mono); }
+    .abrow select, .abrow input[type="text"] {
+      font-family: var(--sans); font-size: 12.5px; }
+    /* A FLOOR AND A CEILING, because this page has ten selects against
+       /backtest s eight and they are wildly uneven on their own: "1Y" is
+       three characters and a theme name is forty. Without the floor the
+       row reads as ragged offcuts; without the ceiling one long option
+       sets a 360px control and pushes the verdicts onto their own line. */
+    .abrow select { min-width: 150px; max-width: 250px; }
+    .abrow select:disabled { opacity: .45; cursor: not-allowed; }
+    .abrow .btn { align-self: flex-end; }
 
-    #abCards { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
-    #abCards .st { border: 1px solid var(--hair); border-radius: 9px; padding: 8px 12px;
-                   background: var(--surface); min-width: 96px; }
-    #abCards .st .n { font: 600 17px var(--mono); display: block; }
-    #abCards .st .k { font-size: 10.5px; color: var(--faint); text-transform: uppercase;
-                      letter-spacing: .06em; }
+    /* VERDICT-COLOURED WHEN PRESSED, the ladder /backtest already paints.
+       Grey-on-grey could not say WHICH verdicts were chosen without
+       reading all six, and the ladder is the one thing on this panel a
+       reader checks at a glance. data-t is already on the button. */
+    #abTiers { display: flex; gap: 7px; flex-wrap: wrap; }
+    #abTiers button {
+      border: 1px solid var(--hair-2); background: var(--surface-2); color: var(--muted);
+      border-radius: 999px; padding: 8px 13px; font: 500 12.5px var(--sans);
+      cursor: pointer; transition: all .18s var(--ease); }
+    #abTiers button[aria-pressed="true"] { color: var(--void); font-weight: 600; }
+    #abTiers button[data-t="Strong Buy"][aria-pressed="true"] { background: var(--green); border-color: var(--green); }
+    #abTiers button[data-t="Buy"][aria-pressed="true"] { background: #6ee7b7; border-color: #6ee7b7; }
+    #abTiers button[data-t="Buy with Risk"][aria-pressed="true"] { background: var(--amber); border-color: var(--amber); }
+    #abTiers button[data-t="Hold"][aria-pressed="true"] { background: var(--muted); border-color: var(--muted); }
+    #abTiers button[data-t="Avoid"][aria-pressed="true"] { background: #fda4af; border-color: #fda4af; }
+    #abTiers button[data-t="Sell Immediately"][aria-pressed="true"] { background: var(--red); border-color: var(--red); }
+
+    /* A GRID, NOT A WRAPPED ROW: the cards then share one width and read
+       as a set rather than as boxes of whatever size their text happened
+       to need. The key leads the value, as it does on /backtest -- the
+       label is what you scan for and the number is what you stop on. */
+    #abCards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+               gap: 12px; margin: 0 0 18px; }
+    #abCards .st { padding: 15px 17px; }
+    #abCards .st .k { display: block; font-size: 10px; letter-spacing: .12em;
+                      text-transform: uppercase; color: var(--faint); }
+    #abCards .st .n { display: block; font: 600 24px/1.15 var(--mono); margin-top: 7px;
+                      font-variant-numeric: tabular-nums; }
     #abCards .st .n.pos { color: var(--green); }
     #abCards .st .n.neg { color: var(--red); }
 
@@ -60,7 +104,7 @@
     body.frozen #abFrozen { display: block; }
     /* THE CONTROLS GO, NOT JUST THEIR EFFECT. A reader who cannot run
        anything must not be shown a Run button that 403s. */
-    body.frozen #abBar, body.frozen #abRunsBox, body.frozen .top .live { display: none; }
+    body.frozen #abPanel, body.frozen #abRunsBox, body.frozen .top .live { display: none; }
     body:not(.frozen) .top .shared { display: none; }
 
     #abSaveMsg { font-size: 12px; color: var(--muted); align-self: center; }
@@ -69,9 +113,7 @@
        so a bare class here would draw as ordinary body text. */
     #abTrades .err { color: var(--red); font-size: 12.5px; margin: 14px 0 0;
       line-height: 1.6; }
-    #abName { font: 400 12.5px var(--sans); padding: 7px 9px; border-radius: 8px;
-      border: 1px solid var(--hair); background: var(--surface); color: var(--text);
-      min-width: 190px; }
+    #abName { min-width: 190px; }
 
     #abRunsBox { margin: 0 0 16px; }
     #abRunsBox > summary { cursor: pointer; font-size: 12.5px; color: var(--muted);
@@ -230,6 +272,11 @@
 
     #abMsg { color: var(--muted); font-size: 13px; padding: 18px 4px; }
     #abMsg.err { color: var(--red); }
+    @media (max-width: 720px) {
+      .page { padding: 0 16px; }
+      .abrow { gap: 14px; }
+      .abpanel { padding: 14px 15px; }
+    }
   </style>
 </head>
 <body>
@@ -250,7 +297,8 @@
 
     <p id="abNote"></p>
 
-    <div id="abBar">
+    <section class="bezel abpanel" id="abPanel"><div class="core abpanel">
+      <div class="abrow">
       <div class="fld"><span class="lbl">Start date</span>
         <input type="date" id="abDate" /></div>
       <div class="fld"><span class="lbl">Hold for</span>
@@ -261,9 +309,9 @@
         <select id="abTheme"><option value="">All stocks</option></select></div>
       <div class="fld"><span class="lbl">Verdicts</span>
         <div id="abTiers"></div></div>
-    </div>
+      </div>
 
-    <div id="abBar">
+      <div class="abrow">
       <div class="fld"><span class="lbl">How many to hold</span>
         <select id="abTop">
           <option value="0">All of them</option>
@@ -303,7 +351,8 @@
         <input type="text" id="abName" maxlength="80" placeholder="optional" /></div>
       <button class="btn" id="abSave" disabled>Save run</button>
       <span id="abSaveMsg"></span>
-    </div>
+      </div>
+    </div></section>
 
     <details id="abRunsBox">
       <summary id="abRunsSum">Saved runs</summary>
@@ -486,8 +535,9 @@
       }
       $('abCards').innerHTML = items.map(function (x) {
         var cls = x[2] == null ? '' : (x[2] >= 0 ? ' pos' : ' neg');
-        return '<div class="st"><span class="n' + cls + '">' + we(x[1]) + '</span>'
-             + '<span class="k">' + we(x[0]) + '</span></div>';
+        return '<div class="bezel"><div class="core st">'
+             + '<span class="k">' + we(x[0]) + '</span>'
+             + '<span class="n' + cls + '">' + we(x[1]) + '</span></div></div>';
       }).join('');
     }
 
