@@ -1176,45 +1176,7 @@ ratio are pre-split and a split does not move a ratio. **One symbol of
 
 ---
 
-## 22. GARCH, but only to make Cushion honest — raised 2026-10-04
-
-**Cushion is distance-to-exit measured in the stock's own TRAILING
-volatility** (`actionRisk.drop ÷ (realisedVol ÷ √12)`). The one thing a
-volatility model adds over a trailing average is the thing the trailing
-average cannot know: **volatility clusters.** A stock that had a shock last
-week is riskier than its 126-day average says, and a stock that has been
-quiet for six months is less risky than a window still carrying one old
-shock.
-
-**Why it is the second of the three.** It needs no new data, no credits and
-no endpoint — `barmath.js` already computes realised volatility from bars —
-and it improves a column that already exists rather than adding one. It is
-also squarely on the display side: Cushion is a reading and a sort tiebreak,
-never an input to a verdict.
-
-**What it would take.** A GARCH(1,1) fitted per symbol is a maximum-likelihood
-optimisation and is more machinery than this is worth. **The cheap 90% is an
-EWMA variance** (RiskMetrics λ = 0.94), which is one line, has no fitting
-step, and captures the clustering that matters. Start there and measure
-whether the full model adds anything before writing one.
-
-**What is already known.** Nothing has been measured. The claim that
-volatility clusters is textbook and is not in doubt; what is NOT measured is
-whether a clustering-aware Cushion orders the realised downside any better
-than the trailing one does. **That is the test**, and `action-backtest.js`
-already has the shape of it — it reports per-verdict p10 over eighteen years,
-and the question is whether splitting a tier by EWMA-Cushion separates the
-tails further than splitting it by today's Cushion.
-
-**What would make it a bad idea.** Shipping it without that measurement. The
-research log is ten framings tested and nine flat; a volatility model is a
-model, and this project's standing rule is that a number goes on screen as a
-FACT or it goes through the backtest first. If the measurement comes back
-flat, the honest outcome is to leave Cushion alone and record it.
-
----
-
-## 23. Empirical VaR as a column — raised 2026-10-04
+## 22. Empirical VaR as a column — raised 2026-10-04
 
 **The worst 5% daily move a stock has actually had over the last year**, read
 straight off the bar archive. Not a model, not a distributional assumption,
