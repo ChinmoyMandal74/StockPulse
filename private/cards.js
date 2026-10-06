@@ -4042,18 +4042,359 @@
       '</div></div>' + chromeFoot();
   }
 
+  // ---- the histogram: the shape of the whole screen on one measure ------
+  //
+  // THE ONE SHAPE THIS STUDIO COULD NOT DRAW. Every other data card is a
+  // ranking (movers), a relationship (bubble, fund), a time series (chart,
+  // evolution) or a composition (flow, size). None answers "what does the
+  // whole screen look like on this measure" -- which is also what makes a
+  // single stock's reading mean anything, and is why the two modes are one
+  // template: `stock` is `screen` with a subject marked on it.
+  //
+  // THE BINNING IS PER MEASURE AND FIXED, never derived from the data. A
+  // range taken from today's own percentiles moves every time the card is
+  // drawn, so two posts a week apart would not be comparable -- and the
+  // range is most of what a histogram asserts. Each entry was set against
+  // the live distribution rather than guessed.
+  //
+  // `openLo` / `openHi` mark an END BIN THAT COLLECTS EVERYTHING BEYOND IT.
+  // That is the trap specific to this chart: drawn without saying so, the
+  // overflow piles against the edge and reads as a real mode. Measured on
+  // the live screen, forward P/E has 125 values outside a 0-60 window and
+  // revenue growth 81. An open end is labelled with a sign and counted in
+  // the note.
+  //
+  // `signed` colours the bars by which side of zero they are on, and is
+  // TRUE only where zero is a direction a reader already reads that way --
+  // returns, margins, growth. It is false for everything whose values are
+  // all one sign (a column negative on every row says nothing by being
+  // red -- the Bad day rule) and false for `peerPe`, because this project
+  // measured that cheap-against-peers is not good: the cheapest third of
+  // each industry has the worse growth, margin, ROE and Quality, so a green
+  // bar there would be the card asserting the opposite of its own data.
+  const HIST_MEASURES = [
+    ['pctFromAth', 'How far below its own record', 'the record being the highest close since the archive begins',
+      { lo: -95, hi: 0, bins: 19, unit: '%', dp: 1, openLo: true }],
+    ['badDay', 'What a bad day looks like', 'the worst 5% of its own daily moves, over the past year',
+      { lo: -14, hi: 0, bins: 14, unit: '%', dp: 1, openLo: true }],
+    ['range52Pos', 'Where each one sits in its 52-week range', '0 is the low, 100 is the high',
+      { lo: 0, hi: 100, bins: 20, unit: '', dp: 0 }],
+    ['qualityRating', 'The Quality score', 'company fundamentals, 1 to 10',
+      { lo: 1, hi: 11, bins: 10, unit: '', dp: 0, discrete: true }],
+    ['peerPe', 'Price against its own industry', '1.00 is what the typical company in that industry costs',
+      { lo: 0, hi: 2.5, bins: 25, unit: '×', dp: 2, openHi: true }],
+    ['todayPct', "Today's move", 'close to close, every company on the screen',
+      { lo: -6, hi: 6, bins: 24, unit: '%', dp: 1, openLo: true, openHi: true, signed: true }],
+    ['oneWeekPct', 'The past week', 'five sessions, close to close',
+      { lo: -12, hi: 12, bins: 24, unit: '%', dp: 1, openLo: true, openHi: true, signed: true }],
+    ['ytdPct', 'The year so far', 'since last year’s close',
+      { lo: -60, hi: 120, bins: 24, unit: '%', dp: 1, openLo: true, openHi: true, signed: true }],
+    ['oneYearPct', 'The past year', 'about 253 sessions, close to close',
+      { lo: -60, hi: 150, bins: 21, unit: '%', dp: 1, openLo: true, openHi: true, signed: true }],
+    ['profitMargin', 'Profit margin', 'what reaches the bottom line',
+      { lo: -40, hi: 60, bins: 25, unit: '%', dp: 1, openLo: true, openHi: true, signed: true }],
+    ['revenueGrowthYoY', 'Revenue growth', 'the latest quarter against a year earlier',
+      { lo: -40, hi: 80, bins: 24, unit: '%', dp: 1, openLo: true, openHi: true, signed: true }],
+    ['rsi', 'RSI', 'the 14-day reading, 30 and 70 being the usual marks',
+      { lo: 10, hi: 90, bins: 20, unit: '', dp: 0, openLo: true, openHi: true }],
+  ];
+  const HIST_BY = {};
+  for (const [k, t, s, c] of HIST_MEASURES) HIST_BY[k] = { key: k, title: t, sub: s, cfg: c };
+
+  // The plot's own height per artboard, measured rather than chosen, the way
+  // the flow card's is. Everything else on the card is fixed furniture.
+  const HG_H = { portrait: 520, square: 330, story: 980 };
+  // A distribution over a handful of rows is not a distribution. Below this
+  // the card says so rather than drawing a row of single-count spikes.
+  const HG_MIN = 30;
+
+  function tplHistogram() {
+    const m = HIST_BY[O.histMeasure] || HIST_BY.pctFromAth;
+    const C = m.cfg;
+    const mode = O.histMode === 'stock' ? 'stock' : 'screen';
+    const sc = scopeOf('histScope', 'histSector');
+
+    // A fund has no fundamentals and reports AUM as a market cap, so it is
+    // not a company and does not belong in a distribution OF companies --
+    // the rule /consolidated, the Snapshot card and the flow card all keep.
+    const pool = sc.rows.filter((x) => x && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol));
+    const val = (r) => {
+      const v = Number(r && r[m.key]);
+      return r && r[m.key] != null && isFinite(v) ? v : null;
+    };
+    const vals = [];
+    for (const r of pool) { const v = val(r); if (v != null) vals.push(v); }
+    const blank = pool.length - vals.length;
+
+    if (vals.length < HG_MIN) {
+      return chromeTop() + '<div class="s-body"><div class="hg-in">' +
+        `<span class="s-kick">${esc(sc.label)}</span>` +
+        `<h2 class="s-title">${esc(m.title)}</h2>` +
+        `<p class="s-sub wide" style="--fs:20px">${esc(
+          vals.length ? 'Only ' + vals.length + ' of these ' + pool.length
+            + ' companies have a reading for this, which is too few to show a shape. '
+            + 'A distribution needs at least ' + HG_MIN + '.'
+            : 'None of these ' + pool.length + ' companies has a reading for this yet.')}</p>` +
+        '</div></div>' + chromeFoot();
+    }
+
+    const sorted = vals.slice().sort((a, b) => a - b);
+    const qt = (p) => {
+      const i = (sorted.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i);
+      return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+    };
+    const med = qt(0.5);
+
+    const step = (C.hi - C.lo) / C.bins;
+    const counts = new Array(C.bins).fill(0);
+    let belowLo = 0, aboveHi = 0;
+    for (const v of vals) {
+      if (v < C.lo) belowLo++;
+      if (v > C.hi) aboveHi++;
+      let k = Math.floor((v - C.lo) / step);
+      if (k < 0) k = 0;
+      if (k >= C.bins) k = C.bins - 1;
+      counts[k]++;
+    }
+    const top = Math.max(...counts) || 1;
+
+    // The subject, in `stock` mode. Its percentile is the payload -- "where
+    // does it sit" is a question about rank, not about the value, which the
+    // row already carries. Worded NEUTRALLY: higher than N% of the screen is
+    // a fact, and whether higher is better is the reader's to decide.
+    let subj = null;
+    if (mode === 'stock') {
+      const want = String(O.histSym || '').toUpperCase();
+      const row = pool.find((x) => x.symbol === want) || stocks.find((x) => x.symbol === want) || null;
+      const v = row ? val(row) : null;
+      if (row && v != null) {
+        let under = 0;
+        for (const x of vals) if (x < v) under++;
+        subj = {
+          sym: row.symbol, name: nameOf(row), v,
+          pct: Math.round(under / vals.length * 100),
+          // where the pin sits along the axis, clamped into the drawn range
+          at: Math.min(100, Math.max(0, (v - C.lo) / (C.hi - C.lo) * 100)),
+          off: v < C.lo || v > C.hi,
+          inPool: pool.indexOf(row) >= 0,
+        };
+      } else if (row) {
+        subj = { sym: row.symbol, name: nameOf(row), v: null };
+      }
+    }
+
+    const fmt = (v) => (v == null ? '—'
+      : (C.signed && v > 0 ? '+' : '') + v.toFixed(C.dp) + C.unit);
+
+    // Bars. HTML rather than SVG, deliberately: the artboard is scaled to the
+    // window, and a stretched SVG distorts every glyph inside it -- which is
+    // why every chart in this module keeps its labels in HTML. A histogram is
+    // rectangles and text, so it needs no SVG at all.
+    //
+    // THE AXIS IS ZERO-BASED, AND THAT IS THE OPPOSITE OF THE EVOLUTION
+    // CARD'S RULE. A bar is read as a quantity measured from the baseline, so
+    // a truncated one is the classic misleading chart; a LINE carries no such
+    // claim, which is why that card may use its data's own range and this one
+    // may not. Do not "fix" this to match it.
+    const bw = 100 / C.bins;
+    const bars = counts.map((n, i) => {
+      const a = C.lo + i * step, b = a + step;
+      const mid = (a + b) / 2;
+      const h = n / top * 100;
+      const cls = C.signed ? (b <= 0 ? ' dn' : a >= 0 ? ' up' : '') : '';
+      const hit = subj && subj.v != null && !subj.off
+        && subj.v >= a && (i === C.bins - 1 ? subj.v <= b : subj.v < b);
+      const lab = (C.openLo && i === 0 ? '≤' + (C.lo + step).toFixed(0)
+        : C.openHi && i === C.bins - 1 ? '≥' + C.hi.toFixed(0)
+          : C.discrete ? String(Math.round(a)) : mid.toFixed(0));
+      return `<div class="hg-b${cls}${hit ? ' hit' : ''}" style="width:${bw}%">` +
+        `<span class="hg-f" style="height:${h.toFixed(2)}%"></span></div>`;
+    }).join('');
+
+    // One label every few bars, or they collide. The ends are always named,
+    // because an open end that is not labelled is the trap above.
+    const every = C.bins > 20 ? 4 : C.bins > 12 ? 3 : 2;
+    const ticks = counts.map((n, i) => {
+      const show = i === 0 || i === C.bins - 1 || i % every === 0;
+      if (!show) return `<span class="hg-t" style="width:${bw}%"></span>`;
+      const a = C.lo + i * step;
+      const t = C.openLo && i === 0 ? '≤' + Math.round(C.lo + step)
+        : C.openHi && i === C.bins - 1 ? '≥' + Math.round(C.hi - step)
+          : String(Math.round(a));
+      return `<span class="hg-t" style="width:${bw}%">${esc(t + (C.unit === '%' ? '' : ''))}</span>`;
+    }).join('');
+
+    const medAt = Math.min(100, Math.max(0, (med - C.lo) / (C.hi - C.lo) * 100));
+
+    const kick = [sc.label, vals.length.toLocaleString() + ' companies'].join(' · ');
+    const title = mode === 'stock' && subj
+      ? 'Where ' + subj.name + ' sits'
+      : m.title;
+    const subtitle = mode === 'stock' && subj
+      ? m.title.charAt(0).toLowerCase() + m.title.slice(1) + ', against ' + sc.label
+      : m.sub;
+
+    const stats = mode === 'stock' && subj && subj.v != null
+      ? [[subj.sym, fmt(subj.v)],
+         ['higher than', subj.pct + '% of them'],
+         ['the middle one', fmt(med)]]
+      : [['the middle one', fmt(med)],
+         ['one in ten below', fmt(qt(0.10))],
+         ['one in ten above', fmt(qt(0.90))]];
+
+    const ends = [];
+    if (C.openLo && belowLo) ends.push(belowLo + ' beyond the left edge');
+    if (C.openHi && aboveHi) ends.push(aboveHi + ' beyond the right');
+
+    // A UNIT PLURALISED UNCONDITIONALLY reads "Each bar is 1 points",
+    // which is the bin width most of these measures use.
+    const wide = C.discrete ? 'one point'
+      : step === 1 ? '1 point'
+        : step.toFixed(step < 1 ? 1 : 0) + (C.unit === '%' ? ' points' : ' wide');
+    const note = 'Each bar is ' + wide
+      + ' and counts the companies whose reading falls in it; the axis starts at zero, as a '
+      + 'count of things must.'
+      + (ends.length ? ' ' + ends.join(' and ') + ' ' + (ends.length > 1 || (belowLo + aboveHi) > 1
+        ? 'are' : 'is') + ' drawn in the end ' + (ends.length > 1 ? 'bars' : 'bar') + '.' : '')
+      + (blank ? ' ' + blank.toLocaleString() + ' of these ' + pool.length.toLocaleString()
+        + ' have no reading for it yet.' : '')
+      + (subj && subj.v == null ? ' ' + esc(subj.sym) + ' has no reading for this, so nothing is marked.' : '')
+      + (subj && subj.off ? ' ' + esc(subj.sym) + ' sits beyond the drawn range, so the mark is at the edge.' : '')
+      + (subj && subj.inPool === false ? ' ' + esc(subj.sym) + ' is not itself in this group.' : '')
+      + ' A distribution describes the screen as it is today. It is not a forecast.';
+
+    const H = HG_H[size.id] || HG_H.portrait;
+
+    return chromeTop() +
+      '<div class="s-body"><div class="hg-in">' +
+      `<span class="s-kick">${esc(kick)}</span>` +
+      `<h2 class="s-title">${esc(title)}<span class="dim">${esc(subtitle)}</span></h2>` +
+      '<div class="hg-wrap">' +
+      `<div class="hg-plot" style="height:${H}px">` +
+        `<span class="hg-med" style="left:${medAt.toFixed(2)}%"></span>` +
+        `<span class="hg-medlab" style="left:${medAt.toFixed(2)}%">middle</span>` +
+        (subj && subj.v != null
+          ? `<span class="hg-pin" style="left:${subj.at.toFixed(2)}%"></span>` +
+            `<span class="hg-flag${subj.at > 82 ? ' rt' : subj.at < 18 ? ' lf' : ''}"
+              style="left:${subj.at.toFixed(2)}%">` +
+            `${esc(subj.sym)} <b>${esc(fmt(subj.v))}</b></span>`
+          : '') +
+        `<div class="hg-bars">${bars}</div>` +
+      '</div>' +
+      `<div class="hg-axis">${ticks}</div>` +
+      `<div class="hg-stats">${stats.map(([k, v]) =>
+        `<div class="hg-s"><span class="hg-k">${esc(k)}</span>` +
+        `<span class="hg-v">${esc(v)}</span></div>`).join('')}</div>` +
+      '</div>' +
+      `<p class="s-sub wide" style="--fs:18px">${note}</p>` +
+      '</div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
     bubble: tplBubble, stock: tplStock, day: tplDay, spotlight: tplSpotlight,
     disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution,
-    flow: tplFlow,
+    flow: tplFlow, histogram: tplHistogram,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
   // page and styled in the other is exactly the drift this module prevents.
   const STYLE = `
+    /* ---- Histogram: the shape of the screen on one measure --------------
+       NO HEX LITERAL ANYWHERE IN HERE. Every value is a token, so all four
+       grounds resolve with no override block -- the lesson the four unmapped
+       dark literals taught on 2026-10-06, applied before the fact.
+
+       The wrapper FILLS what the body leaves and its blocks spread through
+       it. That is the day card's rule: a block whose height is its content
+       gets the leftover room split evenly at its ends, which is how a card
+       ends up with two empty bands and nothing in the middle. */
+    .hg-in { display: flex; flex-direction: column; height: 100%; }
+    /* A .dim span inside .s-title inherits the display size, which on a
+       sentence of explanation sets three lines of headline. The Evolution
+       card met this first; the fix is per card because .s-title is shared. */
+    .hg-in .s-title .dim { display: block; font-size: 30px; line-height: 1.25; }
+    .sz-square .hg-in .s-title .dim { font-size: 25px; }
+    .sz-story .hg-in .s-title .dim { font-size: 40px; }
+
+    .hg-wrap { flex: 1; display: flex; flex-direction: column;
+               justify-content: space-evenly; gap: 10px; min-height: 0; }
+
+    .hg-plot { position: relative; width: 100%; }
+    /* A FLEX ITEM FLOOR IS min-content, so a bar with a count label in it
+       would refuse to shrink past the label and the row would overflow. The
+       width is set INLINE per bar as a percentage, which needs no flex
+       basis at all -- the trap the trade log, the sparks grid and the flow
+       tracks have each met. */
+    .hg-bars { position: absolute; inset: 48px 0 0 0; display: flex;
+               align-items: flex-end; z-index: 0; }
+
+    .sz-square .hg-bars { top: 38px; }
+    .sz-story .hg-bars { top: 64px; }
+
+    .hg-b { position: relative; height: 100%; display: flex;
+            align-items: flex-end; justify-content: center; }
+    .hg-f { display: block; width: calc(100% - 3px); min-height: 2px;
+            background: var(--muted); border-radius: 2px 2px 0 0; }
+    /* A SMALL BAR DRAWN AT ITS HONEST SIZE STILL HAS TO BE VISIBLE -- the
+       Size card's rule. min-height is 2px rather than a floor on the value,
+       so the number is never overstated, only made findable. */
+    .hg-b.up .hg-f { background: var(--green); }
+    .hg-b.dn .hg-f { background: var(--red); }
+    .hg-b.hit .hg-f { background: var(--accent); }
+
+    /* The median is a reference, so it is quiet and dashed; the subject is
+       the point of the card, so it is solid and in the accent. */
+    /* ON TOP OF THE BARS, both of them. Drawn under, the rule appears
+       only in the gap above the tallest bar and the word not at all --
+       which is a reference point the reader cannot find or name. */
+    .hg-med { position: absolute; top: 0; bottom: 0; width: 0; z-index: 2;
+              border-left: 2px dashed var(--hair-2); }
+
+    .hg-pin { position: absolute; top: 0; bottom: 0; width: 0; z-index: 3;
+              border-left: 3px solid var(--accent); }
+
+    .hg-flag { position: absolute; top: 0; transform: translateX(-50%); z-index: 4;
+
+
+               background: var(--accent); color: var(--card-ground);
+               font: 600 19px/1 var(--sans); letter-spacing: .01em;
+               padding: 7px 12px; border-radius: 8px; white-space: nowrap; }
+    .hg-flag b { font-family: var(--mono); font-weight: 700; }
+    .hg-flag.lf { transform: none; }
+    .hg-flag.rt { transform: translateX(-100%); }
+    /* A dashed rule a reader cannot name is furniture. The word sits at
+       the BOTTOM so it can never collide with the subject's flag. */
+    .hg-medlab { position: absolute; bottom: 4px; transform: translateX(-50%); z-index: 2;
+
+                 font: 600 14px/1 var(--sans); letter-spacing: .06em;
+                 text-transform: uppercase; color: var(--faint);
+                 background: var(--card-ground); padding: 0 6px; }
+    .sz-story .hg-medlab { font-size: 18px; }
+
+
+    .hg-axis { display: flex; margin-top: 10px; }
+    .hg-t { text-align: center; font: 500 16px/1.2 var(--mono); color: var(--faint);
+            overflow: hidden; white-space: nowrap; }
+
+    .hg-stats { display: flex; gap: 14px; margin-top: 18px; }
+    .hg-s { flex: 1 1 0; min-width: 0; padding: 14px 16px; border-radius: 12px;
+            background: color-mix(in srgb, var(--text) 5%, transparent);
+            border: 1px solid var(--hair); }
+    .hg-k { display: block; font: 600 15px/1.2 var(--sans); color: var(--muted);
+            letter-spacing: .04em; text-transform: uppercase; }
+    .hg-v { display: block; margin-top: 5px; font: 700 30px/1.1 var(--mono); color: var(--text);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .sz-square .hg-flag { font-size: 17px; padding: 6px 10px; }
+    .sz-square .hg-t { font-size: 14px; }
+    .sz-square .hg-v { font-size: 25px; }
+    .sz-story .hg-flag { font-size: 24px; padding: 9px 15px; }
+    .sz-story .hg-t { font-size: 20px; }
+    .sz-story .hg-k { font-size: 18px; }
+    .sz-story .hg-v { font-size: 38px; }
     /* ---- Evolution: the business, then what the market paid for it -------
        Two stacked panels on one time axis plus a figures row. The wrapper
        FILLS what the body leaves and the blocks spread through it, which is
@@ -5171,6 +5512,11 @@
     // ...and which templates want the basket at all, with the window each
     // one asks for. Exported for the same reason: two hosts, one pairing.
     basketDays,
+    // The studio builds its measure picker from this, so a key the
+    // module does not know can never reach the card -- where it would
+    // fall back and draw a DIFFERENT measure under the chosen heading,
+    // which is the silent-fallback hazard CHART_WINDOWS records.
+    histMeasures: () => HIST_MEASURES.map(([k, t, s]) => [k, t, s]),
     ids: Object.keys(BUILDERS),
     ADV_PROFILES,
     MOV_PERIODS,

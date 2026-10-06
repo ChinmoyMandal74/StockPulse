@@ -619,6 +619,47 @@
           out of both columns — a fund that IS a sector would double-count it.</p>
       </div>
 
+      <!-- Histogram: the shape of the screen on one measure, optionally
+           with a subject pinned to it. `stock` is `screen` plus a pin, so
+           they are two MODES of one template rather than two templates.
+
+           It IS scoped, unlike the spotlight and Evolution -- "the shape of
+           Technology" is a real question -- so it carries the standard six
+           and joins INDUSTRY_PREFIXES. The card refuses to draw below 30
+           readings rather than showing a row of single-count spikes. -->
+      <div id="histBox">
+        <label>Measure</label>
+        <select id="histMeasure"></select>
+        <label>Show</label>
+        <select id="histMode">
+          <option value="screen" selected>The distribution on its own</option>
+          <option value="stock">… with one stock marked on it</option>
+        </select>
+        <div id="histSymWrap">
+          <label>Stock</label>
+          <select id="histSym"></select>
+        </div>
+        <label>Within</label>
+        <select id="histScope"><option value="All">All screened</option></select>
+        <label>Sector</label>
+        <select id="histSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="histIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="histCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="histScreen"><option value="">No screen</option></select>
+        <label>S&amp;P 500</label>
+        <select id="histSp500"></select>
+        <p class="hint">The bars count companies, so the axis starts at zero —
+          unlike the Evolution card, whose line may use its own range. The bin
+          width is fixed per measure rather than taken from today’s data, or two
+          posts a week apart would not be comparable. Where a measure has a long
+          tail the end bar collects everything beyond it and is labelled with a
+          sign; the note says how many are in it. Funds are left out — a
+          distribution of companies.</p>
+      </div>
+
       <!-- One stock, in full. Three controls and no scope pickers: the card
            IS its scope, so there is no spotSector/spotIndustry/spotCap/
            spotScreen and INDUSTRY_PREFIXES is left alone. -->
@@ -763,6 +804,7 @@
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
+      { id: 'histogram', name: 'Histogram', note: 'The shape of the whole screen on one measure — on its own, or with a stock marked on it' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
@@ -880,6 +922,7 @@
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen', 'bubSp500',
       'daySnapPeriod', 'dayMetric', 'dayCount', 'dayFloor', 'daySp500',
       'flowSector', 'flowPeriod', 'flowSp500',
+      'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'evoSym', 'evoMeasure', 'evoWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
@@ -900,7 +943,7 @@
     // (an industry belongs to one sector), and drops a choice the new sector
     // does not contain. Run at the top of every render, so it has already
     // happened by the time a card reads the controls.
-    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub'];
+    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub', 'hist'];
     const industryFor = {};
     function syncIndustries(force) {
       INDUSTRY_PREFIXES.forEach((p) => {
@@ -971,6 +1014,10 @@
       $('flowBox').style.display = tpl === 'flow' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
+      $('histBox').style.display = tpl === 'histogram' ? 'block' : 'none';
+      // A control that can change nothing reads as broken, so the subject
+      // picker is shown only in the mode that marks one.
+      $('histSymWrap').style.display = $('histMode').value === 'stock' ? 'block' : 'none';
       const fm = $('fundMode').value;
       $('fundMetricWrap').style.display = fm === 'rank' ? 'block' : 'none';
       $('fundSymWrap').style.display = fm === 'one' ? 'block' : 'none';
@@ -1129,6 +1176,18 @@
       $(id).addEventListener('change', () => { if (tpl === 'spotlight') render(); }));
     ['evoSym', 'evoMeasure', 'evoWin'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'evolution') render(); }));
+    // A FIFTEENTH hardcoded listener list. histMode is in it like any
+    // other control: the subject picker's show/hide lives inside
+    // render(), beside every other box, so one render covers both.
+    ['histMeasure', 'histMode', 'histSym', 'histScope', 'histSector',
+      'histIndustry', 'histCap', 'histScreen', 'histSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'histogram') render(); }));
+    (function fillHistMeasures() {
+      const sel = $('histMeasure');
+      for (const [k, t] of (Cards.histMeasures ? Cards.histMeasures() : [])) {
+        sel.add(new Option(t, k));
+      }
+    })();
 
     $('intTopic').addEventListener('change', () => { paintSlideList(0); if (tpl === 'intro') render(); });
     $('intSlide').addEventListener('change', () => { if (tpl === 'intro') render(); });
@@ -1489,15 +1548,17 @@
         $('fundScope').innerHTML = $('movScope').innerHTML;
         $('sizeScope').innerHTML = $('movScope').innerHTML;
         $('bubScope').innerHTML = $('movScope').innerHTML;
+        $('histScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
+        $('histSym').innerHTML = $('chtSym').innerHTML;
         $('evoSym').innerHTML = $('chtSym').innerHTML;
         // one sector list, built from the rows themselves so it can never
         // offer a sector nothing is in
         const secOpts = '<option value="All">All sectors</option>' +
           Cards.sectors(stocks).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
         ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector', 'rngSector',
-          'sizeSector', 'bubSector'].forEach((id) => {
+          'sizeSector', 'bubSector', 'histSector'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = secOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -1511,7 +1572,7 @@
           Filters.CAP_ORDER.map((n) => `<option value="${esc(n)}">${esc(n)} · ` +
             `${esc(Filters.CAP_RANGE[n])}</option>`).join('');
         ['movCap', 'chtCap', 'advCap', 'fundCap', 'spkCap', 'rngCap',
-          'sizeCap', 'bubCap'].forEach((id) => {
+          'sizeCap', 'bubCap', 'histCap'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = capOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -1527,7 +1588,7 @@
             list.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') +
             '</optgroup>').join('');
         ['movScreen', 'chtScreen', 'advScreen', 'fundScreen', 'spkScreen', 'rngScreen',
-          'sizeScreen', 'bubScreen'].forEach((id) => {
+          'sizeScreen', 'bubScreen', 'histScreen'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = scrOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -1542,7 +1603,7 @@
         const spOpts = Cards.spCuts().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
-          'sizeSp500', 'bubSp500', 'daySp500'].forEach((id) => {
+          'sizeSp500', 'bubSp500', 'daySp500', 'histSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;

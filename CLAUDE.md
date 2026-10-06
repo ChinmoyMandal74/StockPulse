@@ -4697,6 +4697,57 @@ Both read fields already stamped on every snapshot row — `action` and `adviceP
 - **The caret was `--faint` at 10px and read as a bullet**, not a control — it is `--muted` at 12px, and the test asserts the rendered box rather than the markup (the `/quality` lesson).
 - Verified: 42 checks on the real page — the pickers, carets only where they earn their place, the reconciliation in the total AND column by column AND with a multi-valued column, the blank child bucket sorting last, one-open-at-a-time, a child drill holding only stocks in that sector *and* that industry, the columns-are-Industry guard with Swap disabled and a reason on it, the expansion not outliving its axis, and the computed-style checks above. The original 30-check suite still passes with its wide-fold case moved to the columns axis.
 
+### The Histogram — the shape of the whole screen on one measure (2026-10-06, owner's request)
+
+**A nineteenth template, `histogram`, fifth in the studio's picker, with two modes: the distribution on its own, and the same distribution with one stock pinned to it.** Asked as *"One chart we do not have is Histogram, can you give me some ideas"*, answered with a measurement of which distributions actually have a shape, and the owner took **both** of the two concepts offered.
+
+#### IT IS THE ONE SHAPE THE STUDIO COULD NOT DRAW
+Every other data card is a **ranking** (movers), a **relationship** (bubble, fund), a **time series** (chart, evolution) or a **composition** (flow, size). None of them answers *what does the whole screen look like on this measure* — which is also the thing that makes a single stock's reading mean anything. `stock` is `screen` plus a pin, so they are two MODES of one template rather than two templates; the `fund` and `chart` pattern.
+
+#### THE MEASURES WERE CHOSEN BY DRAWING THEM, not by sounding interesting
+Twelve, each binned against the live distribution rather than guessed. The three with a genuinely striking shape:
+
+| | what it looks like |
+|---|---|
+| **% below its own record** | a broad body with a long left tail — median **−30.5%**, p10 −72.4, and 27 companies more than 90% below |
+| **a bad day** | sharply peaked: **376 companies at −3 to −4** and a thin tail to −14, so "normal bad" is 3-4% |
+| **position in the 52-week range** | **not** the U-shape anyone would predict — a pile at the bottom (133 + 108 in the lowest two bins), a flat middle, a small lift at the top |
+
+**Value added today was measured and REFUSED**: 1,141 of 1,262 fall in two bins, because dollar amounts spanning orders of magnitude do not make a histogram.
+
+#### THE BINNING IS PER MEASURE AND FIXED, never derived from the data
+A range taken from today's own percentiles moves every time the card is drawn, so two posts a week apart would not be comparable — and **the range is most of what a histogram asserts**.
+
+- **AN OPEN END BIN IS THE TRAP SPECIFIC TO THIS CHART.** Drawn without saying so, everything beyond the range piles against the edge and reads as a real mode. Measured on the live screen: **forward P/E has 125 values outside a 0-60 window and revenue growth 81**. An open end is labelled with a sign (`≤−90`) and counted in the note.
+- **THE AXIS LABELS ARE BIN EDGES, not midpoints.** The bins were chosen to land on round numbers and a midpoint label throws that away — the first render read `−77, −62, −47` where the bins start at −75, −60, −45.
+- **THE AXIS IS ZERO-BASED, AND THAT IS THE OPPOSITE OF THE EVOLUTION CARD'S RULE.** A bar is read as a quantity measured from the baseline, so a truncated one is the classic misleading chart; a LINE carries no such claim, which is why that card may use its data's own range and this one may not. **Do not "fix" this to match it** — the comment in the builder says so.
+
+#### COLOUR ONLY WHERE ZERO IS A DIRECTION
+`signed` is true for returns, margins and growth, where a reader already reads red as down. It is false for everything whose values are all one sign — *a column negative on every row says nothing by being red*, the Bad day rule — and **false for `peerPe`, which is a measurement rather than a style choice**: this project found the cheapest third of each industry has the worse growth, margin, ROE and Quality, so a green bar there would be the card asserting the opposite of its own data.
+
+#### Worth knowing
+- **FUNDS ARE OUT.** A fund has no fundamentals and reports AUM as a market cap, so it does not belong in a distribution OF companies — the rule `/consolidated`, the Snapshot card and the flow card all keep. The fixture gives both funds a value in a bin the data otherwise leaves **empty**, so including them would be visible rather than a rounding difference.
+- **THE PERCENTILE IS THE PAYLOAD of the subject mode**, not the value — the row already carries the value. Worded neutrally (*higher than 18% of them*), because whether higher is better is the reader's to decide.
+- **A FLOOR OF 30 READINGS.** Below it the card says so rather than drawing a row of single-count spikes, and it names how many it found.
+- **The flag anchors to whichever side has room.** Centred is right in the middle and runs off the artboard at either end — measured on the story, where a subject at its own record pins at 100%.
+- **A null is counted and named, never binned at the left edge**, which is what `Number(null)` would do.
+
+#### IT FOUND A REAL GAP IN THE CONTRAST SWEEP
+**`groundBehind` starts at `el.parentElement`** — exactly right for the SURFACE check (a background compared with itself would always pass) and **wrong for the INK check: text sits on its OWN background when it has one.** The subject's flag is ground-coloured text on an accent pill, so it measured **1:1 against the artboard**, a failure that is not there. The two checks now take two different grounds, which is what they always meant. *Same class as the text/graphic floor fix the day before: a sweep gets the wrong answer when one model is asked to serve two questions.*
+
+#### A SCOPED TEMPLATE HAS TO JOIN SIX LISTS, NOT TWO
+This page documents the hardcoded **listener** lists (now sixteen) and `CONTROL_IDS`. There are **four more that FILL the pickers** — sector, size, screen, S&P — plus a line that copies the scope options. Missing from a fill list, a picker exists carrying only its placeholder: **the control is there, it is in `CONTROL_IDS`, it is wired to a listener, and it still cannot be changed to anything.** Caught by the suite asking whether changing `histSector` redrew the card, not by reading.
+
+- Control ids **117 against `POST_OPT_MAX` 200**, counted rather than assumed.
+- Verified: **41 checks**, plus the ground sweep (**229 over 168 combinations**) and the width sweep (**109 over 126**) with the template registered and **both modes swept** — a template with no `MODES` entry is visited on its default mode only, the coverage hole the Intro's step slides sat in for weeks.
+  - **THE FIXTURE IS THE TEST.** Every value is planted in a KNOWN bin, the counts per bin are all different, and **the median is deliberately not the midpoint of the range** (−3.5 on a −14..0 axis is 75%), so a card that bins wrongly, or that splits the difference, comes out at a different picture rather than coincidentally the right one. **A histogram that mis-bins looks perfectly well formed.**
+  - **THE ZERO BASELINE IS PROVED BY PROPORTION** rather than asserted: if the drawn heights are proportional to the counts then the baseline is zero, and if it were lifted they would not be.
+  - **THE PHONE IS THE SECOND HOST** and is round-tripped through the page's own Save button — a round-trip written against the API exercises the server and never `controlOpts()`, which is what reads `CONTROL_IDS`.
+  - **Three fixture faults worth keeping.** The three rows added to make a below-floor scope reachable **also carried the measure**, so the pool was 39 and not 36 and the suite reported the CODE wrong when the fixture was. `peerPe` is a **read-path stamp** computed from `forwardPe`, so a fixture that sets `peerPe` directly has it overwritten with null — the no-colour claim was being asserted over an empty card. And `init()` is async, so seeding at module load gives `no such table: names`.
+  - **A SEEDER THAT LOADS `.env` CHANGES THE SERVER'S AUTH MODE.** The shot harness pulls real production rows so the shapes are the real ones; `dotenv` runs at require time, which handed `uni-boot` the real `ADMIN_PASSWORD`, turned off open mode, and sent `/promo` to `/login` — which reads exactly like a page that failed to render.
+  - **`size-scope-test.js` ACCOUNTS FOR EVERY TEMPLATE as either scoped or unscoped, and correctly failed** until the histogram was added to its scoped list — which is that check doing exactly its job rather than going stale. **Corrected, not worked around.**
+  - **Four faults were found by LOOKING and none by assertion**: the subtitle inheriting the 66px title size (the Evolution card's own bug, met again because `.s-title .dim` is shared), the midpoint axis labels, the median line and its label drawn *behind* the bars so the rule showed only above them and the word not at all, and the flag off the artboard at the extremes.
+
 ## Consolidated — every group in one table (2026-09-28, owner's request)
 **`/consolidated`: one row per group, so the groups can be read against each other.** The owner's words: *"I do not have a screen to show how Mag 7 as a theme has done compared with Memory or cybersecurity."* Nothing did — a group page shows ONE group against the index, `/compare` is two **stocks**, and the pivot crosses two dimensions to answer *where is the weight* rather than *how has each one done*. Member page, guests refused, like the studio and the pivot beside it; a `Consolidated` button in the bar before Compare.
 
