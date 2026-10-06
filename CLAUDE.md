@@ -4990,6 +4990,87 @@ A card cannot scroll. Measured: the portrait fits 9 and leaves **9px**, which is
   - **`fold-server-test` carried a PRE-EXISTING stale assertion**, found while regressing this and proved against HEAD rather than assumed: it looked for *"more than one share class"*, a draft wording that never shipped, where the module has said *"Share classes are combined:"* since the fold landed. `foldNote` is byte-identical to HEAD, so this had been failing from the day it was written. Corrected to the real phrase.
 - Verified across the module: the ground sweep at **265 checks over 188 ground × template × mode combinations**, the width sweep at **127 over 141**, note fit at **63 artboard combinations**, and `size-scope` accounting for all 21 templates — all clean with the template registered.
 
+
+### Most shorted — the level as last reported, beside the year so far (2026-10-06, owner's request)
+**A twenty-third template, `shorted`, immediately after Short moves in the picker: the companies carrying the heaviest short interest right now, each with what it has done this year.** Asked for as *"a new card showing stocks with High Short interest as of now … it will be good to show how these stocks have performed YTD"*, with the usual S&P and sector cuts.
+
+#### IT IS THE SIBLING OF `shortmoves` AND DELIBERATELY NOT A MODE OF IT
+That card is the fortnight's **change**; this is the **level**. Two questions, and the measurement says so twice over — ranked by % of float the S&P's top eight are `SWKS NCLH ECHO SMCI KMB PSKY LYV IT`, and by days to cover `TROW SNA LNT LYV TPL KMB UNP IFF`: **two names of eight in common**. Neither ranking stands for the other, which is why the metric is a control rather than a decision taken once in the builder.
+
+- **THE FUNDAMENTALS CARD ALREADY RANKED BY SHORT INTEREST, and that is what this had to beat rather than duplicate.** `FUND_METRICS` has carried `shrt` all along, so "Biggest short interest" was already a ranked bar list. What it could not do is put the year beside it — and the year is the whole reason the owner asked.
+
+#### WHY THE YEAR EARNS ITS PLACE, measured before it was built
+A reference column whose two halves coincided would say nothing, so it was measured first:
+
+| | median YTD, the eight most shorted | median YTD, the whole cut |
+|---|---|---|
+| **in the S&P 500** | **−6.1%** | +3.9% |
+| the top twenty, S&P | −12.3% | +3.9% |
+| **the whole screen** | **−39.9%** | +2.1% |
+
+*(Every figure here moves with the market, and this project refreshes prices through the session. The same two cut medians rendered from the card an hour later read **+4.0%** and **+2.9%** — the second 0.8pt away from the probe's +2.1%, which is an intraday refresh rather than a disagreement. Quote one run; do not reconcile two.)*
+
+A 10- to 42-point gap. **And it is NOT one-directional, which is the half worth seeing**: three of those eight are UP — SWKS **+30.0%** and SMCI **+48.3%**. Heavily shorted and falling is the shorts being right so far; heavily shorted and **rising** is them under water. The card draws both, counts the split in the strip, and forecasts neither — the line `/terms` draws, and the one this dataset makes easiest to cross.
+
+##### AND THE TWO METRICS POINT IN OPPOSITE DIRECTIONS, which is the strongest argument for offering both
+Rendered against the live screen, the S&P cut:
+
+| ranked by | median year, the eight | against the cut | up / down |
+|---|---|---|---|
+| **% of float** | **−6.1%** | +4.0% | 3 / 5 |
+| **days to cover** | **+13.0%** | +4.0% | **7 / 1** |
+
+Days to cover selects `TROW SNA LNT LYV TPL KMB UNP IFF` — low-volume, stable names where the exit is crowded because the **volume is thin**, not because anyone is bearish. So it is not a weaker version of the same reading; it is a different one, and on this window it points the other way. A card offering only the first would have reported half of this. *(Narrowed to S&P Technology the first metric reads −1.1% against a cut of +27.6% — a 28.7-point gap, the widest of the four cuts tried.)*
+
+#### ZERO AT THE CENTRE OF THE YEAR'S TRACK, which is what makes that split legible
+A fall grows left and a rise grows right. Growing both from the left in two colours would draw a 30% fall and a 30% rise as **the same picture**, with only the hue to tell them apart — `/compare`'s own rule wherever a value can be negative. **Proved by reverting**: anchoring the fill at 0 fails the centring check.
+
+- **TWO BARS, TWO SCALES, AND THE CARD SAYS SO IN TWO PLACES** — a column head over each, and a clause in the note. They are not comparable with one another and that is the one thing a reader could otherwise get wrong. **Proved by reverting**: dropping the clause fails 1.
+- **ONLY THE YEAR TAKES COLOUR.** Green and red mean up and down on every surface here and a return is exactly that, so those sit in CSS as tokens and resolve on all four grounds by themselves. The LEVEL takes none: short interest is one sign throughout, and *a bar negative nowhere says nothing by being red* — the histogram's own rule, and `/stock`'s short-interest strip before it. That also means the card has exactly one coloured dimension and it is the one where colour means something.
+
+#### A NULL IS NOT A ZERO, and on this field it is the load-bearing guard
+The read path **nulls** a reading above `SHORT_PCT_MAX`, which is how Berkshire's 966% of float leaves the screen. Coerced, every unread company would sort to the bottom of the ranking instead of out of it — **and the one bad row would sort to the top**. The test is `v > 0`, which rejects null, zero and NaN in one expression.
+
+- **The fixture carries Berkshire's shape exactly**: a nulled float beside a real vendor ratio, so the two metrics must **disagree** about whether it is rankable — out of the % ranking, in the days-to-cover one. **Proved by reverting**: keeping a missing reading fails 2.
+
+#### THE FUND EXCLUSION CANNOT BITE ON PRODUCTION TODAY, AND IS STILL PROVED
+Benchmarks and the eleven sector funds come out, the rule every market card here keeps. **Measured rather than assumed: 0 of the 24 funds on the screen carry EITHER reading** — the vendor reports no float and no short ratio for a fund — so on today's data the guard removes nothing.
+
+**That is exactly why the fixture gives SPY and XLK the biggest readings of all**, so nothing but the explicit exclusion keeps them off the card: *a guard no fixture can reach is a guard unproven*. **Proved by reverting**: it fails 5 and the ranking comes back `SPY,XLK,HIPCT,…` — the index-in-its-own-market error, which is also why it stays. One upstream change (a float published for SPY) would make it the most-shorted thing on the screen by a distance.
+
+#### NO DATA CHANNEL, NO SERVER CHANGE, NO PHONE CHANGE
+Every field it reads — `shortPctFloat`, `shortRatio`, `ytdPct` — is already on the snapshot row, so unlike `shortmoves` there is no `*Need` function, no route, no fetch and nothing to wire on the phone. `/api/m/post` already passes `stocks`, `screens` and `myLists`, and already applies `stampCapDerived` (which carries the ceiling) and `stampSpMember`. Asserted rather than assumed — the stamps are a set and the set has been incomplete twice — by building a saved post through the phone's own route.
+
+#### THE CAPS ARE MEASURED COUNT BY COUNT, with the note at its LONGEST
+A card cannot scroll, and a row here is two lines (a text line and a pair of bars), so it is taller than a short-moves row. **My first guess for the square was 5 and the measurement said 6** — one name more on the tightest artboard.
+
+| | fits | headroom | the next count up |
+|---|---|---|---|
+| portrait | **8** | 75px | 10 runs 26px over |
+| square | **6** | 42px | 8 runs 66px over |
+| story | **10** | 50px | 12 runs 46px over |
+
+- **The worst case is a card whose note has grown its extra sentence**, which happens when a row in the top N has no year of its own. The first measurement missed it and read 42px of headroom on the square as comfortable; with the sentence present it is still 42, but that was luck rather than a measurement until the fixture forced it.
+- **`SHRT_CAP` is a named const rather than an inline literal**, and not for tidiness: the inline map would be **byte-identical to `tplShortMoves`'**, so any revert anchored on it hits twice and is refused — which reads as a broken harness rather than as the one guard it is.
+
+#### Worth knowing
+- **"AS OF NOW" IS A FORTNIGHT AGO, AND THE CARD SAYS SO RATHER THAN IMPLYING CURRENCY.** The figure is the vendor's, which this project measured as FINRA's own to 0.00pt — published twice a month and reaching us about eight business days after it settles. **Our copy adds a second lag nobody should have to work out**: `shortPctFloat` rides the profile, which rotates on `FUND_ROTATION_DAYS` (7), so on a given day a row can still be carrying the previous settlement. That is inside the fortnightly cadence the note already describes, which is why the note states the cadence rather than a date — the `shortmoves` card can name its settlement exactly because it reads the FINRA archive, and this one cannot, because it reads the profile.
+- **It IS scoped where its sibling is not**, and the difference is real rather than an inconsistency: *the most shorted in Technology* is a question about a slice of the screen, where *where did the shorts move* is a reading of the whole of it. So it goes through `scopeOf` and gets sector, industry, size, screen and S&P for free — and joins `INDUSTRY_PREFIXES` and `size-scope-test`'s scoped list.
+- **A SCOPED TEMPLATE HAS TO JOIN SIX LISTS, NOT TWO** — its own listener list and `CONTROL_IDS` are the two this project documents, and the four that FILL the pickers (sector, size, screen, S&P) plus the scope-options copy are the ones a control can be silently missing from: present, saved with a post, read by the builder, and carrying nothing but its placeholder. **Proved by reverting three of them separately.**
+- **No size FLOOR control, deliberately.** Both metrics are ratios rather than amounts, so neither is size-biased the way a dollar change is — which is exactly why `shortmoves` needs one and this does not — and the Size picker already cuts by company size.
+- **The fourth stat is the OTHER metric**, so the strip always adds the reading the rows are not ranked by. Symmetric, and justified by the same evidence that makes the metric a control.
+- Control ids **136 against `POST_OPT_MAX` 200**, counted rather than assumed.
+- **NO BOUNDARY CHECK AND NO ROLE WALK, which is a decision rather than an omission.** The standing rule is that new data may feed a display surface and never the live Advice calculation — and this card introduces **no field at all**. It reads `shortPctFloat`, `shortRatio` and `ytdPct`, every one already on the row and already served to every member by `/api/stocks`, so there is nothing new for a verdict to read and nothing new exposed. The three-way scoring proof the `instrumentType`, S&P and Live P/E columns each had to give does not apply, and asserting it here would be theatre. *(`shortPctFloat` IS an Advice input — [action.js:360](private/action.js#L360) — and is untouched.)*
+- Verified: **52 checks**. The fixture's load-bearing properties are that the two metrics rank differently, the YTD set spans zero, the group median (**−8.0%**) and the cut median (**+6.5%**) genuinely differ, Berkshire's shape is present, and the S&P cut crosses the sectors — so a card wired to the wrong field, the wrong pool or the wrong state comes out at a different answer rather than coincidentally the right one. Plus the ground sweep (**277 checks over 196 combinations**) and the width sweep (**133 over 147**) with **both metrics** swept, note fit (**14 of 14 notes grew**, up from 13), and `size-scope` accounting for all 23 templates. **Proved by reverting fifteen times.**
+  Every one bites: the template unregistered fails 36, `CONTROL_IDS` 8, the metric control ignored 6, the funds left in the pool 6, no listener 5, the metric picker hardcoded 4, the S&P fill list 4, the cap 3, and the centred zero, the reference median, the null guard, the clip, the sector fill and the size fill 2 each, with the two-scales clause at 1.
+  - **TWO OF THOSE REVERTS FIRST REPORTED 0 AND BOTH WERE THE TEST**, which is what the harness is for.
+  - **THE CLIP CHECK WAS VACUOUS FOR TWO REASONS AT ONCE, and the second is a trap for every card measurement here.** `getClientRects().length` cannot see a wrap inside a **blockified** element, and every child of this grid row is blockified — it returns one border box however the text flows. Worse: **`getBoundingClientRect()` is POST-TRANSFORM while `scrollWidth`/`clientWidth` are CSS pixels**, and the studio scales the 1080px artboard to the window — so `scroll > w` was comparing **691 CSS px against 487 screen px** and passed in *both* states for an entirely spurious reason. Stay in one unit system. **And the fixture's 66-character name FIT the 691px track**, so the rule was inert anyway: the check now uses the live universe's longest name at **99 characters** and asserts the row is no taller than its neighbours, which is the harm the rule exists to prevent.
+  - **THE NULL GUARD WAS UNREACHABLE AT THE DEFAULT COUNT.** With fourteen companies and a count of eight, a null coerced to zero sorts to the **bottom** and never reaches the card — so the guard is real and the fixture could not see it. It is checked on a **Technology** cut, which holds five readings and one null, where the reverted card draws a sixth row whose level is an em-dash. *A guard no fixture can reach is a guard unproven*, met twice in one change.
+  - **`size-scope-test` CORRECTLY FAILED and was corrected, not worked around.** It accounts for every template as either scoped or unscoped and named `shorted` the moment it existed — the check doing its job rather than going stale.
+  - **A `cat` heredoc refused to close on the builder and wrote no file at all** — the documented escape hazard, met for the tenth time on this project. Written with the Write tool instead. The **Write tool then resolved `—` into a real em-dash**, so a later patch anchored on the escape matched nothing: anchor on an escape-free line.
+  - **A value the select does not carry leaves it UNCHANGED**, so the fit sweep's first run measured `3` and silently re-reported the previous count's numbers. `shrtCount` offers 5/6/8/10/12 and nothing else; the sweep walks those.
+  - **RENAMING A SELECTOR IN THE CSSOM DOES NOT RE-LAY-OUT**, so a diagnostic that does it reads stale geometry and "proves" a rule inert. Inject a stylesheet, or patch the file and reload.
+
 ## Consolidated — every group in one table (2026-09-28, owner's request)
 **`/consolidated`: one row per group, so the groups can be read against each other.** The owner's words: *"I do not have a screen to show how Mag 7 as a theme has done compared with Memory or cybersecurity."* Nothing did — a group page shows ONE group against the index, `/compare` is two **stocks**, and the pivot crosses two dimensions to answer *where is the weight* rather than *how has each one done*. Member page, guests refused, like the studio and the pivot beside it; a `Consolidated` button in the bar before Compare.
 

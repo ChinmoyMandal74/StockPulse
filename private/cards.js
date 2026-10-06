@@ -5093,6 +5093,204 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Most shorted: the level as last reported, beside the year so far ---
+  //
+  // THE SIBLING OF shortmoves, AND DELIBERATELY NOT A MODE OF IT. That card
+  // is the fortnight's CHANGE; this is the LEVEL. Two different questions,
+  // and the measurement says so twice over: ranked by % of float the S&P's
+  // top eight are SWKS NCLH ECHO SMCI KMB PSKY LYV IT, and by days to cover
+  // TROW SNA LNT LYV TPL KMB UNP IFF -- two names of eight in common.
+  // Neither ranking stands for the other, which is why the metric is a
+  // control rather than a decision taken once in here.
+  const SHRT_METRICS = {
+    pct: ['shortPctFloat', '% of float'],
+    d2c: ['shortRatio', 'days to cover'],
+  };
+  const shrtFig = (v, k) => (v == null ? '—'
+    : v.toFixed(1) + (k === 'pct' ? '%' : 'd'));
+
+  // THE CAP IS PER ARTBOARD and MEASURED COUNT BY COUNT, with the note at
+  // its LONGEST -- a row with no year of its own adds a sentence, and the
+  // note is what the headroom is measured against. The portrait fits 8 and
+  // leaves 75px while 10 runs 26px over; the square fits 6 with 42px and 8
+  // runs 66px over; the story fits 10 with 50px and 12 runs 46px over. All
+  // three clear the 20px floor this module holds everywhere -- 4px of
+  // clearance is luck, not headroom. My own guess for the square was 5 and
+  // the measurement said 6.
+  //
+  // Named rather than inline because an inline literal would be
+  // BYTE-IDENTICAL to tplShortMoves', so a revert anchored on it hits twice
+  // and is refused -- which reads as a broken harness rather than as the
+  // one guard it is.
+  const SHRT_CAP = { portrait: 8, square: 6, story: 10 };
+
+  // WHY THE YEAR RIDES BESIDE IT -- the owner's ask, and also the finding.
+  // Measured on the live screen: the S&P's eight most-shorted carry a median
+  // YTD of -6.1% against +3.9% for the index itself, and the top twenty
+  // -12.3%; across the whole screen the eight sit at -39.9% against +2.1%.
+  // A 10- to 42-point gap, which is what earns the reference its place in
+  // the strip -- a comparison whose two halves coincided would say nothing.
+  //
+  // AND IT IS NOT ONE-DIRECTIONAL, which is the half worth seeing: three of
+  // those eight are UP, SWKS +30.0% and SMCI +48.3%. Heavily shorted and
+  // falling is the shorts being right so far; heavily shorted and RISING is
+  // them under water. The card draws both and forecasts neither -- the line
+  // /terms draws, and the one this dataset makes easiest to cross.
+  function tplShorted() {
+    const mk = SHRT_METRICS[O.shrtMetric] ? O.shrtMetric : 'pct';
+    const [field, mName] = SHRT_METRICS[mk];
+    const ok2 = mk === 'pct' ? 'd2c' : 'pct';
+    const [field2, mName2] = SHRT_METRICS[ok2];
+    const sc = scopeOf('shrtScope', 'shrtSector');
+    const K = Math.max(3, Math.min(12, Number(O.shrtCount) || 8));
+    // A card cannot scroll, and a row here is two lines -- a text line and a
+    // pair of bars -- so it is taller than a short-moves row. The control
+    // stays honest because these are the top N of a ranking: trimming the
+    // ninth is not the misstatement a dropped treemap tile would be. The
+    // measurement behind SHRT_CAP is recorded where it is declared.
+    const N = Math.min(K, SHRT_CAP[size.id] || 8);
+
+    // Benchmarks and the eleven sector funds come out, the rule every market
+    // card here keeps. BELT AND BRACES on this one, and measured rather than
+    // assumed: 0 of the 24 funds on the screen carry EITHER reading, because
+    // the vendor reports no float and no short ratio for a fund. It stays
+    // because ONE upstream change flips it on -- a float for SPY would make
+    // it the most-shorted thing on the screen by a distance, which is the
+    // index-in-its-own-market error -- so its revert proving nothing today
+    // is recorded rather than read as a guard that never mattered.
+    const pool = sc.rows.filter((x) => x && !x.error
+      && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol));
+
+    const num = (r, k) => {
+      const v = Number(r && r[k]);
+      return r && r[k] != null && isFinite(v) ? v : null;
+    };
+
+    // A NULL IS NOT A ZERO, and on this field that is the load-bearing guard
+    // rather than a nicety: the read path NULLS a reading above
+    // SHORT_PCT_MAX, which is how Berkshire's 966% of float leaves the
+    // screen. Coerced, every unread company would sort to the bottom of the
+    // ranking instead of out of it -- and the one bad row would sort to the
+    // top of it.
+    const rows = [];
+    for (const r of pool) {
+      const v = num(r, field);
+      if (!(v > 0)) continue;
+      rows.push({ sym: r.symbol, name: nameOf(r), v,
+        o: num(r, field2), y: num(r, 'ytdPct') });
+    }
+    rows.sort((a, b) => b.v - a.v);
+
+    if (rows.length < 3) {
+      return chromeTop() + '<div class="s-body"><div class="hs-in">'
+        + '<span class="s-kick">' + esc(sc.label) + '</span>'
+        + '<h2 class="s-title">Most shorted</h2>'
+        + '<p class="s-sub wide" style="--fs:20px">' + esc(
+          'Too few short-interest readings here to rank — ' + rows.length
+          + ' of ' + pool.length + '. Widen the cut.')
+        + '</p></div></div>' + chromeFoot();
+    }
+
+    const top = rows.slice(0, N);
+    const median = (a) => {
+      if (!a.length) return null;
+      const s = a.slice().sort((x, y) => x - y), i = (s.length - 1) / 2;
+      return s.length % 2 ? s[i] : (s[i - 0.5] + s[i + 0.5]) / 2;
+    };
+    // The reference is the WHOLE cut, not the ranked slice -- that is the
+    // comparison the strip exists to make, and it is why the pool is the
+    // thing reduced here rather than `rows`.
+    const groupY = top.map((x) => x.y).filter((v) => v != null);
+    const cutY = pool.map((r) => num(r, 'ytdPct')).filter((v) => v != null);
+    const up = groupY.filter((v) => v >= 0).length;
+    const noY = top.length - groupY.length;
+
+    const mxV = Math.max(1e-9, ...top.map((x) => x.v));
+    const mxY = Math.max(1e-9, ...top.map((x) => Math.abs(x.y == null ? 0 : x.y)));
+
+    // A flat stock reads as positive, exactly as pctCell does, so it cannot
+    // read one way here and another on the row it came from.
+    const figY = (v) => (v == null ? '—'
+      : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '%');
+
+    const SZ = { portrait: { n: 19, f: 25, bar: 8 },
+      square: { n: 16, f: 20, bar: 6 },
+      story: { n: 26, f: 34, bar: 11 } }[size.id]
+      || { n: 19, f: 25, bar: 8 };
+
+    const row = (x) => {
+      const w = Math.max(2, x.v / mxV * 100);
+      const cls = x.y == null ? '' : (x.y >= 0 ? ' hs-up' : ' hs-dn');
+      // ZERO AT THE CENTRE of the year's track, so a fall grows left and a
+      // rise grows right. That is the whole reading of this card -- shorted
+      // and falling against shorted and RISING -- and a bar growing from the
+      // left in two colours would draw a 30% fall and a 30% rise as the same
+      // picture. /compare's own rule wherever a value can be negative.
+      const half = x.y == null ? 0 : Math.max(1.2, Math.abs(x.y) / mxY * 50);
+      const left = x.y == null ? 50 : (x.y >= 0 ? 50 : 50 - half);
+      return '<div class="hs-r">'
+        + '<span class="hs-t" style="font-size:' + SZ.n + 'px">' + esc(x.sym) + '</span>'
+        + '<span class="hs-n" style="font-size:' + SZ.n + 'px">' + esc(x.name) + '</span>'
+        + '<span class="hs-v" style="font-size:' + SZ.f + 'px">'
+        + esc(shrtFig(x.v, mk)) + '</span>'
+        + '<span class="hs-y' + cls + '" style="font-size:' + SZ.f + 'px">'
+        + esc(figY(x.y)) + '</span>'
+        + '<span class="hs-bars" style="height:' + SZ.bar + 'px">'
+        + '<span class="hs-b"><span class="hs-f" style="width:' + w.toFixed(1) + '%"></span></span>'
+        + '<span class="hs-b"><span class="hs-z"></span>'
+        + (x.y == null ? ''
+          : '<span class="hs-yf' + cls + '" style="left:' + left.toFixed(1)
+            + '%;width:' + half.toFixed(1) + '%"></span>')
+        + '</span></span>'
+        + '</div>';
+    };
+
+    // The fourth stat is the OTHER metric, so the strip always adds the
+    // reading the rows are not ranked by -- the two are measurably
+    // different populations, which is the same evidence that makes the
+    // metric a control.
+    const stats = [
+      ['median year, these ' + top.length, figY(median(groupY))],
+      ['median year, the cut', figY(median(cutY))],
+      ['up / down this year', up + ' / ' + (groupY.length - up)],
+      ['median ' + mName2, shrtFig(median(top.map((x) => x.o).filter((v) => v != null)), ok2)],
+    ];
+
+    const note = 'Short interest is published twice a month and reaches us about eight '
+      + 'business days after it settles, so this is the latest reported position rather '
+      + 'than today. '
+      + (mk === 'pct'
+        ? 'Ranked by how much of the free float is sold short. '
+        : 'Ranked by days to cover — the position divided by average daily volume, '
+          + 'so it is how crowded the exit is rather than how large the bet is. ')
+      + 'The two bars are two scales: the left is ' + mName
+      + ', the right is the year so far with zero at its centre. '
+      + (noY ? noY + ' of these have no reading for the year yet and sit outside the '
+        + 'medians. ' : '')
+      + 'A short position is a bet against and also the fuel for a squeeze, which is why '
+      + 'the year is beside it rather than a verdict. One window, not a forecast.';
+
+    return chromeTop()
+      + '<div class="s-body"><div class="hs-in">'
+      + '<span class="s-kick">' + esc(sc.label + ' · '
+        + rows.length.toLocaleString() + ' with a reading') + '</span>'
+      + '<h2 class="s-title">Most shorted<span class="dim">'
+      + esc('ranked by ' + mName + ', with what each has done this year')
+      + '</span></h2>'
+      + '<div class="hs-wrap">'
+        + '<div class="hs-hd">'
+          + '<span class="hs-hk">' + esc(mName) + '</span>'
+          + '<span class="hs-hk">year to date</span>'
+        + '</div>'
+        + top.map(row).join('')
+      + '</div>'
+      + '<div class="hs-stats">' + stats.map(([k, v]) =>
+        '<div class="hs-s"><span class="hs-sk">' + esc(k) + '</span>'
+        + '<span class="hs-sv">' + esc(v) + '</span></div>').join('') + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
@@ -5101,6 +5299,7 @@
     disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution,
     flow: tplFlow, histogram: tplHistogram,
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
+    shorted: tplShorted,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -5176,6 +5375,87 @@
     .sz-square .sm-sv { font-size: 23px; }
     .sz-story .sm-sv { font-size: 38px; }
     .sz-story .sm-sk { font-size: 17px; }
+    /* ---- Most shorted: the level, beside the year so far -----------------
+       NO HEX LITERAL AND NO BACKTICK ANYWHERE IN HERE. Every colour is a
+       token, which is what makes all four grounds resolve with no override
+       block; and a backtick inside this block ends the STYLE template
+       literal, which node --check PASSES because it is valid syntax and
+       merely the wrong program. That has taken this module down three times.
+
+       Unlike the short-moves card the two direction colours ARE tokens here
+       -- green and red mean up and down on every surface in this app, and a
+       year-to-date return is exactly that -- so they sit in CSS rather than
+       being emitted inline through pal.ink. The LEVEL takes no colour at
+       all: short interest is one sign throughout, and a bar negative nowhere
+       says nothing by being red. */
+    .hs-in { display: flex; flex-direction: column; height: 100%; }
+    /* A .dim span inside .s-title inherits the 66px display size, which on a
+       sentence of explanation sets three lines of headline. The Evolution
+       card met this first and the fix is per card, because .s-title is
+       shared. */
+    .hs-in .s-title .dim { display: block; font-size: 29px; line-height: 1.25;
+                           letter-spacing: -0.015em; margin-top: 10px; }
+    .sz-square .hs-in .s-title .dim { font-size: 23px; }
+    .sz-story .hs-in .s-title .dim { font-size: 38px; }
+    /* The note is pinned to the foot so the free space collects in ONE band
+       rather than splitting at both ends -- the fault the day card had to be
+       rebuilt for. */
+    .hs-in .s-sub { margin-top: auto; padding-top: 18px; }
+    .hs-wrap { margin-top: 26px; }
+    /* The two column heads LABEL THE TWO SCALES, which is the one thing a
+       reader could otherwise get wrong about this card: the bars are not
+       comparable with one another. */
+    .hs-hd { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+             gap: 16px; margin-bottom: 12px; }
+    .hs-hk { font-family: var(--mono); font-size: 13px; letter-spacing: .12em;
+             text-transform: uppercase; color: var(--faint); }
+    .sz-story .hs-hk { font-size: 17px; }
+    /* minmax(0, 1fr), never 1fr: that is minmax(auto, 1fr), whose auto floor
+       is the item's MIN-CONTENT, so one long company name holds its column
+       open and the row runs past the artboard. The trap the sparks grid, the
+       trade log and the saved-name field have all met. */
+    .hs-r { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto;
+            column-gap: 10px; align-items: baseline; margin-bottom: 14px; }
+    .sz-story .hs-r { margin-bottom: 20px; }
+    .hs-t { font-family: var(--mono); font-weight: 700; color: var(--text); }
+    /* Clipped, never wrapped: one wrapped name makes its row twice as tall
+       and there are up to ten of them. The email log's rule. */
+    .hs-n { color: var(--muted); min-width: 0; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap; }
+    .hs-v { font-family: var(--mono); font-weight: 700; color: var(--text);
+            text-align: right; font-variant-numeric: tabular-nums; }
+    .hs-y { font-family: var(--mono); font-weight: 700; text-align: right;
+            font-variant-numeric: tabular-nums; color: var(--muted); }
+    .hs-y.hs-up { color: var(--green); }
+    .hs-y.hs-dn { color: var(--red); }
+    .hs-bars { grid-column: 1 / -1; display: grid;
+               grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+               gap: 16px; margin-top: 7px; }
+    .hs-b { position: relative; display: block; height: 100%;
+            background: var(--hair); border-radius: 2px; overflow: hidden; }
+    /* display: block on the fill too -- a percentage width on an INLINE span
+       draws nothing, and the style attribute reads as perfectly correct
+       while it does. The /quality lesson. */
+    .hs-f { display: block; height: 100%; border-radius: 2px; min-width: 2px;
+            background: var(--text); }
+    /* The zero of the year's own track, drawn so a reader can see which side
+       of it each bar sits on. */
+    .hs-z { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px;
+            background: var(--hair-2); }
+    .hs-yf { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+    .hs-yf.hs-up { background: var(--green); }
+    .hs-yf.hs-dn { background: var(--red); }
+    .hs-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 14px; margin-top: 24px; }
+    .hs-s { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .hs-sk { font-family: var(--mono); font-size: 13px; letter-spacing: .1em;
+             text-transform: uppercase; color: var(--faint); }
+    .hs-sv { font-family: var(--mono); font-size: 29px; font-weight: 700;
+             color: var(--text); font-variant-numeric: tabular-nums; }
+    .sz-square .hs-sv { font-size: 22px; }
+    .sz-square .hs-sk { font-size: 11px; }
+    .sz-story .hs-sv { font-size: 38px; }
+    .sz-story .hs-sk { font-size: 17px; }
     /* ---- Treemap: the market as area, the move as colour -----------------
        NO HEX LITERAL AND NO BACKTICK ANYWHERE IN HERE. Every value is a
        token, so all four grounds resolve with no override block; and a
@@ -6493,6 +6773,13 @@
     // The floors, so the studio's picker has no copy of them to drift from.
     shortMoveFloors: () => Object.keys(SMOV_FLOORS)
       .map(Number).sort((a, b) => a - b).map((v) => [v, SMOV_FLOORS[v]]),
+    // The two level metrics, so the studio builds its picker from the
+    // catalogue the CARD reads rather than from a copy in the markup: a
+    // host sending a key the module does not know would fall back to
+    // "% of float" in SILENCE, which is the quiet-fallback class this
+    // module exists to keep out.
+    shortedMetrics: () => Object.keys(SHRT_METRICS)
+      .map((k) => [k, SHRT_METRICS[k][1]]),
     EVO_WINDOWS,
     EVO_MEASURES,
     // Which classes the artboard needs for the chosen ground. Three hosts

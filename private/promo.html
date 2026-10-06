@@ -694,6 +694,50 @@
           position says nothing, while the dollar ranking floors itself.</p>
       </div>
 
+
+      <!-- Most shorted: the LEVEL as last reported, beside the year so
+           far. The sibling of Short moves and deliberately not a mode of
+           it -- that card is the fortnight’s change, this is the level,
+           and measured they are different rankings (two names of eight
+           in common).
+
+           It IS scoped -- "the most shorted in Technology" is a real
+           question -- so it carries the standard six and joins
+           INDUSTRY_PREFIXES. There is deliberately no size FLOOR control:
+           both metrics are ratios rather than amounts, so neither is
+           size-biased the way a dollar change is, and the Size picker
+           below already cuts by company size. -->
+      <div id="shrtBox">
+        <label>Rank them</label>
+        <select id="shrtMetric"></select>
+        <label>How many</label>
+        <select id="shrtCount">
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="8" selected>8</option>
+          <option value="10">10</option>
+          <option value="12">12</option>
+        </select>
+        <label>Within</label>
+        <select id="shrtScope"><option value="All">All screened</option></select>
+        <label>Sector</label>
+        <select id="shrtSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="shrtIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="shrtCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="shrtScreen"><option value="">No screen</option></select>
+        <label>S&amp;P 500</label>
+        <select id="shrtSp500"></select>
+        <p class="hint">The two metrics are different questions and give
+          different names — measured on the live screen, the S&amp;P’s eight
+          most shorted by % of float and its eight by days to cover share
+          two names of eight. The year beside each one is the reason the
+          card exists: the most shorted have a median year well below their
+          cut, and some of them are sharply UP, which is the half a median
+          hides. Heavily shorted and rising is the shorts under water.</p>
+      </div>
       <!-- Histogram: the shape of the screen on one measure, optionally
            with a subject pinned to it. `stock` is `screen` plus a pin, so
            they are two MODES of one template rather than two templates.
@@ -882,6 +926,7 @@
       { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
       { id: 'waterfall', name: 'Waterfall', note: 'What actually moved the index, name by name, adding up to the whole' },
       { id: 'shortmoves', name: 'Short moves', note: 'Where the shorts built and where they covered, over the latest fortnight' },
+      { id: 'shorted', name: 'Most shorted', note: 'The level as last reported, beside what each one has done this year' },
       { id: 'histogram', name: 'Histogram', note: 'The shape of the whole screen on one measure — on its own, or with a stock marked on it' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
@@ -1025,6 +1070,7 @@
       'tmapSector', 'tmapPeriod', 'tmapSp500',
       'wfallSector', 'wfallPeriod', 'wfallCount', 'wfallSp500',
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
+      'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'evoSym', 'evoMeasure', 'evoWin',
@@ -1051,7 +1097,7 @@
     // (an industry belongs to one sector), and drops a choice the new sector
     // does not contain. Run at the top of every render, so it has already
     // happened by the time a card reads the controls.
-    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub', 'hist'];
+    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub', 'hist', 'shrt'];
     const industryFor = {};
     function syncIndustries(force) {
       INDUSTRY_PREFIXES.forEach((p) => {
@@ -1123,6 +1169,7 @@
       $('tmapBox').style.display = tpl === 'treemap' ? 'block' : 'none';
       $('wfallBox').style.display = tpl === 'waterfall' ? 'block' : 'none';
       $('smovBox').style.display = tpl === 'shortmoves' ? 'block' : 'none';
+      $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       $('histBox').style.display = tpl === 'histogram' ? 'block' : 'none';
@@ -1303,6 +1350,22 @@
     ['histMeasure', 'histMode', 'histSym', 'histScope', 'histSector',
       'histIndustry', 'histCap', 'histScreen', 'histSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'histogram') render(); }));
+    // ITS OWN hardcoded listener list. A control in the markup and in
+    // CONTROL_IDS but missing from one of these is saved with a post, is
+    // read by the builder, and does NOTHING when you touch it.
+    ['shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector',
+      'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'shorted') render(); }));
+    // FROM THE MODULE, never a copy in the markup: a key the card does not
+    // know falls back to '% of float' in SILENCE, which is the
+    // quiet-fallback class cards.js exists to keep out.
+    (function fillShortedMetrics() {
+      const sel = $('shrtMetric');
+      for (const [v, label] of Cards.shortedMetrics()) {
+        sel.appendChild(new Option(label, v));
+      }
+      sel.value = 'pct';
+    }());
     // From the module, so a floor added there appears here with no edit.
     (function fillShortMoveFloors() {
       const sel = $('smovFloor');
@@ -1684,6 +1747,7 @@
         $('sizeScope').innerHTML = $('movScope').innerHTML;
         $('bubScope').innerHTML = $('movScope').innerHTML;
         $('histScope').innerHTML = $('movScope').innerHTML;
+        $('shrtScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
         $('histSym').innerHTML = $('chtSym').innerHTML;
@@ -1693,7 +1757,7 @@
         const secOpts = '<option value="All">All sectors</option>' +
           Cards.sectors(stocks).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
         ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector', 'rngSector',
-          'sizeSector', 'bubSector', 'histSector'].forEach((id) => {
+          'sizeSector', 'bubSector', 'histSector', 'shrtSector'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = secOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -1707,7 +1771,7 @@
           Filters.CAP_ORDER.map((n) => `<option value="${esc(n)}">${esc(n)} · ` +
             `${esc(Filters.CAP_RANGE[n])}</option>`).join('');
         ['movCap', 'chtCap', 'advCap', 'fundCap', 'spkCap', 'rngCap',
-          'sizeCap', 'bubCap', 'histCap'].forEach((id) => {
+          'sizeCap', 'bubCap', 'histCap', 'shrtCap'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = capOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -1723,7 +1787,7 @@
             list.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') +
             '</optgroup>').join('');
         ['movScreen', 'chtScreen', 'advScreen', 'fundScreen', 'spkScreen', 'rngScreen',
-          'sizeScreen', 'bubScreen', 'histScreen'].forEach((id) => {
+          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = scrOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -1738,7 +1802,8 @@
         const spOpts = Cards.spCuts().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
-          'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500'].forEach((id) => {
+          'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500',
+          'shrtSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
