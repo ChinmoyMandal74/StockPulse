@@ -4118,6 +4118,29 @@
       { lo: -40, hi: 80, bins: 24, unit: '%', dp: 1, openLo: true, openHi: true, signed: true }],
     ['rsi', 'RSI', 'the 14-day reading, 30 and 70 being the usual marks',
       { lo: 10, hi: 90, bins: 20, unit: '', dp: 0, openLo: true, openHi: true }],
+    // POSITIONING, which is neither a return nor a fundamental, so the two
+    // sit at the end rather than among either. Binned against the live
+    // distribution like every entry here: short % of float runs p10 1.4,
+    // median 4.7, p90 14.2, and 1.4% of the screen is past 30 -- so 30 with
+    // an open top, in 2-point bins, and the peak lands at 2-4%. Days to
+    // cover runs p10 2.1, median 4.2, p90 8.2 with 0.6% past 15, and the
+    // bins are whole days because that is the unit it is read in.
+    //
+    // UNCOLOURED, both of them. `signed` is for a measure whose zero is a
+    // direction; these are all one sign, and red on a column that is
+    // negative nowhere says nothing by being red -- the Bad day rule. It
+    // would also be the card taking a view on whether being shorted is bad,
+    // which is the one thing this template must not do.
+    //
+    // A SHARE CLASS CAN REPORT MORE SHORTS THAN ITS FLOAT HOLDS, and the
+    // read path withholds those (SHORT_PCT_MAX in server.js) -- so what
+    // reaches this card is already sane, and the long tail here is real.
+    ['shortPctFloat', 'How much of each one is sold short',
+      'as a share of the float, reported about every fortnight',
+      { lo: 0, hi: 30, bins: 15, unit: '%', dp: 0, openHi: true }],
+    ['shortRatio', 'How long the shorts would take to cover',
+      'short interest against one normal day of volume',
+      { lo: 0, hi: 15, bins: 15, unit: '', dp: 0, openHi: true, unitWord: 'day' }],
   ];
   const HIST_BY = {};
   for (const [k, t, s, c] of HIST_MEASURES) HIST_BY[k] = { key: k, title: t, sub: s, cfg: c };
@@ -4269,9 +4292,18 @@
 
     // A UNIT PLURALISED UNCONDITIONALLY reads "Each bar is 1 points",
     // which is the bin width most of these measures use.
+    //
+    // AND "point" WAS HARDCODED IN THE step === 1 BRANCH, which no measure
+    // reached until days-to-cover arrived with whole-day bins: it read
+    // "Each bar is 1 point" for a count of days. The Flow card's "a industry
+    // that fell", in a third place. `unitWord` is the measure's own noun;
+    // without one the wording is exactly what it was, which is asserted
+    // rather than assumed -- every existing entry is checked unchanged.
+    const w = C.unitWord || 'point';
     const wide = C.discrete ? 'one point'
-      : step === 1 ? '1 point'
-        : step.toFixed(step < 1 ? 1 : 0) + (C.unit === '%' ? ' points' : ' wide');
+      : step === 1 ? '1 ' + w
+        : step.toFixed(step < 1 ? 1 : 0)
+          + ((C.unit === '%' || C.unitWord) ? ' ' + w + 's' : ' wide');
     const note = 'Each bar is ' + wide
       + ' and counts the companies whose reading falls in it; the axis starts at zero, as a '
       + 'count of things must.'
