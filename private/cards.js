@@ -1346,22 +1346,51 @@
     // no second entry to keep in step. An unmapped colour is returned as it
     // is rather than guessed at — the sweep is what finds those.
     const inkFor = (map) => (hex) => (map && map[hex]) || hex;
+    // SKY SHARES LIGHT'S FURNITURE BUT NOT ITS INK, and that is a
+    // measurement. LIGHT_INK is tuned against light's 0.938 ground; sky is
+    // 0.808, and on sky's card tile (#c7e1f3) TEN of its sixteen entries
+    // land at 3.94-4.46, under the 4.5:1 text floor. The contrast sweep
+    // caught exactly one of them -- the accent, on a fund-quadrant label --
+    // because that is the only one currently drawn as SVG text in a swept
+    // mode; the other nine are latent, and would surface one at a time as
+    // cards change. Each is darkened with its channels scaled together, so
+    // the HUE is light's exactly and only the lightness moves.
+    //
+    // SPREAD, not restated: the six that already clear both grounds still
+    // carry a future edit to LIGHT_INK, which is the bargain sky has with
+    // light's furniture. And LIGHT'S OWN MAP IS UNTOUCHED -- a shipped
+    // theme does not move to suit a new one, the call LADDER_SKY made.
+    const SKY_INK = Object.assign({}, LIGHT_INK, {
+      '#34d399': '#136e49',   // green - up
+      '#fb7185': '#bc1c34',   // red - down
+      '#9aa3b2': '#56616f',   // grey - flat
+      '#fbbf24': '#8d5106',   // amber - notice this
+      '#a3e635': '#436b0d',   // lime - Buy
+      '#fb923c': '#a44202',   // orange - Avoid
+      '#7c9cff': '#2956d1',   // accent
+      '#22d3ee': '#0d697c',   // cyan
+      '#94a3b8': '#56616f',   // slate
+      '#7d8797': '#57616f',   // axis / faint
+    });
+
     const LADDER_LIGHT = {
       'Strong Buy': '#157a51', 'Buy': '#4a770e', 'Buy with Risk': '#9d5a07',
       'Hold': '#5b6675', 'Avoid': '#b44902', 'Sell Immediately': '#c81e37',
     };
     // SKY NEEDS ITS OWN LADDER, and that is a MEASUREMENT rather than a
     // precaution. LADDER_LIGHT clears only ~4.52:1 on light's own card tile,
-    // so on a ground 0.117 darker in luminance (#e0ebf9 at 0.821 against
-    // #f7f8fa at 0.938) ALL SIX entries land at 4.00-4.37 and every one is
-    // under the floor. Each is darkened toward black with its channels
-    // scaled together, so the HUE is light's exactly and only the lightness
-    // moves -- the LIGHT_INK approach. Tuned to clear 4.6 on the tile rather
-    // than 4.5: a ladder sitting on its floor is what broke when the ground
-    // moved, so the margin is the point rather than a nicety.
+    // so on a ground 0.130 darker in luminance (#d1ecff at 0.808 against
+    // #f7f8fa at 0.938) ALL SIX entries land under the floor. Each is
+    // darkened toward black with its channels scaled together, so the HUE is
+    // light's exactly and only the lightness moves -- the LIGHT_INK approach.
+    // Tuned to clear 4.6 on the card tile rather than 4.5: a ladder sitting
+    // on its floor is what broke when the ground moved the first time, so the
+    // margin is the point rather than a nicety. Re-tuned when the ground went
+    // #e0ebf9 -> #d1ecff, which cost 1-2 channel steps an entry -- nothing the
+    // eye can see, and the margin back where it was said to be.
     const LADDER_SKY = {
-      'Strong Buy': '#136f4a', 'Buy': '#436c0d', 'Buy with Risk': '#8f5206',
-      'Hold': '#576270', 'Avoid': '#a44202', 'Sell Immediately': '#be1d34',
+      'Strong Buy': '#136e49', 'Buy': '#426b0d', 'Buy with Risk': '#8e5106',
+      'Hold': '#56616f', 'Avoid': '#a44202', 'Sell Immediately': '#bc1d33',
     };
     const THEMES = {
       dark: {
@@ -1396,13 +1425,13 @@
       // need nothing. What it does NOT inherit is anything tuned to light's
       // own luminance -- see LADDER_SKY above and the th-sky block below.
       sky: {
-        cls: 'th-light th-sky', ground: '#e0ebf9',
+        cls: 'th-light th-sky', ground: '#d1ecff',
         up: '#126b46', down: '#bb1b33', flat: '#566070',
         grid: 'rgba(13,16,23,0.11)', zero: 'rgba(13,16,23,0.30)',
         axis: '#515b69',
         legUp: 'rgba(18,107,70,0.45)', legDown: 'rgba(187,27,51,0.45)',
         washUp: 'rgba(18,107,70,0.14)', washDown: 'rgba(187,27,51,0.13)',
-        tints: LADDER_SKY, ink: inkFor(LIGHT_INK),
+        tints: LADDER_SKY, ink: inkFor(SKY_INK),
       },
       // Navy is the dark palette on a different ground, deliberately — every
       // value below is dark's, and the only entries that exist at all are the
@@ -2329,8 +2358,8 @@
       quad(W - PR - 8, H - PB - 12, 'end', `growing & losing \u00b7 ${q.gl}`, pal.down) +
       quad(PL + 8, PT + 24, 'start', `shrinking & profitable \u00b7 ${q.sp}`, pal.ink('#7c9cff')) +
       quad(PL + 8, H - PB - 12, 'start', `shrinking & losing \u00b7 ${q.sl}`, pal.ink('#94a3b8')) +
-      `<text x="${W - PR}" y="${H - 16}" text-anchor="end" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">revenue growth \u2192</text>` +
-      `<text x="20" y="${PT + 14}" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">\u2191 profit margin</text>` +
+      `<text x="${W - PR}" y="${H - 16}" text-anchor="end" font-size="18" fill="${pal.axis}" font-family="Geist Mono, monospace">revenue growth \u2192</text>` +
+      `<text x="20" y="${PT + 14}" font-size="18" fill="${pal.axis}" font-family="Geist Mono, monospace">\u2191 profit margin</text>` +
       '</svg>';
   }
 
@@ -3574,12 +3603,12 @@
         + '" text-anchor="middle" font-size="17" font-weight="600" '
         + 'fill="' + pal.ink('#cfd6e2') + '" font-family="Geist, sans-serif">' + esc(txt) + '</text>'
         + (val ? '<text x="' + cx.toFixed(1) + '" y="' + (ly + 20).toFixed(1)
-          + '" text-anchor="middle" font-size="16" fill="#9aa3b2" '
+          + '" text-anchor="middle" font-size="16" fill="' + pal.ink('#9aa3b2') + '" '
           + 'font-family="Geist Mono, monospace">' + esc(val) + '</text>' : '');
     }).join('');
 
     const axis = (t, x, y, anchor) => '<text x="' + x + '" y="' + y + '" text-anchor="' + anchor
-      + '" font-size="18" fill="#7d8797" font-family="Geist Mono, monospace">' + esc(t) + '</text>';
+      + '" font-size="18" fill="' + pal.axis + '" font-family="Geist Mono, monospace">' + esc(t) + '</text>';
     const svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" '
       + 'style="display:block;margin-top:20px" role="img" aria-label="'
       + esc(xl + ' against ' + yl) + '">'
@@ -4321,17 +4350,17 @@
        the closest to the floor, and it paints the smallest text on the card. */
     /* The blue ground, over the light block above. Same specificity, so it
        has to come AFTER it -- and it only needs what the bluer, darker
-       ground actually changes. Measured: #e0ebf9 is luminance 0.821
-       against light's 0.938, a gap of 0.117, which drops light's green,
-       faint and amber to 4.42 / 4.54 / 4.51 on the bare ground and
-       further under the floor once the 0.05 card-tile tint darkens the
-       surface a card actually puts text on -- so each is darkened a
-       notch. After, on that tile: green 4.89, red 4.74, amber 4.91,
-       flat 4.76, muted 5.31, faint 5.16. The VERDICT LADDER needed the
-       same treatment and is LADDER_SKY, in the palette above: reusing
-       light's put all six entries at 4.00-4.37. */
+       ground actually changes. Measured: #d1ecff is luminance 0.808
+       against light's 0.938, a gap of 0.130, which puts light's own green,
+       faint and amber under the 4.5:1 floor -- and further under it once
+       the 0.05 card-tile tint (#c7e1f3) darkens the surface a card
+       actually puts text on -- so each is darkened a notch. After, on that
+       tile: green 4.82, red 4.67, amber 4.84, flat 4.69, muted 5.23,
+       faint 5.08. The VERDICT LADDER needed the same treatment and is
+       LADDER_SKY, in the palette above: reusing light's put all six
+       entries under the floor. */
     .s-art.th-sky {
-      --card-ground: #e0ebf9;
+      --card-ground: #d1ecff;
       --green: #126b46; --red: #bb1b33; --amber: #8a4f06;
       --muted: #4f5968; --faint: #515b69;
       --hair: rgba(13, 16, 23, 0.11); --hair-2: rgba(13, 16, 23, 0.19);
