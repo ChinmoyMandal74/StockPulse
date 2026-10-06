@@ -2692,7 +2692,14 @@
     // `w > 0` rejects null and zero in one test.
     const agg = new Map();
     if (!etfSecs.length) {
-      for (const x of pool) {
+      // ONE COMPANY, ONE LISTING, here too — see foldListings. This branch
+      // takes a cap-weighted MEAN rather than a sum, so a dual-class company
+      // does not inflate a total; it gets DOUBLE WEIGHT in its own sector,
+      // which on Communication Services is Alphabet at ~55% of the sector
+      // going to ~71%. Dormant on an instance holding the eleven sector
+      // funds (which is the one we run) and silently wrong on one that is
+      // not, so it is folded rather than left as a number nobody will check.
+      for (const x of foldListings(pool, pctField).rows) {
         if (!x.sector) continue;          // the blank bucket is not a sector
         const w = x.marketCap;
         const v = x[pctField];
@@ -4714,7 +4721,13 @@
   // sentence. The chart is the free parameter, and 8% of a story's plot is
   // invisible where a note printed over the brand is not. Clearance now
   // 20px+, the half-a-text-line floor the how-to deck already holds.
-  const WF_H = { portrait: 600, square: 346, story: 934 };
+  //
+  // MEASURED AGAINST PRODUCTION'S OWN SECTORS, NOT THE FIT SWEEP'S FIXTURE.
+  // The fixture's note is shorter than the real ones -- 346/934 passed the
+  // sweep and the LIVE portrait card still ran 15px over. The worst real cut
+  // is Communication Services at 3 a side (a 614-character note), and these
+  // are its overflow plus the 20px floor.
+  const WF_H = { portrait: 565, square: 308, story: 851 };
 
   function tplWaterfall() {
     const per = SNAP_PERIODS.some(([k]) => k === O.wfallPeriod) ? O.wfallPeriod : 'ytd';
