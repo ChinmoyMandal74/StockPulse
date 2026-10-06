@@ -1487,7 +1487,7 @@
         <th class="group grp-rel" data-group="rel" colspan="16">Relative</th>
         <th class="group grp-trend" data-group="trend" colspan="4">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
-        <th class="group grp-fund" data-group="fund" colspan="21">Fundamentals</th>
+        <th class="group grp-fund" data-group="fund" colspan="22">Fundamentals</th>
         <th class="group grp-own" data-group="own" colspan="7">Ownership</th>
         <th rowspan="2"></th>
       </tr>
@@ -1573,6 +1573,7 @@
         <th class="grp-fund" data-key="forwardPe" title="Forward price/earnings ratio. Shown for reference but excluded from the Quality score when the company is loss-making, where it carries no meaning.">Fwd<br>P/E</th>
         <th class="grp-fund" data-key="trailingPe" title="Trailing price/earnings as the DATA PROVIDER reports it — the last twelve months of actual earnings, unlike the Fwd P/E beside it, which is an estimate. It arrives with the company profile, which is re-pulled about weekly, so it is struck at a close up to seven days old and will not divide exactly against the Price column: that is what the Live P/E beside it is for. Blank or meaningless for a loss-maker.">Trail<br>P/E</th>
         <th class="grp-fund" data-key="peLive" title="The same trailing price/earnings, recomputed here from today's Price and the EPS TTM column — so it moves with every intraday refresh and always divides against the Price on this row, where the provider's Trail P/E beside it is struck at whenever the profile was last pulled. A dash where the company loses money: a multiple off a loss is arithmetic, not cheapness, and sorting this column would otherwise put every loss-maker at the top as the cheapest thing on screen. NA for a fund — the provider's weighted figure for the holdings cannot be reproduced from a single EPS.">Live<br>P/E</th>
+        <th class="grp-fund" data-key="peerPe" title="Forward P/E as a multiple of the median forward P/E of its own industry. 0.62× means it costs 38% less than the typical company it is measured against; 1.40× means 40% more. A 25× semiconductor is cheap for a semiconductor and a 15× bank is dear for a bank — which the Fwd P/E column beside this one cannot say. Struck over the whole screener rather than the index, and only where the industry holds five or more companies with a usable multiple, which is about four stocks in five; the cell's own tooltip names the group and its median so the figure can be checked against the Fwd P/E on the same row. Blank where that group is too small, where no industry is recorded yet, or where the company loses money: a multiple off a loss is arithmetic, not cheapness. Deliberately uncoloured — measured over this universe the cheapest third of each industry grow more slowly, earn thinner margins and score lower on Quality than the dearest third, so cheap here is a fact to read beside the others on the row and not a verdict.">P/E vs<br>peers</th>
         <th class="grp-fund" data-key="priceToBook" title="Price ÷ book value per share, most recent quarter. The classic value measure; of little use for asset-light software and misleading for banks.">P/B</th>
         <th class="grp-fund" data-key="priceToSales" title="Price ÷ revenue per share (TTM). The one valuation measure that still works for a company with no profits.">P/S</th>
         <th class="grp-fund" data-key="evToEbitda" title="Enterprise value ÷ EBITDA — a valuation that counts debt, so it compares a leveraged company with a debt-free one fairly.">EV/<br>EBITDA</th>
@@ -1817,6 +1818,48 @@
       const t = attr(title);
       if (n == null || !isFinite(n)) return `<td class="na ${cls}"${t}>—</td>`;
       return `<td class="${n < 0 ? 'neg ' : ''}${cls}"${t}>${n.toFixed(1)}%</td>`;
+    }
+    // ---- P/E vs peers ----------------------------------------------------
+    //
+    // UNCOLOURED, and that is a measurement rather than restraint. Ranking
+    // each industry on its forward multiple and splitting it in thirds, the
+    // cheapest third of this universe grow more slowly than the dearest
+    // (revenue 7.2% against 15.4%), earn thinner margins (10.4 against 12.8)
+    // and score lower on Quality (5 against 6) — monotonically, across all
+    // three. So a green cell would be the screener asserting the opposite of
+    // what its own data says. The value trap is the normal case, not the
+    // exception, and this column's job is to say how cheap, not whether to buy.
+    //
+    // THE TOOLTIP NAMES THE GROUP AND ITS MEDIAN, so the figure can be checked
+    // against the Fwd P/E cell three columns to the left rather than asking to
+    // be trusted — the rule the Snapshot card's own trailing-year row follows.
+    //
+    // THREE WAYS TO BE BLANK, AND THEY ARE DIFFERENT FACTS: no industry on the
+    // row yet (profiles arrive on rotation, so this is common rather than an
+    // edge case), a company whose own multiple is unusable, or an industry too
+    // thin to be a group. The floor itself is deliberately NOT restated here —
+    // the branch reports the count it found and lets the reader judge, so the
+    // server's PEER_MIN has no second copy in the browser to drift from.
+    function peerCell(s, cls = '') {
+      const v = s.peerPe;
+      const n = s.peerPeCount || 0;
+      const ind = s.industry || '';
+      if (v == null || !isFinite(v)) {
+        const why = !ind
+          ? 'No industry recorded yet for this stock, so it has no peer group. Industries arrive one profile at a time.'
+          : !(Number(s.forwardPe) > 0)
+            ? 'No usable forward P/E on this row, so there is nothing to compare: a multiple off a loss is arithmetic, not cheapness.'
+            : `Only ${n} ${n === 1 ? 'company' : 'companies'} in ${ind} carry a forward P/E — too few to measure against.`;
+        return `<td class="na ${cls}"${attr(why)}>—</td>`;
+      }
+      const away = v < 1 ? `${(100 - v * 100).toFixed(0)}% below its peers`
+        : v > 1 ? `${(v * 100 - 100).toFixed(0)}% above its peers`
+        : 'exactly level with its peers';
+      const t = `${ind}: the median forward P/E across ${n} companies is `
+        + `${s.peerPeMedian.toFixed(1)}, and this one is ${Number(s.forwardPe).toFixed(1)} — `
+        + `${away}. Not a verdict: over this screen the cheapest third of an `
+        + `industry also grow more slowly and score lower on Quality.`;
+      return `<td class="${cls}"${attr(t)}>${v.toFixed(2)}×</td>`;
     }
     function pegCell(n, cls = '', title = '') {
       const t = attr(title);
@@ -3457,7 +3500,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="99">${s.error}</td>
+            <td class="na" colspan="100">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3560,8 +3603,9 @@
           ${pegCell(s.peg, 'grp-fund', cacheTitle)}
           ${numCell(s.forwardPe, 'grp-fund', cacheTitle)}`}
           ${numCell(s.trailingPe, 'grp-fund', cacheTitle)}
-          ${isFund ? naRun(9, 'grp-fund') : `
+          ${isFund ? naRun(10, 'grp-fund') : `
           ${numCell(s.peLive, 'grp-fund', liveTitle)}
+          ${peerCell(s, 'grp-fund')}
           ${numCell(s.priceToBook, 'grp-fund', cacheTitle)}
           ${numCell(s.priceToSales, 'grp-fund', cacheTitle)}
           ${numCell(s.evToEbitda, 'grp-fund', cacheTitle)}
@@ -3597,7 +3641,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 104;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 105;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3778,7 +3822,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="101">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="102">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

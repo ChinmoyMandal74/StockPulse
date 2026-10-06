@@ -156,6 +156,7 @@
     rating: (n) => ok(n) ? { t: String(n), c: n >= 8 ? 'pos' : n <= 4 ? 'neg' : 'warn', b: 1, n, u: 'score' } : null,
     rsi: (n) => ok(n) ? { t: n.toFixed(0), c: n >= 70 ? 'neg' : n <= 30 ? 'pos' : '', n, u: 'score' } : null,
     peg: (n) => ok(n) ? { t: n.toFixed(2), c: (n > 0 && n <= 1) ? 'pos' : n >= 2 ? 'neg' : '', n, u: 'num' } : null,
+    ratio: (n) => ok(n) ? { t: n.toFixed(2) + '×', c: '', n, u: 'num' } : null,
     short: (n) => ok(n) ? { t: n.toFixed(1) + '%', c: n >= 20 ? 'neg' : n >= 10 ? 'warn' : '', n, u: 'pct' } : null,
     macd: (n) => ok(n) ? { t: n.toFixed(2), c: n >= 0 ? 'pos' : 'neg', n, u: 'num' } : null,
     count: (n) => {
@@ -365,6 +366,13 @@
     // Deliberately NOT in FUND_HAS: a fund's EPS is not something we hold, so
     // this is NA there even though the provider's Trail P/E above it is real.
     ['fund',  'Live P/E',       (s) => V.num(s.peLive)],
+    // UNCOLOURED, and that is a measurement rather than restraint. Over this
+    // universe the cheapest third of each industry grow more slowly (revenue
+    // 7.2% against 15.4%), earn thinner margins and score lower on Quality
+    // (5 against 6) than the dearest third -- monotonically. A green cell
+    // would be the screener asserting the opposite of what its own data says.
+    // Not in FUND_HAS either: a fund has no industry and no peer group.
+    ['fund',  'P/E vs peers',   (s) => V.ratio(s.peerPe)],
     ['fund',  'P/B',            (s) => V.num(s.priceToBook)],
     ['fund',  'P/S',            (s) => V.num(s.priceToSales)],
     ['fund',  'EV/EBITDA',      (s) => V.num(s.evToEbitda)],

@@ -1093,6 +1093,75 @@ Found while measuring this and **reported, not acted on** — removing or repair
 - **Reported, not acted on** — removing or repairing a ticker is the owner's call, and the standing options are the BBX / PXD / SOLS ending (remove it), leaving it and accepting one wrong row, or a manual adjustment path, which is [docs/backlog.md](docs/backlog.md) entry 21 and touches the refresh path.
 - **NO AUTOMATIC FILTER WAS ADDED, deliberately.** A rule hiding a stock whose window return disagrees with its day would also hide a real crash, and inventing a classifier is the thing `instrumentType` records refusing: the card states what the data says and the judgement stays with a person. The 5th percentile is unaffected either way, which is the point in favour of the statistic over a `min()`.
 
+### P/E vs peers — cheap against its own industry (2026-10-05, owner's request)
+
+**A `P/E vs peers` column closing the Fundamentals group's P/E run, plus two starter screens in Value and growth.** Asked as *"Under valued stocks within peers … how next to find these gems"*, and the owner chose **"Column and screens"** over a backtest when the three paths were put to them. It is the ratio of a stock's forward P/E to the **median forward P/E of its own industry**: `0.22×` means it costs 78% less than the typical company it is compared with.
+
+#### THE COLUMN BESIDE IT CANNOT ASK THIS QUESTION, which is the whole justification
+Measured on the live screen: the **Semiconductors median forward P/E is 24.4 and Micron sits at 5.3**, while a bank at 15 is dear for a bank. The existing `cheapgrw` screen asks for a forward P/E under 20 outright — it calls the bank cheap and misses Micron entirely. The cheapest ten by this reading are EONR 0.14×, MRP 0.19×, MSTR 0.20×, EEFT and MU 0.22×, none of which an absolute cut would have ranked together.
+
+#### CHEAP ALONE IS A TRAP ON THIS UNIVERSE, AND IT IS MONOTONIC
+Ranking each industry on its forward multiple and splitting in thirds:
+
+| | cheapest third | middle | dearest third |
+|---|---|---|---|
+| revenue growth | **7.2%** | 10.8% | **15.4%** |
+| profit margin | 10.4% | 12.7% | 12.8% |
+| ROE | 13.1 | 13.4 | 14.4 |
+| Quality (1–10) | **5** | 6 | 6 |
+| n | 302 | 290 | 269 |
+
+**All four move the same way, which is why the column is UNCOLOURED** — a green cell would be the screener asserting the opposite of what its own data says. The value trap is the normal case here, not the exception. The tooltip says so, the column header says so, and the first screen's own description says so. **Proved by reverting**: painting it by which side of 1.00 it sits fails 4, including a check that reads the DRAWN colour rather than a class name.
+
+#### A RATIO TO THE MEDIAN, not a percentile and not a mean
+- **A percentile would be coarse exactly where the groups are small**: the median peer group here holds **6 names** with a usable multiple, so a percentile moves in 17-point steps. A ratio is continuous at any size and is how a relative multiple is actually discussed.
+- **THE MEDIAN, NEVER THE MEAN** — one row in this universe sits at **114.9×** its peers, and a mean would carry that into every other reading in its group.
+- **The whole screener, not the index.** Inside the S&P 500 the median industry holds **3** names and only 68% of members sit in a group of five or more; across all 1,284 the median is **6** and coverage is **80%**.
+
+#### IT IS CROSS-SECTIONAL, which is the one way it differs from every other stamp
+`stampPeerValue([stock])` can only ever answer null, so every call site hands it the **whole universe** — and hands it over **before any guest filter**, because a peer median is a property of the universe and not of the view. On `/api/stocks` that is free: `finishServe` already runs on `snap.stocks` and the guest filter runs after it. On `/api/stock` the route already holds the whole snapshot to build its symbol picker, so `stock` is simply an element of what gets stamped. In `mobileRows` the stamp had to go **above** the guest filter — struck over a twenty-stock preview no industry would reach the floor and every phone row would read blank for a guest.
+
+- **Five call sites**: `finishServe`, `/api/stock`, `mobileRows`, `/api/m/post`, `runAlertPass`. The last costs nothing and is there because the point of re-scoring in the alert pass is that an alert can never disagree with the screener — a type added to `alerts.js` reads through `Filters.filterValue`, which would answer undefined for a field that pass had not stamped. `groupIndex` is deliberately skipped: it reads sector, industry and `capBand` only and serves symbol lists rather than rows.
+- **Stamped rather than stored**, the `capBand` / `peLive` bargain: it populated the moment the deploy landed instead of waiting ~30 minutes for a full round to rebuild the snapshot, and moving the floor moves every surface with no refresh. **2ms for 1,284 rows**, no query and no credit.
+
+#### `> 0` GUARDS THE DENOMINATOR, NOT JUST THE ROW
+A multiple off a loss is arithmetic, not cheapness — the rule Live P/E, the Size card, the Bubble card and the peer table all keep, and `> 0` rejects the empty before coercing since `Number(null)` is 0 and finite. **What is new here is that it also keeps negatives out of the POOL**: a negative multiple among the peers drags the median down and inverts every ratio struck against it. **Proved by reverting**: letting them in takes the fixture's Semis median from 24 to 21 and fails 16.
+
+#### THE FIVE-NAME FLOOR, and three blanks that stay three different facts
+A median of two is a statement about two companies, and this column's entire claim is that it is measured against a group. `PEER_MIN` is **5**; measured, **80% of the screen** sits in a group that size or larger, so the floor costs the other 20% a reading rather than handing them a bad one. **Probed at exactly 5 and exactly 4** — a threshold is a step function.
+
+- **BLANK, NEVER 1.00**, which would read as *exactly what its peers cost*. Live, the 254 blanks are **25 with no industry recorded yet, 83 with no usable multiple, and 146 in a group too thin** — and the cell names which, because they are different facts.
+- **The floor is NOT restated in the browser.** The cell's thin-group branch reports the count it found and lets the reader judge, so `PEER_MIN` has no second copy to drift from.
+- **A fund answers NA with its group** — it has no industry and no forward P/E, so it needs no branch of its own.
+
+#### THE TOOLTIP IS A CHECK ON THE NUMBER ABOVE IT
+*"Semis: the median forward P/E across 7 companies is 24.0, and this one is 6.0 — 75% below its peers."* Both figures are on the row already (Fwd P/E is three columns to the left), so the cell can be verified rather than trusted — the rule the Snapshot card's trailing-year row follows. It closes *"Not a verdict"*, because a tooltip is where a reader goes when the number surprises them.
+
+#### The two screens, and the threshold is measured
+**`peerval0` "Cheap against its own industry"** (`peerPe <= 0.6`) and **`peerval1` "Cheap vs peers, growing and profitable"** (the same cut plus growing, profitable and Quality 6+). Live: **109 and 49**.
+
+- **BOTH CARRY THE SAME CUT, deliberately**, so the second is visibly a subset of the first and the narrowing is the thing a reader learns from.
+- **0.6× is the 40%-off tail rather than a round number.** The ratio runs p25 0.79 / median 1.00 / p75 1.28, and the alternatives were measured: 0.7× gives 174 and 75, which is a list to browse rather than a shortlist; 0.5× gives 57 and 23, which empties on a quiet week.
+- **`peerval1` sits beside `cheapgrw`** ("Cheap, growing and profitable") on purpose — the two names differ by exactly the thing the screens differ by, absolute against relative.
+- **A NEW STARTER SCREEN NEVER REACHES AN EXISTING DATABASE** (`seedScreensOnce` is marker-guarded so a screen the owner deletes does not come back), so both were inserted with `add-starter-screens.js`, which needed no edit: it diffs defined against stored and appends what is missing. **Targeted INSERTs, never the PUT endpoint and never `writeScreens`** — both rebuild the list through `cleanScreens()`, and a filter reading `<=0.6` would be walking into the 2026-09-15 door that stripped `<` and `>` out of thirteen screens.
+- **Proved by reverting**: pointing `peerval0` at `forwardPe <= 12` instead fails 5, and the list comes back `BANKA,BANKB,BANKC,BANKD,CHIPA,CHIPB,CHIPX,…` — a bank that is dear for a bank let in and a cheap chipmaker ranked beneath it.
+
+#### THE BOUNDARY HOLDS, asserted behaviourally rather than by grep
+`forwardPe` is an Advice input ([action.js:305](private/action.js#L305)), and **it is not touched**: `peerPe` is a new field and nothing in the engine reads it. Every row is scored three ways — field absent, present, and **LYING** — and the verdicts must be identical. The fixture produces **five distinct verdicts**, because a comparison of one word against itself would pass whatever the engine read.
+
+- Constants after the change: the Fundamentals banner **22**, `PAD_SPAN` **105**, the error row **100**, the empty row **102**, the fund's Fundamentals NA run **10**. `/columns` picked the column up on its own and `filters.js` needed nothing — a plain numeric field falls through to `x[key]`.
+- Verified: **69 checks**. The fixture's load-bearing property is that **absolute and relative cheapness DISAGREE** — Semis median 24 against Banks median 11, so BANKF at 14 is absolutely cheaper than CHIPC at 18 and relatively dearer — and market caps are a third order again, so neither the alphabet nor the table's own default sort can stand in for either ranking. **Proved by reverting sixteen times.**
+  - **A MISCOUNTED `naRun` IS NOT AN ERROR, IT IS A ROW ONE CELL SHORT — and no single-cell check can see it.** Every cell in a fund's Fundamentals run says `NA`, so the value at this column's index is `NA` whether the run is 9 or 10; the first revert of that count came back **0 failed**. The suite asserts the row WIDTH now (one distinct count across every body row, equal to the header plus its three anchor cells), and it then fails 3 with `FUNDY 104 CHIPA 105`.
+  - **TWO REVERTS WERE THE HARNESS RATHER THAN THE GUARD.** `stampPeerValue(rows);` appears three times and `stampPeerValue(stocks);` twice, so a bare anchor either hit twice and was refused — printed as `PATCH DID NOT APPLY`, which the harness says out loud rather than reporting as a guard that does not bite — or, worse, inserted a disabled call ABOVE the real one and simulated nothing. *A revert has to simulate the bug, and an anchor that is unique today stops being unique the moment the same call appears twice.*
+  - **A READ IN A DETAIL ARGUMENT ABORTS A SUITE just as surely as one in the assertion.** With the stamp reverted a `.toFixed` on a null threw, the run ended at 16 of 69, and the strongest guard in the change reported 7 failures instead of 46. Every number printed in a detail goes through a total formatter now, and the harness prints `?? only N of 69 ran` so an aborted run can never read as residue.
+  - **`seedScreensOnce` IS LAZY** — it runs on the first `GET /api/screens`, so a phone route asked before that answers *"No such screen."* rather than an empty list, which reads as a broken stamp.
+  - **The filter row is OFF unless prefs say otherwise**, so a selector for its input finds nothing on a page that is working; click `#fltBtn` first. The inputs carry **`data-fk`**, not `data-key`.
+  - **A `<br>` contributes no whitespace to `textContent`**, so the drawn label is `P/E vspeers` — the documented trap, met again.
+  - **A python heredoc ate a backslash level twice in this session**, turning `\n` inside a patch anchor into a real newline: once it broke the harness's own syntax, once it silently failed to match. Both were repaired with the Edit tool. Seventh and eighth instances on this project.
+
+#### Worth reporting, not acted on
+**`SKHY` (SK hynix) appears third-cheapest in Semiconductors at 0.22×**, and this file already records its fundamentals as incoherent — *"net income (116.8B) larger than gross profit (104.0B), which is impossible"*. Its forward P/E of 5.5 may be junk rather than cheap. **MSTR at 0.20× in Software - Application** is Strategy, a bitcoin holding company the provider files under software; that is the taxonomy rather than a fault, and it is the clearest illustration of why the column states a fact and leaves the judgement with a person.
+
 ### Sparklines
 The **Chart** group is one column (`90d`) between Scores and Short-term, holding a 90-session price line per row. A group of its own rather than a column inside Info, because the columns menu toggles *groups* — inside Info it could only be hidden by hiding Price, Sector and Market Cap too. The precedent cited here used to be the Volume group, which no longer exists — Chart is the one-column group now, and the Scores group (`colspan="1"` since 2026-09-23) is the other.
 

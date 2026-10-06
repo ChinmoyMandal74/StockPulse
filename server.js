@@ -3260,6 +3260,68 @@ function stampCapDerived(rows) {
   }
 }
 
+// CHEAP AGAINST ITS OWN INDUSTRY, which is a different question from cheap --
+// and the Fwd P/E column beside this one cannot tell them apart. Measured on
+// the live screen: the Semiconductors median forward P/E is 24.4 and Micron
+// sits at 5.3, while a bank at 15 is dear for a bank. An absolute "P/E under
+// 20" screen calls the second one cheap and misses the first entirely.
+//
+// A RATIO TO THE INDUSTRY MEDIAN, NOT A PERCENTILE. The median peer group
+// here holds 6 names with a usable multiple, so a percentile moves in
+// 17-point steps and says less the smaller the group; a ratio is continuous
+// at any size and is how a relative multiple is actually discussed.
+//
+// THE MEDIAN, NEVER THE MEAN -- one row in this universe sits at 115x its
+// peers, and a mean would carry that into every other reading in its group.
+//
+// IT IS CROSS-SECTIONAL, which is the one way it differs from every other
+// read-path stamp: `stampPeerValue([stock])` can only ever answer null, so
+// every call site hands it the WHOLE universe, and hands it over BEFORE any
+// guest filter. A peer median is a property of the universe, not of the view.
+const PEER_MIN = 5;
+function stampPeerValue(rows) {
+  if (!Array.isArray(rows)) return;
+  // A MULTIPLE OFF A LOSS IS ARITHMETIC, NOT CHEAPNESS -- the rule Live P/E,
+  // the Size card, the Bubble card and the peer table all keep. `> 0` rejects
+  // the empty before coercing, since Number(null) is 0 and finite, and it
+  // guards the DENOMINATOR as well: a negative multiple in the pool would
+  // drag a median below zero and invert every ratio struck against it.
+  const pe = (r) => (Number(r && r.forwardPe) > 0 ? Number(r.forwardPe) : null);
+  const by = new Map();
+  for (const r of rows) {
+    if (!r || !r.symbol || !r.industry || pe(r) == null) continue;
+    if (!by.has(r.industry)) by.set(r.industry, []);
+    by.get(r.industry).push(pe(r));
+  }
+  const med = new Map();
+  for (const [ind, v] of by) {
+    // UNDER FIVE NAMES THERE IS NO PEER GROUP. A median of two is a statement
+    // about two companies, and the whole claim of this column is that it is
+    // measured against a group. Measured: 81% of the screen sits in a group of
+    // five or more, so the floor costs the other 19% a reading rather than
+    // handing them a bad one.
+    if (v.length < PEER_MIN) continue;
+    v.sort((a, b) => a - b);
+    const h = v.length / 2;
+    med.set(ind, v.length % 2 ? v[(v.length - 1) / 2] : (v[h - 1] + v[h]) / 2);
+  }
+  for (const r of rows) {
+    if (!r || !r.symbol) continue;
+    const m = r.industry ? med.get(r.industry) : null;
+    const v = pe(r);
+    // BLANK, NEVER 1.00 -- which would read as "exactly what its peers cost",
+    // a reading this row does not have. There are three ways to get here (no
+    // industry recorded yet, a group too small, no usable multiple) and the
+    // cell names which, because they are different facts.
+    r.peerPe = (m > 0 && v != null) ? v / m : null;
+    r.peerPeMedian = m > 0 ? m : null;
+    // The count the median was struck over, so the cell can be checked against
+    // the Fwd P/E column beside it rather than asking to be trusted -- and so
+    // a group that fell short can say by how much.
+    r.peerPeCount = r.industry ? ((by.get(r.industry) || []).length) : 0;
+  }
+}
+
 async function stampShortNames(rows) {
   if (!Array.isArray(rows) || !rows.length) return;
   try {
@@ -4573,6 +4635,10 @@ const serveStamps = (rows) => Promise.all([
 // The two that need no round trip, and therefore wait for the portfolios.
 function finishServe(rows, pf) {
   stampCapDerived(rows);
+  // Cross-sectional, and this is the one call site where that is free: the
+  // screener is served the whole universe here and the guest filter runs
+  // AFTER, so a guest's twenty rows carry ratios struck against all 1,269.
+  stampPeerValue(rows);
   for (const x of rows) x.portfolios = membershipOf(x.symbol, pf);
 }
 
@@ -4862,6 +4928,30 @@ const STARTER_SCREENS = [
   sc('cheapgrw', 'Value and growth', 'Cheap, growing and profitable', 'Forward P/E under 20, revenue growing 15%+, net margin over 15%.',
     { filters: { forwardPe: '0..20', revenueGrowthYoY: '>15', profitMargin: '>15' }, sort: { key: 'forwardPe', dir: 1 },
       columns: ['forwardPe', 'revenueGrowthYoY', 'profitMargin', 'marketCap', 'oneMonthPct', 'av:Balanced', 'spMember'] }),
+  // CHEAP AGAINST ITS OWN INDUSTRY, which is a different question from the
+  // screen directly above this one. `cheapgrw` asks for a forward P/E under
+  // 20 outright: that calls a 15x bank cheap and misses a 5.3x semiconductor
+  // in a sector whose median is 24.4. These two ask the relative question, and
+  // the pair of them is the point -- the first says how many are cheap against
+  // their own peers, the second how many of those are not also worse.
+  //
+  // THE THRESHOLD IS MEASURED, NOT ROUND. Over the live screen the ratio runs
+  // p25 0.79 / median 1.00 / p75 1.28, so 0.6x is the 40%-off tail rather than
+  // an arbitrary line: 109 names, of which 49 survive the second screen. At
+  // 0.7x it is 174 and 75, which is a list to browse rather than a shortlist;
+  // at 0.5x it is 57 and 23, which empties on a quiet week.
+  //
+  // BOTH SCREENS CARRY THE SAME CUT, deliberately, so the second is visibly a
+  // subset of the first and the narrowing is the thing a reader learns from.
+  sc('peerval0', 'Value and growth', 'Cheap against its own industry',
+    'Forward P/E at least 40% below the median for its own industry. Cheap is not the same as good: across this screen the cheapest third of an industry also grow more slowly and score lower on Quality.',
+    { filters: { peerPe: '<=0.6' }, sort: { key: 'peerPe', dir: 1 },
+      columns: ['peerPe', 'forwardPe', 'revenueGrowthYoY', 'profitMargin', 'qualityScore', 'marketCap', 'av:Balanced', 'spMember'] }),
+  sc('peerval1', 'Value and growth', 'Cheap vs peers, growing and profitable',
+    'The same 40% discount to its own industry, narrowed to companies still growing, still profitable and Quality 6 or better — the pairing that separates a cheap good business from a cheap bad one.',
+    { filters: { peerPe: '<=0.6', revenueGrowthYoY: '>0', profitMargin: '>0', qualityScore: '>=6' },
+      sort: { key: 'peerPe', dir: 1 },
+      columns: ['peerPe', 'forwardPe', 'revenueGrowthYoY', 'profitMargin', 'qualityScore', 'marketCap', 'av:Balanced', 'spMember'] }),
   sc('disconct', 'Value and growth', "Business improving, price isn't", 'Revenue growing 25%+ while the price fell 10%+ over three months.',
     { filters: { revenueGrowthYoY: '>25', threeMonthPct: '<-10' }, sort: { key: 'revenueGrowthYoY', dir: -1 },
       columns: ['revenueGrowthYoY', 'threeMonthPct', 'oneMonthPct', 'grossMargin', 'forwardPe', 'av:Balanced', 'spMember'] }),
@@ -8423,6 +8513,13 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   // same defect the bare-string Size getter had and was hiding behind.
   // Synchronous and free: it reads marketCap and nothing else.
   stampCapDerived([stock]);
+  // AND THE ONE STAMP A SINGLE ROW CANNOT ANSWER. `P/E vs peers` is a ratio
+  // to the stock's own industry, so `stampPeerValue([stock])` could only ever
+  // be null -- it is handed the whole snapshot, which this route already holds
+  // to build its symbol picker, and `stock` is an element of it. Without this
+  // the row drives /compare and the stock page's own field list, both of which
+  // would print a labelled em-dash on a value that exists.
+  stampPeerValue(stocks);
   // THE SAME DEFECT, TWO FIELDS OVER, AND THE COMMENT ABOVE DID NOT STOP IT.
   // This route applied ONE of the four read-path stamps, so `pricedAt` and
   // `adviceDays` were undefined on every stock page — measured on production
@@ -9236,6 +9333,11 @@ function thin(closes) {
 async function mobileRows(req) {
   const snap = await readSnapshot();
   let rows = ((snap && snap.stocks) || []);
+  // BEFORE THE GUEST FILTER, and that ordering is the whole correctness of it:
+  // the peer median is a property of the universe, not of the view. Struck
+  // over a twenty-stock preview no industry would reach the five-name floor
+  // and every phone row would read blank for a guest.
+  stampPeerValue(rows);
   if (await isGuest(req)) rows = rows.filter((x) => guestSet.has(String(x.symbol).toUpperCase()));
   scoreActionInto(rows);
   await stampShortNames(rows);
@@ -9548,6 +9650,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   await stampAthDistance(stocks);
   await stampSpMember(stocks);
   stampCapDerived(stocks);
+  stampPeerValue(stocks);
   const myLists = await store.readUserPortfolios(await prefsKey(req));
   // A post saved with a screen cut needs the screens to resolve it. Optional
   // like the basket below: a failure here draws the card over the whole screen
@@ -13317,6 +13420,11 @@ async function runAlertPass() {
   if (!rows.length) return { alerts: alerts.length, fired: 0, armed: 0, skipped: alerts.length };
   scoreActionInto(rows);
   stampCapDerived(rows);
+  // No alert type reads it today. It is stamped anyway because the whole point
+  // of re-scoring here is that an alert can never disagree with the screener,
+  // and a type added to `alerts.js` reads through `Filters.filterValue` --
+  // which would answer undefined for a field this pass had not stamped.
+  stampPeerValue(rows);
   const by = new Map(rows.map((r) => [r.symbol, r]));
 
   let fired = 0; let armed = 0; let skipped = 0;
