@@ -4290,6 +4290,462 @@
       '</div></div>' + chromeFoot();
   }
 
+  // ---- the index, broken into the parts that made its move --------------
+  //
+  // SHARED BY THE TREEMAP AND THE WATERFALL, because they are two readings
+  // of one arithmetic and two copies would drift the first time either was
+  // tuned. The treemap wants the pool, the sectors and the index return; the
+  // waterfall wants the per-name contributions as well.
+  //
+  // CONTRIBUTION IS BEGIN-WEIGHTED. The Flow card settled this: today's
+  // weight times the window's return overstates the basket by 24.6 points
+  // over a year and 15.7 this year, because a winner has already grown into
+  // the weight being applied to it. The begin weight is reconstructed as
+  // cap / (1 + r/100), which assumes an unchanged share count -- the only
+  // approximation available, since no share count is stored per date.
+  // Measured on the live index: the parts then sum to its own return with a
+  // gap of 0.0000 at every window.
+  //
+  // SIZED BY OUR OWN MARKET CAP, NEVER THE FUND'S PUBLISHED WEIGHT. A
+  // weighted constituent list is the issuer's dataset -- which is why
+  // /holdings is admin-only and why the screener carries only a Yes/No. A
+  // promo card is the most public surface in this app, so it uses the
+  // provider's market cap, which is our own data and visually identical at
+  // the sizes a tile is drawn at.
+  function marketParts(rows, field) {
+    const list = [];
+    let beg = 0, end = 0, noCap = 0, noRet = 0;
+    for (const r of rows) {
+      const cap = Number(r && r.marketCap);
+      // Two exclusions, and they are DIFFERENT rules. A missing return is
+      // ABSENT, never zero -- Number(null) is 0 and finite, and a fabricated
+      // flat company drags a weighted mean. A company with no market cap
+      // carries no weight at all; `> 0` rejects null and zero in one test.
+      if (!(cap > 0)) { noCap++; continue; }
+      if (r[field] == null || !(Number(r[field]) > -99)) { noRet++; continue; }
+      const ret = Number(r[field]);
+      // The -99 floor keeps a total wipeout out of the begin-weight divide:
+      // at -100% the reconstruction is a division by zero and at -99.9 it is
+      // a thousand times the company's own value. The MIN_VOL lesson, where
+      // a near-zero divisor produced a 3,227,535x position.
+      const b = cap / (1 + ret / 100);
+      if (!(b > 0) || !isFinite(b)) { noRet++; continue; }
+      beg += b; end += cap;
+      list.push({ sym: r.symbol, name: nameOf(r), sector: r.sector || null,
+        industry: r.industry || null, cap, ret, b });
+    }
+    if (!list.length) {
+      return { list: [], index: null, beg: 0, end: 0, noCap, noRet, total: 0 };
+    }
+    for (const x of list) x.c = (x.b / beg) * x.ret;
+    return { list, index: (end / beg - 1) * 100, beg, end, noCap, noRet, total: end };
+  }
+
+  // The pool every market card starts from. The index funds and the eleven
+  // sector funds come out FIRST: a fund that IS a slice of the market,
+  // sitting inside that market's own aggregate, double-counts it -- the trap
+  // /consolidated, the Snapshot and the Flow card all record. They carry a
+  // real market cap (a fund reports AUM), so nothing else here would have
+  // excluded them.
+  function marketPool(cut) {
+    return spFilter(stocks.filter((x) => x && !x.error
+      && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol)), cut);
+  }
+  // Prose, as against SP_CUT_LABEL, which titles a kicker.
+  const cutWords = (cut) => (cut === 'in' ? 'the S&P 500'
+    : cut === 'out' ? 'the stocks outside the S&P 500' : 'the whole screen');
+  const cutKick = (cut) => SP_CUT_LABEL[cut] || 'The whole screen';
+
+  // HOW STRONG A COLOUR A RETURN EARNS, PER WINDOW -- and it is FIXED rather
+  // than taken from the day's own spread, for the histogram's reason: a
+  // scale that moves with the data makes two posts a week apart
+  // incomparable, and on a coloured map the scale is most of what the card
+  // asserts. Beyond it the colour clamps and the note counts how many.
+  const HEAT = { d: 4, w1: 8, m1: 15, ytd: 50, y1: 60 };
+
+  // ---- the treemap -------------------------------------------------------
+  //
+  // AREA IS SIZE AND COLOUR IS RETURN, and that is forced rather than
+  // chosen. The obvious encoding -- area = contribution -- CANNOT BE DRAWN:
+  // measured on the index over the past month, 365 of 503 members contribute
+  // NEGATIVELY, and area has no sign. Taking the absolute value instead
+  // makes the tiles sum to 6.8 points against an index of 1.4, a five-fold
+  // overstatement with nothing on the card to say so. The Flow card met the
+  // same wall and answered it the same way: the signed quantity becomes the
+  // colour, never the extent.
+  //
+  // Contribution is then area TIMES colour, which is exactly what makes
+  // narrowness visible -- a handful of enormous bright tiles in a field of
+  // red. The waterfall is the card that can add that up; this is the card
+  // that can show its shape.
+  // MEASURED AGAINST PRODUCTION’S OWN 502 ROWS, not chosen: the story
+  // was 17px over at 1180. 1148 leaves ~15px against a floor of 20 that
+  // the note’s own length can move, so the suite asserts the overflow
+  // rather than the number.
+  const TM_H = { portrait: 700, square: 468, story: 1148 };
+  // Below these a tile cannot carry a ticker or a number legibly, so it is
+  // drawn and left unlabelled rather than labelled illegibly. The note says
+  // how many, because a map whose small tiles are blank should say that is a
+  // property of the space rather than of the data.
+  const TM_LABEL = 30, TM_VAL = 52;
+
+  // Squarified treemap (Bruls, Huizing and van Wijk, 2000). A row is grown
+  // while the WORST aspect ratio in it keeps improving, which is what stops
+  // a treemap of 500 tiles degenerating into slivers -- a naive
+  // slice-and-dice is unreadable at this count.
+  function squarify(items, X, Y, W, H, out) {
+    if (!items.length || !(W > 0) || !(H > 0)) return;
+    const sum = items.reduce((a, it) => a + it.v, 0);
+    if (!(sum > 0)) return;
+    const scale = (W * H) / sum;
+    const v = items.map((it) => Math.max(0, it.v) * scale);
+    const worst = (row, side) => {
+      const s = row.reduce((a, q) => a + q, 0);
+      if (!(s > 0) || !(side > 0)) return Infinity;
+      const mx = Math.max.apply(null, row), mn = Math.min.apply(null, row);
+      if (!(mn > 0)) return Infinity;
+      return Math.max((side * side * mx) / (s * s), (s * s) / (side * side * mn));
+    };
+    let i = 0, x = X, y = Y, w = W, h = H;
+    while (i < v.length && w > 0.5 && h > 0.5) {
+      const vert = w >= h;              // a row runs down the shorter side
+      const side = Math.min(w, h);
+      let row = [v[i]], j = i + 1, best = worst(row, side);
+      while (j < v.length) {
+        const next = row.concat([v[j]]);
+        const r = worst(next, side);
+        if (r > best) break;
+        row = next; best = r; j++;
+      }
+      const s = row.reduce((a, q) => a + q, 0);
+      const thick = s / side;
+      if (!(thick > 0)) break;
+      let p = vert ? y : x;
+      for (let k = 0; k < row.length; k++) {
+        const len = row[k] / thick;
+        if (vert) out.push({ it: items[i + k], x, y: p, w: thick, h: len });
+        else out.push({ it: items[i + k], x: p, y, w: len, h: thick });
+        p += len;
+      }
+      if (vert) { x += thick; w -= thick; } else { y += thick; h -= thick; }
+      i = j;
+    }
+    // A degenerate remainder is DROPPED rather than stacked at zero size,
+    // which would pile tiles on top of each other in one corner and read as
+    // a drawing fault. The count on the card is what is drawn.
+  }
+
+  function tplTreemap() {
+    const per = SNAP_PERIODS.some(([k]) => k === O.tmapPeriod) ? O.tmapPeriod : 'ytd';
+    const [field, perLabel] = MOV_PERIODS[per];
+    const phrase = /^past /.test(perLabel) ? 'over the ' + perLabel : perLabel;
+    const cut = SP_CUTS.some(([k]) => k === O.tmapSp500) ? O.tmapSp500 : 'in';
+    // NOT CHECKED AGAINST A LIST, the Flow card's rule: a sector name is the
+    // PROVIDER's taxonomy arriving as free text on the row, so a hardcoded
+    // set would refuse a twelfth the day one was added. A name matching no
+    // row falls through to the empty state, which says so by name.
+    const drill = (O.tmapSector && O.tmapSector !== 'All') ? String(O.tmapSector) : null;
+
+    let pool = marketPool(cut);
+    if (drill) pool = pool.filter((x) => x.sector === drill);
+    const P = marketParts(pool, field);
+    const H = TM_H[size.id] || TM_H.portrait;
+    const W = 952;
+
+    if (!P.list.length) {
+      const why = !pool.length
+        ? (drill
+          ? 'No stock in ' + drill + ' is in this cut.'
+          : cut === 'in'
+            ? 'No stock here has been matched against the index yet — no holdings '
+              + 'file has been imported.'
+            : cut === 'out' ? 'Every stock on the screen is in the index.'
+              : 'There is nothing on the screen to draw.')
+        : 'Nothing here has both a market value and a reading ' + phrase + '.';
+      return chromeTop() + '<div class="s-body"><div class="tm-in">' +
+        `<span class="s-kick">${esc(drill || cutKick(cut))}</span>` +
+        '<h2 class="s-title">The market, by size</h2>' +
+        `<p class="s-empty">${esc(why)}</p></div></div>` + chromeFoot();
+    }
+
+    // ---- two levels: sectors, then the companies inside each -------------
+    // A FLAT MAP OF 500 TILES HAS NO ORDER A READER CAN USE, and nesting is
+    // also what removes the tail problem. Measured: pooling everything
+    // outside the top 40 would make "the rest" 37% of the area and the
+    // biggest single thing on the chart -- the Flow card's own measurement,
+    // and the reason it refuses a flat industry view. Nested, every member
+    // is drawn and nothing is pooled.
+    //
+    // DRILLED, THE GROUPING IS THE INDUSTRY. A stock can carry a sector and
+    // no industry yet, since both arrive with the same profile and the
+    // taxonomy has been filled at different times -- so the blank bucket is
+    // kept rather than dropped, and named with an em-dash.
+    const gkey = drill ? 'industry' : 'sector';
+    const bySec = new Map();
+    for (const x of P.list) {
+      const k = x[gkey] || '—';
+      if (!bySec.has(k)) bySec.set(k, []);
+      bySec.get(k).push(x);
+    }
+    const secs = [...bySec.entries()].map(([name, xs]) => ({
+      name, xs: xs.slice().sort((a, b) => b.cap - a.cap),
+      v: xs.reduce((a, x) => a + x.cap, 0),
+    })).sort((a, b) => b.v - a.v);
+
+    const HEAD = size.id === 'square' ? 19 : size.id === 'story' ? 28 : 23;
+    const blocks = [];
+    squarify(secs.map((s) => ({ v: s.v, s })), 0, 0, W, H, blocks);
+
+    const tiles = [];
+    for (const b of blocks) {
+      const s = b.it.s;
+      // A HEADER STRIP IS ONLY DRAWN WHERE IT LEAVES ROOM FOR THE COMPANIES
+      // UNDER IT. Basic Materials is 1.4% of the index, so on the square its
+      // block is barely taller than the strip itself -- a header there would
+      // BE the sector, and the tiles it is labelling would be invisible.
+      const strip = (b.h >= HEAD * 2.4 && b.w >= 90) ? HEAD : 0;
+      const kids = [];
+      squarify(s.xs.map((x) => ({ v: x.cap, x })), b.x + 1, b.y + strip,
+        Math.max(0, b.w - 2), Math.max(0, b.h - strip - 1), kids);
+      tiles.push({ sec: s, box: b, strip, kids });
+    }
+
+    const heat = HEAT[per] || 20;
+    let clamped = 0, labelled = 0, drawn = 0;
+    const cell = (k) => {
+      const x = k.it.x;
+      const t = Math.max(-1, Math.min(1, x.ret / heat));
+      if (Math.abs(x.ret) > heat) clamped++;
+      drawn++;
+      // A TINT OVER THE GROUND, never a solid colour -- and that is what
+      // makes one label rule serve all four grounds. A tint keeps the tile
+      // on its own ground's side of the lightness range, so --text reads on
+      // every one of them: near-white on a dark green over black, near-black
+      // on a light green over white. A solid fill would need a second
+      // palette and a per-tile contrast decision.
+      const a = (10 + Math.abs(t) * 42).toFixed(1);
+      const col = t >= 0 ? pal.up : pal.down;
+      const lab = k.w >= TM_LABEL && k.h >= TM_LABEL;
+      const val = k.w >= TM_VAL && k.h >= TM_VAL;
+      if (lab) labelled++;
+      return `<div class="tm-c" style="left:${k.x.toFixed(1)}px;top:${k.y.toFixed(1)}px;`
+        + `width:${Math.max(0, k.w - 1).toFixed(1)}px;`
+        + `height:${Math.max(0, k.h - 1).toFixed(1)}px;`
+        + `background:color-mix(in srgb, ${col} ${a}%, transparent)">`
+        + (lab ? `<span class="tm-s">${esc(x.sym)}</span>` : '')
+        + (val ? `<span class="tm-r">${esc(pct(x.ret, 1))}</span>` : '')
+        + '</div>';
+    };
+
+    const body = tiles.map((t) => {
+      const b = t.box;
+      return `<div class="tm-sec" style="left:${b.x.toFixed(1)}px;top:${b.y.toFixed(1)}px;`
+        + `width:${Math.max(0, b.w - 1).toFixed(1)}px;`
+        + `height:${Math.max(0, b.h - 1).toFixed(1)}px">`
+        + (t.strip ? `<span class="tm-h" style="height:${t.strip}px;`
+          + `line-height:${t.strip}px">${esc(t.sec.name)}</span>` : '')
+        + '</div>' + t.kids.map(cell).join('');
+    }).join('');
+
+    const note = 'Every tile is one company: the area is its market value and the '
+      + 'colour is what it did ' + phrase + '. Contribution is the two together, '
+      + 'which is why a few bright tiles can carry an index while most of it is '
+      + 'red — area alone cannot show that, because a fall has no negative '
+      + 'size. Sized by market value rather than by index weight, and the colour '
+      + 'scale is fixed at ±' + heat + '% so two of these are comparable. '
+      + (clamped ? clamped + ' moved further and are drawn at full strength. ' : '')
+      + (drawn - labelled > 0 ? (drawn - labelled) + ' of ' + drawn
+        + ' are too small to name. ' : '')
+      // A TILE UNDER HALF A PIXEL IS NOT DRAWN AT ALL, and until the
+      // fixture grew a company worth a two-thousandth of its map that
+      // went UNSAID: the kicker counts members and the map counts tiles,
+      // so a reader was told 502 companies and shown 500. It cannot be
+      // floored -- a minimum size would distort the one thing the card
+      // encodes -- so it is counted instead, the Size card's bargain.
+      + (P.list.length - drawn > 0 ? (P.list.length - drawn)
+        + ' are too small to draw at all. ' : '')
+      + (P.noCap ? P.noCap + ' have no market value and are left out. ' : '')
+      + 'Not a forecast.';
+
+    return chromeTop() +
+      '<div class="s-body"><div class="tm-in">' +
+      `<span class="s-kick">${esc((drill || cutKick(cut))
+        + ' · ' + P.list.length.toLocaleString() + ' companies · $'
+        + fmtMoney(P.total))}</span>` +
+      `<h2 class="s-title">${esc(drill ? drill + ', by size' : 'The market, by size')}` +
+      `<span class="dim">${esc('area is market value, colour is ' + phrase
+        + ' · ' + (drill ? 'the sector ' : 'the index ') + pct(P.index, 1))}</span></h2>` +
+      `<div class="tm-wrap" style="height:${H}px">${body}</div>` +
+      '<div class="tm-key">' +
+      `<span class="tm-kl">${esc('−' + heat + '%')}</span>` +
+      '<span class="tm-kb" style="background:linear-gradient(to right,'
+      + ` color-mix(in srgb, ${pal.down} 52%, transparent),`
+      + ` color-mix(in srgb, ${pal.down} 10%, transparent),`
+      + ` color-mix(in srgb, ${pal.up} 10%, transparent),`
+      + ` color-mix(in srgb, ${pal.up} 52%, transparent))"></span>` +
+      `<span class="tm-kl">${esc('+' + heat + '%')}</span></div>` +
+      `<p class="s-sub wide" style="--fs:17px">${esc(note)}</p>` +
+      '</div></div>' + chromeFoot();
+  }
+
+  // ---- the waterfall -----------------------------------------------------
+  //
+  // THE SHAPE THE TREEMAP CANNOT BE, and the reason both exist. Narrowness
+  // is a claim about CONTRIBUTION, contribution is signed, and a waterfall
+  // is the one chart that takes signed parts and still closes: the steps run
+  // from zero, the pooled remainder absorbs everything not named, and the
+  // last bar is the index's own return. The parts add up to the whole on the
+  // card, where a reader can check them.
+  // MEASURED, not chosen -- and the story was 9px over at 1050, which the
+  // card suite caught and neither sweep could: the ground sweep measures
+  // colour and the width sweep measures the horizontal. 1020 leaves ~39px,
+  // against a floor of 20 (half a text line, the how-to deck’s standard).
+  // 4px of room is luck rather than headroom.
+  const WF_H = { portrait: 600, square: 392, story: 1020 };
+
+  function tplWaterfall() {
+    const per = SNAP_PERIODS.some(([k]) => k === O.wfallPeriod) ? O.wfallPeriod : 'ytd';
+    const [field, perLabel] = MOV_PERIODS[per];
+    const phrase = /^past /.test(perLabel) ? 'over the ' + perLabel : perLabel;
+    const cut = SP_CUTS.some(([k]) => k === O.wfallSp500) ? O.wfallSp500 : 'in';
+    const drill = (O.wfallSector && O.wfallSector !== 'All') ? String(O.wfallSector) : null;
+    const K = Math.max(3, Math.min(10, parseInt(O.wfallCount, 10) || 6));
+
+    let pool = marketPool(cut);
+    if (drill) pool = pool.filter((x) => x.sector === drill);
+    const P = marketParts(pool, field);
+    const H = WF_H[size.id] || WF_H.portrait;
+
+    if (!P.list.length || P.index == null) {
+      const why = !pool.length
+        ? (drill ? 'No stock in ' + drill + ' is in this cut.'
+          : cut === 'in'
+            ? 'No stock here has been matched against the index yet — no holdings '
+              + 'file has been imported.'
+            : cut === 'out' ? 'Every stock on the screen is in the index.'
+              : 'There is nothing on the screen to draw.')
+        : 'Nothing here has both a market value and a reading ' + phrase + '.';
+      return chromeTop() + '<div class="s-body"><div class="wf-in">' +
+        `<span class="s-kick">${esc(drill || cutKick(cut))}</span>` +
+        '<h2 class="s-title">What moved the index</h2>' +
+        `<p class="s-empty">${esc(why)}</p></div></div>` + chromeFoot();
+    }
+
+    const up = P.list.filter((x) => x.c > 0).sort((a, b) => b.c - a.c);
+    const dn = P.list.filter((x) => x.c < 0).sort((a, b) => a.c - b.c);
+    // TOP K EACH SIDE, never top 2K by magnitude. Ordered by |contribution|
+    // the two signs interleave and the chart is a jagged fence; this way it
+    // rises, then falls, then closes, which is the shape the reader is meant
+    // to take off it.
+    const picked = up.slice(0, K).concat(dn.slice(0, K));
+    const named = new Set(picked.map((x) => x.sym));
+    const rest = P.list.filter((x) => !named.has(x.sym));
+    const restC = rest.reduce((a, x) => a + x.c, 0);
+
+    const steps = picked.map((x) => ({ k: x.sym, v: x.c }));
+    if (rest.length) steps.push({ k: 'REST', v: restC, pool: true, n: rest.length });
+
+    // THE TOTAL IS NOT A STEP. It is drawn from zero, because it is the
+    // thing the steps add up TO -- drawn as one more step it would read as
+    // another contributor and the chart would not close. It gets no outgoing
+    // connector for the same reason.
+    let run = 0;
+    const laid = steps.map((s) => { const a = run; run += s.v; return { s, a, b: run }; });
+    // The scale has to cover the running path AND the total, or the closing
+    // bar runs off the top of a chart the path itself fits inside.
+    const lo = Math.min(0, P.index, ...laid.map((l) => Math.min(l.a, l.b)));
+    const hi = Math.max(0, P.index, ...laid.map((l) => Math.max(l.a, l.b)));
+    const span = (hi - lo) || 1;
+    const Y = (v) => ((hi - v) / span) * H;
+
+    const n = steps.length + 1;
+    const cw = 952 / n;                       // one column, in px
+    // The ticker and the value are sized FROM THE COLUMN rather than fixed,
+    // because K moves between 3 and 10 and the column halves across that
+    // range. A five-character ticker at 15px needs ~50px; below that it is
+    // set smaller, and below 40px the value is dropped rather than
+    // overlapping its neighbour -- the treemap's own labelling rule.
+    const kFs = Math.max(9, Math.min(16, Math.round(cw * 0.26)));
+    const vFs = Math.max(10, Math.min(15, Math.round(cw * 0.23)));
+    const showV = cw >= 40;
+    const pcw = 100 / n;
+
+    const col = (i, inner) =>
+      `<div class="wf-col" style="left:${(i * pcw).toFixed(4)}%;`
+      + `width:${pcw.toFixed(4)}%">${inner}</div>`;
+
+    const bar = (l, i) => {
+      const top = Y(Math.max(l.a, l.b)), bot = Y(Math.min(l.a, l.b));
+      const cls = l.s.pool ? 'pool' : l.s.v >= 0 ? 'up' : 'dn';
+      // THE CONNECTOR IS THE PROOF THE CHART CLOSES, not decoration: it runs
+      // at the level the running total has reached, and the one leaving the
+      // last step lands exactly on the top of the total bar. If the
+      // arithmetic were wrong, that line would miss.
+      const con = `<span class="wf-con" style="top:${Y(l.b).toFixed(1)}px"></span>`;
+      return col(i,
+        (showV ? `<span class="wf-v" style="bottom:${(H - top + 7).toFixed(1)}px;`
+          + `font-size:${vFs}px">${esc(pct(l.s.v, 2))}</span>` : '')
+        + `<span class="wf-b ${cls}" style="top:${top.toFixed(1)}px;`
+        + `height:${Math.max(3, bot - top).toFixed(1)}px"></span>`
+        + con
+        + `<span class="wf-k" style="font-size:${kFs}px">${esc(l.s.k)}</span>`);
+    };
+
+    const tTop = Y(Math.max(0, P.index)), tBot = Y(Math.min(0, P.index));
+    const total = col(n - 1,
+      (showV ? `<span class="wf-v tot" style="bottom:${(H - tTop + 7).toFixed(1)}px;`
+        + `font-size:${vFs}px">${esc(pct(P.index, 2))}</span>` : '')
+      + `<span class="wf-b tot ${P.index >= 0 ? 'up' : 'dn'}" `
+      + `style="top:${tTop.toFixed(1)}px;height:${Math.max(3, tBot - tTop).toFixed(1)}px">`
+      + '</span>'
+      + `<span class="wf-k tot" style="font-size:${kFs}px">INDEX</span>`);
+
+    // THE NARROWNESS NUMBER, which is what the card is for: how many of the
+    // risers it takes before their contributions alone cover the whole net
+    // move, everything below them cancelling out. Measured on the live index
+    // over the past month that is FOUR, out of 503.
+    let acc = 0, need = 0;
+    if (P.index > 0) { for (const x of up) { acc += x.c; need++; if (acc >= P.index) break; } }
+
+    const stats = [
+      [drill ? 'the sector' : cut === 'in' ? 'the index' : 'the screen', pct(P.index, 2)],
+      ['top ' + up.slice(0, K).length + ' added',
+        pct(up.slice(0, K).reduce((a, x) => a + x.c, 0), 2)],
+      ['fell', dn.length.toLocaleString() + ' of ' + P.list.length.toLocaleString()],
+    ];
+    if (P.index > 0 && need) stats.push(['carry the whole move', need.toLocaleString()]);
+
+    const note = 'Each step is one company’s contribution: its share of the '
+      + 'market at the start of the window, times what it did. They run from zero '
+      + 'and the last bar is the index itself, so the parts add up to the whole '
+      + '— which is the thing a treemap cannot do, because a fall has no '
+      + 'negative area. '
+      + (P.index > 0 && need
+        ? 'The ' + need + ' biggest alone cover the whole net move; everything below '
+          + 'them cancels out. ' : '')
+      + (rest.length ? 'REST is the other ' + rest.length.toLocaleString()
+        + ' together. ' : '')
+      + 'Begin-of-window weights, so a company is not credited with the size it '
+      + 'grew into. Not a forecast.';
+
+    return chromeTop() +
+      '<div class="s-body"><div class="wf-in">' +
+      `<span class="s-kick">${esc((drill || cutKick(cut))
+        + ' · ' + P.list.length.toLocaleString() + ' companies')}</span>` +
+      `<h2 class="s-title">${esc('What moved ' + (drill || cutWords(cut)))}` +
+      `<span class="dim">${esc('every company’s contribution ' + phrase
+        + ', in points of the ' + (drill ? 'sector' : 'index'))}</span></h2>` +
+      `<div class="wf-wrap" style="height:${H}px">` +
+        `<span class="wf-zero" style="top:${Y(0).toFixed(1)}px"></span>` +
+        laid.map(bar).join('') + total +
+      '</div>' +
+      `<div class="wf-stats">${stats.map(([k, v]) =>
+        `<div class="wf-s"><span class="wf-sk">${esc(k)}</span>`
+        + `<span class="wf-sv">${esc(v)}</span></div>`).join('')}</div>` +
+      `<p class="s-sub wide" style="--fs:17px">${esc(note)}</p>` +
+      '</div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
@@ -4297,11 +4753,133 @@
     bubble: tplBubble, stock: tplStock, day: tplDay, spotlight: tplSpotlight,
     disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution,
     flow: tplFlow, histogram: tplHistogram,
+    treemap: tplTreemap, waterfall: tplWaterfall,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
   // page and styled in the other is exactly the drift this module prevents.
   const STYLE = `
+    /* ---- Treemap: the market as area, the move as colour -----------------
+       NO HEX LITERAL AND NO BACKTICK ANYWHERE IN HERE. Every value is a
+       token, so all four grounds resolve with no override block; and a
+       backtick inside this block ends the STYLE template literal, which
+       node --check PASSES because it is valid syntax and merely the wrong
+       program. That has taken this module down three times. */
+    .tm-in { display: flex; flex-direction: column; height: 100%; }
+    /* A .dim span inside .s-title inherits the 66px display size, which on a
+       sentence of explanation sets three lines of headline. The Evolution
+       card met this first and the fix is per card, because .s-title is
+       shared -- and its own step classes were scoped to one container, which
+       is the same trap from the other side. */
+    .tm-in .s-title .dim { display: block; font-size: 29px; line-height: 1.25;
+                           letter-spacing: -0.015em; margin-top: 10px; }
+    .sz-square .tm-in .s-title .dim { font-size: 24px; }
+    .sz-story .tm-in .s-title .dim { font-size: 38px; }
+    /* THE NOTE IS PINNED TO THE FOOT and the map does not stretch. .s-body
+       centres its content, so a block whose height is its own content gets
+       the leftover room split evenly at its ends -- which is how the day
+       card ended up with two empty bands and nothing in the middle. */
+    .tm-in .s-sub { margin-top: auto; padding-top: 18px; }
+    .tm-wrap { position: relative; flex: none; margin-top: 26px; }
+    /* The sector outline sits ABOVE its tiles so its border and its name
+       are never painted over by one. It draws no background of its own --
+       the tiles are the drawing. */
+    .tm-sec { position: absolute; border: 1px solid var(--hair-2);
+              pointer-events: none; z-index: 2; overflow: hidden; }
+    .tm-h { display: block; font: 700 11px var(--sans); letter-spacing: 0.06em;
+            text-transform: uppercase; color: var(--muted); padding: 0 6px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sz-story .tm-h { font-size: 14px; }
+    .sz-square .tm-h { font-size: 10px; }
+    /* A tile. The background is set inline, because it is the datum. */
+    .tm-c { position: absolute; overflow: hidden; padding: 3px 4px;
+            box-sizing: border-box; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; gap: 1px;
+            border-radius: 1px; }
+    .tm-s { font: 700 11px var(--mono); letter-spacing: -0.01em;
+            color: var(--text); white-space: nowrap; line-height: 1.05; }
+    .tm-r { font: 500 10px var(--mono); font-variant-numeric: tabular-nums;
+            color: var(--text); opacity: 0.78; white-space: nowrap;
+            line-height: 1.05; }
+    .sz-story .tm-s { font-size: 14px; } .sz-story .tm-r { font-size: 12px; }
+    /* The key says what the colour MEANS, which on a card nobody can hover
+       is the only place it can be said. The gradient is built inline from
+       the theme's own up and down, so it cannot drift from the tiles. */
+    .tm-key { display: flex; align-items: center; gap: 10px; margin-top: 14px;
+              flex: none; }
+    .tm-kb { flex: 1; height: 8px; border-radius: 4px; display: block;
+             border: 1px solid var(--hair); }
+    .tm-kl { font: 600 13px var(--mono); font-variant-numeric: tabular-nums;
+             color: var(--muted); flex: none; }
+    .sz-story .tm-kl { font-size: 16px; } .sz-story .tm-kb { height: 10px; }
+
+    /* ---- Waterfall: the parts, adding up to the whole -------------------- */
+    .wf-in { display: flex; flex-direction: column; height: 100%; }
+    .wf-in .s-title .dim { display: block; font-size: 29px; line-height: 1.25;
+                           letter-spacing: -0.015em; margin-top: 10px; }
+    .sz-square .wf-in .s-title .dim { font-size: 24px; }
+    .sz-story .wf-in .s-title .dim { font-size: 38px; }
+    .wf-in .s-sub { margin-top: auto; padding-top: 18px; }
+    /* The ticker band hangs BELOW the plot, so the wrap reserves it as a
+       margin rather than inside its own height -- the height passed inline is
+       the plot's, and the scale is struck against it. */
+    /* THE BOTTOM MARGIN IS THE TICKER BAND PLUS CLEAR AIR. At 34 the
+       tickers sat 12px above the figures row and the two read as one
+       block of text -- found by looking at the rendered card, not by any
+       assertion, which is where every layout fault on this project has
+       come from. 54 leaves ~30px. */
+    .wf-wrap { position: relative; flex: none; margin-top: 30px;
+               margin-bottom: 54px; }
+    .wf-zero { position: absolute; left: 0; right: 0; height: 1px;
+               background: var(--hair-2); z-index: 1; }
+    .wf-col { position: absolute; top: 0; height: 100%; }
+    /* 14% gutters either side, which is what leaves room for the connector
+       to cross between two columns. */
+    .wf-b { position: absolute; left: 14%; right: 14%; border-radius: 2px;
+            z-index: 2; }
+    .wf-b.up { background: color-mix(in srgb, var(--green) 52%, transparent); }
+    .wf-b.dn { background: color-mix(in srgb, var(--red) 52%, transparent); }
+    /* The pooled remainder is a real basket and is not dimmed -- it is
+       NEUTRAL, because it is the one bar that is not a company and its sign
+       is whatever hundreds of names net to. */
+    .wf-b.pool { background: color-mix(in srgb, var(--muted) 42%, transparent); }
+    /* The total is the only bar drawn from zero. SOLID rather than a tint, so
+       it reads as a different kind of thing while keeping its own direction
+       -- the Flow card's rule, that green always marks something that rose. */
+    .wf-b.tot.up { background: var(--green); }
+    .wf-b.tot.dn { background: var(--red); }
+    /* THE CONNECTOR IS THE PROOF THE CHART CLOSES. It runs from this bar's
+       right edge to the next bar's left edge -- 86% to 114% of a column --
+       so it crosses the gutter and lands on the next step. Overflowing the
+       column is deliberate and nothing clips it. */
+    .wf-con { position: absolute; left: 86%; width: 28%; height: 1px;
+              background: var(--hair-2); z-index: 1; }
+    /* -2%, not -6%: the labels are centred on their own column and may
+       overhang it, but at 6% two adjacent ones nearly met on the 4:5
+       ("+0.16%" beside "-0.10%"). A value is allowed a little overhang
+       and is dropped entirely below 40px of column. */
+    .wf-v { position: absolute; left: -2%; right: -2%; text-align: center;
+            font: 600 13px var(--mono); font-variant-numeric: tabular-nums;
+            color: var(--muted); white-space: nowrap; z-index: 3; }
+    .wf-v.tot { color: var(--text); font-weight: 700; }
+    .wf-k { position: absolute; top: 100%; margin-top: 9px; left: -8%;
+            right: -8%; text-align: center; font: 600 13px var(--mono);
+            letter-spacing: -0.01em; color: var(--muted); white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis; }
+    .wf-k.tot { color: var(--text); font-weight: 700; }
+    /* The figures row, the day card's shape: the key above its value, so the
+       four read as a set rather than as boxes sized by their own text. */
+    .wf-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+                gap: 14px; flex: none; }
+    .wf-s { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .wf-sk { font: 700 11px var(--sans); letter-spacing: 0.07em;
+             text-transform: uppercase; color: var(--faint); white-space: nowrap;
+             overflow: hidden; text-overflow: ellipsis; }
+    .wf-sv { font: 700 27px var(--mono); font-variant-numeric: tabular-nums;
+             color: var(--text); letter-spacing: -0.02em; }
+    .sz-square .wf-sv { font-size: 22px; }
+    .sz-story .wf-sv { font-size: 34px; }
+    .sz-story .wf-sk { font-size: 13px; }
     /* ---- Histogram: the shape of the screen on one measure --------------
        NO HEX LITERAL ANYWHERE IN HERE. Every value is a token, so all four
        grounds resolve with no override block -- the lesson the four unmapped

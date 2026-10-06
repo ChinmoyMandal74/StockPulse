@@ -619,6 +619,53 @@
           out of both columns — a fund that IS a sector would double-count it.</p>
       </div>
 
+      <!-- THE MARKET AS AREA. No SCOPE pickers, for tplDay's and Flow's
+           reason: this card answers "what is the market made of and how has
+           each part done", so it takes no list, no screen and no size band,
+           and INDUSTRY_PREFIXES is left alone. tmapSector is the DRILL. -->
+      <div id="tmapBox">
+        <label>Break down</label>
+        <select id="tmapSector"></select>
+        <p class="hint">All sectors nests every company under its own sector. Pick
+          one to nest its companies under their industries instead.</p>
+        <label>Period</label>
+        <select id="tmapPeriod"></select>
+        <label>S&amp;P 500</label>
+        <select id="tmapSp500"></select>
+        <p class="hint">Area is market value and colour is the move, which is the
+          only way round it can be drawn: contribution is signed and area is not, so
+          a fall has no negative size. Contribution is the two together. The colour
+          scale is fixed per window, so two of these cards are comparable; anything
+          past it is drawn at full strength and counted in the note. Sized by market
+          value rather than by index weight.</p>
+      </div>
+
+      <!-- THE PARTS, ADDING UP TO THE WHOLE. The shape the treemap cannot be:
+           narrowness is a claim about contribution, contribution is signed,
+           and only a waterfall takes signed parts and still closes. -->
+      <div id="wfBox">
+        <label>Break down</label>
+        <select id="wfallSector"></select>
+        <label>Period</label>
+        <select id="wfallPeriod"></select>
+        <label>How many each side</label>
+        <select id="wfallCount">
+          <option value="4">4 up and 4 down</option>
+          <option value="5">5 up and 5 down</option>
+          <option value="6" selected>6 up and 6 down</option>
+          <option value="8">8 up and 8 down</option>
+          <option value="10">10 up and 10 down</option>
+        </select>
+        <label>S&amp;P 500</label>
+        <select id="wfallSp500"></select>
+        <p class="hint">Each step is one company’s share of the market at the
+          start of the window times what it did, so the steps and the pooled
+          remainder add up to the last bar, which is the index itself. Begin-of-window
+          weights: today’s weight times the window’s return overstates the
+          index by 24.6 points over a year, because a winner has already grown into
+          the weight being applied to it.</p>
+      </div>
+
       <!-- Histogram: the shape of the screen on one measure, optionally
            with a subject pinned to it. `stock` is `screen` plus a pin, so
            they are two MODES of one template rather than two templates.
@@ -804,6 +851,8 @@
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
+      { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
+      { id: 'waterfall', name: 'Waterfall', note: 'What actually moved the index, name by name, adding up to the whole' },
       { id: 'histogram', name: 'Histogram', note: 'The shape of the whole screen on one measure — on its own, or with a stock marked on it' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
@@ -922,6 +971,8 @@
       'bubX', 'bubY', 'bubSize', 'bubThird', 'bubColor', 'bubCount', 'bubScope', 'bubSector', 'bubIndustry', 'bubCap', 'bubScreen', 'bubSp500',
       'daySnapPeriod', 'dayMetric', 'dayCount', 'dayFloor', 'daySp500',
       'flowSector', 'flowPeriod', 'flowSp500',
+      'tmapSector', 'tmapPeriod', 'tmapSp500',
+      'wfallSector', 'wfallPeriod', 'wfallCount', 'wfallSp500',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'evoSym', 'evoMeasure', 'evoWin',
@@ -1012,6 +1063,8 @@
         if (!today && $('dayMetric').value === 'value') $('dayMetric').value = 'pct';
       }
       $('flowBox').style.display = tpl === 'flow' ? 'block' : 'none';
+      $('tmapBox').style.display = tpl === 'treemap' ? 'block' : 'none';
+      $('wfBox').style.display = tpl === 'waterfall' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       $('histBox').style.display = tpl === 'histogram' ? 'block' : 'none';
@@ -1170,6 +1223,14 @@
     // so without this they would save with a post and do nothing on screen.
     ['flowSector', 'flowPeriod', 'flowSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'flow') render(); }));
+    // A FIFTEENTH AND SIXTEENTH hardcoded listener list, and the warning
+    // above applies to both exactly: every one of these is in the markup
+    // and in CONTROL_IDS, so without this they would save with a post, be
+    // read by the builder, and do nothing when you touch them.
+    ['tmapSector', 'tmapPeriod', 'tmapSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'treemap') render(); }));
+    ['wfallSector', 'wfallPeriod', 'wfallCount', 'wfallSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'waterfall') render(); }));
     ['daySnapPeriod', 'dayMetric', 'dayCount', 'dayFloor', 'daySp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
     ['spotSym', 'spotWin', 'spotProf'].forEach((id) =>
@@ -1646,6 +1707,37 @@
         if ([...$('flowSp500').options].some((o) => o.value === flowSpKeep)) {
           $('flowSp500').value = flowSpKeep;
         }
+        // THE TWO MARKET CARDS, filled the same way and for the same reasons.
+        // Both default to the INDEX, so neither can ride the shared S&P fill:
+        // that loop reads `keep` BEFORE the options exist, gets the empty
+        // string on a first paint, finds it in no option list and leaves the
+        // select on its FIRST option -- All. The page and the module would
+        // then disagree about the default, silently, and every number on the
+        // card would be the whole screen's while the module's fallback said
+        // `in`. Filled with `selected`, keeping a choice already made.
+        [['tmap', 'treemap'], ['wfall', 'waterfall']].forEach(([p]) => {
+          const secKeep = $(p + 'Sector').value;
+          $(p + 'Sector').innerHTML = '<option value="All">All sectors</option>'
+            + Cards.sectors(stocks).map((nm) =>
+              `<option value="${esc(nm)}">${esc(nm)}</option>`).join('');
+          if ([...$(p + 'Sector').options].some((o) => o.value === secKeep)) {
+            $(p + 'Sector').value = secKeep;
+          }
+          const perKeep = $(p + 'Period').value;
+          $(p + 'Period').innerHTML = Cards.snapPeriods().map(([v, lab]) =>
+            `<option value="${esc(v)}"${v === 'ytd' ? ' selected' : ''}>`
+            + `${esc(lab)}</option>`).join('');
+          if ([...$(p + 'Period').options].some((o) => o.value === perKeep)) {
+            $(p + 'Period').value = perKeep;
+          }
+          const spKeep = $(p + 'Sp500').value;
+          $(p + 'Sp500').innerHTML = Cards.spCuts().map(([v, lab]) =>
+            `<option value="${esc(v)}"${v === 'in' ? ' selected' : ''}>`
+            + `${esc(lab)}</option>`).join('');
+          if ([...$(p + 'Sp500').options].some((o) => o.value === spKeep)) {
+            $(p + 'Sp500').value = spKeep;
+          }
+        });
         const snapKeep = $('daySnapPeriod').value;
         $('daySnapPeriod').innerHTML = Cards.snapPeriods().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');

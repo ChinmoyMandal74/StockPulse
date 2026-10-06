@@ -4748,6 +4748,86 @@ This page documents the hardcoded **listener** lists (now sixteen) and `CONTROL_
   - **`size-scope-test.js` ACCOUNTS FOR EVERY TEMPLATE as either scoped or unscoped, and correctly failed** until the histogram was added to its scoped list — which is that check doing exactly its job rather than going stale. **Corrected, not worked around.**
   - **Four faults were found by LOOKING and none by assertion**: the subtitle inheriting the 66px title size (the Evolution card's own bug, met again because `.s-title .dim` is shared), the midpoint axis labels, the median line and its label drawn *behind* the bars so the rule showed only above them and the word not at all, and the flag off the artboard at the extremes.
 
+### Treemap and Waterfall — the market as area, and the parts that add up to it (2026-10-06, owner's request)
+
+**A twentieth and twenty-first template, `treemap` and `waterfall`, fifth and sixth in the studio's picker, both defaulting to the S&P 500.** Asked as *"In Promo, What do you think about adding Tree map, One idea I have is to show individual stocks contribution to s&p index .. showing narrowness"*, then **"Can you do the size treemap and waterfall for narrowness, Focus on S&P"**.
+
+#### THEY ARE TWO CARDS BECAUSE CONTRIBUTION IS SIGNED AND AREA IS NOT
+The request was one idea and it does not fit on one card, which is the measurement that shaped both. **Over the past month 360 of the 502 members contribute NEGATIVELY**, and a rectangle has no negative size. Taking the absolute value instead makes the tiles sum to **6.8 points against an index of 1.4** — a five-fold overstatement with nothing on the card to say so.
+
+So the signed quantity becomes the **colour** and the treemap answers *what is the market made of and what did each part do*; the waterfall is the one chart that takes signed parts and still **closes**, and answers *what actually moved it*. Contribution is then area times colour on one card and an explicit arithmetic on the other, and each says in its note what the other is for.
+
+#### SIZED BY OUR OWN MARKET CAP, NEVER THE FUND'S PUBLISHED WEIGHT
+A weighted constituent list is the issuer's dataset — which is why `/holdings` is `requireAdmin` and why the screener carries only a Yes/No boolean. **A promo card is the most public surface in this app**, so area comes from the provider's market cap, which is our own data and visually identical at the sizes a tile is drawn at. There is a check that nothing resembling a weight or a share count reaches a screener row.
+
+#### `marketParts` IS SHARED, AND IT IS BEGIN-WEIGHTED
+Two readings of one arithmetic, so one function: the treemap wants the pool and the index return, the waterfall wants the per-name contributions as well. **The weight is the one at the START of the window**, reconstructed as `cap / (1 + r/100)` — the Flow card's measurement, where today's weight times the window's return overstates the index by **24.6 points over a year**, because a winner has already grown into the weight being applied to it. Measured live, the parts then sum to the index's own return with a gap of **0.0000** at every window. **Proved by reverting**: the end-weighted version fails 9, and the waterfall's own steps then add to 16.28 under a bar labelled 0.00.
+
+- **A `-99` floor keeps a total wipeout out of that divide** — at −100% the reconstruction is a division by zero and at −99.9 it is a thousand times the company's own value. The `MIN_VOL` lesson, where a near-zero divisor once produced a 3,227,535× position.
+- **Two exclusions, and they are different rules.** A missing return is ABSENT, never zero (`Number(null)` is 0 and finite, and a fabricated flat company drags a weighted mean); a company with no market cap carries no weight at all, and `> 0` rejects null and zero in one test. **Proved by reverting**: coercing a null cap fails 1 and drops the count from the note.
+- **The index funds and the eleven sector funds come out first**, the trap `/consolidated`, the Snapshot and the Flow card all record: a fund that IS a slice of the market, inside that market's own aggregate, double-counts it. They carry a real cap (a fund reports AUM), so nothing else would have excluded them. **Proved by reverting**: fails 12.
+
+### The treemap
+
+**Squarified (Bruls, Huizing and van Wijk), nested by sector, every member drawn.** A row is grown while the WORST aspect ratio in it keeps improving, which is what stops 500 tiles degenerating into slivers.
+
+- **NESTING IS WHAT REMOVES THE TAIL PROBLEM.** Measured at 1080px: the top 20 names are 53% of the area, the top 40 are 63%, the top 100 are 78% — so a flat map pooling everything outside the top 40 would make *the rest* **37%** and the biggest single thing on the chart. That is the Flow card's own measurement and the reason it refuses a flat industry view. Nested, nothing is pooled.
+- **Drilled into a sector, the grouping is the INDUSTRY.** A stock can carry a sector and no industry yet, since both arrive with the same profile and the taxonomy has been filled at different times, so the blank bucket is kept and named with an em-dash.
+- **A HEADER STRIP IS ONLY GIVEN TO A BLOCK THAT CAN HOLD ONE** (`b.h >= HEAD * 2.4 && b.w >= 90`). Basic Materials is **1.4% of the index**, so on the square its block is barely taller than the strip — a header there would BE the sector and the tiles it is labelling would be invisible. **Proved by reverting**: a strip at 17px inside a 1px block.
+- **A TINT OVER THE GROUND, never a solid colour, and that is what makes ONE label rule serve all four grounds.** A tint keeps the tile on its own ground's side of the lightness range, so `--text` reads on every one of them: near-white on a dark green over black, near-black on a light green over white. A solid fill would need a second palette and a per-tile contrast decision.
+- **THE COLOUR SCALE IS FIXED PER WINDOW** (±4% for a day, ±8 week, ±15 month, ±50 YTD, ±60 year) and never taken from the day's own spread — the histogram's reason: a scale that moves with the data makes two posts a week apart incomparable, and on a coloured map the scale is most of what the card asserts. Past it the colour clamps, the note counts how many, and the key prints the number.
+- **A tile under the label floor is drawn and left unlabelled** rather than labelled illegibly, and the note says how many. Live: **91 of 502 named on the 4:5, 155 on the story**.
+
+#### A COMPANY TOO SMALL TO DRAW WAS SILENTLY DROPPED, AND THE FIXTURE IS WHAT FOUND IT
+`squarify` abandons a remainder it cannot place, which is right — stacking zero-size tiles in a corner reads as a drawing fault. But the kicker counts MEMBERS and the map counts TILES, so a reader was being told *502 companies* and shown 500. It cannot be floored: a minimum size would distort the one thing the card encodes. **It is counted instead** — *"N are too small to draw at all"* — the Size card's bargain, where a thing drawn at its floor says so.
+
+- Unreachable on the live index (all 502 drew), so the fixture grew a company worth a two-thousandth of its map. **A guard no fixture can reach needs a smaller test, not a quieter claim.**
+
+#### THE 31-ROW FIXTURE CANNOT PROVE SQUARIFY, AND THE REVERT SAID SO
+Reduced to slice-and-dice, the fixture's worst tile is **3.83:1 against squarify's 2.94** — a difference no honest threshold separates, because seven blocks of four or five tiles cannot produce a sliver. The claim is about **five hundred** tiles, so it is measured there: an off-page check builds the card over a 500-name power law with no server and no browser, and asserts **median 1.21:1, p95 1.85, worst 3.40**. **Proved by reverting**, which then fails.
+
+### The waterfall
+
+**Top K risers, then top K fallers, then the pooled remainder, then the index — drawn from zero.**
+
+- **TOP K EACH SIDE, never top 2K by magnitude.** Ordered by |contribution| the two signs interleave and the chart is a jagged fence; this way it rises, falls, and closes, which is the shape the reader is meant to take off it.
+- **THE TOTAL IS NOT A STEP.** It is drawn from zero, because it is the thing the steps add up TO — drawn as one more step it would read as another contributor and the chart would not close. It takes no outgoing connector for the same reason. **Proved by reverting**: fails 1, with the index bar floating where a step would be.
+- **THE CONNECTOR IS THE PROOF, not decoration.** It runs at the level the running total has reached, and the one leaving the last step lands **exactly** on the top of the total bar. If the arithmetic were wrong that line would miss, visibly, and no number on the card would say so. Measured on the fixture: 183.5 against 183.5. **Proved by reverting**: fails 1 at 445.3 against 183.5.
+- **The pooled remainder is NEUTRAL, not a direction** — it is the one bar that is not a company, and its sign is whatever hundreds of names net to.
+- **THE NARROWNESS NUMBER IS A STAT, because it is what the card is for**: how many risers it takes before their contributions alone cover the whole net move, everything below them cancelling out.
+- **The ticker and the value are sized FROM THE COLUMN**, because K moves between 3 and 10 and the column halves across that range; below 40px of column the value is dropped rather than overlapping its neighbour — the treemap's own labelling rule.
+
+### WHAT THE LIVE INDEX ACTUALLY SAYS, which is the argument for both
+
+| | past month | this year |
+|---|---|---|
+| the index | **+1.53%** | +14.44% |
+| members that FELL | **360 of 502** | 212 of 500 |
+| risers needed to cover the whole net move | **5** | 39 |
+| the pooled remainder | +0.03pt | **+8.62pt** |
+
+**Over a month the card is dramatic and over a year it is not, and both are honest.** On the month the REST bar is a sliver and five names carry everything; on the year REST is larger than every named step combined — the index is genuinely broad over that window, and the card says so rather than implying narrowness it has not measured. `wfallCount` is what a reader turns up when the remainder is doing the work. Weight concentration, for context: **the top ten are 42.4% of the index and seventeen names carry half its value.**
+
+#### `POST_OPT_KEY` WANTS THREE LOWERCASE LETTERS, AND `wf` IS TWO
+**The waterfall's controls were `wfSector` / `wfPeriod` / `wfCount` / `wfSp500`, and `cleanPosts` dropped every one of them on save.** `POST_OPT_KEY` is `/^[a-z]{3,6}[A-Z][A-Za-z0-9]{0,20}$/`; a two-letter prefix fails it. The post stored, the response said `ok`, nothing appeared in any log — and the phone then built the card at its **defaults**. The same silence `POST_OPT_MAX` produced when it was 40 against 63 controls and ate all seven of the Size card's.
+
+- **THE PREFIX MOVED, NOT THE REGEX.** That guard is shared by every template and exists to stop a saved post becoming free storage; relaxing it to `{2,6}` would buy nothing, since no other control uses a two-letter prefix. `wfall*`, and nothing was stored yet so there is no migration.
+- **THE CHECK IS OVER THE WHOLE PAGE, not these two cards.** The suite reads `CONTROL_IDS` out of `/promo` and tests all **124** ids against the server's own rule, so the next short prefix is caught by a suite that is not about it.
+- **Proved by reverting**: fails 7, with every control inert. **The revert has to rename the fill-loop prefix too** — renaming the ids alone leaves the page looking up controls that do not exist, which throws and kills the suite at check 1: an impossible state rather than the bug, which was a *consistent* two-letter prefix.
+
+#### Worth knowing
+- **No endpoint, no query, no basket.** Every field both cards read is on the snapshot row, so neither has a `basketDays` entry and neither fetches anything; `spMember` is a read-path stamp and `/api/m/post` already applies it, so a saved post carries the cut to the phone with nothing wired — **checked rather than assumed**, because the stamps are a set and the set has been incomplete twice.
+- **A FIFTEENTH AND SIXTEENTH hardcoded listener list** in promo.html. A control in the markup and in `CONTROL_IDS` but not in one of these saves with a post, is read by the builder, and **does nothing when you touch it**. Control ids **124 against `POST_OPT_MAX` 200**.
+- **No scope pickers**, for `tplDay`'s and Flow's reason — these answer *what is the market made of*, so they take no list, no screen and no size band, and `INDUSTRY_PREFIXES` is left alone. `tmapSector` and `wfallSector` are DRILLS, not scopes, and like Flow's they are **not checked against a list**: a sector name is the provider's taxonomy arriving as free text, so a hardcoded set would refuse a twelfth the day one was added.
+- **HTML labels over the drawing, never SVG text** — the module's standing rule, since the artboard is scaled to the window.
+- Verified: **56 checks**, over a fixture whose load-bearing properties are that **the biggest faller is one of the biggest companies** (so area-as-contribution comes out at a visibly different size), that **begin and end weighting disagree by seven points**, that **the biggest company in it is NOT a member** (so a leaking S&P cut changes the index entirely rather than by a rounding margin), and that **both funds carry `spMember` true**, so only the explicit exclusion removes them. Plus the ground sweep at **253 checks over 184 combinations** and the width sweep at **121 over 138**. **Proved by reverting ten times, every one load-bearing.**
+  - **Two layout faults found by LOOKING and none by assertion**: the ticker band ran straight into the figures row (12px apart, reading as one block of text) and two adjacent value labels nearly met on the 4:5. A third — the treemap's story running **17px** past its artboard — was caught by the card suite and by neither sweep, because the ground sweep measures colour and the width sweep measures the horizontal.
+  - **THE FIXTURE WAS WRONG TWICE BEFORE THE CODE WAS WRONG ONCE.** All four big names were in Technology, which took that sector to **91%** of the map so no other block earned a strip and the suite reported ONE where the guard was working exactly as designed; and every small name was at or below zero, so `up` held only the three giants, the card correctly drew nine steps rather than twelve, and the suite reported the CODE wrong. The giants are in three sectors now and half the crowd rises.
+  - **`note-fit-test` HAS NEVER SEEN THE FLOW CARD'S NOTE**, and would never have seen these two: its fixture carries no `ytdPct`, which is the default window for all three, so each drew `.s-empty` and dropped out of the note list in silence. One field took it from 9 templates to **12**. Corrected there rather than worked around.
+  - **A COUNT HAS TO BE DERIVED, not written down.** The suite's column count is however many of each side the fixture can supply, capped at the control's value — a literal reports the code wrong the moment the fixture moves, which is exactly what it did.
+  - **Three fixture traps worth keeping.** `fund_holdings` and `fund_state` are keyed **`'spy'` lowercase** (both accessors fold it), so a `'SPY'` seed matches nothing, stamps null on every row, and every assertion then passes over a card correctly reporting that no file has been imported — there is a sanity check on the stamp before anything else runs. `CONTROL_IDS` is a top-level `const`, so it is a lexical binding and **not** a property of `window`: reading it that way collected nothing and the post saved with no options at all. And an apostrophe in prose (*"the page's list"*) is a perfectly good quote to a naive matcher, which reported `s list.` as a failing control id.
+  - **A heredoc ate a backslash level twice more** — once leaving a real newline inside a regex literal so the suite would not parse. Eighth and ninth instances; both repaired with the Write tool.
+
 ## Consolidated — every group in one table (2026-09-28, owner's request)
 **`/consolidated`: one row per group, so the groups can be read against each other.** The owner's words: *"I do not have a screen to show how Mag 7 as a theme has done compared with Memory or cybersecurity."* Nothing did — a group page shows ONE group against the index, `/compare` is two **stocks**, and the pivot crosses two dimensions to answer *where is the weight* rather than *how has each one done*. Member page, guests refused, like the studio and the pivot beside it; a `Consolidated` button in the bar before Compare.
 
