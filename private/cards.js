@@ -1350,6 +1350,19 @@
       'Strong Buy': '#157a51', 'Buy': '#4a770e', 'Buy with Risk': '#9d5a07',
       'Hold': '#5b6675', 'Avoid': '#b44902', 'Sell Immediately': '#c81e37',
     };
+    // SKY NEEDS ITS OWN LADDER, and that is a MEASUREMENT rather than a
+    // precaution. LADDER_LIGHT clears only ~4.52:1 on light's own card tile,
+    // so on a ground 0.117 darker in luminance (#e0ebf9 at 0.821 against
+    // #f7f8fa at 0.938) ALL SIX entries land at 4.00-4.37 and every one is
+    // under the floor. Each is darkened toward black with its channels
+    // scaled together, so the HUE is light's exactly and only the lightness
+    // moves -- the LIGHT_INK approach. Tuned to clear 4.6 on the tile rather
+    // than 4.5: a ladder sitting on its floor is what broke when the ground
+    // moved, so the margin is the point rather than a nicety.
+    const LADDER_SKY = {
+      'Strong Buy': '#136f4a', 'Buy': '#436c0d', 'Buy with Risk': '#8f5206',
+      'Hold': '#576270', 'Avoid': '#a44202', 'Sell Immediately': '#be1d34',
+    };
     const THEMES = {
       dark: {
         cls: '', ground: '#050505',
@@ -1368,6 +1381,28 @@
         legUp: 'rgba(21,122,81,0.45)', legDown: 'rgba(200,30,55,0.45)',
         washUp: 'rgba(21,122,81,0.14)', washDown: 'rgba(200,30,55,0.13)',
         tints: LADDER_LIGHT, ink: inkFor(LIGHT_INK),
+      },
+      // 2026-10-05, owner: "a light blue theme .. just to see how it looks",
+      // then committed. It REVERSES the recorded "Only 3 colors, Dark, Light
+      // and Navy", which is why that is written down rather than absorbed.
+      //
+      // Sky CARRIES the light class as well as its own, so it inherits every
+      // one of light's furniture rules by BEING one of them rather than by
+      // duplicating their selectors -- the bargain navy has with dark, and
+      // the reason this cost 4KB rather than a second sweep of the 34
+      // rgba(255,255,255,.0x) sites a CSS variable cannot reach. Note that
+      // classList.add REFUSES a string with a space in it, so promo.html
+      // splits; the phone's two hosts build a class attribute string and
+      // need nothing. What it does NOT inherit is anything tuned to light's
+      // own luminance -- see LADDER_SKY above and the th-sky block below.
+      sky: {
+        cls: 'th-light th-sky', ground: '#e0ebf9',
+        up: '#126b46', down: '#bb1b33', flat: '#566070',
+        grid: 'rgba(13,16,23,0.11)', zero: 'rgba(13,16,23,0.30)',
+        axis: '#515b69',
+        legUp: 'rgba(18,107,70,0.45)', legDown: 'rgba(187,27,51,0.45)',
+        washUp: 'rgba(18,107,70,0.14)', washDown: 'rgba(187,27,51,0.13)',
+        tints: LADDER_SKY, ink: inkFor(LIGHT_INK),
       },
       // Navy is the dark palette on a different ground, deliberately — every
       // value below is dark's, and the only entries that exist at all are the
@@ -4284,6 +4319,32 @@
        6.5, amber 10.5), so nothing else has to move and the white-alpha
        furniture keeps working. --faint alone is lifted: it landed at 4.81,
        the closest to the floor, and it paints the smallest text on the card. */
+    /* The blue ground, over the light block above. Same specificity, so it
+       has to come AFTER it -- and it only needs what the bluer, darker
+       ground actually changes. Measured: #e0ebf9 is luminance 0.821
+       against light's 0.938, a gap of 0.117, which drops light's green,
+       faint and amber to 4.42 / 4.54 / 4.51 on the bare ground and
+       further under the floor once the 0.05 card-tile tint darkens the
+       surface a card actually puts text on -- so each is darkened a
+       notch. After, on that tile: green 4.89, red 4.74, amber 4.91,
+       flat 4.76, muted 5.31, faint 5.16. The VERDICT LADDER needed the
+       same treatment and is LADDER_SKY, in the palette above: reusing
+       light's put all six entries at 4.00-4.37. */
+    .s-art.th-sky {
+      --card-ground: #e0ebf9;
+      --green: #126b46; --red: #bb1b33; --amber: #8a4f06;
+      --muted: #4f5968; --faint: #515b69;
+      --hair: rgba(13, 16, 23, 0.11); --hair-2: rgba(13, 16, 23, 0.19);
+      background: var(--card-ground); }
+    /* Blue blooms rather than light's green-and-blue: a green wash on a
+       blue ground reads as a stain. */
+    .s-art.th-sky .s-aura {
+      background:
+        radial-gradient(82% 56% at 6% -8%, rgba(30, 78, 200, 0.11), transparent 66%),
+        radial-gradient(70% 50% at 100% 0%, rgba(18, 107, 70, 0.05), transparent 68%); }
+    .s-art.th-sky .s-glyph {
+      background: linear-gradient(160deg, rgba(18, 107, 70, 0.17), rgba(18, 107, 70, 0.05));
+      border-color: rgba(18, 107, 70, 0.36); color: #126b46; }
     .s-art.th-navy { --faint: #8b95a5; --card-ground: #0d1a2d;
                      background: var(--card-ground); }
     .s-art.th-navy .s-aura {

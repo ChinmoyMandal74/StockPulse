@@ -129,6 +129,7 @@
       <select id="cardTheme" aria-label="Ground">
         <option value="dark" selected>Dark</option>
         <option value="light">Light</option>
+        <option value="sky">Light blue</option>
         <option value="navy">Navy</option>
       </select>
 
@@ -929,7 +930,10 @@
       [...stage.classList].filter((c) => c.startsWith('th-'))
         .forEach((c) => stage.classList.remove(c));
       const themeCls = Cards.themeClass(tpl, controlOpts());
-      if (themeCls) stage.classList.add(themeCls);
+      // SPLIT: a ground may carry more than one class (sky is light plus a
+      // blue ground), and classList.add throws InvalidCharacterError on a
+      // string with a space in it.
+      if (themeCls) stage.classList.add(...themeCls.split(' '));
       stage.classList.remove('sz-portrait', 'sz-square', 'sz-story');
       stage.classList.add('sz-' + size.id);
       stage.innerHTML = '<div class="s-aura"></div>' +
