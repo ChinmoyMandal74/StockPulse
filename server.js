@@ -3219,6 +3219,11 @@ async function stampAthDistance(rows) {
 // disagree by 2,900% on CX and 900% on Vodafone.
 //
 // A fund has no market cap, so it has no value added — blank, never zero.
+// A short position cannot be a multiple of the float; past this the
+// numerator and the denominator are not the same security. See the guard at
+// the foot of stampCapDerived for the measurement.
+const SHORT_PCT_MAX = 100;
+
 function stampCapDerived(rows) {
   if (!Array.isArray(rows)) return;
   for (const r of rows) {
@@ -3257,6 +3262,44 @@ function stampCapDerived(rows) {
     const px = Number(r.price);
     const eps = Number(r.dilutedEpsTtm);
     r.peLive = (px > 0 && eps > 0) ? px / eps : null;
+
+    // SHORT INTEREST LARGER THAN THE FLOAT IS MIXED UNITS, NOT A SQUEEZE.
+    // shortPctFloat is OUR OWN division (shares_short / float_shares, where
+    // fetchProfile computes it), and the vendor answers a dual-class company
+    // with one class's shorts over the OTHER class's float. Asked of
+    // /statistics directly for BRK.B, in one response:
+    //
+    //     shares_short                         12,529,378   <- the B class
+    //     float_shares                          1,233,781   <- the A class
+    //     shares_outstanding                    1,431,693   <- the A class
+    //     short_percent_of_shares_outstanding        0.01   <- correct for B
+    //     short_ratio                                3.16   <- correct for B
+    //
+    // Ten times more shares short than the float contains. The vendor's own
+    // percentage fields are right per class and THERE IS NO
+    // short_percent_of_float AMONG THEM, so the correct value is not
+    // available to us and a blank with a stated cause beats a number wrong
+    // by three orders of magnitude.
+    //
+    // 100% IS THE ONLY NON-ARBITRARY POINT ON THIS SCALE -- it is where the
+    // figure stops being a share OF the float -- and three other guards were
+    // measured and REJECTED before settling for a ceiling. cap/shares against
+    // price catches 32 rows, nearly all ADRs, whose short interest is fine,
+    // and moves a real verdict (KNTK Buy with Risk -> Hold); the two
+    // percentages against each other catches 116 and moves four, because the
+    // stored float is a different vintage from them; and a day's volume
+    // against the float catches NOTHING, the volume being the A class's too.
+    // The ceiling catches exactly one row at every threshold from 60% to
+    // 500%: the highest genuine reading on the screen is 49.1% and the next
+    // value is 966.4%, a gap of twenty times.
+    //
+    // THE COST, stated: a position above the entire float is possible through
+    // re-lending and would be withheld. Nothing on this screen has been near
+    // it, and the likelier reading past 100% is by far the one above.
+    //
+    // shortPctOutstanding is deliberately LEFT ALONE -- it is the vendor's
+    // own figure and is correct for the class.
+    if (Number(r.shortPctFloat) > SHORT_PCT_MAX) r.shortPctFloat = null;
   }
 }
 
