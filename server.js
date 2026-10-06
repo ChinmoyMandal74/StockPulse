@@ -9777,6 +9777,13 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
     try { evo = await evolutionFor(evoNeed.symbol, evoNeed.years); } catch { evo = null; }
   }
 
+  // The fortnight's short-interest change, and only when the template asks
+  // -- the module's own question, never a list here.
+  let smov = null;
+  if (Cards.shortMovesNeed(post.tpl)) {
+    try { smov = await shortMovesPayload(); } catch { smov = null; }
+  }
+
   const size = POST_SIZES[post.size];
   let html = '';
   try {
@@ -9786,6 +9793,12 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       // same fold or a dual-class company is one bar in the studio and two
       // here -- the drift themeClass and basketDays both exist to prevent.
       filers: await filerIds(),
+      // THE PHONE IS THE SECOND HOST and does not hold a post's controls,
+      // so a saved short-moves card would draw its "reading the archive"
+      // placeholder for ever without this -- the drift themeClass and
+      // basketDays both exist to prevent. Fetched only when the template
+      // asks, which is the module's own question, never a list here.
+      getShortMoves: () => smov,
       getHistory: () => hist,
       getEvolution: () => evo,
       updatedAt: (snap && snap.updatedAt) || null,
@@ -10394,6 +10407,72 @@ async function evolutionFor(symbol, years) {
   evoCache.set(key, { at: Date.now(), body });
   return body;
 }
+
+// WHERE THE SHORTS MOVED -- the two most recent FINRA settlements, as ONE
+// window for every symbol. The card joins this to the snapshot it already
+// holds for the name, the price, the sector and the S&P flag, so the
+// payload is two share counts per symbol and nothing else: ~36KB against
+// the 1.3MB it would cost to send rows.
+//
+// ONE WINDOW, NEVER A PAIR PER SYMBOL. Measured on the live table, two dead
+// tickers still sit on 2025 settlement dates (SQ and FI, the renames this
+// file already records), so letting each symbol use its own most recent
+// pair would compare a fortnight against a year and print both on one card.
+// The newest date across the screen is the window, and a symbol not on it
+// is left out -- 1,190 of 1,192 are, so the cost is the two that should be.
+//
+// A SPLIT IS SKIPPED, because FINRA does not restate for one: NVDA's 10:1
+// reads +978% in its own changePercent field, and a share count either side
+// of a split is two different units. 2 of 1,190 this fortnight.
+//
+// The read is readShortRecentFor, which is one bounded indexed seek per
+// symbol batched in chunks -- 1,192 symbols in 0.7s measured, never a
+// group by over the 217,000-row table, which on this database is a quota
+// event rather than a slow query.
+let shortMovesCache = null;
+let shortMovesAt = 0;
+const SHORT_MOVES_TTL_MS = 10 * 60 * 1000;
+
+async function shortMovesPayload() {
+  if (shortMovesCache && Date.now() - shortMovesAt < SHORT_MOVES_TTL_MS) return shortMovesCache;
+  const uni = await store.readUniverse();
+  const recent = await store.readShortRecentFor(uni, '2999-12-31', 2);
+  // The newest settlement anyone is on, then the newest PREVIOUS one among
+  // the symbols that reached it. Asked of the data rather than computed
+  // from a calendar: FINRA's dates are the 15th and the month end rolled
+  // back over weekends AND market holidays, which is why the rotation
+  // discovers them rather than deriving them.
+  let to = null;
+  for (const h of recent.values()) if (h && h[0] && (!to || h[0].d > to)) to = h[0].d;
+  let from = null;
+  if (to) {
+    for (const h of recent.values()) {
+      if (h && h[0] && h[0].d === to && h[1] && (!from || h[1].d > from)) from = h[1].d;
+    }
+  }
+  const moves = {};
+  let n = 0, splits = 0, offWindow = 0;
+  if (to && from) {
+    for (const [sym, h] of recent) {
+      if (!h || h.length < 2) { offWindow++; continue; }
+      if (h[0].d !== to || h[1].d !== from) { offWindow++; continue; }
+      if (h[0].split || h[1].split) { splits++; continue; }
+      const a = Number(h[1].shares), b = Number(h[0].shares);
+      if (!(a > 0) || !(b > 0)) continue;
+      moves[sym] = [a, b];
+      n++;
+    }
+  }
+  shortMovesCache = { from, to, moves, counts: { n, splits, offWindow } };
+  shortMovesAt = Date.now();
+  return shortMovesCache;
+}
+
+// Member, because the studio is. The figures are FINRA's own published
+// position, which is public, and the card states the window on its face.
+app.get('/api/short-moves', requireMember, route(async (req, res) => {
+  res.json(await shortMovesPayload());
+}));
 
 app.get('/api/evolution', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');

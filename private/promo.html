@@ -666,6 +666,34 @@
           the weight being applied to it.</p>
       </div>
 
+      <div id="smovBox">
+        <label>Rank them</label>
+        <select id="smovMetric">
+          <option value="dv" selected>By what the change is worth</option>
+          <option value="pct">By how much each position changed</option>
+        </select>
+        <label>How many each side</label>
+        <select id="smovCount">
+          <option value="5">5 built and 5 covered</option>
+          <option value="6">6 built and 6 covered</option>
+          <option value="8" selected>8 built and 8 covered</option>
+          <option value="10">10 built and 10 covered</option>
+          <option value="12">12 built and 12 covered</option>
+        </select>
+        <label>Smallest position to include</label>
+        <select id="smovFloor"></select>
+        <label>S&amp;P 500</label>
+        <select id="smovSp500"></select>
+        <p class="hint">FINRA publishes short interest twice a month and it
+          reaches us about eight business days after it settles, so the card
+          dates itself rather than implying today. The two rankings are
+          different questions and in practice share no names at all —
+          measured on the live fortnight, the eight biggest builds by
+          dollars and the eight by percentage had nothing in common. The
+          floor is on the POSITION, not on the move: a percentage of a tiny
+          position says nothing, while the dollar ranking floors itself.</p>
+      </div>
+
       <!-- Histogram: the shape of the screen on one measure, optionally
            with a subject pinned to it. `stock` is `screen` plus a pin, so
            they are two MODES of one template rather than two templates.
@@ -853,6 +881,7 @@
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
       { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
       { id: 'waterfall', name: 'Waterfall', note: 'What actually moved the index, name by name, adding up to the whole' },
+      { id: 'shortmoves', name: 'Short moves', note: 'Where the shorts built and where they covered, over the latest fortnight' },
       { id: 'histogram', name: 'Histogram', note: 'The shape of the whole screen on one measure — on its own, or with a stock marked on it' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
@@ -956,6 +985,28 @@
       return null;
     }
 
+    // THE FORTNIGHT'S SHORT-INTEREST CHANGE. One payload for the whole
+    // screen rather than one per symbol, so it is fetched once and cached;
+    // and the repaint is the half that matters, which is why "does this
+    // template care" is asked of the module rather than listed here — the
+    // spotlight shipped drawing nothing because its fetch landed and no
+    // render followed.
+    let smovCache = null;
+    let smovPending = false;
+    function getShortMoves() {
+      if (smovCache) return smovCache;
+      if (smovPending) return null;
+      smovPending = true;
+      fetch('/api/short-moves', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          smovCache = d; smovPending = false;
+          if (Cards.shortMovesNeed(tpl)) render();
+        })
+        .catch(() => { smovPending = false; });
+      return null;
+    }
+
     // Every control's value, by id — the module reads no DOM, so the studio
     // hands it the panel's state and gets a card back.
     const CONTROL_IDS = [
@@ -973,6 +1024,7 @@
       'flowSector', 'flowPeriod', 'flowSp500',
       'tmapSector', 'tmapPeriod', 'tmapSp500',
       'wfallSector', 'wfallPeriod', 'wfallCount', 'wfallSp500',
+      'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'evoSym', 'evoMeasure', 'evoWin',
@@ -991,7 +1043,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: controlOpts(),
       filers,
-      getBasket, getHistory, getEvolution,
+      getBasket, getHistory, getEvolution, getShortMoves,
       updatedAt: pulledAt,
     });
 
@@ -1070,6 +1122,7 @@
       $('flowBox').style.display = tpl === 'flow' ? 'block' : 'none';
       $('tmapBox').style.display = tpl === 'treemap' ? 'block' : 'none';
       $('wfallBox').style.display = tpl === 'waterfall' ? 'block' : 'none';
+      $('smovBox').style.display = tpl === 'shortmoves' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       $('histBox').style.display = tpl === 'histogram' ? 'block' : 'none';
@@ -1236,6 +1289,8 @@
       $(id).addEventListener('change', () => { if (tpl === 'treemap') render(); }));
     ['wfallSector', 'wfallPeriod', 'wfallCount', 'wfallSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'waterfall') render(); }));
+    ['smovMetric', 'smovCount', 'smovFloor', 'smovSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'shortmoves') render(); }));
     ['daySnapPeriod', 'dayMetric', 'dayCount', 'dayFloor', 'daySp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
     ['spotSym', 'spotWin', 'spotProf'].forEach((id) =>
@@ -1248,6 +1303,16 @@
     ['histMeasure', 'histMode', 'histSym', 'histScope', 'histSector',
       'histIndustry', 'histCap', 'histScreen', 'histSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'histogram') render(); }));
+    // From the module, so a floor added there appears here with no edit.
+    (function fillShortMoveFloors() {
+      const sel = $('smovFloor');
+      for (const [v, label] of Cards.shortMoveFloors()) {
+        const o = new Option(label, v);
+        if (String(v) === '250000000') o.selected = true;
+        sel.add(o);
+      }
+    })();
+
     (function fillHistMeasures() {
       const sel = $('histMeasure');
       for (const [k, t] of (Cards.histMeasures ? Cards.histMeasures() : [])) {
@@ -1673,7 +1738,7 @@
         const spOpts = Cards.spCuts().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
-          'sizeSp500', 'bubSp500', 'daySp500', 'histSp500'].forEach((id) => {
+          'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;

@@ -4939,6 +4939,57 @@ That is why the overflow reached a screenshot, and it is the part worth keeping.
   - **The session cookie is `sp_session`**, read off server.js rather than guessed — a wrong name makes four role checks fail over a server that is working.
   - **A `cat` heredoc refused to close** on the suite and wrote no file; written with the Write tool instead. The ninth instance on this project.
 
+
+### Where the shorts moved — the fortnight's builds and covers (2026-10-06, owner's request)
+**A twenty-second template, `shortmoves`, and the first card fed by the FINRA archive rather than the snapshot.** Every other short-interest surface in this app is a LEVEL — the Ownership column, `/stock`'s card and strip, the two histogram measures — and this is the CHANGE, which is the half that is news.
+
+#### THE TWO RANKINGS SHARE NO NAMES, which is why both are offered
+Measured over the live fortnight (2026-08-31 → 2026-09-15, 1,190 usable pairs), ranked by percent against ranked by dollars:
+
+| | biggest builds |
+|---|---|
+| by percent, raw | LYG +121% · BURL +58% · MDA +54% · DRAM +51% |
+| by dollars, raw | SPY $13.7B · IWM $5.1B · GOOGL $3.4B · META $1.6B |
+| **by percent, as the card draws it** | BURL +58% · DRAM +51% · JHX +48% · SARO +45% |
+| **by dollars, as the card draws it** | GOOGL +$3.4B · META +$1.6B · CRWD +$997M · ORCL +$905M |
+
+**Zero names in common, and it holds AFTER the floor and the fund exclusion as well as before them** — which is the Value added column's lesson in a second place: a percentage says which position moved furthest, it cannot say where the money went. `smovMetric` offers both and the subtitle names which is on screen.
+
+- **THE STUDIO'S HINT NAMES NO COMPANY, deliberately.** Its first draft named that fortnight's leaders — a claim with a two-week shelf life sitting in static markup, which is the "a claim has to leave with the feature" failure this file already records four times over. It states the measurement instead, which stays true. *(It was also wrong: it credited the dollar ranking to two companies that are nowhere near its top eight.)*
+
+- **THE FLOOR IS ON THE POSITION, NOT ON THE MOVE, and one control serves both metrics.** A percentage change in a tiny position is enormous and says nothing; the **dollar ranking is self-flooring** — measured, its top and bottom eight all sit above $4.3B — and the percentage one is not. Default $250M, which keeps 1,072 of 1,188.
+- **The index and sector funds come out**, the rule every market card here keeps, and it matters most on this one: unfiltered, the dollar ranking is led by **SPY at $13.7B and IWM at $5.1B**, which is a statement about hedging the whole market rather than about a company, and it crowds out every real name.
+
+#### ONE WINDOW FOR EVERYBODY, never a pair per symbol
+Two dead tickers still sit on 2025 settlement dates — `SQ` and `FI`, the renames this file already records — so letting each symbol use its own most recent pair compares a fortnight against a year and prints both on one card. The newest date across the screen is the window and a symbol not on it is left out: **1,190 of 1,192 are**, so the cost is exactly the two that should be. **A SPLIT IS SKIPPED** for the reason the `/stock` strip already records: FINRA does not restate, NVDA's 10:1 reads +978% in its own change field, and a share count either side of a split is two different units. 2 of 1,190 this fortnight.
+
+#### BLUE AND ORANGE, NEVER GREEN AND RED — and the precedent is this very dataset
+`/stock`'s short-interest strip is neutral because *"short interest rose is not a direction the price went"*. On a card, green would be asserting that being shorted is bad — a verdict, and only half true, since a build is a bearish bet **and** the fuel for a squeeze. The pair is the one the two-stock Chart card measured as the only divergence surviving both common dichromacies (ΔE **102** at its worst against the accent pair's **3**), and neither hue carries a meaning on this surface. **Emitted inline through `pal.ink`** rather than set in CSS, which is what makes all four grounds resolve with no override block.
+
+#### Shape and cost
+- **`readShortRecentFor` already existed** and is one bounded indexed seek per symbol, batched — **1,192 symbols in 0.7s** measured, never a `group by` over the 217,000-row table, which on this database is a quota event rather than a slow query.
+- **The payload is two share counts per symbol and nothing else** (~36KB): the card joins to the snapshot it already holds for the name, the price, the sector and the S&P flag, so every cut and both metrics are the card's own work. Cached ten minutes.
+- **`getShortMoves` is the fourth `ctx` channel**, and `shortMovesNeed(tpl)` is asked of the module by BOTH hosts — the reason `basketDays` and `evolutionNeed` exist, and how the spotlight once shipped drawing nothing at all. The phone loads it only when the template asks.
+- **A SEVENTEENTH hardcoded listener list** in promo.html. A control in the markup and in `CONTROL_IDS` but not in one of these saves with a post, is read by the builder, and **does nothing when you touch it**. Control ids **112 against `POST_OPT_MAX` 200**.
+
+#### THE CAPS ARE MEASURED COUNT BY COUNT, one row inside each artboard's limit
+A card cannot scroll. Measured: the portrait fits 9 and leaves **9px**, which is under the 20px floor this module holds everywhere; the square fits exactly **6** (a seventh row costs 59px against 51 left); the story fits 11 and is 4px over at 12. So **8 / 6 / 10**. The control still offers up to 12 and the cap trims — honest, because these are the top N of a ranking, where dropping the seventh and eighth biggest is not the misstatement a dropped treemap tile would be.
+
+- **THE STORY SPREADS ITS ROWS, and only the story.** Measured against the siblings, the band above the note is **77px on the portrait and 51 on the square** — in line with the waterfall's 62 and the treemap's 63 — and **354px on the story**, a fifth of the frame. That is the Movers card's own fault, recorded there as rows reading as lines floating in a frame, and spreading is the fix it already settled on. The row margin stays as a **floor** so a short list does not fly apart — the Flow card's gap bargain, measured at 53px of spread at eight rows and back to the 18px floor at twelve.
+
+- Verified: **52 checks**. The fixture's load-bearing property is that **the two rankings disagree** — `TINY` is a small position that doubled (huge percent, small dollars) and `GIANT` a vast one that moved 3% (small percent, huge dollars) — so a card wired to the wrong metric comes out with different names rather than coincidentally the same ones. Plus one of each thing that must not appear: a fund with **the biggest dollar move of all**, a split, a symbol stranded on an older settlement, and a position under the floor. **Proved by reverting fourteen times** across all three files.
+  - **A GUARD NO FIXTURE CAN REACH IS A GUARD UNPROVEN.** With six builds the per-artboard cap could never fire and the three fit checks passed over a card it had not touched. Sixteen filler rows later they read 8 / 6 / 10 — the configured caps, visibly biting.
+  - **`spMember` IS A READ-PATH STAMP, not a stored field**, so an off-page build over the fixture rows filters to nothing on either cut. The cut has to be driven over the SERVED rows — the same trap that makes a `'SPY'`-cased holdings seed stamp null on everything.
+  - **THE FLOOR CHECK RAN WITH THE CUT STILL ON `out`**, where the small position is not a member — so dropping the floor correctly changed nothing and the suite blamed the control.
+  - **`find(x => x.tpl === 'shortmoves')` RETURNED THE PHONE FIXTURE'S OWN POST**, written three assertions earlier with three opts, and reported the page's save as dropping a control it had never been asked for. Match on the name the save used.
+  - **`const N` WAS DECLARED WITH THE TYPE SIZES, which are read AFTER the slicing** — a temporal dead zone, and the page threw `Cannot access 'N' before initialization` on every render. Caught by the shot harness, not by a suite.
+  - **A MULTI-LINE ANCHOR MATCHED NOTHING, twice.** `cards.js` is CRLF on disk, so an anchor carrying a `\n` is silently skipped — and the Edit tool refused the same block for the same reason. Single-line anchors only, which is what this file has said since the first time.
+  - **The shot seeder needed the short-interest table**, the same class of trap as `price_extremes` and the filer ids before it: nothing is stored on the row, so without it the card sits on its placeholder and reads as a fetch that never landed. Its read is bounded to **one** scan — `short_interest` has no index on `d` alone, so any date bound reads all 217k rows whatever it returns, and nested `max()` subqueries would do that more than once.
+  - **`note-fit-test` SKIPPED IT IN SILENCE, which is the Flow lesson in the same harness a second time.** With no short-interest rows seeded the card draws its placeholder rather than a note, so it simply fell out of the list and the sweep reported `12 of 12 grew` over a template it had never measured. Two settlement dates per symbol, a build and a cover, and a position over the floor took it to **13 of 13**. *A sweep that accounts for "every template" has to be read for who is MISSING from its list, not only for its failures.*
+  - **`size-scope-test` CORRECTLY FAILED, and that is the check working rather than going stale.** It accounts for every template as either scoped or unscoped, and this one is unscoped — its only cut is S&P membership, which is not a scope — so it joins `flow`, `treemap` and `waterfall` in `NO_SCOPE`. **Corrected, not worked around.**
+  - **`fold-server-test` carried a PRE-EXISTING stale assertion**, found while regressing this and proved against HEAD rather than assumed: it looked for *"more than one share class"*, a draft wording that never shipped, where the module has said *"Share classes are combined:"* since the fold landed. `foldNote` is byte-identical to HEAD, so this had been failing from the day it was written. Corrected to the real phrase.
+- Verified across the module: the ground sweep at **265 checks over 188 ground × template × mode combinations**, the width sweep at **127 over 141**, note fit at **63 artboard combinations**, and `size-scope` accounting for all 21 templates — all clean with the template registered.
+
 ## Consolidated — every group in one table (2026-09-28, owner's request)
 **`/consolidated`: one row per group, so the groups can be read against each other.** The owner's words: *"I do not have a screen to show how Mag 7 as a theme has done compared with Memory or cybersecurity."* Nothing did — a group page shows ONE group against the index, `/compare` is two **stocks**, and the pivot crosses two dimensions to answer *where is the weight* rather than *how has each one done*. Member page, guests refused, like the studio and the pivot beside it; a `Consolidated` button in the bar before Compare.
 

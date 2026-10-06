@@ -7,6 +7,9 @@
 // Contract: Cards.build(id, ctx) -> HTML string for the card's inner body.
 //   ctx.stocks    the snapshot rows (scored, with prevTech)
 //   ctx.myLists   the caller's own portfolios, { name: [symbols] }
+//   ctx.getShortMoves () -> the fortnight's short-interest change, or null
+//                 while it loads. Only the `shortmoves` card needs it; ask
+//                 Cards.shortMovesNeed(tpl) rather than listing templates.
 //   ctx.filers    { SYMBOL: cik } — which symbols are the same company, so
 //                 a dual-class name is one holding and not two. A host that
 //                 passes none simply folds nothing.
@@ -41,6 +44,11 @@
   // beside the basket and the per-symbol closes, because it answers a
   // different question from either and both hosts cache it themselves.
   let getEvolution = () => null;
+  // The fortnight's short-interest change, per symbol. A fourth channel
+  // beside the basket, the per-symbol closes and the filings series,
+  // because it is the only card fed by the FINRA archive and both hosts
+  // cache it themselves.
+  let getShortMoves = () => null;
   // ONE stock's own daily closes — { symbol, name, closes, dates, rangeLabel,
   // price, today }. A plain data field rather than a getter, because the only
   // host that has it (the stock page) already holds it: it drew the chart from
@@ -4908,6 +4916,183 @@
       '</div></div>' + chromeFoot();
   }
 
+  // WHERE THE SHORTS MOVED — the fortnight's biggest builds and covers.
+  //
+  // THE ONE THING THE APP COULD NOT SHOW. Every other short-interest surface
+  // is a LEVEL: the Ownership column, the /stock card, the two histogram
+  // measures. This is the CHANGE, which is the half that is news, and it is
+  // the only card here fed by the FINRA archive rather than the snapshot.
+  //
+  // A FACT ABOUT POSITIONING, NEVER A VERDICT. Heavy short interest is a
+  // bearish bet and also the fuel for a squeeze, so the card reports what
+  // moved and says in as many words that it is not a forecast — the line
+  // /terms draws, and the one this dataset makes easiest to cross.
+  const SMOV_METRICS = {
+    dv: 'by what the change is worth',
+    pct: 'by how much each position changed',
+  };
+  const SMOV_FLOORS = { 0: 'any size', 1e8: '$100M+', 2.5e8: '$250M+',
+    5e8: '$500M+', 1e9: '$1B+' };
+
+  // Asked of the module by BOTH hosts, for the reason `basketDays` and
+  // `evolutionNeed` exist: the pairing was a hardcoded list in each of them
+  // once, and that is how the spotlight shipped drawing nothing at all.
+  function shortMovesNeed(tpl) {
+    return tpl === 'shortmoves';
+  }
+
+  function tplShortMoves() {
+    const d = getShortMoves();
+    if (!d) {
+      return chromeTop() + '<div class="s-body"><div class="s-empty">'
+        + 'Reading the short-interest archive…</div></div>' + chromeFoot();
+    }
+
+    const metric = SMOV_METRICS[O.smovMetric] ? O.smovMetric : 'dv';
+    const cut = SP_CUTS.some(([k]) => k === O.smovSp500) ? O.smovSp500 : 'All';
+    const floor = SMOV_FLOORS[O.smovFloor] != null ? Number(O.smovFloor) : 2.5e8;
+    const K = Math.max(3, Math.min(12, Number(O.smovCount) || 8));
+    // THE CAP IS PER ARTBOARD, measured rather than chosen: a card cannot
+    // scroll, and eight a side ran the SQUARE 66px past its own artboard
+    // and the note 61px onto the tagline. The Snapshot card’s own rule,
+    // and the control stays honest because these are the top N of a
+    // ranking — trimming the seventh and eighth biggest is not the
+    // misstatement a dropped treemap tile would be.
+    //
+    // MEASURED COUNT BY COUNT, one row inside each artboard’s own limit:
+    // the portrait fits 9 and leaves 9px, which is under the 20px floor
+    // this module holds everywhere; the square fits exactly 6 (a seventh
+    // row costs 59px against 51 left); and the story fits 11 and is 4px
+    // over at 12. The story’s band cannot be read as headroom because
+    // its rows spread to fill -- there the honest test is the overflow.
+    const CAP = { portrait: 8, square: 6, story: 10 }[size.id] || 8;
+    const N = Math.min(K, CAP);
+
+    // The index and sector funds come out, the rule every market card here
+    // keeps. It matters most on THIS one: measured on the live fortnight the
+    // dollar ranking is led by SPY at $13.7B and IWM at $5.1B, which is a
+    // statement about hedging the whole market rather than about a company,
+    // and it would crowd out every real name on the card.
+    const pool = spFilter(stocks.filter((x) => x && !x.error
+      && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol)), cut);
+
+    const rows = [];
+    let added = 0, removed = 0, built = 0, covered = 0, tooSmall = 0;
+    for (const r of pool) {
+      const m = d.moves && d.moves[r.symbol];
+      if (!m) continue;
+      const a = Number(m[0]), b = Number(m[1]), px = Number(r.price);
+      if (!(a > 0) || !(b > 0) || !(px > 0)) continue;
+      // THE FLOOR IS ON THE POSITION, NOT ON THE MOVE. A percentage change
+      // in a tiny position is enormous and says nothing; measured, the
+      // dollar ranking is self-flooring (its top and bottom eight all sit
+      // above $4.3B) and the percentage one is not — which is why one
+      // control serves both rather than the floor being wired to a metric.
+      if (b * px < floor) { tooSmall++; continue; }
+      const dv = (b - a) * px;
+      if (dv >= 0) { added += dv; built++; } else { removed += -dv; covered++; }
+      rows.push({ sym: r.symbol, name: nameOf(r), pct: (b / a - 1) * 100, dv });
+    }
+
+    if (rows.length < 4) {
+      return chromeTop() + '<div class="s-body"><div class="s-empty">' + esc(!d.to
+        ? 'No short-interest readings are stored yet.'
+        : rows.length + ' of ' + pool.length + ' companies in this cut hold a position over $'
+          + fmtMoney(floor) + '. Widen the cut or drop the floor.')
+        + '</div></div>' + chromeFoot();
+    }
+
+    const key = metric === 'pct' ? 'pct' : 'dv';
+    const up = rows.filter((x) => x[key] > 0).sort((x, y) => y[key] - x[key]).slice(0, N);
+    const dn = rows.filter((x) => x[key] < 0).sort((x, y) => x[key] - y[key]).slice(0, N);
+    const scale = Math.max(1e-9,
+      ...up.map((x) => Math.abs(x[key])), ...dn.map((x) => Math.abs(x[key])));
+
+    // BLUE AND ORANGE, NEVER GREEN AND RED — and the precedent is this very
+    // dataset. /stock's short-interest strip is neutral because "short
+    // interest rose is not a direction the price went", and on a card green
+    // would be asserting that being shorted is bad, which is a verdict and
+    // also only half true: a build is a bearish bet AND the fuel for a
+    // squeeze. This pair is the one the two-stock Chart card measured as the
+    // only divergence that survives both common dichromacies (ΔE 102 at its
+    // worst against the accent pair's 3), and neither hue carries a meaning
+    // on this surface. Emitted INLINE through pal.ink rather than set in
+    // CSS, which is what makes all four grounds resolve with no override.
+    const CUP = pal.ink('#60a5fa');
+    const CDN = pal.ink('#fb923c');
+
+    const SZ = { portrait: { n: 19, f: 26, bar: 9, gap: 32 },
+      square: { n: 16, f: 21, bar: 7, gap: 24 },
+      story: { n: 26, f: 35, bar: 12, gap: 44 } }[size.id]
+      || { n: 19, f: 26, bar: 9, gap: 32 };
+    const fig = (x) => (metric === 'pct'
+      ? (x.pct >= 0 ? '+' : '−') + Math.abs(x.pct).toFixed(0) + '%'
+      : (x.dv >= 0 ? '+' : '−') + '$' + fmtMoney(Math.abs(x.dv)));
+    const row = (x, c) => '<div class="sm-r">'
+      + `<span class="sm-t" style="font-size:${SZ.n}px">${esc(x.sym)}</span>`
+      + `<span class="sm-n" style="font-size:${SZ.n}px">${esc(x.name)}</span>`
+      + `<span class="sm-v" style="font-size:${SZ.f}px;color:${c}">${esc(fig(x))}</span>`
+      + `<span class="sm-bar" style="height:${SZ.bar}px">`
+      + `<span class="sm-f" style="width:${(Math.abs(x[key]) / scale * 100).toFixed(1)}%;`
+      + `background:${c}"></span></span>`
+      + '</div>';
+    const col = (list, c, head) => '<div class="sm-c">'
+      + `<span class="sm-h" style="color:${c}">${esc(head)}</span>`
+      + (list.length ? list.map((x) => row(x, c)).join('')
+        : '<div class="sm-none">none this fortnight</div>')
+      + '</div>';
+
+    const net = added - removed;
+    const stats = [
+      ['added', '$' + fmtMoney(added)],
+      ['taken off', '$' + fmtMoney(removed)],
+      ['net', (net >= 0 ? '+' : '−') + '$' + fmtMoney(Math.abs(net))],
+      ['built / covered', built + ' / ' + covered],
+    ];
+
+    // LOCAL NOON, never `new Date(iso)` — that is UTC midnight and renders a
+    // day early west of Greenwich. The card-dating lesson, which `dateStr`
+    // above already follows.
+    const dayStr = (iso) => {
+      if (!iso) return '';
+      const t = new Date(iso + 'T12:00:00');
+      return isNaN(t.getTime()) ? iso
+        : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
+
+    // THE WINDOW IS ON THE CARD'S FACE. This data is fortnightly and about
+    // eight business days old when FINRA publishes it, so a card that does
+    // not date itself implies a currency it does not have.
+    const win = (d.from && d.to) ? dayStr(d.from) + ' to ' + dayStr(d.to) : 'the latest fortnight';
+    const note = 'FINRA publishes short interest twice a month and it reaches us about eight '
+      + 'business days after it settles, so this is the fortnight to ' + dayStr(d.to)
+      + ' rather than today. '
+      + (metric === 'pct'
+        ? 'Ranked by how much each position changed, among those worth $' + fmtMoney(floor)
+          + ' or more: a percentage of a tiny position says nothing. '
+        : 'Ranked by what the change is worth at today’s price, which is a different question '
+          + 'from how much it changed and gives different names. ')
+      + ((d.counts && d.counts.splits)
+        ? d.counts.splits + ' skipped over a split, FINRA not restating for one. ' : '')
+      + 'A short position is a bet against, and also the fuel for a squeeze. Not a forecast.';
+
+    return chromeTop()
+      + '<div class="s-body"><div class="sm-in">'
+      + `<span class="s-kick">${esc(cutKick(cut) + ' · ' + rows.length.toLocaleString()
+        + ' companies · ' + win)}</span>`
+      + '<h2 class="s-title">Where the shorts moved<span class="dim">'
+      + esc('the fortnight’s biggest builds and covers, ' + SMOV_METRICS[metric])
+      + '</span></h2>'
+      + `<div class="sm-wrap" style="gap:${SZ.gap}px">`
+        + col(up, CUP, 'BUILT') + col(dn, CDN, 'COVERED')
+      + '</div>'
+      + `<div class="sm-stats">${stats.map(([k, v]) =>
+        `<div class="sm-s"><span class="sm-sk">${esc(k)}</span>`
+        + `<span class="sm-sv">${esc(v)}</span></div>`).join('')}</div>`
+      + `<p class="s-sub wide" style="--fs:17px">${esc(note)}</p>`
+      + '</div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
@@ -4915,12 +5100,82 @@
     bubble: tplBubble, stock: tplStock, day: tplDay, spotlight: tplSpotlight,
     disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution,
     flow: tplFlow, histogram: tplHistogram,
-    treemap: tplTreemap, waterfall: tplWaterfall,
+    treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
   // page and styled in the other is exactly the drift this module prevents.
   const STYLE = `
+    /* ---- Where the shorts moved: builds against covers ------------------
+       NO HEX LITERAL AND NO BACKTICK ANYWHERE IN HERE. Every value is a
+       token, so all four grounds resolve with no override block; and a
+       backtick inside this block ends the STYLE template literal, which
+       node --check PASSES because it is valid syntax and merely the wrong
+       program. That has taken this module down three times.
+
+       The two direction colours are NOT here: they are emitted inline by
+       the builder through pal.ink, which is what makes them resolve on the
+       light and sky grounds without a second palette. */
+    .sm-in { display: flex; flex-direction: column; height: 100%; }
+    /* A .dim span inside .s-title inherits the 66px display size, which on
+       a sentence of explanation sets three lines of headline. The Evolution
+       card met this first and the fix is per card, because .s-title is
+       shared. */
+    .sm-in .s-title .dim { display: block; font-size: 29px; line-height: 1.25;
+                           letter-spacing: -0.015em; margin-top: 10px; }
+    .sz-square .sm-in .s-title .dim { font-size: 24px; }
+    .sz-story .sm-in .s-title .dim { font-size: 38px; }
+    /* The note is pinned to the foot and the columns do not stretch, so the
+       free space collects in ONE band rather than splitting at both ends --
+       the fault the day card had to be rebuilt for. */
+    .sm-in .s-sub { margin-top: auto; padding-top: 18px; }
+    /* minmax(0, 1fr), never 1fr: that is minmax(auto, 1fr), whose auto floor
+       is the item's MIN-CONTENT, so one long company name holds its column
+       open and the pair runs past the artboard. The trap the sparks grid,
+       the trade log and the saved-name field have all met. */
+    .sm-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+               margin-top: 28px; }
+    .sm-c { display: flex; flex-direction: column; min-width: 0; }
+    .sm-h { font-family: var(--mono); font-size: 14px; letter-spacing: .14em;
+            margin-bottom: 14px; }
+    .sz-story .sm-h { font-size: 19px; }
+    .sm-r { display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+            column-gap: 10px; align-items: baseline; margin-bottom: 13px; }
+    .sz-story .sm-r { margin-bottom: 18px; }
+    .sm-t { font-family: var(--mono); font-weight: 700; color: var(--text); }
+    /* Clipped, never wrapped: one wrapped name makes its row twice as tall
+       and there are up to twelve a side. The email log's rule. */
+    .sm-n { color: var(--muted); min-width: 0; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap; }
+    .sm-v { font-family: var(--mono); font-weight: 700; text-align: right;
+            font-variant-numeric: tabular-nums; }
+    .sm-bar { grid-column: 1 / -1; display: block; margin-top: 7px;
+              background: var(--hair); border-radius: 2px; overflow: hidden; }
+    /* display: block on the fill too -- a percentage width on an INLINE span
+       draws nothing, and the style attribute reads as perfectly correct
+       while it does. The /quality lesson. */
+    .sm-f { display: block; height: 100%; border-radius: 2px; min-width: 2px; }
+    /* THE STORY SPREADS ITS ROWS, and only the story. Measured against
+       the siblings, the band above the note is 77px on the portrait and
+       51 on the square -- in line with the waterfall (62) and the
+       treemap (63) -- and 354px on the STORY, a fifth of the frame. That
+       is the Movers card’s own fault, recorded there as five rows
+       reading as lines floating in a frame, and spreading is the fix it
+       already settled on. The margin stays as a FLOOR so a short list
+       does not fly apart -- the Flow card’s gap bargain. */
+    .sz-story .sm-wrap { flex: 1; }
+    .sz-story .sm-c { justify-content: space-evenly; }
+    .sm-none { color: var(--faint); font-size: 18px; }
+    .sm-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 14px; margin-top: 26px; }
+    .sm-s { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .sm-sk { font-family: var(--mono); font-size: 13px; letter-spacing: .1em;
+             text-transform: uppercase; color: var(--faint); }
+    .sm-sv { font-family: var(--mono); font-size: 29px; font-weight: 700;
+             color: var(--text); font-variant-numeric: tabular-nums; }
+    .sz-square .sm-sv { font-size: 23px; }
+    .sz-story .sm-sv { font-size: 38px; }
+    .sz-story .sm-sk { font-size: 17px; }
     /* ---- Treemap: the market as area, the move as colour -----------------
        NO HEX LITERAL AND NO BACKTICK ANYWHERE IN HERE. Every value is a
        token, so all four grounds resolve with no override block; and a
@@ -6234,6 +6489,10 @@
     // module by the studio AND by the phone's saved-post route, so the two
     // cannot ask for different things — the pairing `basketDays` records.
     evolutionNeed,
+    shortMovesNeed,
+    // The floors, so the studio's picker has no copy of them to drift from.
+    shortMoveFloors: () => Object.keys(SMOV_FLOORS)
+      .map(Number).sort((a, b) => a - b).map((v) => [v, SMOV_FLOORS[v]]),
     EVO_WINDOWS,
     EVO_MEASURES,
     // Which classes the artboard needs for the chosen ground. Three hosts
@@ -6308,6 +6567,7 @@
       getBasket = c.getBasket || (() => null);
       getHistory = c.getHistory || (() => null);
       getEvolution = c.getEvolution || (() => null);
+      getShortMoves = c.getShortMoves || (() => null);
       chartOne = c.chart || null;
       const fn = BUILDERS[id] || BUILDERS.movers;
       return fn();
