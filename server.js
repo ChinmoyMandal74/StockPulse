@@ -9538,6 +9538,43 @@ async function savedPosts() {
 
 // NOT /api/posts — the blog owns that, registered higher up, and Express
 // takes the first match: this one answered the blog's empty list instead.
+// WHICH SYMBOLS ARE ONE COMPANY, for the three market cards that add up
+// market value. The provider repeats every company-level figure -- share
+// count, float and therefore market cap -- against EACH share class and
+// varies only the price, so Alphabet entered a cap-weighted pool twice at
+// full value. Measured on the live index: GOOGL and GOOG are the first two
+// bars of the waterfall, the S&P carries $4.2T of phantom market value, and
+// Communication Services reads 2.05 points high.
+//
+// THE KEY IS THE FILER ID AND NOT THE DISPLAY NAME, which is the same
+// judgement /adjustedbacktest's btOneEach made on the same data and for the
+// same reason: OWL and OBDC are both "Blue Owl Capital" and are two
+// different companies (CIK 1823945 against 1655888), so a name key would
+// merge a real holding away. A symbol with no CIK is never folded -- an
+// under-catch, which is the safe direction, and it is why the two dead
+// renamed tickers (SQ/XYZ, FI/FISV) stay apart.
+//
+// IT IS NOT A SNAPSHOT FIELD AND MUST NOT BECOME ONE. The boundary that
+// keeps filings data off the screener is about the Advice engine and the
+// selection logic; this is an identity handed to a renderer, used and
+// discarded, and /api/stocks is untouched. The precedent is /backtest,
+// which already reads a CIK map it does not otherwise read, to dedupe.
+let filerCache = null;
+let filerAt = 0;
+const FILER_TTL_MS = 60 * 60 * 1000;
+async function filerIds() {
+  if (filerCache && Date.now() - filerAt < FILER_TTL_MS) return filerCache;
+  filerCache = await store.readFilerIds().catch(() => ({}));
+  filerAt = Date.now();
+  return filerCache;
+}
+
+// Member, because the studio is. A filer id is a public registration number
+// and reaches no card -- it is consumed by the fold and never rendered.
+app.get('/api/filers', requireMember, route(async (req, res) => {
+  res.json({ filers: await filerIds() });
+}));
+
 app.get('/api/promo-posts', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({ posts: await savedPosts(), max: POSTS_MAX });
@@ -9702,6 +9739,10 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   try {
     html = Cards.build(post.tpl, {
       stocks, myLists, screens, size, opts: post.opts, getBasket: () => basket,
+      // The phone draws a saved post from the same module, so it needs the
+      // same fold or a dual-class company is one bar in the studio and two
+      // here -- the drift themeClass and basketDays both exist to prevent.
+      filers: await filerIds(),
       getHistory: () => hist,
       getEvolution: () => evo,
       updatedAt: (snap && snap.updatedAt) || null,

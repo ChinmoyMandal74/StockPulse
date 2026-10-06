@@ -7,6 +7,9 @@
 // Contract: Cards.build(id, ctx) -> HTML string for the card's inner body.
 //   ctx.stocks    the snapshot rows (scored, with prevTech)
 //   ctx.myLists   the caller's own portfolios, { name: [symbols] }
+//   ctx.filers    { SYMBOL: cik } — which symbols are the same company, so
+//                 a dual-class name is one holding and not two. A host that
+//                 passes none simply folds nothing.
 //   ctx.size      { id, w, h } — the artboard the card is being drawn into
 //   ctx.opts      the control values, by control id (movPeriod, chtWin, ...)
 //   ctx.getBasket (days) -> the /api/basket payload or null while it loads
@@ -26,6 +29,10 @@
   // The starter screens, as the host holds them: [{ id, name, group, def }].
   // A host that does not pass them simply offers no screen cut.
   let screens = [];
+  // Symbol -> issuer CIK. Only the three cards that add up market value read
+  // it, and it never reaches a card: it is consumed by foldListings and
+  // discarded. See that function for why the display name will not do.
+  let filers = {};
   let size = { id: 'portrait', w: 1080, h: 1350 };
   let O = {};                       // control values, by control id
   let getBasket = () => null;
@@ -3774,6 +3781,12 @@
     let pool = spFilter(
       stocks.filter((x) => x && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol)), cut);
     if (drillSec) pool = pool.filter((x) => x.sector === drillSec);
+    // ONE COMPANY, ONE LISTING, and before anything is weighted — see
+    // foldListings. Both classes sit in the same sector, so an unfolded
+    // Alphabet inflates Communication Services' share of the value AND its
+    // cap-weighted return: measured, the sector reads 2.05 points high.
+    const folded0 = foldListings(pool, field);
+    pool = folded0.rows;
     const capOf = (x) => (Number(x.marketCap) > 0 ? Number(x.marketCap) : 0);
     // Two exclusions and they are DIFFERENT rules. A missing return is
     // ABSENT, never zero -- Number(null) is 0 and finite, and a fabricated
@@ -4024,7 +4037,8 @@
       + (nosec ? ' ' + (nosec === 1 ? 'One company has' : nosec + ' companies have')
         + ' no ' + partWord + ' recorded and so sit' + (nosec === 1 ? 's' : '') + ' in no band.' : '')
       + (floored ? ' The ' + (floored === 1 ? 'smallest ribbon carries' : floored + ' smallest ribbons carry')
-        + ' a minimum thickness, so ' + (floored === 1 ? 'it can' : 'they can') + ' still be followed.' : '');
+        + ' a minimum thickness, so ' + (floored === 1 ? 'it can' : 'they can') + ' still be followed.' : '')
+      + foldNote(folded0.folded).replace(/ $/, '');
 
     return chromeTop() +
       '<div class="s-body"><div class="fl-in">' +
@@ -4312,10 +4326,99 @@
   // promo card is the most public surface in this app, so it uses the
   // provider's market cap, which is our own data and visually identical at
   // the sizes a tile is drawn at.
+  // ONE COMPANY, ONE LISTING — and it has to be a MERGE rather than a drop.
+  //
+  // THE PROVIDER REPEATS EVERY COMPANY-LEVEL FIGURE AGAINST EACH SHARE CLASS
+  // and varies only the price. Measured on the live screen: GOOGL and GOOG
+  // carry the SAME 12,229.9M shares and the same 10,879.4M float, and BRK.B
+  // carries a cap/share of 748,362 against a $506 price — which is BRK.A's.
+  // So a class's market cap is the WHOLE company's share count times THAT
+  // class's own price, and neither class's figure is its own value.
+  //
+  // THEREFORE THE MEAN, NEVER THE SUM. cap is W x price_now and the begin
+  // weight is W x price_then, so the mean across the classes is W x the mean
+  // class price: the company itself, exactly when the classes are equally
+  // sized and inside the bracket always. Summing is the double count that
+  // put Alphabet on the waterfall twice and $4.2T of phantom value into the
+  // S&P's total. A float-weighted mean would be better and is NOT available
+  // — the float is the whole company's on every class too, measured.
+  //
+  // THE KEY IS THE FILER ID AND NOT THE DISPLAY NAME. OWL and OBDC are both
+  // "Blue Owl Capital" and are two different companies (CIK 1823945 against
+  // 1655888), so a name key merges a real holding away — the same judgement
+  // /adjustedbacktest's btOneEach made, on this same data.
+  //
+  // btOneEach DROPS a class, which is right for a book you hold and wrong
+  // here: these cards must still sum to the index.
+  function foldListings(rows, field) {
+    const groups = new Map();
+    const order = [];
+    for (const r of rows) {
+      const cik = r && r.symbol != null ? filers[String(r.symbol).toUpperCase()] : null;
+      // No filer id, never folded. An under-catch, which is the safe
+      // direction, and why the two dead renamed tickers (SQ/XYZ, FI/FISV —
+      // neither dead half has a CIK stored) are left as they are.
+      if (!cik) { order.push([r]); continue; }
+      const k = 'c' + cik;
+      const g = groups.get(k);
+      if (g) g.push(r);
+      else { const fresh = [r]; groups.set(k, fresh); order.push(fresh); }
+    }
+    let folded = 0;
+    const out = order.map((g) => {
+      if (g.length < 2) return g[0];
+      folded += g.length - 1;
+      return mergeListings(g, field);
+    });
+    return { rows: out, folded };
+  }
+
+  // ONE SENTENCE, THREE CARDS. The fold is the same fact wherever it
+  // happens, and a reader who knows Alphabet has two tickers is owed the
+  // reason the card shows one. Silent would be the wrong answer twice over:
+  // it looks like a missing company, and it hides the approximation.
+  const foldNote = (n) => (n ? ' Share classes are combined: '
+    + (n === 1 ? 'one company here reports' : n + ' companies here report')
+    + ' the whole company’s value against each class, so both would count it '
+    + 'twice. ' : '');
+
+  function mergeListings(rs, field) {
+    // THE SYMBOL IS THE ALPHABETICALLY FIRST, which is deterministic and
+    // stable. Largest cap is the obvious pick and is NOT stable: the caps
+    // are struck at different price vintages, so GOOG leads GOOGL today on
+    // a day when GOOGL is the higher-priced of the two. Only the waterfall
+    // shows a ticker at all; the treemap tile carries the company name,
+    // which both classes already share.
+    const alpha = (list) => list.slice().sort((a, b) => (String(a.symbol) < String(b.symbol) ? -1
+      : String(a.symbol) > String(b.symbol) ? 1 : 0))[0];
+    const usable = [];
+    let cap = 0, beg = 0;
+    for (const r of rs) {
+      const c = Number(r.marketCap);
+      const v = Number(r[field]);
+      if (!(c > 0) || r[field] == null || !(v > -99)) continue;
+      const b = c / (1 + v / 100);
+      if (!(b > 0) || !isFinite(b)) continue;
+      cap += c; beg += b; usable.push(r);
+    }
+    // A class with no usable reading is CONSUMED rather than counted: it
+    // must not return as a second row, and it must not drag the mean. It
+    // does not get to name the bar either -- the ticker on the axis should
+    // be one whose own figures are the ones drawn.
+    if (!usable.length) return alpha(rs);
+    const lead = alpha(usable);
+    const n = usable.length;
+    const mc = cap / n;
+    const mb = beg / n;
+    return Object.assign({}, lead, { marketCap: mc, [field]: (mc / mb - 1) * 100 });
+  }
+
   function marketParts(rows, field) {
+    // Folded BEFORE anything is summed, or the index itself double-counts.
+    const fold = foldListings(rows, field);
     const list = [];
     let beg = 0, end = 0, noCap = 0, noRet = 0;
-    for (const r of rows) {
+    for (const r of fold.rows) {
       const cap = Number(r && r.marketCap);
       // Two exclusions, and they are DIFFERENT rules. A missing return is
       // ABSENT, never zero -- Number(null) is 0 and finite, and a fabricated
@@ -4335,10 +4438,11 @@
         industry: r.industry || null, cap, ret, b });
     }
     if (!list.length) {
-      return { list: [], index: null, beg: 0, end: 0, noCap, noRet, total: 0 };
+      return { list: [], index: null, beg: 0, end: 0, noCap, noRet, total: 0, folded: fold.folded };
     }
     for (const x of list) x.c = (x.b / beg) * x.ret;
-    return { list, index: (end / beg - 1) * 100, beg, end, noCap, noRet, total: end };
+    return { list, index: (end / beg - 1) * 100, beg, end, noCap, noRet, total: end,
+      folded: fold.folded };
   }
 
   // The pool every market card starts from. The index funds and the eleven
@@ -4565,6 +4669,7 @@
       + (P.list.length - drawn > 0 ? (P.list.length - drawn)
         + ' are too small to draw at all. ' : '')
       + (P.noCap ? P.noCap + ' have no market value and are left out. ' : '')
+      + foldNote(P.folded).replace(/^ /, '')
       + 'Not a forecast.';
 
     return chromeTop() +
@@ -4601,7 +4706,15 @@
   // colour and the width sweep measures the horizontal. 1020 leaves ~39px,
   // against a floor of 20 (half a text line, the how-to deck’s standard).
   // 4px of room is luck rather than headroom.
-  const WF_H = { portrait: 600, square: 392, story: 1020 };
+  // RE-MEASURED when the fold added a sentence to the note: a FIXED chart
+  // height against a VARIABLE note is the fault, and this card's note is
+  // the module's longest. At 392/1020 the square ran 22px past the artboard
+  // and the story 63px — onto the tagline, found by eye on the live card
+  // because no fixture passed a filer map and so no sweep could see the
+  // sentence. The chart is the free parameter, and 8% of a story's plot is
+  // invisible where a note printed over the brand is not. Clearance now
+  // 20px+, the half-a-text-line floor the how-to deck already holds.
+  const WF_H = { portrait: 600, square: 346, story: 934 };
 
   function tplWaterfall() {
     const per = SNAP_PERIODS.some(([k]) => k === O.wfallPeriod) ? O.wfallPeriod : 'ytd';
@@ -4721,12 +4834,16 @@
       + '— which is the thing a treemap cannot do, because a fall has no '
       + 'negative area. '
       + (P.index > 0 && need
-        ? 'The ' + need + ' biggest alone cover the whole net move; everything below '
-          + 'them cancels out. ' : '')
+        ? (need === 1 ? 'The biggest alone covers the whole net move; everything '
+            + 'below it cancels out. '
+          : 'The ' + need + ' biggest alone cover the whole net move; everything below '
+            + 'them cancels out. ') : '')
       + (rest.length ? 'REST is the other ' + rest.length.toLocaleString()
         + ' together. ' : '')
       + 'Begin-of-window weights, so a company is not credited with the size it '
-      + 'grew into. Not a forecast.';
+      + 'grew into. '
+      + foldNote(P.folded).replace(/^ /, '')
+      + 'Not a forecast.';
 
     return chromeTop() +
       '<div class="s-body"><div class="wf-in">' +
@@ -6139,6 +6256,7 @@
       pulledAt = c.updatedAt || null;
       myLists = c.myLists || {};
       screens = Array.isArray(c.screens) ? c.screens : [];
+      filers = (c.filers && typeof c.filers === 'object') ? c.filers : {};
       size = c.size || { id: 'portrait', w: 1080, h: 1350 };
       O = c.opts || {};
       pal = themeOf(id, O);

@@ -4828,6 +4828,67 @@ Reduced to slice-and-dice, the fixture's worst tile is **3.83:1 against squarify
   - **Three fixture traps worth keeping.** `fund_holdings` and `fund_state` are keyed **`'spy'` lowercase** (both accessors fold it), so a `'SPY'` seed matches nothing, stamps null on every row, and every assertion then passes over a card correctly reporting that no file has been imported — there is a sanity check on the stamp before anything else runs. `CONTROL_IDS` is a top-level `const`, so it is a lexical binding and **not** a property of `window`: reading it that way collected nothing and the post saved with no options at all. And an apostrophe in prose (*"the page's list"*) is a perfectly good quote to a naive matcher, which reported `s list.` as a failing control id.
   - **A heredoc ate a backslash level twice more** — once leaving a real newline inside a regex literal so the suite would not parse. Eighth and ninth instances; both repaired with the Write tool.
 
+#### ONE COMPANY, ONE LISTING — Alphabet was two bars (2026-10-06, owner: "Google is appearing twice")
+**Reported against the waterfall, where `GOOGL +3.81%` and `GOOG +3.47%` were the first two steps.** It is not a cosmetic duplicate: both carry the **whole company's** market value, so Alphabet entered the pool twice at full size, and the index the chart closes on was wrong.
+
+##### THE PROVIDER REPEATS EVERY COMPANY-LEVEL FIGURE AGAINST EACH CLASS, and only the price is the class's own
+Measured on the live screen rather than assumed, and the first reading of this in my own notes was wrong:
+
+| | shares (M) | float (M) | cap $B | cap/share | price |
+|---|---|---|---|---|---|
+| GOOGL | **12,229.9** | **10,879.4** | 4,136.7 | 338.24 | 347.85 |
+| GOOG | **12,229.9** | **10,879.4** | 4,162.5 | 340.35 | 344.32 |
+| BRK.B | 1.4 | 1.2 | 1,071.4 | **748,362** | **506.43** |
+
+**BRK.B is the proof**: a cap/share of 748,362 against a $506 price is BRK.A's figures wholesale. **Shares and float are identical to the digit in all seven dual-class pairs**, so a class's cap is `whole-company share count × that class's own price` — and **neither class's figure is its own value**.
+
+- **The caps therefore need not be near-equal, and that is what corrected the first thesis.** Where the classes trade alike the two caps nearly match (GOOGL/GOOG 0.6% apart, Z/ZG 1.6%); where they do not, they differ a lot (HEI.A $31.4B against HEI $42.3B, 35%). **Both are still wrong, and the pair is still ~2x the company.**
+
+##### THEREFORE THE MEAN, NEVER THE SUM — and a float-weighted mean is not available
+`cap = W × price_now` and the begin weight is `W × price_then`, so the mean across the classes is `W × the mean class price`: the company itself, **exactly** when the classes are equally sized and **inside the bracket always**. Summing is the double count. A float-weighted mean would be better and **the float is the whole company's on every class too**, measured — so the unweighted mean is the best estimator the data permits, and the note says the classes are combined.
+
+##### THE KEY IS THE FILER ID, WHICH THE PROJECT HAD ALREADY SETTLED ON THIS DATA
+`/adjustedbacktest`'s `btOneEach` chose the CIK over the display name because **OWL and OBDC are both "Blue Owl Capital" and are two different companies** (1823945 against 1655888). The same measurement here, and two more reasons the name is worse:
+
+- **Of the nine pairs on the live screen, TWO have different display names** — `FWONA + FWONK` and `LLYVA + LLYVK`, the Liberty Media tracking series this file already records as a near-miss for name matching. A name key misses them entirely.
+- A name-plus-share-count key was measured and **gives the same answer as the CIK today**, but shares outstanding is a quarterly figure on a 7-day rotation: for about a week each quarter two classes can carry different counts, the fold silently stops, and the bug returns four times a year with nothing to say so.
+- **A symbol with no CIK is NEVER folded** — an under-catch, the safe direction, and why the two dead renamed tickers (`SQ/XYZ`, `FI/FISV`, neither dead half carrying one) stay apart. That is a separate, already-reported problem: removing a ticker is the owner's call.
+
+**`btOneEach` DROPS a class, which is right for a book you hold and wrong here**: these cards must still sum to the index, so this merges.
+
+##### What it moves, measured against production (YTD)
+| cut | rows | index | total value |
+|---|---|---|---|
+| S&P 500, all sectors | 500 → **497** | 14.22% → **14.49%** | $74.62T → **$70.43T** |
+| **S&P 500, Communication Services** | 22 → **19** | **5.51% → 3.15% (−2.36pt)** | $11.60T → **$7.41T** |
+| the whole screen | 1,239 → **1,230** | 14.05% → 14.47% | $93.58T → $88.24T |
+| S&P 500, Financial Services | 70 → 70 | unchanged | unchanged — the control |
+
+**$4.19T of phantom market value** on the index, and **36% of what the Communication Services card claimed that sector was worth**. The screenshot's own cut goes from `GOOGL 3.68pt · GOOG 3.28pt · META 1.84pt` to `GOOG 5.33pt · META 2.81pt · VZ 0.27pt`.
+
+##### Shape
+- **`foldListings` runs BEFORE anything is summed**, or the index itself still double-counts.
+- **THE FLOW CARD HAS THE SAME DEFECT AND IS FIXED WITH THEM, though it was not what was asked.** It carries its own copy of the begin-weight arithmetic, so Alphabet inflated Communication Services' share of the value *and* its cap-weighted return. One module, one `ctx` field, one helper; leaving two of three wrong with the data in hand is the drift this module exists to prevent.
+- **THE LABEL IS THE ALPHABETICALLY FIRST CLASS THAT HAS A READING.** Largest cap is the obvious pick and is **not stable** — the caps are struck at different price vintages, so GOOG leads GOOGL on a day GOOGL is the higher-priced. A class with no reading is **consumed, not counted**, and does not get to name the bar: the ticker on the axis should be one whose own figures are drawn. Only the waterfall shows a ticker; a treemap tile carries the company name, which both classes already share.
+- **`ctx.filers` is NOT a snapshot field and must not become one.** The boundary that keeps filings data off the screener is about the Advice engine and the selection logic; this is an identity handed to a renderer, used and discarded. `/api/stocks` is untouched and there is a check on the row keys. The precedent is `/backtest`, which already reads a CIK map it does not otherwise read, to dedupe.
+- **`GET /api/filers` is member-only**, cached an hour, and **the phone is handed the map too** — it does not hold a post's controls and never calls that route, so without it a saved post is one bar in the studio and two on the phone, the drift `themeClass` and `basketDays` both exist to prevent. **Proved by reverting**: fails 3, and the phone's ticks come back `ALFA,ALFB`.
+
+##### TWO FAULTS FOUND BY SCREENSHOT AND NONE BY ASSERTION
+- **The note ran onto the tagline.** The fold adds a sentence and a card cannot scroll. The wording is half its first length — the WHY is the half a reader cannot guess, so that is what was kept — and **`WF_H` was re-measured**: the square ran 22px past the artboard and the story 63px, so 392/1020 became 346/934. A **fixed chart height against a variable note** is the fault; the chart is the free parameter, and 8% of a story's plot is invisible where a note over the brand is not.
+- **"The 1 biggest alone cover the whole net move."** The fold merges the two bars that used to lead this sector, so `need === 1` became common. The Flow card's "a industry that fell", in a second place.
+
+##### NO FIXTURE PASSED A FILER MAP, SO NO SWEEP COULD SEE THE SENTENCE
+That is why the overflow reached a screenshot, and it is the part worth keeping. `note-fit-test` now seeds **two symbols sharing a CIK** — the studio fetches `/api/filers` itself, so seeding `sec_state` is the whole change — and it immediately reported `waterfall/square +22px, waterfall/story +63px`. It names **every** overflowing combination now, rather than only the worst: one name is a lead, the list is the diagnosis.
+
+- **`hist-seed.js` seeds the filer ids too**, for its own stated reason: like `price_extremes` and `fund_holdings` before it, nothing is stored on the row, so without it every future shot of these three cards draws the unfolded version and looks like the fix never landed.
+- **`tmap-live.js` hardcoded `story: 1020`** and went stale the moment the heights were re-measured. It compares the deployed file against the working copy now, which is what that check was always for and cannot rot.
+
+- Verified: **31 checks** off-page (the module is pure, so the whole mechanism is reachable through `Cards.build` and a regex), **12** on the server and the phone, and **8** on the roles. The fixture's load-bearing properties are that the two classes carry **different returns ten points apart** — so a merge that picked one rather than averaging lands on 20.0% or 10.0% and the suite can say which — and that the folded and unfolded indexes differ by 3.4 points. **Proved by reverting ten times, every one load-bearing**: the fold never running fails 10, a display-name key 14, **summing rather than averaging 3 (and the index comes back at exactly the unfolded number)**, the flow card not folding 3, the label by largest cap 2, a no-reading class naming the bar 2, the note dropped 5, the phone not handed the map 3, the route serving nothing 3, and the accessor emptied 6.
+  - **Four of my own assertions were wrong before the code was.** The total bar is `class="wf-v tot"`, so a regex demanding exactly `class="wf-v"` read the last STEP as the index and reported three failures against a working card. And "two pairs, so two fewer rows" was wrong: `CNUL` has no reading, so it never counted unfolded either — the expectation is derived from the filer map now.
+  - **A fixture trap worth keeping**: `OBLU` and `CVAL` were correctly pooled into REST, so two checks about where they appear were asking about names the card had every right not to draw. They are large enough to rank now.
+  - **The session cookie is `sp_session`**, read off server.js rather than guessed — a wrong name makes four role checks fail over a server that is working.
+  - **A `cat` heredoc refused to close** on the suite and wrote no file; written with the Write tool instead. The ninth instance on this project.
+
 ## Consolidated — every group in one table (2026-09-28, owner's request)
 **`/consolidated`: one row per group, so the groups can be read against each other.** The owner's words: *"I do not have a screen to show how Mag 7 as a theme has done compared with Memory or cybersecurity."* Nothing did — a group page shows ONE group against the index, `/compare` is two **stocks**, and the pivot crosses two dimensions to answer *where is the weight* rather than *how has each one done*. Member page, guests refused, like the studio and the pivot beside it; a `Consolidated` button in the bar before Compare.
 

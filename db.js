@@ -3136,6 +3136,19 @@ async function readUniverseCiks() {
   return new Map(r.rows.map((x) => [Number(x.cik), x.symbol]));
 }
 
+
+// Symbol -> issuer CIK, which is the only stable way to know that two
+// listings are ONE company. The mirror of readUniverseCiks above, keyed the
+// other way because it answers the other question: that one asks which of a
+// day's filings are ours, this one asks who a symbol belongs to. Two indexed
+// columns over ~1,300 rows and nothing from the blob beside them.
+async function readFilerIds() {
+  await init();
+  const r = await db.execute('select symbol, cik from sec_state where cik is not null');
+  const out = {};
+  for (const x of r.rows) out[String(x.symbol).toUpperCase()] = Number(x.cik);
+  return out;
+}
 async function readInsiderState() {
   await init();
   const r = await db.execute('select quarter, loaded_at, rows, status, error from insider_state order by quarter');
@@ -5720,7 +5733,7 @@ module.exports = {
   readShortState, noteShortMiss, shortNewest, appendShortInterest,
   fundNewest, noteFundMiss, appendFundHoldings, readFundHoldings, readFundState,
   readFundDates,
-  readInsiderDay, writeInsiderDay, appendInsider, readUniverseCiks,
+  readInsiderDay, writeInsiderDay, appendInsider, readUniverseCiks, readFilerIds,
   clearVisitors,
   logActivity,
   readActivityStats,
