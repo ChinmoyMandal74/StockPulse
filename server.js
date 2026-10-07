@@ -4485,6 +4485,150 @@ function badDay(values, lookback = 253) {
   return Math.round(r[Math.floor(0.05 * (r.length - 1))] * 1000) / 10;
 }
 
+
+// ---- Chip selloff: what a stock did on the complex's own worst days ------
+//
+// THE MEASURE THAT SURVIVED ITS GATE, and two others that did not. The
+// obvious column here is a BETA to the semiconductor factor, and it was
+// measured and refused: Spearman 0.49 against a seed-free principal
+// component, 0.52 against its own past, and only 0.17 at the 252-session
+// lookback a refresh can afford -- so the version that could actually be
+// computed was the weakest one. An episode REPLAY (what each stock did
+// through the seven detected factor drawdowns) persisted better, at a
+// leave-one-out 0.32 with all seven folds positive, and was refused for a
+// different reason: it needs a hardcoded list of episode dates, which rots
+// the moment an eighth episode happens.
+//
+// This is the same question asked CONTINUOUSLY. Leave-one-year-out Spearman
+// 0.532 with all six folds positive (0.224 to 0.697), and -- the figure that
+// decided it -- the 252-session window ranks the universe like the full five
+// years at 0.825, where the beta managed 0.17.
+//
+// IT IS NOT CALLED "AI", deliberately. The factor IS the semiconductor
+// industries; "the AI trade" is an interpretation of them, and the two are
+// not the same thing. The same discipline that stops `pctFromAth` saying
+// "all-time" when 718 archives begin at the provider's 5,000-bar ceiling.
+const CHIP_MIN_BASKET = 12;     // enough names for an equal-weight factor
+const CHIP_WINDOW = 253;        // one year of sessions, the window a refresh holds
+const CHIP_TAIL = 0.05;         // the complex's worst 5% of days
+const CHIP_MIN_DAYS = 10;       // a mean over fewer is not a reading
+
+// One date -> return map per symbol, built ONCE: the basket needs it to form
+// the factor and then every row needs it again to score itself. Bars are
+// newest-first and dated `datetime`, read off readBarsFullFor rather than
+// guessed -- `d` is what the table calls it and `datetime` is what the
+// accessor renames it to.
+function chipReturns(values) {
+  const m = new Map();
+  if (!Array.isArray(values)) return m;
+  const n = Math.min(values.length - 1, CHIP_WINDOW);
+  for (let i = 0; i < n; i++) {
+    const a = parseFloat(values[i].close);
+    const b = parseFloat(values[i + 1].close);
+    // THE SUB-CENT FLOOR, not `> 0`: a penny bar divides into a six-figure
+    // percentage, which is how SOLS once printed +56,129,902% on a live page.
+    if (isFinite(a) && isFinite(b) && a >= MIN_CLOSE && b >= MIN_CLOSE) {
+      m.set(values[i].datetime, a / b - 1);
+    }
+  }
+  return m;
+}
+
+// Which days the complex fell hardest, MARKET-ADJUSTED. Without the
+// adjustment this would be a second market beta wearing another name: the
+// semis carry a beta of about 1.8 to the index, so their worst raw days are
+// mostly the market's worst days. Returns null rather than a guess whenever
+// the basket, the calendar or the overlap is too thin.
+function chipSelloffCtx(series, profiles, benchSym) {
+  const rmap = new Map();
+  for (const sym of Object.keys(series || {})) {
+    const v = (series[sym] || {}).values;
+    if (Array.isArray(v) && v.length > 1) rmap.set(sym, chipReturns(v));
+  }
+  const mkt = rmap.get(benchSym);
+  if (!mkt || mkt.size < CHIP_WINDOW * 0.6) return null;
+
+  // THE BASKET IS THE TAXONOMY, never a hand-picked list of names. Measured,
+  // it is also the tightest identifiable group here: average pairwise
+  // correlation of market-adjusted returns 0.330, against 0.233 and 0.193 for
+  // the owner's own AI themes taken separately and 0.113 for their union.
+  const basket = [...rmap.keys()].filter((sym) => sym !== benchSym
+    && /^Semiconductor/.test(((profiles || {})[sym] || {}).industry || ''));
+  // AN EARLY EXIT, and the per-day `n >= CHIP_MIN_BASKET` below enforces the
+  // same floor again -- two guards for one thing, which the revert harness
+  // caught: reverting this line alone changes nothing, because a basket of
+  // five never clears the per-day test either. It stays because it avoids
+  // walking the whole calendar for nothing and because one edit to that
+  // other line would re-expose this, and the harness reverts the PAIR.
+  if (basket.length < CHIP_MIN_BASKET) return null;
+
+  const dates = [], fac = [], mkr = [];
+  for (const [d, mr] of mkt) {
+    let s = 0, n = 0;
+    for (const sym of basket) {
+      const x = rmap.get(sym).get(d);
+      if (x != null) { s += x; n++; }
+    }
+    if (n >= CHIP_MIN_BASKET) { dates.push(d); fac.push(s / n); mkr.push(mr); }
+  }
+  if (dates.length < CHIP_WINDOW * 0.6) return null;
+
+  const mf = fac.reduce((a, b) => a + b, 0) / fac.length;
+  const mm = mkr.reduce((a, b) => a + b, 0) / mkr.length;
+  let num = 0, den = 0;
+  for (let i = 0; i < fac.length; i++) {
+    num += (mkr[i] - mm) * (fac[i] - mf);
+    den += (mkr[i] - mm) ** 2;
+  }
+  const beta = den ? num / den : 0;
+  const resid = fac.map((v, i) => v - beta * mkr[i]);
+
+  const k = Math.max(CHIP_MIN_DAYS, Math.round(dates.length * CHIP_TAIL));
+  const worst = resid
+    .map((v, i) => [v, i])
+    .sort((a, b) => a[0] - b[0])
+    .slice(0, k)
+    .map(([, i]) => dates[i]);
+  return { days: worst, rmap, basket: basket.length, sessions: dates.length };
+}
+
+// A stock's TYPICAL move on those days. Positive means it ROSE while the
+// complex was falling. Null, never zero: a stock that was not trading on
+// those days has no reading about them, and a fabricated 0.0% would read as
+// "it did not move", which is a different statement.
+//
+// THE MEDIAN, NOT THE MEAN, and that is badDay's own lesson met from the
+// other side. Its comment explains why it takes the 5th percentile rather
+// than a min: "a single junk print moves it not at all". A mean over
+// thirteen days has exactly the opposite property, and the first run proved
+// it -- MRNA came out at +13.98%/day, the best hedge on the screen, off the
+// days -3 -4 6 3 4 10 -2 -5 0 -2 177 -3 2. One company event. Its median is
+// +0.31%, which is the truth.
+//
+// Measured before switching: the choice moves the ranking as a whole barely
+// (Spearman 0.934) and changes 12 OF THE TOP 30, which is the only part of
+// this column anyone reads. Persistence is a wash (0.650 against 0.637) and
+// the semis-against-everything-else separation is marginally wider under the
+// median, so it costs nothing.
+function chipSelloffOf(ctx, sym) {
+  if (!ctx) return null;
+  const m = ctx.rmap.get(sym);
+  if (!m) return null;
+  const v = [];
+  for (const d of ctx.days) {
+    const x = m.get(d);
+    if (x != null) v.push(x);
+  }
+  if (v.length < CHIP_MIN_DAYS || v.length < ctx.days.length * 0.8) return null;
+  v.sort((a, b) => a - b);
+  const i = (v.length - 1) / 2;
+  const mid = v.length % 2 ? v[i] : (v[i - 0.5] + v[i + 0.5]) / 2;
+  // TWO DECIMALS, unlike badDay's one. The universe spans about ten points
+  // here, so a single decimal would tie a dozen stocks a bucket and the
+  // column would sort badly.
+  return Math.round(mid * 10000) / 100;
+}
+
 // A ratio of two absolutes, as a percentage. Derived server-side so the value
 // on screen, in the export and in the chatbot's context is one number computed
 // once — the same reason the margins are derived rather than taken from the feed.
@@ -5016,6 +5160,9 @@ const STARTER_SCREENS = [
   sc('overextd', 'Technical', 'Overextended', 'RSI above 75 and more than 12% above the 50-day average.',
     { filters: { rsi: '>75', vs50ma: '>12' }, sort: { key: 'rsi', dir: -1 },
       columns: ['rsi', 'vs50ma', 'oneMonthPct', 'actionEntry', 'av:Balanced', 'spMember'] }),
+  sc('chiphedg', 'How it moved', 'Held up when chips fell', 'Rose on the 13 worst days for the chip complex. Mostly AI-disrupted software: median -22% this year against the screen’s +2%, while the chip-exposed end is +54%.',
+    { filters: { chipSelloff: '>=2', marketCap: '>=5B' }, sort: { key: 'chipSelloff', dir: -1 },
+      columns: ['chipSelloff', 'ytdPct', 'oneYearPct', 'marketCap', 'av:Balanced', 'spMember'] }),
   sc('shorted0', 'Short interest', 'Most shorted', '10% or more of the float sold short.',
     { filters: { shortPctFloat: '>=10' }, sort: { key: 'shortPctFloat', dir: -1 },
       columns: ['shortPctFloat', 'todayPct', 'oneMonthPct', 'marketCap', 'av:Balanced', 'spMember'] }),
@@ -6645,6 +6792,30 @@ async function computeStocks(asOf, opts = {}) {
     }
 
     T.mark('prices');
+    // CROSS-SECTIONAL, so it cannot live inside the row map the way badDay
+    // does: the factor needs every semiconductor series at once. Built here,
+    // from the window ALREADY IN MEMORY -- the refresh reads ~470 sessions
+    // per symbol for the long returns -- so it costs no query and no credit.
+    //
+    // BLANK IN THE AS-OF VIEW, like YTD and 5Y: "the complex’s worst days"
+    // there would mean the days before the as-of date, which is a different
+    // question from the one the header asks.
+    //
+    // A column must never fail a refresh -- the bars rule.
+    // Named rather than inline, because `if (!asOf) {` appears twice in this
+    // file -- so a revert anchored on it is refused, which reads as a broken
+    // harness rather than as the one guard it is.
+    const chipLive = !asOf;
+    let chipCtx = null;
+    if (chipLive) {
+      try {
+        chipCtx = chipSelloffCtx(series, profiles, BENCHMARK);
+      } catch (err) {
+        console.warn('chip selloff skipped:', err.message);
+        chipCtx = null;
+      }
+    }
+
     const stocks = symbols.map((sym) => {
       const s = series[sym] || {};
       const full = s.values;
@@ -6676,6 +6847,10 @@ async function computeStocks(asOf, opts = {}) {
       // Same window, already in memory: the refresh reads ~470 sessions per
       // symbol for the long returns, so this costs a sort and no query.
       const bad = badDay(values);
+      // Keyed on the SYMBOL, not on `values`: the context holds its own
+      // date-aligned returns, so an as-of slice cannot reach it and the
+      // reading is of the real calendar either way.
+      const chip = chipSelloffOf(chipCtx, sym);
 
       const threeMonthPct = pctChange(values, THREE_MONTH);
       const relStrength =
@@ -6851,6 +7026,7 @@ async function computeStocks(asOf, opts = {}) {
         bandPct: bandPct(values),            // (high-low)/median over the year, %
         realisedVol: rvol,
         badDay: bad,
+        chipSelloff: chip,
         fwd1M,
         fwd3M,
         fwd6M,

@@ -1162,6 +1162,136 @@ A median of two is a statement about two companies, and this column's entire cla
 #### Worth reporting, not acted on
 **`SKHY` (SK hynix) appears third-cheapest in Semiconductors at 0.22×**, and this file already records its fundamentals as incoherent — *"net income (116.8B) larger than gross profit (104.0B), which is impossible"*. Its forward P/E of 5.5 may be junk rather than cheap. **MSTR at 0.20× in Software - Application** is Strategy, a bitcoin holding company the provider files under software; that is the taxonomy rather than a fault, and it is the clearest illustration of why the column states a fact and leaves the judgement with a person.
 
+
+### The AI trade, measured — concentration, the unwind record, and how you identify it (2026-10-06/07, owner's question)
+**Asked as *"what happens if the AI trade unwinds, how to protect, how to find stocks not correlated with it"*, then *"how do you identify AI stocks"*.** The whole of this was measured on the local analysis copy, read-only, with one row of production's snapshot for sector and industry. It produced the **Chip selloff** column below; the findings that did not become a column are here because they are the reason it is shaped the way it is.
+
+#### THERE IS NO AI FIELD, so every identification is a construction — and four of them disagree
+No industry, no tag, no flag. Four methods are available and they were scored on **cohesion**: the average pairwise correlation of market-adjusted returns INSIDE the basket, which asks *is this one trade* rather than *does the label sound right*. A random quarter of the screen scores **0.057**.
+
+| basket | n | cohesion |
+|---|---|---|
+| theme: Memory | 3 | 0.576 |
+| **behaviour: the bottom 40 loadings (the hedge)** | 40 | **0.476** |
+| **the taxonomy: semiconductor industries** | 38 | **0.330** |
+| theme: AI - Optical Networking | 23 | 0.233 |
+| theme: AI - Power Generation | 13 | 0.193 |
+| theme: Cloud Infra | 12 | 0.150 |
+| **all five AI themes, unioned** | 55 | **0.113** |
+| theme: Mag 7 | 7 | 0.108 |
+| **what the company SAYS it does** | 76 | **0.100** |
+
+- **UNIONING THE OWNER'S OWN THEMES DESTROYS THEM.** Individually 0.233 and 0.193; unioned **0.113**, below either. They are not one trade, and they are better as the separate sub-trades they were built as than under one AI label.
+- **WHAT A COMPANY SAYS IS NEARLY WORTHLESS HERE** — 0.100 against a random 0.057. Only 47% of the 76 whose `/profile` description mentions AI terms land in the top decile of actual behaviour, and the top decile holds **62 names that never mention it**, AAPL, GOOGL, MSFT, META, PLTR and ORCL among them. *(Possibly the provider's descriptions being stale boilerplate rather than the idea being bad; either way it is unusable on this data.)*
+- **THE MAG 7 IS NO LONGER ONE TRADE** — 0.108, and it fell 2.5% in an unwind that took a third off the semis.
+- **The taxonomy wins**, which is why the shipped factor is the semiconductor industries and not a list of names.
+
+#### THE MARKET'S SECOND AXIS IS THE AI TRADE, AND ITS MIRROR
+Strip the market out of every stock's returns and ask what the biggest remaining common movement is: one component explains **9.1%** of market-adjusted variance and it is a **see-saw** — NVDA +0.050, AVGO +0.041, MSFT +0.040 at one end; FITB −0.069, FNB −0.068, RF −0.068, BRX, KIM at the other. Regional banks and retail REITs. **No seed, no taxonomy, no opinion.**
+
+- **A PRINCIPAL COMPONENT HAS NO INHERENT SIGN, and I shipped the wrong one for a run.** Oriented on the heaviest absolute loading — which happened to be a bank — the output read as though banks were the AI trade. Its own *"says it does AI but behaves nothing like it"* list came back **NVDA AMZN TSM AVGO MU AMD ASML**, which is what gave it away. Orient on a named anchor.
+- That sign instability is also why the shipped column is **not** a PCA loading: a column whose sign can flip overnight is worse than no column.
+
+#### SEVEN UNWIND REHEARSALS, DETECTED RATHER THAN RECALLED
+Peak-to-trough declines of 12% or more in the factor since 2021. **Detected from the data, which matters: the most informative one postdates my knowledge cutoff.**
+
+| window | factor | index | the index took |
+|---|---|---|---|
+| 2021-02 → 05 | −17.4% | **+3.3%** | none |
+| 2022-01 → 10 | −42.6% | −25.1% | **59%** |
+| 2024-03 → 04 | −15.7% | −3.8% | 24% |
+| 2024-07 → 2025-04 | −39.3% | −12.1% | 31% |
+| 2025-11 | −13.5% | −4.5% | 34% |
+| 2026-02 → 03 | −13.8% | −8.8% | **64%** |
+| **2026-06-22 → 07-29** | **−33.5%** | **−2.0%** | **6%** |
+
+**There is no single answer to "what happens if it unwinds" — the range is 6% to 64%, and the spread IS the finding.** What decides it is whether the unwind stays idiosyncratic. The June–July 2026 episode is the clean case and was **verified against individual names before being reported**: SOXX −29.0% and SMH −24.6% independently, MU −39%, MRVL −47%, INTC −42% — while the **median stock on the screen rose 3.6%**. A genuine rotation. Note also that **NVDA fell only 8.9% and AVGO 5.6%** in it: the fragility is in the mid-cap complex, not the mega-caps.
+
+- The index is **42.6% top-ten** and **16.9% semiconductor industries** by weight.
+
+#### DIVERSIFICATION HALVES EXACTLY WHEN IT IS NEEDED
+Average pairwise correlation across 200 stocks: **0.143 in the quietest third of days, 0.338 in the most stressed — 2.35×.**
+
+**MY FIRST MEASUREMENT CAME OUT BACKWARDS (0.170 against 0.180) AND THE MEASURE WAS AT FAULT, NOT THE MARKET.** Selecting the worst 5% of days conditions on the market return being large AND similar, which strips out the very factor variance that drives cross-sectional correlation — the documented Forbes–Rigobon conditioning artefact. **Split time by VOLATILITY REGIME instead**, which conditions on nothing the correlation is made of. *An effect that comes out backwards against a well-established result is usually the measurement.*
+
+#### THE HEDGE IS A TIGHTER TRADE THAN THE THING BEING HEDGED
+0.476 against the semis' 0.330, and **+6.7% through the purest unwind**. The mirror is not a vague collection of defensives; it is a specific, coherent, measurable bloc.
+
+#### AND THE PROTECTION COSTS, WHICH IS THE NUMBER TO LEAD WITH
+Top quintile of AI beta: median YTD **+35.2%**. Bottom quintile: **−6.1%**. The correlation between AI beta and year-to-date return across every name above $5B is **+0.548**. You are selling the thing that has worked — and the shipped screen's own 57 names carry a median YTD of **−21.9%** against the chip-exposed end's **+53.5%**.
+
+Energy was the only sector with a positive median across all seven episodes (+8.1%), with near-zero AI beta. In the one **general** bear here only **147 of 892** names above $5B finished positive — and of the 111 that passed all three decoupling tests, only **48**. *Low AI beta protects against an AI unwind, not against a market.*
+
+
+### Chip selloff — what a stock did on the complex's own worst days (2026-10-07, owner's request)
+
+**A `Chip selloff` column in the Relative group immediately after `RS vs S&P`, and a `Held up when chips fell` screen.** Asked for after a measurement session on AI-trade concentration: *"how to find stocks that are not correlated with the AI trade"*, then **"column + screen"**.
+
+The value is a stock's **median** move on the 13 sessions in the past year when an equal-weight basket of the semiconductor industries fell hardest, **after the market's own move is taken out**. Positive means it rose while chips were falling.
+
+#### THREE MEASURES WERE GATED AND TWO WERE REFUSED
+The gate was set before any code was written, and the obvious candidate failed it.
+
+| measure | leave-one-out | at the 252-session lookback a refresh can afford | needs |
+|---|---|---|---|
+| **beta** to the factor | — | **0.167** | nothing |
+| episode **replay** | 0.323 | n/a | a hardcoded list of episode dates |
+| **this one** | **0.532** | **0.825** | nothing |
+
+- **THE BETA WAS THE PLAN AND IT LOST.** Spearman **0.494** against a seed-free principal component, **0.519** against its own past, and — decisively — **0.167** at the lookback that is actually computable, so the version that could ship was the weakest one. Its worst disagreements were systematic rather than noise: INTU, ADBE, CRM, NOW and WDAY all carry a *negative* semis beta and a *positive* loading on the seed-free axis, because application software sits on the growth side of the rotation while genuinely not tracking chips. The two measures answer different questions, and a single column called "AI beta" would have meant one and been read as the other.
+- **THE REPLAY PERSISTED BETTER AND WAS STILL REFUSED.** Leave-one-out 0.323 with all seven folds positive (0.271–0.478) and the top decile holding 71% against a coin's 50% — but it is defined by seven hardcoded date pairs, which rot the moment an eighth episode happens. This project does not ship that.
+- **The winner is the same question asked CONTINUOUSLY**: no episode list, nothing to maintain, recomputed every refresh. All six leave-one-year-out folds positive (0.224–0.697).
+
+#### IT IS NOT CALLED "AI", and that is the same discipline `pctFromAth` keeps
+**There is no AI field anywhere in this app** — no industry, no tag, no flag — so every identification is a construction. The factor *is* the semiconductor industries; "the AI trade" is an interpretation of them. The column is named for what it measures, exactly as `pctFromAth` refuses the words "all-time" because 718 archives begin at the provider's 5,000-bar ceiling. The tooltip says the semis are the closest proxy here and are **not** the same thing.
+
+#### THE MARKET ADJUSTMENT IS THE WHOLE GUARD
+The semis carry a beta of about **1.83** to the index, so their worst **raw** days are mostly the market's worst days — without the adjustment this column would be a second market beta wearing another name. **Proved by reverting**: the fixture plants two sets of thirteen bad days, CHIP days (basket −6%, market flat) and MKT days (basket −7%, market −6%). Adjusted, the chip days are the worst residuals; unadjusted the mkt days are worse in raw terms and get chosen instead, and `MKTONLY` — planted to rise only on the mkt days — flips from 0.00 to +3.00.
+
+#### THE MEDIAN, NOT THE MEAN — and the first run proved why
+`badDay`'s own comment explains why it takes the 5th percentile rather than a `min`: *"a single junk print moves it not at all"*. A mean over thirteen days has exactly the opposite property. The first run came back with **MRNA at +13.98%/day, the best hedge on the screen**, off the days `-3 -4 6 3 4 10 -2 -5 0 -2 177 -3 2`. One company event. Its median is **+0.31%**, which is the truth.
+
+Measured before switching: the choice moves the ranking as a whole barely (Spearman **0.934**) and changes **12 of the top 30**, which is the only part of this column anyone reads. Persistence is a wash (0.650 against 0.637) and the semis-against-everything-else separation is marginally wider under the median, so it costs nothing. **Proved by reverting**: `ONEDAY` goes from 0.00 to +13.62.
+
+#### IT IS COLOURED, which corrects my own plan
+I proposed it uncoloured on `badDay`'s rule — *a column negative on every row says nothing by being red*. Measured, that rule does not apply here: **57% of readings are positive, 42% negative, median +0.20**, range −11.90 to +4.54. The values straddle zero and **the sign IS the reading**, so green and red carry exactly their usual meaning and the column takes `pctCell`. `badDay` is uncoloured because it is negative on every row; this one is not.
+
+#### Shape and cost
+- **CROSS-SECTIONAL, so it cannot live inside the row map the way `badDay` does** — the factor needs every semiconductor series at once. Built once before the map, from the ~470-session window **already in memory**, so it costs no query and no credit. Measured: **775ms to build the context and 21ms to score 1,175 stocks.**
+- **A refresh-time field, NOT a read-path stamp**, and my plan said otherwise. `peerPe` can be stamped because it only needs other ROWS; a time-series measure needs bars, which only the refresh has. The consequence is the documented one: **the column is blank until the next FULL round rebuilds the snapshot**, about half an hour. Judge it after a refresh, never straight after the deploy.
+- **Blank in the as-of view**, like YTD and 5Y: "the complex's worst days" there would mean the days before the as-of date, which is a different question from the one the header asks. **AND IT IS THE SECOND GUARD ON THAT, which only the revert said.** In the as-of view `profiles` is `{}` (`asOf ? {} : await ensureProfiles(...)`), so the basket is empty and the floor already returns null — **two guards for one problem**, the `getSessionUser` allowlist trap met again. It is **kept**, by the `CHAT_DAILY_LIMIT_MEMBER` rule: it states the intention, it does not depend on the as-of path never gaining point-in-time profiles, and the day it does it is the only thing left. **Its revert therefore fails 0, which is recorded in the harness’s own case name** rather than left looking like a guard that never mattered.
+- **A null is never a zero.** Under `CHIP_MIN_DAYS` (10) overlapping days, or under 80% of them, there is no reading — and `0.0%` would read as *it did not move*, which is a different statement. The sub-cent floor is `MIN_CLOSE`, not `> 0`.
+- **Two decimals stored, one drawn.** The universe spans about ten points, so a single stored decimal would tie a dozen stocks a bucket and the column would sort badly; `pctCell` is the shared formatter and rounds the display.
+- Constants after the change: the Relative banner **17**, `PAD_SPAN` **106**, the error row **101**, the empty row **103**. One `FIELD_SPEC` row carries it to the hover card, `/stock`, the tiles, the phone and `/compare`; `/columns` and the filter row needed nothing.
+
+#### THE SCREEN SHIPS WITH ITS COUNTER-FACT, because the number is brutal
+**`Held up when chips fell`** — `chipSelloff >= 2` and `marketCap >= 5B`, **57 names**, sorted by the column. Sized against the distribution: `>= 1` gives 230 (a list to browse), `>= 3` gives 15 (nearly a dead box).
+
+**The 57 carry a median YTD of −21.9%, with 47 of 57 down on the year, against the screen's own +2.0% — and the chip-exposed end (≤ −4%/day) is +53.5%.** A hedge that has cost about **75 points** of relative performance this year. They are overwhelmingly SaaS and IT services: the market treats them as the *other side of the same see-saw*, so buying the protection means buying what the market thinks AI is eating.
+
+That goes in the screen's own description, inside the 200-character cap, rather than in a tooltip nobody opens — `peerval0`'s precedent, which states on its own face that the cheapest third has the worse growth, margin, ROE and Quality because the measurement said so. **A screen saying "these held up" without that number would be the most misleading thing in this app.**
+
+- **A NEW STARTER SCREEN NEVER REACHES AN EXISTING DATABASE** (`seedScreensOnce` is marker-guarded so a screen the owner deletes does not come back), so it needs `add-starter-screens.js`, which diffs defined against stored and appends what is missing — **a targeted INSERT, never the PUT endpoint and never `writeScreens`**, both of which rebuild the list through `cleanScreens()` and would walk into the 2026-09-15 door that stripped `<` and `>` out of thirteen screens.
+- The id is `chiphedg`: **exactly eight lowercase alphanumerics**, or `cleanScreens` silently reissues a random one.
+
+#### THE BOUNDARY, asserted behaviourally rather than by grep
+Nothing reaches the Advice engine. Every served row is scored three ways — field **absent**, **present**, and **LYING** (−999) — and the verdicts must be byte-identical; a grep passes if the engine reads the field under another name. There is a grep too, as a second line rather than the first.
+
+#### Worth knowing: the see-saw's other end has ROTATED
+The earlier five-year analysis found the mirror of the AI trade to be rate-sensitive value — regional banks, retail REITs, P&C insurers. This column, on a one-year window of single down-days, finds **SaaS and IT services** (NOW +4.54, WDAY +4.08, ACN +3.78, INFY +3.19, TYL +3.12). Both are correct for their window, and the difference is the finding: **the hedge is not a fixed set of defensives, it is whatever the market is currently treating as AI's victim.** That is the argument for a rolling column over a fixed historical claim.
+
+- Verified: **51 checks**. The fixture's load-bearing properties are the two discriminators above plus every value being hand-computable, so a wrong statistic lands somewhere else rather than coinciding. The three static spans are **derived** from the drawn header (`PAD_SPAN === headers + 3`, the two short rows 5 and 3 below it) rather than written down, since none is on screen in a 21-row fixture. **Proved by reverting fifteen times, fourteen of which bite** — the fifteenth is the as-of guard above, named in the harness as expected-zero.
+  - **THE LOAD-BEARING CHECK IS HEADER-OVER-CELL.** A header added without its body cell does not throw and leaves no gap — it slides every later value one column over and the table still looks perfectly well formed.
+  - **`Action.apply` TAKES THE WHOLE ARRAY and a preset name**, not a single row — read off `action.js` rather than guessed, which cost one run and aborted the suite at 25 of 48.
+  - **THE FILTER INPUTS CARRY `data-fk` AND NOTHING ELSE.** There is no `#fltRow` id, and a container prefix matched nothing — which read as a missing filter box on a control that was there.
+  - **`T.mark('prices')` APPEARS TWICE IN server.js**, so the patch refused and wrote nothing, which is the harness working rather than failing. Anchored on the row map instead.
+  - **The Write tool resolves `—` into a real em-dash**, so a later patch anchored on the escape matched nothing. Anchor on an escape-free line.
+  - **THE AS-OF ASSERTION WAS VACUOUS AND PASSED EITHER WAY.** It read *every as-of row carries null* — which is satisfied just as well by a view that computed nothing at all, and the stub ignores `start_date`, so an empty or errored response would have passed it. It asserts the rows were **really priced** first (20 of 21), and only then that none of them carries a reading. *An absence is satisfied just as well by the thing never happening.*
+  - **A GUARD REVERTED IN HALF PROVES NOTHING, and the basket floor is a pair**: the early exit and the per-day `n >= CHIP_MIN_BASKET` enforce the same thing, so reverting either alone changed nothing. A case takes a LIST of edits now, and the harness **refuses a multi-line anchor outright** rather than normalising it — these files move between CRLF and LF between checkouts, so an anchor carrying a newline matches nothing and the patch is silently skipped.
+  - **A quoted heredoc ate a backslash level FOUR MORE TIMES in this one session, and it eats BOTH levels** -- `\r\n` arrives as real newlines inside a JS string literal, and `\u2014` / `\u2019` arrive as the characters themselves, so a patch anchored on the escape matches nothing. Tenth to thirteenth instances on this project. The shapes that work: build a newline with `String.fromCharCode(10)`, anchor on an escape-free line, write the real UTF-8 character, or edit line-based by index.
+  - **A PREFIX REPLACE LEAVES THE REST OF THE OLD LINE BEHIND**, which in prose reads as a sentence that wanders off mid-thought. Replace the whole line, or anchor on both ends.
+  - **`python3` does not exist on this machine**, so a patch script written for it reported "Python was not found" and changed nothing while looking like it had run. Repaired with the Edit tool.
+
 ### Sparklines
 The **Chart** group is one column (`90d`) between Scores and Short-term, holding a 90-session price line per row. A group of its own rather than a column inside Info, because the columns menu toggles *groups* — inside Info it could only be hidden by hiding Price, Sector and Market Cap too. The precedent cited here used to be the Volume group, which no longer exists — Chart is the one-column group now, and the Scores group (`colspan="1"` since 2026-09-23) is the other.
 
