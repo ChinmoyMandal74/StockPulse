@@ -5401,20 +5401,48 @@
        rather than splitting at both ends -- the fault the day card had to be
        rebuilt for. */
     .hs-in .s-sub { margin-top: auto; padding-top: 18px; }
-    .hs-wrap { margin-top: 26px; }
-    /* The two column heads LABEL THE TWO SCALES, which is the one thing a
-       reader could otherwise get wrong about this card: the bars are not
-       comparable with one another. */
-    .hs-hd { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-             gap: 16px; margin-bottom: 12px; }
+    /* NO BACKTICKS IN THIS COMMENT, OR ANY OTHER IN HERE: Cards.STYLE is
+       itself a template literal, so one inside a CSS comment ends the string.
+       The fourth time on this project.
+
+       THE TWO VALUE COLUMNS ARE A FIXED WIDTH, SHARED BY THE HEAD ROW AND
+       EVERY STOCK ROW, and that is the only thing that makes them line up.
+       Each .hs-r is its OWN grid, so an auto column is sized by that row's
+       own content and nothing aligns between grids: the head used to be a
+       2-column grid matched to the BARS, which put "% OF FLOAT" over the
+       left bar while its number sat at the far right -- the two were never
+       over each other. It also drifted row to row, because a minus-45.2%
+       and a plus-1.8% are different widths, and a narrower last column
+       pushes the one before it right.
+       Fixed widths fix both at once: columns 3 and 4 are measured in from
+       the right edge, which every grid here shares, so what columns 1 and 2
+       hold cannot move them.
+       THE WIDTHS ARE THE HEADINGS', MEASURED, not the values'. At 13px mono
+       with .12em tracking "days to cover" is 122px against the widest value
+       it can sit over at 89 (story: 159 against 122), so the head is the
+       binding constraint in every case and the values are the comfortable
+       ones. ~6px of slack for a value longer than any the read path can
+       currently produce. */
+    .hs-wrap { margin-top: 26px; --hv: 128px; --hy: 118px; }
+    .sz-story .hs-wrap { --hv: 166px; --hy: 154px; }
+    /* The two column heads LABEL THE TWO VALUE COLUMNS, placed into tracks 3
+       and 4 so each sits directly over its own numbers; the second head
+       auto-flows into track 4. The BARS are labelled by the note instead --
+       it is the one thing a reader could otherwise get wrong about this
+       card, since the two bars are not comparable with one another. */
+    .hs-hd { display: grid;
+             grid-template-columns: auto minmax(0, 1fr) var(--hv) var(--hy);
+             column-gap: 10px; margin-bottom: 12px; }
     .hs-hk { font-family: var(--mono); font-size: 13px; letter-spacing: .12em;
-             text-transform: uppercase; color: var(--faint); }
+             text-transform: uppercase; color: var(--faint); text-align: right; }
+    .hs-hd .hs-hk:first-child { grid-column: 3; }
     .sz-story .hs-hk { font-size: 17px; }
     /* minmax(0, 1fr), never 1fr: that is minmax(auto, 1fr), whose auto floor
        is the item's MIN-CONTENT, so one long company name holds its column
        open and the row runs past the artboard. The trap the sparks grid, the
        trade log and the saved-name field have all met. */
-    .hs-r { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto;
+    .hs-r { display: grid;
+            grid-template-columns: auto minmax(0, 1fr) var(--hv) var(--hy);
             column-gap: 10px; align-items: baseline; margin-bottom: 14px; }
     .sz-story .hs-r { margin-bottom: 20px; }
     .hs-t { font-family: var(--mono); font-weight: 700; color: var(--text); }
