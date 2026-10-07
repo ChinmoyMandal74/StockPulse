@@ -5309,6 +5309,39 @@ A card cannot scroll, and a row here is two lines (a text line and a pair of bar
   - **A value the select does not carry leaves it UNCHANGED**, so the fit sweep's first run measured `3` and silently re-reported the previous count's numbers. `shrtCount` offers 5/6/8/10/12 and nothing else; the sweep walks those.
   - **RENAMING A SELECTOR IN THE CSSOM DOES NOT RE-LAY-OUT**, so a diagnostic that does it reads stale geometry and "proves" a rule inert. Inject a stylesheet, or patch the file and reload.
 
+### Bars — any one measure, ranked either way (2026-10-07, owner's request)
+**A twenty-fifth template, `bars`: pick a measure, an order and a count, and it draws one bar per company with its name and its figure.** The owner's words: *"one generic card called Bars wherein I can select any metric such as Price moves, 200 Day moves, 50 day moves, RSI, Revenue, Gross Profit, essentially anything with a number or % attached to it"*, sorted ascending or descending, 5 / 10 / 15, with the usual Sector, Industry, S&P, Size and theme cuts.
+
+**IT IS THE GENERAL CASE OF THREE CARDS THAT EACH RANK ONE FAMILY.** Movers ranks eleven return windows, the Fundamentals card's rank mode ranks seventeen fundamentals, Most shorted ranks two short-interest measures — and none of them could rank by RSI, by distance from a moving average, by cushion, by Quality or by P/E against peers, and only one of them could sort ascending. **All three are left in place**: Movers keeps its verdict line, compare column and side-by-side layout, Most shorted its year-to-date track, and saved posts name all three.
+
+- **A CURATED CATALOGUE OF 52, never "every numeric field".** `BAR_METRICS` in cards.js, in six groups (Price moves, Trend and position, Scale, Margins and growth, Valuation, Ownership), each entry stating its unit, whether its sign is a direction, its title words for each order, its one-line note and which guards travel with it. Exported as `Cards.barMetrics()`, which the studio builds its grouped picker from — a key the module does not know falls back to the one-month return in silence.
+- **THE GUARDS ARE THE REASON IT IS NOT A LOOP OVER FIELDS**, and the ascending sort is where losing one does the most damage: funds are out of every company measure, a null is out rather than a zero (on *lowest RSI* a coerced null is the top of the card), a multiple off a loss is out (unguarded, *lowest forward P/E* leads with the loss-maker), lenders are out of gross margin / cash / debt / EV-EBITDA, and ties are ordered by market value (a dozen companies score 10 for Quality).
+- **Theme is the `Within` picker** (`barScope`), as on every scoped card; the other five cuts come through `scopeOf` for free.
+- **The title is generated**: `Furthest below` / `their 200-day average`, `Lowest` / `forward P/E`, `Biggest gains` / `over the past month`. A posted card has no picker beside it.
+
+#### A ROW WHOSE OWN FIGURES DISAGREE — `barMixed`, and the measurement behind it
+**I told the owner money measures would drop non-USD reporters, and the existing guard cannot do that**: `currency` is the TRADING currency and reads USD for every depositary receipt. Measured on the live screen instead: price to sales IS market value over revenue, and for **31 of 1,239 comparable rows the provider's ratio and those two fields are more than 1.5× apart — 29 of them depositary receipts**. The fields are mixed PER ROW: Toyota's revenue arrives in dollars ($329B) and its EBITDA in yen (7,836B); TSMC's EBITDA is in Taiwan dollars; SK hynix's is 173,888B. Unguarded, *lowest price to sales* opens TM 0.004× / SKHY 0.007× / SONY 0.011×, and *lowest EV/EBITDA* opens with EH and SONY.
+
+- Such a row is left out of every measure built on a reported absolute (`coh`) and **counted in the card's note**. It stays in price, technical, P/E and growth rankings.
+- The test reads only the row's own three fields — the `SHORT_PCT_MAX` precedent, a self-consistency check rather than a classifier. 1,178 of the 1,239 sit within ±10%, so the 1.5× line is far from the body of the distribution.
+- **The Fundamentals card's rank mode does NOT have this guard** and can still lead a money ranking with a mixed row. Not changed here — it was not what was asked.
+
+#### Two things deliberately not in the catalogue
+- **Dividend yield.** Its top reads 869%, 811%, 99%, 68%, 65% — provider junk on the end a reader looks at first, and any ceiling removing them would be a threshold invented here.
+- **Price to book and enterprise value.** P/B's lowest is BRK.B at 0.00097 (the dual-class units fault) and TSMC reads 100; EV is negative for several receipts.
+
+#### The bars
+- **Colour only where zero is a direction** (`sg`): green and red for returns, distance from an average, growth, margins and signed money; the accent for everything that is one sign throughout. RSI, range position and Quality are on FIXED scales (100, 100, 10), with marks at 30 and 70 on RSI.
+- **Where the rows shown straddle zero, the zero moves into the track**, placed in proportion to the two sides, and bars grow away from it.
+- **A RUNAWAY VALUE IS DRAWN BROKEN.** Live, *fastest revenue growth* opens +257,493% / +9,000% / +2,627%; scaled to the largest, nine of ten bars are invisible. Where a value is more than four times the next the scale is set further down (walked, at most a third of the rows), the runaway bar is drawn in two pieces, and the note says so. The printed figure is always the true one.
+- **Counts are capped per artboard**: 15 on the 4:5 and the story, **10 on the square**, where fifteen needs 16px type. The rows spread through whatever the title and note leave, so 5 and 15 both fill the card.
+
+#### Wiring
+Control ids `barMetric`, `barDir`, `barCount`, `barScope`, `barSector`, `barIndustry`, `barCap`, `barScreen`, `barSp500` — **147 against `POST_OPT_MAX` 200** — in `CONTROL_IDS`, their own listener list, `INDUSTRY_PREFIXES` and all four picker fill lists. No server change and no data channel: every field is on the snapshot row and `/api/m/post` already applies the stamps.
+
+- Verified: **69 checks** (`bars-test.js`) — a hand fixture where each row separates one guard, every one of the 52 measures built both ways on all three artboards over a saved copy of the live snapshot (312 builds, no `undefined`/`NaN`), every control redrawing the card, a **108-combination fit sweep** (3 artboards × 3 counts × 12 measures; nothing overflows, tightest row gap 22px), the longest name in the universe clipped rather than wrapped, the drawn colours, and a saved post rebuilt by the phone's own route with the same five companies. Plus the ground sweep (301 checks over 216 combinations), the width sweep (145 over 162), note fit (72 combinations) and size-scope, all clean with the template registered. **Proved by reverting eleven times, every one load-bearing**: funds kept fails 8, a null read as zero 5, the mixed row kept 5, the direction ignored 4, no zero in the track 3, the loss multiple and the break rule 2 each, and the lender, the tie-break, the square cap and the fixed RSI scale 1 each.
+- **Known and not acted on**: Corteva's unadjusted split makes it the lowest RSI and the furthest below its 200-day on the screen. The standing CTVA/MLI issue, now visible on one more card.
+
 ## Consolidated — every group in one table (2026-09-28, owner's request)
 **`/consolidated`: one row per group, so the groups can be read against each other.** The owner's words: *"I do not have a screen to show how Mag 7 as a theme has done compared with Memory or cybersecurity."* Nothing did — a group page shows ONE group against the index, `/compare` is two **stocks**, and the pivot crosses two dimensions to answer *where is the weight* rather than *how has each one done*. Member page, guests refused, like the studio and the pivot beside it; a `Consolidated` button in the bar before Compare.
 

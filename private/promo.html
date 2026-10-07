@@ -738,6 +738,42 @@
           cut, and some of them are sharply UP, which is the half a median
           hides. Heavily shorted and rising is the shorts under water.</p>
       </div>
+      <!-- Bars: any one measure, ranked. The general case of Movers, the
+           Fundamentals ranking and Most shorted, which each rank one
+           family. Scoped, so it carries the standard six and joins
+           INDUSTRY_PREFIXES. The measure list is filled from the module. -->
+      <div id="barBox">
+        <label>Measure</label>
+        <select id="barMetric"></select>
+        <label>Order</label>
+        <select id="barDir">
+          <option value="desc" selected>Highest first</option>
+          <option value="asc">Lowest first</option>
+        </select>
+        <label>How many</label>
+        <select id="barCount">
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="15">15</option>
+        </select>
+        <label>Within</label>
+        <select id="barScope"><option value="All">All screened</option></select>
+        <label>Sector</label>
+        <select id="barSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="barIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="barCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="barScreen"><option value="">No screen</option></select>
+        <label>S&amp;P 500</label>
+        <select id="barSp500"></select>
+        <p class="hint">One measure, ranked either way. Themes and your own
+          lists are under Within. The square card holds ten rows at most.
+          Funds are left out of company measures, a multiple off a loss is
+          left out of a valuation ranking, and the note on the card counts
+          what was left out and why.</p>
+      </div>
       <!-- Narrow or broad: how many are above their 200-day against how
            much of the VALUE is. The card IS the market, so it takes no
            scope, no sector, no size and no screen -- the tplDay and Flow
@@ -946,6 +982,7 @@
       { id: 'shortmoves', name: 'Short moves', note: 'Where the shorts built and where they covered, over the latest fortnight' },
       { id: 'shorted', name: 'Most shorted', note: 'The level as last reported, beside what each one has done this year' },
       { id: 'histogram', name: 'Histogram', note: 'The shape of the whole screen on one measure — on its own, or with a stock marked on it' },
+      { id: 'bars', name: 'Bars', note: 'Any one measure, ranked highest or lowest — returns, technicals, fundamentals' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
@@ -1089,6 +1126,7 @@
       'wfallSector', 'wfallPeriod', 'wfallCount', 'wfallSp500',
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
+      'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'brdMode', 'brdSp500',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
@@ -1116,7 +1154,7 @@
     // (an industry belongs to one sector), and drops a choice the new sector
     // does not contain. Run at the top of every render, so it has already
     // happened by the time a card reads the controls.
-    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub', 'hist', 'shrt'];
+    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub', 'hist', 'shrt', 'bar'];
     const industryFor = {};
     function syncIndustries(force) {
       INDUSTRY_PREFIXES.forEach((p) => {
@@ -1189,6 +1227,7 @@
       $('wfallBox').style.display = tpl === 'waterfall' ? 'block' : 'none';
       $('smovBox').style.display = tpl === 'shortmoves' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
+      $('barBox').style.display = tpl === 'bars' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       $('histBox').style.display = tpl === 'histogram' ? 'block' : 'none';
@@ -1377,6 +1416,26 @@
     ['shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector',
       'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'shorted') render(); }));
+    // Bars: ITS OWN hardcoded listener list, like every template above. A
+    // control missing from it saves with a post and does nothing when touched.
+    ['barMetric', 'barDir', 'barCount', 'barScope', 'barSector',
+      'barIndustry', 'barCap', 'barScreen', 'barSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'bars') render(); }));
+    // The measures come from the module, grouped as it groups them, so one
+    // added there appears here with no edit and the picker can never offer
+    // a key the card does not know.
+    (function fillBarMetrics() {
+      const sel = $('barMetric');
+      const groups = new Map();
+      for (const [v, label, grp] of Cards.barMetrics()) {
+        if (!groups.has(grp)) {
+          const og = document.createElement('optgroup');
+          og.label = grp; groups.set(grp, og); sel.appendChild(og);
+        }
+        groups.get(grp).appendChild(new Option(label, v));
+      }
+      sel.value = 'm1';
+    }());
     // FROM THE MODULE, never a copy in the markup: a key the card does not
     // know falls back to '% of float' in SILENCE, which is the
     // quiet-fallback class cards.js exists to keep out.
@@ -1769,6 +1828,7 @@
         $('bubScope').innerHTML = $('movScope').innerHTML;
         $('histScope').innerHTML = $('movScope').innerHTML;
         $('shrtScope').innerHTML = $('movScope').innerHTML;
+        $('barScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
         $('histSym').innerHTML = $('chtSym').innerHTML;
@@ -1778,7 +1838,7 @@
         const secOpts = '<option value="All">All sectors</option>' +
           Cards.sectors(stocks).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
         ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector', 'rngSector',
-          'sizeSector', 'bubSector', 'histSector', 'shrtSector'].forEach((id) => {
+          'sizeSector', 'bubSector', 'histSector', 'shrtSector', 'barSector'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = secOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -1792,7 +1852,7 @@
           Filters.CAP_ORDER.map((n) => `<option value="${esc(n)}">${esc(n)} · ` +
             `${esc(Filters.CAP_RANGE[n])}</option>`).join('');
         ['movCap', 'chtCap', 'advCap', 'fundCap', 'spkCap', 'rngCap',
-          'sizeCap', 'bubCap', 'histCap', 'shrtCap'].forEach((id) => {
+          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = capOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -1808,7 +1868,7 @@
             list.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') +
             '</optgroup>').join('');
         ['movScreen', 'chtScreen', 'advScreen', 'fundScreen', 'spkScreen', 'rngScreen',
-          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen'].forEach((id) => {
+          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = scrOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -1824,7 +1884,7 @@
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
           'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500',
-          'shrtSp500'].forEach((id) => {
+          'shrtSp500', 'barSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;

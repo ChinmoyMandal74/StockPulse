@@ -5580,6 +5580,284 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Bars: any one measure, ranked -------------------------------------
+  //
+  // THE GENERAL CASE OF THREE CARDS THAT EACH RANK ONE FAMILY. Movers ranks
+  // returns, the Fundamentals card's rank mode ranks fundamentals, Most
+  // shorted ranks two short-interest measures -- and none of them can rank
+  // by RSI, by distance from a moving average, by cushion or by Quality.
+  // This is one catalogue over all of it, with one direction control.
+  //
+  // A CURATED CATALOGUE, NEVER "every numeric field". Each entry states its
+  // unit, whether its sign is a direction, and which guards travel with it.
+  // A generic card is the easiest place to lose those guards, and the
+  // ascending sort is where losing them does the most damage: "lowest
+  // forward P/E" over raw rows is a list of loss-makers.
+  //
+  // Flags:
+  //   sg    zero is a direction: green above, red below, and a zero line
+  //         inside the track where the rows shown straddle it.
+  //   plus  a CHANGE takes a + sign; a level does not.
+  //   pos   only a positive reading is a reading (a multiple off a loss is
+  //         arithmetic, not cheapness).
+  //   co    companies only -- a fund files no statements and reports AUM
+  //         as its market value.
+  //   noFin meaningless for a lender (gross margin, cash and debt).
+  //   coh   needs a row whose own figures agree with each other; see
+  //         barMixed below.
+  //   max   a fixed scale (RSI and range position are out of 100).
+  //   words [descending, ascending] -- what the title says for each order.
+  const BAR_GAIN = ['Biggest gains', 'Biggest falls'];
+  const BAR_SIZE = ['Biggest', 'Smallest'];
+  const BAR_METRICS = [
+    ['d', 'todayPct', 'today', 'pct', 'Price moves', { sg: 1, plus: 1, words: BAR_GAIN, note: 'Close to close.' }],
+    ['w1', 'oneWeekPct', 'over the past week', 'pct', 'Price moves', { sg: 1, plus: 1, words: BAR_GAIN, note: 'Five sessions, price only.' }],
+    ['w2', 'twoWeekPct', 'over the past two weeks', 'pct', 'Price moves', { sg: 1, plus: 1, words: BAR_GAIN, note: 'Ten sessions, price only.' }],
+    ['m1', 'oneMonthPct', 'over the past month', 'pct', 'Price moves', { sg: 1, plus: 1, words: BAR_GAIN, note: 'Twenty-one sessions, price only.' }],
+    ['m3', 'threeMonthPct', 'over the past three months', 'pct', 'Price moves', { sg: 1, plus: 1, words: BAR_GAIN, note: 'Price only, no dividends.' }],
+    ['m6', 'sixMonthPct', 'over the past six months', 'pct', 'Price moves', { sg: 1, plus: 1, words: BAR_GAIN, note: 'Price only, no dividends.' }],
+    ['ytd', 'ytdPct', 'this year', 'pct', 'Price moves', { sg: 1, plus: 1, words: BAR_GAIN, note: 'Since last year’s final close, price only.' }],
+    ['y1', 'oneYearPct', 'over the past year', 'pct', 'Price moves', { sg: 1, plus: 1, words: BAR_GAIN, note: 'Price only, no dividends.' }],
+    ['y5', 'fiveYearPct', 'over the past five years', 'pct', 'Price moves', { sg: 1, plus: 1, words: BAR_GAIN, note: 'Price only, no dividends. A company listed for less than five years has no reading.' }],
+    ['va', 'capChangeToday', 'value added today', 'money', 'Price moves', { sg: 1, plus: 1, co: 1, words: ['Most', 'Least'], note: 'Market value times today’s move — where the money went, which a percentage cannot say.' }],
+
+    ['v50', 'vs50ma', 'their 50-day average', 'pct', 'Trend and position', { sg: 1, plus: 1, words: ['Furthest above', 'Furthest below'], note: 'The latest close against the average of the last 50 sessions.' }],
+    ['v200', 'vs200ma', 'their 200-day average', 'pct', 'Trend and position', { sg: 1, plus: 1, words: ['Furthest above', 'Furthest below'], note: 'The latest close against the average of the last 200 sessions.' }],
+    ['rsi', 'rsi', 'RSI', 'num', 'Trend and position', { max: 100, ticks: [30, 70], words: ['Highest', 'Lowest'], note: 'Fourteen-day RSI, 0 to 100. The two marks are 30 and 70.' }],
+    ['r52', 'range52Pos', 'in their 52-week range', 'num', 'Trend and position', { max: 100, ticks: [50], dp: 0, words: ['Highest', 'Lowest'], note: '0 is the 52-week low and 100 is the high.' }],
+    ['hi52', 'pctFromHigh', 'their 52-week high', 'pct', 'Trend and position', { words: ['Closest to', 'Furthest below'], note: 'The latest close against the highest close of the past year.' }],
+    ['ath', 'pctFromAth', 'their record close', 'pct', 'Trend and position', { words: ['Closest to', 'Furthest below'], note: 'The record is the highest close since our archive begins, which for most is 2006 — not all-time.' }],
+    ['rs', 'relStrength', 'strength against the S&P', 'pct', 'Trend and position', { sg: 1, plus: 1, words: ['Greatest', 'Weakest'], note: 'The stock’s own return less the index’s over the same window.' }],
+    ['chip', 'chipSelloff', 'chip selloff days', 'pct', 'Trend and position', { sg: 1, plus: 1, dp: 2, words: ['Held up best on', 'Fell hardest on'], note: 'The median move on the semiconductor complex’s thirteen worst days of the past year, after the market’s own move is taken out.' }],
+    ['bad', 'badDay', 'bad day', 'pct', 'Trend and position', { words: ['Mildest', 'Roughest'], note: 'The worst 5% of each stock’s own daily moves over the past year. Not a forecast.' }],
+    ['cush', 'actionCushion', 'cushion to the exit', 'sig', 'Trend and position', { words: ['Thickest', 'Thinnest'], note: 'Distance to where the technical rules would exit, in the stock’s own monthly volatility. It reads the size of the bad case, not the direction.' }],
+    ['volx', 'volX', 'relative volume', 'x', 'Trend and position', { dp: 2, words: ['Highest', 'Lowest'], note: 'Today’s volume against the stock’s own 20-day average.' }],
+    ['dvol', 'dollarVolume', 'dollar volume today', 'money', 'Trend and position', { words: BAR_SIZE, note: 'Shares traded today times the close.' }],
+    ['qual', 'qualityRating', 'Quality score', 'num', 'Trend and position', { max: 10, co: 1, words: ['Highest', 'Lowest'], note: 'Company fundamentals on an absolute 1 to 10 scale. Ties are ordered by market value.' }],
+
+    ['cap', 'marketCap', 'market value', 'money', 'Scale', { co: 1, pos: 1, words: BAR_SIZE, note: 'Market capitalisation.' }],
+    ['rev', 'revenueTtm', 'revenue', 'money', 'Scale', { co: 1, coh: 1, pos: 1, words: BAR_SIZE, note: 'Trailing twelve months, as reported.' }],
+    ['gp', 'grossProfitTtm', 'gross profit', 'money', 'Scale', { co: 1, coh: 1, noFin: 1, words: BAR_SIZE, note: 'Trailing twelve months, as reported.' }],
+    ['ni', 'netIncomeTtm', 'net income', 'money', 'Scale', { sg: 1, co: 1, coh: 1, words: ['Highest', 'Lowest'], note: 'Trailing twelve months, as reported. A loss is drawn below zero.' }],
+    ['fcf', 'fcfTtm', 'free cash flow', 'money', 'Scale', { sg: 1, co: 1, coh: 1, words: ['Highest', 'Lowest'], note: 'Trailing twelve months, as reported.' }],
+    ['ebitda', 'ebitda', 'EBITDA', 'money', 'Scale', { sg: 1, co: 1, coh: 1, noFin: 1, words: ['Highest', 'Lowest'], note: 'Trailing twelve months, as the data provider reports it.' }],
+    ['ocf', 'operatingCashFlowTtm', 'operating cash flow', 'money', 'Scale', { sg: 1, co: 1, coh: 1, words: ['Highest', 'Lowest'], note: 'Trailing twelve months, as reported.' }],
+    ['cash', 'netCash', 'net cash', 'money', 'Scale', { sg: 1, co: 1, coh: 1, noFin: 1, words: ['Most', 'Least'], note: 'Cash less debt. Below zero is net debt.' }],
+    ['debt', 'totalDebt', 'debt', 'money', 'Scale', { co: 1, coh: 1, noFin: 1, pos: 1, words: ['Most', 'Least'], note: 'Total debt as last reported.' }],
+
+    ['gm', 'grossMargin', 'gross margin', 'pct', 'Margins and growth', { sg: 1, co: 1, coh: 1, noFin: 1, words: ['Highest', 'Lowest'], note: 'Gross profit over revenue, trailing twelve months.' }],
+    ['om', 'operatingMargin', 'operating margin', 'pct', 'Margins and growth', { sg: 1, co: 1, words: ['Highest', 'Lowest'], note: 'Trailing twelve months, as the data provider reports it.' }],
+    ['pm', 'profitMargin', 'profit margin', 'pct', 'Margins and growth', { sg: 1, co: 1, coh: 1, words: ['Highest', 'Lowest'], note: 'Net income over revenue, trailing twelve months.' }],
+    ['fm', 'fcfMargin', 'free cash flow margin', 'pct', 'Margins and growth', { sg: 1, co: 1, coh: 1, words: ['Highest', 'Lowest'], note: 'Free cash flow over revenue, trailing twelve months.' }],
+    ['rg', 'revenueGrowthYoY', 'revenue growth', 'pct', 'Margins and growth', { sg: 1, plus: 1, co: 1, words: ['Fastest', 'Slowest'], note: 'The latest quarter against the same quarter a year earlier.' }],
+    ['eg', 'earningsGrowthYoY', 'earnings growth', 'pct', 'Margins and growth', { sg: 1, plus: 1, co: 1, words: ['Fastest', 'Slowest'], note: 'The latest quarter against the same quarter a year earlier.' }],
+    ['roe', 'roe', 'return on equity', 'pct', 'Margins and growth', { sg: 1, co: 1, words: ['Highest', 'Lowest'], note: 'As the data provider reports it.' }],
+    ['roa', 'roa', 'return on assets', 'pct', 'Margins and growth', { sg: 1, co: 1, words: ['Highest', 'Lowest'], note: 'As the data provider reports it.' }],
+
+    ['fpe', 'forwardPe', 'forward P/E', 'x', 'Valuation', { co: 1, pos: 1, words: ['Highest', 'Lowest'], note: 'Price over next year’s expected earnings. A multiple off a loss is left out: it is arithmetic, not cheapness.' }],
+    ['tpe', 'trailingPe', 'trailing P/E', 'x', 'Valuation', { co: 1, pos: 1, words: ['Highest', 'Lowest'], note: 'The data provider’s figure, struck at a close up to a week old. A multiple off a loss is left out.' }],
+    ['lpe', 'peLive', 'P/E at today’s price', 'x', 'Valuation', { co: 1, pos: 1, words: ['Highest', 'Lowest'], note: 'Today’s price over trailing earnings per share. A multiple off a loss is left out.' }],
+    ['ppe', 'peerPe', 'P/E against their industry', 'x', 'Valuation', { co: 1, pos: 1, dp: 2, words: ['Dearest', 'Cheapest'], note: 'Forward P/E over the median of the company’s own industry; 1.00× is what the typical peer costs. On this screen the cheapest third have the weaker growth and margins, so cheap here is not a verdict.' }],
+    ['peg', 'peg', 'PEG', 'x', 'Valuation', { co: 1, pos: 1, dp: 2, words: ['Highest', 'Lowest'], note: 'P/E over expected growth, as the data provider reports it.' }],
+    ['ps', 'priceToSales', 'price to sales', 'x', 'Valuation', { co: 1, pos: 1, coh: 1, words: ['Highest', 'Lowest'], note: 'Market value over trailing revenue.' }],
+    ['eve', 'evToEbitda', 'EV / EBITDA', 'x', 'Valuation', { co: 1, pos: 1, coh: 1, noFin: 1, words: ['Highest', 'Lowest'], note: 'Enterprise value over EBITDA, as the data provider reports it.' }],
+    ['fy', 'fcfYield', 'free cash flow yield', 'pct', 'Valuation', { sg: 1, co: 1, coh: 1, words: ['Highest', 'Lowest'], note: 'Trailing free cash flow over market value.' }],
+    // Dividend yield is deliberately NOT here. Measured on the live screen its
+    // top reads 869%, 811%, 99%, 68% and 65% -- junk from the provider, on
+    // the end of the ranking a reader looks at first -- and any ceiling
+    // that removed them would be a threshold invented here.
+
+    ['shrt', 'shortPctFloat', 'short interest', 'pct', 'Ownership', { co: 1, pos: 1, words: ['Highest', 'Lowest'], note: 'Shares sold short as a share of the free float, as last reported — the figure is published twice a month.' }],
+    ['d2c', 'shortRatio', 'days to cover', 'day', 'Ownership', { co: 1, pos: 1, words: ['Most', 'Fewest'], note: 'The short position over average daily volume: how crowded the exit is, not how large the bet.' }],
+    ['ins', 'insiderPct', 'insider ownership', 'pct', 'Ownership', { co: 1, pos: 1, words: ['Highest', 'Lowest'], note: 'The share held by founders, directors and management.' }],
+    ['inst', 'institutionPct', 'institutional ownership', 'pct', 'Ownership', { co: 1, pos: 1, words: ['Highest', 'Lowest'], note: 'The share held by funds and institutions. It can pass 100% where shares are lent and counted twice.' }],
+  ].map(([key, field, label, unit, group, f]) => Object.assign({ key, field, label, unit, group }, f));
+  const BAR_BY_KEY = {};
+  for (const m of BAR_METRICS) BAR_BY_KEY[m.key] = m;
+
+  // 5, 10 or 15 asked for; what each artboard can hold at a size somebody
+  // can read. A 1080px card is about 400px wide in a feed, so the square
+  // stops at ten: fifteen there needs 16px type, which is 6px to the reader.
+  // Measured with the note at its longest.
+  const BAR_CAP = { portrait: 15, square: 10, story: 15 };
+
+  // A ROW WHOSE OWN FIGURES DISAGREE. Price to sales IS market value over
+  // revenue, so where the provider's ratio and those two fields are more
+  // than 1.5x apart, the row's absolutes are not all in one currency.
+  // Measured on the live screen: 31 of 1,239 comparable rows, 29 of them
+  // depositary receipts -- Toyota's revenue arrives in dollars and its
+  // EBITDA in yen, TSMC's EBITDA in Taiwan dollars. The trading-currency
+  // field cannot see this (it says USD for every one of them), and which
+  // field is in which currency is not knowable per row, so such a row is
+  // left out of every measure built on a reported absolute and counted in
+  // the note. The test reads only the row's own three fields.
+  const barMixed = (r) => {
+    const ps = Number(r.priceToSales), c = Number(r.marketCap), rv = Number(r.revenueTtm);
+    if (!(ps > 0 && c > 0 && rv > 0)) return false;
+    const k = rv * ps / c;
+    return k > 1.5 || k < 0.67;
+  };
+
+  function barFig(v, m) {
+    if (v == null) return '—';
+    const a = Math.abs(v);
+    const s = v < 0 ? '−' : (m.plus ? '+' : '');
+    if (m.unit === 'money') return s + '$' + fmtMoney(a);
+    if (m.unit === 'pct') {
+      return s + (a >= 1000 ? Math.round(a).toLocaleString('en-US') : a.toFixed(m.dp || 1)) + '%';
+    }
+    if (m.unit === 'x') return s + a.toFixed(m.dp || 1) + '×';
+    if (m.unit === 'sig') return s + a.toFixed(1) + 'σ';
+    if (m.unit === 'day') return a.toFixed(1) + 'd';
+    return s + (m.dp === 0 || Number.isInteger(a) ? String(Math.round(a)) : a.toFixed(m.dp || 1));
+  }
+
+  function tplBars() {
+    const m = BAR_BY_KEY[O.barMetric] || BAR_BY_KEY.m1;
+    const desc = O.barDir !== 'asc';
+    const K = [5, 10, 15].includes(Number(O.barCount)) ? Number(O.barCount) : 10;
+    const N = Math.min(K, BAR_CAP[size.id] || 10);
+    const sc = scopeOf('barScope', 'barSector');
+
+    const isFund = (r) => r.instrumentType === 'ETF'
+      || IS_BENCH.has(r.symbol) || IS_SECTOR_ETF.has(r.symbol);
+    // A NULL IS NOT A ZERO. Number(null) is 0 and finite, so the empty is
+    // rejected before it is coerced: an unread company must leave the
+    // ranking, not sort to one end of it.
+    const read = (r) => {
+      const raw = r[m.field];
+      if (raw == null || raw === '') return null;
+      const v = Number(raw);
+      return isFinite(v) ? v : null;
+    };
+
+    const out = { fin: 0, mixed: 0, sign: 0 };
+    const rows = [];
+    for (const r of sc.rows) {
+      if (!r || r.error) continue;
+      if (m.co && isFund(r)) continue;
+      const v = read(r);
+      if (v == null) continue;
+      if (m.co && r.currency && r.currency !== 'USD') { out.mixed++; continue; }
+      if (m.noFin && r.sector === 'Financial Services') { out.fin++; continue; }
+      if (m.coh && barMixed(r)) { out.mixed++; continue; }
+      if (m.pos && !(v > 0)) { out.sign++; continue; }
+      rows.push({ name: nameOf(r), v, cap: Number(r.marketCap) || 0 });
+    }
+    // Ties are common on a bounded scale (a dozen companies score 10 for
+    // Quality), so the order inside a tie is market value rather than
+    // whatever order the rows arrived in.
+    rows.sort((a, b) => (desc ? b.v - a.v : a.v - b.v) || b.cap - a.cap);
+
+    const word = (m.words || ['Highest', 'Lowest'])[desc ? 0 : 1];
+    const head = '<span class="s-kick">' + esc(sc.label + ' · '
+      + rows.length.toLocaleString('en-US') + ' with a reading') + '</span>'
+      + '<h2 class="s-title">' + esc(word) + '<span class="dim">' + esc(m.label) + '</span></h2>';
+
+    if (rows.length < 3) {
+      return chromeTop() + '<div class="s-body"><div class="bx-in">' + head
+        + '<p class="s-sub wide" style="--fs:20px">' + esc(
+          'Too few readings in ' + sc.label + ' to rank — ' + rows.length
+          + ' of ' + sc.rows.length + ' carry this measure. Widen the cut.')
+        + '</p></div></div>' + chromeFoot();
+    }
+
+    const top = rows.slice(0, N);
+    const mid = (() => {
+      const s = rows.map((x) => x.v).sort((a, b) => a - b), i = (s.length - 1) / 2;
+      return s.length % 2 ? s[i] : (s[i - 0.5] + s[i + 0.5]) / 2;
+    })();
+
+    // ---- the scale ------------------------------------------------------
+    // Each bar is its own value as a share of the largest shown, measured
+    // from zero -- so it can never overstate. ONE RUNAWAY VALUE would
+    // flatten every other bar to a sliver (a 5,000% growth rate beside
+    // 80%s), so where the largest is more than four times the next, the
+    // scale is set by the next and the runaway bar is drawn BROKEN and
+    // said so. A fixed scale (RSI, range position, Quality) is never
+    // rescaled.
+    const mags = top.map((x) => Math.abs(x.v)).sort((a, b) => b - a);
+    let ceil = m.max || Math.max(mags[0], 1e-9);
+    let broke = 0;
+    // Walked down rather than tested once: the live screen's revenue growth
+    // opens 257,493% / 9,000% / 2,627%, where setting the scale by the
+    // second would still flatten the rest. At most a third of the rows may
+    // break, or the scale stops describing the card.
+    let bi = 0;
+    const maxBreak = Math.max(1, Math.floor(top.length / 3));
+    while (!m.max && bi < maxBreak && bi + 1 < mags.length
+      && mags[bi + 1] > 0 && mags[bi] > mags[bi + 1] * 4) bi++;
+    if (bi > 0) {
+      ceil = mags[bi] * 1.25;
+      broke = top.filter((x) => Math.abs(x.v) > ceil).length;
+    }
+    const hasNeg = top.some((x) => x.v < 0), hasPos = top.some((x) => x.v > 0);
+    // WHERE THE ROWS STRADDLE ZERO the zero moves into the track, placed in
+    // proportion to the two sides, and bars grow away from it. A bar that
+    // ignored the sign would draw a 30% fall and a 30% rise as the same
+    // picture.
+    const split = hasNeg && hasPos;
+    const negMax = Math.min(ceil, Math.max(0, ...top.map((x) => -x.v)));
+    const posMax = Math.min(ceil, Math.max(0, ...top.map((x) => x.v)));
+    const zero = split ? negMax / (negMax + posMax) * 100 : 0;
+
+    const SZ = ({
+      portrait: N <= 5 ? { f: 31, b: 30 } : N <= 10 ? { f: 25, b: 24 } : { f: 21, b: 18 },
+      square: N <= 5 ? { f: 27, b: 26 } : { f: 21, b: 18 },
+      story: N <= 5 ? { f: 44, b: 46 } : N <= 10 ? { f: 37, b: 38 } : { f: 31, b: 30 },
+    })[size.id] || { f: 25, b: 24 };
+    const figs = top.map((x) => barFig(x.v, m));
+    // The value column is as wide as the longest figure shown, so every
+    // row's bar starts and ends on the same two lines.
+    const vw = Math.ceil(Math.max(...figs.map((t) => t.length)) * SZ.f * 0.62) + 6;
+
+    const row = (x, i) => {
+      const a = Math.min(Math.abs(x.v), ceil);
+      const cut = Math.abs(x.v) > ceil;
+      const cls = m.sg ? (x.v < 0 ? ' bx-dn' : ' bx-up') : '';
+      let left, w;
+      if (split) {
+        w = a / (negMax + posMax) * 100;
+        left = x.v < 0 ? zero - w : zero;
+      } else { w = a / ceil * 100; left = 0; }
+      const piece = (l, wd) => '<span class="bx-f' + cls + '" style="left:'
+        + l.toFixed(2) + '%;width:' + Math.max(0.6, wd).toFixed(2) + '%"></span>';
+      // A broken bar is two pieces with a gap: geometry only, so it needs
+      // no colour of its own on any ground.
+      const fill = cut
+        ? (x.v < 0 && split
+          ? piece(left, w * 0.1) + piece(left + w * 0.14, w * 0.86)
+          : piece(left, w * 0.86) + piece(left + w * 0.9, w * 0.1))
+        : piece(left, w);
+      const marks = (split ? [zero] : [])
+        .concat(m.max && m.ticks ? m.ticks.map((t) => t / m.max * 100) : [])
+        .map((p) => '<span class="bx-z" style="left:' + p.toFixed(2) + '%"></span>').join('');
+      return '<div class="bx-r" style="font-size:' + SZ.f + 'px">'
+        + '<span class="bx-n">' + esc(x.name) + '</span>'
+        + '<span class="bx-t" style="height:' + SZ.b + 'px">' + fill + marks + '</span>'
+        + '<span class="bx-v' + cls + '">' + esc(figs[i]) + '</span>'
+        + '</div>';
+    };
+
+    const left = [];
+    if (out.sign) left.push(out.sign + ' with no positive reading');
+    if (out.fin) left.push(out.fin + (out.fin === 1 ? ' lender' : ' lenders')
+      + ', for whom this measure means nothing');
+    if (out.mixed) left.push(out.mixed + ' whose reported figures are not all in dollars');
+    const note = m.note + ' The middle reading across ' + sc.label + ' is '
+      + barFig(mid, m) + '. '
+      + (left.length ? 'Left out: ' + left.join('; ') + '. ' : '')
+      + (broke ? 'A broken bar runs past the scale, which is set by the next largest so '
+        + 'the rest stay readable. ' : '')
+      + 'A ranking of what the screen holds, not a recommendation.';
+
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">' + head
+      + '<div class="bx-rows" style="--bxv:' + vw + 'px">' + top.map(row).join('') + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
@@ -5589,11 +5867,58 @@
     flow: tplFlow, histogram: tplHistogram,
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
     shorted: tplShorted, breadth: tplBreadth,
+    bars: tplBars,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
   // page and styled in the other is exactly the drift this module prevents.
   const STYLE = `
+    /* ---- Bars: any one measure, ranked -----------------------------------
+       NO HEX LITERAL AND NO BACKTICK ANYWHERE IN HERE. Every value is a
+       token, so all four grounds resolve with no override block; and a
+       backtick inside this block ends the STYLE template literal, which
+       node --check PASSES because it is valid syntax and merely the wrong
+       program. */
+    .bx-in { display: flex; flex-direction: column; height: 100%; }
+    /* A .dim span inside .s-title inherits the display size, and a measure
+       name is a phrase rather than a word. Per card, because .s-title is
+       shared. */
+    .bx-in .s-title .dim { display: block; font-size: 40px; line-height: 1.2;
+                           letter-spacing: -0.02em; margin-top: 8px; }
+    .sz-square .bx-in .s-title .dim { font-size: 32px; }
+    .sz-story .bx-in .s-title .dim { font-size: 52px; }
+    /* The rows take whatever the title and the note leave and spread through
+       it, so five rows and fifteen both fill the card and no band of dead
+       space collects above the note. */
+    .bx-rows { flex: 1; min-height: 0; display: flex; flex-direction: column;
+               justify-content: space-evenly; margin-top: 14px; }
+    /* minmax(0, ...), never a bare fraction: the auto floor of a track is
+       its content's own width, so one long company name would hold the
+       column open and push the bar off the card. */
+    .bx-r { display: grid; align-items: center; column-gap: 16px;
+            grid-template-columns: minmax(0, 37%) minmax(0, 1fr) var(--bxv); }
+    /* Clipped, never wrapped: one wrapped name makes its row twice as tall
+       and there are up to fifteen of them. */
+    .bx-n { color: var(--text); font-weight: 600; min-width: 0; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap; }
+    .bx-t { position: relative; display: block; background: var(--hair);
+            border-radius: 4px; overflow: hidden; }
+    /* display: block on the fill -- a percentage width on an inline span
+       draws nothing while its style attribute reads as correct. */
+    .bx-f { position: absolute; top: 0; bottom: 0; display: block;
+            border-radius: 3px; background: var(--accent); }
+    /* Colour only where zero is a direction. A measure that is one sign
+       throughout says nothing by being red. */
+    .bx-f.bx-up { background: var(--green); }
+    .bx-f.bx-dn { background: var(--red); }
+    .bx-z { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px;
+            display: block; background: var(--muted); opacity: .55; }
+    .bx-v { font-family: var(--mono); font-weight: 700; text-align: right;
+            white-space: nowrap; font-variant-numeric: tabular-nums;
+            color: var(--text); }
+    .bx-v.bx-up { color: var(--green); }
+    .bx-v.bx-dn { color: var(--red); }
+    .bx-in .s-sub { margin-top: 14px; }
     /* ---- Where the shorts moved: builds against covers ------------------
        NO HEX LITERAL AND NO BACKTICK ANYWHERE IN HERE. Every value is a
        token, so all four grounds resolve with no override block; and a
@@ -7254,6 +7579,11 @@
     // host sending a key the module does not know would fall back to
     // "% of float" in SILENCE, which is the quiet-fallback class this
     // module exists to keep out.
+    // The Bars catalogue as [key, picker label, group], so the studio builds
+    // its picker from the list the CARD reads. A key the module does not
+    // know would fall back to the one-month return in silence.
+    barMetrics: () => BAR_METRICS.map((m) => [m.key,
+      (m.words || ['Highest', 'Lowest'])[0] + ' ' + m.label, m.group]),
     shortedMetrics: () => Object.keys(SHRT_METRICS)
       .map((k) => [k, SHRT_METRICS[k][1]]),
     EVO_WINDOWS,
