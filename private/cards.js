@@ -5317,7 +5317,12 @@
   // three-way scoring proof the instrumentType and S&P columns had to give
   // does not apply. The boundary that matters here is the other way round:
   // nothing on this card may become a rule.
-  const BRD_MODES = [['size', 'by size'], ['sector', 'by sector']];
+  const BRD_MODES = [['size', 'by size'], ['sector', 'by sector'],
+    ['names', 'by company']];
+  // How many a side the name list shows, per artboard. The counts are
+  // measured, like every cap in this module: two columns of names is the
+  // tallest block this card draws after the sector list.
+  const BRD_NAME_CAP = { portrait: 9, square: 4, story: 12 };
   // Filters.CAP_ORDER restated, the BENCHMARKS bargain: this module has no
   // requires and no DOM, which is what lets a card render identically in
   // Node and the browser. Exported as Cards.capBands() so a test asserts the
@@ -5390,7 +5395,8 @@
     // trap this project keeps meeting.
     const bigEnough = (g) => g.length >= BRD_MIN_GROUP;
     const groups = [];
-    if (mode === 'size') {
+    if (mode === 'names') { /* no groups: the breakdown is a name list */ }
+    else if (mode === 'size') {
       for (const b of BRD_CAP_ORDER) {
         const g = has.filter((r) => r.capBand === b);
         if (bigEnough(g)) {
@@ -5414,7 +5420,7 @@
       }
       groups.sort((a, b) => b.up / b.n - a.up / a.n);
     }
-    const thin = (mode === 'sector'
+    const thin = mode === 'names' ? 0 : (mode === 'sector'
       ? new Set(has.map((r) => r.sector).filter(Boolean)).size
       : BRD_CAP_ORDER.filter((b) => has.some((r) => r.capBand === b)).length) - groups.length;
 
@@ -5428,13 +5434,30 @@
     const far = has.slice().sort((a, b) => num(b, 'vs200ma') - num(a, 'vs200ma'));
     const sg = (v) => (v == null ? '—'
       : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '%');
-    const nameAt = (r) => (r ? esc(r.symbol) + ' ' + sg(num(r, 'vs200ma')) : '—');
-    const stats = [
-      ['the middle one sits', sg(med(dists))],
-      ['furthest above', nameAt(far[0])],
-      ['furthest below', nameAt(far[far.length - 1])],
-      ['no 200-day yet', String(noRead)],
-    ];
+    // The render escapes these, so a helper must NOT: esc(esc(x)) turns an
+    // ampersand into &amp;amp;. No symbol here carries one today, which is
+    // the only reason the first version looked right.
+    const nameAt = (r) => (r ? r.symbol + ' ' + sg(num(r, 'vs200ma')) : '—');
+    // IN NAMES MODE THE TWO 'FURTHEST' STATS WOULD REPEAT THE FIRST ROW OF
+    // EACH COLUMN, word for word, a hundred pixels above them -- the
+    // duplication this project has already been pulled up on once, where the
+    // blog's image caption restated the post title. The biggest company on
+    // each side is the reading the lists CANNOT give, because they are
+    // ranked by DISTANCE and the mega-caps are therefore absent from both;
+    // and it is this card's own thesis said in two names, since the value
+    // half is whatever the largest companies happen to be doing.
+    const byCap = (list) => list.filter((r) => num(r, 'marketCap') > 0)
+      .sort((a, b) => num(b, 'marketCap') - num(a, 'marketCap'))[0] || null;
+    const capAt = (r) => (r ? r.symbol + ' $' + fmtMoney(num(r, 'marketCap')) : '—');
+    const stats = mode === 'names'
+      ? [['the middle one sits', sg(med(dists))],
+        ['biggest above', capAt(byCap(has.filter(isUp)))],
+        ['biggest below', capAt(byCap(has.filter((r) => !isUp(r))))],
+        ['no 200-day yet', String(noRead)]]
+      : [['the middle one sits', sg(med(dists))],
+        ['furthest above', nameAt(far[0])],
+        ['furthest below', nameAt(far[far.length - 1])],
+        ['no 200-day yet', String(noRead)]];
 
     // THE SQUARE IS THE SHORTEST ARTBOARD AND THIS CARD HAS THE MOST BLOCKS
     // -- a pair, a sentence, up to six rows, a four-stat strip and the note.
@@ -5469,6 +5492,27 @@
           : 'BROAD — ' + Math.abs(gap).toFixed(1) + ' points more of the companies are '
             + 'above their average than of the value, so the smaller ones are leading.');
 
+    // ---- the names, which is what a count cannot give you -------------
+    // BOTH ENDS, side by side, because the question is 'above OR below'
+    // and a single ranked list answers only half of it. The furthest
+    // either way is what a card can show; the middle of 496 companies
+    // is not a card.
+    const NC = BRD_NAME_CAP[size.id] || 9;
+    const sorted = has.slice().sort((a, b) => num(b, 'vs200ma') - num(a, 'vs200ma'));
+    const aboveList = sorted.filter(isUp).slice(0, NC);
+    const belowList = sorted.filter((r) => !isUp(r)).reverse().slice(0, NC);
+    const nameRow = (r) => '<div class="brd-nr">'
+      + '<span class="brd-nt">' + esc(r.symbol) + '</span>'
+      + '<span class="brd-nn">' + esc(nameOf(r)) + '</span>'
+      + '<span class="brd-nv ' + (isUp(r) ? 'brd-up' : 'brd-dn') + '">'
+      + esc(sg(num(r, 'vs200ma'))) + '</span></div>';
+    const nameCol = (lab, list, n) => '<div class="brd-nc">'
+      + '<div class="brd-nh">' + esc(lab) + '<span class="brd-nhn">'
+      + esc(n.toLocaleString()) + '</span></div>'
+      + (list.length ? list.map(nameRow).join('')
+        : '<div class="brd-nr brd-none">' + esc('none in this cut') + '</div>')
+      + '</div>';
+
     const mx = Math.max(1, ...groups.map((g) => 100 * g.up / g.n));
     const grpRow = (g) => {
       const p = 100 * g.up / g.n;
@@ -5490,6 +5534,9 @@
         + 'a company that has not traded 200 sessions has no average rather than a '
         + 'low one. ' : '')
       + (noCap ? noCap + ' have no market capitalisation and carry no weight. ' : '')
+      + (mode === 'names' ? 'The ends of the list, not the middle: '
+        + 'these are the furthest either way, and the counts beside each heading '
+        + 'are how many there are in all. ' : '')
       + (thin > 0 ? thin + (thin === 1 ? ' group holds' : ' groups hold') + ' fewer than '
         + BRD_MIN_GROUP + ' and is left out. ' : '')
       + foldNote(fold.folded)
@@ -5513,12 +5560,18 @@
         + half('by value', byValue, '$' + fmtMoney(wUp) + ' of $' + fmtMoney(wAll))
       + '</div>'
       + (gapLine ? '<p class="brd-gap">' + esc(gapLine) + '</p>' : '')
-      + '<div class="brd-wrap' + (mode === 'sector' ? ' brd-sec' : '') + '">'
-        + '<div class="brd-hd"><span class="brd-hdk">'
-          + esc(mode === 'size' ? 'by size' : 'by sector')
-        + '</span><span class="brd-hdv">above</span><span class="brd-hdn">n</span></div>'
-        + groups.map(grpRow).join('')
-      + '</div>'
+      + (mode === 'names'
+        ? '<div class="brd-names">'
+            + nameCol('furthest above', aboveList, up.length)
+            + nameCol('furthest below', belowList, has.length - up.length)
+          + '</div>'
+        : '<div class="brd-wrap' + (mode === 'sector' ? ' brd-sec' : '') + '">'
+            + '<div class="brd-hd"><span class="brd-hdk">'
+              + esc(mode === 'size' ? 'by size' : 'by sector')
+            + '</span><span class="brd-hdv">above</span>'
+            + '<span class="brd-hdn">n</span></div>'
+            + groups.map(grpRow).join('')
+          + '</div>')
       + '<div class="brd-stats">' + stats.map(([k, v]) =>
         '<div class="brd-s"><span class="brd-sk">' + esc(k) + '</span>'
         + '<span class="brd-sv">' + esc(v) + '</span></div>').join('') + '</div>'
@@ -5821,6 +5874,42 @@
               text-align: right; font-variant-numeric: tabular-nums; }
     .brd-rn { font-family: var(--mono); color: var(--faint); text-align: right;
               font-variant-numeric: tabular-nums; }
+    /* NO BACKTICKS IN THIS COMMENT -- Cards.STYLE is a template literal.
+       THE NAMES, IN TWO COLUMNS, because the question is above OR below
+       and one ranked list answers half of it. A share and a count say
+       how many; only this says which, which is what the card was
+       missing. */
+    .brd-names { display: grid; column-gap: 30px;
+                 grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .sz-square .brd-names { column-gap: 20px; }
+    .brd-nh { font-family: var(--mono); font-size: 13px; letter-spacing: .12em;
+              text-transform: uppercase; color: var(--faint); margin-bottom: 10px;
+              display: flex; justify-content: space-between; align-items: baseline; }
+    .sz-story .brd-nh { font-size: 17px; }
+    .brd-nhn { font-family: var(--mono); color: var(--muted); letter-spacing: 0; }
+    /* minmax(0, 1fr) on the name, never 1fr: that is minmax(auto, 1fr),
+       whose auto floor is the item's MIN-CONTENT, so one long company
+       name holds its column open and the row runs past the artboard.
+       The trap the sparks grid, the trade log and the saved-name field
+       have all met. */
+    .brd-nr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+              column-gap: 9px; align-items: baseline; font-size: 19px;
+              margin-bottom: 9px; }
+    .sz-square .brd-nr { font-size: 16px; margin-bottom: 7px; }
+    .sz-story .brd-nr { font-size: 26px; margin-bottom: 13px; }
+    .brd-nt { font-family: var(--mono); font-weight: 700; color: var(--text); }
+    /* Clipped, never wrapped: one wrapped name makes its row twice as
+       tall and there are up to thirteen of them. The email log's rule. */
+    .brd-nn { color: var(--muted); min-width: 0; overflow: hidden;
+              text-overflow: ellipsis; white-space: nowrap; }
+    .brd-nv { font-family: var(--mono); font-weight: 700; text-align: right;
+              font-variant-numeric: tabular-nums; }
+    /* The ONLY colour on this card, and it earns it: here the sign is a
+       direction about one company rather than a share of a population,
+       which is exactly what green and red mean everywhere else here. */
+    .brd-nv.brd-up { color: var(--green); }
+    .brd-nv.brd-dn { color: var(--red); }
+    .brd-none { color: var(--faint); font-style: italic; }
     .brd-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
                  gap: 18px; margin-top: 24px; }
     .brd-s { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
