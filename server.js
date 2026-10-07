@@ -8601,14 +8601,23 @@ function peersFor(stock, stocks, links) {
     // The anchor has no cap of its own (13 live rows), so "closest in size" has
     // no meaning. Largest first instead, and the caption says which it did.
     : (x) => { const c = Number(x.marketCap); return c > 0 ? -c : Infinity; };
-  // ONE COMPANY, ONE ROW. Eight display names in the universe are shared by
-  // two tickers — BRK.A/BRK.B, FOXA/FOX, NWS/NWSA, Z/ZG, HEI.A/HEI,
-  // LBTYA/LBTYK, plus FI/FISV and SQ/XYZ where a ticker simply changed — so
-  // without this The Trade Desk's table listed "Zillow Group" TWICE, and a
-  // Berkshire class could have appeared beside itself. Deduped by the name
-  // the reader actually sees, keeping whichever survives the sort (the
-  // closest in size), and the anchor's own name is taken first so a share
-  // class can never be its own peer.
+  // ONE COMPANY, ONE ROW. This once guarded eight shared display names —
+  // BRK.A/BRK.B, FOXA/FOX, NWS/NWSA, Z/ZG, HEI.A/HEI, LBTYA/LBTYK, plus
+  // FI/FISV and SQ/XYZ where a ticker simply changed — and nine of those
+  // ten symbols were REMOVED from the universe on 2026-10-07, so today only
+  // FI/FISV is left. It is kept: without it The Trade Desk's table listed
+  // "Zillow Group" TWICE, and the next dual-class company to arrive brings
+  // the fault straight back. Deduped by the name the reader actually sees,
+  // keeping whichever survives the sort (the closest in size), and the
+  // anchor's own name is taken first so a share class can never be its own
+  // peer.
+  //
+  // KNOWN FAULT, and the removal did not fix it: the key is the display NAME,
+  // where /adjustedbacktest's btOneEach and cards.js's foldListings both use
+  // the SEC filer id. OWL and OBDC are both "Blue Owl Capital" and are two
+  // DIFFERENT companies (CIK 1823945 against 1655888), so a Blue Owl peer
+  // table silently drops one of them. One line of the CIK key would close it
+  // and the map is already a member-visible route (/api/filers).
   const seen = new Set([String(stock.shortName || stock.name || me).trim().toLowerCase()]);
   const picked = [];
   // A co-movement group ARRIVES IN ITS OWN ORDER — most alike first — and

@@ -112,13 +112,22 @@ console.log(`gaps: ${carried} sessions carried forward, ${blanked} left blank ` 
 console.log(`${rows.length.toLocaleString()} bars, ${bySym.size} symbols, ` +
   `${dates.length.toLocaleString()} sessions ${dates[0]} → ${dates[dates.length - 1]}`);
 
-// The universes the page can choose between: everything, plus each portfolio.
-// portfolio_tickers keys on the portfolio NAME, not an id — there is no id
-// column. Ordered by the portfolios' own position so the dropdown reads in the
-// order the screener's tabs do.
+// The universes the page can choose between: everything, plus each theme.
+// theme_tickers keys on the theme NAME, not an id — there is no id column.
+// Ordered by the themes' own position so the dropdown reads in the order the
+// screener's tabs do.
+//
+// THE TABLES ARE `themes` / `theme_tickers`, and this read said
+// `portfolios` / `portfolio_tickers` until 2026-10-07. It only ever worked
+// because the local analysis copy carried those pre-rename names as RESIDUE —
+// `analysis-db.js --full` drops only the tables it syncs, so a rename leaves
+// the old pair sitting beside the new one. They were dropped on 2026-09-28 and
+// this script has thrown `no such table: portfolio_tickers` at module load
+// ever since, which nothing noticed because it is only run after a ticker
+// removal. The column is `theme`, not `portfolio`.
 const pf = db.prepare(
-  'select t.portfolio as name, t.symbol from portfolio_tickers t ' +
-  'join portfolios p on p.name = t.portfolio order by p.position, t.position').all();
+  'select t.theme as name, t.symbol from theme_tickers t ' +
+  'join themes p on p.name = t.theme order by p.position, t.position').all();
 const groups = new Map();
 for (const r of pf) {
   if (!groups.has(r.name)) groups.set(r.name, []);

@@ -5070,6 +5070,65 @@ That is why the overflow reached a screenshot, and it is the part worth keeping.
   - **The session cookie is `sp_session`**, read off server.js rather than guessed — a wrong name makes four role checks fail over a server that is working.
   - **A `cat` heredoc refused to close** on the suite and wrote no file; written with the Write tool instead. The ninth instance on this project.
 
+#### AND THEN THE DUPLICATES WERE DELETED, SO THE FOLD IS NOW INERT (2026-10-07, owner: "I think I should delete all duplicates, Keep what is most relevant")
+**Ten symbols removed from the universe, 1,284 → 1,274, and there is no longer a single CIK shared by two tracked symbols.** The fold above still runs on every card and can never fire.
+
+| dropped | kept | $vol/day |
+|---|---|---|
+| GOOG (Class C) | **GOOGL** | 4.31 vs **6.38B** |
+| BRK.A | **BRK.B** | 0.09 vs **1.64B** |
+| FOX (Class B) | **FOXA** | 0.04 vs **0.29B** |
+| HEI.A | **HEI** | 0.05 vs **0.13B** |
+| LBTYK (Class C) | **LBTYA** | 0.02 vs **0.04B** |
+| LLYVA (Series A) | **LLYVK** | 0.02 vs **0.03B** |
+| FWONA | **FWONK** | 0.02 vs **0.17B** |
+| NWS (Class B) | **NWSA** | 0.03 vs **0.10B** |
+| ZG (Class A) | **Z** | 0.03 vs **0.07B** |
+| SQ | **XYZ** | the renamed ticker, below |
+
+- **ONE RULE: keep the class the market actually TRADES**, never the higher reported cap — neither class's cap is its own value, which is the whole point of the section above. Where the index names a single class (Berkshire: **BRK.B only**) it agreed, which is the independent check. Note it does **not** follow the share-class letter: Zillow keeps the Class C and Liberty Live the Series C, because those are the liquid ones.
+- **THE FOLD IS KEPT, AND THAT IS THE `CHAT_DAILY_LIMIT_MEMBER` RULE — keep what one guard flips back on.** `foldListings` is dead code on today's universe and is the only thing standing between a doubled sector total and the day a dual-class company enters, or a class is added back. Deleting it would make the next Alphabet a silent $4.2T phantom. Its 31 checks still pass, on a fixture rather than on production.
+- **THE OWNER OVERRODE MY RECOMMENDATION KNOWINGLY, and their reading is the better one.** I argued for removing only the six the index does not hold, because the S&P holds **both** classes of Alphabet (3.036% + 2.440%), Fox and News, so dropping one loses 2.456% of index weight and makes `/holdings` report three permanently missing members. The owner's answer: *"I don't care about the index weighting ... The S&P is a field that helps me in filtering the stocks."* **`spMember` is a BOOLEAN, and GOOGL is still a member** — the filter is unaffected, and I had weighted a reconciliation page above the thing the field is actually for.
+- **A THEME MEMBERSHIP MUST BE MOVED BEFORE THE REMOVAL, NOT AFTER.** `removeFromUniverse` deletes the universe row **and every membership in one batch**, so a theme silently loses the company. Two of the ten were in a theme and nothing else was: `HEI.A` in **Space** and `SQ` in **Digital Payments & Fintech Platforms**. The twin went in first (`POST /api/portfolios/:name/tickers`), so `Space` holds HEI and the payments theme holds XYZ. No member list and no alert touched any of the ten.
+- **`POST /api/universe/bulk-delete` is the right tool and `DELETE /api/tickers/:symbol` is not** — the bulk route is **dry run by default** and its preview names each company, its themes and the fundamentals days it would lose, which is the guard against the documented hazard that free text splits into symbol-shaped tokens. The preview is what confirmed all nine share classes by their stored names (`Alphabet Inc. Class C`, `Fox Corporation Class B`, …) rather than by the ticker's letter.
+- **Cost: 116 `fundamentals_history` days, irrecoverable**, and 43,631 rows purged across the 17 symbol tables. Everything else returns — bars at 1 credit a symbol.
+- Verified: **8 checks** read off the database rather than off any route's 200 — the universe count, all ten out, all ten keeps in, **no rows left in any of the 17 symbol tables**, both theme moves, no stranded theme member, and no CIK shared by two tracked symbols.
+
+##### IDENTICAL SHARES **AND** FLOAT IS A SECOND KEY, AND IT SCORED 9 OF 9 WITH NO FALSE POSITIVES
+Worth recording because it needs no SEC data at all, which matters for the **26 symbols with no CIK stored**. The provider repeats every company-level figure against each class, so the pair is identifiable from the snapshot alone — measured, it found **exactly the nine CIK pairs and nothing else**. The caveat is the one the `peerPe` rotation already records: shares outstanding is a quarterly figure on a 7-day rotation, so for about a week each quarter two classes can carry different counts and the match silently stops. **The CIK is still the shipped key**; this is the fallback, and the agreement between two independent keys is why the nine were safe to delete.
+
+##### A CORRECTION: A SHORT-INTEREST CLOCK IS NOT A PRICE CLOCK
+I reported `SQ` and `FI` as *"dead renamed tickers — SQ's prices stopped 2026-09-28, FI's on 2025-10-31"*. **Both dates are `short_state.newest`**, from this file's own note that *"two symbols lag for ever for real reasons"* — a FINRA reporting clock, which stops when a ticker is renamed. **All four of SQ/XYZ and FI/FISV were priced to 2026-10-06.** SQ was still the right one to drop, on evidence that had nothing to do with the claim I made: no CIK, no `sec_facts`, absent from the index file, and a newest bar a session behind XYZ's.
+
+##### `FI` / `FISV` IS LEFT ALONE, because "most relevant" has two defensible answers
+| | index weight | CIK | sec_facts | theme | price |
+|---|---|---|---|---|---|
+| **FISV** | **0.036%** | **798354** | **322** | none | 45.48 |
+| **FI** | — | none | 0 | Digital Payments | 45.47 |
+
+Every field in the database says keep **FISV** — the issuer's own holdings file names it and it carries the filer id — while **FI is almost certainly the live ticker**. Keeping FI loses the CIK, which takes the SEC EDGAR card, the insider card and the fold with it; keeping FISV risks being left holding the dead one. **This is the `/stock` Micron lesson applied to a ticker** — *check the data before trusting a memory of what a company's symbol should be* — and with the evidence split the decision is the owner's rather than a guess.
+
+##### `PSKY` → `SKYD` IS A LIVE RENAME, NOT A DUPLICATE, and the holdings import is what caught it
+The SPY file swapped them **overnight, between 2026-10-05 and 2026-10-06, into the same 0.008% slot** — `added: SKYD, removed: PSKY`, nothing else changed. We hold `PSKY` (priced, CIK 2041610, 21 `sec_facts`); `SKYD` has **no bars, no name and no row anywhere**. So the operation is an ADD — through `POST /api/universe/check` first, since the gate is what confirms Twelve Data serves it — and then a removal of PSKY once SKYD is priced. **Not acted on**; removing or adding a ticker is the owner's call.
+
+- **It also means `/holdings` now reports FOUR missing index members, not three**: GOOG, FOX and NWS by choice, plus SKYD by the rename, at **2.464%** of index weight. The suppression list that would stop the nagging is still not built.
+
+##### AND `single-closes.json` WAS ALREADY STALE BY TWO BEFORE TODAY
+The documented sequence after any ticker removal — `analysis-db.js --full`, then `single-data.js`, `strategy-runs.js`, `lab-grid.js` — was run, and the check worth keeping is **which derived file actually carried the dead tickers**: `single-closes.json` held nine of today's ten **plus `SOLS` and `SKF` from removals on 2026-09-28**, so `/single` had been listing two delisted names for over a week with nothing saying so. `lab-grid.json` and all fifteen `strategy-u-*.json` name none of them — they hold curves and parameter grids rather than per-symbol closes — but their RESULTS include whatever was in the universe when they were built, so they are rebuilt too. **Grep the derived files for the removed symbols rather than assuming which are affected**; only one of the three was, and it was the one nobody had noticed.
+
+##### THE REBUILD FOUND TWO OF THE THREE BUILDERS BROKEN, AND ONE HAD BEEN FOR NINE DAYS
+`single-data.js` ran clean (**78.2s**, 1,274 symbols, 33.44 MB raw / 8,771 KB gzipped). The other two did not, and **neither failure had anything to do with the removal** — the rebuild is simply the only thing that runs them.
+
+- **`strategy-runs.js` threw `no such table: portfolio_tickers` AT MODULE LOAD, and had done since 2026-09-28.** The tables are `themes` / `theme_tickers`; that read still used the pre-rename names, and **it only ever worked because the local copy carried the old pair as RESIDUE** — `analysis-db.js --full` drops only the tables it syncs, so a rename leaves the old names sitting beside the new ones. They were dropped on 2026-09-28, and this script has been dead ever since **with nothing noticing, because it is only ever run after a ticker removal**. The column is `theme`, not `portfolio`. One line, and the fix immediately found **27 universes against the 15 files on disk** — twelve themes had been invisible to `/strategy` for nine days.
+  - **The lesson is about the residue, not the rename.** Dropping a stale table from the local copy is right, and it **re-armed a nine-day-old latent break in a script nobody runs weekly**. After removing residue from the analysis copy, run every builder that reads it rather than only the one you came for.
+- **`lab-grid.js` HAS OUTGROWN THIS MACHINE AND `lab-grid.json` IS THEREFORE STALE — the one part of the rebuild that was NOT completed.** It loads the whole archive, which has gone **1.85M bars (when it was last built) → 4.65M**, and on the default heap it dies at `Ineffective mark-compacts near heap limit` after 17s. `--max-old-space-size=4096` gets it past the load (4,646,238 bars, 1,274 symbols, 14.6s) and then **thrashes**: this box has **7.8 GB**, so a 4 GB heap leaves 0.7 GB free, and it managed **~2 of its 920 parameter sets a minute — about seven hours**, against the 28.1s recorded for the smaller archive. Abandoned deliberately rather than left running: the same laptop drives the intraday schedule and the nightly, and seven hours at 0.7 GB free is a cost nobody asked for.
+  - **What the staleness actually costs is small, which is why abandoning it was the right trade.** The file holds **cross-sectional parameter grids, not per-symbol data** — none of the removed symbols appears in it by name — so the error is that its t-statistics were computed over a universe carrying nine duplicate share classes and two delisted names. The effect on a cross-sectional t over ~1,280 symbols is marginal, and `/lab` already says on its own face that nothing on the grid clears a bar worth trading.
+  - **The durable fix is in the script, not in the flag**: it must stream the archive rather than hold it. Until then the build is an overnight job, and the flag is mandatory — **`node --max-old-space-size=4096 lab-grid.js`**, which the documented command (`node lab-grid.js`) no longer covers.
+- **NINE STALE `strategy-u-*.json` FILES, 8.1 MB, tracked in git.** The script writes one file per universe and never cleans up, so every theme the owner deletes leaves its runs behind for ever: `chips energy faded fin hardware industrials software utility watchlist` — the industry-style lists dropped once Sector and Industry covered them. `strategy-index.json` does not name them, so `/strategy` cannot reach one; they are dead weight rather than a fault. Removed with the rebuild.
+
+###### AND `| tail` HID BOTH FAILURES BEHIND `exit 0` — THE DOCUMENTED TRAP, MET FROM THE SAME SIDE AS LAST TIME
+The three builders were chained with `&&` and each piped through `tail`, so **the chain's exit status was `tail`'s**: it printed `ALL THREE DONE` and exited 0 over two crashes, and `&&` never short-circuited because nothing had failed as far as the shell could see. This file already records the inverse (`shortint-load.js` succeeded and exited 1 through the same pipe). **The rule that covers both: judge a build by the artefact it wrote, never by how it exited** — the stale `Sep 28` timestamps on two of the three output files are what actually gave it away, after a reported success.
+
 
 ### Where the shorts moved — the fortnight's builds and covers (2026-10-06, owner's request)
 **A twenty-second template, `shortmoves`, and the first card fed by the FINRA archive rather than the snapshot.** Every other short-interest surface in this app is a LEVEL — the Ownership column, `/stock`'s card and strip, the two histogram measures — and this is the CHANGE, which is the half that is news.
