@@ -5160,7 +5160,7 @@ const STARTER_SCREENS = [
   sc('overextd', 'Technical', 'Overextended', 'RSI above 75 and more than 12% above the 50-day average.',
     { filters: { rsi: '>75', vs50ma: '>12' }, sort: { key: 'rsi', dir: -1 },
       columns: ['rsi', 'vs50ma', 'oneMonthPct', 'actionEntry', 'av:Balanced', 'spMember'] }),
-  sc('chiphedg', 'How it moved', 'Held up when chips fell', 'Rose on the 13 worst days for the chip complex. Mostly AI-disrupted software: median -22% this year against the screen’s +2%, while the chip-exposed end is +54%.',
+  sc('chiphedg', 'How it moved', 'Held up when chips fell', 'Rose on the 13 worst days for the chip complex. Mostly AI-disrupted software: median -22% this year against the screen’s +2%, while those that fell hardest on the same days are +54%.',
     { filters: { chipSelloff: '>=2', marketCap: '>=5B' }, sort: { key: 'chipSelloff', dir: -1 },
       columns: ['chipSelloff', 'ytdPct', 'oneYearPct', 'marketCap', 'av:Balanced', 'spMember'] }),
   sc('shorted0', 'Short interest', 'Most shorted', '10% or more of the float sold short.',

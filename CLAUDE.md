@@ -1218,7 +1218,7 @@ Average pairwise correlation across 200 stocks: **0.143 in the quietest third of
 0.476 against the semis' 0.330, and **+6.7% through the purest unwind**. The mirror is not a vague collection of defensives; it is a specific, coherent, measurable bloc.
 
 #### AND THE PROTECTION COSTS, WHICH IS THE NUMBER TO LEAD WITH
-Top quintile of AI beta: median YTD **+35.2%**. Bottom quintile: **−6.1%**. The correlation between AI beta and year-to-date return across every name above $5B is **+0.548**. You are selling the thing that has worked — and the shipped screen's own 57 names carry a median YTD of **−21.9%** against the chip-exposed end's **+53.5%**.
+Top quintile of AI beta: median YTD **+35.2%**. Bottom quintile: **−6.1%**. The correlation between AI beta and year-to-date return across every name above $5B is **+0.548**. You are selling the thing that has worked — and the shipped screen's own 57 names carry a median YTD of **−21.9%** against the mirror cut's **+53.5%**.
 
 Energy was the only sector with a positive median across all seven episodes (+8.1%), with near-zero AI beta. In the one **general** bear here only **147 of 892** names above $5B finished positive — and of the 111 that passed all three decoupling tests, only **48**. *Low AI beta protects against an AI unwind, not against a market.*
 
@@ -1267,7 +1267,8 @@ I proposed it uncoloured on `badDay`'s rule — *a column negative on every row 
 #### THE SCREEN SHIPS WITH ITS COUNTER-FACT, because the number is brutal
 **`Held up when chips fell`** — `chipSelloff >= 2` and `marketCap >= 5B`, **57 names**, sorted by the column. Sized against the distribution: `>= 1` gives 230 (a list to browse), `>= 3` gives 15 (nearly a dead box).
 
-**The 57 carry a median YTD of −21.9%, with 47 of 57 down on the year, against the screen's own +2.0% — and the chip-exposed end (≤ −4%/day) is +53.5%.** A hedge that has cost about **75 points** of relative performance this year. They are overwhelmingly SaaS and IT services: the market treats them as the *other side of the same see-saw*, so buying the protection means buying what the market thinks AI is eating.
+**The 57 carry a median YTD of −21.9%, with 47 of 57 down on the year, against the screen's own +2.0% — and its MIRROR cut, the stocks that fell hardest on those same days, is +53.5%.** A hedge that has cost about **75 points** of relative performance this year. They are overwhelmingly SaaS and IT services: the market treats them as the *other side of the same see-saw*, so buying the protection means buying what the market thinks AI is eating.
+  - **THE MIRROR IS THE RIGHT COMPARISON AND I FIRST LABELLED IT AS SOMETHING ELSE.** Both the screen description and this note said *"the chip-exposed end (<= -4%/day) is +53.5%"*, pairing the right number with the wrong cut: re-measured off the committed code, `<= -2` (the exact mirror of the screen’s `>= 2`) is **+53.5%**, `<= -4` is **+79.4%**, and the bottom 57 by the column is **+92.8%**. The mirror is the honest counterpart — same threshold, opposite sign, which is the comparison a reader makes — so the figure stands and the label is corrected. *A number carried over from a measurement is only as good as the cut named beside it.*
 
 That goes in the screen's own description, inside the 200-character cap, rather than in a tooltip nobody opens — `peerval0`'s precedent, which states on its own face that the cheapest third has the worse growth, margin, ROE and Quality because the measurement said so. **A screen saying "these held up" without that number would be the most misleading thing in this app.**
 
