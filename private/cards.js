@@ -4108,6 +4108,16 @@
       { lo: -14, hi: 0, bins: 14, unit: '%', dp: 1, openLo: true }],
     ['range52Pos', 'Where each one sits in its 52-week range', '0 is the low, 100 is the high',
       { lo: 0, hi: 100, bins: 20, unit: '', dp: 0 }],
+    // Binned against the live distribution like every entry here, not
+    // guessed: the whole screen runs p5 -29.6, p25 -12.1, median -2.8,
+    // p75 +7.8, p95 +36.7, so +/-50 in 4-point bins holds about 96% of it
+    // and the peak lands just below zero. SIGNED, because the sign IS the
+    // reading -- above or below its own average is the whole question, and
+    // this is the one measure here where zero is a named line rather than
+    // an arbitrary point.
+    ['vs200ma', 'How far above or below its 200-day',
+      'the latest close against the average of the last 200 sessions',
+      { lo: -50, hi: 50, bins: 25, unit: '%', dp: 1, openLo: true, openHi: true, signed: true }],
     ['qualityRating', 'The Quality score', 'company fundamentals, 1 to 10',
       { lo: 1, hi: 11, bins: 10, unit: '', dp: 0, discrete: true }],
     ['peerPe', 'Price against its own industry', '1.00 is what the typical company in that industry costs',
@@ -5291,6 +5301,232 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Narrow or broad ---------------------------------------------------
+  //
+  // THE CARD IS ONE COMPARISON: how many companies sit above their 200-day
+  // moving average, against how much of the VALUE does. Measured on the live
+  // index the day it was built, 45.2% by count against 75.6% by value -- a
+  // 30-point gap, which is narrowness quantified and is the one reading no
+  // other surface here gives. The breakdown beneath is the same fact at a
+  // second grain, and the size ladder is almost perfectly monotonic:
+  // Mega 75.9, Large 55.3, Mid-Large 33.3, Mid 12.5.
+  //
+  // IT ADDS NO FIELD. vs200ma is already on every row and is already an
+  // Advice input (trend_gate), so this is display over something the engine
+  // has always read -- there is nothing new for a verdict to see, and the
+  // three-way scoring proof the instrumentType and S&P columns had to give
+  // does not apply. The boundary that matters here is the other way round:
+  // nothing on this card may become a rule.
+  const BRD_MODES = [['size', 'by size'], ['sector', 'by sector']];
+  // Filters.CAP_ORDER restated, the BENCHMARKS bargain: this module has no
+  // requires and no DOM, which is what lets a card render identically in
+  // Node and the browser. Exported as Cards.capBands() so a test asserts the
+  // two lists agree rather than hoping they do.
+  const BRD_CAP_ORDER = ['Mega', 'Large', 'Mid-Large', 'Mid', 'Small', 'Micro'];
+  // A share computed over four companies is not a breadth reading. The
+  // Flow card's own floor, and the sector mode is where it bites.
+  const BRD_MIN_GROUP = 5;
+
+  function tplBreadth() {
+    const cut = SP_CUTS.some(([k]) => k === O.brdSp500) ? O.brdSp500 : 'in';
+    const mode = BRD_MODES.some(([k]) => k === O.brdMode) ? O.brdMode : 'size';
+
+    // The index funds and the eleven sector funds come out FIRST, the rule
+    // every market card here keeps -- and it bites harder on this one than
+    // most: SPY IS the index, so counting whether it is above its own
+    // 200-day inside a breadth reading OF that index is the
+    // index-in-its-own-market error in its purest form.
+    const notFund = (x) => x && !x.error && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol);
+    const pool = spFilter(stocks.filter(notFund), cut);
+
+    // ONE COMPANY, ONE LISTING, and before anything is counted OR weighted.
+    // A dual-class pair would count twice in the headcount and carry the
+    // whole company's value twice in the weighted one -- the fold is inert
+    // on today's universe (the nine pairs were removed on 2026-10-07) and is
+    // exactly what stops the next arrival being a silent double.
+    const fold = foldListings(pool, 'vs200ma');
+    const rows = fold.rows;
+
+    const num = (r, k) => {
+      const v = Number(r && r[k]);
+      return r && r[k] != null && isFinite(v) ? v : null;
+    };
+    const capOf = (r) => { const c = Number(r && r.marketCap); return c > 0 ? c : 0; };
+
+    // A STOCK WITH NO 200-DAY READING IS EXCLUDED AND COUNTED, never counted
+    // as below. A company that has not existed for 200 sessions is not
+    // trading under its average -- it has no average. 24 of 1,274 live.
+    const has = rows.filter((r) => num(r, 'vs200ma') !== null);
+    const noRead = rows.length - has.length;
+    const isUp = (r) => num(r, 'vs200ma') > 0;
+
+    if (has.length < 20) {
+      return chromeTop() + '<div class="s-body"><div class="brd-in">'
+        + '<span class="s-kick">' + esc(SP_CUT_LABEL[cut] || 'the whole screen') + '</span>'
+        + '<h2 class="s-title">Narrow or broad</h2>'
+        + '<p class="s-sub wide" style="--fs:20px">' + esc(
+          'Too few 200-day readings here to measure breadth — ' + has.length
+          + ' of ' + rows.length + '. A 200-day average needs 200 sessions, '
+          + 'so a cut of recent listings has nothing to count.')
+        + '</p></div></div>' + chromeFoot();
+    }
+
+    const up = has.filter(isUp);
+    // Two exclusions and they are DIFFERENT rules, the marketParts bargain.
+    // A missing reading is absent (above); a company with no market cap
+    // carries no weight at all -- Number(null) is 0 and finite, so "> 0"
+    // rejects null and zero in one test.
+    const wAll = has.reduce((a, r) => a + capOf(r), 0);
+    const wUp = up.reduce((a, r) => a + capOf(r), 0);
+    const noCap = has.filter((r) => !capOf(r)).length;
+
+    const byCount = 100 * up.length / has.length;
+    const byValue = wAll > 0 ? 100 * wUp / wAll : null;
+    const gap = byValue == null ? null : byValue - byCount;
+
+    // ---- the breakdown ---------------------------------------------------
+    // ONE floor, ONE anchor. It was written twice, and a revert of either
+    // half left the other quietly holding the line -- the duplicated-guard
+    // trap this project keeps meeting.
+    const bigEnough = (g) => g.length >= BRD_MIN_GROUP;
+    const groups = [];
+    if (mode === 'size') {
+      for (const b of BRD_CAP_ORDER) {
+        const g = has.filter((r) => r.capBand === b);
+        if (bigEnough(g)) {
+          groups.push({ k: b, n: g.length, up: g.filter(isUp).length });
+        }
+      }
+      // DELIBERATELY NOT SORTED: a size ladder read out of order is not a
+      // ladder, and the monotonic fall from Mega to Micro IS the finding.
+    } else {
+      const seen = new Map();
+      for (const r of has) {
+        const k = r.sector || null;
+        if (!k) continue;          // no sector yet is no sector, never a bucket
+        if (!seen.has(k)) seen.set(k, []);
+        seen.get(k).push(r);
+      }
+      for (const [k, g] of seen) {
+        if (bigEnough(g)) {
+          groups.push({ k, n: g.length, up: g.filter(isUp).length });
+        }
+      }
+      groups.sort((a, b) => b.up / b.n - a.up / a.n);
+    }
+    const thin = (mode === 'sector'
+      ? new Set(has.map((r) => r.sector).filter(Boolean)).size
+      : BRD_CAP_ORDER.filter((b) => has.some((r) => r.capBand === b)).length) - groups.length;
+
+    // ---- the strip -------------------------------------------------------
+    const med = (a) => {
+      if (!a.length) return null;
+      const s = a.slice().sort((x, y) => x - y), i = (s.length - 1) / 2;
+      return s.length % 2 ? s[i] : (s[i - 0.5] + s[i + 0.5]) / 2;
+    };
+    const dists = has.map((r) => num(r, 'vs200ma'));
+    const far = has.slice().sort((a, b) => num(b, 'vs200ma') - num(a, 'vs200ma'));
+    const sg = (v) => (v == null ? '—'
+      : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '%');
+    const nameAt = (r) => (r ? esc(r.symbol) + ' ' + sg(num(r, 'vs200ma')) : '—');
+    const stats = [
+      ['the middle one sits', sg(med(dists))],
+      ['furthest above', nameAt(far[0])],
+      ['furthest below', nameAt(far[far.length - 1])],
+      ['no 200-day yet', String(noRead)],
+    ];
+
+    // THE SQUARE IS THE SHORTEST ARTBOARD AND THIS CARD HAS THE MOST BLOCKS
+    // -- a pair, a sentence, up to six rows, a four-stat strip and the note.
+    // Measured at the first sizing it ran 9px past the body with no headroom
+    // at all, so its figure and rows are a size down from the portrait's
+    // rather than a scaled copy of them.
+    const SZ = { portrait: { big: 92, lab: 17, row: 20, bar: 10 },
+      square: { big: 62, lab: 14, row: 16, bar: 7 },
+      story: { big: 124, lab: 23, row: 27, bar: 13 } }[size.id]
+      || { big: 92, lab: 17, row: 20, bar: 10 };
+
+    const pcTxt = (v) => (v == null ? '—' : v.toFixed(1) + '%');
+    const half = (lab, v, sub) => '<div class="brd-h">'
+      + '<span class="brd-hk" style="font-size:' + SZ.lab + 'px">' + esc(lab) + '</span>'
+      + '<span class="brd-hv" style="font-size:' + SZ.big + 'px">' + esc(pcTxt(v)) + '</span>'
+      + '<span class="brd-ht"><span class="brd-hf" style="width:'
+        + (v == null ? 0 : Math.max(1.5, Math.min(100, v))).toFixed(1) + '%"></span></span>'
+      + '<span class="brd-hs">' + esc(sub) + '</span>'
+      + '</div>';
+
+    // THE GAP IS THE READING, so it is a sentence rather than a fourth
+    // figure -- and it is worded for BOTH directions. A card that only knew
+    // how to say "narrow" would be asserting its own premise on the day the
+    // small companies are the ones carrying it.
+    const gapLine = gap == null ? ''
+      : (Math.abs(gap) < 4
+        ? 'Count and value agree to within ' + Math.abs(gap).toFixed(1)
+          + ' points, so the move is about as broad as it looks.'
+        : gap > 0
+          ? 'NARROW — ' + gap.toFixed(1) + ' points more of the value is above its '
+            + 'average than of the companies, so the larger ones are carrying it.'
+          : 'BROAD — ' + Math.abs(gap).toFixed(1) + ' points more of the companies are '
+            + 'above their average than of the value, so the smaller ones are leading.');
+
+    const mx = Math.max(1, ...groups.map((g) => 100 * g.up / g.n));
+    const grpRow = (g) => {
+      const p = 100 * g.up / g.n;
+      return '<div class="brd-r" style="font-size:' + SZ.row + 'px">'
+        + '<span class="brd-rk">' + esc(g.k) + '</span>'
+        + '<span class="brd-rb" style="height:' + SZ.bar + 'px">'
+          + '<span class="brd-rf" style="width:' + (p / mx * 100).toFixed(1) + '%"></span></span>'
+        + '<span class="brd-rv">' + esc(p.toFixed(1) + '%') + '</span>'
+        + '<span class="brd-rn">' + esc(String(g.n)) + '</span>'
+        + '</div>';
+    };
+
+    const scopeWord = cut === 'in' ? 'the S&P 500'
+      : cut === 'out' ? 'the stocks outside the index' : 'the whole screen';
+    const note = 'Above the 200-day means the latest close is above the average of the '
+      + 'last 200 sessions. By count every company weighs the same; by value each weighs '
+      + 'its market capitalisation, which is why the two can differ so widely. '
+      + (noRead ? noRead + ' here have no 200-day yet and are counted in neither — '
+        + 'a company that has not traded 200 sessions has no average rather than a '
+        + 'low one. ' : '')
+      + (noCap ? noCap + ' have no market capitalisation and carry no weight. ' : '')
+      + (thin > 0 ? thin + (thin === 1 ? ' group holds' : ' groups hold') + ' fewer than '
+        + BRD_MIN_GROUP + ' and is left out. ' : '')
+      + foldNote(fold.folded)
+      + 'Index funds and the sector funds are excluded: a fund that IS the index cannot '
+      + 'be counted inside a reading of it. One day’s position, not a forecast.';
+
+    return chromeTop()
+      + '<div class="s-body"><div class="brd-in' + (mode === 'sector' ? ' brd-secm' : '') + '">'
+      + '<span class="s-kick">' + esc((SP_CUT_LABEL[cut] || 'The whole screen')
+        + ' · ' + has.length.toLocaleString() + ' with a 200-day') + '</span>'
+      + '<h2 class="s-title">Narrow or broad<span class="dim">'
+      // 58 CHARACTERS, inside the 54-59 this module's subtitles measure at.
+      // The first wording ran to 69 and the existing letter-spacing simply
+      // crushed it -- the Flow card's own lesson, where the longest
+      // subtitle reads as the most squeezed rather than as a wrap.
+      + esc('how many are above their 200-day, and how much of the value')
+      + '</span></h2>'
+      + '<div class="brd-fill">'
+      + '<div class="brd-pair">'
+        + half('by company', byCount, up.length.toLocaleString() + ' of ' + has.length.toLocaleString())
+        + half('by value', byValue, '$' + fmtMoney(wUp) + ' of $' + fmtMoney(wAll))
+      + '</div>'
+      + (gapLine ? '<p class="brd-gap">' + esc(gapLine) + '</p>' : '')
+      + '<div class="brd-wrap' + (mode === 'sector' ? ' brd-sec' : '') + '">'
+        + '<div class="brd-hd"><span class="brd-hdk">'
+          + esc(mode === 'size' ? 'by size' : 'by sector')
+        + '</span><span class="brd-hdv">above</span><span class="brd-hdn">n</span></div>'
+        + groups.map(grpRow).join('')
+      + '</div>'
+      + '<div class="brd-stats">' + stats.map(([k, v]) =>
+        '<div class="brd-s"><span class="brd-sk">' + esc(k) + '</span>'
+        + '<span class="brd-sv">' + esc(v) + '</span></div>').join('') + '</div>'
+      + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
@@ -5299,7 +5535,7 @@
     disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution,
     flow: tplFlow, histogram: tplHistogram,
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
-    shorted: tplShorted,
+    shorted: tplShorted, breadth: tplBreadth,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
@@ -5473,6 +5709,129 @@
     .hs-yf { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
     .hs-yf.hs-up { background: var(--green); }
     .hs-yf.hs-dn { background: var(--red); }
+
+    /* ---- Narrow or broad ------------------------------------------- */
+    /* NO BACKTICKS IN THIS COMMENT: Cards.STYLE is itself a template
+       literal, so one inside a CSS comment ends the string. */
+    .brd-in { display: flex; flex-direction: column; height: 100%; }
+    .brd-in .s-title .dim { display: block; font-size: 29px; line-height: 1.25;
+             font-weight: 600; color: var(--muted); margin-top: 10px; }
+    .sz-square .brd-in .s-title .dim { font-size: 23px; }
+    .sz-story .brd-in .s-title .dim { font-size: 38px; }
+    .brd-in .s-sub { margin-top: auto; padding-top: 18px; }
+    /* THE SPARE HEIGHT IS SPREAD BETWEEN THE BLOCKS, not left in one band
+       above the note. The size ladder is four rows where the sector list is
+       eleven, so on a post that mode left ~180px of nothing between the
+       strip and the note while the note itself sat pinned to the foot --
+       the Snapshot card's own fault, with its own fix. The margins below
+       stay as FLOORS: free space is distributed after they are allocated,
+       so a full card keeps its rhythm and a sparse one opens up rather
+       than stranding the room at one end. */
+    .brd-fill { display: flex; flex-direction: column; flex: 1;
+                justify-content: space-evenly; min-height: 0; }
+    /* THE PAIR IS THE CARD. Two equal halves, so neither reads as the
+       headline and the other as a footnote -- the comparison IS the
+       reading, and an unequal pair would assert which half matters. */
+    .brd-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                gap: 34px; margin-top: 26px; }
+    .brd-h { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+    .brd-hk { font-family: var(--mono); letter-spacing: .12em;
+              text-transform: uppercase; color: var(--faint); }
+    .brd-hv { font-family: var(--mono); font-weight: 700; color: var(--text);
+              line-height: 1; font-variant-numeric: tabular-nums;
+              letter-spacing: -.02em; }
+    /* display: block on the fill too -- a percentage width on an INLINE
+       span draws nothing, and the style attribute reads as perfectly
+       correct while it does. The /quality lesson. */
+    .brd-ht { display: block; height: 10px; border-radius: 3px;
+              background: var(--hair); overflow: hidden; }
+    .brd-hf { display: block; height: 100%; border-radius: 3px; min-width: 3px;
+              background: var(--text); }
+    .brd-hs { font-family: var(--mono); font-size: 16px; color: var(--muted);
+              font-variant-numeric: tabular-nums; }
+    .sz-story .brd-hs { font-size: 21px; }
+    /* The gap is the finding, so it is set apart from both the figures
+       above it and the breakdown below. Neutral: narrow is not bad and
+       broad is not good, and green and red mean a direction here. */
+    .brd-gap { font-family: var(--mono); font-size: 19px; line-height: 1.45;
+               color: var(--text); margin: 22px 0 0;
+               padding: 14px 0 0; border-top: 1px solid var(--hair-2); }
+    .sz-square .brd-gap { font-size: 16px; margin-top: 16px; padding-top: 11px; }
+    .sz-square .brd-pair { margin-top: 18px; gap: 24px; }
+    .sz-square .brd-wrap { margin-top: 16px; }
+    .sz-square .brd-r { margin-bottom: 9px; }
+    .sz-square .brd-stats { margin-top: 18px; gap: 14px; }
+    /* THE SQUARE TAKES THE SECTOR LIST IN TWO COLUMNS, and it is the only
+       artboard that does. 858px against the post's 1128, and eleven rows
+       is the tallest thing this card draws: measured, one column ran 152px
+       past the body there and no amount of tightening the margins closed
+       it -- 11 rows become 6, which does. The head spans both.
+       The post and the story keep one column, where it fits and reads
+       better; a layout that differs by artboard is how this module already
+       works (the Movers card's story, the Most shorted card's caps). */
+    .sz-square .brd-secm .brd-wrap { display: grid; column-gap: 26px;
+             grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .sz-square .brd-secm .brd-hd { grid-column: 1 / -1; }
+    /* The post needs ~20px rather than a column: trimmed from the gaps
+       between blocks, which is where it is least missed. */
+    .brd-secm .brd-pair { margin-top: 20px; }
+    .brd-secm .brd-gap { margin-top: 16px; padding-top: 11px; }
+    .brd-secm .brd-wrap { margin-top: 16px; }
+    .brd-secm .brd-stats { margin-top: 14px; }
+    .sz-story .brd-gap { font-size: 25px; }
+    .brd-wrap { margin-top: 22px; }
+    /* The head and the rows share ONE column template, so the figures sit
+       under their own heading -- the Most shorted lesson, where two grids
+       with auto columns could never line up. */
+    .brd-hd, .brd-r { display: grid;
+              grid-template-columns: var(--bk) minmax(0, 1fr) 86px 54px;
+              column-gap: 12px; align-items: center; }
+    .brd-wrap { --bk: 128px; }
+    .sz-story .brd-wrap { --bk: 168px; }
+    /* THE SECTOR NAMES NEED A WIDER TRACK THAN THE BANDS, measured rather
+       than guessed: the longest band is Mid-Large at 97px, the longest
+       sector is Communication Services at 235 on a post, 188 on a square
+       and 319 on a story. At the bands' 128 the live card truncated FOUR
+       sectors and showed 'Consumer ...' twice, which is unreadable rather
+       than merely tight -- found on a screenshot of production, because
+       the fixture then had three sectors and none of them long. */
+    .brd-sec { --bk: 240px; }
+    .sz-square .brd-sec { --bk: 192px; }
+    .sz-story .brd-sec { --bk: 324px; }
+    /* ELEVEN ROWS RATHER THAN FOUR, so the sector breakdown gets its own
+       rhythm. At the ladder's spacing it ran 50px past the body on a post
+       and 152 on a square -- and the fit check passed, because the fixture
+       held three sectors where production holds eleven. */
+    .brd-sec .brd-r { margin-bottom: 3px; }
+    .sz-square .brd-sec .brd-r { margin-bottom: 2px; }
+    .sz-story .brd-sec .brd-r { margin-bottom: 9px; }
+    .brd-hd { font-family: var(--mono); font-size: 13px; letter-spacing: .12em;
+              text-transform: uppercase; color: var(--faint); margin-bottom: 11px; }
+    .sz-story .brd-hd { font-size: 17px; }
+    .brd-hdv, .brd-hdn { text-align: right; }
+    .brd-r { margin-bottom: 11px; }
+    .sz-story .brd-r { margin-bottom: 15px; }
+    .brd-rk { color: var(--text); font-weight: 600; min-width: 0;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .brd-rb { display: block; background: var(--hair); border-radius: 2px;
+              overflow: hidden; }
+    .brd-rf { display: block; height: 100%; border-radius: 2px; min-width: 2px;
+              background: var(--text); }
+    .brd-rv { font-family: var(--mono); font-weight: 700; color: var(--text);
+              text-align: right; font-variant-numeric: tabular-nums; }
+    .brd-rn { font-family: var(--mono); color: var(--faint); text-align: right;
+              font-variant-numeric: tabular-nums; }
+    .brd-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+                 gap: 18px; margin-top: 24px; }
+    .brd-s { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .brd-sk { font-family: var(--mono); font-size: 13px; letter-spacing: .1em;
+              text-transform: uppercase; color: var(--faint); }
+    .sz-story .brd-sk { font-size: 17px; }
+    .brd-sv { font-family: var(--mono); font-weight: 700; font-size: 25px;
+              color: var(--text); white-space: nowrap; overflow: hidden;
+              text-overflow: ellipsis; }
+    .sz-square .brd-sv { font-size: 20px; }
+    .sz-story .brd-sv { font-size: 34px; }
     .hs-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
                 gap: 14px; margin-top: 24px; }
     .hs-s { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -6818,6 +7177,8 @@
     sectorEtfs: () => SECTOR_ETF.map((s) => s.slice()),
     // The S&P 500 cut as [value, label] pairs, for the studio's pickers.
     spCuts: () => SP_CUTS.map((c) => c.slice()),
+    breadthModes: () => BRD_MODES.map((x) => x.slice()),
+    capBands: () => BRD_CAP_ORDER.slice(),
     // The Snapshot's periods as [value, label] pairs. Exported for the
     // reason spCuts is: a copy in the markup could offer a key tplDay does
     // not know, which falls back to Today and filters nothing -- a picker

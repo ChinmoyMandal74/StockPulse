@@ -1176,6 +1176,86 @@ ratio are pre-split and a split does not move a ratio. **One symbol of
 
 ---
 
+---
+
+## 25. A trend-state board — the engine's own word, counted — 2026-10-07
+
+**Offered when the owner asked for "analysis of stocks above the 200 Day
+average especially within s&p", and deferred in favour of the breadth card
+that shipped instead.** This is the same question asked in the product's own
+vocabulary rather than as a percentage: `actionTrend` is already on every row
+and already collapses the trend rules to one word.
+
+Measured on the live index the day it was offered:
+
+| | S&P 500 |
+|---|---|
+| Downtrend | 31.7% |
+| Above 200D | 24.8% |
+| Strong uptrend | 20.0% |
+| Breakdown | 19.6% |
+| Below 200D | 3.2% |
+
+**IT IS A MODE ON `advboard`, NOT A NEW CARD.** That template already has an
+`advMode` and already counts the engine's words across a scope, so a trend
+board is a sibling of what it does rather than a second implementation.
+`actionTrend` appears three times in `cards.js` today — the Intro mock, the
+advice board's own pick and the Spotlight's field list — and **nothing
+aggregates it**, so nothing is duplicated by building this.
+
+**What makes it weaker than the card that shipped**: the group pages already
+draw a trend-state stacked bar in their Stance card, so this adds a surface
+rather than a reading. Worth doing when the promo studio wants the engine's
+vocabulary rather than a raw percentage, and not before.
+
+---
+
+## 26. Flow, with the bands keyed on the 200-day — 2026-10-07
+
+**`tplFlow`'s `bandOf(r)` keys on a return against the index** — `r < 0 ?
+down : r > index ? ahead : behind`. A second rule keying on `vs200ma` would
+make that card draw value-weighted breadth as ribbons, by sector, with no new
+template and no new data: the ribbons are already sized by market
+capitalisation.
+
+**It shows the VALUE half only, which is why it was not built instead of the
+breadth card.** The whole finding there is the gap between a headcount and a
+cap-weighted count — 45.2% against 75.6% on the index — and a flow diagram
+has no way to draw the headcount at all. This is the picture, not the
+measurement.
+
+**Cost**: one control and one band rule, plus the band labels, which the card
+already parameterises (`refWord`). The three-band shape fits: above / below,
+or above / near / below with a neutral band around the line, which the engine
+itself has as `whipsaw.neutral_band_pct`.
+
+---
+
+## 27. The index against its own breadth — 2026-10-07
+
+**The divergence picture: the index making highs while fewer of its members
+participate.** The most interesting of the seven ideas put to the owner and
+the one closest to a claim this product does not make, which is why it is
+last rather than first.
+
+**It needs the same data path as the breadth time series** (the other
+deferred half of that conversation): nothing computes a breadth series today.
+Measured as possible from the local archive — 6,073 sessions, usable from
+2008 — and carrying the two caveats recorded with it: only **736 of today's
+1,274 symbols were priceable in 2008** (58%, rising to 97% now), and
+`fund_holdings` holds **four days**, so there is no historical index
+membership and any line is the whole screen rather than the S&P.
+
+**THE HONESTY PROBLEM IS THE WHOLE ENTRY.** A chart of the index rising while
+breadth falls is read as a prediction whatever the caption says, and this
+project's own research log records nine framings measured flat. Before it is
+drawn, the divergence has to be MEASURED the way everything else here is: do
+breadth troughs while the index is at a high actually precede anything, over
+the eighteen years the archive supports? If the answer is flat — and the
+prior from this log is that it will be — the card should not be built at all,
+or should be built stating that measurement on its own face the way the chip
+screen states the cost of its hedge.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's

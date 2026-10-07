@@ -738,6 +738,23 @@
           cut, and some of them are sharply UP, which is the half a median
           hides. Heavily shorted and rising is the shorts under water.</p>
       </div>
+      <!-- Narrow or broad: how many are above their 200-day against how
+           much of the VALUE is. The card IS the market, so it takes no
+           scope, no sector, no size and no screen -- the tplDay and Flow
+           rule. So there is no brdScope/brdSector/brdIndustry/brdCap/
+           brdScreen, and INDUSTRY_PREFIXES is left alone. -->
+      <div id="brdBox">
+        <label>Break down</label>
+        <select id="brdMode"></select>
+        <label>S&amp;P 500</label>
+        <select id="brdSp500"></select>
+        <p class="hint">Measured on the live index the day this was built:
+          45.2% of the S&amp;P 500 was above its 200-day by count and 75.6% by
+          value — a 30-point gap, which is what narrowness looks like as a
+          number. The size ladder says the same thing again: Mega 75.9%,
+          Large 55.3%, Mid-Large 33.3%, Mid 12.5%. A stock with no 200-day
+          average yet is counted in neither half, never as below.</p>
+      </div>
       <!-- Histogram: the shape of the screen on one measure, optionally
            with a subject pinned to it. `stock` is `screen` plus a pin, so
            they are two MODES of one template rather than two templates.
@@ -920,6 +937,7 @@
     ];
     const TPLS = [
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
+      { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
@@ -1071,6 +1089,7 @@
       'wfallSector', 'wfallPeriod', 'wfallCount', 'wfallSp500',
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
+      'brdMode', 'brdSp500',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'evoSym', 'evoMeasure', 'evoWin',
@@ -1338,6 +1357,8 @@
       $(id).addEventListener('change', () => { if (tpl === 'waterfall') render(); }));
     ['smovMetric', 'smovCount', 'smovFloor', 'smovSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'shortmoves') render(); }));
+    ['brdMode', 'brdSp500'].forEach((id) =>
+      $(id).addEventListener('change', render));
     ['daySnapPeriod', 'dayMetric', 'dayCount', 'dayFloor', 'daySp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
     ['spotSym', 'spotWin', 'spotProf'].forEach((id) =>
@@ -1840,6 +1861,18 @@
         // number on the card was the whole screen's while the module's own
         // fallback said `in`. Filled with `selected` instead, keeping a
         // choice already made.
+        const brdModeKeep = $('brdMode').value;
+        $('brdMode').innerHTML = Cards.breadthModes().map(([v, lab]) =>
+          `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
+        if ([...$('brdMode').options].some((o) => o.value === brdModeKeep)) {
+          $('brdMode').value = brdModeKeep;
+        }
+        const brdSpKeep = $('brdSp500').value;
+        $('brdSp500').innerHTML = Cards.spCuts().map(([v, lab]) =>
+          `<option value="${esc(v)}"${v === 'in' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
+        if ([...$('brdSp500').options].some((o) => o.value === brdSpKeep)) {
+          $('brdSp500').value = brdSpKeep;
+        }
         const flowSpKeep = $('flowSp500').value;
         $('flowSp500').innerHTML = Cards.spCuts().map(([v, lab]) =>
           `<option value="${esc(v)}"${v === 'in' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
