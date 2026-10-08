@@ -54,7 +54,7 @@
 
   function build(data, modeKey, count) {
     const mode = modeKey === 'annual' ? 'annual' : 'quarterly';
-    const n = Math.max(2, Math.min(12, Number(count) || 5));
+    const n = Math.max(2, Math.min(20, Number(count) || 5));
     // A period with no revenue has no margin and nothing to measure the
     // other bar against, so it is not a column at all.
     const have = ((data && data[mode]) || []).filter((r) => r && r.d && ok(r.rev) && r.rev > 0);

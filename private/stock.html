@@ -4198,7 +4198,12 @@
         if (!box || !secData || !secData.perf) return;
         const w = Math.max(320, Math.floor(box.clientWidth || box.parentNode.clientWidth || 900));
         const narrow = w < 620;
-        const model = PerfChart.build(secData.perf, secMode, narrow ? 5 : 8);
+        // AS MANY PERIODS AS THE WIDTH CAN HOLD, up to the twenty quarters the
+        // server sends. The binding thing is the margin printed under each
+        // period: a column narrower than about 58px and neighbouring labels
+        // touch. A phone keeps five.
+        const fit = narrow ? 5 : Math.max(5, Math.min(20, Math.floor((w - 122) / 58)));
+        const model = PerfChart.build(secData.perf, secMode, fit);
         const word = secMode === 'annual' ? 'year' : 'quarter';
         if (!model.usable) {
           box.innerHTML = '<p class="msg">Fewer than two ' + word + 's with both a revenue and a net income on file.</p>';
@@ -4311,7 +4316,7 @@
           // A card neither period can fill is removed, not left as a heading
           // over a sentence -- a bank with no revenue tag on file, say.
           if (pf) {
-            const can = (m) => PerfChart.build(j.perf || {}, m, 8).usable;
+            const can = (m) => PerfChart.build(j.perf || {}, m, 20).usable;
             if (!can('quarterly') && !can('annual')) pf.remove();
             else {
               pf.hidden = false;

@@ -10849,7 +10849,7 @@ app.get('/api/peer-trend', requireAuth, route(async (req, res) => {
 // Oldest first, which is the order a chart reads. `dv` marks a period whose
 // revenue or net income was differenced here rather than filed -- no company
 // files a fourth quarter -- so the bar can say so.
-const PERF_Q = 12, PERF_FY = 8;
+const PERF_Q = 20, PERF_FY = 10;
 function perfOf(all) {
   const filled = SecFacts.latestFilled(all || []);          // newest first
   const num = (v) => (v == null || !isFinite(Number(v)) ? null : Number(v));
