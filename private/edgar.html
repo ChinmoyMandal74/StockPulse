@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>SEC EDGAR data — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(124, 156, 255, 0.10), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(52, 211, 153, 0.08), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 70ch; font-size: 13px; line-height: 1.65; }
+    .masthead { margin: 34px 0 22px; }
+    .grp { margin: 30px 4px 12px; font-size: 10px; font-weight: 500; text-transform: uppercase;
+           letter-spacing: 0.2em; color: var(--faint); }
+
+    /* ---- one card per data pull -----------------------------------------
+       Everything is scoped under .pull: nine unscoped class names have
+       captured later markup on this project. */
+    .pull { margin-bottom: 14px; }
+    .pull > .core { padding: 18px 22px 20px; }
+    .pull .top { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .pull h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+    .pull .what { margin: 6px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--muted); max-width: 86ch; }
+    /* The verdict on the card. Green is current, amber is "notice this, it is
+       behind" -- the colour's meaning everywhere here -- and neutral is a
+       state that is neither. Never red: nothing on this page is a fault a
+       reader caused, and red on this site means a price fell. */
+    .pull .state { margin-left: auto; font-size: 11px; font-weight: 600; padding: 3px 10px;
+                   border-radius: 999px; border: 1px solid var(--hair); color: var(--muted); white-space: nowrap; }
+    .pull .state.ok { color: var(--green); border-color: rgba(52, 211, 153, 0.3); }
+    .pull .state.behind { color: var(--amber); border-color: rgba(251, 191, 36, 0.35); }
+    .pull .facts { display: flex; gap: 12px 30px; flex-wrap: wrap; margin: 16px 0 0; }
+    .pull .fact { min-width: 108px; }
+    .pull .fact .k { display: block; font-size: 10px; font-weight: 500; text-transform: uppercase;
+                     letter-spacing: 0.16em; color: var(--faint); }
+    .pull .fact .v { display: block; margin-top: 6px; font-family: var(--mono); font-size: 17px;
+                     font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+    .pull .fact .v.warn { color: var(--amber); }
+    .pull .fact .s { display: block; margin-top: 2px; font-size: 11px; color: var(--faint); }
+    .pull .how { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--hair);
+                 font-size: 12.5px; line-height: 1.65; color: var(--muted); }
+    .pull .how b { color: var(--text); font-weight: 600; }
+    .pull .acts { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 12px 0 0; }
+    .pull .prog { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
+    .pull .prog b.warn { color: var(--amber); }
+    .pull .cmd { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 0;
+                 background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+                 border-radius: 10px; padding: 8px 12px; }
+    .pull .cmd .lbl { font-size: 11.5px; color: var(--faint); }
+    .pull .cmd code { font-family: var(--mono); font-size: 11.5px; color: var(--text); word-break: break-all; }
+    .pull .cmd button { margin-left: auto; }
+    .pull .errs { margin: 10px 0 0; font-size: 11.5px; color: var(--faint); line-height: 1.6; }
+    .btn.sm { font-size: 11.5px; padding: 5px 11px; }
+    .loading, .error { padding: 26px; font-size: 13px; color: var(--muted); }
+    .error { color: var(--red); }
+    .foot { margin: 22px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 88ch; }
+    @media (max-width: 768px) {
+      .page { padding: 0 16px; } .hide-sm { display: none !important; }
+      .pull .state { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.9 13.6A8 8 0 1 1 18.1 7.3"/><path d="M18.7 3.2v4.4h-4.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <button class="btn" id="reload" type="button"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Re-read status</button>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Admin</span>
+      <h1>SEC EDGAR data</h1>
+      <p class="lede">Every data pull that is not prices or company profiles: how current each one is,
+        what keeps it up to date, and what you can do when it falls behind. None of it feeds the
+        Advice verdict or the screener's selection — it is shown on the stock pages and the cards.</p>
+    </header>
+
+    <div id="body"><p class="loading">Reading the status…</p></div>
+    <p class="foot" id="foot" hidden></p>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const DAY = 86400000;
+  const num = (n) => Number(n || 0).toLocaleString('en-US');
+  const plural = (n, w, ws) => num(n) + ' ' + (n === 1 ? w : (ws || w + 's'));
+  // Whole days since a date or a timestamp. A bare ISO date is read at local
+  // noon: `new Date('2026-10-07')` is UTC midnight and lands a day early west
+  // of Greenwich.
+  const daysSince = (v) => {
+    if (v == null) return null;
+    const t = typeof v === 'number' ? v : Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(v) ? v + 'T12:00:00' : v);
+    return isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / DAY)) : null;
+  };
+  const ago = (v) => { const d = daysSince(v); return d == null ? '' : d === 0 ? 'today' : d === 1 ? 'yesterday' : d + ' days ago'; };
+  const when = (ms) => (ms ? new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—');
+
+  const fact = (k, v, s, warn) => '<div class="fact"><span class="k">' + esc(k) + '</span><span class="v' + (warn ? ' warn' : '') + '">'
+    + esc(v == null || v === '' ? '—' : v) + '</span>' + (s ? '<span class="s">' + esc(s) + '</span>' : '') + '</div>';
+  const cmd = (label, text) => '<div class="cmd"><span class="lbl">' + esc(label) + '</span><code>' + esc(text)
+    + '</code><button class="btn sm" type="button" data-copy="' + esc(text) + '">Copy</button></div>';
+  // state: ['ok' | 'behind' | '', words]
+  const card = (id, title, state, what, facts, how, acts, extra) =>
+    '<section class="bezel pull" id="' + id + '"><div class="core">'
+    + '<div class="top"><h2>' + esc(title) + '</h2><span class="state ' + state[0] + '">' + esc(state[1]) + '</span></div>'
+    + '<p class="what">' + what + '</p>'
+    + '<div class="facts">' + facts.join('') + '</div>'
+    + '<p class="how">' + how + '</p>'
+    + (acts ? '<div class="acts">' + acts + '</div>' : '')
+    + '<p class="prog" id="' + id + 'Prog" hidden></p>'
+    + (extra || '') + '</div></section>';
+
+  let S = null;
+  const busy = {};                        // card id -> running
+  const halt = {};
+
+  function paint() {
+    const f = S.filings, b = f.buckets, ins = S.insider || {}, sh = S.short || {}, h = S.holdings || {}, sp = S.splits || {};
+    const none = (b.nocik || 0) + (b.nofacts || 0) + (b.empty || 0);
+    const due = (f.overdue || 0) + (f.missing || 0);
+    // ---- 1. filings ----
+    const fState = !S.ready ? ['behind', 'Not configured']
+      : f.missing ? ['behind', plural(f.missing, 'company', 'companies') + ' never fetched']
+        : f.overdue ? ['behind', plural(f.overdue, 'company', 'companies') + ' overdue']
+          : b.error ? ['behind', plural(b.error, 'error')] : ['ok', 'Current'];
+    const filings = card('fil', 'Company filings', fState,
+      'Each company’s own filed statements — revenue, earnings, cash flow, share counts — from the SEC’s companyfacts file. '
+      + 'They draw the Financial statements, Growth and profitability and SEC EDGAR cards on a stock page, and the filings-based promo cards.',
+      [fact('Companies with filings', num(b.ok) + ' of ' + num(S.universe), none ? none + ' file none (funds, foreign filers)' : ''),
+        fact('Rows stored', num(f.rows)),
+        fact('Newest filing held', f.newestFiled, ago(f.newestFiled)),
+        fact('Filed in the last 30 days', num(f.filed30), num(f.filed7) + ' in the last 7'),
+        fact('Checked in the last ' + S.rotateDays + ' days', num(f.ages.d1 + f.ages.d3 + f.ages.d7), num(f.ages.d1) + ' today'),
+        fact('Overdue a check', num(f.overdue), f.ages.older ? num(f.ages.older) + ' past 14 days' : 'oldest ' + ago(f.oldest), f.overdue > 0),
+        fact('Never fetched', num(f.missing), '', f.missing > 0)],
+      '<b>Kept up to date by</b> the nightly job on your laptop (7:30 AM and 7:30 PM Eastern, weekdays), which re-checks the '
+      + 'companies checked longest ago — up to 150 a run, so a full lap takes about a week. A new 10-Q can therefore take a few days to appear.'
+      + (S.ready ? '' : ' <b>No contact address is configured</b> — the SEC refuses requests that do not declare one. Set MAIL_FROM, REPORT_TO or SEC_UA.'),
+      '<button class="btn warm" type="button" data-run="missing"' + (f.missing && S.ready ? '' : ' disabled') + '>Fetch missing' + (f.missing ? ' (' + num(f.missing) + ')' : '') + '</button>'
+      // The rotation takes the never-fetched FIRST and then the overdue, oldest
+      // first, so its count is both.
+      + '<button class="btn" type="button" data-run="rotate"' + (due && S.ready ? '' : ' disabled') + '>Check the overdue' + (due ? ' (' + num(due) + ')' : '') + '</button>'
+      + '<button class="btn" type="button" data-run="all"' + (S.ready ? '' : ' disabled') + '>Refresh all</button>'
+      + '<button class="btn danger" type="button" data-stop="fil" hidden>Stop</button>',
+      (f.errors && f.errors.length ? '<p class="errs">Errors: ' + f.errors.map((e) => esc(e.symbol) + ' (' + esc(e.error || 'unknown') + ')').join(', ') + '</p>' : ''));
+
+    // ---- 2. announcement dates ----
+    const rAge = daysSince(S.results.newest);
+    const results = card('res', 'Earnings-announcement dates', S.results.companies ? ['ok', 'Current'] : ['', 'Nothing loaded'],
+      'The date of each company’s newest 8-K carrying Item 2.02, “Results of Operations” — the Announced (SEC) column on the screener and the row on a stock page. '
+      + 'A second, independent answer to “has this company reported”, beside the price feed’s.',
+      [fact('Companies with a date', num(S.results.companies) + ' of ' + num(S.universe)),
+        fact('Newest announcement held', S.results.newest, rAge == null ? '' : ago(S.results.newest))],
+      '<b>Kept up to date by</b> the same nightly check as the filings above — it reads each company’s submissions file in the same pass, so it has no schedule of its own. '
+      + 'Running <b>Check the overdue</b> or <b>Refresh all</b> on the card above refreshes these too.',
+      '', cmd('Backfill from your machine, for companies with no date yet', 'node --use-system-ca sec-results-load.js --commit --missing'));
+
+    // ---- 3. insider transactions ----
+    const iState = !ins.loaded ? ['', 'Nothing loaded'] : ins.behind > 7 ? ['behind', ins.behind + ' days behind'] : ['ok', 'Current'];
+    const insider = card('ins', 'Insider transactions', iState,
+      'Open-market purchases and sales by officers, directors and 10% owners, from Forms 3, 4 and 5 — the Insider transactions card on a stock page. '
+      + 'Grants, option exercises and tax withholding are left out.',
+      [fact('Transactions', num(ins.rows)),
+        fact('Quarterly files loaded', num(ins.loaded), ins.from ? ins.from + ' – ' + ins.to : ''),
+        fact('Topped up to', ins.through, ago(ins.through)),
+        fact('Behind', ins.behind == null ? '—' : ins.behind + ' days', '', ins.behind > 7)],
+      '<b>Nothing keeps this up to date on its own.</b> The history comes from the SEC’s quarterly data sets, published after each quarter ends and loaded from your machine '
+      + '(a 60MB file has no business in a web request). The button below walks the days since, one day per call. '
+      + 'For a gap of more than a week or two, load the newest quarter first — a long walk here is thousands of SEC requests and has been rate-limited before.',
+      '<button class="btn warm" type="button" data-run="insider"' + (ins.loaded ? '' : ' disabled') + '>Catch up to yesterday</button>'
+      + '<button class="btn danger" type="button" data-stop="ins" hidden>Stop</button>',
+      cmd('Load the newest quarter, from your machine', 'node --use-system-ca insider-load.js --commit')
+      + cmd('Then walk the recent days, from your machine', 'node --use-system-ca insider-load.js --commit --daily'));
+
+    // ---- other scheduled pulls ----
+    const shAge = daysSince(sh.newest);
+    // Published twice a month and about eight business days after it settles,
+    // so a healthy reading is up to about a month old.
+    const short = card('sht', 'Short interest', !sh.newest ? ['', 'Nothing loaded'] : shAge > 34 ? ['behind', shAge + ' days old'] : ['ok', 'Current'],
+      'FINRA’s twice-monthly count of shares sold short, per company — the Short interest card and chart layer on a stock page, and the Short moves promo card. Not an SEC source.',
+      [fact('Newest settlement date', sh.newest, ago(sh.newest)),
+        fact('Companies on that date', num(sh.onNewest) + ' of ' + num(sh.tracked)),
+        fact('Last checked', when(sh.checkedAt))],
+      '<b>Kept up to date by</b> the nightly job, which asks FINRA for the newest settlement date and loads the one file when there is a new one. '
+      + 'FINRA publishes about eight business days after each settlement (the 15th and the month end), so a reading up to a month old is normal.',
+      '<button class="btn" type="button" data-get="/api/cron/shortint" data-card="sht">Check for a new settlement</button>',
+      cmd('Reload full histories for companies that have none, from your machine', 'node --use-system-ca shortint-load.js --commit --missing'));
+
+    const hAge = daysSince(h.asOf);
+    const hold = card('hld', 'S&P 500 membership', !h.asOf ? ['', 'Nothing loaded'] : (hAge > 6 || (h.status && h.status !== 'ok')) ? ['behind', h.status && h.status !== 'ok' ? 'Last check failed' : hAge + ' days old'] : ['ok', 'Current'],
+      'The index’s members and weights, from the issuer’s own daily holdings file — the S&P 500 column on the screener and the S&P cut on the promo cards. Not an SEC source.',
+      [fact('Data as of', h.asOf, ago(h.asOf)),
+        fact('Holdings', num(h.holdings)),
+        fact('Last checked', when(h.fetchedAt), h.status && h.status !== 'ok' ? h.status + (h.error ? ': ' + h.error : '') : '')],
+      '<b>Kept up to date by</b> the nightly job, once a day. The file carries the previous session’s date and is not published at weekends, so on a Monday it is normally a few days old.',
+      '<button class="btn" type="button" data-get="/api/cron/holdings" data-card="hld">Check now</button><a class="btn" href="/holdings">Open Index membership</a>');
+
+    const spMissing = Math.max(0, S.universe - (sp.symbols || 0));
+    const splits = card('spl', 'Split history', !sp.symbols ? ['', 'Nothing loaded'] : spMissing ? ['', plural(spMissing, 'company', 'companies') + ' not fetched'] : ['ok', 'Complete'],
+      'Every stock split per company, from the price provider. It lets a share count filed years ago be put on today’s basis, which is what makes past market value and P/E right on the Evolution card and the peer chart. Not an SEC source.',
+      [fact('Companies fetched', num(sp.symbols) + ' of ' + num(S.universe)),
+        fact('With at least one split', num(sp.withSplits)),
+        fact('Newest fetch', when(sp.newest))],
+      '<b>Kept up to date</b> on demand: the first time a company’s Evolution card is drawn its history is fetched and stored (20 credits), and re-fetched when the provider reports a newer split. '
+      + 'A company not fetched yet falls back to today’s share count, and the card says so. The command below fills everything in one paced pass — about five hours for the whole universe, '
+      + 'and it must not overlap the 7:30 AM or 7:30 PM nightly job.',
+      '', cmd('Fill the rest, from your machine', 'node --use-system-ca backfill-splits.js --commit --missing'));
+
+    $('body').innerHTML = '<p class="grp">From the SEC</p>' + filings + results + insider
+      + '<p class="grp">Other scheduled pulls</p>' + short + hold + splits;
+    $('foot').hidden = false;
+    $('foot').textContent = 'Status read ' + when(S.at) + '. Price and company-profile refreshes are on the Refresh runs page; headlines on News runs.';
+    wire();
+  }
+
+  const say = (id, html) => { const p = $(id + 'Prog'); if (p) { p.hidden = false; p.innerHTML = html; } };
+  const setRunning = (id, on) => {
+    busy[id] = on; halt[id] = false;
+    const c = $(id); if (!c) return;
+    c.querySelectorAll('button[data-run], button[data-get]').forEach((b) => { b.disabled = on || b.dataset.wasDisabled === '1'; });
+    const st = c.querySelector('button[data-stop]'); if (st) st.hidden = !on;
+  };
+
+  // ---- the filings loop: one batch of five per call, the page drives it ----
+  // A serverless request must never hold hundreds of fetches. `all` and
+  // `rotate` pass a fixed horizon back, or every company just written looks
+  // fresh again and the loop cannot finish.
+  async function runFilings(mode) {
+    if (busy.fil) return;
+    if (mode === 'all' && !confirm('Re-fetch filings for every company. About twenty minutes — leave the tab open. Continue?')) return;
+    setRunning('fil', true);
+    const since = Date.now(); let fetched = 0, rows = 0, rounds = 0; const t0 = Date.now();
+    try {
+      for (;;) {
+        if (halt.fil) { say('fil', 'Stopped after ' + plural(fetched, 'company', 'companies') + '. Everything fetched so far is stored.'); break; }
+        const r = await fetch('/api/sec/refresh?mode=' + mode + '&since=' + since, { method: 'POST' });
+        const j = await r.json();
+        if (!r.ok) { say('fil', '<b class="warn">' + esc(j.error || ('HTTP ' + r.status)) + '</b>'); break; }
+        rounds++; fetched += j.fetched || 0; rows += j.rows || 0;
+        const mins = Math.round((Date.now() - t0) / 60000);
+        say('fil', plural(fetched, 'company', 'companies') + ' fetched, ' + num(rows) + ' rows, ' + num(j.remaining) + ' to go' + (mins ? ' · ' + mins + ' min' : '') + '.');
+        if (j.done || !j.fetched) { say('fil', 'Done — ' + plural(fetched, 'company', 'companies') + ', ' + num(rows) + ' rows, ' + rounds + ' rounds.'); break; }
+      }
+    } catch (e) { say('fil', '<b class="warn">Stopped: ' + esc(e.message) + '</b>'); }
+    const keep = $('filProg').innerHTML;
+    await load(); say('fil', keep);
+  }
+
+  // ---- the insider walk: one day per call ----
+  async function runInsider() {
+    if (busy.ins) return;
+    setRunning('ins', true);
+    let days = 0, rows = 0, stalls = 0; const t0 = Date.now();
+    try {
+      for (;;) {
+        if (halt.ins) { say('ins', 'Stopped after ' + plural(days, 'day') + '.'); break; }
+        const r = await fetch('/api/insider/daily', { method: 'POST' });
+        const j = await r.json();
+        if (!r.ok) { say('ins', '<b class="warn">' + esc(j.error || ('HTTP ' + r.status)) + '</b>'); break; }
+        // THE SEC THROTTLES SUSTAINED ACCESS. Wait, then carry on; after three
+        // in a row say the local loader is the right tool rather than hammer.
+        if (j.throttled) {
+          if (++stalls >= 3) { say('ins', '<b class="warn">The SEC is rate-limiting this address.</b> ' + plural(days, 'day') + ' walked. Use the commands below from your machine.'); break; }
+          say('ins', 'Rate-limited — waiting 60s (' + plural(days, 'day') + ' walked so far)…');
+          await new Promise((z) => setTimeout(z, 60000));
+          continue;
+        }
+        stalls = 0;
+        if (j.day) { days++; rows += j.rows || 0; }
+        const mins = Math.round((Date.now() - t0) / 60000);
+        say('ins', plural(days, 'day') + ' walked, ' + num(rows) + ' transactions added' + (j.day ? ', now at ' + esc(j.day) : '') + (mins ? ' · ' + mins + ' min' : '') + '.');
+        if (j.done || !j.day) { say('ins', 'Up to date — ' + plural(days, 'day') + ' walked, ' + num(rows) + ' transactions added.'); break; }
+      }
+    } catch (e) { say('ins', '<b class="warn">Stopped: ' + esc(e.message) + '</b>'); }
+    const keep = $('insProg').innerHTML;
+    await load(); say('ins', keep);
+  }
+
+  // ---- the two one-call checks: what the nightly job itself calls ----
+  async function runCheck(id, url) {
+    if (busy[id]) return;
+    setRunning(id, true);
+    say(id, 'Checking…');
+    let msg;
+    try {
+      const r = await fetch(url);
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) msg = '<b class="warn">' + esc(j.error || ('HTTP ' + r.status)) + '</b>';
+      // The routes answer 200 with the reason in the body: an unreachable
+      // source is not a failed night, so it is not an HTTP error either.
+      else if (j.error || j.reason || j.refused) msg = '<b class="warn">Could not check: ' + esc(j.error || j.reason || j.refused) + '</b> What is stored was left as it is.';
+      else if (j.pending) msg = 'A newer date (' + esc(j.pending) + ') is announced but its file is not published yet. Try again tomorrow.';
+      else if (j.already) msg = 'Already up to date at ' + esc(j.already) + '.';
+      else if (j.settlement || j.asOf) msg = 'Updated to ' + esc(j.settlement || j.asOf) + ' — ' + num(j.readings || j.holdings) + (j.settlement ? ' readings' : ' holdings') + '.';
+      else msg = 'Checked.';
+    } catch (e) { msg = '<b class="warn">Could not check: ' + esc(e.message) + '</b>'; }
+    await load(); say(id, msg);
+  }
+
+  function wire() {
+    document.querySelectorAll('.pull button[disabled]').forEach((b) => { b.dataset.wasDisabled = '1'; });
+    document.querySelectorAll('button[data-run]').forEach((b) => b.addEventListener('click', () =>
+      (b.dataset.run === 'insider' ? runInsider() : runFilings(b.dataset.run))));
+    document.querySelectorAll('button[data-get]').forEach((b) => b.addEventListener('click', () => runCheck(b.dataset.card, b.dataset.get)));
+    document.querySelectorAll('button[data-stop]').forEach((b) => b.addEventListener('click', () => { halt[b.dataset.stop] = true; }));
+    document.querySelectorAll('button[data-copy]').forEach((b) => b.addEventListener('click', () => {
+      const t = b.dataset.copy;
+      const done = () => { b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy'; }, 1400); };
+      (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(t) : Promise.reject()).then(done, () => {
+        const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) { /* the command is on screen to select by hand */ }
+        ta.remove();
+      });
+    }));
+  }
+
+  async function load() {
+    try {
+      const r = await fetch('/api/edgar-status', { cache: 'no-store' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      S = j;
+      for (const k of Object.keys(busy)) busy[k] = false;
+      paint();
+    } catch (e) {
+      $('body').innerHTML = '<p class="error">Could not read the status: ' + esc(e.message) + '</p>';
+    }
+  }
+  $('reload').addEventListener('click', load);
+  // A tab closed mid-run loses nothing -- every company and every day already
+  // fetched is stored -- but it does stop, so say so before it happens.
+  window.addEventListener('beforeunload', (e) => { if (busy.fil || busy.ins) { e.preventDefault(); e.returnValue = ''; } });
+  load();
+})();
+</script>
+</body>
+</html>

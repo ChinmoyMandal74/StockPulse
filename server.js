@@ -533,7 +533,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/consolidated.html': '/consolidated',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
                       '/export.html': '/export', '/subscribers.html': '/subscribers',
-                      '/emails.html': '/emails', '/holdings.html': '/holdings',
+                      '/emails.html': '/emails', '/holdings.html': '/holdings', '/edgar.html': '/edgar',
                       // The public pages have canonical addresses of their own.
                       '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
                       '/about.html': '/about',
@@ -642,6 +642,15 @@ app.get('/holdings', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'holdings');
   res.sendFile(path.join(__dirname, 'private', 'holdings.html'));
+}));
+
+// The SEC EDGAR data page: every pull that is not prices or profiles, how
+// current each is, and what can be done about it. Admin only -- it starts
+// fetches and names the commands that load data.
+app.get('/edgar', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'edgar');
+  res.sendFile(path.join(__dirname, 'private', 'edgar.html'));
 }));
 
 app.get('/subscribers', route(async (req, res) => {
@@ -11389,7 +11398,9 @@ app.post('/api/insider/daily', requireAdmin, route(async (req, res) => {
 }));
 
 // Coverage for the console: which quarters are loaded, how deep it reaches.
-app.get('/api/insider/coverage', requireAdmin, route(async (req, res) => {
+// ONE reading of the insider coverage, for its own route and for the status
+// page -- two copies of "how far behind" would drift the first time one moved.
+async function insiderCoverage() {
   const qs = await store.readInsiderState();
   const ok = qs.filter((q) => q.status === 'ok');
   // HOW FAR BEHIND is the number that matters here, not how much is stored:
@@ -11402,7 +11413,7 @@ app.get('/api/insider/coverage', requireAdmin, route(async (req, res) => {
   const behind = mark
     ? Math.max(0, Math.round((Date.now() - Date.parse(mark)) / 86400000))
     : null;
-  res.json({
+  return {
     quarters: qs,
     loaded: ok.length,
     rows: ok.reduce((n, q) => n + (q.rows || 0), 0),
@@ -11411,6 +11422,66 @@ app.get('/api/insider/coverage', requireAdmin, route(async (req, res) => {
     through: mark,
     newest,
     behind,
+  };
+}
+app.get('/api/insider/coverage', requireAdmin, route(async (req, res) => {
+  res.json(await insiderCoverage());
+}));
+
+// ---- the status of every auxiliary pull, for /edgar ---------------------------
+// (2026-10-08, owner's request: "the status of every data pull and what can be
+// done to refresh it".) Six datasets, each a small read with its own catch, in
+// parallel -- the six-reads-in-series lesson -- so one slow or failing clock
+// costs its own card rather than the page.
+//
+// EVERY NUMBER HERE IS A CLOCK OR A COUNT off a state table. Nothing scans
+// sec_facts, insider_trans' rows or short_interest; the one aggregate over
+// insider_trans is the covering-index max(filed) its own route already makes.
+app.get('/api/edgar-status', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const soft = (p, d) => Promise.resolve().then(p).catch((e) => Object.assign({ failed: String((e && e.message) || e).slice(0, 120) }, d || {}));
+  const now = Date.now(), DAYMS = 86400000;
+  const [universe, state, filed, insider, shortN, shortSt, fund, splits] = await Promise.all([
+    store.readUniverse(),
+    store.readSecState().catch(() => ({})),
+    store.readSecFiled().catch(() => ({})),
+    soft(() => insiderCoverage()),
+    soft(() => store.shortNewest()),
+    store.readShortState().catch(() => []),
+    soft(() => store.fundNewest(SP_FUND)),
+    soft(() => store.splitCoverage()),
+  ]);
+  // ---- filings ----
+  const buckets = { ok: 0, nocik: 0, nofacts: 0, empty: 0, error: 0, never: 0 };
+  const ages = { d1: 0, d3: 0, d7: 0, d14: 0, older: 0 };
+  const errors = []; let rows = 0, oldest = null, overdue = 0;
+  let newestFiled = null, filed7 = 0, filed30 = 0, withResults = 0, newestResults = null;
+  for (const sym of universe) {
+    const key = String(sym).toUpperCase();
+    const st = state[key];
+    if (!st) { buckets.never++; continue; }
+    buckets[st.status] = (buckets[st.status] || 0) + 1;
+    rows += st.rows || 0;
+    if (oldest == null || st.fetchedAt < oldest) oldest = st.fetchedAt;
+    const a = (now - (st.fetchedAt || 0)) / DAYMS;
+    if (a < 1) ages.d1++; else if (a < 3) ages.d3++; else if (a < 7) ages.d7++; else if (a < 14) ages.d14++; else ages.older++;
+    if (a >= SEC_ROTATE_DAYS) overdue++;
+    if (st.status === 'error' && errors.length < 12) errors.push({ symbol: sym, error: st.error });
+    const f = filed[key]; const fd = f && (typeof f === 'string' ? f : f.filed); const rd = f && typeof f === 'object' ? f.results : null;
+    if (fd) { if (!newestFiled || fd > newestFiled) newestFiled = fd; const fa = (now - Date.parse(fd)) / DAYMS; if (fa <= 7) filed7++; if (fa <= 30) filed30++; }
+    if (rd) { withResults++; if (!newestResults || rd > newestResults) newestResults = rd; }
+  }
+  // ---- short interest: how many symbols sit on the newest settlement ----
+  const onNewest = shortN && shortN.newest ? shortSt.filter((x) => x.newest === shortN.newest).length : 0;
+  const shortChecked = shortSt.reduce((m, x) => (x.fetchedAt > m ? x.fetchedAt : m), 0) || null;
+  res.json({
+    at: now, universe: universe.length, ready: SEC_READY, rotateDays: SEC_ROTATE_DAYS,
+    filings: { buckets, rows, oldest, ages, overdue, errors, newestFiled, filed7, filed30, missing: buckets.never },
+    results: { companies: withResults, newest: newestResults },
+    insider,
+    short: Object.assign({}, shortN, { tracked: shortSt.length, onNewest, checkedAt: shortChecked }),
+    holdings: fund,
+    splits,
   });
 }));
 

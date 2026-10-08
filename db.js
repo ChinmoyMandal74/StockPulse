@@ -3078,6 +3078,15 @@ async function readFundState() {
   }));
 }
 
+// How much of the split history is held: two aggregates over split_state,
+// which is one small row per symbol.
+async function splitCoverage() {
+  await init();
+  const r = await db.execute('select count(*) n, sum(case when n > 0 then 1 else 0 end) w, min(fetched_at) o, max(fetched_at) m from split_state');
+  const x = r.rows[0] || {};
+  return { symbols: Number(x.n || 0), withSplits: Number(x.w || 0), oldest: x.o == null ? null : Number(x.o), newest: x.m == null ? null : Number(x.m) };
+}
+
 // One symbol's split history, or null where it has never been fetched --
 // which is a different answer from an empty list (fetched: never split).
 // Two seeks on primary keys, in one batch.
@@ -5773,7 +5782,7 @@ module.exports = {
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
   writeShortInterest, readShortInterest, readShortLatestFor, readShortAsOfFor,
   readShortRecentFor,
-  readSplits, writeSplits,
+  readSplits, writeSplits, splitCoverage,
   readShortState, noteShortMiss, shortNewest, appendShortInterest,
   fundNewest, noteFundMiss, appendFundHoldings, readFundHoldings, readFundState,
   readFundDates,
