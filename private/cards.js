@@ -614,16 +614,78 @@
       const total = counts.reduce((x, y) => x + y, 0) || 1;
       const max = Math.max(...counts, 1);
       const bull = counts[0] + counts[1] + counts[2];
+      // ---- the dial cluster ------------------------------------------------
+      // One large dial for the verdicts and three small ones for the readings
+      // the rules weigh. The owner asked for "small gauges that roll up into
+      // one needle, like a car dashboard".
+      //
+      // THE BIG NEEDLE IS A SUMMARY OF THE BOARD BELOW IT, NOT A SEVENTH
+      // VERDICT. Each verdict takes its place on the six-step ladder and the
+      // needle sits at the average place, so it is exactly as bullish as the
+      // tally under it and no more. The arc is the ladder's own six colours,
+      // worst on the left, in the product's own words -- there is no "Strong
+      // Sell" here because the engine has no such verdict.
+      //
+      // THE SMALL DIALS DO NOT AVERAGE INTO THE BIG ONE, and the note says so:
+      // a verdict comes from ordered rules, first match wins. They are the
+      // three state columns as shares of the cut -- facts a reader can check
+      // against the screener -- and take the neutral accent, since "more
+      // stocks in an uptrend" is a count rather than a direction of price.
+      const LAD = ActionRules.ACTIONS;                       // worst first
+      const posOf = (a) => (LAD.indexOf(a) + 0.5) / LAD.length;
+      const needle = rows.reduce((t, s) => t + posOf(verdict(s)), 0) / rows.length;
+      const at = Math.min(LAD.length - 1, Math.floor(needle * LAD.length));
+      const pt = (p, r, cx, cy) => [cx - r * Math.cos(Math.PI * p), cy - r * Math.sin(Math.PI * p)];
+      const arc = (a, b, r, cx, cy) => {
+        const A = pt(a, r, cx, cy), B = pt(b, r, cx, cy);
+        return 'M' + A[0].toFixed(2) + ' ' + A[1].toFixed(2) + 'A' + r + ' ' + r + ' 0 0 1 '
+          + B[0].toFixed(2) + ' ' + B[1].toFixed(2);
+      };
+      const hand = (p, r, cx, cy) => {
+        const T = pt(p, r, cx, cy);
+        return '<line class="adl-n" x1="' + cx + '" y1="' + cy + '" x2="' + T[0].toFixed(2) + '" y2="' + T[1].toFixed(2) + '"/>'
+          + '<circle class="adl-hub" cx="' + cx + '" cy="' + cy + '" r="' + (r > 60 ? 7 : 5) + '"/>';
+      };
+      const bigSvg = '<svg viewBox="0 0 220 122" aria-hidden="true">'
+        + LAD.map((a, i) => '<path class="adl-seg" d="' + arc(i / 6 + 0.006, (i + 1) / 6 - 0.006, 92, 110, 112)
+          + '" style="stroke:' + pal.tints[a] + '"/>').join('')
+        + hand(needle, 70, 110, 112) + '</svg>';
+      const st = (s) => (scored[s.symbol] || {}).states || {};
+      const share = (key, good, skip) => {
+        const read = rows.filter((s) => st(s)[key] && st(s)[key] !== skip);
+        return read.length ? { p: read.filter((s) => good.includes(st(s)[key])).length / read.length, n: read.length } : null;
+      };
+      const MINIS = [
+        ['in an uptrend', share('trend', ['Above 200D', 'Strong uptrend'], 'No data')],
+        ['with a clean entry', share('entry', ['Clean', 'Clean, near high'], null)],
+        ['fundamentals OK or better', share('fund', ['OK', 'Strong'], '—')],
+      ].filter((m) => m[1]);
+      const miniSvg = (p) => '<svg viewBox="0 0 120 68" aria-hidden="true">'
+        + '<path class="adl-trk" d="' + arc(0, 1, 50, 60, 62) + '"/>'
+        + (p > 0.005 ? '<path class="adl-val" d="' + arc(0, p, 50, 60, 62) + '"/>' : '')
+        + hand(p, 36, 60, 62) + '</svg>';
+      const dials = '<div class="adial">'
+        + '<div class="adl-big">' + bigSvg
+          + '<div class="adl-w" style="color:' + pal.tints[LAD[at]] + '">' + esc(LAD[at]) + '</div>'
+          + '<div class="adl-k">' + esc('the average of ' + rows.length.toLocaleString('en-US') + ' verdicts') + '</div></div>'
+        + '<div class="adl-minis">' + MINIS.map(([lab, m]) => '<div class="adl-m">' + miniSvg(m.p)
+          + '<div class="adl-v">' + Math.round(m.p * 100) + '%</div>'
+          + '<div class="adl-k">' + esc(lab) + '</div></div>').join('') + '</div>'
+        + '</div>';
       return chromeTop() +
         `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}${esc(prof)}</span>` +
         '<h2 class="s-title">Where the rules<br><span class="dim">stand tonight</span></h2>' +
+        dials +
         `<div class="abar">${order.map((a, i) => counts[i]
           ? `<div style="width:${counts[i] / total * 100}%;background:${pal.tints[a]}"></div>` : '').join('')}</div>` +
         `<div class="atally">${order.map((a, i) =>
           `<div class="arow"><span class="an" style="color:${pal.tints[a]}">${esc(a)}</span>` +
           `<span class="arail"><span class="afill" style="display:block;width:${Math.max(2, counts[i] / max * 100)}%;background:${pal.tints[a]}"></span></span>` +
           `<span class="ac">${counts[i]}</span><span class="ap">${Math.round(counts[i] / total * 100)}%</span></div>`).join('')}</div>` +
-        `<p class="s-sub wide" style="--fs:19px;margin-top:28px">${bull} of ${total} clear the buy rules tonight. A reading of the tape by fixed rules \u2014 it says what is, never what is next.</p>` +
+        `<p class="s-sub wide" style="--fs:18px;margin-top:22px">${bull} of ${total} clear the buy rules tonight. ` +
+        'The large dial is the average place of those verdicts on the six-step ladder — a summary of the tally, not a verdict of its own. ' +
+        'The small dials are shares of the stocks the rules could read; a verdict comes from ordered rules, not from averaging them. ' +
+        'A reading of the tape by fixed rules — it says what is, never what is next.</p>' +
         '</div></div>' + chromeFoot();
     }
 
@@ -6022,6 +6084,45 @@
   // The card styles travel WITH the builders: a new grammar added to one
   // page and styled in the other is exactly the drift this module prevents.
   const STYLE = `
+    /* ---- the dial cluster on the advice board ---------------------------
+       NO BACKTICK IN HERE. The six arc colours are emitted inline from the
+       theme's own verdict ladder, so every ground resolves; everything else
+       is a token. */
+    .adial { display: flex; align-items: flex-end; gap: 34px; margin-top: 26px; }
+    .adl-big { flex: none; width: 330px; text-align: center; }
+    .adl-big svg { display: block; width: 100%; height: auto; }
+    .adl-minis { flex: 1; min-width: 0; display: grid; gap: 14px;
+                 grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .adl-m { text-align: center; min-width: 0; }
+    .adl-m svg { display: block; width: 78%; height: auto; margin: 0 auto; }
+    .adl-seg { fill: none; stroke-width: 20; }
+    .adl-trk { fill: none; stroke-width: 11; stroke: var(--hair-2); stroke-linecap: round; }
+    .adl-val { fill: none; stroke-width: 11; stroke: var(--accent); stroke-linecap: round; }
+    .adl-n { fill: none; stroke: var(--text); stroke-width: 4; stroke-linecap: round; }
+    .adl-m .adl-n { stroke-width: 3.2; }
+    .adl-hub { fill: var(--text); }
+    .adl-w { font: 800 30px var(--sans); letter-spacing: -0.02em; margin-top: 6px; }
+    .adl-v { font: 700 30px var(--mono); color: var(--text); margin-top: 4px;
+             font-variant-numeric: tabular-nums; }
+    .adl-k { font-size: 15px; color: var(--muted); margin-top: 4px; line-height: 1.25; }
+    .sz-square .adial { margin-top: 14px; gap: 24px; }
+    .sz-square .adl-big { width: 250px; }
+    .sz-square .adl-w, .sz-square .adl-v { font-size: 24px; margin-top: 2px; }
+    .sz-square .adl-k { font-size: 13px; margin-top: 2px; }
+    .sz-square .adl-m svg { width: 66%; }
+    .sz-story .adial { flex-direction: column; align-items: center; gap: 30px; margin-top: 40px; }
+    .sz-story .adl-big { width: 560px; }
+    .sz-story .adl-minis { width: 100%; flex: none; }
+    .sz-story .adl-w { font-size: 44px; }
+    .sz-story .adl-v { font-size: 40px; }
+    .sz-story .adl-k { font-size: 21px; }
+    /* With the dials above it the board keeps its rows and gives back some
+       of its spacing, or the square has nowhere to put them. */
+    .adial + .abar { margin-top: 22px; }
+    .sz-square .adial + .abar { margin-top: 12px; height: 22px; }
+    .sz-square .adial ~ .atally { margin-top: 14px; gap: 7px; }
+    .sz-square .adial ~ .atally .arail { height: 22px; }
+    .sz-square .adial ~ .atally .an { font-size: 22px; }
     /* ---- Month by month: one company, year by month ----------------------
        NO HEX LITERAL AND NO BACKTICK ANYWHERE IN HERE. Every colour is a
        token, so all four grounds resolve; a backtick would end the STYLE
