@@ -80,7 +80,12 @@ const STAGNANT_LIMIT = 3;
 // ~200 and the universe turns over in under a week -- the same cadence the
 // profile rotation keeps.
 const SEC_BATCH = 5;
-const SEC_MAX_BATCHES = Number(process.env.SEC_MAX_BATCHES) || 20;
+// 30 BATCHES OF 5, NOT 20 (2026-10-08). Twenty is 100 companies a run and
+// 1,000 a week over ten weekday runs, against 1,274 to cover -- so the
+// rotation could not finish a lap inside its own 7-day cutoff and 481
+// companies sat 7 to 14 days unchecked, measured. Thirty is 1,500 a week.
+// It adds about 45 seconds to a run and stays inside what the SEC asks.
+const SEC_MAX_BATCHES = Number(process.env.SEC_MAX_BATCHES) || 30;
 const SEC_GAP_MS = Number(process.env.NIGHTLY_SEC_GAP_MS) || 1500;
 
 // Read .env directly rather than depending on the process environment: a
