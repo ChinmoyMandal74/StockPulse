@@ -698,6 +698,36 @@
     #months tfoot td, #months tfoot th { padding-top: 9px; }
     #months .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
 
+    /* ---- growth and profitability ----------------------------------------
+       Bars and a line, drawn by PerfChart at its true pixel size. Scoped to
+       #perf throughout. The three series colours are identities, never
+       green and red: those mean up and down on every chart on this page. */
+    #perf { --pc-rev: #7c9cff; --pc-ni: #22d3ee; --pc-pm: #fb923c; }
+    #perf .summary { font-size: 13px; color: var(--muted); margin: 0 0 10px; line-height: 1.6; }
+    #perf .summary b { color: var(--text); font-weight: 600; }
+    #perf .pchart { overflow: hidden; }
+    #perf .pc-svg { display: block; max-width: 100%; }
+    #perf .pc-grid { stroke: var(--hair); stroke-width: 1; }
+    #perf .pc-zero { stroke: var(--hair-2); stroke-width: 1; }
+    #perf .pc-rev { fill: var(--pc-rev); }
+    #perf .pc-ni { fill: var(--pc-ni); }
+    #perf rect.pc-dv { fill-opacity: 0.4; stroke-width: 1.2; stroke-dasharray: 3 3; }
+    #perf rect.pc-rev.pc-dv { stroke: var(--pc-rev); }
+    #perf rect.pc-ni.pc-dv { stroke: var(--pc-ni); }
+    #perf .pc-line { fill: none; stroke: var(--pc-pm); stroke-width: 2.4; stroke-linejoin: round; }
+    #perf .pc-dot { fill: var(--surface); stroke: var(--pc-pm); stroke-width: 2; }
+    #perf .pc-axm { fill: var(--faint); font-family: var(--mono); }
+    #perf .pc-axp { fill: var(--pc-pm); font-family: var(--mono); }
+    #perf .pc-x { fill: var(--muted); font-family: var(--mono); }
+    #perf .pc-x2 { fill: var(--faint); font-family: var(--mono); }
+    #perf .pc-mv { fill: var(--pc-pm); font-family: var(--mono); font-weight: 600; }
+    #perf .pleg { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 0 0;
+                  font-size: 12px; color: var(--muted); }
+    #perf .pleg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+                    margin-right: 6px; vertical-align: -1px; }
+    #perf .pleg i.ln { height: 3px; width: 16px; border-radius: 2px; vertical-align: 3px; }
+    #perf .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
+
     /* ---- against its peers ----------------------------------------------
        One line per company, drawn by PeerTrend at its true pixel size. Scoped
        to #ptrend throughout. */
@@ -1083,6 +1113,7 @@
 
   <script src="/rowcard.js"></script>
   <script src="/peertrend.js"></script>
+  <script src="/perfchart.js"></script>
   <script src="/action.js"></script>
   <script src="/track.js"></script>
   <script>
@@ -3249,6 +3280,20 @@
           <div id="ptrendBody"></div>
         </div></section>` : ''}
 
+        <!-- Growth and profitability: the same filings as the two cards below,
+             drawn. Its period buttons are a SECOND FACE OF THE SEC CARD'S
+             OWN SWITCH, not a second switch -- one state, so the three
+             cards cannot be set to disagree. Hidden until loadSec() lands. -->
+        <section class="bezel card" id="perf" data-jump="Growth" data-icon="i-chart" hidden><div class="core">
+          <div class="sec-h"><h2>Growth and profitability</h2>
+            <span class="deeper">
+              <button class="rng on" id="perfQ" type="button">Quarterly</button>
+              <button class="rng" id="perfA" type="button">Annual</button>
+            </span>
+          </div>
+          <div id="perfBody"></div>
+        </div></section>
+
         <!-- Filled by loadSec() after the chart, and REMOVED ENTIRELY when
              the company has nothing filed — a fund files no statements, and
              a heading over an empty table is worse than no heading. -->
@@ -4139,6 +4184,49 @@
         return h;
       }
 
+      // ---- growth and profitability ------------------------------------------
+      // (2026-10-08, owner's request.) Revenue and net income as bars, the
+      // margin between them as a line. The model and the drawing are
+      // PerfChart's, shared with the promo card, and the series rides the
+      // /api/sec response this page already waits for.
+      //
+      // Inside this scope on purpose: secData and secMode are locals here,
+      // and reaching for them from script scope is the trap this page has
+      // met three times.
+      function paintPerf() {
+        const box = document.getElementById('perfBody');
+        if (!box || !secData || !secData.perf) return;
+        const w = Math.max(320, Math.floor(box.clientWidth || box.parentNode.clientWidth || 900));
+        const narrow = w < 620;
+        const model = PerfChart.build(secData.perf, secMode, narrow ? 5 : 8);
+        const word = secMode === 'annual' ? 'year' : 'quarter';
+        if (!model.usable) {
+          box.innerHTML = '<p class="msg">Fewer than two ' + word + 's with both a revenue and a net income on file.</p>';
+          return;
+        }
+        const p = model.last;
+        const chart = PerfChart.svg(model, { w, h: narrow ? 300 : 340, left: narrow ? 50 : 58,
+          right: narrow ? 54 : 64, fs: narrow ? 10.5 : 12 });
+        box.innerHTML =
+          '<p class="summary">In the latest ' + word + ', to ' + esc(p.d) + ': revenue <b>' + esc(PerfChart.fmtMoney(p.rev)) + '</b>'
+          + (p.ni != null ? ', net income <b>' + esc(PerfChart.fmtMoney(p.ni)) + '</b>, a net margin of <b>' + esc(PerfChart.fmtPct(p.pm)) + '</b>.' : '; no net income on file.') + '</p>'
+          + '<div class="pchart">' + chart + '</div>'
+          + '<div class="pleg"><span><i style="background:var(--pc-rev)"></i>Revenue</span>'
+          + '<span><i style="background:var(--pc-ni)"></i>Net income</span>'
+          + '<span><i class="ln" style="background:var(--pc-pm)"></i>Net margin %, left-hand scale</span></div>'
+          + '<p class="note">Two scales, and they are not the same kind. The bars read the right-hand scale and start at zero. '
+          + 'The line is net income as a share of revenue and reads the left-hand scale'
+          + (model.aligned ? ', which shares the bars’ zero line because a margin here is negative. '
+            : (model.pmFrom > 0 ? ', which starts at ' + esc(PerfChart.fmtPct(model.pmFrom)) + ' rather than zero — so a small move in the margin looks steep. ' : '. '))
+          + 'Every margin is printed under its ' + word + ', so the line can be checked against a number. '
+          + (model.anyDerived ? 'A dashed bar was computed here rather than filed: no company files a fourth quarter. ' : '')
+          + 'From the company’s own SEC filings, the same ones as the two cards below.</p>';
+      }
+      let perfResize = null;
+      window.addEventListener('resize', () => {
+        clearTimeout(perfResize); perfResize = setTimeout(paintPerf, 150);
+      });
+
       async function loadSec() {
         const card = document.getElementById('sec');
         if (!card) return;
@@ -4152,6 +4240,8 @@
           card.remove();
           const sb = document.getElementById('stmt');
           if (sb) sb.remove();
+          const pf = document.getElementById('perf');
+          if (pf) pf.remove();
         };
         try {
           const r = await fetch('/api/sec?symbol=' + encodeURIComponent(stock.symbol));
@@ -4191,6 +4281,9 @@
           // ONE PERIOD SWITCH FOR BOTH CARDS. A second Quarterly/Annual pair
           // on the statements card would be two controls for one question,
           // and they could be set to disagree.
+          const pf = document.getElementById('perf');
+          const pq = document.getElementById('perfQ');
+          const pa = document.getElementById('perfA');
           const sb = document.getElementById('stmt');
           const tabs = [['stmtInc', 'income'], ['stmtBal', 'balance'], ['stmtCf', 'cash']];
           const sync = () => {
@@ -4202,14 +4295,28 @@
               const el = document.getElementById(id);
               if (el) el.classList.toggle('on', stmtTab === key);
             }
+            if (pq) pq.classList.toggle('on', secMode === 'quarterly');
+            if (pa) pa.classList.toggle('on', secMode === 'annual');
             paintSec();
             paintStmt();
+            paintPerf();
           };
           if (sb) {
             sb.hidden = false;
             for (const [id, key] of tabs) {
               const el = document.getElementById(id);
               if (el) el.addEventListener('click', () => { stmtTab = key; sync(); });
+            }
+          }
+          // A card neither period can fill is removed, not left as a heading
+          // over a sentence -- a bank with no revenue tag on file, say.
+          if (pf) {
+            const can = (m) => PerfChart.build(j.perf || {}, m, 8).usable;
+            if (!can('quarterly') && !can('annual')) pf.remove();
+            else {
+              pf.hidden = false;
+              pq.addEventListener('click', () => { secMode = 'quarterly'; sync(); });
+              pa.addEventListener('click', () => { secMode = 'annual'; sync(); });
             }
           }
           qb.addEventListener('click', () => { secMode = 'quarterly'; sync(); });

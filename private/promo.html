@@ -837,6 +837,15 @@
            spotScreen and INDUSTRY_PREFIXES is left alone. -->
       <!-- Against its peers: one company and its closest peers on one measure,
            by quarter. The card IS its own scope, so no scope pickers. -->
+      <div id="prfBox">
+        <label>Stock</label>
+        <select id="prfSym"></select>
+        <label>Periods</label>
+        <select id="prfPeriod"></select>
+        <p class="hint">The last five periods the company has filed. The bars
+          start at zero; the margin line keeps its own scale, and every margin
+          is printed under its period. A fund files nothing and has no card.</p>
+      </div>
       <div id="ptrBox">
         <label>Stock</label>
         <select id="ptrSym"></select>
@@ -984,6 +993,7 @@
   <script src="/filters.js"></script>
   <script src="/action.js"></script>
   <script src="/peertrend.js"></script>
+  <script src="/perfchart.js"></script>
   <script src="/cards.js"></script>
   <script src="/cardshot.js"></script>
   <script>
@@ -1001,6 +1011,7 @@
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
       { id: 'peertrend', name: 'Against its peers', note: 'One company and its closest peers on revenue, earnings, margin or value, quarter by quarter' },
+      { id: 'perf', name: 'Growth and profitability', note: 'One company’s revenue and net income as bars, its net margin as a line, quarter by quarter or year by year' },
       { id: 'months', name: 'Month by month', note: 'One company, year by month — each cell that month’s return' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
@@ -1112,6 +1123,27 @@
       return null;
     }
 
+    // One company's filed periods for the Growth and profitability card,
+    // fetched once per symbol. As with every channel here, the repaint when
+    // it lands is the half that matters.
+    const prfCache = {};
+    const prfPending = {};
+    function getPerf(symbol) {
+      if (!symbol) return null;
+      if (prfCache[symbol]) return prfCache[symbol];
+      if (prfPending[symbol]) return null;
+      prfPending[symbol] = true;
+      fetch(`/api/perf?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          prfCache[symbol] = d && d.quarterly ? d : { quarterly: [], annual: [] };
+          delete prfPending[symbol];
+          if (Cards.perfNeed(tpl, controlOpts())) render();
+        })
+        .catch(() => { delete prfPending[symbol]; });
+      return null;
+    }
+
     // One company's peer series, fetched once per symbol; the repaint is the
     // half that matters, and whether this template cares is the module's call.
     const ptrCache = {};
@@ -1198,6 +1230,7 @@
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView',
+      'prfSym', 'prfPeriod',
       'monSym', 'monView',
       'evoSym', 'evoMeasure', 'evoWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
@@ -1215,7 +1248,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: controlOpts(),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf,
       updatedAt: pulledAt,
     });
 
@@ -1302,6 +1335,7 @@
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       $('monBox').style.display = tpl === 'months' ? 'block' : 'none';
       $('ptrBox').style.display = tpl === 'peertrend' ? 'block' : 'none';
+      $('prfBox').style.display = tpl === 'perf' ? 'block' : 'none';
       $('histBox').style.display = tpl === 'histogram' ? 'block' : 'none';
       // A control that can change nothing reads as broken, so the subject
       // picker is shown only in the mode that marks one.
@@ -1478,6 +1512,11 @@
     // the module that draws the chart.
     ['ptrSym', 'ptrMetric', 'ptrView'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'peertrend') render(); }));
+    // A control in the markup and in CONTROL_IDS but not in a list like this
+    // saves with a post, is read by the builder, and does nothing when touched.
+    ['prfSym', 'prfPeriod'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'perf') render(); }));
+    for (const [v, label] of Cards.perfModes()) $('prfPeriod').appendChild(new Option(label, v));
     for (const [v, label] of Cards.peerTrendMetrics()) $('ptrMetric').appendChild(new Option(label, v));
     for (const [v, label] of Cards.peerTrendViews()) $('ptrView').appendChild(new Option(label, v));
     // Month by month: its own listener list, and its view picker filled from
@@ -1917,6 +1956,8 @@
         $('histSym').innerHTML = $('chtSym').innerHTML;
         { const keep = $('ptrSym').value; $('ptrSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('ptrSym').options].some((o) => o.value === keep)) $('ptrSym').value = keep; }
+        { const keep = $('prfSym').value; $('prfSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('prfSym').options].some((o) => o.value === keep)) $('prfSym').value = keep; }
         { const keep = $('monSym').value; $('monSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('monSym').options].some((o) => o.value === keep)) $('monSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;

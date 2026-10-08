@@ -53,6 +53,8 @@
   let getMonths = () => null;
   // One company and its peers on four measures, by quarter, or null while it loads.
   let getPeerTrend = () => null;
+  // One company's revenue and net income by filed period, or null while it loads.
+  let getPerf = () => null;
   // ONE stock's own daily closes — { symbol, name, closes, dates, rangeLabel,
   // price, today }. A plain data field rather than a getter, because the only
   // host that has it (the stock page) already holds it: it drew the chart from
@@ -6161,6 +6163,73 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Growth and profitability: bars and a margin line -------------------
+  //
+  // THE STOCK PAGE'S CARD AS A POSTER (2026-10-08, owner's request). Revenue
+  // and net income as bars on a zero-based money scale, net margin as a line
+  // on its own. The model and the drawing are PerfChart's, read off the
+  // global lazily the way PeerTrend is, so the page and the card cannot
+  // scale differently.
+  //
+  // A SECOND AXIS, which this module has refused before. It is tolerable here
+  // because the line is the second bar divided by the first -- nothing can be
+  // made to track that the bars do not already say -- and because every
+  // margin is PRINTED under its period, which matters most on a card: a
+  // posted picture has no hover, so the number is the only check there is.
+  //
+  // BLUE, CYAN AND ORANGE, never green and red: those are identities, and on
+  // every other card green and red mean up and down.
+  function perfNeed(tpl, opts) {
+    if (tpl !== 'perf') return null;
+    return { symbol: (opts && opts.prfSym) || null };
+  }
+  // Measured with the note at its longest, on each artboard.
+  const PRF_H = { portrait: 720, square: 470, story: 1180 };
+  const PRF_N = 5;
+  function tplPerf() {
+    const PC = (typeof globalThis !== 'undefined' && globalThis.PerfChart) || null;
+    const sym = O.prfSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((r) => r.symbol === sym);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!row || !PC) return shell('Nothing to chart', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const data = getPerf(sym);
+    if (!data) return shell('Reading the filings', 'Drawing', 'the periods…');
+    const model = PC.build(data, O.prfPeriod, PRF_N);
+    const word = model.mode === 'annual' ? 'year' : 'quarter';
+    if (!model.usable) {
+      return shell(nameOf(row), 'Growth and profitability', 'not enough on file',
+        'Fewer than two ' + word + 's with both a revenue and a net income in this company’s filings. A fund files none.');
+    }
+    const st = size.id === 'story';
+    const fs = st ? 24 : size.id === 'square' ? 17 : 19;
+    const colors = { rev: pal.ink('#60a5fa'), ni: pal.ink('#22d3ee'), pm: pal.ink('#fb923c') };
+    const chart = PC.svg(model, { w: 952, h: PRF_H[size.id] || 600, left: st ? 106 : 86, right: st ? 118 : 96, fs, colors, dot: st ? 9 : 7 });
+    const n = nameOf(row);
+    const p = model.last, first = model.periods[0];
+    const sw = (c, line) => '<i' + (line ? ' class="ln"' : '') + ' style="background:' + c + '"></i>';
+    const note = 'The bars read the right-hand scale, from zero. The line is net income as a share of revenue on the left-hand scale'
+      + (model.aligned ? ', which shares the bars’ zero line because a margin here is negative. '
+        : (model.pmFrom > 0 ? ', which starts at ' + PC.fmtPct(model.pmFrom) + ' rather than zero, so a small move looks steep. ' : '. '))
+      + 'Each margin is printed under its ' + word + '. '
+      + (model.anyDerived ? 'A dashed bar was computed from the annual filing, since no company files a fourth quarter. ' : '')
+      + 'From the company’s own SEC filings. A record of what was reported, not a forecast.';
+    return chromeTop()
+      + '<div class="s-body"><div class="pf-in">'
+      + '<span class="s-kick">' + esc((row.sector ? row.sector + ' · ' : '') + (model.mode === 'annual' ? 'By fiscal year' : 'By quarter')
+        + ' · ' + first.bot + ' to ' + p.bot) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span><span class="dim">'
+      + esc('growth and profitability') + '</span></h2>'
+      + '<div class="pf-leg"><span>' + sw(colors.rev) + 'Revenue <b>' + esc(PC.fmtMoney(p.rev)) + '</b></span>'
+      + '<span>' + sw(colors.ni) + 'Net income <b>' + esc(PC.fmtMoney(p.ni)) + '</b></span>'
+      + '<span>' + sw(colors.pm, 1) + 'Net margin <b>' + esc(PC.fmtPct(p.pm)) + '</b></span></div>'
+      + '<div class="pf-chart">' + chart + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
@@ -6173,11 +6242,43 @@
     bars: tplBars,
     months: tplMonths,
     peertrend: tplPeerTrend,
+    perf: tplPerf,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
   // page and styled in the other is exactly the drift this module prevents.
   const STYLE = `
+    /* ---- Growth and profitability ---------------------------------------
+       NO HEX LITERAL AND NO BACKTICK IN HERE. The three series colours are
+       emitted inline through the theme's own ink map; everything else is a
+       token, so all four grounds resolve. */
+    .pf-in { display: flex; flex-direction: column; height: 100%; }
+    .pf-in .s-title .dim { display: block; font-size: 32px; line-height: 1.2;
+                           letter-spacing: -0.015em; margin-top: 8px; }
+    .sz-square .pf-in .s-title .dim { font-size: 26px; }
+    .sz-story .pf-in .s-title .dim { font-size: 40px; }
+    .pf-leg { display: flex; flex-wrap: wrap; gap: 8px 30px; margin-top: 20px;
+              font-size: 21px; color: var(--muted); }
+    .pf-leg b { color: var(--text); font-family: var(--mono); font-weight: 700; margin-left: 6px; }
+    .pf-leg i { display: inline-block; width: 16px; height: 16px; border-radius: 4px;
+                margin-right: 10px; vertical-align: -1px; }
+    .pf-leg i.ln { height: 5px; width: 26px; border-radius: 3px; vertical-align: 5px; }
+    .sz-square .pf-leg { font-size: 18px; margin-top: 12px; gap: 6px 22px; }
+    .sz-story .pf-leg { font-size: 27px; margin-top: 30px; }
+    .pf-chart { margin-top: 18px; }
+    .sz-square .pf-chart { margin-top: 10px; }
+    .pf-chart .pc-svg { display: block; }
+    .pf-chart .pc-grid { stroke: var(--hair); stroke-width: 1; }
+    .pf-chart .pc-zero { stroke: var(--hair-2); stroke-width: 1.5; }
+    .pf-chart rect.pc-dv { fill-opacity: 0.45; stroke-width: 2; stroke-dasharray: 6 5; }
+    .pf-chart .pc-line { fill: none; stroke-width: 5; stroke-linejoin: round; stroke-linecap: round; }
+    .pf-chart .pc-dot { fill: var(--text); stroke-width: 4; }
+    .pf-chart .pc-axm { fill: var(--faint); font-family: var(--mono); }
+    .pf-chart .pc-axp { font-family: var(--mono); }
+    .pf-chart .pc-x { fill: var(--text); font-family: var(--mono); font-weight: 600; }
+    .pf-chart .pc-x2 { fill: var(--faint); font-family: var(--mono); }
+    .pf-chart .pc-mv { font-family: var(--mono); font-weight: 700; }
+    .pf-in .s-sub { margin-top: auto; padding-top: 14px; }
     /* ---- Against its peers ---------------------------------------------
        NO HEX LITERAL AND NO BACKTICK IN HERE. The chart is PeerTrend's svg at
        its true pixel size; every colour on it is a token, so all four grounds
@@ -8000,6 +8101,8 @@
     evolutionNeed,
     monthsNeed,
     peerTrendNeed,
+    perfNeed,
+    perfModes: () => ((globalThis.PerfChart || {}).MODES || []).map((m) => m.slice()),
     // The two pickers, from the module that DRAWS them, so a host cannot offer
     // a measure or a view the chart does not know.
     peerTrendMetrics: () => ((globalThis.PeerTrend || {}).METRICS || []).map((m) => [m[0], m[1]]),
@@ -8100,6 +8203,7 @@
       getShortMoves = c.getShortMoves || (() => null);
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);
+      getPerf = c.getPerf || (() => null);
       chartOne = c.chart || null;
       const fn = BUILDERS[id] || BUILDERS.movers;
       return fn();

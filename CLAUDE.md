@@ -5468,6 +5468,34 @@ Controls `ptrSym`, `ptrMetric`, `ptrView` — **152 against `POST_OPT_MAX` 200**
   - **Not exercised**: the 200-day carry bound (no fixture company stops filing mid-trail) and the guest 403 on the route.
 
 
+## Growth and profitability — bars and a margin line, on two axes (2026-10-08, owner's request)
+**A card on `/stock` above Financial statements (so above SEC EDGAR), and a twenty-eighth promo template (`perf`): revenue and net income as bars, net margin as a line, quarter by quarter or year by year.** Asked for from a broker's screenshot, with the owner's own words *"I know you told me earlier you don't like dual axis charts"* — so the second axis is the owner's informed call, and what follows is how it is kept honest rather than whether to have it.
+
+### WHY A SECOND AXIS IS TOLERABLE HERE AND WAS REFUSED ON THE PRICE CHART
+The standing objection is that two independent scales can be slid against each other until any two series appear to track. **These two are not independent: the line IS the second bar divided by the first.** Nothing can be made to "track" that the bars do not already say. Four rules carry the rest, all in `private/perfchart.js`:
+
+- **THE BARS ARE ZERO-BASED, always** — a bar is read as a quantity. The money axis runs from $0 to a round number above the largest bar, in ONE unit down the axis (the statements card's rule).
+- **THE LINE KEEPS ITS OWN RANGE, and the note says where it starts** (*"starts at 30.0% rather than zero — so a small move in the margin looks steep"*). A line is read as a shape, the short-interest strip's reasoning. Its ticks are round numbers that land on the bars' gridlines.
+- **EXCEPT WHERE A MARGIN IS NEGATIVE: then both axes share ONE zero line.** The margin scale becomes the money scale times a constant (rounded up so the labels stay round), so a loss hangs below the same line on both. Without it a loss-making quarter's dot is drawn ABOVE the zero its own bar hangs below.
+- **EVERY MARGIN IS PRINTED under its period**, so the line is checked against a number rather than against an axis. On a card that is the only check there is — a posted picture has no hover.
+- The margin axis is in the line's colour and the money axis is not. **Blue, cyan and orange, never green and red** — those are identities, and green and red mean up and down everywhere else.
+
+### Shape
+- **`private/perfchart.js` IS THE MODEL AND THE DRAWING**, the `peertrend.js` shape: pure, loaded by stock.html and promo.html, `require`d by server.js, read off the global by cards.js. One SVG at its true pixel size. Colours come from the host's stylesheet on the page and are emitted INLINE through `pal.ink` on a card, so all four grounds resolve.
+- **`perfOf(all)` in server.js is ONE shaping function with three callers**: `/api/sec` (a `perf` field on the response the stock page already waits for — no new request there), `GET /api/perf` (the studio; members only) and `/api/m/post` (the phone). Twelve quarters and eight years, oldest first, `{d, fp, rev, ni, dv}`.
+- **FROM `latestFilled`, NOT `latestPerPeriod`.** A newer filing's sparse comparative row can win a period carrying a net income and no revenue, and this chart needs both in every column. It is also the reconciled path, so a filing a thousand times out of scale is mended rather than drawn as a bar. The cost is the one `ttmSeries` already accepts: this card can have a column where the SEC card's own row shows a dash.
+- **A period with no revenue is not a column; a missing net income is no bar and a break in the line, never a zero** (`Number(null)` is 0).
+- **A derived quarter is drawn DASHED and the note says so** — no company files a fourth quarter. `dv` is set where the row, or its revenue or net income, was differenced here.
+- **THE CARD'S Quarterly / Annual BUTTONS ARE A SECOND FACE OF THE SEC CARD'S OWN SWITCH**, not a second switch: they write the same `secMode` and call the same `sync()`, so the three filings cards cannot be set to disagree. `paintPerf` lives inside the boot scope with `secData`, deliberately.
+- Eight periods on a wide screen, five on a phone, five on a card. Where neither period can make a chart (a lender with no revenue tag on file) the card is REMOVED and the statements stay; where only the chosen one cannot, it says so in a sentence.
+- Promo controls `prfSym`, `prfPeriod` — **154 against `POST_OPT_MAX` 200** — a seventh data channel (`getPerf`, `Cards.perfNeed`), wired like the peer card's: the studio repaints when the fetch lands. Chart heights 720 / 470 / 1180, measured.
+- **Display only**: nothing is stamped on a snapshot row.
+
+- Verified: **75 checks** (`perf-test.js`) over six planted filers — a grower with one derived quarter, a loss-maker, one whose newest period is won by a revenue-less filing, one with no revenue at all, one with a single quarter and three years, and the universe's 99-character name — plus a fund. Bar heights read off the drawn rects and compared with the planted figures (which is what proves the zero base), the shared zero measured as drawn, the switch moving all three cards both ways, a 15-combination fit sweep, every label and series colour measured on all four grounds, and a saved post rebuilt by the phone's route. **Proved by reverting sixteen times, every one load-bearing**: bars not from zero 3, no shared zero 6, a null net income as zero 1, a no-revenue column 3, `latestPerPeriod` 2, the derived flag 3, the phone's series 1, the switch not repainting 24, the no-revenue card 2, the fund's card left behind 1, twelve quarters on a phone 10, no repaint on fetch 6, the listener 2, `CONTROL_IDS` 5, the story height 1, the dark palette on every ground 1.
+  - **THE SHARED COLOUR SWEEPS CANNOT SEE THIS CHART**, the peer card's own caveat: their fixture holds no filings, so they sweep the placeholder. The contrast check is in the card's own suite.
+  - **A quoted heredoc refused to close on the module** (the documented hazard, again); written with the Write tool.
+
+
 ## Consolidated — every group in one table (2026-09-28, owner's request)
 **`/consolidated`: one row per group, so the groups can be read against each other.** The owner's words: *"I do not have a screen to show how Mag 7 as a theme has done compared with Memory or cybersecurity."* Nothing did — a group page shows ONE group against the index, `/compare` is two **stocks**, and the pivot crosses two dimensions to answer *where is the weight* rather than *how has each one done*. Member page, guests refused, like the studio and the pivot beside it; a `Consolidated` button in the bar before Compare.
 

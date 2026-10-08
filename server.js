@@ -57,6 +57,7 @@ const RowCard = globalThis.RowCard;
 require('./private/cards.js');
 // The peer-trend model and drawing, shared with the stock page and the studio.
 require('./private/peertrend.js');
+require('./private/perfchart.js');
 const Cards = globalThis.Cards;
 // file so the workbook served here and the one written locally are one thing.
 // history and the live score can never drift into two different models.
@@ -10008,6 +10009,13 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
     try { ptrend = await peerTrendFor(String(ptNeed.symbol).toUpperCase()); } catch { ptrend = null; }
   }
 
+  // Revenue, net income and margin by period, and only when the template asks.
+  let perf = null;
+  const perfNeed = Cards.perfNeed(post.tpl, post.opts || {});
+  if (perfNeed && perfNeed.symbol) {
+    try { perf = await perfFor(String(perfNeed.symbol).toUpperCase()); } catch { perf = null; }
+  }
+
   // Month ends for the Month by month card, and only when the template asks.
   let months = null;
   const monNeed = Cards.monthsNeed(post.tpl, post.opts || {});
@@ -10041,6 +10049,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getEvolution: () => evo,
       getMonths: () => months,
       getPeerTrend: () => ptrend,
+      getPerf: () => perf,
       updatedAt: (snap && snap.updatedAt) || null,
     });
   } catch (e) {
@@ -10824,6 +10833,51 @@ app.get('/api/peer-trend', requireAuth, route(async (req, res) => {
   res.json(body);
 }));
 
+// ---- Growth and profitability: revenue, net income and net margin -----------
+// (2026-10-08, owner's request, from a broker's dual-axis chart.)
+//
+// ONE SHAPING FUNCTION AND THREE CALLERS -- /api/sec (the stock page, which is
+// already fetching it), /api/perf (the studio) and /api/m/post (the phone).
+//
+// FROM latestFilled, NOT latestPerPeriod. A newer filing's sparse comparative
+// row can win a period carrying a net income and no revenue, and this chart
+// needs both in every column; filling only ever supplies a figure the winning
+// filing left BLANK, so it cannot disagree with the SEC card about a number.
+// It is also the reconciled path, where a filing a thousand times out of
+// scale with its own neighbours is mended rather than drawn as a bar.
+//
+// Oldest first, which is the order a chart reads. `dv` marks a period whose
+// revenue or net income was differenced here rather than filed -- no company
+// files a fourth quarter -- so the bar can say so.
+const PERF_Q = 12, PERF_FY = 8;
+function perfOf(all) {
+  const filled = SecFacts.latestFilled(all || []);          // newest first
+  const num = (v) => (v == null || !isFinite(Number(v)) ? null : Number(v));
+  const shape = (r) => {
+    const df = Array.isArray(r.derivedFields) ? r.derivedFields : String(r.derivedFields || '').split(',');
+    return { d: r.periodEnd, fp: r.fp || null, rev: num(r.revenue), ni: num(r.netIncome),
+      dv: !!(r.derived || df.indexOf('revenue') >= 0 || df.indexOf('netIncome') >= 0) };
+  };
+  const pick = (t, n) => filled.filter((r) => r.periodType === t && r.periodEnd).slice(0, n).map(shape).reverse();
+  return { quarterly: pick('Q', PERF_Q), annual: pick('FY', PERF_FY) };
+}
+const perfCache = new Map();
+async function perfFor(symbol) {
+  const hit = perfCache.get(symbol);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.body;
+  const body = Object.assign({ symbol }, perfOf(await store.readSecFacts(symbol)));
+  perfCache.set(symbol, { at: Date.now(), body });
+  return body;
+}
+// The studio's fetch. Members only, like the studio itself.
+app.get('/api/perf', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if (await isGuest(req)) return res.status(403).json({ error: 'Not part of the guest preview.' });
+  res.json(await perfFor(symbol));
+}));
+
 // ---- month ends for the Month by month card ---------------------------------
 // ONE assembly, two callers -- this route and the phone's saved-post route --
 // and the same two functions /api/stock already uses for the stock page's
@@ -10899,6 +10953,11 @@ app.get('/api/sec', requireAuth, route(async (req, res) => {
     // Four filed quarters summed, so the card can compare like with like:
     // the vendor's margins are trailing-twelve-month, and a single quarter
     // against them reads as a 30-point error that is really period length.
+    // Revenue, net income and the margin between them, period by period, for
+    // the Growth and profitability card. One shaping function, shared with
+    // /api/perf and the phone, so the page and the promo card are handed
+    // the same series.
+    perf: perfOf(all),
     ttm: SecFacts.ttm(latest.filter((r) => r.periodType === 'Q')),
     // The same trailing year at every quarter-end, for the chart pane. From
     // `latestFilled` rather than `latest`: filling only ever supplies a figure
