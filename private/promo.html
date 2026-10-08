@@ -891,6 +891,8 @@
           <option value="ni">Earnings</option>
           <option value="margin">Profit margin</option>
         </select>
+        <label>Market measure</label>
+        <select id="evoValue"></select>
         <label>Window</label>
         <select id="evoWin">
           <option value="5">Last 5 years</option>
@@ -1298,7 +1300,7 @@
       'ptrSym', 'ptrMetric', 'ptrView',
       'prfSym', 'prfPeriod', 'prfCount',
       'monSym', 'monView',
-      'evoSym', 'evoMeasure', 'evoWin',
+      'evoSym', 'evoMeasure', 'evoWin', 'evoValue',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
       'disMode'];
     function controlOpts() {
@@ -1619,7 +1621,8 @@
     ['monSym', 'monView'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'months') render(); }));
     for (const [v, label] of Cards.monthViews()) $('monView').appendChild(new Option(label, v));
-    ['evoSym', 'evoMeasure', 'evoWin'].forEach((id) =>
+    for (const [v, label] of Cards.evoValues()) $('evoValue').appendChild(new Option(label, v));
+    ['evoSym', 'evoMeasure', 'evoWin', 'evoValue'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'evolution') render(); }));
     // A FIFTEENTH hardcoded listener list. histMode is in it like any
     // other control: the subject picker's show/hide lives inside

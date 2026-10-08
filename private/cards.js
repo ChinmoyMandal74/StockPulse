@@ -3244,7 +3244,8 @@
     const W = 952, H = (o && o.h) || 300, PL = 118, PR = 128, PT = 16, PB = 40;
     const seen = vals.filter((v) => v != null && isFinite(v));
     if (seen.length < 2 || dates.length < 2) {
-      return '<p class="s-empty">' + esc((o && o.empty) || 'Not enough filed quarters to draw.') + '</p>';
+      // Inside a panel the sentence takes no more room than the chart would.
+      return '<p class="s-empty"' + (o && o.tight ? ' style="margin:6px 0;font-size:20px"' : '') + '>' + esc((o && o.empty) || 'Not enough filed quarters to draw.') + '</p>';
     }
     const fmt = (o && o.fmt) || ((v) => String(v));
     let lo = Math.min(...seen), hi = Math.max(...seen);
@@ -3257,11 +3258,15 @@
     const span = (H - PT - PB);
     const y = (v) => PT + PADPX + (1 - (v - lo) / (hi - lo)) * (span - PADPX * 2);
     let d = '', pen = false, first = -1, last = -1;
+    // Each unbroken stretch of the line, so a gap can be filled around rather
+    // than across.
+    const runs = [];
     for (let i = 0; i < vals.length; i++) {
       const v = vals[i];
       if (v == null || !isFinite(v)) { pen = false; continue; }
       if (first < 0) first = i;
       last = i;
+      if (!pen) runs.push([i, i]); else runs[runs.length - 1][1] = i;
       d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1);
       pen = true;
     }
@@ -3326,14 +3331,25 @@
       area = '<defs><linearGradient id="' + fid + '" x1="0" y1="0" x2="0" y2="1">'
         + '<stop offset="0%" stop-color="' + col + '" stop-opacity="' + a0 + '"/>'
         + '<stop offset="100%" stop-color="' + col + '" stop-opacity="' + a1 + '"/></linearGradient></defs>'
-        + '<path d="' + d + 'L' + x(last).toFixed(1) + ' ' + base.toFixed(1)
-        + 'L' + x(first).toFixed(1) + ' ' + base.toFixed(1) + 'Z" fill="url(#' + fid + ')" stroke="none"/>';
+        // ONE CLOSED SHAPE PER RUN. A path with a gap in it is several
+        // subpaths, and closing the whole thing to the floor closes only the
+        // LAST of them -- the others close back to their own first point and
+        // paint a wedge. No series here had a gap until a multiple did: a
+        // P/E does not exist for a loss-making quarter.
+        + runs.filter((r) => r[1] > r[0]).map((r) => {
+          let p = '';
+          for (let i = r[0]; i <= r[1]; i++) p += (i === r[0] ? 'M' : 'L') + x(i).toFixed(1) + ' ' + y(vals[i]).toFixed(1);
+          return '<path d="' + p + 'L' + x(r[1]).toFixed(1) + ' ' + base.toFixed(1)
+            + 'L' + x(r[0]).toFixed(1) + ' ' + base.toFixed(1) + 'Z" fill="url(#' + fid + ')" stroke="none"/>';
+        }).join('');
     }
     const endV = last >= 0 ? vals[last] : null;
+    // The tag prints the TRUE latest figure even where the point is pinned.
+    const endT = (o && o.endLabel != null) ? o.endLabel : (endV == null ? '' : fmt(endV));
     const tag = endV == null ? '' :
       '<text x="' + (W - PR + 12) + '" y="' + (y(endV) + 8).toFixed(1) + '" font-size="25"'
       + ' font-weight="600" fill="' + col + '" font-family="Geist Mono, monospace">'
-      + esc(fmt(endV)) + '</text>';
+      + esc(endT) + '</text>';
     const axis = '<text x="' + PL + '" y="' + (H - 8) + '" font-size="17" fill="' + pal.axis
       + '" font-family="Geist Mono, monospace">' + esc(dates[0]) + '</text>'
       + '<text x="' + (W - PR) + '" y="' + (H - 8) + '" text-anchor="end" font-size="17" fill="'
@@ -3371,6 +3387,30 @@
   // `pal.ink` has a value to give them on the light ground — an unmapped
   // hex stays dark there and the line vanishes into the page, which is the
   // failure that reads as an empty card rather than a broken one.
+  // WHAT THE LOWER PANEL DRAWS (2026-10-08, owner: "any reason why you didn't
+  // do the evolution of P/E"). Market value is the default and what the
+  // card shipped with. The two multiples were left out for a measured
+  // reason -- a trailing P/E explodes where earnings pass through nothing
+  // (CRM's peaks near 8,000 against a median of 142) and does not exist for
+  // a loss-making quarter -- and both halves of that are handled here
+  // rather than used as a reason to withhold the line:
+  //
+  //   a LOSS is a BREAK in the line, never a negative multiple;
+  //   a RUNAWAY quarter is PINNED at the top of the scale and counted in
+  //   the note, the earnings-surprise strip's rule, so the ordinary
+  //   quarters are not flattened to nothing by one of them.
+  //
+  // ONE MULTIPLE AT A TIME, on its own scale. P/E and P/S on two axes of one
+  // plot -- which is how these are often drawn -- is the dual axis this
+  // module refuses: the two are independent, so where each zero and each
+  // ceiling is put decides whether they appear to track.
+  const EVO_VALUES = [
+    ['cap', 'Market value', 'What the market paid for it'],
+    ['pe', 'P/E — price to trailing earnings', 'P/E — market value over trailing earnings'],
+    ['ps', 'P/S — price to trailing sales', 'P/S — market value over trailing revenue'],
+  ];
+  // Past this many times the 90th percentile a quarter is a runaway.
+  const EVO_RUNAWAY = 2.5;
   const EVO_BIZ = '#a3e635';
   const EVO_VAL = '#60a5fa';
 
@@ -3471,10 +3511,37 @@
     const tall = size.id === 'square' ? 180 : size.id === 'story' ? 537 : 330;
     const shortH = size.id === 'square' ? 127 : size.id === 'story' ? 374 : 232;
 
+    const vDef = EVO_VALUES.find((v) => v[0] === O.evoValue) || EVO_VALUES[0];
+    const vKey = vDef[0];
+    // A multiple needs a positive denominator: a P/E off a loss is arithmetic,
+    // not cheapness, and `trailingPe` has already refused those upstream.
+    const psOf = (cap, rev) => (cap != null && rev != null && isFinite(cap) && isFinite(rev) && cap > 0 && rev > 0 ? cap / rev : null);
+    const posOf = (v) => (v != null && isFinite(v) && v > 0 ? v : null);
+    const mults = vKey === 'pe' ? pts.map((p) => posOf(p.pe)).concat(live ? [posOf(live.pe)] : [])
+      : vKey === 'ps' ? pts.map((p) => psOf(p.cap, p.revenue)).concat(live ? [psOf(live.cap, Z.revenue)] : [])
+      : null;
+    let multNote = '', vVals = vCaps, vFmt = money, vEnd = null;
+    if (mults) {
+      const have = mults.filter((v) => v != null).sort((a, b) => a - b);
+      const gaps = mults.filter((v) => v == null).length;
+      const p90 = have.length ? have[Math.min(have.length - 1, Math.floor(have.length * 0.9))] : null;
+      const top = have.length ? have[have.length - 1] : null;
+      // PINNED ONLY WHERE THERE IS A RUNAWAY. An ordinary series keeps its
+      // own range to the last decimal.
+      const ceil = (p90 != null && top > p90 * EVO_RUNAWAY) ? p90 * 1.25 : null;
+      const pinned = ceil == null ? 0 : mults.filter((v) => v != null && v > ceil).length;
+      vVals = ceil == null ? mults : mults.map((v) => (v != null && v > ceil ? ceil : v));
+      vFmt = peF;
+      const lastM = mults[mults.length - 1];
+      vEnd = lastM == null ? null : peF(lastM);
+      multNote = (vKey === 'pe' && gaps ? 'The P/E line breaks where the company lost money — a multiple off a loss is arithmetic, not cheapness. ' : '')
+        + (pinned ? pinned + (pinned === 1 ? ' quarter above ' : ' quarters above ') + peF(ceil) + (pinned === 1 ? ' is' : ' are')
+          + ' drawn at the top of the scale, where ' + (vKey === 'pe' ? 'earnings were' : 'revenue was') + ' close to nothing. ' : '');
+    }
     const valuePanel = ev.hasValue
-      ? '<div class="evo-p"><span class="evo-h">What the market paid for it</span>'
-        + valueChart(vDates, vCaps, { h: shortH, color: pal.ink(EVO_VAL), fmt: money,
-          label: 'market value' }) + '</div>'
+      ? '<div class="evo-p"><span class="evo-h">' + esc(vDef[2]) + '</span>'
+        + valueChart(vDates, vVals, { h: shortH, color: pal.ink(EVO_VAL), fmt: vFmt, endLabel: vEnd,
+          label: vDef[1], tight: true, empty: mults ? 'Too few quarters with a ' + (vKey === 'pe' ? 'profit' : 'revenue') + ' to draw this multiple.' : null }) + '</div>'
       // NO SHARE COUNT, NO PANEL — never a fallback to the filed count, which
       // is the forty-fold error `evolutionSeries` exists to avoid.
       : '<div class="evo-p"><span class="evo-h">What the market paid for it</span>'
@@ -3510,9 +3577,15 @@
       + '</p></div></div>'
       + '<p class="s-sub wide">Trailing twelve months at every filed quarter, from the '
       + 'company\u2019s own SEC filings. The two panels keep their own scales. '
-      + 'Market value is today\u2019s share count at each day\u2019s split-adjusted close, so it '
-      + 'does not restate past share counts \u2014 a buyback makes the earlier multiple read low. '
-      + 'A multiple is not shown where the company lost money.</p>'
+      + (mults
+        // With a multiple drawn the note is about the multiple, and is kept
+        // to the length it had: a card cannot scroll.
+        ? 'Market value is today\u2019s share count at each day\u2019s close, so a buyback makes an earlier multiple read low. '
+          + esc(multNote || (vKey === 'ps' ? 'Revenue is the trailing year\u2019s. ' : ''))
+        : 'Market value is today\u2019s share count at each day\u2019s split-adjusted close, so it '
+          + 'does not restate past share counts \u2014 a buyback makes the earlier multiple read low. '
+          + 'A multiple is not shown where the company lost money.')
+      + '</p>'
       + '</div></div>' + chromeFoot();
   }
 
@@ -8123,6 +8196,8 @@
     // module by the studio AND by the phone's saved-post route, so the two
     // cannot ask for different things — the pairing `basketDays` records.
     evolutionNeed,
+    // The lower panel's choices, from the module that draws them.
+    evoValues: () => EVO_VALUES.map((v) => [v[0], v[1]]),
     monthsNeed,
     peerTrendNeed,
     perfNeed,

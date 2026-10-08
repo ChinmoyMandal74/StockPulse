@@ -5518,6 +5518,18 @@ The standing objection is that two independent scales can be slid against each o
 - **Left where they are**: Short moves, Most shorted, Histogram, Bars and Movers — each takes a scope or ranks a list, which is a different kind of card from one whose subject is the market itself.
 - Verified: the grouping suite is **38 checks** over both groups, and **proved by reverting nine times, every one load-bearing** — Market left out of the groups, the picker not refilled between groups, and the seven above.
 
+### The Evolution card’s lower panel can be a multiple (2026-10-08, owner: "any reason why you didn’t do the evolution of P/E")
+**A `Market measure` control (`evoValue`): Market value (the default), P/E, or P/S.** The card had refused a P/E line for a measured reason — the series explodes where earnings pass through nothing (CRM peaks near 8,000 against a median of 142) and does not exist for a loss-making quarter. Both halves are now HANDLED rather than used as a reason to withhold it:
+
+- **A LOSS IS A BREAK IN THE LINE**, never a negative multiple, and the note says what a break is.
+- **A RUNAWAY QUARTER IS PINNED at the top of the scale and counted in the note** — past 2.5 times the 90th percentile, the ceiling is 1.25 times it — the earnings-surprise strip’s rule. An ordinary series is not touched. **The end label always prints the TRUE latest multiple**, even when that point is itself pinned.
+- **ONE MULTIPLE AT A TIME, which is the one place this differs from the owner’s sample.** P/E and P/S on two axes of one plot is the dual axis this module still refuses: unlike the bars-and-margin card, the two are INDEPENDENT, so where each scale starts decides whether they appear to track.
+- **`valueChart` fills ONE CLOSED SHAPE PER RUN now.** A path with a gap in it is several subpaths, and closing the whole thing to the floor closes only the last — the others close back to their own first point and paint a wedge. No series had a gap until a multiple did.
+- P/S is market value over the trailing year’s revenue, computed in the card from two fields already on each point; nothing changed on the server, and the phone needed nothing.
+- With a multiple drawn the note is rewritten to the length it had, and the in-panel "too few quarters with a profit" sentence is set tight — on the square the full-size one ran 3px over, found by the fit sweep.
+- Control ids **156 against `POST_OPT_MAX` 200**.
+- Verified: **25 checks** (`evoval-test.js`), the series stubbed at the route so every multiple is planted: a profitable company, one with a five-quarter loss and two runaway quarters, and one never profitable. A 27-combination fit sweep. **Proved by reverting seven times, every one load-bearing** — the label guard only after the fixture was given a pinned LATEST point, since with an ordinary one the two versions print the same thing.
+
 ## Consolidated — every group in one table (2026-09-28, owner's request)
 **`/consolidated`: one row per group, so the groups can be read against each other.** The owner's words: *"I do not have a screen to show how Mag 7 as a theme has done compared with Memory or cybersecurity."* Nothing did — a group page shows ONE group against the index, `/compare` is two **stocks**, and the pivot crosses two dimensions to answer *where is the weight* rather than *how has each one done*. Member page, guests refused, like the studio and the pivot beside it; a `Consolidated` button in the bar before Compare.
 
