@@ -51,6 +51,8 @@
   let getShortMoves = () => null;
   // One symbol’s month-end closes and the index’s, or null while it loads.
   let getMonths = () => null;
+  // One company and its peers on four measures, by quarter, or null while it loads.
+  let getPeerTrend = () => null;
   // ONE stock's own daily closes — { symbol, name, closes, dates, rangeLabel,
   // price, today }. A plain data field rather than a getter, because the only
   // host that has it (the stock page) already holds it: it drew the chart from
@@ -6096,6 +6098,69 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Against its peers: one measure, quarter by quarter ------------------
+  //
+  // THE STOCK PAGE'S CARD AS A POSTER. One company and the Similar-stocks
+  // table's own peers on revenue, net income, profit margin or market value,
+  // over five years of quarters -- as the figures themselves (the default) or
+  // as a bump chart of rank.
+  //
+  // THE MODEL AND THE DRAWING ARE PeerTrend's (private/peertrend.js), read off
+  // the global lazily the way ActionRules is, so the page and the card cannot
+  // come to rank or scale differently. This module still has no requires: a
+  // host that did not load it gets a card saying so rather than a throw.
+  //
+  // IT DOES NOT SAY WHICH COMPANY IS BETTER. Biggest is not best, and the
+  // peer table this comes from draws the same line: a record of what was
+  // reported, with no winner marked.
+  function peerTrendNeed(tpl, opts) {
+    if (tpl !== 'peertrend') return null;
+    return { symbol: (opts && opts.ptrSym) || null };
+  }
+  // Measured with the note at its longest, on each artboard.
+  const PTR_H = { portrait: 810, square: 565, story: 1320 };
+  function tplPeerTrend() {
+    const PT = (typeof globalThis !== 'undefined' && globalThis.PeerTrend) || null;
+    const sym = O.ptrSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((r) => r.symbol === sym);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!row || !PT) return shell('Nothing to chart', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const data = getPeerTrend(sym);
+    if (!data) return shell('Reading the filings', 'Drawing', 'the peers…');
+    const model = PT.build(data, O.ptrMetric, O.ptrView);
+    const self = model.lines.find((l) => l.self);
+    if (model.lines.length < 3 || !self) {
+      return shell(nameOf(row), 'Against its peers', 'not enough to compare',
+        'Fewer than three of these companies have ' + model.label.toLowerCase()
+        + ' on record, or ' + sym + ' itself has none.');
+    }
+    const fs = size.id === 'story' ? 24 : size.id === 'square' ? 17 : 19;
+    const chart = PT.svg(model, { w: 952, h: PTR_H[size.id] || 600, left: size.id === 'story' ? 96 : 80,
+      right: size.id === 'story' ? 376 : 318, fs, dot: size.id === 'story' ? 6.5 : 5, nameMax: 15, xLabels: 5 });
+    const n = nameOf(row);
+    const span = model.quarters.length ? PT.qLabel(model.quarters[0]) + ' to ' + PT.qLabel(model.quarters[model.n - 1]) : '';
+    const note = (model.metric === 'cap'
+      ? 'Market value is today’s share count at each quarter’s closing price, so a buyback since then makes an earlier quarter read a little low. '
+      : 'Each point is the trailing twelve months to the latest quarter that company had ended by that date, from its own filings. ')
+      + (model.view === 'rank' ? 'Rank 1 is the largest; a place can change on a small gap or a large one. '
+        : (model.log ? 'Log scale, so equal distances are equal ratios. ' : ''))
+      + (model.gaps ? 'A break in a line is a quarter with no figure on record. ' : '')
+      + 'The peers are today’s closest by industry and size. A record of what was reported, not a view on which is the better company.';
+    return chromeTop()
+      + '<div class="s-body"><div class="pv-in">'
+      + '<span class="s-kick">' + esc((data.group ? data.group + ' · ' : '') + model.N + ' companies · ' + span) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span><span class="dim">'
+      + esc(model.view === 'rank' ? 'ranked on ' + model.label.toLowerCase() + ' among its peers'
+        : model.label.toLowerCase() + ' against its peers'
+          + (self.last ? ' — #' + self.last.rank + ' of ' + model.N + ' today' : '')) + '</span></h2>'
+      + '<div class="pv-chart">' + chart + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
@@ -6107,11 +6172,41 @@
     shorted: tplShorted, breadth: tplBreadth,
     bars: tplBars,
     months: tplMonths,
+    peertrend: tplPeerTrend,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
   // page and styled in the other is exactly the drift this module prevents.
   const STYLE = `
+    /* ---- Against its peers ---------------------------------------------
+       NO HEX LITERAL AND NO BACKTICK IN HERE. The chart is PeerTrend's svg at
+       its true pixel size; every colour on it is a token, so all four grounds
+       resolve. */
+    .pv-in { display: flex; flex-direction: column; height: 100%; }
+    .pv-in .s-title .dim { display: block; font-size: 32px; line-height: 1.2;
+                           letter-spacing: -0.015em; margin-top: 8px; }
+    .sz-square .pv-in .s-title .dim { font-size: 26px; }
+    .sz-story .pv-in .s-title .dim { font-size: 40px; }
+    .pv-chart { margin-top: 22px; }
+    .sz-square .pv-chart { margin-top: 12px; }
+    .pv-chart .pt-svg { display: block; }
+    .pv-chart .pt-grid { stroke: var(--hair); stroke-width: 1; }
+    .pv-chart .pt-zero { stroke: var(--hair-2); stroke-width: 1.5; stroke-dasharray: 6 6; }
+    .pv-chart path.pt-peer { fill: none; stroke: var(--muted); stroke-width: 2.6; opacity: 0.6; }
+    .pv-chart path.pt-self { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linejoin: round; }
+    .pv-chart circle.pt-peer { fill: var(--muted); }
+    .pv-chart circle.pt-self { fill: var(--accent); }
+    .pv-chart .pt-ax { fill: var(--faint); font-family: var(--mono); }
+    .pv-chart .pt-lab { font-family: var(--sans); font-weight: 500; }
+    .pv-chart text.pt-peer { fill: var(--muted); }
+    .pv-chart text.pt-self { fill: var(--text); font-weight: 800; }
+    .pv-chart .pt-fig { font-family: var(--mono); fill: var(--faint); font-weight: 500; }
+    .pv-chart text.pt-self .pt-fig { fill: var(--accent); font-weight: 700; }
+    /* On the light grounds a 60% grey line is 2.5:1 and the accent figure
+       4.4:1 on sky -- both measured, both under their floors. */
+    .s-art.th-light .pv-chart path.pt-peer { opacity: 0.95; }
+    .s-art.th-light .pv-chart text.pt-self .pt-fig { fill: var(--text); }
+    .pv-in .s-sub { margin-top: auto; padding-top: 14px; }
     /* ---- the dial cluster on the advice board ---------------------------
        NO BACKTICK IN HERE. The six arc colours are emitted inline from the
        theme's own verdict ladder, so every ground resolves; everything else
@@ -7904,6 +7999,11 @@
     // cannot ask for different things — the pairing `basketDays` records.
     evolutionNeed,
     monthsNeed,
+    peerTrendNeed,
+    // The two pickers, from the module that DRAWS them, so a host cannot offer
+    // a measure or a view the chart does not know.
+    peerTrendMetrics: () => ((globalThis.PeerTrend || {}).METRICS || []).map((m) => [m[0], m[1]]),
+    peerTrendViews: () => ((globalThis.PeerTrend || {}).VIEWS || []).map((v) => v.slice()),
     monthViews: () => MON_VIEWS.map((v) => v.slice()),
     shortMovesNeed,
     // The floors, so the studio's picker has no copy of them to drift from.
@@ -7999,6 +8099,7 @@
       getEvolution = c.getEvolution || (() => null);
       getShortMoves = c.getShortMoves || (() => null);
       getMonths = c.getMonths || (() => null);
+      getPeerTrend = c.getPeerTrend || (() => null);
       chartOne = c.chart || null;
       const fn = BUILDERS[id] || BUILDERS.movers;
       return fn();

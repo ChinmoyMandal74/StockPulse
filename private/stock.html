@@ -698,6 +698,34 @@
     #months tfoot td, #months tfoot th { padding-top: 9px; }
     #months .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
 
+    /* ---- against its peers ----------------------------------------------
+       One line per company, drawn by PeerTrend at its true pixel size. Scoped
+       to #ptrend throughout. */
+    #ptrend .summary { font-size: 13px; color: var(--muted); margin: 0 0 12px; line-height: 1.6; }
+    #ptrend .summary b { color: var(--text); font-weight: 600; }
+    #ptrend .pbar { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 10px; }
+    #ptrend .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+    #ptrend .seg .rng.on { color: var(--text); border-color: var(--hair-2);
+                           background: rgba(255, 255, 255, 0.075); }
+    #ptrend .pchart { overflow: hidden; }
+    #ptrend .pt-svg { display: block; max-width: 100%; }
+    #ptrend .pt-grid { stroke: var(--hair); stroke-width: 1; }
+    #ptrend .pt-zero { stroke: var(--hair-2); stroke-width: 1; stroke-dasharray: 4 4; }
+    #ptrend path.pt-peer { fill: none; stroke: var(--faint); stroke-width: 1.6; opacity: 0.75; }
+    #ptrend path.pt-self { fill: none; stroke: var(--accent); stroke-width: 3; }
+    /* A peer's line lights up under the pointer, since seven greys cannot be
+       told apart where they cross. */
+    #ptrend path.pt-peer:hover { stroke: var(--text); opacity: 1; stroke-width: 2.4; }
+    #ptrend circle.pt-peer { fill: var(--faint); }
+    #ptrend circle.pt-self { fill: var(--accent); }
+    #ptrend .pt-ax { fill: var(--faint); font-family: var(--mono); }
+    #ptrend .pt-lab { font-family: var(--sans); }
+    #ptrend text.pt-peer { fill: var(--muted); }
+    #ptrend text.pt-self { fill: var(--text); font-weight: 700; }
+    #ptrend .pt-fig { font-family: var(--mono); fill: var(--faint); }
+    #ptrend text.pt-self .pt-fig { fill: var(--accent); }
+    #ptrend .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
+
     /* ---- earnings history ---------------------------------------------
        Reported EPS against what was expected, one row per quarter. Scoped to
        #earn throughout: `.bar`, `.hit` and `.miss` are the kind of generic
@@ -1054,6 +1082,7 @@
   </main>
 
   <script src="/rowcard.js"></script>
+  <script src="/peertrend.js"></script>
   <script src="/action.js"></script>
   <script src="/track.js"></script>
   <script>
@@ -2596,6 +2625,59 @@
       }));
     }
 
+    // ---- against its peers ----------------------------------------------------
+    // One measure for this company and the Similar-stocks table's own six
+    // peers, quarter by quarter. VALUE is the default (the owner's call: the
+    // peers are picked to be close in size); RANK is the bump chart.
+    //
+    // The model and the drawing are PeerTrend's, shared with the promo card.
+    // Script scope, like earnRows: the switches repaint long after boot.
+    let ptData = null;
+    let ptMetric = 'rev';
+    let ptView = 'value';
+    function paintPeerTrend() {
+      const box = document.getElementById('ptrendBody');
+      if (!box || !ptData) return;
+      const model = PeerTrend.build(ptData, ptMetric, ptView);
+      const seg = (list, cur, attr) => '<span class="seg">' + list.map(([k, lab]) =>
+        '<button type="button" class="rng' + (k === cur ? ' on' : '') + '" data-' + attr + '="' + k + '">' + esc(lab) + '</button>').join('') + '</span>';
+      // Only the measures somebody here has a figure for are offered.
+      const offered = PeerTrend.METRICS.filter(([k]) => PeerTrend.build(ptData, k, 'value').lines.length >= 3);
+      const w = Math.max(320, Math.floor(box.clientWidth || box.parentNode.clientWidth || 900));
+      const narrow = w < 620;
+      const chart = model.lines.length >= 3
+        ? PeerTrend.svg(model, { w, h: narrow ? 300 : 340, left: narrow ? 52 : 62, right: narrow ? 128 : 230,
+          fs: narrow ? 10.5 : 12, dot: 3.4, nameMax: narrow ? 9 : 20, xLabels: narrow ? 4 : 7 })
+        : '';
+      const self = model.lines.find((l) => l.self);
+      const head = self && self.last
+        ? esc(self.name) + ' is <b>#' + self.last.rank + ' of ' + model.N + '</b> on ' + esc(model.label.toLowerCase())
+          + ' in the latest quarter, at <b>' + esc(PeerTrend.fmt(model.unit, self.last.v)) + '</b>.'
+        : 'No figure for ' + esc(stock.symbol) + ' on this measure.';
+      box.innerHTML =
+        '<p class="summary">' + head + '</p>' +
+        '<div class="pbar">' + seg(offered.map(([k, lab]) => [k, lab]), model.metric, 'm') + seg(PeerTrend.VIEWS, model.view, 'v') + '</div>' +
+        '<div class="pchart">' + chart + '</div>' +
+        '<p class="note">' +
+        (model.metric === 'cap'
+          ? 'Market value is today’s share count at each quarter’s closing price, so a buyback since then makes an earlier quarter read a little low. '
+          : 'Each point is the trailing twelve months to the latest quarter that company had ended by that date, from its own filings. ') +
+        (model.view === 'rank'
+          ? 'Rank 1 is the largest. A place can change on a small gap or a large one — hover a dot for the figure. '
+          : (model.log ? 'Log scale, so equal distances are equal ratios. ' : '') + 'The figure beside each name is its latest. ') +
+        (model.gaps ? 'A break in a line is a quarter with no figure on record; that company is left out of that quarter’s ranking rather than placed last. ' : '') +
+        'The peers are today’s Similar stocks, drawn for the whole period. A record of what was reported, not a ranking of which is the better company.</p>';
+      box.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
+        if (b.hasAttribute('data-m')) ptMetric = b.getAttribute('data-m');
+        else ptView = b.getAttribute('data-v');
+        paintPeerTrend();
+      }));
+    }
+    let ptResize = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(ptResize); ptResize = setTimeout(paintPeerTrend, 150);
+    });
+
     // ---- the jump bar -------------------------------------------------------
     // BUILT FROM THE PAGE, never from a list written down beside it. Which
     // cards exist here is not fixed the way /admin's eight sections are:
@@ -3157,6 +3239,15 @@
         </div></section>` : ''}
 
         ${peersCard(payload.peers, stock.symbol)}
+
+        <!-- Filled by loadPeerTrend() after the chart, and removed where the
+             peers' filings cannot make a chart. Hidden until then, so the
+             jump bar never offers a chip for a card that is not there. -->
+        ${payload.peers ? `
+        <section class="bezel card" id="ptrend" data-jump="Against peers" data-icon="i-chart" hidden><div class="core">
+          <div class="sec-h"><h2>Against its peers</h2></div>
+          <div id="ptrendBody"></div>
+        </div></section>` : ''}
 
         <!-- Filled by loadSec() after the chart, and REMOVED ENTIRELY when
              the company has nothing filed — a fund files no statements, and
@@ -4208,6 +4299,29 @@
       // Read by nothing else in this app. The Advice rules do read short
       // interest, but they take it from the profile as they always have; this
       // table exists to give that number a history.
+      // The peers' series arrive after the chart, like every other card here
+      // that costs a read of its own. A company whose peers cannot make three
+      // lines gets NO card rather than an empty one.
+      async function loadPeerTrend() {
+        const card = document.getElementById('ptrend');
+        if (!card) return;
+        try {
+          const r = await fetch('/api/peer-trend?symbol=' + encodeURIComponent(stock.symbol));
+          if (!r.ok) { card.remove(); return; }
+          const d = await r.json();
+          const usable = PeerTrend.METRICS.some(([k]) => PeerTrend.build(d, k, 'value').lines.length >= 3
+            && PeerTrend.build(d, k, 'value').lines.some((l) => l.self));
+          if (!usable) { card.remove(); return; }
+          ptData = d;
+          // Open on the first measure this company actually has.
+          const first = PeerTrend.METRICS.find(([k]) => PeerTrend.build(d, k, 'value').lines.some((l) => l.self));
+          ptMetric = first ? first[0] : 'rev';
+          ptView = 'value';
+          card.hidden = false;
+          paintPeerTrend();
+        } catch (e) { card.remove(); }
+      }
+
       async function loadShortInt() {
         const card = document.getElementById('sint');
         if (!card) return;
@@ -4311,6 +4425,7 @@
       loadSec();           // and the filings after that, for the same reason
       loadInsider();
       loadShortInt();
+      loadPeerTrend();
       const nb = document.getElementById('newsBtn');
       if (nb) nb.addEventListener('click', () => loadNews(true));
     })();

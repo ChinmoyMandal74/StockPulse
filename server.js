@@ -55,6 +55,8 @@ const RowCard = globalThis.RowCard;
 // The promo cards, so a saved post can be built here and a phone handed
 // finished markup rather than the whole snapshot.
 require('./private/cards.js');
+// The peer-trend model and drawing, shared with the stock page and the studio.
+require('./private/peertrend.js');
 const Cards = globalThis.Cards;
 // file so the workbook served here and the one written locally are one thing.
 // history and the live score can never drift into two different models.
@@ -9999,6 +10001,13 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
     try { evo = await evolutionFor(evoNeed.symbol, evoNeed.years); } catch { evo = null; }
   }
 
+  // The peer series, and only when the template asks.
+  let ptrend = null;
+  const ptNeed = Cards.peerTrendNeed(post.tpl, post.opts || {});
+  if (ptNeed && ptNeed.symbol) {
+    try { ptrend = await peerTrendFor(String(ptNeed.symbol).toUpperCase()); } catch { ptrend = null; }
+  }
+
   // Month ends for the Month by month card, and only when the template asks.
   let months = null;
   const monNeed = Cards.monthsNeed(post.tpl, post.opts || {});
@@ -10031,6 +10040,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getHistory: () => hist,
       getEvolution: () => evo,
       getMonths: () => months,
+      getPeerTrend: () => ptrend,
       updatedAt: (snap && snap.updatedAt) || null,
     });
   } catch (e) {
@@ -10702,6 +10712,116 @@ async function shortMovesPayload() {
 // position, which is public, and the card states the window on its face.
 app.get('/api/short-moves', requireMember, route(async (req, res) => {
   res.json(await shortMovesPayload());
+}));
+
+// ---- a company against its peers, quarter by quarter -------------------------
+// The data behind the stock page's "Against its peers" card and the promo card
+// of the same name: trailing-twelve-month revenue, net income and profit margin
+// from each company's own filings, and market value, on one shared axis of
+// calendar quarter ends.
+//
+// THE PEERS ARE THE SIMILAR-STOCKS TABLE'S OWN, from the same peersFor(), so
+// the chart and the table beside it cannot name different companies.
+//
+// WHAT IT READS, and why it is not seven calls to evolutionFor: that reads
+// 5,200 bars a symbol, and on this database rows read are metered. This needs
+// one close per company per quarter, so it asks for exactly those -- about
+// 140 indexed seeks -- plus each company's filings.
+//
+// A QUARTER'S FIGURE is the trailing year to the latest period that had ENDED
+// by that quarter end, carried at most PEER_TREND_CARRY days. Fiscal calendars
+// differ (Micron's year ends in August), so without the carry no two companies
+// would share a column; with an unbounded one a company that stopped filing
+// would draw a flat line to today.
+const PEER_TREND_QUARTERS = 20;
+const PEER_TREND_CARRY = 200;
+const peerTrendCache = new Map();
+function quarterEndsBefore(n, today) {
+  const out = [];
+  let y = today.getUTCFullYear(), q = Math.floor(today.getUTCMonth() / 3);   // the quarter we are IN
+  while (out.length < n) {
+    q--; if (q < 0) { q = 3; y--; }
+    const end = new Date(Date.UTC(y, q * 3 + 3, 0));       // last day of that quarter
+    out.unshift(end.toISOString().slice(0, 10));
+  }
+  return out;
+}
+async function peerTrendFor(symbol) {
+  const hit = peerTrendCache.get(symbol);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.body;
+  const [snap, links] = await Promise.all([
+    snapshotCached(), store.readPeerLinks(symbol).catch(() => [])]);
+  const stocks = (snap && snap.stocks) || [];
+  const stock = stocks.find((x) => String(x.symbol).toUpperCase() === symbol);
+  if (!stock) return null;
+  await stampShortNames(stocks).catch(() => {});
+  const peers = peersFor(stock, stocks, links);
+  const list = peers && peers.rows && peers.rows.length ? [peers.self].concat(peers.rows) : [];
+  const quarters = quarterEndsBefore(PEER_TREND_QUARTERS, new Date());
+  const empty = { symbol, quarters, companies: [], series: {}, basis: null, group: null };
+  if (list.length < 3) { peerTrendCache.set(symbol, { at: Date.now(), body: empty }); return empty; }
+  const syms = list.map((p) => String(p.symbol).toUpperCase());
+
+  // closesBefore answers "the last close BEFORE this date", so the day after
+  // each quarter end is asked for.
+  const dayAfter = quarters.map((q) => new Date(Date.parse(q + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10));
+  const [facts, closes] = await Promise.all([
+    Promise.all(syms.map((sym) => store.readSecFacts(sym).catch(() => []))),
+    store.closesBefore(dayAfter, syms).catch(() => quarters.map(() => ({}))),
+  ]);
+  const bySym = {};
+  for (const x of stocks) bySym[String(x.symbol).toUpperCase()] = x;
+  const series = { rev: {}, ni: {}, pm: {}, cap: {} };
+  syms.forEach((sym, k) => {
+    const rows = facts[k] || [];
+    const ttm = rows.length ? SecFacts.ttmSeries(SecFacts.latestFilled(rows).filter((r) => r.periodType === 'Q')) : [];
+    const at = (q) => {
+      let pick = null;
+      for (const t of ttm) { if (t.d <= q) pick = t; else break; }
+      if (!pick) return null;
+      return (Date.parse(q) - Date.parse(pick.d)) / 86400000 <= PEER_TREND_CARRY ? pick : null;
+    };
+    const num = (v) => (v == null || !isFinite(Number(v)) ? null : Number(v));
+    series.rev[sym] = []; series.ni[sym] = []; series.pm[sym] = []; series.cap[sym] = [];
+    // TODAY'S share count against a split-adjusted close, the Evolution
+    // card's formulation: an adjusted close is already in today's share
+    // units, so a split cancels exactly. Rejected before it is coerced --
+    // Number(null) is 0, and a zero share count would rank a company last.
+    const shRaw = bySym[sym] && bySym[sym].sharesOutstanding;
+    const shares = shRaw != null && Number(shRaw) > 0 ? Number(shRaw) : null;
+    quarters.forEach((q, i) => {
+      const t = at(q);
+      const rev = t ? num(t.revenue) : null, ni = t ? num(t.netIncome) : null;
+      series.rev[sym].push(rev != null && rev > 0 ? rev : null);
+      series.ni[sym].push(ni);
+      // A margin off no revenue is a division, not a margin.
+      series.pm[sym].push(rev != null && rev > 0 && ni != null ? Math.round(ni / rev * 10000) / 100 : null);
+      const c = closes[i] && closes[i][sym];
+      // The close has to belong to that quarter: a company not yet listed
+      // would otherwise borrow nothing, and one with a hole would borrow a
+      // price from months earlier.
+      const fresh = c && (Date.parse(q) - Date.parse(c.d)) / 86400000 <= 10;
+      series.cap[sym].push(shares && fresh && c.close >= MIN_CLOSE ? shares * c.close : null);
+    });
+  });
+  const body = {
+    symbol, quarters,
+    companies: list.map((p, k) => ({ symbol: syms[k], name: p.name || syms[k], self: k === 0 })),
+    series, basis: peers.basis || null, group: peers.group || null,
+  };
+  peerTrendCache.set(symbol, { at: Date.now(), body });
+  return body;
+}
+// Members only, like the peer table it sits beside: a guest's preview is
+// twenty stocks, so "the rest of its industry" would be a list they cannot open.
+app.get('/api/peer-trend', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if (await isGuest(req)) return res.status(403).json({ error: 'Not part of the guest preview.' });
+  const body = await peerTrendFor(symbol);
+  if (!body) return res.status(404).json({ error: 'Not in the screener.' });
+  res.json(body);
 }));
 
 // ---- month ends for the Month by month card ---------------------------------

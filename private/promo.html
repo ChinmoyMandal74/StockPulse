@@ -835,6 +835,19 @@
       <!-- One stock, in full. Three controls and no scope pickers: the card
            IS its scope, so there is no spotSector/spotIndustry/spotCap/
            spotScreen and INDUSTRY_PREFIXES is left alone. -->
+      <!-- Against its peers: one company and its closest peers on one measure,
+           by quarter. The card IS its own scope, so no scope pickers. -->
+      <div id="ptrBox">
+        <label>Stock</label>
+        <select id="ptrSym"></select>
+        <label>Measure</label>
+        <select id="ptrMetric"></select>
+        <label>Show</label>
+        <select id="ptrView"></select>
+        <p class="hint">The peers are the Similar stocks from that company's
+          page. Value draws the figures; Rank draws places, 1st at the top.
+          Figures come from company filings, so a fund has no card.</p>
+      </div>
       <!-- Month by month: one company's returns, year by month. The card IS
            its own scope, so no sector, industry, size or screen pickers. -->
       <div id="monBox">
@@ -970,6 +983,7 @@
        require()s to stamp it. -->
   <script src="/filters.js"></script>
   <script src="/action.js"></script>
+  <script src="/peertrend.js"></script>
   <script src="/cards.js"></script>
   <script src="/cardshot.js"></script>
   <script>
@@ -986,6 +1000,7 @@
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
+      { id: 'peertrend', name: 'Against its peers', note: 'One company and its closest peers on revenue, earnings, margin or value, quarter by quarter' },
       { id: 'months', name: 'Month by month', note: 'One company, year by month — each cell that month’s return' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
@@ -1097,6 +1112,26 @@
       return null;
     }
 
+    // One company's peer series, fetched once per symbol; the repaint is the
+    // half that matters, and whether this template cares is the module's call.
+    const ptrCache = {};
+    const ptrPending = {};
+    function getPeerTrend(symbol) {
+      if (!symbol) return null;
+      if (ptrCache[symbol]) return ptrCache[symbol];
+      if (ptrPending[symbol]) return null;
+      ptrPending[symbol] = true;
+      fetch(`/api/peer-trend?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          ptrCache[symbol] = d && d.quarters ? d : { quarters: [], companies: [], series: {} };
+          delete ptrPending[symbol];
+          if (Cards.peerTrendNeed(tpl, controlOpts())) render();
+        })
+        .catch(() => { delete ptrPending[symbol]; });
+      return null;
+    }
+
     // One symbol's month ends, fetched once per symbol. As with the fetch
     // above, the repaint is the half that matters, and whether this template
     // cares is asked of the module.
@@ -1162,6 +1197,7 @@
       'brdMode', 'brdSp500',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
+      'ptrSym', 'ptrMetric', 'ptrView',
       'monSym', 'monView',
       'evoSym', 'evoMeasure', 'evoWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
@@ -1179,7 +1215,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: controlOpts(),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend,
       updatedAt: pulledAt,
     });
 
@@ -1265,6 +1301,7 @@
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       $('monBox').style.display = tpl === 'months' ? 'block' : 'none';
+      $('ptrBox').style.display = tpl === 'peertrend' ? 'block' : 'none';
       $('histBox').style.display = tpl === 'histogram' ? 'block' : 'none';
       // A control that can change nothing reads as broken, so the subject
       // picker is shown only in the mode that marks one.
@@ -1437,6 +1474,12 @@
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
     ['spotSym', 'spotWin', 'spotProf'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'spotlight') render(); }));
+    // Against its peers: its own listener list, and both pickers filled from
+    // the module that draws the chart.
+    ['ptrSym', 'ptrMetric', 'ptrView'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'peertrend') render(); }));
+    for (const [v, label] of Cards.peerTrendMetrics()) $('ptrMetric').appendChild(new Option(label, v));
+    for (const [v, label] of Cards.peerTrendViews()) $('ptrView').appendChild(new Option(label, v));
     // Month by month: its own listener list, and its view picker filled from
     // the module so it cannot offer a value the card does not know.
     ['monSym', 'monView'].forEach((id) =>
@@ -1872,6 +1915,8 @@
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
         $('histSym').innerHTML = $('chtSym').innerHTML;
+        { const keep = $('ptrSym').value; $('ptrSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('ptrSym').options].some((o) => o.value === keep)) $('ptrSym').value = keep; }
         { const keep = $('monSym').value; $('monSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('monSym').options].some((o) => o.value === keep)) $('monSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;
