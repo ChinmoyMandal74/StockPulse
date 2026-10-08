@@ -842,7 +842,11 @@
         <select id="prfSym"></select>
         <label>Periods</label>
         <select id="prfPeriod"></select>
-        <p class="hint">The last five periods the company has filed. The bars
+        <label>How many</label>
+        <select id="prfCount"></select>
+        <p class="hint">The newest periods the company has filed, as many as
+          you choose — a story holds eight at most, and the type steps down as
+          the columns narrow. The bars
           start at zero; the margin line keeps its own scale, and every margin
           is printed under its period. A fund files nothing and has no card.</p>
       </div>
@@ -1230,7 +1234,7 @@
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView',
-      'prfSym', 'prfPeriod',
+      'prfSym', 'prfPeriod', 'prfCount',
       'monSym', 'monView',
       'evoSym', 'evoMeasure', 'evoWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
@@ -1514,9 +1518,10 @@
       $(id).addEventListener('change', () => { if (tpl === 'peertrend') render(); }));
     // A control in the markup and in CONTROL_IDS but not in a list like this
     // saves with a post, is read by the builder, and does nothing when touched.
-    ['prfSym', 'prfPeriod'].forEach((id) =>
+    ['prfSym', 'prfPeriod', 'prfCount'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'perf') render(); }));
     for (const [v, label] of Cards.perfModes()) $('prfPeriod').appendChild(new Option(label, v));
+    for (const [n, def] of Cards.perfCounts()) $('prfCount').appendChild(new Option(n + ' periods', n, def, def));
     for (const [v, label] of Cards.peerTrendMetrics()) $('ptrMetric').appendChild(new Option(label, v));
     for (const [v, label] of Cards.peerTrendViews()) $('ptrView').appendChild(new Option(label, v));
     // Month by month: its own listener list, and its view picker filled from

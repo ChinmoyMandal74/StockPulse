@@ -6185,7 +6185,19 @@
   }
   // Measured with the note at its longest, on each artboard.
   const PRF_H = { portrait: 720, square: 470, story: 1180 };
+  // HOW MANY PERIODS, the owner's control -- and what each artboard can hold.
+  // Every artboard is 1080px wide, so what binds is the margin printed under
+  // each period: at ten columns a column is about 77px. The story sets its
+  // type larger, so it stops at eight. Past the cap the count is trimmed to
+  // the newest periods, which is honest for a time series: the oldest go.
+  const PRF_COUNTS = [4, 5, 6, 8, 10];
   const PRF_N = 5;
+  const PRF_CAP = { portrait: 10, square: 10, story: 8 };
+  function perfCount() {
+    const asked = Number(O.prfCount);
+    const n = PRF_COUNTS.indexOf(asked) >= 0 ? asked : PRF_N;
+    return Math.min(n, PRF_CAP[size.id] || PRF_N);
+  }
   function tplPerf() {
     const PC = (typeof globalThis !== 'undefined' && globalThis.PerfChart) || null;
     const sym = O.prfSym || (stocks[0] && stocks[0].symbol);
@@ -6197,16 +6209,28 @@
     if (!row || !PC) return shell('Nothing to chart', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
     const data = getPerf(sym);
     if (!data) return shell('Reading the filings', 'Drawing', 'the periods…');
-    const model = PC.build(data, O.prfPeriod, PRF_N);
+    const model = PC.build(data, O.prfPeriod, perfCount());
     const word = model.mode === 'annual' ? 'year' : 'quarter';
     if (!model.usable) {
       return shell(nameOf(row), 'Growth and profitability', 'not enough on file',
         'Fewer than two ' + word + 's with both a revenue and a net income in this company’s filings. A fund files none.');
     }
     const st = size.id === 'story';
-    const fs = st ? 24 : size.id === 'square' ? 17 : 19;
+    // THE GUTTERS FIT THEIR OWN LONGEST LABEL. A loss puts a minus sign on both
+    // axes, and one character at this size is the difference between a label
+    // and a label cut off by the edge of the card.
+    const fs0 = st ? 24 : size.id === 'square' ? 17 : 19;
+    const need = (ticks) => Math.ceil(12 + Math.max(...ticks.map((t) => t.label.length)) * 0.62 * fs0);
+    const left = Math.max(st ? 106 : 86, need(model.pmTicks)), right = Math.max(st ? 118 : 96, need(model.moneyTicks));
+    // THE TYPE STEPS DOWN SO THE LONGEST LABEL ALONG THE FOOT FITS ITS COLUMN.
+    // A margin of -100.0% is a character longer than one of 38.0%, and at
+    // ten columns that character is the difference between a row of numbers
+    // and a run-on. The mono face is 0.6em a character.
+    const band = (952 - left - right) / model.n;
+    const longest = Math.max(...model.periods.map((p) => Math.max(PC.fmtPct(p.pm).length, p.bot.length * 0.88)));
+    const fs = Math.max(13, Math.min(fs0, Math.floor(band * 0.92 / (longest * 0.6))));
     const colors = { rev: pal.ink('#60a5fa'), ni: pal.ink('#22d3ee'), pm: pal.ink('#fb923c') };
-    const chart = PC.svg(model, { w: 952, h: PRF_H[size.id] || 600, left: st ? 106 : 86, right: st ? 118 : 96, fs, colors, dot: st ? 9 : 7 });
+    const chart = PC.svg(model, { w: 952, h: PRF_H[size.id] || 600, left, right, fs, colors, dot: st ? 9 : 7 });
     const n = nameOf(row);
     const p = model.last, first = model.periods[0];
     const sw = (c, line) => '<i' + (line ? ' class="ln"' : '') + ' style="background:' + c + '"></i>';
@@ -8103,6 +8127,9 @@
     peerTrendNeed,
     perfNeed,
     perfModes: () => ((globalThis.PerfChart || {}).MODES || []).map((m) => m.slice()),
+    // [count, is it the default] -- the picker is built from this, so a host
+    // cannot offer a count the card would silently replace.
+    perfCounts: () => PRF_COUNTS.map((n) => [n, n === PRF_N]),
     // The two pickers, from the module that DRAWS them, so a host cannot offer
     // a measure or a view the chart does not know.
     peerTrendMetrics: () => ((globalThis.PeerTrend || {}).METRICS || []).map((m) => [m[0], m[1]]),
