@@ -57,7 +57,16 @@
     const n = Math.max(2, Math.min(12, Number(count) || 5));
     // A period with no revenue has no margin and nothing to measure the
     // other bar against, so it is not a column at all.
-    const rows = ((data && data[mode]) || []).filter((r) => r && r.d && ok(r.rev) && r.rev > 0).slice(-n);
+    const have = ((data && data[mode]) || []).filter((r) => r && r.d && ok(r.rev) && r.rev > 0);
+    // A HOLE IN THE RECORD ENDS THE RUN. Columns sit side by side and are read
+    // as consecutive, so two quarters a year apart must not be neighbours --
+    // measured on ExxonMobil, whose only two quarters with a revenue on file
+    // are twelve months apart. Walked back from the newest; what is older
+    // than the first gap is left off.
+    const maxGap = (mode === 'annual' ? 430 : 135) * 86400000;
+    let from = have.length - 1;
+    while (from > 0 && Date.parse(have[from].d) - Date.parse(have[from - 1].d) <= maxGap) from--;
+    const rows = have.slice(Math.max(from, 0)).slice(-n);
     const periods = rows.map((r) => {
       // Rejected before it is coerced: Number(null) is 0, and a missing net
       // income drawn as a zero bar is a claim nobody filed.
