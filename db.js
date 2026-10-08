@@ -3047,6 +3047,23 @@ async function readFundHoldings(fund, d) {
   };
 }
 
+// The first stored date each of a few symbols appears in a fund's file. One
+// seek per symbol on the (fund, symbol, d) primary key -- it is asked only of
+// the handful of members the screener does not track, never of the index.
+async function fundFirstSeen(fund, symbols) {
+  await init();
+  const f = String(fund).toLowerCase();
+  const list = (symbols || []).slice(0, 60);
+  if (!list.length) return {};
+  const rs = await db.batch(list.map((s) => ({
+    sql: 'select min(d) d from fund_holdings where fund = ? and symbol = ?',
+    args: [f, s],
+  })), 'read');
+  const out = {};
+  list.forEach((s, i) => { const d = rs[i].rows[0] && rs[i].rows[0].d; if (d) out[s] = d; });
+  return out;
+}
+
 // Which dates a fund has accumulated, newest first. A `group by` over a
 // growing table would normally be a quota event here — but (fund, d) is a
 // COVERING index, so SQLite walks it in order and never touches the table,
@@ -5784,7 +5801,7 @@ module.exports = {
   readShortRecentFor,
   readSplits, writeSplits, splitCoverage,
   readShortState, noteShortMiss, shortNewest, appendShortInterest,
-  fundNewest, noteFundMiss, appendFundHoldings, readFundHoldings, readFundState,
+  fundNewest, noteFundMiss, appendFundHoldings, readFundHoldings, readFundState, fundFirstSeen,
   readFundDates,
   readInsiderDay, writeInsiderDay, appendInsider, readUniverseCiks, readFilerIds,
   clearVisitors,

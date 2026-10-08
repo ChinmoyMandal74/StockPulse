@@ -14446,6 +14446,21 @@ app.get('/api/cron/holdings', route(async (req, res) => {
     weightSum: parsed.weightSum, ms: Date.now() - t0 });
 }));
 
+// WHY AN INDEX MEMBER IS NOT IN THE SCREENER (2026-10-08, owner: "identify the
+// duplicates separately and tell me if there is anything brand new"). Three
+// different facts used to read as one list of things to add:
+//   class   -- a second listing of a company already tracked (GOOG beside GOOGL)
+//   rename  -- a new ticker for a company tracked under its old one (SKYD for PSKY)
+//   new     -- a company the screener does not hold at all
+// THE KEY IS THE SEC FILER ID, the one this project already settled on for
+// "are two listings one company" (the name gets Blue Owl wrong). SEC's own
+// ticker file lists every class of a filer, so a missing symbol's id can be
+// looked up without tracking it. The second, independent witness for a rename
+// is the fund's own file: the old ticker leaves and the new one arrives with
+// the same share count, to within a day's creations and redemptions.
+const MISSING_EXPLAIN_MAX = 40;   // past this it is a bulk gap, not a few oddities
+const HANDOVER_TOL = 0.03;        // measured on PSKY -> SKYD: 0.5%
+
 // What the import has stored, for /holdings. Four small reads: the clock,
 // the newest day's rows (an indexed seek on idx_fund_holdings_d, never a
 // scan), the universe, and the names.
@@ -14477,11 +14492,77 @@ app.get('/api/fund-holdings', requireAdmin, route(async (req, res) => {
     name: (names[h.symbol] && (names[h.symbol].short || names[h.symbol].name)) || null,
   }));
 
+  // ---- why each missing member is missing ----
+  const missing = rows.filter((r) => !r.held);
+  let summary = null;
+  if (missing.length && missing.length <= MISSING_EXPLAIN_MAX) {
+    const inIndex = new Set(rows.map((r) => r.symbol));
+    const [filers, secMap, first] = await Promise.all([
+      store.readFilerIds().catch(() => ({})),
+      SEC_READY ? secCikMap().catch(() => null) : Promise.resolve(null),
+      store.fundFirstSeen(fund, missing.map((r) => r.symbol)).catch(() => ({})),
+    ]);
+    const byCik = new Map();
+    for (const sym of universe) {
+      const c = filers[String(sym).toUpperCase()];
+      if (!c) continue;
+      if (!byCik.has(c)) byCik.set(c, []);
+      byCik.get(c).push(sym);
+    }
+    // The stored date just before each arrival, read once per date.
+    const oldest = dates.length ? dates[dates.length - 1].d : null;
+    const priorCache = {};
+    const priorOn = async (d) => {
+      const i = dates.findIndex((x) => x.d === d);
+      const p = i > -1 && dates[i + 1] ? dates[i + 1].d : null;
+      if (!p) return null;
+      if (!priorCache[p]) priorCache[p] = store.readFundHoldings(fund, p).then((x) => x.holdings).catch(() => []);
+      return { d: p, holdings: await priorCache[p] };
+    };
+    const nameOf = (s) => (names[s] && (names[s].short || names[s].name)) || null;
+    summary = { new: 0, rename: 0, class: 0, unknown: 0, sec: !!secMap };
+    for (const r of missing) {
+      // "Since" is only known where the arrival is inside what we have stored.
+      const since = first[r.symbol] && oldest && first[r.symbol] > oldest ? first[r.symbol] : null;
+      const cik = secMap ? secLookup(secMap, r.symbol) : null;
+      const twins = cik ? (byCik.get(cik) || []) : [];
+      // The fund's own handover: a tracked ticker that was in the file the day
+      // before this one arrived, is gone from it now, and held the same shares.
+      let hand = null;
+      if (since && r.shares > 0) {
+        const prior = await priorOn(since);
+        for (const h of (prior ? prior.holdings : [])) {
+          if (!ours.has(h.symbol) || inIndex.has(h.symbol) || !(h.shares > 0)) continue;
+          const gap = Math.abs(h.shares - r.shares) / h.shares;
+          if (gap <= HANDOVER_TOL && (!hand || gap < hand.gap)) hand = { symbol: h.symbol, shares: h.shares, gap, last: prior.d };
+        }
+      }
+      let why;
+      // A twin still IN the index is a second class; a twin that has left it is
+      // the old ticker. The order matters: Alphabet's two classes share a filer
+      // and must never read as a rename.
+      const sameIn = twins.find((t) => inIndex.has(t));
+      if (sameIn) why = { kind: 'class', twin: sameIn, via: 'filer' };
+      else if (twins.length) why = { kind: 'rename', twin: twins[0], via: hand && hand.symbol === twins[0] ? 'filer+handover' : 'filer' };
+      else if (hand) why = { kind: 'rename', twin: hand.symbol, via: 'handover' };
+      else if (cik) why = { kind: 'new' };
+      // UNKNOWN IS NOT NEW. With no filer id there is nothing to say the
+      // company is absent, only that it could not be looked up.
+      else why = { kind: 'unknown', reason: secMap ? 'unlisted' : 'nosec' };
+      if (why.twin) why.twinName = nameOf(why.twin);
+      if (hand && why.twin === hand.symbol) why.last = hand.last;
+      why.since = since;
+      r.why = why;
+      summary[why.kind]++;
+    }
+  }
+
   res.json({
     fund, index: cfg.index, label: cfg.label,
     asOf: held.asOf, state, dates,
     universe: universe.length,
     tracked: rows.filter((r) => r.held).length,
+    missing: summary,
     holdings: rows,
   });
 }));

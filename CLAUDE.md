@@ -2358,6 +2358,28 @@ The route's as-of cutoff was written off as an efficiency guard — the write is
 - **`VYLR` HOLDS TWO BARS AND ALWAYS WILL FOR A WHILE.** It listed on 2026-10-01, so it sits under `LIGHT_MIN_ARCHIVE` (300) and is pulled deep on every refresh — which costs nothing, because *thin is only expensive when the provider HAS history to send*. The other five reach 2006-2010 at the 5,000-bar ceiling.
 - **The screener still reads 1,278 rows until the next FULL round rebuilds the snapshot** (~30 minutes), and the six carry no name until a profile is pulled. **A blank NAME column is the visible symptom of a missing profile**, not a name bug — the Sector Benchmark add recorded the same thing seven hours after the fact. Fill missing fetches name, profile and instrument type together in one round.
 
+##### The missing panel says WHY each one is missing (2026-10-08, owner: "identify the duplicates separately and tell me if there is anything brand new")
+**The panel listed GOOG, FOX, SKYD and NWS as four ticked things to add, three of which the owner had deleted on purpose the day before as duplicate share classes.** It now sorts every missing member into one of four groups and ticks only the first:
+
+| group | the test | ticked |
+|---|---|---|
+| **New to the screener** | has an SEC filer id that no tracked symbol shares | yes |
+| **Renamed ticker** | shares a filer id with a tracked symbol that has LEFT the index file, or took over a tracked leaver's holding | no |
+| **Another share class** | shares a filer id with a tracked symbol still IN the index | no |
+| **Not identified** | no filer id and no handover | no |
+
+- **THE KEY IS THE SEC FILER ID, looked up in SEC's own `company_tickers.json`** (`secCikMap`, already cached an hour for the filings loader). That file lists every class of a filer — `GOOGL, GOOG` under 1652044 — so a symbol we do NOT track can be matched to one we do without tracking it. Measured on the live four: GOOG→GOOGL, FOX→FOXA, NWS→NWSA are classes; **SKYD carries PSKY's id 2041610 and PSKY is no longer in the SEC file or the index file**, so it is the rename.
+- **A SECOND, INDEPENDENT WITNESS FOR A RENAME is the fund's own file**: the old ticker leaves and the new one arrives holding the same shares. PSKY 6,624,999 on 2026-10-05, SKYD 6,659,649 on 2026-10-06 — 0.5%, against `HANDOVER_TOL` of 3%. It needs no SEC data, so a rename is still caught when the SEC file is unreadable or does not list the new ticker yet. Only a TRACKED leaver counts; an untracked one leaving with the same share count is a coincidence.
+- **The order of the tests matters**: a twin still in the index is asked first, or Alphabet's two classes read as a rename.
+- **UNKNOWN IS NOT NEW.** With the SEC file unreadable nothing is called new and nothing is ticked, and the empty New group says how many could not be checked rather than "every company is covered".
+- **An arrival date is given only where the arrival is inside the stored dates.** A symbol present on the oldest date we hold has been there since before our record, and the page says nothing rather than naming that date.
+- **The New group is drawn even when empty**, because "nothing new" is the answer the panel is opened for. The note gives the split in one sentence ("4 members are not in the screener: 0 new, 1 renamed, 3 second share classes").
+- **The Add button counts what is TICKED** and is disabled at zero. Select all still ticks every row, for the owner who does want a second class.
+- `GET /api/fund-holdings` puts `why: {kind, twin, twinName, via, since, last}` on each untracked row and a `missing` summary on the response; `store.fundFirstSeen` is one primary-key seek per missing symbol. Past `MISSING_EXPLAIN_MAX` (40) missing members nothing is explained and the old chips are drawn — that is a bulk gap, not a few oddities.
+- **Two stale claims on the page went with it**: the note said adding "costs no API credits" (it has cost 1 a symbol since the provider gate), and the intro said "Nothing on the site reads this yet" (the screener's S&P 500 column does).
+- **Still not built**: a way to mark a duplicate as dismissed, and a one-click swap for a rename. PSKY→SKYD is still the owner's to act on.
+- Verified: **30 checks** (`missing-test.js`) plus **11** with the SEC file refused, over a fixture with one of each case and two decoys; the existing page suite (62) was corrected for the new rows. **Proved by reverting eight times, every one load-bearing.**
+
 ##### Two faults the fixture found, both the "a null is not a zero" family
 - **A NULL WEIGHT CRASHED THE WHOLE PAGE.** `r.weight.toFixed(3)` is unguarded, the throw happened inside the row map, and the fetch's own `.catch` then rendered **the entire table as one error row** — a single absent number taking the page with it. It draws an em-dash and **no bar** now: a zero-width bar would read as *held at no weight*, which is a different claim from *not reported*. The schema allows a null, so this is reachable rather than theoretical.
 - **THE BAR FLOOR WAS ONE PERCENT, WHICH IS 0.9 PIXELS.** `Math.max(1, …)` on an 86px track is sub-pixel and draws as nothing — so the smallest holdings looked absent. It is `min-width: 2px` in CSS now: the Size card's rule, that a small thing drawn at its honest size still has to be visible. **Measured off `getBoundingClientRect()`**, never the style attribute, which was perfectly correct in both versions — the `/quality` lesson.
