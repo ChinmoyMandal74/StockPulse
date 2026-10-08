@@ -8701,6 +8701,39 @@ function peersFor(stock, stocks, links) {
   };
 }
 
+// ---- month by month --------------------------------------------------------
+// The last close of each calendar month, oldest first, for the stock page's
+// month-by-year grid. Derived from the bars /api/stock ALREADY reads for the
+// earnings study, so it costs no query; and at full precision, because the
+// chart's /api/history rounds closes to cents and a split-adjusted close of
+// $0.16 cannot carry a monthly return at that.
+//
+// A sub-cent close is a bad bar, not a price (MIN_CLOSE): one of those at a
+// month end would print a six-figure percentage in a cell.
+function monthEnds(bars) {
+  const last = new Map();
+  for (const b of (bars || [])) {
+    const d = String(b.datetime || b.d || '').slice(0, 10);
+    const c = Number(b.close);
+    if (d.length !== 10 || !(c >= MIN_CLOSE)) continue;
+    const ym = d.slice(0, 7);
+    const cur = last.get(ym);
+    if (!cur || d > cur[0]) last.set(ym, [d, c]);
+  }
+  return [...last.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([ym, v]) => [ym, v[1], v[0]]);
+}
+// The index's own month ends, for the grid's "against the S&P 500" reading.
+// The same answer for every stock, so it is read once per instance and kept
+// half an hour rather than once per page view.
+let benchMonthsCache = null;
+async function benchMonthEnds() {
+  if (benchMonthsCache && Date.now() - benchMonthsCache.at < 30 * 60 * 1000) return benchMonthsCache.rows;
+  const rows = monthEnds(await store.readBars(BENCHMARK, 2640));
+  if (rows.length) benchMonthsCache = { at: Date.now(), rows };
+  return rows;
+}
+
 app.get('/api/stock', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
@@ -8713,7 +8746,7 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   // nothing — the screener's own Promise.all lesson, unapplied here. Each keeps
   // its own failure: the profile is optional (three display fields), the
   // snapshot is the answer.
-  const [snap, profile, earnings, peerLinks, studyBars] = await Promise.all([
+  const [snap, profile, earnings, peerLinks, studyBars, benchMonths] = await Promise.all([
     snapshotCached(),
     store.readProfile(symbol).catch(() => null),
     // Seeks on the (symbol, d) primary key. Optional like the profile: a page
@@ -8730,6 +8763,8 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     // forty quarters — far more events than the aggregate needs, and the
     // module caps what it draws.
     store.readBars(symbol, 2600).catch(() => []),
+    // Optional like the rest: without it the grid simply offers no index reading.
+    benchMonthEnds().catch(() => []),
   ]);
   const stocks = (snap && snap.stocks) || [];
   const stock = stocks.find((x) => String(x.symbol).toUpperCase() === symbol);
@@ -8782,6 +8817,8 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     // Every stored quarter, newest first. Deliberately NOT in the snapshot:
     // it is per-symbol and nothing else on any page reads it.
     earnings,
+    // Month-end closes for the month-by-year grid, from the bars already read.
+    monthly: { stock: monthEnds(studyBars), bench: benchMonths || [] },
     // How this stock has behaved around its OWN earnings — the aggregate, not
     // the bars. Computed here rather than in the browser because the window it
     // needs (a fixed span around each of ~24 reports, up to six years back) is

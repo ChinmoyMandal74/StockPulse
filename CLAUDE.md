@@ -1854,6 +1854,33 @@ The owner was offered "flag it on /stock only" and chose **"flag it on the scree
 - Verified: **45 checks** (`earn-dumbbell-test.js`) over four fixture stocks — sixteen quarters crossing zero with a beat, a miss, an exact match and an unforecast quarter, with gaps of DIFFERENT sizes so a fixed-length line cannot pass; a split mid-history; a split one quarter ago; and a stock with no earnings. Positions, line ends against dot centres, the gap-to-length proportion, the drawn colours, hollow against filled, the gutter's values, the toggle both ways, nothing added inside `#chart`, and a phone (labels neither colliding nor running off the card — they did both on the first render, found by screenshot). **Proved by reverting eight times, every one load-bearing**: one axis across a split fails 5, newest-on-the-left 3, and the three-quarter rule, the zero line, the fixed-length line and the unforecast quarter 2 each, the hollow dot and the phone's label count 1 each.
 - **`earnings-section-test.js` asserted the strip and was CORRECTED, not worked around**: its two checks on the capped percentage scale describe something that no longer exists, and are replaced by one that the near-zero quarter is drawn at its real size.
 
+### Month by month — a year-by-month grid of returns (2026-10-07, owner's request)
+**A `Month by month` card on `/stock`, above Earnings: one row per year, one column per month, each cell that month's return, coloured by direction and strength, with a Year column and a count along the foot.** Asked as *"Seasonality calendar heatmap: a grid of month × year (or weekday × week) colored by return"*; the owner took month × year, on the stock page only. **The price chart is untouched.**
+
+- **WEEKDAY × WEEK WAS OFFERED AND NOT BUILT.** Day-of-week effects in large US stocks are too small to see against daily noise, so the grid would be confetti that invites over-reading.
+- **IT COSTS NO QUERY.** `/api/stock` already reads ~10 years of bars for the earnings study; `monthEnds()` reduces them to the last close of each month and ships ~125 pairs as `monthly.stock`. The index's month ends (`monthly.bench`, for the switch below) are read once per instance and kept half an hour, since they are the same for every stock.
+- **FULL PRECISION, which is why it is not built from `/api/history`.** That route rounds closes to cents, and a split-adjusted close of $0.16 cannot carry a monthly return at that — the `/single` lesson.
+- **`Own return` / `Against the S&P 500`**, a two-button switch defaulting to the stock's own return. Against the index is the month less the index's month, in points: in a year like 2022 nearly every stock's grid is red in the same columns, which says more about the market than the stock. A month the index has no reading for is blank rather than shown raw.
+
+#### IT IS A RECORD, NOT A SEASONAL PATTERN, and the card is built to say so
+Ten years is ten samples a month, and with twelve months to choose from one always looks special by chance — the research log's ten-flat-of-eleven, in the place most likely to be read as a trading calendar.
+
+- **The foot is a COUNT (`2/3`), never an average return**, and the note prints the stock's share of up months across the whole grid beside it, which is what any one month has to be read against.
+- **No best-month or worst-month callout**, and the note ends *"a record of what happened, not a pattern to trade"*.
+- **A flat month is not an up month**, and the month still running is left out of the count.
+
+#### The rules that keep a cell honest
+- **The LAST close of the month**, each month against the month end before it. **A missing month is never bridged**: the return across two months filed under one would be a wrong cell, so the month after a gap is blank.
+- **A sub-cent close is not a price** (`MIN_CLOSE`) — one at a month end would print a six-figure percentage.
+- **The sign comes from the rounded value**, so a move that prints `0.0` is neither green nor `−0.0`.
+- **The colour is capped** (±20% own, ±12 points relative): a +50% month is drawn at full colour and still prints +50. The number is the data and the tint only its strength.
+- **The running month is outlined and says "so far"**; the Year column compounds December to December and is blank where the December before is not held.
+- **Under thirteen month ends there is no card.** The grid scrolls sideways inside its own box on a phone.
+- **Corteva and Mueller will each show one false month** of −50% to −84% — the standing unadjusted-split data, not something this card can see.
+
+- Verified: **42 checks** (`months-test.js`). The fixture gives every month a decoy bar on the 10th and the real month end later, plants every return, drops one month outright, makes one month end a sub-cent print, and has the index rise exactly 1% a month so the relative reading is the raw one less a point everywhere. **Proved by reverting nine times, every one load-bearing**: the switch wired to nothing fails 5, the first close of the month 3, the sub-cent bar 2, and the bridged gap, the running month, the flat month, the colour cap, the rounded sign and the five-month card 1 each.
+- **`sed -i` in Git Bash rewrote the whole of `stock.html` from CRLF to LF** while inserting one line. Git stores LF either way so the diff was unaffected, but any patch carrying a hardcoded `\r\n` would have gone inert from that moment. Detect per file, at the moment of writing.
+
 ### The statements, laid out as statements (2026-10-05, owner's request, from two screenshots)
 **A `Financial statements` card above the SEC EDGAR one: line items down, periods across, newest first, with three tabs — Income, Balance sheet, Cash flow.** The raw card is untouched, which was the owner's condition.
 

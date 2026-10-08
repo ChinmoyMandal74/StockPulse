@@ -662,6 +662,42 @@
       #around .fg { min-width: 104px; }
       #around .fg .v { font-size: 15px; }
     }
+    /* ---- month by month ------------------------------------------------
+       A year-by-month grid of returns. Every selector is scoped to #months:
+       td.up, .seg and .note are exactly the generic names that capture
+       later markup when left loose. */
+    #months .mbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 12px; }
+    #months .seg { display: inline-flex; gap: 6px; }
+    #months .seg .rng.on { color: var(--text); border-color: var(--hair-2);
+                           background: rgba(255, 255, 255, 0.075); }
+    #months .mkey { margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+                    font-size: 11px; color: var(--faint); font-family: var(--mono); }
+    #months .mkey i { width: 14px; height: 10px; border-radius: 2px; display: block; }
+    #months .mkey i.up { background: color-mix(in srgb, var(--green) 80%, transparent); margin-left: 8px; }
+    #months .mkey i.dn { background: color-mix(in srgb, var(--red) 80%, transparent); }
+    /* The one wide thing on the card scrolls inside its own box, so the page
+       itself never pans sideways on a phone. */
+    #months .mwrap { overflow-x: auto; }
+    #months table { width: 100%; min-width: 660px; border-collapse: separate; border-spacing: 2px;
+                    table-layout: fixed; }
+    #months th, #months td { font-family: var(--mono); font-size: 11.5px; text-align: center;
+                             padding: 7px 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    #months thead th, #months tfoot td, #months tfoot th, #months tbody th {
+      color: var(--faint); font-weight: 500; font-size: 10.5px; }
+    #months th:first-child { width: 46px; text-align: left; }
+    #months tbody td { border-radius: 3px; color: var(--text); }
+    /* The colour is the move, the number is the data: the tint is strength
+       only, so the figure stays readable on every cell. */
+    #months tbody td.up { background: color-mix(in srgb, var(--green) var(--a), transparent); }
+    #months tbody td.dn { background: color-mix(in srgb, var(--red) var(--a), transparent); }
+    #months tbody td.flat { background: rgba(255, 255, 255, 0.04); }
+    #months tbody td.na { background: transparent; }
+    #months tbody td.part { outline: 1px dotted var(--muted); outline-offset: -1px; }
+    #months .yr { width: 62px; }
+    #months tbody td.yr { font-weight: 700; }
+    #months tfoot td, #months tfoot th { padding-top: 9px; }
+    #months .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
+
     /* ---- earnings history ---------------------------------------------
        Reported EPS against what was expected, one row per quarter. Scoped to
        #earn throughout: `.bar`, `.hit` and `.miss` are the kind of generic
@@ -2426,6 +2462,140 @@
           : '');
     }
 
+    // ---- month by month ------------------------------------------------------
+    // A grid of year by month, each cell the stock's return for that month.
+    // It shows what a line hides: the bad years, the months that were bad for
+    // everything at once, and how lumpy the returns are.
+    //
+    // IT IS A RECORD, NOT A SEASONAL PATTERN, and the card is built to say so.
+    // Ten years is ten samples a month, and with twelve months to choose from
+    // one of them always looks special by chance. So the foot of the grid is
+    // a COUNT ("up 7 of 10") beside the stock's ordinary share of up months,
+    // never an average return dressed as a tendency, and there is no best- or
+    // worst-month callout.
+    //
+    // Script scope, like earnRows: the switch repaints long after the boot
+    // IIFE has returned.
+    let monthData = null;
+    let monthRel = false;
+    const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    // Full colour is reached here; a bigger move is drawn at full colour and
+    // still prints its real number. Relative moves are smaller, so the cap is.
+    const MONTH_CAP = { raw: 20, rel: 12 };
+    // Thirteen month ends is twelve returns: under a year there is no grid.
+    const monthsReady = (m) => !!(m && Array.isArray(m.stock) && m.stock.length >= 13);
+
+    // [ym, close] pairs to { 'YYYY-MM': return % }, each month against the
+    // month end before it. A missing month in between is a gap, never bridged:
+    // a return across two months filed under one would be a wrong cell.
+    function monthReturns(rows) {
+      const out = {};
+      for (let i = 1; i < rows.length; i++) {
+        const [ym, c] = rows[i], [pym, pc] = rows[i - 1];
+        const y = Number(ym.slice(0, 4)), mo = Number(ym.slice(5, 7));
+        const prev = mo === 1 ? (y - 1) + '-12' : y + '-' + String(mo - 1).padStart(2, '0');
+        if (pym !== prev || !(pc > 0) || !(c > 0)) continue;
+        out[ym] = (c / pc - 1) * 100;
+      }
+      return out;
+    }
+    // A calendar year, December to December, compounded from the month ends.
+    // The first year held is partial unless the December before it is too.
+    function yearReturns(rows) {
+      const by = {};
+      for (const [ym, c] of rows) by[ym] = c;
+      const out = {};
+      const years = [...new Set(rows.map((r) => Number(r[0].slice(0, 4))))];
+      for (const y of years) {
+        const start = by[(y - 1) + '-12'];
+        const lastYm = rows.filter((r) => Number(r[0].slice(0, 4)) === y).map((r) => r[0]).sort().pop();
+        if (start > 0 && by[lastYm] > 0) out[y] = (by[lastYm] / start - 1) * 100;
+      }
+      return out;
+    }
+
+    function monthCell(v, cap, extra) {
+      if (v == null || !isFinite(v)) return '<td class="na"></td>';
+      // The sign comes from the ROUNDED value, so a move that prints as 0.0
+      // is never "-0.0" in red.
+      const r = Math.round(v * 10) / 10;
+      const a = Math.round((0.1 + 0.7 * Math.min(Math.abs(v) / cap, 1)) * 100);
+      const cls = r > 0 ? 'up' : r < 0 ? 'dn' : 'flat';
+      const txt = (r > 0 ? '+' : r < 0 ? '−' : '') + (Math.abs(r) >= 100 ? Math.round(Math.abs(r)) : Math.abs(r).toFixed(1));
+      return `<td class="${cls}${extra && extra.cls ? ' ' + extra.cls : ''}" style="--a:${a}%"` +
+        (extra && extra.title ? ` title="${esc(extra.title)}"` : '') + `>${txt}</td>`;
+    }
+
+    function paintMonths() {
+      const box = document.getElementById('monthsBody');
+      if (!box || !monthsReady(monthData)) return;
+      const rows = monthData.stock;
+      const own = monthReturns(rows), ownY = yearReturns(rows);
+      const idx = monthReturns(monthData.bench || []), idxY = yearReturns(monthData.bench || []);
+      const canRel = Object.keys(idx).length >= 12;
+      const rel = monthRel && canRel;
+      // AGAINST THE INDEX is the stock's month less the index's, in points. A
+      // month the index has no reading for is blank rather than shown raw:
+      // one cell on a different footing from its neighbours is worse than a gap.
+      const val = (ym) => (own[ym] == null ? null : !rel ? own[ym] : idx[ym] == null ? null : own[ym] - idx[ym]);
+      const valY = (y) => (ownY[y] == null ? null : !rel ? ownY[y] : idxY[y] == null ? null : ownY[y] - idxY[y]);
+      const cap = rel ? MONTH_CAP.rel : MONTH_CAP.raw;
+      const lastYm = rows[rows.length - 1][0], lastDay = rows[rows.length - 1][2] || '';
+      const years = [...new Set(Object.keys(own).map((k) => Number(k.slice(0, 4))))].sort((a, b) => b - a);
+
+      const body = years.map((y) => {
+        const cells = MONTH_NAMES.map((_, i) => {
+          const ym = y + '-' + String(i + 1).padStart(2, '0');
+          // The newest month is still running: marked, and said on hover.
+          return monthCell(val(ym), cap, ym === lastYm
+            ? { cls: 'part', title: MONTH_NAMES[i] + ' ' + y + ' so far, to ' + lastDay } : null);
+        }).join('');
+        const yv = valY(y);
+        return `<tr><th scope="row">${y}</th>${cells}` +
+          monthCell(yv, cap * 3, { cls: 'yr' + (String(y) === lastYm.slice(0, 4) ? ' part' : ''),
+            title: String(y) === lastYm.slice(0, 4) ? y + ' so far' : 'Calendar ' + y }) + '</tr>';
+      }).join('');
+
+      // The foot: how many of the years each month was up. A COUNT, and only
+      // over finished months -- the one still running has not happened yet.
+      let ups = 0, all = 0;
+      const foot = MONTH_NAMES.map((_, i) => {
+        let u = 0, n = 0;
+        for (const y of years) {
+          const ym = y + '-' + String(i + 1).padStart(2, '0');
+          const v = ym === lastYm ? null : val(ym);
+          if (v == null) continue;
+          n++; if (v > 0) u++;
+        }
+        ups += u; all += n;
+        return `<td>${n ? u + '/' + n : ''}</td>`;
+      }).join('');
+      const base = all ? Math.round(ups / all * 100) : null;
+
+      box.innerHTML =
+        '<div class="mbar">' +
+          (canRel ? '<span class="seg">' +
+            `<button type="button" class="rng${rel ? '' : ' on'}" data-rel="0">Own return</button>` +
+            `<button type="button" class="rng${rel ? ' on' : ''}" data-rel="1">Against the S&amp;P 500</button></span>` : '') +
+          `<span class="mkey"><i class="dn"></i>−${cap}% or worse<i class="up"></i>+${cap}% or better</span></div>` +
+        '<div class="mwrap"><table><thead><tr><th></th>' +
+          MONTH_NAMES.map((m) => `<th scope="col">${m}</th>`).join('') + '<th scope="col" class="yr">Year</th></tr></thead>' +
+          `<tbody>${body}</tbody>` +
+          `<tfoot><tr><th scope="row">${rel ? 'Ahead' : 'Up'}</th>${foot}<td></td></tr></tfoot></table></div>` +
+        '<p class="note">' + (rel
+          ? 'Each cell is the stock’s return for that month less the S&amp;P 500’s, in points — whether it beat the market, not whether it rose. '
+          : 'Each cell is the price return for that calendar month, in percent; dividends are not included. ') +
+        'The dotted cell is the month still running. ' +
+        `The bottom row counts the years each month was ${rel ? 'ahead of the index' : 'up'}` +
+        (base == null ? '. ' : `; across every month here the figure is ${base}%, which is what any one month should be read against. `) +
+        `With about ${years.length} readings a month and twelve months to choose from, one will always look ` +
+        'special by chance. This is a record of what happened, not a pattern to trade.</p>';
+
+      box.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
+        monthRel = b.getAttribute('data-rel') === '1'; paintMonths();
+      }));
+    }
+
     // ---- the jump bar -------------------------------------------------------
     // BUILT FROM THE PAGE, never from a list written down beside it. Which
     // cards exist here is not fixed the way /admin's eight sections are:
@@ -2965,6 +3135,12 @@
           })}</div>
         </section></div>
 
+        ${monthsReady(payload.monthly) ? `
+        <section class="bezel card" id="months" data-jump="Months" data-icon="i-calendar"><div class="core">
+          <div class="sec-h"><h2>Month by month</h2></div>
+          <div id="monthsBody"></div>
+        </div></section>` : ''}
+
         ${(payload.earnings || []).length ? `
         <section class="bezel card" id="earn" data-jump="Earnings" data-icon="i-calendar"><div class="core">
           <div class="sec-h"><h2>Earnings history</h2>
@@ -3047,9 +3223,12 @@
       earnRows = payload.earnings || [];
       profilePulledAt = (payload.company && payload.company.fetchedAt) || null;
       earnAll = false;
+      monthData = payload.monthly || null;
+      monthRel = false;
       earnWide = false;
       earnSplit = (stock && stock.lastSplitDate) || null;
       paintEarnings();
+      paintMonths();
       paintJumps();
       watchJumps();
 
