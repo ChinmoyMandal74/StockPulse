@@ -2519,7 +2519,7 @@
       // The sign comes from the ROUNDED value, so a move that prints as 0.0
       // is never "-0.0" in red.
       const r = Math.round(v * 10) / 10;
-      const a = Math.round((0.1 + 0.7 * Math.min(Math.abs(v) / cap, 1)) * 100);
+      const a = Math.round((0.08 + 0.42 * Math.min(Math.abs(v) / cap, 1)) * 100);
       const cls = r > 0 ? 'up' : r < 0 ? 'dn' : 'flat';
       const txt = (r > 0 ? '+' : r < 0 ? '−' : '') + (Math.abs(r) >= 100 ? Math.round(Math.abs(r)) : Math.abs(r).toFixed(1));
       return `<td class="${cls}${extra && extra.cls ? ' ' + extra.cls : ''}" style="--a:${a}%"` +

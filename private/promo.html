@@ -835,6 +835,17 @@
       <!-- One stock, in full. Three controls and no scope pickers: the card
            IS its scope, so there is no spotSector/spotIndustry/spotCap/
            spotScreen and INDUSTRY_PREFIXES is left alone. -->
+      <!-- Month by month: one company's returns, year by month. The card IS
+           its own scope, so no sector, industry, size or screen pickers. -->
+      <div id="monBox">
+        <label>Stock</label>
+        <select id="monSym"></select>
+        <label>Show</label>
+        <select id="monView"></select>
+        <p class="hint">A record, not a seasonal pattern: with about ten
+          readings a month, one month always looks special by chance. The
+          square card holds the newest eight years.</p>
+      </div>
       <!-- Evolution. Like the spotlight, the card IS its own scope, so there
            is no evoSector/evoIndustry/evoCap/evoScreen and INDUSTRY_PREFIXES
            is left alone. THE WINDOW IS IN YEARS, not bar counts: the series
@@ -975,6 +986,7 @@
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
+      { id: 'months', name: 'Month by month', note: 'One company, year by month — each cell that month’s return' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
       { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
@@ -1085,6 +1097,26 @@
       return null;
     }
 
+    // One symbol's month ends, fetched once per symbol. As with the fetch
+    // above, the repaint is the half that matters, and whether this template
+    // cares is asked of the module.
+    const monCache = {};
+    const monPending = {};
+    function getMonths(symbol) {
+      if (!symbol) return null;
+      if (monCache[symbol]) return monCache[symbol];
+      if (monPending[symbol]) return null;
+      monPending[symbol] = true;
+      fetch(`/api/months?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          monCache[symbol] = d; delete monPending[symbol];
+          if (Cards.monthsNeed(tpl, controlOpts())) render();
+        })
+        .catch(() => { delete monPending[symbol]; });
+      return null;
+    }
+
     // THE FORTNIGHT'S SHORT-INTEREST CHANGE. One payload for the whole
     // screen rather than one per symbol, so it is fetched once and cached;
     // and the repaint is the half that matters, which is why "does this
@@ -1130,6 +1162,7 @@
       'brdMode', 'brdSp500',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
+      'monSym', 'monView',
       'evoSym', 'evoMeasure', 'evoWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
       'disMode'];
@@ -1146,7 +1179,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: controlOpts(),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths,
       updatedAt: pulledAt,
     });
 
@@ -1230,6 +1263,7 @@
       $('barBox').style.display = tpl === 'bars' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
+      $('monBox').style.display = tpl === 'months' ? 'block' : 'none';
       $('histBox').style.display = tpl === 'histogram' ? 'block' : 'none';
       // A control that can change nothing reads as broken, so the subject
       // picker is shown only in the mode that marks one.
@@ -1402,6 +1436,11 @@
       $(id).addEventListener('change', () => { if (tpl === 'day') render(); }));
     ['spotSym', 'spotWin', 'spotProf'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'spotlight') render(); }));
+    // Month by month: its own listener list, and its view picker filled from
+    // the module so it cannot offer a value the card does not know.
+    ['monSym', 'monView'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'months') render(); }));
+    for (const [v, label] of Cards.monthViews()) $('monView').appendChild(new Option(label, v));
     ['evoSym', 'evoMeasure', 'evoWin'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'evolution') render(); }));
     // A FIFTEENTH hardcoded listener list. histMode is in it like any
@@ -1832,6 +1871,8 @@
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
         $('histSym').innerHTML = $('chtSym').innerHTML;
+        { const keep = $('monSym').value; $('monSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('monSym').options].some((o) => o.value === keep)) $('monSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;
         // one sector list, built from the rows themselves so it can never
         // offer a sector nothing is in

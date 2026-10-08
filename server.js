@@ -9999,6 +9999,13 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
     try { evo = await evolutionFor(evoNeed.symbol, evoNeed.years); } catch { evo = null; }
   }
 
+  // Month ends for the Month by month card, and only when the template asks.
+  let months = null;
+  const monNeed = Cards.monthsNeed(post.tpl, post.opts || {});
+  if (monNeed && monNeed.symbol) {
+    try { months = await monthsFor(String(monNeed.symbol).toUpperCase()); } catch { months = null; }
+  }
+
   // The fortnight's short-interest change, and only when the template asks
   // -- the module's own question, never a list here.
   let smov = null;
@@ -10023,6 +10030,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getShortMoves: () => smov,
       getHistory: () => hist,
       getEvolution: () => evo,
+      getMonths: () => months,
       updatedAt: (snap && snap.updatedAt) || null,
     });
   } catch (e) {
@@ -10694,6 +10702,30 @@ async function shortMovesPayload() {
 // position, which is public, and the card states the window on its face.
 app.get('/api/short-moves', requireMember, route(async (req, res) => {
   res.json(await shortMovesPayload());
+}));
+
+// ---- month ends for the Month by month card ---------------------------------
+// ONE assembly, two callers -- this route and the phone's saved-post route --
+// and the same two functions /api/stock already uses for the stock page's
+// grid, so the card and the page cannot be handed different month ends.
+const monthsCache = new Map();
+async function monthsFor(symbol) {
+  const hit = monthsCache.get(symbol);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.body;
+  const [bars, bench] = await Promise.all([
+    store.readBars(symbol, 2600), benchMonthEnds().catch(() => [])]);
+  const body = { symbol, stock: monthEnds(bars), bench };
+  monthsCache.set(symbol, { at: Date.now(), body });
+  return body;
+}
+app.get('/api/months', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  res.json(await monthsFor(symbol));
 }));
 
 app.get('/api/evolution', requireAuth, route(async (req, res) => {

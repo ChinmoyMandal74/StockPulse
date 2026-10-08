@@ -49,6 +49,8 @@
   // because it is the only card fed by the FINRA archive and both hosts
   // cache it themselves.
   let getShortMoves = () => null;
+  // One symbol’s month-end closes and the index’s, or null while it loads.
+  let getMonths = () => null;
   // ONE stock's own daily closes — { symbol, name, closes, dates, rangeLabel,
   // price, today }. A plain data field rather than a getter, because the only
   // host that has it (the stock page) already holds it: it drew the chart from
@@ -5858,6 +5860,152 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Month by month: one company's returns, year by month ---------------
+  //
+  // THE STOCK PAGE'S GRID AS A CARD. One row per year, one column per month,
+  // each cell that month's return; a Year column and a count along the foot.
+  //
+  // IT IS A RECORD, NOT A SEASONAL PATTERN, and a posted card is where that
+  // matters most: ten years is ten samples a month, and with twelve months to
+  // choose from one always looks special by chance. So the foot is a COUNT
+  // beside the stock's overall share of up months, never an average, and
+  // there is no best-month callout.
+  //
+  // THE ARITHMETIC IS RESTATED from private/stock.html rather than shared,
+  // the BENCHMARKS bargain: this module has no requires and no DOM, which is
+  // what lets a card render identically in Node and the browser. Both read
+  // the same month ends from the same server function, and a test draws the
+  // card and the page over one fixture.
+  const MON_VIEWS = [['raw', 'Own return'], ['rel', 'Against the S&P 500']];
+  const MON_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const MON_CAP = { raw: 20, rel: 12 };
+  // How many years each artboard holds at a size somebody can read. Measured
+  // with the note at its longest; the newest years are the ones kept.
+  const MON_YEARS = { portrait: 11, square: 8, story: 11 };
+  // Asked of the module by BOTH hosts, for the reason basketDays and
+  // evolutionNeed exist: a pairing restated in each host is how a card ships
+  // drawing nothing.
+  function monthsNeed(tpl, opts) {
+    if (tpl !== 'months') return null;
+    return { symbol: (opts && opts.monSym) || null };
+  }
+  // Each month against the month end before it. A missing month is a gap,
+  // never bridged: a two-month move filed under one month is a wrong cell.
+  function monReturns(rows) {
+    const out = {};
+    for (let i = 1; i < rows.length; i++) {
+      const ym = rows[i][0], c = rows[i][1], pym = rows[i - 1][0], pc = rows[i - 1][1];
+      const y = Number(ym.slice(0, 4)), mo = Number(ym.slice(5, 7));
+      const prev = mo === 1 ? (y - 1) + '-12' : y + '-' + String(mo - 1).padStart(2, '0');
+      if (pym !== prev || !(pc > 0) || !(c > 0)) continue;
+      out[ym] = (c / pc - 1) * 100;
+    }
+    return out;
+  }
+  // December to December, compounded from the month ends.
+  function monYears(rows) {
+    const by = {}, lastOf = {};
+    for (const r of rows) { by[r[0]] = r[1]; lastOf[r[0].slice(0, 4)] = r[0]; }
+    const out = {};
+    for (const y of Object.keys(lastOf)) {
+      const start = by[(Number(y) - 1) + '-12'], end = by[lastOf[y]];
+      if (start > 0 && end > 0) out[y] = (end / start - 1) * 100;
+    }
+    return out;
+  }
+
+  function tplMonths() {
+    const sym = O.monSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((r) => r.symbol === sym);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!row) return shell('Nothing to chart', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const data = getMonths(sym);
+    if (!data) return shell('Reading the archive', 'Drawing', 'the months…');
+    const rows = Array.isArray(data.stock) ? data.stock : [];
+    if (rows.length < 13) {
+      return shell(nameOf(row), 'Month by month', 'not enough history',
+        'A grid needs at least a year of month ends, and ' + sym + ' has ' + rows.length + '.');
+    }
+    const own = monReturns(rows), ownY = monYears(rows);
+    const bench = Array.isArray(data.bench) ? data.bench : [];
+    const idx = monReturns(bench), idxY = monYears(bench);
+    // The index reading needs an index. Without one the card falls back to
+    // the stock's own return AND SAYS SO in its subtitle, rather than drawing
+    // raw figures under a heading that claims otherwise.
+    const rel = O.monView === 'rel' && Object.keys(idx).length >= 12;
+    const val = (ym) => (own[ym] == null ? null : !rel ? own[ym] : idx[ym] == null ? null : own[ym] - idx[ym]);
+    const valY = (y) => (ownY[y] == null ? null : !rel ? ownY[y] : idxY[y] == null ? null : ownY[y] - idxY[y]);
+    const cap = rel ? MON_CAP.rel : MON_CAP.raw;
+    const lastYm = rows[rows.length - 1][0];
+    const allYears = [...new Set(Object.keys(own).map((k) => Number(k.slice(0, 4))))].sort((a, b) => b - a);
+    const years = allYears.slice(0, MON_YEARS[size.id] || 10);
+
+    const cell = (v, c, extra) => {
+      if (v == null || !isFinite(v)) return '<span class="mh-c mh-na"></span>';
+      // The sign comes from the ROUNDED value, so a move that prints as 0.0
+      // is neither green nor a red minus zero.
+      const r = Math.round(v * 10) / 10;
+      const a = Math.round((0.10 + 0.40 * Math.min(Math.abs(v) / c, 1)) * 100);
+      const cls = r > 0 ? 'mh-up' : r < 0 ? 'mh-dn' : 'mh-flat';
+      const txt = (r > 0 ? '+' : r < 0 ? '−' : '')
+        + (Math.abs(r) >= 100 ? Math.round(Math.abs(r)) : Math.abs(r).toFixed(1));
+      return '<span class="mh-c ' + cls + (extra ? ' ' + extra : '') + '" style="--a:' + a + '%">' + txt + '</span>';
+    };
+    const body = years.map((y) => '<span class="mh-y">' + y + '</span>'
+      + MON_NAMES.map((_, i) => {
+        const ym = y + '-' + String(i + 1).padStart(2, '0');
+        return cell(val(ym), cap, ym === lastYm ? 'mh-part' : '');
+      }).join('')
+      + cell(valY(y), cap * 3, 'mh-yr' + (String(y) === lastYm.slice(0, 4) ? ' mh-part' : ''))).join('');
+
+    // The foot counts over the years DRAWN, so the count under a column is
+    // the count of the cells above it -- and never the month still running.
+    let ups = 0, all = 0;
+    const foot = MON_NAMES.map((_, i) => {
+      let u = 0, n = 0;
+      for (const y of years) {
+        const ym = y + '-' + String(i + 1).padStart(2, '0');
+        const v = ym === lastYm ? null : val(ym);
+        if (v == null) continue;
+        n++; if (v > 0) u++;
+      }
+      ups += u; all += n;
+      return '<span class="mh-f">' + (n ? u + '/' + n : '') + '</span>';
+    }).join('');
+    const base = all ? Math.round(ups / all * 100) : null;
+    const fellBack = O.monView === 'rel' && !rel;
+
+    const note = (rel
+      ? 'Each cell is the month’s price return less the S&P 500’s, in points — whether it beat the market, not whether it rose. '
+      : 'Each cell is the price return for that calendar month, in percent; dividends are not included. ')
+      + 'The outlined cell is the month still running. The bottom row counts the years each month was '
+      + (rel ? 'ahead' : 'up')
+      + (base == null ? '. ' : '; across every month shown the figure is ' + base + '%, which is what any one month should be read against. ')
+      + 'With about ' + years.length + ' readings a month and twelve months to choose from, one will always '
+      + 'look special by chance — a record of what happened, not a pattern to trade.';
+
+    const n = nameOf(row);
+    return chromeTop()
+      + '<div class="s-body"><div class="mh-in">'
+      + '<span class="s-kick">' + esc((row.sector ? row.sector + ' · ' : '') + sym + ' · ' + years.length
+        + (years.length === 1 ? ' year' : ' years')) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span><span class="dim">'
+      + esc('month by month' + (rel ? ', against the S&P 500' : fellBack ? ' — own return, no index reading held' : ''))
+      + '</span></h2>'
+      + '<div class="mh-grid" style="grid-template-rows:auto repeat(' + years.length + ',minmax(0,1fr)) auto;'
+      + 'max-height:calc(' + years.length + ' * var(--mh-row) + 90px)">'
+        + '<span class="mh-h"></span>' + MON_NAMES.map((m) => '<span class="mh-h">' + m + '</span>').join('')
+        + '<span class="mh-h">Year</span>'
+        + body
+        + '<span class="mh-f mh-fl">' + (rel ? 'Ahead' : 'Up') + '</span>' + foot + '<span class="mh-f"></span>'
+      + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
@@ -5868,11 +6016,59 @@
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
     shorted: tplShorted, breadth: tplBreadth,
     bars: tplBars,
+    months: tplMonths,
   };
 
   // The card styles travel WITH the builders: a new grammar added to one
   // page and styled in the other is exactly the drift this module prevents.
   const STYLE = `
+    /* ---- Month by month: one company, year by month ----------------------
+       NO HEX LITERAL AND NO BACKTICK ANYWHERE IN HERE. Every colour is a
+       token, so all four grounds resolve; a backtick would end the STYLE
+       template literal, which node --check passes. */
+    .mh-in { display: flex; flex-direction: column; height: 100%; }
+    /* The company name is the headline and is arbitrarily long: stepped down
+       by length, then clipped rather than wrapped. */
+    .mh-name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mh-name.mh-l1 { font-size: 50px; }
+    .mh-name.mh-l2 { font-size: 38px; }
+    .sz-square .mh-name.mh-l1 { font-size: 44px; }
+    .sz-square .mh-name.mh-l2 { font-size: 34px; }
+    .sz-story .mh-name.mh-l1 { font-size: 58px; }
+    .sz-story .mh-name.mh-l2 { font-size: 44px; }
+    .mh-in .s-title .dim { display: block; font-size: 34px; line-height: 1.2;
+                           letter-spacing: -0.015em; margin-top: 8px; }
+    .sz-square .mh-in .s-title .dim { font-size: 28px; }
+    .sz-story .mh-in .s-title .dim { font-size: 42px; }
+    /* The grid takes what the title and the note leave, up to a row height
+       that still reads as a cell: a card with four years does not stretch
+       them into slabs. minmax(0, 1fr) on every track, never a bare 1fr. */
+    .mh-grid { flex: 1 1 auto; min-height: 0; display: grid; gap: 5px; margin-top: 20px;
+               grid-template-columns: 58px repeat(12, minmax(0, 1fr)) 88px;
+               --mh-row: 64px; font-family: var(--mono); font-size: 17px; }
+    .sz-square .mh-grid { --mh-row: 52px; font-size: 16px; gap: 4px; margin-top: 14px; }
+    .sz-story .mh-grid { --mh-row: 108px; font-size: 18px; gap: 6px; margin-top: 28px; }
+    .mh-h { font-size: 13px; letter-spacing: .08em; text-transform: uppercase;
+            color: var(--faint); text-align: center; padding-bottom: 4px; }
+    .sz-story .mh-h { font-size: 16px; }
+    .mh-y { color: var(--faint); font-size: 15px; display: flex; align-items: center; }
+    .sz-story .mh-y { font-size: 18px; }
+    .mh-c { display: flex; align-items: center; justify-content: center; min-height: 0;
+            border-radius: 5px; color: var(--text); font-weight: 600;
+            font-variant-numeric: tabular-nums; white-space: nowrap; }
+    /* The tint is strength only and the number is the data. --mh-k thins it
+       on the light grounds, where the greens and reds are darker inks and a
+       full-strength fill would swallow the figure printed on it. */
+    .mh-up { background: color-mix(in srgb, var(--green) calc(var(--a) * var(--mh-k, 1)), transparent); }
+    .mh-dn { background: color-mix(in srgb, var(--red) calc(var(--a) * var(--mh-k, 1)), transparent); }
+    .mh-flat { background: var(--hair); }
+    .s-art.th-light .mh-grid { --mh-k: 0.72; }
+    .mh-part { outline: 2px dotted var(--muted); outline-offset: -2px; }
+    .mh-yr { font-weight: 800; }
+    .mh-f { color: var(--faint); font-size: 14px; text-align: center; padding-top: 5px; }
+    .mh-f.mh-fl { text-align: left; }
+    .sz-story .mh-f { font-size: 17px; }
+    .mh-in .s-sub { margin-top: auto; padding-top: 16px; }
     /* ---- Bars: any one measure, ranked -----------------------------------
        NO HEX LITERAL AND NO BACKTICK ANYWHERE IN HERE. Every value is a
        token, so all four grounds resolve with no override block; and a
@@ -7570,6 +7766,8 @@
     // module by the studio AND by the phone's saved-post route, so the two
     // cannot ask for different things — the pairing `basketDays` records.
     evolutionNeed,
+    monthsNeed,
+    monthViews: () => MON_VIEWS.map((v) => v.slice()),
     shortMovesNeed,
     // The floors, so the studio's picker has no copy of them to drift from.
     shortMoveFloors: () => Object.keys(SMOV_FLOORS)
@@ -7663,6 +7861,7 @@
       getHistory = c.getHistory || (() => null);
       getEvolution = c.getEvolution || (() => null);
       getShortMoves = c.getShortMoves || (() => null);
+      getMonths = c.getMonths || (() => null);
       chartOne = c.chart || null;
       const fn = BUILDERS[id] || BUILDERS.movers;
       return fn();
