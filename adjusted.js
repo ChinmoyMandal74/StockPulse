@@ -169,7 +169,100 @@
   // project has shipped twice (/api/db-stats, the pivot's DIMS).
   const LIVE_MAX_DAYS = 200;
 
-  function evolutionSeries(SecFacts, rows, closes, sharesToday) {
+  // ---- THE SHARE COUNT EACH QUARTER WAS FILED WITH, ON TODAY'S BASIS ---------
+  // (2026-10-08, found on the owner's own Apple card.) `sharesToday x close(t)`
+  // cancels splits exactly and ignores BUYBACKS, and for a P/E history that is
+  // not a footnote: Apple has retired about 30% of its shares since 2016, so
+  // its end-2016 multiple read 9.4x where it was about 14x, and the card's
+  // "x4.1" expansion was really about x2.8.
+  //
+  // The fix is the count the company FILED that quarter, restated for the
+  // splits since -- which needs the split history this app did not hold
+  // until now.
+  //
+  // WHICH SPLITS A FILED COUNT STILL NEEDS IS NOT KNOWABLE FROM ITS DATE.
+  // `latestFilled` takes the NEWEST filing's version of a period, and a later
+  // 10-Q carries prior-year comparatives ALREADY restated for a split -- so a
+  // period that ended before a split may be on either basis, and filling can
+  // take the number from a third document again. What IS known is the shape
+  // of the error: a filing has been restated for every split up to its own
+  // date, so the factor it still lacks is the product of the LAST k splits,
+  // for some k. So each quarter tries every such k and keeps the one that
+  // lands nearest the quarter AFTER it, walking back from today's count.
+  // Buybacks move a count a few percent a quarter and a split moves it 25% at
+  // the very least, so the nearest candidate is not a close call.
+  //
+  // A COUNT NO CANDIDATE CAN RECONCILE IS JUNK, AND IS LEFT OUT -- NVIDIA's
+  // trail carries 564.5M, 0.5M, 582.6M in consecutive quarters. That quarter
+  // takes its neighbour's count and is counted in `mended`.
+  //
+  //   splits  [{ d, f }], f = new shares per old share (4 for a 4-for-1)
+  //   anchor  today's share count, or null
+  // Returns { at: { 'YYYY-MM-DD': shares }, filed, mended } or null where
+  // fewer than half the quarters carry a usable count.
+  const SHARE_STEP_MAX = 1.6;     // a quarter's count this far from its neighbour is not a buyback
+  function splitAdjustedShares(SecFacts, rows, dates, splits, anchor) {
+    const all = Array.isArray(rows) ? rows : [];
+    if (!all.length || !Array.isArray(dates) || !dates.length || !Array.isArray(splits)) return null;
+    const filled = SecFacts.latestFilled(all);
+    const raw = {};
+    // The quarter's own count first; the year's where the quarter has none --
+    // a fourth quarter is differenced here, and a share count cannot be.
+    for (const t of ['FY', 'Q']) {
+      for (const r of filled) {
+        if (r.periodType !== t || !r.periodEnd) continue;
+        let s = num(r.sharesDiluted);
+        // WHERE NO COUNT IS TAGGED, the same filing states it a second way: net
+        // income over diluted EPS. Alphabet tags a share count only from 2023
+        // (three classes), and without this its whole history fell back to
+        // today's count. Only off an EPS large enough that its rounding to a
+        // cent is not most of the answer.
+        if (!(s > 0)) {
+          const ni = num(r.netIncome), eps = num(r.epsDiluted);
+          s = (ni != null && eps != null && Math.abs(eps) >= 0.2 && ni / eps > 0) ? ni / eps : null;
+        }
+        if (s != null && s > 0) raw[r.periodEnd] = s;
+      }
+    }
+    const sp = splits.filter((x) => x && x.d && num(x.f) > 0).slice().sort((a, b) => (a.d < b.d ? -1 : 1));
+    const at = {};
+    let prev = (num(anchor) != null && num(anchor) > 0) ? num(anchor) : null;
+    let filedN = 0, mended = 0;
+    const pending = [];                        // quarters waiting for a count to borrow
+    for (let i = dates.length - 1; i >= 0; i--) {
+      const d = dates[i];
+      const s = raw[d];
+      let pick = null;
+      if (s != null) {
+        // every product of the last k splits that fall after this period end
+        const after = sp.filter((x) => x.d > d);
+        let f = 1; const cands = [s];
+        for (let k = after.length - 1; k >= 0; k--) { f *= Number(after[k].f); cands.push(s * f); }
+        if (prev == null) {
+          // NO ANCHOR AND A SPLIT SINCE THIS QUARTER ENDED: there is nothing
+          // to say whether the filing had seen it, and guessing wrong is the
+          // whole factor. The series falls back rather than guess.
+          if (after.length) return null;
+          pick = cands[0];
+        }
+        else {
+          let best = null, bd = Infinity;
+          for (const c of cands) { const dist = Math.abs(Math.log(c / prev)); if (dist < bd) { bd = dist; best = c; } }
+          if (bd <= Math.log(SHARE_STEP_MAX)) pick = best;
+        }
+      }
+      if (pick != null) {
+        at[d] = pick; prev = pick; filedN++;
+        while (pending.length) at[pending.pop()] = pick;
+      } else if (prev != null && at[dates[i + 1]] != null) { at[d] = prev; mended++; }
+      else pending.push(d);
+    }
+    mended += pending.length;
+    if (filedN * 2 < dates.length) return null;
+    return { at, filed: filedN, mended };
+  }
+
+  function evolutionSeries(SecFacts, rows, closes, sharesToday, splits) {
     const all = Array.isArray(rows) ? rows : [];
     const bars = Array.isArray(closes) ? closes : [];
     // `latestFilled` rather than `latestPerPeriod`, matching the stock page's
@@ -183,6 +276,13 @@
     // fabricated share count of zero would put every market value at nothing.
     const sh = num(sharesToday);
     const shares = (sh != null && sh > 0) ? sh : null;
+    // WHERE THE SPLIT HISTORY IS HELD, each quarter is valued at the count it
+    // was FILED with. Without it -- `splits` null, or too few usable counts --
+    // the series falls back to today's count throughout, never a mixture: a
+    // line that changes basis part-way has a step in it nobody could explain.
+    const adj = splitAdjustedShares(SecFacts, all, ttm.map((t) => t.d), splits, shares);
+    const basis = adj ? 'filed' : 'today';
+    const sharesAt = (d) => (adj ? (adj.at[d] != null ? adj.at[d] : null) : shares);
 
     // The last close ON OR BEFORE a period end. A quarter end is routinely a
     // weekend — 31 December, 30 June — so an exact-date lookup would drop
@@ -199,7 +299,8 @@
       // delisted shell or an unadjusted reverse split, and SOLS printed
       // +56,129,902% on a live page off exactly that shape.
       const px = (close != null && close >= 0.01) ? close : null;
-      const cap = (shares != null && px != null) ? shares * px : null;
+      const shAt = sharesAt(t.d);
+      const cap = (shAt != null && px != null) ? shAt * px : null;
       points.push({
         d: t.d,
         revenue: rev,
@@ -227,7 +328,11 @@
     const newest = bars.length ? bars[bars.length - 1] : null;
     const nClose = newest ? num(newest.close) : null;
     let live = null;
-    if (shares != null && lastPt && newest && nClose != null && nClose >= 0.01
+    // On the filed basis today's point takes the NEWEST FILED count, so the
+    // line's last segment is a move in price alone and not also a switch
+    // from diluted to basic shares.
+    const liveShares = (adj && lastPt) ? sharesAt(lastPt.d) : shares;
+    if (liveShares != null && lastPt && newest && nClose != null && nClose >= 0.01
         && newest.d > lastPt.d) {
       // BOUNDED, because an unbounded extension draws a straight line across
       // years of unfiled history. Measured across 1,183 symbols: the newest
@@ -244,7 +349,7 @@
       const gap = (Date.parse(newest.d + 'T00:00:00Z')
                  - Date.parse(lastPt.d + 'T00:00:00Z')) / 86400000;
       if (gap > 0 && gap <= LIVE_MAX_DAYS) {
-        const cap = shares * nClose;
+        const cap = liveShares * nClose;
         live = { d: newest.d, close: nClose, cap, pe: trailingPe(cap, lastPt.netIncome) };
       }
     }
@@ -256,8 +361,12 @@
       // count draws the business alone and says why, rather than drawing a
       // value panel of nothing or — far worse — falling back to the filed
       // count and reintroducing the forty-fold error above.
-      hasValue: shares != null && points.some((p) => p.cap != null),
+      hasValue: points.some((p) => p.cap != null),
       sharesToday: shares,
+      // 'filed' or 'today' -- which share count the market values are struck
+      // on, so the card can say so rather than describe the wrong one.
+      basis,
+      sharesMended: adj ? adj.mended : 0,
     };
   }
 

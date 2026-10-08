@@ -3577,14 +3577,17 @@
       + '</p></div></div>'
       + '<p class="s-sub wide">Trailing twelve months at every filed quarter, from the '
       + 'company\u2019s own SEC filings. The two panels keep their own scales. '
+      // WHICH SHARE COUNT, said on the card because it changes what a past
+      // multiple means. 'filed' is each quarter at the count the company filed
+      // then, restated for splits since; 'today' is the fallback where the
+      // split history or the filed counts are not held, and it reads a
+      // buyback-heavy company's past value low -- Apple's by a third.
+      + (ev.basis === 'filed'
+        ? 'Market value is each quarter\u2019s closing price times the share count the company filed that quarter, adjusted for splits since. '
+        : 'Market value is today\u2019s share count at each day\u2019s close, so a buyback since makes an earlier figure read low. ')
       + (mults
-        // With a multiple drawn the note is about the multiple, and is kept
-        // to the length it had: a card cannot scroll.
-        ? 'Market value is today\u2019s share count at each day\u2019s close, so a buyback makes an earlier multiple read low. '
-          + esc(multNote || (vKey === 'ps' ? 'Revenue is the trailing year\u2019s. ' : ''))
-        : 'Market value is today\u2019s share count at each day\u2019s split-adjusted close, so it '
-          + 'does not restate past share counts \u2014 a buyback makes the earlier multiple read low. '
-          + 'A multiple is not shown where the company lost money.')
+        ? esc(multNote || (vKey === 'ps' ? 'Revenue is the trailing year\u2019s. ' : ''))
+        : 'A multiple is not shown where the company lost money.')
       + '</p>'
       + '</div></div>' + chromeFoot();
   }

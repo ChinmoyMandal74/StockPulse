@@ -5530,6 +5530,49 @@ The standing objection is that two independent scales can be slid against each o
 - Control ids **156 against `POST_OPT_MAX` 200**.
 - Verified: **25 checks** (`evoval-test.js`), the series stubbed at the route so every multiple is planted: a profitable company, one with a five-quarter loss and two runaway quarters, and one never profitable. A 27-combination fit sweep. **Proved by reverting seven times, every one load-bearing** — the label guard only after the fixture was given a pinned LATEST point, since with an ordinary one the two versions print the same thing.
 
+### The Evolution card values each quarter at the share count it was FILED with (2026-10-08, found on the owner's Apple card)
+**Market value in the past was `today's share count x that day's close`, which cancels splits exactly and ignores BUYBACKS — and on a P/E history that is not a footnote.** The owner's own card read Apple's end-2016 multiple as **9.4x** where it was about 14x, so the "x4.1" expansion printed under it was really about x2.8. Apple has retired roughly 30% of its shares since. It is now the count the company filed that quarter, restated for the splits since.
+
+**Measured on production, read-only, both bases side by side:**
+
+| | old basis | filed basis | what it really was |
+|---|---|---|---|
+| AAPL market value, end 2017 | $621B | **$873B** | ~$870B |
+| AAPL P/E, end 2017 | 12.3 | **17.3** | ~17-18 |
+| MSFT market value, mid 2008 | $204B | **$261B** | ~$250B |
+| AMZN market value, end 2017 | $631B | **$580B** | ~$565B |
+| TSLA market value, Sep 2018 | $70B | **$47B** | ~$45B |
+| GOOGL market value, Mar 2018 | $634B | **$731B** | ~$720B |
+
+The error ran BOTH ways: a buyback read the past low, and dilution (Tesla, Amazon) read it high.
+
+#### WHICH SPLITS A FILED COUNT STILL NEEDS IS NOT KNOWABLE FROM ITS DATE
+The obvious rule — multiply by every split after the period end — is wrong, and it is wrong in the common case. `latestFilled` takes the NEWEST filing's version of a period, and a later 10-Q carries prior-year comparatives **already restated** for a split. NVIDIA's trail reads `2023-04: 2,490M`, `2023-07: 24,994M` with the 10-for-1 a year later: the second is restated, the first is not, and both ended before the split.
+
+- **What IS known is the shape of the error**: a filing has been restated for every split up to its own date, so the factor it still lacks is the product of the LAST k splits, for some k. `splitAdjustedShares` in adjusted.js tries every k and keeps the candidate nearest the quarter AFTER it, walking back from today's count. Buybacks move a count a few percent a quarter and the smallest split there is moves it 25%, so it is not a close call.
+- **A count no candidate can reconcile is junk and is left out** (NVIDIA's trail carries 564.5M, 0.5M, 582.6M). That quarter takes its neighbour's; `sharesMended` counts them.
+- **Where no count is tagged, net income over diluted EPS stands in** — the same filing saying the same thing a second way. Alphabet tags a share count only from 2023 (three classes) and would otherwise have fallen back entirely. Only off an EPS of 20 cents or more: below that the rounding to a cent is most of the answer.
+- **NEVER A MIXTURE.** Fewer than half the quarters with a usable count, or no split history, and the WHOLE series is on today's count — a line that changes basis part-way has a step in it nobody could explain. The payload carries `basis` (`filed` / `today`) and **the card's note says which it used**.
+- **No anchor and a split since the period: it falls back rather than guess**, because guessing wrong is the whole factor.
+- **Today's point takes the newest FILED count**, so the last segment is a move in price alone and not also a switch from diluted to basic shares. The cost: the card's market value now is on DILUTED shares and can differ from the screener's by a few percent (Tesla's by 12%, where the vendor's own share count looks high).
+- A company with no current share count on its profile now gets a value panel where it had none.
+
+#### Split history — fetched the first time a symbol needs it
+**`splits` (symbol, d, f) and `split_state` (the fetch clock), both in `SYMBOL_TABLES`.** `f` is new shares per old: 4 for a 4-for-1, 0.125 for a 1-for-8. From Twelve Data's `/splits`, **20 credits a symbol**, measured off `api-credits-used`, pinned to the US listing.
+
+- **NOT part of the profile pull.** Seven profiles a minute already sit at 560 of the 610; twenty more each would breach it. `splitsFor(symbol, prof)` in server.js asks once, on demand, and stores the answer — so **a single stock needs no backfill at all**.
+- **Re-asked when**: never fetched; older than `SPLITS_TTL_DAYS` (180); or **the profile names a last split newer than any held** — which is what stops a fresh split leaving a filed count unadjusted for longer than the profile rotation.
+- **It never competes with a refresh**: while a multi-round run is live it serves what it holds, or nothing, and the series falls back.
+- **"Never split" and "never asked" are different answers** — an empty list is stored and is not asked about again; a refusal or an unreachable provider stores nothing.
+- **`backfill-splits.js`** does the universe in one paced pass (dry run by default, `--commit`, `--only`, `--missing`, `--rate`): about 25,500 credits and a little over two hours at the default 200 a minute. **Not run** — nothing needs it yet; see backlog 28.
+- **The route caches a body per (symbol, window) for ten minutes**, so a card first drawn while the provider was unreachable stays on today's count for that long.
+
+- Verified: **19 checks** on the arithmetic with no server (`shares-test.js` — every company has a TRUE count per quarter and is filed on a mixture of bases; the adjusted series must come back as the true one), and **20** on the store and the fetch (`splits-test.js`, the provider stubbed and every call counted). **Proved by reverting ten and eight times** — the eighth server-side case (never-fetched read as never-split) stops the suite running at all rather than failing a check.
+  - **The EPS floor's first revert reported nothing**: an EPS of one cent implies a count a hundred times out, which the chain rejects anyway — two guards for one fault. It is proved with a few cents of EPS rounded as a filing rounds it, which wanders 10% while staying inside what the chain accepts.
+  - **The route's ten-minute cache made four checks vacuous on the first run**: a repeat request never reached the split lookup. Each call that has to reach it asks for a window not asked for before.
+- **Backlog 28-30**: the S&P's own P/E beside a stock's, the peer chart's market value on this basis, and the splits table as the missing input for repairing an unadjusted archive.
+
+
 ## Consolidated — every group in one table (2026-09-28, owner's request)
 **`/consolidated`: one row per group, so the groups can be read against each other.** The owner's words: *"I do not have a screen to show how Mag 7 as a theme has done compared with Memory or cybersecurity."* Nothing did — a group page shows ONE group against the index, `/compare` is two **stocks**, and the pivot crosses two dimensions to answer *where is the weight* rather than *how has each one done*. Member page, guests refused, like the studio and the pivot beside it; a `Consolidated` button in the bar before Compare.
 

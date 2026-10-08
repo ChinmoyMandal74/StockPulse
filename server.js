@@ -10609,6 +10609,47 @@ const EVO_CACHE_MS = 10 * 60 * 1000;
 // ONE assembly, two callers — this route and the phone's saved-post route.
 // Two copies would be two chances to get the bars' own ordering wrong, and
 // `readBars` returns NEWEST FIRST under the name `datetime`.
+// ---- split history, fetched the first time a symbol needs it ----------------
+// (2026-10-08.) The Evolution card values each past quarter at the share
+// count FILED that quarter, which needs every split since. /splits is 20
+// credits a symbol, so it is NOT part of the profile pull -- seven profiles a
+// minute already sit at 560 of the 610 -- and is asked for on demand, once,
+// and stored. `backfill-splits.js` fills the universe in one paced pass.
+//
+// WHEN IT IS RE-ASKED: never fetched; older than SPLITS_TTL_DAYS; or the
+// profile names a last split NEWER than any we hold. That last test is what
+// stops a fresh split leaving a filed count unadjusted -- the forty-fold
+// class of error -- for longer than the profile rotation.
+//
+// IT NEVER COMPETES WITH A REFRESH. While a multi-round run is live its
+// minute is already budgeted, so a stale answer is served rather than twenty
+// credits spent; and a failure returns what is held, or null -- on which the
+// series falls back to today's share count and the card says so.
+const SPLITS_TTL_DAYS = 180;
+async function splitsFor(symbol, prof) {
+  let held = null;
+  try { held = await store.readSplits(symbol); } catch { held = null; }
+  const newest = held && held.splits.length ? held.splits[held.splits.length - 1].d : null;
+  const profSplit = prof && prof.lastSplitDate ? String(prof.lastSplitDate).slice(0, 10) : null;
+  const stale = !held || Date.now() - held.fetchedAt > SPLITS_TTL_DAYS * 86400000
+    || (profSplit && (!newest || profSplit > newest));
+  if (!stale) return held.splits;
+  const fallback = held ? held.splits : null;
+  if (!API_KEY) return fallback;
+  try { if (await readRefreshState()) return fallback; } catch { /* not busy */ }
+  try {
+    const j = await fetchJson(`${TD_BASE}/splits?symbol=${encodeURIComponent(symbol)}&country=United States&range=full&apikey=${API_KEY}`,
+      { timeout: 15000, budget: 20000, retry: false });
+    // A refusal is { status: 'error' }; a company that never split answers
+    // with an empty list. Only the second is something to store.
+    if (!j || j.status === 'error' || !Array.isArray(j.splits)) return fallback;
+    const list = j.splits.map((s) => ({ d: String(s.date || '').slice(0, 10), f: Number(s.from_factor) / Number(s.to_factor) }))
+      .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s.d) && s.f > 0 && isFinite(s.f)).sort((a, b) => (a.d < b.d ? -1 : 1));
+    await store.writeSplits(symbol, list).catch(() => {});
+    return list;
+  } catch { return fallback; }
+}
+
 async function evolutionFor(symbol, years) {
   const key = symbol + '|' + years;
   const hit = evoCache.get(key);
@@ -10623,8 +10664,9 @@ async function evolutionFor(symbol, years) {
   ]);
   const closes = (bars || []).slice().reverse()
     .map((b) => ({ d: b.datetime, close: b.close }));
+  const splits = await splitsFor(symbol, prof);
   const out = Adjusted.evolutionSeries(
-    SecFacts, rows, closes, prof ? prof.sharesOutstanding : null);
+    SecFacts, rows, closes, prof ? prof.sharesOutstanding : null, splits);
 
   // The window is in YEARS because the series is QUARTERLY — a bar count is
   // the wrong unit for a measure that moves four times a year, and three
@@ -10649,6 +10691,9 @@ async function evolutionFor(symbol, years) {
     // `years` window filter below: it is today, so every window holds it.
     live: out.live,
     sharesToday: out.sharesToday,
+    // 'filed' (each quarter at the count it was filed with, split-adjusted) or
+    // 'today' (today's count throughout), so the card describes the right one.
+    basis: out.basis,
     // How many quarters the trail holds in total, so the card can say when
     // the window it drew is the whole of what was filed rather than a cut.
     total: out.points.length,

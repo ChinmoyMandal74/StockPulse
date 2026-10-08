@@ -922,6 +922,23 @@ const SCHEMA = [
      status     text,
      error      text
    )`,
+  // Split history, from the provider's /splits (20 credits a symbol). Held so
+  // a share count filed years ago can be put on today's basis -- see
+  // `splitAdjustedShares` in adjusted.js. `f` is new shares per old share: 4
+  // for a 4-for-1, 0.1 for a 1-for-10. split_state is the fetch clock, kept
+  // apart for the reason news_state is: a company that has NEVER split still
+  // has to count as checked, or it is asked about for ever.
+  `create table if not exists splits (
+     symbol text not null,
+     d      text not null,
+     f      real not null,
+     primary key (symbol, d)
+   )`,
+  `create table if not exists split_state (
+     symbol     text primary key,
+     fetched_at integer not null,
+     n          integer not null default 0
+   )`,
   // Index membership, taken from the issuer's own daily holdings file —
   // see holdings.js for why that source and not a maintained list.
   //
@@ -3061,6 +3078,32 @@ async function readFundState() {
   }));
 }
 
+// One symbol's split history, or null where it has never been fetched --
+// which is a different answer from an empty list (fetched: never split).
+// Two seeks on primary keys, in one batch.
+async function readSplits(symbol) {
+  await init();
+  const [st, sp] = await db.batch([
+    { sql: 'select fetched_at, n from split_state where symbol = ?', args: [symbol] },
+    { sql: 'select d, f from splits where symbol = ? order by d', args: [symbol] },
+  ], 'read');
+  if (!st.rows.length) return null;
+  return { fetchedAt: st.rows[0].fetched_at, splits: sp.rows.map((x) => ({ d: x.d, f: x.f })) };
+}
+// Whole-symbol replace: the provider returns the full history each time, and
+// a split it has withdrawn should leave with it.
+async function writeSplits(symbol, list) {
+  await init();
+  const rows = (list || []).filter((x) => x && /^\d{4}-\d{2}-\d{2}$/.test(String(x.d)) && Number(x.f) > 0 && isFinite(Number(x.f)));
+  await db.batch([
+    { sql: 'delete from splits where symbol = ?', args: [symbol] },
+    ...rows.map((x) => ({ sql: 'insert or replace into splits (symbol, d, f) values (?, ?, ?)', args: [symbol, x.d, Number(x.f)] })),
+    { sql: 'insert into split_state (symbol, fetched_at, n) values (?, ?, ?) on conflict(symbol) do update set fetched_at = excluded.fetched_at, n = excluded.n',
+      args: [symbol, Date.now(), rows.length] },
+  ], 'write');
+  return rows.length;
+}
+
 async function readShortState() {
   await init();
   const r = await db.execute(
@@ -4239,7 +4282,7 @@ async function readBarsFor(symbols, since) {
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
-  'sec_facts', 'sec_state', 'short_interest', 'short_state'];
+  'sec_facts', 'sec_state', 'short_interest', 'short_state', 'splits', 'split_state'];
 
 // Remove a symbol from the database entirely.
 //
@@ -5730,6 +5773,7 @@ module.exports = {
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
   writeShortInterest, readShortInterest, readShortLatestFor, readShortAsOfFor,
   readShortRecentFor,
+  readSplits, writeSplits,
   readShortState, noteShortMiss, shortNewest, appendShortInterest,
   fundNewest, noteFundMiss, appendFundHoldings, readFundHoldings, readFundState,
   readFundDates,

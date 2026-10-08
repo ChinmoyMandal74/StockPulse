@@ -1256,6 +1256,74 @@ prior from this log is that it will be — the card should not be built at all,
 or should be built stating that measurement on its own face the way the chip
 screen states the cost of its hedge.
 
+## 28. The S&P 500's own P/E history, beside a stock's — 2026-10-08
+
+**Asked for by the owner on the Evolution card: "one thing important when you
+see PE history is the PE history of the stock against S&P PE history."**
+Deferred at their instruction until the single-stock P/E was right, which it
+now is (the filed-share basis, see CLAUDE.md).
+
+**No source we hold sells it**, so it would be BUILT: for the index's members,
+total market value over total trailing earnings at each quarter end, each
+company valued by `splitAdjustedShares` exactly as its own card is.
+
+**What it needs, in order:**
+- **Split history for every member.** `backfill-splits.js --commit` does the
+  universe: 20 credits a symbol, about 25,500 credits and a little over two
+  hours at the default 200 credits a minute. Index members only is ~10,000.
+- **A stored series, rebuilt nightly as its own phase** (beside `secRotate`,
+  never in the refresh tail). Computing it per request means reading ~500
+  companies' filings — about 175,000 `sec_facts` rows — which on this database
+  is a quota event, not a slow query.
+
+**Three things the card would have to say on its own face:**
+- It is TODAY'S members traced back, not the index as it was constituted then
+  — `fund_holdings` begins 2026-10-01, so there is no historical membership.
+  Survivorship flatters it: a company that left the index by failing is absent.
+- About 10% of filers have no full trailing year in our copy of the filings,
+  lenders especially, so it covers most of the index's value and not all.
+- It will not match S&P's published figure, which is on operating or
+  as-reported earnings by their own method.
+
+**Before drawing it, check it against a known reading** — the index's
+published trailing P/E at two or three past dates. If the built series is not
+within a few points of those, it is not the S&P's P/E under another name and
+should be labelled as what it is ("today's 500, aggregated") or not built.
+
+**One multiple at a time still holds**: the index line shares the stock's
+panel because both are the SAME quantity on the same scale, which is what
+makes one axis honest for them.
+
+## 29. The peer chart's market value is still on today's share count — 2026-10-08
+
+`peerTrendFor` computes each peer's market value as today's share count times
+that quarter's close, the formulation the Evolution card has just left. It
+reads a buyback-heavy peer's past value low — Apple's by about a third over
+ten years — and on a chart that RANKS companies by market value that can
+change a place.
+
+**It was not changed with the Evolution card because it is seven companies a
+request**, so it needs seven split histories (140 credits cold) where that
+card needs one. Once `backfill-splits.js` has run for the universe it costs
+nothing: `splitAdjustedShares` is pure and already takes what that route
+reads. Until then the peer card's note still says today's share count, which
+is true of it.
+
+## 30. The splits table can repair an unadjusted archive — 2026-10-08
+
+Three symbols carry a split the provider serves UNADJUSTED in `time_series`
+(MLI 2-for-1 on 2026-06-25, CTVA 6.18-for-1 on 2026-10-01, CORT about
+2-for-1), and `persistBars` cannot see them: it detects a split by disagreeing
+with a re-fetch, and the provider's history never changes.
+
+**The new `splits` table is the independent source that was missing.** A
+check of each symbol's largest one-day step against its own split list would
+say which archives are unadjusted, and the factor to divide by — the manual
+adjustment path entry 21 describes, with its input now on hand. Worth
+confirming first that `/splits` actually lists the three (MLI's is reported by
+`/statistics`; CORT's was not reported there at all).
+
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
