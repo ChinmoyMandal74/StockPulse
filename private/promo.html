@@ -1029,18 +1029,18 @@
       { id: 'peertrend', name: 'Against its peers', note: 'One company and its closest peers on revenue, earnings, margin or value, quarter by quarter' },
       { id: 'months', name: 'Month by month', note: 'One company, year by month — each cell that month’s return' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
-      { id: 'shortmoves', name: 'Short moves', note: 'Where the shorts built and where they covered, over the latest fortnight' },
-      { id: 'shorted', name: 'Most shorted', note: 'The level as last reported, beside what each one has done this year' },
-      { id: 'histogram', name: 'Histogram', note: 'The shape of the whole screen on one measure — on its own, or with a stock marked on it' },
-      { id: 'bars', name: 'Bars', note: 'Any one measure, ranked highest or lowest — returns, technicals, fundamentals' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
-      { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
-      { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
-      { id: 'range', name: 'Range', note: 'Where each stock sits in its 52-week range' },
-      { id: 'advboard', name: 'Advice', note: 'What the rules read, four ways' },
+      { id: 'bars', name: 'Bars', note: 'Any one measure, ranked highest or lowest — returns, technicals, fundamentals' },
       { id: 'fund', name: 'Fundamentals', note: 'Size, margins, growth \u2014 four ways' },
+      { id: 'shorted', name: 'Most shorted', note: 'The level as last reported, beside what each one has done this year' },
+      { id: 'shortmoves', name: 'Short moves', note: 'Where the shorts built and where they covered, over the latest fortnight' },
       { id: 'size', name: 'Size', note: 'Companies as circles — two measures at once' },
       { id: 'bubble', name: 'Bubble', note: 'Two measures against each other, area as a third' },
+      { id: 'histogram', name: 'Histogram', note: 'The shape of the whole screen on one measure — on its own, or with a stock marked on it' },
+      { id: 'range', name: 'Range', note: 'Where each stock sits in its 52-week range' },
+      { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
+      { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
+      { id: 'advboard', name: 'Advice', note: 'What the rules read, four ways' },
       { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
       { id: 'howto', name: 'How to', note: 'Training slides — one topic, three slides, a carousel each' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
@@ -1092,11 +1092,43 @@
       ['treemap', 'Treemap'],
       ['waterfall', 'Waterfall'],
     ];
+    // ---- Rankings, Compare, Brand (2026-10-08, owner: "do what is logical") ---
+    // The same grouping for everything else, by what a card DOES:
+    //   Rankings -- a top-N list of companies on one measure
+    //   Compare  -- many companies drawn against each other
+    //   Brand    -- no data: words and identity
+    // Advice stays an entry of its own; a group of one is a picker with one
+    // option. Fundamentals sits in Rankings because its default view ranks.
+    const RANK_VIEWS = [
+      ['movers', 'Movers'],
+      ['bars', 'Bars — any measure'],
+      ['fund', 'Fundamentals'],
+      ['shorted', 'Most shorted'],
+      ['shortmoves', 'Short moves'],
+    ];
+    const CMP_VIEWS = [
+      ['size', 'Size — circles'],
+      ['bubble', 'Bubble'],
+      ['histogram', 'Histogram'],
+      ['range', '52-week range'],
+      ['sparks', 'Sparklines'],
+      ['chart', 'Chart'],
+    ];
+    const BRAND_VIEWS = [
+      ['intro', 'Intro'],
+      ['howto', 'How to'],
+      ['announce', 'Announcement'],
+      ['disclaimer', 'Disclaimer'],
+      ['avatar', 'Profile picture'],
+    ];
     // ONE MECHANISM FOR EVERY GROUP: an entry in the Template list, the
     // sub-template last used inside it, and the views the picker offers.
     const TPL_GROUPS = [
       { name: 'Market', views: MKT_VIEWS, last: 'day' },
       { name: SPOT_NAME, views: SPOT_VIEWS, last: 'spotlight' },
+      { name: 'Rankings', views: RANK_VIEWS, last: 'movers' },
+      { name: 'Compare', views: CMP_VIEWS, last: 'size' },
+      { name: 'Brand', views: BRAND_VIEWS, last: 'intro' },
     ];
     const groupOf = (id) => TPL_GROUPS.find((g) => g.views.some((v) => v[0] === id)) || null;
     // THE STOCK CARRIES ACROSS THE FIVE. Each keeps its own control id,
@@ -1111,6 +1143,30 @@
         if (el && other !== id && [...el.options].some((o) => o.value === src.value)) el.value = src.value;
       }
     }
+    // THE CUT CARRIES ACROSS EVERY SCOPED CARD. Each keeps its own six control
+    // ids (a saved post stores them under those), but choosing a list, sector,
+    // industry, size, screen or S&P cut on one sets it on the others -- so
+    // moving from Movers to Bars is the same companies ranked another way,
+    // not a silent return to the whole screen. A card with no such control
+    // (Short moves has only the S&P cut) is simply skipped.
+    const SCOPE_PARTS = ['Scope', 'Sector', 'Industry', 'Cap', 'Screen', 'Sp500'];
+    function scopeSyncFrom(id) {
+      const part = SCOPE_PARTS.find((x) => id.endsWith(x));
+      const src = $(id);
+      if (!part || !src) return;
+      // An industry exists as an option only once its sector is set.
+      if (part === 'Industry') syncIndustries(false);
+      for (const p of INDUSTRY_PREFIXES) {
+        const el = $(p + part);
+        if (el && el !== src && [...el.options].some((o) => o.value === src.value)) el.value = src.value;
+      }
+      if (part === 'Sector') syncIndustries(false);
+    }
+    function scopeSyncAll(prefix) {
+      for (const part of ['Scope', 'Sector', 'Cap', 'Screen', 'Sp500', 'Industry']) scopeSyncFrom(prefix + part);
+    }
+    // Which scoped controls belong to which template, for an opened post.
+    const SCOPE_PREFIX = { movers: 'mov', chart: 'cht', sparks: 'spk', range: 'rng', advboard: 'adv', fund: 'fund', size: 'size', bubble: 'bub', histogram: 'hist', shorted: 'shrt', bars: 'bar' };
     const OWNER_ONLY_TPLS = new Set(['announce']);
     let canAnnounce = false;
     const visibleTpls = () => TPLS.filter((t) => canAnnounce || !OWNER_ONLY_TPLS.has(t.id));
@@ -1458,10 +1514,11 @@
       }
       // The picker is refilled only when the GROUP changes, so it is never
       // rebuilt under the pointer.
-      if (grp && $('tplSub').dataset.group !== grp.name) {
+      const subKey = grp ? grp.name + '|' + key : '';
+      if (grp && $('tplSub').dataset.group !== subKey) {
         $('tplSub').innerHTML = '';
-        for (const [id, label] of grp.views) $('tplSub').appendChild(new Option(label, id));
-        $('tplSub').dataset.group = grp.name;
+        for (const [id, label] of grp.views) if (tpls.some((t) => t.id === id)) $('tplSub').appendChild(new Option(label, id));
+        $('tplSub').dataset.group = subKey;
       }
       $('tplSubBox').hidden = !grp;
       if (grp && $('tplSub').value !== tpl) $('tplSub').value = tpl;
@@ -1481,12 +1538,16 @@
     $('tplSub').addEventListener('change', (e) => {
       if (!groupOf(e.target.value)) return;
       tpl = e.target.value;
+      if (tpl === 'avatar') size = SIZES.find((z) => z.id === 'square') || size;
       paintControls();
       render();
     });
     // Registered here, ahead of each template's own redraw listener, so the
     // other four already hold the company by the time anything is drawn.
     for (const [, , id] of SPOT_VIEWS) $(id).addEventListener('change', () => spotSyncFrom(id));
+    for (const p of INDUSTRY_PREFIXES) for (const part of SCOPE_PARTS) {
+      const el = $(p + part); if (el) el.addEventListener('change', () => scopeSyncFrom(p + part));
+    }
     $('tplSelect').addEventListener('change', (e) => {
       tpl = e.target.value;
       // an avatar is square by definition; the other cards keep whatever
@@ -1762,6 +1823,8 @@
       Object.keys(opts).forEach(set);
       // A post stores only its own template's stock; the sibling views follow it.
       if (spotView(tpl)) spotSyncFrom(spotView(tpl)[2]);
+      // ...and the same for the cut: the opened card's own wins, the rest follow.
+      if (SCOPE_PREFIX[tpl]) scopeSyncAll(SCOPE_PREFIX[tpl]);
       render();
       $('postName').value = p.name;
       postSay('Loaded “' + p.name + '”.');

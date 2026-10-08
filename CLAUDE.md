@@ -5554,6 +5554,24 @@ The standing objection is that two independent scales can be slid against each o
 - **Left where they are**: Short moves, Most shorted, Histogram, Bars and Movers — each takes a scope or ranks a list, which is a different kind of card from one whose subject is the market itself.
 - Verified: the grouping suite is **38 checks** over both groups, and **proved by reverting nine times, every one load-bearing** — Market left out of the groups, the picker not refilled between groups, and the seven above.
 
+#### ...and Rankings, Compare and Brand finish the list (2026-10-08, owner: "do what is logical")
+**The Template list is six entries where it was 19: Market, Stock spotlight, Rankings, Compare, Advice, Brand.** Grouped by what a card does, through the same `TPL_GROUPS` mechanism; template ids unchanged.
+
+| group | sub-templates |
+|---|---|
+| **Rankings** — a top-N list on one measure | Movers, Bars, Fundamentals, Most shorted, Short moves |
+| **Compare** — many companies drawn against each other | Size, Bubble, Histogram, 52-week range, Sparklines, Chart |
+| **Brand** — no data | Intro, How to, Announcement, Disclaimer, Profile picture |
+
+- **Advice stays an entry of its own.** A group of one is a picker with one option.
+- **Fundamentals is in Rankings** because its default view ranks; its quadrant view would fit Compare. A judgement call, the owner's to revisit.
+- **`TPLS` was reordered so each group's members are contiguous**, or a group's single visible entry would move around the list with whichever view was last used.
+- **The Sub-template picker offers only what the account may use**: Announcement is owner-only, so a member's Brand picker has four. Its rebuild key includes the visible-template list, since `/api/me` lands after the first paint.
+- **The profile picture forces the square artboard from either picker.**
+- **THE CUT CARRIES ACROSS EVERY SCOPED CARD** (`scopeSyncFrom`): the list, sector, industry, size band, screen and S&P cut chosen on one of the eleven scoped templates is set on the other ten, so moving from Movers to Bars is the same companies ranked another way. Each card keeps its own six control ids. A sector change refills the other cards' industry lists before an industry is copied; opening a saved post makes that post's cut the one everything follows. **This reverses an older behaviour** where each card kept an independent scope.
+- **Not done**: promoting each card's own mode control (Advice, Fundamentals, Chart, Histogram, Range) into the Sub-template picker, and listing the single-stock modes of those cards under Stock spotlight.
+- Verified: the grouping suite is **48 checks** (`spotgroup-test.js`).
+
 ### The Evolution card’s lower panel can be a multiple (2026-10-08, owner: "any reason why you didn’t do the evolution of P/E")
 **A `Market measure` control (`evoValue`): Market value (the default), P/E, or P/S.** The card had refused a P/E line for a measured reason — the series explodes where earnings pass through nothing (CRM peaks near 8,000 against a median of 142) and does not exist for a loss-making quarter. Both halves are now HANDLED rather than used as a reason to withhold it:
 
