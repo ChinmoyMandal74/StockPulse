@@ -120,6 +120,12 @@
 
       <label>Template</label>
       <select id="tplSelect" aria-label="Template"></select>
+      <!-- ONE COMPANY, FIVE WAYS. The single-stock templates are one entry in
+           the list above and are told apart here. -->
+      <div id="tplSubBox" hidden>
+        <label>Sub-template</label>
+        <select id="tplSub" aria-label="Sub-template"></select>
+      </div>
       <p class="tplnote" id="tplNote"></p>
 
       <!-- The ground, for EVERY card. It sits here rather than in a
@@ -1014,8 +1020,8 @@
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
-      { id: 'peertrend', name: 'Against its peers', note: 'One company and its closest peers on revenue, earnings, margin or value, quarter by quarter' },
       { id: 'perf', name: 'Growth and profitability', note: 'One company’s revenue and net income as bars, its net margin as a line, quarter by quarter or year by year' },
+      { id: 'peertrend', name: 'Against its peers', note: 'One company and its closest peers on revenue, earnings, margin or value, quarter by quarter' },
       { id: 'months', name: 'Month by month', note: 'One company, year by month — each cell that month’s return' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
@@ -1047,6 +1053,43 @@
     let screenList = [];     // the starter screens, so a card can be pointed at one
     // Announcement is free text in the brand's own voice, so only the owner
     // gets it; everyone else sees every other template.
+    // ---- Stock spotlight: one entry, five sub-templates ----------------------
+    // (2026-10-08, owner's cleanup.) Everything that is about ONE company is a
+    // single entry in the Template list, with a Sub-template picker under it.
+    //
+    // THE TEMPLATE IDS DO NOT CHANGE, and that is the whole design. A saved
+    // post names its template by id and cleanPosts checks it against
+    // Cards.ids, so re-keying these would strand every stored post -- the
+    // Scale rename's rule: a label is free, a key is not. The grouping is this
+    // page's presentation and nothing else; cards.js, the server and the phone
+    // know nothing about it.
+    //
+    // So #tplSelect still holds an <option> per id. Inside the group exactly
+    // ONE is shown -- the sub-template last used -- and it reads 'Stock
+    // spotlight'; the others are hidden. Choosing the entry therefore comes
+    // back to the view you left.
+    const SPOT_NAME = 'Stock spotlight';
+    const SPOT_VIEWS = [
+      ['spotlight', 'Overview', 'spotSym'],
+      ['perf', 'Growth and profitability', 'prfSym'],
+      ['peertrend', 'Against its peers', 'ptrSym'],
+      ['months', 'Month by month', 'monSym'],
+      ['evolution', 'Evolution', 'evoSym'],
+    ];
+    const spotView = (id) => SPOT_VIEWS.find((v) => v[0] === id) || null;
+    let spotLast = 'spotlight';
+    // THE STOCK CARRIES ACROSS THE FIVE. Each keeps its own control id,
+    // because a saved post stores it under that id, but choosing a company in
+    // one sets it in the others -- or switching sub-template would quietly
+    // switch company too.
+    function spotSyncFrom(id) {
+      const src = $(id);
+      if (!src || !src.value) return;
+      for (const [, , other] of SPOT_VIEWS) {
+        const el = $(other);
+        if (el && other !== id && [...el.options].some((o) => o.value === src.value)) el.value = src.value;
+      }
+    }
     const OWNER_ONLY_TPLS = new Set(['announce']);
     let canAnnounce = false;
     const visibleTpls = () => TPLS.filter((t) => canAnnounce || !OWNER_ONLY_TPLS.has(t.id));
@@ -1382,6 +1425,21 @@
           `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
         $('tplSelect').dataset.built = key;
       }
+      const inSpot = spotView(tpl);
+      if (inSpot) spotLast = tpl;
+      for (const o of $('tplSelect').options) {
+        const v = spotView(o.value);
+        if (!v) continue;
+        o.hidden = o.value !== spotLast;
+        // The hidden ones are named in full for a browser that ignores
+        // `hidden` on an option and lists them anyway.
+        o.textContent = o.value === spotLast ? SPOT_NAME : SPOT_NAME + ' — ' + v[1];
+      }
+      if (!$('tplSub').options.length) {
+        for (const [id, label] of SPOT_VIEWS) $('tplSub').appendChild(new Option(label, id));
+      }
+      $('tplSubBox').hidden = !inSpot;
+      if (inSpot && $('tplSub').value !== tpl) $('tplSub').value = tpl;
       if ($('tplSelect').value !== tpl) $('tplSelect').value = tpl;
       const cur = tpls.find((t) => t.id === tpl);
       $('tplNote').textContent = cur ? cur.note : '';
@@ -1395,6 +1453,15 @@
     // other twelve cards.
     $('cardTheme').addEventListener('change', render);
 
+    $('tplSub').addEventListener('change', (e) => {
+      if (!spotView(e.target.value)) return;
+      tpl = e.target.value;
+      paintControls();
+      render();
+    });
+    // Registered here, ahead of each template's own redraw listener, so the
+    // other four already hold the company by the time anything is drawn.
+    for (const [, , id] of SPOT_VIEWS) $(id).addEventListener('change', () => spotSyncFrom(id));
     $('tplSelect').addEventListener('change', (e) => {
       tpl = e.target.value;
       // an avatar is square by definition; the other cards keep whatever
@@ -1667,6 +1734,8 @@
       Object.keys(opts).filter((k) => /Sector$/.test(k)).forEach(set);
       syncIndustries(true);
       Object.keys(opts).forEach(set);
+      // A post stores only its own template's stock; the sibling views follow it.
+      if (spotView(tpl)) spotSyncFrom(spotView(tpl)[2]);
       render();
       $('postName').value = p.name;
       postSay('Loaded “' + p.name + '”.');
