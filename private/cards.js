@@ -497,6 +497,39 @@
       return out;
     }
 
+    // ---- the ladder dial ---------------------------------------------------
+    // A half-circle in the six verdict colours, worst on the left, with one
+    // needle. DRAWN ONCE for the two cards that use it -- the Advice board,
+    // where the needle is the average place of many verdicts, and the Stock
+    // spotlight, where it is one company's own verdict -- so the two cannot
+    // come to draw the ladder differently. The colours are the theme's own
+    // verdict ladder, emitted inline, which is what makes every ground
+    // resolve with no override.
+    const dialPt = (p, r, cx, cy) => [cx - r * Math.cos(Math.PI * p), cy - r * Math.sin(Math.PI * p)];
+    const dialArc = (a, b, r, cx, cy) => {
+      const A = dialPt(a, r, cx, cy), B = dialPt(b, r, cx, cy);
+      return 'M' + A[0].toFixed(2) + ' ' + A[1].toFixed(2) + 'A' + r + ' ' + r + ' 0 0 1 '
+        + B[0].toFixed(2) + ' ' + B[1].toFixed(2);
+    };
+    const dialHand = (p, r, cx, cy) => {
+      const T = dialPt(p, r, cx, cy);
+      return '<line class="adl-n" x1="' + cx + '" y1="' + cy + '" x2="' + T[0].toFixed(2) + '" y2="' + T[1].toFixed(2) + '"/>'
+        + '<circle class="adl-hub" cx="' + cx + '" cy="' + cy + '" r="' + (r > 60 ? 7 : 5) + '"/>';
+    };
+    // A verdict's own place on the ladder: the MIDDLE of its step, so a
+    // needle never sits on the line between two verdicts.
+    const dialPlace = (action) => {
+      const L = ActionRules.ACTIONS, i = L.indexOf(action);
+      return i < 0 ? null : (i + 0.5) / L.length;
+    };
+    function ladderDial(p) {
+      const L = ActionRules.ACTIONS;                       // worst first
+      return '<svg viewBox="0 0 220 122" aria-hidden="true">'
+        + L.map((a, i) => '<path class="adl-seg" d="' + dialArc(i / 6 + 0.006, (i + 1) / 6 - 0.006, 92, 110, 112)
+          + '" style="stroke:' + pal.tints[a] + '"/>').join('')
+        + dialHand(p, 70, 110, 112) + '</svg>';
+    }
+
     const advScope = () => scopeOf('advScope', 'advSector');
 
     function tplAdvBoard() {
@@ -632,24 +665,10 @@
       // against the screener -- and take the neutral accent, since "more
       // stocks in an uptrend" is a count rather than a direction of price.
       const LAD = ActionRules.ACTIONS;                       // worst first
-      const posOf = (a) => (LAD.indexOf(a) + 0.5) / LAD.length;
+      const posOf = (a) => dialPlace(a);
       const needle = rows.reduce((t, s) => t + posOf(verdict(s)), 0) / rows.length;
       const at = Math.min(LAD.length - 1, Math.floor(needle * LAD.length));
-      const pt = (p, r, cx, cy) => [cx - r * Math.cos(Math.PI * p), cy - r * Math.sin(Math.PI * p)];
-      const arc = (a, b, r, cx, cy) => {
-        const A = pt(a, r, cx, cy), B = pt(b, r, cx, cy);
-        return 'M' + A[0].toFixed(2) + ' ' + A[1].toFixed(2) + 'A' + r + ' ' + r + ' 0 0 1 '
-          + B[0].toFixed(2) + ' ' + B[1].toFixed(2);
-      };
-      const hand = (p, r, cx, cy) => {
-        const T = pt(p, r, cx, cy);
-        return '<line class="adl-n" x1="' + cx + '" y1="' + cy + '" x2="' + T[0].toFixed(2) + '" y2="' + T[1].toFixed(2) + '"/>'
-          + '<circle class="adl-hub" cx="' + cx + '" cy="' + cy + '" r="' + (r > 60 ? 7 : 5) + '"/>';
-      };
-      const bigSvg = '<svg viewBox="0 0 220 122" aria-hidden="true">'
-        + LAD.map((a, i) => '<path class="adl-seg" d="' + arc(i / 6 + 0.006, (i + 1) / 6 - 0.006, 92, 110, 112)
-          + '" style="stroke:' + pal.tints[a] + '"/>').join('')
-        + hand(needle, 70, 110, 112) + '</svg>';
+      const bigSvg = ladderDial(needle);
       const st = (s) => (scored[s.symbol] || {}).states || {};
       const share = (key, good, skip) => {
         const read = rows.filter((s) => st(s)[key] && st(s)[key] !== skip);
@@ -661,9 +680,9 @@
         ['fundamentals OK or better', share('fund', ['OK', 'Strong'], '—')],
       ].filter((m) => m[1]);
       const miniSvg = (p) => '<svg viewBox="0 0 120 68" aria-hidden="true">'
-        + '<path class="adl-trk" d="' + arc(0, 1, 50, 60, 62) + '"/>'
-        + (p > 0.005 ? '<path class="adl-val" d="' + arc(0, p, 50, 60, 62) + '"/>' : '')
-        + hand(p, 36, 60, 62) + '</svg>';
+        + '<path class="adl-trk" d="' + dialArc(0, 1, 50, 60, 62) + '"/>'
+        + (p > 0.005 ? '<path class="adl-val" d="' + dialArc(0, p, 50, 60, 62) + '"/>' : '')
+        + dialHand(p, 36, 60, 62) + '</svg>';
       const dials = '<div class="adial">'
         + '<div class="adl-big">' + bigSvg
           + '<div class="adl-w" style="color:' + pal.tints[LAD[at]] + '">' + esc(LAD[at]) + '</div>'
@@ -2978,7 +2997,9 @@
     // where the direction IS the story — the table's sparkline stays neutral
     // for the opposite reason, five coloured columns already beside it.
     const colour = move == null ? pal.flat : move >= 0 ? pal.up : pal.down;
-    const H = size.id === 'story' ? 624 : size.id === 'square' ? 176 : 318;
+    // The verdict box grew by the height of its dial, and a card cannot
+    // scroll, so the chart -- the free parameter here -- gives that back.
+    const H = size.id === 'story' ? 600 : size.id === 'square' ? 158 : 292;
     // A MISSING SERIES DOES NOT EMPTY THE CARD. The Chart card returns a bare
     // "no stored history" card because the chart IS that card; here the
     // figures, the range and the verdict are all still worth posting, so the
@@ -3121,8 +3142,15 @@
       verdict = '<div class="sp-block"><div class="sp-head">What the rules read</div>' +
         '<div class="sp-verd" style="border-color:' + tint + '33">' +
         (a && a.action
-          ? '<span class="sp-vw" style="color:' + tint + '">' + esc(a.action) + '</span>' +
-            '<span class="sp-vr">' + esc(a.flag || '') + '</span>'
+          // THE DIAL IS THE VERDICT, drawn as a place on the ladder -- the same
+          // arc the Advice board uses, with the needle in the middle of this
+          // stock's own step. One dial only: the board's small ones are shares
+          // of many stocks, and for one company trend and entry are words, not
+          // amounts. It adds no claim the word beside it does not already make,
+          // and the rule that fired stays next to it.
+          ? (dialPlace(a.action) == null ? '' : '<span class="sp-dial">' + ladderDial(dialPlace(a.action)) + '</span>') +
+            '<span class="sp-vt"><span class="sp-vw" style="color:' + tint + '">' + esc(a.action) + '</span>' +
+            '<span class="sp-vr">' + esc(a.flag || '') + '</span></span>'
           : '<span class="sp-vw" style="color:var(--muted)">Not scored</span>' +
             '<span class="sp-vr">Not enough stored history for the rules to reach a reading.</span>') +
         '<span class="sp-vp">' + esc(profile) + ' rules</span></div></div>';
@@ -7157,6 +7185,14 @@
              line-height: 1.05; }
     .sp-vr { font: 500 21px var(--sans); color: var(--muted); flex: 1;
              min-width: 0; line-height: 1.25; }
+    /* The dial sits to the left of the word and the rule; the two stack
+       beside it, so the box grows by the dial and not by a wrapped line. */
+    .sp-verd { align-items: center; flex-wrap: nowrap; }
+    .sp-dial { flex: none; width: 150px; }
+    .sp-dial svg { display: block; width: 100%; height: auto; }
+    .sp-vt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .sz-square .sp-dial { width: 108px; }
+    .sz-story .sp-dial { width: 210px; }
     .sp-vp { font: 600 14px var(--mono); text-transform: uppercase;
              letter-spacing: 0.14em; color: var(--faint); white-space: nowrap; }
 
