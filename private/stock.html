@@ -2682,7 +2682,7 @@
         : '';
       const self = model.lines.find((l) => l.self);
       const head = self && self.last
-        ? esc(self.name) + ' is <b>#' + self.last.rank + ' of ' + model.N + '</b> on ' + esc(model.label.toLowerCase())
+        ? esc(self.name) + ' is <b>#' + self.last.rank + ' of ' + model.N + '</b> on ' + esc(model.lower)
           + ' in the latest quarter, at <b>' + esc(PeerTrend.fmt(model.unit, self.last.v)) + '</b>.'
         : 'No figure for ' + esc(stock.symbol) + ' on this measure.';
       box.innerHTML =
@@ -2690,13 +2690,11 @@
         '<div class="pbar">' + seg(offered.map(([k, lab]) => [k, lab]), model.metric, 'm') + seg(PeerTrend.VIEWS, model.view, 'v') + '</div>' +
         '<div class="pchart">' + chart + '</div>' +
         '<p class="note">' +
-        (model.metric === 'cap'
-          ? 'Market value is today’s share count at each quarter’s closing price, so a buyback since then makes an earlier quarter read a little low. '
-          : 'Each point is the trailing twelve months to the latest quarter that company had ended by that date, from its own filings. ') +
+        esc(PeerTrend.measureNote(model, ptData)) +
         (model.view === 'rank'
           ? 'Rank 1 is the largest. A place can change on a small gap or a large one — hover a dot for the figure. '
           : (model.log ? 'Log scale, so equal distances are equal ratios. ' : '') + 'The figure beside each name is its latest. ') +
-        (model.gaps ? 'A break in a line is a quarter with no figure on record; that company is left out of that quarter’s ranking rather than placed last. ' : '') +
+        (model.gaps && model.metric !== 'pe' ? 'A break in a line is a quarter with no figure on record; that company is left out of that quarter’s ranking rather than placed last. ' : '') +
         'The peers are today’s Similar stocks, drawn for the whole period. A record of what was reported, not a ranking of which is the better company.</p>';
       box.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
         if (b.hasAttribute('data-m')) ptMetric = b.getAttribute('data-m');

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Fill the `splits` table for the universe. Dry run by default; --commit to
 // fetch and write. `--only SYM,SYM` for a trial, `--missing` to skip symbols
-// already fetched, `--rate N` for credits a minute (default 200).
+// already fetched, `--rate N` for credits a minute (default 80).
 //
 // WHY IT IS OPTIONAL. The server fetches a symbol's split history the first
 // time its Evolution card is drawn (`splitsFor` in server.js) and stores it,
@@ -9,11 +9,16 @@
 // universe in one pass -- which is what a market-wide series would need.
 //
 // WHAT IT COSTS. /splits is 20 credits a symbol, measured off
-// `api-credits-used`. At the default 200 credits a minute that is ten symbols
-// a minute, so ~1,274 symbols is about 25,500 credits and a little over two
-// hours. The plan allows 610 a minute; an intraday price round takes ~500 of
-// them, so the default leaves the live refresh its room. Do not raise it
-// during the session.
+// `api-credits-used`: ~1,274 symbols is about 25,500 credits.
+//
+// THE DEFAULT RATE IS 80 CREDITS A MINUTE, AND THE ARITHMETIC IS THE REASON.
+// The plan allows 610 a minute and an intraday price round takes about 500
+// of them in its own minute, so anything over ~100 here can push that minute
+// past the ceiling -- and the call the provider then refuses may be the
+// PRICE round's, not this one. (This comment first said 200 "leaves the live
+// refresh its room"; 500 + 200 is 700.) At 80 the universe takes about five
+// and a half hours. A NIGHTLY round runs at ~561, which leaves no room at
+// all: do not let a run overlap 07:30-08:15 or 19:30-20:15 Eastern.
 //
 // A SYMBOL THAT FAILS IS LEFT UNRECORDED, never written empty: an empty list
 // reads as "fetched, and it has never split", and --missing would then skip
@@ -26,7 +31,7 @@ const arg = (name) => { const i = process.argv.indexOf(name); return i > -1 ? pr
 const COMMIT = process.argv.includes('--commit');
 const MISSING = process.argv.includes('--missing');
 const ONLY = arg('--only') ? arg('--only').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean) : null;
-const RATE = Math.max(20, Math.min(580, Number(arg('--rate')) || 200));
+const RATE = Math.max(20, Math.min(580, Number(arg('--rate')) || 80));
 const COST = 20;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

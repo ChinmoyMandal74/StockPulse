@@ -6212,7 +6212,7 @@
     const self = model.lines.find((l) => l.self);
     if (model.lines.length < 3 || !self) {
       return shell(nameOf(row), 'Against its peers', 'not enough to compare',
-        'Fewer than three of these companies have ' + model.label.toLowerCase()
+        'Fewer than three of these companies have ' + model.lower
         + ' on record, or ' + sym + ' itself has none.');
     }
     const fs = size.id === 'story' ? 24 : size.id === 'square' ? 17 : 19;
@@ -6220,19 +6220,17 @@
       right: size.id === 'story' ? 376 : 318, fs, dot: size.id === 'story' ? 6.5 : 5, nameMax: 15, xLabels: 5 });
     const n = nameOf(row);
     const span = model.quarters.length ? PT.qLabel(model.quarters[0]) + ' to ' + PT.qLabel(model.quarters[model.n - 1]) : '';
-    const note = (model.metric === 'cap'
-      ? 'Market value is today’s share count at each quarter’s closing price, so a buyback since then makes an earlier quarter read a little low. '
-      : 'Each point is the trailing twelve months to the latest quarter that company had ended by that date, from its own filings. ')
+    const note = PT.measureNote(model, data)
       + (model.view === 'rank' ? 'Rank 1 is the largest; a place can change on a small gap or a large one. '
         : (model.log ? 'Log scale, so equal distances are equal ratios. ' : ''))
-      + (model.gaps ? 'A break in a line is a quarter with no figure on record. ' : '')
+      + (model.gaps && model.metric !== 'pe' ? 'A break in a line is a quarter with no figure on record. ' : '')
       + 'The peers are today’s closest by industry and size. A record of what was reported, not a view on which is the better company.';
     return chromeTop()
       + '<div class="s-body"><div class="pv-in">'
       + '<span class="s-kick">' + esc((data.group ? data.group + ' · ' : '') + model.N + ' companies · ' + span) + '</span>'
       + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span><span class="dim">'
-      + esc(model.view === 'rank' ? 'ranked on ' + model.label.toLowerCase() + ' among its peers'
-        : model.label.toLowerCase() + ' against its peers'
+      + esc(model.view === 'rank' ? 'ranked on ' + model.lower + ' among its peers'
+        : model.lower + ' against its peers'
           + (self.last ? ' — #' + self.last.rank + ' of ' + model.N + ' today' : '')) + '</span></h2>'
       + '<div class="pv-chart">' + chart + '</div>'
       + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'

@@ -28,6 +28,10 @@
     ['ni', 'Net income', 'money'],
     ['pm', 'Profit margin', 'pct'],
     ['cap', 'Market value', 'money'],
+    // Market value over trailing earnings. Positive only: a multiple off a
+    // loss is arithmetic, not cheapness, so a loss-making quarter is a gap
+    // in that company's line and it is left out of that quarter's ranking.
+    ['pe', 'P/E', 'mult'],
   ];
   const VIEWS = [['value', 'Value'], ['rank', 'Rank']];
   const metricOf = (k) => METRICS.find((m) => m[0] === k) || METRICS[0];
@@ -38,6 +42,7 @@
     if (!ok(v)) return '—';
     const a = Math.abs(v), s = v < 0 ? '−' : '';
     if (unit === 'pct') return s + a.toFixed(1) + '%';
+    if (unit === 'mult') return s + (a >= 1000 ? Math.round(a).toLocaleString('en-US') : a.toFixed(1)) + '×';
     if (a >= 1e12) return s + '$' + (a / 1e12).toFixed(2) + 'T';
     if (a >= 1e9) return s + '$' + (a / 1e9).toFixed(1) + 'B';
     if (a >= 1e6) return s + '$' + (a / 1e6).toFixed(0) + 'M';
@@ -76,7 +81,20 @@
     // ---- the value scale -----------------------------------------------------
     const all = [];
     companies.forEach((c) => c.vals.forEach((v) => { if (ok(v)) all.push(v); }));
-    let lo = all.length ? Math.min(...all) : 0, hi = all.length ? Math.max(...all) : 1;
+    // A RUNAWAY MULTIPLE IS PINNED, the Evolution card's rule: a quarter whose
+    // earnings were a rounding error prints a P/E in the thousands, and one of
+    // those would flatten seven companies' ordinary quarters into the floor.
+    // Past 2.5 times the 90th percentile of everything on the chart, a point
+    // is DRAWN at 1.25 times it. Its rank, its label and its tooltip keep the
+    // true figure.
+    let ceil = null;
+    if (unit === 'mult' && view === 'value' && all.length >= 8) {
+      const srt = all.slice().sort((a, b) => a - b);
+      const p90 = srt[Math.min(srt.length - 1, Math.floor(srt.length * 0.9))];
+      if (srt[srt.length - 1] > p90 * 2.5) ceil = p90 * 1.25;
+    }
+    const drawn = (v) => (ceil != null && v > ceil ? ceil : v);
+    let lo = all.length ? Math.min(...all) : 0, hi = all.length ? Math.max(...all.map(drawn)) : 1;
     // LOG only where every figure is positive AND the range is wide enough to
     // need it, the price chart's own rule. Net income and margins cross zero,
     // where a log scale does not exist.
@@ -88,7 +106,7 @@
 
     const lines = companies.map((c, k) => {
       const pts = c.vals.map((v, i) => (ok(v)
-        ? { i, v, rank: ranks[k][i], y: view === 'rank' ? yr(ranks[k][i]) : yv(v) } : null));
+        ? { i, v, rank: ranks[k][i], y: view === 'rank' ? yr(ranks[k][i]) : yv(drawn(v)), pinned: ceil != null && v > ceil } : null));
       let last = null;
       for (let i = n - 1; i >= 0 && !last; i--) if (pts[i]) last = pts[i];
       return { symbol: c.symbol, name: c.name || c.symbol, self: !!c.self, pts, last };
@@ -101,8 +119,30 @@
         .concat([{ y: 1, label: fmt(unit, lo) }]);
 
     return { metric: mk, label: mLabel, unit, view, log, zero, quarters, lines, ticks, n, N,
+      // 'revenue', 'market value' -- but an initialism keeps its capitals.
+      lower: mk === 'pe' ? mLabel : mLabel.toLowerCase(),
+      ceil, pinned: lines.reduce((t, l) => t + l.pts.filter((p) => p && p.pinned).length, 0),
       // How many quarter-cells have no figure, so a host can say so.
       gaps: lines.reduce((t, l) => t + l.pts.filter((p) => !p).length, 0) };
+  }
+
+  // WHAT THE MEASURE IS, in words, defined once so the page and the card
+  // cannot describe the same chart two ways. Plain text; the host escapes it.
+  function measureNote(model, data) {
+    const basis = (data && data.capBasis) || {};
+    const syms = model.lines.map((l) => l.symbol);
+    const filed = syms.filter((s) => basis[s] === 'filed').length;
+    // KEPT SHORT: it is the first sentence of a note on a card that cannot scroll.
+    const shares = filed === syms.length && syms.length ? 'the share count filed each quarter, adjusted for splits'
+      : filed === 0 ? 'today’s share count, which reads a past buyback low'
+        : 'the filed share count for ' + filed + ' of ' + syms.length + ' companies and today’s for the rest';
+    if (model.metric === 'cap') return 'Market value is each quarter’s close times ' + shares + '. ';
+    if (model.metric === 'pe') {
+      return 'P/E is market value over trailing earnings, on ' + shares + '. A loss has no multiple, so the line breaks there. '
+        + (model.pinned ? model.pinned + (model.pinned === 1 ? ' point above ' : ' points above ') + fmt('mult', model.ceil)
+          + (model.pinned === 1 ? ' is' : ' are') + ' drawn at the top of the scale. ' : '');
+    }
+    return 'Each point is the trailing twelve months to the latest quarter that company had ended by that date, from its own filings. ';
   }
 
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
@@ -185,5 +225,5 @@
     return out + '</svg>';
   }
 
-  global.PeerTrend = { METRICS, VIEWS, build, svg, fmt, qLabel };
+  global.PeerTrend = { METRICS, VIEWS, build, svg, fmt, qLabel, measureNote };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -642,6 +642,7 @@
     FIELDS, SOURCES, SHARES_BAD_RATIO, SHORT_LAG_DAYS,
     trailingPe, impliedShares, newestShares, fundamentalsFrom, fundamentalsAsOf,
     evolutionSeries,
+    splitAdjustedShares,
     shortPctFloat, shortCutoff, overlayFrom, engineRow, verdict,
   };
 }));

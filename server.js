@@ -10819,13 +10819,19 @@ async function peerTrendFor(symbol) {
   // closesBefore answers "the last close BEFORE this date", so the day after
   // each quarter end is asked for.
   const dayAfter = quarters.map((q) => new Date(Date.parse(q + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10));
-  const [facts, closes] = await Promise.all([
+  const [facts, held, closes] = await Promise.all([
     Promise.all(syms.map((sym) => store.readSecFacts(sym).catch(() => []))),
+    // Split history as STORED, never fetched here: seven cold lookups is 140
+    // credits in one request, on top of whatever a price round is spending
+    // that minute. A company whose history is not held stays on today's
+    // count, and the payload says how many are on which.
+    Promise.all(syms.map((sym) => store.readSplits(sym).catch(() => null))),
     store.closesBefore(dayAfter, syms).catch(() => quarters.map(() => ({}))),
   ]);
   const bySym = {};
   for (const x of stocks) bySym[String(x.symbol).toUpperCase()] = x;
-  const series = { rev: {}, ni: {}, pm: {}, cap: {} };
+  const series = { rev: {}, ni: {}, pm: {}, cap: {}, pe: {} };
+  const capBasis = {};
   syms.forEach((sym, k) => {
     const rows = facts[k] || [];
     const ttm = rows.length ? SecFacts.ttmSeries(SecFacts.latestFilled(rows).filter((r) => r.periodType === 'Q')) : [];
@@ -10836,13 +10842,27 @@ async function peerTrendFor(symbol) {
       return (Date.parse(q) - Date.parse(pick.d)) / 86400000 <= PEER_TREND_CARRY ? pick : null;
     };
     const num = (v) => (v == null || !isFinite(Number(v)) ? null : Number(v));
-    series.rev[sym] = []; series.ni[sym] = []; series.pm[sym] = []; series.cap[sym] = [];
+    series.rev[sym] = []; series.ni[sym] = []; series.pm[sym] = []; series.cap[sym] = []; series.pe[sym] = [];
     // TODAY'S share count against a split-adjusted close, the Evolution
     // card's formulation: an adjusted close is already in today's share
     // units, so a split cancels exactly. Rejected before it is coerced --
     // Number(null) is 0, and a zero share count would rank a company last.
     const shRaw = bySym[sym] && bySym[sym].sharesOutstanding;
-    const shares = shRaw != null && Number(shRaw) > 0 ? Number(shRaw) : null;
+    let shares = shRaw != null && Number(shRaw) > 0 ? Number(shRaw) : null;
+    // AN ADR'S SHARE COUNT IS THE ORDINARY COUNT AGAINST AN ADR PRICE. Taiwan
+    // Semiconductor read $11.83T on a live page off exactly that -- one ADR is
+    // five shares -- and led a chart it should have been fifth on. The
+    // vendor's market cap is in dollars and is right even where its share
+    // count is in another unit, so where the two disagree by more than half
+    // again the count is the one IMPLIED by cap over price. The same test
+    // rights a dual-class row, whose count is the other class's.
+    const row = bySym[sym] || {};
+    const implied = Number(row.marketCap) > 0 && Number(row.price) >= MIN_CLOSE ? Number(row.marketCap) / Number(row.price) : null;
+    if (shares != null && implied != null && Math.abs(Math.log(implied / shares)) > Math.log(1.5)) shares = implied;
+    // THE COUNT FILED EACH QUARTER, where the split history is held -- the
+    // Evolution card's own basis, from the same function.
+    const adj = held[k] ? Adjusted.splitAdjustedShares(SecFacts, rows, ttm.map((t) => t.d), held[k].splits, shares) : null;
+    capBasis[sym] = adj ? 'filed' : 'today';
     quarters.forEach((q, i) => {
       const t = at(q);
       const rev = t ? num(t.revenue) : null, ni = t ? num(t.netIncome) : null;
@@ -10855,13 +10875,19 @@ async function peerTrendFor(symbol) {
       // would otherwise borrow nothing, and one with a hole would borrow a
       // price from months earlier.
       const fresh = c && (Date.parse(q) - Date.parse(c.d)) / 86400000 <= 10;
-      series.cap[sym].push(shares && fresh && c.close >= MIN_CLOSE ? shares * c.close : null);
+      const shQ = adj ? (t && adj.at[t.d] != null ? adj.at[t.d] : null) : shares;
+      const cap = shQ && fresh && c.close >= MIN_CLOSE ? shQ * c.close : null;
+      series.cap[sym].push(cap);
+      // Positive earnings only, rejected before it is divided by.
+      series.pe[sym].push(cap != null && ni != null && ni > 0 ? Math.round(cap / ni * 100) / 100 : null);
     });
   });
   const body = {
     symbol, quarters,
     companies: list.map((p, k) => ({ symbol: syms[k], name: p.name || syms[k], self: k === 0 })),
     series, basis: peers.basis || null, group: peers.group || null,
+    // Which share count each company's market value is struck on.
+    capBasis,
   };
   peerTrendCache.set(symbol, { at: Date.now(), body });
   return body;

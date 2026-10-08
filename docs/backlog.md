@@ -1269,8 +1269,7 @@ company valued by `splitAdjustedShares` exactly as its own card is.
 
 **What it needs, in order:**
 - **Split history for every member.** `backfill-splits.js --commit` does the
-  universe: 20 credits a symbol, about 25,500 credits and a little over two
-  hours at the default 200 credits a minute. Index members only is ~10,000.
+  universe: 20 credits a symbol, about 25,500 credits and about five and a half hours at the default 80 credits a minute (see the script for why not faster). Index members only is ~10,000.
 - **A stored series, rebuilt nightly as its own phase** (beside `secRotate`,
   never in the refresh tail). Computing it per request means reading ~500
   companies' filings — about 175,000 `sec_facts` rows — which on this database
