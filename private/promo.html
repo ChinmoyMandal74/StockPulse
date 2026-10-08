@@ -120,8 +120,8 @@
 
       <label>Template</label>
       <select id="tplSelect" aria-label="Template"></select>
-      <!-- ONE COMPANY, FIVE WAYS. The single-stock templates are one entry in
-           the list above and are told apart here. -->
+      <!-- A GROUP'S VIEWS. The whole-market templates are one entry in the
+           list above and the single-stock ones another; each is told apart here. -->
       <div id="tplSubBox" hidden>
         <label>Sub-template</label>
         <select id="tplSub" aria-label="Sub-template"></select>
@@ -1019,14 +1019,14 @@
     const TPLS = [
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
+      { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
+      { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
+      { id: 'waterfall', name: 'Waterfall', note: 'What actually moved the index, name by name, adding up to the whole' },
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
       { id: 'perf', name: 'Growth and profitability', note: 'One company’s revenue and net income as bars, its net margin as a line, quarter by quarter or year by year' },
       { id: 'peertrend', name: 'Against its peers', note: 'One company and its closest peers on revenue, earnings, margin or value, quarter by quarter' },
       { id: 'months', name: 'Month by month', note: 'One company, year by month — each cell that month’s return' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
-      { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
-      { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
-      { id: 'waterfall', name: 'Waterfall', note: 'What actually moved the index, name by name, adding up to the whole' },
       { id: 'shortmoves', name: 'Short moves', note: 'Where the shorts built and where they covered, over the latest fortnight' },
       { id: 'shorted', name: 'Most shorted', note: 'The level as last reported, beside what each one has done this year' },
       { id: 'histogram', name: 'Histogram', note: 'The shape of the whole screen on one measure — on its own, or with a stock marked on it' },
@@ -1077,7 +1077,26 @@
       ['evolution', 'Evolution', 'evoSym'],
     ];
     const spotView = (id) => SPOT_VIEWS.find((v) => v[0] === id) || null;
-    let spotLast = 'spotlight';
+    // ---- Market: the whole market, five ways ---------------------------------
+    // (2026-10-08, the same cleanup.) The cards that take the market as their
+    // subject rather than a list drawn from it. No shared control here: each
+    // keeps its own window and its own S&P cut, whose defaults differ by
+    // design (Flow and the two that add up open on the index; the Snapshot
+    // opens on the whole screen), so nothing is carried across.
+    const MKT_VIEWS = [
+      ['day', 'Snapshot'],
+      ['breadth', 'Narrow or broad'],
+      ['flow', 'Flow'],
+      ['treemap', 'Treemap'],
+      ['waterfall', 'Waterfall'],
+    ];
+    // ONE MECHANISM FOR EVERY GROUP: an entry in the Template list, the
+    // sub-template last used inside it, and the views the picker offers.
+    const TPL_GROUPS = [
+      { name: 'Market', views: MKT_VIEWS, last: 'day' },
+      { name: SPOT_NAME, views: SPOT_VIEWS, last: 'spotlight' },
+    ];
+    const groupOf = (id) => TPL_GROUPS.find((g) => g.views.some((v) => v[0] === id)) || null;
     // THE STOCK CARRIES ACROSS THE FIVE. Each keeps its own control id,
     // because a saved post stores it under that id, but choosing a company in
     // one sets it in the others -- or switching sub-template would quietly
@@ -1425,21 +1444,25 @@
           `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
         $('tplSelect').dataset.built = key;
       }
-      const inSpot = spotView(tpl);
-      if (inSpot) spotLast = tpl;
+      const grp = groupOf(tpl);
+      if (grp) grp.last = tpl;
       for (const o of $('tplSelect').options) {
-        const v = spotView(o.value);
-        if (!v) continue;
-        o.hidden = o.value !== spotLast;
+        const g = groupOf(o.value);
+        if (!g) continue;
+        o.hidden = o.value !== g.last;
         // The hidden ones are named in full for a browser that ignores
         // `hidden` on an option and lists them anyway.
-        o.textContent = o.value === spotLast ? SPOT_NAME : SPOT_NAME + ' — ' + v[1];
+        o.textContent = o.value === g.last ? g.name : g.name + ' — ' + g.views.find((v) => v[0] === o.value)[1];
       }
-      if (!$('tplSub').options.length) {
-        for (const [id, label] of SPOT_VIEWS) $('tplSub').appendChild(new Option(label, id));
+      // The picker is refilled only when the GROUP changes, so it is never
+      // rebuilt under the pointer.
+      if (grp && $('tplSub').dataset.group !== grp.name) {
+        $('tplSub').innerHTML = '';
+        for (const [id, label] of grp.views) $('tplSub').appendChild(new Option(label, id));
+        $('tplSub').dataset.group = grp.name;
       }
-      $('tplSubBox').hidden = !inSpot;
-      if (inSpot && $('tplSub').value !== tpl) $('tplSub').value = tpl;
+      $('tplSubBox').hidden = !grp;
+      if (grp && $('tplSub').value !== tpl) $('tplSub').value = tpl;
       if ($('tplSelect').value !== tpl) $('tplSelect').value = tpl;
       const cur = tpls.find((t) => t.id === tpl);
       $('tplNote').textContent = cur ? cur.note : '';
@@ -1454,7 +1477,7 @@
     $('cardTheme').addEventListener('change', render);
 
     $('tplSub').addEventListener('change', (e) => {
-      if (!spotView(e.target.value)) return;
+      if (!groupOf(e.target.value)) return;
       tpl = e.target.value;
       paintControls();
       render();

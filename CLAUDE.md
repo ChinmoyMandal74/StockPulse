@@ -5510,6 +5510,14 @@ The standing objection is that two independent scales can be slid against each o
 - Verified: **27 checks** (`spotgroup-test.js`) — one visible entry for the five, the picker's order, each sub-template showing its own controls and nobody else's, the entry remembering where it was left, a hidden id still selectable directly, the stock carried from any of the five, a post saving under its own id and reopening on its sub-template, an older post's disagreeing stocks reconciled, and the phone still building it. **Proved by reverting seven times, every one load-bearing.**
 
 
+#### ...and Market is the second group (2026-10-08, owner: "move anything related with the broader market under one template called Market")
+**Snapshot (`day`), Narrow or broad (`breadth`), Flow, Treemap and Waterfall sit under one `Market` entry, which leads the list; the Template list is 19 entries where it was 27.** The owner named three; Snapshot and Treemap joined them because they take the market as their subject in the same way, and the Treemap is the Waterfall’s own pair.
+
+- **ONE MECHANISM FOR BOTH GROUPS**: `TPL_GROUPS` in promo.html — a name, its views, and the sub-template last used. The Sub-template picker is refilled only when the GROUP changes. Ids unchanged, as before.
+- **NOTHING IS CARRIED ACROSS Market’s five**, unlike the stock in Stock spotlight: each keeps its own window and its own S&P cut, whose defaults differ by design (Flow, Treemap and Waterfall open on the index; the Snapshot on the whole screen).
+- **Left where they are**: Short moves, Most shorted, Histogram, Bars and Movers — each takes a scope or ranks a list, which is a different kind of card from one whose subject is the market itself.
+- Verified: the grouping suite is **38 checks** over both groups, and **proved by reverting nine times, every one load-bearing** — Market left out of the groups, the picker not refilled between groups, and the seven above.
+
 ## Consolidated — every group in one table (2026-09-28, owner's request)
 **`/consolidated`: one row per group, so the groups can be read against each other.** The owner's words: *"I do not have a screen to show how Mag 7 as a theme has done compared with Memory or cybersecurity."* Nothing did — a group page shows ONE group against the index, `/compare` is two **stocks**, and the pivot crosses two dimensions to answer *where is the weight* rather than *how has each one done*. Member page, guests refused, like the studio and the pivot beside it; a `Consolidated` button in the bar before Compare.
 
