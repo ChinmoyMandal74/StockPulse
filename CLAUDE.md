@@ -1835,6 +1835,25 @@ The owner was offered "flag it on /stock only" and chose **"flag it on the scree
 - `readEarnings` joins `/api/stock`'s existing `Promise.all` and keeps its own catch; it seeks on the `(symbol, d)` primary key.
 - **A trailing-P/E HISTORY is reconstructible and is not stored.** `fundamentals_history.trailing_pe` only starts at 2026-09-15 and the provider serves no historical ratios — but price ÷ TTM EPS is computable from `bars` and this table for as far back as both reach. Checked: AAPL's last four reported quarters sum to **8.72** against the provider's own `diluted_eps_ttm` of **8.71**. Note the provider's `trailing_pe` implies an EPS about 1% off that, so a reconstructed series and the stored one would show a small step where they meet — compute the whole series one way.
 
+### The strip became a dumbbell (2026-10-07, owner's request)
+**"Dumbbell chart for earnings surprise: estimate and actual joined by a line for each quarter, with color for beat or miss."** It REPLACED the strip of surprise percentages in the Earnings card (the owner's call when offered both), and **the price chart is untouched** — their explicit condition, and the right place anyway: EPS and price share no axis, and a second y-axis is the thing this page has refused before.
+
+- **One column per quarter, oldest left**: a hollow dot at the estimate, a filled dot at what was reported, a line between, green for a beat and red for a miss. A quarter nobody forecast is ONE grey dot and no line; an exact match counts as a beat, as the summary already counts it.
+- **IT IS BETTER THAN THE STRIP TWICE OVER.** The robust 90th-percentile scale above existed only because a percentage against a near-zero estimate explodes; plotting the two real numbers makes that problem disappear (the fixture's +260% quarter is simply thirteen cents), so `earnScale` and its "beyond the scale" marking are DELETED. And it shows the LEVEL — earnings climbing or falling — which a row of percentages cannot.
+- **Twelve quarters by default, with an `All N quarters` button.** Twenty-six on one linear axis flattens a fast grower's early years, and a log axis cannot be used because EPS goes negative.
+- **The zero line is drawn only where the window crosses zero**, and labelled in the gutter.
+- **HTML, never SVG**: the box is as wide as the page and a stretched svg turns a dot into an ellipse. Marks are placed by percentage inside a box inset by the dot's radius, and the gutter shares that inset so a percentage means one height in both.
+
+#### REPORTED EPS IS NOT RESTATED FOR A SPLIT, so the chart keeps to one share count
+**Measured on the stored rows before drawing anything: NVIDIA reads 3.37 / 4.02 one quarter and 0.46 / 0.52 the next**, across its ten-for-one. Each quarter's own pair is on one basis, so beat-or-miss was always right — but one axis over both sides draws a collapse in earnings that never happened. This is the FINRA short-interest lesson (not restated either) in a third dataset.
+
+- `earnSegment` uses the profile's `lastSplitDate`: **the quarters reported since the last split where there are at least three, otherwise the ones before it.** The note says which, names the date, and says how many are held back; the table still lists every quarter.
+- **Only the LAST split is known**, so the "before" branch can still span an earlier one (a company that split twice, the second time within the last two quarters). Rare, and not solvable from the profile; an adjusted series would need split factors we do not store.
+- `stock` is script-scope on this page, but `earnSplit` is set beside `earnRows` at boot anyway, so the function reads nothing it was not handed.
+
+- Verified: **45 checks** (`earn-dumbbell-test.js`) over four fixture stocks — sixteen quarters crossing zero with a beat, a miss, an exact match and an unforecast quarter, with gaps of DIFFERENT sizes so a fixed-length line cannot pass; a split mid-history; a split one quarter ago; and a stock with no earnings. Positions, line ends against dot centres, the gap-to-length proportion, the drawn colours, hollow against filled, the gutter's values, the toggle both ways, nothing added inside `#chart`, and a phone (labels neither colliding nor running off the card — they did both on the first render, found by screenshot). **Proved by reverting eight times, every one load-bearing**: one axis across a split fails 5, newest-on-the-left 3, and the three-quarter rule, the zero line, the fixed-length line and the unforecast quarter 2 each, the hollow dot and the phone's label count 1 each.
+- **`earnings-section-test.js` asserted the strip and was CORRECTED, not worked around**: its two checks on the capped percentage scale describe something that no longer exists, and are replaced by one that the near-zero quarter is drawn at its real size.
+
 ### The statements, laid out as statements (2026-10-05, owner's request, from two screenshots)
 **A `Financial statements` card above the SEC EDGAR one: line items down, periods across, newest first, with three tabs — Income, Balance sheet, Cash flow.** The raw card is untouched, which was the owner's condition.
 
