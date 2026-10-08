@@ -533,7 +533,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/consolidated.html': '/consolidated',
                       '/news-runs.html': '/news-runs', '/columns.html': '/columns',
                       '/export.html': '/export', '/subscribers.html': '/subscribers',
-                      '/emails.html': '/emails', '/holdings.html': '/holdings', '/edgar.html': '/edgar',
+                      '/emails.html': '/emails', '/holdings.html': '/holdings', '/edgar.html': '/edgar', '/onboarding.html': '/onboarding',
                       // The public pages have canonical addresses of their own.
                       '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
                       '/about.html': '/about',
@@ -10635,28 +10635,52 @@ const EVO_CACHE_MS = 10 * 60 * 1000;
 // credits spent; and a failure returns what is held, or null -- on which the
 // series falls back to today's share count and the card says so.
 const SPLITS_TTL_DAYS = 180;
+// ONE definition of "is this split history due", for the on-demand path
+// (splitsFor) and the nightly step (/api/cron/splits).
+//
+// THE PROFILE'S DATE AND THE /splits DATE NEED NOT AGREE. /statistics gave
+// Mueller's split as 2026-07-01 while the price series steps on 06-25, so
+// "the profile names a newer split than any we hold" can stay true for ever
+// after a perfectly good fetch -- and a rule that re-asks whenever it is true
+// re-asks every night. So that branch also requires that we have NOT fetched
+// since the date the profile names (plus a few days for the provider's own
+// endpoints to catch up with each other).
+const SPLITS_SETTLE_DAYS = 5;
+function splitsDue(fetchedAt, newest, profSplit, now) {
+  if (fetchedAt == null) return 'never';
+  if (profSplit && (!newest || profSplit > newest)) {
+    const named = Date.parse(profSplit + 'T00:00:00Z');
+    if (isFinite(named) && fetchedAt < named + SPLITS_SETTLE_DAYS * 86400000) return 'newer';
+  }
+  if (now - fetchedAt > SPLITS_TTL_DAYS * 86400000) return 'old';
+  return null;
+}
+// The provider's split list for one symbol, or null where it gave no usable
+// answer. A refusal is { status: 'error' }; a company that never split answers
+// with an EMPTY list, and only that is something to store.
+async function fetchSplitList(symbol) {
+  try {
+    const j = await fetchJson(`${TD_BASE}/splits?symbol=${encodeURIComponent(symbol)}&country=United States&range=full&apikey=${API_KEY}`,
+      { timeout: 15000, budget: 20000, retry: false });
+    if (!j || j.status === 'error' || !Array.isArray(j.splits)) return null;
+    return j.splits.map((s) => ({ d: String(s.date || '').slice(0, 10), f: Number(s.from_factor) / Number(s.to_factor) }))
+      .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s.d) && s.f > 0 && isFinite(s.f)).sort((a, b) => (a.d < b.d ? -1 : 1));
+  } catch { return null; }
+}
 async function splitsFor(symbol, prof) {
   let held = null;
   try { held = await store.readSplits(symbol); } catch { held = null; }
   const newest = held && held.splits.length ? held.splits[held.splits.length - 1].d : null;
   const profSplit = prof && prof.lastSplitDate ? String(prof.lastSplitDate).slice(0, 10) : null;
-  const stale = !held || Date.now() - held.fetchedAt > SPLITS_TTL_DAYS * 86400000
-    || (profSplit && (!newest || profSplit > newest));
+  const stale = !!splitsDue(held ? held.fetchedAt : null, newest, profSplit, Date.now());
   if (!stale) return held.splits;
   const fallback = held ? held.splits : null;
   if (!API_KEY) return fallback;
   try { if (await readRefreshState()) return fallback; } catch { /* not busy */ }
-  try {
-    const j = await fetchJson(`${TD_BASE}/splits?symbol=${encodeURIComponent(symbol)}&country=United States&range=full&apikey=${API_KEY}`,
-      { timeout: 15000, budget: 20000, retry: false });
-    // A refusal is { status: 'error' }; a company that never split answers
-    // with an empty list. Only the second is something to store.
-    if (!j || j.status === 'error' || !Array.isArray(j.splits)) return fallback;
-    const list = j.splits.map((s) => ({ d: String(s.date || '').slice(0, 10), f: Number(s.from_factor) / Number(s.to_factor) }))
-      .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s.d) && s.f > 0 && isFinite(s.f)).sort((a, b) => (a.d < b.d ? -1 : 1));
-    await store.writeSplits(symbol, list).catch(() => {});
-    return list;
-  } catch { return fallback; }
+  const list = await fetchSplitList(symbol);
+  if (!list) return fallback;
+  await store.writeSplits(symbol, list).catch(() => {});
+  return list;
 }
 
 async function evolutionFor(symbol, years) {
@@ -14368,6 +14392,125 @@ const SSGA_UA = process.env.SEC_UA
 // needs no calendar, catches a change within hours, heals after any number
 // of missed runs (`noteTechMark`'s rule), and writes nothing on a day when
 // the as-of date has not moved.
+// ---- split history, kept current by the nightly ----------------------------
+// (2026-10-08, owner: "will you refresh the splits going forward".) Until this
+// a new split was only picked up when somebody opened that stock's Evolution
+// card, and the peer chart -- which reads stored splits and never fetches --
+// could sit on a pre-split share count indefinitely.
+//
+// NOT part of the profile pull: seven profiles a minute already use 560 of the
+// 610 credits. This is its own call, made by the nightly driver AFTER the
+// rounds are over, and it stands aside while any refresh is live.
+//
+// Who is due, in order: never fetched (a new ticker), then a profile naming a
+// split newer than any held, then anything older than the TTL. At most
+// SPLITS_CRON_MAX a call (20 credits each, so 400 of the 610), and the answer
+// says how many remain so the driver can come back a minute later.
+const SPLITS_CRON_MAX = 20;
+app.get('/api/cron/splits', route(async (req, res) => {
+  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'No.' });
+  const dry = req.query.dry === '1';
+  const cap = Math.max(1, Math.min(SPLITS_CRON_MAX, Number(req.query.n) || SPLITS_CRON_MAX));
+  const [universe, idx, profiles] = await Promise.all([
+    store.readUniverse(), store.readSplitIndex(), store.readProfiles().catch(() => ({})),
+  ]);
+  const now = Date.now();
+  const RANK = { never: 0, newer: 1, old: 2 };
+  const due = [];
+  for (const sym of universe) {
+    const st = idx[sym] || null;
+    const p = profiles[sym] || null;
+    const named = p && p.lastSplitDate ? String(p.lastSplitDate).slice(0, 10) : null;
+    const why = splitsDue(st ? st.fetchedAt : null, st ? st.newest : null, named, now);
+    if (why) due.push({ symbol: sym, why, at: st ? st.fetchedAt : 0 });
+  }
+  due.sort((a, b) => RANK[a.why] - RANK[b.why] || a.at - b.at);
+  const counts = { never: 0, newer: 0, old: 0 };
+  for (const d of due) counts[d.why]++;
+  if (dry) return res.json({ ok: true, dry: true, due: due.length, counts, next: due.slice(0, cap).map((d) => d.symbol) });
+  if (!due.length) return res.json({ ok: true, done: true, due: 0, fetched: 0, remaining: 0 });
+  if (!API_KEY) return res.json({ ok: true, done: true, skipped: 'no API key', due: due.length, remaining: due.length });
+  let busy = null;
+  try { busy = await readRefreshState(); } catch { busy = null; }
+  if (busy) return res.json({ ok: true, done: true, skipped: 'a refresh is running', due: due.length, remaining: due.length });
+
+  const batch = due.slice(0, cap);
+  const failed = []; const changed = []; let fetched = 0;
+  for (const d of batch) {
+    const list = await fetchSplitList(d.symbol);
+    // A SYMBOL THAT FAILS IS LEFT UNRECORDED, never written empty: an empty
+    // list reads as "fetched, and it has never split".
+    if (!list) { failed.push(d.symbol); continue; }
+    const before = idx[d.symbol] ? idx[d.symbol].newest : null;
+    const after = list.length ? list[list.length - 1].d : null;
+    try { await store.writeSplits(d.symbol, list); fetched++; if (idx[d.symbol] && after && after !== before) changed.push(d.symbol); }
+    catch { failed.push(d.symbol); }
+  }
+  // What is left is everything not attempted. The failures are NOT counted as
+  // remaining: they would be re-picked first on the next call and the driver
+  // would spend its whole allowance on the same refusals.
+  const remaining = due.length - batch.length;
+  console.log(`splits: ${fetched} fetched, ${failed.length} failed, ${remaining} still due`
+    + (changed.length ? ` — new split on ${changed.join(',')}` : ''));
+  res.json({ ok: true, done: remaining === 0, due: due.length, counts, fetched, failed, changed, remaining });
+}));
+
+// ---- finishing a newly added stock -----------------------------------------
+// (2026-10-08, owner: "what happens when I add new stocks, how will everything
+// including history get pulled properly".) Most of it arrives on its own; four
+// pieces of history are loaded from the owner's machine by onboard.js. This is
+// what is still to do, per stock, with the one command that does it.
+//
+// A stock is "to finish" when it joined the universe after ONBOARD_SINCE and
+// onboard.js has not recorded it. The date is a constant on purpose: every
+// stock already here when this shipped had been loaded by hand over the weeks
+// before, and marking 1,274 rows done in init() would be a write on every cold
+// start to say so.
+const ONBOARD_SINCE = Number(process.env.ONBOARD_SINCE) || Date.UTC(2026, 9, 8, 23, 0, 0);
+app.get('/onboarding', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'onboarding');
+  res.sendFile(path.join(__dirname, 'private', 'onboarding.html'));
+}));
+app.get('/api/onboarding', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const pending = await store.readOnboardPending(ONBOARD_SINCE);
+  const syms = pending.map((p) => p.symbol);
+  const soft = (p, d) => Promise.resolve().then(p).catch(() => d);
+  const [span, names, profiles, sec, shorts, splitIdx, extremes, recent] = await Promise.all([
+    syms.length ? soft(() => store.barsSpan(syms), {}) : {},
+    syms.length ? soft(() => store.readNamesFull(), {}) : {},
+    syms.length ? soft(() => store.readProfiles(), {}) : {},
+    syms.length ? soft(() => store.readSecState(), {}) : {},
+    syms.length ? soft(() => store.readShortState(), []) : [],
+    syms.length ? soft(() => store.readSplitIndex(), {}) : {},
+    syms.length ? soft(() => store.readPriceExtremes(), {}) : {},
+    soft(() => store.readOnboardDone(12), []),
+  ]);
+  const shortBy = {}; for (const x of shorts) shortBy[x.symbol] = x;
+  const rows = pending.map((p) => {
+    const s = p.symbol, b = span[s] || null, sh = shortBy[s] || null, se = sec[s] || null;
+    const prof = profiles[s] || null;
+    return {
+      symbol: s,
+      name: (names[s] && (names[s].short || names[s].name)) || null,
+      addedAt: p.addedAt,
+      // What arrives on its own.
+      profile: !!(prof && prof.fetchedAt),
+      filings: se ? se.status : null,
+      // What onboard.js loads.
+      barsFirst: b ? b.first : null, barsLast: b ? b.last : null,
+      record: !!extremes[s],
+      shortRows: sh ? Number(sh.rows || 0) : 0,
+      splits: !!splitIdx[s],
+    };
+  });
+  res.json({
+    since: ONBOARD_SINCE, pending: rows, recent,
+    command: rows.length ? 'node --use-system-ca onboard.js --commit' : null,
+  });
+}));
+
 app.get('/api/cron/holdings', route(async (req, res) => {
   // 401 here and 403 from requireAdmin, so the status code says which
   // bundle is live — a 403 moments after a push is deploy lag, not an auth

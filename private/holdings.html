@@ -549,9 +549,9 @@
         // script exists so that work happens locally and paced.
         $('mWarn').textContent = 'Added ' + added.length + '. Run this BEFORE the next price '
           + 'refresh — a ticker with no bars is pulled deep inside the refresh’s own '
-          + 'request, and a bulk add has run one past the 300-second ceiling before.';
-        $('mCmd').textContent = 'node --use-system-ca backfill-bars.js --commit --rate 100 --only '
-          + added.join(',');
+          + 'request, and a bulk add has run one past the 300-second ceiling before. It loads the full '
+          + 'price, short-interest and split history for the stocks just added; the New stocks page lists them.';
+        $('mCmd').textContent = 'node --use-system-ca onboard.js --commit';
         load();
       }).catch(function (e) {
         b.disabled = false; b.textContent = 'Add ' + syms.length;

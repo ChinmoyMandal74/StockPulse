@@ -87,6 +87,10 @@ const SEC_BATCH = 5;
 // It adds about 45 seconds to a run and stays inside what the SEC asks.
 const SEC_MAX_BATCHES = Number(process.env.SEC_MAX_BATCHES) || 30;
 const SEC_GAP_MS = Number(process.env.NIGHTLY_SEC_GAP_MS) || 1500;
+// Split history: at most this many calls a run, 20 symbols a call, a minute
+// apart -- each call is up to 400 of the 610 credits a minute.
+const SPLIT_MAX_CALLS = Number(process.env.SPLIT_MAX_CALLS) || 5;
+const SPLIT_GAP_MS = Number(process.env.NIGHTLY_SPLIT_GAP_MS) || 65000;
 
 // Read .env directly rather than depending on the process environment: a
 // scheduled task starts with almost none of the shell's, and the secret has no
@@ -402,18 +406,47 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
     // The night still reports FAILED and still exits 1. The rotation really did
     // fail, and a green task would hide that. What changes is only that three
     // unrelated subsystems no longer fail with it.
+    // SPLIT HISTORY, kept current: a newly added stock, or one whose profile
+    // now names a split newer than any stored. Usually nothing is due and this
+    // is one call that fetches nothing. Non-fatal, and a 404 is an older server.
+    async function splitRotate() {
+      for (let i = 0; i < SPLIT_MAX_CALLS; i += 1) {
+        let r; let text;
+        try {
+          r = await fetch(`${base}/api/cron/splits`, {
+            signal: AbortSignal.timeout(240000),
+            headers: { Authorization: 'Bearer ' + secret },
+          });
+          text = await r.text();
+        } catch (e) {
+          say(`splits     skipped -- ${e.name === 'TimeoutError' ? 'timed out' : e.message}`);
+          return;
+        }
+        let j = null; try { j = JSON.parse(text); } catch { /* not json */ }
+        if (r.status === 404) { say('splits     skipped -- older server, no route yet'); return; }
+        if (!r.ok || !j) { say(`splits     skipped -- HTTP ${r.status} ${String(text).slice(0, 120)}`); return; }
+        if (j.skipped) { say(`splits     skipped -- ${j.skipped} (${j.due} due)`); return; }
+        if (!j.due) { say('splits     up to date'); return; }
+        const failed = (j.failed || []).length;
+        say(`splits     ${j.fetched} fetched${failed ? ', ' + failed + ' failed (' + j.failed.slice(0, 6).join(',') + ')' : ''}`
+          + `${(j.changed || []).length ? ', new split on ' + j.changed.join(',') : ''}, ${j.remaining} still due`);
+        if (!j.remaining) return;
+        await sleep(SPLIT_GAP_MS);
+      }
+    }
+
     let tailDone = false;
     async function tailPhases(why) {
       if (tailDone) return;
       tailDone = true;
-      if (why) say(`tail       ${why} -- running SEC, short interest and holdings anyway`);
+      if (why) say(`tail       ${why} -- running SEC, short interest, holdings and splits anyway`);
       // EACH IS GUARDED SEPARATELY. One of them throwing must not cost the
       // other two their turn, which is the same mistake one level up that this
       // whole change exists to undo. All three are internally defensive today,
       // so reverting this loop currently fails nothing -- it is kept because
       // adding a FOURTH phase here is a one-line change, and a new phase is
       // exactly the thing likely to throw.
-      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate]]) {
+      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['splits', splitRotate]]) {
         try {
           await fn();
         } catch (e) {

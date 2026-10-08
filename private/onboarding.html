@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>New stocks — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(124, 156, 255, 0.10), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(52, 211, 153, 0.08), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 70ch; font-size: 13px; line-height: 1.65; }
+    .masthead { margin: 34px 0 22px; }
+    .grp { margin: 30px 4px 12px; font-size: 10px; font-weight: 500; text-transform: uppercase;
+           letter-spacing: 0.2em; color: var(--faint); }
+
+    /* Everything below is scoped under .ob: unscoped class names have
+       captured later markup on this project nine times. */
+    .ob { margin-bottom: 14px; }
+    .ob > .core { padding: 18px 22px 20px; }
+    .ob h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+    .ob p { margin: 8px 0 0; font-size: 12.5px; line-height: 1.65; color: var(--muted); max-width: 86ch; }
+    .ob p b, .ob li b { color: var(--text); font-weight: 600; }
+    .ob p.ok { color: var(--green); }
+    .ob .cmd { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0 0;
+               background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+               border-radius: 10px; padding: 9px 12px; }
+    .ob .cmd code { font-family: var(--mono); font-size: 12px; color: var(--text); word-break: break-all; }
+    .ob .cmd button { margin-left: auto; }
+    .ob ol { margin: 10px 0 0; padding-left: 20px; font-size: 12.5px; line-height: 1.7; color: var(--muted); max-width: 86ch; }
+    .ob ol li { margin-bottom: 6px; }
+    .ob code.in { font-family: var(--mono); font-size: 11.5px; color: var(--text);
+                  background: rgba(255, 255, 255, 0.05); padding: 1px 5px; border-radius: 5px; }
+    .ob .tw { overflow-x: auto; margin: 12px 0 0; }
+    .ob table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 12.5px; }
+    .ob th { text-align: left; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em;
+             color: var(--faint); padding: 0 12px 8px 0; white-space: nowrap; }
+    .ob td { padding: 7px 12px 7px 0; border-top: 1px solid var(--hair); vertical-align: top; color: var(--muted); line-height: 1.5; }
+    .ob td.sym { font-family: var(--mono); color: var(--text); white-space: nowrap; }
+    .ob td.m { font-family: var(--mono); font-size: 11.5px; white-space: nowrap; }
+    .ob td b { color: var(--text); font-weight: 500; }
+    /* Three states and no red: green is in place, amber is "notice this, it
+       is yours to run", neutral is "coming on its own". */
+    .ob .yes { color: var(--green); }
+    .ob .todo { color: var(--amber); }
+    .ob .wait { color: var(--faint); }
+    .btn.sm { font-size: 11.5px; padding: 5px 11px; }
+    .loading, .error { padding: 26px; font-size: 13px; color: var(--muted); }
+    .error { color: var(--red); }
+    @media (max-width: 768px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.9 13.6A8 8 0 1 1 18.1 7.3"/><path d="M18.7 3.2v4.4h-4.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <button class="btn" id="reload" type="button"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Re-read</button>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Admin</span>
+      <h1>New stocks</h1>
+      <p class="lede">What a newly added stock still needs, and the one command that loads it. Most of a
+        stock’s data arrives on its own within a day; four pieces of history do not, and are loaded from
+        your machine.</p>
+    </header>
+
+    <div id="body"><p class="loading">Reading…</p></div>
+
+    <p class="grp">How to add a stock, start to finish</p>
+    <div class="bezel ob"><div class="core">
+      <ol>
+        <li><b>Add it.</b> On the Admin page (Add a ticker, or Add many at once) or from Index membership.
+          The data provider is asked whether it can price each symbol, at 1 credit each; one it cannot
+          price is refused.</li>
+        <li><b>Run the command on your machine</b>, in the project folder:
+          <code class="in">node --use-system-ca onboard.js --commit</code>.
+          Without <code class="in">--commit</code> it only prints what it would do. It loads the full price
+          history, the record close, the short-interest history and the split history for every stock listed
+          above, then marks them finished. A few stocks take a minute or two.
+          <b>For more than a handful, run it before the next price refresh</b> — a stock with no price
+          history is otherwise pulled inside the refresh itself, and a large batch has run one past its
+          time limit before.</li>
+        <li><b>Leave the rest to the nightly run</b> (7:30 AM and 7:30 PM Eastern on weekdays), or press
+          <a href="/refreshes?do=refreshmissing">Fill missing</a> to pull company data now. The command
+          refuses to start inside either nightly window, because both would be competing for the same
+          API credits.</li>
+        <li><b>Check back here.</b> A stock leaves the list above once the command has run for it. The
+          <a href="/quality">Data quality</a> page shows anything still thin.</li>
+      </ol>
+    </div></div>
+
+    <p class="grp">Where each piece comes from</p>
+    <div class="bezel ob"><div class="core">
+      <div class="tw"><table>
+        <thead><tr><th>Data</th><th>How it arrives</th><th>When</th></tr></thead>
+        <tbody>
+          <tr><td><b>Name and the provider check</b></td><td class="wait">On its own</td><td>The moment you add it</td></tr>
+          <tr><td><b>Prices, about 300 days</b></td><td class="wait">On its own</td><td>Next price refresh, every half hour in market hours</td></tr>
+          <tr><td><b>Profile, fundamentals, sector, industry</b></td><td class="wait">On its own</td><td>Next nightly run, which takes new stocks first; or Fill missing</td></tr>
+          <tr><td><b>Earnings history, up to 40 quarters</b></td><td class="wait">On its own</td><td>With the profile</td></tr>
+          <tr><td><b>SEC filings and announcement dates</b></td><td class="wait">On its own</td><td>Next nightly run, never-fetched companies first</td></tr>
+          <tr><td><b>S&amp;P 500 membership</b></td><td class="wait">On its own</td><td>Immediately</td></tr>
+          <tr><td><b>News</b></td><td class="wait">On its own</td><td>Next news run, or when its page is opened</td></tr>
+          <tr><td><b>Split history, from now on</b></td><td class="wait">On its own</td><td>Nightly: a new stock, or a newly reported split</td></tr>
+          <tr><td><b>Full price history, up to 20 years</b></td><td class="todo">The command</td><td>Until then the 5-year return and long chart ranges are blank</td></tr>
+          <tr><td><b>Record close</b></td><td class="todo">The command</td><td>Needs the full price history first</td></tr>
+          <tr><td><b>Short-interest history, back to 2017</b></td><td class="todo">The command</td><td>Only the newest reading arrives on its own</td></tr>
+          <tr><td><b>Split history, straight away</b></td><td class="todo">The command</td><td>Otherwise the next nightly run</td></tr>
+          <tr><td><b>Insider transactions</b></td><td class="todo">Separately</td><td>Reload the current quarter:
+            <code class="in">node --use-system-ca insider-load.js --commit --quarters 1 --force</code>, after its filings have been fetched</td></tr>
+          <tr><td><b>Day-by-day fundamentals, days the verdict has held</b></td><td>Cannot be loaded</td><td>Both start from the day the stock is added</td></tr>
+        </tbody>
+      </table></div>
+    </div></div>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const day = (ms) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    + ', ' + new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const yes = (t) => '<span class="yes">' + esc(t) + '</span>';
+  const todo = (t) => '<span class="todo">' + esc(t) + '</span>';
+  const wait = (t) => '<span class="wait">' + esc(t) + '</span>';
+
+  function paint(d) {
+    const rows = d.pending || [];
+    let html = '<p class="grp">To finish</p><div class="bezel ob" id="pend"><div class="core">';
+    if (!rows.length) {
+      html += '<h2>Nothing to finish</h2><p class="ok" id="none">Every stock added since this page was built has had its history loaded.</p>';
+    } else {
+      html += '<h2>' + rows.length + (rows.length === 1 ? ' stock needs' : ' stocks need') + ' its history loaded</h2>'
+        + '<p>Run this on your machine, in the project folder. It covers every stock in the table, and nothing else.</p>'
+        + '<div class="cmd"><code id="cmd">' + esc(d.command) + '</code><button class="btn sm" id="copy" type="button">Copy</button></div>'
+        + '<div class="tw"><table id="tbl"><thead><tr><th>Symbol</th><th>Added</th><th>Company data</th><th>Filings</th>'
+        + '<th>Prices from</th><th>Record close</th><th>Short history</th><th>Splits</th></tr></thead><tbody>'
+        + rows.map((r) => '<tr data-sym="' + esc(r.symbol) + '">'
+          + '<td class="sym" title="' + esc(r.name || '') + '">' + esc(r.symbol) + '</td>'
+          + '<td class="m">' + esc(day(r.addedAt)) + '</td>'
+          + '<td>' + (r.profile ? yes('in place') : wait('next nightly run')) + '</td>'
+          + '<td>' + (r.filings ? yes(r.filings === 'ok' ? 'in place' : 'checked: ' + r.filings) : wait('next nightly run')) + '</td>'
+          + '<td class="m">' + (r.barsFirst ? esc(r.barsFirst) + ' ' + todo('· not deepened') : todo('none yet')) + '</td>'
+          + '<td>' + (r.record ? yes('in place') : todo('to load')) + '</td>'
+          + '<td>' + (r.shortRows > 1 ? yes(r.shortRows + ' readings') : todo(r.shortRows === 1 ? 'latest only' : 'to load')) + '</td>'
+          + '<td>' + (r.splits ? yes('in place') : todo('to load')) + '</td></tr>').join('')
+        + '</tbody></table></div>'
+        + '<p>Amber is what the command loads. Grey arrives on its own.</p>';
+    }
+    html += '</div></div>';
+    const rec = d.recent || [];
+    if (rec.length) {
+      html += '<p class="grp">Recently finished</p><div class="bezel ob" id="done"><div class="core"><div class="tw"><table><thead><tr><th>Symbol</th><th>Finished</th><th>What ran</th></tr></thead><tbody>'
+        + rec.map((r) => '<tr><td class="sym">' + esc(r.symbol) + '</td><td class="m">' + esc(day(r.doneAt)) + '</td><td>' + esc(r.steps) + '</td></tr>').join('')
+        + '</tbody></table></div></div></div>';
+    }
+    $('body').innerHTML = html;
+    const c = $('copy');
+    if (c) c.addEventListener('click', function () {
+      navigator.clipboard.writeText($('cmd').textContent).then(function () {
+        c.textContent = 'Copied'; setTimeout(function () { c.textContent = 'Copy'; }, 1500);
+      });
+    });
+  }
+  function load() {
+    fetch('/api/onboarding').then((r) => r.json().then((j) => ({ s: r.status, j })))
+      .then((x) => { if (x.s !== 200) throw new Error(x.j.error || ('HTTP ' + x.s)); paint(x.j); })
+      .catch((e) => { $('body').innerHTML = '<p class="error">' + esc(e && e.message || e) + '</p>'; });
+  }
+  $('reload').addEventListener('click', load);
+  load();
+})();
+</script>
+</body>
+</html>

@@ -253,7 +253,7 @@
       [fact('Companies fetched', num(sp.symbols) + ' of ' + num(S.universe)),
         fact('With at least one split', num(sp.withSplits)),
         fact('Newest fetch', when(sp.newest))],
-      '<b>Kept up to date</b> on demand: the first time a company’s Evolution card is drawn its history is fetched and stored (20 credits), and re-fetched when the provider reports a newer split. '
+      '<b>Kept up to date</b> by the nightly run: after its rounds it fetches the history of any newly added company and of any company whose profile reports a newer split (20 credits each, up to 100 a run). '
       + 'A company not fetched yet falls back to today’s share count, and the card says so. The command below fills everything in one paced pass — about five hours for the whole universe, '
       + 'and it must not overlap the 7:30 AM or 7:30 PM nightly job.',
       '', cmd('Fill the rest, from your machine', 'node --use-system-ca backfill-splits.js --commit --missing'));

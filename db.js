@@ -939,6 +939,12 @@ const SCHEMA = [
      fetched_at integer not null,
      n          integer not null default 0
    )`,
+  // Which newly added stocks have had their history loaded by onboard.js.
+  `create table if not exists onboard_state (
+     symbol  text primary key,
+     done_at integer not null,
+     steps   text
+   )`,
   // Index membership, taken from the issuer's own daily holdings file —
   // see holdings.js for why that source and not a maintained list.
   //
@@ -3064,6 +3070,55 @@ async function fundFirstSeen(fund, symbols) {
   return out;
 }
 
+// ---- finishing a newly added stock ("onboarding") -------------------------
+// Most of a new ticker's data arrives on its own within a day. Four pieces of
+// HISTORY do not -- deep prices, the record close, short-interest history and
+// split history -- and are loaded from the owner's machine by onboard.js.
+// This is the record of which symbols that has been done for. A stock added
+// to the universe after ONBOARD_SINCE with no row here is still to finish.
+async function readOnboardPending(since) {
+  await init();
+  const r = await db.execute({
+    sql: `select u.symbol, u.added_at from universe u
+          left join onboard_state o on o.symbol = u.symbol
+          where u.added_at > ? and o.symbol is null order by u.added_at, u.rowid`,
+    args: [Number(since) || 0],
+  });
+  return r.rows.map((x) => ({ symbol: x.symbol, addedAt: Number(x.added_at) }));
+}
+async function readOnboardDone(limit) {
+  await init();
+  const r = await db.execute({
+    sql: 'select symbol, done_at, steps from onboard_state order by done_at desc limit ?',
+    args: [Math.min(Number(limit) || 20, 200)],
+  });
+  return r.rows.map((x) => ({ symbol: x.symbol, doneAt: Number(x.done_at), steps: x.steps || '' }));
+}
+async function noteOnboarded(symbols, steps) {
+  await init();
+  const list = [...new Set((symbols || []).map((s) => String(s).toUpperCase()))];
+  if (!list.length) return 0;
+  const now = Date.now();
+  await db.batch(list.map((s) => ({
+    sql: `insert into onboard_state (symbol, done_at, steps) values (?, ?, ?)
+          on conflict(symbol) do update set done_at = excluded.done_at, steps = excluded.steps`,
+    args: [s, now, String(steps || '').slice(0, 200)],
+  })), 'write');
+  return list.length;
+}
+
+// Every symbol's split clock with its newest stored split, for the nightly
+// step that decides whose history to re-ask for. One row per symbol and a
+// primary-key seek each into `splits`.
+async function readSplitIndex() {
+  await init();
+  const r = await db.execute(
+    'select s.symbol, s.fetched_at, (select max(d) from splits where symbol = s.symbol) newest from split_state s');
+  const out = {};
+  for (const x of r.rows) out[x.symbol] = { fetchedAt: Number(x.fetched_at), newest: x.newest || null };
+  return out;
+}
+
 // Which dates a fund has accumulated, newest first. A `group by` over a
 // growing table would normally be a quota event here — but (fund, d) is a
 // COVERING index, so SQLite walks it in order and never touches the table,
@@ -4308,7 +4363,7 @@ async function readBarsFor(symbols, since) {
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
-  'sec_facts', 'sec_state', 'short_interest', 'short_state', 'splits', 'split_state'];
+  'sec_facts', 'sec_state', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
 
 // Remove a symbol from the database entirely.
 //
@@ -5799,7 +5854,7 @@ module.exports = {
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
   writeShortInterest, readShortInterest, readShortLatestFor, readShortAsOfFor,
   readShortRecentFor,
-  readSplits, writeSplits, splitCoverage,
+  readSplits, writeSplits, splitCoverage, readSplitIndex, readOnboardPending, readOnboardDone, noteOnboarded,
   readShortState, noteShortMiss, shortNewest, appendShortInterest,
   fundNewest, noteFundMiss, appendFundHoldings, readFundHoldings, readFundState, fundFirstSeen,
   readFundDates,
