@@ -104,6 +104,7 @@
     }
     .chk .chkfine { display: block; margin-top: 3px; font-size: 11px;
                     color: var(--faint); }
+    .chk a { color: var(--text); }
 
     .btn {
       width: 100%; justify-content: center; margin-top: 6px; padding: 12px 16px;
@@ -230,6 +231,18 @@
                 confirm, and every message after that has a one-click unsubscribe.</span></span>
           </label>
         </div>
+        <!-- AGREEMENT TO THE TERMS. Registration only, REQUIRED and unticked:
+             the account is not created without it, and the server refuses a
+             request that does not carry `terms: true`. The two links open in
+             a new tab so reading them does not lose what was typed. -->
+        <div class="field chk" id="termsField" style="display:none">
+          <label for="terms">
+            <input type="checkbox" id="terms" name="terms" />
+            <span>I am at least 18 and I agree to the
+              <a href="/terms" target="_blank" rel="noopener">Terms of use</a> and the
+              <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a></span>
+          </label>
+        </div>
         <button class="btn" id="submit" type="submit">Sign in</button>
       </form>
 
@@ -256,6 +269,8 @@
     let mode = 'signin';
     let signupCodeRequired = false;
     let mailReady = false;
+    // On unless the server says otherwise: a form that hid the box and was then refused would be a dead end.
+    let termsRequired = true;
 
     function setMsg(text, kind) {
       const box = $('msg');
@@ -309,6 +324,7 @@
       // so the box would be a control that does nothing. Hidden on the
       // sign-in tab too — you are not creating anything to subscribe with.
       $('subField').style.display = reg && mailReady ? '' : 'none';
+      $('termsField').style.display = reg && termsRequired ? '' : 'none';
       $('forgotWrap').style.display = reg ? 'none' : '';
       $('password').setAttribute('autocomplete', reg ? 'new-password' : 'current-password');
       setMsg('');
@@ -353,6 +369,12 @@
     $('form').addEventListener('submit', async (e) => {
       e.preventDefault();
       if (busy) return;
+      // Said here, before anything is sent: the server refuses the same request,
+      // but its answer arrives after a spinner and reads as a failure.
+      if (mode === 'register' && termsRequired && !$('terms').checked) {
+        setMsg('Tick the box to agree to the terms.', 'err');
+        return;
+      }
       busy = true;
       setMsg('');
       const w = working($('submit'), mode === 'register' ? 'Creating account…' : 'Signing in…');
@@ -364,6 +386,8 @@
         // A BOOLEAN, never the checkbox's string value: the server
         // takes `=== true` and nothing else.
         subscribe: mode === 'register' && $('subscribe').checked,
+        // A BOOLEAN, like the line above: the server takes `=== true`.
+        terms: mode === 'register' && $('terms').checked,
       };
       try {
         const res = await fetch(mode === 'register' ? '/api/register' : '/api/login', {
@@ -431,6 +455,7 @@
         const me = await fetch('/api/me', { cache: 'no-store' }).then((r) => r.json());
         signupCodeRequired = !!me.signupCodeRequired;
         mailReady = !!me.mailReady;
+        termsRequired = me.termsRequired !== false;
         // Shown only when the server says it is configured. A button that
         // leads to a 404 is worse than no button.
         if (me.googleReady) $('googleWrap').style.display = '';

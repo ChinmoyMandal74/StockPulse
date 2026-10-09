@@ -178,6 +178,17 @@ const SIGNUP_CODE = process.env.SIGNUP_CODE || '';
 // DEFAULTS TO ON, so nothing changes until the env var is set deliberately —
 // a deploy must never be the thing that opens registration.
 const REQUIRE_APPROVAL = process.env.REQUIRE_APPROVAL !== 'false';
+// ---- agreement to the terms (2026-10-09, owner's request) ----------------------
+// THE VERSION IS THE DATE PRINTED ON /terms. A new account must agree to it,
+// and an existing member whose recorded version differs is asked once, at
+// their next request, before anything else is served. Changing the terms
+// materially means changing this AND the date on the page; a test asserts
+// the two agree.
+//
+// DEFAULTS TO ON, the REQUIRE_APPROVAL bargain: a deploy can never be the
+// thing that stops asking. Only setting the variable is.
+const TERMS_VERSION = '2026-10-09';
+const REQUIRE_TERMS = process.env.REQUIRE_TERMS !== 'false';
 // Per-IP-per-day ceiling on registrations. The route was unthrottled, so a
 // script could mint accounts and fire one approval email at the owner for
 // each — the data was safe (pending accounts cannot sign in) but the inbox
@@ -233,6 +244,38 @@ const route = (fn) => (req, res, next) =>
         : 'Server error. Please try again.' });
     }
   });
+
+// THE TERMS GATE. A signed-in member who has not agreed to the current terms
+// gets one page -- /accept-terms -- and nothing else: a page request is
+// redirected there and an API call answers 403. ENFORCED HERE rather than in
+// the pages, the rule every gate on this site follows: a page-side check is
+// a suggestion, and /api/stocks hands the whole table to anyone who asks.
+//
+// WHO IS NOT ASKED: a signed-out visitor and a guest (no account to attach a
+// record to -- the terms page tells them using the site is agreeing), and
+// the admin, who is the operator and the other party to the agreement.
+//
+// IT COSTS NO EXTRA READ. currentUser() memoises on the request, and every
+// route below would have asked it anyway.
+//
+// WHAT STAYS OPEN: the pages somebody needs in order to read the terms and
+// agree or leave, the public pages, and static files that carry no data.
+const TERMS_OPEN_PAGES = new Set(['/accept-terms', '/terms', '/privacy', '/login', '/join', '/reset',
+  '/about', '/landing', '/unsubscribe', '/subscribe', '/robots.txt', '/sitemap.xml']);
+const TERMS_OPEN_API = /^\/api\/(me|terms\/accept|logout|login|register|forgot|reset|password|health|public-stats|guest|auth\/|cron\/|subscribe|unsubscribe)(\/|$)/;
+const TERMS_STATIC = /\.(css|js|svg|png|jpg|jpeg|webp|ico|woff2?|map|txt|xml)$/i;
+app.use(route(async (req, res, next) => {
+  if (!REQUIRE_TERMS || !AUTH_REQUIRED) return next();
+  const p = req.path;
+  const api = p.startsWith('/api/');
+  if (api ? TERMS_OPEN_API.test(p) : (TERMS_OPEN_PAGES.has(p) || p.startsWith('/blog') || TERMS_STATIC.test(p))) return next();
+  const u = await currentUser(req);
+  if (!u || isAdminRole(u.role) || u.termsVersion === TERMS_VERSION) return next();
+  if (api || req.method !== 'GET' || /\.json$/i.test(p)) {
+    return res.status(403).json({ error: 'Please agree to the current terms to continue.', termsDue: true });
+  }
+  res.redirect('/accept-terms');
+}));
 
 // Log every public page load before static files are served.
 app.get(['/', '/index.html'], route(async (req, res, next) => {
@@ -493,6 +536,13 @@ app.get('/about', (req, res) => {
 app.get('/privacy', (req, res) => {
   res.sendFile(path.join(__dirname, 'private', 'privacy.html'));
 });
+
+// The one page a member who has not agreed can reach. Signed-out visitors
+// have nothing to agree to here and go to sign in.
+app.get('/accept-terms', route(async (req, res) => {
+  if (!(await currentUser(req))) return res.redirect('/login');
+  res.sendFile(path.join(__dirname, 'private', 'accept.html'));
+}));
 
 app.get('/terms', (req, res) => {
   res.sendFile(path.join(__dirname, 'private', 'terms.html'));
@@ -1760,6 +1810,11 @@ app.get('/api/me', route(async (req, res) => {
     // provider configured nothing can be confirmed, so the box would be a
     // control that does nothing. `googleReady`'s own rule, one line up.
     mailReady: MAIL_READY,
+    // The version a sign-up form is agreeing to, and whether THIS account
+    // still has to. The admin is never asked; see the gate.
+    termsVersion: TERMS_VERSION,
+    termsRequired: REQUIRE_TERMS,
+    termsDue: !!(REQUIRE_TERMS && AUTH_REQUIRED && u && !isAdminRole(u.role) && u.termsVersion !== TERMS_VERSION),
   });
 }));
 
@@ -1905,6 +1960,12 @@ app.post('/api/register', route(async (req, res) => {
   if (password.length < MIN_PASSWORD) {
     return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD} characters.` });
   }
+  // STRICTLY `=== true`. Every non-empty string is truthy, so a loose test
+  // would read a hand-rolled POST carrying "false" as agreement -- on the one
+  // field whose whole job is to be evidence. The newsletter tick's rule.
+  if (REQUIRE_TERMS && req.body?.terms !== true) {
+    return res.status(400).json({ error: 'Please agree to the terms to create an account.' });
+  }
   // TRIMMED AND CASE-FOLDED before the compare. This is an invite code read
   // off a phone screen and pasted out of WhatsApp, not a password: a mobile
   // keyboard capitalises the first letter by default, and a paste carries a
@@ -1942,6 +2003,10 @@ app.post('/api/register', route(async (req, res) => {
   const status = (isAdminRole(role) || !REQUIRE_APPROVAL) ? 'active' : 'pending';
   const user = await store.createUser({ email, passwordHash, salt, role, status, name });
   logAct(req, 'login', 'signup', email);
+  // The agreement is recorded with the account. A failure here does not fail
+  // the sign-up: the account then carries no version, and the gate asks at
+  // the first request -- asked twice beats recorded never.
+  if (req.body?.terms === true) await store.recordTerms(Number(user.id), email, TERMS_VERSION, 'signup', ip).catch(() => {});
 
   // ONE CALL SITE, BEFORE THE BRANCH. The newsletter is independent of whether
   // the account is approved -- the blog is public and most subscribers will
@@ -2034,6 +2099,18 @@ app.post('/api/login', route(async (req, res) => {
   logAct(req, 'login', 'account', user.email);
   res.json({ ok: true, admin: isAdminRole(user.role),
     user: { email: user.email, name: user.name || null, role: user.role } });
+}));
+
+// An existing member agreeing to the current terms. Needs an account row --
+// a guest or the password escape hatch has nothing to record against.
+app.post('/api/terms/accept', route(async (req, res) => {
+  const u = await currentUser(req);
+  if (!u) return res.status(401).json({ error: 'Sign in first.' });
+  if (!(req.body && req.body.agree === true)) return res.status(400).json({ error: 'Tick the box to agree.' });
+  const ip = String(req.ip || req.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
+  await store.recordTerms(u.id, u.email, TERMS_VERSION, 'prompt', ip);
+  logAct(req, 'account', 'terms:' + TERMS_VERSION);
+  res.json({ ok: true, version: TERMS_VERSION });
 }));
 
 app.post('/api/logout', route(async (req, res) => {
@@ -2314,6 +2391,13 @@ app.post('/api/auth/google/finish', route(async (req, res) => {
   const byEmail = await store.findUserByEmail(p.email);
   if (byEmail) { await store.linkGoogleSub(byEmail.id, p.sub); return done(byEmail); }
 
+  // From here on an account is about to be CREATED, so the tick is required.
+  // A returning or linked account passed through `done` above, and the gate
+  // asks it separately if it has to.
+  if (REQUIRE_TERMS && !(req.body && req.body.terms === true)) {
+    return res.status(400).json({ error: 'Please agree to the terms to create an account.' });
+  }
+
   // GOOGLE MAY NOT BOOTSTRAP THE FIRST ACCOUNT. On an empty instance the first
   // registration becomes the admin, and the owner's constraint is that Google
   // is never a way into that account.
@@ -2341,6 +2425,7 @@ app.post('/api/auth/google/finish', route(async (req, res) => {
     name: p.name || null, googleSub: p.sub,
   });
   logAct(req, 'login', 'signup-google', p.email);
+  if (req.body && req.body.terms === true) await store.recordTerms(Number(user.id), p.email, TERMS_VERSION, 'google', ip).catch(() => {});
 
   await done(user);
   sendSignupNotice(p.email, 'member', p.name || null, status === 'pending').catch(() => {});

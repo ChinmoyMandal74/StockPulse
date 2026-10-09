@@ -431,6 +431,21 @@ const SCHEMA = [
      failed_count  integer not null default 0,
      locked_until  integer
    )`,
+  // WHO AGREED TO WHICH VERSION OF THE TERMS, AND WHEN (2026-10-09). An
+  // append-only record: a member who re-accepts after the terms change has
+  // two rows, which is the point -- `users.terms_version` holds only the
+  // latest, for the gate. The email is kept on the row because it is the
+  // thing a person would ask about. Removed with the account.
+  `create table if not exists terms_acceptances (
+     id      integer primary key autoincrement,
+     user_id integer not null,
+     email   text not null,
+     version text not null,
+     at      integer not null,
+     via     text,
+     ip      text
+   )`,
+  `create index if not exists idx_terms_user on terms_acceptances (user_id, at)`,
   // Random per-login tokens rather than a deterministic cookie, so a single
   // session can be revoked and expiry is just a column.
   `create table if not exists sessions (
@@ -1093,6 +1108,9 @@ const ADDED_COLUMNS = [
   // is given a random unusable hash instead, which also means verifyPassword
   // can never accidentally succeed against one.
   "alter table users add column google_sub text",
+  // The version of the terms this account last agreed to, or null. What the
+  // gate reads on every request, so it rides the session lookup.
+  "alter table users add column terms_version text",
   // Resend's own id for the message. `ok` records only that the provider
   // ACCEPTED it, which is not the same as delivered — the first real use of
   // the list hit exactly that gap, and without an id there is nothing to ask
@@ -5296,6 +5314,26 @@ async function createUser({ email, passwordHash, salt, role, status = 'active', 
   return findUserByEmail(email);
 }
 
+// Record an agreement to the terms: one row in the append-only record and
+// the version on the account, in ONE batch -- a record with no version would
+// ask the person again, and a version with no record could not be shown.
+async function recordTerms(userId, email, version, via, ip) {
+  await init();
+  await db.batch([
+    { sql: 'insert into terms_acceptances (user_id, email, version, at, via, ip) values (?, ?, ?, ?, ?, ?)',
+      args: [userId, String(email || '').toLowerCase(), String(version), Date.now(), via || null, ip ? String(ip).slice(0, 64) : null] },
+    { sql: 'update users set terms_version = ? where id = ?', args: [String(version), userId] },
+  ], 'write');
+}
+
+// One account's record, newest first. Indexed on (user_id, at).
+async function readTerms(userId) {
+  await init();
+  const r = await db.execute({
+    sql: 'select version, at, via from terms_acceptances where user_id = ? order by at desc', args: [userId] });
+  return r.rows.map((x) => ({ version: x.version, at: Number(x.at), via: x.via || null }));
+}
+
 // Approval flips pending to active; the route sends the welcome on success.
 async function approveUser(id) {
   await init();
@@ -5339,6 +5377,8 @@ async function listUsers() {
   const r = await db.execute({
     sql: `select u.id, u.email, u.name, u.role, u.created_at, u.locked_until, u.status,
                  u.google_sub,
+                 u.terms_version,
+                 (select max(t.at) from terms_acceptances t where t.user_id = u.id) as terms_at,
                  (select count(*) from sessions s
                    where s.user_id = u.id and s.expires_at > ?) as active,
                  (select max(s.created_at) from sessions s where s.user_id = u.id) as last_seen
@@ -5359,6 +5399,9 @@ async function listUsers() {
     // function — the same reason the password hash has never been in this
     // list. Everything here is allowlisted by hand for exactly that.
     google: !!u.google_sub,
+    // Which version of the terms they agreed to, and when. Null is "not yet".
+    termsVersion: u.terms_version || null,
+    termsAt: u.terms_at != null ? Number(u.terms_at) : null,
     lockedUntil: u.locked_until != null && Number(u.locked_until) > Date.now()
       ? Number(u.locked_until) : null,
   }));
@@ -5375,6 +5418,7 @@ async function deleteUser(id) {
   const stmts = [
     { sql: 'delete from sessions where user_id = ?', args: [id] },
     { sql: 'delete from users where id = ?', args: [id] },
+    { sql: 'delete from terms_acceptances where user_id = ?', args: [id] },
   ];
   if (email) {
     stmts.push({ sql: 'delete from prefs where user_key = ?', args: [email] });
@@ -5423,7 +5467,7 @@ async function getSessionUser(token) {
     // account's live session would have kept working for up to its full 30
     // days and the feature would have looked like it did nothing. A gate
     // should refuse what it does not recognise.
-    sql: `select u.id, u.email, u.name, u.role, s.expires_at
+    sql: `select u.id, u.email, u.name, u.role, u.terms_version, s.expires_at
           from sessions s join users u on u.id = s.user_id
           where s.token = ? and u.status = 'active'`,
     args: [token],
@@ -5434,7 +5478,7 @@ async function getSessionUser(token) {
     await deleteSession(token);
     return null;
   }
-  return { id: Number(row.id), email: row.email, name: row.name || null, role: row.role };
+  return { id: Number(row.id), email: row.email, name: row.name || null, role: row.role, termsVersion: row.terms_version || null };
 }
 
 async function deleteSession(token) {
@@ -5902,6 +5946,8 @@ module.exports = {
   clearLoginFailures,
   createSession,
   getSessionUser,
+  recordTerms,
+  readTerms,
   deleteSession,
   readPortfolios,
   readUniverse,

@@ -112,7 +112,7 @@
       <p class="lede">This is a description of what the software actually does, written from its own
         database schema rather than from a template. Where something is kept, it says for how long.
         Where a third party is involved, it says which and what reaches them.</p>
-      <div class="when">Last updated 26 September 2026</div>
+      <div class="when">Last updated 9 October 2026</div>
     </header>
 
     <div class="doc">
@@ -151,6 +151,9 @@
           you joined. Your <b>password is never stored</b> — only a <code>scrypt</code> hash of it
           with a random per-account salt, which cannot be reversed back into the password. A count of
           failed sign-in attempts is kept so an account can be locked after repeated guesses.</p>
+        <p>It also holds a record of <b>when you agreed to the terms</b>: the version you agreed to,
+          the date, how (at sign-up or when asked later), and the network address that request came
+          from. If the terms change and you agree again, both records are kept.</p>
 
         <h3>The activity log</h3>
         <p>Signed-in actions are recorded as <b>facts, never content</b>: which page was opened, that
@@ -222,6 +225,7 @@
               <tr><td>Record of emails sent</td><td>90 days</td></tr>
               <tr><td>Sign-in sessions</td><td>30 days, or until you sign out</td></tr>
               <tr><td>Your account and what you created</td><td>Until the account is deleted</td></tr>
+              <tr><td>The record of agreeing to the terms</td><td>Until the account is deleted</td></tr>
               <tr><td>A mailing-list subscription</td><td>Until you ask for it to be removed</td></tr>
             </tbody>
           </table>

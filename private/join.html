@@ -58,6 +58,40 @@
     .jmsg.ok { color: var(--green); }
     .jnote { margin: 16px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--faint); }
     .jnote a { color: var(--muted); }
+    .chk { margin: -2px 0 16px; }
+    .chk label { display: flex; gap: 10px; align-items: flex-start; margin: 0;
+                 font-size: 12.5px; font-weight: 400; text-transform: none;
+                 letter-spacing: 0; line-height: 1.5; color: var(--muted);
+                 cursor: pointer; }
+    /* DRAWN RATHER THAN LEFT TO THE BROWSER, for the reason every other input
+       on this page is: the native empty box renders as a PALE FILLED SQUARE
+       on a black card, which on a consent control reads as already ticked —
+       the one impression it must not give. `accent-color` does not help,
+       since it paints the ticked state only, and `color-scheme: dark` was
+       tried and changed nothing. So it takes the same hairline and inset the
+       text fields have, and the ticked state is the accent with a mark on it;
+       keyboard focus keeps a visible ring, which `appearance: none` would
+       otherwise throw away. */
+    .chk input[type="checkbox"] {
+      appearance: none; -webkit-appearance: none;
+      width: 16px; height: 16px; flex: 0 0 auto; margin: 1px 0 0; padding: 0;
+      border: 1px solid var(--hair-2); border-radius: 5px;
+      background: rgba(255, 255, 255, 0.03); box-shadow: var(--inset);
+      cursor: pointer;
+      transition: border-color 0.4s var(--ease), background 0.4s var(--ease);
+    }
+    .chk input[type="checkbox"]:hover { background: rgba(255, 255, 255, 0.075); }
+    .chk input[type="checkbox"]:checked {
+      border-color: var(--accent);
+      background: var(--accent) center/11px no-repeat
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.4l3 3 6-7' fill='none' stroke='%23070910' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    }
+    .chk input[type="checkbox"]:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 2px;
+    }
+    .chk .chkfine { display: block; margin-top: 3px; font-size: 11px;
+                    color: var(--faint); }
+    .chk a { color: var(--text); }
   </style>
 </head>
 <body>
@@ -102,10 +136,13 @@
         '<div class="jfield"><label for="code">Invite code</label>' +
         '<input type="text" id="code" autocomplete="off" autocapitalize="none" autocorrect="off" ' +
         'spellcheck="false" placeholder="Ask whoever invited you" /></div>' +
+        // UNTICKED and required: the account is not created without it.
+        '<div class="chk"><label for="terms"><input type="checkbox" id="terms" />' +
+        '<span>I am at least 18 and I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of use</a> ' +
+        'and the <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a></span></label></div>' +
         '<button class="jbtn" id="go" type="button">Create my account</button>' +
         '<p class="jmsg" id="msg"></p>' +
-        '<p class="jnote">By continuing you agree to the <a href="/terms">terms</a> and ' +
-        '<a href="/privacy">privacy policy</a>. Not you? <a href="/login">Start again</a>.</p>';
+        '<p class="jnote">Not you? <a href="/login">Start again</a>.</p>';
 
       const go = $('go'), msg = $('msg'), code = $('code');
       code.focus();
@@ -113,6 +150,7 @@
 
       async function submit() {
         if (busy) return;
+        if (!$('terms').checked) { msg.textContent = 'Tick the box to agree to the terms.'; return; }
         busy = true;
         msg.className = 'jmsg';
         msg.textContent = '';
@@ -122,7 +160,7 @@
         try {
           const r = await fetch('/api/auth/google/finish', {
             method: 'POST', headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ code: code.value }),
+            body: JSON.stringify({ code: code.value, terms: $('terms').checked === true }),
           });
           const d = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(d.error || 'That did not work. Please try again.');

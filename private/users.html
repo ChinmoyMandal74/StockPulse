@@ -107,6 +107,7 @@
 
     .note { margin: 16px 4px 0; line-height: 1.6; }
     .err { color: var(--red); font-size: 13px; margin-top: 14px; }
+    #out .tline { margin-top: 2px; font-size: 10.5px; color: var(--faint); white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -213,6 +214,9 @@
       // has Approve and Delete, and Enable on it would be a silent second
       // Approve that skips the welcome email approval exists to send.
       const noFlip = blocked || u.status === 'pending';
+      // Which version of the terms this account agreed to, under the date it
+      // joined. An admin is the operator and is never asked, so it says nothing.
+      const termsLine = (x) => (isAdminRole(x.role) ? '' : `<div class="tline${x.termsVersion ? '' : ' tno'}" title="${x.termsAt ? 'Agreed ' + esc(new Date(x.termsAt).toLocaleString()) : 'Has not agreed to the terms yet — asked at the next sign-in'}">${x.termsVersion ? 'terms ' + esc(x.termsVersion) : 'terms not agreed'}</div>`);
       return `<tr class="${isOff ? 'offrow' : ''}">
         <td class="uname">${u.name ? esc(u.name) : '<span class="noname">—</span>'}</td>
         <td class="email">${u.activeSessions > 0 ? '<span class="dot" title="Signed in"></span>' : ''}${esc(u.email)}${isMe ? '<span class="you">you</span>' : ''}</td>
@@ -221,7 +225,7 @@
             ${isOff ? '<span class="role off" title="Switched off by the owner — cannot sign in, and was signed out everywhere. Everything the account has saved is kept.">switched off</span>' : ''}
             ${u.google ? '<span class="role gsign" title="Google is linked to this account — they can sign in with it. Whether they also have a working password is not recorded.">Google</span>' : ''}
             ${u.lockedUntil ? `<div class="locked">locked until ${esc(new Date(u.lockedUntil).toLocaleTimeString())}</div>` : ''}</td>
-        <td class="when">${esc(when(u.createdAt))}</td>
+        <td class="when">${esc(when(u.createdAt))}${termsLine(u)}</td>
         <td class="when">${esc(when(u.lastSignIn))}</td>
         ${pfCell(u.portfolios)}
         <td class="act">${u.status === 'pending'
