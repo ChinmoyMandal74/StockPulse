@@ -1,0 +1,7 @@
+## Scores / ratings
+**Quality is the only composite left (1–10), computed in `computeScores()` in server.js** — company fundamentals, six factors, absolute rather than ranked against the list. A dash rather than a number when under 40% of the factor weight has usable data; a loss-maker has the three earnings-based factors excluded and the rest rescaled, because the feed will report a healthy-looking PEG for a company losing hundreds of millions.
+
+**The price-strength score and the Overall composite were removed on 2026-09-23** at the owner's instruction. The model, its measured centres, the four factors dropped before it and the honest summary of whether it ever predicted anything are in **[docs/momentum-scoring.md](docs/momentum-scoring.md)**; the tag `momentum-scoring` marks the last commit where all of it worked. **Do not rebuild any of it from memory; read that file first.** The advice engine never used it (`use_momentum: false` in every default profile), which is what made the removal safe — the verdicts, the trend ribbon, `tech_history` and both backtests are untouched. What survives of the shared bar maths is **`barmath.js`** (RSI and realised volatility), which `techrow.js` and the Cushion column depend on.
+
+**The table sorts by Market cap by default.** That was Overall until the removal; every starter view and starter screen that led with a score now leads with market cap.
+

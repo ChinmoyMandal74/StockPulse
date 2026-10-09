@@ -1,0 +1,12 @@
+## The SEC EDGAR data page
+**`/edgar` (admin, a `SEC EDGAR data` row in the console's Data section): the status of every data pull that is not prices or profiles, and what can be done to refresh each (2026-10-08, owner's request).** It replaced the SEC EDGAR panel on `/admin`, which showed two of the six pulls and no clock for either.
+
+- **Six cards**: company filings, earnings-announcement dates (Item 2.02), insider transactions, short interest (FINRA), S&P 500 membership (the SPY holdings file) and split history. The last three are not SEC sources and each card says so; they are here because they are the same kind of thing, a scheduled pull with a clock.
+- **Each card carries a verdict pill, its counts and dates, a "Kept up to date by" line, and its actions.** Insider transactions says *Nothing keeps this up to date on its own*, which is true: the quarterly files are loaded from the laptop and the daily walk is a button.
+- **`GET /api/edgar-status` (admin) reads only state tables** (`sec_state`, `insider_state`, `short_state`, `fund_state`, `split_state`) plus the covering-index `max(filed)` the insider route already made. Eight reads in parallel, each with its own catch. Nothing scans `sec_facts` or `short_interest`.
+- **The actions are the existing routes, not new ones**: `POST /api/sec/refresh` (missing / rotate / all), `POST /api/insider/daily`, `GET /api/cron/shortint`, `GET /api/cron/holdings`. Work that does not belong in a web request is shown as a command to copy (`insider-load.js`, `sec-results-load.js`, `shortint-load.js`, `backfill-splits.js`).
+- **"Check the overdue" counts the never-fetched as well**, because `mode=rotate` takes those first; "Fetch missing" takes only those.
+- **Announcement dates are counted against the whole universe**, not against the companies with filings: an IFRS filer has a 2.02 date and no statements.
+- `insiderCoverage()` is one function for `/api/insider/coverage` and this page. `store.splitCoverage()` is two aggregates over `split_state`.
+- Verified: **34 checks** (`edgar-test.js`) with every outside address stubbed: the status route's figures against a fixture with overdue, never-fetched, errored and no-filings companies; each card's pill, facts and actions; both filings loops run to completion with the card re-read; the FINRA and holdings checks reporting in words; the commands; the admin console's row and the removed panel; guest and stranger refused. **Proved by reverting four times, each load-bearing.**
+

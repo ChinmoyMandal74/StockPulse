@@ -1,0 +1,3 @@
+## Deploys — one hard rule
+**Production deploys happen via `git push` only.** On 2026-09-12 the site went down for an hour with no commit involved: `vercel` CLI deploys made from another folder replaced production with foreign code (its logs said "Legacy server listening…", a string not in this repo), and every database route 500'd while `/api/health` stayed green. Diagnosis path when "site down, no commit": check `npx vercel ls stock-pulse` for deployments that do not match the git log, and `npx vercel logs <deployment>` for a boot line that is not ours. Fix: `npx vercel promote <last git-built deployment>`. The Turso token was never the problem — `Turso: schema ready` in the logs clears the credentials immediately.
+
