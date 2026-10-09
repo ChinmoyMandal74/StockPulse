@@ -797,6 +797,20 @@
           Large 55.3%, Mid-Large 33.3%, Mid 12.5%. A stock with no 200-day
           average yet is counted in neither half, never as below.</p>
       </div>
+      <!-- Earnings growth: the members' summed net income against a year
+           earlier, and the companies the difference is made of. From the
+           SEC filings, fetched for the chosen index. No scope pickers. -->
+      <div id="egrBox">
+        <label>Index</label>
+        <select id="egrSp500"></select>
+        <label>Quarter</label>
+        <select id="egrQtr"><option value="">Latest mostly reported</option></select>
+        <label>Companies named</label>
+        <select id="egrCount"><option value="5">5</option><option value="8" selected>8</option><option value="10">10</option></select>
+        <p class="hint">Net income as each company filed it, against the same quarter a year earlier. The
+          newest quarter shown is the latest one most of the index has reported, so it runs a quarter
+          behind the headlines. A square card names five at most and a story ten.</p>
+      </div>
       <!-- Beating the index: how many companies did better than the S&P 500
            over a window. Like the other Market cards it takes no scope,
            sector, size or screen, so INDUSTRY_PREFIXES is left alone. -->
@@ -1036,6 +1050,7 @@
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
+      { id: 'earngrow', name: 'Earnings growth', note: 'Which companies an index’s earnings growth is made of, from the filings — with the last eight quarters' },
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
       { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
       { id: 'waterfall', name: 'Waterfall', note: 'What actually moved the index, name by name, adding up to the whole' },
@@ -1104,6 +1119,7 @@
       ['day', 'Snapshot'],
       ['breadth', 'Narrow or broad'],
       ['beat', 'Beating the index'],
+      ['earngrow', 'Earnings growth'],
       ['flow', 'Flow'],
       ['treemap', 'Treemap'],
       ['waterfall', 'Waterfall'],
@@ -1330,6 +1346,35 @@
     // template care" is asked of the module rather than listed here — the
     // spotlight shipped drawing nothing because its fetch landed and no
     // render followed.
+    // The earnings-growth card's data: one payload per index, fetched when the
+    // card first asks and kept. The repaint is the half that matters. The
+    // Quarter picker is filled from what came back, so it can only offer a
+    // quarter the server actually has.
+    const egrCache = {};
+    const egrPending = {};
+    function fillEgrQuarters(d) {
+      const el = $('egrQtr'); const keep = el.value;
+      el.innerHTML = '<option value="">Latest mostly reported</option>' + (d.quarters || []).filter((q) => q.n >= 10).map((q) =>
+        `<option value="${esc(q.q)}">${esc(q.label)} — ${q.n} of ${q.members} reported</option>`).join('');
+      if ([...el.options].some((o) => o.value === keep)) el.value = keep;
+    }
+    function getEarnGrowth(cut) {
+      if (egrCache[cut]) return egrCache[cut];
+      if (egrPending[cut]) return null;
+      egrPending[cut] = true;
+      fetch('/api/earnings-growth?cut=' + encodeURIComponent(cut), { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          egrPending[cut] = false;
+          if (!d || !Array.isArray(d.quarters)) return;
+          egrCache[cut] = d;
+          const need = Cards.earnGrowthNeed(tpl, { egrSp500: $('egrSp500').value });
+          if (need && need.cut === cut) { fillEgrQuarters(d); render(); }
+        })
+        .catch(() => { egrPending[cut] = false; });
+      return null;
+    }
+
     let smovCache = null;
     let smovPending = false;
     function getShortMoves() {
@@ -1366,7 +1411,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
-      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench',
+      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView',
@@ -1388,7 +1433,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: controlOpts(),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth,
       updatedAt: pulledAt,
     });
 
@@ -1471,6 +1516,7 @@
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
+      $('egrBox').style.display = tpl === 'earngrow' ? 'block' : 'none';
       $('barBox').style.display = tpl === 'bars' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
@@ -1676,6 +1722,16 @@
       $(id).addEventListener('change', () => { if (tpl === 'waterfall') render(); }));
     ['smovMetric', 'smovCount', 'smovFloor', 'smovSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'shortmoves') render(); }));
+    // Earnings growth: its own listener list. Changing the INDEX drops the
+    // chosen quarter, since the two indexes need not have the same ones.
+    $('egrSp500').addEventListener('change', () => {
+      const c = Cards.earnGrowthNeed('earngrow', { egrSp500: $('egrSp500').value }).cut;
+      $('egrQtr').value = '';
+      if (egrCache[c]) { fillEgrQuarters(egrCache[c]); $('egrQtr').value = ''; }
+      if (tpl === 'earngrow') render();
+    });
+    ['egrQtr', 'egrCount'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'earngrow') render(); }));
     // Beating the index: its own listener list, like every template here.
     ['beatPeriod', 'beatSp500', 'beatBench'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'beat') render(); }));
@@ -2281,6 +2337,10 @@
             $(p + 'Sp500').value = spKeep;
           }
         });
+        const egrKeep = $('egrSp500').value;
+        $('egrSp500').innerHTML = Cards.earnGrowthCuts().map(([v, lab]) =>
+          `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
+        if ([...$('egrSp500').options].some((o) => o.value === egrKeep)) $('egrSp500').value = egrKeep;
         // Beating the index: both pickers from the module, with the defaults
         // the card itself falls back to -- this year, inside the index.
         const beatPerKeep = $('beatPeriod').value;

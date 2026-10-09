@@ -49,6 +49,7 @@
   // because it is the only card fed by the FINRA archive and both hosts
   // cache it themselves.
   let getShortMoves = () => null;
+  let getEarnGrowth = () => null;
   // One symbol’s month-end closes and the index’s, or null while it loads.
   let getMonths = () => null;
   // One company and its peers on four measures, by quarter, or null while it loads.
@@ -5945,6 +5946,137 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Earnings growth: who it is made of ----------------------------------
+  //
+  // (2026-10-09, owner, from an article saying two companies would supply a
+  // third of the S&P 500's earnings growth.) For one calendar quarter: the
+  // index members' summed net income against the same quarter a year earlier,
+  // and the companies the difference is made of, with the last eight quarters
+  // beneath. The arithmetic is earngrowth.js on the server; this draws it.
+  //
+  // REPORTED, NOT FORECAST, and the card says so: the article's figures were
+  // estimates for a quarter not yet filed. A contribution is a company's own
+  // change in net income over the group's year-ago total, in POINTS, so the
+  // rows add up to the headline exactly -- the two pooled rows are what makes
+  // that visible rather than asserted.
+  //
+  // BLUE FOR A CONTRIBUTION, RED ONLY FOR THE POOLED FALL. Earnings up is not
+  // a price going up, and a row of green bars under a green headline would
+  // read as a recommendation.
+  const EGR_CUTS = [['in', 'S&P 500'], ['ndx', 'Nasdaq 100'], ['All', 'The whole screen']];
+  const EGR_CAP = { portrait: 8, square: 5, story: 10 };
+  // Asked of the module by both hosts, the basketDays bargain.
+  function earnGrowthNeed(tpl, opts) {
+    if (tpl !== 'earngrow') return null;
+    const c = opts && opts.egrSp500;
+    return { cut: EGR_CUTS.some(([k]) => k === c) ? c : 'in' };
+  }
+
+  function tplEarnGrow() {
+    const cut = earnGrowthNeed('earngrow', O).cut;
+    const cutName = (EGR_CUTS.find(([k]) => k === cut) || EGR_CUTS[0])[1];
+    const d = getEarnGrowth(cut);
+    const shell = (msg) => chromeTop() + '<div class="s-body"><div class="eg-in">'
+      + '<span class="s-kick">' + esc(cutName) + '</span>'
+      + '<h2 class="s-title">Who drove earnings growth</h2>'
+      + '<p class="s-sub wide" style="--fs:20px">' + esc(msg) + '</p></div></div>' + chromeFoot();
+    if (!d) {
+      return chromeTop() + '<div class="s-body"><div class="s-empty">'
+        + 'Reading the filings…</div></div>' + chromeFoot();
+    }
+    const qs = Array.isArray(d.quarters) ? d.quarters : [];
+    let qi = qs.findIndex((x) => x.q === O.egrQtr);
+    if (qi < 0) qi = Math.min(Math.max(0, Number(d.lead) || 0), Math.max(0, qs.length - 1));
+    const Q = qs[qi];
+    if (!Q || Q.n < 10) {
+      return shell('Too few companies here have filed both a quarter and the same quarter a year earlier to add up — '
+        + (Q ? Q.n : 0) + '.');
+    }
+
+    const money = (v) => (v == null ? '—' : (v < 0 ? '−' : '') + '$' + fmtMoney(Math.abs(v)));
+    const pt = (v) => (v == null ? '—' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1));
+    const pc = (v) => (v == null ? '—' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '%');
+    const hasRate = Q.growth != null;
+    const want = Number(O.egrCount) > 0 ? Number(O.egrCount) : 8;
+    const K = Math.min(want, EGR_CAP[size.id] || 8, Q.up.length);
+
+    // ---- the rows: K named, then the two pools that make it add up --------
+    const named = Q.up.slice(0, K);
+    const dOf = (r) => r.cur - r.prev;
+    const restUpD = Q.up.slice(K).reduce((s, r) => s + dOf(r), 0) + (Q.restUp ? Q.restUp.d : 0);
+    const restUpN = Q.upN - K;
+    const fellD = Q.dn.reduce((s, r) => s + dOf(r), 0) + (Q.restDn ? Q.restDn.d : 0);
+    const toPts = (dv) => (hasRate && Q.base > 0 ? 100 * dv / Q.base : null);
+    const rows = named.map((r) => ({ name: symOf(r.s), d: dOf(r), sub: money(r.prev) + ' → ' + money(r.cur), cls: 'eg-up' }));
+    if (restUpN > 0) rows.push({ name: restUpN.toLocaleString() + ' others that earned more', d: restUpD, sub: 'together', cls: 'eg-rest' });
+    if (Q.dnN > 0) {
+      rows.push({ name: Q.dnN.toLocaleString() + ' that earned less', d: fellD,
+        sub: Q.dn.length ? 'led by ' + Q.dn.slice(0, 2).map((r) => r.s).join(', ') : 'together', cls: 'eg-dn' });
+    }
+    const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.d)));
+    const rowHtml = rows.map((r) => '<div class="eg-r ' + r.cls + '">'
+      + '<span class="eg-n">' + esc(r.name) + '</span>'
+      + '<span class="eg-b"><i style="width:' + Math.max(0.6, 100 * Math.abs(r.d) / maxAbs).toFixed(1) + '%"></i></span>'
+      + '<span class="eg-v">' + esc(hasRate ? pt(toPts(r.d)) + ' pts' : money(r.d)) + '</span>'
+      + '<span class="eg-s">' + esc(r.sub) + '</span></div>').join('');
+
+    // ---- how concentrated ------------------------------------------------
+    const share = (k) => {
+      if (!hasRate || !(Q.growth > 0)) return null;
+      const s = Q.up.slice(0, k).reduce((a, r) => a + (r.pts || 0), 0);
+      return 100 * s / Q.growth;
+    };
+    const sh = (v) => (v == null ? '—' : Math.round(v) + '%');
+    const stats = [['the top two are', sh(share(2)) + (share(2) == null ? '' : ' of it')],
+      ['the top five are', sh(share(5)) + (share(5) == null ? '' : ' of it')],
+      ['without the top five', pc(Q.ex5)],
+      ['earned more / less', Q.upN.toLocaleString() + ' / ' + Q.dnN.toLocaleString()]];
+
+    // ---- the history: this quarter and the seven before it ----------------
+    const hist = qs.slice(qi, qi + 8).reverse();
+    const vals = [];
+    for (const h of hist) { if (h.growth != null) vals.push(h.growth); if (h.ex5 != null) vals.push(h.ex5); }
+    const hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);
+    const span = (hi - lo) || 1;
+    const bar = (v, cls) => {
+      if (v == null) return '';
+      const top = 100 * (hi - Math.max(v, 0)) / span, h = Math.max(0.8, 100 * Math.abs(v) / span);
+      return '<i class="' + cls + '" style="top:' + top.toFixed(1) + '%;height:' + h.toFixed(1) + '%"></i>';
+    };
+    const short = (x) => 'Q' + x.q.slice(5) + ' ’' + x.q.slice(2, 4);
+    const histHtml = hist.length >= 3 ? '<div class="eg-hist">'
+      + '<div class="eg-hh"><span>the last ' + hist.length + ' quarters</span>'
+        + '<span class="eg-key"><i class="eg-all"></i>all companies<i class="eg-ex"></i>without each quarter’s top five</span></div>'
+      + '<div class="eg-cols">' + hist.map((h) => '<div class="eg-c' + (h.q === Q.q ? ' on' : '') + '">'
+        + '<span class="eg-cv">' + esc(h.growth == null ? '—' : pc(h.growth).replace('.0%', '%')) + '</span>'
+        + '<span class="eg-plot"><b style="top:' + (100 * hi / span).toFixed(1) + '%"></b>' + bar(h.growth, 'eg-all') + bar(h.ex5, 'eg-ex') + '</span>'
+        + '<span class="eg-cl">' + esc(short(h)) + '</span></div>').join('') + '</div></div>' : '';
+
+    const newer = qi > 0 ? qs[0] : null;
+    const note = 'Net income as each company filed it with the SEC, ' + Q.label + ' against the same quarter a year earlier, '
+      + 'for the ' + Q.n.toLocaleString() + ' of ' + Q.members.toLocaleString() + ' ' + (cut === 'All' ? 'companies' : 'members')
+      + ' that have filed both. A company’s points are its own change over the group’s year-ago total, so the rows add up to the headline. '
+      + (hasRate ? '' : 'The group lost money a year earlier, so there is no growth rate to state and the rows are in dollars. ')
+      + 'A fiscal quarter is placed in the calendar quarter most of it falls in. One-off gains and losses are included as filed. '
+      + (newer && newer.q !== Q.q ? newer.label + ' has ' + newer.n + ' filed so far. ' : '')
+      + 'Today’s members throughout. What was reported, not a forecast.';
+
+    return chromeTop()
+      + '<div class="s-body"><div class="eg-in">'
+      + '<span class="s-kick">' + esc(cutName + ' · ' + Q.label + ' · ' + Q.n.toLocaleString() + ' of ' + Q.members.toLocaleString() + ' reported') + '</span>'
+      + '<h2 class="s-title">Who drove earnings growth<span class="dim">'
+      + esc('net income, ' + Q.label + ' against a year earlier') + '</span></h2>'
+      + '<div class="eg-fill">'
+      + '<div class="eg-hero"><span class="eg-big">' + esc(hasRate ? pc(Q.growth) : money(Q.change)) + '</span>'
+        + '<span class="eg-hs">' + esc(money(Q.base) + ' → ' + money(Q.cur)) + '<br>' + esc('summed net income') + '</span></div>'
+      + '<div class="eg-rows">' + rowHtml + '</div>'
+      + '<div class="eg-stats">' + stats.map(([k, v]) => '<div class="eg-st"><span class="eg-sk">' + esc(k) + '</span><span class="eg-sv">' + esc(v) + '</span></div>').join('') + '</div>'
+      + histHtml
+      + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Bars: any one measure, ranked -------------------------------------
   //
   // THE GENERAL CASE OF THREE CARDS THAT EACH RANK ONE FAMILY. Movers ranks
@@ -6529,7 +6661,7 @@
     disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution,
     flow: tplFlow, histogram: tplHistogram,
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
-    shorted: tplShorted, breadth: tplBreadth, beat: tplBeat,
+    shorted: tplShorted, breadth: tplBreadth, beat: tplBeat, earngrow: tplEarnGrow,
     bars: tplBars,
     months: tplMonths,
     peertrend: tplPeerTrend,
@@ -6979,6 +7111,79 @@
     .sz-story .bt-hd { font-size: 17px; }
     .sz-story .bt-sk { font-size: 17px; }
     .sz-story .bt-sv { font-size: 34px; }
+    /* ---- Earnings growth -------------------------------------------------
+       Tokens only, so all four grounds resolve with no override block. No
+       quote marks of the template kind here: STYLE is a template literal. */
+    .eg-in { display: flex; flex-direction: column; height: 100%; }
+    .eg-in .s-title .dim { display: block; font-size: 29px; line-height: 1.25; font-weight: 600;
+             color: var(--muted); margin-top: 10px; letter-spacing: -.01em; }
+    .sz-square .eg-in .s-title .dim { font-size: 23px; }
+    .sz-story .eg-in .s-title .dim { font-size: 38px; }
+    .eg-in .s-sub { margin-top: auto; padding-top: 14px; }
+    .eg-fill { display: flex; flex-direction: column; flex: 1; justify-content: space-evenly; min-height: 0; }
+    .eg-hero { display: flex; align-items: flex-end; gap: 26px; margin-top: 14px; }
+    .eg-big { font-family: var(--mono); font-weight: 700; font-size: 96px; line-height: .9; letter-spacing: -.05em; color: var(--text); }
+    .eg-hs { font-family: var(--mono); font-size: 18px; line-height: 1.45; color: var(--muted); padding-bottom: 6px; }
+    .eg-rows { margin-top: 18px; }
+    .eg-r { display: grid; grid-template-columns: 300px minmax(0, 1fr) 118px 196px; align-items: center;
+            column-gap: 14px; font-size: 19px; margin-bottom: 9px; }
+    .eg-n { color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .eg-b { display: block; height: 16px; border-radius: 3px; background: var(--hair); overflow: hidden; }
+    .eg-b i { display: block; height: 100%; min-width: 3px; border-radius: 3px; background: var(--accent); }
+    .eg-v { font-family: var(--mono); font-weight: 700; color: var(--text); text-align: right; white-space: nowrap; }
+    .eg-s { font-family: var(--mono); font-size: 14px; color: var(--faint); text-align: right; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis; }
+    .eg-rest .eg-n, .eg-dn .eg-n { font-weight: 400; color: var(--muted); }
+    .eg-rest .eg-b i { background: var(--muted); }
+    .eg-dn .eg-b i { background: var(--red); }
+    .eg-rest { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hair); }
+    .eg-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 14px;
+                padding-top: 14px; border-top: 1px solid var(--hair); }
+    .eg-st { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .eg-sk { font-family: var(--mono); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+    .eg-sv { font-family: var(--mono); font-weight: 700; font-size: 24px; color: var(--text); white-space: nowrap; }
+    .eg-hist { margin-top: 16px; }
+    .eg-hh { display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 13px;
+             letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin-bottom: 8px; }
+    .eg-key { display: inline-flex; align-items: center; gap: 7px; letter-spacing: .04em; text-transform: none; }
+    .eg-key i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-left: 10px; }
+    .eg-cols { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); column-gap: 14px; }
+    .eg-c { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+    .eg-cv { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+    .eg-cl { font-family: var(--mono); font-size: 13px; color: var(--faint); white-space: nowrap; }
+    .eg-plot { position: relative; display: block; width: 100%; height: 88px; }
+    .eg-plot b { position: absolute; left: 0; right: 0; height: 1px; background: var(--faint); opacity: .55; }
+    .eg-plot i { position: absolute; border-radius: 2px; }
+    .eg-plot i.eg-all { left: 14%; width: 40%; }
+    .eg-plot i.eg-ex { left: 58%; width: 26%; }
+    .eg-all { background: var(--accent); }
+    .eg-ex { background: var(--muted); }
+    .eg-c.on .eg-cv, .eg-c.on .eg-cl { color: var(--text); }
+    .sz-square .eg-hero { margin-top: 8px; }
+    .sz-square .eg-big { font-size: 66px; }
+    .sz-square .eg-hs { font-size: 15px; }
+    .sz-square .eg-rows { margin-top: 10px; }
+    .sz-square .eg-r { font-size: 15px; margin-bottom: 5px; grid-template-columns: 250px minmax(0, 1fr) 96px 168px; }
+    .sz-square .eg-b { height: 11px; }
+    .sz-square .eg-s { font-size: 12px; }
+    .sz-square .eg-rest { margin-top: 8px; padding-top: 7px; }
+    .sz-square .eg-stats { display: none; }
+    .sz-square .eg-hist { margin-top: 10px; }
+    .sz-square .eg-plot { height: 62px; }
+    .sz-square .eg-cv { font-size: 13px; }
+    .sz-square .eg-cl { font-size: 11px; }
+    .sz-story .eg-big { font-size: 116px; }
+    .sz-story .eg-hs { font-size: 24px; }
+    .sz-story .eg-r { font-size: 25px; margin-bottom: 11px; grid-template-columns: 330px minmax(0, 1fr) 150px; }
+    .sz-story .eg-s { display: none; }
+    .sz-story .eg-b { height: 22px; }
+    .sz-story .eg-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 20px; }
+    .sz-story .eg-sk { font-size: 17px; }
+    .sz-story .eg-sv { font-size: 32px; }
+    .sz-story .eg-hh { font-size: 16px; }
+    .sz-story .eg-plot { height: 130px; }
+    .sz-story .eg-cv { font-size: 19px; }
+    .sz-story .eg-cl { font-size: 17px; }
     .brd-in { display: flex; flex-direction: column; height: 100%; }
     .brd-in .s-title .dim { display: block; font-size: 29px; line-height: 1.25;
              font-weight: 600; color: var(--muted); margin-top: 10px; }
@@ -8514,6 +8719,8 @@
     // that silently draws the wrong window.
     snapPeriods: () => SNAP_PERIODS.map((p) => p.slice()),
     beatPeriods: () => BEAT_PERIODS.map((p) => p.slice()),
+    earnGrowthNeed,
+    earnGrowthCuts: () => EGR_CUTS.map((p) => p.slice()),
     beatBenches: () => BEAT_BENCH.map((p) => p.slice()),
     // ...and which templates want the basket at all, with the window each
     // one asks for. Exported for the same reason: two hosts, one pairing.
@@ -8575,6 +8782,7 @@
       getHistory = c.getHistory || (() => null);
       getEvolution = c.getEvolution || (() => null);
       getShortMoves = c.getShortMoves || (() => null);
+      getEarnGrowth = c.getEarnGrowth || (() => null);
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);
       getPerf = c.getPerf || (() => null);

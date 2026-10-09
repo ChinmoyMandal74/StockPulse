@@ -10045,6 +10045,11 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
 
   // The fortnight's short-interest change, and only when the template asks
   // -- the module's own question, never a list here.
+  // The earnings-growth card, likewise only when the template asks.
+  let egrow = null;
+  const egNeed = Cards.earnGrowthNeed(post.tpl, post.opts || {});
+  if (egNeed) { try { egrow = await earnGrowthFor(egNeed.cut); } catch { egrow = null; } }
+
   let smov = null;
   if (Cards.shortMovesNeed(post.tpl)) {
     try { smov = await shortMovesPayload(); } catch { smov = null; }
@@ -10065,6 +10070,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       // basketDays both exist to prevent. Fetched only when the template
       // asks, which is the module's own question, never a list here.
       getShortMoves: () => smov,
+      getEarnGrowth: () => egrow,
       getHistory: () => hist,
       getEvolution: () => evo,
       getMonths: () => months,
@@ -10808,6 +10814,59 @@ async function shortMovesPayload() {
 
 // Member, because the studio is. The figures are FINRA's own published
 // position, which is public, and the card states the window on its face.
+// ---- who drove an index's earnings growth ------------------------------------
+// The data behind the promo card of that name: the members' summed net income,
+// quarter against the same quarter a year earlier, and the companies the
+// difference is made of. The arithmetic is earngrowth.js; this reads the
+// filings for it.
+//
+// WHAT IT READS: the index's members from its own holdings file, then each
+// member's filings back about three and a half years -- an indexed seek per
+// symbol on (symbol, period_end), never a scan. Measured against production:
+// 23,094 rows in 2.8s for the S&P 500, 4,425 in 0.4s for the Nasdaq 100. Cached
+// half an hour, because filings change a few times a day at most.
+//
+// DISPLAY ONLY. Nothing here is stamped on a snapshot row.
+const EarnGrowth = require('./earngrowth.js');
+const EG_FUND = { in: SP_FUND, ndx: NDX_FUND };
+const EG_TTL_MS = 30 * 60 * 1000;
+const egCache = {};
+const egWarm = (cut) => !!(egCache[cut] && Date.now() - egCache[cut].at < EG_TTL_MS);
+async function earnGrowthFor(cutIn) {
+  const cut = EG_FUND[cutIn] || cutIn === 'All' ? cutIn : 'in';
+  if (egWarm(cut)) return egCache[cut].body;
+  const universe = await store.readUniverse();
+  const tracked = new Set(universe);
+  let syms = universe; let asOf = null;
+  if (cut !== 'All') {
+    const h = await store.readFundHoldings(EG_FUND[cut]);
+    asOf = h.asOf;
+    syms = h.holdings.map((x) => x.symbol).filter((s) => tracked.has(s));
+  }
+  // ONE COMPANY ONCE. Two share classes file one set of statements, and
+  // counting it twice would double that company in both sums.
+  const ids = await filerIds().catch(() => ({}));
+  const seen = new Set();
+  syms = syms.filter((s) => { const c = ids[String(s).toUpperCase()]; if (!c) return true; if (seen.has(c)) return false; seen.add(c); return true; });
+  const since = new Date(Date.now() - 3.6 * 365 * 86400000).toISOString().slice(0, 10);
+  const facts = await store.readSecFactsSince(syms, since);
+  const members = syms.map((s) => ({ symbol: s, rows: SecFacts.latestFilled(facts.get(s) || []) }));
+  const all = EarnGrowth.build(members, { keep: 25 });
+  const lead = EarnGrowth.settled(all);
+  // The half-reported quarters ahead of the lead, the lead, and seven before it.
+  const body = { cut, asOf, members: syms.length, lead, quarters: all.slice(0, lead + 8), at: Date.now() };
+  egCache[cut] = { at: Date.now(), body };
+  return body;
+}
+app.get('/api/earnings-growth', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const cut = String(req.query.cut || 'in');
+  const key = EG_FUND[cut] || cut === 'All' ? cut : 'in';
+  // A cached answer reads nothing, so it is served even while a refresh runs.
+  if (!egWarm(key) && await standAside(res)) return;
+  res.json(await earnGrowthFor(key));
+}));
+
 app.get('/api/short-moves', requireMember, route(async (req, res) => {
   res.json(await shortMovesPayload());
 }));
