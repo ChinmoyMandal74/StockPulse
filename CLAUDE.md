@@ -281,6 +281,16 @@ Sent through **Resend** over plain `fetch` — a REST call does not justify a fo
 - **Destination is `CONTACT_TO`, falling back to the owner account's email**, so the form works even if the variable is never set.
 - The daily cap reuses `chat_usage` under a `contact:` key prefix — that table is a generic per-key-per-day counter that happens to be named for its first caller.
 
+### The domain receives mail now — Google Workspace on the root (2026-10-09, owner's request)
+**`chinmoy@tickrlab.com` is a real mailbox (Google Workspace, Business Starter, one user) with the aliases `support@`, `privacy@` and `legal@`.** Until this, nothing received mail at any `tickrlab.com` address, and the line above that says so is now out of date.
+
+- **DNS, read back from public resolvers the day it was set up**: root `MX 1 smtp.google.com`, root SPF `v=spf1 include:_spf.google.com ~all`, DKIM on `google._domainkey.tickrlab.com` (authenticating), and the existing `_dmarc` at `p=quarantine`. **The app's own sending records under `send.mail` and `resend._domainkey.mail` are untouched**: transactional and list mail still leave from `mail.tickrlab.com` through Resend, and the mailbox is a separate reputation.
+- **Three settings point the app at it, in Vercel and in the laptop's `.env`**: `MAIL_REPLY_TO=support@tickrlab.com` (a reply to a reset or a broadcast now reaches a person), `CONTACT_TO=support@tickrlab.com` (the contact form), `REPORT_TO=chinmoy@tickrlab.com` (the refresh report, the sign-up notice, the watchdog — and, through `SEC_UA`'s fallback, the contact address declared to the SEC). `CONTACT_TO` and `REPORT_TO` did not exist before and both fell back to the admin account's own address.
+- **The admin ACCOUNT still signs in with its original address.** These settings change where mail goes, not who the account is.
+- **`/terms` and `/privacy` print the addresses**: support and legal on the terms, privacy and support on the privacy page. Someone without an account could not write to the operator at all before. Not a material change to the terms, so `TERMS_VERSION` did not move.
+- **Set with `vercel env add`, which is not a deploy**: the one-hard-rule above is about deployments, and a setting only takes effect on the next one, which was an ordinary `git push`.
+- **Not done**: the DMARC reports (`rua`) still go to a personal address, and the postal address on list mail is a site setting on `/subscribers` that the code cannot see.
+
 ### The email log — every message, recorded where they all pass (2026-09-25, owner's request)
 **`/emails` (admin, an Email log row in the console's People & logs section) lists every message this app has handed to Resend.** It exists because the list's first real broadcast produced a question nothing here could answer: the confirmation reached the reader and the post did not, and the only record of either was a line in a Vercel log that had already rolled off.
 
