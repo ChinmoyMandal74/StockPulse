@@ -6543,9 +6543,21 @@
     pick.forEach((r, i) => { colors[r.symbol] = pal.ink(LINE_COLORS[i % LINE_COLORS.length]); });
     const story = size.id === 'story';
     const fs = story ? 24 : size.id === 'square' ? 17 : 19;
+    // THE RIGHT GUTTER IS AS WIDE AS THE LABELS DRAWN, NOT A FIXED THIRD OF THE
+    // CARD (owner, 2026-10-09: "increase the width of the graph, especially on
+    // the right"). Each label is stacked, name over figure, so it needs the
+    // width of its longer line only. The figure is in the mono face, 0.62em a
+    // character; a name is in the sans one, where a capital or a digit is
+    // about 0.68em and the rest about 0.55 -- both rounded up, so a label
+    // cannot run past the card. Never wider than the old fixed gutter.
+    const NAME_MAX = story ? 17 : 19;
+    const nameEm = (n) => { let w = 0; for (const ch of n.slice(0, NAME_MAX)) w += /[A-Z0-9&%@]/.test(ch) ? 0.68 : 0.55; return w; };
+    const longest = Math.max(...model.lines.filter((l) => l.last).map((l) =>
+      Math.max(nameEm(l.name), PT.fmt(model.unit, l.last.v).length * 0.62)));
+    const right = Math.min(story ? 376 : 318, Math.max(120, Math.ceil(12 + longest * fs + 10)));
     const chart = PT.svg(model, {
-      w: 952, h: LIN_H[size.id] || 600, left: story ? 110 : 92, right: story ? 376 : 318,
-      fs, nameMax: story ? 17 : 19, xLabels: 5, colors,
+      w: 952, h: LIN_H[size.id] || 600, left: story ? 110 : 92, right, stack: true,
+      fs, nameMax: NAME_MAX, xLabels: 5, colors,
       xLabel: daily ? (d) => LIN_MON[Number(String(d).slice(5, 7)) - 1] + ' ' + Number(String(d).slice(8, 10)) : null,
     });
 

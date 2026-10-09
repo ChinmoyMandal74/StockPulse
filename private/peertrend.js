@@ -257,7 +257,10 @@
     // overprint: sorted by height, pushed down to a minimum gap, and the whole
     // stack pulled back up if it ran past the foot.
     const labs = model.lines.filter((l) => l.last).map((l) => ({ l, y: Y(l.last.y) })).sort((a, b) => a.y - b.y);
-    const gap = fs * 1.45;
+    // STACKED (the Lines card): the figure sits UNDER the name rather than
+    // beside it, which halves the width a label needs and gives it to the
+    // plot. Each label is then two lines tall, so the gap doubles.
+    const gap = o.stack ? fs * 2.5 : fs * 1.45;
     for (let i = 1; i < labs.length; i++) if (labs[i].y < labs[i - 1].y + gap) labs[i].y = labs[i - 1].y + gap;
     const over = labs.length ? labs[labs.length - 1].y - y1 : 0;
     if (over > 0) {
@@ -270,8 +273,9 @@
       const fig = model.view === 'rank' ? '#' + l.last.rank + '  ' : '';
       const col = o.colors && o.colors[l.symbol];
       out += '<text class="pt-lab ' + (col ? 'pt-col' : l.self ? 'pt-self' : 'pt-peer') + '"' + (col ? ' style="fill:' + col + '"' : '')
-        + ' x="' + (x1 + 12) + '" y="' + (y + fs * 0.34).toFixed(1) + '" font-size="' + fs + '">'
-        + esc(fig + nm) + '<tspan class="pt-fig"' + (col ? ' style="fill:' + col + '"' : '') + ' dx="8">' + esc(fmt(unit, l.last.v)) + '</tspan></text>';
+        + ' x="' + (x1 + 12) + '" y="' + (y + fs * (o.stack ? -0.18 : 0.34)).toFixed(1) + '" font-size="' + fs + '">'
+        + esc(fig + nm) + '<tspan class="pt-fig"' + (col ? ' style="fill:' + col + '"' : '')
+        + (o.stack ? ' x="' + (x1 + 12) + '" dy="' + (fs * 1.12).toFixed(1) + '"' : ' dx="8"') + '>' + esc(fmt(unit, l.last.v)) + '</tspan></text>';
     }
     return out + '</svg>';
   }
