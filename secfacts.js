@@ -691,13 +691,20 @@ function ttm(quarterly) {
 // symbols. Left as it is rather than forked, since the floor is load-bearing
 // where `ttm` feeds the margin comparison and a second summation here would
 // be the drift this module exists to prevent.
-function ttmSeries(quarterly) {
+function ttmSeries(quarterly, full) {
   const q = Array.isArray(quarterly) ? quarterly : [];
   const out = [];
   for (let i = 0; i + 4 <= q.length; i++) {
     const t = ttm(q.slice(i, i + 4));
     if (!t) continue;
-    out.push({ d: t.to, from: t.from, revenue: t.revenue, netIncome: t.netIncome });
+    const p = { d: t.to, from: t.from, revenue: t.revenue, netIncome: t.netIncome };
+    // `full` adds the rest of the trailing year for a caller that charts it
+    // (the Lines card). Off by default, so the stock page payload is unchanged.
+    if (full) {
+      p.grossProfit = t.grossProfit; p.operatingIncome = t.operatingIncome; p.freeCashFlow = t.freeCashFlow;
+      p.grossMargin = t.grossMargin; p.operatingMargin = t.operatingMargin; p.fcfMargin = t.fcfMargin;
+    }
+    out.push(p);
   }
   return out.reverse();
 }

@@ -50,6 +50,7 @@
   // cache it themselves.
   let getShortMoves = () => null;
   let getEarnGrowth = () => null;
+  let getLineSeries = () => null;
   // One symbol’s month-end closes and the index’s, or null while it loads.
   let getMonths = () => null;
   // One company and its peers on four measures, by quarter, or null while it loads.
@@ -1352,6 +1353,10 @@
     // chartHistoryNeed already is, so a fourth costs one line in one place.
     const BASKET_WIN_KEY = { chart: 'chtWin', sparks: 'spkWin', spotlight: 'spotWin' };
     function basketDays(tpl, opts) {
+      // The Lines card reads the basket only for a DAILY price window; which
+      // that is depends on its measure as well as its window, so it answers
+      // for itself.
+      if (tpl === 'lines') return lineBasketDays(opts);
       const key = BASKET_WIN_KEY[tpl];
       if (!key) return 0;
       // The chart may ask for a calendar window; the other two may not, so
@@ -6355,6 +6360,227 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Lines: any measure with a history, one line per company ------------
+  //
+  // THE LINE-CHART COUNTERPART OF BARS (2026-10-09, owner's request). Bars
+  // ranks a cut on one measure as it stands today; this draws the largest
+  // companies in the same cut on one measure OVER TIME. Until it existed the
+  // studio could draw several companies' PRICES (the Chart card) or one
+  // company's fundamentals (Evolution), and nothing in between.
+  //
+  // "ANY MEASURE" MEANS ANY MEASURE WITH A HISTORY, which is a much shorter
+  // list than Bars' fifty-two: a price in the bar archive, or a figure in
+  // the company's own filings. RSI, short interest, the forward P/E and the
+  // rest of the screener's columns are stored as of today only, so there is
+  // no line to draw for them. The catalogue is PeerTrend.LINE_METRICS.
+  //
+  // THE MODEL AND THE DRAWING ARE PeerTrend's, the peer chart's own: gaps
+  // break a line, a runaway multiple is pinned, the scale goes logarithmic
+  // only where every figure is positive and they span more than four times.
+  // What differs is who is on it (the cut's largest, not one company's
+  // peers) and that every line takes a colour, since none is the subject.
+  //
+  // WHICH COMPANIES: the largest by market value in the cut, today. Not the
+  // leaders on the measure -- that would need every company's series before
+  // choosing five, and "biggest" is the list a reader expects to see.
+  //
+  // TWO KINDS OF WINDOW. Up to a year a price line is DAILY, from the same
+  // basket the Chart card reads. Past a year everything is one point per
+  // QUARTER END, price included, from the filings route -- so the picker
+  // offers the short windows for price alone.
+  //
+  // BLUE AND ORANGE LEAD THE PALETTE, never green: on this card a colour is
+  // an identity, and green and red mean up and down everywhere else.
+  const LINE_WINDOWS = [
+    ['m1', 'd'], ['m3', 'd'], ['m6', 'd'], ['ytd', 'd'], ['y1', 'd'],
+    ['q8', 'q', 9, 'past two years'], ['q12', 'q', 13, 'past three years'],
+    ['q20', 'q', 21, 'past five years'], ['q40', 'q', 41, 'past ten years'],
+  ];
+  const LINE_GROUP = { px: 'Price', cap: 'Valuation', pe: 'Valuation', ps: 'Valuation' };
+  // coh   built on a reported absolute: a row whose own figures are not all
+  //       in dollars is left out (the Bars card's measurement, 31 rows).
+  // noFin means nothing for a lender.
+  // flow  a trailing-twelve-month sum, which the subtitle says.
+  const LINE_FLAGS = {
+    px: {}, rev: { coh: 1, flow: 1 }, gp: { coh: 1, noFin: 1, flow: 1 }, oi: { coh: 1, flow: 1 },
+    ni: { coh: 1, flow: 1 }, fcf: { coh: 1, flow: 1 }, gm: { noFin: 1 }, om: {}, pm: {}, fm: {}, rg: {},
+    cap: {}, pe: { coh: 1 }, ps: { coh: 1 },
+  };
+  const LINE_COLORS = ['#60a5fa', '#fb923c', '#a78bfa', '#22d3ee', '#fbbf24', '#f472b6', '#a3e635', '#34d399'];
+  const LINE_COUNTS = [3, 5, 8];
+  const lineCatalogue = () => ((typeof globalThis !== 'undefined' && globalThis.PeerTrend) || {}).LINE_METRICS || [];
+  const lineMetric = (k) => { const c = lineCatalogue(); return (c.find((m) => m[0] === k) || c[0] || ['px'])[0]; };
+  // The windows a measure can be drawn over, and the one it opens on. A
+  // window the measure cannot use falls back to that measure's default, so
+  // a hand-edited post can never ask for daily revenue.
+  function lineWindows(metricKey) {
+    const px = lineMetric(metricKey) === 'px';
+    return LINE_WINDOWS.filter((w) => px || w[1] === 'q').map((w) => {
+      const lab = w[1] === 'd' ? CHART_WINDOWS[w[0]][1] : w[3];
+      return [w[0], lab.charAt(0).toUpperCase() + lab.slice(1), w[0] === (px ? 'm6' : 'q20')];
+    });
+  }
+  function lineWin(metricKey, v) {
+    const px = lineMetric(metricKey) === 'px';
+    const ok = LINE_WINDOWS.filter((w) => px || w[1] === 'q');
+    return ok.find((w) => w[0] === v) || ok.find((w) => w[0] === (px ? 'm6' : 'q20'));
+  }
+  // The daily price path reads the basket; asked by basketDays for both hosts.
+  function lineBasketDays(opts) {
+    const o = opts || {};
+    if (lineMetric(o.linMetric) !== 'px') return 0;
+    const w = lineWin('px', o.linWin);
+    return w[1] === 'd' ? CHART_WINDOWS[w[0]][0] : 0;
+  }
+  // WHAT THE PHONE HAS TO FETCH. Which companies is this card's own decision,
+  // made from the rows and the cut, so the card is built once with a getter
+  // that only records what it was asked for.
+  function linesNeed(tpl, ctx) {
+    if (tpl !== 'lines') return null;
+    let want = null;
+    try {
+      global.Cards.build('lines', Object.assign({}, ctx || {}, {
+        getLineSeries: (symbols, quarters) => { want = { symbols, quarters }; return null; },
+      }));
+    } catch (e) { want = null; }
+    return want;
+  }
+  // Measured over production's own filings with the note at its longest, then
+  // given back two more lines: a cut can leave out more than the sample did.
+  const LIN_H = { portrait: 750, square: 505, story: 1235 };
+  const LIN_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function tplLines() {
+    const PT = (typeof globalThis !== 'undefined' && globalThis.PeerTrend) || null;
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!PT || !PT.LINE_METRICS) return shell('Nothing to chart', 'Lines', 'not available here');
+    const mk = lineMetric(O.linMetric);
+    const f = LINE_FLAGS[mk] || {};
+    const win = lineWin(mk, O.linWin);
+    const want = LINE_COUNTS.includes(Number(O.linCount)) ? Number(O.linCount) : 5;
+    const sc = scopeOf('linScope', 'linSector');
+    const mLabel = (PT.LINE_METRICS.find((m) => m[0] === mk) || [])[1] || mk;
+
+    // ---- who is on the chart -------------------------------------------------
+    const isFund = (r) => r.instrumentType === 'ETF' || IS_BENCH.has(r.symbol) || IS_SECTOR_ETF.has(r.symbol);
+    const out = { fin: 0, mixed: 0 };
+    const pool = [];
+    for (const r of sc.rows) {
+      if (!r || r.error || isFund(r)) continue;
+      // A NULL IS NOT A ZERO: no market value is no place in a list ordered by it.
+      if (!(Number(r.marketCap) > 0)) continue;
+      if (f.noFin && r.sector === 'Financial Services') { out.fin++; continue; }
+      if (f.coh && ((r.currency && r.currency !== 'USD') || barMixed(r))) { out.mixed++; continue; }
+      pool.push(r);
+    }
+    pool.sort((a, b) => Number(b.marketCap) - Number(a.marketCap) || String(a.symbol).localeCompare(String(b.symbol)));
+    const pick = pool.slice(0, want);
+    if (pick.length < 2) {
+      return shell(sc.label, mLabel, 'too few companies',
+        'A line chart needs at least two companies and ' + sc.label + ' holds ' + pick.length
+        + ' that can be drawn on this measure. Widen the cut.');
+    }
+
+    // ---- the series ------------------------------------------------------------
+    let xs, data = null, daily = false, winLabel;
+    const vals = {}, late = [];
+    const r2 = (v) => Math.round(v * 100) / 100;
+    if (win[1] === 'd') {
+      daily = true;
+      const cw = CHART_WINDOWS[win[0]];
+      winLabel = cw[1];
+      let d = getBasket(cw[0]);
+      if (!d || !d.dates || !d.dates.length) return shell('Reading the archive', 'Drawing', 'the lines…');
+      const i0 = winStart(cw, d.dates);
+      if (d.dates.length - i0 < 2) {
+        return shell(sc.label, mLabel, 'this year',
+          'The year has not opened yet — there is no session since 31 December to chart.');
+      }
+      d = sliceBasket(d, i0);
+      xs = d.dates;
+      for (const r of pick) {
+        const S = (d.series || {})[r.symbol];
+        // NO PRICE AT THE WINDOW'S START -- a recent listing, or an archive that
+        // does not reach back that far. Its line would start part-way along
+        // on a base of its own, and the gap to the others would mean nothing.
+        if (!S || S[0] == null) { late.push(r); continue; }
+        vals[r.symbol] = S.map((v) => (v == null ? null : r2((v - 1) * 100)));
+      }
+    } else {
+      winLabel = win[3];
+      data = getLineSeries(pick.map((r) => r.symbol), win[2]);
+      if (!data || !Array.isArray(data.quarters)) return shell('Reading the filings', 'Drawing', 'the lines…');
+      xs = data.quarters;
+      const src = (data.series || {})[mk] || {};
+      for (const r of pick) {
+        const arr = src[r.symbol] || [];
+        if (mk !== 'px') { vals[r.symbol] = arr; continue; }
+        const base = arr[0];
+        if (!(base > 0)) { late.push(r); continue; }
+        vals[r.symbol] = arr.map((v) => (v == null ? null : r2((v / base - 1) * 100)));
+      }
+    }
+    const kept = pick.filter((r) => vals[r.symbol]);
+    const model = PT.build({
+      quarters: xs,
+      companies: kept.map((r) => ({ symbol: r.symbol, name: nameOf(r) })),
+      series: { [mk]: vals },
+    }, mk, 'value', PT.LINE_METRICS, { grid: 4 });
+    if (model.lines.length < 2) {
+      return shell(sc.label, mLabel, 'not enough on record',
+        'Fewer than two of the ' + pick.length + ' largest companies in ' + sc.label + ' have '
+        + model.lower + ' on record over the ' + winLabel + '.');
+    }
+    // On the chart = has a line. A company with no figure anywhere in the
+    // window is named in the note rather than left to look like an omission.
+    const drawn = new Set(model.lines.map((l) => l.symbol));
+    const blank = kept.filter((r) => !drawn.has(r.symbol));
+
+    const colors = {};
+    pick.forEach((r, i) => { colors[r.symbol] = pal.ink(LINE_COLORS[i % LINE_COLORS.length]); });
+    const story = size.id === 'story';
+    const fs = story ? 24 : size.id === 'square' ? 17 : 19;
+    const chart = PT.svg(model, {
+      w: 952, h: LIN_H[size.id] || 600, left: story ? 110 : 92, right: story ? 376 : 318,
+      fs, nameMax: story ? 17 : 19, xLabels: 5, colors,
+      xLabel: daily ? (d) => LIN_MON[Number(String(d).slice(5, 7)) - 1] + ' ' + Number(String(d).slice(8, 10)) : null,
+    });
+
+    // Two names at most, then a count: the note sits on a card that cannot scroll.
+    const short = (r) => { const n = nameOf(r); return n.length > 28 ? n.slice(0, 27).trimEnd() + '…' : n; };
+    const names = (list) => list.slice(0, 2).map(short).join(', ')
+      + (list.length > 2 ? ' and ' + (list.length - 2) + (list.length === 3 ? ' other' : ' others') : '');
+    const what = mk === 'px'
+      ? 'Price only, each line rebased to the first close of the window, so the gap between two lines is the difference in their returns. '
+        + (daily ? '' : 'One point per quarter end. ')
+      : mk === 'rg' ? 'Each point is the trailing twelve months of revenue against the twelve months before it, from the company’s own filings. '
+        + (model.pinned ? model.pinned + (model.pinned === 1 ? ' point above ' : ' points above ') + PT.fmt('ret', model.ceil)
+          + (model.pinned === 1 ? ' is' : ' are') + ' drawn at the top of the scale. ' : '')
+        : PT.measureNote(model, data);
+    const note = what
+      + (model.log ? 'Log scale, so equal distances are equal ratios. ' : '')
+      + (model.gaps && mk !== 'px' && mk !== 'pe' ? 'A break in a line is a quarter with no figure on record. ' : '')
+      + (late.length ? names(late) + (late.length === 1 ? ' is' : ' are') + ' left out: the price history held here starts after the window does. ' : '')
+      + (blank.length ? names(blank) + (blank.length === 1 ? ' has' : ' have') + ' no ' + model.lower + ' on file. ' : '')
+      + (out.fin ? 'Lenders are left out: this measure means nothing for one. ' : '')
+      + (out.mixed ? 'Companies whose reported figures are not all in dollars are left out. ' : '')
+      + 'Today’s largest by market value in the cut. '
+      + (mk === 'px' ? 'A record, not a forecast.' : 'A record, not a recommendation.');
+
+    const sub = (f.flow ? 'trailing twelve months, ' : mk === 'px' ? 'rebased, ' : '')
+      + (win[0] === 'ytd' ? 'so far this year' : 'over the ' + winLabel);
+    return chromeTop()
+      + '<div class="s-body"><div class="pv-in ln-in">'
+      + '<span class="s-kick">' + esc(sc.label + ' · the ' + model.lines.length + ' largest by market value') + '</span>'
+      + '<h2 class="s-title">' + esc(mLabel) + '<span class="dim">' + esc(sub) + '</span></h2>'
+      + '<div class="pv-chart">' + chart + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Month by month: one company's returns, year by month ---------------
   //
   // THE STOCK PAGE'S GRID AS A CARD. One row per year, one column per month,
@@ -6663,6 +6889,7 @@
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
     shorted: tplShorted, breadth: tplBreadth, beat: tplBeat, earngrow: tplEarnGrow,
     bars: tplBars,
+    lines: tplLines,
     months: tplMonths,
     peertrend: tplPeerTrend,
     perf: tplPerf,
@@ -6726,6 +6953,11 @@
     .pv-chart text.pt-self { fill: var(--text); font-weight: 800; }
     .pv-chart .pt-fig { font-family: var(--mono); fill: var(--faint); font-weight: 500; }
     .pv-chart text.pt-self .pt-fig { fill: var(--accent); font-weight: 700; }
+    /* The Lines card: a colour per line, set inline by the drawing. */
+    .pv-chart path.pt-col { fill: none; stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }
+    .pv-chart text.pt-col { font-weight: 600; }
+    .pv-chart text.pt-col .pt-fig { font-weight: 600; }
+    .sz-story .pv-chart path.pt-col { stroke-width: 5; }
     /* On the light grounds a 60% grey line is 2.5:1 and the accent figure
        4.4:1 on sky -- both measured, both under their floors. */
     .s-art.th-light .pv-chart path.pt-peer { opacity: 0.95; }
@@ -8719,6 +8951,13 @@
     // that silently draws the wrong window.
     snapPeriods: () => SNAP_PERIODS.map((p) => p.slice()),
     beatPeriods: () => BEAT_PERIODS.map((p) => p.slice()),
+    // The Lines card: what the phone must fetch, and the two pickers built
+    // from the module that draws them. lineWindows depends on the MEASURE:
+    // a price can be drawn daily, a filed figure only by the quarter.
+    linesNeed,
+    lineMetrics: () => lineCatalogue().map((m) => [m[0], m[1], LINE_GROUP[m[0]] || 'From the filings']),
+    lineWindows,
+    lineCounts: () => LINE_COUNTS.map((n) => [n, n === 5]),
     earnGrowthNeed,
     earnGrowthCuts: () => EGR_CUTS.map((p) => p.slice()),
     beatBenches: () => BEAT_BENCH.map((p) => p.slice()),
@@ -8783,6 +9022,7 @@
       getEvolution = c.getEvolution || (() => null);
       getShortMoves = c.getShortMoves || (() => null);
       getEarnGrowth = c.getEarnGrowth || (() => null);
+      getLineSeries = c.getLineSeries || (() => null);
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);
       getPerf = c.getPerf || (() => null);

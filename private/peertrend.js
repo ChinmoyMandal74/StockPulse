@@ -33,14 +33,38 @@
     // in that company's line and it is left out of that quarter's ranking.
     ['pe', 'P/E', 'mult'],
   ];
+  // THE LINES CARD'S CATALOGUE: everything here that has a HISTORY -- a price
+  // in the bar archive, or a figure in the filings. A fourth element carries
+  // flags: `pin` caps a runaway point the way a multiple is capped, `lower`
+  // is the mid-sentence form where lower-casing the label would be wrong.
+  // The peer chart keeps its own five; this list is handed to build() by the
+  // one card that wants it.
+  const LINE_METRICS = [
+    ['px', 'Share price', 'ret'],
+    ['rev', 'Revenue', 'money'],
+    ['gp', 'Gross profit', 'money'],
+    ['oi', 'Operating income', 'money'],
+    ['ni', 'Net income', 'money'],
+    ['fcf', 'Free cash flow', 'money'],
+    ['gm', 'Gross margin', 'pct'],
+    ['om', 'Operating margin', 'pct'],
+    ['pm', 'Profit margin', 'pct'],
+    ['fm', 'Free cash flow margin', 'pct'],
+    ['rg', 'Revenue growth', 'ret', { pin: 1 }],
+    ['cap', 'Market value', 'money'],
+    ['pe', 'P/E', 'mult'],
+    ['ps', 'P/S', 'mult'],
+  ];
   const VIEWS = [['value', 'Value'], ['rank', 'Rank']];
-  const metricOf = (k) => METRICS.find((m) => m[0] === k) || METRICS[0];
+  const metricOf = (k, cat) => (cat || METRICS).find((m) => m[0] === k) || (cat || METRICS)[0];
 
   const ok = (v) => v != null && isFinite(v);
 
   function fmt(unit, v) {
     if (!ok(v)) return '—';
     const a = Math.abs(v), s = v < 0 ? '−' : '';
+    // A RETURN takes its sign both ways; a level (a margin) only when negative.
+    if (unit === 'ret') return (v > 0 ? '+' : s) + (a >= 1000 ? Math.round(a).toLocaleString('en-US') : a.toFixed(1)) + '%';
     if (unit === 'pct') return s + a.toFixed(1) + '%';
     if (unit === 'mult') return s + (a >= 1000 ? Math.round(a).toLocaleString('en-US') : a.toFixed(1)) + '×';
     if (a >= 1e12) return s + '$' + (a / 1e12).toFixed(2) + 'T';
@@ -55,8 +79,8 @@
 
   // The model both hosts draw from. Every y is 0 at the top and 1 at the
   // bottom of the plot, so a renderer only has to scale it.
-  function build(data, metricKey, viewKey) {
-    const [mk, mLabel, unit] = metricOf(metricKey);
+  function build(data, metricKey, viewKey, catalogue, opt) {
+    const [mk, mLabel, unit, mf] = metricOf(metricKey, catalogue);
     const view = viewKey === 'rank' ? 'rank' : 'value';
     const quarters = (data && data.quarters) || [];
     const src = ((data && data.series) || {})[mk] || {};
@@ -88,7 +112,7 @@
     // is DRAWN at 1.25 times it. Its rank, its label and its tooltip keep the
     // true figure.
     let ceil = null;
-    if (unit === 'mult' && view === 'value' && all.length >= 8) {
+    if ((unit === 'mult' || (mf && mf.pin)) && view === 'value' && all.length >= 8) {
       const srt = all.slice().sort((a, b) => a - b);
       const p90 = srt[Math.min(srt.length - 1, Math.floor(srt.length * 0.9))];
       if (srt[srt.length - 1] > p90 * 2.5) ceil = p90 * 1.25;
@@ -112,15 +136,30 @@
       return { symbol: c.symbol, name: c.name || c.symbol, self: !!c.self, pts, last };
     });
 
-    const ticks = view === 'rank'
+    let ticks = view === 'rank'
       ? Array.from({ length: N }, (_, r) => ({ y: yr(r + 1), label: String(r + 1) }))
       : [{ y: 0, label: fmt(unit, hi) }]
-        .concat(zero != null && zero > 0.12 && zero < 0.88 ? [{ y: zero, label: unit === 'pct' ? '0%' : '$0' }] : [])
+        .concat(zero != null && zero > 0.12 && zero < 0.88 ? [{ y: zero, label: unit === 'pct' || unit === 'ret' ? '0%' : '$0' }] : [])
         .concat([{ y: 1, label: fmt(unit, lo) }]);
+    // EVENLY SPACED GRIDLINES for a host that asks (the Lines card, a poster
+    // with room for them). Spaced in the DRAWN scale, so on a log axis the
+    // labels are the values at equal distances rather than equal steps.
+    if (opt && opt.grid && view === 'value') {
+      const inv = (y) => (log ? Math.exp(Math.log(hi) - y * (Math.log(hi) - Math.log(lo))) : hi - y * (hi - lo));
+      const g = opt.grid;
+      // A percentage axis spanning twenty points or more is labelled in whole
+      // numbers: '+14.2%' on a gridline claims a precision a gridline does not have.
+      const whole = (unit === 'pct' || unit === 'ret') && !log && hi - lo >= 20;
+      const ax = (v) => (whole ? (Math.round(v) === 0 ? '0%' : (unit === 'ret' && v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(Math.round(v)).toLocaleString('en-US') + '%') : fmt(unit, v));
+      ticks = Array.from({ length: g + 1 }, (_, k) => ({ y: k / g, label: ax(inv(k / g)) }));
+      if (zero != null && ticks.every((t) => Math.abs(t.y - zero) > 0.07)) {
+        ticks.push({ y: zero, label: unit === 'pct' || unit === 'ret' ? '0%' : '$0' });
+      }
+    }
 
     return { metric: mk, label: mLabel, unit, view, log, zero, quarters, lines, ticks, n, N,
       // 'revenue', 'market value' -- but an initialism keeps its capitals.
-      lower: mk === 'pe' ? mLabel : mLabel.toLowerCase(),
+      lower: /^P\//.test(mLabel) ? mLabel : mLabel.toLowerCase(),
       ceil, pinned: lines.reduce((t, l) => t + l.pts.filter((p) => p && p.pinned).length, 0),
       // How many quarter-cells have no figure, so a host can say so.
       gaps: lines.reduce((t, l) => t + l.pts.filter((p) => !p).length, 0) };
@@ -137,6 +176,11 @@
       : filed === 0 ? 'today’s share count, which reads a past buyback low'
         : 'the filed share count for ' + filed + ' of ' + syms.length + ' companies and today’s for the rest';
     if (model.metric === 'cap') return 'Market value is each quarter’s close times ' + shares + '. ';
+    if (model.metric === 'ps') {
+      return 'P/S is market value over trailing revenue, on ' + shares + '. '
+        + (model.pinned ? model.pinned + (model.pinned === 1 ? ' point above ' : ' points above ') + fmt('mult', model.ceil)
+          + (model.pinned === 1 ? ' is' : ' are') + ' drawn at the top of the scale. ' : '');
+    }
     if (model.metric === 'pe') {
       return 'P/E is market value over trailing earnings, on ' + shares + '. A loss has no multiple, so the line breaks there. '
         + (model.pinned ? model.pinned + (model.pinned === 1 ? ' point above ' : ' points above ') + fmt('mult', model.ceil)
@@ -177,7 +221,7 @@
     if (step >= 3) step = Math.ceil(step / 4) * 4;
     for (let i = n - 1; i >= 0; i -= step) {
       out += '<text class="pt-ax" x="' + X(i).toFixed(1) + '" y="' + (h - fs * 0.5).toFixed(1) + '" text-anchor="'
-        + 'middle' + '" font-size="' + fs + '">' + esc(qLabel(model.quarters[i])) + '</text>';
+        + 'middle' + '" font-size="' + fs + '">' + esc((o.xLabel || qLabel)(model.quarters[i])) + '</text>';
     }
 
     // the lines: peers first, the company itself last so it is never crossed out
@@ -189,8 +233,13 @@
         d += (pen ? 'L' : 'M') + X(p.i).toFixed(1) + ' ' + Y(p.y).toFixed(1);
         pen = true;
       }
-      const cls = l.self ? 'pt-self' : 'pt-peer';
-      out += '<path class="' + cls + '" d="' + d + '"><title>' + esc(l.name) + '</title></path>';
+      // A COLOUR PER LINE where the host hands one over (the Lines card, which
+      // has no company of its own to single out). Inline, because that markup
+      // also travels through the PNG export.
+      const col = o.colors && o.colors[l.symbol];
+      const cls = col ? 'pt-col' : l.self ? 'pt-self' : 'pt-peer';
+      const sty = col ? ' style="stroke:' + col + '"' : '';
+      out += '<path class="' + cls + '"' + sty + ' d="' + d + '"><title>' + esc(l.name) + '</title></path>';
       // Dots on every line in the rank view, where a place is a discrete
       // thing; in the value view only on the company, or seven lines of dots
       // bury the lines themselves.
@@ -219,11 +268,13 @@
     for (const { l, y } of labs) {
       const nm = l.name.length > max ? l.name.slice(0, max - 1).trimEnd() + '…' : l.name;
       const fig = model.view === 'rank' ? '#' + l.last.rank + '  ' : '';
-      out += '<text class="pt-lab ' + (l.self ? 'pt-self' : 'pt-peer') + '" x="' + (x1 + 12) + '" y="' + (y + fs * 0.34).toFixed(1) + '" font-size="' + fs + '">'
-        + esc(fig + nm) + '<tspan class="pt-fig" dx="8">' + esc(fmt(unit, l.last.v)) + '</tspan></text>';
+      const col = o.colors && o.colors[l.symbol];
+      out += '<text class="pt-lab ' + (col ? 'pt-col' : l.self ? 'pt-self' : 'pt-peer') + '"' + (col ? ' style="fill:' + col + '"' : '')
+        + ' x="' + (x1 + 12) + '" y="' + (y + fs * 0.34).toFixed(1) + '" font-size="' + fs + '">'
+        + esc(fig + nm) + '<tspan class="pt-fig"' + (col ? ' style="fill:' + col + '"' : '') + ' dx="8">' + esc(fmt(unit, l.last.v)) + '</tspan></text>';
     }
     return out + '</svg>';
   }
 
-  global.PeerTrend = { METRICS, VIEWS, build, svg, fmt, qLabel, measureNote };
+  global.PeerTrend = { METRICS, LINE_METRICS, VIEWS, build, svg, fmt, qLabel, measureNote };
 })(typeof window !== 'undefined' ? window : globalThis);

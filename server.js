@@ -10045,6 +10045,13 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
 
   // The fortnight's short-interest change, and only when the template asks
   // -- the module's own question, never a list here.
+  // The Lines card over a long window reads the filings. WHICH companies is
+  // the card's own decision (the biggest in its cut), so the module is asked
+  // with the rows in hand rather than this route re-deriving the cut.
+  let lines = null;
+  const lnNeed = Cards.linesNeed(post.tpl, { stocks, myLists, screens, size: POST_SIZES[post.size], opts: post.opts || {} });
+  if (lnNeed) { try { lines = await lineSeriesFor(lnNeed.symbols, lnNeed.quarters); } catch { lines = null; } }
+
   // The earnings-growth card, likewise only when the template asks.
   let egrow = null;
   const egNeed = Cards.earnGrowthNeed(post.tpl, post.opts || {});
@@ -10071,6 +10078,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       // asks, which is the module's own question, never a list here.
       getShortMoves: () => smov,
       getEarnGrowth: () => egrow,
+      getLineSeries: () => lines,
       getHistory: () => hist,
       getEvolution: () => evo,
       getMonths: () => months,
@@ -10903,22 +10911,13 @@ function quarterEndsBefore(n, today) {
   }
   return out;
 }
-async function peerTrendFor(symbol) {
-  const hit = peerTrendCache.get(symbol);
-  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.body;
-  const [snap, links] = await Promise.all([
-    snapshotCached(), store.readPeerLinks(symbol).catch(() => [])]);
-  const stocks = (snap && snap.stocks) || [];
-  const stock = stocks.find((x) => String(x.symbol).toUpperCase() === symbol);
-  if (!stock) return null;
-  await stampShortNames(stocks).catch(() => {});
-  const peers = peersFor(stock, stocks, links);
-  const list = peers && peers.rows && peers.rows.length ? [peers.self].concat(peers.rows) : [];
-  const quarters = quarterEndsBefore(PEER_TREND_QUARTERS, new Date());
-  const empty = { symbol, quarters, companies: [], series: {}, basis: null, group: null };
-  if (list.length < 3) { peerTrendCache.set(symbol, { at: Date.now(), body: empty }); return empty; }
-  const syms = list.map((p) => String(p.symbol).toUpperCase());
-
+// ONE SERIES PER COMPANY PER QUARTER END, for any list of symbols. Lifted out
+// of peerTrendFor (2026-10-09) when the Lines card wanted the same figures
+// for companies chosen by a cut rather than by peer distance: two copies of
+// "a quarter's trailing year" would drift, and the share-count rules below
+// took three corrections to get right. `full` adds every measure that has a
+// history; the peer chart passes false and gets exactly what it always did.
+async function trendSeries(syms, quarters, stocks, full) {
   // closesBefore answers "the last close BEFORE this date", so the day after
   // each quarter end is asked for.
   const dayAfter = quarters.map((q) => new Date(Date.parse(q + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10));
@@ -10934,10 +10933,13 @@ async function peerTrendFor(symbol) {
   const bySym = {};
   for (const x of stocks) bySym[String(x.symbol).toUpperCase()] = x;
   const series = { rev: {}, ni: {}, pm: {}, cap: {}, pe: {} };
+  // The rest of what has a history, for the one caller that charts any of it.
+  const EXTRA = full ? ['gp', 'oi', 'fcf', 'gm', 'om', 'fm', 'rg', 'ps', 'px'] : [];
+  for (const k of EXTRA) series[k] = {};
   const capBasis = {};
   syms.forEach((sym, k) => {
     const rows = facts[k] || [];
-    const ttm = rows.length ? SecFacts.ttmSeries(SecFacts.latestFilled(rows).filter((r) => r.periodType === 'Q')) : [];
+    const ttm = rows.length ? SecFacts.ttmSeries(SecFacts.latestFilled(rows).filter((r) => r.periodType === 'Q'), full) : [];
     const at = (q) => {
       let pick = null;
       for (const t of ttm) { if (t.d <= q) pick = t; else break; }
@@ -10946,6 +10948,16 @@ async function peerTrendFor(symbol) {
     };
     const num = (v) => (v == null || !isFinite(Number(v)) ? null : Number(v));
     series.rev[sym] = []; series.ni[sym] = []; series.pm[sym] = []; series.cap[sym] = []; series.pe[sym] = [];
+    for (const k of EXTRA) series[k][sym] = [];
+    // The trailing year about twelve months before a given one, for growth.
+    const yearBefore = (t) => {
+      let best = null, gap = 1e9;
+      for (const p of ttm) {
+        const d = (Date.parse(t.d) - Date.parse(p.d)) / 86400000;
+        if (d >= 350 && d <= 380 && Math.abs(d - 365) < gap) { best = p; gap = Math.abs(d - 365); }
+      }
+      return best;
+    };
     // TODAY'S share count against a split-adjusted close, the Evolution
     // card's formulation: an adjusted close is already in today's share
     // units, so a split cancels exactly. Rejected before it is coerced --
@@ -10983,8 +10995,43 @@ async function peerTrendFor(symbol) {
       series.cap[sym].push(cap);
       // Positive earnings only, rejected before it is divided by.
       series.pe[sym].push(cap != null && ni != null && ni > 0 ? Math.round(cap / ni * 100) / 100 : null);
+      if (full) {
+        const g = (k) => (t ? num(t[k]) : null);
+        const r2 = (v) => (v == null ? null : Math.round(v * 100) / 100);
+        series.gp[sym].push(g('grossProfit')); series.oi[sym].push(g('operatingIncome')); series.fcf[sym].push(g('freeCashFlow'));
+        series.gm[sym].push(r2(g('grossMargin'))); series.om[sym].push(r2(g('operatingMargin'))); series.fm[sym].push(r2(g('fcfMargin')));
+        // Growth needs BOTH trailing years positive: off a zero or negative base
+        // the percentage is arithmetic, and its sign can invert.
+        const prior = t && rev != null && rev > 0 ? yearBefore(t) : null;
+        const pr = prior ? num(prior.revenue) : null;
+        series.rg[sym].push(pr != null && pr > 0 ? r2((rev / pr - 1) * 100) : null);
+        series.ps[sym].push(cap != null && rev != null && rev > 0 ? r2(cap / rev) : null);
+        // The quarter-end close itself, for a price line over years. The card
+        // rebases it; a sub-cent bar is not a price.
+        series.px[sym].push(fresh && c.close >= MIN_CLOSE ? c.close : null);
+      }
     });
   });
+  return { series, capBasis };
+}
+
+async function peerTrendFor(symbol) {
+  const hit = peerTrendCache.get(symbol);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.body;
+  const [snap, links] = await Promise.all([
+    snapshotCached(), store.readPeerLinks(symbol).catch(() => [])]);
+  const stocks = (snap && snap.stocks) || [];
+  const stock = stocks.find((x) => String(x.symbol).toUpperCase() === symbol);
+  if (!stock) return null;
+  await stampShortNames(stocks).catch(() => {});
+  const peers = peersFor(stock, stocks, links);
+  const list = peers && peers.rows && peers.rows.length ? [peers.self].concat(peers.rows) : [];
+  const quarters = quarterEndsBefore(PEER_TREND_QUARTERS, new Date());
+  const empty = { symbol, quarters, companies: [], series: {}, basis: null, group: null };
+  if (list.length < 3) { peerTrendCache.set(symbol, { at: Date.now(), body: empty }); return empty; }
+  const syms = list.map((p) => String(p.symbol).toUpperCase());
+
+  const { series, capBasis } = await trendSeries(syms, quarters, stocks, false);
   const body = {
     symbol, quarters,
     companies: list.map((p, k) => ({ symbol: syms[k], name: p.name || syms[k], self: k === 0 })),
@@ -11005,6 +11052,44 @@ app.get('/api/peer-trend', requireAuth, route(async (req, res) => {
   const body = await peerTrendFor(symbol);
   if (!body) return res.status(404).json({ error: 'Not in the screener.' });
   res.json(body);
+}));
+
+// ---- Lines: any measure with a history, for a handful of companies -----------
+// (2026-10-09, owner's request: "like Bars -- any measure, but a line chart".)
+//
+// The CARD chooses the companies (the biggest in whatever cut it was given),
+// so this takes a symbol list and answers with the same shape /api/peer-trend
+// does. Bounded on both axes: eight companies and forty-one quarter ends is
+// 328 indexed seeks plus eight companies' filings -- never a scan.
+//
+// DISPLAY ONLY. Nothing here is stamped on a snapshot row.
+const LINE_MAX_SYMS = 8;
+const LINE_QUARTERS = [9, 13, 21, 41];      // two, three, five and ten years, both ends drawn
+const lineCache = new Map();
+async function lineSeriesFor(symsIn, nqIn) {
+  const nq = LINE_QUARTERS.includes(Number(nqIn)) ? Number(nqIn) : 21;
+  const snap = await snapshotCached();
+  const stocks = (snap && snap.stocks) || [];
+  const known = new Set(stocks.map((x) => String(x.symbol).toUpperCase()));
+  const syms = [...new Set((symsIn || []).map((s) => String(s).toUpperCase()))]
+    .filter((s) => known.has(s)).slice(0, LINE_MAX_SYMS);
+  const key = syms.join(',') + '|' + nq;
+  const hit = lineCache.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.body;
+  const quarters = quarterEndsBefore(nq, new Date());
+  const out = syms.length ? await trendSeries(syms, quarters, stocks, true) : { series: {}, capBasis: {} };
+  const body = { quarters, companies: syms.map((s) => ({ symbol: s, name: s })), series: out.series, capBasis: out.capBasis };
+  if (lineCache.size > 200) lineCache.clear();
+  lineCache.set(key, { at: Date.now(), body });
+  return body;
+}
+app.get('/api/line-series', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const syms = String(req.query.symbols || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+  if (!syms.length || syms.length > LINE_MAX_SYMS || syms.some((s) => !/^[A-Z0-9.\-]{1,15}$/.test(s))) {
+    return res.status(400).json({ error: 'Between one and ' + LINE_MAX_SYMS + ' symbols.' });
+  }
+  res.json(await lineSeriesFor(syms, req.query.q));
 }));
 
 // ---- Growth and profitability: revenue, net income and net margin -----------

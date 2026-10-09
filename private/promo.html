@@ -744,6 +744,36 @@
           cut, and some of them are sharply UP, which is the half a median
           hides. Heavily shorted and rising is the shorts under water.</p>
       </div>
+      <!-- Lines: any measure with a history, one line per company. The
+           line-chart counterpart of Bars. Scoped, so it carries the standard
+           six and joins INDUSTRY_PREFIXES. The measure and window lists are
+           filled from the module; the windows depend on the measure. -->
+      <div id="linBox">
+        <label>Measure</label>
+        <select id="linMetric"></select>
+        <label>Time frame</label>
+        <select id="linWin"></select>
+        <label>How many lines</label>
+        <select id="linCount"></select>
+        <label>Within</label>
+        <select id="linScope"><option value="All">All screened</option></select>
+        <label>Sector</label>
+        <select id="linSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="linIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="linCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="linScreen"><option value="">No screen</option></select>
+        <label>Index</label>
+        <select id="linSp500"></select>
+        <p class="hint">One measure over time, a line for each of the largest
+          companies in the cut. Price can be drawn daily up to a year; past a
+          year, and for every figure from the filings, it is one point per
+          quarter. Only measures with a history are offered: a price, or a
+          figure the company filed. Narrow the cut with Sector and Industry to
+          compare direct competitors.</p>
+      </div>
       <!-- Bars: any one measure, ranked. The general case of Movers, the
            Fundamentals ranking and Most shorted, which each rank one
            family. Scoped, so it carries the standard six and joins
@@ -1070,6 +1100,7 @@
       { id: 'range', name: 'Range', note: 'Where each stock sits in its 52-week range' },
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
+      { id: 'lines', name: 'Lines', note: 'Any one measure over time — price or a filed fundamental — a line per company' },
       { id: 'advboard', name: 'Advice', note: 'What the rules read, four ways' },
       { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
       { id: 'howto', name: 'How to', note: 'Training slides — one topic, three slides, a carousel each' },
@@ -1145,6 +1176,7 @@
       ['range', '52-week range'],
       ['sparks', 'Sparklines'],
       ['chart', 'Chart'],
+      ['lines', 'Lines — any measure'],
     ];
     const BRAND_VIEWS = [
       ['intro', 'Intro'],
@@ -1198,7 +1230,7 @@
       for (const part of ['Scope', 'Sector', 'Cap', 'Screen', 'Sp500', 'Industry']) scopeSyncFrom(prefix + part);
     }
     // Which scoped controls belong to which template, for an opened post.
-    const SCOPE_PREFIX = { movers: 'mov', chart: 'cht', sparks: 'spk', range: 'rng', advboard: 'adv', fund: 'fund', size: 'size', bubble: 'bub', histogram: 'hist', shorted: 'shrt', bars: 'bar' };
+    const SCOPE_PREFIX = { movers: 'mov', chart: 'cht', sparks: 'spk', range: 'rng', advboard: 'adv', fund: 'fund', size: 'size', bubble: 'bub', histogram: 'hist', shorted: 'shrt', bars: 'bar', lines: 'lin' };
     const OWNER_ONLY_TPLS = new Set(['announce']);
     let canAnnounce = false;
     const visibleTpls = () => TPLS.filter((t) => canAnnounce || !OWNER_ONLY_TPLS.has(t.id));
@@ -1297,6 +1329,29 @@
           if (Cards.perfNeed(tpl, controlOpts())) render();
         })
         .catch(() => { delete prfPending[symbol]; });
+      return null;
+    }
+
+    // The Lines card's quarterly series, for the companies and the depth the
+    // CARD asked for -- it chooses them from the cut, so this is keyed on the
+    // list itself. The repaint is the half that matters.
+    const linCache = {};
+    const linPending = {};
+    function getLineSeries(symbols, quarters) {
+      if (!symbols || !symbols.length) return null;
+      const key = symbols.join(',') + '|' + quarters;
+      if (linCache[key]) return linCache[key];
+      if (linPending[key]) return null;
+      linPending[key] = true;
+      fetch(`/api/line-series?symbols=${encodeURIComponent(symbols.join(','))}&q=${encodeURIComponent(quarters)}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          delete linPending[key];
+          if (!d || !Array.isArray(d.quarters)) return;
+          linCache[key] = d;
+          if (tpl === 'lines') render();
+        })
+        .catch(() => { delete linPending[key]; });
       return null;
     }
 
@@ -1411,6 +1466,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
+      'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
       'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
@@ -1433,7 +1489,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: controlOpts(),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries,
       updatedAt: pulledAt,
     });
 
@@ -1441,7 +1497,7 @@
     // (an industry belongs to one sector), and drops a choice the new sector
     // does not contain. Run at the top of every render, so it has already
     // happened by the time a card reads the controls.
-    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub', 'hist', 'shrt', 'bar'];
+    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub', 'hist', 'shrt', 'bar', 'lin'];
     const industryFor = {};
     function syncIndustries(force) {
       INDUSTRY_PREFIXES.forEach((p) => {
@@ -1518,6 +1574,7 @@
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
       $('egrBox').style.display = tpl === 'earngrow' ? 'block' : 'none';
       $('barBox').style.display = tpl === 'bars' ? 'block' : 'none';
+      $('linBox').style.display = tpl === 'lines' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       $('monBox').style.display = tpl === 'months' ? 'block' : 'none';
@@ -1773,6 +1830,33 @@
     ['shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector',
       'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'shorted') render(); }));
+    // Lines: its own listener list. THE WINDOWS FOLLOW THE MEASURE -- a price
+    // can be drawn daily, a filed figure only by the quarter -- so changing
+    // the measure refills the Time frame picker before anything is drawn,
+    // keeping the choice where the new measure still offers it.
+    function fillLineWindows() {
+      const el = $('linWin'); const keep = el.value;
+      const wins = Cards.lineWindows($('linMetric').value);
+      el.innerHTML = wins.map(([v, lab]) => `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
+      el.value = wins.some((w) => w[0] === keep) ? keep : (wins.find((w) => w[2]) || wins[0])[0];
+    }
+    (function fillLineControls() {
+      const sel = $('linMetric');
+      const groups = new Map();
+      for (const [v, label, grp] of Cards.lineMetrics()) {
+        if (!groups.has(grp)) {
+          const og = document.createElement('optgroup');
+          og.label = grp; groups.set(grp, og); sel.appendChild(og);
+        }
+        groups.get(grp).appendChild(new Option(label, v));
+      }
+      for (const [n, def] of Cards.lineCounts()) $('linCount').appendChild(new Option(String(n), String(n), def, def));
+      fillLineWindows();
+    }());
+    $('linMetric').addEventListener('change', () => { fillLineWindows(); if (tpl === 'lines') render(); });
+    ['linWin', 'linCount', 'linScope', 'linSector',
+      'linIndustry', 'linCap', 'linScreen', 'linSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'lines') render(); }));
     // Bars: ITS OWN hardcoded listener list, like every template above. A
     // control missing from it saves with a post and does nothing when touched.
     ['barMetric', 'barDir', 'barCount', 'barScope', 'barSector',
@@ -2190,6 +2274,7 @@
         $('histScope').innerHTML = $('movScope').innerHTML;
         $('shrtScope').innerHTML = $('movScope').innerHTML;
         $('barScope').innerHTML = $('movScope').innerHTML;
+        $('linScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
         $('histSym').innerHTML = $('chtSym').innerHTML;
@@ -2205,7 +2290,7 @@
         const secOpts = '<option value="All">All sectors</option>' +
           Cards.sectors(stocks).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
         ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector', 'rngSector',
-          'sizeSector', 'bubSector', 'histSector', 'shrtSector', 'barSector'].forEach((id) => {
+          'sizeSector', 'bubSector', 'histSector', 'shrtSector', 'barSector', 'linSector'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = secOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -2219,7 +2304,7 @@
           Filters.CAP_ORDER.map((n) => `<option value="${esc(n)}">${esc(n)} · ` +
             `${esc(Filters.CAP_RANGE[n])}</option>`).join('');
         ['movCap', 'chtCap', 'advCap', 'fundCap', 'spkCap', 'rngCap',
-          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap'].forEach((id) => {
+          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap', 'linCap'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = capOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -2235,7 +2320,7 @@
             list.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') +
             '</optgroup>').join('');
         ['movScreen', 'chtScreen', 'advScreen', 'fundScreen', 'spkScreen', 'rngScreen',
-          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen'].forEach((id) => {
+          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen', 'linScreen'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = scrOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -2251,7 +2336,7 @@
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
           'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500',
-          'shrtSp500', 'barSp500'].forEach((id) => {
+          'shrtSp500', 'barSp500', 'linSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
