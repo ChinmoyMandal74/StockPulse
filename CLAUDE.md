@@ -2182,6 +2182,15 @@ Verified: **+18 checks** on the walk — termination over a weekend, one day per
 
 **And the same night Vercel raised a High Severity alert — a spike in 502s on the root route, 01:25 UTC.** Almost certainly self-inflicted and not the app: a 130-call loop holding functions, a 60-round `mode=all` filings refresh, and a 10-minute 224k-row bulk write into the production Turso, all at once. The site was verified healthy afterwards (health 200 in 150ms, `/api/stocks` 200 in 4.9s, no stuck refresh flag, the nightly `complete` at 1182/1182). **The rule this leaves is the one already written for research reads**: heavy work aimed at production is not free, and three heavy things at once is an outage of your own making.
 
+##### The walk stalled on a Saturday, and the nightly walks it now (2026-10-08, owner: "looks like insider transaction is behind")
+**`/edgar` read 100 days behind.** The 2026 Q3 quarterly file had been published and not loaded (now loaded: 30,625 transactions), and nothing ran the daily walk. Both fixed; insider data is current through 2026-10-07.
+
+- **A DAY WITH NO INDEX ANSWERS 403, NOT 404.** Measured: `form.20261003.idx` (a Saturday) is 403 while the Friday and Monday either side are 200. The walk treated only 404 as "weekend or holiday", so both the local loader and the route stopped dead at the first weekend of the quarter. The earlier fixture stubbed 404, which is why its weekend test passed.
+- **403 IS ALSO WHAT A BLOCKED ADDRESS GETS**, so the two are told apart by a HEAD request for a day known to exist (`SEC_INDEX_REF`, 2026-07-01): 200 there means the address is fine and the day has no file; anything else is a block, and nothing is marked done.
+- **A weekday inside the last three days is never written off** — its index may simply not be published yet. Marking it done would skip a real day for ever. The walk stops there and says so.
+- **`insiderRotate()` is a fifth phase in the nightly tail**, before splits: one day per call, up to `INSIDER_MAX_DAYS` (6) a run. `POST /api/insider/daily` accepts the cron secret beside an admin session. A throttle or error stops it for that run with the cursor unmoved. **A long gap still belongs to `insider-load.js`**, and a new quarter's file still has to be loaded by hand when it is published.
+- Verified: **8 checks** (`insider403-test.js`), three reverts all biting; `tail-test.js` corrected for the fifth phase. `insider-daily-test.js` still fails 2, both about the catch-up control having moved from `/admin` to `/edgar` that morning.
+
 ### Short interest — FINRA's bi-weekly position, on its own card (2026-09-28, owner's request)
 
 **A third card on `/stock`: how much of the company is sold short, how many days of volume that is, and where today sits in its own eight-year range.** Asked for as *"just download this data and show on the individual page for the time being and not use it anywhere else"* — so it is display only, loaded locally, and production never talks to FINRA at all.

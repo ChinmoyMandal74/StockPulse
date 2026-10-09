@@ -216,7 +216,7 @@
         fact('Quarterly files loaded', num(ins.loaded), ins.from ? ins.from + ' – ' + ins.to : ''),
         fact('Topped up to', ins.through, ago(ins.through)),
         fact('Behind', ins.behind == null ? '—' : ins.behind + ' days', '', ins.behind > 7)],
-      '<b>Nothing keeps this up to date on its own.</b> The history comes from the SEC’s quarterly data sets, published after each quarter ends and loaded from your machine '
+      '<b>Kept up to date</b> by the nightly run, which walks the days since its last run (up to six a run). The history comes from the SEC’s quarterly data sets, published after each quarter ends and loaded from your machine '
       + '(a 60MB file has no business in a web request). The button below walks the days since, one day per call. '
       + 'For a gap of more than a week or two, load the newest quarter first — a long walk here is thousands of SEC requests and has been rate-limited before.',
       '<button class="btn warm" type="button" data-run="insider"' + (ins.loaded ? '' : ' disabled') + '>Catch up to yesterday</button>'

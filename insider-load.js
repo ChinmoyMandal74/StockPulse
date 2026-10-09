@@ -36,6 +36,13 @@ const DAILY = has('--daily');
 // The SEC asks for at most ten requests a second and throttles sustained
 // access below that. 130ms is about 7/s and has not been refused.
 const PACE = Math.max(60, Number(val('--pace', 130)));
+// A DAY WITH NO INDEX ANSWERS 403, NOT ONLY 404 (measured 2026-10-08: Saturday
+// 2026-10-03 is 403 while the Friday and the Monday either side are 200). 403
+// is also what a blocked address gets, so the two are told apart by asking for
+// a day KNOWN to exist: if that answers 200 the address is fine and the day
+// simply has no file. A weekday inside the last two days is never written off
+// this way -- its index may just not be published yet.
+const SEC_INDEX_REF = 'https://www.sec.gov/Archives/edgar/daily-index/2026/QTR3/form.20260701.idx';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // The SEC wants a contact string and refuses an undeclared bot. Same
@@ -161,7 +168,16 @@ async function walkDays(limit) {
       '/' + q + '/form.' + next.replace(/-/g, '') + '.idx';
     const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(60000) });
     await sleep(PACE);
-    if (res.status === 404) {                       // weekend or holiday
+    let none = res.status === 404;
+    if (res.status === 403) {
+      const ref = await fetch(SEC_INDEX_REF, { method: 'HEAD', headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(60000) }).catch(() => null);
+      await sleep(PACE);
+      none = !!(ref && ref.ok);
+    }
+    const dow = new Date(next + 'T12:00:00Z').getUTCDay();
+    const settled = dow === 0 || dow === 6 || (Date.now() - Date.parse(next)) / 86400000 >= 3;
+    if (none && !settled) { console.log(next + '  no index yet — it may not be published; stopping here'); break; }
+    if (none) {                                     // weekend or holiday
       if (COMMIT) await store.writeInsiderDay(next);
       day = next; empty++; continue;
     }

@@ -11316,7 +11316,19 @@ app.get('/api/insider', requireAuth, route(async (req, res) => {
 // the day done, which is the worst of both.
 const SEC_DAY_MAX = 900;
 
-app.post('/api/insider/daily', requireAdmin, route(async (req, res) => {
+// A DAY WITH NO INDEX ANSWERS 403, NOT ONLY 404 (measured 2026-10-08: Saturday
+// 2026-10-03 is 403 while the Friday and the Monday either side are 200). 403
+// is also what a blocked address gets, so the two are told apart by asking for
+// a day KNOWN to exist: if that answers 200 the address is fine and the day
+// simply has no file. A weekday inside the last two days is never written off
+// this way -- its index may just not be published yet.
+const SEC_INDEX_REF = 'https://www.sec.gov/Archives/edgar/daily-index/2026/QTR3/form.20260701.idx';
+
+// The cron secret satisfies this beside an admin session (2026-10-08): the
+// nightly driver walks the days since its last run, so the card no longer
+// reads "nothing keeps this up to date on its own".
+app.post('/api/insider/daily', route(async (req, res) => {
+  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'No.' });
   if (!SEC_READY) {
     return res.status(400).json({ error: 'No contact address configured. Set MAIL_FROM, REPORT_TO or SEC_UA.' });
   }
@@ -11350,7 +11362,17 @@ app.post('/api/insider/daily', requireAdmin, route(async (req, res) => {
   const idxRes = await fetch(url, { headers: head, signal: AbortSignal.timeout(SEC_TIMEOUT_MS) });
   // A WEEKEND OR A HOLIDAY HAS NO INDEX, and that is not a failure — the day
   // still has to be marked done or the walk stalls on the first Saturday.
-  if (idxRes.status === 404) {
+  let noIndex = idxRes.status === 404;
+  if (idxRes.status === 403) {
+    const ref = await fetch(SEC_INDEX_REF, { method: 'HEAD', headers: head, signal: AbortSignal.timeout(SEC_TIMEOUT_MS) }).catch(() => null);
+    noIndex = !!(ref && ref.ok);
+  }
+  const dow = new Date(next + 'T12:00:00Z').getUTCDay();
+  const settled = dow === 0 || dow === 6 || (Date.now() - Date.parse(next)) / 86400000 >= 3;
+  if (noIndex && !settled) {
+    return res.json({ done: true, day: null, through: day, remaining: 0, skipped: 'the index for ' + next + ' is not published yet' });
+  }
+  if (noIndex) {
     await store.writeInsiderDay(next);
     return res.json({ done: remaining === 0, day: next, filings: 0, rows: 0,
       skipped: 'no index (weekend or holiday)', remaining });

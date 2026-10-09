@@ -91,6 +91,8 @@ const SEC_GAP_MS = Number(process.env.NIGHTLY_SEC_GAP_MS) || 1500;
 // apart -- each call is up to 400 of the 610 credits a minute.
 const SPLIT_MAX_CALLS = Number(process.env.SPLIT_MAX_CALLS) || 5;
 const SPLIT_GAP_MS = Number(process.env.NIGHTLY_SPLIT_GAP_MS) || 65000;
+// Insider filings: one day of the SEC daily index per call, at most this many a run.
+const INSIDER_MAX_DAYS = Number(process.env.INSIDER_MAX_DAYS) || 6;
 
 // Read .env directly rather than depending on the process environment: a
 // scheduled task starts with almost none of the shell's, and the secret has no
@@ -406,6 +408,37 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
     // The night still reports FAILED and still exits 1. The rotation really did
     // fail, and a green task would hide that. What changes is only that three
     // unrelated subsystems no longer fail with it.
+    // INSIDER TRANSACTIONS, the days since the last walk. One day per call;
+    // a weekend or holiday is a call that fetches nothing. A throttle or an
+    // error stops it for this run -- the cursor has not moved, so the next
+    // run resumes at the same day. A long gap still belongs to
+    // insider-load.js on this machine.
+    async function insiderRotate() {
+      let days = 0; let rows = 0; let through = null;
+      for (let i = 0; i < INSIDER_MAX_DAYS; i += 1) {
+        let r; let text;
+        try {
+          r = await fetch(`${base}/api/insider/daily`, {
+            method: 'POST', signal: AbortSignal.timeout(290000),
+            headers: { Authorization: 'Bearer ' + secret },
+          });
+          text = await r.text();
+        } catch (e) {
+          say(`insider    stopped -- ${e.name === 'TimeoutError' ? 'timed out' : e.message}`);
+          break;
+        }
+        let j = null; try { j = JSON.parse(text); } catch { /* not json */ }
+        if (r.status === 403 || r.status === 404) { say('insider    skipped -- older server'); return; }
+        if (!r.ok || !j) { say(`insider    stopped -- HTTP ${r.status} ${String(text).slice(0, 110)}`); break; }
+        if (j.throttled) { say('insider    stopped -- the SEC is rate-limiting; resumes next run'); break; }
+        if (j.day) { days += 1; rows += Number(j.rows || 0); through = j.day; }
+        if (j.skipped && !j.day) { say(`insider    ${j.skipped}`); break; }
+        if (j.done || !j.day) break;
+        await sleep(SEC_GAP_MS);
+      }
+      say(days ? `insider    ${days} day(s) walked through ${through}, ${rows} transactions` : 'insider    up to date');
+    }
+
     // SPLIT HISTORY, kept current: a newly added stock, or one whose profile
     // now names a split newer than any stored. Usually nothing is due and this
     // is one call that fetches nothing. Non-fatal, and a 404 is an older server.
@@ -439,14 +472,14 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
     async function tailPhases(why) {
       if (tailDone) return;
       tailDone = true;
-      if (why) say(`tail       ${why} -- running SEC, short interest, holdings and splits anyway`);
+      if (why) say(`tail       ${why} -- running SEC, short interest, holdings, insiders and splits anyway`);
       // EACH IS GUARDED SEPARATELY. One of them throwing must not cost the
       // other two their turn, which is the same mistake one level up that this
       // whole change exists to undo. All three are internally defensive today,
       // so reverting this loop currently fails nothing -- it is kept because
       // adding a FOURTH phase here is a one-line change, and a new phase is
       // exactly the thing likely to throw.
-      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['splits', splitRotate]]) {
+      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate]]) {
         try {
           await fn();
         } catch (e) {
