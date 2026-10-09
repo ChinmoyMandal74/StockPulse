@@ -7,7 +7,7 @@
 - The repository is **public**: this file, `docs/` and every commit message are world-readable.
 
 ## What this is
-A stock screener. Every symbol in the universe is measured the same way after every close — returns, trend, relative and volume readings, company fundamentals, and a mechanical Advice verdict that names the one rule that fired. State lives in **Turso** (hosted libSQL/SQLite, the SQLite fork — not the Rust engine rewrite). Price and fundamentals data come from the Twelve Data API (Pro plan). The owner (admin) manages the universe and refreshes data; members see a read-only cached snapshot; guests see twenty symbols.
+A stock screener. Every symbol in the universe is measured the same way after every close — returns, trend, relative and volume readings, company fundamentals, and a mechanical **Signal** that names the one rule that fired. State lives in **Turso** (hosted libSQL/SQLite, the SQLite fork — not the Rust engine rewrite). Price and fundamentals data come from the Twelve Data API (Pro plan). The owner (admin) manages the universe and refreshes data; members see a read-only cached snapshot; guests see twenty symbols.
 
 The repo/folder is `StockPulse`; the app is branded **Tickr Lab** in the UI. Production is `https://www.tickrlab.com` on Vercel.
 
@@ -26,7 +26,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 |---|---|
 | `server.js` | Express backend — every route, auth, data computation |
 | `db.js` | Turso persistence — every read and write goes through here |
-| `private/action.js` | **The Advice rules** (`ActionRules`) — ordered lists, first match wins. Shared by server and browser |
+| `private/action.js` | **The Signal rules** (`ActionRules`) — ordered lists, first match wins. Shared by server and browser |
 | `action-test.js` | One case per rule. Run after touching any rule |
 | `private/index.html` | The screener — single page, vanilla JS, no build step |
 | `private/rowcard.js` | `FIELD_SPEC`, the one field catalogue, plus hover card and chart SVG. Feeds `/stock`, tiles, phone, `/compare` |
@@ -36,7 +36,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `public/app.css` | Shared design system — tokens, bezel, buttons, table base |
 | `barmath.js`, `techrow.js` | Indicators from bars alone; the one backtest row builder |
 | `secfacts.js`, `insider.js`, `shortint.js`, `holdings.js`, `news.js` | Auxiliary data pulls (SEC filings, insiders, FINRA short interest, index membership, headlines) |
-| `adjusted.js` | Filings-fed Advice overlay for `/adjusted` and `/adjustedbacktest` (admin research) |
+| `adjusted.js` | Filings-fed Signal overlay for `/adjusted` and `/adjustedbacktest` (admin research) |
 | `analysis-db.js` | **Local SQLite copy of the archive for research.** `--full` rebuilds, no flag syncs, `--stats` reports |
 | `strategy-runs.js`, `single-data.js`, `lab-grid.js` | Offline builders writing derived JSON into `private/` |
 | `backfill-*.js`, `onboard.js`, `purge-orphans.js`, `*-load.js` | Local maintenance scripts — dry run by default, `--commit` to write |
@@ -52,7 +52,10 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 - **`public/` is served by Vercel's CDN without running any code — nothing there can be protected.** Anything needing a session lives in `private/`, mounted at the root behind `gateAssets`. The offline builders write into `private/`.
 - Vercel functions are stateless and are killed at about 300s. Nothing runs after the response: await every write that matters. Shared state lives in tables (`refresh_state`, `app_meta`), never process variables. Long work is one bounded batch per request with the caller looping.
 
-**The Advice engine is sacrosanct**
+**The Signal engine is sacrosanct** (the column was "Action", then "Advice", and is "Signal" since 2026-10-09)
+- **Six words, one rule set.** Very Weak · Weak · Neutral · Strong – Elevated Risk · Strong · Very Strong (the dash is an en dash). They replaced Sell Immediately / Avoid / Hold / Buy with Risk / Buy / Strong Buy as a legal precaution: a reading of strength, not an instruction to trade. **Never reintroduce buy, sell or hold wording** on any surface, including card glosses and tooltips.
+- **Stored rows still carry the old words** (`advice_state`, `tech_history`, old screens, alert sides). Anything read back from storage goes through `ActionRules.canon()` / `canonRow()`; a new read path of a stored verdict must too. Colour tests are `/Strong/` (up) and `/Weak/` (down).
+- Only Balanced is offered. The other presets remain in `action.js`, unused; `Cards.ADV_PROFILES` is the one list of what is live.
 - New data may feed display surfaces, never the verdict. Nothing new is read by `action.js` / `classify()`, stamped onto a snapshot row, or added to `CHAT_FIELDS` without an owner decision. Prove the boundary behaviourally (score with the field absent, present and lying; require identical verdicts), not by grep.
 - The rules are first-match-wins ordered lists, not a score. Sell/Avoid/Hold rules sit above every Buy rule. Thresholds may move; order may not.
 - Do not change verdict inputs at source to fix a display fault (`shortPctFloat`, `lastEarningsDate`, `nextEarningsDate`). Fix the display.
@@ -94,7 +97,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 
 ## Area gotchas worth knowing up front
 - **Adding a screener column** means editing, in step: header cell, body cell, the group banner `colspan`, `PAD_SPAN`, the error row (`PAD_SPAN - 5`), the empty row (`PAD_SPAN - 3`), the fund `naRun` count, and one `FIELD_SPEC` row. A miscount does not throw; it slides every later value one column over. A profile field reaches the row only if `computeStocks` names it. See `column-groups.md`.
-- **Stored keys are never renamed** — group ids, `group|label` keys, card template ids, control ids, screen ids (exactly eight lowercase alphanumerics). Labels are free. Internal names still say `action` where the UI says Advice; leave them.
+- **Stored keys are never renamed** — group ids, `group|label` keys, card template ids, control ids, screen ids (exactly eight lowercase alphanumerics). Labels are free. Internal names still say `action` and `advice` where the UI says Signal; leave them. The field key is `act|Signal` (`act|Advice` is read as it).
 - **Read-path stamps are a set** (`stampShortNames`, `stampAdviceAge`, `stampPricedAt`, `stampCapDerived`, `stampAthDistance`, `stampSpMember`, `stampPeerValue`). Any new read path applies all of them, each with its own catch.
 - **`/api/stocks` re-derives the verdict; `/api/stock` serves the stored one.** Test fixtures differ accordingly.
 - **Backtests:** one row builder (`techrow.js`); filter filings on `filed`, never `periodEnd`; the `bt*` helpers are shared by `/backtest` and `/adjustedbacktest`; `/backtest` has a two-month hard cap; maximum hold is one to two months (owner). If a result improves after the universe shrinks, suspect the universe.
@@ -134,7 +137,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Refreshing** — `the-refresh-budget` · `a-live-price-pull-is-shallow` · `fast-refresh` · `fill-missing` · `intraday-price-refreshes` · `refresh-runs` · `refresh-state` · `the-nightly-job` · `bar-archive` · `price-as-of`
 
-**Advice and research** — `the-advice-column` · `does-any-of-this-predict-anything` · `the-advice-backtest` · `adjusted-advice` · `the-adjusted-backtest` · `the-trend-only-backtest` · `the-strategy-backtest` · `the-single-stock-strategy` · `the-indicator-lab`
+**Signal and research** (file names keep the old word) — `the-advice-column` · `does-any-of-this-predict-anything` · `the-advice-backtest` · `adjusted-advice` · `the-adjusted-backtest` · `the-trend-only-backtest` · `the-strategy-backtest` · `the-single-stock-strategy` · `the-indicator-lab`
 
 **Regulatory and auxiliary data** — `sec-edgar` (140 KB: also insiders, FINRA short interest, index membership, the add-gate, the FUND/EARN/SHORT chart strips) · `the-sec-edgar-data-page` · `news` · `logos` (removed)
 

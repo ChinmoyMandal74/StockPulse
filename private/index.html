@@ -171,18 +171,18 @@
     td.name.cellfil:hover { color: var(--text); text-decoration: underline;
       text-decoration-color: var(--hair-2); text-underline-offset: 2px; }
     td.av-col { font-size: 11.5px; }
-    td.act.a-strong-buy { color: var(--green); font-weight: 700; }
-    td.act.a-buy { color: var(--green); }
-    td.act.a-buy-with-risk { color: color-mix(in srgb, var(--green) 55%, var(--muted)); }
-    td.act.a-hold { color: var(--muted); }
-    td.act.a-avoid { color: color-mix(in srgb, var(--red) 70%, var(--muted)); }
-    td.act.a-sell-immediately { color: var(--red); font-weight: 700; }
-    /* the same ladder colours, as dots in the Advice quick filter */
+    td.act.a-very-strong { color: var(--green); font-weight: 700; }
+    td.act.a-strong { color: var(--green); }
+    td.act.a-strong-elevated-risk { color: color-mix(in srgb, var(--green) 55%, var(--muted)); }
+    td.act.a-neutral { color: var(--muted); }
+    td.act.a-weak { color: color-mix(in srgb, var(--red) 70%, var(--muted)); }
+    td.act.a-very-weak { color: var(--red); font-weight: 700; }
+    /* the same ladder colours, as dots in the Signal quick filter */
     .adot { width: 7px; height: 7px; border-radius: 50%; flex: none; display: inline-block; background: var(--muted); }
-    .adot.a-strong-buy, .adot.a-buy { background: var(--green); }
-    .adot.a-buy-with-risk { background: color-mix(in srgb, var(--green) 55%, var(--muted)); }
-    .adot.a-avoid { background: color-mix(in srgb, var(--red) 70%, var(--muted)); }
-    .adot.a-sell-immediately { background: var(--red); }
+    .adot.a-very-strong, .adot.a-strong { background: var(--green); }
+    .adot.a-strong-elevated-risk { background: color-mix(in srgb, var(--green) 55%, var(--muted)); }
+    .adot.a-weak { background: color-mix(in srgb, var(--red) 70%, var(--muted)); }
+    .adot.a-very-weak { background: var(--red); }
     /* and the same idea for the direction of a move — Unchanged keeps the muted default */
     .adot.mv-upgraded { background: var(--green); }
     .adot.mv-downgraded { background: var(--red); }
@@ -668,7 +668,7 @@
 
     /* A tint down the whole column, not a border per cell: a bottom rule on
        every row draws a line between each pair of them and reads as a ladder. */
-    /* The Advice rules profile: when it is not Balanced the six Advice
+    /* The Signal rules profile: when it is not Balanced the six Signal
        columns are re-scored in the browser, and the tint says so — a changed
        verdict must not look like the shared Balanced one. */
     /* Non-Balanced advice columns carry the tint — the shared measurement
@@ -801,7 +801,7 @@
        on 2026-09-16: the Changed chip filtered to exactly these rows, and the
        per-column chevron still marks which verdict moved, so the bar was a
        third way of saying the same thing. The chip itself went on 2026-09-23,
-       replaced by the Advice move picker, which says WHICH WAY as well. */
+       replaced by the Signal move picker, which says WHICH WAY as well. */
     /* The frozen name column: the link ellipsizes, the pencil sits beside it.
        Width comes from .frz1 above, not from here — this cell IS that column
        now that Name has gone, and two different widths would fight. */
@@ -825,7 +825,7 @@
                 stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
     .momarrow.up { stroke: var(--green); transform: rotate(180deg); }
     .momarrow.down { stroke: var(--red); }
-    /* The Advice change marker: same chevron language, on the other side of
+    /* The Signal change marker: same chevron language, on the other side of
        the word. It marks a verdict that moved since the previous session. */
     .advchg { width: 11px; height: 11px; margin-right: 3px; vertical-align: -1px; }
     .advchg.up { stroke: var(--green); transform: rotate(180deg); }
@@ -1148,7 +1148,7 @@
         </div>
         <div class="picker" id="advPicker" data-open="0">
           <button class="btn picker-btn" id="advBtn" aria-haspopup="listbox" aria-expanded="false"></button>
-          <div class="picker-menu" id="advMenu" role="listbox" aria-label="Balanced advice"></div>
+          <div class="picker-menu" id="advMenu" role="listbox" aria-label="Signal"></div>
         </div>
         <!-- Which way the Balanced verdict went since the previous session.
              This was a Changed chip — an on/off toggle meaning "moved either
@@ -1156,7 +1156,7 @@
              the choices rather than lost to the split. -->
         <div class="picker" id="movePicker" data-open="0" style="display:none">
           <button class="btn picker-btn" id="moveBtn" aria-haspopup="listbox" aria-expanded="false"></button>
-          <div class="picker-menu" id="moveMenu" role="listbox" aria-label="Advice move"></div>
+          <div class="picker-menu" id="moveMenu" role="listbox" aria-label="Signal move"></div>
         </div>
         <button class="btn picker-btn" id="fltBtn" aria-pressed="false"></button>
         <!-- The promo studio, open to every account since 2026-09-15 (the
@@ -1479,7 +1479,7 @@
         <th rowspan="2" class="left frz frz1" data-key="shortName" title="What a person would call it — shortened from the legal name by rule, and editable by the owner. The full legal name is in the tooltip on each row.">Name</th>
         <th class="group grp-info" data-group="info" colspan="11">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="1">Scores</th>
-        <th class="group grp-act" data-group="act" colspan="12">Advice</th>
+        <th class="group grp-act" data-group="act" colspan="8">Signal</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="8">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="5">Long-term %</th>
@@ -1497,8 +1497,8 @@
         <th class="left grp-info" data-key="sector">Sector</th>
         <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — Twelve Data's own taxonomy, not GICS.">Industry</th>
         <th class="left grp-info" data-key="exchange" title="Where the stock actually trades, with its MIC and trading currency on the cell. Stored on the profile rather than read from the price call, so it survives a round that prices from the archive. NOTE: the currency here is the TRADING one — an ADR trades in USD while its financials are in the home currency, so this does not tell you what the money columns are denominated in.">Exchange</th>
-        <th class="left grp-info" data-key="instrumentType" title="What the instrument IS, from the provider's own free reference list: Common Stock, Preferred Stock, American Depositary Receipt, Limited Partnership, REIT or ETF. It exists because a NAME cannot be trusted for this — BNS is stored as 'Bank Nova Scotia Halifax Pfd 3' and is Scotiabank's common stock, while a subordinated note can read as ordinary equity. Filter on it to find anything that is not common stock. It states the fact only: nothing in the Advice engine reads it.">Instrument</th>
-        <th class="left grp-info" data-key="spMember" title="Which index the stock is in: the S&amp;P 500, the Nasdaq 100, both or neither. Each comes from the index fund's own daily holdings file (SPY and QQQ), the closest published source there is, and the cell names the date. An em-dash means a holdings file has not been imported yet, which is NOT the same as being in neither. The index WEIGHT is deliberately not here: it stays on the admin holdings page. Nothing in the Advice engine reads this.">Index</th>
+        <th class="left grp-info" data-key="instrumentType" title="What the instrument IS, from the provider's own free reference list: Common Stock, Preferred Stock, American Depositary Receipt, Limited Partnership, REIT or ETF. It exists because a NAME cannot be trusted for this — BNS is stored as 'Bank Nova Scotia Halifax Pfd 3' and is Scotiabank's common stock, while a subordinated note can read as ordinary equity. Filter on it to find anything that is not common stock. It states the fact only: nothing in the Signal engine reads it.">Instrument</th>
+        <th class="left grp-info" data-key="spMember" title="Which index the stock is in: the S&amp;P 500, the Nasdaq 100, both or neither. Each comes from the index fund's own daily holdings file (SPY and QQQ), the closest published source there is, and the cell names the date. An em-dash means a holdings file has not been imported yet, which is NOT the same as being in neither. The index WEIGHT is deliberately not here: it stays on the admin holdings page. Nothing in the Signal engine reads this.">Index</th>
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
         <th class="left grp-info" data-key="capBand" title="The size band, from the market cap beside it: Mega $200B+, Large $50-200B, Mid-Large $10-50B, Mid $2-10B, Small $300M-2B, Micro under $300M. The $50B line inside Large is this site's own cut, not a standard — without it 69% of the screen sat in one bucket. Thresholds are fixed, never derived from the current universe. Blank for ETFs, which report AUM rather than capitalisation.">Size</th>
         <th class="grp-info" data-key="newsAge" title="How long ago the latest stored headline was published, and how many this stock has from the last week. Click a cell to read them. A dot means we have not checked this stock yet — headlines are fetched a few stocks at a time.">News</th>
@@ -1508,14 +1508,10 @@
         <th class="grp-act left" data-key="actionTrend" title="The price-trend reading, one word — the most severe condition that holds, on the same ladder the rules check: Breakdown → Downtrend → Below 200D → Above 200D → Strong uptrend. Trend answers whether you may.">Trend</th>
         <th class="grp-act left" data-key="actionEntry" title="The timing reading: Clean (a base or shallow pullback with RSI 45–65), Clean near the high, Extended (up too far, too fast — do not chase), or None. Entry answers whether now.">Entry</th>
         <th class="grp-act left" data-key="actionFund" title="The fundamentals bucket under this stock's rule set — Strong, OK, Weak, or — when the data makes no case either way. Established is judged on earnings, revenue, margins and cash flow; Early on growth, gross margin, burn and short interest. Fundamentals answer how much conviction.">Fund.</th>
-        <th class="grp-act left" data-key="actionGuards" title="Reasons to wait that override everything below a Sell: earnings within the blackout window, or too little price history to judge. Blank for most stocks — when this column speaks, it matters.">Guards</th>
-        <th class="grp-act left av-col av-balanced" data-key="av:Balanced" title="What the Balanced rules — the defaults every shared surface uses — conclude for this stock today. The other four profiles sit beside it. First matching rule wins, and each cell's tooltip names the rule that fired.">Balanced</th>
-        <th class="grp-act left av-col avx av-trend-rider" data-key="av:Trend Rider" title="Trend Rider's advice: chases further (1M +40%, RSI 78), Early may reach Strong Buy, exits stay Balanced.">Trend Rider</th>
-        <th class="grp-act left av-col avx av-aggressive" data-key="av:Aggressive" title="Aggressive's advice: stops widen to −15% (Early −8%), chase to +35%, blackout 3 days, Early reaches Buy on OK fundamentals.">Aggressive</th>
-        <th class="grp-act left av-col avx av-max-risk" data-key="av:Max Risk" title="Max Risk's advice: widest stops (−20%), chase caps nearly off, Buy to −30% below the high. Still never buys below the 200D.">Max Risk</th>
-        <th class="grp-act left av-col avx av-dip-buyer" data-key="av:Dip Buyer" title="Dip Buyer's advice: may buy below the 200D (capped at Buy with Risk). The research log does not endorse the mode.">Dip Buyer</th>
-        <th class="grp-act" data-key="actionCushion" title="How far the rules let this stock fall before they exit, measured in its OWN monthly volatility — so it is comparable between a quiet stock and a wild one, which the raw percentage is not. It orders TAIL SIZE inside an advice tier, not return: over 307,965 stock-days the higher-cushion half of a tier had a thinner 10th-percentile loss in every era and horizon tested, while the average return difference stayed noise. Sorting by an advice column breaks ties on it.">Cushion</th>
-        <th class="grp-act" data-key="adviceDays" title="Market days the Balanced verdict has stood. A reading that has held for weeks is a different proposition from one that turned this morning, and the chevron beside the verdict only says that it moved since the last close. It counts once a day, after the close — counting on the intraday rounds would advance it on a provisional bar and reset the run whenever a verdict flapped over lunch. A ≥ means the verdict has held since this column started watching: the run before that could not be recovered, because only one day of technicals is stored and a verdict replay needs fundamentals, which begin at the end of August.">Days held</th>
+        <th class="grp-act left" data-key="actionGuards" title="Timing guards that cap the signal at Neutral: earnings within the blackout window, or too little price history to judge. Blank for most stocks — when this column speaks, it matters.">Guards</th>
+        <th class="grp-act left av-col av-balanced" data-key="av:Balanced" title="What the fixed rules read for this stock today. A mechanical reading of the table, not a recommendation. First matching rule wins, and the cell's tooltip names the rule that fired.">Signal</th>
+        <th class="grp-act" data-key="actionCushion" title="How far the rules let this stock fall before they exit, measured in its OWN monthly volatility — so it is comparable between a quiet stock and a wild one, which the raw percentage is not. It orders TAIL SIZE inside a signal tier, not return: over 307,965 stock-days the higher-cushion half of a tier had a thinner 10th-percentile loss in every era and horizon tested, while the average return difference stayed noise. Sorting by an advice column breaks ties on it.">Cushion</th>
+        <th class="grp-act" data-key="adviceDays" title="Market days the signal has stood. A reading that has held for weeks is a different proposition from one that turned this morning, and the chevron beside the verdict only says that it moved since the last close. It counts once a day, after the close — counting on the intraday rounds would advance it on a provisional bar and reset the run whenever a verdict flapped over lunch. A ≥ means the verdict has held since this column started watching: the run before that could not be recovered, because only one day of technicals is stored and a verdict replay needs fundamentals, which begin at the end of August.">Days held</th>
         <th class="grp-chart" data-col="spark90" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
         <th class="grp-short" data-key="pricedAt" title="When this stock’s price was last fetched from the provider — a per-symbol clock, not the time the refresh ran. The two differ: price rounds are paced once the universe is large, so a round prices only the slice that fits inside the minute and reads the rest from the archive. It says we ASKED, which is a different fact from whether anything came back — a stock can be pulled on time and still carry a stale close, so read it beside the bar date rather than instead of it. Amber past a day.">Price<br>pulled</th>
         <th class="grp-short" data-key="todayPct">Today</th>
@@ -1555,7 +1551,7 @@
         <th class="grp-trend" data-key="vs200ma" title="Price vs 200-day moving average">vs 200D<br>MA</th>
         <th class="left grp-trend" data-key="maCrossRank" title="50/200-day MA cross: Golden (50 above 200) or Death, with trading days since the last cross">MA<br>Cross</th>
         <th class="grp-trend" data-key="macdHist" title="MACD histogram (12/26/9) = MACD line − signal; positive = bullish">MACD</th>
-        <th class="grp-trend" data-key="aoPct" title="Awesome Oscillator: the 5-day average of each day&#39;s midpoint, (high + low) / 2, less the 34-day average, shown as a percentage of the price so stocks can be compared. Above zero means the last week has run ahead of the last seven weeks. Not an input to Advice.">Awesome<br>Osc</th>
+        <th class="grp-trend" data-key="aoPct" title="Awesome Oscillator: the 5-day average of each day&#39;s midpoint, (high + low) / 2, less the 34-day average, shown as a percentage of the price so stocks can be compared. Above zero means the last week has run ahead of the last seven weeks. Not an input to Signal.">Awesome<br>Osc</th>
         <th class="grp-size" data-key="revenueTtm" title="Revenue, trailing twelve months (sum of the last 4 reported quarters), in the company's own reporting currency — do not compare across currencies">Revenue<br>TTM</th>
         <th class="grp-size" data-key="grossProfitTtm" title="Gross profit, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">Gross<br>Profit</th>
         <th class="grp-size" data-key="grossMargin" title="Gross profit ÷ revenue, both trailing twelve months — derived from the two columns to the left so the numbers reconcile">Gross<br>Margin</th>
@@ -1671,7 +1667,7 @@
     // Labels live here so adding a group later is: append to GROUPS, give it a
     // colour and a label, and tag the <th>/<td> cells with .grp-<id>.
     const GROUP_LABELS = {
-      info: 'Info', rank: 'Scores', act: 'Advice', chart: 'Chart',
+      info: 'Info', rank: 'Scores', act: 'Signal', chart: 'Chart',
       short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
       rel: 'Relative', trend: 'Trend',
       // Scale, not Size: there is a Size COLUMN in Info (the cap band), and a
@@ -1904,7 +1900,7 @@
       let warn = '';
       if (thin || stale) {
         const notes = [];
-        if (thin) notes.push(`only ${s.historyDays} days of history — longer-period columns and Buy Rating need more`);
+        if (thin) notes.push(`only ${s.historyDays} days of history — longer-period columns and the Quality score need more`);
         if (stale) notes.push(`price data is from ${s.latestDate}, behind the latest (${freshest})`);
         title = notes.join(' · ');
         warn = ' <span class="warn" title="See tooltip"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-warn" /></svg></span>';
@@ -3260,7 +3256,7 @@
     }
 
     // Verdicts present in the tab, sector and industry in force, in ladder
-    // order from Strong Buy down, with counts.
+    // order from Very Strong down, with counts.
     function renderAdviceMenu() {
       const inScope = tabStocks().filter((s) => (sectorFilter === 'All' || s.sector === sectorFilter)
         && (industryFilter === 'All' || s.industry === industryFilter));
@@ -3275,16 +3271,15 @@
       const row = (val, label, n) =>
         `<button class="pick ${adviceFilter === val ? 'on' : ''}" data-adv="${we(val)}" role="option" ` +
         `aria-selected="${adviceFilter === val}">` +
-        (val === 'All' ? '' : `<span class="adot a-${val.toLowerCase().replace(/ /g, '-')}"></span>`) +
+        (val === 'All' ? '' : `<span class="adot a-${val.toLowerCase().replace(/[^a-z]+/g, '-')}"></span>`) +
         `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>`;
       const note = blank
         ? `${blank} ${blank === 1 ? 'row has' : 'rows have'} no verdict yet — not enough data for the rules to read.`
         : '';
       $('advMenu').innerHTML = '<div class="picker-inner">' +
-        row('All', 'All advice', inScope.length) +
+        row('All', 'All signals', inScope.length) +
         names.map((n) => row(n, n, counts[n] || 0)).join('') +
-        '<div class="pick-sep"></div><div class="pick-hint">The Balanced rules — the advice column that is always shown. ' +
-        'Other profiles can be filtered from the filter row.' + (note ? ' ' + we(note) : '') + '</div>' +
+        '<div class="pick-sep"></div><div class="pick-hint">What the fixed rules read today.' + (note ? ' ' + we(note) : '') + '</div>' +
         '</div>';
       $('advMenu').querySelectorAll('[data-adv]').forEach((b) => {
         b.addEventListener('click', () => {
@@ -3363,7 +3358,7 @@
       let blank = 0;
       inScope.forEach((s) => { if (s.capBand) counts[s.capBand] = (counts[s.capBand] || 0) + 1; else blank++; });
       // The LADDER, not the alphabet — and EVERY band is offered even at zero,
-      // which is where this differs from the Advice and Sector menus. Those
+      // which is where this differs from the Signal and Sector menus. Those
       // list what is present because their value sets are open-ended and long;
       // this one is a fixed ladder of six, so hiding the empty ones would make
       // a short control move under the pointer as the table narrowed, and
@@ -3412,13 +3407,13 @@
       const on = adviceFilter !== 'All';
       $('advBtn').innerHTML =
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-check" /></svg>' +
-        '<span class="picker-label">Advice</span>' +
+        '<span class="picker-label">Signal</span>' +
         `<span class="count">${on ? we(adviceFilter) : 'All'}</span>` +
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
       $('advBtn').classList.toggle('on', on);
       $('advBtn').title = on
-        ? `Showing Balanced “${adviceFilter}” only — open to change or clear`
-        : 'Filter the table to one Balanced verdict';
+        ? `Showing “${adviceFilter}” only — open to change or clear`
+        : 'Filter the table to one signal';
     }
 
     function renderIndustryTrigger() {
@@ -3477,8 +3472,8 @@
         row('Upgraded', 'Upgraded', counts.Upgraded) +
         row('Unchanged', 'Unchanged', counts.Unchanged) +
         row('Downgraded', 'Downgraded', counts.Downgraded) +
-        '<div class="pick-sep"></div><div class="pick-hint">The Balanced verdict against the previous ' +
-        'close. An upgrade is a step up the ladder, Strong Buy being the top.' + (note ? ' ' + we(note) : '') +
+        '<div class="pick-sep"></div><div class="pick-hint">The signal against the previous ' +
+        'close. An upgrade is a step up the ladder, Very Strong being the top.' + (note ? ' ' + we(note) : '') +
         '</div></div>';
       $('moveMenu').querySelectorAll('[data-move]').forEach((b) => {
         b.addEventListener('click', () => {
@@ -3500,7 +3495,7 @@
       const on = moveFilter !== 'All';
       $('moveBtn').innerHTML =
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh-all" /></svg>' +
-        '<span class="picker-label">Advice move</span>' +
+        '<span class="picker-label">Signal move</span>' +
         `<span class="count">${on ? we(moveFilter) : 'Any'}</span>` +
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
       $('moveBtn').classList.toggle('on', on);
@@ -3529,7 +3524,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="102">${s.error}</td>
+            <td class="na" colspan="98">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3567,7 +3562,7 @@
           ${entryCell(s)}
           ${stateCell(s.actionFund, FUND_DANGER, 'fund')}
           ${guardsCell(s)}
-          ${adviceCell(s, 'Balanced')}${adviceCell(s, 'Trend Rider')}${adviceCell(s, 'Aggressive')}${adviceCell(s, 'Max Risk')}${adviceCell(s, 'Dip Buyer')}
+          ${adviceCell(s, 'Balanced')}
           ${cushionCell(s)}
           ${heldCell(s)}
           <td class="spark grp-chart" data-spark="${s.symbol}">${sparkCache[s.symbol] || ''}</td>
@@ -3672,7 +3667,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 107;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 103;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3753,7 +3748,7 @@
         to: art ? art.to : null,
         rangeLabel: tileRangeLabel(),
         verdict: v && tileCfg.verdict
-          ? { word: v, cls: /Buy/.test(v) ? 'up' : /Sell|Avoid/.test(v) ? 'dn' : '',
+          ? { word: v, cls: /Strong/.test(v) ? 'up' : /Weak/.test(v) ? 'dn' : '',
               why: [tileCfg.trend ? s.actionTrend : '', tileCfg.why ? s.actionFlag : '']
                 .filter(Boolean).join(' · ') }
           : null,
@@ -3845,15 +3840,15 @@
           : moveFilter === 'Moved'
           ? `Every verdict in ${where} held since the previous session — nothing moved to show.`
           : moveFilter !== 'All'
-          ? `No verdict in ${where} was ${moveFilter.toLowerCase()} since the previous session.`
+          ? `No signal in ${where} was ${moveFilter.toLowerCase()} since the previous session.`
           : adviceFilter !== 'All'
-            ? `Nothing reads ${where} — clear the Advice filter to see the rest.`
+            ? `Nothing reads ${where} — clear the Signal filter to see the rest.`
           : narrowest !== 'All'
             ? `Nothing in ${where} — clear the ${industryFilter !== 'All' ? 'industry' : 'sector'} filter to see the rest.`
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="104">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="100">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -3889,7 +3884,7 @@
         : sortKey === 'capBand'
           ? (x.capBand ? Filters.CAP_ORDER.length - 1 - Filters.CAP_ORDER.indexOf(x.capBand) : null)
         : x[sortKey]);
-      // Sorting by an advice column leaves whole tiers tied — five Strong Buys
+      // Sorting by an advice column leaves whole tiers tied — five Very Strongs
       // in a row, in whatever order they happened to arrive. Cushion breaks
       // that tie, always thickest first whichever way the tier is sorted,
       // because it is a tail-size reading rather than a direction. It is the
@@ -4041,12 +4036,12 @@
       const extra = name === 'Balanced' ? '' : ' avx';
       const v = s.adviceBy && s.adviceBy[name];
       if (!v) return `<td class="act grp-act av-col ${slug}${extra}">—</td>`;
-      const cls = 'a-' + v.a.toLowerCase().replace(/ /g, '-');
+      const cls = 'a-' + v.a.toLowerCase().replace(/[^a-z]+/g, '-');
       const changed = v.prev && v.prev !== v.a;
       const up = changed && ActionRules.ACTIONS.indexOf(v.a) > ActionRules.ACTIONS.indexOf(v.prev);
       const tip = (v.f || v.a) + (changed ? ` — was ${v.prev} the previous trading day` : '');
       const mark = changed
-        ? `<svg class="advchg ${up ? 'up' : 'down'}" aria-label="Advice ${up ? 'raised' : 'lowered'} since the previous trading day" role="img"><use href="#i-chevron" /></svg>`
+        ? `<svg class="advchg ${up ? 'up' : 'down'}" aria-label="Signal ${up ? 'raised' : 'lowered'} since the previous trading day" role="img"><use href="#i-chevron" /></svg>`
         : '';
       return `<td class="act grp-act av-col ${slug}${extra} ${cls}" data-av="${we(name)}"${attr(tip)}>${mark}${we(v.a)}</td>`;
     }
@@ -4269,7 +4264,7 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 
-    // The five advice columns are permanent members of the Advice group since
+    // The five advice columns are permanent members of the Signal group since
     // 2026-09-15 — the Rules picker that toggled four of them was removed, and
     // choosing columns is the job of personal column views. What is left of
     // this function is the per-render hook the filter summary hangs off.
@@ -4788,7 +4783,7 @@
 
     // What a stored screen means by an advice move. `changed: true` is how the
     // Changed chip stored itself before 2026-09-23 and is exactly 'Moved'; the
-    // starter screen "Advice changed today" still carries it.
+    // starter screen "Signal changed today" still carries it.
     const screenMove = (d) => d.move || (d.changed ? 'Moved' : 'All');
 
     // The rows a screen keeps, from a starting set — the menu's live counts.
@@ -4990,7 +4985,7 @@
       }
       if (canEditScreens) {
         html += '<div class="pick-sep"></div><button class="pick" data-snew="1"><span class="nm">+ Save the table as a starter screen' +
-          '<em>Its filters, Sector / Industry / Advice picks, sort and columns</em></span></button>';
+          '<em>Its filters, Sector / Industry / Signal picks, sort and columns</em></span></button>';
       }
       html += (canFav()
         ? '<div class="pick-hint">The star keeps a screen at the top of this menu, for your account only.</div>'
@@ -5806,7 +5801,7 @@
     let tdDraft = null;
     const TILE_FIELDS_MAX = 6;     // the server's cap, restated so the dialog can show it
     const TD_TOGGLES = [
-      ['verdict', 'Advice verdict'], ['why', 'The rule that fired'], ['trend', 'Trend state'],
+      ['verdict', 'Signal'], ['why', 'The rule that fired'], ['trend', 'Trend state'],
       ['scores', 'Score chips'], ['sector', 'Sector chip'],
     ];
 
@@ -6295,7 +6290,7 @@
     // whichever profile is active. The choice is a per-user pref; the
     // snapshot, the nightly report, the assistant and the CSV's underlying
     // data all stay on Balanced, exactly like the weight lens.
-    const ADVICE_PROFILES = ['Balanced', 'Trend Rider', 'Aggressive', 'Max Risk', 'Dip Buyer'];
+    const ADVICE_PROFILES = ['Balanced'];   // one rule set since 2026-10-09
     // Which profile an open ladder panel is explaining — set by the advice
     // cell that was clicked; the state cells always open under Balanced,
     // since the four state columns are pinned to the shared rules.
@@ -6346,12 +6341,12 @@
     let apOpenFor = null, apAnchor = null, apBackSym = null, apModelTab = 'Established';
 
     const AP_ACT_CLS = {
-      'Strong Buy': 'ap-act-buy', 'Buy': 'ap-act-buy', 'Buy with Risk': 'ap-act-bwr',
-      'Hold': 'ap-act-hold', 'Avoid': 'ap-act-avoid', 'Sell Immediately': 'ap-act-sell',
+      'Very Strong': 'ap-act-buy', 'Strong': 'ap-act-buy', 'Strong – Elevated Risk': 'ap-act-bwr',
+      'Neutral': 'ap-act-hold', 'Weak': 'ap-act-avoid', 'Very Weak': 'ap-act-sell',
     };
     const AP_DOT = {
-      'Strong Buy': 'good', 'Buy': 'good', 'Buy with Risk': 'mid',
-      'Hold': 'hold', 'Avoid': 'bad', 'Sell Immediately': 'bad',
+      'Very Strong': 'good', 'Strong': 'good', 'Strong – Elevated Risk': 'mid',
+      'Neutral': 'hold', 'Weak': 'bad', 'Very Weak': 'bad',
     };
 
     function apFmt(v, unit) {
@@ -6468,7 +6463,7 @@
         `<button class="ap-tab" data-ap-tab="${t}" data-on="${t === apModelTab ? 1 : 0}">${t}</button>`).join('');
       const rungs = ActionRules.ladder(apModelTab, actionCfg());
       return '<div class="ap-core">' +
-        '<div class="ap-head"><span class="ap-sym">Advice model</span>' +
+        '<div class="ap-head"><span class="ap-sym">Signal model</span>' +
         `<span class="ap-verdict" style="color:var(--muted);font-weight:500">${we(panelProfile)} thresholds</span>` +
         '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>' +
         `<div class="ap-tabs">${tabs}</div>` +
@@ -6523,7 +6518,7 @@
         word = e.states.guards || 'None';
         body = e.families.guards.map(apFamRung).join('');
         note = e.states.guards
-          ? 'Guards are independent — any active one caps the verdict at Hold while it lasts.'
+          ? 'Guards are independent — any active one caps the signal at Neutral while it lasts.'
           : 'No guards active — nothing is holding this stock back on timing.';
       } else if (fam === 'fund' && e.type === 'ETF') {
         word = '—';
@@ -6542,7 +6537,7 @@
         `<div class="ap-chips"><span class="ap-chip">${we(FAM_TITLES[fam])} column</span>` +
         `<span class="ap-chip">Rules <b>${we(panelProfile)}</b></span>` +
         `<span class="ap-chip">Type <b>${we(e.type)}</b></span>` +
-        `<span class="ap-chip">Advice <b>${we(e.action)}</b></span></div>` +
+        `<span class="ap-chip">Signal <b>${we(e.action)}</b></span></div>` +
         body +
         `<div class="ap-note">${note}</div>` +
         (fam === 'entry' && breakoutNote(s)

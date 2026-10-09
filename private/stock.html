@@ -978,7 +978,7 @@
     #sec .fundv .k { color: var(--faint); font-size: 10.5px; text-transform: uppercase;
                      letter-spacing: 0.1em; }
     #sec .fundv .v { font-family: var(--mono); font-size: 16px; color: var(--text); }
-    /* COLOUR ONLY ON THE DANGER WORD, the Advice group's own rule — and AMBER
+    /* COLOUR ONLY ON THE DANGER WORD, the Signal group's own rule — and AMBER
        rather than red, because on this page red is the price falling and a
        weak balance sheet is not a price move. Amber already means "notice
        this" here. */
@@ -1693,8 +1693,8 @@
           : `<a class="namelink" href="/stock/${encodeURIComponent(r.symbol)}">${esc(r.name)}</a>`}
           <span class="sym">${esc(r.symbol)}</span>${me ? '<span class="here">this stock</span>' : ''}</td>
         ${cell(r.Price)}${cell(r.Today)}${cell(r['1Y'])}${cell(r['Market Cap'])}${cell(r['Fwd P/E'])}
-        <td class="av ${r.Advice ? (r.Advice.c || '') : 'na'}"${
-          r.why ? ` title="${esc(r.why)}"` : ''}>${esc(r.Advice ? r.Advice.t : '—')}</td>
+        <td class="av ${r.Signal ? (r.Signal.c || '') : 'na'}"${
+          r.why ? ` title="${esc(r.why)}"` : ''}>${esc(r.Signal ? r.Signal.t : '—')}</td>
         <td class="cmp">${me ? '' : `<a class="rng" href="/compare/${encodeURIComponent(sym)}/${
           encodeURIComponent(r.symbol)}" title="Open ${esc(r.symbol)} beside ${esc(sym)} — every field, side by side">vs</a>`}</td>
       </tr>`;
@@ -1708,7 +1708,7 @@
           <p class="summary">${basis}</p>
           <div class="ptab"><table>
             <thead><tr><th>Company</th><th>Price</th><th>Today</th><th>1Y</th>
-              <th>Market cap</th><th>Fwd P/E</th><th>Advice</th><th></th></tr></thead>
+              <th>Market cap</th><th>Fwd P/E</th><th>Signal</th><th></th></tr></thead>
             <tbody>${body}</tbody>
           </table></div>
           <p class="note">${p.basis === 'moves'
@@ -1717,7 +1717,7 @@
               + 'available when an industry holds too few companies to compare within.'
             : `Same ${p.basis}, ranked by ${p.byName ? 'how close each one is in market cap' : 'size'}.`}
             It is who else is on this screen measured the same way — not a ranking, and not a list of
-            better alternatives. Advice is the Balanced rule set; hover it for the rule that fired.
+            better alternatives. Hover the Signal for the rule that fired.
             A dash under Fwd P/E is a company with no positive forward earnings, or none reported —
             a multiple off a loss is arithmetic, not cheapness.</p>
         </div></section>`;
@@ -2216,7 +2216,7 @@
     // backtest validated), so the profiles differ here through their chase
     // caps and stop widths; the fundamentals half, where Dip Buyer and the
     // Early rules live, has no history to replay — blanks satisfy nothing.
-    const AP_TIER = { 'Sell Immediately': 0, 'Avoid': 1, 'Hold': 2, 'Buy with Risk': 3, 'Buy': 4, 'Strong Buy': 5 };
+    const AP_TIER = { 'Very Weak': 0, 'Weak': 1, 'Neutral': 2, 'Strong – Elevated Risk': 3, 'Strong': 4, 'Very Strong': 5 };
     function verdictSeries(all, from, cfg, rsiAll) {
       const s200 = RowCard.sma(all, 200), s50 = RowCard.sma(all, 50);
       const out = [];
@@ -4047,7 +4047,7 @@
           'so they will not always match the vendor figures elsewhere on this page, which are trailing-twelve-month and restated to today. ' +
           'Later filings restate earlier periods; each row shows the most recent version. ' +
           (anyDerived ? 'A dotted value was computed here rather than filed: no company files a fourth quarter, and a cash-flow statement is year-to-date, so those quarters are the difference between the cumulative periods either side. ' : '') +
-          'Nothing on this card feeds the Advice verdict or the screener.</p>';
+          'Nothing on this card feeds the Signal or the screener.</p>';
         host.innerHTML = h;
       }
 
@@ -4081,7 +4081,7 @@
             ? 'A fund is scored on the technical rules alone — it files no statements and has no fundamentals reading.'
             : esc(ev.type) + ' company, so the ' +
               (ev.type === 'Early' ? 'early-stage' : 'established') +
-              ' fundamentals rules apply. The Balanced verdict is <b>' + esc(ev.action) +
+              ' fundamentals rules apply. The signal is <b>' + esc(ev.action) +
               '</b>' + (ev.flag ? ': ' + esc(ev.flag) : '') + '.') +
           '</span></div>';
       }
@@ -4206,7 +4206,7 @@
         h += '<p class="note"><b>Computed here from the filings above</b>, not taken from ' +
           'a vendor — each is that period’s own figure divided by that period’s own ' +
           'revenue, on the company’s fiscal calendar. <b>These are not the numbers the ' +
-          'Advice verdict used.</b> The engine reads the vendor’s trailing-twelve-month ' +
+          'Signal used.</b> The engine reads the vendor’s trailing-twelve-month ' +
           'values, restated to today and computed on a different basis, which is why the ' +
           'gap column is rarely zero and is marked once it passes two points. ' +
           '<b>The comparison is like for like:</b> the margins are four filed quarters ' +
@@ -4222,7 +4222,7 @@
           'A growth figure is against the same period a year earlier — hover it for which — ' +
           'and is withheld where the earlier figure was a loss, since growth from a negative ' +
           'base inverts its own sign. Operating margin is shown because it is worth seeing; ' +
-          'no rule reads it. <b>Nothing on this card feeds the Advice verdict or the ' +
+          'no rule reads it. <b>Nothing on this card feeds the Signal or the ' +
           'screener</b> — it is here so you can see what the company actually filed.</p>';
         return h;
       }
@@ -4439,7 +4439,7 @@
             '<b>Traded</b> is when it happened, usually two business days earlier. ' +
             'Marked <span class="plan">plan</span> means a 10b5-1 schedule set up months in ' +
             'advance. Straight from the filer’s own Form 4 at SEC EDGAR, and read by ' +
-            'nothing else in this app — not the Advice verdict, not the screener.</p>';
+            'nothing else in this app — not the Signal, not the screener.</p>';
           document.getElementById('insBody').innerHTML = h;
           card.hidden = false;
         } catch (e) { card.remove(); }
@@ -4451,7 +4451,7 @@
       // which is short VOLUME: mostly market-maker intermediation, flat again
       // by the close, and routinely 50-60% on a liquid name.
       //
-      // Read by nothing else in this app. The Advice rules do read short
+      // Read by nothing else in this app. The Signal rules do read short
       // interest, but they take it from the profile as they always have; this
       // table exists to give that number a history.
       // The peers' series arrive after the chart, like every other card here
@@ -4565,7 +4565,7 @@
             'uses today’s float, so it is shown for the latest reading only. Straight from ' +
             '<a href="https://www.finra.org/finra-data/browse-catalog/short-interest/files" ' +
             'target="_blank" rel="noopener">FINRA</a>, and read by nothing else in this app ' +
-            '— not the Advice verdict, not the screener.</p>';
+            '— not the Signal, not the screener.</p>';
 
           document.getElementById('sintBody').innerHTML = h;
           card.hidden = false;

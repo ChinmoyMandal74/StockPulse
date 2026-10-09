@@ -29,8 +29,8 @@
 // Two holes in the source brief are closed here, both toggleable:
 //   - A stock whose 200-day average does not exist yet (young listing) used to
 //     fall through every trend rule — none could fire on a blank — and reach
-//     "Buy with Risk" with zero trend information. Blank trend now Holds.
-//   - Above the 200-day, a clean entry used to reach "Buy with Risk" even with
+//     "Strong – Elevated Risk" with zero trend information. Blank trend now Holds.
+//   - Above the 200-day, a clean entry used to reach "Strong – Elevated Risk" even with
 //     Weak fundamentals (collapsing earnings AND revenue). Weak now Holds.
 //
 // It is a rules engine, not a measured predictor. Nothing here has been shown
@@ -45,8 +45,34 @@
   if (root) root.ActionRules = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
 
-  const ACTIONS = ['Sell Immediately', 'Avoid', 'Hold', 'Buy with Risk', 'Buy', 'Strong Buy'];
+  const ACTIONS = ['Very Weak', 'Weak', 'Neutral', 'Strong – Elevated Risk', 'Strong', 'Very Strong'];
   const TYPES = ['ETF', 'Established', 'Early'];
+
+  // The six words were renamed on 2026-10-09 (the owner's call: a reading of
+  // strength, not an instruction to trade). Rows written before that still
+  // carry the old word -- advice_state, tech_history, a stored screen -- so
+  // anything read back from storage goes through canon() and nothing had to
+  // be migrated. A word that is neither old nor new comes back unchanged.
+  const LEGACY = {
+    'Sell Immediately': 'Very Weak', 'Avoid': 'Weak', 'Hold': 'Neutral',
+    'Buy with Risk': 'Strong – Elevated Risk', 'Buy': 'Strong', 'Strong Buy': 'Very Strong',
+  };
+  const canon = (v) => (typeof v === 'string' && Object.prototype.hasOwnProperty.call(LEGACY, v) ? LEGACY[v] : v);
+  // A flag that opens with its verdict ('Buy: clean entry') carries the word too.
+  const canonFlag = (f) => (typeof f === 'string'
+    ? f.replace(/^(Strong Buy|Buy with Risk|Buy)(?=:| \(early\))/, (w) => LEGACY[w]) : f);
+  // One stored row, in place: every field a verdict or its reason is kept in.
+  function canonRow(s) {
+    if (!s || typeof s !== 'object') return s;
+    if (s.action != null) s.action = canon(s.action);
+    if (s.advicePrev != null) s.advicePrev = canon(s.advicePrev);
+    if (s.actionFlag != null) s.actionFlag = canonFlag(s.actionFlag);
+    if (s.actionRisk && typeof s.actionRisk === 'object') {
+      s.actionRisk.action = canon(s.actionRisk.action);
+      s.actionRisk.flag = canonFlag(s.actionRisk.flag);
+    }
+    return s;
+  }
 
   // ---- the Balanced defaults ------------------------------------------------
   // Every threshold a profile may change. The nesting is the grouping the
@@ -79,11 +105,11 @@
       rsi_low: 45, rsi_high: 65,  // moving, not stretched
       near_high: -10,             // % from 52W high counted as "near the high"
       buy_max_drawdown: -20,      // a plain Buy must not be deeper in a hole than this
-      strong_buy_vs200: 10,       // Strong Buy needs a real uptrend, not a wobble above the line
+      strong_buy_vs200: 10,       // Very Strong needs a real uptrend, not a wobble above the line
       uptrend_vs50: -8,           // uptrend = above 200D and vs50 above this
     },
 
-    stop_loss: {                  // the breakdown = Sell Immediately triggers
+    stop_loss: {                  // the breakdown = Very Weak triggers
       established_vs200: -10,     // this far below the 200D...
       confirm_1m: -8,             // ...and still falling over 1 month
       confirm_3m: -15,            // ...or over 3 months
@@ -106,8 +132,8 @@
     },
 
     early: {
-      allow_buy: true,            // Conservative turns this off (Early caps at Buy with Risk)
-      allow_strong_buy: false,    // Early is never Strong Buy unless deliberately enabled
+      allow_buy: true,            // Conservative turns this off (Early caps at Strong – Elevated Risk)
+      allow_strong_buy: false,    // Early is never Very Strong unless deliberately enabled
       buy_requires: 'strong',     // 'ok' is the Aggressive stance
     },
 
@@ -152,7 +178,7 @@
       stop_loss: { established_vs200: -5, early_vs200: -3 },
       chase: { max_1m: 15 },
       earnings: { blackout_days: 10 },
-      early: { allow_buy: false },              // Early caps at Buy with Risk
+      early: { allow_buy: false },              // Early caps at Strong – Elevated Risk
     },
     // Buys strength sooner and holds it longer — entry-side aggression ONLY.
     // The stops, the drawdown limits and the blackout all stay Balanced:
@@ -178,7 +204,7 @@
       early: { allow_strong_buy: true, buy_requires: 'ok' },
     },
     // The one orthogonal profile: flips the trend gate, so a clean entry
-    // below the 200D with OK fundamentals earns Buy with Risk instead of
+    // below the 200D with OK fundamentals earns Strong – Elevated Risk instead of
     // Hold. The stops stay Balanced — Breakdown still sells, so the knife-
     // catch has a floor. The research log tested buy-the-lower-side three
     // ways on this universe and it came back flat-to-wrong; this profile
@@ -415,82 +441,82 @@
   // blocks in the source, and evaluate() runs them in source order — that
   // ordering is the loss-avoidance guarantee and is deliberately not a config.
   function establishedRules(d, fund, cfg) {
-    if (d.breakdown) return ['Sell Immediately', 'Breakdown'];
-    if (d.downtrend) return ['Avoid', 'Downtrend'];
-    if (d.below200 && fund === 'weak') return ['Avoid', 'Weak fundamentals below 200D'];
-    if (d.distribution && d.deepHole) return ['Avoid', 'Distribution deep in drawdown'];
+    if (d.breakdown) return ['Very Weak', 'Breakdown'];
+    if (d.downtrend) return ['Weak', 'Downtrend'];
+    if (d.below200 && fund === 'weak') return ['Weak', 'Weak fundamentals below 200D'];
+    if (d.distribution && d.deepHole) return ['Weak', 'Distribution deep in drawdown'];
 
     const gate = cfg.trend_gate.never_buy_below_200d;
-    if (gate && d.below200) return ['Hold', 'Below 200D'];
-    if (cfg.fixes.blank_trend_holds && d.blankTrend) return ['Hold', 'No trend data'];
-    if (d.thinHistory) return ['Hold', 'Thin history'];
-    if (d.earningsSoon) return ['Hold', 'Earnings soon'];
-    if (d.extended) return ['Hold', 'Extended — wait for a pullback'];
+    if (gate && d.below200) return ['Neutral', 'Below 200D'];
+    if (cfg.fixes.blank_trend_holds && d.blankTrend) return ['Neutral', 'No trend data'];
+    if (d.thinHistory) return ['Neutral', 'Thin history'];
+    if (d.earningsSoon) return ['Neutral', 'Earnings soon'];
+    if (d.extended) return ['Neutral', 'Extended — wait for a pullback'];
 
     if (d.strongUptrend && d.cleanEntry && d.nearHigh && fund === 'strong') {
-      return ['Strong Buy', 'Strong Buy: uptrend, clean entry, near high, strong fundamentals'];
+      return ['Very Strong', 'Very Strong: uptrend, clean entry, near high, strong fundamentals'];
     }
     if (!d.below200 && d.cleanEntry && (fund === 'ok' || fund === 'strong') && d.shallowEnough) {
-      return ['Buy', 'Buy: clean entry, fundamentals OK'];
+      return ['Strong', 'Strong: clean entry, fundamentals OK'];
     }
     if (d.cleanEntry && !(cfg.fixes.weak_blocks_buy_with_risk && fund === 'weak')) {
       // In mean-reversion mode (gate off) a below-200D clean entry still needs
-      // fundamentals on its side; the brief allows Buy with Risk, no higher.
+      // fundamentals on its side; the brief allows Strong – Elevated Risk, no higher.
       if (!d.below200 || fund === 'ok' || fund === 'strong') {
         // Two different roads lead here and the flag must name the right one:
         // fundamentals that made no case, or good fundamentals refused a full
         // Buy because the stock is too deep below its high.
-        return ['Buy with Risk', d.below200
-          ? 'Buy with Risk: below 200D, mean-reversion mode'
+        return ['Strong – Elevated Risk', d.below200
+          ? 'Strong – Elevated Risk: below 200D, mean-reversion mode'
           : (fund === 'ok' || fund === 'strong')
-            ? 'Buy with Risk: deep below the high'
-            : 'Buy with Risk: fundamentals not OK'];
+            ? 'Strong – Elevated Risk: deep below the high'
+            : 'Strong – Elevated Risk: fundamentals not OK'];
       }
-      return ['Hold', 'Below 200D without fundamentals'];
+      return ['Neutral', 'Below 200D without fundamentals'];
     }
-    if (d.cleanEntry && fund === 'weak') return ['Hold', 'Weak fundamentals'];
-    return ['Hold', 'No clean entry'];
+    if (d.cleanEntry && fund === 'weak') return ['Neutral', 'Weak fundamentals'];
+    return ['Neutral', 'No clean entry'];
   }
 
   function earlyRules(d, fund, cfg) {
-    if (d.breakdown) return ['Sell Immediately', 'Breakdown (early)'];
-    if (d.below200 && fund === 'weak') return ['Sell Immediately', 'Weak fundamentals below 200D'];
-    if (d.below200) return ['Avoid', 'Below 200D'];
-    if (d.distribution) return ['Avoid', 'Distribution'];
-    if (d.heavyShort) return ['Avoid', 'Heavy short interest'];
+    if (d.breakdown) return ['Very Weak', 'Breakdown (early)'];
+    if (d.below200 && fund === 'weak') return ['Very Weak', 'Weak fundamentals below 200D'];
+    if (d.below200) return ['Weak', 'Below 200D'];
+    if (d.distribution) return ['Weak', 'Distribution'];
+    if (d.heavyShort) return ['Weak', 'Heavy short interest'];
 
-    if (cfg.fixes.blank_trend_holds && d.blankTrend) return ['Hold', 'No trend data'];
-    if (d.thinHistory) return ['Hold', 'Thin history'];
-    if (d.earningsSoon) return ['Hold', 'Earnings soon'];
-    if (d.extended) return ['Hold', 'Extended — wait for a pullback'];
-    if (fund === 'weak') return ['Hold', 'Weak fundamentals'];
+    if (cfg.fixes.blank_trend_holds && d.blankTrend) return ['Neutral', 'No trend data'];
+    if (d.thinHistory) return ['Neutral', 'Thin history'];
+    if (d.earningsSoon) return ['Neutral', 'Earnings soon'];
+    if (d.extended) return ['Neutral', 'Extended — wait for a pullback'];
+    if (fund === 'weak') return ['Neutral', 'Weak fundamentals'];
 
     const need = cfg.early.buy_requires === 'ok' ? (fund === 'ok' || fund === 'strong') : fund === 'strong';
     if (cfg.early.allow_buy && d.strongUptrend && d.cleanEntry && need
       && d.shallowEnough) {
       if (cfg.early.allow_strong_buy && d.nearHigh && fund === 'strong') {
-        return ['Strong Buy', 'Strong Buy (early): enabled by profile'];
+        return ['Very Strong', 'Very Strong (early): enabled by profile'];
       }
-      return ['Buy', 'Buy (early): strong growth in an uptrend'];
+      return ['Strong', 'Strong (early): strong growth in an uptrend'];
     }
     if (d.cleanEntry && (fund === 'ok' || fund === 'strong')) {
-      return ['Buy with Risk', 'Buy with Risk (early)'];
+      return ['Strong – Elevated Risk', 'Strong – Elevated Risk (early)'];
     }
-    return ['Hold', 'No clean entry'];
+    return ['Neutral', 'No clean entry'];
   }
 
   function etfRules(d, cfg) {
-    if (d.breakdown) return ['Sell Immediately', 'Breakdown'];
-    if (d.downtrend) return ['Avoid', 'Downtrend'];
-    if (d.below200) return ['Hold', 'Below 200D'];
-    if (cfg.fixes.blank_trend_holds && d.blankTrend) return ['Hold', 'No trend data'];
-    if (d.thinHistory) return ['Hold', 'Thin history'];
-    if (d.extended) return ['Hold', 'Extended — wait for a pullback'];
+    if (d.breakdown) return ['Very Weak', 'Breakdown'];
+    if (d.downtrend) return ['Weak', 'Downtrend'];
+    if (d.below200) return ['Neutral', 'Below 200D'];
+    if (cfg.fixes.blank_trend_holds && d.blankTrend) return ['Neutral', 'No trend data'];
+    if (d.thinHistory) return ['Neutral', 'Thin history'];
+    if (d.extended) return ['Neutral', 'Extended — wait for a pullback'];
     if (d.strongUptrend && d.cleanEntry && d.nearHigh) {
-      return ['Strong Buy', 'Strong Buy: uptrend, clean entry, near high'];
+      return ['Very Strong', 'Very Strong: uptrend, clean entry, near high'];
     }
-    if (d.cleanEntry) return ['Buy', 'Buy: clean entry'];
-    return ['Hold', 'No clean entry'];
+    if (d.cleanEntry) return ['Strong', 'Strong: clean entry'];
+    return ['Neutral', 'No clean entry'];
   }
 
   // ---- the intermediate states, one word per family --------------------------
@@ -577,7 +603,7 @@
   // and compressed to its runs — "2025-11-03 Above 200D -> 2026-01-15 Strong
   // uptrend", each date the session that state began, oldest first, the last
   // run being the current state. Bar-derived only, which is why this history
-  // is honestly replayable when the full Advice history is not; thresholds
+  // is honestly replayable when the full Signal history is not; thresholds
   // are today's rules and the stock's current type — the ribbon's semantics.
   function trendTimeline(closes, dates, type, cfg, maxSessions) {
     const n = Array.isArray(closes) ? closes.length : 0;
@@ -718,88 +744,88 @@
     const fundOK = fund === 'ok' || fund === 'strong';
     const K = condKit(d, cfg);
     const { clean, below200, above200ish, distribution, extended, mom, nearHigh, strongUp, shallow } = K;
-    const thin = () => R('cap', 'Hold', 'Thin history', [K.thinCond()]);
-    const earnings = () => R('cap', 'Hold', 'Earnings soon', [K.earnCond()]);
-    const noTrend = () => R('cap', 'Hold', 'No trend data', [K.blankCond()]);
+    const thin = () => R('cap', 'Neutral', 'Thin history', [K.thinCond()]);
+    const earnings = () => R('cap', 'Neutral', 'Earnings soon', [K.earnCond()]);
+    const noTrend = () => R('cap', 'Neutral', 'No trend data', [K.blankCond()]);
 
     const r = [];
     if (type === 'Established') {
-      r.push(R('veto', 'Sell Immediately', 'Breakdown', K.breakdown(type)));
-      r.push(R('veto', 'Avoid', 'Downtrend', K.downtrend()));
-      r.push(R('veto', 'Avoid', 'Weak fundamentals below 200D',
+      r.push(R('veto', 'Very Weak', 'Breakdown', K.breakdown(type)));
+      r.push(R('veto', 'Weak', 'Downtrend', K.downtrend()));
+      r.push(R('veto', 'Weak', 'Weak fundamentals below 200D',
         [below200(), cB('Fundamentals Weak', fund === 'weak')]));
-      r.push(R('veto', 'Avoid', 'Distribution deep in drawdown', distribution().concat([
+      r.push(R('veto', 'Weak', 'Distribution deep in drawdown', distribution().concat([
         cLT(`More than ${-ex.distribution_avoid_drawdown}% below the 52W high`, 'fh', d.fh, ex.distribution_avoid_drawdown),
       ])));
-      if (cfg.trend_gate.never_buy_below_200d) r.push(R('cap', 'Hold', 'Below 200D', [below200()]));
+      if (cfg.trend_gate.never_buy_below_200d) r.push(R('cap', 'Neutral', 'Below 200D', [below200()]));
       if (cfg.fixes.blank_trend_holds) r.push(noTrend());
       r.push(thin());
       if (cfg.earnings.enabled) r.push(earnings());
-      r.push(R('cap', 'Hold', 'Extended — wait for a pullback', extended()));
+      r.push(R('cap', 'Neutral', 'Extended — wait for a pullback', extended()));
 
-      r.push(R('setup', 'Strong Buy', 'Strong Buy: uptrend, clean entry, near high, strong fundamentals',
+      r.push(R('setup', 'Very Strong', 'Very Strong: uptrend, clean entry, near high, strong fundamentals',
         [strongUp()].concat(clean(), [nearHigh(), cB('Fundamentals Strong', fund === 'strong')])));
-      r.push(R('setup', 'Buy', 'Buy: clean entry, fundamentals OK',
+      r.push(R('setup', 'Strong', 'Strong: clean entry, fundamentals OK',
         [above200ish()].concat(clean(), [cB('Fundamentals OK or Strong', fundOK), shallow()])));
       if (!cfg.trend_gate.never_buy_below_200d) {
-        r.push(R('setup', 'Buy with Risk', 'Buy with Risk: below 200D, mean-reversion mode',
+        r.push(R('setup', 'Strong – Elevated Risk', 'Strong – Elevated Risk: below 200D, mean-reversion mode',
           [below200()].concat(clean(), [cB('Fundamentals OK or Strong', fundOK)])));
       }
-      r.push(R('setup', 'Buy with Risk', 'Buy with Risk: deep below the high',
+      r.push(R('setup', 'Strong – Elevated Risk', 'Strong – Elevated Risk: deep below the high',
         [above200ish()].concat(clean(), [cB('Fundamentals OK or Strong', fundOK),
           { label: `More than ${-en.buy_max_drawdown}% below the 52W high`, met: !d.shallowEnough,
             gauge: gauge('fh', d.fh, [DOMAINS.fh[0], en.buy_max_drawdown]) }])));
       const notOK = fund === 'none' || (fund === 'weak' && !cfg.fixes.weak_blocks_buy_with_risk);
-      r.push(R('setup', 'Buy with Risk', 'Buy with Risk: fundamentals not OK',
+      r.push(R('setup', 'Strong – Elevated Risk', 'Strong – Elevated Risk: fundamentals not OK',
         [above200ish()].concat(clean(), [cB('Fundamentals not OK', notOK)])));
       if (!cfg.trend_gate.never_buy_below_200d) {
-        r.push(R('setup', 'Hold', 'Below 200D without fundamentals',
+        r.push(R('setup', 'Neutral', 'Below 200D without fundamentals',
           [below200()].concat(clean(), [cB('Fundamentals not OK', notOK)])));
       }
       if (cfg.fixes.weak_blocks_buy_with_risk) {
-        r.push(R('setup', 'Hold', 'Weak fundamentals',
+        r.push(R('setup', 'Neutral', 'Weak fundamentals',
           clean().concat([cB('Fundamentals Weak', fund === 'weak')])));
       }
-      r.push(R('setup', 'Hold', 'No clean entry', clean(), true));
+      r.push(R('setup', 'Neutral', 'No clean entry', clean(), true));
     } else if (type === 'Early') {
-      r.push(R('veto', 'Sell Immediately', 'Breakdown (early)', K.breakdown(type)));
-      r.push(R('veto', 'Sell Immediately', 'Weak fundamentals below 200D',
+      r.push(R('veto', 'Very Weak', 'Breakdown (early)', K.breakdown(type)));
+      r.push(R('veto', 'Very Weak', 'Weak fundamentals below 200D',
         [below200(), cB('Fundamentals Weak', fund === 'weak')]));
-      r.push(R('veto', 'Avoid', 'Below 200D', [below200()]));
-      r.push(R('veto', 'Avoid', 'Distribution', distribution()));
-      r.push(R('veto', 'Avoid', 'Heavy short interest',
+      r.push(R('veto', 'Weak', 'Below 200D', [below200()]));
+      r.push(R('veto', 'Weak', 'Distribution', distribution()));
+      r.push(R('veto', 'Weak', 'Heavy short interest',
         [cGT(`Short interest above ${ex.early_avoid_short_float}% of float`, 'sf', d.sf, ex.early_avoid_short_float)]));
       if (cfg.fixes.blank_trend_holds) r.push(noTrend());
       r.push(thin());
       if (cfg.earnings.enabled) r.push(earnings());
-      r.push(R('cap', 'Hold', 'Extended — wait for a pullback', extended()));
-      r.push(R('cap', 'Hold', 'Weak fundamentals', [cB('Fundamentals Weak', fund === 'weak')]));
+      r.push(R('cap', 'Neutral', 'Extended — wait for a pullback', extended()));
+      r.push(R('cap', 'Neutral', 'Weak fundamentals', [cB('Fundamentals Weak', fund === 'weak')]));
 
       const needStrong = cfg.early.buy_requires !== 'ok';
       const needCond = () => cB(needStrong ? 'Fundamentals Strong' : 'Fundamentals OK or Strong',
         needStrong ? fund === 'strong' : fundOK);
       if (cfg.early.allow_buy && cfg.early.allow_strong_buy) {
-        r.push(R('setup', 'Strong Buy', 'Strong Buy (early): enabled by profile',
+        r.push(R('setup', 'Very Strong', 'Very Strong (early): enabled by profile',
           [strongUp()].concat(clean(), [nearHigh(), cB('Fundamentals Strong', fund === 'strong'), shallow()])));
       }
       if (cfg.early.allow_buy) {
-        r.push(R('setup', 'Buy', 'Buy (early): strong growth in an uptrend',
+        r.push(R('setup', 'Strong', 'Strong (early): strong growth in an uptrend',
           [strongUp()].concat(clean(), [needCond(), shallow()])));
       }
-      r.push(R('setup', 'Buy with Risk', 'Buy with Risk (early)',
+      r.push(R('setup', 'Strong – Elevated Risk', 'Strong – Elevated Risk (early)',
         clean().concat([cB('Fundamentals OK or Strong', fundOK)])));
-      r.push(R('setup', 'Hold', 'No clean entry', clean(), true));
+      r.push(R('setup', 'Neutral', 'No clean entry', clean(), true));
     } else {
-      r.push(R('veto', 'Sell Immediately', 'Breakdown', K.breakdown(type)));
-      r.push(R('veto', 'Avoid', 'Downtrend', K.downtrend()));
-      r.push(R('cap', 'Hold', 'Below 200D', [below200()]));
+      r.push(R('veto', 'Very Weak', 'Breakdown', K.breakdown(type)));
+      r.push(R('veto', 'Weak', 'Downtrend', K.downtrend()));
+      r.push(R('cap', 'Neutral', 'Below 200D', [below200()]));
       if (cfg.fixes.blank_trend_holds) r.push(noTrend());
       r.push(thin());
-      r.push(R('cap', 'Hold', 'Extended — wait for a pullback', extended()));
-      r.push(R('setup', 'Strong Buy', 'Strong Buy: uptrend, clean entry, near high',
+      r.push(R('cap', 'Neutral', 'Extended — wait for a pullback', extended()));
+      r.push(R('setup', 'Very Strong', 'Very Strong: uptrend, clean entry, near high',
         [strongUp()].concat(clean(), [nearHigh()])));
-      r.push(R('setup', 'Buy', 'Buy: clean entry', clean()));
-      r.push(R('setup', 'Hold', 'No clean entry', clean(), true));
+      r.push(R('setup', 'Strong', 'Strong: clean entry', clean()));
+      r.push(R('setup', 'Neutral', 'No clean entry', clean(), true));
     }
     return r;
   }
@@ -958,7 +984,7 @@
   }
 
   return {
-    ACTIONS, TYPES, DEFAULTS, PRESETS, TREND_ORDER, ENTRY_ORDER, FUND_ORDER,
+    ACTIONS, LEGACY, canon, canonFlag, canonRow, TYPES, DEFAULTS, PRESETS, TREND_ORDER, ENTRY_ORDER, FUND_ORDER,
     resolve, validate, diff, merge,
     classify, definitions, fundamentals, evaluate, apply, daysToEarnings,
     explain, ladder, trendAt, actionAt, trendTimeline, exitDistance,

@@ -529,7 +529,7 @@
         `<div class="px"><b>${esc(price)}</b><span class="${t == null ? 'na' : t >= 0 ? 'pos' : 'neg'}">` +
           `${t == null ? '—' : (t >= 0 ? '+' : '') + t.toFixed(2) + '% today'}</span></div>` +
         `<div class="chips">${chips}</div>` +
-        `<div class="verdict"><span class="v ${v && /Buy/.test(v) ? 'pos' : v && /Sell|Avoid/.test(v) ? 'neg' : ''}">` +
+        `<div class="verdict"><span class="v ${v && /Strong/.test(v) ? 'pos' : v && /Weak/.test(v) ? 'neg' : ''}">` +
           `${esc(v || 'No verdict')}</span>` +
           `<span class="why">${esc(s.actionFlag || 'The rules could not read this row.')}</span></div>` +
         `<a class="btn open" href="/stock/${encodeURIComponent(s.symbol)}">Open ${esc(s.symbol)}</a>` +

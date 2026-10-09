@@ -1,6 +1,6 @@
-// Adjusted Advice — the SAME rules, read off different data.
+// Adjusted Signal — the SAME rules, read off different data.
 //
-// The live Advice verdict reads one vendor for everything. This assembles the
+// The live Signal reads one vendor for everything. This assembles the
 // engine's inputs from two sources instead — Twelve Data's price bars for
 // every technical, the company's own SEC filings for every fundamental — and
 // runs `action.js` over the result unchanged. No rule, no threshold and no

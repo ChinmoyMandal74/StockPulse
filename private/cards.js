@@ -395,7 +395,7 @@
           '</div></div>' + chromeFoot();
       }
       // The verdict beside the move. Off unless a rule set is picked, and
-      // the card names which one: "Strong Buy" means nothing without the
+      // the card names which one: "Very Strong" means nothing without the
       // rules behind it, which is the line this whole product is built on.
       // Only the single-column layouts carry it — the side-by-side card
       // already runs two rankings in half the width apiece, and a verdict on
@@ -474,26 +474,30 @@
       // five more lines of prose would push the ranking over the masthead.
       // The footer carries the standing disclaimer either way.
       const kick = `${esc(scope.label)} \u00b7 ${esc(periodLabel)}` +
-        (advOf ? ` \u00b7 ${esc(advProf)} rules` : '');
+        (advOf ? ' \u00b7 with the signal' : '');
       return chromeTop() +
         `<div class="s-body"><div><span class="s-kick">${kick}</span>` +
         `<h2 class="s-title">${title}</h2>` +
         body + '</div></div>' + chromeFoot();
     }
 
-    // ---- the Advice cards ---------------------------------------------------
+    // ---- the Signal cards ---------------------------------------------------
     // Four readings of the same thing: the tally, the rules doing the talking,
     // one stock through every profile, and the roll-call at a chosen verdict.
     // All of it reports what a published mechanical rule said — the verdict
     // always travels with the rule that produced it, which is the whole
     // difference between this and a tip sheet.
-    const ADV_PROFILES = ['Balanced', 'Trend Rider', 'Aggressive', 'Max Risk', 'Dip Buyer'];
+    // ONE rule set since 2026-10-09 (the owner's call). The list stays a list
+    // because the server validates a rule set against it and the hosts fill
+    // their pickers from it; a saved control naming a retired set reads as
+    // Balanced.
+    const ADV_PROFILES = ['Balanced'];
     // The DARK ladder. Read only through pal.tints now (LADDER_LIGHT is its
     // light counterpart), so no template can print it on a ground it does not
     // clear — which is what five of them were doing until 2026-09-30.
     const ADV_TINT = {
-      'Strong Buy': '#34d399', 'Buy': '#a3e635', 'Buy with Risk': '#fbbf24',
-      'Hold': '#9aa3b2', 'Avoid': '#fb923c', 'Sell Immediately': '#fb7185',
+      'Very Strong': '#34d399', 'Strong': '#a3e635', 'Strong – Elevated Risk': '#fbbf24',
+      'Neutral': '#9aa3b2', 'Weak': '#fb923c', 'Very Weak': '#fb7185',
     };
     const advCache = {};
     // Scored in the browser through the same engine the server uses, so a
@@ -523,7 +527,7 @@
 
     // ---- the ladder dial ---------------------------------------------------
     // A half-circle in the six verdict colours, worst on the left, with one
-    // needle. DRAWN ONCE for the two cards that use it -- the Advice board,
+    // needle. DRAWN ONCE for the two cards that use it -- the Signal board,
     // where the needle is the average place of many verdicts, and the Stock
     // spotlight, where it is one company's own verdict -- so the two cannot
     // come to draw the ladder differently. The colours are the theme's own
@@ -558,7 +562,7 @@
 
     function tplAdvBoard() {
       const mode = O.advMode;
-      const profile = O.advProf || 'Balanced';
+      const profile = ADV_PROFILES.indexOf(O.advProf) >= 0 ? O.advProf : 'Balanced';
       const scored = advScored(profile);
       const scope = advScope();
       const verdict = (s) => (scored[s.symbol] || {}).action || null;
@@ -625,28 +629,8 @@
           '</div></div>' + chromeFoot();
       }
 
-      if (mode === 'profiles') {
-        const sym = O.advSym || rows[0].symbol;
-        const row = stocks.find((r) => r.symbol === sym);
-        if (!row) return chromeTop() + '<div class="s-body"><div><p class="s-empty">Pick a stock.</p></div></div>' + chromeFoot();
-        const reads = ADV_PROFILES.map((pn) => {
-          const r = advScored(pn)[sym];
-          return { pn, action: r ? r.action : null, flag: r ? r.flag : null };
-        }).filter((r) => r.action);
-        const agree = new Set(reads.map((r) => r.action)).size === 1;
-        return chromeTop() +
-          `<div class="s-body"><div><span class="s-kick">${esc(symOf(sym))} \u00b7 five rule sets</span>` +
-          `<h2 class="s-title">${agree ? 'All five<br><span class="dim">agree</span>' : 'Where the rules<br><span class="dim">disagree</span>'}</h2>` +
-          `<div style="margin-top:32px">${reads.map((r) =>
-            `<div class="pcard"><span class="pn">${esc(r.pn)}</span>` +
-            `<span class="pv" style="color:${pal.tints[r.action] || 'var(--text)'}">${esc(r.action)}</span>` +
-            `<span class="pw">${esc(r.flag || '')}</span></div>`).join('')}</div>` +
-          `<p class="s-sub wide" style="--fs:19px;margin-top:26px">Same stock, same night, five fixed rule sets \u2014 ${agree ? 'and this time they all read it the same way.' : 'and they do not agree. Each names the rule that decided it, so the disagreement is readable rather than mysterious.'}</p>` +
-          '</div></div>' + chromeFoot();
-      }
-
       if (mode === 'tier') {
-        const want = O.advTier || 'Strong Buy';
+        const want = O.advTier || 'Very Strong';
         const hits = rows.filter((s) => verdict(s) === want)
           .slice(0, size.id === 'story' ? 11 : size.id === 'square' ? 6 : 8);
         const tint = pal.tints[want] || 'var(--text)';
@@ -756,7 +740,7 @@
     const introRules = () => (introCfg = introCfg || ActionRules.resolve({}).cfg);
     function introRow() {
       const pick = (a) => stocks.find((s) => s.action === a && s.actionFlag && s.actionTrend);
-      return pick('Buy') || pick('Strong Buy') || pick('Buy with Risk') || pick('Hold')
+      return pick('Strong') || pick('Very Strong') || pick('Strong – Elevated Risk') || pick('Neutral')
         || stocks.find((s) => s.action) || null;
     }
 
@@ -769,7 +753,7 @@
           { kind: 'steps', kick: 'The short version', title: 'Five things<br><span class="dim">it does</span>',
             rows: [
               ['screen', 'var(--green)', 'Screened nightly', 'Returns, trend and a 1–10 Quality score after every close, on an absolute scale — a 7 means the same thing in any market.'],
-              ['rules', 'var(--accent)', 'Advice that shows its work', 'Five fixed rule profiles side by side, and every verdict names the ONE rule that fired.'],
+              ['rules', 'var(--accent)', 'A signal that shows its work', 'One fixed, published rule set, and every signal names the ONE rule that fired.'],
               ['trend', 'var(--amber)', 'Twenty years of receipts', 'Trend ribbons, backtests and an indicator lab over the full bar archive — measured, not asserted.'],
               ['ask', 'var(--accent-2)', 'Alerts on what you follow', 'Watch one stock for one thing — a price level, a moving-average cross, a change of verdict — and see it when it happens.'],
               ['guest', 'var(--red)', 'Try it in one click', 'A guest preview: twenty real stocks across every sector, the whole table and every verdict. No account, no card.'],
@@ -788,14 +772,14 @@
         ],
       },
       {
-        id: 'advice', name: 'How Advice works',
+        id: 'advice', name: 'How the Signal works',
         slides: [
-          { kind: 'cover', kick: 'How it works', title: 'Advice,<br><span class="dim">explained</span>',
+          { kind: 'cover', kick: 'How it works', title: 'The Signal,<br><span class="dim">explained</span>',
             sub: 'Not a score, not a black box: the company type picks the rulebook, four readings collapse to one word, and the rule that decided it is always named.' },
           { kind: 'flow' },
           { kind: 'ladder' },
           { kind: 'tiers', kick: 'The whole vocabulary', title: 'Six words,<br><span class="dim">nothing else</span>',
-            note: 'The Sell, Avoid and Hold rules sit ABOVE every Buy rule in the source. Loss avoidance is the order of the list, not a setting.' },
+            note: 'The Weak and Neutral rules sit ABOVE every Strong rule in the source. Loss avoidance is the order of the list, not a setting.' },
           { kind: 'close' },
         ],
       },
@@ -889,14 +873,14 @@
 
     const TIER_DEF = [
       // THE PRODUCT'S OWN WORDS, not abbreviations of them. A card posted
-      // beside the Advice board has to use the same six, or the vocabulary
+      // beside the Signal board has to use the same six, or the vocabulary
       // the carousel exists to teach does not match the one on screen.
-      ['Sell Immediately', 'var(--red)', 'get out'],
-      ['Avoid', 'var(--red)', 'not now'],
-      ['Hold', 'var(--muted)', 'sit still'],
-      ['Buy with Risk', 'var(--amber)', 'eyes open'],
-      ['Buy', 'var(--green)', 'clean'],
-      ['Strong Buy', 'var(--green)', 'everything lines up'],
+      ['Very Weak', 'var(--red)', 'breakdown'],
+      ['Weak', 'var(--red)', 'downtrend'],
+      ['Neutral', 'var(--muted)', 'no clear setup'],
+      ['Strong – Elevated Risk', 'var(--amber)', 'setup, with a caveat'],
+      ['Strong', 'var(--green)', 'clean setup'],
+      ['Very Strong', 'var(--green)', 'everything lines up'],
     ];
     function slideTiers(sl) {
       return `<div class="tiers">${TIER_DEF.map(([n, c, w]) =>
@@ -1049,7 +1033,7 @@
             sub: () => {
               const n = (screens || []).length;
               const g = new Set((screens || []).map((x) => x.group || x.grp).filter(Boolean)).size;
-              return 'A screen is a saved question: its filters, its Sector / Industry / Advice picks, a sort and a column set.'
+              return 'A screen is a saved question: its filters, its Sector / Industry / Signal picks, a sort and a column set.'
                 + (n ? ` There are <b>${n}</b>, in ${g} group${g === 1 ? '' : 's'}.` : '');
             },
             who: 'applyOnly' },
@@ -1071,22 +1055,22 @@
         ],
       },
       {
-        id: 'advice', name: 'Reading Advice',
+        id: 'advice', name: 'Reading the Signal',
         slides: [
-          { kind: 'cover', kick: 'How to', title: 'Reading<br><span class="dim">the Advice group</span>',
+          { kind: 'cover', kick: 'How to', title: 'Reading<br><span class="dim">the Signal group</span>',
             sub: 'A mechanical reading of the table, not a recommendation. The company type picks the rulebook, four readings collapse to one word, and the rule that decided it is always named.',
             who: 'readOnly' },
           { kind: 'hsteps', kick: 'Four steps', title: 'Read it<br><span class="dim">left to right</span>',
             rows: [
               ['Start with Type', 'Established, Early or a fund. It decides which rulebook runs — an Early company is never judged on a P/E.'],
               ['Then Trend, Entry, Fund., Guards', 'May you · now · how much conviction · anything to wait for. Each is one word, and Guards is blank on most rows by design.'],
-              ['Read the verdict, and its reason', 'Hover any Advice cell: it names the ONE rule that fired. Five rule profiles sit side by side, Balanced first.'],
+              ['Read the signal, and its reason', 'Hover the Signal cell: it names the ONE rule that fired.'],
               ['Check the Cushion', 'How far the price can fall before the rules change their mind, in that stock’s own monthly volatility — so it compares across stocks.'],
             ] },
-          { kind: 'stmts', kick: 'Worth knowing', title: 'What the verdict<br><span class="dim">is claiming</span>',
+          { kind: 'stmts', kick: 'Worth knowing', title: 'What the signal<br><span class="dim">is claiming</span>',
             rows: [
-              ['y', 'Loss avoidance is the ORDER of the list', 'Every Sell, Avoid and Hold rule sits above every Buy rule in the source. That is a property of the code, not a setting.'],
-              ['y', 'Six words, nothing else', 'Sell Immediately · Avoid · Hold · Buy with Risk · Buy · Strong Buy. No scores, no targets, no percentages of confidence.'],
+              ['y', 'Loss avoidance is the ORDER of the list', 'Every Weak and Neutral rule sits above every Strong rule in the source. That is a property of the code, not a setting.'],
+              ['y', 'Six words, nothing else', 'Very Weak · Weak · Neutral · Strong – Elevated Risk · Strong · Very Strong. No scores, no targets, no percentages of confidence.'],
               ['x', 'It does not pick winners', 'Replayed over twenty years the tiers order the DOWNSIDE correctly and the medians are flat. It manages risk; that is the honest claim.'],
             ] },
         ],
@@ -1100,7 +1084,7 @@
           { kind: 'hsteps', kick: 'Four steps', title: 'One stock,<br><span class="dim">one thing</span>',
             rows: [
               ['Open <b>Alerts</b> in the bar', 'Your alerts, and everything they have reported, on one page.'],
-              ['Pick a stock and a type', 'Six: a price level, a moving-average cross, a change of Advice verdict, an RSI level, a 52-week extreme, or a big day.'],
+              ['Pick a stock and a type', 'Six: a price level, a moving-average cross, a change of Signal, an RSI level, a 52-week extreme, or a big day.'],
               ['Press <b>Add alert</b>', 'The form asks only for what that type needs — a direction and a number, or just a direction.'],
               ['Watch the badge', 'Every page carries the unread count. Nothing interrupts you; it is there when you next look.'],
             ] },
@@ -1198,7 +1182,7 @@
       // Name the groups that lost entries where there are one or two of them;
       // past that the sentence becomes a list longer than the thing it is
       // apologising for ("in Value and growth, Technical, Short interest,
-      // Earnings and Advice" was the square's first reading) and a count of
+      // Earnings and Signal" was the square's first reading) and a count of
       // groups says the same thing in four words.
       const where = partial || dropped.length === 0 ? ''
         : dropped.length <= 2 ? `, in ${esc(dropped.join(' and '))}`
@@ -1500,8 +1484,8 @@
     });
 
     const LADDER_LIGHT = {
-      'Strong Buy': '#157a51', 'Buy': '#4a770e', 'Buy with Risk': '#9d5a07',
-      'Hold': '#5b6675', 'Avoid': '#b44902', 'Sell Immediately': '#c81e37',
+      'Very Strong': '#157a51', 'Strong': '#4a770e', 'Strong – Elevated Risk': '#9d5a07',
+      'Neutral': '#5b6675', 'Weak': '#b44902', 'Very Weak': '#c81e37',
     };
     // SKY NEEDS ITS OWN LADDER, and that is a MEASUREMENT rather than a
     // precaution. LADDER_LIGHT clears only ~4.52:1 on light's own card tile,
@@ -1515,8 +1499,8 @@
     // #e0ebf9 -> #d1ecff, which cost 1-2 channel steps an entry -- nothing the
     // eye can see, and the margin back where it was said to be.
     const LADDER_SKY = {
-      'Strong Buy': '#136e49', 'Buy': '#426b0d', 'Buy with Risk': '#8e5106',
-      'Hold': '#56616f', 'Avoid': '#a44202', 'Sell Immediately': '#bc1d33',
+      'Very Strong': '#136e49', 'Strong': '#426b0d', 'Strong – Elevated Risk': '#8e5106',
+      'Neutral': '#56616f', 'Weak': '#a44202', 'Very Weak': '#bc1d33',
     };
     const THEMES = {
       dark: {
@@ -1942,8 +1926,8 @@
        + 'security. Tickr Lab applies fixed, published rules to published market data and '
        + 'reports what they produce. It does not know your circumstances, your goals or '
        + 'your tax position.'],
-      ['A verdict is a label, not an instruction',
-       'Buy, Strong Buy, Avoid and Sell Immediately name the output of a rule. Each one '
+      ['A signal is a label, not an instruction',
+       'Very Strong, Strong, Weak and Very Weak name the output of a rule. Each one '
        + 'carries the single rule that produced it, precisely so you can judge the rule '
        + 'for yourself.'],
       ['It describes, it does not predict',
@@ -2979,7 +2963,7 @@
   //
   // "One card for a single stock" (the owner, 2026-09-30). Three templates
   // already answer ONE question about one company — the Chart card in `stock`
-  // mode draws its line, the Advice card in `profiles` mode reads the five
+  // mode draws its line, the Signal card in `profiles` mode reads the five
   // rule sets against it, the Fundamentals card in `one` mode lists its
   // figures — so the whole picture took three posts. This is the poster: what
   // it is, what it did, what it earns, and what the rules make of it.
@@ -3162,7 +3146,7 @@
     // THE VERDICT ALWAYS TRAVELS WITH THE RULE THAT FIRED and with the rule
     // set's name. That is the whole difference between this and a tip sheet,
     // and it is why the attribution is not a setting.
-    const profile = O.spotProf || 'Balanced';
+    const profile = O.spotProf === 'off' ? 'off' : 'Balanced';
     let verdict = '';
     if (profile !== 'off') {
       const a = advScored(profile)[sym] || null;
@@ -3171,7 +3155,7 @@
         '<div class="sp-verd" style="border-color:' + tint + '33">' +
         (a && a.action
           // THE DIAL IS THE VERDICT, drawn as a place on the ladder -- the same
-          // arc the Advice board uses, with the needle in the middle of this
+          // arc the Signal board uses, with the needle in the middle of this
           // stock's own step. One dial only: the board's small ones are shares
           // of many stocks, and for one company trend and entry are words, not
           // amounts. It adds no claim the word beside it does not already make,
@@ -3843,7 +3827,7 @@
     // not optional.
     const swatch = colorBy === 'none' ? ''
       : (colorBy === 'advice'
-        ? '<span class="bkey">colour: the Balanced verdict</span>'
+        ? '<span class="bkey">colour: the signal</span>'
         : sectors.slice(0, 6).map((s, i) =>
           '<span class="bkey"><i style="background:'
           + pal.ink(BUB_SECTOR_TINTS[i % BUB_SECTOR_TINTS.length]) + '"></i>' + esc(s) + '</span>').join(''));
@@ -5507,7 +5491,7 @@
   // Mega 75.9, Large 55.3, Mid-Large 33.3, Mid 12.5.
   //
   // IT ADDS NO FIELD. vs200ma is already on every row and is already an
-  // Advice input (trend_gate), so this is display over something the engine
+  // Signal input (trend_gate), so this is display over something the engine
   // has always read -- there is nothing new for a verdict to see, and the
   // three-way scoring proof the instrumentType and S&P columns had to give
   // does not apply. The boundary that matters here is the other way round:
@@ -7949,7 +7933,7 @@
                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sz-story .row .nm2 { font-size: 30px; width: 390px; }
     /* The verdict rides UNDER the name rather than taking a column of its
-       own: at "Sell Immediately" a column would cost ~170px, and with the
+       own: at "Very Weak" a column would cost ~170px, and with the
        comparison column on there is not that much left to give. Stacked, it
        costs nothing horizontally and about 2px of row height. */
     .row .nm2.stack { display: flex; flex-direction: column; justify-content: center;

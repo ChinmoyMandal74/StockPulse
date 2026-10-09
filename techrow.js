@@ -1,4 +1,4 @@
-// The bar-derived row, defined once — barmath.js's shape, for the Advice
+// The bar-derived row, defined once — barmath.js's shape, for the Signal
 // engine's inputs rather than its score.
 //
 // Everything here comes from a symbol's own daily bars and nothing else: no
@@ -15,7 +15,7 @@
 //   * the 52-week high. This one uses the intraday HIGHS, the study used
 //     CLOSES. A closing high is never above an intraday one, so the study
 //     reported every stock as nearer its high than the app does — and
-//     `pctFromHigh` feeds `nearHigh` (Strong Buy), `shallowEnough` (a plain
+//     `pctFromHigh` feeds `nearHigh` (Very Strong), `shallowEnough` (a plain
 //     Buy) and `deepHole`.
 //   * `volTrend` was absent from the study's row entirely, so the
 //     `distribution` Avoid rule could never fire in eighteen years of it.

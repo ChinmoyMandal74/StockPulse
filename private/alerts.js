@@ -99,7 +99,7 @@
     },
 
     verdict: {
-      name: 'Advice verdict change',
+      name: 'Signal change',
       blurb: 'When the Balanced rules read this stock differently than they did.',
       fields: [{ k: 'dir', t: 'dir', label: 'Direction',
                  opts: [['any', 'changes either way'], ['up', 'is upgraded'], ['down', 'is downgraded']] }],
@@ -108,6 +108,10 @@
       // The verdict IS the side: any change of word is a transition, so the
       // generic edge detector handles it with no special case.
       side: (row) => (row.action ? String(row.action) : null),
+      was: (side) => {
+        const R = typeof globalThis !== 'undefined' && globalThis.ActionRules;
+        return R && R.canon ? R.canon(side) : side;
+      },
       fires(from, to, p) {
         if (p.dir === 'any') return true;
         const L = (typeof globalThis !== 'undefined' && globalThis.ActionRules
@@ -119,7 +123,7 @@
         if (a < 0 || b < 0) return false;
         return p.dir === 'up' ? b > a : b < a;
       },
-      label: (p) => `Advice ${p.dir === 'any' ? 'changes' : p.dir === 'up' ? 'is upgraded' : 'is downgraded'}`,
+      label: (p) => `Signal ${p.dir === 'any' ? 'changes' : p.dir === 'up' ? 'is upgraded' : 'is downgraded'}`,
       body: (row, p, from, to) => `${row.symbol} moved from ${from} to ${to}.`,
     },
 
@@ -238,7 +242,10 @@
     if (!t || !row) return { side: null, fire: false, body: null };
     const to = t.side(row, alert.params || {});
     if (to === null) return { side: null, fire: false, body: null };
-    const from = alert.lastSide == null ? null : alert.lastSide;
+    // A side remembered before the verdict words were renamed is the OLD word.
+    // Read as it stands it differs from today's on every alert at once, and
+    // each one fires on a move that never happened.
+    const from = alert.lastSide == null ? null : (t.was ? t.was(alert.lastSide) : alert.lastSide);
     if (from === null || from === to) return { side: to, fire: false, body: null };
     if (!t.fires(from, to, alert.params || {})) return { side: to, fire: false, body: null };
     return { side: to, fire: true, body: t.body(row, alert.params || {}, from, to) };

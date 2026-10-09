@@ -208,7 +208,7 @@ for (const era of ERAS) {
         const cut = med(got.map((x) => x[m]));
         const thick = got.filter((x) => x[m] >= cut).map((x) => x[key]);
         const thin = got.filter((x) => x[m] < cut).map((x) => x[key]);
-        // A DEGENERATE SPLIT IS NOT A GAP. In Avoid and Sell Immediately the
+        // A DEGENERATE SPLIT IS NOT A GAP. In Avoid and Very Weak the
         // technicals are ALREADY at or past the exit, so exitDistance returns
         // a drop of 0 and every cushion in the tier is 0 -- the median split
         // then puts everyone on the thick side and nobody on the thin one.
@@ -224,7 +224,7 @@ for (const era of ERAS) {
       // point have not been told apart by 18 years of data.
       const d = out.ce - out.ct;
       const better = Math.abs(d) < 0.001 ? '   =' : (d > 0 ? 'ewma' : 'trail');
-      if (tier === 'Strong Buy' || tier === 'Buy') {
+      if (tier === 'Very Strong' || tier === 'Strong') {
         if (better === 'ewma') wins.ewma++; else if (better === 'trail') wins.trail++; else wins.tie++;
       }
       line.push([pc(out.ct), pc(out.ce), better.padStart(6)]);
@@ -239,7 +239,7 @@ for (const era of ERAS) {
 console.log('\nGAP = p10(thick cushion half) - p10(thin half). POSITIVE means the measure');
 console.log('orders the downside correctly: a thicker cushion really does come with a');
 console.log('shallower bad case. The better estimator is the one with the BIGGER gap.');
-console.log('\nAcross the Strong Buy and Buy cells (2 tiers x 2 horizons x 3 eras = 12): '
+console.log('\nAcross the Very Strong and Buy cells (2 tiers x 2 horizons x 3 eras = 12): '
   + 'ewma better in ' + wins.ewma + ', trailing better in ' + wins.trail
   + ', indistinguishable in ' + wins.tie + '.');
 console.log('\nSurvivorship: ' + syms.length + ' symbols that all still trade, no bankruptcies,');

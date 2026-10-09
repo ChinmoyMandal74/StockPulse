@@ -378,7 +378,7 @@
         : 'none — every verdict in this list held today';
       return '<section class="bezel card"><div class="core"><h2>Stance</h2>' +
         `<div class="stack">${stack}</div><div class="tags">${tags}</div>` +
-        `<p class="chgline">${above}/${rows.length} above their 200-day. Advice (Balanced): ${advLine || '—'}.</p>` +
+        `<p class="chgline">${above}/${rows.length} above their 200-day. Signal: ${advLine || '—'}.</p>` +
         `<p class="chgline">Changed since the last session: ${chg}.</p>` +
         '</div></section>';
     }
@@ -510,7 +510,7 @@
         `<div><h3>Worst over ${esc(range.id)}</h3>${worst.map(row).join('')}</div></div>` +
         (overlap ? '<p class="note">Only a handful of stocks here, so the two columns overlap.</p>' : '') +
         `<p class="note">${have.length} of ${rows.length} have a ${esc(range.id)} return stored. ` +
-        'The verdict is the Balanced rules’ — a reading, not a recommendation.</p>' +
+        'The signal is a mechanical reading of the rules, not a recommendation.</p>' +
         '</div></section>';
     }
 
@@ -575,8 +575,8 @@
     //    on a column the reader then changes with the range buttons.
     // 3. A LADDER IS NOT THE ALPHABET. Balanced sorts on the engine's own
     //    ACTIONS order, which runs WORST-FIRST — so the index IS the rank and
-    //    descending puts Strong Buy on top. Sorting those words as text gives
-    //    Avoid, Buy, Hold, Sell Immediately, Strong Buy, which is nonsense
+    //    descending puts Very Strong on top. Sorting those words as text gives
+    //    Avoid, Buy, Hold, Very Weak, Very Strong, which is nonsense
     //    wearing a sort arrow.
     let sortKey = 'cap';
     let sortDir = -1;             // -1 descending, 1 ascending
@@ -587,7 +587,7 @@
       { k: 'today', label: 'Today',      num: true,  get: (s) => s.todayPct },
       { k: 'ret',   label: null,         num: true,  get: (s, f) => s[f] },
       { k: 'cap',   label: 'Market cap', num: true,  get: (s) => s.marketCap },
-      { k: 'adv',   label: 'Balanced',   num: true,
+      { k: 'adv',   label: 'Signal',     num: true,
         get: (s) => { const i = ActionRules.ACTIONS.indexOf(s.action); return i < 0 ? null : i; } },
     ];
     const colOf = (k) => STOCK_COLS.find((c) => c.k === k) || STOCK_COLS[5];

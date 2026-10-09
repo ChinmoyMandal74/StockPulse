@@ -71,129 +71,129 @@ check('Quality ON: the 7th point comes from Quality, not ROE',
 console.log('\nESTABLISHED rules, top to bottom');
 check('Breakdown → Sell (1M confirm)',
   run(row(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 })),
-  ['Established', 'Sell Immediately', 'Breakdown']);
+  ['Established', 'Very Weak', 'Breakdown']);
 check('Breakdown → Sell (3M confirm)',
   run(row(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -2, threeMonthPct: -20 })),
-  ['Established', 'Sell Immediately', 'Breakdown']);
+  ['Established', 'Very Weak', 'Breakdown']);
 check('Downtrend → Avoid',
   run(row(EST, { vs200ma: -4, vs50ma: -2, oneMonthPct: -2 })),
-  ['Established', 'Avoid', 'Downtrend']);
+  ['Established', 'Weak', 'Downtrend']);
 check('Weak below 200D → Avoid',
   run(row(EST, { vs200ma: -4, vs50ma: 1, earningsGrowthYoY: -10, revenueGrowthYoY: -5 })),
-  ['Established', 'Avoid', 'Weak fundamentals below 200D']);
+  ['Established', 'Weak', 'Weak fundamentals below 200D']);
 check('Distribution deep in a hole → Avoid',
   run(row(EST, { vs200ma: 1, vs50ma: 1, pctFromHigh: -35, volTrend: 15, oneMonthPct: -2 })),
-  ['Established', 'Avoid', 'Distribution deep in drawdown']);
+  ['Established', 'Weak', 'Distribution deep in drawdown']);
 check('Below 200D → Hold',
-  run(row(EST, { vs200ma: -3, vs50ma: 1 })), ['Established', 'Hold', 'Below 200D']);
-check('HOLE FIX 1: blank 200D → Hold, never a blind Buy with Risk',
-  run(row(EST, { vs200ma: null })), ['Established', 'Hold', 'No trend data']);
+  run(row(EST, { vs200ma: -3, vs50ma: 1 })), ['Established', 'Neutral', 'Below 200D']);
+check('HOLE FIX 1: blank 200D → Hold, never a blind Strong – Elevated Risk',
+  run(row(EST, { vs200ma: null })), ['Established', 'Neutral', 'No trend data']);
 check('  …fix 1 off reproduces the brief (falls through to Buy)',
-  run(row(EST, { vs200ma: null }), { fixes: { blank_trend_holds: false } })[1], 'Buy');
+  run(row(EST, { vs200ma: null }), { fixes: { blank_trend_holds: false } })[1], 'Strong');
 check('Thin history → Hold',
-  run(row(EST, { historyDays: 120 })), ['Established', 'Hold', 'Thin history']);
+  run(row(EST, { historyDays: 120 })), ['Established', 'Neutral', 'Thin history']);
 check('Earnings soon → Hold',
-  run(row(EST, { nextEarningsDate: '2026-09-14' })), ['Established', 'Hold', 'Earnings soon']);
+  run(row(EST, { nextEarningsDate: '2026-09-14' })), ['Established', 'Neutral', 'Earnings soon']);
 check('Stale (past) earnings date is ignored',
-  run(row(EST, { nextEarningsDate: '2026-09-01' }))[1], 'Buy');
+  run(row(EST, { nextEarningsDate: '2026-09-01' }))[1], 'Strong');
 check('Extended → Hold (1M too hot)',
-  run(row(EST, { oneMonthPct: 30 })), ['Established', 'Hold', 'Extended — wait for a pullback']);
-check('Strong Buy: everything aligned',
+  run(row(EST, { oneMonthPct: 30 })), ['Established', 'Neutral', 'Extended — wait for a pullback']);
+check('Very Strong: everything aligned',
   run(row(EST, { vs200ma: 15, pctFromHigh: -5 })),
-  ['Established', 'Strong Buy', 'Strong Buy: uptrend, clean entry, near high, strong fundamentals']);
-check('Buy: clean entry, OK fundamentals, modest trend',
+  ['Established', 'Very Strong', 'Very Strong: uptrend, clean entry, near high, strong fundamentals']);
+check('Strong: clean entry, OK fundamentals, modest trend',
   run(row(EST, { earningsGrowthYoY: 5, revenueGrowthYoY: 5 })),
-  ['Established', 'Buy', 'Buy: clean entry, fundamentals OK']);
-check('Buy refused deeper than max drawdown → Buy with Risk, flag names the drawdown',
+  ['Established', 'Strong', 'Strong: clean entry, fundamentals OK']);
+check('Buy refused deeper than max drawdown → Strong – Elevated Risk, flag names the drawdown',
   run(row(EST, { earningsGrowthYoY: 5, revenueGrowthYoY: 5, pctFromHigh: -25 })),
-  ['Established', 'Buy with Risk', 'Buy with Risk: deep below the high']);
-check('Buy with Risk: fundamentals made no case',
+  ['Established', 'Strong – Elevated Risk', 'Strong – Elevated Risk: deep below the high']);
+check('Strong – Elevated Risk: fundamentals made no case',
   run(row(EST, { earningsGrowthYoY: 5, revenueGrowthYoY: -1 })),
-  ['Established', 'Buy with Risk', 'Buy with Risk: fundamentals not OK']);
-check('HOLE FIX 2: Weak + clean entry → Hold, not Buy with Risk',
+  ['Established', 'Strong – Elevated Risk', 'Strong – Elevated Risk: fundamentals not OK']);
+check('HOLE FIX 2: Weak + clean entry → Hold, not Strong – Elevated Risk',
   run(row(EST, { earningsGrowthYoY: -10, revenueGrowthYoY: -5, vs200ma: 5 })),
-  ['Established', 'Hold', 'Weak fundamentals']);
+  ['Established', 'Neutral', 'Weak fundamentals']);
 check('  …fix 2 off reproduces the brief',
   run(row(EST, { earningsGrowthYoY: -10, revenueGrowthYoY: -5, vs200ma: 5 }),
-    { fixes: { weak_blocks_buy_with_risk: false } })[1], 'Buy with Risk');
+    { fixes: { weak_blocks_buy_with_risk: false } })[1], 'Strong – Elevated Risk');
 check('No clean entry → Hold',
-  run(row(EST, { rsi: 70 })), ['Established', 'Hold', 'No clean entry']);
-check('Mean-reversion mode: below 200D + OK fundamentals → Buy with Risk, no higher',
+  run(row(EST, { rsi: 70 })), ['Established', 'Neutral', 'No clean entry']);
+check('Mean-reversion mode: below 200D + OK fundamentals → Strong – Elevated Risk, no higher',
   run(row(EST, { vs200ma: -4, vs50ma: 1 }), { trend_gate: { never_buy_below_200d: false } }),
-  ['Established', 'Buy with Risk', 'Buy with Risk: below 200D, mean-reversion mode']);
+  ['Established', 'Strong – Elevated Risk', 'Strong – Elevated Risk: below 200D, mean-reversion mode']);
 check('Mean-reversion mode without fundamentals → Hold',
   run(row(EST, { vs200ma: -4, vs50ma: 1, earningsGrowthYoY: 5, revenueGrowthYoY: -1 }),
-    { trend_gate: { never_buy_below_200d: false } })[1], 'Hold');
+    { trend_gate: { never_buy_below_200d: false } })[1], 'Neutral');
 
 console.log('\nEARLY rules, top to bottom');
 check('Early breakdown → Sell (shorter leash)',
   run(row(EARLY, { vs200ma: -6, vs50ma: -4, oneMonthPct: -6 })),
-  ['Early', 'Sell Immediately', 'Breakdown (early)']);
+  ['Early', 'Very Weak', 'Breakdown (early)']);
 check('Weak below 200D → Sell, not Avoid',
   run(row(EARLY, { vs200ma: -2, vs50ma: 1, revenueGrowthYoY: 3 })),
-  ['Early', 'Sell Immediately', 'Weak fundamentals below 200D']);
+  ['Early', 'Very Weak', 'Weak fundamentals below 200D']);
 check('Below 200D → Avoid (harder than Established)',
   run(row(EARLY, { vs200ma: -2, vs50ma: 1, revenueGrowthYoY: 20, grossMargin: 30, fcfMargin: -10 })),
-  ['Early', 'Avoid', 'Below 200D']);
+  ['Early', 'Weak', 'Below 200D']);
 check('Heavy short interest → Avoid even in an uptrend',
-  run(row(EARLY, { shortPctFloat: 30 })), ['Early', 'Avoid', 'Heavy short interest']);
+  run(row(EARLY, { shortPctFloat: 30 })), ['Early', 'Weak', 'Heavy short interest']);
 check('Weak growth → Hold above the 200D',
-  run(row(EARLY, { revenueGrowthYoY: 3 })), ['Early', 'Hold', 'Weak fundamentals']);
+  run(row(EARLY, { revenueGrowthYoY: 3 })), ['Early', 'Neutral', 'Weak fundamentals']);
 check('Early Buy: strong growth in a real uptrend',
   run(row(EARLY, { fcfTtm: 50e6 })),
-  ['Early', 'Buy', 'Buy (early): strong growth in an uptrend']);
-check('Early is never Strong Buy by default',
-  run(row(EARLY, { fcfTtm: 50e6, pctFromHigh: -5 }))[1], 'Buy');
+  ['Early', 'Strong', 'Strong (early): strong growth in an uptrend']);
+check('Early is never Very Strong by default',
+  run(row(EARLY, { fcfTtm: 50e6, pctFromHigh: -5 }))[1], 'Strong');
 check('  …unless the profile enables it',
   run(row(EARLY, { fcfTtm: 50e6, pctFromHigh: -5 }), { early: { allow_strong_buy: true } })[1],
-  'Strong Buy');
-check('Buy with Risk (early): OK but not strong',
+  'Very Strong');
+check('Strong – Elevated Risk (early): OK but not strong',
   run(row(EARLY, { revenueGrowthYoY: 20, grossMargin: 30, fcfMargin: -10 })),
-  ['Early', 'Buy with Risk', 'Buy with Risk (early)']);
+  ['Early', 'Strong – Elevated Risk', 'Strong – Elevated Risk (early)']);
 
 console.log('\nETF rules');
 const ETF = row(EST, { portfolios: ['ETFs'], qualityRating: null, forwardPe: null });
-check('ETF Buy on a clean entry', run(ETF), ['ETF', 'Buy', 'Buy: clean entry']);
-check('ETF Strong Buy', run(row(ETF, { vs200ma: 15, pctFromHigh: -5 }))[1], 'Strong Buy');
-check('ETF below 200D → Hold', run(row(ETF, { vs200ma: -3, vs50ma: 1 }))[1], 'Hold');
+check('ETF Buy on a clean entry', run(ETF), ['ETF', 'Strong', 'Strong: clean entry']);
+check('ETF Very Strong', run(row(ETF, { vs200ma: 15, pctFromHigh: -5 }))[1], 'Very Strong');
+check('ETF below 200D → Hold', run(row(ETF, { vs200ma: -3, vs50ma: 1 }))[1], 'Neutral');
 check('ETF breakdown → Sell', run(row(ETF, { vs200ma: -12, vs50ma: -9, oneMonthPct: -9 }))[1],
-  'Sell Immediately');
+  'Very Weak');
 
 console.log('\nPRESETS');
 check('Conservative: tighter stop fires where Balanced held',
   run(row(EST, { vs200ma: -7, vs50ma: -2, oneMonthPct: -9 }), null, 'Conservative')[1],
-  'Sell Immediately');
+  'Very Weak');
 check('  …same row under Balanced is only Avoid',
-  run(row(EST, { vs200ma: -7, vs50ma: -2, oneMonthPct: -9 }))[1], 'Avoid');
-check('Conservative: Early caps at Buy with Risk',
-  run(row(EARLY, { fcfTtm: 50e6 }), null, 'Conservative')[1], 'Buy with Risk');
+  run(row(EST, { vs200ma: -7, vs50ma: -2, oneMonthPct: -9 }))[1], 'Weak');
+check('Conservative: Early caps at Strong – Elevated Risk',
+  run(row(EARLY, { fcfTtm: 50e6 }), null, 'Conservative')[1], 'Strong – Elevated Risk');
 check('Conservative: 10-day earnings blackout',
-  run(row(EST, { nextEarningsDate: '2026-09-20' }), null, 'Conservative')[1], 'Hold');
+  run(row(EST, { nextEarningsDate: '2026-09-20' }), null, 'Conservative')[1], 'Neutral');
 check('Aggressive: Early Buy on merely OK fundamentals',
   run(row(EARLY, { revenueGrowthYoY: 20, grossMargin: 30, fcfMargin: -10 }), null, 'Aggressive')[1],
-  'Buy');
+  'Strong');
 check('Aggressive: 30% month is not yet "extended"',
-  run(row(EST, { oneMonthPct: 30 }), null, 'Aggressive')[1], 'Buy');
+  run(row(EST, { oneMonthPct: 30 }), null, 'Aggressive')[1], 'Strong');
 
 console.log('\nCOMPOSITES OFF BY DEFAULT, ON BY CONFIG');
 check('use_quality on: Quality 3 makes an otherwise-strong row Weak → Hold',
-  run(row(EST, { qualityRating: 3 }), { use_quality: true })[1], 'Hold');
+  run(row(EST, { qualityRating: 3 }), { use_quality: true })[1], 'Neutral');
 
 console.log('\nBLANK DISCIPLINE');
 check('a nearly-empty row Holds, with the reason',
   run({ symbol: 'BLANK', portfolios: [], forwardPe: 20, qualityRating: 5 }),
-  ['Early', 'Hold', 'No trend data']);
+  ['Early', 'Neutral', 'No trend data']);
 check('blank 1M cannot confirm a breakdown',
-  run(row(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: null, threeMonthPct: null }))[1], 'Avoid');
+  run(row(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: null, threeMonthPct: null }))[1], 'Weak');
 check('blank short float is not "heavy short interest"',
-  run(row(EARLY, { shortPctFloat: null, fcfTtm: 50e6 }))[1], 'Buy');
+  run(row(EARLY, { shortPctFloat: null, fcfTtm: 50e6 }))[1], 'Strong');
 
 console.log('\nWHIPSAW BAND');
 check('inside a 2% band, -1.5% vs 200D is neither above nor below → falls to entry rules',
   run(row(EST, { vs200ma: -1.5, vs50ma: 1, earningsGrowthYoY: 5, revenueGrowthYoY: 5 }),
-    { whipsaw: { neutral_band_pct: 2 } })[1], 'Buy'),
+    { whipsaw: { neutral_band_pct: 2 } })[1], 'Strong'),
 check('  …the same row with no band is Below 200D → Hold',
-  run(row(EST, { vs200ma: -1.5, vs50ma: 1 }))[1], 'Hold');
+  run(row(EST, { vs200ma: -1.5, vs50ma: 1 }))[1], 'Neutral');
 
 console.log('\nCONFIG PLUMBING');
 const v1 = A.validate(cfg({ entry: { rsi_low: 70, rsi_high: 65 } }));
@@ -246,25 +246,25 @@ console.log('\nTHE LADDER (explain / ladder)');
   const ex = (r, d, p) => A.explain(row(r, d || {}), cfg(p));
   const fired = (e) => { const g = e.rungs[e.firedIndex]; return [e.mismatch, g.section, g.action, g.flag]; };
 
-  check('healthy Established base fires the Buy rung (vs200 +6 is under the Strong Buy bar)',
-    fired(ex(EST)), [false, 'setup', 'Buy', 'Buy: clean entry, fundamentals OK']);
-  check('strong uptrend near the high fires the Strong Buy rung',
+  check('healthy Established base fires the Buy rung (vs200 +6 is under the Very Strong bar)',
+    fired(ex(EST)), [false, 'setup', 'Strong', 'Strong: clean entry, fundamentals OK']);
+  check('strong uptrend near the high fires the Very Strong rung',
     fired(ex(EST, { vs200ma: 15, pctFromHigh: -5 })),
-    [false, 'setup', 'Strong Buy', 'Strong Buy: uptrend, clean entry, near high, strong fundamentals']);
+    [false, 'setup', 'Very Strong', 'Very Strong: uptrend, clean entry, near high, strong fundamentals']);
   check('breakdown row fires the top veto rung',
-    fired(ex(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 })), [false, 'veto', 'Sell Immediately', 'Breakdown']);
+    fired(ex(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 })), [false, 'veto', 'Very Weak', 'Breakdown']);
   check('rungs below the fired one are marked unchecked',
     ex(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 }).rungs.slice(1).every((g) => !g.checked), true);
   check('deep-below-the-high BwR rung carries the failed drawdown as a met condition',
     (() => { const e = ex(EST, { vs200ma: 6, pctFromHigh: -25, earningsGrowthYoY: 5, revenueGrowthYoY: 5, profitMargin: 3 });
       const g = e.rungs[e.firedIndex];
       return [e.mismatch, g.flag, g.conds[g.conds.length - 1].met]; })(),
-    [false, 'Buy with Risk: deep below the high', true]);
+    [false, 'Strong – Elevated Risk: deep below the high', true]);
   check('every condition on the fired rung is met (first-match honesty)',
     (() => { const e = ex(EST); return e.rungs[e.firedIndex].conds.every((c) => c.met); })(), true);
   check('ETF row walks the ETF ladder',
     fired(ex(row(EST, { portfolios: ['ETFs'], qualityRating: null, forwardPe: null }), { pctFromHigh: -5, vs200ma: 15 })),
-    [false, 'setup', 'Strong Buy', 'Strong Buy: uptrend, clean entry, near high']);
+    [false, 'setup', 'Very Strong', 'Very Strong: uptrend, clean entry, near high']);
   check('typeParts sum to the establishment score',
     (() => { const e = ex(EST); return e.typeParts.reduce((t, x) => t + x.earned, 0) === e.estScore; })(), true);
   check('typeParts max out at 7', ex(EST).typeParts.reduce((t, x) => t + x.max, 0), 7);
@@ -277,8 +277,8 @@ console.log('\nTHE LADDER (explain / ladder)');
     A.ladder('Established', cfg()).every((g) => g.conds.every((c) => !c.met)), true);
   check('gate off adds the mean-reversion rung, gate on omits it',
     [A.ladder('Established', cfg({ trend_gate: { never_buy_below_200d: false } }))
-        .some((g) => g.flag === 'Buy with Risk: below 200D, mean-reversion mode'),
-      A.ladder('Established', cfg()).some((g) => g.flag === 'Buy with Risk: below 200D, mean-reversion mode')],
+        .some((g) => g.flag === 'Strong – Elevated Risk: below 200D, mean-reversion mode'),
+      A.ladder('Established', cfg()).some((g) => g.flag === 'Strong – Elevated Risk: below 200D, mean-reversion mode')],
     [true, false]);
 
   // The sweep. A small LCG so the run is deterministic; each field is drawn
@@ -388,31 +388,31 @@ console.log('\nTHE FIVE PROFILES (picker presets)');
   // Trend Rider: chases further, exits unchanged.
   check('Trend Rider buys what Balanced calls Extended',
     [run(row(EST, { oneMonthPct: 28 }))[1], run(row(EST, { oneMonthPct: 28 }), null, 'Trend Rider')[1]],
-    ['Hold', 'Buy']);
+    ['Neutral', 'Strong']);
   check('Trend Rider keeps the Balanced stop — breakdown still sells',
     run(row(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 }), null, 'Trend Rider'),
-    ['Established', 'Sell Immediately', 'Breakdown']);
-  check('Trend Rider lets Early reach Strong Buy on strong fundamentals',
+    ['Established', 'Very Weak', 'Breakdown']);
+  check('Trend Rider lets Early reach Very Strong on strong fundamentals',
     run(row(EARLY, { revenueGrowthYoY: 40, grossMargin: 60, fcfTtm: 100e6, pctFromHigh: -5 }),
-      null, 'Trend Rider')[1], 'Strong Buy');
+      null, 'Trend Rider')[1], 'Very Strong');
 
   // Max Risk: the widest everything, still above the 200D only.
   check('Max Risk softens the Balanced breakdown to a downtrend Avoid (the veto below it)',
     [run(row(EST, { vs200ma: -17, vs50ma: -2, oneMonthPct: -10 }))[1],
       run(row(EST, { vs200ma: -17, vs50ma: -2, oneMonthPct: -10 }), null, 'Max Risk')[1]],
-    ['Sell Immediately', 'Avoid']);
-  check('Max Risk buys deep in a drawdown where Balanced caps at Buy with Risk',
+    ['Very Weak', 'Weak']);
+  check('Max Risk buys deep in a drawdown where Balanced caps at Strong – Elevated Risk',
     [run(row(EST, { pctFromHigh: -25 }))[1], run(row(EST, { pctFromHigh: -25 }), null, 'Max Risk')[1]],
-    ['Buy with Risk', 'Buy']);
+    ['Strong – Elevated Risk', 'Strong']);
   check('Max Risk still never buys below the 200D',
-    run(row(EST, { vs200ma: -3, vs50ma: 1 }), null, 'Max Risk')[1], 'Hold');
+    run(row(EST, { vs200ma: -3, vs50ma: 1 }), null, 'Max Risk')[1], 'Neutral');
 
   // Dip Buyer: the gate flips, the stops do not.
-  check('Dip Buyer turns a below-200D clean entry into Buy with Risk',
+  check('Dip Buyer turns a below-200D clean entry into Strong – Elevated Risk',
     [run(row(EST, { vs200ma: -4, vs50ma: 1 }))[1], run(row(EST, { vs200ma: -4, vs50ma: 1 }), null, 'Dip Buyer')],
-    ['Hold', ['Established', 'Buy with Risk', 'Buy with Risk: below 200D, mean-reversion mode']]);
+    ['Neutral', ['Established', 'Strong – Elevated Risk', 'Strong – Elevated Risk: below 200D, mean-reversion mode']]);
   check('Dip Buyer keeps the Balanced stop — a real breakdown still sells',
-    run(row(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 }), null, 'Dip Buyer')[1], 'Sell Immediately');
+    run(row(EST, { vs200ma: -12, vs50ma: -10, oneMonthPct: -9 }), null, 'Dip Buyer')[1], 'Very Weak');
 }
 
 

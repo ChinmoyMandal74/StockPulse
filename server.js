@@ -1906,7 +1906,7 @@ async function sendWelcome(email, role, name) {
       : `You now have access to ${BRAND} — a stock screener for a watchlist of stocks, ` +
         'refreshed after every close.';
     const bullets = [
-      ['The screener', 'Every ticker scored on quality and read by the advice rules, with 48 columns you can ' +
+      ['The screener', 'Every ticker scored on quality and read by the signal rules, with 48 columns you can ' +
         'collapse into groups and sort however you like.'],
       ['Signal screens', 'Seven views the sorted table cannot give you — bases turning up, ' +
         'names that have just started moving, earnings drift, and what is stretched.'],
@@ -3382,7 +3382,7 @@ function stampCapDerived(rows) {
     // figure stops being a share OF the float -- and three other guards were
     // measured and REJECTED before settling for a ceiling. cap/shares against
     // price catches 32 rows, nearly all ADRs, whose short interest is fine,
-    // and moves a real verdict (KNTK Buy with Risk -> Hold); the two
+    // and moves a real verdict (KNTK Strong – Elevated Risk -> Hold); the two
     // percentages against each other catches 116 and moves four, because the
     // stored float is a different vintage from them; and a day's volume
     // against the float catches NOTHING, the volume being the A class's too.
@@ -4273,7 +4273,7 @@ function emaArray(arr, period) {
 // (high + low) / 2, less the 34-session average. Returns { ao, prev } for the
 // newest session and the one before it, or null under 35 sessions. `values`
 // is newest-first. A bar with no usable high or low falls back to its close.
-// DISPLAY ONLY: nothing in the Advice engine reads it.
+// DISPLAY ONLY: nothing in the Signal engine reads it.
 function aoCalc(values) {
   if (!Array.isArray(values) || values.length < 35) return null;
   const mid = (v) => {
@@ -4986,7 +4986,7 @@ function scoreActionInto(rows) {
     // volatility, and the only within-tier ordering the archive supports.
     //
     // Measured 2026-09-17 over 307,965 stock-days, 42,285 of them in the
-    // technical Strong Buy tier, ranked within the day against the universe's
+    // technical Very Strong tier, ranked within the day against the universe's
     // equal-weight return: ranking on the RAW distance orders the downside
     // BACKWARDS — the roomiest half sits 25.6% above its 200-day on 31.7%
     // volatility against 13.8% and 24.3%, so "more room" is really "more
@@ -5102,9 +5102,8 @@ const STARTER_VIEWS = [
   { id: 'strfunda', name: 'Fundamentals', columns: ['price', 'sector', 'industry', 'marketCap', 'nextEarningsDate',
     'qualityScore', 'revenueTtm', 'grossMargin', 'netIncomeTtm', 'fcfMargin', 'netCash', 'earningsGrowthYoY',
     'revenueGrowthYoY', 'profitMargin', 'roe', 'forwardPe', 'peg'] },
-  { id: 'stradvic', name: 'Advice', columns: ['marketCap', 'price', 'todayPct', 'oneMonthPct', 'companyType', 'actionTrend',
-    'actionEntry', 'actionFund', 'actionGuards', 'av:Balanced', 'av:Trend Rider', 'av:Aggressive', 'av:Max Risk',
-    'av:Dip Buyer'] },
+  { id: 'stradvic', name: 'Signal', columns: ['marketCap', 'price', 'todayPct', 'oneMonthPct', 'companyType', 'actionTrend',
+    'actionEntry', 'actionFund', 'actionGuards', 'av:Balanced'] },
 ];
 
 function cleanViews(input) {
@@ -5144,7 +5143,7 @@ const SCREENS_MAX = 60;
 // stripped the filters out of every screen that went through a save.
 const SCREEN_FILTER_VAL_RE = /^[^\u0000-\u001f]{1,80}$/;
 const ADVICE_COLS = ['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'actionGuards',
-  'av:Balanced', 'av:Trend Rider', 'av:Aggressive', 'av:Max Risk', 'av:Dip Buyer'];
+  'av:Balanced'];
 const sc = (id, group, name, description, def) => ({ id, group, name, description, def });
 const STARTER_SCREENS = [
   sc('daygainr', 'Market movers', 'Day gainers', 'Up 3% or more today.',
@@ -5304,10 +5303,10 @@ const STARTER_SCREENS = [
   sc('driftbet', 'Earnings', 'Drifting after a beat', 'Beat estimates by 10-100%, reported in the last three weeks.',
     { filters: { lastSurprise: '10..100', daysSinceEarnings: '0..21' }, sort: { key: 'lastSurprise', dir: -1 },
       columns: ['nextEarningsDate', 'twoWeekPct', 'oneMonthPct', 'av:Balanced', 'spMember'] }),
-  sc('strngbuy', 'Advice', 'Strong Buys (Balanced)', 'The Balanced rules read Strong Buy — a mechanical reading, not an analyst rating.',
-    { filters: {}, advice: 'Strong Buy', sort: { key: 'marketCap', dir: -1 },
+  sc('strngbuy', 'Signal', 'Very Strong signals', 'The rules read Very Strong — a mechanical reading, not an analyst rating.',
+    { filters: {}, advice: 'Very Strong', sort: { key: 'marketCap', dir: -1 },
       columns: ['marketCap', 'price', 'todayPct', 'oneMonthPct', 'spMember'].concat(ADVICE_COLS) }),
-  sc('chgtoday', 'Advice', 'Advice changed today', 'The Balanced verdict moved since the previous session.',
+  sc('chgtoday', 'Signal', 'Signal changed today', 'The signal moved since the previous session.',
     { filters: {}, changed: true, sort: { key: 'marketCap', dir: -1 },
       columns: ['marketCap', 'price', 'todayPct', 'oneMonthPct', 'spMember'].concat(ADVICE_COLS) }),
 ];
@@ -7138,7 +7137,7 @@ async function computeStocks(asOf, opts = {}) {
         daysSince52wLow: extremeAges(values).lo,
         fresh3mHigh: fresh3mHigh(values),  // first close above the prior 3-month high
         // Yesterday's technical readings — the same fields, one bar back — so
-        // the Advice can be re-evaluated as of the previous trading day.
+        // the Signal can be re-evaluated as of the previous trading day.
         // Fundamentals are day-cached steps and stand for both days, the same
         // carry-forward the stock page's trend ribbon uses. Costs nothing:
         // the bars are already in hand.
@@ -7448,7 +7447,7 @@ async function persistBars(symbols, series, T = null) {
 // ============================================================================
 // The advice backtest
 // ============================================================================
-// "On this day a month ago, which stocks did the rules call a Strong Buy, and
+// "On this day a month ago, which stocks did the rules call a Very Strong, and
 // what would an equal-weight basket of them have done since?"
 //
 // What is REPLAYED and what is IMPUTED, because the difference is the whole
@@ -7924,7 +7923,7 @@ const btRowAt = (closes, highs, vols, i) => TechRow.rowAt(closes, highs, vols, i
 // rules. Over two months of correlated large caps that moves a result by tens
 // of basis points and would be a control that does nothing.
 const BT_MODES = ['rerun', 'exit'];
-const BT_EXIT_TIER = 'Avoid';          // this or worse closes a holding
+const BT_EXIT_TIER = 'Weak';          // this or worse closes a holding
 
 // Every Nth calendar day from the start, snapped to the next session that
 // actually traded. Calendar days rather than sessions because 7 / 14 / 30 is
@@ -8183,7 +8182,7 @@ function btTrades(log, verdicts, byS, opts) {
 // start date and the rebalancer calls it again at every rebalance, so a run
 // that re-runs the rules every 7 days evaluates through exactly the same code
 // path as the one that evaluates once. A second row builder would drift from
-// the Advice column inside a week — the reason rowcard.js and action.js exist.
+// the Signal column inside a week — the reason rowcard.js and action.js exist.
 function btEvalAt(sym, p, i, today, was, earnings, atDate, cfg, also) {
   const tech = p.tech || btRowAt(p.closes, p.highs, p.vols, i);
   if (!tech) return null;
@@ -8255,7 +8254,7 @@ function btRebalance(o) {
       why.set(sym, { a: ev.v.action, f: ev.v.flag || null, real: !!was });
       // In exit mode a holding survives while its verdict is ABOVE the exit
       // tier, which is a wider net than the tiers you bought on — you do not
-      // sell a Strong Buy that merely slipped to Hold.
+      // sell a Very Strong that merely slipped to Hold.
       const ok = mode === 'exit'
         ? Action.ACTIONS.indexOf(ev.v.action) > Action.ACTIONS.indexOf(BT_EXIT_TIER)
         : tiers.indexOf(ev.v.action) >= 0;
@@ -8372,7 +8371,7 @@ function btRun(opts) {
         const c = cmp.get(name);
         if (!c || !want.has(by[name].action)) continue;
         c.n++; c.sum += ret;
-        if (by[name].action === 'Strong Buy') c.strong++;
+        if (by[name].action === 'Very Strong') c.strong++;
       }
     }
     if (!want.has(v.action)) continue;
@@ -8460,13 +8459,13 @@ const CHAT_FIELDS = [
     'The $50B line inside Large is this site\'s own cut, not an industry standard'],
   ['qualityRating', 'quality 1-10 from fundamentals; blank when too few inputs are usable'],
   ['companyType', 'Established, Early or ETF — which rule list judges this stock'],
-  ['actionTrend', 'the Advice model\'s trend state: No data / Breakdown / Downtrend / Below 200D / Near 200D / Above 200D / Strong uptrend'],
+  ['actionTrend', 'the Signal model\'s trend state: No data / Breakdown / Downtrend / Below 200D / Near 200D / Above 200D / Strong uptrend'],
   ['actionEntry', 'its entry state: Extended / None / Clean / Clean, near high'],
   ['actionFund', 'its fundamentals bucket: Weak / — / OK / Strong'],
   ['actionGuards', 'active timing guards (thin history, earnings soon); blank when none'],
-  ['action', 'the Advice column: what the fixed Balanced rules conclude — Strong Buy / Buy / Buy with Risk / Hold / Avoid / Sell Immediately'],
-  ['actionFlag', 'the ONE rule that fired — the stated reason for that advice'],
-  ['advicePrev', 'the advice as of the previous trading day; a difference from action means it changed today'],
+  ['action', 'the Signal column: what the fixed rules conclude — Very Strong / Strong / Strong – Elevated Risk / Neutral / Weak / Very Weak'],
+  ['actionFlag', 'the ONE rule that fired — the stated reason for that signal'],
+  ['advicePrev', 'the signal as of the previous trading day; a difference from action means it changed today'],
   ['trendTimeline', 'the trend state over the last ~12 months as dated runs, oldest first — "date state → date state", each date the session that state began. Replayed from the bars under the current Balanced rules and the stock\'s current type, so it is exact where full advice history would not be'],
   ['todayPct', 'return today, %'],
   ['oneWeekPct', 'return over 1 week, %'],
@@ -8553,10 +8552,10 @@ function chatRules(asOf, count) {
     'YOU DO NOT GIVE BUY, SELL OR HOLD VERDICTS OF YOUR OWN. Asked whether to buy something, set',
     '  out what the data supports on both sides and stop there: a verdict would need news, a',
     '  valuation model, and the person\'s horizon and risk tolerance, none of which you have.',
-    '  The ADVICE column is different: it is the output of a fixed, published rule set, and you',
-    '  may report it WITH ATTRIBUTION — "the Balanced rules read this as Buy: clean entry,',
+    '  The SIGNAL column is different: it is the output of a fixed, published rule set, and you',
+    '  may report it WITH ATTRIBUTION — "the rules read this as Strong: clean entry,',
     '  fundamentals OK (the actionFlag)" — never as your own recommendation. The distinction to',
-    '  keep: the model advises, you explain the model. Do not append a standing disclaimer.',
+    '  keep: the model reads the data, you explain the model. Do not append a standing disclaimer.',
     '',
     'PREDICTIONS. "Will it go up?" is not a missing-data problem, it is unknowable. Say so briefly,',
     '  then describe where the stock actually stands.',
@@ -8776,7 +8775,7 @@ function peersFor(stock, stocks, links) {
   // the payload to ~1KB: six whole snapshot rows would be ~18KB for six cells
   // each.
   const CELLS = ['info|Price', 'short|Today', 'long|1Y', 'info|Market Cap',
-    'fund|Fwd P/E', 'act|Advice'];
+    'fund|Fwd P/E', 'act|Signal'];
   const peerRow = (x) => {
     const v = RowCard.fieldValues(x);
     const out = { symbol: x.symbol, name: x.shortName || x.name || x.symbol, why: x.actionFlag || '' };
@@ -9091,10 +9090,6 @@ function columnCatalogue() {
 const EXPORT_SKIP = {
   spark90: 'a drawing, not a value',
   newsAge: 'fetched separately, never stored on the row',
-  'av:Trend Rider': 'read in the browser under another rule set',
-  'av:Aggressive': 'read in the browser under another rule set',
-  'av:Max Risk': 'read in the browser under another rule set',
-  'av:Dip Buyer': 'read in the browser under another rule set',
 };
 // The anchors: always written, never offered as a tick. A sheet of numbers
 // with no symbol on it is not an export of anything. They are also exactly the
@@ -9614,6 +9609,10 @@ app.delete('/api/admin/posts/image/:id', requireAdmin, route(async (req, res) =>
 // Relative, so a `vol|…` key names nothing the catalogue can answer. (A
 // `TILE_GROUPS` array sat above this and was read by nothing — a second copy
 // of the list that could only ever drift out of step with the regex.)
+// The field was 'Advice' until 2026-10-09. A stored tile or phone setup still
+// names it that way, and a key the catalogue no longer has is dropped by the
+// cleaners below -- so the verdict would vanish from every saved view.
+const fieldKeyNow = (f) => (f === 'act|Advice' ? 'act|Signal' : f);
 const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|trend|size|fund|own)\|[^|]{1,32}$/;
 const TILE_SPARK_DAYS = [0, 21, 63, 126, 252];
 const TILE_FIELDS_MAX = 6;   // six reads as a tile; eight reads as a table cell
@@ -9624,7 +9623,7 @@ const TILE_DEFAULT = {
   fields: ['short|1W', 'short|1M', 'long|1Y', 'long|5Y'],
   scores: true,                 // the Overall / Mom / Qual chips
   sector: true,
-  verdict: true,                // the Advice word
+  verdict: true,                // the Signal word
   why: true,                    // and the rule that fired
   trend: true,                  // the Trend state beside the verdict
 };
@@ -9634,7 +9633,7 @@ function cleanTileConfig(raw) {
   const spark = TILE_SPARK_DAYS.includes(Number(c.spark)) || Number(c.spark) === 90
     ? Number(c.spark) : TILE_DEFAULT.spark;
   const fields = Array.isArray(c.fields)
-    ? [...new Set(c.fields.filter((f) => typeof f === 'string' && TILE_FIELD_RE.test(f)))].slice(0, TILE_FIELDS_MAX)
+    ? [...new Set(c.fields.map(fieldKeyNow).filter((f) => typeof f === 'string' && TILE_FIELD_RE.test(f)))].slice(0, TILE_FIELDS_MAX)
     : TILE_DEFAULT.fields;
   const flag = (k) => (typeof c[k] === 'boolean' ? c[k] : TILE_DEFAULT[k]);
   const sparkH = TILE_HEIGHTS.includes(Number(c.sparkH)) ? Number(c.sparkH) : TILE_DEFAULT.sparkH;
@@ -9660,7 +9659,7 @@ const MOBILE_FIELDS_MAX = 5;          // a phone row, not a table row
 const MOBILE_DEFAULT = {
   views: [
     { id: 'move', name: 'Move', fields: ['short|Today', 'short|1W', 'short|1M', 'long|1Y'] },
-    { id: 'verdict', name: 'Verdict', fields: ['act|Advice', 'act|Trend', 'act|Entry', 'rank|Overall'] },
+    { id: 'verdict', name: 'Verdict', fields: ['act|Signal', 'act|Trend', 'act|Entry'] },
     { id: 'value', name: 'Value', fields: ['fund|Fwd P/E', 'fund|ROE', 'fund|Profit margin', 'info|Market Cap'] },
   ],
 };
@@ -9674,7 +9673,7 @@ function cleanMobileConfig(raw) {
       const name = String((v && v.name) || '').trim().slice(0, 24);
       const id = slugify((v && v.id) || name).slice(0, 24);
       const fields = (Array.isArray(v && v.fields) ? v.fields : [])
-        .filter((f) => known.has(f)).slice(0, MOBILE_FIELDS_MAX);
+        .map(fieldKeyNow).filter((f) => known.has(f)).slice(0, MOBILE_FIELDS_MAX);
       return { id, name, fields };
     })
     .filter((v) => v.id && v.name && v.fields.length && !seen.has(v.id) && seen.add(v.id))
@@ -9958,7 +9957,7 @@ async function savedPosts() {
 // renamed tickers (SQ/XYZ, FI/FISV) stay apart.
 //
 // IT IS NOT A SNAPSHOT FIELD AND MUST NOT BECOME ONE. The boundary that
-// keeps filings data off the screener is about the Advice engine and the
+// keeps filings data off the screener is about the Signal engine and the
 // selection logic; this is an identity handed to a renderer, used and
 // discarded, and /api/stocks is untouched. The precedent is /backtest,
 // which already reads a CIK map it does not otherwise read, to dedupe.
@@ -10472,7 +10471,7 @@ async function newsStalePlan(windowMs) {
 // this at all: "We cannot afford to have incorrect data and wrong logic in
 // there which is the heart of the system and the differentiating factor."
 // So this data feeds the SEC EDGAR card on /stock and NOTHING else — not the
-// snapshot, not the Advice engine, not a screener column. It is never
+// snapshot, not the Signal engine, not a screener column. It is never
 // stamped onto a row, so it cannot become filterable, then screenable, then
 // a promo card. `sec-boundary-test.js` asserts that rather than trusting it.
 //
@@ -10749,7 +10748,7 @@ app.get('/api/sec/coverage', requireAdmin, route(async (req, res) => {
 //
 // Display only. Nothing here is stamped onto a snapshot row, and the response
 // carries no verdict, no flag and no rule — `evolution-test.js` asserts that
-// against the real payload, because an EDGAR series reaching the Advice
+// against the real payload, because an EDGAR series reaching the Signal
 // column is the one thing this class of feature must never do.
 const EVO_YEARS = { 5: 5, 10: 10, 0: 0 };          // 0 = everything stored
 const evoCache = new Map();
@@ -11356,7 +11355,7 @@ app.get('/api/sec', requireAuth, route(async (req, res) => {
   });
 }));
 
-// ---- Adjusted Advice (2026-09-29, owner's request) ------------------------
+// ---- Adjusted Signal (2026-09-29, owner's request) ------------------------
 //
 // The SAME rules, read off different data: Twelve Data's bars for every
 // technical, the company's own filings for every fundamental. `adjusted.js`
@@ -11511,7 +11510,7 @@ const INSIDER_WINDOW_DAYS = Number(process.env.INSIDER_WINDOW_DAYS || 180);
 // DISPLAY ONLY, and asserted rather than intended: `shortint-test.js` reads
 // the real /api/stocks and the real screener header and fails if any field
 // from this table appears in either. The boundary matters more here than it
-// did for the filings card, because `shortPctFloat` is ALREADY an Advice
+// did for the filings card, because `shortPctFloat` is ALREADY a Signal
 // input — read at action.js:360 (an Early company above 25% of float is an
 // Avoid) and again at 379/382 (the weak/ok fundamentals split). The live
 // verdict must keep taking that from the profile; this table exists so the
@@ -12001,7 +12000,7 @@ app.get('/api/news/latest', requireAuth, route(async (req, res) => {
 // IT IS A SEPARATE ENDPOINT FETCHED AFTER THE TABLE PAINTS, and that shape
 // is the boundary rather than a performance choice. The SEC data must not
 // reach a verdict: `lastEarningsDate` derives `nextEarningsDate`, which the
-// Advice engine's earnings guard reads, so a filing date stamped onto the
+// Signal engine's earnings guard reads, so a filing date stamped onto the
 // snapshot would be one rename away from moving verdicts. Delivered this way
 // it is never on the row the server scores — the engine cannot see it even
 // in principle — and nothing is written to the snapshot. `loadLatestNews`
@@ -13532,7 +13531,7 @@ let btCovCache = null;
 app.get('/api/trend-backtest', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const horizon = TB_HORIZONS[String(req.query.horizon || '')] ? String(req.query.horizon) : '3M';
-  const tiers = String(req.query.tiers || 'Strong Buy,Buy').split(',')
+  const tiers = String(req.query.tiers || 'Very Strong,Strong').split(',')
     .map((x) => x.trim()).filter((x) => Action.ACTIONS.indexOf(x) >= 0);
   if (!tiers.length) return res.status(400).json({ error: 'Pick at least one verdict.' });
   const rules = RULE_SETS.indexOf(String(req.query.rules || '')) >= 0
@@ -13639,7 +13638,7 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
   }
   if (asked >= today) return res.status(400).json({ error: 'Pick a date before today.' });
 
-  const tiers = String(req.query.tiers || 'Strong Buy').split(',')
+  const tiers = String(req.query.tiers || 'Very Strong').split(',')
     .map((x) => x.trim()).filter((x) => Action.ACTIONS.indexOf(x) >= 0);
   if (!tiers.length) return res.status(400).json({ error: 'Pick at least one verdict.' });
 
@@ -13859,13 +13858,13 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
 // public. So it runs from 2018 instead of from July.
 //
 // ADMIN ONLY, and research. It reuses `btRun`, `btCurve`, `btMatrix` and
-// `btRowAt` unchanged — a second row builder would drift from the Advice
+// `btRowAt` unchanged — a second row builder would drift from the Signal
 // column inside a week, which is why those were extracted at all. The one
 // thing it supplies differently is `recorded`: the fundamentals overlay, built
 // from filings visible on the date rather than from a vendor snapshot.
 //
 // NOTHING HERE TOUCHES THE LIVE VERDICT. No snapshot stamp, no screener
-// column; `/api/backtest` and the Balanced Advice column are untouched, and
+// column; `/api/backtest` and the Balanced Signal column are untouched, and
 // `adjbt-test.js` asserts both.
 const ADJBT_FLOOR = '2018-01-01';        // FINRA short interest starts 2017-12-29
 const ADJBT_HORIZONS = { '1M': 31, '3M': 92, '6M': 183, '1Y': 366 };
@@ -14036,7 +14035,7 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
       'which has not happened yet. Pick an earlier date or a shorter horizon.' });
   }
 
-  const tiers = String(req.query.tiers || 'Strong Buy').split(',')
+  const tiers = String(req.query.tiers || 'Very Strong').split(',')
     .map((x) => x.trim()).filter((x) => Action.ACTIONS.indexOf(x) >= 0);
   if (!tiers.length) return res.status(400).json({ error: 'Pick at least one verdict.' });
 
@@ -15396,7 +15395,7 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     // existed still carries the column, and a house-profile edit shows up on
     // the next load rather than after the nightly refresh.
     scoreActionInto(snap.stocks);
-    // Display names are stamped on the way out for the same reason the Advice
+    // Display names are stamped on the way out for the same reason the Signal
     // columns are: they derive from data we already hold, so a snapshot
     // written before the field existed still carries it, and an override
     // typed a moment ago shows without waiting for a refresh.

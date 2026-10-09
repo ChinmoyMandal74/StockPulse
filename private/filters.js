@@ -228,7 +228,7 @@
   // bar filter, the pivot's dimension and measure, and this module's own screen
   // evaluation, which the server runs for the phone.
   //
-  // `ActionRules.ACTIONS` RUNS WORST-FIRST (Sell Immediately → Strong Buy), so
+  // `ActionRules.ACTIONS` RUNS WORST-FIRST (Very Weak → Very Strong), so
   // an upgrade is an INCREASE in index. Both pages reverse that list for
   // display; using the display order here would label every upgrade a
   // downgrade. Read off the global lazily rather than at load, because

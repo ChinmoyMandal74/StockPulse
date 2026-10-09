@@ -343,7 +343,7 @@
     const BLANK = '—';
 
     // Ladders, so a dimension that HAS an order is not sorted alphabetically.
-    // "Avoid, Buy, Buy with Risk, Hold, Sell Immediately, Strong Buy" is the
+    // "Avoid, Buy, Strong – Elevated Risk, Hold, Very Weak, Very Strong" is the
     // alphabet's idea of a verdict ladder and nobody else's.
     //
     // TAKEN FROM THE ENGINE, not restated here, and that is not tidiness — the
@@ -362,12 +362,12 @@
     // path, `advicePrev` from the technicals one bar back — so this costs a
     // comparison and no fetch.
     //
-    // `ActionRules.ACTIONS` runs WORST-FIRST (Sell Immediately → Strong Buy),
+    // `ActionRules.ACTIONS` runs WORST-FIRST (Very Weak → Very Strong),
     // so a higher index is a better verdict and an upgrade is an increase. The
     // page reverses that list for display; using the display order here would
     // label every upgrade a downgrade.
     // Defined in filters.js, which this page already loads and the server
-    // require()s — so the pivot, the screener's Advice move picker and a screen
+    // require()s — so the pivot, the screener's Signal move picker and a screen
     // the server runs for the phone cannot disagree about which way a verdict
     // went. A blank stays a blank: nothing to compare is not "Unchanged".
     const adviceMove = (s) => Filters.adviceMove(s);
@@ -388,8 +388,8 @@
     const GOOD = '#34d399', OK = '#a3e635', WARM = '#fbbf24',
           COOL = '#9aa3b2', WARN = '#fb923c', BAD = '#fb7185';
     const LADDER_TINT = {
-      'Strong Buy': GOOD, 'Buy': OK, 'Buy with Risk': WARM,
-      'Hold': COOL, 'Avoid': WARN, 'Sell Immediately': BAD,
+      'Very Strong': GOOD, 'Strong': OK, 'Strong – Elevated Risk': WARM,
+      'Neutral': COOL, 'Weak': WARN, 'Very Weak': BAD,
       'Strong uptrend': GOOD, 'Above 200D': OK, 'Near 200D': COOL,
       'Below 200D': WARM, 'Downtrend': WARN, 'Breakdown': BAD, 'No data': 'var(--faint)',
       'Clean, near high': GOOD, 'Clean': OK, 'None': COOL, 'Extended': WARN,
@@ -399,7 +399,7 @@
       // Unchanged sits in the middle deliberately: it is neither.
       'Up 3%+': GOOD, 'Up 1-3%': OK, 'Up 0-1%': COOL, 'Unchanged': 'var(--faint)',
       'Down 0-1%': WARM, 'Down 1-3%': WARN, 'Down 3%+': BAD,
-      // Advice moves. `tint: 1` on a dimension is a DEAD FLAG until its values
+      // Signal moves. `tint: 1` on a dimension is a DEAD FLAG until its values
       // appear here — which this file already records happening once, with the
       // move bands. Caught the same way the second time: a screenshot, where
       // Unchanged carried a dot and the other two did not, only because the
@@ -418,7 +418,7 @@
     // single sector's slice, and crossed with Sector it is a block-diagonal
     // grid with one non-empty cell per column. It is expanded from its sector
     // instead, and left out of the Rows picker. (It stays in COLUMNS, where
-    // Advice × Industry is still a real question.)
+    // Signal × Industry is still a real question.)
     // TODAY'S MOVE, AS A BAND — and it is a DIMENSION rather than a measure on
     // purpose. Every measure here is additive (a count and a market cap both
     // sum) and percentages do not add: averaging them needs a weighting, and
@@ -479,7 +479,7 @@
       // headers can carry the same green-to-red language the screener's own
       // verdict cells use. Only these three: size, sector and exchange have an
       // order or none, but neither has a good end and a bad one.
-      advice:   { label: 'Balanced advice', get: (s) => s.action,      order: ADVICE_ORDER, tint: 1 },
+      advice:   { label: 'Signal', get: (s) => s.action,      order: ADVICE_ORDER, tint: 1 },
       trend:    { label: 'Trend state',     get: (s) => s.actionTrend, order: TREND_ORDER, tint: 1 },
       entry:    { label: 'Entry state',     get: (s) => s.actionEntry, order: ENTRY_ORDER, tint: 1 },
       type:     { label: 'Company type',    get: (s) => s.companyType, order: TYPE_ORDER },
@@ -498,7 +498,7 @@
       // A stock with no previous verdict is a BLANK, not "Unchanged" — the two
       // are different facts and the page already buckets blanks rather than
       // dropping them.
-      advmove:  { label: 'Advice move', get: (s) => adviceMove(s),
+      advmove:  { label: 'Signal move', get: (s) => adviceMove(s),
                   order: ['Upgraded', 'Unchanged', 'Downgraded'], tint: 1 },
       // TIME AS A COLUMN AXIS (2026-09-27, owner: "one column per month...
       // it will help to see how stocks perform over time"). Columns only —
@@ -573,10 +573,10 @@
       // of stocks that moved, deliberately unsigned: the pivot orders, shades
       // and totals on the measure, and a signed one would shade only its
       // positive half and read a −20 cell the same as an empty one. Which way
-      // they moved is the `Advice move` dimension's job — cross the two and the
+      // they moved is the `Signal move` dimension's job — cross the two and the
       // grid says both at once.
       moves: {
-        label: 'Advice moves',
+        label: 'Signal moves',
         each: (s) => (adviceMoved(s) ? 1 : 0),
         fmt: (v) => String(v),
         noun: 'a count of verdicts that moved since the previous close',
@@ -589,13 +589,13 @@
           'screener — so they count as neither moved nor unmoved.',
         placeNote: ' A move is counted once per placement, so these totals exceed the number of stocks that moved.',
         // The split is the point of the measure, and it is not derivable from
-        // the grid unless Advice move is on an axis — so the note says it.
+        // the grid unless Signal move is on an axis — so the note says it.
         summary: (rows) => {
           const up = rows.filter((s) => adviceMove(s) === 'Upgraded').length;
           const dn = rows.filter((s) => adviceMove(s) === 'Downgraded').length;
-          if (!up && !dn) return 'No Balanced verdict moved since the previous close.';
+          if (!up && !dn) return 'No signal moved since the previous close.';
           return '<b>' + (up + dn) + '</b> moved since the previous close — <b>' + up +
-            '</b> up, <b>' + dn + '</b> down. Put <b>Advice move</b> on an axis to see which way, by cell.';
+            '</b> up, <b>' + dn + '</b> down. Put <b>Signal move</b> on an axis to see which way, by cell.';
         },
       },
       // EQUAL WEIGHT, the convention the group pages and the theme page
@@ -782,11 +782,11 @@
     //
     // WHAT LEFT, 2026-09-28 (owner): Was, Trend and Cushion, replaced by the
     // 3M and 6M returns. The three that went were all readings of the advice
-    // engine, and the Advice column beside them already gives the verdict; a
+    // engine, and the Signal column beside them already gives the verdict; a
     // drill opened from a cell is read for "which stocks are in here and how
     // have they done", so the horizons earn the width more than a second and
     // third opinion on the same row does. `advicePrev` is still carried on
-    // the row and the Advice move measure still reads it — only the column
+    // the row and the Signal move measure still reads it — only the column
     // went.
     const DETAIL_COLS = [
       { k: 'symbol',        t: 'Symbol',     l: 1, link: 1 },
@@ -806,7 +806,7 @@
       { k: 'oneYearPct',    t: '1Y',         mv: 1 },
       { k: 'sector',        t: 'Sector',     l: 1 },
       { k: 'industry',      t: 'Industry',   l: 1 },
-      { k: 'action',        t: 'Advice',     l: 1 },
+      { k: 'action',        t: 'Signal',     l: 1 },
     ];
     // Biggest first, because "who is in this bucket" is answered by the names
     // that carry it. Every column is sortable, so this is only a starting point.
@@ -1407,7 +1407,7 @@
       const bits = [];
       // Whether the measure's total IS the stock count. It used to be
       // `measure !== 'count'`, which made every future measure inherit market
-      // cap's wording about funds — the Advice moves measure is a count of
+      // cap's wording about funds — the Signal moves measure is a count of
       // stocks and is still not a count of ALL of them.
       const everyStock = !!M().everyStock;
       // THE FILTER IS SAID FIRST, before any total. A grid holding 191 of 845

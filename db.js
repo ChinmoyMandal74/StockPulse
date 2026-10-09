@@ -20,6 +20,9 @@
 
 const crypto = require('crypto');
 const { createClient } = require('@tursodatabase/serverless/compat');
+// A snapshot or an advice_state row written before the six verdict words were
+// renamed still carries the old one; canon() answers with today's.
+const { canon: canonAction, canonRow: canonActionRow } = require('./private/action.js');
 
 const url = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
@@ -798,7 +801,7 @@ const SCHEMA = [
   // period is as-first-reported, the one thing no vendor sells and the one
   // thing that cannot be recovered once discarded.
   //
-  // FOR DISPLAY ONLY. Nothing here may reach the Advice engine or the
+  // FOR DISPLAY ONLY. Nothing here may reach the Signal engine or the
   // screener; see secfacts.js and the CLAUDE.md section for the boundary and
   // the test that enforces it.
   `create table if not exists sec_facts (
@@ -848,7 +851,7 @@ const SCHEMA = [
   // our universe, so dropping a ticker from the screener must not delete a
   // company's filing history. It is loaded and trimmed by the quarter.
   //
-  // FOR DISPLAY, like sec_facts. Never the Advice engine, never the screener.
+  // FOR DISPLAY, like sec_facts. Never the Signal engine, never the screener.
   `create table if not exists insider_trans (
      cik          integer not null,
      symbol       text,
@@ -1467,7 +1470,7 @@ async function readAdviceState() {
   const r = await db.execute('select symbol, action, since_d, seen_d, sessions, exact from advice_state');
   const out = {};
   for (const row of r.rows) {
-    out[row.symbol] = { action: row.action, since: row.since_d, seen: row.seen_d,
+    out[row.symbol] = { action: canonAction(row.action), since: row.since_d, seen: row.seen_d,
       sessions: Number(row.sessions), exact: !!Number(row.exact) };
   }
   return out;
@@ -2285,7 +2288,7 @@ async function readEarnings(symbol) {
 
 // ---- SEC EDGAR filings ----------------------------------------------------
 //
-// DISPLAY ONLY. These never reach the snapshot, the screener or the Advice
+// DISPLAY ONLY. These never reach the snapshot, the screener or the Signal
 // engine — see secfacts.js for why that boundary exists.
 
 const SEC_COLS = ['symbol', 'cik', 'accn', 'form', 'filed', 'fy', 'fp',
@@ -4661,7 +4664,7 @@ async function writeTechHistory(rows, opts = {}) {
 // range read and the by-date read cannot decode a row differently.
 const techMark = (row) => ({
   symbol: row.symbol, d: row.d,
-  action: row.action, flag: row.flag, trend: row.trend,
+  action: canonAction(row.action), flag: row.flag, trend: row.trend,
   close: row.close == null ? null : Number(row.close),
   vs200: row.vs200 == null ? null : Number(row.vs200),
   vs50: row.vs50 == null ? null : Number(row.vs50),
@@ -4920,7 +4923,9 @@ async function readSnapshot() {
   const r = await db.execute('select payload from snapshot where id = 1');
   if (!r.rows.length) return null;
   try {
-    return JSON.parse(r.rows[0].payload);
+    const snap = JSON.parse(r.rows[0].payload);
+    if (snap && Array.isArray(snap.stocks)) snap.stocks.forEach(canonActionRow);
+    return snap;
   } catch {
     return null;
   }
@@ -5118,13 +5123,31 @@ async function writeViews(scope, views) {
   await db.batch(stmts, 'write');
 }
 
+// A screen saved before 2026-10-09 names its verdict by the old word and may
+// list the four rule-set columns that were retired with it. Read as stored,
+// the first matches no row at all and the screen comes back empty.
+const RETIRED_COLS = new Set(['av:Trend Rider', 'av:Aggressive', 'av:Max Risk', 'av:Dip Buyer']);
+function screenDefNow(def) {
+  if (!def || typeof def !== 'object') return def;
+  if (typeof def.advice === 'string') def.advice = canonAction(def.advice);
+  if (def.filters && typeof def.filters === 'object') {
+    for (const k of Object.keys(def.filters)) {
+      if (RETIRED_COLS.has(k)) delete def.filters[k];
+      else if (k === 'av:Balanced') def.filters[k] = canonAction(def.filters[k]);
+    }
+  }
+  if (Array.isArray(def.columns)) def.columns = def.columns.filter((k) => !RETIRED_COLS.has(k));
+  if (def.sort && RETIRED_COLS.has(def.sort.key)) delete def.sort;
+  return def;
+}
+
 async function readScreens() {
   await init();
   const r = await db.execute('select id, name, grp, description, def from screens order by position');
   return r.rows.map((x) => {
     let def = {};
     try { def = JSON.parse(x.def); } catch { /* an unreadable screen has no filters */ }
-    return { id: x.id, name: x.name, group: x.grp, description: x.description || '', def };
+    return { id: x.id, name: x.name, group: x.grp, description: x.description || '', def: screenDefNow(def) };
   });
 }
 

@@ -290,7 +290,7 @@
         // quietest kind of lie.
         $('note').innerHTML = 'Six columns the table draws cannot be exported, because a row does not hold them: ' +
           (d.skipped || []).map((s) => '<b>' + esc(s.id) + '</b> (' + esc(s.why) + ')').join(', ') +
-          '. Balanced advice IS included — it is stamped on every row. ' +
+          '. The Signal IS included — it is stamped on every row. ' +
           'CSV is written with a byte-order mark and quotes anything a spreadsheet would read as a formula.';
         chosen = asTable();
         describe();

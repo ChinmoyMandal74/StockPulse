@@ -220,8 +220,8 @@
     ['act',   'Entry',          (s) => V.text(s.actionEntry)],
     ['act',   'Fundamentals',   (s) => V.text(s.actionFund)],
     ['act',   'Guards',         (s) => V.text(s.actionGuards)],
-    ['act',   'Advice',         (s) => s.action
-                                  ? { t: s.action, c: /Buy/.test(s.action) ? 'up' : /Sell|Avoid/.test(s.action) ? 'down' : '' } : null],
+    ['act',   'Signal',         (s) => s.action
+                                  ? { t: s.action, c: /Strong/.test(s.action) ? 'up' : /Weak/.test(s.action) ? 'down' : '' } : null],
     ['act',   'Why',            (s) => V.text(s.actionFlag)],
     ['act',   'Yesterday',      (s) => (s.advicePrev && s.advicePrev !== s.action ? V.text(s.advicePrev) : null)],
     // How far the Balanced rules let it fall before they exit. NOT a measure of
@@ -442,7 +442,7 @@
   // band). The group ID is unchanged, so every saved key that names it still
   // resolves — a label is free to change in a way a group id is not.
   const GROUP_LABELS = {
-    info: 'Info', rank: 'Scores', act: 'Advice', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
+    info: 'Info', rank: 'Scores', act: 'Signal', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
     rel: 'Relative', trend: 'Trend', size: 'Scale', fund: 'Fundamentals', own: 'Ownership',
   };
 

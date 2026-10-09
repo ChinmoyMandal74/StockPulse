@@ -184,7 +184,7 @@
           <option value="split">Both, side by side</option>
         </select>
         <div id="movAdvWrap">
-          <label>Advice</label>
+          <label>Signal</label>
           <select id="movAdv"></select>
         </div>
         <label>Within</label>
@@ -351,11 +351,10 @@
           <option value="board" selected>Tonight's board</option>
           <option value="firing">What's firing</option>
           <option value="changed">What changed</option>
-          <option value="profiles">Five profiles, one stock</option>
-          <option value="tier">Everything at one verdict</option>
+          <option value="tier">Everything at one signal</option>
         </select>
         <div id="advTierWrap">
-          <label>Verdict</label>
+          <label>Signal</label>
           <select id="advTier"></select>
         </div>
         <div id="advSymWrap">
@@ -376,7 +375,7 @@
         <label>Index</label>
         <select id="advSp500"></select>
         </div>
-        <div id="advProfWrap">
+        <div id="advProfWrap" hidden>
           <label>Rules</label>
           <select id="advProf"></select>
         </div>
@@ -537,7 +536,7 @@
         <label>Colour</label>
         <select id="bubColor">
           <option value="sector" selected>By sector</option>
-          <option value="advice">By the Balanced verdict</option>
+          <option value="advice">By the signal</option>
           <option value="none">One colour</option>
         </select>
         <label>How many</label>
@@ -975,11 +974,11 @@
           <option value="m6" selected>Past six months</option>
           <option value="y1">Past year</option>
         </select>
-        <label>Rules</label>
+        <label>Signal</label>
         <select id="spotProf"></select>
         <p class="hint">The window moves the chart alone — the eight figures are
           the stock's own fixed periods, and the range track is always its year.
-          A verdict always carries the rule that fired and the rule set's name.</p>
+          A signal always carries the rule that fired.</p>
       </div>
 
       <div id="intBox">
@@ -1101,7 +1100,7 @@
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'lines', name: 'Lines', note: 'Any one measure over time — price or a filed fundamental — a line per company' },
-      { id: 'advboard', name: 'Advice', note: 'What the rules read, four ways' },
+      { id: 'advboard', name: 'Signal', note: 'What the rules read, four ways' },
       { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
       { id: 'howto', name: 'How to', note: 'Training slides — one topic, three slides, a carousel each' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
@@ -1160,7 +1159,7 @@
     //   Rankings -- a top-N list of companies on one measure
     //   Compare  -- many companies drawn against each other
     //   Brand    -- no data: words and identity
-    // Advice stays an entry of its own; a group of one is a picker with one
+    // Signal stays an entry of its own; a group of one is a picker with one
     // option. Fundamentals sits in Rankings because its default view ranks.
     const RANK_VIEWS = [
       ['movers', 'Movers'],
@@ -1590,9 +1589,8 @@
       $('fundScopeWrap').style.display = fm === 'one' ? 'none' : 'block';
       const am = $('advMode').value;
       $('advTierWrap').style.display = am === 'tier' ? 'block' : 'none';
-      $('advSymWrap').style.display = am === 'profiles' ? 'block' : 'none';
-      $('advScopeWrap').style.display = am === 'profiles' ? 'none' : 'block';
-      $('advProfWrap').style.display = am === 'profiles' ? 'none' : 'block';
+      $('advSymWrap').style.display = 'none';
+      $('advScopeWrap').style.display = 'block';
       const cm = $('chtMode').value;
       const oneOrTwo = cm === 'stock' || cm === 'two';
       $('chtScopeWrap').style.display = oneOrTwo ? 'none' : 'block';
@@ -1681,7 +1679,7 @@
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
     $('movAdv').innerHTML = '<option value="off" selected>Don’t show</option>' +
-      Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}">${esc(n)} rules</option>`).join('');
+      Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}">Show it</option>`).join('');
     // THESE LISTS ARE A SECOND COPY OF CONTROL_IDS, split per template so
     // a change only redraws the card it belongs to. A control added to the
     // markup and to CONTROL_IDS but NOT here exists, is saved with a post, is
@@ -1708,7 +1706,7 @@
           : kind === 'steps' ? 'Steps'
           : kind === 'flow' ? 'The four readings'
           : kind === 'ladder' ? 'The rule ladder'
-          : kind === 'tiers' ? 'The six verdicts'
+          : kind === 'tiers' ? 'The six signals'
           : kind === 'mock' ? 'The star'
           : kind === 'stmts' ? 'The refusals' : kind)}</option>`).join('');
       $('intSlide').value = String(at);
@@ -1744,7 +1742,7 @@
     // what a spotlight is for, and it is the reading every other surface
     // shows. Off stays available for a card that is only about the numbers.
     $('spotProf').innerHTML = '<option value="off">Don\u2019t show</option>' +
-      Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}"${n === 'Balanced' ? ' selected' : ''}>${esc(n)}</option>`).join('');
+      Cards.ADV_PROFILES.map((n) => `<option value="${esc(n)}"${n === 'Balanced' ? ' selected' : ''}>Show it</option>`).join('');
     ['advMode', 'advTier', 'advSym', 'advScope', 'advProf', 'advSector', 'advIndustry', 'advCap', 'advScreen', 'advSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'advboard') render(); }));
     ['fundMode', 'fundMetric', 'fundDir', 'fundCount', 'fundSym', 'fundScope', 'fundSector', 'fundIndustry', 'fundCap', 'fundScreen', 'fundSp500'].forEach((id) =>

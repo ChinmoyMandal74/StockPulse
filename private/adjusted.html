@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Adjusted Advice — Tickr Lab</title>
+  <title>Adjusted Signal — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -109,7 +109,7 @@
 
   <main class="page">
     <header class="top">
-      <h1>Adjusted Advice</h1>
+      <h1>Adjusted Signal</h1>
       <span class="count" id="adjTook"></span>
       <span class="spacer"></span>
       <button class="btn" id="adjFresh">Rebuild</button>
@@ -197,9 +197,9 @@
            + we(x.label) + '</th>';
       });
       h += '<th class="t" data-k="type">Type</th>'
-         + '<th class="t" data-k="adjusted">Adjusted Advice</th>'
+         + '<th class="t" data-k="adjusted">Adjusted Signal</th>'
          + '<th class="t" data-k="flag">Rule that fired</th>'
-         + '<th class="t" data-k="live">Live advice</th></tr>';
+         + '<th class="t" data-k="live">Live signal</th></tr>';
       $('adj').tHead.innerHTML = h;
 
       [].forEach.call($('adj').querySelectorAll('thead tr.hd th'), function (th) {

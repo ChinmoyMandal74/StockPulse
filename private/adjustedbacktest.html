@@ -72,12 +72,12 @@
       border-radius: 999px; padding: 8px 13px; font: 500 12.5px var(--sans);
       cursor: pointer; transition: all .18s var(--ease); }
     #abTiers button[aria-pressed="true"] { color: var(--void); font-weight: 600; }
-    #abTiers button[data-t="Strong Buy"][aria-pressed="true"] { background: var(--green); border-color: var(--green); }
-    #abTiers button[data-t="Buy"][aria-pressed="true"] { background: #6ee7b7; border-color: #6ee7b7; }
-    #abTiers button[data-t="Buy with Risk"][aria-pressed="true"] { background: var(--amber); border-color: var(--amber); }
-    #abTiers button[data-t="Hold"][aria-pressed="true"] { background: var(--muted); border-color: var(--muted); }
-    #abTiers button[data-t="Avoid"][aria-pressed="true"] { background: #fda4af; border-color: #fda4af; }
-    #abTiers button[data-t="Sell Immediately"][aria-pressed="true"] { background: var(--red); border-color: var(--red); }
+    #abTiers button[data-t="Very Strong"][aria-pressed="true"] { background: var(--green); border-color: var(--green); }
+    #abTiers button[data-t="Strong"][aria-pressed="true"] { background: #6ee7b7; border-color: #6ee7b7; }
+    #abTiers button[data-t="Strong – Elevated Risk"][aria-pressed="true"] { background: var(--amber); border-color: var(--amber); }
+    #abTiers button[data-t="Neutral"][aria-pressed="true"] { background: var(--muted); border-color: var(--muted); }
+    #abTiers button[data-t="Weak"][aria-pressed="true"] { background: #fda4af; border-color: #fda4af; }
+    #abTiers button[data-t="Very Weak"][aria-pressed="true"] { background: var(--red); border-color: var(--red); }
 
     /* A GRID, NOT A WRAPPED ROW: the cards then share one width and read
        as a set rather than as boxes of whatever size their text happened
@@ -315,7 +315,7 @@
       <h1>Adjusted backtest</h1>
       <span class="count" id="abTook"></span>
       <span class="spacer"></span>
-      <a class="btn live" href="/adjusted">Adjusted Advice</a>
+      <a class="btn live" href="/adjusted">Adjusted Signal</a>
       <a class="btn live" href="/admin">Admin</a>
       <a class="btn shared" href="/">Tickr Lab</a>
     </header>
@@ -330,7 +330,7 @@
         <input type="date" id="abDate" /></div>
       <div class="fld"><span class="lbl">Hold for</span>
         <select id="abHz"></select></div>
-      <div class="fld"><span class="lbl">Rules</span>
+      <div class="fld" hidden><span class="lbl">Rules</span>
         <select id="abRules"></select></div>
       <div class="fld"><span class="lbl">Theme</span>
         <select id="abTheme"><option value="">All stocks</option></select></div>
@@ -418,11 +418,11 @@
     'use strict';
     var $ = function (id) { return document.getElementById(id); };
     var DATA = null, SORT = { key: 'ret', dir: -1 };
-    var TIERS = ['Strong Buy', 'Buy', 'Buy with Risk', 'Hold', 'Avoid', 'Sell Immediately'];
-    // The owner's default: Strong Buy ALONE. Adding Buy roughly triples the
+    var TIERS = ['Very Strong', 'Strong', 'Strong – Elevated Risk', 'Neutral', 'Weak', 'Very Weak'];
+    // The owner's default: Very Strong ALONE. Adding Buy roughly triples the
     // basket and takes it most of the way to being the benchmark, which is
     // the documented reason the trend sweep's own result was hard to read.
-    var chosen = { 'Strong Buy': true };
+    var chosen = { 'Very Strong': true };
 
     function we(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -927,7 +927,7 @@
 
     function note() {
       var common =
-        'The <b>same rules</b> as the Advice column, replayed on a past date with every '
+        'The <b>same rules</b> as the Signal column, replayed on a past date with every '
       + 'fundamental taken from <b>filings that were public on that date</b> and every '
       + 'technical rebuilt from the price bars. That is what lets it start in '
       + we(DATA.floor) + ' rather than two months ago: a filing carries the day it was '
@@ -937,7 +937,7 @@
       // which a reader with no account cannot open. A dead link and a
       // repeated caveat are both worse than the shorter paragraph.
       $('abNote').innerHTML = RUNID ? common : common
-        + ' <b>Research only</b> — nothing here reaches the screener, the Advice column or '
+        + ' <b>Research only</b> — nothing here reaches the screener, the Signal column or '
         + '<a href="/backtest">/backtest</a>, which is unchanged.';
     }
 
@@ -1292,7 +1292,7 @@
       })
       .catch(function () { /* the picker simply offers All */ });
 
-    ['Balanced', 'Trend Rider', 'Dip Buyer', 'Aggressive', 'Max Risk'].forEach(function (nm) {
+    ['Balanced'].forEach(function (nm) {   // one rule set since 2026-10-09
       var o = document.createElement('option'); o.value = nm; o.textContent = nm;
       $('abRules').appendChild(o);
     });
@@ -1328,9 +1328,9 @@
     if (p.get('date')) load();
     else {
       $('abMsg').textContent = 'Pick a start date and press Run.';
-      $('abNote').innerHTML = 'The same rules as the Advice column, replayed on a past '
+      $('abNote').innerHTML = 'The same rules as the Signal column, replayed on a past '
         + 'date with every fundamental taken from filings public on that date. '
-        + '<b>Research only</b> — nothing here reaches the screener or the Advice '
+        + '<b>Research only</b> — nothing here reaches the screener or the Signal '
         + 'column, and <a href="/backtest">/backtest</a> is unchanged.';
     }
   }());

@@ -217,7 +217,7 @@
       if (!r.ok) throw new Error(d.error || `Request failed (${r.status})`);
       return d;
     };
-    const GROUP_NAMES = { info: 'Info', rank: 'Scores', act: 'Advice', chart: 'Chart', short: 'Short term',
+    const GROUP_NAMES = { info: 'Info', rank: 'Scores', act: 'Signal', chart: 'Chart', short: 'Short term',
       long: 'Long term', rel: 'Relative', trend: 'Trend', vol: 'Volume', size: 'Size',
       fund: 'Fundamentals', own: 'Ownership' };
     const GROUP_TINT = { info: '#7c9cff', rank: '#a3e635', act: '#5eead4', short: '#34d399', long: '#a78bfa',
@@ -392,7 +392,7 @@
     }
 
     const TPL_NAMES = { movers: 'Movers', chart: 'Chart', sparks: 'Sparklines', range: 'Range',
-      advboard: 'Advice', fund: 'Fundamentals', intro: 'Intro', announce: 'Announcement',
+      advboard: 'Signal', fund: 'Fundamentals', intro: 'Intro', announce: 'Announcement',
       avatar: 'Profile picture' };
     const SHAPE_NAMES = { portrait: 'Post 4:5', square: 'Square', story: 'Story 9:16' };
 
@@ -536,7 +536,7 @@
       const sheet = openSheet('<div class="msg">Loading…</div>');
       try {
         const d = await get('/api/m/stock?symbol=' + encodeURIComponent(sym) + chartQ());
-        const vcls = /Buy/.test(d.action || '') ? 'up' : /Sell|Avoid/.test(d.action || '') ? 'dn' : 'flat';
+        const vcls = /Strong/.test(d.action || '') ? 'up' : /Weak/.test(d.action || '') ? 'dn' : 'flat';
         const secs = (d.groups || []).map((g) =>
           `<div class="sec" style="--tint:${GROUP_TINT[g.group] || 'var(--faint)'}">` +
           `<h3>${we(GROUP_NAMES[g.group] || g.group)}</h3>` +

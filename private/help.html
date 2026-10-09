@@ -153,7 +153,7 @@
           <span class="td">When prices land, and what the clock on a row means</span></span></a></li>
         <li><a href="#account"><span class="no">11</span><span><span class="tt">Your account</span>
           <span class="td">Signing in, your own lists, and what is remembered</span></span></a></li>
-        <li><a href="#rules"><span class="no">12</span><span><span class="tt">The Advice column</span>
+        <li><a href="#rules"><span class="no">12</span><span><span class="tt">The Signal column</span>
           <span class="td">Company Type, the rule lists, and what each word means</span></span></a></li>
         <li><a href="#tiles"><span class="no">13</span><span><span class="tt">Tiles</span>
           <span class="td">The same rows as cards, with a chart on each</span></span></a></li>
@@ -171,9 +171,9 @@
       <div class="sec-h"><h2>1 · What this is</h2></div>
       <p>Tickr Lab watches a list of stocks and scores them on how their prices are behaving and how
         the underlying companies are doing. It is a <strong>screener</strong>: it narrows a list down to the
-        few names worth a closer look. The <strong>Advice</strong> column does carry a verdict, but it
+        few names worth a closer look. The <strong>Signal</strong> column does carry a verdict, but it
         is the output of a plain rule set you can read in full under
-        <a href="#rules">The Advice column</a> — a consistent reading of today's numbers, not a
+        <a href="#rules">The Signal column</a> — a consistent reading of today's numbers, not a
         prediction.</p>
       <p>Stocks are grouped into <strong>themes</strong> — a stock can belong to several — and the
         picker at the top left switches between them. They are also cut by <strong>sector</strong>,
@@ -185,9 +185,9 @@
       <p>A brokerage terminal gives you four hundred indicators, streaming quotes and no opinion —
         the synthesis is your job, every time, forever. Tickr Lab is the opposite bet: <strong>one
         opinionated, fully-inspectable pipeline</strong> over a small universe you chose. Its defining
-        feature is not any single number but that <strong>every verdict names the one rule that
-        fired</strong> — every Advice cell carries the rule that produced that word, not just the
-        word. There is no "why exactly does this say Buy?" anywhere else; here it is the whole
+        feature is not any single number but that <strong>every signal names the one rule that
+        fired</strong> — every Signal cell carries the rule that produced that word, not just the
+        word. There is no "why exactly does this say Strong?" anywhere else; here it is the whole
         design.</p>
       <p>The second bet is <strong>institutionalised honesty</strong>. The backtests charge trading
         costs and hold out a period before looking; ideas that measured as noise are recorded so
@@ -208,7 +208,7 @@
       <div class="sec-h"><h2>2 · Reading the table</h2></div>
 
       <p>There are around ninety columns, arranged into groups you can collapse: <em>Info</em>,
-        <em>Scores</em>, <em>Advice</em>, <em>Chart</em>, <em>Short-term %</em>, <em>Long-term %</em>,
+        <em>Scores</em>, <em>Signal</em>, <em>Chart</em>, <em>Short-term %</em>, <em>Long-term %</em>,
         <em>Relative</em>, <em>Trend</em>, <em>Volume</em>, <em>Size</em>, <em>Fundamentals</em> and
         <em>Ownership</em>. The <strong>View</strong> menu (top left) decides what the table shows.
         <b>Standard</b> is every column, grouped, and lets you switch whole groups on and off; your
@@ -220,7 +220,7 @@
       <p>A <b>view</b> is a named set of columns you can switch to with one click from the View menu. Symbol and Name are
         always shown, and the columns keep the table's order.</p>
       <ul>
-        <li><b>Starter views</b> (Trend &amp; returns, Fundamentals, Advice) are shared by everyone. The lock beside
+        <li><b>Starter views</b> (Trend &amp; returns, Fundamentals, Signal) are shared by everyone. The lock beside
           them means only the site owner can change them — use the <b>+</b> beside one to copy it into your own views
           and change the copy.</li>
         <li><b>Your views</b>: <b>+ New view</b> opens a list of every column with a search box; tick what you want, name
@@ -241,7 +241,7 @@
 
       <h3>The headline strip</h3>
       <p>Under the table, a slow crawl of headlines <b>published in the last 12 hours</b> for the stocks the table
-        is showing — pick a theme, a sector, an Advice verdict or a column filter and the strip narrows with it —
+        is showing — pick a theme, a sector, a Signal or a column filter and the strip narrows with it —
         newest first, with each stock's move today. Hover it (or press pause) to stop it; click a ticker
         for the stock page or a headline for the article. Hide it with its ×, and bring it back from <b>⋯ → News ticker</b>
         — the choice is remembered. These are stored headlines, fetched a few stocks at a time as the data refreshes,
@@ -262,8 +262,8 @@
         <li><b>Text</b> (symbol, name, themes, guards): the text it contains ·
           <span class="kbd">=NVDA</span> for exact · <span class="kbd">!memory</span> to exclude ·
           <span class="kbd">chips|memory</span> for either.</li>
-        <li><b>Lists</b> (type, trend, entry, advice…): pick from what is actually in the table, with counts.
-          Sector, Industry and Balanced are the same filters as the Sector, Industry and Advice pickers in the bar.</li>
+        <li><b>Lists</b> (type, trend, entry, signal…): pick from what is actually in the table, with counts.
+          Sector, Industry and Signal are the same filters as the Sector, Industry and Signal pickers in the bar.</li>
         <li><span class="kbd">Esc</span> clears the box you are in. Hiding a column keeps its filter
           working, and the strip says so. Filters reset when you reload the page; whether the row is
           open is remembered.</li>
@@ -294,7 +294,7 @@
           differs row to row — prices are pulled in slices. It turns amber past a day.</li>
         <li><b>The tooltip names the newest bar beside it</b>, because "we asked" and "something came
           back" are different facts. Read the two together.</li>
-        <li><b>Days held</b>, in the Advice group, is how long the Balanced verdict has stood. It
+        <li><b>Days held</b>, in the Signal group, is how long the signal has stood. It
           prints <b>≥</b> until the run has actually been seen to change, because the count only
           starts from when the column shipped and a bare number would overstate it.</li>
       </ul>
@@ -366,8 +366,8 @@
           Sector — it only offers industries that are actually in view — and changing the sector
           drops an industry that no longer applies. Each menu carries live counts, and says how many
           rows have no value yet, so counts that do not add up are explained rather than puzzling.</li>
-        <li><b>Advice</b> filters to one Balanced verdict.</li>
-        <li><b>Advice move</b> answers <em>which way</em>, not just whether: <b>Moved</b>,
+        <li><b>Signal</b> filters to one signal.</li>
+        <li><b>Signal move</b> answers <em>which way</em>, not just whether: <b>Moved</b>,
           <b>Upgraded</b>, <b>Unchanged</b> or <b>Downgraded</b> since the previous session. A stock
           with no previous verdict matches none of them — nothing to compare against is a different
           fact from having held — and the menu counts those separately.</li>
@@ -394,8 +394,8 @@
           <tr><td>Short interest</td><td>Most shorted</td><td>10% or more of the float sold short</td></tr>
           <tr><td>Earnings</td><td>Reporting in the next 14 days</td><td>A catalyst and a risk in the same event</td></tr>
           <tr><td></td><td>Drifting after a beat</td><td>Beat estimates by 10–100% and reported within three weeks</td></tr>
-          <tr><td>Advice</td><td>Strong Buys (Balanced)</td><td>The Balanced rules read Strong Buy — a mechanical reading, not an analyst rating</td></tr>
-          <tr><td></td><td>Advice changed today</td><td>The Balanced verdict moved since the previous session</td></tr>
+          <tr><td>Signal</td><td>Very Strong signals</td><td>The rules read Very Strong — a mechanical reading, not an analyst rating</td></tr>
+          <tr><td></td><td>Signal changed today</td><td>The signal moved since the previous session</td></tr>
         </tbody>
       </table>
       <div class="note"><b>Two data notes.</b> Earnings growth here is the latest quarter against a year earlier, not an
@@ -435,7 +435,7 @@
       <h3>Similar stocks</h3>
       <p>At the foot of the page, up to six other companies in the same <b>industry</b>, the ones
         closest to this one in market cap, with price, today, a year, market cap, forward P/E and the
-        Balanced verdict. Each row opens that stock; the <b>vs</b> pill opens the pair on the compare
+        signal. Each row opens that stock; the <b>vs</b> pill opens the pair on the compare
         page.</p>
       <ul>
         <li><b>The page names the rule it used.</b> Where an industry holds fewer than three other
@@ -482,7 +482,7 @@
         <li><b>A fund has no section at all</b>, because it files no financial statements. Neither do
           companies reporting under international standards rather than US GAAP.</li>
       </ul>
-      <div class="note"><b>Nothing on that card feeds the Advice verdict or the screener.</b> It is
+      <div class="note"><b>Nothing on that card feeds the Signal or the screener.</b> It is
         there to be read, not to move anything — a deliberate line, so that the rules stay driven by
         one consistent set of numbers.</div>
       <a class="top" href="#top">↑ Contents</a>
@@ -575,7 +575,7 @@
       <div class="sec-h"><h2>9 · Alerts</h2></div>
       <p><b>Alerts</b> in the bar watches one stock for one thing and tells you the next time you open
         the site. Up to five at a time. Six kinds: a <b>price level</b>, a <b>moving-average cross</b>,
-        an <b>Advice verdict change</b>, an <b>RSI level</b>, a <b>52-week extreme</b> and a
+        an <b>Signal change</b>, an <b>RSI level</b>, a <b>52-week extreme</b> and a
         <b>big day</b>.</p>
 
       <h3>Things worth knowing before you set one</h3>
@@ -693,23 +693,22 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="rules"><div class="core">
-      <div class="sec-h"><h2>12 · The Advice column</h2></div>
-      <p><em>&ldquo;Advice&rdquo; here means the output of the fixed rules described below — a mechanical
+      <div class="sec-h"><h2>12 · The Signal column</h2></div>
+      <p><em>&ldquo;Signal&rdquo; here means the output of the fixed rules described below — a mechanical
         reading of the table, not a recommendation tailored to you.</em></p>
-      <p>The <strong>Advice</strong> column group shows the whole derivation, left to right:
+      <p>The <strong>Signal</strong> column group shows the whole derivation, left to right:
         <strong>Type</strong> (Established, Early or ETF) · <strong>Trend</strong> (the price-trend
         reading — Breakdown, Downtrend, Below 200D, Above 200D or Strong uptrend: whether you
         <em>may</em>) · <strong>Entry</strong> (Clean, Clean near high, Extended or None: whether
         <em>now</em>) · <strong>Fund.</strong> (Strong, OK, Weak, or — when the data makes no case:
         how much <em>conviction</em>) · <strong>Guards</strong> (earnings soon, thin history — blank for
         most stocks, and meaningful when it is not: <em>wait</em>) · and the
-        <strong>Advice</strong> itself (Strong Buy · Buy · Buy with Risk · Hold · Avoid · Sell
-        Immediately). The group collapses as one unit from the View menu in Standard. The model is a list of plain rules checked top
-        to bottom — <strong>the first rule that matches is the answer</strong>, and hovering an Advice
-        cell shows the one rule that fired. The Sell, Avoid and Hold rules always sit above the Buy
-        rules, so no amount of good news can buy a stock whose trend is broken. Backtested over
+        <strong>Signal</strong> itself (Very Strong · Strong · Strong – Elevated Risk · Neutral · Weak · Very Weak). The group collapses as one unit from the View menu in Standard. The model is a list of plain rules checked top
+        to bottom — <strong>the first rule that matches is the answer</strong>, and hovering a Signal
+        cell shows the one rule that fired. The Weak and Neutral rules always sit above the Strong
+        rules, so no amount of good news lifts a stock whose trend is broken. Backtested over
         307,875 stock-days since 2008, the tiers order <em>downside</em> correctly (the worst tenth of
-        3-month outcomes: about −12% for the Buy tiers against −25% for Sell Immediately, before and
+        3-month outcomes: about −12% for the Strong tiers against −25% for Very Weak, before and
         after 2020 alike) — but median returns are flat across tiers. <strong>It manages risk; it does
         not predict winners.</strong></p>
 
@@ -723,29 +722,29 @@
         without earnings. A company migrates the day it earns it. A blank value never satisfies any
         rule, in either direction.</p>
 
-      <h3>The rule lists (Balanced defaults)</h3>
-      <p><strong>Established:</strong> Sell Immediately on a breakdown (more than 10% below the 200-day
-        average and still falling: 1M &lt; −8% or 3M &lt; −15%) → Avoid in a downtrend, or below the
-        200-day with weak fundamentals, or on heavy-volume selling more than 30% off the high → Hold
+      <h3>The rule lists</h3>
+      <p><strong>Established:</strong> Very Weak on a breakdown (more than 10% below the 200-day
+        average and still falling: 1M &lt; −8% or 3M &lt; −15%) → Weak in a downtrend, or below the
+        200-day with weak fundamentals, or on heavy-volume selling more than 30% off the high → Neutral
         if below the 200-day, no trend data yet, under 200 sessions of history, earnings within 7 days,
-        or extended (1M &gt; +25%, or &gt;15% above the 50-day, or RSI &gt; 72) → <em>then</em> Strong Buy
+        or extended (1M &gt; +25%, or &gt;15% above the 50-day, or RSI &gt; 72) → <em>then</em> Very Strong
         (&gt;10% above the 200-day, a clean entry — within −3%…+8% of the 50-day with RSI 45–65 —
-        near the high and strong fundamentals) → Buy (clean entry, decent fundamentals, less than 20%
-        off the high) → Buy with Risk (clean entry, fundamentals unproven but not weak) → Hold.</p>
+        near the high and strong fundamentals) → Strong (clean entry, decent fundamentals, less than 20%
+        off the high) → Strong – Elevated Risk (clean entry, fundamentals unproven but not weak) → Neutral.</p>
       <p><strong>Early:</strong> the same shape with a shorter leash — breakdown at −5%/−5%, weak
-        fundamentals below the 200-day is an immediate Sell, merely being below the 200-day is Avoid
-        rather than Hold, short interest above 25% is Avoid, and Buy needs strong growth (revenue
-        &gt; 30%, gross margin &gt; 50%, positive FCF) in a &gt;10% uptrend. Early is never Strong Buy
-        unless a profile enables it. <strong>ETF:</strong> the technical rules alone.</p>
+        fundamentals below the 200-day is Very Weak at once, merely being below the 200-day is Weak
+        rather than Neutral, short interest above 25% is Weak, and Strong needs strong growth (revenue
+        &gt; 30%, gross margin &gt; 50%, positive FCF) in a &gt;10% uptrend. Early is never Very Strong.
+        <strong>ETF:</strong> the technical rules alone.</p>
 
       <h3>Why this stock says what it says</h3>
-      <p><strong>Every Advice cell carries the one rule that fired</strong> — the phrase beside the
+      <p><strong>Every Signal cell carries the one rule that fired</strong> — the phrase beside the
         verdict, and the cell's tooltip, name it. That is the whole point of a first-match rule list
         rather than a score: there is always exactly one reason, and it is written down. The four
         state columns beside it show the working, so the derivation reads left to right without
         anything to open.</p>
       <p>A <strong>chevron</strong> before the word means the verdict moved since the previous
-        session, and names what it was. <b>Advice move</b> in the bar filters to exactly those rows.</p>
+        session, and names what it was. <b>Signal move</b> in the bar filters to exactly those rows.</p>
 
       <h3>The trend ribbon on the stock page</h3>
       <p>Each stock's page paints a thin strip under the price chart: the Trend word, session by
@@ -767,55 +766,39 @@
         high trip count is the warning that real results would be lower — the Single page is the
         full version of this experiment, with costs and sizing.</p>
       <p>The dashed line trades one rule only: in during the green states, out otherwise. It
-        deliberately does not replay the Advice verdicts — a full advice history cannot be
+        deliberately does not replay the Signals — a full signal history cannot be
         reconstructed honestly, so the line claims only what the bars can prove. The model's
         verdicts still appear as explanation: hover a day where the model and the trend disagree
         and the readout names the blocking rule.</p>
       <p><strong>Why do these differ?</strong> in the ribbon legend opens a card below the chart
         that answers it with numbers: both rules' returns over the drawn range, then the largest
         stretches where one was in and the other was not, each named by the model's own flag —
-        "Trend in — Balanced out: No clean entry (RSI 72)". Hovering the chart also names the
+        "Trend in — rules out: No clean entry (RSI 72)". Hovering the chart also names the
         blocking flag on any day the two disagree. The TREND toggle controls the line and only the
         line: switching it off takes the card, the return caption and the "If held" readout with
         it, because all three describe the line. The ribbon underneath is always there — it is a
         reading of the bars rather than a simulation, so it is not something to switch on.</p>
 
-      <h3>Five profiles, side by side — no custom set</h3>
-      <p>The Advice group carries <strong>all five profiles as columns</strong>, so their verdicts can be
-        compared row by row. <strong>Balanced is always the first</strong> — it is the shared measurement
-        every other surface uses — and Trend Rider, Aggressive, Max Risk and Dip Buyer sit beside it.
-        Collapse the Advice group from the View menu (Standard), or use a view that leaves them out. Each column carries its own colours, its own change chevron against
-        that profile's previous trading day, and its own reason on hover; clicking a cell opens
-        the rule ladder under that column's profile. There is deliberately no custom profile — a
-        verdict should always be explainable by one named rule set.</p>
-      <ul>
-        <li><strong>Balanced</strong> — the defaults below. Loss-avoidance first. Always shown.</li>
-        <li><strong>Trend Rider</strong> — buys strength sooner and holds it longer: chase caps
-          loosen (1M +40%, RSI 78) and Early can reach Strong Buy. The stops stay Balanced.</li>
-        <li><strong>Aggressive</strong> — more rope everywhere: stops widen to −15% (Early −8%),
-          chase to +35%, blackout 3 days, Early reaches Buy on OK fundamentals.</li>
-        <li><strong>Max Risk</strong> — the far end: stops at −20% with −12/−25 confirms, chase
-          caps nearly off, Buy allowed to −30% below the high. Still never buys below the 200-day.</li>
-        <li><strong>Dip Buyer</strong> — the one different opinion: a clean entry below the
-          200-day with OK fundamentals earns Buy with Risk instead of Hold. Stops stay Balanced.
-          The research log does not endorse the mode; this column shows what it says anyway.</li>
-      </ul>
+      <h3>One rule set — no custom set</h3>
+      <p>There is one fixed rule set, the same for every stock and every reader. There is
+        deliberately no custom version: a signal should always be explainable by one named rule.
+        Collapse the Signal group from the View menu (Standard), or use a view that leaves it out.</p>
       <h3>Cushion — how far it can fall before the rules change their mind</h3>
-      <p>Five Strong Buys on one screen leave you with a question the verdict cannot answer: which of
+      <p>Five Very Strongs on one screen leave you with a question the verdict cannot answer: which of
         these hurts least when it goes wrong. Underneath <strong>Cushion</strong> is a simple measure —
-        <em>the distance the price could fall before the technical rules flip that verdict to Avoid or
+        <em>the distance the price could fall before the technical rules flip that signal to Weak or
         worse</em>, with the moving averages, RSI and fundamentals held where they are today. It is a
         gauge of where the rules stand, not a stop order, and it is the honest half of "risk/reward":
         the reward half would need a forecast, which this app refuses to make.</p>
       <p><strong>That raw distance is not a safety ranking, though, and it was tested.</strong> Across 307,965
-        stock-days of the archive, the stocks with the most room inside an advice tier were the ones that
+        stock-days of the archive, the stocks with the most room inside a signal tier were the ones that
         had run furthest above their own averages — 25.6% above the 200-day against 13.8%, on 31.7%
         volatility against 24.3% — and their worst cases were <em>worse</em>, not better: a 10th-percentile
         three-month loss of −18.5% against −15.7%. Room is extension wearing a risk label.</p>
       <p>The <strong>Cushion</strong> column is that same distance divided by the stock's own volatility,
         in monthly sigmas, which makes a quiet stock and a wild one comparable. That version does order the
         downside: a thinner 10th- and 25th-percentile loss in every era and horizon tested, by one to three
-        points. Sorting by an advice column breaks ties on it, thickest cushion first — so five Strong Buys
+        points. Sorting by the Signal column breaks ties on it, thickest cushion first — so five Very Strongs
         come back in an order that means something.</p>
       <p><strong>It ranks how bad the bad case is, never how good the good one is.</strong> Every average
         return difference in that study was noise, which is the same verdict the whole ladder gets: it
@@ -828,19 +811,16 @@
         volume ran at least 1.5&times; its own 20-day average (the <em>confirmed</em> kind, the one
         pattern in our measurements whose edge held both before and after 2020), faint when the
         breakout came on quiet volume (where the same measurements found nothing). It is a measured
-        fact shown beside the state, not a rule — no advice rule reads volume.</p>
+        fact shown beside the state, not a rule — no signal rule reads volume.</p>
 
-      <h3>When the advice changes</h3>
-      <p>A small green or red chevron before the Advice word marks a verdict that moved since the
+      <h3>When the signal changes</h3>
+      <p>A small green or red chevron before the Signal word marks a verdict that moved since the
         previous trading session — yesterday's technical readings walked through the same rules,
         with the day-cached fundamentals standing for both days. The cell's tooltip and the hover
-        card name yesterday's verdict, each profile's column carries its own marker,
-        and both refresh emails carry an <em>Advice changes</em> list (on the Balanced rules, like
-        everything else they report).</p>
-      <p>The <strong>Advice move</strong> picker in the bar filters the table by that movement:
+        card name yesterday's signal.</p>
+      <p>The <strong>Signal move</strong> picker in the bar filters the table by that movement:
         <em>Upgraded</em>, <em>Unchanged</em>, <em>Downgraded</em>, or <em>Moved either way</em> for
-        both directions at once. An upgrade is a step up the ladder, Strong Buy being the top. It
-        reads the Balanced rules, like the Advice picker beside it, and a stock with no verdict from
+        both directions at once. An upgrade is a step up the ladder, Very Strong being the top. A stock with no signal from
         the previous close appears under none of the four — there is nothing to compare it against,
         which is a different fact from having held. The picker is hidden until a refresh has stored
         a previous verdict to compare with.</p>
@@ -867,7 +847,7 @@
         <tr><td><code>early</code></td><td>allow_buy true · allow_strong_buy false ·
           buy_requires "strong"</td></tr>
         <tr><td><code>trend_gate</code></td><td>never_buy_below_200d true (false = mean-reversion mode:
-          below the 200-day a clean entry with decent fundamentals can reach Buy with Risk, never
+          below the 200-day a clean entry with decent fundamentals can reach Strong – Elevated Risk, never
           higher)</td></tr>
         <tr><td><code>fund_established</code></td><td>strong {eg 15 · rg 10 · fcf_margin 10 · pm 15} ·
           ok {eg 0 · rg 0} · weak: shrinking earnings <em>and</em> revenue, or a negative margin</td></tr>
@@ -889,7 +869,7 @@
       <div class="sec-h"><h2>13 · Tiles</h2></div>
       <p>The <strong>Table / Tiles</strong> switch beside the View menu draws the same rows as cards
         instead of a table. It is the same selection either way: the sort, the theme, the sector,
-        industry, advice and advice-move pickers, any screen and every column filter all still
+        industry, signal and signal-move pickers, any screen and every column filter all still
         apply, so a filter that leaves seven stocks leaves seven tiles. Nothing is recalculated &mdash; a
         tile shows the values the table would have shown.</p>
       <p>It exists because a short list wastes a table. Filter to seven names and two thirds of the

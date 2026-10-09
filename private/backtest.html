@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Advice backtest — Tickr Lab</title>
+  <title>Signal backtest — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -39,12 +39,12 @@
       border-radius: 999px; padding: 8px 13px; font-size: 12.5px; font-weight: 500;
       cursor: pointer; transition: all .18s var(--ease); }
     .tier[aria-pressed="true"] { color: var(--void); font-weight: 600; }
-    .tier[data-t="Strong Buy"][aria-pressed="true"] { background: var(--green); border-color: var(--green); }
-    .tier[data-t="Buy"][aria-pressed="true"] { background: #6ee7b7; border-color: #6ee7b7; }
-    .tier[data-t="Buy with Risk"][aria-pressed="true"] { background: var(--amber); border-color: var(--amber); }
-    .tier[data-t="Hold"][aria-pressed="true"] { background: var(--muted); border-color: var(--muted); }
-    .tier[data-t="Avoid"][aria-pressed="true"] { background: #fda4af; border-color: #fda4af; }
-    .tier[data-t="Sell Immediately"][aria-pressed="true"] { background: var(--red); border-color: var(--red); }
+    .tier[data-t="Very Strong"][aria-pressed="true"] { background: var(--green); border-color: var(--green); }
+    .tier[data-t="Strong"][aria-pressed="true"] { background: #6ee7b7; border-color: #6ee7b7; }
+    .tier[data-t="Strong – Elevated Risk"][aria-pressed="true"] { background: var(--amber); border-color: var(--amber); }
+    .tier[data-t="Neutral"][aria-pressed="true"] { background: var(--muted); border-color: var(--muted); }
+    .tier[data-t="Weak"][aria-pressed="true"] { background: #fda4af; border-color: #fda4af; }
+    .tier[data-t="Very Weak"][aria-pressed="true"] { background: var(--red); border-color: var(--red); }
     .hint { color: var(--faint); font-size: 11.5px; margin-top: 8px; }
 
     /* Coverage: one bar per day the page will accept, height = the share of the
@@ -203,7 +203,7 @@
 
   <main class="page">
     <header class="top">
-      <h1>Advice backtest</h1>
+      <h1>Signal backtest</h1>
       <a class="btn back" href="/admin">Admin</a>
     </header>
     <p class="sub">
@@ -229,7 +229,7 @@
           <label for="theme">Run over</label>
           <select id="theme"><option value="">All stocks</option></select>
         </div>
-        <div class="fld">
+        <div class="fld" hidden>
           <label for="rules">Rules</label>
           <select id="rules"></select>
         </div>
@@ -335,8 +335,8 @@
     const $ = (id) => document.getElementById(id);
     const we = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
       (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const TIERS = ['Strong Buy', 'Buy', 'Buy with Risk', 'Hold', 'Avoid', 'Sell Immediately'];
-    const picked = new Set(['Strong Buy']);
+    const TIERS = ['Very Strong', 'Strong', 'Strong – Elevated Risk', 'Neutral', 'Weak', 'Very Weak'];
+    const picked = new Set(['Very Strong']);
     const pct = (v, dp) => (v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(dp == null ? 1 : dp) + '%');
     const cls = (v) => (v == null ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : '');
     // One writer for the ranking's name: the cards, the legend and the trade
@@ -441,7 +441,7 @@
     function paintCompare(r) {
       const w = $('cmpWrap');
       const list = (r.compare || []).filter((x) => x.n > 0 || x.ret != null);
-      if (!list.length) { w.hidden = true; return; }
+      if (list.length < 2) { w.hidden = true; return; }   // nothing to compare one rule set against
       const rets = list.map((x) => x.ret).filter((x) => x != null);
       const span = Math.max(0.5, ...rets.map((x) => Math.abs(x)));
       const best = rets.length ? Math.max(...rets) : null;
@@ -459,7 +459,7 @@
         return `<button class="crow${x.profile === r.rules ? ' on' : ''}" data-rs="${we(x.profile)}">
           <span class="nm">${we(x.profile)}</span>
           <span class="n">${x.n} pick${x.n === 1 ? '' : 's'}</span>
-          <span class="sb">${x.strong} Strong Buy</span>
+          <span class="sb">${x.strong} Very Strong</span>
           <span class="bar">${bar}<u style="left:${half}%"></u></span>
           <span class="rt ${cls(v)}">${pct(v)}</span>
           <span class="tag">${x.profile === r.rules ? 'running' : (v != null && v === best ? 'best here' : '')}</span>
@@ -499,7 +499,7 @@
           ? `Each mark rebuilds the basket from whatever the rules pick that day, so a name that is kept
              is re-weighted rather than traded — that re-weighting counts towards the turnover figure
              above but is neither a purchase nor a sale, and is not listed here.`
-          : `This mode never buys back: a holding is sold when its verdict reaches Avoid, and the cash
+          : `This mode never buys back: a holding is sold when its signal reaches Weak, and the cash
              sits idle from then on.`)
         + ` The reason beside each name is <b>the verdict that fired for it on that date</b>.`;
       const cutBy = `ranked below the top ${r.top} by ${rankLabel(r.rank)}`;
@@ -606,7 +606,7 @@
         const share = tot ? Math.round((rec / tot) * 100) : 0;
         rn.innerHTML =
           (r.mode === 'exit'
-            ? `Selling a holding when its verdict reached <b>Avoid</b> and never re-buying returned `
+            ? `Selling a holding when its signal reached <b>Weak</b> and never re-buying returned `
             : `Re-running the rules every <b>${r.every} days</b> returned `)
           + `<b>${we(pct(s.rebalanced))}</b> against <b>${we(pct(s.portfolio))}</b> for holding the same `
           + `opening picks — a difference of <b>${we(pct(gap))}</b> after ${we(String(s.turnover))}% turnover `
@@ -787,7 +787,7 @@
       if (qs.get('tiers')) {
         picked.clear();
         qs.get('tiers').split(',').forEach((t) => { if (TIERS.includes(t)) picked.add(t); });
-        if (!picked.size) picked.add('Strong Buy');
+        if (!picked.size) picked.add('Very Strong');
       }
       // The themes, with their counts, so the scope of a run is visible before
       // it starts. A theme too small to pick from is still offered — the empty
