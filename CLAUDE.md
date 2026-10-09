@@ -2408,7 +2408,7 @@ The route's as-of cutoff was written off as an efficiency guard — the write is
 - **"Not in the S&P 500" is no longer offered** (`out` is still understood by the rule). A saved promo post or pivot preset carrying it falls back to that card's default, as the owner accepted.
 - **Cards**: the kicker names the cut (`Nasdaq 100`, `S&P 500 or Nasdaq 100`, `Nasdaq 100, not in the S&P 500`, `Outside both indexes`); on Flow, Treemap, Waterfall and Narrow or broad "the index" is used only where the cut IS an index. With the cut on Nasdaq 100 those cards read the Nasdaq 100's own make-up. Every promo label reads Index.
 - The row card's `info|S&P 500` field is now `info|Index`; production's tile and phone configs did not use the old key.
-- **First live reading**: 1,274 stocks — 499 in the S&P 500, 95 in the Nasdaq 100, 13 Nasdaq-only.
+- **First live reading**: 1,278 stocks — 499 in the S&P 500, 99 in the Nasdaq 100 (every member but GOOG), 514 in either, 15 Nasdaq-only, 764 in neither, none unknown.
 - Verified: **38 checks** (`indexcut-test.js`): the rule over all eight flag combinations with no server, the cards, the server stamp, the screener (menu, each cut, the column, the filter row both ways), the pivot and the studio. **Proved by reverting nine times, every one load-bearing.**
   - **Seven older suites assert the retired two-value cut** and now fail on it: `spcol`, `spbar`, `pivot-spcut`, `sp500`, `screencols` (1), `day-test` (6) and `flow-test` (7). Their failures are the old `out` value and the old `Yes` cell, not regressions; `indexcut-test.js` is the suite for the cut.
 
