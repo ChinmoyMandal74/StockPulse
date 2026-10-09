@@ -5786,6 +5786,12 @@
   // One square a company up to this many; past it each square stands for
   // more than one, and the note says how many.
   const BEAT_CELLS = 520;
+  // What it is measured against. Both are funds already tracked for their
+  // price, so the second benchmark costs no data. The S&P cut beside it is
+  // still about MEMBERSHIP of the S&P 500 -- there is no Nasdaq 100 member
+  // list yet (docs/backlog.md) -- so "S&P members against the Nasdaq 100"
+  // is a combination the card can draw and names in full.
+  const BEAT_BENCH = [['SPY', 'S&P 500'], ['QQQ', 'Nasdaq 100']];
   const BEAT_COLS = { portrait: 46, square: 54, story: 40 };
 
   function tplBeat() {
@@ -5798,7 +5804,9 @@
       const v = Number(r && r[k]);
       return r && r[k] != null && isFinite(v) ? v : null;
     };
-    const spy = stocks.find((x) => x && !x.error && x.symbol === 'SPY') || null;
+    const bench = BEAT_BENCH.find(([k]) => k === O.beatBench) || BEAT_BENCH[0];
+    const BN = bench[1];
+    const spy = stocks.find((x) => x && !x.error && x.symbol === bench[0]) || null;
     // Funds out first, the rule every market card here keeps: a fund that IS
     // the index cannot be counted as beating or trailing it.
     const notFund = (x) => x && !x.error && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol)
@@ -5831,7 +5839,7 @@
         + '<span class="s-kick">' + esc(SP_CUT_LABEL[cut] || 'The whole screen') + '</span>'
         + '<h2 class="s-title">Beating the index</h2>'
         + '<p class="s-sub wide" style="--fs:20px">' + esc(!R
-          ? 'The S&P 500 has no return stored for ' + words + ', so there is nothing to measure against yet.'
+          ? 'The ' + BN + ' has no return stored for ' + words + ', so there is nothing to measure against yet.'
           : 'Too few ' + scopeWord + ' have a return for ' + words + ' to count — ' + R.n + '.')
         + '</p></div></div>' + chromeFoot();
     }
@@ -5889,8 +5897,8 @@
     const rose = R.has.filter((r) => num(r, R.f) > 0).length;
 
     const note = 'Each square is ' + (per1 > 1.001 ? 'about ' + per1.toFixed(1) + ' companies' : 'one company')
-      + ', coloured by what its price did ' + words + ' against the S&P 500’s own '
-      + sg(R.b) + ' (the SPY fund, price only — dividends are left out on both sides). '
+      + ', coloured by what its price did ' + words + ' against the ' + BN + '’s own '
+      + sg(R.b) + ' (the ' + bench[0] + ' fund, price only — dividends are left out on both sides). '
       + 'The bars repeat the count for every window; the figure beside each is the share that beat the index, then the index itself. '
       + (R.missing ? R.missing + ' with no return for this window, listed since it began, are left out. ' : '')
       + foldNote(R.folded)
@@ -5899,9 +5907,9 @@
 
     return chromeTop()
       + '<div class="s-body"><div class="bt-in">'
-      + '<span class="s-kick">' + esc((SP_CUT_LABEL[cut] || 'The whole screen') + ' · ' + R.n.toLocaleString() + ' companies · ' + words) + '</span>'
+      + '<span class="s-kick">' + esc((SP_CUT_LABEL[cut] || 'The whole screen') + ' · ' + R.n.toLocaleString() + ' companies · ' + (bench[0] === 'SPY' ? '' : 'against the ' + BN + ' · ') + words) + '</span>'
       + '<h2 class="s-title">Beating the index<span class="dim">'
-      + esc('how many did better than the S&P 500 ' + words) + '</span></h2>'
+      + esc('how many did better than the ' + BN + ' ' + words) + '</span></h2>'
       + '<div class="bt-fill">'
       + '<div class="bt-hero">'
         + '<div class="bt-big"><span class="bt-bv">' + esc(pc(R.beat, R.n) + '%') + '</span>'
@@ -8488,6 +8496,7 @@
     // that silently draws the wrong window.
     snapPeriods: () => SNAP_PERIODS.map((p) => p.slice()),
     beatPeriods: () => BEAT_PERIODS.map((p) => p.slice()),
+    beatBenches: () => BEAT_BENCH.map((p) => p.slice()),
     // ...and which templates want the basket at all, with the window each
     // one asks for. Exported for the same reason: two hosts, one pairing.
     basketDays,

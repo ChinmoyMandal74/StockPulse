@@ -1323,6 +1323,49 @@ confirming first that `/splits` actually lists the three (MLI's is reported by
 `/statistics`; CORT's was not reported there at all).
 
 
+## 31. Nasdaq 100 membership — 2026-10-08
+
+**Asked by the owner** ("similar to the S&P index, I think Nasdaq 100 is also a
+very important benchmark"). The benchmark half shipped the same day: the
+Beating the index card can measure against QQQ, and the group pages draw a
+Nasdaq 100 line beside the S&P 500 and the Dow. **This entry is the other
+half: knowing which stocks are IN the index**, so it can be a screener column,
+a bar filter and a cut on the promo cards, the way S&P membership is.
+
+**What is already in place.** `fund_holdings` / `fund_state` are keyed on
+`fund`, and `Holdings.FUNDS` is a config map, so a second index is an entry
+rather than a migration. The nightly `holdingsRotate` step, the `/holdings`
+page and its missing-member sorting (new / renamed / second share class) all
+take a fund key.
+
+**What has NOT been checked, and decides whether this is an afternoon or not.**
+The S&P list comes from SSGA's daily xlsx for SPY. QQQ is Invesco's, a
+different issuer with a different file; nobody has fetched it, confirmed it is
+served to an honest User-Agent, or looked at its layout. iShares answered 200
+with a csv content type and 2MB of HTML when it was tried for the S&P, so
+"there is a download link" proves nothing. Nasdaq's own list endpoint is the
+other candidate. **Measure the source first; `Holdings.parse` validates what
+it read rather than the status code for exactly this reason.**
+
+**Design questions to settle with the owner before building.**
+- The screener column is `spMember`, the filter is `spFilter`, the promo cut is
+  `xxSp500`. A second index wants either a second set of each or one "Index"
+  picker with three values. One picker is the better shape, and it is a change
+  to saved screens and saved posts.
+- About 85 to 90 of the 100 are also S&P members, so the cut is mostly
+  "large-cap growth" rather than a new population. The handful outside the S&P
+  are the interesting part and should be easy to isolate.
+- Some members are foreign-domiciled companies listed on Nasdaq. Those are US
+  listings and pass the standing rule; a few may not be on the screener, and
+  the dual share classes (GOOG/GOOGL) will show up as "second share class"
+  exactly as they do for the S&P.
+- **Membership only, never the weight**, for the reason `/holdings` is
+  admin-only.
+
+**What would make it a bad idea.** No reliable daily file from the issuer. A
+maintained list from a mirror was refused for the S&P because it was eleven
+days stale and missing a real member; the same test applies here.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's

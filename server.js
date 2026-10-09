@@ -35,7 +35,7 @@ const BENCHMARKS = new Set(['SPY', 'QQQ', 'IWM', 'DIA']);
 // The two the group pages draw beside a basket. Labels here rather than in
 // the page, so basket.html restates nothing; stock.html keeps its own list
 // because those are four toggles with their own colours, a different control.
-const PAGE_BENCHMARKS = [['SPY', 'S&P 500'], ['DIA', 'Dow 30']];
+const PAGE_BENCHMARKS = [['SPY', 'S&P 500'], ['QQQ', 'Nasdaq 100'], ['DIA', 'Dow 30']];
 // Persistence lives in Turso (libSQL). The accessors below keep the shapes the
 // old flat-file helpers returned, so this file only had to gain `await`s.
 // See db.js and migrate-to-turso.js.

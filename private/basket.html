@@ -299,11 +299,11 @@
                      '#60a5fa', '#fb7185', '#2dd4bf', '#e879f9', '#facc15', '#94a3b8'];
     const stockColor = (i) => PALETTE[i % PALETTE.length];
 
-    // The benchmark lines, in draw order. Accent and violet rather than
+    // The benchmark lines, in draw order. Accent, orange and violet rather than
     // green and red: those two already mean up and down on every chart here,
     // and an index coloured by its own direction would be making a different
     // claim from the one the chart is for.
-    const BENCH_TINT = { SPY: '#7c9cff', DIA: '#a78bfa' };
+    const BENCH_TINT = { SPY: '#7c9cff', QQQ: '#fb923c', DIA: '#a78bfa' };
     const benchLines = () => ((curve && curve.bench) || [])
       .map((b) => ({ ...b, color: BENCH_TINT[b.sym] || '#7d8797' }));
 

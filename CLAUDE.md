@@ -5470,6 +5470,14 @@ A card cannot scroll, and a row here is two lines (a text line and a pair of bar
   - **The S&P cut's "everything" value is `'All'`, capital A.** A lower-case `all` falls back to the index cut in silence, and the first sweep reported the whole screen as 499 companies.
   - **The small-state guard first reverted to nothing**: two companies in 1,300 already win a square by largest remainder. One in 1,300 does not, and is the fixture now.
 
+#### The Nasdaq 100 as a second benchmark (2026-10-08, owner's request)
+**The benchmark half only; membership is [docs/backlog.md](docs/backlog.md) entry 31.** QQQ is already tracked for its price, so this cost no data.
+
+- **`beatBench` on the Beating the index card**: S&P 500 (SPY) or Nasdaq 100 (QQQ), from `Cards.beatBenches()`. The subtitle, the kicker, the note and every strip row follow it; an unknown value falls back to the S&P. **The S&P cut beside it is still about S&P MEMBERSHIP**, so "S&P members against the Nasdaq 100" is a combination the card draws and names in full.
+- **`PAGE_BENCHMARKS` is SPY, QQQ, DIA**, so every group page draws a Nasdaq 100 line and a returns row. Orange (`#fb923c`), between the accent and the violet: the pair the two-stock chart measured as surviving both common colour-blindness types. "Difference vs" is still against the first, the S&P.
+- QQQ was already in `BENCHMARKS`, so it was already undeletable and already out of every market card's pool.
+- Verified: `beat-test.js` is 31 checks (the fixture's QQQ is up 25% against SPY's 10%, so nothing at +20 beats it); `group-page-test.js` corrected for three benchmark lines.
+
 ### Bars — any one measure, ranked either way (2026-10-07, owner's request)
 **A twenty-fifth template, `bars`: pick a measure, an order and a count, and it draws one bar per company with its name and its figure.** The owner's words: *"one generic card called Bars wherein I can select any metric such as Price moves, 200 Day moves, 50 day moves, RSI, Revenue, Gross Profit, essentially anything with a number or % attached to it"*, sorted ascending or descending, 5 / 10 / 15, with the usual Sector, Industry, S&P, Size and theme cuts.
 
