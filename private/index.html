@@ -1140,7 +1140,7 @@
         </div>
         <div class="picker" id="spPicker" data-open="0">
           <button class="btn picker-btn" id="spBtn" aria-haspopup="listbox" aria-expanded="false"></button>
-          <div class="picker-menu" id="spMenu" role="listbox" aria-label="S&amp;P 500 membership"></div>
+          <div class="picker-menu" id="spMenu" role="listbox" aria-label="Index membership"></div>
         </div>
         <div class="picker" id="sizePicker" data-open="0">
           <button class="btn picker-btn" id="sizeBtn" aria-haspopup="listbox" aria-expanded="false"></button>
@@ -1498,7 +1498,7 @@
         <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — Twelve Data's own taxonomy, not GICS.">Industry</th>
         <th class="left grp-info" data-key="exchange" title="Where the stock actually trades, with its MIC and trading currency on the cell. Stored on the profile rather than read from the price call, so it survives a round that prices from the archive. NOTE: the currency here is the TRADING one — an ADR trades in USD while its financials are in the home currency, so this does not tell you what the money columns are denominated in.">Exchange</th>
         <th class="left grp-info" data-key="instrumentType" title="What the instrument IS, from the provider's own free reference list: Common Stock, Preferred Stock, American Depositary Receipt, Limited Partnership, REIT or ETF. It exists because a NAME cannot be trusted for this — BNS is stored as 'Bank Nova Scotia Halifax Pfd 3' and is Scotiabank's common stock, while a subordinated note can read as ordinary equity. Filter on it to find anything that is not common stock. It states the fact only: nothing in the Advice engine reads it.">Instrument</th>
-        <th class="left grp-info" data-key="spMember" title="Whether the stock is in the S&amp;P 500, from the issuer's own daily holdings file for SPY &mdash; the fund that tracks the index, which is the closest published source there is. The cell names the date the file is from. An em-dash means no holdings file has been imported yet, which is NOT the same as No. The index WEIGHT is deliberately not here: it stays on the admin holdings page. Nothing in the Advice engine reads this.">S&amp;P<br>500</th>
+        <th class="left grp-info" data-key="spMember" title="Which index the stock is in: the S&amp;P 500, the Nasdaq 100, both or neither. Each comes from the index fund's own daily holdings file (SPY and QQQ), the closest published source there is, and the cell names the date. An em-dash means a holdings file has not been imported yet, which is NOT the same as being in neither. The index WEIGHT is deliberately not here: it stays on the admin holdings page. Nothing in the Advice engine reads this.">Index</th>
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
         <th class="left grp-info" data-key="capBand" title="The size band, from the market cap beside it: Mega $200B+, Large $50-200B, Mid-Large $10-50B, Mid $2-10B, Small $300M-2B, Micro under $300M. The $50B line inside Large is this site's own cut, not a standard — without it 69% of the screen sat in one bucket. Thresholds are fixed, never derived from the current universe. Blank for ETFs, which report AUM rather than capitalisation.">Size</th>
         <th class="grp-info" data-key="newsAge" title="How long ago the latest stored headline was published, and how many this stock has from the last week. Click a cell to read them. A dot means we have not checked this stock yet — headlines are fetched a few stocks at a time.">News</th>
@@ -2180,13 +2180,22 @@
     // claim. `.nocard` for the Instrument cell's reason: a hover card on a
     // Yes/No is an ambush on a cell nobody needs a field list for.
     function spCell(s) {
-      if (s.spMember == null) {
+      // ONE CELL FOR BOTH INDEXES (2026-10-08). Short words, because the
+      // column is narrow: S&P, NDX, or both. `No` is said only when BOTH files
+      // have been read; with one missing the cell says what it does know.
+      const sp = s.spMember, nd = s.ndxMember;
+      const when = (a) => (a ? ` as of ${we(a)}` : '');
+      const say = [
+        sp === true ? `In the S&amp;P 500${when(s.spAsOf)}.` : sp === false ? `Not in the S&amp;P 500${when(s.spAsOf)}.` : 'S&amp;P 500: no holdings file imported yet.',
+        nd === true ? `In the Nasdaq 100${when(s.ndxAsOf)}.` : nd === false ? `Not in the Nasdaq 100${when(s.ndxAsOf)}.` : 'Nasdaq 100: no holdings file imported yet.',
+      ].join(' ') + ' From each index fund’s own holdings file.';
+      if (sp == null && nd == null) {
         return `<td class="name left grp-info nocard na" title="No index holdings file has been imported yet — this is not the same as No.">—</td>`;
       }
-      const when = s.spAsOf ? ` as of ${we(s.spAsOf)}` : '';
-      return s.spMember
-        ? `<td class="name left grp-info nocard" title="In the S&amp;P 500${when}, from the issuer's own holdings file.">Yes</td>`
-        : `<td class="name left grp-info nocard na" title="Not in the S&amp;P 500${when}, from the issuer's own holdings file.">No</td>`;
+      const txt = sp === true && nd === true ? 'S&amp;P · NDX' : sp === true ? 'S&amp;P' : nd === true ? 'NDX'
+        : (sp === false && nd === false) ? 'No' : '—';
+      const quiet = !(sp === true || nd === true);
+      return `<td class="name left grp-info nocard${quiet ? ' na' : ''}" title="${say}">${txt}</td>`;
     }
 
     // Sector and Industry: the bar's own pickers in a second place (owner,
@@ -2724,11 +2733,11 @@
     // Balanced only: it is the shared measurement, the one advice column that
     // is always shown, and the one every other surface reads.
     let adviceFilter = 'All';
-    // 'All' | 'Yes' | 'No', matching what Filters.filterValue returns for
-    // spMember -- so the bar picker and the filter row compare like with
-    // like. A row of UNKNOWN membership returns '' and is therefore in
-    // NEITHER cut: null is not No, which is the rule the column itself
-    // keeps and the one that matters on an instance with no holdings file.
+    // ONE OF Filters.INDEX_CUTS: All, in (S&P 500), ndx (Nasdaq 100), either,
+    // ndxonly, neither. Every test goes through Filters.indexCutIs, so the bar
+    // picker, the filter row and a saved screen ask one function. A row of
+    // UNKNOWN membership is in no cut that needs the missing flag: null is
+    // not No, which is the rule the column itself keeps.
     let spFilter = 'All';
     let sizeFilter = 'All';
     // 'table' or 'tiles'. Saved per account: which shape you read in is a
@@ -2827,7 +2836,7 @@
       }
       if (sectorFilter !== 'All') rows = rows.filter((s) => s.sector === sectorFilter);
       if (industryFilter !== 'All') rows = rows.filter((s) => s.industry === industryFilter);
-      if (spFilter !== 'All') rows = rows.filter((s) => filterValue(s, 'spMember') === spFilter);
+      if (spFilter !== 'All') rows = rows.filter((s) => Filters.indexCutIs(s, spFilter));
       if (sizeFilter !== 'All') rows = rows.filter((s) => s.capBand === sizeFilter);
       if (adviceFilter !== 'All') rows = rows.filter((s) => filterValue(s, 'av:Balanced') === adviceFilter);
       return rows;
@@ -3026,11 +3035,20 @@
         : k === 'capBand' ? Filters.CAP_ORDER
         // A boolean has a natural order and the alphabet gets it backwards:
         // a reader scanning a Yes/No pair expects Yes first.
-        : k === 'spMember' ? ['Yes', 'No']
         : k.startsWith('av:') ? ActionRules.ACTIONS : null);
       document.querySelectorAll('tr.filterrow select.flt').forEach((el) => {
         if (el === document.activeElement) return;
         const k = el.dataset.fk;
+        // THE INDEX CELL IS THE BAR'S OWN PICKER: the same cuts, counted the
+        // same way, rather than the Yes/No values of one flag.
+        if (k === 'spMember') {
+          el.innerHTML = Filters.INDEX_CUTS.map(([v, lab]) => {
+            const val = v === 'All' ? '' : v;
+            const n = v === 'All' ? inTab.length : inTab.filter((s) => Filters.indexCutIs(s, v)).length;
+            return `<option value="${we(val)}"${(spFilter === 'All' ? '' : spFilter) === val ? ' selected' : ''}>${we(v === 'All' ? 'All' : lab + ' (' + n + ')')}</option>`;
+          }).join('');
+          return;
+        }
         const pool = k === 'industry'
           ? inTab.filter((s) => sectorFilter === 'All' || s.sector === sectorFilter)
           : k === 'av:Balanced'
@@ -3275,11 +3293,9 @@
     // control move under the pointer as the table narrowed -- the Size
     // menu's reasoning, and "0 in the index" is itself an answer.
     function renderSpMenu(inScope) {
-      let yes = 0, no = 0, unknown = 0;
-      inScope.forEach((s) => {
-        const v = filterValue(s, 'spMember');
-        if (v === 'Yes') yes++; else if (v === 'No') no++; else unknown++;
-      });
+      // A row is UNKNOWN where either index's file has not been read for it.
+      const unknown = inScope.filter((s) => s.spMember == null || s.ndxMember == null).length;
+      const count = (c) => inScope.filter((s) => Filters.indexCutIs(s, c)).length;
       const row = (val, label, n) =>
         '<div class="pick-row">' +
         `<button class="pick ${spFilter === val ? 'on' : ''}" data-sp="${we(val)}" role="option" ` +
@@ -3292,16 +3308,15 @@
       // imported for it yet -- which is a gap in our own data, never a fact
       // about the company, and is why it is not offered as a third cut.
       const note = unknown
-        ? `${unknown} ${unknown === 1 ? 'row has' : 'rows have'} not been checked against the ` +
-          `index file, so ${unknown === 1 ? 'it is' : 'they are'} in neither cut. That is not ` +
-          'the same as being outside it.'
+        ? `${unknown} ${unknown === 1 ? 'row has' : 'rows have'} not been checked against both ` +
+          `index files, so ${unknown === 1 ? 'it is' : 'they are'} left out of any cut that needs the missing one. ` +
+          'That is not the same as being outside it.'
         : '';
       $('spMenu').innerHTML = '<div class="picker-inner">' +
         row('All', 'All stocks', inScope.length) +
-        row('Yes', 'In the S&P 500', yes) +
-        row('No', 'Not in the S&P 500', no) +
-        '<div class="pick-sep"></div><div class="pick-hint">Membership comes from the index ' +
-        'fund&rsquo;s own daily holdings file.' + (note ? ' ' + we(note) : '') + '</div>' +
+        Filters.INDEX_CUTS.slice(1).map(([v, lab]) => row(v, lab, count(v))).join('') +
+        '<div class="pick-sep"></div><div class="pick-hint">Membership comes from each index ' +
+        'fund&rsquo;s own daily holdings file (SPY and QQQ).' + (note ? ' ' + we(note) : '') + '</div>' +
         '</div>';
       $('spMenu').querySelectorAll('[data-sp]').forEach((b) => {
         b.addEventListener('click', () => {
@@ -3313,18 +3328,19 @@
       });
     }
 
+    const IDX_SHORT = { in: 'S&P 500', ndx: 'Nasdaq 100', either: 'Either', ndxonly: 'NDX only', neither: 'Neither', out: 'Not S&P' };
     function renderSpTrigger() {
       const on = spFilter !== 'All';
       $('spBtn').innerHTML =
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-shield" /></svg>' +
-        '<span class="picker-label">S&amp;P 500</span>' +
-        `<span class="count">${on ? (spFilter === 'Yes' ? 'In' : 'Not in') : 'All'}</span>` +
+        '<span class="picker-label">Index</span>' +
+        `<span class="count">${we(IDX_SHORT[spFilter] || 'All')}</span>` +
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>' ;
       $('spBtn').classList.toggle('on', on);
       $('spBtn').title = on
-        ? (spFilter === 'Yes' ? 'Showing S&P 500 members only' : 'Showing stocks outside the S&P 500')
+        ? 'Showing: ' + ((Filters.INDEX_CUTS.find((c) => c[0] === spFilter) || [])[1] || spFilter)
           + ' — open to change or clear'
-        : 'Filter the table to the S&P 500, or to everything outside it';
+        : 'Filter the table by index: the S&P 500, the Nasdaq 100, either or neither';
     }
 
     // The size bands, counted over the tab + sector + industry already in
@@ -3807,8 +3823,8 @@
         // table, and the one to clear first.
         const narrowest = industryFilter !== 'All' ? industryFilter
           : sectorFilter !== 'All' ? sectorFilter : 'All';
-        const spWhere = spFilter === 'Yes' ? ' in the S&P 500'
-          : spFilter === 'No' ? ' outside the S&P 500' : '';
+        const spWhere = ({ in: ' in the S&P 500', ndx: ' in the Nasdaq 100', either: ' in either index',
+          ndxonly: ' in the Nasdaq 100 and not the S&P 500', neither: ' in neither index', out: ' outside the S&P 500' })[spFilter] || '';
         const where = (adviceFilter !== 'All' ? `“${adviceFilter}” in ` : '') +
           (narrowest === 'All' ? tabName : `${narrowest} in ${tabName}`) + spWhere;
         const msg = activeColFilters().length && prefilterStocks().length
@@ -3840,6 +3856,11 @@
           ? (x.newsLatest && x.newsLatest.published_at ? Date.parse(x.newsLatest.published_at) : null)
           :
         // Alphabetical would put Avoid above Buy; rank by the ladder instead.
+        // The Index column ranks by how many indexes: both, the S&P 500, the
+        // Nasdaq 100, neither -- and unknown last, whichever way it is sorted.
+        sortKey === 'spMember' ? (x.spMember == null && x.ndxMember == null ? null
+          : (x.spMember === true ? 2 : 0) + (x.ndxMember === true ? 1 : 0))
+        :
         sortKey.startsWith('av:') ? (() => {
           const v = x.adviceBy && x.adviceBy[sortKey.slice(3)];
           return v ? ActionRules.ACTIONS.indexOf(v.a) : null;
@@ -4779,7 +4800,7 @@
         && Object.keys(want).every((k) => have[k] === want[k]);
       return !same || screenColsOff
         || (d.sector || 'All') !== sectorFilter || (d.industry || 'All') !== industryFilter
-        || (d.sp || 'All') !== spFilter
+        || Filters.normIndexCut(d.sp) !== spFilter
         || (d.size || 'All') !== sizeFilter
         || (d.advice || 'All') !== adviceFilter || screenMove(d) !== moveFilter
         || (d.sort && (d.sort.key !== sortKey || d.sort.dir !== sortDir));
@@ -4798,7 +4819,7 @@
       for (const [k, v] of Object.entries(d.filters || {})) setColFilter(k, v);
       sectorFilter = d.sector || 'All';
       industryFilter = d.industry || 'All';
-      spFilter = d.sp || 'All';
+      spFilter = Filters.normIndexCut(d.sp);
       sizeFilter = d.size || 'All';
       adviceFilter = d.advice || 'All';
       moveFilter = screenMove(d);

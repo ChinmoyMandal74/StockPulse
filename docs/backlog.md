@@ -1330,6 +1330,11 @@ confirming first that `/splits` actually lists the three (MLI's is reported by
 > shown on `/holdings`. See CLAUDE.md, "The Nasdaq 100 is imported too". **What
 > is left is everything below about USING it**: the screener column, the bar
 > filter and the promo cut, and the one-picker-or-two question.
+>
+> **AND THE USING HALF IS DONE TOO (later the same evening).** One Index picker
+> on the screener, the pivot and every promo card; see CLAUDE.md, "ONE Index
+> picker over both indexes". Nothing in this entry is outstanding. Kept for
+> the reasoning.
 
 **Asked by the owner** ("similar to the S&P index, I think Nasdaq 100 is also a
 very important benchmark"). The benchmark half shipped the same day: the

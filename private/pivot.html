@@ -301,7 +301,7 @@
       <!-- Both filters change WHICH STOCKS the grid is about rather than how
            they are arranged, so they sit together, the fixed one first. The
            generic Filter keeps its dependent "Is" and its Clear beside it. -->
-      <div class="pick"><label for="spCut">Include S&amp;P</label><select id="spCut"></select></div>
+      <div class="pick"><label for="spCut">Index</label><select id="spCut"></select></div>
       <div class="pick"><label for="pageDim">Filter</label><select id="pageDim"></select></div>
       <div class="pick" id="pageValWrap" hidden><label for="pageVal">Is</label><select id="pageVal"></select></div>
       <button class="btn" id="pageClear" hidden title="Show the whole screen again">Clear filter</button>
@@ -750,13 +750,13 @@
     // a third home for three labels would be worse than two.
     const SP_CUTS = [
       ['all', 'All stocks'],
-      ['in',  'In the S&P 500'],
-      ['out', 'Not in the S&P 500'],
+      ['in', 'S&P 500'], ['ndx', 'Nasdaq 100'], ['either', 'In either index'],
+      ['ndxonly', 'Nasdaq 100, not S&P 500'], ['neither', 'In neither index'],
     ];
     let spCut = 'all';
     const spOf = (s) => Filters.filterValue(s, 'spMember');
-    const spKeep = (s) => (spCut === 'all' ? true
-      : spCut === 'in' ? spOf(s) === 'Yes' : spOf(s) === 'No');
+    // ONE definition of every cut, shared with the screener: Filters.indexCutIs.
+    const spKeep = (s) => (spCut === 'all' ? true : Filters.indexCutIs(s, spCut));
 
     // THE PAGE FILTER — Excel's report filter: a dimension on neither axis that
     // narrows the whole grid. It is not a third axis; it removes stocks before
@@ -1424,7 +1424,7 @@
       if (spCut !== 'all') {
         const unknown = stocks.filter((s) => !spOf(s)).length;
         bits.push('Showing only the stocks <b>' +
-          (spCut === 'in' ? 'in the S&P 500' : 'outside the S&P 500') +
+          ({ in: 'in the S&P 500', ndx: 'in the Nasdaq 100', either: 'in either index', ndxonly: 'in the Nasdaq 100 and not the S&P 500', neither: 'in neither index', out: 'outside the S&P 500' }[spCut] || '') +
           '</b> — <b>' + total + '</b> of ' + stocks.length + '.' +
           // AN UNCHECKED STOCK IS IN NEITHER CUT, so where there are any the
           // two cuts do not add up to the screen and the page says why rather
@@ -1600,11 +1600,8 @@
       // Counted over the WHOLE universe, like the Filter's own values and for
       // the same reason: a menu that described the table you have already
       // narrowed to could not tell you what you would get back.
-      const spN = { all: stocks.length, in: 0, out: 0 };
-      for (const s of stocks) {
-        const v = spOf(s);
-        if (v === 'Yes') spN.in++; else if (v === 'No') spN.out++;
-      }
+      const spN = { all: stocks.length };
+      for (const [k] of SP_CUTS) if (k !== 'all') spN[k] = stocks.filter((s) => Filters.indexCutIs(s, k)).length;
       $('spCut').innerHTML = SP_CUTS.map(([k, lab]) =>
         '<option value="' + k + '"' + (k === spCut ? ' selected' : '') + '>' +
         esc(lab) + ' (' + spN[k] + ')</option>').join('');

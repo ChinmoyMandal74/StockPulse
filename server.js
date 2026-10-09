@@ -4796,20 +4796,24 @@ function ruleCfg(name) {
 // which does not happen between two page loads.
 const SP_FUND = 'spy';
 const SP_TTL_MS = 60000;
-let spCache = { at: 0, asOf: null, set: null };
-async function spMembers() {
+// The Nasdaq 100, from the same store under its own fund key.
+const NDX_FUND = 'qqq';
+const idxCache = {};
+async function fundMembers(fund) {
+  let spCache = idxCache[fund] || { at: 0, asOf: null, set: null };
   if (spCache.set && Date.now() - spCache.at < SP_TTL_MS) return spCache;
-  const st = await store.fundNewest(SP_FUND);
-  if (!st || !st.asOf) { spCache = { at: Date.now(), asOf: null, set: null }; return spCache; }
+  const st = await store.fundNewest(fund);
+  if (!st || !st.asOf) { spCache = idxCache[fund] = { at: Date.now(), asOf: null, set: null }; return spCache; }
   // The newest day's ~504 rows, the indexed seek readFundHoldings already is.
   // IT RETURNS AN OBJECT, `{ fund, asOf, holdings }`, not an array -- mapping
   // the return value directly throws, and `serveStamps` catches per stamp, so
   // the only symptom is a column that is silently absent from every row. Read
   // a field's shape, never guess it.
-  const { holdings } = await store.readFundHoldings(SP_FUND, st.asOf);
-  spCache = { at: Date.now(), asOf: st.asOf, set: new Set((holdings || []).map((r) => r.symbol)) };
+  const { holdings } = await store.readFundHoldings(fund, st.asOf);
+  spCache = idxCache[fund] = { at: Date.now(), asOf: st.asOf, set: new Set((holdings || []).map((r) => r.symbol)) };
   return spCache;
 }
+const spMembers = () => fundMembers(SP_FUND);
 
 // A NULL IS NOT A FALSE, and this is the sharpest place that rule has landed:
 // with no holdings file ever imported, `false` on every row is the screener
@@ -4817,10 +4821,17 @@ async function spMembers() {
 // answer. Unknown until there is a file, and the cell says which.
 async function stampSpMember(rows) {
   if (!Array.isArray(rows) || !rows.length) return;
-  const { asOf, set } = await spMembers();
+  // BOTH INDEXES, each three-state on its own: a missing Nasdaq 100 file
+  // must not blank the S&P flag, and the other way round.
+  const [sp, nd] = await Promise.all([
+    spMembers(),
+    fundMembers(NDX_FUND).catch(() => ({ asOf: null, set: null })),
+  ]);
   for (const r of rows) {
-    r.spMember = set ? set.has(r.symbol) : null;
-    r.spAsOf = asOf;
+    r.spMember = sp.set ? sp.set.has(r.symbol) : null;
+    r.spAsOf = sp.asOf;
+    r.ndxMember = nd.set ? nd.set.has(r.symbol) : null;
+    r.ndxAsOf = nd.asOf;
   }
 }
 
@@ -9900,7 +9911,7 @@ function cleanPivots(raw) {
         // the page would then open every saved pivot on the default cut with
         // nothing saying why. Anything else falls back to 'all'; the page
         // validates it again against its own list.
-        sp: ['all', 'in', 'out'].includes(String(q.sp || '')) ? String(q.sp) : 'all',
+        sp: ['all', 'in', 'ndx', 'either', 'ndxonly', 'neither', 'out'].includes(String(q.sp || '')) ? String(q.sp) : 'all',
         // A VALUE, not an identifier: it is a sector, a theme or a band name
         // that came out of the data, so anything printable is legitimate.
         // Narrowing this is how every screen silently lost its `<` and `>`

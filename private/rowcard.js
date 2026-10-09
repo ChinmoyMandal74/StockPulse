@@ -183,7 +183,15 @@
     ['info',  'Instrument',     (s) => V.text(s.instrumentType)],
     // Boolean only. The index WEIGHT is deliberately not here: it stays on
     // the admin /holdings page, which is the licensing line the owner drew.
-    ['info',  'S&P 500',        (s) => (s.spMember == null ? null : V.text(s.spMember ? 'Yes' : 'No'))],
+    // ONE row for both indexes. Blank where neither is known, or where
+    // "neither" cannot be said because one file has not been imported.
+    ['info',  'Index',          (s) => {
+      const sp = s.spMember, nd = s.ndxMember;
+      const t = sp === true && nd === true ? 'S&P 500 · Nasdaq 100' : sp === true ? 'S&P 500'
+        : nd === true ? 'Nasdaq 100' : (sp === false && nd === false) ? 'Neither'
+          : (sp === false && nd == null) ? 'Not in the S&P 500' : null;
+      return t ? V.text(t) : null;
+    }],
     ['info',  'Market Cap',     (s) => V.money(s.marketCap, s.currency)],
     // The band the cap falls in. One entry here puts it in the hover card, the
     // tiles, the phone and the tile/mobile field pickers at once.

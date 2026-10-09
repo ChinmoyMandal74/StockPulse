@@ -2396,6 +2396,22 @@ The route's as-of cutoff was written off as an efficiency guard — the write is
 - Verified: **36 checks** (`ndx-test.js`) — the parser on the REAL feed frozen as a fixture, the guards on synthetic feeds, the route (dry run, import, repeat, refusal, markup served as 200, dropped connection, a newer file with a removal and history surviving), and the page's switch. **Proved by reverting eight times, every one load-bearing.** `tail-test.js` corrected for two holdings calls a night.
   - **`holdings-page-test.js` fails 3 when run late in the evening Eastern**: its fixture dates are UTC and the page counts local days, so "7 days old" reads 6 after 8 PM. Time of day, not this change.
 
+#### ONE Index picker over both indexes (2026-10-08, owner: "single Index picker, do not worry about presets")
+**The S&P 500 picker became an Index picker everywhere: the screener's bar and filter row, the pivot, and every promo card.** Six cuts: All stocks, S&P 500, Nasdaq 100, In either index, Nasdaq 100 not S&P 500, In neither index. The owner chose this over a second column-and-filter pair.
+
+- **`Filters.indexCutIs(row, cut)` is the one rule**, in the module the server requires and the pages load, with `INDEX_CUTS`, `normIndexCut` and `indexLabel` beside it. The screener, the pivot and a screen the server runs all call it. `cards.js` restates the six in `spFilter` / `SP_CUTS` (it has no requires) and the suite asserts the two catalogues agree.
+- **EVERY ROW CARRIES TWO THREE-STATE FLAGS**, `spMember` and `ndxMember`, stamped together by `stampSpMember` from each fund's own newest file (`fundMembers(fund)`, cached a minute per fund). A missing Nasdaq 100 file blanks only its own flag.
+- **`=== true` / `=== false`, never truthy.** `ndxonly` and `neither` each assert an ABSENCE, so they need the other flag to be a known `false`: a row whose S&P file has not been read is not "Nasdaq-only", and an unchecked row is not in "neither". Both proved by reverting.
+- **The column keeps its id, `spMember`**, so saved views and the 29 starter screens that name it still show it. It is headed **Index** and reads `S&P · NDX`, `S&P`, `NDX` or `No`; the tooltip names each index and its file date. It sorts both, S&P, Nasdaq, neither, unknown last. `filterValue(x, 'spMember')` still returns Yes/No for the S&P flag alone; `ndxMember` and `indexMember` (the label) are new keys.
+- **The filter-row cell under that column is the bar picker in a second place**: the same six cuts with the same counts, one piece of state (`spFilter`), not the Yes/No of one flag.
+- **A screen's `sp` was stored and never applied where the server runs a screen** (`screenRows`), so the phone and a promo card pointed at a screen ignored it. It is applied now. The screener's old stored values `Yes` / `No` are read as S&P in / not-in through `normIndexCut`.
+- **"Not in the S&P 500" is no longer offered** (`out` is still understood by the rule). A saved promo post or pivot preset carrying it falls back to that card's default, as the owner accepted.
+- **Cards**: the kicker names the cut (`Nasdaq 100`, `S&P 500 or Nasdaq 100`, `Nasdaq 100, not in the S&P 500`, `Outside both indexes`); on Flow, Treemap, Waterfall and Narrow or broad "the index" is used only where the cut IS an index. With the cut on Nasdaq 100 those cards read the Nasdaq 100's own make-up. Every promo label reads Index.
+- The row card's `info|S&P 500` field is now `info|Index`; production's tile and phone configs did not use the old key.
+- **First live reading**: 1,274 stocks — 499 in the S&P 500, 95 in the Nasdaq 100, 13 Nasdaq-only.
+- Verified: **38 checks** (`indexcut-test.js`): the rule over all eight flag combinations with no server, the cards, the server stamp, the screener (menu, each cut, the column, the filter row both ways), the pivot and the studio. **Proved by reverting nine times, every one load-bearing.**
+  - **Seven older suites assert the retired two-value cut** and now fail on it: `spcol`, `spbar`, `pivot-spcut`, `sp500`, `screencols` (1), `day-test` (6) and `flow-test` (7). Their failures are the old `out` value and the old `Yes` cell, not regressions; `indexcut-test.js` is the suite for the cut.
+
 #### `/holdings` — the page (2026-10-03, owner's request)
 **Admin only, an `Index membership` row in the console's Data section.** The import had no surface at all, so "did it run, and what did it get" could only be answered by querying Turso by hand.
 

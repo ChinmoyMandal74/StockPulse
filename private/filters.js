@@ -140,6 +140,8 @@
     // unknown, and a dropdown offering only Yes/No would silently filter
     // those rows away rather than showing them as unanswered.
     if (key === 'spMember') return x.spMember == null ? '' : (x.spMember ? 'Yes' : 'No');
+    if (key === 'ndxMember') return x.ndxMember == null ? '' : (x.ndxMember ? 'Yes' : 'No');
+    if (key === 'indexMember') return indexLabel(x);
     return x[key];
   }
 
@@ -251,6 +253,50 @@
   // Every row a screen's definition matches, in its sort order. The bound keys
   // (sector, industry, the Balanced verdict) are part of the definition too,
   // and are applied here rather than by the caller.
+  // ---- index membership: ONE cut, two indexes ----------------------------
+  // (2026-10-08, owner: "single Index picker".) The S&P 500 and the Nasdaq 100
+  // are each a three-state flag on the row -- true, false, or null where no
+  // holdings file has been imported -- and every surface that narrows by
+  // index asks THIS function, so the screener, the pivot and a screen the
+  // server runs cannot disagree about what a cut means.
+  //
+  // `=== true` / `=== false`, NEVER truthy: a null is not a No. An unchecked
+  // row is in no cut but All. `ndxonly` and `neither` therefore need BOTH
+  // flags known, because each asserts an absence.
+  const INDEX_CUTS = [
+    ['All', 'All stocks'], ['in', 'S&P 500'], ['ndx', 'Nasdaq 100'],
+    ['either', 'In either index'], ['ndxonly', 'Nasdaq 100, not S&P 500'],
+    ['neither', 'In neither index'],
+  ];
+  // `Yes` / `No` are what the screener's picker stored before it knew two
+  // indexes; `out` (not in the S&P 500) is still understood, not offered.
+  function normIndexCut(v) {
+    if (v === 'Yes') return 'in';
+    if (v === 'No' || v === 'out') return 'out';
+    return INDEX_CUTS.some((c) => c[0] === v) ? v : 'All';
+  }
+  function indexCutIs(x, cut) {
+    const sp = x ? x.spMember : null, nd = x ? x.ndxMember : null;
+    switch (cut) {
+      case 'in': return sp === true;
+      case 'out': return sp === false;
+      case 'ndx': return nd === true;
+      case 'either': return sp === true || nd === true;
+      case 'ndxonly': return nd === true && sp === false;
+      case 'neither': return sp === false && nd === false;
+      default: return true;
+    }
+  }
+  // What the Index column shows. Blank where it cannot be said: "Neither"
+  // is a claim about both indexes, so it needs both files.
+  function indexLabel(x) {
+    const sp = x ? x.spMember : null, nd = x ? x.ndxMember : null;
+    if (sp === true && nd === true) return 'S&P 500 · Nasdaq 100';
+    if (sp === true) return 'S&P 500';
+    if (nd === true) return 'Nasdaq 100';
+    return sp === false && nd === false ? 'Neither' : '';
+  }
+
   function screenRows(def, rows, ctx) {
     const d = def || {};
     const list = (rows || []).filter((x) => x && !x.error);
@@ -263,6 +309,10 @@
     if (d.industry && d.industry !== 'All') tests.push(['industry', (v) => v === d.industry]);
     if (d.advice && d.advice !== 'All') tests.push(['av:Balanced', (v) => v === d.advice]);
     let out = list.filter((x) => tests.every(([key, fn]) => fn(filterValue(x, key, ctx))));
+    // A screen's index cut. It was stored and never applied here, so a screen
+    // the server ran (the phone, a promo card) ignored it.
+    const ic = normIndexCut(d.sp);
+    if (ic !== 'All') out = out.filter((x) => indexCutIs(x, ic));
     // Which way the Balanced verdict went since the previous close.
     // `d.changed` is the older spelling and means "moved either way"; it is
     // still read so screens saved before the split keep working, and it is
@@ -293,5 +343,6 @@
     maCrossWord, filterValue, filterKind, parseNumTerm,
     adviceMove, adviceMoveIs, MOVES,
     compileNum, compileText, compileFilter, screenRows,
+    INDEX_CUTS, normIndexCut, indexCutIs, indexLabel,
   };
 });

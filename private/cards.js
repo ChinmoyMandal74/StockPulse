@@ -149,11 +149,24 @@
     // a card captioned "stocks we have not checked" is not a card.
     const SP_CUTS = [
       ['All', 'All stocks'],
-      ['in', 'In the index'],
-      ['out', 'Not in the index'],
+      ['in', 'S&P 500'],
+      ['ndx', 'Nasdaq 100'],
+      ['either', 'In either index'],
+      ['ndxonly', 'Nasdaq 100, not S&P 500'],
+      ['neither', 'In neither index'],
     ];
+    // ONE INDEX PICKER, TWO INDEXES (2026-10-08). Filters.INDEX_CUTS restated,
+    // the BENCHMARKS bargain: this module has no requires. `out` (not in the
+    // S&P 500) is still understood by spFilter and is no longer offered.
     // What the kicker calls each cut. `All` is absent, so it names nothing.
-    const SP_CUT_LABEL = { in: 'S&P 500', out: 'Outside the S&P 500' };
+    const SP_CUT_LABEL = { in: 'S&P 500', ndx: 'Nasdaq 100', either: 'S&P 500 or Nasdaq 100',
+      ndxonly: 'Nasdaq 100, not in the S&P 500', neither: 'Outside both indexes', out: 'Outside the S&P 500' };
+    // Prose for a sentence, where the label above titles a kicker.
+    const SP_CUT_PROSE = { in: 'the S&P 500', ndx: 'the Nasdaq 100', either: 'the two indexes',
+      ndxonly: 'the Nasdaq 100 names outside the S&P 500', neither: 'the stocks outside both indexes',
+      out: 'the stocks outside the S&P 500' };
+    // A cut that IS an index, so "the index" is the right word for its own aggregate.
+    const isIndexCut = (c) => c === 'in' || c === 'ndx';
 
     // THE THREE-STATE READ, IN ONE PLACE. `=== true` / `=== false`, NEVER
     // truthy/falsy, and that is the whole guard: `spMember` is three-state.
@@ -175,6 +188,11 @@
     function spFilter(rows, cut) {
       if (cut === 'in') return rows.filter((x) => x.spMember === true);
       if (cut === 'out') return rows.filter((x) => x.spMember === false);
+      if (cut === 'ndx') return rows.filter((x) => x.ndxMember === true);
+      if (cut === 'either') return rows.filter((x) => x.spMember === true || x.ndxMember === true);
+      // Each of these asserts an ABSENCE, so both flags must be known.
+      if (cut === 'ndxonly') return rows.filter((x) => x.ndxMember === true && x.spMember === false);
+      if (cut === 'neither') return rows.filter((x) => x.spMember === false && x.ndxMember === false);
       return rows;
     }
 
@@ -2916,9 +2934,9 @@
     // THE KICKER NAMES THE CUT, because a posted card has no picker beside
     // it and nothing else on the artboard could say why a familiar name is
     // missing. It degrades to exactly the old string when the cut is off.
-    const movWord = spCut === 'in' ? 'S&P 500 movers'
-      : spCut === 'out' ? 'movers outside the S&P 500'
-        : 'movers';
+    const movWord = ({ in: 'S&P 500 movers', ndx: 'Nasdaq 100 movers', either: 'index movers',
+      ndxonly: 'Nasdaq-only movers', neither: 'movers outside both indexes',
+      out: 'movers outside the S&P 500' })[spCut] || 'movers';
     const floorNote = (spCut !== 'All' || floor)
       ? ' · ' + movWord + (floor ? ' over $' + fmtMoney(floor) : '')
       : '';
@@ -4056,12 +4074,12 @@
       }]);
     }
 
-    const cutWord = cut === 'in' ? 'The S&P 500'
-      : cut === 'out' ? 'Outside the S&P 500' : 'The whole screen';
+    const cutWord = cut === 'in' ? 'The S&P 500' : cut === 'ndx' ? 'The Nasdaq 100'
+      : SP_CUT_LABEL[cut] || 'The whole screen';
     // Drilled, the reference is the sector -- named generically rather than
     // by name, because the title and the kicker already say which sector and
     // "Ahead of Communication Services" would not fit the band's own track.
-    const refWord = drillSec ? 'the sector' : cut === 'in' ? 'the index' : 'the screen';
+    const refWord = drillSec ? 'the sector' : isIndexCut(cut) ? 'the index' : cut === 'All' ? 'the screen' : 'the group';
     const partWord = drillSec ? 'industry' : 'sector';
     const partsWord = drillSec ? 'industries' : 'sectors';
     // "A industry that fell" -- caught by eye on the drilled card, not by an
@@ -4079,7 +4097,7 @@
       const why = !pool.length
         ? (drillSec
           ? 'No stock in ' + esc(drillSec) + ' is ' + (cut === 'out' ? 'outside the index' : 'in this cut') + '.'
-          : cut === 'in'
+          : (cut !== 'All' && cut !== 'out')
             ? 'No stock here has been matched against the index yet — no holdings file has been imported.'
             : cut === 'out'
               ? 'Every stock on the screen is in the index.'
@@ -4685,8 +4703,7 @@
       && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol)), cut);
   }
   // Prose, as against SP_CUT_LABEL, which titles a kicker.
-  const cutWords = (cut) => (cut === 'in' ? 'the S&P 500'
-    : cut === 'out' ? 'the stocks outside the S&P 500' : 'the whole screen');
+  const cutWords = (cut) => SP_CUT_PROSE[cut] || 'the whole screen';
   const cutKick = (cut) => SP_CUT_LABEL[cut] || 'The whole screen';
 
   // HOW STRONG A COLOUR A RETURN EARNS, PER WINDOW -- and it is FIXED rather
@@ -4789,7 +4806,7 @@
       const why = !pool.length
         ? (drill
           ? 'No stock in ' + drill + ' is in this cut.'
-          : cut === 'in'
+          : (cut !== 'All' && cut !== 'out')
             ? 'No stock here has been matched against the index yet — no holdings '
               + 'file has been imported.'
             : cut === 'out' ? 'Every stock on the screen is in the index.'
@@ -4967,7 +4984,7 @@
     if (!P.list.length || P.index == null) {
       const why = !pool.length
         ? (drill ? 'No stock in ' + drill + ' is in this cut.'
-          : cut === 'in'
+          : (cut !== 'All' && cut !== 'out')
             ? 'No stock here has been matched against the index yet — no holdings '
               + 'file has been imported.'
             : cut === 'out' ? 'Every stock on the screen is in the index.'
@@ -5056,7 +5073,7 @@
     if (P.index > 0) { for (const x of up) { acc += x.c; need++; if (acc >= P.index) break; } }
 
     const stats = [
-      [drill ? 'the sector' : cut === 'in' ? 'the index' : 'the screen', pct(P.index, 2)],
+      [drill ? 'the sector' : isIndexCut(cut) ? 'the index' : cut === 'All' ? 'the screen' : 'the group', pct(P.index, 2)],
       ['top ' + up.slice(0, K).length + ' added',
         pct(up.slice(0, K).reduce((a, x) => a + x.c, 0), 2)],
       ['fell', dn.length.toLocaleString() + ' of ' + P.list.length.toLocaleString()],
@@ -5697,8 +5714,7 @@
         + '</div>';
     };
 
-    const scopeWord = cut === 'in' ? 'the S&P 500'
-      : cut === 'out' ? 'the stocks outside the index' : 'the whole screen';
+    const scopeWord = SP_CUT_PROSE[cut] || 'the whole screen';
     const note = 'Above the 200-day means the latest close is above the average of the '
       + 'last 200 sessions. By count every company weighs the same; by value each weighs '
       + 'its market capitalisation, which is why the two can differ so widely. '
@@ -5833,7 +5849,9 @@
     };
     const R = read(per);
 
-    const scopeWord = cut === 'in' ? 'S&P 500 members' : cut === 'out' ? 'stocks outside the index' : 'stocks on the screen';
+    const scopeWord = ({ in: 'S&P 500 members', ndx: 'Nasdaq 100 members', either: 'index members',
+      ndxonly: 'Nasdaq 100 names outside the S&P 500', neither: 'stocks outside both indexes',
+      out: 'stocks outside the S&P 500' })[cut] || 'stocks on the screen';
     if (!R || R.n < 20) {
       return chromeTop() + '<div class="s-body"><div class="bt-in">'
         + '<span class="s-kick">' + esc(SP_CUT_LABEL[cut] || 'The whole screen') + '</span>'
