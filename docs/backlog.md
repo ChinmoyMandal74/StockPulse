@@ -1325,6 +1325,12 @@ confirming first that `/splits` actually lists the three (MLI's is reported by
 
 ## 31. Nasdaq 100 membership — 2026-10-08
 
+> **THE IMPORT HALF IS DONE (2026-10-08, the same evening).** The source is
+> Invesco's own JSON feed for QQQ; it is imported nightly under fund `qqq` and
+> shown on `/holdings`. See CLAUDE.md, "The Nasdaq 100 is imported too". **What
+> is left is everything below about USING it**: the screener column, the bar
+> filter and the promo cut, and the one-picker-or-two question.
+
 **Asked by the owner** ("similar to the S&P index, I think Nasdaq 100 is also a
 very important benchmark"). The benchmark half shipped the same day: the
 Beating the index card can measure against QQQ, and the group pages draw a

@@ -107,6 +107,8 @@
     .dchip.on { border-color: var(--accent); color: var(--text); }
     .note { margin: 14px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 84ch; }
     .btn.sm { font-size: 11.5px; padding: 5px 11px; }
+    .fundtabs { display: flex; gap: 8px; margin: 0 4px 16px; }
+    .fundtabs .btn.on { border-color: var(--accent); color: var(--text); }
     .btn.go { border-color: rgba(52, 211, 153, 0.3); color: var(--green); }
     .miss > .core { padding: 16px 20px; }
     .mnote { margin: 0 0 12px; font-size: 12px; color: var(--faint); line-height: 1.6; max-width: 86ch; }
@@ -177,9 +179,11 @@
       <span class="eyebrow"><span class="pip"></span>Admin</span>
       <h1>Index membership</h1>
       <p class="lede">What the nightly import has taken from the issuer's own daily holdings file —
-        every S&amp;P 500 member with its weight in the index, and whether the screener tracks it.
+        every <span id="ledeIdx">S&amp;P 500</span> member with its weight in the index, and whether the screener tracks it.
         The screener reads only whether a stock is a member; the weights stay on this page.</p>
     </header>
+
+    <div class="fundtabs" id="fundTabs"></div>
 
     <div class="bezel clock"><div class="core">
       <div class="row">
@@ -570,6 +574,7 @@
   function paint(d) {
     DATA = d;
     paintClock(d);
+    paintFunds(d);
     paintMissing(d);
     paintDates(d);
     var hs = d.holdings || [];
@@ -612,7 +617,7 @@
     b.disabled = true;
     var was = b.textContent;
     b.textContent = 'Fetching…';
-    fetch('/api/cron/holdings').then(function (r) { return r.json(); }).then(function (j) {
+    fetch('/api/cron/holdings?fund=' + FUND).then(function (r) { return r.json(); }).then(function (j) {
       b.disabled = false; b.textContent = was;
       $('cMsg').hidden = false;
       $('cMsg').className = 'msg' + (j.refused || j.error || j.reason ? ' bad' : '');
@@ -628,8 +633,27 @@
     });
   });
 
+  // WHICH INDEX. The S&P 500 by default; the choice is kept in the address
+  // so a link opens on the same one.
+  var FUND = (/[?&]fund=([a-z]{2,6})/.exec(location.search) || [])[1] || 'spy';
+  function paintFunds(d) {
+    var box = $('fundTabs');
+    box.innerHTML = (d.funds || []).map(function (x) {
+      return '<button type="button" class="btn sm' + (x.fund === d.fund ? ' on' : '') + '" data-fund="' + esc(x.fund) + '">' + esc(x.label) + '</button>';
+    }).join('');
+    $('ledeIdx').textContent = d.label || 'index';
+  }
+  $('fundTabs').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-fund]');
+    if (!b || b.getAttribute('data-fund') === FUND) return;
+    FUND = b.getAttribute('data-fund');
+    history.replaceState(null, '', FUND === 'spy' ? location.pathname : location.pathname + '?fund=' + FUND);
+    $('cMsg').hidden = true;
+    load();
+  });
+
   function load() {
-    fetch('/api/fund-holdings').then(function (r) {
+    fetch('/api/fund-holdings?fund=' + FUND).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     }).then(paint).catch(function (e) {

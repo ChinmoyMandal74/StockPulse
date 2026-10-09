@@ -351,12 +351,19 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
     //
     // A 404 reads as an older server, so deploy order never matters.
     //
+    // EVERY INDEX WE FOLLOW, one after the other: the S&P 500 (SPY) and the
+    // Nasdaq 100 (QQQ). A failure on one does not cost the other its turn.
+    async function holdingsRotate() {
+      for (const fund of ['spy', 'qqq']) {
+        try { await holdingsOne(fund); } catch (e) { say(`holdings   ${fund} skipped -- ${String((e && e.message) || e).slice(0, 100)}`); }
+      }
+    }
     // One 54KB fetch, and on most days it writes nothing: the route compares
     // the file's own as-of date against what is stored and stands down.
-    async function holdingsRotate() {
+    async function holdingsOne(fund) {
       let r; let text;
       try {
-        r = await fetch(`${base}/api/cron/holdings`, {
+        r = await fetch(`${base}/api/cron/holdings?fund=${fund}`, {
           signal: AbortSignal.timeout(120000),
           headers: { Authorization: 'Bearer ' + secret },
         });

@@ -44,7 +44,11 @@
     // read as every holding being removed at once. S&P targets 500 names and
     // the count has sat between 500 and 505 for decades, so 450 is generous
     // and unambiguous: no real file lands between.
-    spy: { index: 'SP500', label: 'S&P 500', min: 450 },
+    spy: { index: 'SP500', label: 'S&P 500', min: 450, source: 'ssga' },
+    // The Nasdaq 100, from Invesco, QQQ's own issuer. It has sat at 100 to 103
+    // names (a few companies have two share classes in it), so 90 is the floor
+    // and 130 a ceiling: a file far over it is some other fund's.
+    qqq: { index: 'NDX100', label: 'Nasdaq 100', min: 90, max: 130, source: 'invesco' },
   };
 
   // Reject the empty before coercing. `Number('')` and `Number(null)` are
@@ -176,6 +180,71 @@
     return rows;
   }
 
+  // --- Invesco's holdings feed (QQQ, the Nasdaq 100) --------------------
+  //
+  // (2026-10-08, owner: "work on the bigger task of finding the holdings of
+  // nasdaq100".) Measured before it was chosen:
+  //
+  //   - Invesco's own feed for QQQ answers an honest User-Agent with JSON:
+  //     an effective date, 105 rows, weights summing to 100.000.
+  //   - 100 of the 105 are equities (97 common stock, 3 depositary receipts).
+  //     The other five are a cash line whose TICKER IS `USD`, a pending-
+  //     dividend line `USDPDV`, an index future `NQZ6`, and two cash rows with
+  //     no ticker. `USD` and `USDPDV` pass any ticker-shape test, so the row's
+  //     own security type is what keeps them out -- an ALLOWLIST of equity
+  //     types, so a type this has never seen is dropped and counted rather
+  //     than let in.
+  //   - Those 100 are EXACTLY the 100 symbols Nasdaq's own list endpoint
+  //     publishes for the index, with not one extra either way.
+  //   - The older CSV download link answers 200 with 425KB of HTML, which is
+  //     the iShares shape again and why the body is validated, not the status.
+  //   - No dotted tickers and no translation needed.
+  //
+  // The same contract as the workbook path: it THROWS on anything it cannot
+  // vouch for, and the caller's only response to a throw is to write nothing.
+  const EQUITY_TYPE = /common stock|ordinary share|depositor?y receipt|depositor?y share|\breit\b|tracking stock|limited partnership/i;
+  function parseInvesco(buf, fund, cfg) {
+    let j;
+    try { j = JSON.parse(Buffer.isBuffer(buf) ? buf.toString('utf8') : String(buf)); }
+    catch { throw new Error('not JSON -- the holdings feed answered with something else (a page of markup, usually)'); }
+    if (!j || !Array.isArray(j.holdings)) throw new Error('no holdings array in the feed');
+    const d = String(j.effectiveBusinessDate || j.effectiveDate || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new Error('no effective date in the feed');
+    const held = [];
+    const seen = new Set();
+    let dropped = 0;
+    let weightSum = 0;
+    for (const h of j.holdings) {
+      const w = num(h && h.percentageOfTotalNetAssets);
+      if (w != null) weightSum += w;
+      const sym = ticker(h && h.ticker);
+      const type = String((h && h.securityTypeName) || '');
+      if (!sym || !EQUITY_TYPE.test(type) || seen.has(sym)) { dropped += 1; continue; }
+      seen.add(sym);
+      held.push({
+        symbol: sym,
+        name: h.issuerName ? String(h.issuerName).trim() : null,
+        weight: w,
+        shares: num(h.units),
+        cusip: h.cusip ? String(h.cusip).trim() : null,
+        sedol: null,
+      });
+    }
+    if (held.length < cfg.min) {
+      throw new Error(`only ${held.length} holdings parsed, floor is ${cfg.min} `
+        + `— refusing the file rather than reading it as ${cfg.min - held.length}+ removals`);
+    }
+    // The index holds about 100 names. Far more than that is a different
+    // fund's file, or a layout that has started listing something else.
+    if (cfg.max && held.length > cfg.max) {
+      throw new Error(`${held.length} holdings parsed, ceiling is ${cfg.max} — not this fund's file`);
+    }
+    return {
+      fund, index: cfg.index, label: cfg.label, asOf: d, holdings: held, dropped,
+      weightSum: Math.round(weightSum * 1000) / 1000,
+    };
+  }
+
   // --- the one entry point --------------------------------------------
   //
   // Throws on anything it cannot vouch for, because the caller's only safe
@@ -186,6 +255,7 @@
   function parse(buf, fund) {
     const cfg = FUNDS[String(fund || 'spy').toLowerCase()];
     if (!cfg) throw new Error('unknown fund: ' + fund);
+    if (cfg.source === 'invesco') return parseInvesco(buf, String(fund).toLowerCase(), cfg);
 
     const files = unzip(buf, ['xl/sharedStrings.xml', 'xl/worksheets/sheet1.xml']);
     const sheetXml = files['xl/worksheets/sheet1.xml'];
@@ -260,7 +330,7 @@
     };
   }
 
-  const api = { FUNDS, parse, unzip, sharedStrings, sheetRows, asOfDate, ticker, num };
+  const api = { FUNDS, parse, parseInvesco, unzip, sharedStrings, sheetRows, asOfDate, ticker, num };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Holdings = api;
 })(typeof window !== 'undefined' ? window : globalThis);

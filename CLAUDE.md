@@ -2375,6 +2375,27 @@ The route's as-of cutoff was written off as an efficiency guard — the write is
   - **A BACKTICK IN A SQL COMMENT TOOK db.js DOWN — the `Cards.STYLE` trap, in SQL this time.** The statement is a JS template literal, so `` `as_of` `` inside a `--` comment ended the string. **`node --check` would have caught it and was not run after that edit**; the revert harness caught it instead by refusing to report against a baseline that would not boot.
   - **The shell ate `` `insider_trans` `` out of a comment** while patching `query-plan-test.js` — a backtick inside a double-quoted `node -e` string is command substitution, the documented trap, met again. Single-quote the expression or use a file.
 
+#### The Nasdaq 100 is imported too (2026-10-08, owner: "work on the bigger task of finding the holdings of nasdaq100")
+**Fund `qqq`, index `NDX100`, from Invesco's own JSON feed for QQQ** — the issuer's file again, through the same route, store, nightly phase and page as the S&P 500. **This is the IMPORT; nothing on the screener reads it yet** (backlog entry 31 holds the column / filter / promo-cut design questions).
+
+| source, measured 2026-10-08 | what it does |
+|---|---|
+| `dng-api.invesco.com/.../shareclasses/QQQ/holdings/fund` | 200, JSON, honest User-Agent, effective date, 105 rows, weights sum 100.000 |
+| `api.nasdaq.com/api/quote/list-type/nasdaq100` | 200, JSON, exactly 100 symbols, no weights |
+| Invesco's older CSV download link | 200 with 425KB of HTML — the iShares shape again |
+| the same feed for QQQM | HTTP 500 |
+
+- **The two good sources agree exactly**: the feed's 100 equities are Nasdaq's own 100, not one extra either way. Invesco's is used because it carries weights, share counts and its own as-of date; Nasdaq's list is the independent cross-check and is not wired.
+- **THE CASH LINE'S TICKER IS `USD`** (and a pending-dividend line is `USDPDV`), so a ticker-shape test lets both in as holdings. `parseInvesco` keeps a row only if its **security type is on an allowlist of equity types** (common stock, depositary receipts and the like); a type it has never seen is dropped and counted. The other three non-equity rows are an index future and two untickered cash rows.
+- **Floor 90, ceiling 130.** The index has sat at 100 to 103 names. Under the floor is a partial file; far over the ceiling is another fund's. Either refuses the file and writes nothing.
+- **`Holdings.FUNDS` carries `source`** (`ssga` / `invesco`) and `parse` dispatches on it; `holdingsUrl(fund, cfg)` in server.js picks the address. The route, `appendFundHoldings`, `noteFundMiss`, the as-of cutoff and the dry run are unchanged and shared.
+- **The nightly's `holdingsRotate` now calls the route once per fund** (`spy`, then `qqq`), each in its own try.
+- **`/holdings` has an index switch** (S&P 500 / Nasdaq 100), kept in the address as `?fund=qqq`; Fetch now, the clock, the missing-member sorting and the table all follow it. `GET /api/fund-holdings` returns `funds` so the page offers what the server knows.
+- **`stampSpMember` still reads `SP_FUND` alone**, so the screener's S&P column cannot be affected.
+- **First reading**: 100 members, top ten 47.1% of the index; **17 are not in the S&P 500** (SPCX, SHOP, ASML, ARM, MELI, ALAB, NBIS, MSTR, PDD, CCEP, RKLB, CRWV, TRI, FER, ALNY among them); **five are not on the screener** — GOOG (the share class removed on purpose) and NBIS, CCEP, TRI, FER, which are new.
+- Verified: **36 checks** (`ndx-test.js`) — the parser on the REAL feed frozen as a fixture, the guards on synthetic feeds, the route (dry run, import, repeat, refusal, markup served as 200, dropped connection, a newer file with a removal and history surviving), and the page's switch. **Proved by reverting eight times, every one load-bearing.** `tail-test.js` corrected for two holdings calls a night.
+  - **`holdings-page-test.js` fails 3 when run late in the evening Eastern**: its fixture dates are UTC and the page counts local days, so "7 days old" reads 6 after 8 PM. Time of day, not this change.
+
 #### `/holdings` — the page (2026-10-03, owner's request)
 **Admin only, an `Index membership` row in the console's Data section.** The import had no surface at all, so "did it run, and what did it get" could only be answered by querying Turso by hand.
 

@@ -14533,6 +14533,14 @@ app.get('/api/onboarding', requireAdmin, route(async (req, res) => {
   });
 }));
 
+// Where each fund's own issuer publishes its holdings. SSGA serves a workbook
+// per fund; Invesco serves JSON. Both answer an honest User-Agent (measured
+// 2026-10-08 for Invesco), and both are validated by what they contain.
+const INVESCO_HOLDINGS = (t) => 'https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/' + t
+  + '/holdings/fund?idType=ticker&interval=monthly&productType=ETF';
+const holdingsUrl = (fund, cfg) => (cfg.source === 'invesco'
+  ? INVESCO_HOLDINGS(fund.toUpperCase()) : SSGA_HOLDINGS + fund + '.xlsx');
+
 app.get('/api/cron/holdings', route(async (req, res) => {
   // 401 here and 403 from requireAdmin, so the status code says which
   // bundle is live — a 403 moments after a push is deploy lag, not an auth
@@ -14550,8 +14558,8 @@ app.get('/api/cron/holdings', route(async (req, res) => {
 
   let file;
   try {
-    file = await fetch(SSGA_HOLDINGS + fund + '.xlsx', {
-      headers: { 'User-Agent': SSGA_UA }, signal: AbortSignal.timeout(60000),
+    file = await fetch(holdingsUrl(fund, cfg), {
+      headers: { 'User-Agent': SSGA_UA, Accept: 'application/json, */*' }, signal: AbortSignal.timeout(60000),
     });
   } catch (e) {
     // Unreachable is not a failure of the night, and it must not blank a
@@ -14724,6 +14732,7 @@ app.get('/api/fund-holdings', requireAdmin, route(async (req, res) => {
 
   res.json({
     fund, index: cfg.index, label: cfg.label,
+    funds: Object.keys(Holdings.FUNDS).map((k) => ({ fund: k, label: Holdings.FUNDS[k].label })),
     asOf: held.asOf, state, dates,
     universe: universe.length,
     tracked: rows.filter((r) => r.held).length,
