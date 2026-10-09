@@ -312,6 +312,14 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 /* the indicator sits on its own ground, a shade off the chart's */
 .rc-chart .pane-bg { fill: rgba(255, 255, 255, 0.05); stroke: none; }
 
+/* Awesome Oscillator bars: green where the bar is higher than the one before
+   it, red where it is lower -- NOT above and below zero. The zero line is the
+   other reading, so it is drawn plainly. */
+.rc-chart .aob { stroke: none; opacity: 0.8; }
+.rc-chart .aob.au { fill: var(--green); }
+.rc-chart .aob.ad { fill: var(--red); }
+.rc-chart .ao-zero { stroke: rgba(255, 255, 255, 0.28); stroke-width: 1; vector-effect: non-scaling-stroke; }
+
 /* volume bars sit in their own band under the price; green on an up session,
    red on a down one, dimmed so they never compete with the price line */
 .rc-chart .vb { stroke: none; opacity: 0.55; }

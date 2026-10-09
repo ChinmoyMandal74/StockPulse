@@ -337,6 +337,12 @@
     // something is on the histogram above.
     ['trend', 'MACD line',      (s) => V.num(s.macdLine, 2)],
     ['trend', 'MACD signal',    (s) => V.num(s.macdSignal, 2)],
+    // Awesome Oscillator as a share of the price, so a $900 stock and a $9 one
+    // can be read against each other; the raw figure is in dollars and would
+    // rank by share price. The sign is the reading here (the fast average of
+    // the midpoint above or below the slow one), unlike the chart pane, whose
+    // bars are coloured by rising or falling.
+    ['trend', 'Awesome osc.',   (s) => V.pct(s.aoPct)],
     ['size',  'Revenue TTM',    (s) => V.money(s.revenueTtm, s.currency)],
     ['size',  'Gross profit',   (s) => V.money(s.grossProfitTtm, s.currency)],
     ['size',  'Gross margin',   (s) => V.lvl(s.grossMargin)],
@@ -545,6 +551,17 @@
     return out;
   }
 
+  // Awesome Oscillator at every point, oldest-first: the 5-session average of
+  // each session midpoint, (high + low) / 2, less the 34-session average.
+  // Null until 34 sessions exist; the caller over-fetches so those nulls fall
+  // outside the visible range. Plain averages, so unlike RSI there is no
+  // warm-up beyond the window itself.
+  const AO_FAST = 5, AO_SLOW = 34;
+  function aoSeries(mids) {
+    const f = sma(mids, AO_FAST), s = sma(mids, AO_SLOW);
+    return mids.map((_, k) => (f[k] == null || s[k] == null ? null : f[k] - s[k]));
+  }
+
   // Prices at even steps along whichever scale is in use, each rounded to a
   // readable precision. Even spacing beats round numbers here: on a log axis
   // round values land unevenly and the gridlines look accidental.
@@ -604,6 +621,7 @@
     const o = opts || {};
     const vols = o.volumes && o.volumes.length === closes.length ? o.volumes : null;
     const rsis = o.rsi && o.rsi.length === closes.length ? o.rsi : null;
+    const aos = o.ao && o.ao.length === closes.length && o.ao.some((v) => v != null) ? o.ao : null;
     const W = 600;
 
     // Indicator panes stack below the price, in the order RSI then volume, each
@@ -615,7 +633,7 @@
     const PANE_GAP = 13;
     const PANE_H = 44;
     const RSI_H = 58;
-    const anyPane = vols || rsis;
+    const anyPane = vols || rsis || aos;
     // The price panel is taller than the panes under it, twice over at the
     // owner's request (2026-09-21): 150 -> 195 -> 254 viewBox units, each step
     // 30% on the one before and the volume and RSI bands left alone both times.
@@ -632,8 +650,11 @@
     // tile/phone stock card, which pass no panes and were not asked about.
     const PRICE_H = anyPane ? 254 : 104;
     let cursor = PRICE_H;
-    let rsiTop = 0, rsiBot = 0, volTop = 0, volBot = 0;
+    let rsiTop = 0, rsiBot = 0, volTop = 0, volBot = 0, aoTop = 0, aoBot = 0;
     if (rsis) { cursor += PANE_GAP; rsiTop = cursor; rsiBot = cursor + RSI_H; cursor = rsiBot; }
+    // The oscillator sits between RSI and volume, at the RSI band height: it
+    // needs room either side of a zero line.
+    if (aos) { cursor += PANE_GAP; aoTop = cursor; aoBot = cursor + RSI_H; cursor = aoBot; }
     if (vols) { cursor += PANE_GAP; volTop = cursor; volBot = cursor + PANE_H; cursor = volBot; }
     const H = anyPane ? cursor + 6 : 104;
     const PT = 12, PB = anyPane ? 8 : 12;
@@ -699,6 +720,37 @@
       if (rd) rsiPane += `<path class="rsi-ln" d="${rd}"/>`;
     }
 
+    // Awesome Oscillator pane: bars from a zero line, scaled to the largest
+    // reading in view. THE COLOUR IS NOT THE SIGN: a bar is green where it is
+    // higher than the bar before it and red where it is lower, which is the
+    // convention the indicator is read by, so a green bar can sit below zero.
+    // The caller says so beside the pane, because everywhere else on this
+    // chart green and red mean the price rose or fell.
+    let aoPane = '', aoZero = 0, aoAt = null;
+    if (aos) {
+      const seen = aos.filter((v) => v != null);
+      const aLo = Math.min(0, Math.min.apply(null, seen)), aHi = Math.max(0, Math.max.apply(null, seen));
+      const aSpan = (aHi - aLo) || 1;
+      const pad = 3;
+      const ay = (v) => aoTop + pad + (1 - (v - aLo) / aSpan) * (aoBot - aoTop - pad * 2);
+      aoAt = ay; aoZero = ay(0);
+      aoPane += `<rect class="pane-bg" x="0" y="${aoTop}" width="${W}" height="${(aoBot - aoTop).toFixed(1)}"/>`;
+      aoPane += `<line class="ao-zero" x1="0" y1="${aoZero.toFixed(1)}" x2="${W}" y2="${aoZero.toFixed(1)}"/>`;
+      const slot = W / aos.length;
+      const bw = Math.max(0.6, Math.min(slot * 0.72, 7));
+      let prev = o.aoPrev == null ? null : o.aoPrev;
+      for (let k = 0; k < aos.length; k++) {
+        const v = aos[k];
+        if (v == null) continue;
+        const cx = aos.length === 1 ? W / 2 : (k / (aos.length - 1)) * (W - bw) + bw / 2;
+        const top = Math.min(ay(v), aoZero), h = Math.max(0.5, Math.abs(ay(v) - aoZero));
+        const up = prev == null ? v >= 0 : v >= prev;
+        aoPane += `<rect class="aob ${up ? 'au' : 'ad'}" x="${(cx - bw / 2).toFixed(2)}" ` +
+                  `y="${top.toFixed(2)}" width="${bw.toFixed(2)}" height="${h.toFixed(2)}"/>`;
+        prev = v;
+      }
+    }
+
     const wantTicks = o.ticks || 0;
     const ticks = wantTicks ? priceTicks(lo, hi, useLog, wantTicks) : [];
     let grid = '';
@@ -723,6 +775,7 @@
       price: { top: 0, bottom: PRICE_H / H, at: (v) => y(v) / H, lo, hi },
       rsi: rsis ? { top: rsiTop / H, bottom: rsiBot / H,
                     at: (v) => (rsiBot - (v / 100) * (rsiBot - rsiTop)) / H } : null,
+      ao: aos ? { top: aoTop / H, bottom: aoBot / H, zero: aoZero / H, at: (v) => aoAt(v) / H } : null,
       volume: vols ? { top: volTop / H, bottom: volBot / H } : null,
     };
 
@@ -758,6 +811,7 @@
       `<path class="ln" d="${d}"/>` +
       overlayPaths +
       rsiPane +
+      aoPane +
       `<circle class="dot" cx="${x(closes.length - 1).toFixed(1)}" cy="${y(closes[closes.length - 1]).toFixed(1)}" r="2.6"/>` +
       bars +
       '</svg>';
@@ -1321,7 +1375,7 @@
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
     gfUrl, yfUrl, googleExchange, canHover,
     // used by the stock page
-    buildSections, chartSVG, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries, stepSeries, fmtMktCap,
+    buildSections, chartSVG, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries, aoSeries, stepSeries, fmtMktCap,
     scoreTip, placeTip,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS, ANN_AHEAD_DAYS, announcedSec,
     fieldCatalogue, fieldValues, fieldProps, isFund,

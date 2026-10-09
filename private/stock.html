@@ -280,6 +280,8 @@
                           viewBox H                  px/unit   height
          volume only      254+13+44+6      = 317      1.4196    468px
          + RSI            254+13+58+13+44+6 = 388     1.4407    577px
+         + AO             254+13+58+13+44+6 = 388     1.4407    577px
+         + RSI + AO       388+13+58         = 459     1.4407    679px
 
        Those px-per-unit figures are the ones the original 320/427 pair already
        implied and have been held constant through both increases, which is
@@ -290,16 +292,28 @@
     #chart.rc-chart { height: 468px; border-radius: 12px; padding: 0 52px 18px 0;
                       transition: height 0.45s var(--ease); }
     #chart.rc-chart.has-rsi { height: 577px; }
+    #chart.rc-chart.has-ao { height: 577px; }
+    #chart.rc-chart.has-rsi.has-ao { height: 679px; }
     #chart .cap { font-size: 12.5px; }
     #chart .cap.chg { font-size: 17px; }
     /* Pane labels sit against the geometry the chart reports, not a guessed
        percentage — turning RSI on moves the volume band down. */
-    #chart .cap.vol, #chart .cap.rsi {
+    #chart .cap.vol, #chart .cap.rsi, #chart .cap.ao {
       left: 9px; bottom: auto; font-size: 11px;
       text-transform: uppercase; letter-spacing: 0.12em;
       transform: translateY(-125%);
     }
     #chart .cap.rsi { color: var(--accent-2); }
+    /* The oscillator caption carries the colour rule, because on this chart
+       green and red otherwise mean the price rose or fell. */
+    #chart .cap.ao { color: var(--muted); }
+    #chart .cap.ao i { font-style: normal; letter-spacing: 0.04em; text-transform: none; color: var(--faint); }
+    #chart .cap.ao .u { color: var(--green); } #chart .cap.ao .d { color: var(--red); }
+    #chart .ao-lbl {
+      position: absolute; right: 56px; transform: translateY(-50%);
+      font-family: var(--mono); font-size: 10.5px; color: var(--faint); pointer-events: none;
+      text-shadow: 0 0 4px rgba(10, 12, 17, 0.95), 0 0 2px rgba(10, 12, 17, 0.95);
+    }
     /* Worded thresholds, sitting just clear of the lines they name — above the
        overbought line, below the oversold one, as a terminal draws them. */
     #chart .rsi-zone {
@@ -1207,6 +1221,11 @@
     };
     const GROUP_LINK_ORDER = ['Sector', 'Industry', 'Size', 'Portfolios'];
     let showRSI = true;
+    // The Awesome Oscillator pane: off unless this device switched it on. The
+    // chart already carries the price, two averages, RSI and volume.
+    const AO_KEY = 'stock.ao';
+    let showAO = false;
+    try { showAO = localStorage.getItem(AO_KEY) === '1'; } catch (e) { /* private window */ }
     // THE RIBBON AND THE LINE ARE TWO THINGS, and only one of them is a
     // hypothesis. The ribbon is a reading of the bars — what the trend rules
     // said on each session — and is always drawn. The dashed trend-hold line
@@ -2882,6 +2901,7 @@
       if (!box) return;
       box.dataset.range = range.id;
       box.classList.toggle('has-rsi', showRSI);
+      box.classList.toggle('has-ao', showAO);
       // The chosen stock rides with the indices: one list, so the fetch, the
       // rebasing, the overlay paths and the legend all treat it identically.
       const wantBench = BENCH.filter((b) => b.on).concat(
@@ -2915,6 +2935,15 @@
         const rsiAllFull = RowCard.rsiSeries(all, RSI_LEN);   // the replay reads it even when the pane is off
         const rsi = showRSI ? rsiAllFull.slice(from) : null;
         const rsiNow = rsi ? [...rsi].reverse().find((v) => v != null) ?? null : null;
+        // Midpoints come with the history; an older server sends none and the
+        // closes stand in, which is a momentum reading of the close instead.
+        const midsAll = data.mids && data.mids.length === all.length ? data.mids : all;
+        const aoAll = showAO ? RowCard.aoSeries(midsAll) : null;
+        const ao = aoAll ? aoAll.slice(from) : null;
+        const aoNow = ao ? [...ao].reverse().find((v) => v != null) ?? null : null;
+        // Room is made only for a pane that will be drawn: a listing under 34
+        // sessions has no reading, and the taller box would stretch every band.
+        box.classList.toggle('has-ao', aoNow != null);
         // ALWAYS computed: the ribbon is a reading of the bars, not an
         // option, and the crosshair's Trend row comes off the same words.
         // Thresholds follow the stock's current type — the classification is
@@ -2934,7 +2963,7 @@
         const thLabel = 'Trend-held';
         paintCtx = { all, from, closes, dates, trend, rsiAll: rsiAllFull };
         const c = RowCard.chartSVG(closes, {
-          volumes, ticks: 5, rsi,
+          volumes, ticks: 5, rsi, ao, aoPrev: aoAll && from > 0 ? aoAll[from - 1] : null,
           overlays: series.map((x) => ({ values: x.values, cls: x.ma.cls }))
             .concat(th ? [{ values: th.values, cls: 'th-ln' }] : [])
             .concat(drawnBench.map((b) => ({ values: b.values, cls: 'bm-ln ' + b.cls }))),
@@ -2971,6 +3000,12 @@
               `<span class="rsi-lbl" style="top:${atY(c.panes.rsi.at(30))}">30</span>` +
               `<span class="rsi-zone hi" style="top:${atY(c.panes.rsi.at(70))}">Overbought</span>` +
               `<span class="rsi-zone lo" style="top:${atY(c.panes.rsi.at(30))}">Oversold</span>`
+            : '') +
+          (c.panes.ao
+            ? `<span class="cap ao" style="top:${atY(c.panes.ao.top)}">` +
+              `Awesome osc. 5/34${aoNow == null ? '' : ' &middot; ' + (aoNow >= 0 ? '+' : '') + aoNow.toFixed(2)}` +
+              ` <i>&middot; <span class="u">green</span> higher than the bar before, <span class="d">red</span> lower</i></span>` +
+              `<span class="ao-lbl" style="top:${atY(c.panes.ao.zero)}">0</span>`
             : '') +
           `<span class="cap vol" style="top:${atY(c.panes.volume.top)}">Volume</span>` +
           `<span class="yaxis">${yLabels}</span>` +
@@ -3018,7 +3053,7 @@
         }
 
         // Everything the crosshair needs, kept for the pointer handler.
-        hover = { dates, closes, volumes, rsi, trend, th: th ? th.values : null,
+        hover = { dates, closes, volumes, rsi, ao, trend, th: th ? th.values : null,
           verd: verds, pM: verds ? modelPositions(verds) : null, panes: c.panes };
       });
     }
@@ -3126,6 +3161,7 @@
                 `<button class="rng ma-toggle ${m.cls}${m.on ? ' on' : ''}" data-ma="${m.len}">${m.label}</button>`
               ).join('')}
               <button class="rng rsi-toggle${showRSI ? ' on' : ''}" id="rsiBtn">RSI</button>
+              <button class="rng${showAO ? ' on' : ''}" id="aoBtn" title="Awesome Oscillator: the 5-day average of each day&#39;s midpoint less the 34-day average">AO</button>
               <!-- FIRST of the three layer toggles, matching the order they
                    are drawn in below the chart (the owner, 2026-09-29).
                    Self-gating: no filings, or no trailing year inside the
@@ -3529,6 +3565,7 @@
           // Ordered to match the panes top to bottom, so the readout reads down
           // the chart rather than in whatever order the fields were added.
           (r == null ? '' : `<span class="k">RSI</span> <span class="v rsi">${r.toFixed(1)}</span>`) +
+          (hover.ao && hover.ao[i] != null ? `<span class="k">AO</span> <span class="v">${hover.ao[i] >= 0 ? '+' : ''}${hover.ao[i].toFixed(2)}</span>` : '') +
           `<span class="k">Vol</span> <span class="v">${fmtVol(hover.volumes[i])}</span>` +
           (hover.trend && hover.trend[i] && hover.trend[i] !== 'No data'
             ? `<span class="k">Trend</span> <span class="v">${esc(hover.trend[i])}</span>` : '') +
@@ -3598,6 +3635,14 @@
           showTrendLine = !showTrendLine;
           window.track && track('chart', 'trend:' + (showTrendLine ? 'on' : 'off'));
           b.classList.toggle('on', showTrendLine);
+          paintChart();
+          return;
+        }
+        if (b.id === 'aoBtn') {
+          showAO = !showAO;
+          try { localStorage.setItem(AO_KEY, showAO ? '1' : '0'); } catch (e) { /* private window */ }
+          window.track && track('chart', 'pane:ao:' + (showAO ? 'on' : 'off'));
+          b.classList.toggle('on', showAO);
           paintChart();
           return;
         }

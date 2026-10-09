@@ -1485,7 +1485,7 @@
         <th class="group grp-long" data-group="long" colspan="5">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
         <th class="group grp-rel" data-group="rel" colspan="17">Relative</th>
-        <th class="group grp-trend" data-group="trend" colspan="4">Trend</th>
+        <th class="group grp-trend" data-group="trend" colspan="5">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
         <th class="group grp-fund" data-group="fund" colspan="22">Fundamentals</th>
         <th class="group grp-own" data-group="own" colspan="7">Ownership</th>
@@ -1555,6 +1555,7 @@
         <th class="grp-trend" data-key="vs200ma" title="Price vs 200-day moving average">vs 200D<br>MA</th>
         <th class="left grp-trend" data-key="maCrossRank" title="50/200-day MA cross: Golden (50 above 200) or Death, with trading days since the last cross">MA<br>Cross</th>
         <th class="grp-trend" data-key="macdHist" title="MACD histogram (12/26/9) = MACD line − signal; positive = bullish">MACD</th>
+        <th class="grp-trend" data-key="aoPct" title="Awesome Oscillator: the 5-day average of each day&#39;s midpoint, (high + low) / 2, less the 34-day average, shown as a percentage of the price so stocks can be compared. Above zero means the last week has run ahead of the last seven weeks. Not an input to Advice.">Awesome<br>Osc</th>
         <th class="grp-size" data-key="revenueTtm" title="Revenue, trailing twelve months (sum of the last 4 reported quarters), in the company's own reporting currency — do not compare across currencies">Revenue<br>TTM</th>
         <th class="grp-size" data-key="grossProfitTtm" title="Gross profit, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">Gross<br>Profit</th>
         <th class="grp-size" data-key="grossMargin" title="Gross profit ÷ revenue, both trailing twelve months — derived from the two columns to the left so the numbers reconcile">Gross<br>Margin</th>
@@ -2275,6 +2276,17 @@
       const title = `50DMA ${ma50} vs 200DMA ${ma200} · ${crossTxt}`;
       const weight = fresh ? 'font-weight:700;' : '';
       return `<td class="left ${cls}" style="color:${color};${weight}"${attr(title)}>${label}</td>`;
+    }
+    // Coloured by the SIGN, like MACD beside it: above or below zero is the
+    // reading a table can carry. Whether it is rising is in the tooltip, and
+    // is what the bars on the stock page are coloured by.
+    function aoCell(s) {
+      const cls = 'grp-trend';
+      const v = s.aoPct;
+      if (v == null || !isFinite(v)) return `<td class="na ${cls}">—</td>`;
+      const dir = s.aoRising == null ? '' : s.aoRising ? ' · higher than the session before' : ' · lower than the session before';
+      const title = `Awesome Oscillator (5/34 of the daily midpoint) as a share of the price${dir}`;
+      return `<td class="${cls} ${v >= 0 ? 'pos' : 'neg'}"${attr(title)}>${v >= 0 ? '+' : ''}${v.toFixed(1)}%</td>`;
     }
     function macdCell(s) {
       const cls = 'grp-trend';
@@ -3517,7 +3529,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="101">${s.error}</td>
+            <td class="na" colspan="102">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3601,6 +3613,7 @@
           ${pctCell(s.vs200ma, 'grp-trend', liveTitle)}
           ${maCrossCell(s)}
           ${macdCell(s)}
+          ${aoCell(s)}
           ${isFund ? naRun(11, 'grp-size') : `
           ${capCell(s.revenueTtm, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.grossProfitTtm, s.currency, 'grp-size', cacheTitle)}
@@ -3659,7 +3672,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 106;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 107;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3840,7 +3853,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="103">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="104">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

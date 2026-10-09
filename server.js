@@ -4269,6 +4269,30 @@ function emaArray(arr, period) {
   return out;
 }
 
+// Awesome Oscillator: the 5-session average of each session midpoint,
+// (high + low) / 2, less the 34-session average. Returns { ao, prev } for the
+// newest session and the one before it, or null under 35 sessions. `values`
+// is newest-first. A bar with no usable high or low falls back to its close.
+// DISPLAY ONLY: nothing in the Advice engine reads it.
+function aoCalc(values) {
+  if (!Array.isArray(values) || values.length < 35) return null;
+  const mid = (v) => {
+    const h = parseFloat(v.high), l = parseFloat(v.low), c = parseFloat(v.close);
+    return h > 0 && l > 0 ? (h + l) / 2 : c;
+  };
+  const at = (off) => {
+    let f = 0, s = 0;
+    for (let k = 0; k < 34; k++) {
+      const m = mid(values[off + k]);
+      if (!Number.isFinite(m)) return null;
+      s += m; if (k < 5) f += m;
+    }
+    return f / 5 - s / 34;
+  };
+  const ao = at(0), prev = at(1);
+  return ao == null ? null : { ao, prev };
+}
+
 // MACD(12,26,9): returns { hist, line, signal } or null. hist = MACD line − signal.
 function macdCalc(values, fast = 12, slow = 26, sig = 9) {
   if (!Array.isArray(values) || values.length < slow + sig) return null;
@@ -6969,6 +6993,10 @@ async function computeStocks(asOf, opts = {}) {
       const price = ok ? parseFloat(values[0].close) : null;
       const mc = maCross(values); // 50/200 regime + days since cross
       const mac = macdCalc(values); // MACD histogram + line + signal
+      const aoNow = aoCalc(values);
+      // As a share of the price: the raw figure is in dollars and would rank
+      // the screen by share price.
+      const aoPct = aoNow && price >= MIN_CLOSE ? Math.round((aoNow.ao / price) * 10000) / 100 : null;
       // Sort key so "most bullish" sorts to the top: fresh golden high, fresh death low.
       let maCrossRank = null;
       if (mc) {
@@ -7081,6 +7109,8 @@ async function computeStocks(asOf, opts = {}) {
         ma50: mc ? mc.ma50 : null,
         ma200: mc ? mc.ma200 : null,
         maCrossRank,
+        aoPct,
+        aoRising: aoPct == null || aoNow.prev == null ? null : aoNow.ao >= aoNow.prev,
         macdHist: mac ? mac.hist : null,
         macdLine: mac ? mac.line : null,
         macdSignal: mac ? mac.signal : null,
@@ -12404,7 +12434,7 @@ app.get('/api/history', requireAuth, route(async (req, res) => {
   const days = Math.min(5200, Math.max(2, Number(req.query.days) || 260));
 
   const bars = await store.readBars(symbol, days);   // newest-first
-  if (!bars.length) return res.json({ symbol, dates: [], closes: [], volumes: [], from: null, to: null });
+  if (!bars.length) return res.json({ symbol, dates: [], closes: [], volumes: [], mids: [], from: null, to: null });
   const asc = bars.slice().reverse();
 
   res.json({
@@ -12414,6 +12444,10 @@ app.get('/api/history', requireAuth, route(async (req, res) => {
     dates: asc.map((b) => b.datetime),
     // 2dp keeps the payload small; a chart 600px wide cannot show more.
     closes: asc.map((b) => Math.round(b.close * 100) / 100),
+    // Each session midpoint, (high + low) / 2, for the Awesome Oscillator
+    // pane. One array rather than highs and lows; the close stands in where
+    // a bar has neither.
+    mids: asc.map((b) => { const m = b.high > 0 && b.low > 0 ? (b.high + b.low) / 2 : b.close; return Math.round(m * 1000) / 1000; }),
     // Volume is split-adjusted the same way price is, so it is comparable
     // across the series but is not the literal share count for a past day.
     volumes: asc.map((b) => (b.volume == null ? 0 : Math.round(b.volume))),
