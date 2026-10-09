@@ -289,7 +289,8 @@ Sent through **Resend** over plain `fetch` — a REST call does not justify a fo
 - **The admin ACCOUNT still signs in with its original address.** These settings change where mail goes, not who the account is.
 - **`/terms` and `/privacy` print the addresses**: support and legal on the terms, privacy and support on the privacy page. Someone without an account could not write to the operator at all before. Not a material change to the terms, so `TERMS_VERSION` did not move.
 - **Set with `vercel env add`, which is not a deploy**: the one-hard-rule above is about deployments, and a setting only takes effect on the next one, which was an ordinary `git push`.
-- **Not done**: the DMARC reports (`rua`) still go to a personal address, and the postal address on list mail is a site setting on `/subscribers` that the code cannot see.
+- **The DMARC reports (`rua`) go to `chinmoy@tickrlab.com`** since the same day; the record was replaced at Vercel DNS and read back from the authoritative and a public resolver. The policy itself (`p=quarantine`) did not change.
+- **Not done**: the postal address on list mail is a site setting on `/subscribers` that the code cannot see.
 
 ### The email log — every message, recorded where they all pass (2026-09-25, owner's request)
 **`/emails` (admin, an Email log row in the console's People & logs section) lists every message this app has handed to Resend.** It exists because the list's first real broadcast produced a question nothing here could answer: the confirmation reached the reader and the post did not, and the only record of either was a line in a Vercel log that had already rolled off.
