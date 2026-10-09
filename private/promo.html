@@ -797,6 +797,18 @@
           Large 55.3%, Mid-Large 33.3%, Mid 12.5%. A stock with no 200-day
           average yet is counted in neither half, never as below.</p>
       </div>
+      <!-- Beating the index: how many companies did better than the S&P 500
+           over a window. Like the other Market cards it takes no scope,
+           sector, size or screen, so INDUSTRY_PREFIXES is left alone. -->
+      <div id="beatBox">
+        <label>Window</label>
+        <select id="beatPeriod"></select>
+        <label>S&amp;P 500</label>
+        <select id="beatSp500"></select>
+        <p class="hint">Green beat the index, blue moved the same way but by less, red fell (or, in a
+          falling window, fell further). The index is the SPY fund’s own price return, so dividends are
+          left out on both sides. The bars under the grid show every window at once.</p>
+      </div>
       <!-- Histogram: the shape of the screen on one measure, optionally
            with a subject pinned to it. `stock` is `screen` plus a pin, so
            they are two MODES of one template rather than two templates.
@@ -1021,6 +1033,7 @@
     const TPLS = [
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
+      { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
       { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
       { id: 'waterfall', name: 'Waterfall', note: 'What actually moved the index, name by name, adding up to the whole' },
@@ -1088,6 +1101,7 @@
     const MKT_VIEWS = [
       ['day', 'Snapshot'],
       ['breadth', 'Narrow or broad'],
+      ['beat', 'Beating the index'],
       ['flow', 'Flow'],
       ['treemap', 'Treemap'],
       ['waterfall', 'Waterfall'],
@@ -1350,7 +1364,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
-      'brdMode', 'brdSp500',
+      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView',
@@ -1454,6 +1468,7 @@
       $('smovBox').style.display = tpl === 'shortmoves' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
+      $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
       $('barBox').style.display = tpl === 'bars' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
@@ -1659,6 +1674,9 @@
       $(id).addEventListener('change', () => { if (tpl === 'waterfall') render(); }));
     ['smovMetric', 'smovCount', 'smovFloor', 'smovSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'shortmoves') render(); }));
+    // Beating the index: its own listener list, like every template here.
+    ['beatPeriod', 'beatSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'beat') render(); }));
     ['brdMode', 'brdSp500'].forEach((id) =>
       $(id).addEventListener('change', render));
     ['daySnapPeriod', 'dayMetric', 'dayCount', 'dayFloor', 'daySp500'].forEach((id) =>
@@ -2261,6 +2279,16 @@
             $(p + 'Sp500').value = spKeep;
           }
         });
+        // Beating the index: both pickers from the module, with the defaults
+        // the card itself falls back to -- this year, inside the index.
+        const beatPerKeep = $('beatPeriod').value;
+        $('beatPeriod').innerHTML = Cards.beatPeriods().map(([v, lab]) =>
+          `<option value="${esc(v)}"${v === 'ytd' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
+        if ([...$('beatPeriod').options].some((o) => o.value === beatPerKeep)) $('beatPeriod').value = beatPerKeep;
+        const beatSpKeep = $('beatSp500').value;
+        $('beatSp500').innerHTML = Cards.spCuts().map(([v, lab]) =>
+          `<option value="${esc(v)}"${v === 'in' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
+        if ([...$('beatSp500').options].some((o) => o.value === beatSpKeep)) $('beatSp500').value = beatSpKeep;
         const snapKeep = $('daySnapPeriod').value;
         $('daySnapPeriod').innerHTML = Cards.snapPeriods().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');

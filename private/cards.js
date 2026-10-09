@@ -5752,6 +5752,173 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Beating the index --------------------------------------------------
+  //
+  // (2026-10-08, owner: "how many stocks have beaten the S&P in a given
+  // period".) ONE COUNT, DRAWN: a square per company, in three colours.
+  // Measured the day it was built, about a third of the index's own members
+  // beat it over any window from a month to five years -- 34% this year,
+  // while 58% of them ROSE. That gap between "went up" and "kept up" is the
+  // card, and it is the Narrow-or-broad finding read off returns instead of
+  // moving averages.
+  //
+  // THE INDEX IS SPY'S OWN RETURN over the same window, off the same row
+  // family every stock's figure comes from, so both sides are price-only and
+  // neither carries a dividend. It is deliberately NOT the cap-weighted
+  // aggregate of the companies drawn: "beat the S&P 500" is a claim about a
+  // published number a reader can look up.
+  //
+  // THREE STATES, AND GREEN ALWAYS MEANS ROSE *AND* AHEAD. With the index up,
+  // the middle state is "rose, but by less"; with it down, "fell, but by
+  // less" -- and red is then only the stocks that fell further than it did.
+  // So in a falling window a stock that lost money is never painted green
+  // for losing less, the Flow card's own rule. "Beat" in the headline is
+  // strictly `return > index`, which is green alone in a rising window and
+  // green plus the middle state in a falling one.
+  //
+  // IT ADDS NO FIELD: every return here is already on the row.
+  const BEAT_PERIODS = [['d', 'Today'], ['w1', 'Past week'], ['m1', 'Past month'],
+    ['m3', 'Past three months'], ['m6', 'Past six months'], ['ytd', 'This year'], ['y1', 'Past year']];
+  // The strip under the grid: every window but the single day, whose count
+  // swings between 30% and 70% and says nothing about the others.
+  const BEAT_STRIP = [['w1', '1 week'], ['m1', '1 month'], ['m3', '3 months'],
+    ['m6', '6 months'], ['ytd', 'This year'], ['y1', '1 year']];
+  // One square a company up to this many; past it each square stands for
+  // more than one, and the note says how many.
+  const BEAT_CELLS = 520;
+  const BEAT_COLS = { portrait: 46, square: 54, story: 40 };
+
+  function tplBeat() {
+    const cut = SP_CUTS.some(([k]) => k === O.beatSp500) ? O.beatSp500 : 'in';
+    const per = BEAT_PERIODS.some(([k]) => k === O.beatPeriod) ? O.beatPeriod : 'ytd';
+    const field = (k) => (MOV_PERIODS[k] || MOV_PERIODS.ytd)[0];
+    const words = (MOV_PERIODS[per] || MOV_PERIODS.ytd)[1];
+
+    const num = (r, k) => {
+      const v = Number(r && r[k]);
+      return r && r[k] != null && isFinite(v) ? v : null;
+    };
+    const spy = stocks.find((x) => x && !x.error && x.symbol === 'SPY') || null;
+    // Funds out first, the rule every market card here keeps: a fund that IS
+    // the index cannot be counted as beating or trailing it.
+    const notFund = (x) => x && !x.error && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol)
+      && x.instrumentType !== 'ETF';
+    const pool = spFilter(stocks.filter(notFund), cut);
+
+    // One window's reading. A stock with no return for the window (it listed
+    // since) is ABSENT, never a zero: a fabricated flat stock would be
+    // counted as trailing an index it was not there to trail.
+    const read = (k) => {
+      const f = field(k);
+      const b = num(spy, f);
+      if (b === null) return null;
+      const fold = foldListings(pool, f);
+      const has = fold.rows.filter((r) => num(r, f) !== null);
+      let a = 0, m = 0, d = 0;
+      for (const r of has) {
+        const v = num(r, f);
+        if (b >= 0) { if (v > b) a++; else if (v >= 0) m++; else d++; }
+        else if (v >= 0) a++; else if (v > b) m++; else d++;
+      }
+      const beat = b >= 0 ? a : a + m;
+      return { k, f, b, has, n: has.length, a, m, d, beat, folded: fold.folded, missing: fold.rows.length - has.length };
+    };
+    const R = read(per);
+
+    const scopeWord = cut === 'in' ? 'S&P 500 members' : cut === 'out' ? 'stocks outside the index' : 'stocks on the screen';
+    if (!R || R.n < 20) {
+      return chromeTop() + '<div class="s-body"><div class="bt-in">'
+        + '<span class="s-kick">' + esc(SP_CUT_LABEL[cut] || 'The whole screen') + '</span>'
+        + '<h2 class="s-title">Beating the index</h2>'
+        + '<p class="s-sub wide" style="--fs:20px">' + esc(!R
+          ? 'The S&P 500 has no return stored for ' + words + ', so there is nothing to measure against yet.'
+          : 'Too few ' + scopeWord + ' have a return for ' + words + ' to count — ' + R.n + '.')
+        + '</p></div></div>' + chromeFoot();
+    }
+
+    const sg = (v) => (v == null ? '—' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '%');
+    const pc = (x, n) => (n ? Math.round(100 * x / n) : 0);
+    const up = R.b >= 0;
+    const LAB = up
+      ? ['beat the index', 'rose, but by less', 'fell']
+      : ['rose', 'fell, but by less', 'fell further'];
+
+    // ---- the grid -------------------------------------------------------
+    // Proportional when there are more companies than squares, by largest
+    // remainder, so the three runs always add up to the squares drawn.
+    const cells = Math.min(R.n, BEAT_CELLS);
+    const per1 = R.n / cells;
+    const raw = [R.a, R.m, R.d].map((x) => x / per1);
+    const cnt = raw.map(Math.floor);
+    let left = cells - cnt.reduce((s, x) => s + x, 0);
+    raw.map((x, i) => [x - Math.floor(x), i]).sort((p, q) => q[0] - p[0])
+      .forEach(([, i]) => { if (left > 0) { cnt[i]++; left--; } });
+    // A state that exists is never drawn as nothing.
+    [R.a, R.m, R.d].forEach((x, i) => {
+      if (x > 0 && cnt[i] === 0) { const big = cnt.indexOf(Math.max(...cnt)); cnt[big]--; cnt[i] = 1; }
+    });
+    const cols = BEAT_COLS[size.id] || 40;
+    const grid = '<div class="bt-grid" style="grid-template-columns:repeat(' + cols + ',minmax(0,1fr))">'
+      + '<i class="bt-a"></i>'.repeat(cnt[0]) + '<i class="bt-m"></i>'.repeat(cnt[1]) + '<i class="bt-d"></i>'.repeat(cnt[2])
+      + '</div>';
+
+    const leg = (cls, n, lab) => '<div class="bt-lg"><i class="' + cls + '"></i>'
+      + '<span class="bt-lv">' + esc(n.toLocaleString()) + '</span>'
+      + '<span class="bt-lp">' + esc(pc(n, R.n) + '%') + '</span>'
+      + '<span class="bt-ll">' + esc(lab) + '</span></div>';
+
+    // ---- every window, the same three colours ---------------------------
+    const strip = BEAT_STRIP.map(([k, lab]) => {
+      const x = k === per ? R : read(k);
+      if (!x || !x.n) return '';
+      const w = (v) => (100 * v / x.n).toFixed(2) + '%';
+      return '<div class="bt-r' + (k === per ? ' on' : '') + '">'
+        + '<span class="bt-rk">' + esc(lab) + '</span>'
+        + '<span class="bt-rb">'
+          + (x.a ? '<i class="bt-a" style="width:' + w(x.a) + '"></i>' : '')
+          + (x.m ? '<i class="bt-m" style="width:' + w(x.m) + '"></i>' : '')
+          + (x.d ? '<i class="bt-d" style="width:' + w(x.d) + '"></i>' : '')
+        + '</span>'
+        + '<span class="bt-rv">' + esc(pc(x.beat, x.n) + '%') + '</span>'
+        + '<span class="bt-ri">' + esc(sg(x.b)) + '</span>'
+        + '</div>';
+    }).join('');
+
+    const vals = R.has.map((r) => num(r, R.f)).sort((p, q) => p - q);
+    const mid = vals.length % 2 ? vals[(vals.length - 1) / 2] : (vals[vals.length / 2 - 1] + vals[vals.length / 2]) / 2;
+    const rose = R.has.filter((r) => num(r, R.f) > 0).length;
+
+    const note = 'Each square is ' + (per1 > 1.001 ? 'about ' + per1.toFixed(1) + ' companies' : 'one company')
+      + ', coloured by what its price did ' + words + ' against the S&P 500’s own '
+      + sg(R.b) + ' (the SPY fund, price only — dividends are left out on both sides). '
+      + 'The bars repeat the count for every window; the figure beside each is the share that beat the index, then the index itself. '
+      + (R.missing ? R.missing + ' with no return for this window, listed since it began, are left out. ' : '')
+      + foldNote(R.folded)
+      + 'Funds are excluded. Only companies that still trade are here, so the longer windows flatter the count. '
+      + 'What happened, not a forecast.';
+
+    return chromeTop()
+      + '<div class="s-body"><div class="bt-in">'
+      + '<span class="s-kick">' + esc((SP_CUT_LABEL[cut] || 'The whole screen') + ' · ' + R.n.toLocaleString() + ' companies · ' + words) + '</span>'
+      + '<h2 class="s-title">Beating the index<span class="dim">'
+      + esc('how many did better than the S&P 500 ' + words) + '</span></h2>'
+      + '<div class="bt-fill">'
+      + '<div class="bt-hero">'
+        + '<div class="bt-big"><span class="bt-bv">' + esc(pc(R.beat, R.n) + '%') + '</span>'
+          + '<span class="bt-bs">' + esc(R.beat.toLocaleString() + ' of ' + R.n.toLocaleString() + ' beat it') + '</span></div>'
+        + '<div class="bt-legs">' + leg('bt-a', R.a, LAB[0]) + leg('bt-m', R.m, LAB[1]) + leg('bt-d', R.d, LAB[2]) + '</div>'
+      + '</div>'
+      + grid
+      + '<div class="bt-strip"><div class="bt-r bt-hd"><span class="bt-rk">every window</span><span class="bt-rb"></span>'
+        + '<span class="bt-rv">beat it</span><span class="bt-ri">index</span></div>' + strip + '</div>'
+      + '<div class="bt-stats">' + [['the index', sg(R.b)], ['the middle stock', sg(mid)],
+        ['rose at all', pc(rose, R.n) + '%'], ['beat the index', pc(R.beat, R.n) + '%']].map(([k, v]) =>
+        '<div class="bt-s"><span class="bt-sk">' + esc(k) + '</span><span class="bt-sv">' + esc(v) + '</span></div>').join('') + '</div>'
+      + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Bars: any one measure, ranked -------------------------------------
   //
   // THE GENERAL CASE OF THREE CARDS THAT EACH RANK ONE FAMILY. Movers ranks
@@ -6336,7 +6503,7 @@
     disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution,
     flow: tplFlow, histogram: tplHistogram,
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
-    shorted: tplShorted, breadth: tplBreadth,
+    shorted: tplShorted, breadth: tplBreadth, beat: tplBeat,
     bars: tplBars,
     months: tplMonths,
     peertrend: tplPeerTrend,
@@ -6710,6 +6877,82 @@
     /* ---- Narrow or broad ------------------------------------------- */
     /* NO BACKTICKS IN THIS COMMENT: Cards.STYLE is itself a template
        literal, so one inside a CSS comment ends the string. */
+    /* ---- Beating the index ------------------------------------------------
+       Three colours and every one a token, so all four grounds resolve with
+       no override: green is rose AND ahead, the accent is the middle state,
+       red fell (or fell further). No quote marks of the template kind in
+       this block -- STYLE is itself a template literal. */
+    .bt-in { display: flex; flex-direction: column; height: 100%; }
+    .bt-in .s-title .dim { display: block; font-size: 29px; line-height: 1.25;
+             font-weight: 600; color: var(--muted); margin-top: 10px; letter-spacing: -.01em; }
+    .sz-square .bt-in .s-title .dim { font-size: 23px; }
+    .sz-story .bt-in .s-title .dim { font-size: 38px; }
+    .bt-in .s-sub { margin-top: auto; padding-top: 16px; }
+    .bt-fill { display: flex; flex-direction: column; flex: 1; justify-content: space-evenly; min-height: 0; }
+    .bt-a { background: var(--green); }
+    .bt-m { background: var(--accent); }
+    .bt-d { background: var(--red); }
+    .bt-hero { display: flex; align-items: flex-end; gap: 44px; margin-top: 18px; }
+    .bt-big { display: flex; flex-direction: column; gap: 6px; flex: none; }
+    .bt-bv { font-family: var(--mono); font-weight: 700; font-size: 112px; line-height: .9;
+             letter-spacing: -.05em; color: var(--green); }
+    .bt-bs { font-family: var(--mono); font-size: 18px; color: var(--muted); }
+    .bt-legs { display: flex; flex-direction: column; gap: 9px; flex: 1; min-width: 0; padding-bottom: 4px; }
+    .bt-lg { display: grid; grid-template-columns: 18px 76px 62px minmax(0, 1fr); align-items: center;
+             column-gap: 12px; font-size: 20px; }
+    .bt-lg i { display: block; width: 18px; height: 18px; border-radius: 4px; }
+    .bt-lv { font-family: var(--mono); font-weight: 700; color: var(--text); text-align: right; }
+    .bt-lp { font-family: var(--mono); color: var(--muted); text-align: right; }
+    .bt-ll { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bt-grid { display: grid; gap: 3px; margin-top: 20px; }
+    .bt-grid i { display: block; aspect-ratio: 1 / 1; border-radius: 3px; min-width: 0; }
+    .bt-strip { margin-top: 20px; }
+    .bt-r { display: grid; grid-template-columns: 118px minmax(0, 1fr) 70px 86px; align-items: center;
+            column-gap: 14px; font-size: 18px; margin-bottom: 7px; color: var(--muted); }
+    .bt-rk { white-space: nowrap; }
+    .bt-rb { display: flex; height: 14px; border-radius: 3px; overflow: hidden; }
+    .bt-rb i { display: block; height: 100%; min-width: 2px; }
+    .bt-rv { font-family: var(--mono); font-weight: 700; color: var(--text); text-align: right; }
+    .bt-ri { font-family: var(--mono); color: var(--faint); text-align: right; }
+    .bt-r.on { color: var(--text); font-weight: 700; }
+    .bt-r.on .bt-rb { height: 20px; }
+    .bt-r.on .bt-ri { color: var(--muted); }
+    .bt-hd { font-family: var(--mono); font-size: 13px; letter-spacing: .12em; text-transform: uppercase;
+             color: var(--faint); margin-bottom: 9px; }
+    .bt-hd .bt-rb { height: 0; }
+    .bt-hd .bt-rv, .bt-hd .bt-ri { font-weight: 400; color: var(--faint); }
+    .bt-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-top: 20px;
+                padding-top: 16px; border-top: 1px solid var(--hair); }
+    .bt-s { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .bt-sk { font-family: var(--mono); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+    .bt-sv { font-family: var(--mono); font-weight: 700; font-size: 25px; color: var(--text); }
+    .sz-square .bt-hero { margin-top: 12px; gap: 30px; }
+    .sz-square .bt-bv { font-size: 78px; }
+    .sz-square .bt-bs { font-size: 15px; }
+    .sz-square .bt-legs { gap: 5px; }
+    .sz-square .bt-lg { font-size: 16px; grid-template-columns: 14px 62px 52px minmax(0, 1fr); }
+    .sz-square .bt-lg i { width: 14px; height: 14px; }
+    .sz-square .bt-grid { gap: 2px; margin-top: 12px; }
+    .sz-square .bt-grid i { border-radius: 2px; }
+    .sz-square .bt-strip { margin-top: 12px; }
+    .sz-square .bt-r { font-size: 14px; margin-bottom: 4px; grid-template-columns: 96px minmax(0, 1fr) 56px 70px; }
+    .sz-square .bt-rb { height: 9px; }
+    .sz-square .bt-r.on .bt-rb { height: 13px; }
+    .sz-square .bt-hd { font-size: 11px; margin-bottom: 5px; }
+    .sz-square .bt-stats { display: none; }
+    .sz-story .bt-bv { font-size: 150px; }
+    .sz-story .bt-bs { font-size: 24px; }
+    .sz-story .bt-hero { flex-direction: column; align-items: stretch; gap: 26px; }
+    .sz-story .bt-lg { font-size: 26px; grid-template-columns: 24px 96px 80px minmax(0, 1fr); }
+    .sz-story .bt-lg i { width: 24px; height: 24px; }
+    .sz-story .bt-grid { gap: 5px; }
+    .sz-story .bt-grid i { border-radius: 5px; }
+    .sz-story .bt-r { font-size: 24px; margin-bottom: 12px; grid-template-columns: 150px minmax(0, 1fr) 92px 112px; }
+    .sz-story .bt-rb { height: 20px; }
+    .sz-story .bt-r.on .bt-rb { height: 28px; }
+    .sz-story .bt-hd { font-size: 17px; }
+    .sz-story .bt-sk { font-size: 17px; }
+    .sz-story .bt-sv { font-size: 34px; }
     .brd-in { display: flex; flex-direction: column; height: 100%; }
     .brd-in .s-title .dim { display: block; font-size: 29px; line-height: 1.25;
              font-weight: 600; color: var(--muted); margin-top: 10px; }
@@ -8244,6 +8487,7 @@
     // not know, which falls back to Today and filters nothing -- a picker
     // that silently draws the wrong window.
     snapPeriods: () => SNAP_PERIODS.map((p) => p.slice()),
+    beatPeriods: () => BEAT_PERIODS.map((p) => p.slice()),
     // ...and which templates want the basket at all, with the window each
     // one asks for. Exported for the same reason: two hosts, one pairing.
     basketDays,

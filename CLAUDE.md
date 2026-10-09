@@ -5453,6 +5453,23 @@ A card cannot scroll, and a row here is two lines (a text line and a pair of bar
   - **A value the select does not carry leaves it UNCHANGED**, so the fit sweep's first run measured `3` and silently re-reported the previous count's numbers. `shrtCount` offers 5/6/8/10/12 and nothing else; the sweep walks those.
   - **RENAMING A SELECTOR IN THE CSSOM DOES NOT RE-LAY-OUT**, so a diagnostic that does it reads stale geometry and "proves" a rule inert. Inject a stylesheet, or patch the file and reload.
 
+### Beating the index — a square per company, in three colours (2026-10-08, owner's request)
+**A twenty-ninth template, `beat`, the third view under Market.** Asked as *"how many stocks have beaten the S&P in a given period, do we show this somewhere in promo"* — nothing did — then *"add it … use some colorful graphics"*. Measured first: about a third of the index's own members beat it over any window from a month to five years (34% this year, while 58% of them ROSE), which is the Narrow-or-broad finding read off returns.
+
+- **The picture is a waffle grid**: one square per company, sorted into three runs, plus a stacked bar for every window (1 week to 1 year) with the chosen one marked, the share that beat the index and the index's own return beside each.
+- **THE INDEX IS SPY'S OWN RETURN** off the same row fields as every stock's, so both sides are price-only. Deliberately not the cap-weighted aggregate of the companies drawn: "beat the S&P 500" is a claim about a published number.
+- **GREEN ALWAYS MEANS ROSE *AND* AHEAD.** Index up: beat it / rose by less / fell. Index down: rose / fell by less / fell further. A stock that lost money is never green for losing less (the Flow card's rule). The headline "beat it" is strictly `return > index`, so in a falling window it is green plus the middle state; an equal return is not a beat.
+- **A stock with no return for the window is absent, never zero**, and counted in the note. Funds are out (benchmarks, sector funds, and `instrumentType === 'ETF'`).
+- **Past `BEAT_CELLS` (520) companies a square stands for several**, allotted by largest remainder so the squares add up; a state with any company in it is never drawn as nothing; the note says how many a square is.
+- **Columns per artboard are measured** (`BEAT_COLS` 46 / 54 / 40): the story's first cut ran 350px over at 26 columns. The square drops the four-figure strip.
+- **No five-year window**: `MOV_PERIODS` has none, and a five-year count is survivorship-flattered. The note says the longer windows flatter the count anyway.
+- Controls `beatPeriod`, `beatSp500` (default this year, inside the index), both filled from the module (`Cards.beatPeriods()`, `Cards.spCuts()`); its own listener list; no scope pickers, so it is in `size-scope-test`'s `NO_SCOPE`. Every colour is a token, so all four grounds resolve with no override.
+- **It adds no field**, so nothing new reaches the Advice engine.
+- Verified: **26 checks** (`beat-test.js`, pure, every count planted and the two windows of opposite sign), a 63-combination fit sweep on production's rows (least free height 22px), text contrast on all four grounds (worst 5.02:1). **Proved by reverting eight times, every one load-bearing.**
+  - **THE SHARED GROUND AND WIDTH SWEEPS CANNOT SEE THIS CARD**: their fixture's SPY row carries no `ytdPct`, so they sweep the empty state. The card's own shot and contrast scripts measure it on real rows.
+  - **The S&P cut's "everything" value is `'All'`, capital A.** A lower-case `all` falls back to the index cut in silence, and the first sweep reported the whole screen as 499 companies.
+  - **The small-state guard first reverted to nothing**: two companies in 1,300 already win a square by largest remainder. One in 1,300 does not, and is the fixture now.
+
 ### Bars — any one measure, ranked either way (2026-10-07, owner's request)
 **A twenty-fifth template, `bars`: pick a measure, an order and a count, and it draws one bar per company with its name and its figure.** The owner's words: *"one generic card called Bars wherein I can select any metric such as Price moves, 200 Day moves, 50 day moves, RSI, Revenue, Gross Profit, essentially anything with a number or % attached to it"*, sorted ascending or descending, 5 / 10 / 15, with the usual Sector, Industry, S&P, Size and theme cuts.
 
