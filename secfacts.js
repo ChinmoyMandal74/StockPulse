@@ -52,6 +52,117 @@ const CONCEPTS = {
 };
 const CONCEPT_KEYS = Object.keys(CONCEPTS);
 
+// ---- the same concepts, as a foreign company files them --------------------
+//
+// (2026-10-10, owner: "does Spotify not have SEC EDGAR data".) It does, and
+// this reader could not see it. A foreign private issuer files a 20-F under
+// INTERNATIONAL accounting standards, so its facts sit under `ifrs-full`
+// rather than `us-gaap`, with different names for the same lines. 69 of the
+// universe read "empty" for that reason or one like it.
+//
+// TWO THINGS ARE DIFFERENT ABOUT THESE ROWS, and both are visible downstream:
+//
+//   ANNUAL ONLY. A 20-F is a year. The interim results go out in a 6-K,
+//   which carries no tagged facts, so there are no quarters to read and none
+//   to derive. Anything built on four consecutive quarters has nothing here.
+//
+//   THE REPORTING CURRENCY IS THE COMPANY'S OWN. Spotify reports in euros.
+//   See `toDollars` below for what is done about that, and `currencyOf` for
+//   how a caller finds out before deciding.
+//
+// The tags were read off Spotify's own companyfacts rather than from the
+// taxonomy's index: `Equity` is not filed there and
+// `EquityAttributableToOwnersOfParent` is; the diluted share count is
+// `AdjustedWeightedAverageShares`, a name that does not say so.
+const IFRS_CONCEPTS = {
+  revenue: ['Revenue', 'RevenueFromContractsWithCustomers'],
+  costOfRevenue: ['CostOfSales'],
+  grossProfit: ['GrossProfit'],
+  operatingIncome: ['ProfitLossFromOperatingActivities'],
+  netIncome: ['ProfitLoss', 'ProfitLossAttributableToOwnersOfParent'],
+  epsDiluted: ['DilutedEarningsLossPerShare'],
+  operatingCashFlow: ['CashFlowsFromUsedInOperatingActivities'],
+  capex: ['PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities',
+    'PurchaseOfPropertyPlantAndEquipment'],
+  assets: ['Assets'],
+  liabilities: ['Liabilities'],
+  equity: ['Equity', 'EquityAttributableToOwnersOfParent'],
+  cash: ['CashAndCashEquivalents'],
+  debt: ['LongtermBorrowings', 'NoncurrentPortionOfNoncurrentBorrowings', 'Borrowings'],
+  sharesDiluted: ['AdjustedWeightedAverageShares'],
+};
+
+// Which taxonomy speaks for this company. US GAAP where it carries any of
+// the three lines every filer has; otherwise IFRS where that exists.
+function taxonomyOf(facts) {
+  const f = (facts && facts.facts) || {};
+  const us = f['us-gaap'] || {};
+  const probe = CONCEPTS.revenue.concat(CONCEPTS.netIncome, CONCEPTS.assets);
+  if (probe.some((t) => us[t])) return 'us-gaap';
+  return f['ifrs-full'] ? 'ifrs-full' : 'us-gaap';
+}
+
+// THE REPORTING CURRENCY of an IFRS filer, read off its own facts: the unit
+// most of its revenue, profit and assets are stated in. Null for a US GAAP
+// filer, where this module has always taken the figures as dollars.
+function currencyOf(facts) {
+  if (taxonomyOf(facts) !== 'ifrs-full') return null;
+  const g = facts.facts['ifrs-full'];
+  const tally = {};
+  for (const c of ['revenue', 'netIncome', 'assets']) {
+    for (const tag of IFRS_CONCEPTS[c]) {
+      const f = g[tag];
+      if (!f || !f.units) continue;
+      for (const unit of Object.keys(f.units)) {
+        if (/^[A-Z]{3}$/.test(unit)) tally[unit] = (tally[unit] || 0) + f.units[unit].length;
+      }
+    }
+  }
+  const best = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
+  return best || null;
+}
+
+// ---- a euro figure, in dollars ----------------------------------------------
+//
+// CONVERTED WHEN THE FILING IS READ, at the rate of the period it describes,
+// and the rate is KEPT ON THE ROW. So every page that reads these rows --
+// the statements, the charts, the comparisons with a US company -- gets
+// dollars with no change of its own, and the figure as filed is still there:
+// divide by the rate beside it.
+//
+//   A FLOW takes the period's AVERAGE rate (`fxAvg`): revenue, costs, profit,
+//   cash flow, and earnings per share, which is profit over a share count.
+//   A POSITION takes the rate on the balance-sheet date (`fxEnd`): assets,
+//   liabilities, equity, cash, debt.
+//   A SHARE COUNT is not money and is left alone.
+//
+// A row whose period the rates do not cover is DROPPED, not converted at
+// the nearest rate: a year in dollars at the wrong year's rate is a number
+// that looks exactly as good as the right one. A position with no rate on
+// its date is left blank on a row that otherwise stands.
+//
+// WHAT THIS DOES TO GROWTH, which a reader should know: a company whose
+// euro revenue grew 10% in a year the euro rose 4% shows about 14% here.
+// That is true of the dollar figure and is not the company's own growth;
+// margins, being a ratio inside one period, are untouched.
+const FLOWS = ['revenue', 'costOfRevenue', 'grossProfit', 'operatingIncome', 'netIncome',
+  'epsDiluted', 'operatingCashFlow', 'capex'];
+function toDollars(rows, currency, fx) {
+  const out = [];
+  for (const r of rows) {
+    const avg = fx.avg(r.periodStart, r.periodEnd);
+    if (avg == null) continue;
+    const end = fx.at(r.periodEnd);
+    for (const c of FLOWS) if (r[c] != null) r[c] = r[c] * avg;
+    for (const c of INSTANT) if (r[c] != null) r[c] = end == null ? null : r[c] * end;
+    r.currency = currency;
+    r.fxAvg = avg;
+    r.fxEnd = end;
+    out.push(r);
+  }
+  return out;
+}
+
 // A balance-sheet fact is an INSTANT — a position as at one date, with no
 // start — where an income or cash-flow fact covers a span. They live in the
 // same filing and belong on the same row, so the instants are matched to the
@@ -83,10 +194,24 @@ const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 // One row per (accn, period), because within a single filing every concept is
 // drawn from the same document — so a row can never mix a revenue from one
 // filing with a net income from another.
-function normalise(facts, symbol) {
+function normalise(facts, symbol, opts) {
   const sym = String(symbol || '').toUpperCase();
   const cik = facts && facts.cik != null ? Number(facts.cik) : null;
-  const g = (facts && facts.facts && facts.facts['us-gaap']) || {};
+  // WHICH FACTS, AND IN WHAT UNIT. A US GAAP filer is read as it always was:
+  // every unit, taken as dollars. An IFRS filer is read in ITS reporting
+  // currency and nothing else -- a second currency in the same file is a
+  // note about a subsidiary, not the statement.
+  const tax = taxonomyOf(facts);
+  const ifrs = tax === 'ifrs-full';
+  const cur = ifrs ? currencyOf(facts) : null;
+  const fx = opts && opts.fx;
+  // A currency this module cannot bring to dollars yields NO ROWS rather
+  // than rows in the wrong unit under a dollar sign. The caller asks
+  // currencyOf to tell that apart from a company with nothing filed.
+  if (ifrs && cur !== 'USD' && !(cur && fx && opts.fxCurrency === cur)) return [];
+  const g = (facts && facts.facts && facts.facts[tax]) || {};
+  const concepts = ifrs ? IFRS_CONCEPTS : CONCEPTS;
+  const unitOk = ifrs ? ((u) => u === cur || u === cur + '/shares' || u === 'shares') : (() => true);
   const rows = new Map();           // accn|start|end -> row
   const instants = new Map();       // accn|end -> {concept: value}
 
@@ -95,10 +220,11 @@ function normalise(facts, symbol) {
   for (const concept of CONCEPT_KEYS) {
     // First tag with anything to say wins, per observation — not per concept,
     // so a stitch can hand over mid-history without leaving a hole.
-    for (const tag of CONCEPTS[concept]) {
+    for (const tag of concepts[concept]) {
       const f = g[tag];
       if (!f || !f.units) continue;
       for (const unit of Object.keys(f.units)) {
+        if (!unitOk(unit)) continue;
         for (const x of f.units[unit]) {
           if (!x || !x.end || !x.accn || !x.filed) continue;
           const v = num(x.val);
@@ -130,17 +256,23 @@ function normalise(facts, symbol) {
     }
   }
 
-  const out = [...rows.values()];
+  let out = [...rows.values()];
   // Attach each filing's balance sheet to the period it closes.
   for (const r of out) {
     const bag = instants.get(r.accn + '|' + r.periodEnd);
     if (bag) for (const c of Object.keys(bag)) if (r[c] == null) r[c] = bag[c];
   }
+  // Before anything is derived from these rows: a gross profit made of a
+  // dollar revenue and a euro cost would be neither.
+  if (ifrs && cur !== 'USD') out = toDollars(out, cur, fx);
   relabel(out);
   for (const r of out) fill(r);
   const all = out.concat(deriveQuarters(out));
   relabel(all);          // again, so a derived quarter is labelled the same way
   for (const r of all) fill(r);
+  // A derived quarter is arithmetic on converted rows, so it carries the
+  // currency it came from and no rate of its own.
+  if (ifrs && cur !== 'USD') for (const r of all) if (!r.currency) r.currency = cur;
   all.sort((a, b) => (a.periodEnd < b.periodEnd ? 1 : a.periodEnd > b.periodEnd ? -1
     : (a.filed < b.filed ? 1 : -1)));
   return all;
@@ -756,7 +888,7 @@ function newestResults(recent) {
 }
 
 module.exports = {
-  CONCEPTS, CONCEPT_KEYS, INSTANT, NO_DIFF,
+  CONCEPTS, CONCEPT_KEYS, INSTANT, NO_DIFF, IFRS_CONCEPTS, taxonomyOf, currencyOf, toDollars,
   periodType, normalise, deriveQuarters, latestPerPeriod, latestFilled, visibleAsOf,
   filingUrl, isStatement, withRatios, ttm, ttmSeries, MIN_REVENUE, FILLABLE,
   reconcile, newestResults,

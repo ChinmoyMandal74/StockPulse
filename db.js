@@ -839,6 +839,17 @@ const SCHEMA = [
   // page asks ("who has nothing, who is stale"), which would otherwise scan.
   'create index if not exists idx_sec_symbol_end on sec_facts (symbol, period_end)',
 
+  // The European Central Bank's daily reference rates: dollars per one unit
+  // of `ccy`, one row per working day back to 1999. About 7,100 rows for the
+  // euro, which is the only currency loaded. See fx.js for which rate prices
+  // which figure.
+  `create table if not exists fx_rates (
+     ccy  text not null,
+     d    text not null,
+     usd  real not null,
+     primary key (ccy, d)
+   )`,
+
   // ---- SEC Forms 3/4/5: insider transactions (2026-09-27) ----------------
   // Open-market purchases and sales by officers, directors and 10% owners.
   //
@@ -1080,6 +1091,10 @@ function parseAddColumn(stmt) {
 }
 
 const ADDED_COLUMNS = [
+  // A filing reported in another currency, converted when read (2026-10-10).
+  "alter table sec_facts add column currency text",
+  "alter table sec_facts add column fx_avg real",
+  "alter table sec_facts add column fx_end real",
   // The newest STATEMENT filing (10-K/10-Q/20-F/40-F) we hold for a symbol,
   // recorded by writeSecFacts, which already has the rows. It exists so the
   // vendor-vs-filings staleness check never has to ask sec_facts for a
@@ -2295,7 +2310,11 @@ const SEC_COLS = ['symbol', 'cik', 'accn', 'form', 'filed', 'fy', 'fp',
   'period_start', 'period_end', 'period_type', 'derived', 'derived_fields',
   'revenue', 'cost_of_revenue', 'gross_profit', 'operating_income', 'net_income',
   'eps_diluted', 'operating_cash_flow', 'capex', 'free_cash_flow',
-  'assets', 'liabilities', 'equity', 'cash', 'debt', 'shares_diluted'];
+  'assets', 'liabilities', 'equity', 'cash', 'debt', 'shares_diluted',
+  // Set only where the figures were filed in another currency and converted
+  // when read: which currency, and the two rates used (see secfacts.js,
+  // toDollars). Null on every dollar filer, which is nearly all of them.
+  'currency', 'fx_avg', 'fx_end'];
 // camelCase on the row -> snake_case in the table, named once.
 const SEC_FIELD = {
   cost_of_revenue: 'costOfRevenue', gross_profit: 'grossProfit',
@@ -2303,7 +2322,7 @@ const SEC_FIELD = {
   eps_diluted: 'epsDiluted', operating_cash_flow: 'operatingCashFlow',
   free_cash_flow: 'freeCashFlow', shares_diluted: 'sharesDiluted',
   period_start: 'periodStart', period_end: 'periodEnd', period_type: 'periodType',
-  derived_fields: 'derivedFields',
+  derived_fields: 'derivedFields', fx_avg: 'fxAvg', fx_end: 'fxEnd',
 };
 const secVal = (row, col) => {
   const v = row[SEC_FIELD[col] || col];
@@ -2630,6 +2649,35 @@ async function writeFlows(obj) {
     sql: "insert or replace into app_meta (key, value) values ('flows', ?)",
     args: [JSON.stringify(obj || {})],
   });
+}
+
+// ---- reference exchange rates ---------------------------------------------
+
+// Every stored rate for one currency, oldest first. A seek on the primary
+// key's leading column; about 7,100 rows, read when a filing in that
+// currency is being converted and not on any page view.
+async function readFxRates(ccy) {
+  await init();
+  const r = await db.execute({ sql: 'select d, usd from fx_rates where ccy = ? order by d', args: [String(ccy)] });
+  return r.rows.map((x) => ({ d: x.d, usd: Number(x.usd) }));
+}
+
+// An upsert, never a replace: a top-up carries the last ninety days and must
+// not cost the table the twenty-seven years before them.
+async function writeFxRates(ccy, rows) {
+  await init();
+  const list = (rows || []).filter((r) => r && r.d && Number(r.usd) > 0);
+  if (!list.length) return 0;
+  const stmts = [];
+  for (let i = 0; i < list.length; i += 200) {
+    const chunk = list.slice(i, i + 200);
+    stmts.push({
+      sql: 'insert or replace into fx_rates (ccy, d, usd) values ' + chunk.map(() => '(?,?,?)').join(','),
+      args: chunk.flatMap((r) => [String(ccy), String(r.d), Number(r.usd)]),
+    });
+  }
+  await db.batch(stmts, 'write');
+  return list.length;
 }
 
 // ---- FINRA short interest -------------------------------------------------
@@ -5981,6 +6029,7 @@ module.exports = {
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
   writeShortInterest, readShortInterest, readShortLatestFor, readShortAsOfFor,
   readInsiderNetSince, readFlows, writeFlows,
+  readFxRates, writeFxRates,
   readShortRecentFor,
   readSplits, writeSplits, splitCoverage, readSplitIndex, readOnboardPending, readOnboardDone, noteOnboarded,
   readShortState, noteShortMiss, shortNewest, appendShortInterest,

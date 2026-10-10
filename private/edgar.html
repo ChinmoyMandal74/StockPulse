@@ -168,7 +168,8 @@
 
   function paint() {
     const f = S.filings, b = f.buckets, ins = S.insider || {}, sh = S.short || {}, h = S.holdings || {}, sp = S.splits || {};
-    const none = (b.nocik || 0) + (b.nofacts || 0) + (b.empty || 0);
+    // `currency` is a filer that reports in a currency not converted yet.
+    const none = (b.nocik || 0) + (b.nofacts || 0) + (b.empty || 0) + (b.currency || 0);
     const due = (f.overdue || 0) + (f.missing || 0);
     // ---- 1. filings ----
     const fState = !S.ready ? ['behind', 'Not configured']

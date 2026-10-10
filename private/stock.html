@@ -3999,10 +3999,28 @@
           '( ) = negative. Periods run newest first; the trend runs oldest to newest and is ' +
           'scaled to the largest figure in its own row. ' +
           (anyDerived ? 'A dotted value was computed here rather than filed — no company files a fourth quarter, and a cash-flow statement is year-to-date. ' : '') +
+          esc(fxNote(cols)) +
           'The same filings as the SEC EDGAR card below, which names the document each row came from.</p>';
         host.innerHTML = h;
       }
 
+      // A COMPANY THAT REPORTS IN ANOTHER CURRENCY IS SHOWN IN DOLLARS, and the
+      // card has to say so or its figures match nothing the company
+      // publishes. The rows carry the currency and the two rates used (see
+      // secfacts.js, toDollars); this is the one sentence both filings cards
+      // print, so they cannot describe the conversion differently.
+      const CCY_NAME = { EUR: 'euros' };
+      function fxNote(rows) {
+        const c = (rows || []).find((r) => r && r.currency && r.currency !== 'USD');
+        if (!c) return '';
+        return 'Reported in ' + (CCY_NAME[c.currency] || c.currency) + ' and shown here in dollars, at the European Central '
+          + 'Bank’s reference rates: revenue, profit and cash flow at the average rate over each period, and '
+          + 'balance-sheet figures at the rate on the period’s last day. So growth from one period to the next '
+          + 'includes the currency’s own move; a margin does not. Hover a period for its rates. ';
+      }
+      const fxTip = (r) => (r && r.currency && r.fxAvg
+        ? ' title="' + esc('Converted from ' + r.currency + ': ' + Number(r.fxAvg).toFixed(4) + ' average over the period'
+          + (r.fxEnd ? ', ' + Number(r.fxEnd).toFixed(4) + ' on its last day' : '')) + '"' : '');
       function paintSec() {
         const host = document.getElementById('secBody');
         if (!host || !secData) return;
@@ -4017,7 +4035,7 @@
           SEC_COLS.map((c) => '<th>' + esc(c[1]) + '</th>').join('') +
           '<th>Filed</th></tr></thead><tbody>';
         for (const r of rows) {
-          h += '<tr><td class="per">' + esc(r.periodEnd) +
+          h += '<tr><td class="per"' + fxTip(r) + '>' + esc(r.periodEnd) +
             (r.fp ? '<span class="fp">' + esc(r.fp) + '</span>' : '') + '</td>';
           for (const [k, label, fmt] of SEC_COLS) {
             const t = fmt(r[k]);
@@ -4045,7 +4063,7 @@
           esc(String(secData.cik || '')) + '&type=10-&dateb=&owner=include&count=40" target="_blank" rel="noopener">SEC EDGAR</a>' +
           ', on the company’s fiscal calendar and as reported in the filing named on each row — ' +
           'so they will not always match the vendor figures elsewhere on this page, which are trailing-twelve-month and restated to today. ' +
-          'Later filings restate earlier periods; each row shows the most recent version. ' +
+          'Later filings restate earlier periods; each row shows the most recent version. ' + esc(fxNote(rows)) +
           (anyDerived ? 'A dotted value was computed here rather than filed: no company files a fourth quarter, and a cash-flow statement is year-to-date, so those quarters are the difference between the cumulative periods either side. ' : '') +
           'Nothing on this card feeds the Signal or the screener.</p>';
         host.innerHTML = h;

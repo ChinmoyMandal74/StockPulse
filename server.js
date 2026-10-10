@@ -10734,6 +10734,47 @@ async function saveResults(sym, d) {
 // still recorded as CHECKED, or the refresh re-picks it forever and can
 // never report itself finished — the news-staleness lesson, which cost a
 // loop that ran until it was stopped by hand.
+// ---- euro reference rates, for a filer that reports in euros ---------------
+//
+// The book fx.js builds over the stored ECB rates. Asked for only when a
+// filing in euros is being read, which is a handful of companies in an
+// EDGAR refresh and never a page view.
+//
+// IT TOPS ITSELF UP. A filing lands weeks after its period ends, so the rates
+// for that period are normally long stored; but the table has to keep
+// moving or next year's annual report finds a year with no average. Where
+// the newest stored rate is more than FX_STALE_DAYS old the ECB's ninety-day
+// file is fetched and upserted -- the whole history only if the table is
+// empty, which fx-load.js normally prevents. A failed top-up is not a
+// failed read: the stored rates are still the stored rates, and a period
+// they do not cover is dropped by the reader rather than guessed.
+const Fx = require('./fx.js');
+const FX_STALE_DAYS = 5;
+const FX_MEM_MS = 6 * 60 * 60 * 1000;
+let fxBook = null;
+let fxBookAt = 0;
+async function eurFx() {
+  if (fxBook && Date.now() - fxBookAt < FX_MEM_MS) return fxBook;
+  let rows = await store.readFxRates('EUR');
+  const last = rows.length ? rows[rows.length - 1].d : null;
+  const age = last ? (Date.now() - Date.parse(last + 'T00:00:00Z')) / 86400000 : Infinity;
+  if (age > FX_STALE_DAYS) {
+    try {
+      const r = await fetch(rows.length ? Fx.RECENT_URL : Fx.HIST_URL, {
+        headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(30000),
+      });
+      if (r.ok) {
+        const got = Fx.parseEcb(await r.text());
+        const fresh = last ? got.filter((x) => x.d > last) : got;
+        if (fresh.length) { await store.writeFxRates('EUR', fresh); rows = rows.concat(fresh); }
+      }
+    } catch (e) { console.warn('euro rates top-up skipped:', e.message); }
+  }
+  fxBook = Fx.book(rows);
+  fxBookAt = Date.now();
+  return fxBook;
+}
+
 async function secFetchOne(symbol) {
   const sym = String(symbol).toUpperCase();
   // Declared OUTSIDE the try: the catch path writes it too, and a `let`
@@ -10790,7 +10831,19 @@ async function secFetchOne(symbol) {
       return { symbol: sym, status: 'nofacts', rows: 0, results: lastResults };
     }
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    const rows = SecFacts.normalise(await r.json(), sym);
+    const facts = await r.json();
+    // A FOREIGN FILER REPORTS IN ITS OWN CURRENCY (2026-10-10). Euros are
+    // brought to dollars at the European Central Bank's rate for each period;
+    // any other currency is not converted yet, and is recorded as exactly
+    // that rather than as a company with nothing filed.
+    const cur = SecFacts.currencyOf(facts);
+    const opts = cur === 'EUR' ? { fx: await eurFx(), fxCurrency: 'EUR' } : undefined;
+    const rows = SecFacts.normalise(facts, sym, opts);
+    if (!rows.length && cur && cur !== 'USD' && cur !== 'EUR') {
+      await store.noteSecMiss(sym, 'currency', 'reports in ' + cur, cik);
+      await saveResults(sym, lastResults);
+      return { symbol: sym, status: 'currency', rows: 0, cik, currency: cur, results: lastResults };
+    }
     if (!rows.length) {
       await store.noteSecMiss(sym, 'empty', null, cik);
       await saveResults(sym, lastResults);

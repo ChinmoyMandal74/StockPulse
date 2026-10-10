@@ -35,7 +35,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `private/stock.html`, `compare.html`, `basket.html`, `mobile.html` | `/stock/<SYM>`, `/compare/<A>/<B>`, the group page, the phone page `/m` |
 | `public/app.css` | Shared design system — tokens, bezel, buttons, table base |
 | `barmath.js`, `techrow.js` | Indicators from bars alone; the one backtest row builder |
-| `secfacts.js`, `insider.js`, `shortint.js`, `holdings.js`, `news.js` | Auxiliary data pulls (SEC filings, insiders, FINRA short interest, index membership, headlines) |
+| `secfacts.js`, `fx.js`, `insider.js`, `shortint.js`, `holdings.js`, `news.js` | Auxiliary data pulls (SEC filings, insiders, FINRA short interest, index membership, headlines) |
 | `adjusted.js` | Filings-fed Signal overlay for `/adjusted` and `/adjustedbacktest` (admin research) |
 | `analysis-db.js` | **Local SQLite copy of the archive for research.** `--full` rebuilds, no flag syncs, `--stats` reports |
 | `strategy-runs.js`, `single-data.js`, `lab-grid.js` | Offline builders writing derived JSON into `private/` |
@@ -139,7 +139,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Signal and research** (file names keep the old word) — `the-advice-column` · `does-any-of-this-predict-anything` · `the-advice-backtest` · `adjusted-advice` · `the-adjusted-backtest` · `the-trend-only-backtest` · `the-strategy-backtest` · `the-single-stock-strategy` · `the-indicator-lab`
 
-**Regulatory and auxiliary data** — `sec-edgar` (140 KB: also insiders, FINRA short interest, index membership, the add-gate, the FUND/EARN/SHORT chart strips) · `the-sec-edgar-data-page` · `news` · `logos` (removed)
+**Regulatory and auxiliary data** — `sec-edgar` (140 KB: also insiders, FINRA short interest, index membership, the add-gate, the FUND/EARN/SHORT chart strips) · `the-sec-edgar-data-page` · `foreign-filers-and-euro-rates` · `news` · `logos` (removed)
 
 **Stock, group and comparison pages** — `charts-and-the-stock-page` · `earnings-history-on-the-stock-page` · `similar-stocks` · `against-its-peers` · `growth-and-profitability` (also promo template grouping and split history) · `the-basket-page` · `the-compare-page` · `the-pivot-view` · `consolidated` · `the-phone-page`
 
