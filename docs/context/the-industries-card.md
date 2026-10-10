@@ -76,3 +76,24 @@ Wiring:
 - A cut that leaves no industry of three says which cut. An unknown value filters nothing.
 - Controls now `ispName`, `ispWin`, `ispSp500` (183 of 200).
 - Verified: 17 checks (`indspot-idx-test.js`), on a fixture where the S&P 500 and Nasdaq 100 cuts of one industry are a different three companies with returns of +20.0% and -3.3%.
+
+## The Sector cards — the same two, one step coarser (2026-10-10, owner's request)
+
+**A Sector group in the picker, between Market and Industry, with the same two views: `sectors` (Ranking) and `secspot` (Spotlight).** Asked as *"similar to how you built the Industry template … can you also build the Sector templates"*.
+
+**They are not a second pair of builders.** `tplIndustries` and `tplIndSpot` became `groupRanking(G)` and `groupSpot(G)`, and `industryList` became `groupList(rows, cut, G)`; `GROUPING` holds what differs — the row field, the words (`one`, `many`, `Many`) and the two control prefixes. The catalogue's labels and notes carry `{one}` / `{many}` placeholders filled by `gWords`. A copy would have been the floor, the fund rule and the beginning weights written twice. **Proved by comparison**: thirty builds of the two industry cards (ten control sets on three artboards) are byte-identical against the file before the change.
+
+What differs for a sector:
+
+- **A sector's return here is made from the companies on the screen, so it is NOT the sector fund's own return** — which is what the Snapshot card prints, by the owner's decision of 2026-09-30. The two will disagree, and the ranking's note says so on every return measure. The reason to build it from companies anyway: breadth, the medians and every cut (index, size, screen, list) exist only for companies.
+- **No Sector cut on a card of sectors.** `scopeOf` finds its other cuts by the sector key's prefix, so it has to be handed `secSector`, and would obey one. The studio has no such control, but a saved post is stored text, so the key is deleted from `O` before it is read. Found by the check, which ranked one sector against nothing.
+- **Eleven sectors at most**, so the count picker's third option reads "All of them" (value 15) and is the default. The square still holds ten.
+- **Fewer than three sectors is "too few to rank"**, the industry card's rule, and it is met far more often here: under the S&P 500 cut of a small list two sectors can be all that keeps three companies.
+- The spotlight's kicker is just `sector` (plus the cut): an industry is introduced by its sector, a sector is the top of the tree. Its picker is one flat list, largest first, with no grouping.
+- The sector's own fund is never a member of its sector (`IS_SECTOR_ETF`), the rule the industry cards already had.
+
+Wiring: ranking controls `secMetric`, `secDir`, `secCount`, `secWeight`, `secScope`, `secCap`, `secScreen`, `secSp500`; spotlight controls `sspName`, `sspWin`, `sspSp500`. `secMetric` is filled from `Cards.indMetrics()`, the one catalogue. `fillGroupNames` serves both spotlights' pickers. `secspot: 'sspWin'` is in `BASKET_WIN_KEY` and may ask for year to date.
+
+**`CONTROL_IDS` is now 194 of `POST_OPT_MAX` 200.** The next template with more than six controls needs the cap raised first (server.js), or its controls are dropped from a saved post in silence — the failure the cap was raised from 40 and from 100 for.
+
+Verified: 34 checks (`sector-test.js`), plus the four industry suites unchanged (17, 27, 14, 26). **Nothing was rendered.** The layouts are the industry cards', of which only the ranking's 4:5 artboard has been seen.

@@ -1335,7 +1335,7 @@
     // shipped for an hour reading a basket that never arrived, because its
     // fetch landed and nothing repainted. Asked here instead, the way
     // chartHistoryNeed already is, so a fourth costs one line in one place.
-    const BASKET_WIN_KEY = { chart: 'chtWin', sparks: 'spkWin', spotlight: 'spotWin', indspot: 'ispWin' };
+    const BASKET_WIN_KEY = { chart: 'chtWin', sparks: 'spkWin', spotlight: 'spotWin', indspot: 'ispWin', secspot: 'sspWin' };
     function basketDays(tpl, opts) {
       // The Lines card reads the basket only for a DAILY price window; which
       // that is depends on its measure as well as its window, so it answers
@@ -1350,7 +1350,7 @@
       // second card that may be given the calendar window -- and only that
       // one key: any other value still resolves through barWin.
       const win = tpl === 'chart' ? (CHART_WINDOWS[v] || CHART_WINDOWS.m6)
-        : tpl === 'indspot' && v === 'ytd' ? CHART_WINDOWS.ytd : barWin(v);
+        : (tpl === 'indspot' || tpl === 'secspot') && v === 'ytd' ? CHART_WINDOWS.ytd : barWin(v);
       return win[0];
     }
 
@@ -6390,30 +6390,42 @@
   //   median  the middle company. A multiple off a loss is left out first
   //           (`pos`), so "lowest forward P/E" is not a list of loss-makers.
   const IND_MIN = 3;
+  // THE SAME TWO CARDS, ONE STEP COARSER (2026-10-10, owner's request). A
+  // sector card is an industry card with a different field to group on, so
+  // both are one builder taking the grouping as an argument -- the words
+  // it prints, the row field, and the control prefixes its two cards read.
+  // A second pair of builders would be the same arithmetic twice, and the
+  // floor, the fund rule and the beginning weights would drift apart the
+  // first time one was tuned.
+  const GROUPING = {
+    industry: { field: 'industry', one: 'industry', many: 'industries', Many: 'Industries', rank: 'ind', spot: 'isp' },
+    sector: { field: 'sector', one: 'sector', many: 'sectors', Many: 'Sectors', rank: 'sec', spot: 'ssp' },
+  };
+  const gWords = (s, G) => String(s).replace(/\{many\}/g, G.many).replace(/\{one\}/g, G.one);
   const IND_RET = { kind: 'ret', unit: 'pct', sg: 1, plus: 1, words: ['Strongest', 'Weakest'], group: 'Returns' };
   const IND_METRICS = [
-    ['d', 'todayPct', 'industries \u00b7 today', 'Return \u00b7 today', IND_RET],
-    ['w1', 'oneWeekPct', 'industries \u00b7 past week', 'Return \u00b7 past week', IND_RET],
-    ['m1', 'oneMonthPct', 'industries \u00b7 past month', 'Return \u00b7 past month', IND_RET],
-    ['m3', 'threeMonthPct', 'industries \u00b7 past 3 months', 'Return \u00b7 past three months', IND_RET],
-    ['m6', 'sixMonthPct', 'industries \u00b7 past 6 months', 'Return \u00b7 past six months', IND_RET],
-    ['ytd', 'ytdPct', 'industries \u00b7 this year', 'Return \u00b7 this year', IND_RET],
-    ['y1', 'oneYearPct', 'industries \u00b7 past year', 'Return \u00b7 past year', IND_RET],
-    ['a200', 'vs200ma', 'industries \u00b7 above 200-day', 'Share above the 200-day average',
+    ['d', 'todayPct', '{many} \u00b7 today', 'Return \u00b7 today', IND_RET],
+    ['w1', 'oneWeekPct', '{many} \u00b7 past week', 'Return \u00b7 past week', IND_RET],
+    ['m1', 'oneMonthPct', '{many} \u00b7 past month', 'Return \u00b7 past month', IND_RET],
+    ['m3', 'threeMonthPct', '{many} \u00b7 past 3 months', 'Return \u00b7 past three months', IND_RET],
+    ['m6', 'sixMonthPct', '{many} \u00b7 past 6 months', 'Return \u00b7 past six months', IND_RET],
+    ['ytd', 'ytdPct', '{many} \u00b7 this year', 'Return \u00b7 this year', IND_RET],
+    ['y1', 'oneYearPct', '{many} \u00b7 past year', 'Return \u00b7 past year', IND_RET],
+    ['a200', 'vs200ma', '{many} \u00b7 above 200-day', 'Share above the 200-day average',
       { kind: 'share', unit: 'pct', max: 100, ticks: [50], words: ['Broadest', 'Narrowest'], group: 'Trend',
-        note: 'The share of each industry\u2019s companies closing above their own 200-day average. The mark is half.' }],
-    ['cap', 'marketCap', 'industries \u00b7 market value', 'Market value',
+        note: 'The share of each {one}\u2019s companies closing above their own 200-day average. The mark is half.' }],
+    ['cap', 'marketCap', '{many} \u00b7 market value', 'Market value',
       { kind: 'sum', unit: 'money', pos: 1, words: ['Biggest', 'Smallest'], group: 'Scale',
-        note: 'The market value of each industry\u2019s companies, added up.' }],
-    ['fpe', 'forwardPe', 'industry forward P/E', 'Median forward P/E',
+        note: 'The market value of each {one}\u2019s companies, added up.' }],
+    ['fpe', 'forwardPe', '{one} forward P/E', 'Median forward P/E',
       { kind: 'median', unit: 'x', pos: 1, words: ['Highest', 'Lowest'], group: 'Valuation',
-        note: 'The middle company\u2019s forward P/E in each industry. A multiple off a loss is left out first.' }],
-    ['rg', 'revenueGrowthYoY', 'industry revenue growth', 'Median revenue growth',
+        note: 'The middle company\u2019s forward P/E in each {one}. A multiple off a loss is left out first.' }],
+    ['rg', 'revenueGrowthYoY', '{one} revenue growth', 'Median revenue growth',
       { kind: 'median', unit: 'pct', sg: 1, plus: 1, words: ['Fastest', 'Slowest'], group: 'Growth and margins',
-        note: 'The middle company\u2019s revenue growth in each industry, latest quarter against a year earlier.' }],
-    ['pm', 'profitMargin', 'industry profit margin', 'Median profit margin',
+        note: 'The middle company\u2019s revenue growth in each {one}, latest quarter against a year earlier.' }],
+    ['pm', 'profitMargin', '{one} profit margin', 'Median profit margin',
       { kind: 'median', unit: 'pct', sg: 1, words: ['Highest', 'Lowest'], group: 'Growth and margins',
-        note: 'The middle company\u2019s net margin in each industry, trailing twelve months.' }],
+        note: 'The middle company\u2019s net margin in each {one}, trailing twelve months.' }],
   ].map(([key, field, label, pick, f]) => Object.assign({ key, field, label, pick }, f));
   const IND_BY_KEY = {};
   for (const m of IND_METRICS) IND_BY_KEY[m.key] = m;
@@ -6449,13 +6461,28 @@
     return { v: s.length % 2 ? s[i] : (s[i - 0.5] + s[i + 0.5]) / 2, n: vals.length };
   }
 
-  function tplIndustries() {
-    const m = IND_BY_KEY[O.indMetric] || IND_BY_KEY.m1;
-    const desc = O.indDir !== 'asc';
-    const K = [5, 10, 15].includes(Number(O.indCount)) ? Number(O.indCount) : 10;
+  const tplIndustries = () => groupRanking(GROUPING.industry);
+  // Eleven sectors at most, so "15" simply draws them all; and there is no
+  // Sector cut on a card whose rows ARE the sectors -- scopeOf reads a
+  // control this card does not have and so narrows nothing.
+  const tplSectors = () => groupRanking(GROUPING.sector);
+  function groupRanking(G) {
+    const P = G.rank;
+    const m = IND_BY_KEY[O[P + 'Metric']] || IND_BY_KEY.m1;
+    const desc = O[P + 'Dir'] !== 'asc';
+    const K = [5, 10, 15].includes(Number(O[P + 'Count'])) ? Number(O[P + 'Count']) : 10;
     const N = Math.min(K, BAR_CAP[size.id] || 10);
-    const capW = m.kind === 'ret' && O.indWeight === 'cap';
-    const sc = scopeOf('indScope', 'indSector');
+    const capW = m.kind === 'ret' && O[P + 'Weight'] === 'cap';
+    // NO SECTOR CUT ON A CARD OF SECTORS. scopeOf finds its other cuts by
+    // the sector key's prefix, so it has to be handed `secSector` -- and it
+    // would then obey one. The studio has no such control, but a saved post
+    // is stored text: a hand-edited `secSector: 'Energy'` would rank one
+    // sector against nothing. So the key is taken away before it is read.
+    if (G.field === 'sector' && O[P + 'Sector'] != null) {
+      O = Object.assign({}, O);
+      delete O[P + 'Sector'];
+    }
+    const sc = scopeOf(P + 'Scope', P + 'Sector');
 
     const groups = new Map();
     let noInd = 0, firms = 0;
@@ -6463,7 +6490,7 @@
       if (!r || r.error) continue;
       if (r.instrumentType === 'ETF' || IS_BENCH.has(r.symbol) || IS_SECTOR_ETF.has(r.symbol)) continue;
       firms++;
-      const ind = r.industry ? String(r.industry) : '';
+      const ind = r[G.field] ? String(r[G.field]) : '';
       if (!ind) { noInd++; continue; }
       if (!groups.has(ind)) groups.set(ind, []);
       groups.get(ind).push(r);
@@ -6481,13 +6508,13 @@
 
     const word = m.words[desc ? 0 : 1];
     const head = '<span class="s-kick">' + esc(sc.label + ' \u00b7 '
-      + rows.length.toLocaleString('en-US') + (rows.length === 1 ? ' industry' : ' industries')) + '</span>'
-      + '<h2 class="s-title">' + esc(word) + '<span class="dim">' + esc(m.label) + '</span></h2>';
+      + rows.length.toLocaleString('en-US') + ' ' + (rows.length === 1 ? G.one : G.many)) + '</span>'
+      + '<h2 class="s-title">' + esc(word) + '<span class="dim">' + esc(gWords(m.label, G)) + '</span></h2>';
 
     if (rows.length < 3) {
       return chromeTop() + '<div class="s-body"><div class="bx-in">' + head
         + '<p class="s-sub wide" style="--fs:20px">' + esc(
-          'Too few industries in ' + sc.label + ' to rank \u2014 ' + rows.length
+          'Too few ' + G.many + ' in ' + sc.label + ' to rank \u2014 ' + rows.length
           + ' with at least ' + IND_MIN + ' companies carrying this measure, out of '
           + groups.size + '. Widen the cut.')
         + '</p></div></div>' + chromeFoot();
@@ -6496,17 +6523,19 @@
     const top = rows.slice(0, N);
     const drawn = barDraw(top, m, N);
 
-    const how = m.kind !== 'ret' ? m.note
-      : capW ? 'Each industry\u2019s companies weighted by market value at the start of the window, price only.'
-        : 'The plain average of each industry\u2019s companies, price only.';
+    const how = m.kind !== 'ret' ? gWords(m.note, G)
+      : capW ? 'Each ' + G.one + '\u2019s companies weighted by market value at the start of the window, price only.'
+        : 'The plain average of each ' + G.one + '\u2019s companies, price only.';
     const left = [];
-    if (thin) left.push(thin + (thin === 1 ? ' industry' : ' industries') + ' with fewer than '
+    if (thin) left.push(thin + ' ' + (thin === 1 ? G.one : G.many) + ' with fewer than '
       + IND_MIN + ' readings');
-    if (noInd) left.push(noInd + (noInd === 1 ? ' company' : ' companies') + ' with no industry recorded');
+    if (noInd) left.push(noInd + (noInd === 1 ? ' company' : ' companies') + ' with no ' + G.one + ' recorded');
     const note = how + ' The small figure is how many companies stand behind each row. '
       + (left.length ? 'Left out: ' + left.join('; ') + '. ' : '')
       + (drawn.broke ? 'A broken bar runs past the scale. ' : '')
-      + 'Industries are the data provider\u2019s, not GICS. A ranking of what the screen holds, not a recommendation.';
+      + (G.field === 'sector' && m.kind === 'ret'
+        ? 'Made from the companies on this screen, so it is not the sector fund\u2019s own return. ' : '')
+      + G.Many + ' are the data provider\u2019s, not GICS. A ranking of what the screen holds, not a recommendation.';
 
     return chromeTop()
       + '<div class="s-body"><div class="bx-in">' + head
@@ -6548,11 +6577,13 @@
   // industry with three companies of which one is in the index is not
   // offered under that index -- the list and the card answer for the same
   // companies.
-  function industryList(rows, cut) {
+  const industryList = (rows, cut) => groupList(rows, cut, GROUPING.industry);
+  const sectorList = (rows, cut) => groupList(rows, cut, GROUPING.sector);
+  function groupList(rows, cut, G) {
     const by = new Map();
     for (const r of spFilter(rows || [], cut || 'All')) {
-      if (!r || r.error || !r.industry || isFundRow(r)) continue;
-      const k = String(r.industry);
+      if (!r || r.error || !r[G.field] || isFundRow(r)) continue;
+      const k = String(r[G.field]);
       const g = by.get(k) || { name: k, n: 0, cap: 0, sectors: {} };
       g.n++;
       const c = Number(r.marketCap); if (c > 0) g.cap += c;
@@ -6565,30 +6596,33 @@
     })).sort((a, b) => b.cap - a.cap || (a.name < b.name ? -1 : 1));
   }
 
-  function tplIndSpot() {
+  const tplIndSpot = () => groupSpot(GROUPING.industry);
+  const tplSecSpot = () => groupSpot(GROUPING.sector);
+  function groupSpot(G) {
+    const P = G.spot;
     // THE INDEX CUT NARROWS THE COMPANIES, not the industries: "Semiconductors
     // \u00b7 S&P 500" is the semiconductor companies that are in the index. Every
     // block below reads `pool`, so the header, the line, the figures and the
     // dial are all the same companies.
-    const cut = SP_CUT_LABEL[O.ispSp500] ? O.ispSp500 : 'All';
+    const cut = SP_CUT_LABEL[O[P + 'Sp500']] ? O[P + 'Sp500'] : 'All';
     const pool = spFilter(stocks, cut);
-    const all = industryList(stocks, cut);
-    const pick = all.find((g) => g.name === O.ispName) || all[0] || null;
+    const all = groupList(stocks, cut, G);
+    const pick = all.find((g) => g.name === O[P + 'Name']) || all[0] || null;
     if (!pick) {
       return chromeTop() + '<div class="s-body"><div>'
         + '<span class="s-kick">Nothing to spotlight</span>'
-        + '<h2 class="s-title">No industry<br><span class="dim">of ' + IND_MIN + ' companies</span></h2>'
-        + '<p class="s-empty">No industry ' + esc(cut === 'All' ? 'on this screen' : 'in ' + SP_CUT_PROSE[cut])
+        + '<h2 class="s-title">No ' + G.one + '<br><span class="dim">of ' + IND_MIN + ' companies</span></h2>'
+        + '<p class="s-empty">No ' + G.one + ' ' + esc(cut === 'All' ? 'on this screen' : 'in ' + SP_CUT_PROSE[cut])
         + ' has ' + IND_MIN + ' companies recorded.</p>'
         + '</div></div>' + chromeFoot();
     }
-    const members = pool.filter((r) => r && !r.error && r.industry === pick.name && !isFundRow(r));
+    const members = pool.filter((r) => r && !r.error && r[G.field] === pick.name && !isFundRow(r));
     // YEAR TO DATE IS A CALENDAR WINDOW, which barWin refuses on purpose: a
     // card that draws the fetched axis as-is would show a full year under
     // "this year". This card slices the basket to the last session before
     // 1 January and re-rebases it, through the Chart card's own winStart
     // and sliceBasket, so it may ask.
-    const win = O.ispWin === 'ytd' ? CHART_WINDOWS.ytd : barWin(O.ispWin);
+    const win = O[P + 'Win'] === 'ytd' ? CHART_WINDOWS.ytd : barWin(O[P + 'Win']);
     const raw = getBasket(win[0]);
     if (!raw || !raw.dates || !raw.dates.length) {
       return chromeTop()
@@ -6645,7 +6679,7 @@
     const fig = (field, kind, extra) => indFigure(members, Object.assign({ field, kind }, extra || {}), false);
     const val = (x) => (x ? x.v : null);
     const today = val(fig('todayPct', 'ret'));
-    const head = '<span class="s-kick">' + esc((pick.sector ? pick.sector + ' \u00b7 ' : '') + 'industry'
+    const head = '<span class="s-kick">' + esc((G.field !== 'sector' && pick.sector ? pick.sector + ' \u00b7 ' : '') + G.one
       + (cut === 'All' ? '' : ' \u00b7 ' + SP_CUT_LABEL[cut])) + '</span>'
       + '<h2 class="s-title' + tCls + '">' + esc(pick.name) + '</h2>'
       + '<div class="sp-sub">' + esc(members.length + ' companies')
@@ -6721,7 +6755,7 @@
           ? 'Furthest up: ' + clip(ends[0].n) + ' ' + pct(ends[0].v) + '. Furthest down: '
             + clip(ends[ends.length - 1].n) + ' ' + pct(ends[ends.length - 1].v) + '. ' : '')
       : '')
-      + 'The dial is the average place of its companies, not a signal for the industry.';
+      + 'The dial is the average place of its companies, not a signal for the ' + G.one + '.';
 
     return chromeTop()
       + '<div class="s-body"><div class="sp-in">' + head
@@ -7273,6 +7307,8 @@
     bars: tplBars,
     industries: tplIndustries,
     indspot: tplIndSpot,
+    sectors: tplSectors,
+    secspot: tplSecSpot,
     lines: tplLines,
     months: tplMonths,
     peertrend: tplPeerTrend,
@@ -9326,8 +9362,9 @@
     // know would fall back to the one-month return in silence.
     // The Industries catalogue, on the same bargain as barMetrics.
     indMetrics: () => IND_METRICS.map((m) => [m.key, m.pick, m.group]),
-    // Every industry the spotlight can draw, largest first.
+    // Every industry, and every sector, a spotlight can draw, largest first.
     industryList,
+    sectorList,
     barMetrics: () => BAR_METRICS.map((m) => [m.key,
       (m.words || ['Highest', 'Lowest'])[0] + ' ' + m.label, m.group]),
     shortedMetrics: () => Object.keys(SHRT_METRICS)

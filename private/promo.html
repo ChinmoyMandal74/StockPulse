@@ -773,6 +773,65 @@
           figure the company filed. Narrow the cut with Sector and Industry to
           compare direct competitors.</p>
       </div>
+      <!-- Sectors: the Industries card one step coarser -- one row per
+           SECTOR. No Sector picker, since the rows are the sectors, and no
+           Industry one. The prefix is not in INDUSTRY_PREFIXES for the
+           reason `ind` is not. -->
+      <div id="secBox">
+        <label>Measure</label>
+        <select id="secMetric"></select>
+        <label>Order</label>
+        <select id="secDir">
+          <option value="desc" selected>Highest first</option>
+          <option value="asc">Lowest first</option>
+        </select>
+        <label>How many</label>
+        <select id="secCount">
+          <option value="5">5</option>
+          <option value="10">10</option>
+          <option value="15" selected>All of them</option>
+        </select>
+        <label>A return is</label>
+        <select id="secWeight">
+          <option value="eq" selected>The plain average of its companies</option>
+          <option value="cap">Weighted by market value</option>
+        </select>
+        <label>Within</label>
+        <select id="secScope"><option value="All">All screened</option></select>
+        <label>Size</label>
+        <select id="secCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="secScreen"><option value="">No screen</option></select>
+        <label>Index</label>
+        <select id="secSp500"></select>
+        <p class="hint">Each row is a sector of at least three companies
+          carrying the measure; the small figure after its name is how
+          many. A return here is made from the companies on the screen, so
+          it is not the sector fund's own return, which is what the
+          Snapshot card prints. The square card holds ten rows at most.</p>
+      </div>
+      <!-- Sector spotlight: the industry spotlight, one step coarser. -->
+      <div id="sspBox">
+        <label>Sector</label>
+        <select id="sspName"></select>
+        <label>Window</label>
+        <select id="sspWin">
+          <option value="w1">Past week</option>
+          <option value="m1">Past month</option>
+          <option value="m3">Past three months</option>
+          <option value="m6" selected>Past six months</option>
+          <option value="ytd">Year to date</option>
+          <option value="y1">Past year</option>
+        </select>
+        <label>Index</label>
+        <select id="sspSp500"></select>
+        <p class="hint">The index narrows the companies; a Nasdaq 100 cut
+          is drawn against the Nasdaq 100. Returns are the plain average of
+          the sector's companies and the rest are the middle company. The
+          line holds only the companies with a close on every session of
+          the window. The dial is where its companies sit on average, never
+          a signal for the sector.</p>
+      </div>
       <!-- Industry spotlight: one industry in full, the Stock spotlight's
            layout with an industry where the company was. The list comes
            from the module, which is also what decides an industry is
@@ -1152,6 +1211,8 @@
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
       { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
       { id: 'waterfall', name: 'Waterfall', note: 'What actually moved the index, name by name, adding up to the whole' },
+      { id: 'sectors', name: 'Sectors', note: 'Every sector as one row, ranked on a return, breadth, size or a median — made from its companies, not its fund' },
+      { id: 'secspot', name: 'Sector spotlight', note: 'One sector in full — its line against the index, twelve figures, and where its companies sit' },
       { id: 'indspot', name: 'Industry spotlight', note: 'One industry in full — its line against the S&P 500, twelve figures, and where its companies sit' },
       { id: 'industries', name: 'Industries', note: 'Every industry as one row, ranked on a return, breadth, size or a median — the industry is the unit' },
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
@@ -1258,12 +1319,18 @@
     // ONE MECHANISM FOR EVERY GROUP: an entry in the Template list, the
     // sub-template last used inside it, and the views the picker offers.
     // ---- Industry: the industry as the unit (2026-10-10, owner's request) ---
+    // ---- Sector: the same two views, one step coarser ------------------------
+    const SEC_VIEWS = [
+      ['sectors', 'Ranking'],
+      ['secspot', 'Spotlight'],
+    ];
     const IND_VIEWS = [
       ['industries', 'Ranking'],
       ['indspot', 'Spotlight'],
     ];
     const TPL_GROUPS = [
       { name: 'Market', views: MKT_VIEWS, last: 'day' },
+      { name: 'Sector', views: SEC_VIEWS, last: 'sectors' },
       { name: 'Industry', views: IND_VIEWS, last: 'industries' },
       { name: SPOT_NAME, views: SPOT_VIEWS, last: 'spotlight' },
       { name: 'Rankings', views: RANK_VIEWS, last: 'movers' },
@@ -1544,6 +1611,8 @@
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
       'ispName', 'ispWin', 'ispSp500',
+      'secMetric', 'secDir', 'secCount', 'secWeight', 'secScope', 'secCap', 'secScreen', 'secSp500',
+      'sspName', 'sspWin', 'sspSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
       'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
@@ -1654,6 +1723,8 @@
       $('barBox').style.display = tpl === 'bars' ? 'block' : 'none';
       $('indBox').style.display = tpl === 'industries' ? 'block' : 'none';
       $('ispBox').style.display = tpl === 'indspot' ? 'block' : 'none';
+      $('secBox').style.display = tpl === 'sectors' ? 'block' : 'none';
+      $('sspBox').style.display = tpl === 'secspot' ? 'block' : 'none';
       $('linBox').style.display = tpl === 'lines' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
@@ -1944,30 +2015,47 @@
     // picker holds an industry the card will draw. The other order would
     // send a name the cut has emptied, and the card would fall back to the
     // largest while the picker still showed the old one.
-    function fillIspNames() {
-      const keep = $('ispName').value;
-      const list = Cards.industryList(stocks, $('ispSp500').value || 'All');
+    const fillIspNames = () => fillGroupNames('ispName', 'ispSp500', Cards.industryList, true);
+    const fillSspNames = () => fillGroupNames('sspName', 'sspSp500', Cards.sectorList, false);
+    function fillGroupNames(nameId, cutId, listOf, bySector) {
+      const keep = $(nameId).value;
+      const list = listOf(stocks, $(cutId).value || 'All');
+      if (!bySector) {
+        // Eleven sectors need no grouping: one flat list, largest first.
+        $(nameId).innerHTML = list.map((g) =>
+          `<option value="${esc(g.name)}">${esc(g.name)} · ${g.n}</option>`).join('');
+        if (list.some((g) => g.name === keep)) $(nameId).value = keep;
+        else if (list.length) $(nameId).value = list[0].name;
+        return;
+      }
       const bySec = new Map();
       for (const g of list) {
         const k = g.sector || 'Other';
         if (!bySec.has(k)) bySec.set(k, []);
         bySec.get(k).push(g);
       }
-      $('ispName').innerHTML = [...bySec.keys()].sort().map((k) => `<optgroup label="${esc(k)}">` +
+      $(nameId).innerHTML = [...bySec.keys()].sort().map((k) => `<optgroup label="${esc(k)}">` +
         bySec.get(k).map((g) => `<option value="${esc(g.name)}">${esc(g.name)} · ${g.n}</option>`).join('') +
         '</optgroup>').join('');
-      if (list.some((g) => g.name === keep)) $('ispName').value = keep;
-      else if (list.length) $('ispName').value = list[0].name;
+      if (list.some((g) => g.name === keep)) $(nameId).value = keep;
+      else if (list.length) $(nameId).value = list[0].name;
     }
     $('ispSp500').addEventListener('change', fillIspNames);
+    $('sspSp500').addEventListener('change', fillSspNames);
+    ['sspName', 'sspWin', 'sspSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'secspot') render(); }));
     ['ispName', 'ispWin', 'ispSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'indspot') render(); }));
     // Industries: its own listener list too, and its measures from the module.
     ['indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector',
       'indCap', 'indScreen', 'indSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'industries') render(); }));
-    (function fillIndMetrics() {
-      const sel = $('indMetric');
+    ['secMetric', 'secDir', 'secCount', 'secWeight', 'secScope',
+      'secCap', 'secScreen', 'secSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'sectors') render(); }));
+    // One catalogue, two pickers: the Sectors card reads the same measures.
+    ['indMetric', 'secMetric'].forEach(function fillIndMetrics(selId) {
+      const sel = $(selId);
       const groups = new Map();
       for (const [v, label, grp] of Cards.indMetrics()) {
         if (!groups.has(grp)) {
@@ -1977,7 +2065,7 @@
         groups.get(grp).appendChild(new Option(label, v));
       }
       sel.value = 'm1';
-    }());
+    });
     // Bars: ITS OWN hardcoded listener list, like every template above. A
     // control missing from it saves with a post and does nothing when touched.
     ['barMetric', 'barDir', 'barCount', 'barScope', 'barSector',
@@ -2105,6 +2193,8 @@
       // as an option only under its own index cut.
       set('ispSp500');
       fillIspNames();
+      set('sspSp500');
+      fillSspNames();
       Object.keys(opts).forEach(set);
       // A post stores only its own template's stock; the sibling views follow it.
       if (spotView(tpl)) spotSyncFrom(spotView(tpl)[2]);
@@ -2400,6 +2490,7 @@
         $('shrtScope').innerHTML = $('movScope').innerHTML;
         $('barScope').innerHTML = $('movScope').innerHTML;
         $('indScope').innerHTML = $('movScope').innerHTML;
+        $('secScope').innerHTML = $('movScope').innerHTML;
         $('linScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
@@ -2430,7 +2521,7 @@
           Filters.CAP_ORDER.map((n) => `<option value="${esc(n)}">${esc(n)} · ` +
             `${esc(Filters.CAP_RANGE[n])}</option>`).join('');
         ['movCap', 'chtCap', 'advCap', 'fundCap', 'spkCap', 'rngCap',
-          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap', 'linCap', 'indCap'].forEach((id) => {
+          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap', 'linCap', 'indCap', 'secCap'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = capOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -2446,7 +2537,7 @@
             list.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') +
             '</optgroup>').join('');
         ['movScreen', 'chtScreen', 'advScreen', 'fundScreen', 'spkScreen', 'rngScreen',
-          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen', 'linScreen', 'indScreen'].forEach((id) => {
+          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen', 'linScreen', 'indScreen', 'secScreen'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = scrOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -2462,7 +2553,7 @@
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
           'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500',
-          'shrtSp500', 'barSp500', 'linSp500', 'indSp500', 'ispSp500'].forEach((id) => {
+          'shrtSp500', 'barSp500', 'linSp500', 'indSp500', 'ispSp500', 'secSp500', 'sspSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -2471,6 +2562,7 @@
         // them. Below the index fill on purpose: a cut kept across a reload
         // is back in its picker by now.
         fillIspNames();
+        fillSspNames();
         // FROM THE MODULE, never a copy in the markup: a key tplDay does not
         // know falls back to Today and draws the wrong window with nothing
         // saying so. The spCuts bargain.
