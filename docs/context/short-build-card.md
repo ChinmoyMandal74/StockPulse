@@ -46,3 +46,12 @@ The only axis two companies can share: a share count favours whoever has more sh
 - The signal is printed as the word alone, the Movers card's precedent; the rule that fired is on the screener and the stock page.
 - Controls now `sbaPage`, `sbaDir`, `sbaRank`, `sbaCount`, `sbaFloor`, `sbaSp500` (205 of 300).
 - Verified: 19 checks (`sb2-test.js`), the signals compared against the engine's own answer for each fixture row. **Not rendered.** New and unseen: a fourth column on the row (the signal), whose width is set from the longest word on the card, and "Strong – Elevated Risk" is long.
+
+### Column headings on both pages (2026-10-10, the owner on the first page two drawn: "it is hard to know what number is what")
+Neither page had headings, so the blue percentage, the bar and the figure were unlabelled, and page two's loose key line ("past month, price only · 3 up · 5 down … S&P 500 +2.7%") sat over nothing in particular.
+
+- **The headings are a ROW OF THE SAME GRID, inside `.bx-rows`** (`.bx-r.sb-hd`), so each sits over its own column whatever the widths come to. Page two's heading row is given the same inline `grid-template-columns` string as its data rows (one `cols` constant); page one's takes the default columns and the shared `--bxv`.
+- Page one: `Company · change in shares short` | `Short position, % of the float` | `Before → after`. Page two: `Company · change in shares short` | `Price, past month` (spanning the bar AND its figure, which are one reading) | `Signal`.
+- **"change in shares short" is printed in the chip's own colour**, which is what ties the heading to the number it names.
+- Page two's key line is gone; its counts and the index figure open the note instead ("3 rose and 5 fell over the past month, against +2.7% for the S&P 500.").
+- The heading row is one more child of a container that spreads its rows evenly, so it costs each artboard about one row's worth of spacing. **Not re-measured**: check twelve rows on the portrait and eight on the square.

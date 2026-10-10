@@ -7254,7 +7254,7 @@
         const w = r.ret == null ? 0 : Math.abs(r.ret) / span * 100;
         const left = r.ret == null ? 0 : (r.ret < 0 ? zero - w : zero);
         const cls = r.ret == null ? '' : (r.ret < 0 ? ' bx-dn' : ' bx-up');
-        return '<div class="bx-r" style="font-size:' + SZp.f + 'px;grid-template-columns:minmax(0,34%) minmax(0,1fr) ' + rw + 'px ' + sw + 'px">'
+        return '<div class="bx-r" style="font-size:' + SZp.f + 'px;grid-template-columns:' + cols + '">'
           + '<span class="bx-n ix-n"><span class="ix-t">' + esc(r.x.name) + '</span>'
           + '<span class="ix-c" style="color:' + C + '">' + esc(chg) + '</span></span>'
           + '<span class="bx-t" style="height:' + SZp.b + 'px">'
@@ -7268,19 +7268,23 @@
       const up = have.filter((r) => r.ret > 0).length, dn = have.filter((r) => r.ret < 0).length;
       const idx = stocks.find((s) => s && s.symbol === 'SPY');
       const idxRet = idx ? num(idx.oneMonthPct) : null;
-      const key2 = '<div class="sb-key"><span>' + esc('past month, price only') + '</span>'
-        + '<span>' + esc(up + ' up \u00b7 ' + dn + ' down') + '</span>'
-        + '<span class="sb-ax">' + esc(idxRet == null ? 'the signal, as of the latest close' : 'S&P 500 ' + rfig(idxRet)) + '</span></div>';
+      const cols = 'minmax(0,34%) minmax(0,1fr) ' + rw + 'px ' + sw + 'px';
+      // The price heading spans the bar AND its figure: they are one reading.
+      const hd2 = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '">'
+        + '<span>Company <b style="color:' + C + '">\u00b7 change in shares short</b></span>'
+        + '<span style="grid-column:2 / 4">Price, past month</span>'
+        + '<span class="sb-hr">Signal</span></div>';
       const head2 = '<span class="s-kick">' + esc(cutKick(cut) + ' \u00b7 ' + (covers ? 'biggest covers' : 'biggest builds') + ' \u00b7 ' + win) + '</span>'
         + '<h2 class="s-title">' + esc(covers ? 'Shorts covered' : 'Shorts built')
         + '<span class="dim">' + esc('the same companies: past month, and the signal') + '</span></h2>';
-      const note2 = 'The same ' + top.length + ' companies as the first page, in the same order; the percentage after each name is the change in shares short. '
+      const note2 = up + ' rose and ' + dn + ' fell over the past month' + (idxRet == null ? '' : ', against ' + rfig(idxRet) + ' for the S&P 500') + '. '
+        + 'The same ' + top.length + ' companies as the first page, in the same order. '
         + 'The short reports end on ' + dayStr(d.to) + ' and the month runs to the latest close, so most of that month is after the second report. '
         + 'The signal is what the fixed rules read for each company today: a mechanical reading of its trend and fundamentals, which does not use short interest. '
         + 'This is a list of ' + top.length + ' companies, not a test of anything, and none of it is a forecast.';
       return chromeTop()
-        + '<div class="s-body"><div class="bx-in">' + head2 + key2
-        + '<div class="bx-rows">' + list.map(prow).join('') + '</div>'
+        + '<div class="s-body"><div class="bx-in">' + head2
+        + '<div class="bx-rows">' + hd2 + list.map(prow).join('') + '</div>'
         + '<p class="s-sub wide" style="--fs:17px">' + esc(note2) + '</p>'
         + '</div></div>' + chromeFoot();
     }
@@ -7324,7 +7328,16 @@
 
     return chromeTop()
       + '<div class="s-body"><div class="bx-in">' + head + key
-      + '<div class="bx-rows" style="--bxv:' + vw + 'px">' + top.map(row).join('') + '</div>'
+      // THE HEADINGS ARE A ROW OF THE SAME GRID, inside the same container, so
+      // each sits over its own column whatever the widths come to. The first
+      // card drawn had none, and a reader could not tell the blue percentage
+      // from the bar from the figures (the owner: "it is hard to know what
+      // number is what"). The words "shares short" take the chip's own colour,
+      // which is what ties the heading to the number it names.
+      + '<div class="bx-rows" style="--bxv:' + vw + 'px">'
+      + '<div class="bx-r sb-hd"><span>Company <b style="color:' + C + '">\u00b7 change in shares short</b></span>'
+      + '<span>Short position, % of the float</span><span class="sb-hr">Before \u2192 after</span></div>'
+      + top.map(row).join('') + '</div>'
       + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();
   }
@@ -8092,6 +8105,14 @@
     .sb-key .sb-ax { margin-left: auto; color: var(--faint); }
     /* Page two's signal word: a step under the row's own size, never wrapped,
        since one of the six is long and a wrapped row is twice as tall. */
+    /* The heading row: small, quiet, and on the rows' own columns. */
+    .sb-hd { font: 600 15px var(--mono); text-transform: uppercase; letter-spacing: 0.07em;
+             color: var(--faint); align-items: end; }
+    .sb-hd > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sb-hd b { font-weight: 600; }
+    .sb-hd .sb-hr { text-align: right; }
+    .sz-square .sb-hd { font-size: 13px; }
+    .sz-story .sb-hd { font-size: 20px; }
     .sb-sig { font-size: .8em; font-weight: 600; white-space: nowrap; text-align: right;
               overflow: hidden; text-overflow: ellipsis; }
     .sz-story .sb-key { font-size: 23px; }
