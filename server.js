@@ -985,193 +985,6 @@ app.get('/blog/img/:id', route(async (req, res, next) => {
   res.send(img.bytes);
 }));
 
-// ---- Instagram --------------------------------------------------------------
-// The studio's "Post to Instagram" (2026-10-10). The rules and the request
-// shapes are in instagram.js; this makes the calls and keeps the record.
-//
-// NOTHING HERE POSTS BY ITSELF. There is no cron and no queue: a post happens
-// when an admin presses the button in the studio and then confirms what the
-// dry run showed them. A post is public the moment it lands and Instagram
-// has no "unpublish" in this API, so the dry run is the confirmation and the
-// real call is a second, separate request.
-//
-// THE TOKEN NEVER LEAVES THE SERVER and is never logged: it travels in a
-// header (in the query string only for the refresh call, which takes it no
-// other way), and an error is reported in Instagram's words, not as a URL.
-const Instagram = require('./instagram.js');
-const IG_USER_ID = String(process.env.IG_USER_ID || '').trim();
-const IG_ENV_TOKEN = String(process.env.IG_ACCESS_TOKEN || '').trim();
-const IG_VER = String(process.env.IG_API_VERSION || 'v23.0').trim();
-const IG_READY = !!(IG_ENV_TOKEN && /^\d+$/.test(IG_USER_ID));
-// A mark of the environment's token, never the token: it is what lets a
-// stored, refreshed token say which one it descends from.
-const IG_MARK = IG_ENV_TOKEN ? crypto.createHash('sha256').update(IG_ENV_TOKEN).digest('hex').slice(0, 16) : null;
-const IG_AGAIN_MS = 10 * 60 * 1000;      // the same pictures twice inside this is a double click
-const IG_WAIT_MS = 25000;                // how long a container may take to be ready
-
-async function igCall(method, path, params, token, opts = {}) {
-  const url = new URL(Instagram.HOST + (opts.bare ? '' : '/' + IG_VER) + path);
-  const init = { method, headers: {}, signal: AbortSignal.timeout(opts.timeout || 20000) };
-  if (token) init.headers.Authorization = 'Bearer ' + token;
-  if (method === 'GET') {
-    for (const k of Object.keys(params || {})) url.searchParams.set(k, params[k]);
-  } else {
-    init.headers['Content-Type'] = 'application/x-www-form-urlencoded';
-    init.body = new URLSearchParams(params || {}).toString();
-  }
-  let r;
-  // The driver's message can carry the address, and the refresh call's
-  // address carries the token. Ours carries neither.
-  try { r = await fetch(url, init); } catch (e) {
-    throw new Error(e && e.name === 'TimeoutError' ? 'Instagram did not answer in time.' : 'Instagram could not be reached.');
-  }
-  const j = await r.json().catch(() => null);
-  if (!r.ok || !j || j.error) throw new Error(Instagram.errorText(j, r.status));
-  return j;
-}
-
-// The live token, refreshed when it is due. A failed READ of the chain
-// throws rather than being taken for "nothing stored": treating it as a
-// first sight would overwrite a refreshed token with nothing.
-async function igToken() {
-  if (!IG_READY) return { token: null };
-  const stored = await store.readIgToken();
-  const plan = Instagram.tokenPlan(IG_ENV_TOKEN, IG_MARK, stored);
-  if (plan.firstSeen) {
-    await store.writeIgToken({ from: IG_MARK, at: plan.at, token: null, expires: null });
-    return { token: plan.token, expires: null };
-  }
-  if (!plan.due) return { token: plan.token, expires: plan.expires };
-  try {
-    const j = await igCall('GET', '/refresh_access_token',
-      { grant_type: 'ig_refresh_token', access_token: plan.token }, null, { bare: true });
-    if (!j.access_token) throw new Error('the refresh returned no token');
-    const expires = Date.now() + Number(j.expires_in || 0) * 1000;
-    await store.writeIgToken({ from: IG_MARK, at: Date.now(), token: String(j.access_token), expires });
-    console.log('instagram: token refreshed, good until ' + new Date(expires).toISOString().slice(0, 10));
-    return { token: String(j.access_token), expires, refreshed: true };
-  } catch (e) {
-    console.warn('instagram: token refresh failed:', e.message);
-    return { token: plan.token, expires: plan.expires, refreshError: e.message };
-  }
-}
-
-// A container is ready when Instagram has fetched and accepted the picture.
-async function igReady(containerId, token, until) {
-  for (;;) {
-    const j = await igCall('GET', '/' + containerId, { fields: 'status_code,status' }, token);
-    if (j.status_code === 'FINISHED' || j.status_code === 'PUBLISHED') return;
-    if (j.status_code === 'ERROR' || j.status_code === 'EXPIRED') {
-      throw new Error('Instagram could not use the picture' + (j.status ? ': ' + String(j.status).slice(0, 200) : '.'));
-    }
-    if (Date.now() > until) throw new Error('Instagram was still preparing the picture after '
-      + Math.round(IG_WAIT_MS / 1000) + ' seconds. Nothing was posted; try again in a minute.');
-    await new Promise((ok) => setTimeout(ok, 1200));
-  }
-}
-
-// Who the token posts as, how much of the day's allowance is used, and the
-// last few posts. Read-only: this is also the check that the token works.
-app.get('/api/admin/instagram', requireAdmin, route(async (req, res) => {
-  const recent = await store.listIgPosts(8).catch(() => []);
-  const limits = { caption: Instagram.CAPTION_MAX, pictures: Instagram.CAROUSEL_MAX };
-  if (!IG_READY) return res.json({ configured: false, recent, limits });
-  try {
-    const t = await igToken();
-    const [me, quota] = await Promise.all([
-      igCall('GET', '/me', { fields: 'user_id,username,account_type' }, t.token),
-      igCall('GET', '/' + IG_USER_ID + '/content_publishing_limit', { fields: 'quota_usage,config' }, t.token).catch(() => null),
-    ]);
-    const q = quota && quota.data && quota.data[0];
-    res.json({ configured: true, username: me.username || null, accountType: me.account_type || null,
-      // The token must belong to the account the id names, or a post would go
-      // somewhere other than where this says.
-      idMatches: me.user_id == null ? null : String(me.user_id) === IG_USER_ID,
-      used: q ? Number(q.quota_usage) : null, allowed: q && q.config ? Number(q.config.quota_total) : null,
-      expires: t.expires || null, refreshError: t.refreshError || null, recent, limits });
-  } catch (e) {
-    res.json({ configured: true, error: e.message, recent, limits });
-  }
-}));
-
-// { images: [{ id, w, h }], caption, dry, again }
-//
-// `dry` checks everything and posts nothing; the studio shows what it
-// returns and asks. `again` allows the same pictures a second time inside
-// ten minutes, which is otherwise taken for a double click.
-app.post('/api/admin/instagram/post', requireAdmin, route(async (req, res) => {
-  if (!IG_READY) return res.status(503).json({ error: 'Instagram is not connected on this server: IG_ACCESS_TOKEN and IG_USER_ID are not set.' });
-  const caption = String(req.body?.caption || '').replace(/\r\n/g, '\n').trim();
-  const asked = Array.isArray(req.body?.images) ? req.body.images.slice(0, Instagram.CAROUSEL_MAX + 1) : [];
-  const images = [];
-  for (const a of asked) {
-    const id = String((a && a.id) || '');
-    const stored = Instagram.isImageId(id) ? await store.readPostImage(id) : null;
-    if (!stored) return res.status(400).json({ error: 'One of the pictures is not in the image store. Add the card again.' });
-    images.push({ id, mime: stored.mime, w: Number(a.w) || 0, h: Number(a.h) || 0 });
-  }
-  const wrong = Instagram.problem(images, caption);
-  if (wrong) return res.status(400).json({ error: wrong });
-  // Instagram fetches from a public address, which a local server is not.
-  const base = APP_URL || ('https://' + req.get('host'));
-  const urls = images.map((im) => Instagram.imageUrl(base, im.id));
-  if (urls.some((u) => !u)) {
-    return res.status(400).json({ error: 'Instagram fetches the picture from a public address, and this server is not at one. Post from the live site.' });
-  }
-  const ids = images.map((im) => im.id);
-  if (!req.body?.again) {
-    const recent = await store.listIgPosts(20);
-    const dup = recent.find((p) => Date.now() - p.at < IG_AGAIN_MS && p.images.join() === ids.join());
-    if (dup) {
-      return res.status(409).json({ error: 'These pictures were posted '
-        + Math.max(1, Math.round((Date.now() - dup.at) / 60000)) + ' minute(s) ago.', permalink: dup.permalink, duplicate: true });
-    }
-  }
-  let t, me;
-  try {
-    t = await igToken();
-    me = await igCall('GET', '/me', { fields: 'user_id,username' }, t.token);
-  } catch (e) { return res.status(502).json({ error: e.message }); }
-  if (me.user_id != null && String(me.user_id) !== IG_USER_ID) {
-    return res.status(409).json({ error: 'The access token belongs to @' + me.username + ', which is not the account IG_USER_ID names. Nothing was posted.' });
-  }
-  if (req.body?.dry) {
-    return res.json({ ok: true, dry: true, username: me.username, pictures: images.length, captionLength: [...caption].length });
-  }
-  let mediaId = null;
-  try {
-    const until = Date.now() + IG_WAIT_MS;
-    const single = images.length === 1;
-    const made = [];
-    // In order, not at once: the carousel is in the order the children are named.
-    for (const url of urls) {
-      const c = await igCall('POST', '/' + IG_USER_ID + '/media', Instagram.itemParams(url, single, caption), t.token);
-      await igReady(c.id, t.token, until);
-      made.push(c.id);
-    }
-    let creation = made[0];
-    if (!single) {
-      const c = await igCall('POST', '/' + IG_USER_ID + '/media', Instagram.carouselParams(made, caption), t.token);
-      await igReady(c.id, t.token, until);
-      creation = c.id;
-    }
-    const pub = await igCall('POST', '/' + IG_USER_ID + '/media_publish', { creation_id: creation }, t.token, { timeout: 30000 });
-    mediaId = String(pub.id);
-  } catch (e) {
-    return res.status(502).json({ error: e.message });
-  }
-  // PUBLISHED. From here nothing may report a failure: the post is up, and
-  // an error now would invite a second one.
-  let permalink = null;
-  try { permalink = (await igCall('GET', '/' + mediaId, { fields: 'permalink' }, t.token)).permalink || null; } catch { /* the link is a courtesy */ }
-  let recorded = true;
-  try {
-    await store.writeIgPost({ at: Date.now(), mediaId, permalink, caption, images: ids, by: await actKey(req) });
-  } catch (e) { recorded = false; console.warn('instagram: posted but not recorded:', e.message); }
-  logAct(req, 'instagram', `${images.length}:${mediaId}`);
-  res.json({ ok: true, mediaId, permalink, username: me.username, pictures: images.length, recorded });
-}));
-
 // ---- the mailing list -------------------------------------------------------
 // WHAT CAN BE SENT, defined once. Adding a second mailing is an entry here plus
 // something that sends it; the column on the row is a JSON array from day one
@@ -9992,6 +9805,193 @@ app.post('/api/admin/posts/image', requireAdmin, route(async (req, res) => {
   const saved = await store.writePostImage({ id, mime, bytes });
   logAct(req, 'post', `image:${id.slice(0, 12)}`);
   res.json({ ok: true, ...saved, url: `/blog/img/${id}` });
+}));
+
+// ---- Instagram --------------------------------------------------------------
+// The studio's "Post to Instagram" (2026-10-10). The rules and the request
+// shapes are in instagram.js; this makes the calls and keeps the record.
+//
+// NOTHING HERE POSTS BY ITSELF. There is no cron and no queue: a post happens
+// when an admin presses the button in the studio and then confirms what the
+// dry run showed them. A post is public the moment it lands and Instagram
+// has no "unpublish" in this API, so the dry run is the confirmation and the
+// real call is a second, separate request.
+//
+// THE TOKEN NEVER LEAVES THE SERVER and is never logged: it travels in a
+// header (in the query string only for the refresh call, which takes it no
+// other way), and an error is reported in Instagram's words, not as a URL.
+const Instagram = require('./instagram.js');
+const IG_USER_ID = String(process.env.IG_USER_ID || '').trim();
+const IG_ENV_TOKEN = String(process.env.IG_ACCESS_TOKEN || '').trim();
+const IG_VER = String(process.env.IG_API_VERSION || 'v23.0').trim();
+const IG_READY = !!(IG_ENV_TOKEN && /^\d+$/.test(IG_USER_ID));
+// A mark of the environment's token, never the token: it is what lets a
+// stored, refreshed token say which one it descends from.
+const IG_MARK = IG_ENV_TOKEN ? crypto.createHash('sha256').update(IG_ENV_TOKEN).digest('hex').slice(0, 16) : null;
+const IG_AGAIN_MS = 10 * 60 * 1000;      // the same pictures twice inside this is a double click
+const IG_WAIT_MS = 25000;                // how long a container may take to be ready
+
+async function igCall(method, path, params, token, opts = {}) {
+  const url = new URL(Instagram.HOST + (opts.bare ? '' : '/' + IG_VER) + path);
+  const init = { method, headers: {}, signal: AbortSignal.timeout(opts.timeout || 20000) };
+  if (token) init.headers.Authorization = 'Bearer ' + token;
+  if (method === 'GET') {
+    for (const k of Object.keys(params || {})) url.searchParams.set(k, params[k]);
+  } else {
+    init.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    init.body = new URLSearchParams(params || {}).toString();
+  }
+  let r;
+  // The driver's message can carry the address, and the refresh call's
+  // address carries the token. Ours carries neither.
+  try { r = await fetch(url, init); } catch (e) {
+    throw new Error(e && e.name === 'TimeoutError' ? 'Instagram did not answer in time.' : 'Instagram could not be reached.');
+  }
+  const j = await r.json().catch(() => null);
+  if (!r.ok || !j || j.error) throw new Error(Instagram.errorText(j, r.status));
+  return j;
+}
+
+// The live token, refreshed when it is due. A failed READ of the chain
+// throws rather than being taken for "nothing stored": treating it as a
+// first sight would overwrite a refreshed token with nothing.
+async function igToken() {
+  if (!IG_READY) return { token: null };
+  const stored = await store.readIgToken();
+  const plan = Instagram.tokenPlan(IG_ENV_TOKEN, IG_MARK, stored);
+  if (plan.firstSeen) {
+    await store.writeIgToken({ from: IG_MARK, at: plan.at, token: null, expires: null });
+    return { token: plan.token, expires: null };
+  }
+  if (!plan.due) return { token: plan.token, expires: plan.expires };
+  try {
+    const j = await igCall('GET', '/refresh_access_token',
+      { grant_type: 'ig_refresh_token', access_token: plan.token }, null, { bare: true });
+    if (!j.access_token) throw new Error('the refresh returned no token');
+    const expires = Date.now() + Number(j.expires_in || 0) * 1000;
+    await store.writeIgToken({ from: IG_MARK, at: Date.now(), token: String(j.access_token), expires });
+    console.log('instagram: token refreshed, good until ' + new Date(expires).toISOString().slice(0, 10));
+    return { token: String(j.access_token), expires, refreshed: true };
+  } catch (e) {
+    console.warn('instagram: token refresh failed:', e.message);
+    return { token: plan.token, expires: plan.expires, refreshError: e.message };
+  }
+}
+
+// A container is ready when Instagram has fetched and accepted the picture.
+async function igReady(containerId, token, until) {
+  for (;;) {
+    const j = await igCall('GET', '/' + containerId, { fields: 'status_code,status' }, token);
+    if (j.status_code === 'FINISHED' || j.status_code === 'PUBLISHED') return;
+    if (j.status_code === 'ERROR' || j.status_code === 'EXPIRED') {
+      throw new Error('Instagram could not use the picture' + (j.status ? ': ' + String(j.status).slice(0, 200) : '.'));
+    }
+    if (Date.now() > until) throw new Error('Instagram was still preparing the picture after '
+      + Math.round(IG_WAIT_MS / 1000) + ' seconds. Nothing was posted; try again in a minute.');
+    await new Promise((ok) => setTimeout(ok, 1200));
+  }
+}
+
+// Who the token posts as, how much of the day's allowance is used, and the
+// last few posts. Read-only: this is also the check that the token works.
+app.get('/api/admin/instagram', requireAdmin, route(async (req, res) => {
+  const recent = await store.listIgPosts(8).catch(() => []);
+  const limits = { caption: Instagram.CAPTION_MAX, pictures: Instagram.CAROUSEL_MAX };
+  if (!IG_READY) return res.json({ configured: false, recent, limits });
+  try {
+    const t = await igToken();
+    const [me, quota] = await Promise.all([
+      igCall('GET', '/me', { fields: 'user_id,username,account_type' }, t.token),
+      igCall('GET', '/' + IG_USER_ID + '/content_publishing_limit', { fields: 'quota_usage,config' }, t.token).catch(() => null),
+    ]);
+    const q = quota && quota.data && quota.data[0];
+    res.json({ configured: true, username: me.username || null, accountType: me.account_type || null,
+      // The token must belong to the account the id names, or a post would go
+      // somewhere other than where this says.
+      idMatches: me.user_id == null ? null : String(me.user_id) === IG_USER_ID,
+      used: q ? Number(q.quota_usage) : null, allowed: q && q.config ? Number(q.config.quota_total) : null,
+      expires: t.expires || null, refreshError: t.refreshError || null, recent, limits });
+  } catch (e) {
+    res.json({ configured: true, error: e.message, recent, limits });
+  }
+}));
+
+// { images: [{ id, w, h }], caption, dry, again }
+//
+// `dry` checks everything and posts nothing; the studio shows what it
+// returns and asks. `again` allows the same pictures a second time inside
+// ten minutes, which is otherwise taken for a double click.
+app.post('/api/admin/instagram/post', requireAdmin, route(async (req, res) => {
+  if (!IG_READY) return res.status(503).json({ error: 'Instagram is not connected on this server: IG_ACCESS_TOKEN and IG_USER_ID are not set.' });
+  const caption = String(req.body?.caption || '').replace(/\r\n/g, '\n').trim();
+  const asked = Array.isArray(req.body?.images) ? req.body.images.slice(0, Instagram.CAROUSEL_MAX + 1) : [];
+  const images = [];
+  for (const a of asked) {
+    const id = String((a && a.id) || '');
+    const stored = Instagram.isImageId(id) ? await store.readPostImage(id) : null;
+    if (!stored) return res.status(400).json({ error: 'One of the pictures is not in the image store. Add the card again.' });
+    images.push({ id, mime: stored.mime, w: Number(a.w) || 0, h: Number(a.h) || 0 });
+  }
+  const wrong = Instagram.problem(images, caption);
+  if (wrong) return res.status(400).json({ error: wrong });
+  // Instagram fetches from a public address, which a local server is not.
+  const base = APP_URL || ('https://' + req.get('host'));
+  const urls = images.map((im) => Instagram.imageUrl(base, im.id));
+  if (urls.some((u) => !u)) {
+    return res.status(400).json({ error: 'Instagram fetches the picture from a public address, and this server is not at one. Post from the live site.' });
+  }
+  const ids = images.map((im) => im.id);
+  if (!req.body?.again) {
+    const recent = await store.listIgPosts(20);
+    const dup = recent.find((p) => Date.now() - p.at < IG_AGAIN_MS && p.images.join() === ids.join());
+    if (dup) {
+      return res.status(409).json({ error: 'These pictures were posted '
+        + Math.max(1, Math.round((Date.now() - dup.at) / 60000)) + ' minute(s) ago.', permalink: dup.permalink, duplicate: true });
+    }
+  }
+  let t, me;
+  try {
+    t = await igToken();
+    me = await igCall('GET', '/me', { fields: 'user_id,username' }, t.token);
+  } catch (e) { return res.status(502).json({ error: e.message }); }
+  if (me.user_id != null && String(me.user_id) !== IG_USER_ID) {
+    return res.status(409).json({ error: 'The access token belongs to @' + me.username + ', which is not the account IG_USER_ID names. Nothing was posted.' });
+  }
+  if (req.body?.dry) {
+    return res.json({ ok: true, dry: true, username: me.username, pictures: images.length, captionLength: [...caption].length });
+  }
+  let mediaId = null;
+  try {
+    const until = Date.now() + IG_WAIT_MS;
+    const single = images.length === 1;
+    const made = [];
+    // In order, not at once: the carousel is in the order the children are named.
+    for (const url of urls) {
+      const c = await igCall('POST', '/' + IG_USER_ID + '/media', Instagram.itemParams(url, single, caption), t.token);
+      await igReady(c.id, t.token, until);
+      made.push(c.id);
+    }
+    let creation = made[0];
+    if (!single) {
+      const c = await igCall('POST', '/' + IG_USER_ID + '/media', Instagram.carouselParams(made, caption), t.token);
+      await igReady(c.id, t.token, until);
+      creation = c.id;
+    }
+    const pub = await igCall('POST', '/' + IG_USER_ID + '/media_publish', { creation_id: creation }, t.token, { timeout: 30000 });
+    mediaId = String(pub.id);
+  } catch (e) {
+    return res.status(502).json({ error: e.message });
+  }
+  // PUBLISHED. From here nothing may report a failure: the post is up, and
+  // an error now would invite a second one.
+  let permalink = null;
+  try { permalink = (await igCall('GET', '/' + mediaId, { fields: 'permalink' }, t.token)).permalink || null; } catch { /* the link is a courtesy */ }
+  let recorded = true;
+  try {
+    await store.writeIgPost({ at: Date.now(), mediaId, permalink, caption, images: ids, by: await actKey(req) });
+  } catch (e) { recorded = false; console.warn('instagram: posted but not recorded:', e.message); }
+  logAct(req, 'instagram', `${images.length}:${mediaId}`);
+  res.json({ ok: true, mediaId, permalink, username: me.username, pictures: images.length, recorded });
 }));
 
 app.get('/api/admin/posts/images', requireAdmin, route(async (req, res) => {
