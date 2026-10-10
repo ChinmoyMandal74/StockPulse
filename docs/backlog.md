@@ -1581,6 +1581,67 @@ present and lying.
 
 ---
 
+## 34. Corrections, for the market and for each stock — 2026-10-10
+
+*Area: Screener · Status: Open · Note: five pieces; the first two are cheap and need no new data*
+
+**The gap, in the owner's words:** "There is nothing in my app about market
+and individual stock corrections." That is true of the vocabulary and the
+history, though not of the raw material. The screener already has
+`% from 52W hi` (`pctFromHigh`), `% from record` (`pctFromAth`), the Ulcer
+index (the root-mean-square drawdown) and the Market selloff and Market
+rally columns in Reactions. Nothing names a correction, nothing shows one
+over time, and no card is about one.
+
+Five pieces, proposed by the assistant on 2026-10-10 and filed at the
+owner's request. None is built.
+
+**a. A correction status, for each index and each stock.** A label from the
+distance below the high, on the usual thresholds: within 5% is near the
+high, 5 to 10% a pullback, 10 to 20% a correction, 20% or more a bear
+market. On the market Snapshot for the indexes; a filterable screener
+column for stocks, so "everything in a correction" is one filter. A small
+build on `pctFromHigh`. To decide first: measured from the 52-week high or
+from the record, since the two disagree for a stock two years off its peak.
+
+**b. A breadth-of-corrections card.** "The S&P 500 is 3% from its high, but
+41% of its companies are in a correction and 18% in a bear market." Counts
+of (a) across a cut, beside the index's own distance. No new data. Close
+kin to entry 27 (the index against its own breadth) and to the Signal
+card's pyramid; check it says something those two do not.
+
+**c. A drawdown history for one stock or index.** An underwater chart: how
+far below its running high the price sat on each day, with every drawdown
+of 10% or more marked with its depth, the days to the bottom and the days
+to recover. On the stock page and as a promo card. The bar archive holds
+the closes; the cost is a per-symbol read of the whole series, so it is
+computed on request for one symbol, never across the table.
+
+**d. Correction columns per stock.** Days since the high, the deepest
+drawdown in the past year, and the number of 10% drawdowns in three years.
+They belong in Reactions beside Market selloff. Computed from bars in the
+nightly pass like the other bar-derived readings, not on the read path.
+
+**e. The market's own correction history.** A table and a card of every
+S&P 500 correction the archive covers: start, bottom, depth, days down,
+days to recover. Its use is context while one is happening ("this one is
+12% deep and 30 days old; the median was 14% and 45 days"). Limited by how
+far back the index fund's bars go, which is the first thing to measure.
+
+**Suggested order:** (a) and (b) together, since they give a column, a
+filter and a card in one pass; then (c), the richest for content and the
+largest build.
+
+**What must hold for all five.** Display only: none of it is read by
+`action.js`, proved by scoring a row with the field absent, present and
+lying. Descriptive, never predictive: a card may say what past drawdowns
+of this depth did and must not say what this one will do. A status word is
+a label for a distance, so it takes amber or neutral ink, and green and red
+stay with the price move itself. A stock with too little history to have a
+52-week high has no status, rather than "near high".
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
