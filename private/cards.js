@@ -6468,6 +6468,8 @@
     ['ath', 'pctFromAth', 'their record close', 'pct', 'Trend and position', { words: ['Closest to', 'Furthest below'], note: 'The record is the highest close since our archive begins, which for most is 2006 — not all-time.' }],
     ['rs', 'relStrength', 'strength against the S&P', 'pct', 'Trend and position', { sg: 1, plus: 1, words: ['Greatest', 'Weakest'], note: 'The stock’s own return less the index’s over the same window.' }],
     ['chip', 'chipSelloff', 'chip selloff days', 'pct', 'Trend and position', { sg: 1, plus: 1, dp: 2, words: ['Held up best on', 'Fell hardest on'], note: 'The median move on the semiconductor complex’s thirteen worst days of the past year, after the market’s own move is taken out.' }],
+    ['mdn', 'marketSelloff', 'market selloff days', 'pct', 'Trend and position', { dp: 2, words: ['Held up best on', 'Fell hardest on'], note: 'The median move on the S&P 500\u2019s thirteen worst days of the past year. Mostly a stock\u2019s sensitivity to the market, in plain terms.' }],
+    ['mup', 'marketRally', 'market rally days', 'pct', 'Trend and position', { dp: 2, plus: 1, words: ['Rose most on', 'Rose least on'], note: 'The median move on the S&P 500\u2019s thirteen best days of the past year. Mostly a stock\u2019s sensitivity to the market, in plain terms.' }],
     ['bad', 'badDay', 'bad day', 'pct', 'Trend and position', { words: ['Mildest', 'Roughest'], note: 'The worst 5% of each stock’s own daily moves over the past year. Not a forecast.' }],
     ['cush', 'actionCushion', 'cushion to the exit', 'sig', 'Trend and position', { words: ['Thickest', 'Thinnest'], note: 'Distance to where the technical rules would exit, in the stock’s own monthly volatility. It reads the size of the bad case, not the direction.' }],
     ['volx', 'volX', 'relative volume', 'x', 'Trend and position', { dp: 2, words: ['Highest', 'Lowest'], note: 'Today’s volume against the stock’s own 20-day average.' }],
@@ -6507,6 +6509,8 @@
     // that removed them would be a threshold invented here.
 
     ['shrt', 'shortPctFloat', 'short interest', 'pct', 'Ownership', { co: 1, pos: 1, words: ['Highest', 'Lowest'], note: 'Shares sold short as a share of the free float, as last reported — the figure is published twice a month.' }],
+    ['sbld', 'shortBuild', 'short interest change', 'pct', 'Ownership', { co: 1, plus: 1, words: ['Biggest build in', 'Biggest fall in'], note: 'The change in shares sold short between the two most recent reports, about a fortnight apart. The direction of the position, not its size.' }],
+    ['insn', 'insiderNet', 'insider net buying', 'pct', 'Ownership', { co: 1, plus: 1, dp: 2, words: ['Most', 'Least'], note: 'Insiders\u2019 open-market purchases less unplanned sales over 90 days, as a share of the company\u2019s market value. Most companies are net sellers: pay being turned into cash.' }],
     ['d2c', 'shortRatio', 'days to cover', 'day', 'Ownership', { co: 1, pos: 1, words: ['Most', 'Fewest'], note: 'The short position over average daily volume: how crowded the exit is, not how large the bet.' }],
     ['ins', 'insiderPct', 'insider ownership', 'pct', 'Ownership', { co: 1, pos: 1, words: ['Highest', 'Lowest'], note: 'The share held by founders, directors and management.' }],
     ['inst', 'institutionPct', 'institutional ownership', 'pct', 'Ownership', { co: 1, pos: 1, words: ['Highest', 'Lowest'], note: 'The share held by funds and institutions. It can pass 100% where shares are lent and counted twice.' }],

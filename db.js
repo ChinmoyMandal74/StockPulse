@@ -2572,6 +2572,66 @@ async function readInsider(cik, limit = 60) {
   });
 }
 
+// What each company's insiders did on the open market since a date, added up
+// per company. For the screener's Insider net column, which needs every
+// company at once -- so this is the one read here that is NOT one company.
+//
+// It is bounded by FILING DATE and rides idx_insider_filed: measured against
+// production on 2026-10-10, ninety days is 28,212 rows in 1.1s (the plan
+// reads SEARCH ... USING INDEX idx_insider_filed). That is too many rows to
+// pay on a page view, so the caller keeps the answer in app_meta and asks
+// again a few times a day -- see readFlows below.
+//
+// `INDEXED BY` IS LOAD-BEARING. Left to itself the planner satisfies the
+// `group by cik` by walking idx_insider_cik -- the WHOLE table, in company
+// order -- and applies the date as a filter afterwards. query-plan-test.js
+// caught it (SCAN insider_trans USING INDEX idx_insider_cik) before it
+// shipped; the first probe of this read had explained a simpler statement
+// without the grouping and so had not. Named, the index makes it a range
+// seek on the ninety days and nothing else.
+//
+// A SALE UNDER A PRE-ARRANGED PLAN IS LEFT OUT (planned = 1): it was
+// scheduled months earlier and says nothing about what the seller thinks
+// now, and it is 45% of all selling by value. Purchases are never planned.
+async function readInsiderNetSince(since) {
+  await init();
+  const r = await db.execute({
+    sql: `select cik,
+            sum(case when buy = 1 then value else 0 end) as bought,
+            sum(case when buy = 0 and planned = 0 then value else 0 end) as sold,
+            count(distinct case when buy = 1 then owner_cik end) as buyers,
+            count(distinct case when buy = 0 and planned = 0 then owner_cik end) as sellers
+          from insider_trans indexed by idx_insider_filed
+          where filed >= ? and code in ('P', 'S') and value > 0
+          group by cik`,
+    args: [String(since)],
+  });
+  const out = new Map();
+  for (const x of r.rows) {
+    out.set(Number(x.cik), { bought: Number(x.bought) || 0, sold: Number(x.sold) || 0,
+      buyers: Number(x.buyers) || 0, sellers: Number(x.sellers) || 0 });
+  }
+  return out;
+}
+
+// The two readings the screener stamps from tables it must not walk per
+// request -- the change in short interest and the insiders' net trades --
+// kept as one JSON value. A site setting like the tile setup beside it.
+async function readFlows() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'flows'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value); } catch { return null; }
+}
+
+async function writeFlows(obj) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('flows', ?)",
+    args: [JSON.stringify(obj || {})],
+  });
+}
+
 // ---- FINRA short interest -------------------------------------------------
 const SI_COLS = ['symbol', 'd', 'shares', 'prev', 'adv', 'dtc', 'change_pct', 'split', 'revised'];
 
@@ -5920,6 +5980,7 @@ module.exports = {
   buildLogMeta, writeBuildLogMeta,
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
   writeShortInterest, readShortInterest, readShortLatestFor, readShortAsOfFor,
+  readInsiderNetSince, readFlows, writeFlows,
   readShortRecentFor,
   readSplits, writeSplits, splitCoverage, readSplitIndex, readOnboardPending, readOnboardDone, noteOnboarded,
   readShortState, noteShortMiss, shortNewest, appendShortInterest,

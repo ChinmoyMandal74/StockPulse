@@ -98,7 +98,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 ## Area gotchas worth knowing up front
 - **Adding a screener column** means editing, in step: header cell, body cell, the group banner `colspan`, `PAD_SPAN`, the error row (`PAD_SPAN - 5`), the empty row (`PAD_SPAN - 3`), the fund `naRun` count, and one `FIELD_SPEC` row. A miscount does not throw; it slides every later value one column over. A profile field reaches the row only if `computeStocks` names it. See `column-groups.md`.
 - **Stored keys are never renamed** — group ids, `group|label` keys, card template ids, control ids, screen ids (exactly eight lowercase alphanumerics). Labels are free. Internal names still say `action` and `advice` where the UI says Signal; leave them. The field key is `act|Signal` (`act|Advice` is read as it).
-- **Read-path stamps are a set** (`stampShortNames`, `stampAdviceAge`, `stampPricedAt`, `stampCapDerived`, `stampAthDistance`, `stampSpMember`, `stampPeerValue`). Any new read path applies all of them, each with its own catch.
+- **Read-path stamps are a set** (`stampShortNames`, `stampAdviceAge`, `stampPricedAt`, `stampCapDerived`, `stampAthDistance`, `stampSpMember`, `stampFlows`, `stampPeerValue`). Any new read path applies all of them, each with its own catch.
 - **`/api/stocks` re-derives the verdict; `/api/stock` serves the stored one.** Test fixtures differ accordingly.
 - **Backtests:** one row builder (`techrow.js`); filter filings on `filed`, never `periodEnd`; the `bt*` helpers are shared by `/backtest` and `/adjustedbacktest`; `/backtest` has a two-month hard cap; maximum hold is one to two months (owner). If a result improves after the universe shrinks, suspect the universe.
 - **SEC:** this address has already had a 429 then a 403. Declared `SEC_UA`, sequential fetches, a 429 is a wait, not a retry.
@@ -131,7 +131,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Accounts and mail** — `auth-model` · `email` · `alerts` · `the-admin-announcement` · `activity-logging` · `visitor-logging` · `member-portfolios` · `saved-column-layout`
 
-**Screener front end** — `frontend-layout` · `design-system` · `table-specifics` · `column-groups` (190 KB: every column, plus tiles, views, the filter row, hidden columns) · `screens` · `analysis-screens` (retired) · `the-awesome-oscillator`
+**Screener front end** — `frontend-layout` · `design-system` · `table-specifics` · `column-groups` (190 KB: every column, plus tiles, views, the filter row, hidden columns) · `reactions-group` · `screens` · `analysis-screens` (retired) · `the-awesome-oscillator`
 
 **Fundamentals and the universe** — `fundamentals-data` · `scores-ratings` · `everything-the-profile-call-returns-is-kept-now` · `fundamentals-history` · `which-dates-the-fundamentals-actually-describe` · `the-universe-and-the-ballast-that-has-been-draining-out-of-it` · `the-universe-table` · `adding-a-stock` · `dropping-a-symbol` · `editing-portfolios-does-not-pull` · `the-nasdaq-reference-list`
 

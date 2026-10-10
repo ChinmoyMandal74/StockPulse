@@ -150,7 +150,7 @@
     const say = (m, k) => { $('said').textContent = m || ''; $('said').className = 'said' + (k ? ' ' + k : ''); };
     const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
 
-    const GROUPS = ['info', 'rank', 'act', 'short', 'long', 'rel', 'trend', 'vol', 'size', 'fund', 'own'];
+    const GROUPS = ['info', 'rank', 'act', 'short', 'long', 'rel', 'react', 'trend', 'vol', 'size', 'fund', 'own'];
     const GROUP_NAMES = RowCard.GROUP_LABELS;
     const GROUP_COLORS = RowCard.GROUP_COLORS;
     const CAT = RowCard.fieldCatalogue().filter((f) => f.group !== 'fwd' && f.group !== 'chart');

@@ -1,4 +1,6 @@
 ## SEC EDGAR — the filings, on their own card, feeding nothing (2026-09-27)
+**TWO EXCEPTIONS TO THE BOUNDARY BELOW, BY THE OWNER (2026-10-10).** This section says FINRA and insider data get no screener column. That was lifted for two readings: **Short build** and **Insider net**, in the Reactions group. See [reactions-group.md](reactions-group.md). Everything else here stays off the row, and nothing from either table reaches the Signal.
+
 
 **`/stock/<SYMBOL>` carries a `SEC EDGAR` section: the company's own filed statements, back to 2007 for a long-listed name, every row linking to the filing it came from.** Asked for after measuring the gap — `bars` holds 1.9M rows back to 2003 and **`fundamentals_history` holds 20 days**, which is why `/backtest` is capped at two months.
 

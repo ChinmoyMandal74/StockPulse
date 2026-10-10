@@ -4713,6 +4713,54 @@ function chipSelloffCtx(series, profiles, benchSym) {
   return { days: worst, rmap, basket: basket.length, sessions: dates.length };
 }
 
+// ---- Market selloff, Market rally: the same reading against the index ----
+//
+// (2026-10-10, owner's request.) What a stock typically did on the S&P 500
+// fund's own worst 5% of days in the past year, and on its best 5%. The
+// trigger is the index's RAW return -- there is nothing to adjust it for --
+// and the reading is chipSelloffOf's own median, so one junk print moves
+// neither.
+//
+// MEASURED BEFORE BUILDING, on the local archive copy, seven non-overlapping
+// one-year windows from 2019, about 1,100 stocks each. Year to year the
+// selloff reading carries over at a Spearman of 0.42 to 0.78 and the rally
+// at 0.24 to 0.65, every fold positive -- the gate Chip selloff passed at
+// 0.53. Two things the same run showed, and the column headers say both:
+//
+//   THEY ARE ONE SENSITIVITY SEEN FROM TWO SIDES. The two correlate at
+//   -0.82 with each other and at about 0.9 with a plain beta, which itself
+//   carries over better (0.60 to 0.83). These are a beta a reader can say
+//   out loud -- "fell 2.6% on the market's worst days" -- not a new fact.
+//
+//   THE GAP BETWEEN THEM IS NOT A TRAIT. "Catches the rallies and dodges
+//   the selloffs" (rally + selloff) carries over at 0.20, 0.04, 0.10, 0.10,
+//   0.09 and -0.01. A stock that looks asymmetric this year is not one
+//   that will next year, so nothing here ranks or screens on the difference.
+//
+// The index fund's own row reads its own median on those days, which is the
+// scale every other row is read against.
+function marketTailCtx(series, benchSym, rmapIn) {
+  let rmap = rmapIn;
+  if (!rmap) {
+    rmap = new Map();
+    for (const sym of Object.keys(series || {})) {
+      const v = (series[sym] || {}).values;
+      if (Array.isArray(v) && v.length > 1) rmap.set(sym, chipReturns(v));
+    }
+  }
+  const mkt = rmap.get(benchSym);
+  if (!mkt || mkt.size < CHIP_WINDOW * 0.6) return null;
+  const ranked = [...mkt].sort((a, b) => a[1] - b[1]);
+  const k = Math.max(CHIP_MIN_DAYS, Math.round(ranked.length * CHIP_TAIL));
+  // Two tails of one calendar must not share a day, or a short window would
+  // count its middle on both sides.
+  if (ranked.length < k * 2) return null;
+  return {
+    down: { rmap, days: ranked.slice(0, k).map((x) => x[0]) },
+    up: { rmap, days: ranked.slice(-k).map((x) => x[0]) },
+  };
+}
+
 // A stock's TYPICAL move on those days. Positive means it ROSE while the
 // complex was falling. Null, never zero: a stock that was not trading on
 // those days has no reading about them, and a fabricated 0.0% would read as
@@ -4944,7 +4992,119 @@ async function stampSpMember(rows) {
   }
 }
 
+// ---- Short build and Insider net: two readings from tables a row must not walk
+//
+// (2026-10-10, owner's request, lifting the earlier condition that FINRA
+// and insider data stay off the screener row. They are DISPLAY columns:
+// nothing in action.js reads either, and the engine's `shortPctFloat` still
+// comes from the profile.)
+//
+// SHORT BUILD is the change in shares sold short between the two most
+// recent FINRA settlements -- shortMovesPayload's own window, so a symbol
+// off that window and a split between the two reports are blank here for
+// the reasons recorded there.
+//
+// INSIDER NET is open-market purchases less unplanned sales over
+// INSIDER_NET_DAYS, as a percentage of the company's market value. Three
+// things measured on the live table decided its shape:
+//   raw dollars are unusable -- the filings carry values a thousand times
+//   out of scale (one company shows $1.6 QUADRILLION bought in ninety days,
+//   another $23.6B), so a side larger than INSIDER_JUNK of the company's
+//   own market value is not believed and the reading is blank;
+//   45% of selling by value is under a pre-arranged plan, which the read
+//   leaves out;
+//   selling dominates (1,897 net sellers against 805 net buyers), most of
+//   it pay being cashed in -- so the tooltip says a negative is ordinary.
+//
+// BOTH COME FROM ONE STORED VALUE (app_meta `flows`), rebuilt when it is
+// older than FLOWS_TTL_MS. The rebuild reads about 30,000 rows; a cold
+// serverless instance paying that on its first page view, every time,
+// would be most of this database's read bill. Stored, it is one row.
+const INSIDER_NET_DAYS = 90;
+const INSIDER_JUNK = 0.25;
+const FLOWS_TTL_MS = 6 * 60 * 60 * 1000;
+const FLOWS_MEM_MS = 10 * 60 * 1000;
+let flowsMem = null;
+let flowsMemAt = 0;
+async function buildFlows() {
+  const since = new Date(Date.now() - INSIDER_NET_DAYS * 86400000).toISOString().slice(0, 10);
+  const [sm, ids, net] = await Promise.all([
+    shortMovesPayload().catch(() => null),
+    filerIds().catch(() => ({})),
+    store.readInsiderNetSince(since).catch(() => null),
+  ]);
+  const short = {};
+  if (sm && sm.moves) {
+    for (const sym of Object.keys(sm.moves)) {
+      const [a, b] = sm.moves[sym];
+      if (a > 0 && b > 0) short[sym] = Math.round((b / a - 1) * 1000) / 10;
+    }
+  }
+  // By SYMBOL, through the filer id: the insider table is keyed on the
+  // issuer, and two share classes of one company carry the same trades.
+  const insider = {};
+  if (net) {
+    for (const sym of Object.keys(ids || {})) {
+      const x = net.get(Number(ids[sym]));
+      if (x) insider[sym] = [Math.round(x.bought), Math.round(x.sold), x.buyers, x.sellers];
+    }
+  }
+  return { at: Date.now(), shortFrom: sm ? sm.from : null, shortTo: sm ? sm.to : null, short,
+    // null, not {}: "the read failed" must not be stored as "nobody traded".
+    insiderSince: net ? since : null, insider: net ? insider : null };
+}
+async function flowsNow() {
+  if (flowsMem && Date.now() - flowsMemAt < FLOWS_MEM_MS) return flowsMem;
+  let f = await store.readFlows().catch(() => null);
+  if (!f || !f.at || Date.now() - f.at > FLOWS_TTL_MS) {
+    const fresh = await buildFlows();
+    // A half that failed to read keeps the stored half rather than blanking it.
+    if (f && !fresh.insider) { fresh.insider = f.insider || null; fresh.insiderSince = f.insiderSince || null; }
+    if (f && !fresh.shortTo) { fresh.short = f.short || {}; fresh.shortFrom = f.shortFrom || null; fresh.shortTo = f.shortTo || null; }
+    await store.writeFlows(fresh).catch(() => {});
+    f = fresh;
+  }
+  flowsMem = f; flowsMemAt = Date.now();
+  return f;
+}
+// PURE, so the arithmetic is testable with no database: one row, one stored
+// value. Null, never zero: a company with no trade on file has no reading,
+// which is a different statement from "its insiders netted to nothing".
+function flowsOf(row, f) {
+  const out = { shortBuild: null, insiderNet: null, insiderBuyers: null, insiderSellers: null };
+  if (!row || !f) return out;
+  const sb = f.short ? f.short[row.symbol] : null;
+  if (sb != null && isFinite(sb)) out.shortBuild = Number(sb);
+  const cap = Number(row.marketCap);
+  const x = f.insider ? f.insider[String(row.symbol).toUpperCase()] : null;
+  if (x && cap > 0) {
+    const bought = Number(x[0]) || 0, sold = Number(x[1]) || 0;
+    out.insiderBuyers = Number(x[2]) || 0;
+    out.insiderSellers = Number(x[3]) || 0;
+    if (bought <= cap * INSIDER_JUNK && sold <= cap * INSIDER_JUNK && (bought > 0 || sold > 0)) {
+      out.insiderNet = Math.round((bought - sold) / cap * 100000) / 1000;
+    }
+  }
+  return out;
+}
+async function stampFlows(rows) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  const f = await flowsNow();
+  for (const r of rows) {
+    if (!r || r.error) continue;
+    const v = flowsOf(r, f);
+    r.shortBuild = v.shortBuild;
+    r.shortBuildFrom = f ? f.shortFrom : null;
+    r.shortBuildTo = f ? f.shortTo : null;
+    r.insiderNet = v.insiderNet;
+    r.insiderBuyers = v.insiderBuyers;
+    r.insiderSellers = v.insiderSellers;
+    r.insiderSince = f ? f.insiderSince : null;
+  }
+}
+
 const serveStamps = (rows) => Promise.all([
+  stampFlows(rows).catch(() => {}),
   stampShortNames(rows).catch(() => {}),
   stampAdviceAge(rows).catch(() => {}),
   stampPricedAt(rows).catch(() => {}),
@@ -6946,6 +7106,18 @@ async function computeStocks(asOf, opts = {}) {
         chipCtx = null;
       }
     }
+    // The market's own tails, on the same gate and the same date-aligned
+    // returns. It does not depend on the chip basket, so a screen with too
+    // few semiconductor names still gets these two.
+    let mktCtx = null;
+    if (chipLive) {
+      try {
+        mktCtx = marketTailCtx(series, BENCHMARK, chipCtx ? chipCtx.rmap : null);
+      } catch (err) {
+        console.warn('market tails skipped:', err.message);
+        mktCtx = null;
+      }
+    }
 
     const stocks = symbols.map((sym) => {
       const s = series[sym] || {};
@@ -6982,6 +7154,8 @@ async function computeStocks(asOf, opts = {}) {
       // date-aligned returns, so an as-of slice cannot reach it and the
       // reading is of the real calendar either way.
       const chip = chipSelloffOf(chipCtx, sym);
+      const mktDown = chipSelloffOf(mktCtx && mktCtx.down, sym);
+      const mktUp = chipSelloffOf(mktCtx && mktCtx.up, sym);
 
       const threeMonthPct = pctChange(values, THREE_MONTH);
       const relStrength =
@@ -7164,6 +7338,8 @@ async function computeStocks(asOf, opts = {}) {
         realisedVol: rvol,
         badDay: bad,
         chipSelloff: chip,
+        marketSelloff: mktDown,
+        marketRally: mktUp,
         fwd1M,
         fwd3M,
         fwd6M,
@@ -8936,6 +9112,7 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     stampAdviceAge([stock]).catch(() => {}),
     stampAthDistance([stock]).catch(() => {}),
     stampSpMember([stock]).catch(() => {}),
+    stampFlows([stock]).catch(() => {}),
   ]);
 
   res.json({
@@ -9612,8 +9789,10 @@ app.delete('/api/admin/posts/image/:id', requireAdmin, route(async (req, res) =>
 // The field was 'Advice' until 2026-10-09. A stored tile or phone setup still
 // names it that way, and a key the catalogue no longer has is dropped by the
 // cleaners below -- so the verdict would vanish from every saved view.
-const fieldKeyNow = (f) => (f === 'act|Advice' ? 'act|Signal' : f);
-const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|trend|size|fund|own)\|[^|]{1,32}$/;
+// ...and Chip selloff moved from Relative to the Reactions group on 2026-10-10.
+const FIELD_KEY_MOVED = { 'act|Advice': 'act|Signal', 'rel|Chip selloff': 'react|Chip selloff' };
+const fieldKeyNow = (f) => (Object.prototype.hasOwnProperty.call(FIELD_KEY_MOVED, f) ? FIELD_KEY_MOVED[f] : f);
+const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|react|trend|size|fund|own)\|[^|]{1,32}$/;
 const TILE_SPARK_DAYS = [0, 21, 63, 126, 252];
 const TILE_FIELDS_MAX = 6;   // six reads as a tile; eight reads as a table cell
 const TILE_HEIGHTS = [44, 72, 110];
@@ -9747,6 +9926,7 @@ async function mobileRows(req) {
   await stampPricedAt(rows);
   await stampAthDistance(rows);
   await stampSpMember(rows);
+  await stampFlows(rows).catch(() => {});
   stampCapDerived(rows);
   return rows;
 }
@@ -10088,6 +10268,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   await stampPricedAt(stocks);
   await stampAthDistance(stocks);
   await stampSpMember(stocks);
+  await stampFlows(stocks).catch(() => {});
   stampCapDerived(stocks);
   stampPeerValue(stocks);
   const myLists = await store.readUserPortfolios(await prefsKey(req));

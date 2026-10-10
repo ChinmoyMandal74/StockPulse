@@ -150,6 +150,16 @@
     // of the last year is not a thing that just happened. The spotlight
     // card's rule, where "% from the high" takes the same treatment.
     mag: (n) => ok(n) ? { t: n.toFixed(1) + '%', c: '', n, u: 'pct' } : null,
+    // ...and the same with the plus printed, for a reading whose sign is the
+    // point but is not a price going up: a short position growing, insiders
+    // buying. signedPctCell in the screener is the same decision.
+    // A reading that rounds to nothing prints as nothing, never "-0.00%".
+    smag: (n, d = 1) => {
+      if (!ok(n)) return null;
+      const txt = n.toFixed(d);
+      const zero = Number(txt) === 0;
+      return { t: (zero ? txt.replace('-', '') : (n > 0 ? '+' : '') + txt) + '%', c: '', n, u: 'pct' };
+    },
     num: (n, d = 1) => ok(n) ? { t: n.toFixed(d), c: '', n, u: 'num' } : null,
     money: (n, code) => ok(n) ? { t: fmtMktCap(n, code), c: n < 0 ? 'neg' : '', n, u: 'money' } : null,
     signedMoney: (n, code) => ok(n) ? { t: fmtMktCap(n, code), c: n >= 0 ? 'pos' : 'neg', n, u: 'money' } : null,
@@ -288,7 +298,6 @@
     ['fwd',   '+6M',            (s) => V.pct(s.fwd6M)],
     ['fwd',   'Since',          (s) => V.pct(s.fwdSince)],
     ['rel',   'RS vs S&P',      (s) => V.pct(s.relStrength)],
-    ['rel',   'Chip selloff',   (s) => V.pct(s.chipSelloff)],
     ['rel',   '% from 52W lo',  (s) => V.lvl(s.pctFromLow)],
     ['rel',   '% from 52W hi',  (s) => V.pct(s.pctFromHigh)],
     // Distance below the highest CLOSE on record. Deliberately not called an
@@ -319,6 +328,15 @@
     ['rel',   'Vol trend',      (s) => V.pct(s.volTrend)],
     ['rel',   'Rel. volume',    (s) => (ok(s.volX) ? { t: s.volX.toFixed(2) + '×', c: s.volX >= 1.5 ? 'warn' : '', n: s.volX, u: 'num' } : null)],
     ['rel',   '$ volume',       (s) => V.money(s.dollarVolume, s.currency || 'USD')],
+    // REACTIONS (2026-10-10): what the stock did on someone else's worst and
+    // best days, and what short sellers and its own insiders have been
+    // doing. Chip selloff moved here from Relative; a stored `rel|Chip
+    // selloff` key is read as this one (server.js, FIELD_KEY_MOVED).
+    ['react', 'Chip selloff',   (s) => V.pct(s.chipSelloff)],
+    ['react', 'Market selloff', (s) => V.mag(s.marketSelloff)],
+    ['react', 'Market rally',   (s) => V.smag(s.marketRally)],
+    ['react', 'Short build',    (s) => V.smag(s.shortBuild)],
+    ['react', 'Insider net',    (s) => V.smag(s.insiderNet, 2)],
     ['trend', 'vs 50D MA',      (s) => V.pct(s.vs50ma)],
     ['trend', 'vs 200D MA',     (s) => V.pct(s.vs200ma)],
     ['trend', 'MA cross',       (s) => {
@@ -430,20 +448,20 @@
     ['own',   'Institutions',   (s) => V.lvl(s.institutionPct)],
   ];
 
-  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'trend', 'size', 'fund', 'own'];
+  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'react', 'trend', 'size', 'fund', 'own'];
   // The palette lives here because this file already owns GROUP_ORDER and
   // FIELD_SPEC. index.html keeps its own copy — it also colours the table's
   // group banners and the columns menu — so those two must stay in step.
   const GROUP_COLORS = {
     info: '#7c9cff', rank: '#a3e635', act: '#5eead4', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
-    rel: '#22d3ee', trend: '#fbbf24', size: '#94a3b8', fund: '#fb7185', own: '#f0abfc',
+    rel: '#22d3ee', react: '#f472b6', trend: '#fbbf24', size: '#94a3b8', fund: '#fb7185', own: '#f0abfc',
   };
   // `size` is labelled Scale because there is a Size COLUMN in Info (the cap
   // band). The group ID is unchanged, so every saved key that names it still
   // resolves — a label is free to change in a way a group id is not.
   const GROUP_LABELS = {
     info: 'Info', rank: 'Scores', act: 'Signal', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
-    rel: 'Relative', trend: 'Trend', size: 'Scale', fund: 'Fundamentals', own: 'Ownership',
+    rel: 'Relative', react: 'Reactions', trend: 'Trend', size: 'Scale', fund: 'Fundamentals', own: 'Ownership',
   };
 
   // ---- price history -------------------------------------------------------
