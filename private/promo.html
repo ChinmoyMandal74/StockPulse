@@ -39,6 +39,23 @@
       border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
       color: var(--text); font: 400 12.5px var(--sans); resize: vertical; }
     .panel textarea { min-height: 84px; }
+    /* Post to Instagram: the pictures waiting to go, in posting order. */
+    #igBox { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--hair); }
+    .ig-who { font-size: 11px; color: var(--muted); line-height: 1.5; margin: 0 0 4px; }
+    .ig-tray { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .ig-tray:empty { display: none; }
+    .ig-item { position: relative; width: 46px; }
+    .ig-item img { display: block; width: 46px; border-radius: 5px; border: 1px solid var(--hair); }
+    .ig-item b { position: absolute; left: 3px; top: 2px; font: 600 9px var(--sans); color: #fff;
+                 text-shadow: 0 0 3px #000; }
+    .ig-item button { position: absolute; right: -5px; top: -5px; width: 16px; height: 16px; padding: 0;
+                      border-radius: 50%; border: 1px solid var(--hair); background: #1b2030;
+                      color: var(--muted); font: 600 10px/1 var(--sans); cursor: pointer; }
+    #igCaption { margin-top: 10px; min-height: 110px; }
+    .ig-ask { margin-top: 10px; padding: 10px; border-radius: 10px; border: 1px solid rgba(124, 156, 255, 0.4);
+              background: rgba(124, 156, 255, 0.08); font-size: 11.5px; color: var(--text); line-height: 1.5; }
+    .ig-ask .row { display: flex; gap: 6px; margin-top: 8px; }
+    .ig-ask .btn { margin-top: 0; }
     .panel input:focus-visible, .panel textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     #annBox { display: none; }
     #disBox { display: none; }
@@ -1226,6 +1243,28 @@
       <div id="blogBox" hidden>
         <button class="btn" id="blogBtn" title="Store this card as a picture and start a blog draft around it">Post to blog</button>
         <p class="hint" id="blogMsg"></p>
+      </div>
+
+      <!-- The same shot again, sent to the brand's Instagram account. Admin
+           only, like the blog button and for the same reason. One card is a
+           post; cards added to the tray first are a carousel, in the order
+           they were added. NOTHING is sent until the second button, which
+           appears only after the server has checked the post and named the
+           account it would go to. -->
+      <div id="igBox" hidden>
+        <p class="ig-who" id="igWho">Instagram</p>
+        <button class="btn" id="igAddBtn" title="Keep this card for a carousel: add up to ten, then post them together">Add this card to a carousel</button>
+        <div class="ig-tray" id="igTray"></div>
+        <textarea id="igCaption" maxlength="2200" placeholder="Caption — what the card shows, and any hashtags"></textarea>
+        <button class="btn" id="igBtn" title="Check this post and ask before sending it">Post to Instagram</button>
+        <div class="ig-ask" id="igAsk" hidden>
+          <span id="igAskText"></span>
+          <div class="row">
+            <button class="btn" id="igGoBtn">Post now</button>
+            <button class="btn" id="igNoBtn">Cancel</button>
+          </div>
+        </div>
+        <p class="hint" id="igMsg"></p>
       </div>
 
       <button class="btn" id="reloadBtn">Re-pull tonight's data</button>
@@ -2506,6 +2545,140 @@
     }
     $('blogBtn').addEventListener('click', postToBlog);
 
+    // ---- Post to Instagram --------------------------------------------------
+    // The blog button's first two steps, then a different third: shoot the
+    // artboard, store the JPEG in `post_images` -- which is what gives it the
+    // public address Instagram fetches it from -- and hand the server the ids.
+    //
+    // TWO REQUESTS, ALWAYS. The first is a dry run: the server checks the
+    // shapes, the caption and the token, and answers with the account's name.
+    // Only what it answered is offered for confirmation, and only the second
+    // button sends. A post cannot be taken back through this API, so there is
+    // no one-click path to it. The rules themselves live in instagram.js on
+    // the server; nothing here repeats them.
+    const igTray = [];              // [{ id, url, w, h }] in posting order
+    let igPending = null;           // what the dry run approved, awaiting the second click
+    const igSay = (t) => { $('igMsg').textContent = t; };
+    const igDay = (ms) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    function igPaintTray() {
+      $('igTray').innerHTML = igTray.map((im, i) =>
+        `<div class="ig-item"><img src="${esc(im.url)}" alt=""><b>${i + 1}</b>`
+        + `<button data-i="${i}" title="Take this one out">\u00d7</button></div>`).join('');
+      $('igBtn').textContent = igTray.length > 1 ? `Post ${igTray.length} cards to Instagram` : 'Post to Instagram';
+    }
+    $('igTray').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-i]');
+      if (!b) return;
+      igTray.splice(Number(b.dataset.i), 1);
+      igCancel();
+      igPaintTray();
+    });
+
+    function igCancel() { igPending = null; $('igAsk').hidden = true; }
+
+    // The card on the artboard, stored. Content-hashed like every picture
+    // here, so the same card stored twice is one row and one address.
+    async function igShoot() {
+      const fontCss = await ensureFontCss();
+      const blob = await shoot(fontCss, 'image/jpeg', 0.92);
+      const up = await fetch('/api/admin/posts/image', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ dataUrl: await blobToDataUrl(blob) }),
+      });
+      const img = await up.json().catch(() => ({}));
+      if (!up.ok) throw new Error(img.error || `the picture could not be stored (HTTP ${up.status}).`);
+      return { id: img.id, url: img.url, w: 1080, h: size.h };
+    }
+
+    async function igAdd() {
+      const btn = $('igAddBtn');
+      btn.disabled = true;
+      igCancel();
+      try {
+        igSay('Rendering\u2026');
+        const im = await igShoot();
+        if (igTray.some((x) => x.id === im.id)) igSay('That card is already in the carousel.');
+        else { igTray.push(im); igPaintTray(); igSay(`${igTray.length} in the carousel. Change the card and add the next, or post.`); }
+      } catch (err) { igSay('Could not add: ' + err.message); }
+      btn.disabled = false;
+    }
+
+    const igSend = async (body) => {
+      const r = await fetch('/api/admin/instagram/post', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const d = await r.json().catch(() => ({}));
+      return { ok: r.ok, status: r.status, d };
+    };
+
+    // First click: store the card if there is no carousel, and dry-run.
+    async function igCheck() {
+      const btn = $('igBtn');
+      btn.disabled = true;
+      igCancel();
+      try {
+        igSay(igTray.length ? 'Checking\u2026' : 'Rendering\u2026');
+        const images = igTray.length ? igTray.slice() : [await igShoot()];
+        const caption = $('igCaption').value;
+        const { ok, status, d } = await igSend({ images, caption, dry: true });
+        if (!ok && !(status === 409 && d.duplicate)) throw new Error(d.error || `the check failed (HTTP ${status}).`);
+        const again = !ok;
+        igPending = { images, caption, again };
+        const what = images.length > 1 ? `these ${images.length} cards as a carousel` : 'this card';
+        $('igAskText').textContent = (again ? d.error + ' Post them again? ' : '')
+          + `Post ${what} to ${again ? 'Instagram' : '@' + d.username}`
+          + (caption.trim() ? '' : ', with no caption') + '? It is public at once and cannot be taken back from here.';
+        $('igAsk').hidden = false;
+        igSay('');
+      } catch (err) { igSay('Not posted: ' + err.message); }
+      btn.disabled = false;
+    }
+
+    // Second click: the only thing on this page that publishes.
+    async function igGo() {
+      const p = igPending;
+      if (!p) return;
+      igCancel();
+      $('igBtn').disabled = true;
+      try {
+        igSay('Posting\u2026 Instagram fetches each picture first, which takes a few seconds.');
+        const { ok, status, d } = await igSend({ images: p.images, caption: p.caption, again: p.again });
+        if (!ok) throw new Error(d.error || `Instagram did not take it (HTTP ${status}).`);
+        const link = /^https:\/\/www\.instagram\.com\//.test(String(d.permalink || '')) ? d.permalink : '';
+        $('igMsg').innerHTML = `Posted to @${esc(d.username)}`
+          + (link ? ` \u2014 <a href="${esc(link)}" target="_blank" rel="noopener">see it</a>.` : '.');
+        igTray.length = 0;
+        igPaintTray();
+        $('igCaption').value = '';
+        loadIg();
+      } catch (err) { igSay('Not posted: ' + err.message); }
+      $('igBtn').disabled = false;
+    }
+
+    // Who it posts as. This read is also the proof that the token works, so
+    // a refused token is found here rather than at the moment of posting.
+    async function loadIg() {
+      const who = $('igWho');
+      try {
+        const d = await fetch('/api/admin/instagram', { cache: 'no-store' }).then((r) => r.json());
+        const off = !d.configured || !!d.error || d.idMatches === false;
+        $('igBtn').disabled = off;
+        $('igAddBtn').disabled = off;
+        if (!d.configured) { who.textContent = 'Instagram is not connected on this server (no token set here).'; return; }
+        if (d.error) { who.textContent = 'Instagram: ' + d.error; return; }
+        if (d.idMatches === false) { who.textContent = `Instagram: the token belongs to @${d.username}, not the account this server is set to post as.`; return; }
+        who.textContent = `Instagram \u00b7 posting as @${d.username}`
+          + (d.used != null && d.allowed ? ` \u00b7 ${d.used} of ${d.allowed} posts used in the last day` : '')
+          + (d.refreshError ? ' \u00b7 token renewal failed: ' + d.refreshError : d.expires ? ' \u00b7 token good until ' + igDay(d.expires) : '');
+      } catch { who.textContent = 'Instagram: the status could not be read.'; }
+    }
+    $('igAddBtn').addEventListener('click', igAdd);
+    $('igBtn').addEventListener('click', igCheck);
+    $('igGoBtn').addEventListener('click', igGo);
+    $('igNoBtn').addEventListener('click', () => { igCancel(); igSay('Not posted.'); });
+    $('igCaption').addEventListener('input', igCancel);
+
     Cards.injectStyle();
 
     async function load(reload) {
@@ -2519,7 +2692,8 @@
         canAnnounce = !!me.admin;
         $('postsBox').hidden = !me.admin;
         $('blogBox').hidden = !me.admin;
-        if (me.admin) loadPosts();
+        $('igBox').hidden = !me.admin;
+        if (me.admin) { loadPosts(); loadIg(); }
         if (!canAnnounce && OWNER_ONLY_TPLS.has(tpl)) tpl = 'movers';
         const data = await fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json());
         stocks = (data.stocks || []).filter((s) => !s.error);

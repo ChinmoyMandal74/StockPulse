@@ -839,6 +839,20 @@ const SCHEMA = [
   // page asks ("who has nothing, who is stale"), which would otherwise scan.
   'create index if not exists idx_sec_symbol_end on sec_facts (symbol, period_end)',
 
+  // What has been posted to the brand's Instagram account (2026-10-10): one
+  // row per published post, written after Instagram confirms it. `images` is
+  // a JSON array of post_images ids, in carousel order. The id is the order,
+  // so the newest twenty are read off the end of the table without a scan.
+  `create table if not exists ig_posts (
+     id        integer primary key autoincrement,
+     at        integer not null,
+     media_id  text,
+     permalink text,
+     caption   text,
+     images    text,
+     by        text
+   )`,
+
   // The European Central Bank's daily reference rates: dollars per one unit
   // of `ccy`, one row per working day back to 1999. About 7,100 rows for the
   // euro, which is the only currency loaded. See fx.js for which rate prices
@@ -2671,6 +2685,48 @@ async function writeFlows(obj) {
 // Every stored rate for one currency, oldest first. A seek on the primary
 // key's leading column; about 7,100 rows, read when a filing in that
 // currency is being converted and not on any page view.
+// ---- Instagram ---------------------------------------------------------
+// The token chain (see tokenPlan in instagram.js): which environment token
+// this descends from, when it was last refreshed, and -- only once a
+// refresh has produced one -- the refreshed token itself.
+async function readIgToken() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'ig_token'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value); } catch { return null; }
+}
+
+async function writeIgToken(obj) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('ig_token', ?)",
+    args: [JSON.stringify(obj || {})],
+  });
+}
+
+async function writeIgPost({ at, mediaId, permalink, caption, images, by }) {
+  await init();
+  await db.execute({
+    sql: 'insert into ig_posts (at, media_id, permalink, caption, images, by) values (?, ?, ?, ?, ?, ?)',
+    args: [Number(at) || Date.now(), mediaId || null, permalink || null,
+      String(caption || ''), JSON.stringify(images || []), by || null],
+  });
+}
+
+async function listIgPosts(limit) {
+  await init();
+  const r = await db.execute({
+    sql: 'select id, at, media_id, permalink, caption, images, by from ig_posts order by id desc limit ?',
+    args: [Math.max(1, Math.min(100, Number(limit) || 20))],
+  });
+  return r.rows.map((x) => {
+    let images = [];
+    try { images = JSON.parse(x.images || '[]'); } catch { /* an unreadable list is an empty one */ }
+    return { id: Number(x.id), at: Number(x.at), mediaId: x.media_id || null, permalink: x.permalink || null,
+      caption: x.caption || '', images, by: x.by || null };
+  });
+}
+
 async function readFxRates(ccy) {
   await init();
   const r = await db.execute({ sql: 'select d, usd from fx_rates where ccy = ? order by d', args: [String(ccy)] });
@@ -6045,6 +6101,7 @@ module.exports = {
   writeShortInterest, readShortInterest, readShortLatestFor, readShortAsOfFor,
   readInsiderNetSince, readFlows, writeFlows,
   readFxRates, writeFxRates,
+  readIgToken, writeIgToken, writeIgPost, listIgPosts,
   readShortRecentFor,
   readSplits, writeSplits, splitCoverage, readSplitIndex, readOnboardPending, readOnboardDone, noteOnboarded,
   readShortState, noteShortMiss, shortNewest, appendShortInterest,
