@@ -691,6 +691,31 @@
       <!-- Short build: the position before and after, company by company.
            Where the shorts moved ranks the change; this draws the two
            positions. The orderings and the floors come from the module. -->
+      <div id="eaBox">
+        <label>Window</label>
+        <select id="eaWin"></select>
+        <label>How many</label>
+        <select id="eaCount">
+          <option value="6">6</option>
+          <option value="9" selected>9</option>
+          <option value="12">12</option>
+        </select>
+        <label>Dates</label>
+        <select id="eaEst">
+          <option value="confirmed" selected>Confirmed dates only</option>
+          <option value="all">Include estimated dates</option>
+        </select>
+        <label>Index</label>
+        <select id="eaSp500"></select>
+        <p class="hint">The largest companies in the cut that report inside
+          the window, under the day each one reports. The window starts
+          the day after the data's own date, so "the coming week" on a
+          Friday card is the Monday to Friday that follows. The bar is
+          market value. An estimated date is the last report plus
+          ninety-one days and is often a week out, which is why it is
+          left off unless asked for.</p>
+      </div>
+
       <div id="sbaBox">
         <label>Page</label>
         <select id="sbaPage">
@@ -1313,6 +1338,7 @@
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
+      { id: 'earnahead', name: 'Earnings ahead', note: 'Who reports and when — the largest companies due in the coming days, under the day each one reports' },
       { id: 'earngrow', name: 'Earnings growth', note: 'Which companies an index’s earnings growth is made of, from the filings — with the last eight quarters' },
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
       { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
@@ -1390,6 +1416,7 @@
       ['breadth', 'Narrow or broad'],
       ['beat', 'Beating the index'],
       ['earngrow', 'Earnings growth'],
+      ['earnahead', 'Earnings ahead'],
       ['flow', 'Flow'],
       ['treemap', 'Treemap'],
       ['waterfall', 'Waterfall'],
@@ -1718,6 +1745,7 @@
       'wfallSector', 'wfallPeriod', 'wfallCount', 'wfallSp500',
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
+      'eaWin', 'eaCount', 'eaEst', 'eaSp500',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -1829,6 +1857,7 @@
       $('wfallBox').style.display = tpl === 'waterfall' ? 'block' : 'none';
       $('smovBox').style.display = tpl === 'shortmoves' ? 'block' : 'none';
       $('sbaBox').style.display = tpl === 'shortbuild' ? 'block' : 'none';
+      $('eaBox').style.display = tpl === 'earnahead' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
@@ -2216,6 +2245,12 @@
       }
       sel.value = 'pct';
     }());
+    // Earnings ahead: its own listener list, and its windows from the module.
+    ['eaWin', 'eaCount', 'eaEst', 'eaSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'earnahead') render(); }));
+    for (const [v, label] of Cards.earnAheadWindows()) {
+      $('eaWin').add(new Option(label.charAt(0).toUpperCase() + label.slice(1), v));
+    }
     // Short build: its own listener list, and its two pickers from the module.
     ['sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'shortbuild') render(); }));
@@ -2839,7 +2874,7 @@
         const spOpts = Cards.spCuts().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
-          'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500', 'sbaSp500',
+          'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500', 'sbaSp500', 'eaSp500',
           'shrtSp500', 'barSp500', 'linSp500', 'indSp500', 'ispSp500', 'secSp500', 'sspSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;

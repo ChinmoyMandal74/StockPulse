@@ -7342,6 +7342,147 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Earnings ahead: who reports, day by day ------------------------------
+  //
+  // (2026-10-10, owner: "I don't think there is a promo for upcoming earning
+  // .. can you make one".) There was none: Earnings growth and Evolution
+  // look back at what was filed, and the screener's Next Earn column had no
+  // card. This is the calendar: the largest companies in a cut that report
+  // inside a window, set out under the day each one reports.
+  //
+  // THE LARGEST N ARE CHOSEN FIRST, THEN LAID OUT BY DAY. Choosing per day
+  // would give a quiet Monday as many rows as a Thursday with forty reports,
+  // and the card's subject is which reports matter to the cut. Each day's
+  // heading says how many it shows of how many are due, so a reader can see
+  // the busy day without the card pretending to list it.
+  //
+  // THE WINDOW RUNS FROM THE DATA'S DAY, never the reader's clock, for the
+  // reason every card is dated that way: a card built on Saturday carries
+  // Friday's data, and "the coming week" from Friday is Monday to Friday.
+  // The title prints the dates rather than "this week" or "next week",
+  // because a post is read on a different day from the one it was made.
+  //
+  // A CONFIRMED DATE AND AN ESTIMATED ONE ARE DIFFERENT FACTS. When the
+  // provider's calendar has no date, the row carries the last report plus
+  // ninety-one days, flagged `nextEarningsEstimated`. That is a guess at a
+  // quarter's rhythm and is often a week out, so it is left off unless
+  // asked for, counted in the note, and marked on the row when shown.
+  //
+  // THE BAR IS MARKET VALUE, in the accent colour: it is a size, and green
+  // and red on this site mean a price that rose or fell. The last column is
+  // the previous quarter's earnings per share against the consensus, as
+  // the provider reported it, also uncoloured for the same reason. Neither
+  // says anything about the report to come, and the note says so.
+  const EA_WINS = { week: 'the coming week', d7: 'the next 7 days', d14: 'the next 14 days' };
+  const EA_CAP = { portrait: 12, square: 8, story: 14 };
+  const eaIso = (t) => t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+  // [from, to], both included, every day strictly after `baseIso`.
+  //   week  Monday to Thursday: the rest of that week. Friday or a weekend:
+  //         the Monday to Friday that follows.
+  function eaWindow(baseIso, key) {
+    const b = new Date(baseIso + 'T12:00:00');
+    const plus = (n) => { const t = new Date(b); t.setDate(t.getDate() + n); return eaIso(t); };
+    if (key === 'd7') return [plus(1), plus(7)];
+    if (key === 'd14') return [plus(1), plus(14)];
+    const dow = b.getDay();
+    if (dow >= 1 && dow <= 4) return [plus(1), plus(5 - dow)];
+    const toMon = dow === 5 ? 3 : dow === 6 ? 2 : 1;
+    return [plus(toMon), plus(toMon + 4)];
+  }
+
+  function tplEarnAhead() {
+    const win = EA_WINS[O.eaWin] ? O.eaWin : 'week';
+    const cut = SP_CUTS.some(([k]) => k === O.eaSp500) ? O.eaSp500 : 'All';
+    const withEst = O.eaEst === 'all';
+    const K = [6, 9, 12].includes(Number(O.eaCount)) ? Number(O.eaCount) : 9;
+    const N = Math.min(K, EA_CAP[size.id] || 9);
+    const range = eaWindow(marketDay || eaIso(new Date()), win);
+    const from = range[0], to = range[1];
+    const num = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));   // a null is not a zero
+
+    const pool = spFilter(stocks.filter((x) => x && !x.error && x.instrumentType !== 'ETF'
+      && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol)), cut);
+    const due = [];
+    let guessed = 0;
+    for (const r of pool) {
+      const d = r.nextEarningsDate ? String(r.nextEarningsDate).slice(0, 10) : '';
+      if (!d || d < from || d > to) continue;
+      if (r.nextEarningsEstimated && !withEst) { guessed++; continue; }
+      due.push({ sym: r.symbol, name: nameOf(r), d, cap: num(r.marketCap), sur: num(r.lastSurprise), est: !!r.nextEarningsEstimated });
+    }
+    // Largest first; a company with no market value on file goes last.
+    due.sort((a, b) => (b.cap == null ? -1 : b.cap) - (a.cap == null ? -1 : a.cap));
+
+    const day = (iso, long) => {
+      const t = new Date(iso + 'T12:00:00');
+      return isNaN(t.getTime()) ? iso
+        : t.toLocaleDateString('en-US', long ? { weekday: 'long', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' });
+    };
+    const span = day(from) + ' to ' + day(to);
+    const head = '<span class="s-kick">' + esc(cutKick(cut) + ' \u00b7 ' + due.length.toLocaleString('en-US')
+      + (due.length === 1 ? ' company reports' : ' companies report') + ' \u00b7 ' + EA_WINS[win]) + '</span>'
+      + '<h2 class="s-title">Earnings ahead<span class="dim">' + esc(span) + '</span></h2>';
+    const guessNote = guessed ? guessed + (guessed === 1 ? ' more has' : ' more have')
+      + ' only an estimated date in that window and ' + (guessed === 1 ? 'is' : 'are') + ' left out. ' : '';
+
+    if (!due.length) {
+      return chromeTop() + '<div class="s-body"><div class="bx-in">' + head
+        + '<p class="s-sub wide" style="--fs:20px">' + esc('No company in this cut has a '
+          + (withEst ? '' : 'confirmed ') + 'report date between ' + span + '. ' + guessNote
+          + 'Widen the window or the cut.') + '</p></div></div>' + chromeFoot();
+    }
+
+    const top = due.slice(0, N);
+    const days = [...new Set(top.map((x) => x.d))].sort();
+    const T = top.length + days.length;
+    const SZ = ({
+      portrait: T <= 9 ? { f: 29, b: 26 } : T <= 13 ? { f: 25, b: 22 } : { f: 21, b: 18 },
+      square: T <= 9 ? { f: 22, b: 18 } : { f: 18, b: 14 },
+      story: T <= 9 ? { f: 42, b: 40 } : T <= 13 ? { f: 36, b: 34 } : { f: 30, b: 26 },
+    })[size.id] || { f: 25, b: 22 };
+    const scale = Math.max(1e-9, ...top.map((x) => x.cap || 0));
+    const capFig = (v) => (v == null ? '\u2014' : '$' + fmtMoney(v));
+    const surFig = (v) => (v == null ? '\u2014' : (v >= 0 ? '+' : '\u2212') + Math.abs(v).toFixed(Math.abs(v) >= 100 ? 0 : 1) + '%');
+    const cw = Math.ceil(Math.max(...top.map((x) => capFig(x.cap).length)) * SZ.f * 0.62) + 6;
+    // Never narrower than its own heading, which is the longer of the two.
+    const sw = Math.max(Math.ceil(Math.max(...top.map((x) => surFig(x.sur).length)) * SZ.f * 0.62) + 6, Math.ceil(SZ.f * 5.6));
+    const cols = 'minmax(0,38%) minmax(0,1fr) ' + cw + 'px ' + sw + 'px';
+    const row = (x) => '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+      + '<span class="bx-n ix-n"><span class="ix-t">' + esc(x.name) + '</span>'
+      + '<span class="ix-c ea-sym">' + esc((x.name === x.sym ? '' : x.sym) + (x.est ? (x.name === x.sym ? '' : ' \u00b7 ') + 'est.' : '')) + '</span></span>'
+      + '<span class="bx-t" style="height:' + SZ.b + 'px">'
+      + (x.cap == null ? '' : '<span class="bx-f" style="left:0;width:' + Math.max(0.6, x.cap / scale * 100).toFixed(2) + '%"></span>')
+      + '</span>'
+      + '<span class="bx-v">' + esc(capFig(x.cap)) + '</span>'
+      + '<span class="bx-v ea-sur">' + esc(surFig(x.sur)) + '</span>'
+      + '</div>';
+    const block = (d) => {
+      const shown = top.filter((x) => x.d === d), all = due.filter((x) => x.d === d).length;
+      return '<div class="bx-r ea-day" style="font-size:' + SZ.f + 'px;grid-template-columns:minmax(0,1fr) auto">'
+        + '<span>' + esc(day(d, true)) + '</span>'
+        + '<span class="ea-n">' + esc(all > shown.length ? shown.length + ' of ' + all + ' reporting' : all + ' reporting') + '</span></div>'
+        + shown.map(row).join('');
+    };
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '">'
+      + '<span>Company</span><span style="grid-column:2 / 4">Market value</span>'
+      + '<span class="sb-hr">Last qtr vs est.</span></div>';
+    // Days in the window with reports the card had no room to show at all.
+    const unseen = [...new Set(due.map((x) => x.d))].filter((d) => !days.includes(d)).length;
+    const note = (due.length > top.length
+        ? 'The ' + top.length + ' largest by market value of the ' + due.length + ' companies in this cut due to report between ' + span + '. '
+        : (due.length === 1 ? 'The one company' : 'All ' + due.length + ' companies') + ' in this cut due to report between ' + span + '. ')
+      + (unseen ? unseen + (unseen === 1 ? ' other day has' : ' other days have') + ' only smaller companies reporting. ' : '')
+      + (withEst ? 'A date marked est. is the last report plus ninety-one days, not a confirmed one. ' : guessNote)
+      + 'Dates come from the provider\u2019s calendar and companies do move them. '
+      + 'The last column is how far the previous quarter\u2019s earnings per share landed from the consensus estimate; '
+      + 'it says nothing about the quarter to come. A calendar, not a forecast.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">' + head
+      + '<div class="bx-rows">' + hd + days.map(block).join('') + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Lines: any measure with a history, one line per company ------------
   //
   // THE LINE-CHART COUNTERPART OF BARS (2026-10-09, owner's request). Bars
@@ -7884,6 +8025,7 @@
     shorted: tplShorted, breadth: tplBreadth, beat: tplBeat, earngrow: tplEarnGrow,
     bars: tplBars,
     shortbuild: tplShortBuild,
+    earnahead: tplEarnAhead,
     evo2: tplEvoTwo,
     industries: tplIndustries,
     indspot: tplIndSpot,
@@ -8113,6 +8255,16 @@
     .sb-hd .sb-hr { text-align: right; }
     .sz-square .sb-hd { font-size: 13px; }
     .sz-story .sb-hd { font-size: 20px; }
+    /* Earnings ahead: the day a block of rows reports on, the ticker beside
+       a name, and the surprise figure, which is not a price and so takes no
+       direction colour. */
+    .bx-r.ea-day { margin-top: .35em; padding-bottom: .12em; border-bottom: 1px solid var(--hair);
+                   font-weight: 700; color: var(--text); }
+    .bx-r.ea-day > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bx-r.ea-day .ea-n { font: 500 .7em var(--mono); color: var(--faint); text-transform: uppercase;
+                         letter-spacing: 0.06em; }
+    .ix-c.ea-sym { color: var(--faint); }
+    .bx-v.ea-sur { font-weight: 500; color: var(--muted); }
     .sb-sig { font-size: .8em; font-weight: 600; white-space: nowrap; text-align: right;
               overflow: hidden; text-overflow: ellipsis; }
     .sz-story .sb-key { font-size: 23px; }
@@ -9969,6 +10121,8 @@
     sectorList,
     // The Short build card's two orderings, from the list the card reads.
     shortBuildRanks: () => Object.keys(SBA_RANKS).map((k) => [k, SBA_RANKS[k]]),
+    earnAheadWindows: () => Object.keys(EA_WINS).map((k) => [k, EA_WINS[k]]),
+    earnAheadWindow: eaWindow,
     barMetrics: () => BAR_METRICS.map((m) => [m.key,
       (m.words || ['Highest', 'Lowest'])[0] + ' ' + m.label, m.group]),
     shortedMetrics: () => Object.keys(SHRT_METRICS)
