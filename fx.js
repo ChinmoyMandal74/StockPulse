@@ -24,15 +24,82 @@
 // time the euro moved, and growth from one year to the next would be the
 // currency's growth as much as the company's.
 //
-// ONLY THE EURO, for now (the owner's instruction, 2026-10-10). The file
-// carries about thirty currencies against the euro, so another reporting
-// currency is a cross rate away -- but nothing here computes one yet.
+// EVERY CURRENCY THE FILE CARRIES (2026-10-10, the owner, an hour after
+// "only the euro": "we should convert the other currencies too"). The file
+// quotes about thirty currencies against the euro, each as UNITS PER ONE
+// EURO, so dollars per one unit of any of them is a cross rate taken on
+// the same day from the same publication:
+//
+//   dollars per CAD = (dollars per euro) / (CAD per euro)
+//
+// Both legs are the ECB's own reference rates for that day, so nothing is
+// mixed across sources or times of day.
+//
+// THE TAIWAN DOLLAR IS NOT IN IT, and three filers report in one, TSMC
+// among them. That one currency comes from Twelve Data's daily USD/TWD
+// series instead (5,000 sessions, back to 2008, one credit): a market
+// close rather than a central bank's reference rate, which over a quarter's
+// average is the same number to three figures. `sourceOf` says which, and
+// the stored rows are the same shape either way.
 (function (root) {
   'use strict';
 
   // One <Cube time="YYYY-MM-DD"> per day, holding <Cube currency="USD" rate="…"/>.
   // Read with a pattern rather than an XML parser: the file is machine-made,
   // flat, and this needs one attribute from each day.
+  // Currencies converted, and where each one's rate comes from. Explicit
+  // rather than "whatever the file has": the file still lists currencies
+  // that no longer exist (the lat, the kroon), and a filer cannot report in
+  // those. A reporting currency not named here stays unconverted and is
+  // recorded as that.
+  const ECB_CCYS = ['EUR', 'GBP', 'CAD', 'CHF', 'JPY', 'DKK', 'SEK', 'NOK', 'AUD', 'NZD', 'HKD', 'SGD',
+    'KRW', 'CNY', 'INR', 'BRL', 'MXN', 'ZAR', 'ILS', 'PLN', 'CZK', 'HUF', 'TRY', 'THB', 'MYR', 'IDR', 'PHP'];
+  const TD_CCYS = ['TWD'];
+  const sourceOf = (ccy) => (ECB_CCYS.includes(ccy) ? 'ecb' : TD_CCYS.includes(ccy) ? 'twelvedata' : null);
+  const supports = (ccy) => sourceOf(ccy) != null;
+
+  // The whole file in one pass: { CCY: [{ d, usd }] }, dollars per one unit.
+  // A day on which either leg is missing has no rate for that currency --
+  // the real is absent before 2008 and the rupee before 2009.
+  function parseEcbAll(xml, want) {
+    const pick = new Set(want || ECB_CCYS);
+    const out = {};
+    for (const c of pick) out[c] = [];
+    const text = String(xml || '');
+    const day = /<Cube\s+time=["'](\d{4}-\d{2}-\d{2})["']\s*>([\s\S]*?)<\/Cube>/g;
+    const rate = /currency=["']([A-Z]{3})["']\s+rate=["']([\d.]+)["']/g;
+    let m;
+    while ((m = day.exec(text))) {
+      const per = {};
+      let r;
+      rate.lastIndex = 0;
+      while ((r = rate.exec(m[2]))) per[r[1]] = Number(r[2]);
+      const usd = per.USD;
+      if (!(usd > 0.5 && usd < 2.5)) continue;        // not a euro-dollar rate
+      for (const c of pick) {
+        if (c === 'EUR') { out.EUR.push({ d: m[1], usd }); continue; }
+        const x = per[c];
+        if (x > 0 && isFinite(x)) out[c].push({ d: m[1], usd: usd / x });
+      }
+    }
+    for (const c of pick) out[c].sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
+    return out;
+  }
+
+  // Twelve Data's `time_series` values for USD/<CCY>: units of the currency
+  // per one dollar at each close, newest first. Dollars per unit is the
+  // reciprocal.
+  function parseTd(values) {
+    const out = [];
+    for (const v of values || []) {
+      const c = Number(v && v.close);
+      const d = v && String(v.datetime || '').slice(0, 10);
+      if (d && c > 0 && isFinite(c)) out.push({ d, usd: 1 / c });
+    }
+    out.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
+    return out;
+  }
+
   function parseEcb(xml) {
     const out = [];
     const text = String(xml || '');
@@ -99,7 +166,7 @@
     return { at, avg, first, last, n: list.length };
   }
 
-  const api = { parseEcb, book,
+  const api = { parseEcb, parseEcbAll, parseTd, book, supports, sourceOf, ECB_CCYS, TD_CCYS,
     HIST_URL: 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml',
     RECENT_URL: 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml' };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

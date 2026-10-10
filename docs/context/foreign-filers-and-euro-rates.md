@@ -51,3 +51,15 @@ The SEC EDGAR card and the Financial statements card each carry one sentence, fr
 - Layout constants after it: `PAD_SPAN` 108, error row 103, empty row 105; Info banner 12.
 - **The 64 were filled before the deploy** by `fx-load.js --only …`, so the first rebuilt value already had them. The loader passes taxonomy and currency on both of its writes.
 - Display only: not read by the Signal.
+
+### Every reporting currency, not only the euro (2026-10-10, the owner, an hour later: "we should convert the other currencies too")
+**The 23 companies that reported in another currency are converted the same way**: flows at the period's average, positions at the rate on its last day, the rate kept on the row.
+
+- **A cross rate from the same ECB file.** It quotes about thirty currencies as units per one euro, so dollars per one unit of any of them is `(dollars per euro) / (units per euro)`, both legs the ECB's own reference rate for that day. `Fx.parseEcbAll(xml, [ccys])` reads the file once into `{ CCY: [{ d, usd }] }`; its EUR output is identical to the euro-only parser's.
+- **The currencies converted are an explicit list** (`ECB_CCYS`, 27 of them), not "whatever the file has": it still lists currencies that no longer exist. A reporting currency not on the list stays status `currency`.
+- **Coverage starts later for some**: the yuan from 2005-04, the real from 2008-01, the rupee from 2009-01. A period before a currency's first rate is dropped, as any uncovered period is.
+- **THE TAIWAN DOLLAR IS NOT IN THE ECB FILE**, and three filers report in it, TSMC among them. It comes from Twelve Data's daily `USD/TWD` series instead (`TD_CCYS`, `Fx.parseTd`): 5,000 sessions back to 2008-03-19, one credit, a market close rather than a central bank's reference rate. `Fx.sourceOf(ccy)` says which, the stock page's note says "daily market rates" for it, and the stored rows are the same shape either way. *The Federal Reserve's own series was the first choice and was not reachable from here.*
+- **`fxFor(ccy)` in server.js** replaced `eurFx()` (kept as a one-line alias): one book per currency, memory-cached six hours, topped up from that currency's source when its newest rate is over five days old.
+- The tooltip on a period prints rates to four SIGNIFICANT figures, not four decimals: a yen is 0.0067 dollars.
+- **Recovered on the first run**: CAD 8 (BMO, BNS, RY, TD, CCJ, GFL, ALM, DPRO), GBP 4 (BTI, HLN, LYG, EVTL), BRL 3 (ABEV, SBS, XP), TWD 3 (TSM, ASX, UMC), and NVO, ONON, TME, WIT, SMFG. Checked against what is known: TSMC 2024 $90.16B, Novo Nordisk 2025 $46.79B, BAT 2025 $33.76B. Five companies remain empty under US GAAP for their own reasons.
+- The Canadian banks carry quarters as well as years (66 quarterly rows each): they file quarterly reports with tagged facts, so the trailing-twelve-month cards work for them where they do not for Spotify.

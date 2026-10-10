@@ -4009,18 +4009,23 @@
       // publishes. The rows carry the currency and the two rates used (see
       // secfacts.js, toDollars); this is the one sentence both filings cards
       // print, so they cannot describe the conversion differently.
-      const CCY_NAME = { EUR: 'euros' };
+      const CCY_NAME = { EUR: 'euros', GBP: 'pounds sterling', CAD: 'Canadian dollars', CHF: 'Swiss francs',
+        JPY: 'yen', DKK: 'Danish kroner', SEK: 'Swedish kronor', NOK: 'Norwegian kroner', AUD: 'Australian dollars',
+        CNY: 'Chinese yuan', INR: 'Indian rupees', BRL: 'Brazilian reais', TWD: 'New Taiwan dollars',
+        HKD: 'Hong Kong dollars', KRW: 'Korean won', MXN: 'Mexican pesos', ZAR: 'South African rand', ILS: 'Israeli shekels' };
       function fxNote(rows) {
         const c = (rows || []).find((r) => r && r.currency && r.currency !== 'USD');
         if (!c) return '';
-        return 'Reported in ' + (CCY_NAME[c.currency] || c.currency) + ' and shown here in dollars, at the European Central '
-          + 'Bank’s reference rates: revenue, profit and cash flow at the average rate over each period, and '
+        return 'Reported in ' + (CCY_NAME[c.currency] || c.currency) + ' and shown here in dollars, at '
+          + (c.currency === 'TWD' ? 'daily market rates' : 'the European Central Bank’s reference rates')
+          + ': revenue, profit and cash flow at the average rate over each period, and '
           + 'balance-sheet figures at the rate on the period’s last day. So growth from one period to the next '
           + 'includes the currency’s own move; a margin does not. Hover a period for its rates. ';
       }
       const fxTip = (r) => (r && r.currency && r.fxAvg
-        ? ' title="' + esc('Converted from ' + r.currency + ': ' + Number(r.fxAvg).toFixed(4) + ' average over the period'
-          + (r.fxEnd ? ', ' + Number(r.fxEnd).toFixed(4) + ' on its last day' : '')) + '"' : '');
+        // Significant figures, not decimal places: a yen is 0.0067 dollars.
+        ? ' title="' + esc('Converted from ' + r.currency + ': ' + Number(r.fxAvg).toPrecision(4) + ' dollars per unit, the average over the period'
+          + (r.fxEnd ? ', and ' + Number(r.fxEnd).toPrecision(4) + ' on its last day' : '')) + '"' : '');
       function paintSec() {
         const host = document.getElementById('secBody');
         if (!host || !secData) return;

@@ -10788,28 +10788,41 @@ async function saveResults(sym, d) {
 const Fx = require('./fx.js');
 const FX_STALE_DAYS = 5;
 const FX_MEM_MS = 6 * 60 * 60 * 1000;
-let fxBook = null;
-let fxBookAt = 0;
-async function eurFx() {
-  if (fxBook && Date.now() - fxBookAt < FX_MEM_MS) return fxBook;
-  let rows = await store.readFxRates('EUR');
+const fxBooks = new Map();          // ccy -> { at, book }
+// The newer rows for one currency, from wherever that currency's rates come
+// from (fx.js, sourceOf). `have` is whether anything is stored yet: the
+// ECB's ninety-day file tops a table up, and its whole history fills an
+// empty one.
+async function fxFetch(ccy, have) {
+  if (Fx.sourceOf(ccy) === 'twelvedata') {
+    // One credit, whatever the depth. A top-up asks for a few months.
+    const j = await fetchJson(`${TD_BASE}/time_series?symbol=${encodeURIComponent('USD/' + ccy)}`
+      + `&interval=1day&outputsize=${have ? 120 : 5000}&apikey=${API_KEY}`);
+    return Fx.parseTd(j && j.values);
+  }
+  const r = await fetch(have ? Fx.RECENT_URL : Fx.HIST_URL, {
+    headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(30000),
+  });
+  if (!r.ok) return [];
+  return Fx.parseEcbAll(await r.text(), [ccy])[ccy] || [];
+}
+const eurFx = () => fxFor('EUR');
+async function fxFor(ccy) {
+  const hit = fxBooks.get(ccy);
+  if (hit && Date.now() - hit.at < FX_MEM_MS) return hit.book;
+  let rows = await store.readFxRates(ccy);
   const last = rows.length ? rows[rows.length - 1].d : null;
   const age = last ? (Date.now() - Date.parse(last + 'T00:00:00Z')) / 86400000 : Infinity;
   if (age > FX_STALE_DAYS) {
     try {
-      const r = await fetch(rows.length ? Fx.RECENT_URL : Fx.HIST_URL, {
-        headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(30000),
-      });
-      if (r.ok) {
-        const got = Fx.parseEcb(await r.text());
-        const fresh = last ? got.filter((x) => x.d > last) : got;
-        if (fresh.length) { await store.writeFxRates('EUR', fresh); rows = rows.concat(fresh); }
-      }
-    } catch (e) { console.warn('euro rates top-up skipped:', e.message); }
+      const got = await fxFetch(ccy, rows.length > 0);
+      const fresh = last ? got.filter((x) => x.d > last) : got;
+      if (fresh.length) { await store.writeFxRates(ccy, fresh); rows = rows.concat(fresh); }
+    } catch (e) { console.warn(ccy + ' rates top-up skipped:', e.message); }
   }
-  fxBook = Fx.book(rows);
-  fxBookAt = Date.now();
-  return fxBook;
+  const book = Fx.book(rows);
+  fxBooks.set(ccy, { at: Date.now(), book });
+  return book;
 }
 
 async function secFetchOne(symbol) {
@@ -10874,10 +10887,12 @@ async function secFetchOne(symbol) {
     // any other currency is not converted yet, and is recorded as exactly
     // that rather than as a company with nothing filed.
     const cur = SecFacts.currencyOf(facts);
-    const opts = cur === 'EUR' ? { fx: await eurFx(), fxCurrency: 'EUR' } : undefined;
+    const conv = !!cur && cur !== 'USD' && Fx.supports(cur);
+    const opts = conv ? { fx: await fxFor(cur), fxCurrency: cur } : undefined;
     const rows = SecFacts.normalise(facts, sym, opts);
     const filer = { taxonomy: SecFacts.taxonomyOf(facts), currency: cur };
-    if (!rows.length && cur && cur !== 'USD' && cur !== 'EUR') {
+    // A currency with no rate source is recorded as exactly that.
+    if (!rows.length && cur && cur !== 'USD' && !conv) {
       await store.noteSecMiss(sym, 'currency', 'reports in ' + cur, cik, filer);
       await saveResults(sym, lastResults);
       return { symbol: sym, status: 'currency', rows: 0, cik, currency: cur, results: lastResults };
