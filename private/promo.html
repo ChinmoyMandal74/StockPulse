@@ -773,6 +773,47 @@
           figure the company filed. Narrow the cut with Sector and Industry to
           compare direct competitors.</p>
       </div>
+      <!-- Industries: one row per INDUSTRY, ranked on one measure. The
+           unit is the industry, so there is no Industry picker here and
+           the prefix is deliberately NOT in INDUSTRY_PREFIXES (every
+           prefix there must own one). Its cut is its own, like the
+           Market cards': a Sector here narrows which industries are
+           ranked. The measure list is filled from the module. -->
+      <div id="indBox">
+        <label>Measure</label>
+        <select id="indMetric"></select>
+        <label>Order</label>
+        <select id="indDir">
+          <option value="desc" selected>Highest first</option>
+          <option value="asc">Lowest first</option>
+        </select>
+        <label>How many</label>
+        <select id="indCount">
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="15">15</option>
+        </select>
+        <label>A return is</label>
+        <select id="indWeight">
+          <option value="eq" selected>The plain average of its companies</option>
+          <option value="cap">Weighted by market value</option>
+        </select>
+        <label>Within</label>
+        <select id="indScope"><option value="All">All screened</option></select>
+        <label>Sector</label>
+        <select id="indSector"><option value="All">All sectors</option></select>
+        <label>Size</label>
+        <select id="indCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="indScreen"><option value="">No screen</option></select>
+        <label>Index</label>
+        <select id="indSp500"></select>
+        <p class="hint">Each row is an industry of at least three companies
+          carrying the measure; the small figure after its name is how
+          many. Funds are never members. The weighting applies to returns
+          only. The square card holds ten rows at most. Industries are the
+          data provider's, not GICS.</p>
+      </div>
       <!-- Bars: any one measure, ranked. The general case of Movers, the
            Fundamentals ranking and Most shorted, which each rank one
            family. Scoped, so it carries the standard six and joins
@@ -1083,6 +1124,7 @@
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
       { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
       { id: 'waterfall', name: 'Waterfall', note: 'What actually moved the index, name by name, adding up to the whole' },
+      { id: 'industries', name: 'Industries', note: 'Every industry as one row, ranked on a return, breadth, size or a median — the industry is the unit' },
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
       { id: 'perf', name: 'Growth and profitability', note: 'One company’s revenue and net income as bars, its net margin as a line, quarter by quarter or year by year' },
       { id: 'peertrend', name: 'Against its peers', note: 'One company and its closest peers on revenue, earnings, margin or value, quarter by quarter' },
@@ -1186,8 +1228,14 @@
     ];
     // ONE MECHANISM FOR EVERY GROUP: an entry in the Template list, the
     // sub-template last used inside it, and the views the picker offers.
+    // ---- Industry: the industry as the unit (2026-10-10, owner's request) ---
+    // A group of one for now; an industry spotlight is its intended second.
+    const IND_VIEWS = [
+      ['industries', 'Ranking'],
+    ];
     const TPL_GROUPS = [
       { name: 'Market', views: MKT_VIEWS, last: 'day' },
+      { name: 'Industry', views: IND_VIEWS, last: 'industries' },
       { name: SPOT_NAME, views: SPOT_VIEWS, last: 'spotlight' },
       { name: 'Rankings', views: RANK_VIEWS, last: 'movers' },
       { name: 'Compare', views: CMP_VIEWS, last: 'size' },
@@ -1465,6 +1513,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
+      'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
       'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
@@ -1573,6 +1622,7 @@
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
       $('egrBox').style.display = tpl === 'earngrow' ? 'block' : 'none';
       $('barBox').style.display = tpl === 'bars' ? 'block' : 'none';
+      $('indBox').style.display = tpl === 'industries' ? 'block' : 'none';
       $('linBox').style.display = tpl === 'lines' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
@@ -1855,6 +1905,22 @@
     ['linWin', 'linCount', 'linScope', 'linSector',
       'linIndustry', 'linCap', 'linScreen', 'linSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'lines') render(); }));
+    // Industries: its own listener list too, and its measures from the module.
+    ['indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector',
+      'indCap', 'indScreen', 'indSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'industries') render(); }));
+    (function fillIndMetrics() {
+      const sel = $('indMetric');
+      const groups = new Map();
+      for (const [v, label, grp] of Cards.indMetrics()) {
+        if (!groups.has(grp)) {
+          const og = document.createElement('optgroup');
+          og.label = grp; groups.set(grp, og); sel.appendChild(og);
+        }
+        groups.get(grp).appendChild(new Option(label, v));
+      }
+      sel.value = 'm1';
+    }());
     // Bars: ITS OWN hardcoded listener list, like every template above. A
     // control missing from it saves with a post and does nothing when touched.
     ['barMetric', 'barDir', 'barCount', 'barScope', 'barSector',
@@ -2272,6 +2338,7 @@
         $('histScope').innerHTML = $('movScope').innerHTML;
         $('shrtScope').innerHTML = $('movScope').innerHTML;
         $('barScope').innerHTML = $('movScope').innerHTML;
+        $('indScope').innerHTML = $('movScope').innerHTML;
         $('linScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
@@ -2288,7 +2355,7 @@
         const secOpts = '<option value="All">All sectors</option>' +
           Cards.sectors(stocks).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
         ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector', 'rngSector',
-          'sizeSector', 'bubSector', 'histSector', 'shrtSector', 'barSector', 'linSector'].forEach((id) => {
+          'sizeSector', 'bubSector', 'histSector', 'shrtSector', 'barSector', 'linSector', 'indSector'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = secOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -2302,7 +2369,7 @@
           Filters.CAP_ORDER.map((n) => `<option value="${esc(n)}">${esc(n)} · ` +
             `${esc(Filters.CAP_RANGE[n])}</option>`).join('');
         ['movCap', 'chtCap', 'advCap', 'fundCap', 'spkCap', 'rngCap',
-          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap', 'linCap'].forEach((id) => {
+          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap', 'linCap', 'indCap'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = capOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -2318,7 +2385,7 @@
             list.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') +
             '</optgroup>').join('');
         ['movScreen', 'chtScreen', 'advScreen', 'fundScreen', 'spkScreen', 'rngScreen',
-          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen', 'linScreen'].forEach((id) => {
+          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen', 'linScreen', 'indScreen'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = scrOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -2334,7 +2401,7 @@
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
           'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500',
-          'shrtSp500', 'barSp500', 'linSp500'].forEach((id) => {
+          'shrtSp500', 'barSp500', 'linSp500', 'indSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;

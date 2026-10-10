@@ -6198,62 +6198,11 @@
     return s + (m.dp === 0 || Number.isInteger(a) ? String(Math.round(a)) : a.toFixed(m.dp || 1));
   }
 
-  function tplBars() {
-    const m = BAR_BY_KEY[O.barMetric] || BAR_BY_KEY.m1;
-    const desc = O.barDir !== 'asc';
-    const K = [5, 10, 15].includes(Number(O.barCount)) ? Number(O.barCount) : 10;
-    const N = Math.min(K, BAR_CAP[size.id] || 10);
-    const sc = scopeOf('barScope', 'barSector');
-
-    const isFund = (r) => r.instrumentType === 'ETF'
-      || IS_BENCH.has(r.symbol) || IS_SECTOR_ETF.has(r.symbol);
-    // A NULL IS NOT A ZERO. Number(null) is 0 and finite, so the empty is
-    // rejected before it is coerced: an unread company must leave the
-    // ranking, not sort to one end of it.
-    const read = (r) => {
-      const raw = r[m.field];
-      if (raw == null || raw === '') return null;
-      const v = Number(raw);
-      return isFinite(v) ? v : null;
-    };
-
-    const out = { fin: 0, mixed: 0, sign: 0 };
-    const rows = [];
-    for (const r of sc.rows) {
-      if (!r || r.error) continue;
-      if (m.co && isFund(r)) continue;
-      const v = read(r);
-      if (v == null) continue;
-      if (m.co && r.currency && r.currency !== 'USD') { out.mixed++; continue; }
-      if (m.noFin && r.sector === 'Financial Services') { out.fin++; continue; }
-      if (m.coh && barMixed(r)) { out.mixed++; continue; }
-      if (m.pos && !(v > 0)) { out.sign++; continue; }
-      rows.push({ name: nameOf(r), v, cap: Number(r.marketCap) || 0 });
-    }
-    // Ties are common on a bounded scale (a dozen companies score 10 for
-    // Quality), so the order inside a tie is market value rather than
-    // whatever order the rows arrived in.
-    rows.sort((a, b) => (desc ? b.v - a.v : a.v - b.v) || b.cap - a.cap);
-
-    const word = (m.words || ['Highest', 'Lowest'])[desc ? 0 : 1];
-    const head = '<span class="s-kick">' + esc(sc.label + ' · '
-      + rows.length.toLocaleString('en-US') + ' with a reading') + '</span>'
-      + '<h2 class="s-title">' + esc(word) + '<span class="dim">' + esc(m.label) + '</span></h2>';
-
-    if (rows.length < 3) {
-      return chromeTop() + '<div class="s-body"><div class="bx-in">' + head
-        + '<p class="s-sub wide" style="--fs:20px">' + esc(
-          'Too few readings in ' + sc.label + ' to rank — ' + rows.length
-          + ' of ' + sc.rows.length + ' carry this measure. Widen the cut.')
-        + '</p></div></div>' + chromeFoot();
-    }
-
-    const top = rows.slice(0, N);
-    const mid = (() => {
-      const s = rows.map((x) => x.v).sort((a, b) => a - b), i = (s.length - 1) / 2;
-      return s.length % 2 ? s[i] : (s[i - 0.5] + s[i + 0.5]) / 2;
-    })();
-
+  // THE DRAWING, shared by every card that ranks rows on one measure (Bars,
+  // Industries). `top` is the rows to draw, already ordered and cut to N;
+  // `m` carries the unit and the flags documented above BAR_METRICS. A row
+  // may carry `sub`, a small figure printed after its name.
+  function barDraw(top, m, N) {
     // ---- the scale ------------------------------------------------------
     // Each bar is its own value as a share of the largest shown, measured
     // from zero -- so it can never overstate. ONE RUNAWAY VALUE would
@@ -6319,11 +6268,73 @@
         .concat(m.max && m.ticks ? m.ticks.map((t) => t / m.max * 100) : [])
         .map((p) => '<span class="bx-z" style="left:' + p.toFixed(2) + '%"></span>').join('');
       return '<div class="bx-r" style="font-size:' + SZ.f + 'px">'
-        + '<span class="bx-n">' + esc(x.name) + '</span>'
+        + '<span class="bx-n">' + esc(x.name)
+        + (x.sub ? '<span class="ix-c">' + esc(x.sub) + '</span>' : '') + '</span>'
         + '<span class="bx-t" style="height:' + SZ.b + 'px">' + fill + marks + '</span>'
         + '<span class="bx-v' + cls + '">' + esc(figs[i]) + '</span>'
         + '</div>';
     };
+    return { html: top.map(row).join(''), vw, broke };
+  }
+
+  function tplBars() {
+    const m = BAR_BY_KEY[O.barMetric] || BAR_BY_KEY.m1;
+    const desc = O.barDir !== 'asc';
+    const K = [5, 10, 15].includes(Number(O.barCount)) ? Number(O.barCount) : 10;
+    const N = Math.min(K, BAR_CAP[size.id] || 10);
+    const sc = scopeOf('barScope', 'barSector');
+
+    const isFund = (r) => r.instrumentType === 'ETF'
+      || IS_BENCH.has(r.symbol) || IS_SECTOR_ETF.has(r.symbol);
+    // A NULL IS NOT A ZERO. Number(null) is 0 and finite, so the empty is
+    // rejected before it is coerced: an unread company must leave the
+    // ranking, not sort to one end of it.
+    const read = (r) => {
+      const raw = r[m.field];
+      if (raw == null || raw === '') return null;
+      const v = Number(raw);
+      return isFinite(v) ? v : null;
+    };
+
+    const out = { fin: 0, mixed: 0, sign: 0 };
+    const rows = [];
+    for (const r of sc.rows) {
+      if (!r || r.error) continue;
+      if (m.co && isFund(r)) continue;
+      const v = read(r);
+      if (v == null) continue;
+      if (m.co && r.currency && r.currency !== 'USD') { out.mixed++; continue; }
+      if (m.noFin && r.sector === 'Financial Services') { out.fin++; continue; }
+      if (m.coh && barMixed(r)) { out.mixed++; continue; }
+      if (m.pos && !(v > 0)) { out.sign++; continue; }
+      rows.push({ name: nameOf(r), v, cap: Number(r.marketCap) || 0 });
+    }
+    // Ties are common on a bounded scale (a dozen companies score 10 for
+    // Quality), so the order inside a tie is market value rather than
+    // whatever order the rows arrived in.
+    rows.sort((a, b) => (desc ? b.v - a.v : a.v - b.v) || b.cap - a.cap);
+
+    const word = (m.words || ['Highest', 'Lowest'])[desc ? 0 : 1];
+    const head = '<span class="s-kick">' + esc(sc.label + ' · '
+      + rows.length.toLocaleString('en-US') + ' with a reading') + '</span>'
+      + '<h2 class="s-title">' + esc(word) + '<span class="dim">' + esc(m.label) + '</span></h2>';
+
+    if (rows.length < 3) {
+      return chromeTop() + '<div class="s-body"><div class="bx-in">' + head
+        + '<p class="s-sub wide" style="--fs:20px">' + esc(
+          'Too few readings in ' + sc.label + ' to rank — ' + rows.length
+          + ' of ' + sc.rows.length + ' carry this measure. Widen the cut.')
+        + '</p></div></div>' + chromeFoot();
+    }
+
+    const top = rows.slice(0, N);
+    const mid = (() => {
+      const s = rows.map((x) => x.v).sort((a, b) => a - b), i = (s.length - 1) / 2;
+      return s.length % 2 ? s[i] : (s[i - 0.5] + s[i + 0.5]) / 2;
+    })();
+
+    const drawn = barDraw(top, m, N);
+    const broke = drawn.broke;
 
     const left = [];
     if (out.sign) left.push(out.sign + ' with no positive reading');
@@ -6339,11 +6350,165 @@
 
     return chromeTop()
       + '<div class="s-body"><div class="bx-in">' + head
-      + '<div class="bx-rows" style="--bxv:' + vw + 'px">' + top.map(row).join('') + '</div>'
+      + '<div class="bx-rows" style="--bxv:' + drawn.vw + 'px">' + drawn.html + '</div>'
       + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Industries: one row per industry, ranked on one measure -------------
+  //
+  // THE UNIT IS THE INDUSTRY (2026-10-10, owner's request). Every other card
+  // draws companies, or sectors; several can be CUT to one industry, and Flow
+  // and the Treemap drill into a sector's industries, but nothing ranked the
+  // industries against each other.
+  //
+  // AN INDUSTRY IS ITS COMPANIES, so a fund is never a member (it reports
+  // assets as its market value and files no statements), and a company with
+  // no industry recorded is in none of them -- counted in the note, never
+  // pooled into an "Other" row that would rank.
+  //
+  // AT LEAST IND_MIN COMPANIES WITH A READING, or the row is one company's
+  // figure under a grander name. The floor is the peer table's own
+  // (PEER_MIN_INDUSTRY on the server). It is applied to the readings, not
+  // the membership: five companies of which one has a forward P/E do not
+  // have a median forward P/E.
+  //
+  // HOW AN INDUSTRY'S FIGURE IS MADE depends on the measure, and the note
+  // says which:
+  //   ret     a return. The plain average by default; weighted by market
+  //           value on request, on BEGINNING weights (cap / (1 + r)), the
+  //           rule every market-aggregate card here follows -- today's value
+  //           already contains the move it is being used to weight.
+  //   share   the share of its companies above zero on the field.
+  //   sum     added up. Market value only: it is the one money field that is
+  //           in dollars for every row.
+  //   median  the middle company. A multiple off a loss is left out first
+  //           (`pos`), so "lowest forward P/E" is not a list of loss-makers.
+  const IND_MIN = 3;
+  const IND_RET = { kind: 'ret', unit: 'pct', sg: 1, plus: 1, words: ['Strongest', 'Weakest'], group: 'Returns' };
+  const IND_METRICS = [
+    ['d', 'todayPct', 'industries \u00b7 today', 'Return \u00b7 today', IND_RET],
+    ['w1', 'oneWeekPct', 'industries \u00b7 past week', 'Return \u00b7 past week', IND_RET],
+    ['m1', 'oneMonthPct', 'industries \u00b7 past month', 'Return \u00b7 past month', IND_RET],
+    ['m3', 'threeMonthPct', 'industries \u00b7 past 3 months', 'Return \u00b7 past three months', IND_RET],
+    ['m6', 'sixMonthPct', 'industries \u00b7 past 6 months', 'Return \u00b7 past six months', IND_RET],
+    ['ytd', 'ytdPct', 'industries \u00b7 this year', 'Return \u00b7 this year', IND_RET],
+    ['y1', 'oneYearPct', 'industries \u00b7 past year', 'Return \u00b7 past year', IND_RET],
+    ['a200', 'vs200ma', 'industries \u00b7 above 200-day', 'Share above the 200-day average',
+      { kind: 'share', unit: 'pct', max: 100, ticks: [50], words: ['Broadest', 'Narrowest'], group: 'Trend',
+        note: 'The share of each industry\u2019s companies closing above their own 200-day average. The mark is half.' }],
+    ['cap', 'marketCap', 'industries \u00b7 market value', 'Market value',
+      { kind: 'sum', unit: 'money', pos: 1, words: ['Biggest', 'Smallest'], group: 'Scale',
+        note: 'The market value of each industry\u2019s companies, added up.' }],
+    ['fpe', 'forwardPe', 'industry forward P/E', 'Median forward P/E',
+      { kind: 'median', unit: 'x', pos: 1, words: ['Highest', 'Lowest'], group: 'Valuation',
+        note: 'The middle company\u2019s forward P/E in each industry. A multiple off a loss is left out first.' }],
+    ['rg', 'revenueGrowthYoY', 'industry revenue growth', 'Median revenue growth',
+      { kind: 'median', unit: 'pct', sg: 1, plus: 1, words: ['Fastest', 'Slowest'], group: 'Growth and margins',
+        note: 'The middle company\u2019s revenue growth in each industry, latest quarter against a year earlier.' }],
+    ['pm', 'profitMargin', 'industry profit margin', 'Median profit margin',
+      { kind: 'median', unit: 'pct', sg: 1, words: ['Highest', 'Lowest'], group: 'Growth and margins',
+        note: 'The middle company\u2019s net margin in each industry, trailing twelve months.' }],
+  ].map(([key, field, label, pick, f]) => Object.assign({ key, field, label, pick }, f));
+  const IND_BY_KEY = {};
+  for (const m of IND_METRICS) IND_BY_KEY[m.key] = m;
+
+  // One industry's figure, or null when fewer than IND_MIN of its companies
+  // carry a reading. Returns { v, n } -- n is the readings the figure stands on.
+  function indFigure(list, m, capWeighted) {
+    const vals = [];
+    for (const r of list) {
+      const raw = r[m.field];
+      // A NULL IS NOT A ZERO: rejected before it is coerced.
+      if (raw == null || raw === '') continue;
+      const v = Number(raw);
+      if (!isFinite(v)) continue;
+      if (m.pos && !(v > 0)) continue;
+      const cap = Number(r.marketCap);
+      vals.push({ v, cap: cap > 0 ? cap : 0 });
+    }
+    if (m.kind === 'ret') {
+      // The -99 floor is marketParts' own: at a total wipeout the beginning
+      // weight is a division by zero.
+      const ok = vals.filter((x) => x.v > -99 && (!capWeighted || x.cap > 0));
+      if (ok.length < IND_MIN) return null;
+      if (!capWeighted) return { v: ok.reduce((a, x) => a + x.v, 0) / ok.length, n: ok.length };
+      let beg = 0, sum = 0;
+      for (const x of ok) { const b = x.cap / (1 + x.v / 100); beg += b; sum += b * x.v; }
+      return beg > 0 ? { v: sum / beg, n: ok.length } : null;
+    }
+    if (vals.length < IND_MIN) return null;
+    if (m.kind === 'share') return { v: vals.filter((x) => x.v > 0).length / vals.length * 100, n: vals.length };
+    if (m.kind === 'sum') return { v: vals.reduce((a, x) => a + x.v, 0), n: vals.length };
+    const s = vals.map((x) => x.v).sort((a, b) => a - b), i = (s.length - 1) / 2;
+    return { v: s.length % 2 ? s[i] : (s[i - 0.5] + s[i + 0.5]) / 2, n: vals.length };
+  }
+
+  function tplIndustries() {
+    const m = IND_BY_KEY[O.indMetric] || IND_BY_KEY.m1;
+    const desc = O.indDir !== 'asc';
+    const K = [5, 10, 15].includes(Number(O.indCount)) ? Number(O.indCount) : 10;
+    const N = Math.min(K, BAR_CAP[size.id] || 10);
+    const capW = m.kind === 'ret' && O.indWeight === 'cap';
+    const sc = scopeOf('indScope', 'indSector');
+
+    const groups = new Map();
+    let noInd = 0, firms = 0;
+    for (const r of sc.rows) {
+      if (!r || r.error) continue;
+      if (r.instrumentType === 'ETF' || IS_BENCH.has(r.symbol) || IS_SECTOR_ETF.has(r.symbol)) continue;
+      firms++;
+      const ind = r.industry ? String(r.industry) : '';
+      if (!ind) { noInd++; continue; }
+      if (!groups.has(ind)) groups.set(ind, []);
+      groups.get(ind).push(r);
+    }
+    const rows = [];
+    let thin = 0;
+    for (const [name, list] of groups) {
+      const fig = indFigure(list, m, capW);
+      if (!fig) { thin++; continue; }
+      let cap = 0;
+      for (const r of list) { const c = Number(r.marketCap); if (c > 0) cap += c; }
+      rows.push({ name, sub: String(fig.n), v: fig.v, cap });
+    }
+    rows.sort((a, b) => (desc ? b.v - a.v : a.v - b.v) || b.cap - a.cap);
+
+    const word = m.words[desc ? 0 : 1];
+    const head = '<span class="s-kick">' + esc(sc.label + ' \u00b7 '
+      + rows.length.toLocaleString('en-US') + (rows.length === 1 ? ' industry' : ' industries')) + '</span>'
+      + '<h2 class="s-title">' + esc(word) + '<span class="dim">' + esc(m.label) + '</span></h2>';
+
+    if (rows.length < 3) {
+      return chromeTop() + '<div class="s-body"><div class="bx-in">' + head
+        + '<p class="s-sub wide" style="--fs:20px">' + esc(
+          'Too few industries in ' + sc.label + ' to rank \u2014 ' + rows.length
+          + ' with at least ' + IND_MIN + ' companies carrying this measure, out of '
+          + groups.size + '. Widen the cut.')
+        + '</p></div></div>' + chromeFoot();
+    }
+
+    const top = rows.slice(0, N);
+    const drawn = barDraw(top, m, N);
+
+    const how = m.kind !== 'ret' ? m.note
+      : capW ? 'Each industry\u2019s companies weighted by market value at the start of the window, price only.'
+        : 'The plain average of each industry\u2019s companies, price only.';
+    const left = [];
+    if (thin) left.push(thin + (thin === 1 ? ' industry' : ' industries') + ' with fewer than '
+      + IND_MIN + ' readings');
+    if (noInd) left.push(noInd + (noInd === 1 ? ' company' : ' companies') + ' with no industry recorded');
+    const note = how + ' The small figure is how many companies stand behind each row. '
+      + (left.length ? 'Left out: ' + left.join('; ') + '. ' : '')
+      + (drawn.broke ? 'A broken bar runs past the scale. ' : '')
+      + 'Industries are the data provider\u2019s, not GICS. A ranking of what the screen holds, not a recommendation.';
+
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">' + head
+      + '<div class="bx-rows" style="--bxv:' + drawn.vw + 'px">' + drawn.html + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
   // ---- Lines: any measure with a history, one line per company ------------
   //
   // THE LINE-CHART COUNTERPART OF BARS (2026-10-09, owner's request). Bars
@@ -6885,6 +7050,7 @@
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
     shorted: tplShorted, breadth: tplBreadth, beat: tplBeat, earngrow: tplEarnGrow,
     bars: tplBars,
+    industries: tplIndustries,
     lines: tplLines,
     months: tplMonths,
     peertrend: tplPeerTrend,
@@ -7091,6 +7257,11 @@
     .bx-v.bx-up { color: var(--green); }
     .bx-v.bx-dn { color: var(--red); }
     .bx-in .s-sub { margin-top: 14px; }
+    /* The Industries card prints how many companies stand behind a row,
+       after the name and inside its clipped cell, so a long name loses the
+       count before it loses a second line. */
+    .ix-c { margin-left: 10px; font-family: var(--mono); font-size: .78em;
+            font-weight: 500; color: var(--faint); }
     /* ---- Where the shorts moved: builds against covers ------------------
        NO HEX LITERAL AND NO BACKTICK ANYWHERE IN HERE. Every value is a
        token, so all four grounds resolve with no override block; and a
@@ -8925,6 +9096,8 @@
     // The Bars catalogue as [key, picker label, group], so the studio builds
     // its picker from the list the CARD reads. A key the module does not
     // know would fall back to the one-month return in silence.
+    // The Industries catalogue, on the same bargain as barMetrics.
+    indMetrics: () => IND_METRICS.map((m) => [m.key, m.pick, m.group]),
     barMetrics: () => BAR_METRICS.map((m) => [m.key,
       (m.words || ['Highest', 'Lowest'])[0] + ' ' + m.label, m.group]),
     shortedMetrics: () => Object.keys(SHRT_METRICS)
