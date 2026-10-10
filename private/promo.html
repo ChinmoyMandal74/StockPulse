@@ -675,6 +675,11 @@
            Where the shorts moved ranks the change; this draws the two
            positions. The orderings and the floors come from the module. -->
       <div id="sbaBox">
+        <label>Page</label>
+        <select id="sbaPage">
+          <option value="pos" selected>1 · The positions, before and after</option>
+          <option value="perf">2 · The same companies: past month, and the signal</option>
+        </select>
         <label>Show</label>
         <select id="sbaDir">
           <option value="built" selected>Positions that grew</option>
@@ -698,7 +703,9 @@
           The figures beside it are before then after. Ranking by percent
           and by points of the float give different companies, since a
           position that doubled from 1% is not the one that added five
-          points. The square card holds eight rows at most.</p>
+          points. The square card holds eight rows at most. Page 2 draws
+          the same companies in the same order, so the two pages post as
+          a pair: change the other controls and both follow.</p>
       </div>
       <div id="smovBox">
         <label>Rank them</label>
@@ -1670,7 +1677,7 @@
       'tmapSector', 'tmapPeriod', 'tmapSp500',
       'wfallSector', 'wfallPeriod', 'wfallCount', 'wfallSp500',
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
-      'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
+      'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -2170,7 +2177,7 @@
       sel.value = 'pct';
     }());
     // Short build: its own listener list, and its two pickers from the module.
-    ['sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500'].forEach((id) =>
+    ['sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'shortbuild') render(); }));
     for (const [v, label] of Cards.shortBuildRanks()) {
       $('sbaRank').add(new Option(label.charAt(0).toUpperCase() + label.slice(1), v));

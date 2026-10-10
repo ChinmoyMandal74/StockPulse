@@ -7183,7 +7183,7 @@
       if (!(fl > 0)) { noFloat++; continue; }
       const was = a / fl * 100, now = b / fl * 100;
       if (was > 100 || now > 100) { over++; continue; }
-      rows.push({ name: nameOf(r), was, now, pct: (b / a - 1) * 100, pts: now - was });
+      rows.push({ sym: r.symbol, name: nameOf(r), was, now, pct: (b / a - 1) * 100, pts: now - was, m1: r.oneMonthPct });
     }
     const side = rows.filter((x) => (covers ? x.pts < 0 : x.pts > 0));
     side.sort((x, y) => (covers ? x[rank] - y[rank] : y[rank] - x[rank]));
@@ -7210,6 +7210,80 @@
 
     const top = side.slice(0, N);
     const C = pal.ink(covers ? '#fb923c' : '#60a5fa');
+
+    // ---- the second page: the SAME companies, in the SAME order -----------
+    //
+    // (2026-10-10, owner: "it is kind of not complete just to show the short
+    // interest like this ... a second page showing how these stocks have
+    // performed in last 1 month and what is our signal".) A build says what
+    // short sellers did; it does not say what the price did, or what the
+    // rules read. Page two answers both for the list page one drew -- chosen
+    // by the same code above, so the two pages cannot disagree about who is
+    // on them, and a reader can lay one beside the other row for row.
+    //
+    // GREEN AND RED ARE BACK HERE, and correctly: this bar IS a price that
+    // rose or fell. The change in the short position keeps its blue or
+    // orange, beside the name, as on page one.
+    //
+    // THE TWO WINDOWS ARE NOT THE SAME DAYS, and the note says so rather than
+    // leaving a reader to line them up: the short reports end about three
+    // weeks before they can be drawn, and the month runs to the latest
+    // close. So most of the month is AFTER the second report -- which is the
+    // interesting half, and also means the bar is not "what the price did
+    // while the shorts were building".
+    if (O.sbaPage === 'perf') {
+      const scored = advScored('Balanced');
+      const num = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));   // a null is not a zero
+      const list = top.map((x) => ({ x, ret: num(x.m1), sig: (scored[x.sym] || {}).action || null }));
+      const SZp = ({
+        portrait: N <= 5 ? { f: 30, b: 30 } : N <= 8 ? { f: 26, b: 26 } : { f: 22, b: 20 },
+        square: N <= 5 ? { f: 26, b: 24 } : { f: 21, b: 18 },
+        story: N <= 5 ? { f: 42, b: 44 } : N <= 8 ? { f: 36, b: 38 } : { f: 30, b: 30 },
+      })[size.id] || { f: 26, b: 26 };
+      const have = list.filter((r) => r.ret != null);
+      const negMax = Math.max(0, ...have.map((r) => -r.ret)), posMax = Math.max(0, ...have.map((r) => r.ret));
+      const span = Math.max(1e-9, negMax + posMax);
+      const zero = negMax / span * 100;
+      const rfig = (v) => (v == null ? '\u2014' : (v >= 0 ? '+' : '\u2212') + Math.abs(v).toFixed(1) + '%');
+      const rw = Math.ceil(Math.max(...list.map((r) => rfig(r.ret).length)) * SZp.f * 0.62) + 6;
+      // The signal is one of six words and one of them is long; the column is
+      // as wide as the longest one ON THIS CARD, at a size a step under the row's.
+      const sw = Math.ceil(Math.max(4, ...list.map((r) => (r.sig || '\u2014').length)) * SZp.f * 0.8 * 0.56) + 4;
+      const prow = (r) => {
+        const chg = (r.x.pct >= 0 ? '+' : '\u2212') + Math.abs(r.x.pct).toFixed(0) + '%';
+        const w = r.ret == null ? 0 : Math.abs(r.ret) / span * 100;
+        const left = r.ret == null ? 0 : (r.ret < 0 ? zero - w : zero);
+        const cls = r.ret == null ? '' : (r.ret < 0 ? ' bx-dn' : ' bx-up');
+        return '<div class="bx-r" style="font-size:' + SZp.f + 'px;grid-template-columns:minmax(0,34%) minmax(0,1fr) ' + rw + 'px ' + sw + 'px">'
+          + '<span class="bx-n ix-n"><span class="ix-t">' + esc(r.x.name) + '</span>'
+          + '<span class="ix-c" style="color:' + C + '">' + esc(chg) + '</span></span>'
+          + '<span class="bx-t" style="height:' + SZp.b + 'px">'
+          + (r.ret == null ? '' : '<span class="bx-f' + cls + '" style="left:' + left.toFixed(2) + '%;width:' + Math.max(0.6, w).toFixed(2) + '%"></span>')
+          + (negMax > 0 && posMax > 0 ? '<span class="bx-z" style="left:' + zero.toFixed(2) + '%"></span>' : '')
+          + '</span>'
+          + '<span class="bx-v' + cls + '">' + esc(rfig(r.ret)) + '</span>'
+          + '<span class="sb-sig" style="color:' + ((r.sig && pal.tints[r.sig]) || 'var(--faint)') + '">' + esc(r.sig || '\u2014') + '</span>'
+          + '</div>';
+      };
+      const up = have.filter((r) => r.ret > 0).length, dn = have.filter((r) => r.ret < 0).length;
+      const idx = stocks.find((s) => s && s.symbol === 'SPY');
+      const idxRet = idx ? num(idx.oneMonthPct) : null;
+      const key2 = '<div class="sb-key"><span>' + esc('past month, price only') + '</span>'
+        + '<span>' + esc(up + ' up \u00b7 ' + dn + ' down') + '</span>'
+        + '<span class="sb-ax">' + esc(idxRet == null ? 'the signal, as of the latest close' : 'S&P 500 ' + rfig(idxRet)) + '</span></div>';
+      const head2 = '<span class="s-kick">' + esc(cutKick(cut) + ' \u00b7 ' + (covers ? 'biggest covers' : 'biggest builds') + ' \u00b7 ' + win) + '</span>'
+        + '<h2 class="s-title">' + esc(covers ? 'Shorts covered' : 'Shorts built')
+        + '<span class="dim">' + esc('the same companies: past month, and the signal') + '</span></h2>';
+      const note2 = 'The same ' + top.length + ' companies as the first page, in the same order; the percentage after each name is the change in shares short. '
+        + 'The short reports end on ' + dayStr(d.to) + ' and the month runs to the latest close, so most of that month is after the second report. '
+        + 'The signal is what the fixed rules read for each company today: a mechanical reading of its trend and fundamentals, which does not use short interest. '
+        + 'This is a list of ' + top.length + ' companies, not a test of anything, and none of it is a forecast.';
+      return chromeTop()
+        + '<div class="s-body"><div class="bx-in">' + head2 + key2
+        + '<div class="bx-rows">' + list.map(prow).join('') + '</div>'
+        + '<p class="s-sub wide" style="--fs:17px">' + esc(note2) + '</p>'
+        + '</div></div>' + chromeFoot();
+    }
     const scale = Math.max(1e-9, ...top.map((x) => Math.max(x.was, x.now)));
     const SZ = ({
       portrait: N <= 5 ? { f: 30, b: 30 } : N <= 8 ? { f: 26, b: 26 } : { f: 22, b: 20 },
@@ -8016,6 +8090,10 @@
     .sb-key i { display: inline-block; width: 22px; height: 12px; border-radius: 3px;
                 margin-right: 8px; vertical-align: -1px; }
     .sb-key .sb-ax { margin-left: auto; color: var(--faint); }
+    /* Page two's signal word: a step under the row's own size, never wrapped,
+       since one of the six is long and a wrapped row is twice as tall. */
+    .sb-sig { font-size: .8em; font-weight: 600; white-space: nowrap; text-align: right;
+              overflow: hidden; text-overflow: ellipsis; }
     .sz-story .sb-key { font-size: 23px; }
     .sz-story .sb-key i { width: 30px; height: 16px; }
     /* The Industries card prints how many companies stand behind a row.

@@ -32,3 +32,17 @@ The only axis two companies can share: a share count favours whoever has more sh
 - Verified: 29 checks in Node (`sb-test.js` in the session scratchpad): both orderings, the bar's two parts against hand arithmetic for a build and a cover, the floor, no float, past 100%, the fund, the index cut, the empty states, the three artboards. The Short moves card is byte-identical before and after.
 
 **NOT YET SEEN ON ANY ARTBOARD.** The row grid is Bars', which was measured, but this card adds a key line under the title and its row caps (12 / 8 / 12) are a guess one step under Bars' (15 / 10 / 15), not a measurement. Look at twelve rows on the portrait and eight on the square first.
+
+### Page two — the same companies: the past month, and the signal (2026-10-10, owner's request)
+**`sbaPage` (`pos` | `perf`).** Asked as *"it is kind of not complete just to show the short interest like this, it should maybe have a second page showing how these stocks have performed in last 1 month and what is our signal"*. A build says what short sellers did; it does not say what the price did, or what the rules read.
+
+- **The same companies in the same order as page one**, chosen by the same code above the branch, so the two pages cannot disagree about who is on them and post as a pair. Every other control moves both. A check builds the two under three settings and compares the names.
+- Each row: the name, the change in shares short (still blue or orange), a bar for the past month's price move growing away from one zero line, the figure, and the signal word in its ladder colour.
+- **Green and red are back on this page, and correctly**: the bar IS a price that rose or fell.
+- **A missing return is a dash and draws no bar**, never 0.0%. A company the rules cannot read shows a dash for its signal.
+- The key line counts how many rose and fell and prints the S&P 500 fund's own month beside them.
+- **The two windows are not the same days, and the note says so**: the short reports end about three weeks before they can be drawn, and the month runs to the latest close, so most of the month is AFTER the second report. That is the interesting half; it also means the bar is not "what the price did while the shorts were building".
+- The note also says the signal does not use short interest, and that a list of N companies is not a test of anything. **Do not let this page become a claim that builds predict returns**: nothing here has measured that.
+- The signal is printed as the word alone, the Movers card's precedent; the rule that fired is on the screener and the stock page.
+- Controls now `sbaPage`, `sbaDir`, `sbaRank`, `sbaCount`, `sbaFloor`, `sbaSp500` (205 of 300).
+- Verified: 19 checks (`sb2-test.js`), the signals compared against the engine's own answer for each fixture row. **Not rendered.** New and unseen: a fourth column on the row (the signal), whose width is set from the longest word on the card, and "Strong – Elevated Risk" is long.
