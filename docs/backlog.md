@@ -1377,6 +1377,69 @@ it read rather than the status code for exactly this reason.**
 maintained list from a mirror was refused for the S&P because it was eleven
 days stale and missing a real member; the same test applies here.
 
+## 32. Earnings narrowness — three more views on the Earnings growth card — 2026-10-09
+
+**Asked by the owner** ("show which stocks are major contributors to the entire
+S&P or Nasdaq 100 earning growth … this also shows narrowness"). The card that
+answers the first half already exists and shipped the same day: `earngrow`,
+under Market — the quarter against a year earlier, the top contributors in
+points that add up to the headline, four concentration figures, and eight
+quarters of history with and without each quarter's top five. See
+[context/the-promo-studio-cards-2.md](context/the-promo-studio-cards-2.md),
+"Earnings growth". **These are the three ideas for making the narrowness
+reading land harder. None is built, and NOTHING BELOW HAS BEEN MEASURED** —
+whether any of them shows a striking picture on today's data is unknown until
+someone runs the numbers.
+
+In the order they would be built:
+
+1. **Earnings share against size share — a new card.** Three bars for the top
+   ten companies of an index: their share of its market cap, of its earnings,
+   and of its earnings growth. It is the one picture the existing cards cannot
+   make, because it puts earnings narrowness beside the PRICE narrowness the
+   treemap and the waterfall already show. The recommended place to start
+   (Claude's suggestion; the owner has not chosen).
+2. **Concentration over time — an addition to `earngrow`.** One line across the
+   eight quarters: the share of the growth supplied by the top five. The card
+   shows "with and without the top five" for each quarter, which is the same
+   information as two columns; it does not say at a glance whether narrowness
+   is rising or falling.
+3. **A waffle of who grew — a new view.** One square per company, the
+   `beat` card's grid: earned more, earned less, swung to a loss. It answers
+   "how many companies are actually growing earnings", the breadth side of the
+   same story.
+
+**What is already in place.** `earngrowth.js` is the arithmetic (pure, no
+network); `earnGrowthFor(cut)` / `GET /api/earnings-growth?cut=in|ndx|All` is
+the data, cached thirty minutes; `getEarnGrowth` / `Cards.earnGrowthNeed` is
+the channel both hosts already ask. Ideas 2 and 3 need nothing the payload
+does not already carry, or very nearly. Idea 1 needs each member's market cap
+beside its net income, which the snapshot has — sized by OUR market cap, never
+the fund's published weights, the treemap's rule.
+
+**What would make it a bad idea, or a wrong picture.**
+
+- **A "share of growth" blows up or flips sign when the group's net growth is
+  small or negative.** The existing card falls back to points and dollars and
+  says why. Every one of these three needs the same fallback, and idea 2 is a
+  line that will have a hole or a spike in exactly the quarter a reader looks
+  at first. Decide what it draws there before drawing anything.
+- **Reported, not forecast**, so all three run a quarter behind the headlines
+  that prompt the question. The note has to say so, as the card's does.
+- **Idea 1 mixes a date-of-today quantity (market cap) with a quarter that
+  ended months ago.** Either say so on the card or size by the cap at the
+  quarter's end, which is the split-safe arithmetic the Evolution card already
+  paid for (`sharesToday × adjusted close(t)`).
+- **One company once**, by filer id, and benchmarks and sector funds out of the
+  pool first — the rules every market-aggregate card already follows.
+- **Colour:** earnings up is not a price going up. The card uses blue for a
+  contribution and red only for the pooled fall; the waffle should not turn
+  into green and red.
+- A new control joins `CONTROL_IDS`, its template's listener list and the
+  scoped-picker lists, under `POST_OPT_MAX`.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
