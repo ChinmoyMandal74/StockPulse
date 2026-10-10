@@ -1335,7 +1335,7 @@
     // shipped for an hour reading a basket that never arrived, because its
     // fetch landed and nothing repainted. Asked here instead, the way
     // chartHistoryNeed already is, so a fourth costs one line in one place.
-    const BASKET_WIN_KEY = { chart: 'chtWin', sparks: 'spkWin', spotlight: 'spotWin' };
+    const BASKET_WIN_KEY = { chart: 'chtWin', sparks: 'spkWin', spotlight: 'spotWin', indspot: 'ispWin' };
     function basketDays(tpl, opts) {
       // The Lines card reads the basket only for a DAILY price window; which
       // that is depends on its measure as well as its window, so it answers
@@ -6268,8 +6268,9 @@
         .concat(m.max && m.ticks ? m.ticks.map((t) => t / m.max * 100) : [])
         .map((p) => '<span class="bx-z" style="left:' + p.toFixed(2) + '%"></span>').join('');
       return '<div class="bx-r" style="font-size:' + SZ.f + 'px">'
-        + '<span class="bx-n">' + esc(x.name)
-        + (x.sub ? '<span class="ix-c">' + esc(x.sub) + '</span>' : '') + '</span>'
+        + (x.sub
+          ? '<span class="bx-n ix-n"><span class="ix-t">' + esc(x.name) + '</span><span class="ix-c">' + esc(x.sub) + '</span></span>'
+          : '<span class="bx-n">' + esc(x.name) + '</span>')
         + '<span class="bx-t" style="height:' + SZ.b + 'px">' + fill + marks + '</span>'
         + '<span class="bx-v' + cls + '">' + esc(figs[i]) + '</span>'
         + '</div>';
@@ -6509,6 +6510,188 @@
       + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();
   }
+  // ---- Industry spotlight: one industry in full ----------------------------
+  //
+  // THE STOCK SPOTLIGHT'S OWN LAYOUT, block for block -- header, line, twelve
+  // figures, a dial, a note -- with an industry where the company was. It is
+  // built from the same classes on purpose: that card's fit on the three
+  // artboards was measured, and this one could not be (2026-10-10; nothing
+  // was rendered when it was written).
+  //
+  // WHAT EACH BLOCK MEANS FOR A GROUP, which is where it differs:
+  //   the line     the equal-weight index of its companies, rebased, beside
+  //                the S&P 500's own fund over the same window. Only a
+  //                company with a close on EVERY session is in it: a member
+  //                that joins part-way would bend the line with a listing,
+  //                not a move.
+  //   returns      the plain average of its companies.
+  //   the rest     the middle company -- except "Above 200-day", which is a
+  //                share, and "Market value", which is a total. The head over
+  //                the figures says so.
+  //   the dial     the AVERAGE place of its companies on the six-step ladder.
+  //                The needle is not a signal for the industry: the engine
+  //                reads companies, and there is no rule that reads a group.
+  //                So the words beside it are a count, never one of the six.
+  //
+  // A figure needs IND_MIN readings, like a row of the ranking; under that
+  // it is a dash.
+  const isFundRow = (r) => r.instrumentType === 'ETF' || IS_BENCH.has(r.symbol) || IS_SECTOR_ETF.has(r.symbol);
+  // Every industry that can be drawn, largest first: [{ name, sector, n, cap }].
+  // Asked of the module by the studio's picker, so it can never offer an
+  // industry the card would refuse.
+  function industryList(rows) {
+    const by = new Map();
+    for (const r of rows || []) {
+      if (!r || r.error || !r.industry || isFundRow(r)) continue;
+      const k = String(r.industry);
+      const g = by.get(k) || { name: k, n: 0, cap: 0, sectors: {} };
+      g.n++;
+      const c = Number(r.marketCap); if (c > 0) g.cap += c;
+      if (r.sector) g.sectors[r.sector] = (g.sectors[r.sector] || 0) + 1;
+      by.set(k, g);
+    }
+    return [...by.values()].filter((g) => g.n >= IND_MIN).map((g) => ({
+      name: g.name, n: g.n, cap: g.cap,
+      sector: Object.keys(g.sectors).sort((a, b) => g.sectors[b] - g.sectors[a] || (a < b ? -1 : 1))[0] || null,
+    })).sort((a, b) => b.cap - a.cap || (a.name < b.name ? -1 : 1));
+  }
+
+  function tplIndSpot() {
+    const all = industryList(stocks);
+    const pick = all.find((g) => g.name === O.ispName) || all[0] || null;
+    if (!pick) {
+      return chromeTop() + '<div class="s-body"><div>'
+        + '<span class="s-kick">Nothing to spotlight</span>'
+        + '<h2 class="s-title">No industry<br><span class="dim">of ' + IND_MIN + ' companies</span></h2>'
+        + '<p class="s-empty">No industry on this screen has ' + IND_MIN + ' companies recorded yet.</p>'
+        + '</div></div>' + chromeFoot();
+    }
+    const members = stocks.filter((r) => r && !r.error && r.industry === pick.name && !isFundRow(r));
+    const [days, winLabel] = barWin(O.ispWin);
+    const d = getBasket(days);
+    if (!d || !d.dates || !d.dates.length) {
+      return chromeTop()
+        + '<div class="s-body"><div><span class="s-kick">Reading the archive</span>'
+        + '<h2 class="s-title">Drawing<br><span class="dim">the chart\u2026</span></h2>'
+        + '</div></div>' + chromeFoot();
+    }
+
+    // ---- the line --------------------------------------------------------
+    const series = d.series || {};
+    const full = members.map((r) => ({ r, S: series[r.symbol] }))
+      .filter((x) => Array.isArray(x.S) && x.S.length === d.dates.length && x.S.every((v) => v != null && isFinite(v)));
+    let line = null;
+    if (full.length >= IND_MIN) {
+      line = d.dates.map((_, i) => full.reduce((a, x) => a + x.S[i], 0) / full.length);
+    }
+    const endOf = (A) => (A && A.length ? (A[A.length - 1] - 1) * 100 : null);
+    const move = endOf(line);
+    const colour = move == null ? pal.flat : move >= 0 ? pal.up : pal.down;
+    // The index fund is a row of the screen, so its line is usually in the
+    // series; the payload's own benchmark list, on the same rebasing, is the
+    // fallback for a basket that leaves it out.
+    const spy = Array.isArray(series.SPY) ? series.SPY
+      : ((Array.isArray(d.bench) ? d.bench : []).find((b) => b && b.sym === 'SPY') || {}).index;
+    const bench = Array.isArray(spy) && spy.some((v) => v != null) ? spy : null;
+    let benchMove = null;
+    if (bench) for (let i = bench.length - 1; i >= 0 && benchMove == null; i--) if (bench[i] != null) benchMove = (bench[i] - 1) * 100;
+    const H = size.id === 'story' ? 600 : size.id === 'square' ? 158 : 292;
+    const lines = line ? [{ color: colour, S: line, width: 4, fill: true }] : [];
+    if (line && bench) lines.push({ color: pal.flat, S: bench, width: 2, dim: true });
+    const plot = line
+      ? lineChart(d.dates, lines, { h: H, mt: 0 })
+      : '<p class="s-empty">Fewer than ' + IND_MIN + ' of its companies have a close on every session of the '
+        + esc(winLabel) + ', so there is no line to draw.</p>';
+
+    // ---- the header ------------------------------------------------------
+    const tCls = pick.name.length > 60 ? ' t4' : pick.name.length > 40 ? ' t3' : pick.name.length > 28 ? ' t2' : '';
+    const fig = (field, kind, extra) => indFigure(members, Object.assign({ field, kind }, extra || {}), false);
+    const val = (x) => (x ? x.v : null);
+    const today = val(fig('todayPct', 'ret'));
+    const head = '<span class="s-kick">' + esc((pick.sector ? pick.sector + ' \u00b7 ' : '') + 'industry') + '</span>'
+      + '<h2 class="s-title' + tCls + '">' + esc(pick.name) + '</h2>'
+      + '<div class="sp-sub">' + esc(members.length + ' companies')
+      + (pick.cap > 0 ? ' \u00b7 ' + esc('$' + fmtMoney(pick.cap)) : '')
+      + (today != null
+        ? ' \u00b7 <span class="' + (today >= 0 ? 'sp-up' : 'sp-dn') + '">' + esc(pct(today, 2)) + ' today</span>'
+        : '')
+      + '</div>';
+
+    // ---- twelve figures --------------------------------------------------
+    const fpe = val(fig('forwardPe', 'median', { pos: 1 }));
+    const a200 = val(fig('vs200ma', 'share'));
+    const CELLS = [
+      ['1 week', val(fig('oneWeekPct', 'ret')), 'ret'],
+      ['1 month', val(fig('oneMonthPct', 'ret')), 'ret'],
+      ['3 months', val(fig('threeMonthPct', 'ret')), 'ret'],
+      ['1 year', val(fig('oneYearPct', 'ret')), 'ret'],
+      // A share of companies is a level: no sign, no colour.
+      ['Above 200-day', a200 == null ? null : a200.toFixed(0) + '%', 'raw'],
+      ['vs 200-day', val(fig('vs200ma', 'median')), 'ret'],
+      ['RSI', val(fig('rsi', 'median')), 'idx'],
+      ['From 52w high', val(fig('pctFromHigh', 'median')), 'lvl'],
+      ['Market value', pick.cap > 0 ? pick.cap : null, 'cap'],
+      ['Fwd P/E', fpe == null ? null : fpe.toFixed(1) + '\u00d7', 'raw'],
+      ['Revenue growth', val(fig('revenueGrowthYoY', 'median')), 'ret'],
+      ['Profit margin', val(fig('profitMargin', 'median')), 'margin'],
+    ];
+    const cell = (label, v, kind) => {
+      let txt = '\u2014', cls = '';
+      const ok = v != null && (kind === 'raw' || isFinite(v));
+      if (!ok) txt = '\u2014';
+      else if (kind === 'raw') txt = String(v);
+      else if (kind === 'cap') txt = '$' + fmtMoney(v);
+      else if (kind === 'lvl') txt = pct(v);
+      else if (kind === 'idx') txt = v.toFixed(1);
+      else if (kind === 'margin') { txt = fmtMetric(v, 'pct'); cls = v < 0 ? 'neg' : ''; }
+      else { txt = pct(v); cls = v >= 0 ? 'pos' : 'neg'; }
+      return '<div class="sp-cell"><span class="sp-cl">' + esc(label) + '</span>'
+        + '<span class="sp-cv ' + cls + '">' + esc(txt) + '</span></div>';
+    };
+    const figs = '<div class="sp-block"><div class="sp-head">Returns are averages \u00b7 the rest, the middle company</div>'
+      + '<div class="sp-grid">' + CELLS.map((c) => cell(c[0], c[1], c[2])).join('') + '</div></div>';
+
+    // ---- where its companies sit on the ladder ---------------------------
+    const scored = advScored('Balanced');
+    const L = ActionRules.ACTIONS;                       // worst first
+    const tally = L.map(() => 0);
+    let read = 0, placeSum = 0;
+    for (const r of members) {
+      const a = scored[r.symbol];
+      const i = a && a.action ? L.indexOf(a.action) : -1;
+      if (i < 0) continue;
+      tally[i]++; read++; placeSum += (i + 0.5) / L.length;
+    }
+    const strong = tally[3] + tally[4] + tally[5], weak = tally[0] + tally[1], mid = tally[2];
+    const ladder = '<div class="sp-block"><div class="sp-head">Where its companies sit</div>'
+      + '<div class="sp-verd">'
+      + (read
+        ? '<span class="sp-dial">' + ladderDial(placeSum / read) + '</span>'
+          + '<span class="sp-vt"><span class="sp-vw">' + esc(strong + ' of ' + read) + '</span>'
+          + '<span class="sp-vr">' + esc('read Strong or better. ' + mid + ' Neutral, ' + weak + ' Weak or Very Weak.') + '</span></span>'
+        : '<span class="sp-vw" style="color:var(--muted)">Not scored</span>'
+          + '<span class="sp-vr">None of its companies has enough stored history for the rules to reach a reading.</span>')
+      + '</div></div>';
+
+    // ---- the note --------------------------------------------------------
+    const clip = (s) => (s.length > 26 ? s.slice(0, 25).trimEnd() + '\u2026' : s);
+    const ends = full.map((x) => ({ n: nameOf(x.r), v: (x.S[x.S.length - 1] - 1) * 100 })).sort((a, b) => b.v - a.v);
+    const note = (line
+      ? 'The equal-weight line of ' + full.length + ' companies over the ' + winLabel + ', price only'
+        + (bench && benchMove != null ? '; the fainter line is the S&P 500, ' + pct(benchMove) : '') + '. '
+        + (ends.length >= 2
+          ? 'Furthest up: ' + clip(ends[0].n) + ' ' + pct(ends[0].v) + '. Furthest down: '
+            + clip(ends[ends.length - 1].n) + ' ' + pct(ends[ends.length - 1].v) + '. ' : '')
+      : '')
+      + 'The dial is the average place of its companies, not a signal for the industry.';
+
+    return chromeTop()
+      + '<div class="s-body"><div class="sp-in">' + head
+      + '<div class="sp-wrap">' + plot + figs + ladder + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px;margin-top:16px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Lines: any measure with a history, one line per company ------------
   //
   // THE LINE-CHART COUNTERPART OF BARS (2026-10-09, owner's request). Bars
@@ -7051,6 +7234,7 @@
     shorted: tplShorted, breadth: tplBreadth, beat: tplBeat, earngrow: tplEarnGrow,
     bars: tplBars,
     industries: tplIndustries,
+    indspot: tplIndSpot,
     lines: tplLines,
     months: tplMonths,
     peertrend: tplPeerTrend,
@@ -7257,10 +7441,16 @@
     .bx-v.bx-up { color: var(--green); }
     .bx-v.bx-dn { color: var(--red); }
     .bx-in .s-sub { margin-top: 14px; }
-    /* The Industries card prints how many companies stand behind a row,
-       after the name and inside its clipped cell, so a long name loses the
-       count before it loses a second line. */
-    .ix-c { margin-left: 10px; font-family: var(--mono); font-size: .78em;
+    /* The Industries card prints how many companies stand behind a row.
+       The NAME gives way, never the count: as one clipped cell a long name
+       took the figure with it, on four rows of the first ten drawn. So the
+       cell is a flex row, the name is the part that shrinks and clips, and
+       the count keeps its width. Only a row that carries a count is built
+       this way; a Bars row is the plain clipped cell it always was. */
+    .bx-n.ix-n { display: flex; align-items: baseline; overflow: visible; }
+    .ix-t { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+            white-space: nowrap; }
+    .ix-c { flex: none; margin-left: 10px; font-family: var(--mono); font-size: .78em;
             font-weight: 500; color: var(--faint); }
     /* ---- Where the shorts moved: builds against covers ------------------
        NO HEX LITERAL AND NO BACKTICK ANYWHERE IN HERE. Every value is a
@@ -9098,6 +9288,8 @@
     // know would fall back to the one-month return in silence.
     // The Industries catalogue, on the same bargain as barMetrics.
     indMetrics: () => IND_METRICS.map((m) => [m.key, m.pick, m.group]),
+    // Every industry the spotlight can draw, largest first.
+    industryList,
     barMetrics: () => BAR_METRICS.map((m) => [m.key,
       (m.words || ['Highest', 'Lowest'])[0] + ' ' + m.label, m.group]),
     shortedMetrics: () => Object.keys(SHRT_METRICS)

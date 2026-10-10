@@ -773,6 +773,29 @@
           figure the company filed. Narrow the cut with Sector and Industry to
           compare direct competitors.</p>
       </div>
+      <!-- Industry spotlight: one industry in full, the Stock spotlight's
+           layout with an industry where the company was. The list comes
+           from the module, which is also what decides an industry is
+           large enough to draw. -->
+      <div id="ispBox">
+        <label>Industry</label>
+        <select id="ispName"></select>
+        <label>Window</label>
+        <select id="ispWin">
+          <option value="w1">Past week</option>
+          <option value="m1">Past month</option>
+          <option value="m3">Past three months</option>
+          <option value="m6" selected>Past six months</option>
+          <option value="y1">Past year</option>
+        </select>
+        <p class="hint">The window moves the line alone; the twelve figures
+          are fixed periods. Returns are the plain average of its companies
+          and the rest are the middle company. The line holds only the
+          companies with a close on every session of the window, beside the
+          S&amp;P 500. The dial is where its companies sit on average, never
+          a signal for the industry. Industries of three or more companies
+          are listed, largest first inside each sector.</p>
+      </div>
       <!-- Industries: one row per INDUSTRY, ranked on one measure. The
            unit is the industry, so there is no Industry picker here and
            the prefix is deliberately NOT in INDUSTRY_PREFIXES (every
@@ -1124,6 +1147,7 @@
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
       { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
       { id: 'waterfall', name: 'Waterfall', note: 'What actually moved the index, name by name, adding up to the whole' },
+      { id: 'indspot', name: 'Industry spotlight', note: 'One industry in full — its line against the S&P 500, twelve figures, and where its companies sit' },
       { id: 'industries', name: 'Industries', note: 'Every industry as one row, ranked on a return, breadth, size or a median — the industry is the unit' },
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its verdict' },
       { id: 'perf', name: 'Growth and profitability', note: 'One company’s revenue and net income as bars, its net margin as a line, quarter by quarter or year by year' },
@@ -1229,9 +1253,9 @@
     // ONE MECHANISM FOR EVERY GROUP: an entry in the Template list, the
     // sub-template last used inside it, and the views the picker offers.
     // ---- Industry: the industry as the unit (2026-10-10, owner's request) ---
-    // A group of one for now; an industry spotlight is its intended second.
     const IND_VIEWS = [
       ['industries', 'Ranking'],
+      ['indspot', 'Spotlight'],
     ];
     const TPL_GROUPS = [
       { name: 'Market', views: MKT_VIEWS, last: 'day' },
@@ -1514,6 +1538,7 @@
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
+      'ispName', 'ispWin',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
       'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
@@ -1623,6 +1648,7 @@
       $('egrBox').style.display = tpl === 'earngrow' ? 'block' : 'none';
       $('barBox').style.display = tpl === 'bars' ? 'block' : 'none';
       $('indBox').style.display = tpl === 'industries' ? 'block' : 'none';
+      $('ispBox').style.display = tpl === 'indspot' ? 'block' : 'none';
       $('linBox').style.display = tpl === 'lines' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
@@ -1905,6 +1931,11 @@
     ['linWin', 'linCount', 'linScope', 'linSector',
       'linIndustry', 'linCap', 'linScreen', 'linSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'lines') render(); }));
+    // Industry spotlight: its own listener list. The window needs no fetch
+    // wired here -- render() asks getBasket, and the basket's arrival
+    // repaints any template Cards.basketDays answers for.
+    ['ispName', 'ispWin'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'indspot') render(); }));
     // Industries: its own listener list too, and its measures from the module.
     ['indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector',
       'indCap', 'indScreen', 'indSp500'].forEach((id) =>
@@ -2339,6 +2370,22 @@
         $('shrtScope').innerHTML = $('movScope').innerHTML;
         $('barScope').innerHTML = $('movScope').innerHTML;
         $('indScope').innerHTML = $('movScope').innerHTML;
+        // The industries the spotlight can draw, from the module that draws
+        // them, grouped by sector. The choice is kept across a reload of the
+        // rows; the first time, it is the largest.
+        { const keep = $('ispName').value;
+          const list = Cards.industryList(stocks);
+          const bySec = new Map();
+          for (const g of list) {
+            const k = g.sector || 'Other';
+            if (!bySec.has(k)) bySec.set(k, []);
+            bySec.get(k).push(g);
+          }
+          $('ispName').innerHTML = [...bySec.keys()].sort().map((k) => `<optgroup label="${esc(k)}">` +
+            bySec.get(k).map((g) => `<option value="${esc(g.name)}">${esc(g.name)} · ${g.n}</option>`).join('') +
+            '</optgroup>').join('');
+          if (list.some((g) => g.name === keep)) $('ispName').value = keep;
+          else if (list.length) $('ispName').value = list[0].name; }
         $('linScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
