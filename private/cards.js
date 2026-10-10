@@ -3898,8 +3898,21 @@
     // ONE "THEN" FOR ALL FOUR: the first quarter both had filed. A company
     // with no figure in it prints a dash, never a later quarter passed off as
     // the start.
-    const figure = (c, label, a, b, fmt, plain) => {
-      const ch = evoChange(a, b);
+    //
+    // BOTH OF A PAIR IN THE SAME UNIT. evoChange words growth as a multiple
+    // from three times up and as a percentage below it, which is right for
+    // one company and wrong for two side by side: the first card drawn
+    // read "+185%" beside "\u00d7116", and a reader has to convert one to
+    // compare them (the owner: "why is that number in %"). So where either
+    // of a pair is a multiple, the other is printed as one too, to one
+    // decimal. Only growth is: a fall stays a percentage ("\u00d70.8" is not how
+    // anyone says it), and a sign change stays words.
+    const grew = (a, b) => (a != null && b != null && isFinite(a) && isFinite(b) && a > 0 && b > 0 ? b / a : null);
+    const asMult = (pairs) => pairs.some(([a, b]) => { const r = grew(a, b); return r != null && r >= 3; });
+    const figure = (c, label, a, b, fmt, plain, mult) => {
+      let ch = evoChange(a, b);
+      const r = grew(a, b);
+      if (mult && r != null && r >= 1) ch = { t: '\u00d7' + (r >= 10 ? r.toFixed(0) : r.toFixed(1)), c: 'pos' };
       const cls = (ch && !plain) ? ' ' + ch.c : '';
       return '<div class="evo-f"><span class="evo-fl"><span style="color:' + c.color + '">' + esc(c.sym) + '</span> ' + esc(label) + '</span>'
         + '<span class="evo-fv">' + esc(fmt(a)) + ' <i>\u2192</i> ' + esc(fmt(b)) + '</span>'
@@ -3908,11 +3921,15 @@
     const SHORT = { rev: 'revenue', ni: 'earnings', margin: 'margin', cap: 'value', pe: 'P/E', ps: 'P/S' };
     const first = (L) => L[0];
     const bizNow = (c) => { const Z = lastOf(c); return Z ? num(Z[field]) : null; };
+    const bizPair = [[first(bA), bizNow(A)], [first(bB), bizNow(B)]];
+    const valPair = [[valAt(A, A.by.get(start), false), endA], [valAt(B, B.by.get(start), false), endB]];
+    // A margin is a level in points, never a multiple of itself.
+    const bizMult = mKind === 'money' && asMult(bizPair), valMult = asMult(valPair);
     const figs = '<div class="evo-figs">'
-      + (bizBlocked ? '' : figure(A, SHORT[mKey], first(bA), bizNow(A), fmtM, mKind !== 'money')
-        + figure(B, SHORT[mKey], first(bB), bizNow(B), fmtM, mKind !== 'money'))
-      + (valBlocked ? '' : figure(A, SHORT[vKey], valAt(A, A.by.get(start), false), endA, vFmt, vKey !== 'cap')
-        + figure(B, SHORT[vKey], valAt(B, B.by.get(start), false), endB, vFmt, vKey !== 'cap'))
+      + (bizBlocked ? '' : figure(A, SHORT[mKey], bizPair[0][0], bizPair[0][1], fmtM, mKind !== 'money', bizMult)
+        + figure(B, SHORT[mKey], bizPair[1][0], bizPair[1][1], fmtM, mKind !== 'money', bizMult))
+      + (valBlocked ? '' : figure(A, SHORT[vKey], valPair[0][0], valPair[0][1], vFmt, vKey !== 'cap', valMult)
+        + figure(B, SHORT[vKey], valPair[1][0], valPair[1][1], vFmt, vKey !== 'cap', valMult))
       + '</div>';
     const zA = lastOf(A), zB = lastOf(B);
     const asof = 'From ' + labels[0] + ' \u00b7 ' + SHORT[mKey] + ' to each one\u2019s last filed quarter ('

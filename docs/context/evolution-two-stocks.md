@@ -31,3 +31,10 @@ Two companies' filed quarters almost never share a date (Apple's year ends in Se
 - `pairChart(labels, lines, o)` is a sibling of `valueChart`, not a flag on it: that one fills under a single series, and a fill under each of two is mud.
 - **The layout is Evolution's own** — the same `evo-*` classes, the same two measured panel heights, four figures in the same one row — so the fit is inherited rather than measured. What is new and unseen: a title of two names (tickers past 40 characters combined), a legend in the line under it, two end tags per panel, and four figure labels that carry a ticker.
 - Verified: 35 checks in Node (`evt-test.js` in the session scratchpad), on fixtures with offset fiscal years, a hundredfold size gap, a loss-then-profit company with a 9,000× quarter, and a foreign reporter. The one-company Evolution card is identical before and after. **Nothing was rendered.**
+
+### Both figures of a pair in the same unit (2026-10-10, the owner on the first card drawn: "why is that number in %")
+`evoChange` words growth as a multiple from three times up and as a percentage below it. That is right for one company and wrong for two side by side: Apple against NVIDIA read **"+185%" beside "×116"**, and a reader has to convert one to compare them. So where EITHER of a pair is a multiple, the other is printed as one too, to one decimal (`×2.9`).
+
+- **Only growth is.** A fall stays a percentage (`×0.8` is not how anyone says it) and a sign change stays words ("to profit").
+- A margin is a level in points and is never a multiple of itself, so the rule applies to the dollar measures and to the market measure.
+- Where neither of a pair tripled, both stay percentages, as before.
