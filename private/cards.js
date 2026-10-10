@@ -7464,7 +7464,12 @@
   // blue for near the high, grey for a pullback, amber and orange for the
   // two that have names. Red would say "fell today", which a stock in a
   // correction may well not have done.
-  const DD_TINT = { 'Near high': '#60a5fa', 'Pullback': '#9aa3b2', 'Correction': '#fbbf24', 'Bear market': '#fb923c' };
+  // MUTED ON PURPOSE (2026-10-10, the owner, of the first card: "orange and
+  // yellow are very bright"). On a real night three quarters of the bar is
+  // the last two states, so a saturated amber and orange filled the card.
+  // These are the same four hues turned down: a sand and a clay that still
+  // read as warmer and deeper in turn, beside a calmer blue and a slate.
+  const DD_TINT = { 'Near high': '#5a8fd6', 'Pullback': '#6f7b8f', 'Correction': '#b89a62', 'Bear market': '#a5604a' };
   const ddNum = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));   // a null is not a zero
   const ddBelow = (v) => (v == null ? '\u2014' : v >= -0.05 ? 'at its high' : '\u2212' + Math.abs(v).toFixed(1) + '%');
   const COR_SECTORS = { portrait: 11, square: 6, story: 11 };
@@ -7519,8 +7524,8 @@
       return { s, c, n: by[s].length, deep: (c[2] + c[3]) / by[s].length * 100 };
     }).sort((a, b) => b.deep - a.deep || a.s.localeCompare(b.s)).slice(0, COR_SECTORS[size.id] || 11);
     const SZ = ({ portrait: { f: 23, b: 24 }, square: { f: 19, b: 16 }, story: { f: 32, b: 36 } })[size.id] || { f: 23, b: 24 };
-    const secHtml = secs.length ? '<div class="bx-rows cor-rows" style="--bxv:' + Math.ceil(SZ.f * 3.4) + 'px">'
-      + '<div class="bx-r sb-hd"><span>Sector</span><span>Its companies, by state</span><span class="sb-hr">10%+ below</span></div>'
+    const secHtml = secs.length ? '<div class="bx-rows cor-rows" style="--bxv:' + Math.ceil(SZ.f * 4.6) + 'px">'
+      + '<div class="bx-r sb-hd"><span>Sector</span><span>Its companies, by state</span><span class="sb-hr">10%+ off</span></div>'
       + secs.map((r) => '<div class="bx-r" style="font-size:' + SZ.f + 'px">'
         + '<span class="bx-n ix-n"><span class="ix-t">' + esc(r.s) + '</span><span class="ix-c cor-cn">' + r.n + '</span></span>'
         + '<span class="cor-t" style="height:' + SZ.b + 'px">' + bar(r.c, ' cor-sm') + '</span>'
@@ -7533,7 +7538,7 @@
     const note = deep.toLocaleString('en-US') + ' of ' + n.toLocaleString('en-US') + ' companies (' + p0(deep / n * 100) + ') are 10% or more below their 52-week high'
       + (own ? ', while the ' + own.label + ' is ' + (own.d >= -0.05 ? 'at its high' : Math.abs(own.d).toFixed(1) + '% below its own') : '') + '. '
       + 'The median company is ' + (med >= -0.05 ? 'at its high' : Math.abs(med).toFixed(1) + '% below') + '. '
-      + 'Each is measured against its own 52-week high at the latest close: under 5% below is near the high, 5 to 10% a pullback, 10 to 20% a correction, 20% or more a bear market. '
+      + 'Each is measured against its own 52-week high, the highest price traded in the past year, at the latest close: under 5% below is near the high, 5 to 10% a pullback, 10 to 20% a correction, 20% or more a bear market. '
       + (skipped ? skipped + ' with under six months of history or no reading ' + (skipped === 1 ? 'is' : 'are') + ' left out. ' : '')
       + 'An index is weighted by size and this is counted by company, which is why the two can disagree. Where prices stand, not where they go next.';
     return chromeTop()
