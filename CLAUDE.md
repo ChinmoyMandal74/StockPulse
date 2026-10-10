@@ -129,7 +129,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Foundations** — `what-this-is` · `running-the-app` · `key-files` · `persistence` · `deploys` · `serving-and-the-gate` · `api-patterns` · `conventions` · `feature-flags-in-env`
 
-**Accounts and mail** — `auth-model` · `email` · `alerts` · `the-admin-announcement` · `activity-logging` · `visitor-logging` · `member-portfolios` · `saved-column-layout`
+**Accounts and mail** — `auth-model` · `request-access` · `email` · `alerts` · `the-admin-announcement` · `activity-logging` · `visitor-logging` · `member-portfolios` · `saved-column-layout`
 
 **Screener front end** — `frontend-layout` · `design-system` · `table-specifics` · `column-groups` (190 KB: every column, plus tiles, views, the filter row, hidden columns) · `reactions-group` · `screens` · `analysis-screens` (retired) · `the-awesome-oscillator`
 

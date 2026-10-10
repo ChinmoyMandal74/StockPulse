@@ -216,7 +216,12 @@
         <div class="field" id="codeField" style="display:none">
           <label for="code">Invite code</label>
           <input type="text" id="code" name="code" autocomplete="off" autocapitalize="none"
-                 autocorrect="off" spellcheck="false" placeholder="Ask the admin for this" />
+                 autocorrect="off" spellcheck="false" placeholder="The code you were sent" />
+          <!-- Uses the email and name already typed above, the reset link's
+               pattern: one click rather than a second form. -->
+          <p class="forgot" style="text-align:left;margin-top:8px">
+            <button type="button" id="askBtn">No code? Request one by email</button>
+          </p>
         </div>
         <!-- Registration only, and UNTICKED. A pre-ticked box is not consent
              — it is the one thing the regulators name outright — and a page
@@ -305,6 +310,32 @@
       }
     }
 
+    // Asks the owner for an invite code, with the address already typed in.
+    // The reply is the same whatever the server knows about that address,
+    // so the message cannot say more than "received".
+    async function requestAccess() {
+      const email = ($('email').value || '').trim();
+      if (!email) { $('email').focus(); return setMsg('Enter your email address first, then click again.'); }
+      if (busy) return;
+      busy = true;
+      const w = working($('askBtn'), 'Sending…');
+      try {
+        const res = await fetch('/api/access-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, name: ($('name').value || '').trim() }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) setMsg(data.error || 'That request could not be sent. Try again in a moment.');
+        else setMsg(data.message || 'Request received.', 'ok');
+      } catch {
+        setMsg('Could not reach the server. Try again in a moment.');
+      } finally {
+        w.restore();
+        busy = false;
+      }
+    }
+
     function setMode(next) {
       mode = next;
       const reg = mode === 'register';
@@ -336,6 +367,7 @@
     $('tabSignin').addEventListener('click', () => { if (!busy) setMode('signin'); });
     $('tabRegister').addEventListener('click', () => { if (!busy) setMode('register'); });
     $('forgotBtn').addEventListener('click', requestReset);
+    $('askBtn').addEventListener('click', requestAccess);
 
     // IN FLIGHT, guarded beyond the disabled button. Disabling `#submit` does
     // not reliably stop a second submission — Enter in a text field submits the
@@ -461,7 +493,9 @@
         if (me.googleReady) $('googleWrap').style.display = '';
         if (me.signedIn) { window.location.href = '/'; return; }
       } catch { /* show the form */ }
-      setMode('signin');
+      // The invite email links here with ?mode=register, so the person lands
+      // on the form the code belongs in.
+      setMode(new URLSearchParams(location.search).get('mode') === 'register' ? 'register' : 'signin');
       // AFTER setMode, and that ordering is the whole point: setMode ends with
       // setMsg(''), and it runs here — after an awaited fetch — while this
       // handler used to run synchronously at parse time. The message was

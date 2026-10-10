@@ -3048,6 +3048,100 @@ app.post('/api/reset', route(async (req, res) => {
 }));
 
 // Owner-only: see who has an account, and revoke one.
+// ---- asking for an invite code ------------------------------------------
+//
+// (2026-10-10, the owner: "there should be an option for someone to request
+// access just by giving their email so that I can send them the sign up
+// code".) Until now the sign-up form's code field said "Ask the admin for
+// this" and gave no way to do it.
+//
+// THE CODE IS NEVER SENT AUTOMATICALLY. A request is a row and a notice to
+// the owner; the code goes out when the owner presses Send on /users. An
+// automatic reply would turn the invite code into something anyone can
+// fetch by typing an address, which is no gate at all.
+//
+// THE ANSWER IS THE SAME WHATEVER HAPPENED -- new, a repeat, throttled, or
+// an address that already has an account -- for /api/forgot's reason: the
+// form must not say whose address is known here.
+//
+// PUBLIC AND UNAUTHENTICATED, so it is bounded twice: one row per address
+// (a repeat is counted, not added, and does not notify again), and a
+// site-wide cap on new addresses an hour, past which a request is dropped
+// rather than written. The owner's inbox is the thing being protected.
+const ACCESS_REQ_PER_HOUR = 20;
+app.post('/api/access-request', route(async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  // CR and LF stripped, the registration name's rule: it goes into a mail.
+  const name = String(req.body?.name || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 80);
+  if (!EMAIL_RE.test(email) || email.length > 160) {
+    return res.status(400).json({ error: 'That does not look like an email address.' });
+  }
+  const generic = { ok: true, message: 'Request received. If access is available, an invite code will be emailed to that address.' };
+  const r = await store.noteAccessRequest({ email, name, hourCap: ACCESS_REQ_PER_HOUR });
+  if (r.throttled) { console.warn('access-request: hourly cap reached; a request was dropped'); return res.json(generic); }
+  if (r.fresh && MAIL_READY) {
+    // Awaited: nothing runs after the response here. Swallowed: a failing
+    // mail provider must not fail the request, which is already stored.
+    try {
+      const to = await operatorEmail();
+      const heading = 'Access requested';
+      const intro = (name ? name + ' (' + email + ')' : email) + ' asked for an invite code from the sign-up form.';
+      const link = `${APP_URL}/users`;
+      const note = 'Nothing is sent to them until you press Send code on the Users page.';
+      if (to) {
+        await sendMail({ kind: 'access-request', to, subject: `[${BRAND}] Access requested`,
+          text: textShell({ heading, intro, lines: [link], note }),
+          html: emailShell({ heading, intro, body: mailButton(link, 'Open Users'), note }) });
+      }
+    } catch (e) { console.warn('access-request: owner notice failed:', e.message); }
+  }
+  res.json(generic);
+}));
+
+app.get('/api/access-requests', requireAdmin, route(async (req, res) => {
+  res.json({ requests: await store.listAccessRequests(), codeSet: !!SIGNUP_CODE, mailReady: MAIL_READY });
+}));
+
+// Sends the invite code to one requester. The only place the code leaves
+// the server, and only on an admin's click.
+app.post('/api/access-requests/:id/send', requireAdmin, route(async (req, res) => {
+  if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
+  const r = await store.readAccessRequest(req.params.id);
+  if (!r) return res.status(404).json({ error: 'That request is no longer there.' });
+  const link = `${APP_URL}/login?mode=register`;
+  const heading = 'Your invite';
+  const intro = `You asked for access to ${BRAND}. ` + (SIGNUP_CODE
+    ? 'Here is the invite code to create your account with.'
+    : 'No invite code is needed at the moment: you can create your account now.');
+  const after = REQUIRE_APPROVAL ? 'New accounts are approved by the admin before the first sign-in.' : '';
+  const note = 'If you did not ask for this, ignore this email. Nothing has been created in your name.';
+  const codeHtml = SIGNUP_CODE
+    ? `<p style="margin:0 0 18px;padding:14px 16px;border-radius:10px;border:1px solid ${MC.hair || '#2a3142'};`
+      + `font:600 22px ui-monospace,Menlo,Consolas,monospace;letter-spacing:2px;text-align:center">${mailEsc(SIGNUP_CODE)}</p>`
+    : '';
+  const sent = await sendMail({
+    kind: 'access-invite', to: r.email, replyTo: process.env.MAIL_REPLY_TO || undefined,
+    subject: `Your ${BRAND} invite` + (SIGNUP_CODE ? ' code' : ''),
+    text: textShell({ heading, intro,
+      lines: (SIGNUP_CODE ? ['Invite code: ' + SIGNUP_CODE, ''] : []).concat([link], after ? ['', after] : []), note }),
+    html: emailShell({ heading, intro,
+      body: codeHtml + mailButton(link, 'Create your account')
+        + (after ? `<p style="margin:0;font-size:13.5px;color:${MC.mute}">${mailEsc(after)}</p>` : ''),
+      note }),
+  });
+  if (!sent) return res.status(502).json({ error: 'The email could not be sent. Nothing was marked as sent.' });
+  await store.markAccessRequestSent(r.id);
+  logAct(req, 'access', 'invite-sent');
+  res.json({ ok: true });
+}));
+
+app.delete('/api/access-requests/:id', requireAdmin, route(async (req, res) => {
+  const gone = await store.deleteAccessRequest(req.params.id);
+  if (!gone) return res.status(404).json({ error: 'That request is no longer there.' });
+  logAct(req, 'access', 'request-deleted');
+  res.json({ ok: true });
+}));
+
 app.get('/api/users', requireAdmin, route(async (req, res) => {
   // The review half of member portfolios: each account row on /users shows
   // what its owner has built. Rows under a key with no account (the legacy

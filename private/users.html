@@ -107,6 +107,15 @@
 
     .note { margin: 16px 4px 0; line-height: 1.6; }
     .err { color: var(--red); font-size: 13px; margin-top: 14px; }
+    /* Requests for an invite code, above the accounts. */
+    #reqs { margin-bottom: 18px; }
+    #reqs h2 { font: 600 13px var(--sans); color: var(--muted); margin: 0; padding: 16px 18px 4px; }
+    #reqs .rq-send { font: 600 12px var(--sans); color: var(--text); background: rgba(124, 156, 255, 0.10);
+                     border: 1px solid rgba(124, 156, 255, 0.4); border-radius: 999px; padding: 5px 14px;
+                     cursor: pointer; margin-right: 6px; }
+    #reqs .rq-send:hover { background: rgba(124, 156, 255, 0.18); }
+    #reqs .rq-send:disabled { opacity: 0.4; cursor: default; }
+    #reqs .rq-st { font-size: 11px; color: var(--faint); }
     #out .tline { margin-top: 2px; font-size: 10.5px; color: var(--faint); white-space: nowrap; }
   </style>
 </head>
@@ -134,6 +143,9 @@
     </p>
 
     <div class="stats" id="stats"></div>
+    <!-- People who asked for an invite code from the sign-up form. Hidden
+         when there are none. -->
+    <section class="bezel tbl" id="reqs" hidden><div class="core" id="reqsOut"></div></section>
     <section class="bezel tbl"><div class="core" id="out">
       <p class="lede" style="padding: 20px 18px; margin: 0;">Loading…</p>
     </div></section>
@@ -154,6 +166,53 @@
 
     let me = null;
 
+    // Requests for an invite code. Its own fetch and its own failure: a
+    // fault here must not take the accounts table down with it.
+    async function loadRequests(users) {
+      let d;
+      try {
+        const res = await fetch('/api/access-requests', { cache: 'no-store' });
+        d = await res.json();
+        if (!res.ok) throw new Error(d.error || 'x');
+      } catch { $('reqs').hidden = true; return; }
+      const list = d.requests || [];
+      $('reqs').hidden = !list.length;
+      if (!list.length) return;
+      const have = new Set((users || []).map((u) => u.email));
+      const waiting = list.filter((r) => r.status === 'new').length;
+      $('reqsOut').innerHTML = `<h2>Access requests${waiting ? ' \u00b7 ' + waiting + ' waiting' : ''}</h2>`
+        + '<table><thead><tr><th>Name</th><th>Email</th><th>Asked</th><th>Status</th><th></th></tr></thead><tbody>'
+        + list.map((r) => `<tr>
+            <td class="uname">${r.name ? esc(r.name) : '<span class="noname">\u2014</span>'}</td>
+            <td class="email">${esc(r.email)}</td>
+            <td class="when">${esc(when(r.lastAt))}${r.asks > 1 ? ` <span class="rq-st">\u00d7${r.asks}</span>` : ''}</td>
+            <td class="rq-st">${have.has(r.email) ? 'already has an account' : r.status === 'sent' ? 'code sent ' + esc(when(r.sentAt)) : 'waiting'}</td>
+            <td class="act"><button class="rq-send" data-rq="${r.id}" data-email="${esc(r.email)}" ${d.mailReady ? '' : 'disabled title="Email is not configured on this server"'}>`
+              + `${r.status === 'sent' ? 'Send again' : d.codeSet ? 'Send code' : 'Send invite'}</button>`
+              + `<button class="del" data-rqdel="${r.id}" data-email="${esc(r.email)}">Delete</button></td></tr>`).join('')
+        + '</tbody></table>';
+    }
+    $('reqsOut').addEventListener('click', async (e) => {
+      const s = e.target.closest('.rq-send'), x = e.target.closest('[data-rqdel]');
+      const b = s || x;
+      if (!b || b.disabled) return;
+      if (s && !window.confirm(`Email the invite code to ${s.dataset.email}?`)) return;
+      if (x && !window.confirm(`Delete the request from ${x.dataset.email}? Nothing is sent to them.`)) return;
+      b.disabled = true;
+      $('err').textContent = '';
+      try {
+        const res = s
+          ? await fetch(`/api/access-requests/${encodeURIComponent(s.dataset.rq)}/send`, { method: 'POST' })
+          : await fetch(`/api/access-requests/${encodeURIComponent(x.dataset.rqdel)}`, { method: 'DELETE' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'That did not work.');
+        await load();
+      } catch (err) {
+        $('err').textContent = err.message;
+        b.disabled = false;
+      }
+    });
+
     async function load() {
       $('err').textContent = '';
       let data;
@@ -169,6 +228,7 @@
       }
 
       const users = data.users || [];
+      loadRequests(users);
       const admins = users.filter((u) => isAdminRole(u.role)).length;
       const active = users.filter((u) => u.activeSessions > 0).length;
 

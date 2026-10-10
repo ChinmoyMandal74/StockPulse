@@ -308,6 +308,22 @@ const SCHEMA = [
   // An unsubscribed row is KEPT, never deleted. The row IS the record that the
   // address asked to stop, and deleting it would lose both the audit trail and
   // the reason the next import must not pick them up again.
+  // People who asked for an invite code from the sign-up form (2026-10-10).
+  // One row per address: asking again bumps `asks` and `last_at` rather than
+  // adding a row, which is also what stops one person filling the owner's
+  // inbox. `status` is 'new' until the owner sends the code, then 'sent'.
+  // Rows leave when the owner deletes them, and after ninety days.
+  `create table if not exists access_requests (
+     id         integer primary key autoincrement,
+     email      text not null unique,
+     name       text,
+     status     text not null default 'new',
+     asks       integer not null default 1,
+     created_at integer not null,
+     last_at    integer not null,
+     sent_at    integer
+   )`,
+  'create index if not exists idx_access_req_last on access_requests (last_at)',
   `create table if not exists subscribers (
      email           text primary key,
      status          text not null,
@@ -2692,6 +2708,66 @@ async function writeFlows(obj) {
 // The token chain (see tokenPlan in instagram.js): which environment token
 // this descends from, when it was last refreshed, and -- only once a
 // refresh has produced one -- the refreshed token itself.
+// ---- requests for an invite code ----------------------------------------
+const ACCESS_REQ_KEEP_MS = 90 * 86400000;
+const ACCESS_REQ_AGAIN_MS = 86400000;
+
+// Records one request. Answers { fresh } when the owner should hear about
+// it, { throttled } when the site has taken `hourCap` in the last hour and
+// this one was not written, and neither for a repeat that changed nothing
+// worth a second notice.
+async function noteAccessRequest({ email, name, hourCap }) {
+  await init();
+  const now = Date.now();
+  await db.execute({ sql: 'delete from access_requests where last_at < ?', args: [now - ACCESS_REQ_KEEP_MS] });
+  const had = await db.execute({ sql: 'select id, status, last_at from access_requests where email = ?', args: [email] });
+  if (had.rows.length) {
+    const row = had.rows[0];
+    // Already sent a code and asking again a day later: the first one may
+    // never have arrived, so it becomes a new request. Sooner, or still
+    // waiting, it is only counted.
+    const again = row.status === 'sent' && now - Number(row.last_at) > ACCESS_REQ_AGAIN_MS;
+    await db.execute({
+      sql: `update access_requests set asks = asks + 1, last_at = ?, name = coalesce(?, name),
+              status = case when ? = 1 then 'new' else status end where id = ?`,
+      args: [now, name || null, again ? 1 : 0, row.id],
+    });
+    return { fresh: again };
+  }
+  const hour = await db.execute({ sql: 'select count(*) as n from access_requests where last_at > ?', args: [now - 3600000] });
+  if (Number(hour.rows[0].n) >= (hourCap || 20)) return { throttled: true };
+  await db.execute({
+    sql: `insert into access_requests (email, name, status, asks, created_at, last_at) values (?, ?, 'new', 1, ?, ?)
+          on conflict(email) do nothing`,
+    args: [email, name || null, now, now],
+  });
+  return { fresh: true };
+}
+
+async function listAccessRequests() {
+  await init();
+  const r = await db.execute('select id, email, name, status, asks, created_at, last_at, sent_at from access_requests order by id desc limit 200');
+  return r.rows.map((x) => ({ id: Number(x.id), email: String(x.email), name: x.name || null, status: String(x.status),
+    asks: Number(x.asks || 1), createdAt: Number(x.created_at), lastAt: Number(x.last_at), sentAt: x.sent_at == null ? null : Number(x.sent_at) }));
+}
+
+async function readAccessRequest(id) {
+  await init();
+  const r = await db.execute({ sql: 'select id, email, name, status from access_requests where id = ?', args: [Number(id)] });
+  return r.rows.length ? { id: Number(r.rows[0].id), email: String(r.rows[0].email), name: r.rows[0].name || null, status: String(r.rows[0].status) } : null;
+}
+
+async function markAccessRequestSent(id) {
+  await init();
+  await db.execute({ sql: "update access_requests set status = 'sent', sent_at = ? where id = ?", args: [Date.now(), Number(id)] });
+}
+
+async function deleteAccessRequest(id) {
+  await init();
+  const r = await db.execute({ sql: 'delete from access_requests where id = ?', args: [Number(id)] });
+  return Number(r.rowsAffected || 0) > 0;
+}
+
 async function readIgToken() {
   await init();
   const r = await db.execute("select value from app_meta where key = 'ig_token'");
@@ -6105,6 +6181,7 @@ module.exports = {
   readInsiderNetSince, readFlows, writeFlows,
   readFxRates, writeFxRates,
   readIgToken, writeIgToken, writeIgPost, listIgPosts,
+  noteAccessRequest, listAccessRequests, readAccessRequest, markAccessRequestSent, deleteAccessRequest,
   readShortRecentFor,
   readSplits, writeSplits, splitCoverage, readSplitIndex, readOnboardPending, readOnboardDone, noteOnboarded,
   readShortState, noteShortMiss, shortNewest, appendShortInterest,
