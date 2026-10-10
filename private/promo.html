@@ -1067,6 +1067,36 @@
            is no evoSector/evoIndustry/evoCap/evoScreen and INDUSTRY_PREFIXES
            is left alone. THE WINDOW IS IN YEARS, not bar counts: the series
            is quarterly, so three months of it is a single point. -->
+      <!-- Evolution Two Stocks: the Evolution card's two panels for a chosen
+           pair. Its own five controls; the market measures come from the
+           module, the same list the one-company card offers. -->
+      <div id="evtBox">
+        <label>First stock</label>
+        <select id="evtSymA"></select>
+        <label>Second stock</label>
+        <select id="evtSymB"></select>
+        <label>Business measure</label>
+        <select id="evtMeasure">
+          <option value="rev" selected>Revenue</option>
+          <option value="ni">Earnings</option>
+          <option value="margin">Profit margin</option>
+        </select>
+        <label>Market measure</label>
+        <select id="evtValue"></select>
+        <label>Window</label>
+        <select id="evtWin">
+          <option value="5">Last 5 years</option>
+          <option value="10" selected>Last 10 years</option>
+          <option value="0">Everything filed</option>
+        </select>
+        <p class="hint">Two companies on one axis, lined up by calendar
+          quarter, from the first quarter both had filed. A dollar measure
+          goes logarithmic where the two differ in size by more than four
+          times and neither has a loss in the window; with a loss it stays
+          plain and the smaller reads flat, so use Profit margin for that
+          pair. A company reporting in another currency is compared on
+          margin and market value only.</p>
+      </div>
       <div id="evoBox">
         <label>Stock</label>
         <select id="evoSym"></select>
@@ -1232,6 +1262,7 @@
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'lines', name: 'Lines', note: 'Any one measure over time — price or a filed fundamental — a line per company' },
+      { id: 'evo2', name: 'Evolution Two Stocks', note: 'Two companies, what each business did and what the market paid for it — from the filings, on one axis' },
       { id: 'advboard', name: 'Signal', note: 'What the rules read, four ways' },
       { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
       { id: 'howto', name: 'How to', note: 'Training slides — one topic, three slides, a carousel each' },
@@ -1308,6 +1339,7 @@
       ['sparks', 'Sparklines'],
       ['chart', 'Chart'],
       ['lines', 'Lines — any measure'],
+      ['evo2', 'Evolution Two Stocks'],
     ];
     const BRAND_VIEWS = [
       ['intro', 'Intro'],
@@ -1621,6 +1653,7 @@
       'prfSym', 'prfPeriod', 'prfCount',
       'monSym', 'monView',
       'evoSym', 'evoMeasure', 'evoWin', 'evoValue',
+      'evtSymA', 'evtSymB', 'evtMeasure', 'evtValue', 'evtWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
       'disMode'];
     function controlOpts() {
@@ -1728,6 +1761,7 @@
       $('linBox').style.display = tpl === 'lines' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
+      $('evtBox').style.display = tpl === 'evo2' ? 'block' : 'none';
       $('monBox').style.display = tpl === 'months' ? 'block' : 'none';
       $('ptrBox').style.display = tpl === 'peertrend' ? 'block' : 'none';
       $('prfBox').style.display = tpl === 'perf' ? 'block' : 'none';
@@ -1966,6 +2000,12 @@
       $(id).addEventListener('change', () => { if (tpl === 'months') render(); }));
     for (const [v, label] of Cards.monthViews()) $('monView').appendChild(new Option(label, v));
     for (const [v, label] of Cards.evoValues()) $('evoValue').appendChild(new Option(label, v));
+    // The two-stock card offers the same market measures and opens on P/E,
+    // the owner's default for a pair.
+    for (const [v, label] of Cards.evoValues()) $('evtValue').appendChild(new Option(label, v));
+    $('evtValue').value = 'pe';
+    ['evtSymA', 'evtSymB', 'evtMeasure', 'evtValue', 'evtWin'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'evo2') render(); }));
     ['evoSym', 'evoMeasure', 'evoWin', 'evoValue'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'evolution') render(); }));
     // A FIFTEENTH hardcoded listener list. histMode is in it like any
@@ -2502,6 +2542,15 @@
         { const keep = $('monSym').value; $('monSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('monSym').options].some((o) => o.value === keep)) $('monSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;
+        // Two pickers from the one list, each keeping its choice across a
+        // reload of the rows. The second opens on the SECOND company: a
+        // pair that starts as one stock twice is not a comparison.
+        for (const [id, at] of [['evtSymA', 0], ['evtSymB', 1]]) {
+          const keep = $(id).value;
+          $(id).innerHTML = $('chtSym').innerHTML;
+          if (keep && [...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
+          else if ($(id).options.length > at) $(id).selectedIndex = at;
+        }
         // one sector list, built from the rows themselves so it can never
         // offer a sector nothing is in
         const secOpts = '<option value="All">All sectors</option>' +

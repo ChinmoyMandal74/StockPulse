@@ -3228,6 +3228,13 @@
   // `basketDays` exists: the pairing was a hardcoded list in each of them
   // once, and that is how the spotlight shipped drawing nothing at all.
   function evolutionNeed(tpl, opts) {
+    // The two-stock card needs two companies' filings. `symbol` stays the
+    // first so an older host still fetches one; `symbols` is the whole ask.
+    if (tpl === 'evo2') {
+      const o2 = opts || {};
+      const [a, b] = evoTwoSyms(o2);
+      return { symbol: a, symbols: [a, b].filter(Boolean), years: EVO_WINDOWS[o2.evtWin] != null ? Number(o2.evtWin) : 10 };
+    }
     if (tpl !== 'evolution') return null;
     const o = opts || {};
     const years = EVO_WINDOWS[o.evoWin] != null ? Number(o.evoWin) : 10;
@@ -3601,6 +3608,331 @@
         ? esc(multNote || (vKey === 'ps' ? 'Revenue is the trailing year\u2019s. ' : ''))
         : 'A multiple is not shown where the company lost money.')
       + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
+  // ---- Evolution Two Stocks: the same two panels, two companies -------------
+  //
+  // (2026-10-10, owner's request, from the Evolution card.) What that card
+  // does for one company -- what the business did above, what the market paid
+  // for it below -- drawn for a chosen pair, one line each, in blue and
+  // orange: a colour here is an identity, and green and red mean up and down
+  // everywhere else.
+  //
+  // TWO COMPANIES ARE RARELY ONE SIZE, and a shared dollar axis draws the
+  // smaller as a line along the floor. So:
+  //   a RATIO (margin, P/E, P/S) is already comparable: one plain axis.
+  //   a DOLLAR measure goes LOGARITHMIC where every figure of both is
+  //     positive and they span more than EVT_LOG_SPAN times -- the peer
+  //     chart's own rule. On a log axis equal slopes are equal growth rates,
+  //     which is the comparison a reader is making. The heading says so.
+  //   a dollar measure that reaches zero or below (earnings, with a loss
+  //     anywhere in the window) CANNOT go logarithmic and is NOT rebased:
+  //     rebasing a series that starts negative or crosses zero gives a number
+  //     that means nothing. It stays on a plain dollar axis and the note says
+  //     the smaller company will read flat, and that margin is the like-for-
+  //     like view.
+  //
+  // LINED UP BY CALENDAR QUARTER, never by date: Apple's year ends in
+  // September and Microsoft's in June, so their filed quarters never share a
+  // date. A quarter belongs to the calendar quarter its MIDDLE falls in, the
+  // Earnings growth card's rule (earngrowth.js), restated because this module
+  // has no requires.
+  //
+  // THE WINDOW STARTS WHERE BOTH HAVE FILED. Before that there is one line,
+  // and a comparison of one is the other card.
+  //
+  // NO WINNER. Nothing is ranked, coloured or worded as better; a multiple's
+  // change takes no colour at all, as on the one-company card.
+  const EVT_LOG_SPAN = 4;
+  const EVT_A = '#60a5fa';
+  const EVT_B = '#fb923c';
+  const evtQ = (d) => {
+    const t = Date.parse(String(d) + 'T00:00:00Z');
+    if (!isFinite(t)) return null;
+    const m = new Date(t - 45 * 86400000);
+    return m.getUTCFullYear() * 4 + Math.floor(m.getUTCMonth() / 3);
+  };
+  const evtQLabel = (i) => 'Q' + (i % 4 + 1) + ' ' + Math.floor(i / 4);
+
+  // Which two stocks, over how many years. Asked by both hosts through
+  // evolutionNeed, which answers for this card with `symbols`.
+  function evoTwoSyms(opts) {
+    const o = opts || {};
+    const a = o.evtSymA || (stocks[0] && stocks[0].symbol) || null;
+    let b = o.evtSymB || null;
+    if (!b || b === a) b = (stocks.find((r) => r && r.symbol !== a) || {}).symbol || null;
+    return [a, b];
+  }
+
+  // Two lines on ONE axis. A sibling of valueChart, not a flag on it: that
+  // one fills under a single series, and a fill under each of two is mud.
+  function pairChart(labels, lines, o) {
+    const W = 952, H = (o && o.h) || 300, PL = 118, PR = 128, PT = 16, PB = 40;
+    const ok = (v) => v != null && isFinite(v);
+    const all = [].concat(...lines.map((l) => l.vals)).filter(ok);
+    if (labels.length < 2 || !lines.some((l) => l.vals.filter(ok).length >= 2)) {
+      return '<p class="s-empty" style="margin:6px 0;font-size:20px">' + esc((o && o.empty) || 'Not enough filed quarters to draw.') + '</p>';
+    }
+    const fmt = (o && o.fmt) || ((v) => String(v));
+    let lo = Math.min(...all), hi = Math.max(...all);
+    if (lo === hi) { lo -= 1; hi += 1; }
+    const log = !!(o && o.log) && lo > 0;
+    if (!log) {
+      // valueChart's own rule: zero is on the axis only where the data nears it.
+      if (lo > 0 && lo < (hi - lo)) lo = 0;
+      if (hi < 0 && -hi < (hi - lo)) hi = 0;
+    }
+    const T = log ? Math.log : (v) => v;
+    const PADPX = 14, span = H - PT - PB;
+    const x = (i) => PL + (i / (labels.length - 1)) * (W - PL - PR);
+    const y = (v) => PT + PADPX + (1 - (T(v) - T(lo)) / (T(hi) - T(lo))) * (span - PADPX * 2);
+    let grid = '';
+    const ticks = [];
+    for (let g = 0; g <= 3; g++) {
+      const v = log ? Math.exp(T(lo) + (g / 3) * (T(hi) - T(lo))) : lo + (g / 3) * (hi - lo);
+      ticks.push(v);
+      grid += '<line x1="' + PL + '" y1="' + y(v).toFixed(1) + '" x2="' + (W - PR)
+        + '" y2="' + y(v).toFixed(1) + '" stroke="' + pal.grid + '" stroke-width="1"/>'
+        + '<text x="' + (PL - 14) + '" y="' + (y(v) + 7).toFixed(1) + '" text-anchor="end"'
+        + ' font-size="18" fill="' + pal.axis + '" font-family="Geist Mono, monospace">'
+        + esc(fmt(v)) + '</text>';
+    }
+    if (!log && lo < 0 && hi > 0) {
+      const yz = y(0);
+      grid += '<line x1="' + PL + '" y1="' + yz.toFixed(1) + '" x2="' + (W - PR)
+        + '" y2="' + yz.toFixed(1) + '" stroke="' + pal.zero + '" stroke-width="1.5"/>';
+      if (ticks.every((v) => Math.abs(y(v) - yz) >= 22)) {
+        grid += '<text x="' + (PL - 14) + '" y="' + (yz + 7).toFixed(1) + '" text-anchor="end"'
+          + ' font-size="18" fill="' + pal.axis + '" font-family="Geist Mono, monospace">'
+          + esc(fmt(0)) + '</text>';
+      }
+    }
+    let strokes = '';
+    const marks = [];
+    for (const l of lines) {
+      let d = '', pen = false, last = -1, runStart = -1, dots = '';
+      for (let i = 0; i < l.vals.length; i++) {
+        const v = l.vals[i];
+        if (!ok(v)) {
+          // A QUARTER WITH NO NEIGHBOUR is one point, and a path of one point
+          // draws nothing: it gets a dot, or a lone profitable quarter
+          // between two losses would vanish from a P/E line.
+          if (pen && runStart === i - 1) dots += '<circle cx="' + x(i - 1).toFixed(1) + '" cy="' + y(l.vals[i - 1]).toFixed(1) + '" r="3.2" fill="' + l.color + '"/>';
+          pen = false; continue;
+        }
+        if (!pen) runStart = i;
+        d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1);
+        pen = true; last = i;
+      }
+      if (pen && runStart === l.vals.length - 1) dots += '<circle cx="' + x(runStart).toFixed(1) + '" cy="' + y(l.vals[runStart]).toFixed(1) + '" r="3.2" fill="' + l.color + '"/>';
+      strokes += '<path d="' + d + '" fill="none" stroke="' + l.color + '" stroke-width="2.6"'
+        + ' stroke-linejoin="round" stroke-linecap="round"/>' + dots;
+      if (last >= 0) {
+        marks.push({ y: y(l.vals[last]) + 8, color: l.color,
+          t: l.endLabel != null ? l.endLabel : fmt(l.vals[last]) });
+      }
+    }
+    // Two end tags at one height print on top of each other, and two
+    // companies ending a point apart is the ordinary case. lineChart's rule.
+    const TAG_GAP = 28;
+    marks.sort((a, b) => a.y - b.y);
+    let floor = PT + 16;
+    for (const m of marks) { m.y = Math.max(m.y, floor); floor = m.y + TAG_GAP; }
+    const over = marks.length ? marks[marks.length - 1].y - (H - PB) : 0;
+    if (over > 0) for (const m of marks) m.y = Math.max(PT + 16, m.y - over);
+    const tags = marks.map((m) => '<text x="' + (W - PR + 12) + '" y="' + m.y.toFixed(1) + '" font-size="25"'
+      + ' font-weight="600" fill="' + m.color + '" font-family="Geist Mono, monospace">' + esc(m.t) + '</text>').join('');
+    const axis = '<text x="' + PL + '" y="' + (H - 8) + '" font-size="17" fill="' + pal.axis
+      + '" font-family="Geist Mono, monospace">' + esc(labels[0]) + '</text>'
+      + '<text x="' + (W - PR) + '" y="' + (H - 8) + '" text-anchor="end" font-size="17" fill="'
+      + pal.axis + '" font-family="Geist Mono, monospace">' + esc(labels[labels.length - 1]) + '</text>';
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block" role="img"'
+      + ' aria-label="' + esc((o && o.label) || 'chart') + '">' + grid + strokes + tags + axis + '</svg>';
+  }
+
+  function tplEvoTwo() {
+    const [symA, symB] = evoTwoSyms(O);
+    const rowA = stocks.find((r) => r.symbol === symA), rowB = stocks.find((r) => r.symbol === symB);
+    const years = EVO_WINDOWS[O.evtWin] != null ? Number(O.evtWin) : 10;
+    const say = (kick, l1, l2, body) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(l1) + '<br><span class="dim">' + esc(l2) + '</span></h2>'
+      + (body ? '<p class="s-sub wide">' + esc(body) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!rowA || !rowB) return say('Nothing to compare', 'Two stocks', 'are needed', 'Pick two different companies that are on this screen.');
+    // Asked for BOTH before either is tested, so the two fetches start together.
+    const evA = getEvolution(symA, years), evB = getEvolution(symB, years);
+    if (!evA || !evB) return say('Reading the filings', 'Drawing', 'the history\u2026', '');
+
+    const index = (ev) => {
+      const by = new Map();
+      for (const p of (ev.points || [])) {
+        if (!p || !p.d) continue;
+        const q = evtQ(p.d);
+        if (q == null) continue;
+        const was = by.get(q);
+        if (!was || String(p.d) > String(was.d)) by.set(q, p);     // a changed year end: the later period
+      }
+      return by;
+    };
+    const A = { sym: symA, row: rowA, ev: evA, by: index(evA), color: pal.ink(EVT_A) };
+    const B = { sym: symB, row: rowB, ev: evB, by: index(evB), color: pal.ink(EVT_B) };
+    const short = [A, B].find((c) => c.by.size < 3);
+    if (short) {
+      return say(nameOf(short.row), 'Too little', 'filed history', 'A trailing year needs four consecutive filed quarters, and '
+        + nameOf(short.row) + ' has too few stored to draw a line. A fund files no statements at all, and a few large filers use tags this reader does not map.');
+    }
+    const qs = (c) => [...c.by.keys()].sort((a, b) => a - b);
+    const qa = qs(A), qb = qs(B);
+    const start = Math.max(qa[0], qb[0]);
+    const end = Math.max(qa[qa.length - 1], qb[qb.length - 1]);
+    if (end - start < 2) {
+      return say('From the filings', 'No shared', 'history', nameOf(rowA) + ' and ' + nameOf(rowB)
+        + ' have fewer than three calendar quarters in which both had filed.');
+    }
+    const axis = [];
+    for (let q = start; q <= end; q++) axis.push(q);
+    const labels = axis.map(evtQLabel);
+
+    const mKey = EVO_MEASURES[O.evtMeasure] ? O.evtMeasure : 'rev';
+    const [field, mLabel, mKind] = EVO_MEASURES[mKey];
+    const vDef = EVO_VALUES.find((v) => v[0] === O.evtValue) || EVO_VALUES.find((v) => v[0] === 'pe');
+    const vKey = vDef[0];
+    const num = (v) => (v != null && isFinite(v) ? Number(v) : null);
+    const posOf = (v) => (v != null && isFinite(v) && v > 0 ? Number(v) : null);
+    const psOf = (cap, rev) => (posOf(cap) != null && posOf(rev) != null ? cap / rev : null);
+    const money = (v) => (v == null ? '\u2014' : (v < 0 ? '-$' : '$') + fmtMoney(Math.abs(v)));
+    const peF = (v) => (v == null ? '\u2014' : (v >= 1000 ? Math.round(v).toLocaleString('en-US') : v.toFixed(1)) + '\u00d7');
+    const fmtM = mKind === 'money' ? money : ((v) => (v == null ? '\u2014' : v.toFixed(0) + '%'));
+    const vFmt = vKey === 'cap' ? money : peF;
+
+    // A ROW WHOSE REPORTED FIGURES ARE NOT ALL IN DOLLARS (barMixed, the Bars
+    // card's measurement: depositary receipts reporting in yen or Taiwan
+    // dollars). Its revenue and earnings cannot share an axis with a dollar
+    // company's, and its multiples divide a dollar value by another
+    // currency. A margin is a ratio inside one currency and is unaffected, as
+    // is market value, which is in dollars for every row.
+    const mixed = [A, B].filter((c) => barMixed(c.row));
+    const bizBlocked = mixed.length && mKind === 'money';
+    const valBlocked = mixed.length && vKey !== 'cap';
+    const whyMixed = mixed.length ? mixed.map((c) => nameOf(c.row)).join(' and ')
+      + (mixed.length === 1 ? ' reports' : ' report') + ' in a currency other than dollars' : '';
+
+    // ---- the business panel ----------------------------------------------
+    const biz = (c) => axis.map((q) => { const p = c.by.get(q); return p ? num(p[field]) : null; });
+    const bA = biz(A), bB = biz(B);
+    const logOf = (lists) => {
+      const v = [].concat(...lists).filter((x) => x != null);
+      if (!v.length) return false;
+      const lo = Math.min(...v), hi = Math.max(...v);
+      return lo > 0 && hi / lo > EVT_LOG_SPAN;
+    };
+    const bizLog = mKind === 'money' && logOf([bA, bB]);
+    // A dollar measure that cannot go logarithmic, on two companies of very
+    // different size: the plain axis is right, and the smaller reads flat.
+    const flatWarn = mKind === 'money' && !bizLog && (() => {
+      const m = (L) => Math.max(0, ...L.filter((x) => x != null).map((x) => Math.abs(x)));
+      const a = m(bA), b = m(bB);
+      return a > 0 && b > 0 && Math.max(a, b) / Math.min(a, b) > EVT_LOG_SPAN;
+    })();
+
+    // ---- the market panel, which runs to today where a price does --------
+    const lastOf = (c) => c.by.get(Math.max(...c.by.keys()));
+    const liveOf = (c) => { const Z = lastOf(c), l = c.ev.live; return l && Z && String(l.d) > String(Z.d) ? l : null; };
+    const lA = liveOf(A), lB = liveOf(B);
+    const liveD = [lA, lB].filter(Boolean).map((l) => String(l.d)).sort().pop() || null;
+    const valAt = (c, p, live) => {
+      if (!p || !c.ev.hasValue) return null;
+      if (vKey === 'cap') return posOf(p.cap);
+      if (vKey === 'pe') return posOf(p.pe);
+      return psOf(p.cap, live ? lastOf(c).revenue : p.revenue);
+    };
+    const val = (c, live) => axis.map((q) => valAt(c, c.by.get(q), false)).concat(liveD ? [live ? valAt(c, live, true) : null] : []);
+    let vA = val(A, lA), vB = val(B, lB);
+    const vLabels = liveD ? labels.concat(liveD) : labels;
+    let multNote = '';
+    const trueEnd = (L) => { for (let i = L.length - 1; i >= 0; i--) if (L[i] != null) return L[i]; return null; };
+    const endA = trueEnd(vA), endB = trueEnd(vB);
+    if (vKey !== 'cap') {
+      const have = vA.concat(vB).filter((v) => v != null).sort((a, b) => a - b);
+      const p90 = have.length ? have[Math.min(have.length - 1, Math.floor(have.length * 0.9))] : null;
+      const top = have.length ? have[have.length - 1] : null;
+      const ceil = (p90 != null && top > p90 * EVO_RUNAWAY) ? p90 * 1.25 : null;
+      const pinned = ceil == null ? 0 : have.filter((v) => v > ceil).length;
+      if (ceil != null) { vA = vA.map((v) => (v != null && v > ceil ? ceil : v)); vB = vB.map((v) => (v != null && v > ceil ? ceil : v)); }
+      const gaps = vKey === 'pe' && [A, B].some((c) => axis.some((q) => { const p = c.by.get(q); return p && posOf(p.pe) == null; }));
+      multNote = (gaps ? 'A P/E line breaks where that company lost money. ' : '')
+        + (pinned ? pinned + (pinned === 1 ? ' quarter above ' : ' quarters above ') + peF(ceil)
+          + (pinned === 1 ? ' is' : ' are') + ' drawn at the top of the scale. ' : '');
+    }
+    const valLog = vKey === 'cap' && logOf([vA, vB]);
+
+    // ---- the header ------------------------------------------------------
+    const nA = nameOf(rowA), nB = nameOf(rowB);
+    // Two names are twice one name: past this they are tickers.
+    const title = (nA + nB).length > 40 ? symA + ' vs ' + symB : nA + ' vs ' + nB;
+    const tClass = title.length > 40 ? ' t3' : title.length > 28 ? ' t2' : '';
+    const sw = (c) => '<span style="color:' + c.color + '">\u25cf ' + esc(c.sym) + '</span>';
+    const lab = sw(A) + ' \u00b7 ' + sw(B) + ' \u00b7 ' + axis.length + ' quarters \u00b7 '
+      + esc(labels[0] + ' \u2192 ' + labels[labels.length - 1]);
+
+    const tall = size.id === 'square' ? 180 : size.id === 'story' ? 537 : 330;
+    const shortH = size.id === 'square' ? 127 : size.id === 'story' ? 374 : 232;
+
+    const bizPanel = '<div class="evo-p"><span class="evo-h">' + esc(mLabel + ', trailing twelve months' + (bizLog ? ' \u00b7 log scale' : '')) + '</span>'
+      + (bizBlocked
+        ? '<p class="s-empty" style="margin:6px 0;font-size:20px">' + esc(whyMixed + ', so its ' + mLabel.toLowerCase() + ' cannot share a dollar axis. Profit margin compares the two.') + '</p>'
+        : pairChart(labels, [{ vals: bA, color: A.color }, { vals: bB, color: B.color }],
+          { h: tall, fmt: fmtM, log: bizLog, label: mLabel })) + '</div>';
+    const noVal = [A, B].filter((c) => !c.ev.hasValue);
+    const valPanel = '<div class="evo-p"><span class="evo-h">' + esc(vDef[2] + (valLog ? ' \u00b7 log scale' : '')) + '</span>'
+      + (valBlocked
+        ? '<p class="s-empty" style="margin:6px 0;font-size:20px">' + esc(whyMixed + ', so a multiple of its market value is not drawn. Market value compares the two.') + '</p>'
+        : pairChart(vLabels, [{ vals: vA, color: A.color, endLabel: endA == null ? null : vFmt(endA) },
+          { vals: vB, color: B.color, endLabel: endB == null ? null : vFmt(endB) }],
+          { h: shortH, fmt: vFmt, log: valLog, label: vDef[1],
+            empty: noVal.length === 2 ? 'No current share count for either, so no market value is drawn.'
+              : 'Too few quarters with a ' + (vKey === 'pe' ? 'profit' : 'figure') + ' to draw this.' })) + '</div>';
+
+    // ---- four figures: each company's own then -> now ---------------------
+    // ONE "THEN" FOR ALL FOUR: the first quarter both had filed. A company
+    // with no figure in it prints a dash, never a later quarter passed off as
+    // the start.
+    const figure = (c, label, a, b, fmt, plain) => {
+      const ch = evoChange(a, b);
+      const cls = (ch && !plain) ? ' ' + ch.c : '';
+      return '<div class="evo-f"><span class="evo-fl"><span style="color:' + c.color + '">' + esc(c.sym) + '</span> ' + esc(label) + '</span>'
+        + '<span class="evo-fv">' + esc(fmt(a)) + ' <i>\u2192</i> ' + esc(fmt(b)) + '</span>'
+        + '<span class="evo-fc' + cls + '">' + esc(ch ? ch.t : '\u2014') + '</span></div>';
+    };
+    const SHORT = { rev: 'revenue', ni: 'earnings', margin: 'margin', cap: 'value', pe: 'P/E', ps: 'P/S' };
+    const first = (L) => L[0];
+    const bizNow = (c) => { const Z = lastOf(c); return Z ? num(Z[field]) : null; };
+    const figs = '<div class="evo-figs">'
+      + (bizBlocked ? '' : figure(A, SHORT[mKey], first(bA), bizNow(A), fmtM, mKind !== 'money')
+        + figure(B, SHORT[mKey], first(bB), bizNow(B), fmtM, mKind !== 'money'))
+      + (valBlocked ? '' : figure(A, SHORT[vKey], valAt(A, A.by.get(start), false), endA, vFmt, vKey !== 'cap')
+        + figure(B, SHORT[vKey], valAt(B, B.by.get(start), false), endB, vFmt, vKey !== 'cap'))
+      + '</div>';
+    const zA = lastOf(A), zB = lastOf(B);
+    const asof = 'From ' + labels[0] + ' \u00b7 ' + SHORT[mKey] + ' to each one\u2019s last filed quarter ('
+      + symA + ' ' + zA.d + ', ' + symB + ' ' + zB.d + ')'
+      + (liveD ? ' \u00b7 ' + SHORT[vKey] + ' at the ' + liveD + ' close' : '');
+
+    const note = 'Trailing twelve months at every filed quarter, from each company\u2019s own SEC filings, lined up by calendar quarter. '
+      + (bizLog || valLog ? 'A log scale is used where the two differ in size by more than four times: equal slopes are equal growth rates. ' : '')
+      + (flatWarn ? 'With a loss in the window the dollar axis stays plain, so the smaller company reads flat; profit margin is the like-for-like view. ' : '')
+      + multNote
+      + (noVal.length === 1 ? 'No current share count is held for ' + noVal[0].sym + ', so it has no market line. ' : '')
+      + 'The two panels keep their own scales.';
+
+    return chromeTop() + '<div class="s-body"><div class="evo-in">'
+      + '<span class="s-kick">From the filings \u00b7 two companies</span>'
+      + '<h2 class="s-title' + tClass + '">' + esc(title) + '</h2>'
+      + '<p class="evo-lab">' + lab + '</p>'
+      + '<div class="evo-wrap">' + bizPanel + valPanel
+      + '<div class="evo-foot">' + figs + '<p class="evo-asof">' + esc(asof) + '</p></div></div>'
+      + '<p class="s-sub wide">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();
   }
 
@@ -7305,6 +7637,7 @@
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
     shorted: tplShorted, breadth: tplBreadth, beat: tplBeat, earngrow: tplEarnGrow,
     bars: tplBars,
+    evo2: tplEvoTwo,
     industries: tplIndustries,
     indspot: tplIndSpot,
     sectors: tplSectors,

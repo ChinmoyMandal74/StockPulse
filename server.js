@@ -9905,7 +9905,7 @@ const POST_OPT_KEY = /^[a-z]{3,6}[A-Z][A-Za-z0-9]{0,20}$/;
 // which is four more controls from breaching a cap whose whole failure mode is
 // silence. 200 against 87 — this is a guard against a page being used as free
 // storage, not a budget, so the headroom costs nothing.
-const POST_OPT_MAX = 200;
+const POST_OPT_MAX = 300;   // 199 real controls as of 2026-10-10; raised from 200 before it bit
 
 function cleanPosts(raw) {
   const known = new Set(Cards.ids);
@@ -10132,7 +10132,15 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   // route cannot ask for different things.
   let evo = null;
   const evoNeed = Cards.evolutionNeed(post.tpl, post.opts || {});
-  if (evoNeed && evoNeed.symbol) {
+  // The two-stock card asks for two companies (`symbols`); every other card
+  // for one. Read together, and one failing leaves the other standing --
+  // the card then draws its waiting state rather than half a comparison.
+  const evoBySym = {};
+  if (evoNeed && Array.isArray(evoNeed.symbols) && evoNeed.symbols.length) {
+    await Promise.all(evoNeed.symbols.slice(0, 2).map(async (s) => {
+      try { evoBySym[s] = await evolutionFor(s, evoNeed.years); } catch { evoBySym[s] = null; }
+    }));
+  } else if (evoNeed && evoNeed.symbol) {
     try { evo = await evolutionFor(evoNeed.symbol, evoNeed.years); } catch { evo = null; }
   }
 
@@ -10194,7 +10202,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getEarnGrowth: () => egrow,
       getLineSeries: () => lines,
       getHistory: () => hist,
-      getEvolution: () => evo,
+      getEvolution: (s) => (Object.prototype.hasOwnProperty.call(evoBySym, s) ? evoBySym[s] : evo),
       getMonths: () => months,
       getPeerTrend: () => ptrend,
       getPerf: () => perf,
