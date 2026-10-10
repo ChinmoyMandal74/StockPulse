@@ -500,9 +500,22 @@
       'Neutral': '#9aa3b2', 'Weak': '#fb923c', 'Very Weak': '#fb7185',
     };
     const advCache = {};
+    // THE SCORES BELONG TO ONE SET OF ROWS. Both caches were kept for the
+    // life of the module until 2026-10-10, so a card built after the studio
+    // re-pulled the data, or on a server instance that outlived a refresh,
+    // drew the verdicts of the rows it had scored first. Found when a test
+    // handed the module a second set of companies and got "Nothing scored".
+    let advRows = null;
+    function advFresh() {
+      if (advRows === stocks) return;
+      advRows = stocks;
+      for (const k of Object.keys(advCache)) delete advCache[k];
+      for (const k of Object.keys(advPrevCache)) delete advPrevCache[k];
+    }
     // Scored in the browser through the same engine the server uses, so a
     // card can show any profile without a round trip.
     function advScored(profile) {
+      advFresh();
       if (advCache[profile]) return advCache[profile];
       const res = ActionRules.apply(stocks, {}, profile === 'Balanced' ? undefined : profile);
       const out = {};
@@ -516,6 +529,7 @@
     // second pass the screener's change chevrons use.
     const advPrevCache = {};
     function advScoredPrev(profile) {
+      advFresh();
       if (advPrevCache[profile]) return advPrevCache[profile];
       const prevRows = stocks.map((s) => (s && s.prevTech ? Object.assign({}, s, s.prevTech) : null));
       const res = ActionRules.apply(prevRows, {}, profile === 'Balanced' ? undefined : profile);
@@ -649,6 +663,87 @@
           '</div></div>' + chromeFoot();
       }
 
+      // ---- the shape: a two-sided pyramid of the six signals ---------------
+      //
+      // (2026-10-10, the owner: "one way to show signal will be a funnel or
+      // pyramid chart", then "add within signal card".) A PYRAMID AND NOT A
+      // FUNNEL: a funnel draws stages that things pass through, and the six
+      // signals are not stages -- every company has exactly one. What they
+      // are is a ranked distribution, which is what a pyramid draws.
+      //
+      // TWO SIDES FROM ONE SPINE, the population pyramid's layout. Left is
+      // the share of COMPANIES at each signal; right is the share of their
+      // combined MARKET VALUE. Both are percentages on one scale, so a band
+      // that is short on the left and long on the right says, with no
+      // arithmetic, that a few large companies hold it. That comparison is
+      // what this view has that the board's tally does not.
+      //
+      // THE WIDTHS ARE THE REAL SHARES. Nothing forces a triangle: when most
+      // companies read Neutral the shape is a diamond, and that is the
+      // finding. Best at the top, as the board's tally is ordered.
+      //
+      // COMPANIES ONLY. A fund's "market value" is its assets, and four
+      // index funds would outweigh a sector on the right-hand side. Market
+      // cap is also the one money field reliably in dollars, so it is the
+      // one that may be summed across companies. A company with no market
+      // value on file counts on the left and adds nothing on the right.
+      if (mode === 'pyramid') {
+        const cos = rows.filter((s) => s.instrumentType !== 'ETF' && !IS_BENCH.has(s.symbol) && !IS_SECTOR_ETF.has(s.symbol));
+        const capOf = (s) => (s.marketCap == null || s.marketCap === '' || !(Number(s.marketCap) > 0) ? null : Number(s.marketCap));
+        const bandsOrder = ActionRules.ACTIONS.slice().reverse();
+        const n = cos.length;
+        const valTotal = cos.reduce((t, s) => t + (capOf(s) || 0), 0);
+        const NAMES = size.id === 'square' ? 2 : 3;
+        const bands = bandsOrder.map((a) => {
+          const at = cos.filter((s) => verdict(s) === a);
+          const val = at.reduce((t, s) => t + (capOf(s) || 0), 0);
+          const big = at.filter((s) => capOf(s) != null).sort((x, y) => capOf(y) - capOf(x)).slice(0, NAMES);
+          return { a, count: at.length, cp: n ? at.length / n * 100 : 0, vp: valTotal > 0 ? val / valTotal * 100 : null,
+            names: big.map(nameOf) };
+        });
+        if (!n) {
+          return chromeTop() + `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}${esc(prof)}</span>` +
+            '<h2 class="s-title">No companies<br><span class="dim">in this cut</span></h2></div></div>' + chromeFoot();
+        }
+        const scale = Math.max(1e-9, ...bands.map((b) => Math.max(b.cp, b.vp || 0)));
+        const p0 = (v) => (v == null ? '\u2014' : v > 0 && v < 0.5 ? '<1%' : Math.round(v) + '%');
+        const SZ = ({ portrait: { f: 27, b: 36 }, square: { f: 21, b: 22 }, story: { f: 38, b: 52 } })[size.id] || { f: 27, b: 36 };
+        const lfig = (b) => b.count.toLocaleString('en-US') + ' \u00b7 ' + p0(b.cp);
+        const fw = Math.ceil(Math.max(...bands.map((b) => lfig(b).length)) * SZ.f * 0.82 * 0.62) + 14;
+        const w = (v) => (v == null || v <= 0 ? 0 : Math.max(0.8, v / scale * 100));
+        const band = (b) => {
+          const tint = pal.tints[b.a] || 'var(--muted)';
+          return '<div class="apy-band">'
+            + '<div class="apy-l"><span class="apy-w" style="color:' + tint + '">' + esc(b.a) + '</span>'
+            + (b.names.length ? '<span class="apy-nm">' + esc(b.names.join(', ')) + '</span>' : '') + '</div>'
+            + '<div class="apy-r">'
+            + '<span class="apy-fig apy-fl">' + esc(lfig(b)) + '</span>'
+            + '<span class="apy-t apy-tl">' + (b.count ? '<span class="apy-f" style="width:' + w(b.cp).toFixed(2) + '%;background:' + tint + '"></span>' : '') + '</span>'
+            + '<span class="apy-t apy-tr">' + (b.vp > 0 ? '<span class="apy-f" style="width:' + w(b.vp).toFixed(2) + '%;background:' + tint + '"></span>' : '') + '</span>'
+            + '<span class="apy-fig apy-fr">' + esc(p0(b.vp)) + '</span>'
+            + '</div></div>';
+        };
+        const upC = bands.slice(0, 3).reduce((t, b) => t + b.count, 0);
+        const upV = valTotal > 0 ? bands.slice(0, 3).reduce((t, b) => t + (b.vp || 0), 0) : null;
+        const dnC = bands.slice(4).reduce((t, b) => t + b.count, 0);
+        const dnV = valTotal > 0 ? bands.slice(4).reduce((t, b) => t + (b.vp || 0), 0) : null;
+        const lead = p0(upC / n * 100) + ' of the ' + n.toLocaleString('en-US') + ' companies read Strong or better'
+          + (upV == null ? '' : ', and they hold ' + p0(upV) + ' of the market value') + '; '
+          + p0(dnC / n * 100) + ' read Weak or worse' + (dnV == null ? '' : ', holding ' + p0(dnV)) + '. ';
+        return chromeTop() +
+          `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}${esc(prof)} \u00b7 ${n.toLocaleString('en-US')} companies</span>` +
+          '<h2 class="s-title">The shape of<br><span class="dim">the signals tonight</span></h2>' +
+          '<div class="apy" style="--f:' + SZ.f + 'px;--b:' + SZ.b + 'px;--fw:' + fw + 'px">' +
+          '<div class="apy-hd"><span>Share of companies</span><span>Share of market value</span></div>' +
+          bands.map(band).join('') + '</div>' +
+          '<p class="s-sub wide" style="--fs:18px;margin-top:22px">' + esc(lead
+            + 'Left of the line is how many companies sit at each signal; right is how much of their combined market value'
+            + (valTotal > 0 ? ' ($' + fmtMoney(valTotal) + ')' : '') + ' does. '
+            + 'The widths are the real shares, so the shape is the market\u2019s own. The names are the largest companies at each signal. '
+            + 'A reading of the tape by fixed rules \u2014 it says what is, never what is next.') + '</p>' +
+          '</div></div>' + chromeFoot();
+      }
+
       // the board
       const order = ActionRules.ACTIONS.slice().reverse();
       const counts = order.map((a) => rows.filter((s) => verdict(s) === a).length);
@@ -709,7 +804,7 @@
           `<div class="arow"><span class="an" style="color:${pal.tints[a]}">${esc(a)}</span>` +
           `<span class="arail"><span class="afill" style="display:block;width:${Math.max(2, counts[i] / max * 100)}%;background:${pal.tints[a]}"></span></span>` +
           `<span class="ac">${counts[i]}</span><span class="ap">${Math.round(counts[i] / total * 100)}%</span></div>`).join('')}</div>` +
-        `<p class="s-sub wide" style="--fs:18px;margin-top:22px">${bull} of ${total} clear the buy rules tonight. ` +
+        `<p class="s-sub wide" style="--fs:18px;margin-top:22px">${bull} of ${total} read Strong or better tonight. ` +
         'The large dial is the average place of those verdicts on the six-step ladder — a summary of the tally, not a verdict of its own. ' +
         'The small dials are shares of the stocks the rules could read; a verdict comes from ordered rules, not from averaging them. ' +
         'A reading of the tape by fixed rules — it says what is, never what is next.</p>' +
@@ -9605,6 +9700,31 @@
     .abar { display: flex; height: 34px; border-radius: 999px; overflow: hidden; margin-top: 36px; }
     .abar div { height: 100%; }
     .atally { display: flex; flex-direction: column; gap: 12px; margin-top: 28px; }
+    /* The Signal card's pyramid: two bars growing away from one spine, a
+       band per signal. Sizes ride on three custom properties the template
+       sets per card shape. */
+    .apy { display: flex; flex-direction: column; gap: .5em; margin-top: 26px; font-size: var(--f); }
+    .sz-square .apy { gap: .22em; margin-top: 12px; }
+    .apy-hd { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px;
+              font: 600 .56em var(--mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--faint); }
+    .apy-hd > span:first-child { text-align: right; }
+    .apy-l { display: flex; justify-content: center; align-items: baseline; gap: .6em;
+             white-space: nowrap; overflow: hidden; line-height: 1.2; }
+    .apy-w { flex: none; font-weight: 700; }
+    .apy-nm { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+              font-size: .68em; color: var(--faint); }
+    .apy-r { display: grid; grid-template-columns: var(--fw) minmax(0, 1fr) minmax(0, 1fr) var(--fw);
+             align-items: center; margin-top: .16em; }
+    .apy-t { display: flex; height: var(--b); }
+    .apy-tl { justify-content: flex-end; border-right: 2px solid var(--muted); }
+    .apy-tr { justify-content: flex-start; border-left: 2px solid var(--muted); margin-left: -2px; }
+    .apy-f { display: block; height: 100%; }
+    .apy-tl .apy-f { border-radius: 5px 0 0 5px; }
+    .apy-tr .apy-f { border-radius: 0 5px 5px 0; }
+    .apy-fig { font: 700 .82em var(--mono); color: var(--text); white-space: nowrap;
+               font-variant-numeric: tabular-nums; }
+    .apy-fl { text-align: right; padding-right: 12px; }
+    .apy-fr { text-align: left; padding-left: 12px; }
     .arow { display: flex; align-items: center; gap: 20px; }
     .arow .an { width: 300px; font: 700 27px var(--sans); }
     .arow .arail { flex: 1; height: 30px; border-radius: 9px; background: rgba(255, 255, 255, 0.04); overflow: hidden; }
