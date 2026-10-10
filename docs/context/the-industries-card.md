@@ -56,3 +56,23 @@ Wiring:
 - Verified: 27 checks in Node against a fixture (`indspot-test.js` in the session scratchpad) — the header, all twelve figures against hand arithmetic, the line's membership and end value, the fund kept out of it, the index line, both fallbacks, the waiting card before the basket arrives, the three artboards.
 
 **NOT YET SEEN ON ANY ARTBOARD.** The risks, in the order to look for them: the square, where the chart is 158px tall and now carries two lines and two end tags; the note, which is three sentences where the stock card's is two; and the dial block, whose text is a count plus a sentence rather than a word plus a flag.
+
+### Year to date on the spotlight (2026-10-10, owner's request)
+**`ispWin` takes `ytd`, the second card after Chart that may be given the calendar window.** `barWin` refuses it on purpose: a card that draws the fetched axis as-is would show a full year under "this year". This one slices, through the Chart card's own `winStart` and `sliceBasket`, so the origin is the last close BEFORE 1 January and every series is re-rebased to it.
+
+- **`basketDays` answers 260 for `indspot` + `ytd` and for nothing else**: any other value still resolves through `barWin`, and the Stock spotlight still cannot ask (a check on both).
+- **`sliceBasket` re-rebases `series` only**, so the benchmark fallback (`bench[].index`) is cut and rebased in the card.
+- A company with no close on the origin is not in the line, which is the every-session rule read off the sliced axis: a January listing is out of a year-to-date line.
+- Before the year's first session the card says the year has not opened, the Chart card's own words.
+- The twelve figures do not move with the window, as before; there is no year-to-date cell among them.
+- Verified: 14 checks (`indspot-ytd-test.js`), the fixture's fetched axis starting two months before the year so a line rebased to the wrong origin reads +166.7% against the right +20.0%.
+
+### The Index cut on the spotlight (2026-10-10, owner's request)
+**`ispSp500`, the same six cuts as every other card, through `spFilter`.** It narrows the COMPANIES, not the industries: "Semiconductors · S&P 500" is the semiconductor companies that are in the index. One `pool` feeds the header, the line, the twelve figures and the dial, so they are always the same companies.
+
+- **The cut comes BEFORE the floor.** `Cards.industryList(rows, cut)` takes it, so an industry with four companies of which two are in the index is not offered under that index, and the picker and the card answer for the same set.
+- **Drawn against the index the cut names**: a Nasdaq 100 cut (`ndx`, `ndxonly`) is measured against QQQ and the note says "Nasdaq 100"; everything else against SPY.
+- **In the studio the index's listener is registered first and refills the industry list** (`fillIspNames`), so by the time the redraw runs the picker holds an industry the card will draw. The other order sends a name the cut has emptied: the card falls back to the largest while the picker still shows the old one. `openPost` sets the cut and refills before the rest for the same reason, the sector-then-industry dependency one card over.
+- A cut that leaves no industry of three says which cut. An unknown value filters nothing.
+- Controls now `ispName`, `ispWin`, `ispSp500` (183 of 200).
+- Verified: 17 checks (`indspot-idx-test.js`), on a fixture where the S&P 500 and Nasdaq 100 cuts of one industry are a different three companies with returns of +20.0% and -3.3%.

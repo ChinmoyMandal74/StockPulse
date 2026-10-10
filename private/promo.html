@@ -786,9 +786,14 @@
           <option value="m1">Past month</option>
           <option value="m3">Past three months</option>
           <option value="m6" selected>Past six months</option>
+          <option value="ytd">Year to date</option>
           <option value="y1">Past year</option>
         </select>
-        <p class="hint">The window moves the line alone; the twelve figures
+        <label>Index</label>
+        <select id="ispSp500"></select>
+        <p class="hint">The index narrows the companies, and so the list of
+          industries above it; a Nasdaq 100 cut is drawn against the Nasdaq
+          100. The window moves the line alone; the twelve figures
           are fixed periods. Returns are the plain average of its companies
           and the rest are the middle company. The line holds only the
           companies with a close on every session of the window, beside the
@@ -1538,7 +1543,7 @@
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
-      'ispName', 'ispWin',
+      'ispName', 'ispWin', 'ispSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
       'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
@@ -1934,7 +1939,28 @@
     // Industry spotlight: its own listener list. The window needs no fetch
     // wired here -- render() asks getBasket, and the basket's arrival
     // repaints any template Cards.basketDays answers for.
-    ['ispName', 'ispWin'].forEach((id) =>
+    // THE INDEX CHANGES WHICH INDUSTRIES EXIST, so its listener is registered
+    // FIRST and refills the list: by the time the redraw below runs, the
+    // picker holds an industry the card will draw. The other order would
+    // send a name the cut has emptied, and the card would fall back to the
+    // largest while the picker still showed the old one.
+    function fillIspNames() {
+      const keep = $('ispName').value;
+      const list = Cards.industryList(stocks, $('ispSp500').value || 'All');
+      const bySec = new Map();
+      for (const g of list) {
+        const k = g.sector || 'Other';
+        if (!bySec.has(k)) bySec.set(k, []);
+        bySec.get(k).push(g);
+      }
+      $('ispName').innerHTML = [...bySec.keys()].sort().map((k) => `<optgroup label="${esc(k)}">` +
+        bySec.get(k).map((g) => `<option value="${esc(g.name)}">${esc(g.name)} · ${g.n}</option>`).join('') +
+        '</optgroup>').join('');
+      if (list.some((g) => g.name === keep)) $('ispName').value = keep;
+      else if (list.length) $('ispName').value = list[0].name;
+    }
+    $('ispSp500').addEventListener('change', fillIspNames);
+    ['ispName', 'ispWin', 'ispSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'indspot') render(); }));
     // Industries: its own listener list too, and its measures from the module.
     ['indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector',
@@ -2075,6 +2101,10 @@
       const set = (k) => { const el = $(k); if (el && opts[k] != null) el.value = opts[k]; };
       Object.keys(opts).filter((k) => /Sector$/.test(k)).forEach(set);
       syncIndustries(true);
+      // The same dependency, one card over: the spotlight's industry exists
+      // as an option only under its own index cut.
+      set('ispSp500');
+      fillIspNames();
       Object.keys(opts).forEach(set);
       // A post stores only its own template's stock; the sibling views follow it.
       if (spotView(tpl)) spotSyncFrom(spotView(tpl)[2]);
@@ -2370,22 +2400,6 @@
         $('shrtScope').innerHTML = $('movScope').innerHTML;
         $('barScope').innerHTML = $('movScope').innerHTML;
         $('indScope').innerHTML = $('movScope').innerHTML;
-        // The industries the spotlight can draw, from the module that draws
-        // them, grouped by sector. The choice is kept across a reload of the
-        // rows; the first time, it is the largest.
-        { const keep = $('ispName').value;
-          const list = Cards.industryList(stocks);
-          const bySec = new Map();
-          for (const g of list) {
-            const k = g.sector || 'Other';
-            if (!bySec.has(k)) bySec.set(k, []);
-            bySec.get(k).push(g);
-          }
-          $('ispName').innerHTML = [...bySec.keys()].sort().map((k) => `<optgroup label="${esc(k)}">` +
-            bySec.get(k).map((g) => `<option value="${esc(g.name)}">${esc(g.name)} · ${g.n}</option>`).join('') +
-            '</optgroup>').join('');
-          if (list.some((g) => g.name === keep)) $('ispName').value = keep;
-          else if (list.length) $('ispName').value = list[0].name; }
         $('linScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
@@ -2448,11 +2462,15 @@
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
           'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500',
-          'shrtSp500', 'barSp500', 'linSp500', 'indSp500'].forEach((id) => {
+          'shrtSp500', 'barSp500', 'linSp500', 'indSp500', 'ispSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
         });
+        // The industries the spotlight can draw, from the module that draws
+        // them. Below the index fill on purpose: a cut kept across a reload
+        // is back in its picker by now.
+        fillIspNames();
         // FROM THE MODULE, never a copy in the markup: a key tplDay does not
         // know falls back to Today and draws the wrong window with nothing
         // saying so. The spCuts bargain.

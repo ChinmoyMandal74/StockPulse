@@ -1346,7 +1346,11 @@
       // The chart may ask for a calendar window; the other two may not, so
       // they resolve through barWin and can never request a year by accident.
       const v = (opts || {})[key];
-      const win = tpl === 'chart' ? (CHART_WINDOWS[v] || CHART_WINDOWS.m6) : barWin(v);
+      // The industry spotlight slices too (see tplIndSpot), so it is the
+      // second card that may be given the calendar window -- and only that
+      // one key: any other value still resolves through barWin.
+      const win = tpl === 'chart' ? (CHART_WINDOWS[v] || CHART_WINDOWS.m6)
+        : tpl === 'indspot' && v === 'ytd' ? CHART_WINDOWS.ytd : barWin(v);
       return win[0];
     }
 
@@ -6539,9 +6543,14 @@
   // Every industry that can be drawn, largest first: [{ name, sector, n, cap }].
   // Asked of the module by the studio's picker, so it can never offer an
   // industry the card would refuse.
-  function industryList(rows) {
+  //
+  // `cut` is the Index picker's value. It is applied BEFORE the floor, so an
+  // industry with three companies of which one is in the index is not
+  // offered under that index -- the list and the card answer for the same
+  // companies.
+  function industryList(rows, cut) {
     const by = new Map();
-    for (const r of rows || []) {
+    for (const r of spFilter(rows || [], cut || 'All')) {
       if (!r || r.error || !r.industry || isFundRow(r)) continue;
       const k = String(r.industry);
       const g = by.get(k) || { name: k, n: 0, cap: 0, sectors: {} };
@@ -6557,24 +6566,43 @@
   }
 
   function tplIndSpot() {
-    const all = industryList(stocks);
+    // THE INDEX CUT NARROWS THE COMPANIES, not the industries: "Semiconductors
+    // \u00b7 S&P 500" is the semiconductor companies that are in the index. Every
+    // block below reads `pool`, so the header, the line, the figures and the
+    // dial are all the same companies.
+    const cut = SP_CUT_LABEL[O.ispSp500] ? O.ispSp500 : 'All';
+    const pool = spFilter(stocks, cut);
+    const all = industryList(stocks, cut);
     const pick = all.find((g) => g.name === O.ispName) || all[0] || null;
     if (!pick) {
       return chromeTop() + '<div class="s-body"><div>'
         + '<span class="s-kick">Nothing to spotlight</span>'
         + '<h2 class="s-title">No industry<br><span class="dim">of ' + IND_MIN + ' companies</span></h2>'
-        + '<p class="s-empty">No industry on this screen has ' + IND_MIN + ' companies recorded yet.</p>'
+        + '<p class="s-empty">No industry ' + esc(cut === 'All' ? 'on this screen' : 'in ' + SP_CUT_PROSE[cut])
+        + ' has ' + IND_MIN + ' companies recorded.</p>'
         + '</div></div>' + chromeFoot();
     }
-    const members = stocks.filter((r) => r && !r.error && r.industry === pick.name && !isFundRow(r));
-    const [days, winLabel] = barWin(O.ispWin);
-    const d = getBasket(days);
-    if (!d || !d.dates || !d.dates.length) {
+    const members = pool.filter((r) => r && !r.error && r.industry === pick.name && !isFundRow(r));
+    // YEAR TO DATE IS A CALENDAR WINDOW, which barWin refuses on purpose: a
+    // card that draws the fetched axis as-is would show a full year under
+    // "this year". This card slices the basket to the last session before
+    // 1 January and re-rebases it, through the Chart card's own winStart
+    // and sliceBasket, so it may ask.
+    const win = O.ispWin === 'ytd' ? CHART_WINDOWS.ytd : barWin(O.ispWin);
+    const raw = getBasket(win[0]);
+    if (!raw || !raw.dates || !raw.dates.length) {
       return chromeTop()
         + '<div class="s-body"><div><span class="s-kick">Reading the archive</span>'
         + '<h2 class="s-title">Drawing<br><span class="dim">the chart\u2026</span></h2>'
         + '</div></div>' + chromeFoot();
     }
+    const i0 = winStart(win, raw.dates);
+    if (raw.dates.length - i0 < 2) {
+      return chromeTop()
+        + '<div class="s-body"><div><p class="s-empty">The year has not opened yet \u2014 '
+        + 'there is no session since 31 December to chart.</p></div></div>' + chromeFoot();
+    }
+    const d = sliceBasket(raw, i0);
 
     // ---- the line --------------------------------------------------------
     const series = d.series || {};
@@ -6590,8 +6618,17 @@
     // The index fund is a row of the screen, so its line is usually in the
     // series; the payload's own benchmark list, on the same rebasing, is the
     // fallback for a basket that leaves it out.
-    const spy = Array.isArray(series.SPY) ? series.SPY
-      : ((Array.isArray(d.bench) ? d.bench : []).find((b) => b && b.sym === 'SPY') || {}).index;
+    // AGAINST THE INDEX THE CUT NAMES. A Nasdaq 100 cut is measured against
+    // the Nasdaq 100's own fund; everything else against the S&P 500's.
+    const [benchSym, benchName] = cut === 'ndx' || cut === 'ndxonly' ? ['QQQ', 'Nasdaq 100'] : ['SPY', 'S&P 500'];
+    const spy = Array.isArray(series[benchSym]) ? series[benchSym]
+      : (() => {
+        const B = ((Array.isArray(raw.bench) ? raw.bench : []).find((b) => b && b.sym === benchSym) || {}).index;
+        if (!Array.isArray(B)) return null;
+        const S = B.slice(i0);
+        const base = S.find((v) => v != null);
+        return base ? S.map((v) => (v == null ? null : v / base)) : null;
+      })();
     const bench = Array.isArray(spy) && spy.some((v) => v != null) ? spy : null;
     let benchMove = null;
     if (bench) for (let i = bench.length - 1; i >= 0 && benchMove == null; i--) if (bench[i] != null) benchMove = (bench[i] - 1) * 100;
@@ -6600,15 +6637,16 @@
     if (line && bench) lines.push({ color: pal.flat, S: bench, width: 2, dim: true });
     const plot = line
       ? lineChart(d.dates, lines, { h: H, mt: 0 })
-      : '<p class="s-empty">Fewer than ' + IND_MIN + ' of its companies have a close on every session of the '
-        + esc(winLabel) + ', so there is no line to draw.</p>';
+      : '<p class="s-empty">Fewer than ' + IND_MIN + ' of its companies have a close on every session '
+        + esc(winPhrase(win).replace(/^over /, 'of ')) + ', so there is no line to draw.</p>';
 
     // ---- the header ------------------------------------------------------
     const tCls = pick.name.length > 60 ? ' t4' : pick.name.length > 40 ? ' t3' : pick.name.length > 28 ? ' t2' : '';
     const fig = (field, kind, extra) => indFigure(members, Object.assign({ field, kind }, extra || {}), false);
     const val = (x) => (x ? x.v : null);
     const today = val(fig('todayPct', 'ret'));
-    const head = '<span class="s-kick">' + esc((pick.sector ? pick.sector + ' \u00b7 ' : '') + 'industry') + '</span>'
+    const head = '<span class="s-kick">' + esc((pick.sector ? pick.sector + ' \u00b7 ' : '') + 'industry'
+      + (cut === 'All' ? '' : ' \u00b7 ' + SP_CUT_LABEL[cut])) + '</span>'
       + '<h2 class="s-title' + tCls + '">' + esc(pick.name) + '</h2>'
       + '<div class="sp-sub">' + esc(members.length + ' companies')
       + (pick.cap > 0 ? ' \u00b7 ' + esc('$' + fmtMoney(pick.cap)) : '')
@@ -6677,8 +6715,8 @@
     const clip = (s) => (s.length > 26 ? s.slice(0, 25).trimEnd() + '\u2026' : s);
     const ends = full.map((x) => ({ n: nameOf(x.r), v: (x.S[x.S.length - 1] - 1) * 100 })).sort((a, b) => b.v - a.v);
     const note = (line
-      ? 'The equal-weight line of ' + full.length + ' companies over the ' + winLabel + ', price only'
-        + (bench && benchMove != null ? '; the fainter line is the S&P 500, ' + pct(benchMove) : '') + '. '
+      ? 'The equal-weight line of ' + full.length + ' companies ' + winPhrase(win) + ', price only'
+        + (bench && benchMove != null ? '; the fainter line is the ' + benchName + ', ' + pct(benchMove) : '') + '. '
         + (ends.length >= 2
           ? 'Furthest up: ' + clip(ends[0].n) + ' ' + pct(ends[0].v) + '. Furthest down: '
             + clip(ends[ends.length - 1].n) + ' ' + pct(ends[ends.length - 1].v) + '. ' : '')
