@@ -41,7 +41,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `strategy-runs.js`, `single-data.js`, `lab-grid.js` | Offline builders writing derived JSON into `private/` |
 | `backfill-*.js`, `onboard.js`, `purge-orphans.js`, `*-load.js` | Local maintenance scripts — dry run by default, `--commit` to write |
 | `nightly-ping.js`, `intraday-ping.js`, `news-ping.js` + `*-task.ps1` | The schedulers: Windows Task Scheduler on the owner's laptop, calling the deployed app over HTTP |
-| `docs/backlog.md` | Work identified and deliberately not done |
+| `docs/backlog.md` | Work identified and deliberately not done. Each entry carries a filing line (`*Area: … · Status: …*`) that the admin page `/backlog` reads; keep it when adding one |
 
 `portfolios.json`, `snapshot.json`, `profiles.json`, `names.json`, `visitors.log` are legacy pre-migration backups; nothing reads them.
 
@@ -145,6 +145,6 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Promo studio** — `the-promo-studio` (also seven refresh post-mortems) · `cards-and-the-module-behind-them` · `the-promo-studio-cards` (180 KB) · `the-promo-studio-cards-2` (105 KB) · `the-industries-card` (also the Sector cards) · `evolution-two-stocks` · `short-build-card` · `saved-posts`
 
-**Admin pages and the public side** — `the-admin-console` · `the-architecture-diagram` · `the-build-log` · `the-data-quality-page` · `the-database-page` · `the-help-page` · `the-public-side` · `chatbot`
+**Admin pages and the public side** — `the-admin-console` · `the-architecture-diagram` · `the-build-log` · `the-data-quality-page` · `the-database-page` · `the-help-page` · `the-backlog-page` · `the-public-side` · `chatbot`
 
 Also in `docs/`: `backlog.md`, `momentum-scoring.md`, `momentum-delta.md`.

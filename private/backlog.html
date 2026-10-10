@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Backlog — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The shell is the Database page's, so the admin pages read as one set.
+       Everything this page adds is prefixed bk- : an unscoped class here has
+       captured later markup nine times in this project. */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(167, 139, 250, 0.10), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: #a78bfa; box-shadow: 0 0 8px #a78bfa; }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 64ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+    .k { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+
+    /* ---- the four counts, which are also the status filter ---------------- */
+    .bk-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
+    .bk-stat { text-align: left; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+    .bk-stat .core { padding: 18px 20px; transition: background .25s var(--ease); }
+    .bk-stat:hover .core { background: rgba(255, 255, 255, 0.035); }
+    .bk-stat.on { outline: 1px solid var(--bk-c); outline-offset: -1px; border-radius: 26px; }
+    .bk-val { margin-top: 10px; font-family: var(--mono); font-size: 34px; font-weight: 500;
+              letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; color: var(--bk-c); }
+    .bk-sub { margin-top: 8px; font-size: 11.5px; color: var(--faint); }
+
+    /* ---- the bar above the table ------------------------------------------ */
+    .bk-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 4px 12px; }
+    .bk-bar input, .bk-bar select {
+      padding: 8px 12px; border-radius: 10px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.04); color: var(--text); font: 500 12.5px var(--sans); }
+    .bk-bar input { flex: 1 1 220px; min-width: 0; }
+    .bk-bar input:focus-visible, .bk-bar select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .bk-count { margin-left: auto; font-size: 12px; color: var(--faint); }
+
+    /* ---- the table -------------------------------------------------------- */
+    .bk-wrap { overflow-x: auto; }
+    table.bk { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.bk > thead th { background: var(--surface-2); text-align: left; padding: 10px 16px; white-space: nowrap;
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; color: var(--faint);
+      border-bottom: 1px solid var(--hair); cursor: pointer; user-select: none; }
+    table.bk > thead th:hover { color: var(--text); }
+    table.bk > thead th.on { color: var(--accent); }
+    table.bk > tbody > tr.bk-row { cursor: pointer; }
+    table.bk > tbody > tr.bk-row > td { padding: 13px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); vertical-align: top; }
+    table.bk > tbody > tr.bk-row:hover > td { background: rgba(255, 255, 255, 0.025); }
+    table.bk > tbody > tr.bk-row.open > td { background: rgba(255, 255, 255, 0.035); border-bottom-color: transparent; }
+    td.bk-n { font-family: var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; width: 1%; }
+    td.bk-story { min-width: 280px; }
+    .bk-title { font-weight: 600; font-size: 14px; letter-spacing: -0.01em; line-height: 1.35; }
+    .bk-row.done .bk-title { color: var(--muted); }
+    .bk-sum { margin-top: 5px; color: var(--muted); font-size: 12.5px; line-height: 1.5; max-width: 78ch; }
+    .bk-note { margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--amber); max-width: 78ch; }
+    td.bk-area, td.bk-status, td.bk-date { white-space: nowrap; width: 1%; }
+    .bk-tag { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+    .bk-tag i { width: 7px; height: 7px; border-radius: 50%; background: var(--bk-c); }
+    .bk-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 500;
+      letter-spacing: 0.02em; color: var(--bk-c); border: 1px solid color-mix(in srgb, var(--bk-c) 38%, transparent);
+      background: color-mix(in srgb, var(--bk-c) 10%, transparent); }
+    td.bk-date { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+    .bk-chev { display: inline-block; margin-left: 8px; color: var(--faint); transition: transform .3s var(--ease); }
+    .bk-row.open .bk-chev { transform: rotate(90deg); }
+
+    /* ---- an opened entry -------------------------------------------------- */
+    tr.bk-detail > td { padding: 0 16px 22px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); background: rgba(255, 255, 255, 0.035); }
+    .bk-body { max-width: 84ch; margin-left: 46px; padding: 6px 0 0; font-size: 13.5px; line-height: 1.68; color: var(--muted); }
+    .bk-body p { margin: 0 0 12px; }
+    .bk-body strong { color: var(--text); font-weight: 600; }
+    .bk-body code { font-family: var(--mono); font-size: 12px; color: var(--text); background: rgba(255, 255, 255, 0.06);
+                    padding: 1px 5px; border-radius: 5px; }
+    .bk-body pre { overflow-x: auto; padding: 12px 14px; border-radius: 12px; background: rgba(0, 0, 0, 0.35);
+                   border: 1px solid var(--hair); font-size: 12px; line-height: 1.55; }
+    .bk-body pre code { background: none; padding: 0; }
+    .bk-body ul, .bk-body ol { margin: 0 0 12px; padding-left: 20px; }
+    .bk-body li { margin: 0 0 6px; }
+    .bk-body h2, .bk-body h3, .bk-body h4 { margin: 20px 0 8px; font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: -0.005em; }
+    .bk-body blockquote { margin: 0 0 14px; padding: 10px 14px; border-left: 2px solid var(--amber);
+                          background: rgba(251, 191, 36, 0.06); border-radius: 0 10px 10px 0; color: var(--muted); }
+    .bk-body blockquote p:last-child { margin-bottom: 0; }
+    .bk-body a { color: var(--accent); text-decoration: none; }
+    .bk-body a:hover { text-decoration: underline; }
+    .bk-tw { overflow-x: auto; margin: 0 0 14px; }
+    .bk-tw table { border-collapse: collapse; font-size: 12.5px; }
+    .bk-tw th, .bk-tw td { text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--hair); white-space: nowrap; }
+    .bk-tw th { font-weight: 500; color: var(--faint); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+    .bk-empty, .bk-error { padding: 28px; font-size: 13px; color: var(--muted); }
+    .bk-error { color: var(--red); }
+    .bk-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.6; max-width: 84ch; }
+    .bk-foot a { color: var(--muted); }
+    .bk-not { margin-top: 18px; }
+    .bk-not > .core { padding: 20px 24px 10px; }
+    .bk-not .bk-body { margin-left: 0; }
+
+    @media (max-width: 860px) {
+      .page { padding: 0 16px; } .hide-sm { display: none !important; }
+      .bk-stats { grid-template-columns: repeat(2, 1fr); }
+      td.bk-area, th.bk-h-area, td.bk-date, th.bk-h-date { display: none; }
+      .bk-body { margin-left: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) { .bk-chev, .bk-stat .core { transition: none; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.9 13.6A8 8 0 1 1 18.1 7.3"/><path d="M18.7 3.2v4.4h-4.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <button class="btn" id="reloadBtn"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Read again</button>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Admin</span>
+      <h1>Backlog</h1>
+      <p class="lede">Work that was identified and deliberately not done yet. Each story says what it is,
+        what has already been measured, and what would make it a bad idea. Open a row to read it in full.</p>
+    </header>
+
+    <div class="bk-stats" id="stats"></div>
+
+    <div class="bk-bar">
+      <input type="search" id="q" placeholder="Search titles and summaries" aria-label="Search the backlog" />
+      <select id="area" aria-label="Area"><option value="">Every area</option></select>
+      <span class="bk-count" id="count"></span>
+    </div>
+
+    <div class="bezel"><div class="core" style="padding:0">
+      <div class="bk-wrap" id="wrap"><div class="bk-empty">Reading the backlog…</div></div>
+    </div></div>
+
+    <div class="bezel bk-not" id="notWrap" hidden><div class="core">
+      <span class="k">Deliberately not on this list</span>
+      <div class="bk-body" id="notBody" style="margin-top:12px"></div>
+    </div></div>
+
+    <p class="bk-foot" id="foot"></p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    // One colour per status and per area, set as a custom property on the
+    // element rather than as a class per value: a status this page has never
+    // seen still draws, in the neutral.
+    const STATUS = {
+      'Open': ['#7c9cff', 'not started'],
+      'Partly done': ['#fbbf24', 'some of it has shipped'],
+      'Parked': ['#9aa3b2', 'set aside on purpose'],
+      'Done': ['#34d399', 'kept for the reasoning'],
+    };
+    const AREA_TINTS = ['#22d3ee', '#a78bfa', '#fb923c', '#f472b6', '#a3e635', '#fbbf24', '#7c9cff', '#34d399', '#fb7185', '#f0abfc'];
+    const areaTint = {};
+    const statusOrder = (s) => { const i = Object.keys(STATUS).indexOf(s); return i < 0 ? 99 : i; };
+
+    let data = null;
+    let status = '';            // '' is every status
+    let sortKey = 'n', sortDir = 1;
+    const open = new Set();
+
+    // LOCAL NOON, never new Date(iso): that is UTC midnight and reads a day
+    // early west of Greenwich.
+    const day = (iso) => {
+      if (!iso) return '—';
+      const t = new Date(iso + 'T12:00:00');
+      return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
+
+    function shown() {
+      const q = $('q').value.trim().toLowerCase();
+      const area = $('area').value;
+      let list = data.entries.filter((e) => (!status || e.status === status) && (!area || e.area === area)
+        && (!q || (e.title + ' ' + e.summary + ' ' + (e.note || '') + ' ' + e.area).toLowerCase().includes(q) || String(e.n) === q));
+      const val = (e) => (sortKey === 'status' ? statusOrder(e.status)
+        : sortKey === 'area' ? e.area.toLowerCase()
+        : sortKey === 'date' ? (e.date || '')
+        : e.n);
+      list = list.slice().sort((a, b) => {
+        const x = val(a), y = val(b);
+        // An undated story sorts last whichever way the dates run.
+        if (sortKey === 'date' && (!x || !y) && x !== y) return x ? -1 : 1;
+        return (x < y ? -1 : x > y ? 1 : a.n - b.n) * sortDir;
+      });
+      return list;
+    }
+
+    function paintStats() {
+      const counts = {};
+      for (const e of data.entries) counts[e.status] = (counts[e.status] || 0) + 1;
+      const names = Object.keys(STATUS).concat(Object.keys(counts).filter((s) => !STATUS[s]));
+      $('stats').innerHTML = names.map((s) => {
+        const [c, sub] = STATUS[s] || ['#9aa3b2', 'as written in the file'];
+        return `<button class="bezel bk-stat${status === s ? ' on' : ''}" data-s="${we(s)}" style="--bk-c:${c}" aria-pressed="${status === s}">`
+          + `<div class="core"><span class="k">${we(s)}</span><div class="bk-val">${counts[s] || 0}</div>`
+          + `<div class="bk-sub">${we(sub)}</div></div></button>`;
+      }).join('');
+      $('stats').querySelectorAll('[data-s]').forEach((b) => b.addEventListener('click', () => {
+        status = status === b.dataset.s ? '' : b.dataset.s;
+        paintStats(); paint();
+      }));
+    }
+
+    function paint() {
+      const list = shown();
+      const th = (key, label, cls) => `<th class="${cls || ''}${sortKey === key ? ' on' : ''}" data-k="${key}">${label}${sortKey === key ? (sortDir > 0 ? ' ↑' : ' ↓') : ''}</th>`;
+      const rows = list.map((e) => {
+        const c = (STATUS[e.status] || ['#9aa3b2'])[0];
+        const isOpen = open.has(e.n);
+        return `<tr class="bk-row${isOpen ? ' open' : ''}${e.status === 'Done' ? ' done' : ''}" data-n="${e.n}" tabindex="0" role="button" aria-expanded="${isOpen}">`
+          + `<td class="bk-n">${e.n}<span class="bk-chev" aria-hidden="true">›</span></td>`
+          + `<td class="bk-story"><div class="bk-title">${we(e.title)}</div>`
+          + (e.summary ? `<div class="bk-sum">${we(e.summary)}</div>` : '')
+          + (e.note ? `<div class="bk-note">${we(e.note)}</div>` : '') + '</td>'
+          + `<td class="bk-area"><span class="bk-tag" style="--bk-c:${areaTint[e.area] || '#9aa3b2'}"><i></i>${we(e.area)}</span></td>`
+          + `<td class="bk-status"><span class="bk-pill" style="--bk-c:${c}">${we(e.status)}</span></td>`
+          + `<td class="bk-date">${we(day(e.date))}</td></tr>`
+          // THE BODY IS THE SERVER'S OWN RENDERING of our own file: its
+          // markdown renderer escapes first, so this is markup, not text.
+          + (isOpen ? `<tr class="bk-detail"><td colspan="5"><div class="bk-body">${e.html}</div></td></tr>` : '');
+      }).join('');
+      $('wrap').innerHTML = list.length
+        ? '<table class="bk"><thead><tr>' + th('n', '#') + th('title', 'Story') + th('area', 'Area', 'bk-h-area')
+          + th('status', 'Status') + th('date', 'Raised', 'bk-h-date') + '</tr></thead><tbody>' + rows + '</tbody></table>'
+        : '<div class="bk-empty">No story matches that. Clear the search or the filters.</div>';
+      $('count').textContent = list.length === data.entries.length
+        ? data.entries.length + ' stories' : list.length + ' of ' + data.entries.length + ' stories';
+      $('wrap').querySelectorAll('th[data-k]').forEach((h) => h.addEventListener('click', () => {
+        const k = h.dataset.k === 'title' ? 'n' : h.dataset.k;
+        if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = 1; }
+        paint();
+      }));
+      const toggle = (tr) => {
+        const n = Number(tr.dataset.n);
+        if (open.has(n)) open.delete(n); else open.add(n);
+        paint();
+      };
+      $('wrap').querySelectorAll('tr.bk-row').forEach((tr) => {
+        tr.addEventListener('click', (ev) => { if (!ev.target.closest('a')) toggle(tr); });
+        tr.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(tr); } });
+      });
+    }
+
+    async function load(fresh) {
+      try {
+        const r = await fetch('/api/backlog' + (fresh ? '?fresh=1' : ''), { cache: 'no-store' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not read the backlog.');
+        data = d;
+      } catch (e) {
+        $('wrap').innerHTML = `<div class="bk-error">${we(e.message)}</div>`;
+        return;
+      }
+      const areas = [...new Set(data.entries.map((e) => e.area))].sort((a, b) => a.localeCompare(b));
+      areas.forEach((a, i) => { areaTint[a] = AREA_TINTS[i % AREA_TINTS.length]; });
+      const keep = $('area').value;
+      $('area').innerHTML = '<option value="">Every area</option>' + areas.map((a) =>
+        `<option value="${we(a)}">${we(a)} · ${data.entries.filter((e) => e.area === a).length}</option>`).join('');
+      if (areas.includes(keep)) $('area').value = keep;
+      // A link to one story opens it: /backlog#17
+      const want = Number(location.hash.slice(1));
+      if (want && data.entries.some((e) => e.n === want)) open.add(want);
+      paintStats(); paint();
+      if (data.notHtml) { $('notBody').innerHTML = data.notHtml; $('notWrap').hidden = false; }
+      const unfiled = data.entries.filter((e) => !e.filed).length;
+      $('foot').innerHTML = 'This page is a reading of <a href="' + we(data.file) + '" target="_blank" rel="noopener">docs/backlog.md</a>, '
+        + 'which is where a story is added, changed or closed. Area and status come from one line under each heading in that file'
+        + (unfiled ? '; ' + unfiled + (unfiled === 1 ? ' story has' : ' stories have') + ' no such line yet and ' + (unfiled === 1 ? 'shows' : 'show') + ' as Open and Unfiled' : '')
+        + '. Read ' + (data.source === 'github' ? 'from the repository' : 'from the deployed copy')
+        + ' at ' + new Date(data.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) + '.';
+      if (want) { const tr = document.querySelector(`tr.bk-row[data-n="${want}"]`); if (tr) tr.scrollIntoView({ block: 'center' }); }
+    }
+
+    $('q').addEventListener('input', () => { if (data) paint(); });
+    $('area').addEventListener('change', () => { if (data) paint(); });
+    $('reloadBtn').addEventListener('click', () => load(true));
+    load(false);
+  </script>
+</body>
+</html>

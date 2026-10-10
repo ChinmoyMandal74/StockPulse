@@ -11,9 +11,21 @@ either way say which in the commit.
 
 Ordered roughly by value, not by effort.
 
+**Every entry carries one line of filing data under its heading**, which is what
+the admin page at `/backlog` reads to build its table:
+
+    *Area: Promo · Status: Open · Note: optional, one sentence*
+
+Status is one of **Open**, **Partly done**, **Parked** or **Done**. Keep the line
+when adding an entry, and change the status rather than deleting a finished
+entry whose reasoning is still worth having. An entry without the line still
+shows, as Open and unfiled.
+
 ---
 
 ## 1. The PEAD study — the best untested idea this project has
+
+*Area: Research · Status: Open*
 
 **Post-earnings announcement drift**: a company reports, the number beats or
 misses what was expected, the price jumps that day — and then keeps drifting in
@@ -95,6 +107,8 @@ over nine years rather than eight weeks.
 
 ## 2. A reconstructed trailing-P/E history
 
+*Area: Data · Status: Open*
+
 `fundamentals_history.trailing_pe` only starts **2026-09-15** (the day the
 profile call started being kept in full), and the provider serves no historical
 ratios on this plan — `/statistics` returns today's number and nothing else. So
@@ -117,6 +131,8 @@ splicing.
 ---
 
 ## 3. Strategy and Single are describing a universe that no longer exists
+
+*Area: Research · Status: Done · Note: the data half was rebuilt on 2026-09-28; the payload half became entry 15*
 
 > **REBUILT 2026-09-28 — the data half is done, the payload half became entry
 > 15.** Both files now carry the real **1,182** symbols against a 4.58M-bar
@@ -156,6 +172,8 @@ computation, or a sampled universe) before rebuilding.
 
 ## 4. `lab-grid.json` is stale, and it is the lab's honesty anchor
 
+*Area: Research · Status: Partly done · Note: the rebuild was attempted and is blocked on entry 16*
+
 > **REBUILDING 2026-09-28, and it is NOT "the cheap one" any more.** This entry
 > called it 300KB and a quick offline run. Measured on the deepened archive:
 > `lab-grid.js` **aborted out of memory** (exit 134) because it loads every bar
@@ -186,6 +204,8 @@ node lab-grid.js
 
 ## 5. The cron route has no fast mode — the real fix for refresh growth
 
+*Area: Refresh and jobs · Status: Open*
+
 Verified 2026-09-23: `POST /api/refresh-all?mode=fast` exists, but
 `/api/cron/refresh` has no fast path and the nightly workflow only ever calls
 `?start=1`.
@@ -206,6 +226,8 @@ against Refresh all's 5–7 hours and ~63M.
 
 ## 6. `TURSO_ROWS_READ_LIMIT` is unset, so the quota watchdog can never fire
 
+*Area: Infrastructure · Status: Open*
+
 Verified: not in `.env`. The daily watchdog compares rows read, rows written and
 storage against `TURSO_ROWS_READ_LIMIT`, `TURSO_ROWS_WRITTEN_LIMIT` and
 `TURSO_STORAGE_LIMIT_GB` and mails once the worst passes `TURSO_ALERT_AT` (0.7).
@@ -219,6 +241,8 @@ rather than only billing for it. Setting one number re-arms it.
 ---
 
 ## 7. Smaller, verified, one-line-ish
+
+*Area: Housekeeping · Status: Open*
 
 - **`/api/me` is still fetched twice on six pages** — stock, promo, activity,
   contact, users, visitors. Each loads `wmark.js`, which now shares a promise
@@ -239,6 +263,8 @@ rather than only billing for it. Setting one number re-arms it.
 
 ## 8. Untested research framings, carried over from the log
 
+*Area: Research · Status: Open*
+
 These are recorded in CLAUDE.md's research log and are repeated here only so
 this list is the one place to look:
 
@@ -255,6 +281,8 @@ this list is the one place to look:
 ---
 
 ## 9. A control plane for scheduled jobs — parked 2026-09-24
+
+*Area: Refresh and jobs · Status: Parked · Note: the direction reversed in entry 14*
 
 The owner asked how hard a front end for the laptop's intraday job would be,
 then said they plan to move the nightly onto the laptop too and expect "more
@@ -339,6 +367,8 @@ surface, to duplicate what a server-side gate does better.
 ---
 
 ## 10. A separate sending domain for the newsletter — parked 2026-09-25
+
+*Area: Accounts and mail · Status: Parked*
 
 **The list broadcasts from `mail.tickrlab.com`, the same subdomain as password
 resets, the contact form and the refresh report.** They share one sender
@@ -425,6 +455,8 @@ seconds afterwards arrived normally.
 
 ## 11. Sign in with Google — scoped 2026-09-26, not built
 
+*Area: Accounts and mail · Status: Done · Note: Google sign-in has shipped since this was written; what follows is the original scoping*
+
 **Asked about, costed, and deferred.** Google sign-in removes friction at the
 top of a funnel this app deliberately gates at the bottom with owner approval,
 and with four accounts the password form is not what is costing signups. The
@@ -483,6 +515,8 @@ account must not compromise the instance.
 
 ## 12. The insider table is 89 days behind, and waiting is the cheap fix — 2026-09-27
 
+*Area: Data · Status: Done · Note: on 2026-10-10 the newest filing on file was three days old*
+
 **Measured on production the day the daily walk shipped**: 8 quarters, **224,367
 transactions, through 2026-07-01, 89 days behind** the calendar. The quarterly
 Form 345 data sets are published after a quarter ends, so the table was born
@@ -536,6 +570,8 @@ number is on `/api/insider/coverage` and on `/admin`, amber past a week.
 ---
 
 ## 13. Onboarding a new ticker is a manual sequence, and one dataset has a hole — 2026-09-27
+
+*Area: Data · Status: Partly done · Note: onboard.js now covers bars, the record close, short interest and splits; insider trades are still a separate step*
 
 The owner's note: **stocks keep being added, and there must be a way to backfill
 everything for them — EDGAR and insider trades included.** What follows is what
@@ -597,6 +633,8 @@ cannot does not.
 ---
 
 ## 14. Getting the scheduled jobs off the laptop — 2026-09-28
+
+*Area: Refresh and jobs · Status: Open*
 
 The owner's question: **as the number of refresh jobs grows, how is the laptop
 dependency removed — is a cloud machine the answer?** Recommendation below;
@@ -670,6 +708,8 @@ dumb schedule from anywhere is fine, which was the design.
 
 ## 15. `/single` now downloads 8.6 MB, and the fix is a page change — 2026-09-28
 
+*Area: Research · Status: Open*
+
 **Measured after the deep backfill**: `private/single-closes.json` went from
 **2.52 MB to 32.94 MB raw, 8.6 MB gzipped** — the file `/single` downloads in
 full so it can simulate in the browser. This file's own note recorded "~700 KB
@@ -708,6 +748,8 @@ answer; only the delivery should change.
 ---
 
 ## 16. The offline builders have no sub-cent floor, and the lab grid is wrong without one — 2026-09-28
+
+*Area: Research · Status: Open*
 
 **`lab-grid.js` rebuilt on the deepened archive and printed decile returns of
 `-179.87%` and `-504.12%` for a one-month forward horizon.** A long position
@@ -774,6 +816,8 @@ anyway, and the floor should land before the rebuild rather than after it.
 ---
 
 ## 17. Backtesting Adjusted Advice — PARTLY BUILT 2026-09-29
+
+*Area: Research · Status: Partly done*
 
 > **`/adjustedbacktest` now exists** and does the single-window half: pick a
 > date from 2018, the rules are replayed on filings public then, and the
@@ -879,6 +923,8 @@ knowing for a few hundred lines of effort rather than a few thousand.
 
 ## 18. The EDGAR rotation cannot sustain its own cutoff, and a bulk refresh synchronises it — 2026-10-01
 
+*Area: Data · Status: Open*
+
 **Asked for by the owner as "fixing the EDGAR refresh", straight after the Item
 2.02 announcement date was folded into it.** The refresh works; what does not
 work is its *cadence*, and the arithmetic is against it in two separate ways.
@@ -972,6 +1018,8 @@ the window's throughput, not its design.
 
 ## 19. Rebuilding the phone page — 2026-10-01
 
+*Area: Pages · Status: Open*
+
 **The owner's instruction, given while regrouping the screener's columns:
 "Ignore Mobile app, Lets rebuild it later, Add this to backlog."** So `/m` and
 `/mobile-setup` were deliberately left out of that change, and this entry is
@@ -1061,6 +1109,8 @@ already draws at 1080px.
 
 ## 20. Chart patterns — measured 2026-10-02, flat, and worth drawing anyway
 
+*Area: Research · Status: Open*
+
 **Asked for from a table of classical patterns (head and shoulders, double and
 triple tops, rounding bottoms) with "do you think we can do some of these on
 the individual stock chart".** The fire rate was measured before anything was
@@ -1137,6 +1187,8 @@ has strictly more free parameters than the pattern that just failed.
 
 ## 21. A split leaves every per-share profile field wrong for up to a week — 2026-10-04
 
+*Area: Data · Status: Open*
+
 **Found while verifying the Live P/E column against production, and it is
 wider than that column.** `persistBars` detects a split and rewrites the
 symbol's whole bar history, so the archive is adjusted within one refresh.
@@ -1180,6 +1232,8 @@ ratio are pre-split and a split does not move a ratio. **One symbol of
 
 ## 25. A trend-state board — the engine's own word, counted — 2026-10-07
 
+*Area: Promo · Status: Open*
+
 **Offered when the owner asked for "analysis of stocks above the 200 Day
 average especially within s&p", and deferred in favour of the breadth card
 that shipped instead.** This is the same question asked in the product's own
@@ -1212,6 +1266,8 @@ vocabulary rather than a raw percentage, and not before.
 
 ## 26. Flow, with the bands keyed on the 200-day — 2026-10-07
 
+*Area: Promo · Status: Open*
+
 **`tplFlow`'s `bandOf(r)` keys on a return against the index** — `r < 0 ?
 down : r > index ? ahead : behind`. A second rule keying on `vs200ma` would
 make that card draw value-weighted breadth as ribbons, by sector, with no new
@@ -1232,6 +1288,8 @@ itself has as `whipsaw.neutral_band_pct`.
 ---
 
 ## 27. The index against its own breadth — 2026-10-07
+
+*Area: Promo · Status: Open*
 
 **The divergence picture: the index making highs while fewer of its members
 participate.** The most interesting of the seven ideas put to the owner and
@@ -1257,6 +1315,8 @@ or should be built stating that measurement on its own face the way the chip
 screen states the cost of its hedge.
 
 ## 28. The S&P 500's own P/E history, beside a stock's — 2026-10-08
+
+*Area: Promo · Status: Open*
 
 **Asked for by the owner on the Evolution card: "one thing important when you
 see PE history is the PE history of the stock against S&P PE history."**
@@ -1295,6 +1355,8 @@ makes one axis honest for them.
 
 ## 29. The peer chart's market value is still on today's share count — 2026-10-08
 
+*Area: Data · Status: Open*
+
 `peerTrendFor` computes each peer's market value as today's share count times
 that quarter's close, the formulation the Evolution card has just left. It
 reads a buyback-heavy peer's past value low — Apple's by about a third over
@@ -1310,6 +1372,8 @@ is true of it.
 
 ## 30. The splits table can repair an unadjusted archive — 2026-10-08
 
+*Area: Data · Status: Open*
+
 Three symbols carry a split the provider serves UNADJUSTED in `time_series`
 (MLI 2-for-1 on 2026-06-25, CTVA 6.18-for-1 on 2026-10-01, CORT about
 2-for-1), and `persistBars` cannot see them: it detects a split by disagreeing
@@ -1324,6 +1388,8 @@ confirming first that `/splits` actually lists the three (MLI's is reported by
 
 
 ## 31. Nasdaq 100 membership — 2026-10-08
+
+*Area: Data · Status: Done*
 
 > **THE IMPORT HALF IS DONE (2026-10-08, the same evening).** The source is
 > Invesco's own JSON feed for QQQ; it is imported nightly under fund `qqq` and
@@ -1378,6 +1444,8 @@ maintained list from a mirror was refused for the S&P because it was eleven
 days stale and missing a real member; the same test applies here.
 
 ## 32. Earnings narrowness — three more views on the Earnings growth card — 2026-10-09
+
+*Area: Promo · Status: Open*
 
 **Asked by the owner** ("show which stocks are major contributors to the entire
 S&P or Nasdaq 100 earning growth … this also shows narrowness"). The card that
@@ -1441,6 +1509,8 @@ the fund's published weights, the treemap's rule.
 ---
 
 ## 33. More columns in the Chip selloff family — 2026-10-10
+
+*Area: Screener · Status: Open*
 
 **Asked by the owner** ("similar to chips sell off, do you have any other unique
 ideas that I can add as column"). Nine were offered. Four were built the same

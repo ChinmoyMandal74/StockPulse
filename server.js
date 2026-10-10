@@ -572,6 +572,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
+                      '/backlog.html': '/backlog',
                       '/backtest.html': '/backtest', '/quality.html': '/quality',
                       '/trend-backtest.html': '/trend-backtest',
                       '/adjusted.html': '/adjusted',
@@ -1508,6 +1509,14 @@ app.get('/quality', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'quality');
   res.sendFile(path.join(__dirname, 'private', 'quality.html'));
+}));
+
+// Admin only: the backlog, as a table. The data is docs/backlog.md itself;
+// see /api/backlog below and backlog.js.
+app.get('/backlog', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'backlog');
+  res.sendFile(path.join(__dirname, 'private', 'backlog.html'));
 }));
 
 app.get('/database', route(async (req, res) => {
@@ -15725,6 +15734,53 @@ store.init().then(
 // ===========================================================================
 
 const BUILD_REPO = String(process.env.GITHUB_REPO || 'ChinmoyMandal74/StockPulse').trim();
+
+// ---- the backlog page -------------------------------------------------------
+//
+// THE MARKDOWN FILE IS THE DATA (2026-10-10, owner's request for a page of
+// the backlog stories). docs/backlog.md is read, parsed by backlog.js and
+// served as rows; nothing is copied into the database, where the same
+// thirty entries would be a second place to be wrong in. An entry changes by
+// editing the file and pushing, which is also the deploy.
+//
+// TWO PLACES TO FIND IT, in order. The file beside this one, which is there
+// locally and on Vercel only if the build traced it into the function --
+// `private/` is bundled because the server lists it at boot, and nothing
+// promises the same for `docs/`. So where the file is missing, the same
+// text is fetched from the public repository's main branch, which a push
+// has just updated. Local works either way; this is the half that only
+// production can exercise, which is the trap `public/` taught this file.
+const Backlog = require('./backlog.js');
+const BACKLOG_TTL_MS = 10 * 60 * 1000;
+let backlogCache = null;
+async function backlogText() {
+  try {
+    const t = fs.readFileSync(path.join(__dirname, 'docs', 'backlog.md'), 'utf8');
+    if (t && t.length > 200) return { text: t, source: 'file' };
+  } catch (e) { /* not bundled: ask the repository */ }
+  const r = await fetch(`https://raw.githubusercontent.com/${BUILD_REPO}/main/docs/backlog.md`, {
+    headers: { 'User-Agent': 'TickrLab backlog page' }, signal: AbortSignal.timeout(12000),
+  });
+  if (!r.ok) throw new Error('backlog file not reachable: ' + r.status);
+  return { text: await r.text(), source: 'github' };
+}
+app.get('/api/backlog', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const fresh = req.query.fresh === '1';
+  if (!fresh && backlogCache && Date.now() - backlogCache.at < BACKLOG_TTL_MS) return res.json(backlogCache.body);
+  let got;
+  try { got = await backlogText(); }
+  catch (e) {
+    // Our words, never the upstream's.
+    console.warn('backlog read failed:', e.message);
+    return res.status(502).json({ error: 'The backlog file could not be read just now.' });
+  }
+  const parsed = Backlog.parse(got.text, (s) => renderMarkdown(s));
+  const body = { ...parsed, source: got.source, at: Date.now(),
+    file: `https://github.com/${BUILD_REPO}/blob/main/docs/backlog.md` };
+  backlogCache = { at: Date.now(), body };
+  res.json(body);
+}));
 const GITHUB_TOKEN = String(process.env.GITHUB_TOKEN || '').trim();
 // GitHub refuses a request with no User-Agent. Ours names the app and, where
 // one is configured, a contact -- the same bargain SEC_UA strikes.
