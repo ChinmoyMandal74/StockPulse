@@ -1477,7 +1477,7 @@
       <tr>
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="shortName" title="What a person would call it — shortened from the legal name by rule, and editable by the owner. The full legal name is in the tooltip on each row.">Name</th>
-        <th class="group grp-info" data-group="info" colspan="11">Info</th>
+        <th class="group grp-info" data-group="info" colspan="12">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="1">Scores</th>
         <th class="group grp-act" data-group="act" colspan="8">Signal</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
@@ -1499,6 +1499,7 @@
         <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — Twelve Data's own taxonomy, not GICS.">Industry</th>
         <th class="left grp-info" data-key="exchange" title="Where the stock actually trades, with its MIC and trading currency on the cell. Stored on the profile rather than read from the price call, so it survives a round that prices from the archive. NOTE: the currency here is the TRADING one — an ADR trades in USD while its financials are in the home currency, so this does not tell you what the money columns are denominated in.">Exchange</th>
         <th class="left grp-info" data-key="instrumentType" title="What the instrument IS, from the provider's own free reference list: Common Stock, Preferred Stock, American Depositary Receipt, Limited Partnership, REIT or ETF. It exists because a NAME cannot be trusted for this — BNS is stored as 'Bank Nova Scotia Halifax Pfd 3' and is Scotiabank's common stock, while a subordinated note can read as ordinary equity. Filter on it to find anything that is not common stock. It states the fact only: nothing in the Signal engine reads it.">Instrument</th>
+        <th class="left grp-info" data-key="filer" title="How the company files its accounts with the SEC. &quot;Foreign&quot; means a foreign company filing under international standards (IFRS), which only a foreign issuer may do; the code beside it is the currency it reports in. A euro reporter is shown in dollars on its stock page, at the European Central Bank's rate for each period; other currencies are not converted yet, so those companies have no filings card. &quot;US GAAP&quot; is how nearly every company here files, and says how it reports rather than where it is from: a foreign company may choose US GAAP too. Every stock here is US-listed either way. Blank for a fund, which files no statements.">Filer</th>
         <th class="left grp-info" data-key="spMember" title="Which index the stock is in: the S&amp;P 500, the Nasdaq 100, both or neither. Each comes from the index fund's own daily holdings file (SPY and QQQ), the closest published source there is, and the cell names the date. An em-dash means a holdings file has not been imported yet, which is NOT the same as being in neither. The index WEIGHT is deliberately not here: it stays on the admin holdings page. Nothing in the Signal engine reads this.">Index</th>
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
         <th class="left grp-info" data-key="capBand" title="The size band, from the market cap beside it: Mega $200B+, Large $50-200B, Mid-Large $10-50B, Mid $2-10B, Small $300M-2B, Micro under $300M. The $50B line inside Large is this site's own cut, not a standard — without it 69% of the screen sat in one bucket. Thresholds are fixed, never derived from the current universe. Blank for ETFs, which report AUM rather than capitalisation.">Size</th>
@@ -2175,6 +2176,15 @@
     //
     // `.nocard` because the hover card is an ambush on a cell nobody needs a
     // field list for, the rule Sector, Industry and Size already follow.
+    // How the company files. A foreign filer is the reading worth finding,
+    // so it is the one that is not faint; 'US GAAP' is nearly every row.
+    function filerCell(s) {
+      if (!s.filer) {
+        return `<td class="name left grp-info nocard na" title="No financial statements on file with the SEC \u2014 a fund files none.">\u2014</td>`;
+      }
+      const foreign = /^Foreign/.test(s.filer);
+      return `<td class="name left grp-info nocard${foreign ? '' : ' na'}">${we(s.filer)}</td>`;
+    }
     function instrumentCell(s) {
       if (!s.instrumentType) {
         return `<td class="name left grp-info nocard na" title="Not recorded yet \u2014 it fills in the next time this stock's profile is pulled.">\u2014</td>`;
@@ -3543,7 +3553,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="102">${s.error}</td>
+            <td class="na" colspan="103">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3570,7 +3580,7 @@
           ${classCell('secval', s.sector, 'sector', '', cacheTitle)}
           ${classCell('indval', s.industry, 'industry', ' industry', s.industry || cacheTitle)}
           ${exchangeCell(s)}
-          ${instrumentCell(s)}${spCell(s)}
+          ${instrumentCell(s)}${filerCell(s)}${spCell(s)}
           <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
           ${capBandCell(s)}
           ${newsCell(s)}
@@ -3690,7 +3700,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 107;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 108;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3871,7 +3881,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="104">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="105">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

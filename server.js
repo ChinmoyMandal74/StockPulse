@@ -5029,6 +5029,31 @@ async function stampSpMember(rows) {
 // older than FLOWS_TTL_MS. The rebuild reads about 30,000 rows; a cold
 // serverless instance paying that on its first page view, every time,
 // would be most of this database's read bill. Stored, it is one row.
+// ---- Filer: is this a foreign company, by how it files -------------------
+//
+// (2026-10-10, owner: "add a column saying these are foreign listings or
+// something like that so it's easy to identify and filter".) Every stock
+// here is US-LISTED, so "foreign listing" is the wrong name for the fact.
+// What separates Spotify from Netflix is the FILER: only a foreign private
+// issuer may file with the SEC under international standards, so a company
+// whose facts are IFRS is foreign, by the SEC's own rule rather than by a
+// guess from its name or its instrument type (Spotify is ordinary shares,
+// not a depositary receipt). The reporting currency rides beside it,
+// because that is the second thing a reader needs: whether its figures
+// were converted, or could not be.
+//
+// 'US GAAP' IS NOT 'AMERICAN'. A foreign company may choose US GAAP and
+// some do, so the label says how it files and stops there.
+//
+// A company with rows and no taxonomy recorded was read before the column
+// existed, when US GAAP was the only taxonomy this reader knew.
+function filerLabel(st) {
+  if (!st) return null;
+  if (st.taxonomy === 'ifrs-full') return 'Foreign \u00b7 ' + (st.currency || 'IFRS');
+  if (st.status === 'ok' && (st.taxonomy === 'us-gaap' || !st.taxonomy)) return 'US GAAP';
+  return null;
+}
+const FLOWS_V = 2;          // bumped when the stored value gains a part
 const INSIDER_NET_DAYS = 90;
 const INSIDER_JUNK = 0.25;
 const FLOWS_TTL_MS = 6 * 60 * 60 * 1000;
@@ -5037,11 +5062,19 @@ let flowsMem = null;
 let flowsMemAt = 0;
 async function buildFlows() {
   const since = new Date(Date.now() - INSIDER_NET_DAYS * 86400000).toISOString().slice(0, 10);
-  const [sm, ids, net] = await Promise.all([
+  const [sm, ids, net, secState] = await Promise.all([
     shortMovesPayload().catch(() => null),
     filerIds().catch(() => ({})),
     store.readInsiderNetSince(since).catch(() => null),
+    store.readSecState().catch(() => null),
   ]);
+  const filer = {};
+  if (secState) {
+    for (const sym of Object.keys(secState)) {
+      const lab = filerLabel(secState[sym]);
+      if (lab) filer[sym] = lab;
+    }
+  }
   const short = {};
   if (sm && sm.moves) {
     for (const sym of Object.keys(sm.moves)) {
@@ -5058,17 +5091,19 @@ async function buildFlows() {
       if (x) insider[sym] = [Math.round(x.bought), Math.round(x.sold), x.buyers, x.sellers];
     }
   }
-  return { at: Date.now(), shortFrom: sm ? sm.from : null, shortTo: sm ? sm.to : null, short,
+  return { v: FLOWS_V, at: Date.now(), filer: secState ? filer : null,
+    shortFrom: sm ? sm.from : null, shortTo: sm ? sm.to : null, short,
     // null, not {}: "the read failed" must not be stored as "nobody traded".
     insiderSince: net ? since : null, insider: net ? insider : null };
 }
 async function flowsNow() {
   if (flowsMem && Date.now() - flowsMemAt < FLOWS_MEM_MS) return flowsMem;
   let f = await store.readFlows().catch(() => null);
-  if (!f || !f.at || Date.now() - f.at > FLOWS_TTL_MS) {
+  if (!f || !f.at || f.v !== FLOWS_V || Date.now() - f.at > FLOWS_TTL_MS) {
     const fresh = await buildFlows();
     // A half that failed to read keeps the stored half rather than blanking it.
     if (f && !fresh.insider) { fresh.insider = f.insider || null; fresh.insiderSince = f.insiderSince || null; }
+    if (f && !fresh.filer) fresh.filer = f.filer || null;
     if (f && !fresh.shortTo) { fresh.short = f.short || {}; fresh.shortFrom = f.shortFrom || null; fresh.shortTo = f.shortTo || null; }
     await store.writeFlows(fresh).catch(() => {});
     f = fresh;
@@ -5080,8 +5115,9 @@ async function flowsNow() {
 // value. Null, never zero: a company with no trade on file has no reading,
 // which is a different statement from "its insiders netted to nothing".
 function flowsOf(row, f) {
-  const out = { shortBuild: null, insiderNet: null, insiderBuyers: null, insiderSellers: null };
+  const out = { shortBuild: null, insiderNet: null, insiderBuyers: null, insiderSellers: null, filer: null };
   if (!row || !f) return out;
+  out.filer = (f.filer && f.filer[String(row.symbol).toUpperCase()]) || null;
   const sb = f.short ? f.short[row.symbol] : null;
   if (sb != null && isFinite(sb)) out.shortBuild = Number(sb);
   const cap = Number(row.marketCap);
@@ -5109,6 +5145,7 @@ async function stampFlows(rows) {
     r.insiderBuyers = v.insiderBuyers;
     r.insiderSellers = v.insiderSellers;
     r.insiderSince = f ? f.insiderSince : null;
+    r.filer = v.filer;
   }
 }
 
@@ -10839,8 +10876,9 @@ async function secFetchOne(symbol) {
     const cur = SecFacts.currencyOf(facts);
     const opts = cur === 'EUR' ? { fx: await eurFx(), fxCurrency: 'EUR' } : undefined;
     const rows = SecFacts.normalise(facts, sym, opts);
+    const filer = { taxonomy: SecFacts.taxonomyOf(facts), currency: cur };
     if (!rows.length && cur && cur !== 'USD' && cur !== 'EUR') {
-      await store.noteSecMiss(sym, 'currency', 'reports in ' + cur, cik);
+      await store.noteSecMiss(sym, 'currency', 'reports in ' + cur, cik, filer);
       await saveResults(sym, lastResults);
       return { symbol: sym, status: 'currency', rows: 0, cik, currency: cur, results: lastResults };
     }
@@ -10856,7 +10894,8 @@ async function secFetchOne(symbol) {
     // `outranks` exists to prevent on the card.
     const lastFiled = rows.reduce(
       (m, r) => (SecFacts.isStatement(r) && r.filed && (!m || r.filed > m) ? r.filed : m), null);
-    await store.writeSecFacts(sym, rows, { cik, status: 'ok', lastFiled, lastResults });
+    await store.writeSecFacts(sym, rows, { cik, status: 'ok', lastFiled, lastResults,
+      taxonomy: filer.taxonomy, currency: filer.currency });
     return { symbol: sym, status: 'ok', rows: rows.length, cik, results: lastResults };
   } catch (e) {
     await store.noteSecMiss(sym, 'error', e.message).catch(() => {});

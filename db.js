@@ -1092,6 +1092,12 @@ function parseAddColumn(stmt) {
 
 const ADDED_COLUMNS = [
   // A filing reported in another currency, converted when read (2026-10-10).
+  // HOW a company files, kept on its state row so the screener can say
+  // which companies are foreign filers without opening a filing:
+  // `taxonomy` is 'us-gaap' or 'ifrs-full', `currency` the reporting
+  // currency of an IFRS filer (2026-10-10).
+  "alter table sec_state add column taxonomy text",
+  "alter table sec_state add column currency text",
   "alter table sec_facts add column currency text",
   "alter table sec_facts add column fx_avg real",
   "alter table sec_facts add column fx_end real",
@@ -2352,12 +2358,17 @@ async function writeSecFacts(symbol, rows, meta = {}) {
   // rather than blanking it. The same reasoning as noteSecMiss's subquery,
   // and the reason this is not simply `meta.lastResults || null`.
   stmts.push({
-    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed, last_results)
+    // `taxonomy` and `currency` COALESCE too: `insert or replace` rewrites
+    // the whole row, so a column this statement did not name would come
+    // back NULL -- the way the CIK and both dates were each lost once.
+    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed, last_results, taxonomy, currency)
           values (?, ?, ?, ?, ?, ?, ?,
-                  coalesce(?, (select last_results from sec_state where symbol = ?)))`,
+                  coalesce(?, (select last_results from sec_state where symbol = ?)),
+                  coalesce(?, (select taxonomy from sec_state where symbol = ?)),
+                  coalesce(?, (select currency from sec_state where symbol = ?)))`,
     args: [sym, meta.cik == null ? null : Number(meta.cik), Date.now(), rows.length,
       meta.status || 'ok', meta.error || null, meta.lastFiled || null,
-      meta.lastResults || null, sym],
+      meta.lastResults || null, sym, meta.taxonomy || null, sym, meta.currency || null, sym],
   });
   await db.batch(stmts);
   return rows.length;
@@ -2371,7 +2382,7 @@ async function writeSecFacts(symbol, rows, meta = {}) {
 // whose CIK resolved fine but whose filings are in the IFRS taxonomy stored
 // a NULL. That silently broke the insider card for all 64 of them — the
 // transactions were there, the join was not. Prefer the caller's value.
-async function noteSecMiss(symbol, status, error, cik) {
+async function noteSecMiss(symbol, status, error, cik, filer) {
   await init();
   const sym = String(symbol).toUpperCase();
   await db.execute({
@@ -2379,10 +2390,12 @@ async function noteSecMiss(symbol, status, error, cik) {
     // the same reason: it comes from a DIFFERENT source (the submissions API,
     // loaded locally) and a companyfacts miss must not wipe it. This is the
     // third field this function has had to be told to keep.
-    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed, last_results)
+    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed, last_results, taxonomy, currency)
           values (?, coalesce(?, (select cik from sec_state where symbol = ?)), ?, 0, ?, ?,
                   (select last_filed from sec_state where symbol = ?),
-                  (select last_results from sec_state where symbol = ?))`,
+                  (select last_results from sec_state where symbol = ?),
+                  coalesce(?, (select taxonomy from sec_state where symbol = ?)),
+                  coalesce(?, (select currency from sec_state where symbol = ?)))`,
     // The two trailing `sym`s are for the last_filed and last_results
     // subqueries: a symbol that could not be FETCHED this time still holds
     // whatever it already had, and blanking either date would make a
@@ -2390,7 +2403,8 @@ async function noteSecMiss(symbol, status, error, cik) {
     // same mistake this function already made once with the CIK, which
     // silently broke the insider card for 64 filers.
     args: [sym, cik == null ? null : Number(cik), sym, Date.now(),
-      status || 'none', error ? String(error).slice(0, 300) : null, sym, sym],
+      status || 'none', error ? String(error).slice(0, 300) : null, sym, sym,
+      (filer && filer.taxonomy) || null, sym, (filer && filer.currency) || null, sym],
   });
 }
 
@@ -2456,7 +2470,7 @@ async function readSecFactsSince(symbols, since, untilFiled) {
 async function readSecState() {
   await init();
   const r = await db.execute(
-    'select symbol, cik, fetched_at, rows, status, error, last_results from sec_state');
+    'select symbol, cik, fetched_at, rows, status, error, last_results, taxonomy, currency from sec_state');
   const out = {};
   for (const x of r.rows) {
     // `lastResults` rides along because /api/sec already makes this read:
@@ -2465,7 +2479,8 @@ async function readSecState() {
     // is a DIFFERENT fact from `last_filed` (the newest statement filing)
     // and is why both columns exist.
     out[x.symbol] = { cik: x.cik, fetchedAt: x.fetched_at, rows: x.rows, status: x.status,
-      error: x.error, lastResults: x.last_results || null };
+      error: x.error, lastResults: x.last_results || null,
+      taxonomy: x.taxonomy || null, currency: x.currency || null };
   }
   return out;
 }

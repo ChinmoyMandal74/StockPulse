@@ -191,6 +191,9 @@
     // about the security, not a reading of it — so it carries no colour and
     // nothing in the engine reads it.
     ['info',  'Instrument',     (s) => V.text(s.instrumentType)],
+    // How the company files with the SEC: 'US GAAP', or 'Foreign · EUR' for a
+    // foreign filer under international standards, with its reporting currency.
+    ['info',  'Filer',          (s) => V.text(s.filer)],
     // Boolean only. The index WEIGHT is deliberately not here: it stays on
     // the admin /holdings page, which is the licensing line the owner drew.
     // ONE row for both indexes. Blank where neither is known, or where

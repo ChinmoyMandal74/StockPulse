@@ -38,3 +38,16 @@ A foreign private issuer files a 20-F under INTERNATIONAL accounting standards, 
 The SEC EDGAR card and the Financial statements card each carry one sentence, from one function (`fxNote`), where a row was converted: which currency, the two kinds of rate, and that growth includes the currency's move. Hovering a period shows its two rates. Nothing else on the page changed: the figures arrive as dollars.
 
 **Display only, as before.** Nothing here reaches the Signal or the screener row.
+
+### The Filer column (2026-10-10, owner: "add a column saying these are foreign listings … so it's easy to identify and filter")
+**A screener column, `filer`, in the Info group after Instrument.** Values: `Foreign · EUR` (and `· USD`, `· CAD` …) for a foreign filer with its reporting currency, `US GAAP` for nearly everyone else, blank where no statements are on file (a fund). On the live universe: 1,180 US GAAP, 64 Foreign (28 USD, 13 EUR, 8 CAD, 4 GBP, 3 TWD, 3 BRL, and one each of CHF, CNY, DKK, INR, JPY), 36 blank.
+
+- **Not called "foreign listing", because every stock here is US-listed.** What separates Spotify from Netflix is the FILER: only a foreign private issuer may file with the SEC under international standards, so IFRS facts mean a foreign company by the SEC's own rule, not by a guess from a name or an instrument type (Spotify is ordinary shares, not a depositary receipt).
+- **`US GAAP` is not "American".** A foreign company may choose US GAAP and some do, so the label says how it files and stops there. The tooltip says so.
+- **Stored on `sec_state`** as `taxonomy` and `currency`, written by every outcome that learned them (`writeSecFacts` meta, `noteSecMiss`'s fifth argument). **Both `insert or replace` statements name and COALESCE the two columns**: that statement rewrites the whole row, so a column it does not name comes back NULL, which is how the CIK and both dates were each lost once.
+- A company with rows and no taxonomy recorded was read before the column existed, when US GAAP was the only taxonomy the reader knew; `filerLabel` reads it as `US GAAP`. It fills in properly as the rotation re-reads each company.
+- **It reaches a row through `stampFlows`**: `buildFlows` reads `sec_state` once and stores `filer` by symbol in the same `app_meta` value as the short and insider readings. `FLOWS_V` was bumped to 2 so the stored value is rebuilt on the first read after deploy rather than six hours later.
+- **Filterable**: `filer` is in `CAT_KEYS`, so the filter row offers its values as a list with counts. It is also a `FIELD_SPEC` row (`info|Filer`).
+- Layout constants after it: `PAD_SPAN` 108, error row 103, empty row 105; Info banner 12.
+- **The 64 were filled before the deploy** by `fx-load.js --only …`, so the first rebuilt value already had them. The loader passes taxonomy and currency on both of its writes.
+- Display only: not read by the Signal.

@@ -83,7 +83,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         if (cur && cur !== 'USD' && cur !== 'EUR') {
           say('reports in ' + cur);
           line += `reports in ${cur}: not converted`;
-          if (COMMIT) await store.noteSecMiss(sym, 'currency', 'reports in ' + cur, cik);
+          if (COMMIT) await store.noteSecMiss(sym, 'currency', 'reports in ' + cur, cik, { taxonomy: tax, currency: cur });
         } else { say('still empty'); line += `still empty (${tax})`; }
         console.log(line);
       } else {
@@ -97,7 +97,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         console.log(line);
         if (COMMIT) {
           const lastFiled = rows.reduce((m, x) => (SecFacts.isStatement(x) && x.filed && (!m || x.filed > m) ? x.filed : m), null);
-          await store.writeSecFacts(sym, rows, { cik, status: 'ok', lastFiled });
+          // How it files rides along, for the screener's Filer column.
+          await store.writeSecFacts(sym, rows, { cik, status: 'ok', lastFiled, taxonomy: tax, currency: cur });
         }
       }
     } catch (e) { say('failed'); console.log(line + 'failed: ' + e.message); }
