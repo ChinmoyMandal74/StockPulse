@@ -1440,6 +1440,77 @@ the fund's published weights, the treemap's rule.
 
 ---
 
+## 33. More columns in the Chip selloff family — 2026-10-10
+
+**Asked by the owner** ("similar to chips sell off, do you have any other unique
+ideas that I can add as column"). Nine were offered. Four were built the same
+day as the Reactions group (Market selloff, Market rally, Short build, Insider
+net; see [context/reactions-group.md](context/reactions-group.md)). **These are
+the other five, plus two things that came out of building the four.**
+
+**NONE OF THE FIVE HAS BEEN MEASURED.** Chip selloff was added only after it
+ranked stocks the same way from one year to the next (Spearman 0.53), and two
+alternatives were refused for failing that. Each of these owes the same test
+before it is a column, on the local archive copy; `mkt-study.js` in the
+2026-10-10 session scratchpad is the shape of it and takes a minute to run.
+
+In the order they would be worth trying:
+
+1. **Earnings-day swing.** The typical size of a stock's move on the session
+   after each of its last eight reports. Useful just before earnings, which is
+   when a reader looks. `earnings_history` holds the dates and the bars hold
+   the moves. *The trap:* nearly every report is After Hours, so the reaction
+   is the NEXT session (the PEAD entry above records this). A median of
+   absolute moves, never a mean: one buyout day would be the whole reading.
+2. **Versus its industry.** Its return less the middle company of its own
+   industry, over a month or a quarter. There is relative strength against
+   the S&P and nothing against peers, and it pairs with the Industry cards.
+   Cross-sectional, so it is a read-path stamp fed the WHOLE universe before
+   any guest filter (`stampPeerValue`'s rule), with `PEER_MIN_INDUSTRY`'s
+   floor and its sector fallback said on the cell.
+3. **Own-sector selloff.** Its move on its own sector's worst days, after the
+   market's move is taken out: does it lead its sector down or hold up inside
+   it. The eleven sector funds are already rows, so the trigger exists. It is
+   Chip selloff's exact method with a different basket, and should be built
+   by generalising `chipSelloffCtx`, not copying it.
+4. **Overnight share.** How much of the past year's return came between one
+   close and the next open, against during the session. The most unusual of
+   the nine. *Check first:* that the archive's opens are split-adjusted on the
+   same basis as its closes; an unadjusted open across a split is a
+   several-hundred-percent overnight "move" (backlog 21 and 30).
+5. **The market's share of its moves.** How much of a stock's daily movement
+   the S&P 500 explains, as a percentage. A low figure is a stock trading on
+   its own story. *Likely to pass:* a plain beta carried over at 0.60 to 0.83
+   in the Market selloff study. *Likely to be redundant with* Market selloff,
+   which correlates with beta at about 0.9; measure that before adding a
+   third column that says the same thing.
+
+**What building the four showed, so it is not rediscovered:**
+
+- **Do NOT build an "asymmetry" column** (rally plus selloff, "catches the
+  upside and dodges the downside"). It was measured and it is not a trait: it
+  carries over year to year at 0.20, 0.04, 0.10, 0.10, 0.09 and -0.01.
+- **Insider net could be shown in dollars instead.** As a percentage of market
+  value its median is -0.005% and half the column rounds to nothing; the
+  owner was offered dollars and has not chosen. Dollars read better per cell
+  and stop being comparable across company sizes. The junk guard has to stay
+  either way (one filing shows $1.6 quadrillion bought).
+
+**A related card, also not built:** a dedicated Chip selloff promo card. The
+measure is on the Bars card and behind the "Held up when chips fell" screen,
+and nothing explains it. A card of its own would show both ends at once
+(Bars cannot), which sectors moved against chips, and the explanation on the
+card. It must keep the column's own line: the measure is the semiconductor
+industries, and "the AI trade" is an interpretation of them.
+
+**What would make any of these a bad idea.** A column that fails the
+year-to-year test is a description of noise, and the table already has 104.
+Every one of them is display only and must stay out of `action.js`, proved
+the way the Reactions four were: one row scored with the field absent,
+present and lying.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
