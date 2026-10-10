@@ -671,6 +671,35 @@
           the weight being applied to it.</p>
       </div>
 
+      <!-- Short build: the position before and after, company by company.
+           Where the shorts moved ranks the change; this draws the two
+           positions. The orderings and the floors come from the module. -->
+      <div id="sbaBox">
+        <label>Show</label>
+        <select id="sbaDir">
+          <option value="built" selected>Positions that grew</option>
+          <option value="covered">Positions that shrank</option>
+        </select>
+        <label>Rank them</label>
+        <select id="sbaRank"></select>
+        <label>How many</label>
+        <select id="sbaCount">
+          <option value="5">5</option>
+          <option value="8" selected>8</option>
+          <option value="12">12</option>
+        </select>
+        <label>Position worth at least</label>
+        <select id="sbaFloor"></select>
+        <label>Index</label>
+        <select id="sbaSp500"></select>
+        <p class="hint">Each bar is one company's short position on the two
+          most recent FINRA dates, as a share of its float: grey is what
+          was held on both, the colour is what was added or bought back.
+          The figures beside it are before then after. Ranking by percent
+          and by points of the float give different companies, since a
+          position that doubled from 1% is not the one that added five
+          points. The square card holds eight rows at most.</p>
+      </div>
       <div id="smovBox">
         <label>Rank them</label>
         <select id="smovMetric">
@@ -1254,6 +1283,7 @@
       { id: 'bars', name: 'Bars', note: 'Any one measure, ranked highest or lowest — returns, technicals, fundamentals' },
       { id: 'fund', name: 'Fundamentals', note: 'Size, margins, growth \u2014 four ways' },
       { id: 'shorted', name: 'Most shorted', note: 'The level as last reported, beside what each one has done this year' },
+      { id: 'shortbuild', name: 'Short build', note: 'Each company’s short position before and after the latest fortnight, as a share of its float' },
       { id: 'shortmoves', name: 'Short moves', note: 'Where the shorts built and where they covered, over the latest fortnight' },
       { id: 'size', name: 'Size', note: 'Companies as circles — two measures at once' },
       { id: 'bubble', name: 'Bubble', note: 'Two measures against each other, area as a third' },
@@ -1330,6 +1360,7 @@
       ['fund', 'Fundamentals'],
       ['shorted', 'Most shorted'],
       ['shortmoves', 'Short moves'],
+      ['shortbuild', 'Short build — before and after'],
     ];
     const CMP_VIEWS = [
       ['size', 'Size — circles'],
@@ -1639,6 +1670,7 @@
       'tmapSector', 'tmapPeriod', 'tmapSp500',
       'wfallSector', 'wfallPeriod', 'wfallCount', 'wfallSp500',
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
+      'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -1749,6 +1781,7 @@
       $('tmapBox').style.display = tpl === 'treemap' ? 'block' : 'none';
       $('wfallBox').style.display = tpl === 'waterfall' ? 'block' : 'none';
       $('smovBox').style.display = tpl === 'shortmoves' ? 'block' : 'none';
+      $('sbaBox').style.display = tpl === 'shortbuild' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
@@ -2136,6 +2169,17 @@
       }
       sel.value = 'pct';
     }());
+    // Short build: its own listener list, and its two pickers from the module.
+    ['sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'shortbuild') render(); }));
+    for (const [v, label] of Cards.shortBuildRanks()) {
+      $('sbaRank').add(new Option(label.charAt(0).toUpperCase() + label.slice(1), v));
+    }
+    for (const [v, label] of Cards.shortMoveFloors()) {
+      const o = new Option(label, v);
+      if (String(v) === '250000000') o.selected = true;
+      $('sbaFloor').add(o);
+    }
     // From the module, so a floor added there appears here with no edit.
     (function fillShortMoveFloors() {
       const sel = $('smovFloor');
@@ -2601,7 +2645,7 @@
         const spOpts = Cards.spCuts().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
-          'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500',
+          'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500', 'sbaSp500',
           'shrtSp500', 'barSp500', 'linSp500', 'indSp500', 'ispSp500', 'secSp500', 'sspSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;

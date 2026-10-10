@@ -5480,7 +5480,8 @@
   // `evolutionNeed` exist: the pairing was a hardcoded list in each of them
   // once, and that is how the spotlight shipped drawing nothing at all.
   function shortMovesNeed(tpl) {
-    return tpl === 'shortmoves';
+    // The Short build card reads the same two settlements.
+    return tpl === 'shortmoves' || tpl === 'shortbuild';
   }
 
   function tplShortMoves() {
@@ -7117,6 +7118,143 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Short build: the position BEFORE and AFTER, company by company -------
+  //
+  // (2026-10-10, owner's request: "it has to be specific ... show the short
+  // position before and after within the 2 weeks".) Where the shorts moved
+  // ranks the CHANGE and draws one bar for it; a reader cannot tell a
+  // position that went from 1% of the float to 2% from one that went from 20%
+  // to 40%, and those are different stories. This card draws the two
+  // positions themselves.
+  //
+  // AS A SHARE OF THE FLOAT, because that is the only axis two companies can
+  // share: a share count favours whoever has more shares and a dollar figure
+  // whoever is bigger. It is the unit of the screener's own Short % Float
+  // column. The share COUNTS are FINRA's, as settled on each date; the float
+  // is today's, from the profile, for both ends -- so the bar moves only
+  // because the position did. A company with no float on file cannot be
+  // placed and is counted in the note. A reading past 100% of the float is
+  // the dual-class artefact the column already withholds (short interest is
+  // reported per issuer, the float per class) and is left out the same way.
+  //
+  // ONE BAR, TWO PARTS, both measured from zero so neither can overstate:
+  //   a build   grey to where it was, then the colour for what was added;
+  //   a cover   grey to where it is now, then the colour for what was bought
+  //             back.
+  // The grey is always the position that was there on BOTH dates. The figures
+  // beside it are the two readings, before then after, and the percentage
+  // after the name is the change in the share count -- the Short build
+  // column's own number.
+  //
+  // BLUE FOR A BUILD AND ORANGE FOR A COVER, never green and red: the Short
+  // moves card's rule and its reason.
+  const SBA_RANKS = {
+    pct: 'by how much the position changed',
+    pts: 'by points of the float',
+  };
+  const SBA_CAP = { portrait: 12, square: 8, story: 12 };
+
+  function tplShortBuild() {
+    const d = getShortMoves();
+    if (!d) {
+      return chromeTop() + '<div class="s-body"><div class="s-empty">'
+        + 'Reading the short-interest archive\u2026</div></div>' + chromeFoot();
+    }
+    const covers = O.sbaDir === 'covered';
+    const rank = SBA_RANKS[O.sbaRank] ? O.sbaRank : 'pct';
+    const cut = SP_CUTS.some(([k]) => k === O.sbaSp500) ? O.sbaSp500 : 'All';
+    const floor = SMOV_FLOORS[O.sbaFloor] != null ? Number(O.sbaFloor) : 2.5e8;
+    const K = [5, 8, 12].includes(Number(O.sbaCount)) ? Number(O.sbaCount) : 8;
+    const N = Math.min(K, SBA_CAP[size.id] || 8);
+
+    const pool = spFilter(stocks.filter((x) => x && !x.error && x.instrumentType !== 'ETF'
+      && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol)), cut);
+    const rows = [];
+    let tooSmall = 0, noFloat = 0, over = 0;
+    for (const r of pool) {
+      const m = d.moves && d.moves[r.symbol];
+      if (!m) continue;
+      const a = Number(m[0]), b = Number(m[1]), px = Number(r.price);
+      if (!(a > 0) || !(b > 0) || !(px > 0)) continue;
+      // The floor is on the POSITION, the Short moves card's rule: a
+      // percentage change in a tiny position is enormous and says nothing.
+      if (Math.max(a, b) * px < floor) { tooSmall++; continue; }
+      const fl = Number(r.floatShares);
+      if (!(fl > 0)) { noFloat++; continue; }
+      const was = a / fl * 100, now = b / fl * 100;
+      if (was > 100 || now > 100) { over++; continue; }
+      rows.push({ name: nameOf(r), was, now, pct: (b / a - 1) * 100, pts: now - was });
+    }
+    const side = rows.filter((x) => (covers ? x.pts < 0 : x.pts > 0));
+    side.sort((x, y) => (covers ? x[rank] - y[rank] : y[rank] - x[rank]));
+
+    const dayStr = (iso) => {
+      if (!iso) return '';
+      const t = new Date(iso + 'T12:00:00');
+      return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
+    const win = (d.from && d.to) ? dayStr(d.from) + ' to ' + dayStr(d.to) : 'the latest fortnight';
+    const head = '<span class="s-kick">' + esc(cutKick(cut) + ' \u00b7 ' + side.length.toLocaleString('en-US')
+      + (covers ? ' covered' : ' built') + ' \u00b7 ' + win) + '</span>'
+      + '<h2 class="s-title">' + esc(covers ? 'Shorts covered' : 'Shorts built')
+      + '<span class="dim">' + esc('before and after, % of the float') + '</span></h2>';
+
+    if (side.length < 3) {
+      return chromeTop() + '<div class="s-body"><div class="bx-in">' + head
+        + '<p class="s-sub wide" style="--fs:20px">' + esc(!d.to
+          ? 'No short-interest readings are stored yet.'
+          : 'Only ' + side.length + ' of ' + pool.length + ' companies in this cut ' + (covers ? 'covered' : 'built')
+            + ' a position worth $' + fmtMoney(floor) + ' or more with a float on file. Widen the cut or drop the floor.')
+        + '</p></div></div>' + chromeFoot();
+    }
+
+    const top = side.slice(0, N);
+    const C = pal.ink(covers ? '#fb923c' : '#60a5fa');
+    const scale = Math.max(1e-9, ...top.map((x) => Math.max(x.was, x.now)));
+    const SZ = ({
+      portrait: N <= 5 ? { f: 30, b: 30 } : N <= 8 ? { f: 26, b: 26 } : { f: 22, b: 20 },
+      square: N <= 5 ? { f: 26, b: 24 } : { f: 21, b: 18 },
+      story: N <= 5 ? { f: 42, b: 44 } : N <= 8 ? { f: 36, b: 38 } : { f: 30, b: 30 },
+    })[size.id] || { f: 26, b: 26 };
+    const p1 = (v) => (v >= 10 ? v.toFixed(0) : v.toFixed(1));
+    const figs = top.map((x) => p1(x.was) + '% \u2192 ' + p1(x.now) + '%');
+    const vw = Math.ceil(Math.max(...figs.map((t) => t.length)) * SZ.f * 0.6) + 6;
+    const row = (x, i) => {
+      const lo = Math.min(x.was, x.now), hi = Math.max(x.was, x.now);
+      const w0 = lo / scale * 100, w1 = (hi - lo) / scale * 100;
+      const chg = (x.pct >= 0 ? '+' : '\u2212') + Math.abs(x.pct).toFixed(0) + '%';
+      return '<div class="bx-r" style="font-size:' + SZ.f + 'px">'
+        + '<span class="bx-n ix-n"><span class="ix-t">' + esc(x.name) + '</span>'
+        + '<span class="ix-c" style="color:' + C + '">' + esc(chg) + '</span></span>'
+        + '<span class="bx-t" style="height:' + SZ.b + 'px">'
+        // held on both dates
+        + '<span class="bx-f sb-held" style="left:0;width:' + Math.max(0.6, w0).toFixed(2) + '%"></span>'
+        // added, or bought back
+        + '<span class="bx-f" style="left:' + w0.toFixed(2) + '%;width:' + Math.max(0.6, w1).toFixed(2) + '%;background:' + C + '"></span>'
+        + '</span>'
+        + '<span class="bx-v">' + esc(figs[i]) + '</span>'
+        + '</div>';
+    };
+    const key = '<div class="sb-key"><span><i class="sb-held"></i>' + esc(covers ? 'still held' : 'held before') + '</span>'
+      + '<span><i style="background:' + C + '"></i>' + esc(covers ? 'bought back' : 'added') + '</span>'
+      + '<span class="sb-ax">' + esc('0 to ' + p1(scale) + '% of the float') + '</span></div>';
+
+    const left = [];
+    if (noFloat) left.push(noFloat + ' with no float on file');
+    if (over) left.push(over + ' reading past 100% of the float');
+    const note = 'FINRA publishes short interest twice a month, about eight business days after it settles, so this is the fortnight to '
+      + dayStr(d.to) + ' rather than today. Each bar is the position on both dates against today\u2019s float; the percentage is the change in shares short. '
+      + 'Ranked ' + SBA_RANKS[rank] + ', among positions worth $' + fmtMoney(floor) + ' or more. '
+      + (left.length ? 'Left out: ' + left.join('; ') + '. ' : '')
+      + 'A short position is a bet against, and also the fuel for a squeeze. Not a forecast.';
+
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">' + head + key
+      + '<div class="bx-rows" style="--bxv:' + vw + 'px">' + top.map(row).join('') + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Lines: any measure with a history, one line per company ------------
   //
   // THE LINE-CHART COUNTERPART OF BARS (2026-10-09, owner's request). Bars
@@ -7658,6 +7796,7 @@
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
     shorted: tplShorted, breadth: tplBreadth, beat: tplBeat, earngrow: tplEarnGrow,
     bars: tplBars,
+    shortbuild: tplShortBuild,
     evo2: tplEvoTwo,
     industries: tplIndustries,
     indspot: tplIndSpot,
@@ -7869,6 +8008,16 @@
     .bx-v.bx-up { color: var(--green); }
     .bx-v.bx-dn { color: var(--red); }
     .bx-in .s-sub { margin-top: 14px; }
+    /* Short build: the part of a position held on both dates, and the key
+       that names the two parts. A token, so every ground resolves. */
+    .bx-f.sb-held, .sb-key i.sb-held { background: var(--muted); opacity: .5; }
+    .sb-key { display: flex; align-items: center; gap: 22px; margin-top: 16px;
+              font: 500 17px var(--mono); color: var(--muted); }
+    .sb-key i { display: inline-block; width: 22px; height: 12px; border-radius: 3px;
+                margin-right: 8px; vertical-align: -1px; }
+    .sb-key .sb-ax { margin-left: auto; color: var(--faint); }
+    .sz-story .sb-key { font-size: 23px; }
+    .sz-story .sb-key i { width: 30px; height: 16px; }
     /* The Industries card prints how many companies stand behind a row.
        The NAME gives way, never the count: as one clipped cell a long name
        took the figure with it, on four rows of the first ten drawn. So the
@@ -9719,6 +9868,8 @@
     // Every industry, and every sector, a spotlight can draw, largest first.
     industryList,
     sectorList,
+    // The Short build card's two orderings, from the list the card reads.
+    shortBuildRanks: () => Object.keys(SBA_RANKS).map((k) => [k, SBA_RANKS[k]]),
     barMetrics: () => BAR_METRICS.map((m) => [m.key,
       (m.words || ['Highest', 'Lowest'])[0] + ' ' + m.label, m.group]),
     shortedMetrics: () => Object.keys(SHRT_METRICS)
