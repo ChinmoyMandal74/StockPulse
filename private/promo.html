@@ -692,6 +692,41 @@
       <!-- Short build: the position before and after, company by company.
            Where the shorts moved ranks the change; this draws the two
            positions. The orderings and the floors come from the module. -->
+      <!-- Corrections: the cut is the only choice; the states and their
+           thresholds are the screener column's own. -->
+      <div id="corBox">
+        <label>Index</label>
+        <select id="corSp500"></select>
+        <p class="hint">Each company against its own 52-week high: under
+          5% below is near the high, 5 to 10% a pullback, 10 to 20% a
+          correction, 20% or more a bear market. The four indexes are
+          measured the same way, from their funds. Sectors are ordered
+          by the share of their companies 10% or more below.</p>
+      </div>
+      <!-- Drawdowns. Like the other one-company cards, the card IS its own
+           scope. An index is picked by its fund: SPY, QQQ, IWM, DIA. -->
+      <div id="ddBox">
+        <label>Stock or index fund</label>
+        <select id="ddSym"></select>
+        <label>Window</label>
+        <select id="ddYears">
+          <option value="3">3 years</option>
+          <option value="5" selected>5 years</option>
+          <option value="10">10 years</option>
+          <option value="max">Everything on file</option>
+        </select>
+        <label>Count a drawdown from</label>
+        <select id="ddMin">
+          <option value="10" selected>10% (a correction)</option>
+          <option value="20">20% (a bear market)</option>
+        </select>
+        <p class="hint">How far each close sat below the highest close
+          before it. The deepest drawdowns are numbered on the chart and
+          listed under it. The window cannot see a high from before it
+          opens, so a drawdown marked "before" was already under way.
+          For an index, pick its fund (SPY for the S&amp;P 500).</p>
+      </div>
+
       <div id="eaBox">
         <label>Window</label>
         <select id="eaWin"></select>
@@ -1339,6 +1374,8 @@
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
+      { id: 'corrections', name: 'Corrections', note: 'How many companies are in a pullback, a correction or a bear market — beside how far each index is from its own high' },
+      { id: 'drawdown', name: 'Drawdowns', note: 'One stock or index below its own high, over the years — every drawdown, how deep it went and how long it took to come back' },
       { id: 'earnahead', name: 'Earnings ahead', note: 'Who reports and when — the largest companies due in the coming days, under the day each one reports' },
       { id: 'earngrow', name: 'Earnings growth', note: 'Which companies an index’s earnings growth is made of, from the filings — with the last eight quarters' },
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
@@ -1404,6 +1441,7 @@
       ['peertrend', 'Against its peers', 'ptrSym'],
       ['months', 'Month by month', 'monSym'],
       ['evolution', 'Evolution', 'evoSym'],
+      ['drawdown', 'Drawdowns', 'ddSym'],
     ];
     const spotView = (id) => SPOT_VIEWS.find((v) => v[0] === id) || null;
     // ---- Market: the whole market, five ways ---------------------------------
@@ -1418,6 +1456,7 @@
       ['beat', 'Beating the index'],
       ['earngrow', 'Earnings growth'],
       ['earnahead', 'Earnings ahead'],
+      ['corrections', 'Corrections'],
       ['flow', 'Flow'],
       ['treemap', 'Treemap'],
       ['waterfall', 'Waterfall'],
@@ -1559,7 +1598,8 @@
         .then((r) => r.json())
         .then((d) => {
           histCache[key] = d; delete histPending[key];
-          if (tpl === 'chart') render();
+          // The Drawdowns card reads the same channel, at its own depth.
+          if (tpl === 'chart' || tpl === 'drawdown') render();
         })
         .catch(() => { delete histPending[key]; });
       return null;
@@ -1747,6 +1787,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'eaWin', 'eaCount', 'eaEst', 'eaSp500',
+      'corSp500', 'ddSym', 'ddYears', 'ddMin',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -1859,6 +1900,8 @@
       $('smovBox').style.display = tpl === 'shortmoves' ? 'block' : 'none';
       $('sbaBox').style.display = tpl === 'shortbuild' ? 'block' : 'none';
       $('eaBox').style.display = tpl === 'earnahead' ? 'block' : 'none';
+      $('corBox').style.display = tpl === 'corrections' ? 'block' : 'none';
+      $('ddBox').style.display = tpl === 'drawdown' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
@@ -2246,6 +2289,10 @@
       }
       sel.value = 'pct';
     }());
+    // Corrections and Drawdowns: their own listener lists.
+    $('corSp500').addEventListener('change', () => { if (tpl === 'corrections') render(); });
+    ['ddSym', 'ddYears', 'ddMin'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'drawdown') render(); }));
     // Earnings ahead: its own listener list, and its windows from the module.
     ['eaWin', 'eaCount', 'eaEst', 'eaSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'earnahead') render(); }));
@@ -2816,6 +2863,8 @@
         { const keep = $('monSym').value; $('monSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('monSym').options].some((o) => o.value === keep)) $('monSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;
+        { const keep = $('ddSym').value; $('ddSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('ddSym').options].some((o) => o.value === keep)) $('ddSym').value = keep; }
         // Two pickers from the one list, each keeping its choice across a
         // reload of the rows. The second opens on the SECOND company: a
         // pair that starts as one stock twice is not a comparison.
@@ -2875,7 +2924,7 @@
         const spOpts = Cards.spCuts().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
-          'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500', 'sbaSp500', 'eaSp500',
+          'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500', 'sbaSp500', 'eaSp500', 'corSp500',
           'shrtSp500', 'barSp500', 'linSp500', 'indSp500', 'ispSp500', 'secSp500', 'sspSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;

@@ -21,7 +21,7 @@
   const RATING_FOR = { qualityScore: 'qualityRating' };
   const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios']);
   const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh',
-    'exchange', 'capBand', 'instrumentType', 'filer', 'spMember']);
+    'exchange', 'capBand', 'instrumentType', 'filer', 'ddState', 'spMember']);
 
   // ---- Size by market cap ---------------------------------------------------
   // It lives HERE because four surfaces need it and none of them may own it:
@@ -63,6 +63,53 @@
   // The band, or null. A missing or zero cap is NOT a band: an ETF reports AUM
   // rather than capitalisation, so it belongs in the blank bucket rather than
   // being called the smallest company on the screen.
+  // ---- Drawdown state: a word for the distance below the 52-week high -------
+  //
+  // (2026-10-10, the owner: "there is nothing in my app about market and
+  // individual stock corrections".) The distance was always on the row as
+  // `pctFromHigh`; what was missing was the vocabulary, so nothing could be
+  // filtered or counted as "in a correction". The thresholds are the ones
+  // the financial press uses for an index, applied to each stock against its
+  // own high:
+  //
+  //   under 5% below    Near high
+  //   5 to 10%          Pullback
+  //   10 to 20%         Correction
+  //   20% or more       Bear market
+  //
+  // AGAINST THE 52-WEEK HIGH, NOT THE RECORD. The two disagree for a stock
+  // that peaked two years ago: 40% off its record and at a one-year high is
+  // not "in a bear market" in any sense a reader means today. `% from
+  // record` stays its own column for the other question.
+  //
+  // IT LIVES HERE for the size band's reason: the server stamps it, the
+  // screener sorts and filters on it, the cards count it, and none of them
+  // may own the thresholds.
+  //
+  // NO STATE WITHOUT A YEAR'S HIGH TO MEASURE FROM. A stock listed three
+  // months ago has a three-month high, and calling it "near high" would be
+  // a claim about a year it has not had. Half a year of sessions is the
+  // floor; an unknown history is taken as enough, since most rows that
+  // reach a page carry the distance without the count.
+  const DD_STATES = [
+    { label: 'Near high', under: 5, range: 'Less than 5% below the 52-week high' },
+    { label: 'Pullback', under: 10, range: '5 to 10% below the 52-week high' },
+    { label: 'Correction', under: 20, range: '10 to 20% below the 52-week high' },
+    { label: 'Bear market', under: Infinity, range: '20% or more below the 52-week high' },
+  ];
+  const DD_ORDER = DD_STATES.map((b) => b.label);
+  const DD_RANGE = {};
+  for (const b of DD_STATES) DD_RANGE[b.label] = b.range;
+  const DD_MIN_HISTORY = 126;
+  function ddStateOf(pctFromHigh, historyDays) {
+    // A null is not a zero: Number(null) is 0, which would read 'Near high'.
+    if (pctFromHigh == null || pctFromHigh === '' || !isFinite(Number(pctFromHigh))) return null;
+    if (historyDays != null && historyDays !== '' && Number(historyDays) < DD_MIN_HISTORY) return null;
+    const below = -Number(pctFromHigh);
+    for (const b of DD_STATES) if (below < b.under) return b.label;
+    return null;
+  }
+
   function capBandOf(cap) {
     if (cap == null || !isFinite(cap) || cap <= 0) return null;
     for (const b of CAP_BANDS) if (cap >= b.min) return b.label;
@@ -340,6 +387,7 @@
   return {
     RATING_FOR, TEXT_KEYS, CAT_KEYS, SCREEN_ONLY_KEYS, BOUND_KEYS, BLANK,
     CAP_BANDS, CAP_ORDER, CAP_RANGE, capBandOf,
+    DD_STATES, DD_ORDER, DD_RANGE, DD_MIN_HISTORY, ddStateOf,
     maCrossWord, filterValue, filterKind, parseNumTerm,
     adviceMove, adviceMoveIs, MOVES,
     compileNum, compileText, compileFilter, screenRows,

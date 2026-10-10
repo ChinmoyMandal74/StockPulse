@@ -3288,6 +3288,14 @@
           <div id="monthsBody"></div>
         </div></section>` : ''}
 
+        <section class="bezel card" id="dd" data-jump="Drawdowns" data-icon="i-chart" hidden><div class="core">
+          <div class="sec-h"><h2>Drawdowns</h2>
+            <span id="ddWin" style="font-size:11.5px;color:var(--faint);font-family:var(--mono)"></span>
+          </div>
+          <div class="dd" id="ddBody" style="font-size:13.5px"></div>
+          <p id="ddNote" style="margin:14px 0 0;font-size:12px;line-height:1.6;color:var(--muted)"></p>
+        </div></section>
+
         ${(payload.earnings || []).length ? `
         <section class="bezel card" id="earn" data-jump="Earnings" data-icon="i-calendar"><div class="core">
           <div class="sec-h"><h2>Earnings history</h2>
@@ -4500,6 +4508,37 @@
         } catch (e) { card.remove(); }
       }
 
+      // Drawdowns: how far each close sat below the highest close before it,
+      // over five years. The analysis and the drawing are Cards' own (the
+      // promo card draws the same block), and only the drawdown rules of
+      // its stylesheet are brought in -- the artboard's are not wanted here.
+      // The card stays hidden until there is a year of closes to read, and
+      // goes away on any failure: a decoration must not leave an empty box.
+      async function loadDrawdowns() {
+        const card = document.getElementById('dd');
+        if (!card) return;
+        try {
+          const r = await fetch('/api/history?symbol=' + encodeURIComponent(stock.symbol) + '&days=1265', { cache: 'no-store' });
+          if (!r.ok) { card.remove(); return; }
+          const h = await r.json();
+          const an = Cards.drawdownAnalyse(h.dates, h.closes, 10);
+          if (!an || an.under.length < 250) { card.remove(); return; }
+          if (!document.getElementById('dd-style')) {
+            const el = document.createElement('style');
+            el.id = 'dd-style';
+            el.textContent = Cards.drawdownStyle();
+            document.head.appendChild(el);
+          }
+          document.getElementById('ddBody').innerHTML = Cards.drawdownBlock(an, { rows: 8 });
+          document.getElementById('ddWin').textContent = 'since ' + new Date(an.from + 'T12:00:00')
+            .toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+          document.getElementById('ddNote').textContent = Cards.drawdownSummary(an)
+            + ' Each point is how far the close sat below the highest close before it in this window, which cannot see a high from before it opens. '
+            + 'Split-adjusted, dividends left out. What happened, not what happens next.';
+          card.hidden = false;
+        } catch { card.remove(); }
+      }
+
       async function loadShortInt() {
         const card = document.getElementById('sint');
         if (!card) return;
@@ -4604,6 +4643,7 @@
       loadInsider();
       loadShortInt();
       loadPeerTrend();
+      loadDrawdowns();
       const nb = document.getElementById('newsBtn');
       if (nb) nb.addEventListener('click', () => loadNews(true));
     })();

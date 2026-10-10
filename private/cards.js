@@ -7437,6 +7437,268 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Corrections: how many companies are in one ---------------------------
+  //
+  // (2026-10-10, backlog 34b.) An index can sit near its high while much of
+  // what is in it does not: the index is weighted by size and a correction
+  // is counted by company. This card puts the two side by side -- the four
+  // indexes' own distance from their highs, then how many companies in the
+  // cut stand at each state, then the same split sector by sector.
+  //
+  // THE STATES ARE Filters.ddStateOf RESTATED, the BENCHMARKS bargain: this
+  // module has no requires, and the stock page and the phone do not load
+  // filters.js. Exported as Cards.ddStateOf and Cards.ddStates() so a test
+  // asserts the two agree on every threshold rather than hoping they do.
+  const DD_STEPS_C = [['Near high', 5], ['Pullback', 10], ['Correction', 20], ['Bear market', Infinity]];
+  const DD_ORDER_C = DD_STEPS_C.map((s) => s[0]);
+  const DD_MIN_HISTORY_C = 126;
+  function ddStateC(pctFromHigh, historyDays) {
+    if (pctFromHigh == null || pctFromHigh === '' || !isFinite(Number(pctFromHigh))) return null;
+    if (historyDays != null && historyDays !== '' && Number(historyDays) < DD_MIN_HISTORY_C) return null;
+    const below = -Number(pctFromHigh);
+    for (const s of DD_STEPS_C) if (below < s[1]) return s[0];
+    return null;
+  }
+  //
+  // FOUR TINTS THAT ARE NOT GREEN AND RED. A state is a place, not a move:
+  // blue for near the high, grey for a pullback, amber and orange for the
+  // two that have names. Red would say "fell today", which a stock in a
+  // correction may well not have done.
+  const DD_TINT = { 'Near high': '#60a5fa', 'Pullback': '#9aa3b2', 'Correction': '#fbbf24', 'Bear market': '#fb923c' };
+  const ddNum = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));   // a null is not a zero
+  const ddBelow = (v) => (v == null ? '\u2014' : v >= -0.05 ? 'at its high' : '\u2212' + Math.abs(v).toFixed(1) + '%');
+  const COR_SECTORS = { portrait: 11, square: 6, story: 11 };
+
+  function tplCorrections() {
+    const cut = SP_CUTS.some(([k]) => k === O.corSp500) ? O.corSp500 : 'All';
+    const ORDER = DD_ORDER_C;
+    const pool = spFilter(stocks.filter((x) => x && !x.error && x.instrumentType !== 'ETF'
+      && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol)), cut);
+    const read = pool.map((x) => ({ x, st: ddStateC(x.pctFromHigh, x.historyDays), d: ddNum(x.pctFromHigh) })).filter((r) => r.st);
+    const n = read.length;
+    const head = '<span class="s-kick">' + esc(cutKick(cut) + ' \u00b7 ' + n.toLocaleString('en-US') + ' companies \u00b7 against the 52-week high') + '</span>'
+      + '<h2 class="s-title">Who is in<br><span class="dim">a correction</span></h2>';
+    if (n < 3) {
+      return chromeTop() + '<div class="s-body"><div class="bx-in">' + head
+        + '<p class="s-sub wide" style="--fs:20px">' + esc('Only ' + n + ' of ' + pool.length + ' companies in this cut have a 52-week high to measure from. Widen the cut.')
+        + '</p></div></div>' + chromeFoot();
+    }
+    const tint = (st) => pal.ink(DD_TINT[st]);
+    const tally = (list) => ORDER.map((st) => list.filter((r) => r.st === st).length);
+    const bar = (counts, cls) => {
+      const tot = counts.reduce((a, b) => a + b, 0) || 1;
+      return '<span class="cor-bar' + (cls || '') + '">' + ORDER.map((st, i) => (counts[i]
+        ? '<i style="width:' + (counts[i] / tot * 100).toFixed(2) + '%;background:' + tint(st) + '"></i>' : '')).join('') + '</span>';
+    };
+    const p0 = (v) => (v > 0 && v < 0.5 ? '<1%' : Math.round(v) + '%');
+    const all = tally(read);
+    const deep = all[2] + all[3];
+
+    // The indexes, each against its own fund's 52-week high.
+    const bySym = new Map(stocks.map((x) => [x.symbol, x]));
+    const idx = BENCH.map(([sym, label]) => {
+      const r = bySym.get(sym);
+      const d = r ? ddNum(r.pctFromHigh) : null;
+      return d == null ? null : { label, d, st: ddStateC(d, r.historyDays) };
+    }).filter((x) => x && x.st);
+    const idxHtml = idx.length ? '<div class="cor-idx">' + idx.map((x) =>
+      '<div class="cor-ix"><span class="cor-il">' + esc(x.label) + '</span>'
+      + '<span class="cor-iv">' + esc(ddBelow(x.d)) + '</span>'
+      + '<span class="cor-is" style="color:' + tint(x.st) + '">' + esc(x.st) + '</span></div>').join('') + '</div>' : '';
+
+    const key = '<div class="cor-key">' + ORDER.map((st, i) =>
+      '<span><i style="background:' + tint(st) + '"></i><b>' + esc(st) + '</b>'
+      + '<em>' + all[i].toLocaleString('en-US') + ' \u00b7 ' + esc(p0(all[i] / n * 100)) + '</em></span>').join('') + '</div>';
+
+    // Sector by sector, the deepest first. Three companies is the floor the
+    // Industries card uses: a "sector" of two is two companies.
+    const by = {};
+    for (const r of read) { const s = r.x.sector; if (s) (by[s] = by[s] || []).push(r); }
+    const secs = Object.keys(by).filter((s) => by[s].length >= IND_MIN).map((s) => {
+      const c = tally(by[s]);
+      return { s, c, n: by[s].length, deep: (c[2] + c[3]) / by[s].length * 100 };
+    }).sort((a, b) => b.deep - a.deep || a.s.localeCompare(b.s)).slice(0, COR_SECTORS[size.id] || 11);
+    const SZ = ({ portrait: { f: 23, b: 24 }, square: { f: 19, b: 16 }, story: { f: 32, b: 36 } })[size.id] || { f: 23, b: 24 };
+    const secHtml = secs.length ? '<div class="bx-rows cor-rows" style="--bxv:' + Math.ceil(SZ.f * 3.4) + 'px">'
+      + '<div class="bx-r sb-hd"><span>Sector</span><span>Its companies, by state</span><span class="sb-hr">10%+ below</span></div>'
+      + secs.map((r) => '<div class="bx-r" style="font-size:' + SZ.f + 'px">'
+        + '<span class="bx-n ix-n"><span class="ix-t">' + esc(r.s) + '</span><span class="ix-c cor-cn">' + r.n + '</span></span>'
+        + '<span class="cor-t" style="height:' + SZ.b + 'px">' + bar(r.c, ' cor-sm') + '</span>'
+        + '<span class="bx-v">' + esc(p0(r.deep)) + '</span></div>').join('') + '</div>' : '';
+
+    const ds = read.map((r) => r.d).sort((a, b) => a - b);
+    const med = ds.length % 2 ? ds[(ds.length - 1) / 2] : (ds[ds.length / 2 - 1] + ds[ds.length / 2]) / 2;
+    const own = cut === 'ndx' ? idx.find((x) => x.label === 'Nasdaq 100') : idx.find((x) => x.label === 'S&P 500');
+    const skipped = pool.length - n;
+    const note = deep.toLocaleString('en-US') + ' of ' + n.toLocaleString('en-US') + ' companies (' + p0(deep / n * 100) + ') are 10% or more below their 52-week high'
+      + (own ? ', while the ' + own.label + ' is ' + (own.d >= -0.05 ? 'at its high' : Math.abs(own.d).toFixed(1) + '% below its own') : '') + '. '
+      + 'The median company is ' + (med >= -0.05 ? 'at its high' : Math.abs(med).toFixed(1) + '% below') + '. '
+      + 'Each is measured against its own 52-week high at the latest close: under 5% below is near the high, 5 to 10% a pullback, 10 to 20% a correction, 20% or more a bear market. '
+      + (skipped ? skipped + ' with under six months of history or no reading ' + (skipped === 1 ? 'is' : 'are') + ' left out. ' : '')
+      + 'An index is weighted by size and this is counted by company, which is why the two can disagree. Where prices stand, not where they go next.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">' + head + idxHtml
+      + '<div class="cor-all">' + bar(all) + key + '</div>'
+      + secHtml
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
+  // ---- Drawdowns: one stock or index below its own high, over time ----------
+  //
+  // (2026-10-10, backlog 34c.) An underwater chart: on each day, how far the
+  // close sat below the highest close before it. Zero is a new high; every
+  // dip below the line is a drawdown, and the ones that reached the
+  // threshold are numbered and listed with how deep they went, how long
+  // they took to bottom and how long to get back.
+  //
+  // ddAnalyse IS PURE AND EXPORTED, because two surfaces draw this -- the
+  // card and the stock page -- and neither may own the definition of an
+  // episode. An episode runs from a high to the first close back at or
+  // above it. Its depth is the lowest close between, against that high.
+  //
+  // WHAT THE WINDOW CANNOT SEE. The first close in the window is treated as
+  // a high because nothing earlier is known, so a drawdown already under
+  // way on that day is drawn shallower and shorter than it was. Such an
+  // episode is flagged `fromStart` and printed as starting "before" its
+  // date. Days are CALENDAR days between the dated closes, the unit a
+  // reader means by "it took four months".
+  //
+  // RED IS RIGHT HERE. The area is a price below where it was: a fall, the
+  // one thing red means on this site.
+  const DD_YEARS = { 3: 760, 5: 1265, 10: 2530, max: 5200 };
+  const DD_ROWS = { portrait: 6, square: 4, story: 8 };
+  function drawdownNeed(tpl, opts) {
+    if (tpl !== 'drawdown') return null;
+    const o = opts || {};
+    return { symbol: o.ddSym || null, days: DD_YEARS[o.ddYears] || DD_YEARS[5] };
+  }
+  const ddGap = (a, b) => Math.round((Date.parse(String(b).slice(0, 10) + 'T12:00:00Z') - Date.parse(String(a).slice(0, 10) + 'T12:00:00Z')) / 86400000);
+  function ddAnalyse(dates, closes, minPct) {
+    const min = Math.abs(Number(minPct) || 10);
+    const D = [], C = [];
+    for (let i = 0; i < (closes || []).length; i++) {
+      const c = Number(closes[i]);
+      if (closes[i] != null && c > 0 && isFinite(c) && dates && dates[i]) { D.push(String(dates[i]).slice(0, 10)); C.push(c); }
+    }
+    if (C.length < 2) return null;
+    const under = new Array(C.length);
+    const eps = [];
+    let peak = C[0], pi = 0, ti = 0, low = C[0];
+    const close = (ri) => {
+      if (low < peak) {
+        eps.push({ peakDate: D[pi], troughDate: D[ti], recoverDate: ri == null ? null : D[ri], pi, ti, ri,
+          depth: (low / peak - 1) * 100, fromStart: pi === 0,
+          daysDown: ddGap(D[pi], D[ti]), daysBack: ri == null ? null : ddGap(D[ti], D[ri]),
+          daysSoFar: ri == null ? ddGap(D[pi], D[C.length - 1]) : null });
+      }
+    };
+    for (let i = 0; i < C.length; i++) {
+      if (C[i] >= peak) { if (i > 0) close(i); peak = C[i]; pi = i; ti = i; low = C[i]; }
+      else if (C[i] < low) { low = C[i]; ti = i; }
+      under[i] = (C[i] / peak - 1) * 100;
+    }
+    close(null);                                   // whatever is still open
+    // A hair of slack: 108.9 against 121 is ten percent and computes to a shade less.
+    const big = eps.filter((e) => e.depth <= -min + 1e-9);
+    const med = (list) => { if (!list.length) return null; const s = list.slice().sort((a, b) => a - b);
+      return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2; };
+    const back = big.filter((e) => e.daysBack != null);
+    const last = eps.length && eps[eps.length - 1].ri == null ? eps[eps.length - 1] : null;
+    return { dates: D, under, min, episodes: big, all: eps.length,
+      worst: Math.min(0, ...under), from: D[0], to: D[D.length - 1],
+      years: ddGap(D[0], D[D.length - 1]) / 365.25,
+      medDepth: med(big.map((e) => e.depth)), medDown: med(big.map((e) => e.daysDown)), medBack: med(back.map((e) => e.daysBack)),
+      recovered: back.length,
+      now: { pct: under[under.length - 1], since: last ? last.peakDate : D[D.length - 1], days: last ? last.daysSoFar : 0 } };
+  }
+  const ddDay = (iso, withYear) => {
+    const t = new Date(iso + 'T12:00:00');
+    return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', withYear === false ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+  const ddSpan = (days) => (days == null ? '\u2014' : days < 60 ? days + (days === 1 ? ' day' : ' days')
+    : days < 730 ? Math.round(days / 30.44) + ' months' : (days / 365.25).toFixed(1) + ' years');
+  // The chart and the table, as one block sized in em so the card and the
+  // stock page can each set its own type size on the wrapper.
+  function ddBlock(an, opts) {
+    if (!an) return '';
+    const rows = Math.max(1, (opts && opts.rows) || 6);
+    // Numbered in the order they happened; the table lists the deepest.
+    const shown = an.episodes.slice().sort((a, b) => a.depth - b.depth).slice(0, rows).sort((a, b) => a.pi - b.pi);
+    shown.forEach((e, i) => { e.no = i + 1; });
+    // The -20% line is always on the chart, so a shallow history is seen to be shallow.
+    const floor = Math.min(an.worst, -20) * 1.08;
+    const N = an.under.length, W = 1000, H = 300;
+    const B = Math.min(N, 500), pts = [];
+    for (let b = 0; b < B; b++) {
+      const a = Math.floor(b * N / B), z = Math.max(a + 1, Math.floor((b + 1) * N / B));
+      let lo = 0;
+      for (let i = a; i < z && i < N; i++) if (an.under[i] < lo) lo = an.under[i];
+      pts.push(((b + 0.5) / B * W).toFixed(1) + ' ' + (lo / floor * H).toFixed(1));
+    }
+    const path = 'M0 0L' + pts.join('L') + 'L' + W + ' 0Z';
+    const lines = [-10, -20, -40, -60].filter((v) => v > floor * 0.97).map((v) =>
+      '<span class="dd-gl" style="top:' + (v / floor * 100).toFixed(2) + '%"><i>' + '\u2212' + Math.abs(v) + '%</i></span>').join('');
+    const marks = shown.map((e) => '<span class="dd-mk" style="left:' + ((e.ti + 0.5) / N * 100).toFixed(2) + '%;top:'
+      + (e.depth / floor * 100).toFixed(2) + '%">' + e.no + '</span>').join('');
+    // A year label where each January begins, thinned to at most eight.
+    const ys = [];
+    for (let i = 1; i < N; i++) if (an.dates[i].slice(0, 4) !== an.dates[i - 1].slice(0, 4)) ys.push([i, an.dates[i].slice(0, 4)]);
+    const step = Math.max(1, Math.ceil(ys.length / 8));
+    const years = ys.filter((_, i) => (ys.length - 1 - i) % step === 0).map(([i, y]) =>
+      '<span style="left:' + (i / N * 100).toFixed(2) + '%">' + y + '</span>').join('');
+    const tbl = shown.length ? '<div class="dd-tbl">'
+      + '<div class="dd-tr dd-th"><span></span><span>From its high on</span><span>Bottom</span><span class="dd-r">Depth</span><span class="dd-r">To the bottom</span><span class="dd-r">Back to the high</span></div>'
+      + shown.slice().sort((a, b) => a.depth - b.depth).map((e) => '<div class="dd-tr">'
+        + '<span class="dd-no">' + e.no + '</span>'
+        + '<span>' + esc((e.fromStart ? 'before ' : '') + ddDay(e.peakDate)) + '</span>'
+        + '<span>' + esc(ddDay(e.troughDate)) + '</span>'
+        + '<span class="dd-r dd-dp">' + esc('\u2212' + Math.abs(e.depth).toFixed(1) + '%') + '</span>'
+        + '<span class="dd-r">' + esc(ddSpan(e.daysDown)) + '</span>'
+        + '<span class="dd-r' + (e.daysBack == null ? ' dd-open' : '') + '">' + esc(e.daysBack == null ? 'not yet' : ddSpan(e.daysBack)) + '</span>'
+        + '</div>').join('') + '</div>' : '';
+    return '<div class="dd-chart"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true">'
+      + '<path class="dd-area" d="' + path + '"/></svg>' + lines + marks + '</div>'
+      + '<div class="dd-x">' + years + '</div>' + tbl;
+  }
+  // The findings in a sentence or two, shared by both hosts.
+  function ddSummary(an) {
+    if (!an) return '';
+    const k = an.episodes.length, yrs = an.years >= 1.5 ? Math.round(an.years) + ' years' : Math.round(an.years * 12) + ' months';
+    const now = an.now.pct >= -0.05 ? 'It closed at a high for this window on ' + ddDay(an.to) + '.'
+      : 'It is now ' + Math.abs(an.now.pct).toFixed(1) + '% below the high set on ' + ddDay(an.now.since) + ', ' + ddSpan(an.now.days) + ' ago.';
+    if (!k) return 'No drawdown of ' + an.min + '% or more in ' + yrs + '; the deepest was ' + Math.abs(an.worst).toFixed(1) + '%. ' + now;
+    return k + (k === 1 ? ' drawdown' : ' drawdowns') + ' of ' + an.min + '% or more in ' + yrs
+      + (k > 1 ? ', with a median depth of ' + Math.abs(an.medDepth).toFixed(1) + '% and a median of ' + ddSpan(an.medDown) + ' to the bottom' : '')
+      + (an.recovered ? '. ' + (an.recovered === k ? (k === 1 ? 'It' : k === 2 ? 'Both' : 'All ' + k) : an.recovered + ' of them') + ' got back to the old high'
+        + (an.recovered > 1 ? ', in a median of ' + ddSpan(an.medBack) + ' from the bottom' : ', ' + ddSpan(an.medBack) + ' after the bottom') : '') + '. ' + now;
+  }
+
+  function tplDrawdown() {
+    const need = drawdownNeed('drawdown', O);
+    const row = need.symbol ? stocks.find((x) => x && x.symbol === need.symbol) : null;
+    const label = row ? (IS_BENCH.has(row.symbol) ? (BENCH.find((b) => b[0] === row.symbol) || [])[1] : nameOf(row)) : (need.symbol || '');
+    const min = Number(O.ddMin) === 20 ? 20 : 10;
+    const empty = (msg) => chromeTop() + '<div class="s-body"><div class="s-empty">' + esc(msg) + '</div></div>' + chromeFoot();
+    if (!need.symbol) return empty('Pick a stock or an index.');
+    const hist = getHistory(need.symbol, need.days);
+    if (!hist) return empty('Reading the price archive\u2026');
+    const an = ddAnalyse(hist.dates, hist.closes, min);
+    if (!an || an.under.length < 120) return empty('There is not enough price history for ' + label + ' to draw this.');
+    const fs = ({ portrait: 22, square: 17, story: 30 })[size.id] || 22;
+    const head = '<span class="s-kick">' + esc((row && !IS_BENCH.has(row.symbol) && label !== row.symbol ? row.symbol + ' \u00b7 ' : '')
+      + ddDay(an.from) + ' to ' + ddDay(an.to)) + '</span>'
+      + '<h2 class="s-title">' + esc(label) + '<span class="dim">below its own high</span></h2>';
+    const note = ddSummary(an) + ' Each point is how far the close sat below the highest close before it in this window. '
+      + 'The window opens on ' + ddDay(an.from) + ' and cannot see a high before that, so a drawdown marked \u201cbefore\u201d was already under way. '
+      + 'Prices are split-adjusted and leave out dividends. What happened, not what happens next.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">' + head
+      + '<div class="dd dd-card" style="font-size:' + fs + 'px">' + ddBlock(an, { rows: DD_ROWS[size.id] || 6 }) + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Earnings ahead: who reports, day by day ------------------------------
   //
   // (2026-10-10, owner: "I don't think there is a promo for upcoming earning
@@ -8121,6 +8383,8 @@
     bars: tplBars,
     shortbuild: tplShortBuild,
     earnahead: tplEarnAhead,
+    corrections: tplCorrections,
+    drawdown: tplDrawdown,
     evo2: tplEvoTwo,
     industries: tplIndustries,
     indspot: tplIndSpot,
@@ -8350,6 +8614,68 @@
     .sb-hd .sb-hr { text-align: right; }
     .sz-square .sb-hd { font-size: 13px; }
     .sz-story .sb-hd { font-size: 20px; }
+    /* Corrections: the four indexes, the stacked bar of states, its key, and
+       a thin copy of the bar on each sector row. */
+    .cor-idx { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+    .cor-ix { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border-radius: 12px;
+              border: 1px solid var(--hair); min-width: 0; }
+    .cor-il { font: 600 15px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint);
+              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cor-iv { font: 700 28px var(--mono); color: var(--text); white-space: nowrap; }
+    .cor-is { font-size: 19px; font-weight: 600; white-space: nowrap; }
+    .cor-all { margin-top: 20px; }
+    .cor-bar { display: flex; height: 34px; border-radius: 8px; overflow: hidden; background: var(--hair); }
+    .cor-bar i { display: block; height: 100%; }
+    .cor-bar.cor-sm { height: 100%; border-radius: 4px; }
+    .cor-t { display: block; }
+    .cor-key { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+    .cor-key span { display: flex; flex-direction: column; min-width: 0; }
+    .cor-key i { display: block; width: 26px; height: 8px; border-radius: 3px; margin-bottom: 6px; }
+    .cor-key b { font-size: 20px; font-weight: 600; color: var(--text); white-space: nowrap; }
+    .cor-key em { font: 500 18px var(--mono); font-style: normal; color: var(--muted); white-space: nowrap; }
+    .ix-c.cor-cn { color: var(--faint); }
+    .sz-square .cor-idx { margin-top: 12px; gap: 8px; }
+    .sz-square .cor-ix { padding: 8px 10px; }
+    .sz-square .cor-iv { font-size: 22px; }
+    .sz-square .cor-is { font-size: 16px; }
+    .sz-square .cor-all { margin-top: 12px; }
+    .sz-square .cor-bar { height: 24px; }
+    .sz-square .cor-key b { font-size: 17px; }
+    .sz-square .cor-key em { font-size: 15px; }
+    .sz-story .cor-il { font-size: 19px; }
+    .sz-story .cor-iv { font-size: 38px; }
+    .sz-story .cor-is { font-size: 25px; }
+    .sz-story .cor-bar { height: 48px; }
+    .sz-story .cor-key b { font-size: 26px; }
+    .sz-story .cor-key em { font-size: 23px; }
+    /* dd:start */
+    /* Drawdowns: sized in em throughout, so the card and the stock page
+       each set one font-size on the wrapper. The labels are HTML laid over
+       a stretched SVG, never SVG text, which would stretch with it. */
+    .dd-card { margin-top: 22px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .dd-chart { position: relative; height: 12em; border-top: 2px solid var(--muted); }
+    .dd-card .dd-chart { flex: 1; min-height: 7em; height: auto; }
+    .dd-chart svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .dd-area { fill: var(--red); fill-opacity: .34; stroke: var(--red); stroke-width: 1.5;
+               vector-effect: non-scaling-stroke; }
+    .dd-gl { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--hair); }
+    .dd-gl i { position: absolute; right: 0; top: -1.35em; font: 500 .62em var(--mono); font-style: normal; color: var(--faint); }
+    .dd-mk { position: absolute; width: 1.5em; height: 1.5em; margin: .25em 0 0 -.75em; border-radius: 50%;
+             display: flex; align-items: center; justify-content: center;
+             font: 700 .62em var(--mono); color: var(--text); background: var(--bg, #0b0d12);
+             border: 1px solid var(--muted); }
+    .dd-x { position: relative; height: 1.5em; margin-top: .2em; font: 500 .62em var(--mono); color: var(--faint); }
+    .dd-x span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+    .dd-tbl { margin-top: .5em; display: flex; flex-direction: column; gap: .32em; }
+    .dd-tr { display: grid; grid-template-columns: 1.6em minmax(0, 1.25fr) minmax(0, 1.25fr) minmax(0, .8fr) minmax(0, 1fr) minmax(0, 1.1fr);
+             column-gap: .7em; align-items: baseline; font-size: .82em; color: var(--text); }
+    .dd-tr > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dd-th { font: 600 .56em var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
+    .dd-r { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .dd-no { font: 700 .9em var(--mono); color: var(--muted); }
+    .dd-dp { font-weight: 700; color: var(--red); }
+    .dd-open { color: var(--faint); }
+    /* dd:end */
     /* Earnings ahead: the day a block of rows reports on, the ticker beside
        a name, and the surprise figure, which is not a price and so takes no
        direction colour. */
@@ -10243,6 +10569,14 @@
     shortBuildRanks: () => Object.keys(SBA_RANKS).map((k) => [k, SBA_RANKS[k]]),
     earnAheadWindows: () => Object.keys(EA_WINS).map((k) => [k, EA_WINS[k]]),
     earnAheadWindow: eaWindow,
+    // The drawdown card's history, asked of the host the way the chart's is,
+    // and its analysis and drawing, which the stock page uses too.
+    drawdownNeed, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
+    drawdownYears: () => Object.keys(DD_YEARS),
+    // The drawdown rules alone, for a host that draws the block outside a
+    // card: the stock page takes these and none of the artboard's.
+    drawdownStyle: () => STYLE.slice(STYLE.indexOf('/* dd:start */'), STYLE.indexOf('/* dd:end */')),
+    ddStateOf: ddStateC, ddStates: () => DD_STEPS_C.map((s) => s.slice()), ddMinHistory: DD_MIN_HISTORY_C,
     barMetrics: () => BAR_METRICS.map((m) => [m.key,
       (m.words || ['Highest', 'Lowest'])[0] + ' ' + m.label, m.group]),
     shortedMetrics: () => Object.keys(SHRT_METRICS)

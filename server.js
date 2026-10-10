@@ -3432,6 +3432,9 @@ function stampCapDerived(rows) {
   for (const r of rows) {
     if (!r || !r.symbol) continue;
     r.capBand = Filters.capBandOf(r.marketCap);
+    // The word for the distance below the 52-week high (filters.js). Derived
+    // on the way out like the size band, never stored, and read by no rule.
+    r.ddState = Filters.ddStateOf(r.pctFromHigh, r.historyDays);
     const cap = Number(r.marketCap);
     const pct = Number(r.todayPct);
     r.capChangeToday = (cap > 0 && Number.isFinite(pct)) ? cap * pct / 100 : null;
@@ -10655,6 +10658,17 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
         hist = { dates: asc.map((b) => b.datetime), closes: asc.map((b) => b.close) };
       } catch { hist = null; }
     }
+  }
+
+  // The Drawdowns card: the same one-symbol read, at the depth Cards asks
+  // for, so a saved post opens here with the history the studio drew.
+  const ddNeed = Cards.drawdownNeed(post.tpl, post.opts || {});
+  if (ddNeed && ddNeed.symbol) {
+    try {
+      const bars = await store.readBars(ddNeed.symbol, ddNeed.days);   // newest-first
+      const asc = bars.slice().reverse();
+      hist = { dates: asc.map((b) => b.datetime), closes: asc.map((b) => b.close) };
+    } catch { hist = null; }
   }
 
   // The Evolution card reads the filings rather than the archive. Which

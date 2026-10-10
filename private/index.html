@@ -1484,7 +1484,7 @@
         <th class="group grp-short" data-group="short" colspan="8">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="5">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
-        <th class="group grp-rel" data-group="rel" colspan="16">Relative</th>
+        <th class="group grp-rel" data-group="rel" colspan="17">Relative</th>
         <th class="group grp-react" data-group="react" colspan="5">Reactions</th>
         <th class="group grp-trend" data-group="trend" colspan="5">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
@@ -1536,6 +1536,7 @@
         <th class="grp-rel" data-key="pctFromLow" title="How far the price has risen above its 52-week low. A level, not a change — small means it is still sitting on the floor of its range.">% from<br>52W Lo</th>
         <th class="grp-rel" data-key="daysSince52wLow" title="Trading sessions since the 52-week low was set — 0 is today. A new low this week reads 0 to 4.">52W Lo<br>days</th>
         <th class="grp-rel" data-key="pctFromHigh" title="Distance below the 52-week high">% from<br>52W Hi</th>
+        <th class="left grp-rel" data-key="ddState" title="A word for the distance below the 52-week high, on the usual thresholds: Near high is less than 5% below it, Pullback 5 to 10%, Correction 10 to 20%, Bear market 20% or more. Measured against the 52-week high rather than the record, so a stock far off an old peak but at a one-year high reads Near high. Blank for a stock with under six months of history, which has no year's high to measure from. A description of where the price stands, not a forecast.">Drawdown</th>
         <th class="grp-rel" data-key="daysSince52wHigh" title="Trading sessions since the 52-week high was set — 0 is today. A new high this week reads 0 to 4.">52W Hi<br>days</th>
         <th class="grp-rel" data-key="pctFromAth" title="Distance below the highest CLOSE on record for this symbol. 0.0% means it closed at a record today. Not the highest intraday print — across the universe that sits a median 1.07% higher and the two are not interchangeable. Each cell says how far back its own record reaches: many archives begin in 2006 because that is the provider's 5,000-bar ceiling, not a listing date, so this is not an all-time high and is not labelled one.">% from<br>record</th>
         <th class="grp-rel" data-key="range52Pos" title="Where the price sits in its 52-week range: 0 is on the low, 100 on the high.">52W<br>range</th>
@@ -2263,6 +2264,15 @@
     // past. `nocard` goes on BOTH branches, valued and blank, for the reason
     // the other two record: a card on the em-dash rows and not the ones
     // above them reads as a bug rather than as a rule.
+    // The word for the distance below the 52-week high. 'Near high' is most
+    // rows on most days, so it is the faint one and the other three stand out.
+    // No colour: green and red here mean a price that moved, and this is a place.
+    function ddStateCell(s) {
+      if (!s.ddState) {
+        return `<td class="name left grp-rel nocard na" title="No 52-week high to measure from.">\u2014</td>`;
+      }
+      return `<td class="name left grp-rel nocard${s.ddState === 'Near high' ? ' na' : ''}"${attr(Filters.DD_RANGE[s.ddState] || '')}>${we(s.ddState)}</td>`;
+    }
     function capBandCell(s) {
       if (!s.capBand) {
         return `<td class="name left grp-info nocard na" title="No market capitalisation — a fund reports assets under management instead.">—</td>`;
@@ -3070,6 +3080,7 @@
         : k === 'actionEntry' ? ActionRules.ENTRY_ORDER
         : k === 'actionFund' ? ActionRules.FUND_ORDER
         : k === 'capBand' ? Filters.CAP_ORDER
+        : k === 'ddState' ? Filters.DD_ORDER
         // A boolean has a natural order and the alphabet gets it backwards:
         // a reader scanning a Yes/No pair expects Yes first.
         : k.startsWith('av:') ? ActionRules.ACTIONS : null);
@@ -3553,7 +3564,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="103">${s.error}</td>
+            <td class="na" colspan="104">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3618,6 +3629,7 @@
           ${marginCell(s.pctFromLow, 'grp-rel', liveTitle)}
           ${daysCell(s.daysSince52wLow, 'grp-rel', liveTitle)}
           ${pctCell(s.pctFromHigh, 'grp-rel', liveTitle)}
+          ${ddStateCell(s)}
           ${daysCell(s.daysSince52wHigh, 'grp-rel', liveTitle)}
           ${pctCell(s.pctFromAth, 'grp-rel', s.pctFromAth == null ? liveTitle
             : (s.athIsRecord ? 'Closed at a record today' : 'Record close set ' + (s.athDate || 'n/a'))
@@ -3700,7 +3712,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 108;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 109;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3881,7 +3893,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="105">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="106">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -3916,6 +3928,8 @@
         // its raw index would rank Micro highest on a descending sort.
         : sortKey === 'capBand'
           ? (x.capBand ? Filters.CAP_ORDER.length - 1 - Filters.CAP_ORDER.indexOf(x.capBand) : null)
+        // Deepest first on a first click, the way the distance beside it sorts.
+        : sortKey === 'ddState' ? (x.ddState ? Filters.DD_ORDER.indexOf(x.ddState) : null)
         : x[sortKey]);
       // Sorting by an advice column leaves whole tiers tied — five Very Strongs
       // in a row, in whatever order they happened to arrive. Cushion breaks
