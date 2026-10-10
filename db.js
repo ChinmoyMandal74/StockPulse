@@ -724,6 +724,23 @@ const SCHEMA = [
   // 706 of 1,181 archives start in 2006-Q4 — the 5,000-bar API ceiling rather
   // than a listing date — so "all-time" is a false word for most of the
   // universe and the row has to carry its own answer.
+  // Each symbol's drawdown history over five years, as a handful of figures
+  // for the screener (2026-10-10): how many drawdowns of 10% or more, how
+  // many got back to the old high, and the median days from the bottom to
+  // do so. Rebuilt from the bar archive a slice a night; `at` is when, and
+  // is what picks the next slice. `n` is NULL for a symbol with too little
+  // history to say, which is a different fact from zero drawdowns.
+  `create table if not exists drawdown_stats (
+     symbol    text primary key,
+     n         integer,
+     n_back    integer,
+     med_back  real,
+     med_depth real,
+     worst     real,
+     from_d    text,
+     through_d text,
+     at        integer not null
+   )`,
   `create table if not exists price_extremes (
      symbol    text primary key,
      ath_close real not null,
@@ -4479,6 +4496,39 @@ async function readPriceState() {
 
 // The whole table in one read — 1,182 rows, the `price_state` bargain. Never
 // a join against `bars`, which is the scan this table exists to avoid.
+// ---- drawdown history, per symbol ----------------------------------------
+// The whole table: about 1,300 short rows, read when the stored readings
+// are rebuilt (every six hours at most) and once a night to pick a slice.
+async function readDrawdownStats() {
+  await init();
+  const r = await db.execute('select symbol, n, n_back, med_back, med_depth, worst, from_d, through_d, at from drawdown_stats');
+  const out = {};
+  for (const x of r.rows) {
+    out[String(x.symbol)] = { n: x.n == null ? null : Number(x.n), nBack: x.n_back == null ? null : Number(x.n_back),
+      medBack: x.med_back == null ? null : Number(x.med_back), medDepth: x.med_depth == null ? null : Number(x.med_depth),
+      worst: x.worst == null ? null : Number(x.worst), from: x.from_d || null, through: x.through_d || null, at: Number(x.at) || 0 };
+  }
+  return out;
+}
+
+async function writeDrawdownStats(list) {
+  await init();
+  const rows = (list || []).filter((x) => x && x.symbol);
+  if (!rows.length) return 0;
+  const now = Date.now();
+  await db.batch(rows.map((x) => ({
+    sql: `insert into drawdown_stats (symbol, n, n_back, med_back, med_depth, worst, from_d, through_d, at)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          on conflict(symbol) do update set n = excluded.n, n_back = excluded.n_back, med_back = excluded.med_back,
+            med_depth = excluded.med_depth, worst = excluded.worst, from_d = excluded.from_d,
+            through_d = excluded.through_d, at = excluded.at`,
+    args: [String(x.symbol).toUpperCase(), x.n == null ? null : Number(x.n), x.nBack == null ? null : Number(x.nBack),
+      x.medBack == null ? null : Number(x.medBack), x.medDepth == null ? null : Number(x.medDepth),
+      x.worst == null ? null : Number(x.worst), x.from || null, x.through || null, now],
+  })), 'write');
+  return rows.length;
+}
+
 async function readPriceExtremes() {
   await init();
   const r = await db.execute('select symbol, ath_close, ath_d, first_d, through_d from price_extremes');
@@ -4640,7 +4690,7 @@ async function readBarsFor(symbols, since) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state',
+const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
   'sec_facts', 'sec_state', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
 
@@ -6359,6 +6409,7 @@ module.exports = {
   purgeSymbol,
   markRefreshPrices, readBarsFullFor, readBarsWindow, notePricePull, readPriceState,
   readPriceExtremes, writePriceExtremes, maxCloseBetween, firstBarDates,
+  readDrawdownStats, writeDrawdownStats, readCloseSeries,
   readEarningsDates,
   barsSpan, coverageRollups,
   knownListings,

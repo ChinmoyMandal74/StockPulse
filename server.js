@@ -5153,7 +5153,34 @@ function filerLabel(st) {
   if (st.status === 'ok' && (st.taxonomy === 'us-gaap' || !st.taxonomy)) return 'US GAAP';
   return null;
 }
-const FLOWS_V = 2;          // bumped when the stored value gains a part
+const FLOWS_V = 3;          // bumped when the stored value gains a part
+
+// ---- Drawdown history: corrections in five years, and the way back -------
+//
+// (2026-10-10, the owner, of the stock page's drawdown table: "the median
+// days to recover can be calculated at the stock level, why don't we show
+// that on screener".) It can, and the reason it was not is cost: the
+// figure needs five years of closes per stock, about 1.6 million rows for
+// the universe, and a row must not walk the archive on the way out.
+//
+// SO IT IS STORED, AND REBUILT A SLICE A NIGHT. `drawdown_stats` holds a
+// handful of figures per symbol; the daily check rebuilds the stalest
+// 200 of them (drawdowns.js) from the bars, so every symbol is redone about once a
+// week for roughly a quarter of a million rows read a night. A weekly
+// figure is not a stale one here: it moves only when a drawdown of 10% or
+// more ends, which for a stock is a few times in five years.
+//
+// THE ANALYSIS IS Cards.drawdownAnalyse, the stock page's own, so the
+// column cannot count an episode the chart beside it does not draw. The
+// one difference is deliberate and is in Cards.drawdownStats: an episode
+// already under way when the window opens is left out of the figures.
+//
+// DISPLAY ONLY. Nothing here is read by the rules.
+// The slice itself is drawdowns.js, shared with drawdown-load.js (the first
+// fill): symbols never built first, then the longest since, in chunks, until
+// the limit or its own clock.
+const Drawdowns = require('./drawdowns.js');
+const drawdownSlice = (opts) => Drawdowns.slice(store, Cards, opts);
 const INSIDER_NET_DAYS = 90;
 const INSIDER_JUNK = 0.25;
 const FLOWS_TTL_MS = 6 * 60 * 60 * 1000;
@@ -5162,12 +5189,22 @@ let flowsMem = null;
 let flowsMemAt = 0;
 async function buildFlows() {
   const since = new Date(Date.now() - INSIDER_NET_DAYS * 86400000).toISOString().slice(0, 10);
-  const [sm, ids, net, secState] = await Promise.all([
+  const [sm, ids, net, secState, ddAll] = await Promise.all([
     shortMovesPayload().catch(() => null),
     filerIds().catch(() => ({})),
     store.readInsiderNetSince(since).catch(() => null),
     store.readSecState().catch(() => null),
+    store.readDrawdownStats().catch(() => null),
   ]);
+  // [count, median days back to the high], and only for a symbol with
+  // enough history to have a count at all.
+  const dd = {};
+  if (ddAll) {
+    for (const sym of Object.keys(ddAll)) {
+      const x = ddAll[sym];
+      if (x.n != null) dd[sym] = [x.n, x.medBack == null ? null : Math.round(x.medBack)];
+    }
+  }
   const filer = {};
   if (secState) {
     for (const sym of Object.keys(secState)) {
@@ -5191,7 +5228,7 @@ async function buildFlows() {
       if (x) insider[sym] = [Math.round(x.bought), Math.round(x.sold), x.buyers, x.sellers];
     }
   }
-  return { v: FLOWS_V, at: Date.now(), filer: secState ? filer : null,
+  return { v: FLOWS_V, at: Date.now(), filer: secState ? filer : null, dd: ddAll ? dd : null,
     shortFrom: sm ? sm.from : null, shortTo: sm ? sm.to : null, short,
     // null, not {}: "the read failed" must not be stored as "nobody traded".
     insiderSince: net ? since : null, insider: net ? insider : null };
@@ -5204,6 +5241,7 @@ async function flowsNow() {
     // A half that failed to read keeps the stored half rather than blanking it.
     if (f && !fresh.insider) { fresh.insider = f.insider || null; fresh.insiderSince = f.insiderSince || null; }
     if (f && !fresh.filer) fresh.filer = f.filer || null;
+    if (f && !fresh.dd) fresh.dd = f.dd || null;
     if (f && !fresh.shortTo) { fresh.short = f.short || {}; fresh.shortFrom = f.shortFrom || null; fresh.shortTo = f.shortTo || null; }
     await store.writeFlows(fresh).catch(() => {});
     f = fresh;
@@ -5215,8 +5253,16 @@ async function flowsNow() {
 // value. Null, never zero: a company with no trade on file has no reading,
 // which is a different statement from "its insiders netted to nothing".
 function flowsOf(row, f) {
-  const out = { shortBuild: null, insiderNet: null, insiderBuyers: null, insiderSellers: null, filer: null };
+  const out = { shortBuild: null, insiderNet: null, insiderBuyers: null, insiderSellers: null, filer: null,
+    ddCount: null, ddMedBack: null };
   if (!row || !f) return out;
+  // Zero is a real count here (no drawdown of 10% in five years); the median
+  // is null when none has recovered, and neither is ever invented.
+  const d = f.dd ? f.dd[String(row.symbol).toUpperCase()] : null;
+  if (d && d[0] != null && isFinite(Number(d[0]))) {
+    out.ddCount = Number(d[0]);
+    out.ddMedBack = d[1] == null || !isFinite(Number(d[1])) ? null : Number(d[1]);
+  }
   out.filer = (f.filer && f.filer[String(row.symbol).toUpperCase()]) || null;
   const sb = f.short ? f.short[row.symbol] : null;
   if (sb != null && isFinite(sb)) out.shortBuild = Number(sb);
@@ -5246,6 +5292,8 @@ async function stampFlows(rows) {
     r.insiderSellers = v.insiderSellers;
     r.insiderSince = f ? f.insiderSince : null;
     r.filer = v.filer;
+    r.ddCount = v.ddCount;
+    r.ddMedBack = v.ddMedBack;
   }
 }
 
@@ -15705,6 +15753,19 @@ app.get('/api/cron/watchdog', route(async (req, res) => {
   }
   console.log(`watchdog: ${today.day} ${today.verdict}${mailed ? ' — alert mailed' : ''}` +
               (usage && usage.configured ? ` · rows read ${Number(usage.rowsRead || 0).toLocaleString()}${usageMailed ? ' — usage alert mailed' : ''}` : ''));
+  // Drawdown history, a slice a night (see drawdownSlice). Bounded by its
+  // own clock and swallowed whole: this pass exists to report on the
+  // nightly job, and must still do so when the archive is slow.
+  let drawdowns = null;
+  if (req.query.dry !== '1') {
+    // Raced against a clock of its own as well: a dropped socket does not
+    // throw for hours (db.js), and what follows this must still run.
+    try {
+      drawdowns = await Promise.race([drawdownSlice({ budgetMs: 25000 }),
+        new Promise((ok) => setTimeout(() => ok({ timedOut: true }), 45000))]);
+    }
+    catch (err) { console.warn('watchdog: drawdown slice skipped:', err.message); }
+  }
   // The Instagram token, on the same daily pass: igToken refreshes it when a
   // week has gone by, so sixty days never run out between posts. A refresh
   // that fails is worth a letter -- the alternative is finding out from a
@@ -15728,7 +15789,7 @@ app.get('/api/cron/watchdog', route(async (req, res) => {
       }
     } catch (err) { console.warn('watchdog: instagram token check skipped:', err.message); }
   }
-  res.json({ ok: true, ...today, alert: bad, mailed, instagram });
+  res.json({ ok: true, ...today, alert: bad, mailed, instagram, drawdowns });
 }));
 
 // ---- intraday price refreshes -------------------------------------------------

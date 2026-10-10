@@ -42,6 +42,20 @@ Backlog 34, pieces a, b and c. The owner: "There is nothing in my app about mark
 
 Checked against the archive: SPY over five years gives two episodes, January to October 2022 at 25.4% and February to April 2025 at 19.0%.
 
+## d. Two history columns: Corr. 5Y and Median recov. (2026-10-10)
+
+The owner, of the stock page table: "The median days to recover can be calculated at the stock level, why don't we show that on screener". Keys `ddCount` and `ddMedBack`, in Relative after Drawdown; `FIELD_SPEC` rows `rel|Corrections 5Y` and `rel|Median recovery`.
+
+- **`ddCount`**: drawdowns of 10% or more in five years, each counted once from its high to the first close back at it; one still open counts. **`ddMedBack`**: median calendar days from the bottom back to the old high, over those that recovered.
+- **An episode already under way when the window opens is left out** (`Cards.drawdownStats`): its high is unseen, so a median cannot use it. The chart still draws it, marked "before".
+- **Zero is a real count; the median is null when none has recovered.** Under 500 sessions in the window (`MIN_SESSIONS`) both are blank, stored as `n = NULL`.
+- **Stored, not computed on the way out.** The figure needs five years of closes per stock, about 1.6 million rows for the universe. Table `drawdown_stats` (in `SYMBOL_TABLES`); `drawdowns.js` `slice()` rebuilds the 200 stalest symbols per call, in chunks of 40 through `readCloseSeries`.
+- **Refresh**: the daily watchdog cron calls the slice, bounded by its own 25-second budget and raced against a 45-second clock, so every symbol is redone about weekly for roughly 250,000 rows read a night. `drawdown-load.js` (dry run by default, `--commit`, `--only`) is the first fill and the rebuild by hand.
+- **Reaches the row through `stampFlows`**: `buildFlows` reads the table once into the stored `flows` value (`FLOWS_V` 3, six-hour life) as `dd: { SYM: [count, median] }`, and `flowsOf` sets the two fields. No new stamp site.
+- Constants after these columns: Relative 19, `PAD_SPAN` 111, error row 106, empty row 108.
+- First fill, 2026-10-10: 1,127 of 1,280 with a count, 153 under two years of history, 4 with no drawdown of 10%, 195 with none recovered; the median stock's median recovery is 63 days.
+- The stock page reads 1,265 sessions and this reads 1,830 calendar days, so an episode right at the window's edge can differ between the two by a few days of start.
+
 ## Not built
 
-Pieces d (deepest drawdown in a year, count of corrections in three years; days since the 52-week high already exists as a column) and e (the market's own correction history as a table). Neither card was rendered in a browser by the build; tests were Node suites on fixtures plus the read-only check above.
+The rest of piece d (deepest drawdown in a year) and piece e (the market's own correction history as a table). Neither card was rendered in a browser by the build; tests were Node suites on fixtures plus the read-only check above.

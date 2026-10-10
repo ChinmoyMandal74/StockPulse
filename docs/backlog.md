@@ -1583,7 +1583,7 @@ present and lying.
 
 ## 34. Corrections, for the market and for each stock — 2026-10-10
 
-*Area: Screener · Status: Partly done · Note: a, b and c built 2026-10-10 (docs/context/corrections.md); d and e remain*
+*Area: Screener · Status: Partly done · Note: a, b, c and most of d built 2026-10-10 (docs/context/corrections.md); e remains*
 
 **The gap, in the owner's words:** "There is nothing in my app about market
 and individual stock corrections." That is true of the vocabulary and the

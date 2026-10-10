@@ -36,6 +36,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `public/app.css` | Shared design system — tokens, bezel, buttons, table base |
 | `barmath.js`, `techrow.js` | Indicators from bars alone; the one backtest row builder |
 | `secfacts.js`, `fx.js`, `insider.js`, `shortint.js`, `holdings.js`, `news.js` | Auxiliary data pulls (SEC filings, insiders, FINRA short interest, index membership, headlines) |
+| `drawdowns.js`, `drawdown-load.js` | The stored drawdown figures behind two screener columns: a slice a night on the daily check, and the first fill |
 | `adjusted.js` | Filings-fed Signal overlay for `/adjusted` and `/adjustedbacktest` (admin research) |
 | `analysis-db.js` | **Local SQLite copy of the archive for research.** `--full` rebuilds, no flag syncs, `--stats` reports |
 | `strategy-runs.js`, `single-data.js`, `lab-grid.js` | Offline builders writing derived JSON into `private/` |

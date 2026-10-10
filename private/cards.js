@@ -7617,6 +7617,22 @@
       recovered: back.length,
       now: { pct: under[under.length - 1], since: last ? last.peakDate : D[D.length - 1], days: last ? last.daysSoFar : 0 } };
   }
+  // The figures the screener carries for one stock, from one analysis.
+  //
+  // AN EPISODE ALREADY UNDER WAY WHEN THE WINDOW OPENS IS LEFT OUT. Its
+  // high is unseen, so its depth and both its lengths are measured from
+  // the wrong place; the chart can print "before" beside it, and a median
+  // cannot. `medBack` is over the episodes that DID get back to the old
+  // high, so it is null when none has, never zero.
+  function ddStats(an) {
+    if (!an) return null;
+    const eps = an.episodes.filter((e) => !e.fromStart);
+    const med = (list) => { if (!list.length) return null; const s = list.slice().sort((a, b) => a - b);
+      return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2; };
+    const back = eps.filter((e) => e.daysBack != null);
+    return { n: eps.length, nBack: back.length, medBack: med(back.map((e) => e.daysBack)),
+      medDepth: med(eps.map((e) => e.depth)), worst: an.worst, from: an.from, through: an.to, sessions: an.under.length };
+  }
   const ddDay = (iso, withYear) => {
     const t = new Date(iso + 'T12:00:00');
     return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', withYear === false ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
@@ -10576,7 +10592,7 @@
     earnAheadWindow: eaWindow,
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.
-    drawdownNeed, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
+    drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
     drawdownYears: () => Object.keys(DD_YEARS),
     // The drawdown rules alone, for a host that draws the block outside a
     // card: the stock page takes these and none of the artboard's.

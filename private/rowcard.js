@@ -305,6 +305,10 @@
     ['rel',   '% from 52W hi',  (s) => V.pct(s.pctFromHigh)],
     // The word for that distance: Near high, Pullback, Correction, Bear market.
     ['rel',   'Drawdown',       (s) => V.text(s.ddState)],
+    // Five years of history: how many drawdowns of 10% or more, and the
+    // median days from the bottom back to the old high.
+    ['rel',   'Corrections 5Y', (s) => (ok(s.ddCount) ? { t: String(s.ddCount), c: '' } : null)],
+    ['rel',   'Median recovery', (s) => (ok(s.ddMedBack) ? { t: s.ddMedBack + ' days', c: '' } : null)],
     // Distance below the highest CLOSE on record. Deliberately not called an
     // all-time high: measured 2026-10-02, 718 of 1,282 archives start in 2006
     // at the provider's 5,000-bar ceiling, so the window differs by symbol and
