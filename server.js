@@ -9916,7 +9916,10 @@ app.get('/api/admin/instagram', requireAdmin, route(async (req, res) => {
   }
 }));
 
-// { images: [{ id, w, h }], caption, dry, again }
+// { images: [{ id, w, h }], caption, kind, dry, again }
+//
+// `kind` is 'story' for Stories: each picture is published as a story of
+// its own, in order, and the caption is not sent because a story has none.
 //
 // `dry` checks everything and posts nothing; the studio shows what it
 // returns and asks. `again` allows the same pictures a second time inside
@@ -9932,7 +9935,8 @@ app.post('/api/admin/instagram/post', requireAdmin, route(async (req, res) => {
     if (!stored) return res.status(400).json({ error: 'One of the pictures is not in the image store. Add the card again.' });
     images.push({ id, mime: stored.mime, w: Number(a.w) || 0, h: Number(a.h) || 0 });
   }
-  const wrong = Instagram.problem(images, caption);
+  const kind = req.body?.kind === 'story' ? 'story' : 'feed';
+  const wrong = Instagram.problem(images, caption, kind);
   if (wrong) return res.status(400).json({ error: wrong });
   // Instagram fetches from a public address, which a local server is not.
   const base = APP_URL || ('https://' + req.get('host'));
@@ -9943,7 +9947,9 @@ app.post('/api/admin/instagram/post', requireAdmin, route(async (req, res) => {
   const ids = images.map((im) => im.id);
   if (!req.body?.again) {
     const recent = await store.listIgPosts(20);
-    const dup = recent.find((p) => Date.now() - p.at < IG_AGAIN_MS && p.images.join() === ids.join());
+    // A story is recorded a picture at a time, so it is matched a picture at a time.
+    const dup = recent.find((p) => Date.now() - p.at < IG_AGAIN_MS && (p.kind || 'feed') === kind
+      && (kind === 'story' ? ids.includes(p.images[0]) : p.images.join() === ids.join()));
     if (dup) {
       return res.status(409).json({ error: 'These pictures were posted '
         + Math.max(1, Math.round((Date.now() - dup.at) / 60000)) + ' minute(s) ago.', permalink: dup.permalink, duplicate: true });
@@ -9958,16 +9964,22 @@ app.post('/api/admin/instagram/post', requireAdmin, route(async (req, res) => {
     return res.status(409).json({ error: 'The access token belongs to @' + me.username + ', which is not the account IG_USER_ID names. Nothing was posted.' });
   }
   if (req.body?.dry) {
-    return res.json({ ok: true, dry: true, username: me.username, pictures: images.length, captionLength: [...caption].length });
+    return res.json({ ok: true, dry: true, kind, username: me.username, pictures: images.length, captionLength: [...caption].length });
   }
+  // One group is one published thing: the whole post, or one story.
+  const groups = kind === 'story' ? urls.map((u, i) => ({ urls: [u], ids: [ids[i]] })) : [{ urls, ids }];
+  const done = [];
+  let failed = null;
+  for (const g of groups) {
   let mediaId = null;
   try {
     const until = Date.now() + IG_WAIT_MS;
-    const single = images.length === 1;
+    const single = g.urls.length === 1;
     const made = [];
     // In order, not at once: the carousel is in the order the children are named.
-    for (const url of urls) {
-      const c = await igCall('POST', '/' + IG_USER_ID + '/media', Instagram.itemParams(url, single, caption), t.token);
+    for (const url of g.urls) {
+      const c = await igCall('POST', '/' + IG_USER_ID + '/media',
+        kind === 'story' ? Instagram.storyParams(url) : Instagram.itemParams(url, single, caption), t.token);
       await igReady(c.id, t.token, until);
       made.push(c.id);
     }
@@ -9980,7 +9992,10 @@ app.post('/api/admin/instagram/post', requireAdmin, route(async (req, res) => {
     const pub = await igCall('POST', '/' + IG_USER_ID + '/media_publish', { creation_id: creation }, t.token, { timeout: 30000 });
     mediaId = String(pub.id);
   } catch (e) {
-    return res.status(502).json({ error: e.message });
+    // Stories already up stay up; the rest are not attempted, and the answer
+    // says how far it got.
+    failed = e.message;
+    break;
   }
   // PUBLISHED. From here nothing may report a failure: the post is up, and
   // an error now would invite a second one.
@@ -9988,10 +10003,15 @@ app.post('/api/admin/instagram/post', requireAdmin, route(async (req, res) => {
   try { permalink = (await igCall('GET', '/' + mediaId, { fields: 'permalink' }, t.token)).permalink || null; } catch { /* the link is a courtesy */ }
   let recorded = true;
   try {
-    await store.writeIgPost({ at: Date.now(), mediaId, permalink, caption, images: ids, by: await actKey(req) });
+    await store.writeIgPost({ at: Date.now(), mediaId, permalink, caption: kind === 'story' ? '' : caption,
+      images: g.ids, by: await actKey(req), kind });
   } catch (e) { recorded = false; console.warn('instagram: posted but not recorded:', e.message); }
-  logAct(req, 'instagram', `${images.length}:${mediaId}`);
-  res.json({ ok: true, mediaId, permalink, username: me.username, pictures: images.length, recorded });
+  done.push({ mediaId, permalink, recorded });
+  }
+  if (!done.length) return res.status(502).json({ error: failed });
+  logAct(req, 'instagram', `${kind}:${done.length}:${done[0].mediaId}`);
+  res.json({ ok: true, kind, mediaId: done[0].mediaId, permalink: done[0].permalink, username: me.username,
+    pictures: images.length, posted: done.length, failed, recorded: done.every((d) => d.recorded) });
 }));
 
 app.get('/api/admin/posts/images', requireAdmin, route(async (req, res) => {

@@ -22,6 +22,12 @@
 // shape -- so a carousel of mixed shapes is refused here rather than cropped
 // there.
 //
+// A STORY is the same two calls with `media_type=STORIES`, and it differs in
+// three ways: it is ONE picture (several cards are several stories, each
+// published by itself, in order), it carries NO caption (the API has no
+// field for one), and it may be as tall as 9:16, which is the shape that
+// fills the screen. It is gone after a day, by Instagram's doing.
+//
 // THE TOKEN LASTS SIXTY DAYS and can be refreshed for another sixty any time
 // after its first day. The refreshed token replaces the one in the
 // environment, which nothing here can write to, so the chain is kept in the
@@ -36,6 +42,7 @@
   // The feed's limits on a picture's shape, width over height.
   const RATIO_MIN = 4 / 5;
   const RATIO_MAX = 1.91;
+  const STORY_RATIO_MIN = 9 / 16;
   const DAY = 86400000;
   // Refresh weekly: far inside the sixty days, so a month of failed refreshes
   // still leaves a working token and time to notice.
@@ -56,22 +63,29 @@
 
   // What is wrong with a post, in words for the person about to send it, or
   // null. `images` is [{ id, mime, w, h }].
-  function problem(images, caption) {
+  function problem(images, caption, kind) {
+    const story = kind === 'story';
     const list = images || [];
     if (!list.length) return 'There is no picture to post.';
-    if (list.length > CAROUSEL_MAX) return `A carousel holds ${CAROUSEL_MAX} pictures at most; this has ${list.length}.`;
+    if (list.length > CAROUSEL_MAX) {
+      return story ? `That is ${list.length} stories in one go; ${CAROUSEL_MAX} is the most.`
+        : `A carousel holds ${CAROUSEL_MAX} pictures at most; this has ${list.length}.`;
+    }
     for (const im of list) {
       if (!isImageId(im && im.id)) return 'One of the pictures has no stored id.';
       if (im.mime && im.mime !== 'image/jpeg') return 'Instagram takes JPEG pictures only.';
       if (im.w > 0 && im.h > 0) {
         const r = im.w / im.h;
-        if (r < RATIO_MIN - 0.005) {
+        if (story && r < STORY_RATIO_MIN - 0.005) return 'That shape is taller than a Story, which is 9:16 at the tallest.';
+        if (!story && r < RATIO_MIN - 0.005) {
           return 'That shape is too tall for the feed, which takes 4:5 at the tallest. The 9:16 size is a Story shape.';
         }
         if (r > RATIO_MAX + 0.005) return 'That shape is too wide for the feed, which takes 1.91:1 at the widest.';
       }
     }
     if (new Set(list.map((im) => im.id)).size !== list.length) return 'The same picture is in the post twice.';
+    // A story has no caption and no shared shape: each one stands alone.
+    if (story) return null;
     const first = list[0];
     if (list.length > 1 && first.w > 0 && first.h > 0) {
       const odd = list.find((im) => im.w > 0 && im.h > 0 && Math.abs(im.w / im.h - first.w / first.h) > 0.01);
@@ -90,6 +104,7 @@
   const itemParams = (url, single, caption) => (single
     ? { image_url: url, caption: String(caption || '') }
     : { image_url: url, is_carousel_item: 'true' });
+  const storyParams = (url) => ({ image_url: url, media_type: 'STORIES' });
   const carouselParams = (childIds, caption) =>
     ({ media_type: 'CAROUSEL', children: childIds.join(','), caption: String(caption || '') });
 
@@ -139,7 +154,7 @@
 
   const api = { HOST, CAPTION_MAX, HASHTAG_MAX, CAROUSEL_MAX, RATIO_MIN, RATIO_MAX,
     REFRESH_AFTER_MS, WARN_BEFORE_MS,
-    isImageId, imageUrl, problem, itemParams, carouselParams, errorText, tokenPlan };
+    STORY_RATIO_MIN, isImageId, imageUrl, problem, itemParams, storyParams, carouselParams, errorText, tokenPlan };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Instagram = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

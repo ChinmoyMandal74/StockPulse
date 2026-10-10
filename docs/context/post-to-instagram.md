@@ -15,7 +15,8 @@ The studio's admin-only box under "Post to blog". One card is a post; cards adde
 
 - **Nothing posts by itself.** No cron, no queue. The first click is a dry run (`dry: true`) that checks the post and names the account; only the second button sends. A post cannot be withdrawn through this API.
 - **The picture must be a JPEG at a public address.** It is stored in `post_images` and fetched by Instagram from `/blog/img/<id>.jpg` (the route ignores the extension). A local server is not public, so posting is refused there; post from the live site.
-- **Feed shapes only**: 4:5 to 1.91:1. The 9:16 Story size is refused. A carousel is one shape, two to ten pictures.
+- **Feed shapes**: 4:5 to 1.91:1; 9:16 is refused on the feed. A carousel is one shape, two to ten pictures.
+- **Stories** ("Post as a Story", `kind: 'story'`): `media_type=STORIES`, as tall as 9:16. One picture each, so every card in the tray is published as a story of its own, in order, and recorded as its own `ig_posts` row with `kind = 'story'`. No caption is sent; the API has no field for one. If a later story in a batch fails, the earlier ones stay up and the answer is still `ok` with `posted`, `pictures` and `failed`.
 - **The same pictures twice inside ten minutes is refused** as a double click unless `again` is sent, which the studio offers as a second confirmation.
 - **After `media_publish` succeeds nothing may report a failure**: the post is up. A failed record write returns `recorded: false`, still `ok`.
 - **The token is never logged or returned**, and travels in a header except on the refresh call. Network errors are reported in our words because the driver's message can carry the address.
@@ -23,4 +24,4 @@ The studio's admin-only box under "Post to blog". One card is a post; cards adde
 
 **Tests** were scratchpad Node suites: the rules, and the server block run against a pretend Instagram. Nothing was posted to the real account by the build.
 
-**Not built**: Stories, video and reels, scheduling, deleting a post.
+**Not built**: video and reels, scheduling, deleting a post, links or stickers on a Story (the API offers none).

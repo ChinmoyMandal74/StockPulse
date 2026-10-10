@@ -1257,6 +1257,7 @@
         <div class="ig-tray" id="igTray"></div>
         <textarea id="igCaption" maxlength="2200" placeholder="Caption — what the card shows, and any hashtags"></textarea>
         <button class="btn" id="igBtn" title="Check this post and ask before sending it">Post to Instagram</button>
+        <button class="btn" id="igStoryBtn" title="Send this card as a Story: no caption, gone after a day. The Story 9:16 size fills the screen">Post as a Story</button>
         <div class="ig-ask" id="igAsk" hidden>
           <span id="igAskText"></span>
           <div class="row">
@@ -2566,6 +2567,7 @@
         `<div class="ig-item"><img src="${esc(im.url)}" alt=""><b>${i + 1}</b>`
         + `<button data-i="${i}" title="Take this one out">\u00d7</button></div>`).join('');
       $('igBtn').textContent = igTray.length > 1 ? `Post ${igTray.length} cards to Instagram` : 'Post to Instagram';
+      $('igStoryBtn').textContent = igTray.length > 1 ? `Post ${igTray.length} cards as Stories` : 'Post as a Story';
     }
     $('igTray').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-i]');
@@ -2613,22 +2615,27 @@
     };
 
     // First click: store the card if there is no carousel, and dry-run.
-    async function igCheck() {
-      const btn = $('igBtn');
+    // A STORY takes the same path with `kind: 'story'`: every card in the tray
+    // becomes a story of its own, and the caption box is not sent.
+    async function igCheck(kind) {
+      const btn = $(kind === 'story' ? 'igStoryBtn' : 'igBtn');
       btn.disabled = true;
       igCancel();
       try {
         igSay(igTray.length ? 'Checking\u2026' : 'Rendering\u2026');
         const images = igTray.length ? igTray.slice() : [await igShoot()];
         const caption = $('igCaption').value;
-        const { ok, status, d } = await igSend({ images, caption, dry: true });
+        const { ok, status, d } = await igSend({ images, caption, kind, dry: true });
         if (!ok && !(status === 409 && d.duplicate)) throw new Error(d.error || `the check failed (HTTP ${status}).`);
         const again = !ok;
-        igPending = { images, caption, again };
-        const what = images.length > 1 ? `these ${images.length} cards as a carousel` : 'this card';
+        igPending = { images, caption, again, kind };
+        const story = kind === 'story';
+        const what = story ? (images.length > 1 ? `these ${images.length} cards as ${images.length} Stories` : 'this card as a Story')
+          : images.length > 1 ? `these ${images.length} cards as a carousel` : 'this card';
         $('igAskText').textContent = (again ? d.error + ' Post them again? ' : '')
           + `Post ${what} to ${again ? 'Instagram' : '@' + d.username}`
-          + (caption.trim() ? '' : ', with no caption') + '? It is public at once and cannot be taken back from here.';
+          + (story ? (caption.trim() ? ' (a Story carries no caption, so the caption box is not sent)' : '') : caption.trim() ? '' : ', with no caption')
+          + '? It is public at once and cannot be taken back from here.';
         $('igAsk').hidden = false;
         igSay('');
       } catch (err) { igSay('Not posted: ' + err.message); }
@@ -2641,19 +2648,23 @@
       if (!p) return;
       igCancel();
       $('igBtn').disabled = true;
+      $('igStoryBtn').disabled = true;
       try {
         igSay('Posting\u2026 Instagram fetches each picture first, which takes a few seconds.');
-        const { ok, status, d } = await igSend({ images: p.images, caption: p.caption, again: p.again });
+        const { ok, status, d } = await igSend({ images: p.images, caption: p.caption, again: p.again, kind: p.kind });
         if (!ok) throw new Error(d.error || `Instagram did not take it (HTTP ${status}).`);
         const link = /^https:\/\/www\.instagram\.com\//.test(String(d.permalink || '')) ? d.permalink : '';
-        $('igMsg').innerHTML = `Posted to @${esc(d.username)}`
+        const said = d.kind === 'story' ? (d.posted > 1 ? `${d.posted} Stories posted` : 'Story posted') : 'Posted';
+        $('igMsg').innerHTML = `${said} to @${esc(d.username)}`
+          + (d.failed ? `, then it stopped (${d.posted} of ${d.pictures}): ${esc(d.failed)}` : '')
           + (link ? ` \u2014 <a href="${esc(link)}" target="_blank" rel="noopener">see it</a>.` : '.');
         igTray.length = 0;
         igPaintTray();
-        $('igCaption').value = '';
+        if (d.kind !== 'story') $('igCaption').value = '';
         loadIg();
       } catch (err) { igSay('Not posted: ' + err.message); }
       $('igBtn').disabled = false;
+      $('igStoryBtn').disabled = false;
     }
 
     // Who it posts as. This read is also the proof that the token works, so
@@ -2664,6 +2675,7 @@
         const d = await fetch('/api/admin/instagram', { cache: 'no-store' }).then((r) => r.json());
         const off = !d.configured || !!d.error || d.idMatches === false;
         $('igBtn').disabled = off;
+        $('igStoryBtn').disabled = off;
         $('igAddBtn').disabled = off;
         if (!d.configured) { who.textContent = 'Instagram is not connected on this server (no token set here).'; return; }
         if (d.error) { who.textContent = 'Instagram: ' + d.error; return; }
@@ -2674,7 +2686,8 @@
       } catch { who.textContent = 'Instagram: the status could not be read.'; }
     }
     $('igAddBtn').addEventListener('click', igAdd);
-    $('igBtn').addEventListener('click', igCheck);
+    $('igBtn').addEventListener('click', () => igCheck('feed'));
+    $('igStoryBtn').addEventListener('click', () => igCheck('story'));
     $('igGoBtn').addEventListener('click', igGo);
     $('igNoBtn').addEventListener('click', () => { igCancel(); igSay('Not posted.'); });
     $('igCaption').addEventListener('input', igCancel);

@@ -1110,6 +1110,9 @@ const ADDED_COLUMNS = [
   // which companies are foreign filers without opening a filing:
   // `taxonomy` is 'us-gaap' or 'ifrs-full', `currency` the reporting
   // currency of an IFRS filer (2026-10-10).
+  // 'story' for a Story; absent on a feed post, which is what every row was
+  // before Stories could be posted (2026-10-10).
+  "alter table ig_posts add column kind text",
   "alter table sec_state add column taxonomy text",
   "alter table sec_state add column currency text",
   "alter table sec_facts add column currency text",
@@ -2704,26 +2707,26 @@ async function writeIgToken(obj) {
   });
 }
 
-async function writeIgPost({ at, mediaId, permalink, caption, images, by }) {
+async function writeIgPost({ at, mediaId, permalink, caption, images, by, kind }) {
   await init();
   await db.execute({
-    sql: 'insert into ig_posts (at, media_id, permalink, caption, images, by) values (?, ?, ?, ?, ?, ?)',
+    sql: 'insert into ig_posts (at, media_id, permalink, caption, images, by, kind) values (?, ?, ?, ?, ?, ?, ?)',
     args: [Number(at) || Date.now(), mediaId || null, permalink || null,
-      String(caption || ''), JSON.stringify(images || []), by || null],
+      String(caption || ''), JSON.stringify(images || []), by || null, kind === 'story' ? 'story' : null],
   });
 }
 
 async function listIgPosts(limit) {
   await init();
   const r = await db.execute({
-    sql: 'select id, at, media_id, permalink, caption, images, by from ig_posts order by id desc limit ?',
+    sql: 'select id, at, media_id, permalink, caption, images, by, kind from ig_posts order by id desc limit ?',
     args: [Math.max(1, Math.min(100, Number(limit) || 20))],
   });
   return r.rows.map((x) => {
     let images = [];
     try { images = JSON.parse(x.images || '[]'); } catch { /* an unreadable list is an empty one */ }
     return { id: Number(x.id), at: Number(x.at), mediaId: x.media_id || null, permalink: x.permalink || null,
-      caption: x.caption || '', images, by: x.by || null };
+      caption: x.caption || '', images, by: x.by || null, kind: x.kind === 'story' ? 'story' : 'feed' };
   });
 }
 
