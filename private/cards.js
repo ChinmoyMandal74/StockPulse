@@ -8284,7 +8284,7 @@
     // the old fixed values, and the plot takes the rest.
     const room = PT.fit(model, { fs, nameMax: 15, maxLeft: size.id === 'story' ? 150 : 124, maxRight: size.id === 'story' ? 376 : 318 });
     const chart = PT.svg(model, { w: 952, h: PTR_H[size.id] || 600, left: room.left, right: room.right,
-      fs, dot: size.id === 'story' ? 6.5 : 5, nameMax: 15, xLabels: 5, area: true });
+      fs, dot: size.id === 'story' ? 6.5 : 5, nameMax: 15, xLabels: 5 });
     const n = nameOf(row);
     const span = model.quarters.length ? PT.qLabel(model.quarters[0]) + ' to ' + PT.qLabel(model.quarters[model.n - 1]) : '';
     const note = PT.measureNote(model, data)
@@ -8470,7 +8470,6 @@
     .pv-chart .pt-zero { stroke: var(--hair-2); stroke-width: 1.5; stroke-dasharray: 6 6; }
     .pv-chart path.pt-peer { fill: none; stroke: var(--muted); stroke-width: 2.6; opacity: 0.6; }
     .pv-chart path.pt-self { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linejoin: round; }
-    .pv-chart path.pt-area { fill: var(--accent); fill-opacity: .13; stroke: none; }
     .pv-chart circle.pt-peer { fill: var(--muted); }
     .pv-chart circle.pt-self { fill: var(--accent); }
     .pv-chart .pt-ax { fill: var(--faint); font-family: var(--mono); }

@@ -254,32 +254,6 @@
         + 'middle' + '" font-size="' + fs + '">' + esc((o.xLabel || qLabel)(model.quarters[i])) + '</text>';
     }
 
-    // ---- an area under the company's own line (o.area) ----------------------
-    // Only its own, and only in the value view. Several filled areas on one
-    // scale hide each other, and a rank is a place, not a quantity to fill.
-    // The fill runs down to zero where the scale has one, otherwise to the
-    // foot of the plot. On a log scale that foot is not zero, so the area
-    // is emphasis and its size means nothing; the line is still the reading.
-    // A flat tint rather than a gradient: this markup travels through the
-    // PNG export, where a url(#id) reference is the first thing to be lost.
-    // Drawn before the lines so every line stays on top of it.
-    if (o.area && model.view !== 'rank') {
-      const me = model.lines.find((l) => l.self);
-      const base = model.zero != null ? Y(model.zero) : y1;
-      let run = [];
-      const flush = () => {
-        if (run.length > 1) {
-          out += '<path class="pt-area" d="M' + X(run[0].i).toFixed(1) + ' ' + base.toFixed(1)
-            + run.map((p) => 'L' + X(p.i).toFixed(1) + ' ' + Y(p.y).toFixed(1)).join('')
-            + 'L' + X(run[run.length - 1].i).toFixed(1) + ' ' + base.toFixed(1) + 'Z"/>';
-        }
-        run = [];
-      };
-      // A gap ends one area and starts the next, as it breaks the line.
-      for (const p of (me ? me.pts : [])) { if (p) run.push(p); else flush(); }
-      flush();
-    }
-
     // the lines: peers first, the company itself last so it is never crossed out
     const order = model.lines.filter((l) => !l.self).concat(model.lines.filter((l) => l.self));
     for (const l of order) {
