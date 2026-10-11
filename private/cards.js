@@ -51,6 +51,7 @@
   let getShortMoves = () => null;
   let getEarnGrowth = () => null;
   let getMargins = () => null;
+  let getHolders = () => null;
   let getLineSeries = () => null;
   // One symbol’s month-end closes and the index’s, or null while it loads.
   let getMonths = () => null;
@@ -7603,6 +7604,111 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Large holders: who reports more than 5% of one company ---------------
+  //
+  // (2026-10-11, the owner: "add a page in promo for large investor data,
+  // single stock template".) The stock page lists every 13D and 13G FILING,
+  // which is a log: a holder who amended five times is five lines. A card
+  // wants the answer the log adds up to, so this draws one row per HOLDER,
+  // at the stake in that holder's newest filing.
+  //
+  // A HOLDER WHOSE NEWEST FILING REPORTS NO HOLDING HAS LEFT, and is named
+  // under the rows rather than drawn as a bar of nothing.
+  //
+  // THIS IS NOT A REGISTER OF SHAREHOLDERS, and the card says so. It holds
+  // only those who FILED in about thirteen months. A holder above 5% who has
+  // had nothing to amend in that time is not on it, and neither is anyone
+  // under 5%, however large. Reading it as "the top holders" would be wrong.
+  //
+  // WHICH FORM IS A FACT, NOT A VERDICT ON THE COMPANY. 13D is marked
+  // because it is the rarer form; the bar is the accent, a size, and no row
+  // is coloured for being one form or the other. Names are as filed.
+  const LH_ROWS = { portrait: 10, square: 6, story: 12 };
+  function holdersNeed(tpl, opts) {
+    if (tpl !== 'holders') return null;
+    return { symbol: (opts && opts.lhSym) || null };
+  }
+  // The filings, newest first, folded to one row a holder. Exported so the
+  // fold is testable by itself.
+  function holdersFold(filings) {
+    const seen = new Map();
+    // Sorted here rather than trusted: "the newest filing" is the whole rule.
+    const list = (filings || []).slice().sort((a, b) => (String(a && a.filed) < String(b && b.filed) ? 1 : String(a && a.filed) > String(b && b.filed) ? -1 : 0));
+    for (const f of list) {
+      if (!f || !f.holder) continue;
+      const k = String(f.holder).toLowerCase().replace(/[^a-z0-9]/g, '');
+      const had = seen.get(k);
+      if (!had) seen.set(k, { holder: f.holder, pct: f.pct, shares: f.shares, active: !!f.active, filed: f.filed, n: 1, persons: f.persons || 1 });
+      else had.n++;
+    }
+    const all = [...seen.values()];
+    // A stake of exactly nothing is a departure; an unstated one is a holder
+    // whose filing gave no percentage, and it stays on the list, last.
+    return { now: all.filter((h) => h.pct !== 0).sort((a, b) => (b.pct == null ? -1 : b.pct) - (a.pct == null ? -1 : a.pct)),
+      gone: all.filter((h) => h.pct === 0) };
+  }
+
+  function tplHolders() {
+    const sym = O.lhSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((r) => r.symbol === sym);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!row) return shell('Nothing to show', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const data = getHolders(sym);
+    if (!data) return shell('Reading the filings', 'Finding', 'the large holders\u2026');
+    const filings = Array.isArray(data.filings) ? data.filings : [];
+    const n = nameOf(row);
+    if (!filings.length) {
+      return shell(n, 'Large holders', 'none on file',
+        'No Schedule 13D or 13G has been filed about ' + sym + ' in the past thirteen months. A fund has none, and a holder with nothing to amend files nothing.');
+    }
+    const fold = holdersFold(filings);
+    const top = fold.now.slice(0, LH_ROWS[size.id] || 10);
+    const day = (iso) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+    const dayShort = (iso) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }).replace(' ', ' \u2019'); };
+    const pctFig = (p) => (p == null ? '\u2014' : (p > 0 && p < 0.1 ? '<0.1' : p >= 10 ? p.toFixed(1).replace(/\.0$/, '') : p.toFixed(1)) + '%');
+    const oldest = filings.reduce((m, x) => (x && x.filed && x.filed < m ? x.filed : m), '9999');
+    const head = '<span class="s-kick">' + esc((row.sector ? row.sector + ' \u00b7 ' : '') + sym + ' \u00b7 filings since ' + day(oldest)) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
+      + '<span class="dim">who reports more than 5%</span></h2>';
+    const SZ = ({
+      portrait: top.length <= 5 ? { f: 30, b: 30 } : top.length <= 8 ? { f: 26, b: 24 } : { f: 23, b: 20 },
+      square: top.length <= 4 ? { f: 25, b: 22 } : { f: 21, b: 16 },
+      story: top.length <= 6 ? { f: 40, b: 42 } : top.length <= 9 ? { f: 34, b: 34 } : { f: 30, b: 28 },
+    })[size.id] || { f: 26, b: 24 };
+    const scale = Math.max(1e-9, ...top.map((h) => h.pct || 0));
+    const vw = Math.ceil(Math.max(5, ...top.map((h) => pctFig(h.pct).length)) * SZ.f * 0.62) + 6;
+    const fw = Math.ceil(13 * SZ.f * 0.78 * 0.62) + 6;                       // "13D · Sep ’26"
+    const cols = 'minmax(0,40%) minmax(0,1fr) ' + vw + 'px ' + fw + 'px';
+    const rows = top.map((h) => '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+      + '<span class="bx-n">' + esc(h.holder) + '</span>'
+      + '<span class="bx-t" style="height:' + SZ.b + 'px">' + (h.pct > 0 ? '<span class="bx-f" style="left:0;width:' + Math.max(0.6, h.pct / scale * 100).toFixed(2) + '%"></span>' : '') + '</span>'
+      + '<span class="bx-v">' + esc(pctFig(h.pct)) + '</span>'
+      + '<span class="lh-form">' + (h.active ? '<b>13D</b>' : '13G') + esc(' \u00b7 ' + dayShort(h.filed)) + '</span></div>').join('');
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Holder, as filed</span>'
+      + '<span style="grid-column:2 / 4">Stake reported, % of the class</span><span class="sb-hr">Form \u00b7 filed</span></div>';
+    const gone = fold.gone.slice(0, 4);
+    const goneHtml = gone.length ? '<p class="lh-gone">' + esc('No longer reporting a stake: '
+      + gone.map((h) => h.holder + ' (' + dayShort(h.filed) + ')').join(', ')
+      + (fold.gone.length > gone.length ? ' and ' + (fold.gone.length - gone.length) + ' more' : '') + '.') + '</p>' : '';
+    const d13 = fold.now.filter((h) => h.active).length;
+    const more = fold.now.length - top.length;
+    const note = (fold.now.length ? fold.now.length + (fold.now.length === 1 ? ' holder has' : ' holders have') + ' reported a stake in ' + sym + ' since ' + day(oldest)
+        + (d13 ? ', ' + d13 + ' on a 13D' : '') + (more > 0 ? '; the ' + top.length + ' largest are shown' : '') + '. '
+        : 'Every holder that filed about ' + sym + ' since ' + day(oldest) + ' now reports no stake. ')
+      + 'Anyone who comes to hold more than 5% of a company must file: a 13D if they may seek to influence it, a 13G if they are passive, such as an index fund. '
+      + 'Each row is that holder\u2019s newest filing. This is not a full register: a holder with nothing to amend in that time is not here, and nobody under 5% is. '
+      + 'From the SEC. Which form a holder chose is a fact about the holder, not a forecast for the share.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">' + head
+      + (top.length ? '<div class="bx-rows">' + hd + rows + '</div>' : '')
+      + goneHtml
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Margins: a group's profit as a share of its revenue, over time -------
   //
   // (2026-10-10, the owner: "is there good data on understanding corporate
@@ -8732,6 +8838,7 @@
     shortbuild: tplShortBuild,
     earnahead: tplEarnAhead,
     corrections: tplCorrections,
+    holders: tplHolders,
     margins: () => marginsCard('margins'),
     secmargin: () => marginsCard('secmargin'),
     indmargin: () => marginsCard('indmargin'),
@@ -8965,6 +9072,13 @@
     .sb-hd .sb-hr { text-align: right; }
     .sz-square .sb-hd { font-size: 13px; }
     .sz-story .sb-hd { font-size: 20px; }
+    /* Large holders: the form and date beside each stake, and the line for
+       those who have left. */
+    .lh-form { font: 500 .78em var(--mono); color: var(--muted); text-align: right; white-space: nowrap; }
+    .lh-form b { color: var(--text); font-weight: 700; }
+    .lh-gone { margin: 14px 0 0; font-size: 19px; line-height: 1.45; color: var(--muted); }
+    .sz-square .lh-gone { font-size: 16px; margin-top: 8px; }
+    .sz-story .lh-gone { font-size: 25px; }
     /* Margins: three headline figures, then one line at its true size. */
     .mg-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
     .mg-stats div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -10937,6 +11051,7 @@
     earnAheadWindows: () => Object.keys(EA_WINS).map((k) => [k, EA_WINS[k]]),
     earnAheadWindow: eaWindow,
     marginsNeed, marginMetrics: () => MG_METRICS.map((p) => p.slice()),
+    holdersNeed, holdersFold,
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.
     drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
@@ -11039,6 +11154,7 @@
       getShortMoves = c.getShortMoves || (() => null);
       getEarnGrowth = c.getEarnGrowth || (() => null);
       getMargins = c.getMargins || (() => null);
+      getHolders = c.getHolders || (() => null);
       getLineSeries = c.getLineSeries || (() => null);
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);

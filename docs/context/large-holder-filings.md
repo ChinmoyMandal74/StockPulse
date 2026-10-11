@@ -27,6 +27,21 @@ Backlog 37a, built at the owner's request after the 8-K events. Who reported hol
 - **Screener**: column `lastHolder`, "5% filing", last in Ownership: the newest 13D or 13G in the last 60 days as "13D · Cohen Ryan · 8.9%" and its age. A text filter (type `13D`), sorts by date. Through `stampFlows`: `flows.hd` (`FLOWS_V` 6), fields `lastHolder`, `lastHolderDate`, `lastHolderActive`.
 - Constants after this column: Ownership 8 (a fund's blank run `naRun(8)`), `PAD_SPAN` 114, error row 109, empty row 111.
 
+## The promo card: `holders`, "Large holders", in Stock spotlight (2026-10-11)
+
+The owner: "add a page in promo for large investor data, single stock template". `tplHolders` in `private/cards.js`; one control, `lhSym`. Data through `ctx.getHolders(symbol)`, asked by `Cards.holdersNeed`; the studio fetches `/api/holders` and `/api/m/post` calls `holdersPayload`, the one function the page route also uses.
+
+- **One row per holder, not per filing.** The stock page is a log; the card is what the log adds up to: `Cards.holdersFold(filings)` keeps each holder's newest filing (names matched ignoring case and punctuation; the filings are sorted inside the fold, not trusted to arrive in order).
+- **A holder whose newest filing reports no holding has left** and is named under the rows, up to four. One with no percentage stated stays on the list, last, with a dash.
+- **Not a register of shareholders, and the card says so.** It holds only those who filed in about thirteen months. Apple's card on 2026-10-11 shows Vanguard alone: other holders above 5% had nothing to amend in the window. The note states that a holder with nothing to amend is not there and nobody under 5% is.
+- Bar in the accent (a size), 13D marked bold as the rarer form, no colour for either form. Caps: 10 rows, 6 on the square, 12 on the story.
+
+Checked against the stored filings: Dell shows Michael Dell 45.7% (13G), Silver Lake 11.9% (13D), Vanguard Capital Management 7.1% (13G), and The Vanguard Group as having left.
+
+## Sizing (the first fill, as measured)
+
+The full run read 9,600 documents for 1,253 companies in 68 minutes: 555 13D, 6,802 13G, and 2,243 not about the company (far more than the sample suggested: banks and asset managers file about what they hold). 1,190 companies have at least one.
+
 ## Sizing
 
 A dry run over 25 companies read 109 documents in 0.8 minutes: 6 13D, 94 13G, 9 not about the company. Scaled, the first fill is about 5,500 documents and 40 minutes. Ongoing, it is the handful of new filings each company gets between re-reads.

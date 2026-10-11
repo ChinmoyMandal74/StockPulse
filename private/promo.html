@@ -775,6 +775,16 @@
       </div>
       <!-- Drawdowns. Like the other one-company cards, the card IS its own
            scope. An index is picked by its fund: SPY, QQQ, IWM, DIA. -->
+      <!-- Large holders: one company, so the card is its own scope. -->
+      <div id="lhBox">
+        <label>Stock</label>
+        <select id="lhSym"></select>
+        <p class="hint">One row per holder, at the stake in its newest
+          Schedule 13D or 13G from the past thirteen months. Not a full
+          register: a holder with nothing to amend in that time is not
+          listed, and nobody under 5% is. A fund has no card. Names are
+          as filed with the SEC.</p>
+      </div>
       <div id="ddBox">
         <label>Stock or index fund</label>
         <select id="ddSym"></select>
@@ -1445,6 +1455,7 @@
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
       { id: 'corrections', name: 'Corrections', note: 'How many companies are in a pullback, a correction or a bear market — beside how far each index is from its own high' },
+      { id: 'holders', name: 'Large holders', note: 'Who reports holding more than 5% of one company, and on which form — each holder at its newest filing' },
       { id: 'drawdown', name: 'Drawdowns', note: 'One stock or index below its own high, over the years — every drawdown, how deep it went and how long it took to come back' },
       { id: 'margins', name: 'Margins', note: 'An index’s profit as a share of its revenue — its combined margin over four years from the filings, and each sector now against a year ago' },
       { id: 'earnahead', name: 'Earnings ahead', note: 'Who reports and when — the largest companies due in the coming days, under the day each one reports' },
@@ -1516,6 +1527,7 @@
       ['months', 'Month by month', 'monSym'],
       ['evolution', 'Evolution', 'evoSym'],
       ['drawdown', 'Drawdowns', 'ddSym'],
+      ['holders', 'Large holders', 'lhSym'],
     ];
     const spotView = (id) => SPOT_VIEWS.find((v) => v[0] === id) || null;
     // ---- Market: the whole market, five ways ---------------------------------
@@ -1715,6 +1727,24 @@
     // it lands is the half that matters.
     const prfCache = {};
     const prfPending = {};
+    // One company's 13D and 13G filings, for the Large holders card.
+    const lhCache = {};
+    const lhPending = {};
+    function getHolders(symbol) {
+      if (!symbol) return null;
+      if (lhCache[symbol]) return lhCache[symbol];
+      if (lhPending[symbol]) return null;
+      lhPending[symbol] = true;
+      fetch(`/api/holders?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          lhCache[symbol] = d && Array.isArray(d.filings) ? d : { filings: [] };
+          delete lhPending[symbol];
+          if (Cards.holdersNeed(tpl, controlOpts())) render();
+        })
+        .catch(() => { delete lhPending[symbol]; });
+      return null;
+    }
     function getPerf(symbol) {
       if (!symbol) return null;
       if (prfCache[symbol]) return prfCache[symbol];
@@ -1892,6 +1922,7 @@
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
+      'lhSym',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -1922,7 +1953,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: controlOpts(),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders,
       updatedAt: pulledAt,
     });
 
@@ -2010,6 +2041,7 @@
       $('ssnBox').style.display = tpl === 'secsnap' ? 'block' : 'none';
       $('imgBox').style.display = tpl === 'indmargin' ? 'block' : 'none';
       $('ddBox').style.display = tpl === 'drawdown' ? 'block' : 'none';
+      $('lhBox').style.display = tpl === 'holders' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
@@ -2423,6 +2455,8 @@
       $(id).addEventListener('change', () => { if (tpl === 'secmargin') render(); }));
     ['imgName', 'imgSp500', 'imgMetric'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'indmargin') render(); }));
+    // Large holders: one control.
+    $('lhSym').addEventListener('change', () => { if (tpl === 'holders') render(); });
     // Corrections and Drawdowns: their own listener lists.
     $('corSp500').addEventListener('change', () => { if (tpl === 'corrections') render(); });
     ['ddSym', 'ddYears', 'ddMin'].forEach((id) =>
@@ -3003,6 +3037,8 @@
         { const keep = $('monSym').value; $('monSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('monSym').options].some((o) => o.value === keep)) $('monSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;
+        { const keep = $('lhSym').value; $('lhSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('lhSym').options].some((o) => o.value === keep)) $('lhSym').value = keep; }
         { const keep = $('ddSym').value; $('ddSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('ddSym').options].some((o) => o.value === keep)) $('ddSym').value = keep; }
         // Two pickers from the one list, each keeping its choice across a

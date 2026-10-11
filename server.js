@@ -10821,6 +10821,11 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const lnNeed = Cards.linesNeed(post.tpl, { stocks, myLists, screens, size: POST_SIZES[post.size], opts: post.opts || {} });
   if (lnNeed) { try { lines = await lineSeriesFor(lnNeed.symbols, lnNeed.quarters); } catch { lines = null; } }
 
+  // The Large holders card, likewise.
+  let lholders = null;
+  const lhNeed = Cards.holdersNeed(post.tpl, post.opts || {});
+  if (lhNeed && lhNeed.symbol) { try { lholders = await holdersPayload(String(lhNeed.symbol).toUpperCase()); } catch { lholders = null; } }
+
   // The Margins card, likewise.
   let mgins = null;
   const mgNeed = Cards.marginsNeed(post.tpl, post.opts || {});
@@ -10853,6 +10858,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getShortMoves: () => smov,
       getEarnGrowth: () => egrow,
       getMargins: () => mgins,
+      getHolders: () => lholders,
       getLineSeries: () => lines,
       getHistory: () => hist,
       getEvolution: (s) => (Object.prototype.hasOwnProperty.call(evoBySym, s) ? evoBySym[s] : evo),
@@ -12373,6 +12379,17 @@ const ShortInt = require('./shortint.js');
 //
 // DISPLAY ONLY. Which form a holder chose is a fact; nothing here says
 // what it means for the share.
+// One company's filings as the page and the card both read them. A function
+// declaration, so the saved-post route above can call it.
+async function holdersPayload(symbol) {
+  const [rows, ids] = await Promise.all([store.readSecHolders(symbol, 40), filerIds().catch(() => ({}))]);
+  const cik = ids[symbol] || null;
+  return { symbol, days: Holders13.KEEP_DAYS, filings: rows.map((e) => ({
+    filed: e.filed, form: e.form, kind: e.kind, active: e.kind === 'D', amended: /\/A$/.test(e.form),
+    holder: e.holder, pct: e.pct, pctText: Holders13.pctWord(e.pct), shares: e.shares, persons: e.persons,
+    eventDate: e.eventDate, url: Holders13.pageUrl(cik, e.accn),
+  })) };
+}
 app.get('/api/holders', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
@@ -12380,13 +12397,7 @@ app.get('/api/holders', requireAuth, route(async (req, res) => {
   if ((await isGuest(req)) && !guestSet.has(symbol)) {
     return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   }
-  const [rows, ids] = await Promise.all([store.readSecHolders(symbol, 40), filerIds().catch(() => ({}))]);
-  const cik = ids[symbol] || null;
-  res.json({ symbol, days: Holders13.KEEP_DAYS, filings: rows.map((e) => ({
-    filed: e.filed, form: e.form, kind: e.kind, active: e.kind === 'D', amended: /\/A$/.test(e.form),
-    holder: e.holder, pct: e.pct, pctText: Holders13.pctWord(e.pct), shares: e.shares, persons: e.persons,
-    eventDate: e.eventDate, url: Holders13.pageUrl(cik, e.accn),
-  })) });
+  res.json(await holdersPayload(symbol));
 }));
 
 // ---- 8-K events for one company ---------------------------------------------
