@@ -7459,10 +7459,23 @@
   const MG_WHAT = { net: 'net income', op: 'operating income', gross: 'gross profit', fcf: 'free cash flow' };
   const MG_ROWS = { portrait: 11, square: 5, story: 11 };
   const MG_H = { portrait: 300, square: 190, story: 480 };
+  // THREE CARDS, ONE BUILDER. The index card breaks its line down by sector;
+  // the sector card is one sector broken down by industry; the industry
+  // card is one industry broken down by company. Each keeps its own control
+  // ids, as every template does, and `key` is what a host caches under.
+  const MG_TPLS = {
+    margins: { p: 'mg', dim: null, row: 'Sector' },
+    secmargin: { p: 'smg', dim: 'sector', row: 'Industry' },
+    indmargin: { p: 'img', dim: 'industry', row: 'Company' },
+  };
   function marginsNeed(tpl, opts) {
-    if (tpl !== 'margins') return null;
-    const c = opts && opts.mgSp500;
-    return { cut: EGR_CUTS.some(([k]) => k === c) ? c : 'in' };
+    const T = MG_TPLS[tpl];
+    if (!T) return null;
+    const o = opts || {};
+    const c = o[T.p + 'Sp500'];
+    const cut = EGR_CUTS.some(([k]) => k === c) ? c : 'in';
+    const value = T.dim ? String(o[T.p + 'Name'] || '') : '';
+    return { cut, dim: T.dim, value, key: cut + '|' + (T.dim || '') + '|' + value };
   }
   const mgQ = (q) => 'Q' + q.slice(5) + ' \u2019' + q.slice(2, 4);
   // One line at its true pixel size, so the text inside it is safe.
@@ -7499,19 +7512,26 @@
     return out + '</svg>';
   }
 
-  function tplMargins() {
-    const cut = marginsNeed('margins', O).cut;
+  function marginsCard(tpl) {
+    const T = MG_TPLS[tpl];
+    const need = marginsNeed(tpl, O);
+    const cut = need.cut;
     const cutName = (EGR_CUTS.find(([k]) => k === cut) || EGR_CUTS[0])[1];
-    const metric = MG_METRICS.some(([k]) => k === O.mgMetric) ? O.mgMetric : 'net';
+    const metric = MG_METRICS.some(([k]) => k === O[T.p + 'Metric']) ? O[T.p + 'Metric'] : 'net';
     const mName = (MG_METRICS.find(([k]) => k === metric) || MG_METRICS[0])[1];
-    const d = getMargins(cut);
+    if (T.dim && !need.value) {
+      return chromeTop() + '<div class="s-body"><div class="s-empty">' + esc('Pick ' + (T.dim === 'sector' ? 'a sector.' : 'an industry.')) + '</div></div>' + chromeFoot();
+    }
+    const d = getMargins(need);
     if (!d) return chromeTop() + '<div class="s-body"><div class="s-empty">Reading the filings\u2026</div></div>' + chromeFoot();
     const M = d.metrics && d.metrics[metric];
     const shell = (msg) => chromeTop() + '<div class="s-body"><div class="bx-in">'
-      + '<span class="s-kick">' + esc(cutName) + '</span><h2 class="s-title">' + esc(mName) + '</h2>'
+      + '<span class="s-kick">' + esc((T.dim ? need.value + ' \u00b7 ' : '') + cutName) + '</span><h2 class="s-title">' + esc(mName) + '</h2>'
       + '<p class="s-sub wide" style="--fs:20px">' + esc(msg) + '</p></div></div>' + chromeFoot();
     if (!M || !M.n || !Array.isArray(M.series) || M.series.length < 5) {
-      return shell('Too few companies here have every quarter on file to add up ' + mName.toLowerCase() + ' over this window.');
+      return shell('Too few companies ' + (T.dim ? 'in ' + need.value + ' within ' + cutName : 'here')
+        + ' have every quarter on file to add up ' + mName.toLowerCase() + ' over this window'
+        + (T.dim && cut !== 'All' ? '. The whole screen has more of them.' : '.'));
     }
     const S = M.series, n = S.length, now = S[n - 1], ago = S[n - 5], first = S[0];
     const up = pal.ink('#60a5fa'), dn = pal.ink('#fb923c');
@@ -7528,22 +7548,29 @@
     const fs = size.id === 'story' ? 24 : size.id === 'square' ? 16 : 18;
     const chart = mgChart(S, d.quarters, 952, MG_H[size.id] || 300, fs, pal.ink('#60a5fa'));
 
-    // Sectors: now, and against a year ago. Largest margin first.
+    // The breakdown: now, and against a year ago. Largest margin first. A
+    // company row is named from the screen's own rows and carries no count.
+    const rowName = (k) => { if (T.dim !== 'industry') return k; const r = stocks.find((x) => x && x.symbol === k); return r ? nameOf(r) : k; };
     const secs = (M.sectors || []).slice().sort((a, b) => b.now - a.now).slice(0, MG_ROWS[size.id] || 11);
     const SZ = ({ portrait: { f: 22, b: 20 }, square: { f: 18, b: 14 }, story: { f: 31, b: 32 } })[size.id] || { f: 22, b: 20 };
     const negMax = Math.max(0, ...secs.map((r) => -r.now)), posMax = Math.max(0, ...secs.map((r) => r.now));
     const sp = Math.max(1e-9, negMax + posMax), zero = negMax / sp * 100;
     const vw = Math.ceil(Math.max(5, ...secs.map((r) => p1(r.now).length)) * SZ.f * 0.62) + 6;
-    const cw = Math.ceil(Math.max(5, ...secs.map((r) => pts(r.prev == null ? null : r.now - r.prev).length)) * SZ.f * 0.62) + 6;
+    // Never narrower than its own heading, which the first card clipped to
+    // "VS YR ...": nine characters of the heading row's own type.
+    const hdFs = size.id === 'story' ? 20 : size.id === 'square' ? 13 : 15;
+    const cw = Math.max(Math.ceil(Math.max(5, ...secs.map((r) => pts(r.prev == null ? null : r.now - r.prev).length)) * SZ.f * 0.62) + 6,
+      Math.ceil(9 * hdFs * 0.7) + 6);
     const cols = 'minmax(0,36%) minmax(0,1fr) ' + vw + 'px ' + cw + 'px';
     const secHtml = secs.length ? '<div class="bx-rows">'
-      + '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Sector</span>'
+      + '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>' + T.row + '</span>'
       + '<span style="grid-column:2 / 4">' + esc(mName + ', latest year') + '</span><span class="sb-hr">vs yr ago</span></div>'
       + secs.map((r) => {
         const w = Math.abs(r.now) / sp * 100, left = r.now < 0 ? zero - w : zero;
         const c = r.prev == null ? null : r.now - r.prev;
         return '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
-          + '<span class="bx-n ix-n"><span class="ix-t">' + esc(r.sector) + '</span><span class="ix-c cor-cn">' + r.n + '</span></span>'
+          + '<span class="bx-n ix-n"><span class="ix-t">' + esc(rowName(r.sector)) + '</span>'
+          + (T.dim === 'industry' ? '' : '<span class="ix-c cor-cn">' + r.n + '</span>') + '</span>'
           + '<span class="bx-t" style="height:' + SZ.b + 'px"><span class="bx-f" style="left:' + left.toFixed(2) + '%;width:' + Math.max(0.6, w).toFixed(2) + '%"></span>'
           + (negMax > 0 ? '<span class="bx-z" style="left:' + zero.toFixed(2) + '%"></span>' : '') + '</span>'
           + '<span class="bx-v">' + esc(p1(r.now)) + '</span>'
@@ -7557,8 +7584,13 @@
       + 'Since ' + mgQ(d.quarters[0]) + ' it has gone from ' + p1(first) + ' to ' + p1(now) + '. What was reported, not a forecast.';
     return chromeTop()
       + '<div class="s-body"><div class="bx-in">'
-      + '<span class="s-kick">' + esc(cutName + ' \u00b7 ' + M.n.toLocaleString('en-US') + ' companies \u00b7 ' + mgQ(d.quarters[0]) + ' to ' + mgQ(d.quarters[n - 1])) + '</span>'
-      + '<h2 class="s-title">' + esc(mName) + '<span class="dim">profit as a share of revenue</span></h2>'
+      + '<span class="s-kick">' + esc(cutName + ' \u00b7 ' + M.n.toLocaleString('en-US') + (M.n === 1 ? ' company' : ' companies') + ' \u00b7 ' + mgQ(d.quarters[0]) + ' to ' + mgQ(d.quarters[n - 1])) + '</span>'
+      // The sector or industry is the subject where there is one, and the
+      // measure moves to the line under it.
+      + (T.dim
+        ? '<h2 class="s-title"><span class="mh-name' + (need.value.length > 30 ? ' mh-l2' : need.value.length > 18 ? ' mh-l1' : '') + '">' + esc(need.value)
+          + '</span><span class="dim">' + esc(mName.toLowerCase() + ', profit as a share of revenue') + '</span></h2>'
+        : '<h2 class="s-title">' + esc(mName) + '<span class="dim">profit as a share of revenue</span></h2>')
       + stats + '<div class="mg-chart">' + chart + '</div>' + secHtml
       + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();
@@ -8535,7 +8567,9 @@
     shortbuild: tplShortBuild,
     earnahead: tplEarnAhead,
     corrections: tplCorrections,
-    margins: tplMargins,
+    margins: () => marginsCard('margins'),
+    secmargin: () => marginsCard('secmargin'),
+    indmargin: () => marginsCard('indmargin'),
     drawdown: tplDrawdown,
     evo2: tplEvoTwo,
     industries: tplIndustries,

@@ -696,6 +696,34 @@
            thresholds are the screener column's own. -->
       <!-- Margins: the group and the measure. The figures are the filings',
            added up by margins.js on the server. -->
+      <!-- Sector margins and Industry margins: the Margins card for one
+           sector or one industry. Their own control ids, as every template
+           has; the names come from the module's own lists. -->
+      <div id="smgBox">
+        <label>Sector</label>
+        <select id="smgName"></select>
+        <label>Index</label>
+        <select id="smgSp500"></select>
+        <label>Measure</label>
+        <select id="smgMetric"></select>
+        <p class="hint">One sector's combined profit over its combined
+          revenue, a trailing year at each point, with each of its
+          industries under it. Only companies with every quarter on file
+          are counted; the card says how many. Pick "The whole screen"
+          for more companies than the index holds.</p>
+      </div>
+      <div id="imgBox">
+        <label>Industry</label>
+        <select id="imgName"></select>
+        <label>Index</label>
+        <select id="imgSp500"></select>
+        <label>Measure</label>
+        <select id="imgMetric"></select>
+        <p class="hint">One industry's combined margin over four years,
+          with each of its companies under it. A company without every
+          quarter on file is left out of both the line and the rows, so
+          a recent listing will not appear.</p>
+      </div>
       <div id="mgBox">
         <label>Index</label>
         <select id="mgSp500"></select>
@@ -1397,6 +1425,8 @@
       { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
       { id: 'waterfall', name: 'Waterfall', note: 'What actually moved the index, name by name, adding up to the whole' },
       { id: 'sectors', name: 'Sectors', note: 'Every sector as one row, ranked on a return, breadth, size or a median — made from its companies, not its fund' },
+      { id: 'secmargin', name: 'Sector margins', note: 'One sector’s profit as a share of its revenue over four years, from the filings — and each of its industries now against a year ago' },
+      { id: 'indmargin', name: 'Industry margins', note: 'One industry’s profit as a share of its revenue over four years, from the filings — and each of its companies now against a year ago' },
       { id: 'secspot', name: 'Sector spotlight', note: 'One sector in full — its line against the index, twelve figures, and where its companies sit' },
       { id: 'indspot', name: 'Industry spotlight', note: 'One industry in full — its line against the S&P 500, twelve figures, and where its companies sit' },
       { id: 'industries', name: 'Industries', note: 'Every industry as one row, ranked on a return, breadth, size or a median — the industry is the unit' },
@@ -1516,10 +1546,12 @@
     const SEC_VIEWS = [
       ['sectors', 'Ranking'],
       ['secspot', 'Spotlight'],
+      ['secmargin', 'Margins'],
     ];
     const IND_VIEWS = [
       ['industries', 'Ranking'],
       ['indspot', 'Spotlight'],
+      ['indmargin', 'Margins'],
     ];
     const TPL_GROUPS = [
       { name: 'Market', views: MKT_VIEWS, last: 'day' },
@@ -1753,18 +1785,22 @@
     // The Margins card's payload, by cut: the earnings-growth channel's shape.
     const mgCache = {};
     const mgPending = {};
-    function getMargins(cut) {
+    // `need` is Cards.marginsNeed's answer: the cut, and for the sector and
+    // industry cards which one. Its `key` is what a payload is kept under.
+    function getMargins(need) {
+      const cut = need.key;
       if (mgCache[cut]) return mgCache[cut];
       if (mgPending[cut]) return null;
       mgPending[cut] = true;
-      fetch('/api/margins?cut=' + encodeURIComponent(cut), { cache: 'no-store' })
+      fetch('/api/margins?cut=' + encodeURIComponent(need.cut)
+        + (need.dim ? '&dim=' + need.dim + '&name=' + encodeURIComponent(need.value) : ''), { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           mgPending[cut] = false;
           if (!d || !d.metrics) return;
           mgCache[cut] = d;
-          const need = Cards.marginsNeed(tpl, { mgSp500: $('mgSp500').value });
-          if (need && need.cut === cut) render();
+          const now = Cards.marginsNeed(tpl, controlOpts());
+          if (now && now.key === cut) render();
         })
         .catch(() => { mgPending[cut] = false; });
       return null;
@@ -1824,6 +1860,7 @@
       'eaWin', 'eaCount', 'eaEst', 'eaSp500',
       'corSp500', 'ddSym', 'ddYears', 'ddMin',
       'mgSp500', 'mgMetric',
+      'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -1938,6 +1975,8 @@
       $('eaBox').style.display = tpl === 'earnahead' ? 'block' : 'none';
       $('corBox').style.display = tpl === 'corrections' ? 'block' : 'none';
       $('mgBox').style.display = tpl === 'margins' ? 'block' : 'none';
+      $('smgBox').style.display = tpl === 'secmargin' ? 'block' : 'none';
+      $('imgBox').style.display = tpl === 'indmargin' ? 'block' : 'none';
       $('ddBox').style.display = tpl === 'drawdown' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
@@ -2331,6 +2370,21 @@
       $(id).addEventListener('change', () => { if (tpl === 'margins') render(); }));
     for (const [v, label] of Cards.earnGrowthCuts()) $('mgSp500').add(new Option(label, v));
     for (const [v, label] of Cards.marginMetrics()) $('mgMetric').add(new Option(label, v));
+    // The sector and industry versions: the same two pickers each, and a name.
+    // THE INDEX CHANGES WHICH NAMES EXIST, so its listener refills the list
+    // FIRST, the spotlight cards' rule and their reason.
+    for (const p of ['smg', 'img']) {
+      for (const [v, label] of Cards.earnGrowthCuts()) $(p + 'Sp500').add(new Option(label, v));
+      for (const [v, label] of Cards.marginMetrics()) $(p + 'Metric').add(new Option(label, v));
+    }
+    const fillSmgNames = () => fillGroupNames('smgName', 'smgSp500', Cards.sectorList, false);
+    const fillImgNames = () => fillGroupNames('imgName', 'imgSp500', Cards.industryList, true);
+    $('smgSp500').addEventListener('change', fillSmgNames);
+    $('imgSp500').addEventListener('change', fillImgNames);
+    ['smgName', 'smgSp500', 'smgMetric'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'secmargin') render(); }));
+    ['imgName', 'imgSp500', 'imgMetric'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'indmargin') render(); }));
     // Corrections and Drawdowns: their own listener lists.
     $('corSp500').addEventListener('change', () => { if (tpl === 'corrections') render(); });
     ['ddSym', 'ddYears', 'ddMin'].forEach((id) =>
@@ -2451,6 +2505,10 @@
       fillIspNames();
       set('sspSp500');
       fillSspNames();
+      set('smgSp500');
+      fillSmgNames();
+      set('imgSp500');
+      fillImgNames();
       Object.keys(opts).forEach(set);
       // A post stores only its own template's stock; the sibling views follow it.
       if (spotView(tpl)) spotSyncFrom(spotView(tpl)[2]);
@@ -2977,6 +3035,8 @@
         // is back in its picker by now.
         fillIspNames();
         fillSspNames();
+        fillSmgNames();
+        fillImgNames();
         // FROM THE MODULE, never a copy in the markup: a key tplDay does not
         // know falls back to Today and draws the wrong window with nothing
         // saying so. The spCuts bargain.

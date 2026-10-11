@@ -1670,7 +1670,9 @@ high-margin company growing faster lifts the total with no company's
 margin moving). Get the arithmetic right before drawing it, and show the
 mix term rather than folding it away.
 
-**c. A sector's margin over time.** The card draws the index's line and
+**c. A sector's margin over time.** (Partly met 2026-10-10: the Sector
+margins and Industry margins cards draw one sector's or one industry's line.
+What remains is several sectors on one chart.) The card draws the index's line and
 each sector as two numbers. A view with one line per sector, or a Sector
 spotlight figure, would show which sectors are being squeezed and since
 when. `Margins.build` already has each sector's panel; it returns only

@@ -24,6 +24,18 @@ Checked against the filings, 2026-10-10, S&P 500: net margin 14.8% for the year 
 - The subtitle is "profit as a share of revenue". An earlier wording used the word "sell", which the no-trading-words rule catches even in an innocent sense.
 - Reads about 39,000 filing rows for the S&P 500 per cold cache.
 
+## One sector, one industry: `secmargin` and `indmargin` (2026-10-10)
+
+The owner, of the index card: "Can this be expanded to sector and industry templates in promo". Two more templates on the same builder (`marginsCard(tpl)`, table `MG_TPLS`), in the Sector and Industry groups as "Margins".
+
+- **One level further down each time**: the index card breaks its line down by sector, the sector card by industry, the industry card by company. A company row is named from the screen's rows and carries no count.
+- Controls: `smgName`, `smgSp500`, `smgMetric` and `imgName`, `imgSp500`, `imgMetric`. The name pickers are filled by the spotlight cards' own `fillGroupNames`, and the index picker refills them first.
+- `Cards.marginsNeed(tpl, opts)` returns `{ cut, dim, value, key }`; a host caches under `key` and is handed the whole need (`ctx.getMargins(need)`). The route is `GET /api/margins?cut=&dim=sector|industry&name=`, and `marginsFor(cut, dim, value)` caches per key, cleared past 80 entries.
+- `Margins.build` takes `group` on each member (falling back to `sector`) and `opts.minGroup`: 3 for sectors and industries, 1 where a row is a company.
+- **The lead quarter is 80% of the best-covered of the last six quarters, not of the member count.** Foreign issuers file annually and new listings have few quarters; counted in the denominator they could never be reached, the lead slid back a year, and no company had twenty quarters behind that. Found on the first real industry: 38 semiconductor companies on the whole screen, lead 2025 Q2, an empty card. After the fix: 22 of 38, 26.7% to 43.4%. The S&P 500 figures did not move.
+- The index card's last column heading was clipped to "VS YR ..."; the column is now never narrower than its heading.
+- Checked against the filings: Technology in the S&P 500, 75 of 86 companies, 19.1% to 27.3%; Semiconductors in the S&P 500, 13 of 14, 27.0% to 43.9%.
+
 ## The column: `netMarginChg`, "Margin chg", in Fundamentals after Profit margin
 
 - Points, signed, no colour. Tooltip gives both margins. `FIELD_SPEC` row `fund|Margin change`. A fund's blank run in that block is now `naRun(7)`.

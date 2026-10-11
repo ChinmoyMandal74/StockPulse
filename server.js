@@ -10785,7 +10785,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   // The Margins card, likewise.
   let mgins = null;
   const mgNeed = Cards.marginsNeed(post.tpl, post.opts || {});
-  if (mgNeed) { try { mgins = await marginsFor(mgNeed.cut); } catch { mgins = null; } }
+  if (mgNeed) { try { mgins = await marginsFor(mgNeed.cut, mgNeed.dim, mgNeed.value); } catch { mgins = null; } }
 
   // The earnings-growth card, likewise only when the template asks.
   let egrow = null;
@@ -11687,9 +11687,17 @@ async function earnGrowthFor(cutIn) {
 const Margins = require('./margins.js');
 const mgCache = {};
 const mgWarm = (cut) => !!(mgCache[cut] && Date.now() - mgCache[cut].at < EG_TTL_MS);
-async function marginsFor(cutIn) {
+// ONE SECTOR, OR ONE INDUSTRY (2026-10-10, the owner, of the index card:
+// "can this be expanded to sector and industry templates"). The same read
+// and the same arithmetic over fewer members, broken down one level
+// further: an index by sector, a sector by industry, an industry by
+// company. `dim` is 'sector' or 'industry' and `value` its name.
+async function marginsFor(cutIn, dimIn, valueIn) {
   const cut = EG_FUND[cutIn] || cutIn === 'All' ? cutIn : 'in';
-  if (mgWarm(cut)) return mgCache[cut].body;
+  const dim = dimIn === 'sector' || dimIn === 'industry' ? dimIn : null;
+  const value = dim ? String(valueIn || '').slice(0, 80) : '';
+  const key = cut + '|' + (dim || '') + '|' + value;
+  if (mgWarm(key)) return mgCache[key].body;
   const universe = await store.readUniverse();
   const tracked = new Set(universe);
   let syms = universe; let asOf = null;
@@ -11702,22 +11710,33 @@ async function marginsFor(cutIn) {
   const seen = new Set();
   syms = syms.filter((s) => { const c = ids[String(s).toUpperCase()]; if (!c) return true; if (seen.has(c)) return false; seen.add(c); return true; });
   // Each company's sector, from the same index the group pages use.
-  const sectorOf = {};
-  try { for (const [sec, list] of (await groupIndex()).sector) for (const s of list) sectorOf[s] = sec; } catch { /* a card without its sector rows */ }
+  const sectorOf = {}, industryOf = {};
+  try {
+    const gi = await groupIndex();
+    for (const [sec, list] of gi.sector) for (const s of list) sectorOf[s] = sec;
+    for (const [ind, list] of gi.industry) for (const s of list) industryOf[s] = ind;
+  } catch { /* a card without its breakdown rows */ }
+  if (dim) syms = syms.filter((s) => (dim === 'sector' ? sectorOf : industryOf)[s] === value);
   const since = new Date(Date.now() - 5.6 * 365 * 86400000).toISOString().slice(0, 10);
   const facts = await store.readSecFactsSince(syms, since);
-  const members = syms.map((s) => ({ symbol: s, sector: sectorOf[s] || null, rows: SecFacts.latestFilled(facts.get(s) || []) }));
-  const built = Margins.build(members, { points: 17 });
-  const body = Object.assign({ cut, asOf, at: Date.now() }, built || { members: syms.length, quarters: [], metrics: {} });
-  mgCache[cut] = { at: Date.now(), body };
+  const groupOf = (s) => (!dim ? sectorOf[s] : dim === 'sector' ? industryOf[s] : s) || null;
+  const members = syms.map((s) => ({ symbol: s, group: groupOf(s), rows: SecFacts.latestFilled(facts.get(s) || []) }));
+  const built = Margins.build(members, { points: 17, minGroup: dim === 'industry' ? 1 : 3 });
+  const body = Object.assign({ cut, dim, value, asOf, at: Date.now() }, built || { members: syms.length, quarters: [], metrics: {} });
+  // One entry per sector and industry asked for: bounded, since an instance
+  // can live long enough to be asked for all of them.
+  if (Object.keys(mgCache).length > 80) for (const k of Object.keys(mgCache)) delete mgCache[k];
+  mgCache[key] = { at: Date.now(), body };
   return body;
 }
 app.get('/api/margins', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const cut = String(req.query.cut || 'in');
-  const key = EG_FUND[cut] || cut === 'All' ? cut : 'in';
-  if (!mgWarm(key) && await standAside(res)) return;
-  res.json(await marginsFor(key));
+  const c = EG_FUND[cut] || cut === 'All' ? cut : 'in';
+  const dim = req.query.dim === 'sector' || req.query.dim === 'industry' ? req.query.dim : null;
+  const name = dim ? String(req.query.name || '').slice(0, 80) : '';
+  if (!mgWarm(c + '|' + (dim || '') + '|' + name) && await standAside(res)) return;
+  res.json(await marginsFor(c, dim, name));
 }));
 
 // EVERY COMPANY'S MARGIN NOW AGAINST A YEAR AGO, for the screener column.

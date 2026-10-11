@@ -86,20 +86,37 @@ function ttm(q, i, metric) {
   return rev > 0 ? { rev, v } : null;
 }
 
-// members: [{ symbol, sector, rows }]. opts.points: how many points (default
-// 17, four years and the one before them). Returns null when nothing can be
-// drawn.
+// members: [{ symbol, group, rows }]. `group` is whatever the rows under the
+// line are broken down by: a sector for an index, an industry for a sector,
+// the company itself for an industry (`sector` is read where `group` is
+// absent, the first caller's name for it). opts.points: how many points
+// (default 17, four years and the one before them). opts.minGroup: how many
+// companies a breakdown row needs (default 3; 1 where a row IS a company).
+// Returns null when nothing can be drawn.
 function build(members, opts) {
   const o = opts || {};
   const P = Math.max(5, Number(o.points) || 17);
-  const cos = (members || []).map((m) => ({ symbol: m.symbol, sector: m.sector || null, q: byQuarter(m.rows) }));
+  const minGroup = Math.max(1, Number(o.minGroup) || 3);
+  const cos = (members || []).map((m) => ({ symbol: m.symbol, sector: (m.group != null ? m.group : m.sector) || null, q: byQuarter(m.rows) }));
   if (!cos.length) return null;
   // THE LEAD is the newest calendar quarter most of the group has filed; the
   // newest of all is half-reported for weeks.
+  //
+  // "MOST OF THE GROUP" IS MOST OF THOSE THAT FILE QUARTERLY AT ALL, measured
+  // against the best-covered of the last six quarters rather than against
+  // the member count. A foreign issuer files once a year and a new listing
+  // has two quarters; counted in the denominator they can never be reached,
+  // and the lead slid back a year to the last quarter an old cohort all had
+  // -- which left no company with twenty quarters behind it and an empty
+  // card. Found on the first real industry: 38 semiconductor companies on
+  // the whole screen, lead 2025 Q2, panel of none.
   const have = new Map();
   for (const c of cos) for (const i of c.q.keys()) have.set(i, (have.get(i) || 0) + 1);
-  const need = (o.share == null ? 0.8 : o.share) * cos.length;
-  const lead = [...have.keys()].sort((a, b) => b - a).find((i) => have.get(i) >= need);
+  const newest = [...have.keys()].sort((a, b) => b - a);
+  if (!newest.length) return null;
+  const best = Math.max(...newest.filter((i) => i > newest[0] - 6).map((i) => have.get(i)));
+  const need = (o.share == null ? 0.8 : o.share) * best;
+  const lead = newest.find((i) => have.get(i) >= need);
   if (lead == null) return null;
   const idx = [];
   for (let i = lead - P + 1; i <= lead; i++) idx.push(i);
@@ -121,7 +138,7 @@ function build(members, opts) {
     const series = idx.map((_, k) => at(panel, k));
     const by = {};
     for (const p of panel) if (p.c.sector) (by[p.c.sector] = by[p.c.sector] || []).push(p);
-    const sectors = Object.keys(by).filter((s) => by[s].length >= 3).map((s) => ({
+    const sectors = Object.keys(by).filter((s) => by[s].length >= minGroup).map((s) => ({
       sector: s, n: by[s].length, now: at(by[s], P - 1), prev: at(by[s], P - 5),
     })).filter((s) => s.now != null);
     metrics[m] = { n: panel.length, series, sectors };
