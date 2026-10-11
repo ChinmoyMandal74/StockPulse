@@ -336,31 +336,56 @@
   // one 'Other'. Fewer than three periods is not an evolution: null.
   //   cur:  the newest period's breakdown { members: [{ key, name, v, subtotal }], complete }
   //   hist: [{ end, derived, kind }] newest first, the newest included
+  //
+  // A PERIOD MISSING BETWEEN TWO THAT ARE DRAWN IS A GAP, AND IS SHOWN AS ONE.
+  // (2026-10-11, the owner, of Nvidia: its Jul 25 column stood right beside
+  // Apr 26 as if they were consecutive, with two quarters left out between
+  // them. "Yes indicate the gaps clearly.") Given the period type, the
+  // columns are checked for spacing and an empty one is put in for every
+  // period skipped: `gapAt` is true there and every part's share is null.
+  // It carries the date of the period on file where there is one, and the
+  // date it would have had otherwise.
   const MIX_PARTS = 6;
-  function mixOver(cur, hist) {
+  function mixOver(cur, hist, ptype) {
     if (!cur || !Array.isArray(cur.members)) return null;
     const parts = cur.members.filter((m) => !m.subtotal);
     if (parts.length < 2 || parts.some((m) => !(m.v >= 0))) return null;
     const now = new Set(parts.map((m) => m.key));
     const cols = [];
-    let skipped = 0;
+    const out0 = [];                                                 // the ends of the periods left out
     for (const h of hist || []) {
       const P = h && h.kind;
       if (!P || !Array.isArray(P.members)) continue;                 // not reported that period: nothing to leave out
       const mine = P.members.filter((m) => !m.subtotal);
       const sum = mine.reduce((s, m) => s + m.v, 0);
-      if (!mine.length || mine.some((m) => !(m.v >= 0) || !now.has(m.key)) || !(sum > 0) || (cur.complete && !P.complete)) { skipped++; continue; }
+      if (!mine.length || mine.some((m) => !(m.v >= 0) || !now.has(m.key)) || !(sum > 0) || (cur.complete && !P.complete)) { out0.push(h.end); continue; }
       cols.push({ end: h.end, derived: !!h.derived, at: new Map(mine.map((m) => [m.key, m.v / sum * 100])) });
     }
     if (cols.length < 3) return null;
     cols.reverse();                                                  // oldest on the left
+    // `skipped` counts only those BEFORE the first column: one inside the
+    // range is drawn as a gap and so is not left out of the picture.
+    const skipped = out0.filter((e) => e < cols[0].end).length;
+    const step = ptype === 'Q' ? 91.3125 : ptype === 'FY' ? 365.25 : 0;
+    if (step) {
+      const iso = (from, add) => new Date(Date.parse(from + 'T00:00:00Z') + Math.round(add) * DAY).toISOString().slice(0, 10);
+      for (let i = cols.length - 1; i > 0; i--) {
+        const missing = Math.min(12, Math.round(days(cols[i - 1].end, cols[i].end) / step) - 1);
+        for (let g = missing; g >= 1; g--) {
+          const want = iso(cols[i - 1].end, g * step);
+          const known = (hist || []).find((h) => h && h.end && Math.abs(days(h.end, want)) <= 12);
+          cols.splice(i, 0, { end: known ? known.end : want, gap: true, derived: false, at: new Map() });
+        }
+      }
+    }
     const last = cols[cols.length - 1].at;
+    const shareAt = (c, f) => (c.gap ? null : f(c.at));
     const order = parts.slice().sort((x, y) => (last.get(y.key) || 0) - (last.get(x.key) || 0));
     const named = order.length > MIX_PARTS + 1 ? order.slice(0, MIX_PARTS) : order;
     const rest = order.slice(named.length);
-    const out = named.map((m) => ({ name: m.name, other: false, shares: cols.map((c) => c.at.get(m.key) || 0) }));
-    if (rest.length) out.push({ name: 'Other (' + rest.length + ' smaller)', other: true, shares: cols.map((c) => rest.reduce((s, m) => s + (c.at.get(m.key) || 0), 0)) });
-    return { ends: cols.map((c) => c.end), derivedAt: cols.map((c) => c.derived), parts: out, skipped };
+    const out = named.map((m) => ({ name: m.name, other: false, shares: cols.map((c) => shareAt(c, (at) => at.get(m.key) || 0)) }));
+    if (rest.length) out.push({ name: 'Other (' + rest.length + ' smaller)', other: true, shares: cols.map((c) => shareAt(c, (at) => rest.reduce((s, m) => s + (at.get(m.key) || 0), 0))) });
+    return { ends: cols.map((c) => c.end), derivedAt: cols.map((c) => c.derived), gapAt: cols.map((c) => !!c.gap), parts: out, skipped };
   }
 
   // A period beside the same period a year before: `prev` on each member

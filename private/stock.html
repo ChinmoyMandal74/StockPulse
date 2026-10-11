@@ -1082,6 +1082,8 @@
     #seg .sg-ms { flex: 1; min-height: 0; display: flex; flex-direction: column-reverse; gap: 1px; border-radius: 4px; overflow: hidden; }
     #seg .sg-ms span { display: flex; align-items: center; justify-content: center; min-height: 0; overflow: hidden;
       font: 600 10px var(--mono); color: rgba(8, 12, 24, 0.8); }
+    #seg .sg-ms.sg-gap { border: 1px dashed var(--faint); align-items: center; justify-content: center; flex-direction: column; }
+    #seg .sg-ms.sg-gap span { font: 500 9px var(--mono); color: var(--faint); text-align: center; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 3px; }
     #seg .sg-mx { text-align: center; font: 500 10px var(--mono); color: var(--faint); padding-top: 5px; white-space: nowrap; }
     #seg .sg-lgd { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-size: 11.5px; color: var(--muted); }
     #seg .sg-lgd i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
@@ -4748,13 +4750,16 @@
                 const sh = (v) => (v > 0 && v < 0.5 ? '<1' : String(Math.round(v))) + '%';
                 const last = M.ends.length - 1;
                 return '<p class="sg-hl">How the mix has changed' + (K.complete ? '' : ' (shares of the parts reported)') + '</p><div class="sg-mix">'
-                  + M.ends.map((e, c) => '<div class="sg-mc"><div class="sg-ms">'
+                  + M.ends.map((e, c) => ((M.gapAt || [])[c]
+                    ? '<div class="sg-mc"><div class="sg-ms sg-gap"><span>no comparable figures</span></div><div class="sg-mx">' + esc(short(e)) + '</div></div>'
+                    : '<div class="sg-mc"><div class="sg-ms">'
                     + M.parts.map((p, i) => (p.shares[c] > 0 ? '<span style="flex:' + p.shares[c].toFixed(3) + ' 0 0;background:' + ink(p, i) + '" title="' + esc(p.name + ' ' + sh(p.shares[c])) + '">' + (p.shares[c] >= 9 ? sh(p.shares[c]) : '') + '</span>' : '')).join('')
-                    + '</div><div class="sg-mx">' + esc(short(e)) + (M.derivedAt[c] ? '*' : '') + '</div></div>').join('')
+                    + '</div><div class="sg-mx">' + esc(short(e)) + (M.derivedAt[c] ? '*' : '') + '</div></div>')).join('')
                   + '</div><div class="sg-lgd">'
                   + M.parts.map((p, i) => '<span><i style="background:' + ink(p, i) + '"></i>' + esc(p.name) + '<b>' + esc(sh(p.shares[0])) + ' \u2192 ' + esc(sh(p.shares[last])) + '</b></span>').join('')
                   + '</div>'
-                  + (M.skipped ? '<p class="snote" style="margin-top:6px">' + (M.skipped === 1 ? 'One earlier period was' : M.skipped + ' earlier periods were') + ' reported on a different grouping and ' + (M.skipped === 1 ? 'is' : 'are') + ' left out of the columns.</p>' : '');
+                  + ((M.gapAt || []).some(Boolean) ? '<p class="snote" style="margin-top:6px">A dashed column is a period with no figures on this grouping: the company reported it on a different one, or not separately.</p>' : '')
+                  + (M.skipped > 0 ? '<p class="snote" style="margin-top:6px">Earlier periods reported on a different grouping are left out of the columns.</p>' : '');
               })() : '');
           }).join('')
             + '<p class="snote">From the company\u2019s own ' + esc(S.form || 'report') + (S.filed ? ', filed ' + esc(day(S.filed)) : '')

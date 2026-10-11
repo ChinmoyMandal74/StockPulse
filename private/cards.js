@@ -7749,9 +7749,13 @@
       const inkOf = (p, i) => pal.ink(p.other ? RM_INKS[RM_INKS.length - 1] : RM_INKS[i % (RM_INKS.length - 1)]);
       const sh = (v) => (v > 0 && v < 0.5 ? '<1' : String(Math.round(v))) + '%';
       const last = M.ends.length - 1;
-      const colsH = M.ends.map((e, c) => '<div class="rme-col"><div class="rme-st">'
+      const gapAt = M.gapAt || [];
+      const gaps = gapAt.filter(Boolean).length;
+      const colsH = M.ends.map((e, c) => (gapAt[c]
+        ? '<div class="rme-col rme-gapc"><div class="rme-st rme-gap"><span>no comparable figures</span></div><div class="rme-x">' + esc(xl(e)) + '</div></div>'
+        : '<div class="rme-col"><div class="rme-st">'
         + M.parts.map((p, i) => (p.shares[c] > 0 ? '<div class="rme-sg" style="flex:' + p.shares[c].toFixed(3) + ' 0 0;background:' + inkOf(p, i) + '">' + (p.shares[c] >= 7 ? sh(p.shares[c]) : '') + '</div>' : '')).join('')
-        + '</div><div class="rme-x">' + esc(xl(e)) + (M.derivedAt[c] ? '*' : '') + '</div></div>').join('');
+        + '</div><div class="rme-x">' + esc(xl(e)) + (M.derivedAt[c] ? '*' : '') + '</div></div>')).join('');
       const pts = (v) => (Math.abs(v) < 0.5 ? '0' : (v > 0 ? '+' : '\u2212') + Math.round(Math.abs(v))) + ' pts';
       const lg = '<span></span><span class="h" style="text-align:left">As the company reports it</span><span class="h">' + esc(xl(M.ends[0])) + '</span><span class="h">' + esc(xl(M.ends[last])) + '</span><span class="h">Change</span>'
         + M.parts.map((p, i) => { const d = p.shares[last] - p.shares[0];
@@ -7760,7 +7764,8 @@
       const noteE = 'Each column is one ' + (isQ ? 'quarter' : 'fiscal year') + ' of ' + sym + '\u2019s revenue, split into the parts the company reports and shown as shares'
         + (K.complete ? ' of the whole. ' : ' of those parts, which do not add up to all of its revenue. ')
         + 'The change is in percentage points of that share between the first column and the last. '
-        + (M.skipped ? (M.skipped === 1 ? 'One earlier period was' : M.skipped + ' earlier periods were') + ' reported on a different grouping and ' + (M.skipped === 1 ? 'is' : 'are') + ' left out. ' : '')
+        + (gaps ? (gaps === 1 ? 'The dashed column is a ' : 'The ' + gaps + ' dashed columns are ') + (isQ ? (gaps === 1 ? 'quarter' : 'quarters') : (gaps === 1 ? 'year' : 'years')) + ' with no figures on this grouping: the company reported ' + (gaps === 1 ? 'it' : 'them') + ' on a different one, or not separately. ' : '')
+        + (M.skipped > 0 ? (M.skipped === 1 ? 'One earlier period was' : M.skipped + ' earlier periods were') + ' reported on a different grouping and ' + (M.skipped === 1 ? 'is' : 'are') + ' left out. ' : '')
         + (M.derivedAt.some(Boolean) ? 'A fourth quarter (*) is not reported on its own: it is the fiscal year less the three quarters before it. ' : '')
         + 'The names and the groupings are the company\u2019s own, so they cannot be compared with another company\u2019s. '
         + 'A share can fall while the amount grows. What was reported, not a forecast.';
@@ -9291,6 +9296,14 @@
     .rme-sg { display: flex; align-items: center; justify-content: center; min-height: 0; overflow: hidden;
       font: 600 20px var(--mono); color: rgba(8, 12, 24, 0.8); }
     .rme-x { text-align: center; font: 500 19px var(--mono); color: var(--muted); padding-top: 10px; white-space: nowrap; }
+    /* A period with nothing comparable: an empty dashed column, so two
+       columns that are not consecutive never stand side by side. */
+    .rme-st.rme-gap { border: 2px dashed rgba(148, 163, 184, 0.5); align-items: center; justify-content: center; flex-direction: column; }
+    .rme-gap span { font: 500 15px var(--mono); color: var(--muted); text-align: center; padding: 0 6px; line-height: 1.5;
+      text-transform: uppercase; letter-spacing: 0.05em; }
+    .rme-gapc .rme-x { opacity: 0.6; }
+    .sz-story .rme-gap span { font-size: 20px; }
+    .sz-square .rme-gap span { font-size: 12px; }
     .rme-lg { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto auto; column-gap: 20px; row-gap: 8px;
       align-items: center; font-size: 24px; margin: 12px 0 4px; }
     .rme-lg i { width: 22px; height: 22px; border-radius: 5px; display: block; }

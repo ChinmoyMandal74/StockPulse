@@ -12524,7 +12524,7 @@ async function segmentsPayload(symbol) {
           past: at.map((mp) => (mp.has(m.key) ? mp.get(m.key) : null)) })),
         // How the proportions moved, period by period; null where there are too
         // few periods on the same grouping to call it an evolution.
-        mix: Segments.mixOver(K, hist.map((h) => ({ end: h.end, derived: !!h.derived, kind: (h.data.kinds || {})[k] }))) };
+        mix: Segments.mixOver(K, hist.map((h) => ({ end: h.end, derived: !!h.derived, kind: (h.data.kinds || {})[k] })), ptype) };
     });
     if (!kinds.length) return null;
     return { ptype, end: cur.end, fyEnd: cur.end, currency: d.currency || null, total: d.total,
