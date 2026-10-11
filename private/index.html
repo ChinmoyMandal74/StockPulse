@@ -1489,7 +1489,7 @@
         <th class="group grp-trend" data-group="trend" colspan="5">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
         <th class="group grp-fund" data-group="fund" colspan="23">Fundamentals</th>
-        <th class="group grp-own" data-group="own" colspan="8">Ownership</th>
+        <th class="group grp-own" data-group="own" colspan="10">Ownership</th>
         <th rowspan="2"></th>
       </tr>
       <tr>
@@ -1603,6 +1603,8 @@
         <th class="grp-own" data-key="shortPctOutstanding" title="Short interest as % of ALL shares, not just the float — the stricter of the two short measures.">Short<br>% Out</th>
         <th class="grp-own" data-key="insiderPct" title="Percentage of shares held by insiders — founders and management.">Insiders</th>
         <th class="grp-own" data-key="institutionPct" title="Percentage of shares held by institutions — funds, pensions and the like.">Instit.</th>
+        <th class="grp-own" data-key="instManagers" title="How many institutional managers reported holding the stock on Form 13F at the last quarter end the SEC has published. Every manager with more than $100 million in US-listed securities files one within 45 days of the quarter end, so this is a snapshot that is months old, not today's. Long positions in shares only: options are left out. Hover a figure for the quarter. Blank for a fund, and for a stock whose security code could not be matched. Updated once a quarter.">13F<br>holders</th>
+        <th class="grp-own" data-key="instChange" title="The change in the shares held by all 13F filers between them, last published quarter end against the one before, in percent. Up means institutions as a group held more shares than a quarter earlier. It includes managers who newly crossed the $100 million filing line, so a small rise is not always buying. A snapshot that is months old. Blank where either quarter is missing. Updated once a quarter.">13F<br>chg</th>
         <th class="left grp-own" data-key="lastHolder" title="The newest Schedule 13D or 13G filed about the company in the last sixty days: the form, who filed it, the stake they report, and how many days ago. Anyone who comes to hold more than 5% of a company's shares must file one. A 13D is the form for a holder who may seek to influence the company and is shown in bold because it is the rarer of the two; a 13G is the short form for a passive holder such as an index fund. An amendment reports a change, and &quot;no holding&quot; means the stake is no longer reportable. Type 13D in the filter row to find them. Blank when nothing was filed in the window. Which form a holder chose is a fact; it does not say what follows for the share. From the SEC, updated as each company's filings are re-read.">5%<br>filing</th>
       </tr>
     </thead>
@@ -3613,7 +3615,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="109">${s.error}</td>
+            <td class="na" colspan="111">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3743,7 +3745,7 @@
           ${isFund ? naRun(1, 'grp-fund') : periodCell(s)}
           ${isFund ? naRun(1, 'grp-fund') : reportedCell(s)}
           ${resultsCell(s)}
-          ${isFund ? naRun(8, 'grp-own') : `
+          ${isFund ? naRun(10, 'grp-own') : `
           ${bigNumCell(s.sharesOutstanding, null, 'grp-own', cacheTitle)}
           ${bigNumCell(s.floatShares, null, 'grp-own', cacheTitle)}
           ${numCell(s.shortRatio, 'grp-own', cacheTitle)}
@@ -3751,6 +3753,8 @@
           ${shortCell(s.shortPctOutstanding, 'grp-own', cacheTitle)}
           ${marginCell(s.insiderPct, 'grp-own', cacheTitle)}
           ${marginCell(s.institutionPct, 'grp-own', cacheTitle)}
+          ${rangeCell(s.instManagers, 'grp-own', s.instPeriod ? 'Managers reporting a holding at ' + s.instPeriod : '')}
+          ${signedPctCell(s.instChange, 'grp-own', s.instPeriod ? 'Shares held by 13F filers at ' + s.instPeriod + ' against the quarter before' : '')}
           ${lastHolderCell(s)}`}
           ${removeBtn}
         </tr>`;
@@ -3766,7 +3770,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 114;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 116;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3947,7 +3951,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="111">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="113">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

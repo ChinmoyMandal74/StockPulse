@@ -765,6 +765,32 @@ const SCHEMA = [
      primary key (symbol, accn)
    )`,
   'create index if not exists idx_sec_holders_filed on sec_holders (filed)',
+  // Institutional holdings from Form 13F, one row per stock for the newest
+  // quarter on file (2026-10-11): how many managers hold it, the shares
+  // between them, the same for the quarter before, and the largest holders
+  // as JSON. Written by inst13f-load.js on the owner's machine, four times
+  // a year; nothing on a request path computes it.
+  `create table if not exists inst_holdings (
+     symbol        text primary key,
+     period        text not null,
+     prev_period   text,
+     managers      integer,
+     managers_prev integer,
+     shares        real,
+     shares_prev   real,
+     value         real,
+     px            real,
+     added         integer,
+     exited        integer,
+     top           text,
+     at            integer not null
+   )`,
+  // A security's CUSIP beside its ticker, from the SEC's fails-to-deliver
+  // files. Kept because the next data set keyed by CUSIP will want it too.
+  `create table if not exists cusip_map (
+     cusip  text primary key,
+     symbol text not null
+   )`,
   `create table if not exists drawdown_stats (
      symbol    text primary key,
      n         integer,
@@ -4642,6 +4668,65 @@ async function readSecHoldersSince(since) {
     holder: x.holder || '', pct: x.pct == null ? null : Number(x.pct) }));
 }
 
+// ---- institutional holdings (13F) ---------------------------------------
+async function writeInstHoldings(rows) {
+  await init();
+  const list = (rows || []).filter((r) => r && r.symbol && r.period);
+  const now = Date.now();
+  for (let i = 0; i < list.length; i += 100) {
+    await db.batch(list.slice(i, i + 100).map((r) => ({
+      sql: `insert into inst_holdings (symbol, period, prev_period, managers, managers_prev, shares, shares_prev, value, px, added, exited, top, at)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            on conflict(symbol) do update set period = excluded.period, prev_period = excluded.prev_period,
+              managers = excluded.managers, managers_prev = excluded.managers_prev, shares = excluded.shares,
+              shares_prev = excluded.shares_prev, value = excluded.value, px = excluded.px, added = excluded.added,
+              exited = excluded.exited, top = excluded.top, at = excluded.at`,
+      args: [String(r.symbol).toUpperCase(), String(r.period), r.prevPeriod || null, r.managers == null ? null : Number(r.managers),
+        r.managersPrev == null ? null : Number(r.managersPrev), r.shares == null ? null : Number(r.shares),
+        r.sharesPrev == null ? null : Number(r.sharesPrev), r.value == null ? null : Number(r.value), r.px == null ? null : Number(r.px),
+        r.added == null ? null : Number(r.added), r.exited == null ? null : Number(r.exited), JSON.stringify(r.top || []), now],
+    })), 'write');
+  }
+  return list.length;
+}
+
+async function readInstHolding(symbol) {
+  await init();
+  const r = await db.execute({ sql: 'select * from inst_holdings where symbol = ?', args: [String(symbol).toUpperCase()] });
+  if (!r.rows.length) return null;
+  const x = r.rows[0];
+  let top = [];
+  try { top = JSON.parse(x.top || '[]'); } catch { /* an unreadable list is an empty one */ }
+  const n = (v) => (v == null ? null : Number(v));
+  return { symbol: String(x.symbol), period: String(x.period), prevPeriod: x.prev_period || null, managers: n(x.managers),
+    managersPrev: n(x.managers_prev), shares: n(x.shares), sharesPrev: n(x.shares_prev), value: n(x.value), px: n(x.px),
+    added: n(x.added), exited: n(x.exited), top, at: Number(x.at) || 0 };
+}
+
+// Every stock's counts, WITHOUT the holder lists: for the screener's columns.
+async function readInstSummaries() {
+  await init();
+  const r = await db.execute('select symbol, period, managers, shares, shares_prev from inst_holdings');
+  const out = {};
+  for (const x of r.rows) {
+    out[String(x.symbol)] = { period: String(x.period), managers: x.managers == null ? null : Number(x.managers),
+      shares: x.shares == null ? null : Number(x.shares), sharesPrev: x.shares_prev == null ? null : Number(x.shares_prev) };
+  }
+  return out;
+}
+
+async function writeCusipMap(pairs) {
+  await init();
+  const list = (pairs || []).filter((p) => p && p.cusip && p.symbol);
+  for (let i = 0; i < list.length; i += 200) {
+    await db.batch(list.slice(i, i + 200).map((p) => ({
+      sql: 'insert into cusip_map (cusip, symbol) values (?, ?) on conflict(cusip) do update set symbol = excluded.symbol',
+      args: [String(p.cusip), String(p.symbol).toUpperCase()],
+    })), 'write');
+  }
+  return list.length;
+}
+
 // ---- drawdown history, per symbol ----------------------------------------
 // The whole table: about 1,300 short rows, read when the stored readings
 // are rebuilt (every six hours at most) and once a night to pick a slice.
@@ -4836,7 +4921,7 @@ async function readBarsFor(symbols, since) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders',
+const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'cusip_map',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
   'sec_facts', 'sec_state', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
 
@@ -6558,6 +6643,7 @@ module.exports = {
   readDrawdownStats, writeDrawdownStats, readCloseSeries,
   writeSecEvents, readSecEvents, readSecEventsSince,
   writeSecHolders, readSecHolders, readSecHolderAccns, readSecHoldersSince,
+  writeInstHoldings, readInstHolding, readInstSummaries, writeCusipMap,
   readMarginChange, writeMarginChange,
   readEarningsDates,
   barsSpan, coverageRollups,

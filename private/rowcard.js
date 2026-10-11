@@ -461,6 +461,10 @@
     ['own',   'Insiders',       (s) => V.lvl(s.insiderPct)],
     ['own',   'Institutions',   (s) => V.lvl(s.institutionPct)],
     // The newest 13D or 13G filed about the company in the last sixty days.
+    // Form 13F: how many institutional managers held it at the last published
+    // quarter end, and the change in their combined shares on the quarter before.
+    ['own',   '13F holders',    (s) => (ok(s.instManagers) ? { t: Number(s.instManagers).toLocaleString('en-US'), c: '' } : null)],
+    ['own',   '13F shares chg', (s) => V.smag(s.instChange)],
     ['own',   '5% filing',      (s) => (s.lastHolder ? { t: s.lastHolder + (s.lastHolderDate ? ' \u00b7 ' + shortDate(s.lastHolderDate) : ''), c: '' } : null)],
   ];
 

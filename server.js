@@ -5153,7 +5153,7 @@ function filerLabel(st) {
   if (st.status === 'ok' && (st.taxonomy === 'us-gaap' || !st.taxonomy)) return 'US GAAP';
   return null;
 }
-const FLOWS_V = 6;          // bumped when the stored value gains a part
+const FLOWS_V = 7;          // bumped when the stored value gains a part
 const EVENT_RECENT_DAYS = 60;     // how far back the screener's 8-K column looks
 
 // ---- Drawdown history: corrections in five years, and the way back -------
@@ -5190,7 +5190,7 @@ let flowsMem = null;
 let flowsMemAt = 0;
 async function buildFlows() {
   const since = new Date(Date.now() - INSIDER_NET_DAYS * 86400000).toISOString().slice(0, 10);
-  const [sm, ids, net, secState, ddAll, mgAll, evAll, hdAll] = await Promise.all([
+  const [sm, ids, net, secState, ddAll, mgAll, evAll, hdAll, instAll] = await Promise.all([
     shortMovesPayload().catch(() => null),
     filerIds().catch(() => ({})),
     store.readInsiderNetSince(since).catch(() => null),
@@ -5199,7 +5199,13 @@ async function buildFlows() {
     store.readMarginChange().catch(() => null),
     store.readSecEventsSince(new Date(Date.now() - EVENT_RECENT_DAYS * 86400000).toISOString().slice(0, 10)).catch(() => null),
     store.readSecHoldersSince(new Date(Date.now() - EVENT_RECENT_DAYS * 86400000).toISOString().slice(0, 10)).catch(() => null),
+    store.readInstSummaries().catch(() => null),
   ]);
+  // 13F: { SYM: [managers, shares, sharesPrev, period] }.
+  const inst = {};
+  if (instAll) {
+    for (const sym of Object.keys(instAll)) { const x = instAll[sym]; if (x.managers != null) inst[sym] = [x.managers, x.shares, x.sharesPrev, x.period]; }
+  }
   // Each company's NEWEST 13D or 13G in the same window: { SYM: [filed, kind, holder, pct] }.
   const hd = {};
   if (hdAll) {
@@ -5247,6 +5253,7 @@ async function buildFlows() {
     mg: mgAll && mgAll.m ? mgAll.m : null,
     ev: evAll ? ev : null,
     hd: hdAll ? hd : null,
+    inst: instAll ? inst : null,
     shortFrom: sm ? sm.from : null, shortTo: sm ? sm.to : null, short,
     // null, not {}: "the read failed" must not be stored as "nobody traded".
     insiderSince: net ? since : null, insider: net ? insider : null };
@@ -5263,6 +5270,7 @@ async function flowsNow() {
     if (f && !fresh.mg) fresh.mg = f.mg || null;
     if (f && !fresh.ev) fresh.ev = f.ev || null;
     if (f && !fresh.hd) fresh.hd = f.hd || null;
+    if (f && !fresh.inst) fresh.inst = f.inst || null;
     if (f && !fresh.shortTo) { fresh.short = f.short || {}; fresh.shortFrom = f.shortFrom || null; fresh.shortTo = f.shortTo || null; }
     await store.writeFlows(fresh).catch(() => {});
     f = fresh;
@@ -5277,12 +5285,23 @@ function flowsOf(row, f) {
   const out = { shortBuild: null, insiderNet: null, insiderBuyers: null, insiderSellers: null, filer: null,
     ddCount: null, ddMedBack: null, netMarginChg: null, netMarginNow: null, netMarginPrev: null,
     lastEvent: null, lastEventDate: null, lastEventNotable: null,
-    lastHolder: null, lastHolderDate: null, lastHolderActive: null };
+    lastHolder: null, lastHolderDate: null, lastHolderActive: null,
+    instManagers: null, instChange: null, instPeriod: null };
   if (!row || !f) return out;
   // Zero is a real count here (no drawdown of 10% in five years); the median
   // is null when none has recovered, and neither is ever invented.
   // The trailing year's net margin less the year before it, in points. Both
   // ends must be there; a missing one is never read as a margin of zero.
+  // 13F: how many managers held it at the last published quarter end, and
+  // the change in the shares between them on the quarter before. The change
+  // needs both quarters; a missing one is blank, never zero.
+  const i13 = f.inst ? f.inst[String(row.symbol).toUpperCase()] : null;
+  if (i13 && i13[0] != null) {
+    out.instManagers = Number(i13[0]);
+    out.instPeriod = i13[3] || null;
+    const c = Inst13f.change(Number(i13[1]), Number(i13[2]));
+    out.instChange = c == null || !isFinite(c) ? null : Math.round(c * 10) / 10;
+  }
   // The newest 13D or 13G in the window: the form, who, and how much.
   const h13 = f.hd ? f.hd[String(row.symbol).toUpperCase()] : null;
   if (h13 && h13[0]) {
@@ -5348,6 +5367,9 @@ async function stampFlows(rows) {
     r.lastHolder = v.lastHolder;
     r.lastHolderDate = v.lastHolderDate;
     r.lastHolderActive = v.lastHolderActive;
+    r.instManagers = v.instManagers;
+    r.instChange = v.instChange;
+    r.instPeriod = v.instPeriod;
   }
 }
 
@@ -11756,6 +11778,7 @@ async function earnGrowthFor(cutIn) {
 const Margins = require('./margins.js');
 const Events8k = require('./events8k.js');
 const Holders13 = require('./holders13.js');
+const Inst13f = require('./inst13f.js');
 const HOLDER_DOCS = 3;             // documents fetched per company per refresh
 const mgCache = {};
 const mgWarm = (cut) => !!(mgCache[cut] && Date.now() - mgCache[cut].at < EG_TTL_MS);
@@ -12379,6 +12402,41 @@ const ShortInt = require('./shortint.js');
 //
 // DISPLAY ONLY. Which form a holder chose is a fact; nothing here says
 // what it means for the share.
+// ---- institutional holdings (Form 13F) for one stock ----------------------------
+// Who held it at the last quarter end the SEC has published: how many
+// managers, the shares between them, the largest, and the change on the
+// quarter before. Loaded by inst13f-load.js; this only reads one row.
+//
+// DISPLAY ONLY, and a quarter-end snapshot that is months old by the time
+// it can be shown. The payload carries the quarter so no surface can
+// present it as current.
+app.get('/api/institutions', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  const h = await store.readInstHolding(symbol);
+  if (!h) return res.json({ symbol, holding: null });
+  // Shares outstanding from the profile: one row, not the snapshot.
+  let out = null;
+  try { const p = await store.readProfile(symbol); out = p && Number(p.sharesOutstanding) > 0 ? Number(p.sharesOutstanding) : null; } catch { out = null; }
+  // A total far past every share that exists is not double counting, it is a
+  // share count for the wrong class (see inst13f.js, summarise). Past one and
+  // a half times, no percentage of the company is offered at all.
+  if (out && h.shares > out * 1.5) out = null;
+  const pct = Inst13f.pctOf(h.shares, out);
+  res.json({ symbol, holding: {
+    period: h.period, quarter: Inst13f.quarterName(h.period), prevQuarter: Inst13f.quarterName(h.prevPeriod),
+    managers: h.managers, managersPrev: h.managersPrev, shares: h.shares, sharesPrev: h.sharesPrev,
+    sharesChange: Inst13f.change(h.shares, h.sharesPrev), value: h.value, px: h.px, added: h.added, exited: h.exited,
+    sharesOut: out, pct,
+    top: (h.top || []).map((t) => ({ name: t.name, shares: t.shares, pct: Inst13f.pctOf(t.shares, out),
+      isNew: t.prev === 0, change: t.prev > 0 ? Inst13f.change(t.shares, t.prev) : null })),
+  } });
+}));
+
 // One company's filings as the page and the card both read them. A function
 // declaration, so the saved-post route above can call it.
 async function holdersPayload(symbol) {

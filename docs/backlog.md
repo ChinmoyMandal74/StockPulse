@@ -1701,7 +1701,7 @@ or red for a margin. Reported figures only, never a forecast.
 
 ## 36. More public SEC data: 13F holdings, and what 8-K events could still feed — 2026-10-11
 
-*Area: Data · Status: Open · Note: 8-K events built 2026-10-11 (docs/context/8k-events.md); 13F and the follow-ons remain*
+*Area: Data · Status: Partly done · Note: 8-K events and 13F holdings built 2026-10-11 (docs/context/8k-events.md, institutional-holdings-13f.md); b to e remain*
 
 **Where this came from.** The owner found FilingRail, a third-party API on
 RapidAPI (a small publisher; about 8,200 SEC filers, refreshed daily), and
@@ -1722,7 +1722,7 @@ slow sequential reader already handles it.
 **Built: 8-K events**, from the feed the filings refresh already
 downloads. A stock-page list, a screener column, a text filter.
 
-**a. 13F institutional holdings. Not built.** What large institutions held
+**a. 13F institutional holdings. Built 2026-10-11** (see docs/context/institutional-holdings-13f.md; the CUSIP map came from the fails-to-deliver files). What large institutions held
 at each quarter end and how it changed. The SEC publishes it as free
 quarterly bulk files (one row per manager per security). Things to settle
 before building:

@@ -1039,6 +1039,19 @@
     /* The heading and its count share a row, and at 390px they overlapped —
        `.sec-h` is shared with #sec and #ins, so the wrap is scoped here
        rather than changed underneath them. */
+    /* Institutional holders: the 13F quarter, its figures and its largest. */
+    #inst .sum { display: flex; gap: 26px; flex-wrap: wrap; margin: 0 0 16px; }
+    #inst .fig { display: flex; flex-direction: column; gap: 3px; }
+    #inst .fig .k { color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); }
+    #inst .fig .v { font-family: var(--mono); font-size: 19px; color: var(--text); }
+    #inst .fig .x { color: var(--muted); font-size: 11.5px; }
+    #inst table { width: 100%; border-collapse: collapse; }
+    #inst th { text-align: left; font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.06em;
+               color: var(--faint); padding: 0 12px 7px 0; }
+    #inst td { padding: 7px 12px 7px 0; border-top: 1px solid var(--hair); font-size: 12.5px; }
+    #inst td.n, #inst th.n { text-align: right; font-family: var(--mono); white-space: nowrap; }
+    #inst td.c { color: var(--muted); }
+    #inst .inote { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
     /* Large holders: the 13D and 13G filings, one line each. */
     #hold table { width: 100%; border-collapse: collapse; }
     #hold th { text-align: left; font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.06em;
@@ -3410,6 +3423,13 @@
              Its own card again: what the company files, what its officers do
              with their own money, and what the rest of the market has bet
              against it are three different questions. -->
+        <section class="bezel card" id="inst" data-jump="Institutions" data-icon="i-users" hidden><div class="core">
+          <div class="sec-h"><h2>Institutional holders</h2>
+            <span id="instWin" style="font-size:11.5px;color:var(--faint);font-family:var(--mono)"></span>
+          </div>
+          <div id="instBody"></div>
+        </div></section>
+
         <section class="bezel card" id="hold" data-jump="Large holders" data-icon="i-users" hidden><div class="core">
           <div class="sec-h"><h2>Large holders</h2>
             <span id="holdWin" style="font-size:11.5px;color:var(--faint);font-family:var(--mono)"></span>
@@ -4578,6 +4598,43 @@
         } catch { card.remove(); }
       }
 
+      // Institutional holders: the 13F quarter. A snapshot of a quarter end
+      // that is months old by the time it can be shown, so the quarter is
+      // in the heading and in every figure's label, never left implied.
+      async function loadInstitutions() {
+        const card = document.getElementById('inst');
+        if (!card) return;
+        try {
+          const r = await fetch('/api/institutions?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
+          if (!r.ok) { card.remove(); return; }
+          const h = (await r.json()).holding;
+          if (!h || !h.managers) { card.remove(); return; }
+          const sh = (v) => (v == null ? '\u2014' : v >= 1e9 ? (v / 1e9).toFixed(2) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(0) + 'K' : String(Math.round(v)));
+          const usd = (v) => (v == null ? '\u2014' : '$' + (v >= 1e12 ? (v / 1e12).toFixed(2) + 'T' : v >= 1e9 ? (v / 1e9).toFixed(1) + 'B' : (v / 1e6).toFixed(0) + 'M'));
+          const sg = (v, d) => (v == null ? '\u2014' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(d == null ? 1 : d) + '%');
+          const pc = (v) => (v == null ? '\u2014' : v.toFixed(v >= 10 ? 1 : 2) + '%');
+          const fig = (k, v, x) => '<div class="fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span>' + (x ? '<span class="x">' + esc(x) + '</span>' : '') + '</div>';
+          // More than every share that exists is double counting between related
+          // managers, not a holding, and is said rather than printed as one.
+          const over = h.pct != null && h.pct > 100;
+          document.getElementById('instWin').textContent = 'as of ' + h.quarter + ' (' + h.period + ')';
+          document.getElementById('instBody').innerHTML = '<div class="sum">'
+            + fig('Managers holding', Number(h.managers).toLocaleString('en-US'), h.managersPrev == null ? '' : Number(h.managersPrev).toLocaleString('en-US') + ' in ' + h.prevQuarter)
+            + fig('Shares held', sh(h.shares), h.pct == null ? '' : over ? 'more than every share: related managers report the same ones' : pc(h.pct) + ' of shares outstanding')
+            + fig('Change on the quarter', sg(h.sharesChange), h.added == null ? '' : h.added + ' new, ' + h.exited + ' gone')
+            + fig('Worth', usd(h.value), h.px == null ? '' : 'at $' + h.px.toFixed(2) + ', the quarter-end price')
+            + '</div>'
+            + '<table><thead><tr><th>Largest holders, ' + esc(h.quarter) + '</th><th class="n">Shares</th><th class="n">Of the company</th><th class="n">On the quarter</th></tr></thead><tbody>'
+            + (h.top || []).map((t) => '<tr><td>' + esc(t.name) + '</td><td class="n">' + esc(sh(t.shares)) + '</td><td class="n">' + esc(pc(t.pct)) + '</td>'
+              + '<td class="n c">' + esc(t.isNew ? 'new' : sg(t.change)) + '</td></tr>').join('')
+            + '</tbody></table>'
+            + '<p class="inote">From Form 13F, which every institutional manager with more than $100 million in US-listed securities files within 45 days of a quarter end. '
+            + 'It is a snapshot of ' + esc(h.quarter) + ', not of today, and it counts long positions in shares only: options are left out, short positions are never reported, and smaller managers and individuals do not file. '
+            + 'Related managers sometimes report the same shares, so the total can overstate. Names are as filed. Updated once a quarter.</p>';
+          card.hidden = false;
+        } catch { card.remove(); }
+      }
+
       // Large holders: the 13D and 13G filings about this company, newest
       // first. One line per FILING, so a holder who amends five times is
       // five lines; the newest line for a name is where that holder stands.
@@ -4747,6 +4804,7 @@
       loadDrawdowns();
       loadEvents();
       loadHolders();
+      loadInstitutions();
       const nb = document.getElementById('newsBtn');
       if (nb) nb.addEventListener('click', () => loadNews(true));
     })();
