@@ -50,6 +50,7 @@
   // cache it themselves.
   let getShortMoves = () => null;
   let getEarnGrowth = () => null;
+  let getMargins = () => null;
   let getLineSeries = () => null;
   // One symbol’s month-end closes and the index’s, or null while it loads.
   let getMonths = () => null;
@@ -7437,6 +7438,132 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Margins: a group's profit as a share of its revenue, over time -------
+  //
+  // (2026-10-10, the owner: "is there good data on understanding corporate
+  // margin", then "yes build".) The filings held every company's revenue
+  // and profit by quarter and nothing added them up. This is the index-level
+  // line the commentary quotes, made from the members' own filings: the
+  // group's total profit over its total revenue for the four quarters ending
+  // at each point, then each sector now beside a year ago.
+  //
+  // THE ARITHMETIC IS margins.js ON THE SERVER, and the rules that matter
+  // are argued there: a total over a total and never an average of
+  // margins, a trailing year at every point so the line is not the
+  // calendar, and the same companies at every point so an arrival is not
+  // drawn as a change. The card prints how many companies that left.
+  //
+  // BLUE AND ORANGE FOR A MARGIN THAT WIDENED OR NARROWED, never green and
+  // red: a margin is not a price, and the Short moves card's reason holds.
+  const MG_METRICS = [['net', 'Net margin'], ['op', 'Operating margin'], ['gross', 'Gross margin'], ['fcf', 'Free cash flow margin']];
+  const MG_WHAT = { net: 'net income', op: 'operating income', gross: 'gross profit', fcf: 'free cash flow' };
+  const MG_ROWS = { portrait: 11, square: 5, story: 11 };
+  const MG_H = { portrait: 300, square: 190, story: 480 };
+  function marginsNeed(tpl, opts) {
+    if (tpl !== 'margins') return null;
+    const c = opts && opts.mgSp500;
+    return { cut: EGR_CUTS.some(([k]) => k === c) ? c : 'in' };
+  }
+  const mgQ = (q) => 'Q' + q.slice(5) + ' \u2019' + q.slice(2, 4);
+  // One line at its true pixel size, so the text inside it is safe.
+  function mgChart(series, quarters, w, h, fs, color) {
+    const vals = series.filter((v) => v != null);
+    if (vals.length < 2) return '';
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const pad = Math.max(0.3, (hi - lo) * 0.18);
+    lo -= pad; hi += pad;
+    const span = hi - lo;
+    const step = [0.25, 0.5, 1, 2, 5, 10, 20].find((s) => span / s <= 4) || 20;
+    const dp = step < 1 ? (step < 0.5 ? 2 : 1) : 0;
+    const left = Math.ceil((hi.toFixed(dp).length + 1) * fs * 0.62) + 14, right = fs;
+    const y0 = fs * 0.9, y1 = h - fs * 2.2, n = series.length;
+    const X = (i) => left + (i / (n - 1)) * (w - left - right);
+    const Y = (v) => y0 + (hi - v) / span * (y1 - y0);
+    let out = '<svg class="mg-svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" role="img">';
+    for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9; t += step) {
+      out += '<line class="mg-grid" x1="' + left + '" x2="' + (w - right) + '" y1="' + Y(t).toFixed(1) + '" y2="' + Y(t).toFixed(1) + '"/>'
+        + '<text class="mg-ax" x="' + (left - 10) + '" y="' + (Y(t) + fs * 0.34).toFixed(1) + '" text-anchor="end" font-size="' + fs + '">' + esc(t.toFixed(dp) + '%') + '</text>';
+    }
+    // A label each year back from the newest point, which is always labelled.
+    for (let i = n - 1; i >= 0; i -= 4) {
+      out += '<text class="mg-ax" x="' + X(i).toFixed(1) + '" y="' + (h - fs * 0.5).toFixed(1) + '" text-anchor="'
+        + (i === n - 1 ? 'end' : i === 0 ? 'start' : 'middle') + '" font-size="' + fs + '">' + esc(mgQ(quarters[i])) + '</text>';
+    }
+    let d = '', pen = false;
+    series.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); pen = true; });
+    out += '<path class="mg-line" style="stroke:' + color + '" d="' + d + '"/>';
+    // The year-ago point and the newest, which are the two the headline compares.
+    for (const i of [n - 5, n - 1]) {
+      if (i >= 0 && series[i] != null) out += '<circle class="mg-dot" style="fill:' + color + '" cx="' + X(i).toFixed(1) + '" cy="' + Y(series[i]).toFixed(1) + '" r="' + (fs * 0.42).toFixed(1) + '"/>';
+    }
+    return out + '</svg>';
+  }
+
+  function tplMargins() {
+    const cut = marginsNeed('margins', O).cut;
+    const cutName = (EGR_CUTS.find(([k]) => k === cut) || EGR_CUTS[0])[1];
+    const metric = MG_METRICS.some(([k]) => k === O.mgMetric) ? O.mgMetric : 'net';
+    const mName = (MG_METRICS.find(([k]) => k === metric) || MG_METRICS[0])[1];
+    const d = getMargins(cut);
+    if (!d) return chromeTop() + '<div class="s-body"><div class="s-empty">Reading the filings\u2026</div></div>' + chromeFoot();
+    const M = d.metrics && d.metrics[metric];
+    const shell = (msg) => chromeTop() + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc(cutName) + '</span><h2 class="s-title">' + esc(mName) + '</h2>'
+      + '<p class="s-sub wide" style="--fs:20px">' + esc(msg) + '</p></div></div>' + chromeFoot();
+    if (!M || !M.n || !Array.isArray(M.series) || M.series.length < 5) {
+      return shell('Too few companies here have every quarter on file to add up ' + mName.toLowerCase() + ' over this window.');
+    }
+    const S = M.series, n = S.length, now = S[n - 1], ago = S[n - 5], first = S[0];
+    const up = pal.ink('#60a5fa'), dn = pal.ink('#fb923c');
+    const p1 = (v) => (v == null ? '\u2014' : (v < 0 ? '\u2212' : '') + Math.abs(v).toFixed(1) + '%');
+    const pts = (v) => (v == null ? '\u2014' : Math.abs(v) < 0.05 ? '0.0' : (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(1));
+    const tone = (v) => (v == null || Math.abs(v) < 0.05 ? 'var(--muted)' : v > 0 ? up : dn);
+    const chg = now != null && ago != null ? now - ago : null;
+    const hi = Math.max(...S.filter((v) => v != null)), lo = Math.min(...S.filter((v) => v != null));
+    const stats = '<div class="mg-stats">'
+      + '<div><b>' + esc(p1(now)) + '</b><span>' + esc('the year to ' + mgQ(d.quarters[n - 1])) + '</span></div>'
+      + '<div><b style="color:' + tone(chg) + '">' + esc(pts(chg)) + '</b><span>points on a year earlier</span></div>'
+      + '<div><b>' + esc(p1(lo) + ' to ' + p1(hi)) + '</b><span>' + esc('range since ' + mgQ(d.quarters[0])) + '</span></div>'
+      + '</div>';
+    const fs = size.id === 'story' ? 24 : size.id === 'square' ? 16 : 18;
+    const chart = mgChart(S, d.quarters, 952, MG_H[size.id] || 300, fs, pal.ink('#60a5fa'));
+
+    // Sectors: now, and against a year ago. Largest margin first.
+    const secs = (M.sectors || []).slice().sort((a, b) => b.now - a.now).slice(0, MG_ROWS[size.id] || 11);
+    const SZ = ({ portrait: { f: 22, b: 20 }, square: { f: 18, b: 14 }, story: { f: 31, b: 32 } })[size.id] || { f: 22, b: 20 };
+    const negMax = Math.max(0, ...secs.map((r) => -r.now)), posMax = Math.max(0, ...secs.map((r) => r.now));
+    const sp = Math.max(1e-9, negMax + posMax), zero = negMax / sp * 100;
+    const vw = Math.ceil(Math.max(5, ...secs.map((r) => p1(r.now).length)) * SZ.f * 0.62) + 6;
+    const cw = Math.ceil(Math.max(5, ...secs.map((r) => pts(r.prev == null ? null : r.now - r.prev).length)) * SZ.f * 0.62) + 6;
+    const cols = 'minmax(0,36%) minmax(0,1fr) ' + vw + 'px ' + cw + 'px';
+    const secHtml = secs.length ? '<div class="bx-rows">'
+      + '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Sector</span>'
+      + '<span style="grid-column:2 / 4">' + esc(mName + ', latest year') + '</span><span class="sb-hr">vs yr ago</span></div>'
+      + secs.map((r) => {
+        const w = Math.abs(r.now) / sp * 100, left = r.now < 0 ? zero - w : zero;
+        const c = r.prev == null ? null : r.now - r.prev;
+        return '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+          + '<span class="bx-n ix-n"><span class="ix-t">' + esc(r.sector) + '</span><span class="ix-c cor-cn">' + r.n + '</span></span>'
+          + '<span class="bx-t" style="height:' + SZ.b + 'px"><span class="bx-f" style="left:' + left.toFixed(2) + '%;width:' + Math.max(0.6, w).toFixed(2) + '%"></span>'
+          + (negMax > 0 ? '<span class="bx-z" style="left:' + zero.toFixed(2) + '%"></span>' : '') + '</span>'
+          + '<span class="bx-v">' + esc(p1(r.now)) + '</span>'
+          + '<span class="bx-v" style="color:' + tone(c) + '">' + esc(pts(c)) + '</span></div>';
+      }).join('') + '</div>' : '';
+
+    const note = mName + ' here is the companies\u2019 combined ' + MG_WHAT[metric] + ' over their combined revenue, for the four quarters ending at each point, from their own filings. '
+      + M.n.toLocaleString('en-US') + ' of ' + Number(d.members).toLocaleString('en-US') + ' companies have every quarter on file and are the only ones counted, so the line is the same companies throughout. '
+      + (metric === 'gross' ? 'Banks and insurers report no gross profit and are not in this one. ' : '')
+      + 'The latest point is the newest quarter most of them have filed. '
+      + 'Since ' + mgQ(d.quarters[0]) + ' it has gone from ' + p1(first) + ' to ' + p1(now) + '. What was reported, not a forecast.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc(cutName + ' \u00b7 ' + M.n.toLocaleString('en-US') + ' companies \u00b7 ' + mgQ(d.quarters[0]) + ' to ' + mgQ(d.quarters[n - 1])) + '</span>'
+      + '<h2 class="s-title">' + esc(mName) + '<span class="dim">profit as a share of revenue</span></h2>'
+      + stats + '<div class="mg-chart">' + chart + '</div>' + secHtml
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Corrections: how many companies are in one ---------------------------
   //
   // (2026-10-10, backlog 34b.) An index can sit near its high while much of
@@ -8408,6 +8535,7 @@
     shortbuild: tplShortBuild,
     earnahead: tplEarnAhead,
     corrections: tplCorrections,
+    margins: tplMargins,
     drawdown: tplDrawdown,
     evo2: tplEvoTwo,
     industries: tplIndustries,
@@ -8638,6 +8766,22 @@
     .sb-hd .sb-hr { text-align: right; }
     .sz-square .sb-hd { font-size: 13px; }
     .sz-story .sb-hd { font-size: 20px; }
+    /* Margins: three headline figures, then one line at its true size. */
+    .mg-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
+    .mg-stats div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .mg-stats b { font: 700 40px var(--mono); color: var(--text); white-space: nowrap; }
+    .mg-stats span { font-size: 18px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mg-chart { margin-top: 16px; }
+    .mg-chart .mg-svg { display: block; }
+    .mg-chart .mg-grid { stroke: var(--hair); stroke-width: 1; }
+    .mg-chart .mg-ax { fill: var(--faint); font-family: var(--mono); }
+    .mg-chart .mg-line { fill: none; stroke-width: 5; stroke-linejoin: round; stroke-linecap: round; }
+    .sz-square .mg-stats { margin-top: 12px; }
+    .sz-square .mg-stats b { font-size: 30px; }
+    .sz-square .mg-stats span { font-size: 15px; }
+    .sz-square .mg-chart { margin-top: 8px; }
+    .sz-story .mg-stats b { font-size: 54px; }
+    .sz-story .mg-stats span { font-size: 24px; }
     /* Corrections: the four indexes, the stacked bar of states, its key, and
        a thin copy of the bar on each sector row. */
     .cor-idx { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
@@ -10593,6 +10737,7 @@
     shortBuildRanks: () => Object.keys(SBA_RANKS).map((k) => [k, SBA_RANKS[k]]),
     earnAheadWindows: () => Object.keys(EA_WINS).map((k) => [k, EA_WINS[k]]),
     earnAheadWindow: eaWindow,
+    marginsNeed, marginMetrics: () => MG_METRICS.map((p) => p.slice()),
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.
     drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
@@ -10694,6 +10839,7 @@
       getEvolution = c.getEvolution || (() => null);
       getShortMoves = c.getShortMoves || (() => null);
       getEarnGrowth = c.getEarnGrowth || (() => null);
+      getMargins = c.getMargins || (() => null);
       getLineSeries = c.getLineSeries || (() => null);
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);

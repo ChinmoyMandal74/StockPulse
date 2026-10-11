@@ -2785,6 +2785,25 @@ async function deleteAccessRequest(id) {
   return Number(r.rowsAffected || 0) > 0;
 }
 
+// Each company's trailing-year net margin now and a year before, as one
+// stored value: { at, m: { SYM: [now, prev] } }. Built from the filings
+// once a day (server.js, marginChangeBuild) and read into the screener's
+// stored readings.
+async function readMarginChange() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'margin_chg'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value); } catch { return null; }
+}
+
+async function writeMarginChange(obj) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('margin_chg', ?)",
+    args: [JSON.stringify(obj || {})],
+  });
+}
+
 async function readIgToken() {
   await init();
   const r = await db.execute("select value from app_meta where key = 'ig_token'");
@@ -6410,6 +6429,7 @@ module.exports = {
   markRefreshPrices, readBarsFullFor, readBarsWindow, notePricePull, readPriceState,
   readPriceExtremes, writePriceExtremes, maxCloseBetween, firstBarDates,
   readDrawdownStats, writeDrawdownStats, readCloseSeries,
+  readMarginChange, writeMarginChange,
   readEarningsDates,
   barsSpan, coverageRollups,
   knownListings,

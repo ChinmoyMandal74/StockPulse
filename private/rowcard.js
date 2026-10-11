@@ -397,6 +397,9 @@
     ['fund',  'Earn grth Q YoY',(s) => V.pct(s.earningsGrowthYoY)],
     ['fund',  'Rev grth Q YoY', (s) => V.pct(s.revenueGrowthYoY)],
     ['fund',  'Profit margin',  (s) => V.pct(s.profitMargin)],
+    // The trailing year's net margin less the year before it, in points,
+    // from the company's own filings.
+    ['fund',  'Margin change',  (s) => (ok(s.netMarginChg) ? { t: (s.netMarginChg > 0 ? '+' : s.netMarginChg < 0 ? '\u2212' : '') + Math.abs(s.netMarginChg).toFixed(1) + ' pts', c: '' } : null)],
     ['fund',  'ROE',            (s) => V.pct(s.roe)],
     // PEG leads the three P/E rows rather than sitting between them, the
     // screener's own column order since 2026-10-04: a PEG is a P/E with

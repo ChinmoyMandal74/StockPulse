@@ -5153,7 +5153,7 @@ function filerLabel(st) {
   if (st.status === 'ok' && (st.taxonomy === 'us-gaap' || !st.taxonomy)) return 'US GAAP';
   return null;
 }
-const FLOWS_V = 3;          // bumped when the stored value gains a part
+const FLOWS_V = 4;          // bumped when the stored value gains a part
 
 // ---- Drawdown history: corrections in five years, and the way back -------
 //
@@ -5189,12 +5189,13 @@ let flowsMem = null;
 let flowsMemAt = 0;
 async function buildFlows() {
   const since = new Date(Date.now() - INSIDER_NET_DAYS * 86400000).toISOString().slice(0, 10);
-  const [sm, ids, net, secState, ddAll] = await Promise.all([
+  const [sm, ids, net, secState, ddAll, mgAll] = await Promise.all([
     shortMovesPayload().catch(() => null),
     filerIds().catch(() => ({})),
     store.readInsiderNetSince(since).catch(() => null),
     store.readSecState().catch(() => null),
     store.readDrawdownStats().catch(() => null),
+    store.readMarginChange().catch(() => null),
   ]);
   // [count, median days back to the high], and only for a symbol with
   // enough history to have a count at all.
@@ -5229,6 +5230,8 @@ async function buildFlows() {
     }
   }
   return { v: FLOWS_V, at: Date.now(), filer: secState ? filer : null, dd: ddAll ? dd : null,
+    // { SYM: [margin now, margin a year before] }, as stored.
+    mg: mgAll && mgAll.m ? mgAll.m : null,
     shortFrom: sm ? sm.from : null, shortTo: sm ? sm.to : null, short,
     // null, not {}: "the read failed" must not be stored as "nobody traded".
     insiderSince: net ? since : null, insider: net ? insider : null };
@@ -5242,6 +5245,7 @@ async function flowsNow() {
     if (f && !fresh.insider) { fresh.insider = f.insider || null; fresh.insiderSince = f.insiderSince || null; }
     if (f && !fresh.filer) fresh.filer = f.filer || null;
     if (f && !fresh.dd) fresh.dd = f.dd || null;
+    if (f && !fresh.mg) fresh.mg = f.mg || null;
     if (f && !fresh.shortTo) { fresh.short = f.short || {}; fresh.shortFrom = f.shortFrom || null; fresh.shortTo = f.shortTo || null; }
     await store.writeFlows(fresh).catch(() => {});
     f = fresh;
@@ -5254,10 +5258,18 @@ async function flowsNow() {
 // which is a different statement from "its insiders netted to nothing".
 function flowsOf(row, f) {
   const out = { shortBuild: null, insiderNet: null, insiderBuyers: null, insiderSellers: null, filer: null,
-    ddCount: null, ddMedBack: null };
+    ddCount: null, ddMedBack: null, netMarginChg: null, netMarginNow: null, netMarginPrev: null };
   if (!row || !f) return out;
   // Zero is a real count here (no drawdown of 10% in five years); the median
   // is null when none has recovered, and neither is ever invented.
+  // The trailing year's net margin less the year before it, in points. Both
+  // ends must be there; a missing one is never read as a margin of zero.
+  const g = f.mg ? f.mg[String(row.symbol).toUpperCase()] : null;
+  if (g && g[0] != null && g[1] != null && isFinite(Number(g[0])) && isFinite(Number(g[1]))) {
+    out.netMarginNow = Number(g[0]);
+    out.netMarginPrev = Number(g[1]);
+    out.netMarginChg = Math.round((out.netMarginNow - out.netMarginPrev) * 100) / 100;
+  }
   const d = f.dd ? f.dd[String(row.symbol).toUpperCase()] : null;
   if (d && d[0] != null && isFinite(Number(d[0]))) {
     out.ddCount = Number(d[0]);
@@ -5294,6 +5306,9 @@ async function stampFlows(rows) {
     r.filer = v.filer;
     r.ddCount = v.ddCount;
     r.ddMedBack = v.ddMedBack;
+    r.netMarginChg = v.netMarginChg;
+    r.netMarginNow = v.netMarginNow;
+    r.netMarginPrev = v.netMarginPrev;
   }
 }
 
@@ -10767,6 +10782,11 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const lnNeed = Cards.linesNeed(post.tpl, { stocks, myLists, screens, size: POST_SIZES[post.size], opts: post.opts || {} });
   if (lnNeed) { try { lines = await lineSeriesFor(lnNeed.symbols, lnNeed.quarters); } catch { lines = null; } }
 
+  // The Margins card, likewise.
+  let mgins = null;
+  const mgNeed = Cards.marginsNeed(post.tpl, post.opts || {});
+  if (mgNeed) { try { mgins = await marginsFor(mgNeed.cut); } catch { mgins = null; } }
+
   // The earnings-growth card, likewise only when the template asks.
   let egrow = null;
   const egNeed = Cards.earnGrowthNeed(post.tpl, post.opts || {});
@@ -10793,6 +10813,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       // asks, which is the module's own question, never a list here.
       getShortMoves: () => smov,
       getEarnGrowth: () => egrow,
+      getMargins: () => mgins,
       getLineSeries: () => lines,
       getHistory: () => hist,
       getEvolution: (s) => (Object.prototype.hasOwnProperty.call(evoBySym, s) ? evoBySym[s] : evo),
@@ -11651,6 +11672,76 @@ async function earnGrowthFor(cutIn) {
   egCache[cut] = { at: Date.now(), body };
   return body;
 }
+// ---- corporate margins, from the filings --------------------------------------
+// The data behind the Margins card: a group's total profit over its total
+// revenue, a trailing year at every point, and each sector now beside a
+// year ago. The arithmetic and its rules are margins.js; this reads the
+// filings for it, exactly as earnGrowthFor above does and for the same
+// members, counted once per company.
+//
+// WHAT IT READS: five and a half years of filings per member, an indexed
+// seek per symbol. About one and a half times the earnings-growth read, so
+// roughly 36,000 rows for the S&P 500. Cached half an hour.
+//
+// DISPLAY ONLY. Nothing here is read by the rules.
+const Margins = require('./margins.js');
+const mgCache = {};
+const mgWarm = (cut) => !!(mgCache[cut] && Date.now() - mgCache[cut].at < EG_TTL_MS);
+async function marginsFor(cutIn) {
+  const cut = EG_FUND[cutIn] || cutIn === 'All' ? cutIn : 'in';
+  if (mgWarm(cut)) return mgCache[cut].body;
+  const universe = await store.readUniverse();
+  const tracked = new Set(universe);
+  let syms = universe; let asOf = null;
+  if (cut !== 'All') {
+    const h = await store.readFundHoldings(EG_FUND[cut]);
+    asOf = h.asOf;
+    syms = h.holdings.map((x) => x.symbol).filter((s) => tracked.has(s));
+  }
+  const ids = await filerIds().catch(() => ({}));
+  const seen = new Set();
+  syms = syms.filter((s) => { const c = ids[String(s).toUpperCase()]; if (!c) return true; if (seen.has(c)) return false; seen.add(c); return true; });
+  // Each company's sector, from the same index the group pages use.
+  const sectorOf = {};
+  try { for (const [sec, list] of (await groupIndex()).sector) for (const s of list) sectorOf[s] = sec; } catch { /* a card without its sector rows */ }
+  const since = new Date(Date.now() - 5.6 * 365 * 86400000).toISOString().slice(0, 10);
+  const facts = await store.readSecFactsSince(syms, since);
+  const members = syms.map((s) => ({ symbol: s, sector: sectorOf[s] || null, rows: SecFacts.latestFilled(facts.get(s) || []) }));
+  const built = Margins.build(members, { points: 17 });
+  const body = Object.assign({ cut, asOf, at: Date.now() }, built || { members: syms.length, quarters: [], metrics: {} });
+  mgCache[cut] = { at: Date.now(), body };
+  return body;
+}
+app.get('/api/margins', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const cut = String(req.query.cut || 'in');
+  const key = EG_FUND[cut] || cut === 'All' ? cut : 'in';
+  if (!mgWarm(key) && await standAside(res)) return;
+  res.json(await marginsFor(key));
+}));
+
+// EVERY COMPANY'S MARGIN NOW AGAINST A YEAR AGO, for the screener column.
+// Two and a half years of filings for the whole universe, about 20,000
+// rows, once a day on the daily check: a filing lands a few times a year,
+// so a day is as fresh as this can usefully be. Stored as one value and
+// folded into the screener's stored readings (buildFlows).
+async function marginChangeBuild(opts = {}) {
+  const universe = await store.readUniverse();
+  const since = new Date(Date.now() - 2.7 * 365 * 86400000).toISOString().slice(0, 10);
+  const facts = await store.readSecFactsSince(universe, since);
+  const today = new Date().toISOString().slice(0, 10);
+  const m = {};
+  for (const sym of universe) {
+    const rows = facts.get(String(sym).toUpperCase());
+    if (!rows) continue;
+    const c = Margins.change(SecFacts.latestFilled(rows), today);
+    if (c) m[String(sym).toUpperCase()] = [Math.round(c.now * 100) / 100, Math.round(c.prev * 100) / 100];
+  }
+  // A read that found nothing is not written over a value that has figures.
+  if (!opts.dry && Object.keys(m).length) await store.writeMarginChange({ at: Date.now(), m });
+  return { companies: Object.keys(m).length, universe: universe.length };
+}
+
 app.get('/api/earnings-growth', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const cut = String(req.query.cut || 'in');
@@ -15766,6 +15857,15 @@ app.get('/api/cron/watchdog', route(async (req, res) => {
     }
     catch (err) { console.warn('watchdog: drawdown slice skipped:', err.message); }
   }
+  // Each company's margin against a year ago, rebuilt whole (see
+  // marginChangeBuild). Bounded and swallowed like the slice above it.
+  let margins = null;
+  if (req.query.dry !== '1') {
+    try {
+      margins = await Promise.race([marginChangeBuild(),
+        new Promise((ok) => setTimeout(() => ok({ timedOut: true }), 45000))]);
+    } catch (err) { console.warn('watchdog: margin change skipped:', err.message); }
+  }
   // The Instagram token, on the same daily pass: igToken refreshes it when a
   // week has gone by, so sixty days never run out between posts. A refresh
   // that fails is worth a letter -- the alternative is finding out from a
@@ -15789,7 +15889,7 @@ app.get('/api/cron/watchdog', route(async (req, res) => {
       }
     } catch (err) { console.warn('watchdog: instagram token check skipped:', err.message); }
   }
-  res.json({ ok: true, ...today, alert: bad, mailed, instagram, drawdowns });
+  res.json({ ok: true, ...today, alert: bad, mailed, instagram, drawdowns, margins });
 }));
 
 // ---- intraday price refreshes -------------------------------------------------

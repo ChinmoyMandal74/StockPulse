@@ -1488,7 +1488,7 @@
         <th class="group grp-react" data-group="react" colspan="5">Reactions</th>
         <th class="group grp-trend" data-group="trend" colspan="5">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
-        <th class="group grp-fund" data-group="fund" colspan="22">Fundamentals</th>
+        <th class="group grp-fund" data-group="fund" colspan="23">Fundamentals</th>
         <th class="group grp-own" data-group="own" colspan="7">Ownership</th>
         <th rowspan="2"></th>
       </tr>
@@ -1575,6 +1575,7 @@
         <th class="grp-fund" data-key="earningsGrowthYoY" title="Earnings growth: the most recent quarter versus the same quarter a year ago. It describes that one quarter, not the trailing-twelve-month figures in the Size group. Excluded from the Quality score for loss-making companies — a shrinking loss is not earnings growth. Very large values are usually genuine but come off a near-zero base (memory names in an upcycle), and the score caps their contribution anyway.">Earn Grth<br>Q YoY</th>
         <th class="grp-fund" data-key="revenueGrowthYoY" title="Revenue growth: the most recent quarter versus the same quarter a year ago. It describes that one quarter, not the Revenue TTM column.">Rev Grth<br>Q YoY</th>
         <th class="grp-fund" data-key="profitMargin" title="Net profit margin (TTM), derived as Net Income ÷ Revenue from the two columns in the Size group — not taken from the data feed, which reports it incorrectly for loss-making companies with small revenue. Dividing those two columns gives exactly this number.">Profit<br>Margin</th>
+        <th class="grp-fund" data-key="netMarginChg" title="Net margin over the latest four quarters, less net margin over the four before them, in percentage points, from the company's own SEC filings. +2.0 means it kept two more cents of each dollar of revenue than a year earlier. Needs eight consecutive quarters on file with the newest recent, so a bank whose filings carry no revenue line is blank, as is a company whose margin is past 100% either way (almost no revenue). Rebuilt daily. A fund has none. What was reported, not a forecast.">Margin<br>chg</th>
         <th class="grp-fund" data-key="roe" title="Return on equity (TTM)">ROE</th>
         <th class="grp-fund" data-key="peg" title="PEG ratio &mdash; &lt;1 cheap, &gt;2 expensive. Shown for reference but excluded from the Quality score when the company is loss-making: the feed still returns a healthy-looking figure there (0.16 for a company losing $878M), which is meaningless. It leads the three P/E columns rather than sitting among them: a PEG is earnings growth priced in, so it belongs beside them and not between them.">PEG</th>
         <th class="grp-fund" data-key="forwardPe" title="Forward price/earnings ratio. Shown for reference but excluded from the Quality score when the company is loss-making, where it carries no meaning.">Fwd<br>P/E</th>
@@ -2283,6 +2284,18 @@
         return `<td class="na grp-rel"${attr(s.ddCount == null ? 'Under two years of price history.' : s.ddCount === 0 ? 'No drawdown of 10% or more in five years.' : 'None of its drawdowns has got back to the old high yet.')}>\u2014</td>`;
       }
       return `<td class="grp-rel"${attr(n + ' days, the median over the drawdowns that recovered')}>${n < 60 ? n + 'd' : Math.round(n / 30.44) + 'mo'}</td>`;
+    }
+    // Net margin now against a year ago, in POINTS, from the filings. No
+    // colour: green and red here mean a price that moved, and a margin is
+    // not one. A change that rounds to nothing prints unsigned and faint.
+    function marginChgCell(s) {
+      const v = s.netMarginChg;
+      if (v == null || !isFinite(v)) {
+        return `<td class="na grp-fund" title="Needs eight consecutive quarters on file, the newest recent, and a margin within 100% either way.">\u2014</td>`;
+      }
+      const flat = Math.abs(v) < 0.05;
+      const t = `${Number(s.netMarginNow).toFixed(1)}% over the latest four quarters, ${Number(s.netMarginPrev).toFixed(1)}% over the four before`;
+      return `<td class="grp-fund${flat ? ' na' : ''}"${attr(t)}>${flat ? '0.0' : (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(1)}</td>`;
     }
     function capBandCell(s) {
       if (!s.capBand) {
@@ -3575,7 +3588,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="106">${s.error}</td>
+            <td class="na" colspan="107">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3679,10 +3692,11 @@
           ${capCell(s.totalDebt, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.ebitda, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.operatingCashFlowTtm, s.currency, 'grp-size', cacheTitle)}`}
-          ${isFund ? naRun(6, 'grp-fund') : `
+          ${isFund ? naRun(7, 'grp-fund') : `
           ${pctCell(s.earningsGrowthYoY, 'grp-fund', cacheTitle)}
           ${pctCell(s.revenueGrowthYoY, 'grp-fund', cacheTitle)}
           ${pctCell(s.profitMargin, 'grp-fund', cacheTitle)}
+          ${marginChgCell(s)}
           ${pctCell(s.roe, 'grp-fund', cacheTitle)}
           ${pegCell(s.peg, 'grp-fund', cacheTitle)}
           ${numCell(s.forwardPe, 'grp-fund', cacheTitle)}`}
@@ -3725,7 +3739,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 111;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 112;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3906,7 +3920,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="108">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="109">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

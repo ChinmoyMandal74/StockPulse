@@ -1642,6 +1642,61 @@ stay with the price move itself. A stock with too little history to have a
 
 ---
 
+## 35. Corporate margins — the views not yet built — 2026-10-10
+
+*Area: Promo · Status: Open · Note: the index and sector history card and the Margin chg column were built 2026-10-10 (docs/context/margins.md)*
+
+**Built already:** the Margins card (a group's combined margin over four
+years, and each sector now against a year ago) and the screener's Margin
+chg column. Both read `margins.js`. What follows was proposed by the
+assistant in the same conversation and filed at the owner's request.
+
+**a. Margin breadth.** How many companies' margins are wider than a year
+ago, how many narrower, and by how much at the median: the margin
+counterpart of the Corrections card. The figures are already stored for
+the column (`app_meta` `margin_chg`, 978 companies), so this is a card over
+data that exists. By sector as well. Worth checking first whether the count
+says anything the index line does not: on 2026-10-10 the median company's
+change was +0.4 points while the S&P 500's was +2.8, which suggests it
+does.
+
+**b. Concentration: whose margin is it.** How much of an index's margin
+gain comes from a handful of companies, in the spirit of the Earnings
+growth card: the index line with and without its five largest
+contributors. A company's contribution to a change in an aggregate margin
+is not its own margin change; it is its change in profit and in revenue
+against the group's totals, and the decomposition has a mix term (a
+high-margin company growing faster lifts the total with no company's
+margin moving). Get the arithmetic right before drawing it, and show the
+mix term rather than folding it away.
+
+**c. A sector's margin over time.** The card draws the index's line and
+each sector as two numbers. A view with one line per sector, or a Sector
+spotlight figure, would show which sectors are being squeezed and since
+when. `Margins.build` already has each sector's panel; it returns only
+now and a year ago.
+
+**d. More margin columns.** Operating and gross margin change, the way
+net is done. Cheap, since `Margins.change` reads the same quarters; the
+cost is two more columns in a table that has over a hundred.
+
+**e. Coverage of the financials.** Banks whose filings carry no revenue
+line here (JPMorgan among them) have no margin on any of these. The fix
+is in the tag mapping in `secfacts.js`, not in the margin code, and it
+would lift the net panel from 377 of 499 S&P 500 companies.
+
+**f. A benchmark check.** FactSet's Earnings Insight publishes the S&P
+500's net margin by quarter. Our 14.8% is a trailing year on a fixed
+panel of 377, theirs is a single quarter on the whole index, so they
+should differ; putting the two side by side once would show whether they
+differ for those reasons only.
+
+**What must hold.** A total over a total, a trailing year at each point,
+and one panel throughout: the three rules `margins.js` argues. No green
+or red for a margin. Reported figures only, never a forecast.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's

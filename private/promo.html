@@ -694,6 +694,20 @@
            positions. The orderings and the floors come from the module. -->
       <!-- Corrections: the cut is the only choice; the states and their
            thresholds are the screener column's own. -->
+      <!-- Margins: the group and the measure. The figures are the filings',
+           added up by margins.js on the server. -->
+      <div id="mgBox">
+        <label>Index</label>
+        <select id="mgSp500"></select>
+        <label>Measure</label>
+        <select id="mgMetric"></select>
+        <p class="hint">The group's combined profit over its combined
+          revenue, for the four quarters ending at each point. Only
+          companies with every quarter on file are counted, so the line
+          is the same companies throughout; the card says how many.
+          Gross margin leaves out banks and insurers, which report no
+          gross profit.</p>
+      </div>
       <div id="corBox">
         <label>Index</label>
         <select id="corSp500"></select>
@@ -1376,6 +1390,7 @@
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
       { id: 'corrections', name: 'Corrections', note: 'How many companies are in a pullback, a correction or a bear market — beside how far each index is from its own high' },
       { id: 'drawdown', name: 'Drawdowns', note: 'One stock or index below its own high, over the years — every drawdown, how deep it went and how long it took to come back' },
+      { id: 'margins', name: 'Margins', note: 'An index’s profit as a share of its revenue — its combined margin over four years from the filings, and each sector now against a year ago' },
       { id: 'earnahead', name: 'Earnings ahead', note: 'Who reports and when — the largest companies due in the coming days, under the day each one reports' },
       { id: 'earngrow', name: 'Earnings growth', note: 'Which companies an index’s earnings growth is made of, from the filings — with the last eight quarters' },
       { id: 'flow', name: 'Flow', note: 'Where the value sits, and how each sector has done — a one-step alluvial' },
@@ -1457,6 +1472,7 @@
       ['earngrow', 'Earnings growth'],
       ['earnahead', 'Earnings ahead'],
       ['corrections', 'Corrections'],
+      ['margins', 'Margins'],
       ['flow', 'Flow'],
       ['treemap', 'Treemap'],
       ['waterfall', 'Waterfall'],
@@ -1734,6 +1750,25 @@
         `<option value="${esc(q.q)}">${esc(q.label)} — ${q.n} of ${q.members} reported</option>`).join('');
       if ([...el.options].some((o) => o.value === keep)) el.value = keep;
     }
+    // The Margins card's payload, by cut: the earnings-growth channel's shape.
+    const mgCache = {};
+    const mgPending = {};
+    function getMargins(cut) {
+      if (mgCache[cut]) return mgCache[cut];
+      if (mgPending[cut]) return null;
+      mgPending[cut] = true;
+      fetch('/api/margins?cut=' + encodeURIComponent(cut), { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          mgPending[cut] = false;
+          if (!d || !d.metrics) return;
+          mgCache[cut] = d;
+          const need = Cards.marginsNeed(tpl, { mgSp500: $('mgSp500').value });
+          if (need && need.cut === cut) render();
+        })
+        .catch(() => { mgPending[cut] = false; });
+      return null;
+    }
     function getEarnGrowth(cut) {
       if (egrCache[cut]) return egrCache[cut];
       if (egrPending[cut]) return null;
@@ -1788,6 +1823,7 @@
       'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'eaWin', 'eaCount', 'eaEst', 'eaSp500',
       'corSp500', 'ddSym', 'ddYears', 'ddMin',
+      'mgSp500', 'mgMetric',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -1818,7 +1854,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: controlOpts(),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins,
       updatedAt: pulledAt,
     });
 
@@ -1901,6 +1937,7 @@
       $('sbaBox').style.display = tpl === 'shortbuild' ? 'block' : 'none';
       $('eaBox').style.display = tpl === 'earnahead' ? 'block' : 'none';
       $('corBox').style.display = tpl === 'corrections' ? 'block' : 'none';
+      $('mgBox').style.display = tpl === 'margins' ? 'block' : 'none';
       $('ddBox').style.display = tpl === 'drawdown' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
@@ -2289,6 +2326,11 @@
       }
       sel.value = 'pct';
     }());
+    // Margins: its own listener list, and both pickers from the module.
+    ['mgSp500', 'mgMetric'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'margins') render(); }));
+    for (const [v, label] of Cards.earnGrowthCuts()) $('mgSp500').add(new Option(label, v));
+    for (const [v, label] of Cards.marginMetrics()) $('mgMetric').add(new Option(label, v));
     // Corrections and Drawdowns: their own listener lists.
     $('corSp500').addEventListener('change', () => { if (tpl === 'corrections') render(); });
     ['ddSym', 'ddYears', 'ddMin'].forEach((id) =>
