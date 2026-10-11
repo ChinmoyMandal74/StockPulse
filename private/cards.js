@@ -850,7 +850,12 @@
             rows: [
               ['screen', 'var(--green)', 'Screened nightly', 'Returns, trend and a 1–10 Quality score after every close, on an absolute scale — a 7 means the same thing in any market.'],
               ['rules', 'var(--accent)', 'A signal that shows its work', 'One fixed, published rule set, and every signal names the ONE rule that fired.'],
-              ['trend', 'var(--amber)', 'Twenty years of receipts', 'Trend ribbons, backtests and an indicator lab over the full bar archive — measured, not asserted.'],
+              // (2026-10-11 review.) This row read "Twenty years of receipts: trend
+              // ribbons, backtests and an indicator lab". The backtest is admin
+              // only, so a card was promising members a page they cannot open.
+              // It now names what every member has had since: the filings and the
+              // drawdown history, both on each stock's own page.
+              ['chart', 'var(--amber)', 'The filings and the drawdowns', 'Revenue, profit and margins by quarter from each company’s SEC filings, and every correction in five years with its depth and length.'],
               ['ask', 'var(--accent-2)', 'Alerts on what you follow', 'Watch one stock for one thing — a price level, a moving-average cross, a change of verdict — and see it when it happens.'],
               ['guest', 'var(--red)', 'Try it in one click', 'A guest preview: twenty real stocks across every sector, the whole table and every verdict. No account, no card.'],
             ] },
@@ -886,10 +891,10 @@
             sub: 'A screener can describe. It cannot know what happens next — and most of the industry pretends otherwise.' },
           { kind: 'stmts', kick: 'Four refusals', title: 'On purpose',
             rows: [
-              ['x', 'No “stocks to buy”', 'The rules read the tape and say what they read. Nobody here is telling you what to own.'],
+              ['x', 'No stock picks', 'The rules read the tape and say what they read. Nobody here is telling you what to own.'],
               ['x', 'No price targets', 'A target is a forecast wearing a decimal point. We do not have one and will not invent one.'],
               ['x', 'No portfolio tracking', 'No shares, no cost basis, no “you are up 4%”. Lists are lists.'],
-              ['y', 'Only what we measured', 'Eight research framings have been tested and seven came back flat. Every one is written down in the app, failures included.'],
+              ['y', 'Only what we measured', 'Eleven research framings have been tested and ten came back flat. The failures are written up beside the one that was not.'],
             ] },
           { kind: 'close' },
         ],
@@ -930,10 +935,10 @@
       if (!r) return '<p class="s-empty">No scored rows yet.</p>';
       const rows = [
         ['Company type', 'How established is it?', r.companyType || '—'],
-        ['Trend', 'May I own this at all?', r.actionTrend || '—'],
-        ['Entry', 'Is now a sane moment?', r.actionEntry || '—'],
-        ['Fundamentals', 'How much conviction?', r.actionFund || '—'],
-        ['Guards', 'Any reason to wait?', r.actionGuards || 'clear'],
+        ['Trend', 'Is the trend intact?', r.actionTrend || '—'],
+        ['Entry', 'Is the price stretched?', r.actionEntry || '—'],
+        ['Fundamentals', 'How sound is the business?', r.actionFund || '—'],
+        ['Guards', 'Any flag raised?', r.actionGuards || 'clear'],
       ];
       return `<div class="flow">${rows.map(([k, q, v]) =>
         `<div class="flowrow"><span class="fk">${esc(k)}</span><span class="fq">${esc(q)}</span>` +
@@ -1013,7 +1018,8 @@
         '<div class="fl">No account needed</div>' +
         '<div class="fa">Try it free</div>' +
         '<div class="fw">Twenty real stocks, the whole table and every verdict — one click on the login page.</div></div>' +
-        '<p class="s-sub wide" style="margin-top:30px">Or have the write-ups sent to you: <b>tickrlab.com/blog</b> — confirmed opt-in, one click to leave, and nothing else ever goes to that address.</p>';
+        '<p class="s-sub wide" style="margin-top:30px">Want the whole screen? Ask for an invite code on the sign-up form and it is emailed to you. '
+        + 'Or have the write-ups sent instead: <b>tickrlab.com/blog</b> — confirmed opt-in, one click to leave, and nothing else ever goes to that address.</p>';
     }
 
     function tplIntro() {
@@ -1100,7 +1106,7 @@
         id: 'view', name: 'Views — your own columns',
         slides: [
           { kind: 'cover', kick: 'How to', title: 'Views,<br><span class="dim">your own columns</span>',
-            sub: 'The table is ninety-odd columns in twelve groups. A view is a named set of them — Symbol, Name and exactly the ones you picked.',
+            sub: 'The table is more than a hundred columns in thirteen groups. A view is a named set of them — Symbol, Name and exactly the ones you picked.',
             who: 'member' },
           { kind: 'hsteps', kick: 'Four steps', title: 'Pick the columns<br><span class="dim">you actually read</span>',
             rows: [
@@ -1159,7 +1165,7 @@
           { kind: 'hsteps', kick: 'Four steps', title: 'Read it<br><span class="dim">left to right</span>',
             rows: [
               ['Start with Type', 'Established, Early or a fund. It decides which rulebook runs — an Early company is never judged on a P/E.'],
-              ['Then Trend, Entry, Fund., Guards', 'May you · now · how much conviction · anything to wait for. Each is one word, and Guards is blank on most rows by design.'],
+              ['Then Trend, Entry, Fund., Guards', 'Is the trend intact · is the price stretched · how sound is the business · any flag raised. Each is one word, and Guards is blank on most rows by design.'],
               ['Read the signal, and its reason', 'Hover the Signal cell: it names the ONE rule that fired.'],
               ['Check the Cushion', 'How far the price can fall before the rules change their mind, in that stock’s own monthly volatility — so it compares across stocks.'],
             ] },
@@ -1193,6 +1199,52 @@
         ],
       },
     ];
+    // (2026-10-11.) Two decks for what was added that week: the correction
+    // and drawdown readings, and the filings-fed margin readings. Pushed on
+    // rather than written into the literal above so the note sits with them.
+    HOWTOS.push(
+      {
+        id: 'drawdown', name: 'Corrections and drawdowns',
+        slides: [
+          { kind: 'cover', kick: 'How to', title: 'Corrections,<br><span class="dim">and drawdowns</span>',
+            sub: 'How far a stock sits below its high, in a word; how often it has fallen 10% or more; and how long it took to come back. A record of what happened, never a forecast.',
+            who: 'everyone' },
+          { kind: 'hsteps', kick: 'Four steps', title: 'Where it stands,<br><span class="dim">then where it has been</span>',
+            rows: [
+              ['Find <b>Drawdown</b> in the Relative group', 'One word for the distance below the 52-week high: Near high, Pullback, Correction or Bear market.'],
+              ['Filter on it', 'Open the filter row and pick a state. Everything in a correction is one choice.'],
+              ['Read the two columns beside it', '<b>Corr. 5Y</b> counts the drawdowns of 10% or more in five years. <b>Median recov.</b> is the usual time from the bottom back to the old high.'],
+              ['Open the stock for the chart', 'Its page has a Drawdowns section: every fall below its own high, numbered, with the depth and both lengths in a table.'],
+            ] },
+          { kind: 'stmts', kick: 'Worth knowing', title: 'What the words<br><span class="dim">mean here</span>',
+            rows: [
+              ['y', 'Under 5%, 5 to 10, 10 to 20, 20 and over', 'Near high, Pullback, Correction, Bear market. Measured against the 52-week high, not the all-time record.'],
+              ['y', 'Blank means not enough history', 'Under six months of prices there is no state; under two years, no count and no recovery time.'],
+              ['x', 'It does not say what comes next', 'A median of past recoveries describes the past. Read it beside the count: a median of one recovery is one event.'],
+            ] },
+        ],
+      },
+      {
+        id: 'margins', name: 'Margins, from the filings',
+        slides: [
+          { kind: 'cover', kick: 'How to', title: 'Margins,<br><span class="dim">from the filings</span>',
+            sub: 'What a company keeps of each dollar of revenue, and whether that is more or less than a year ago, taken from its own SEC filings rather than from a data feed.',
+            who: 'everyone' },
+          { kind: 'hsteps', kick: 'Four steps', title: 'The level,<br><span class="dim">then the direction</span>',
+            rows: [
+              ['Find <b>Profit margin</b> in Fundamentals', 'Net income over revenue for the trailing twelve months.'],
+              ['Read <b>Margin chg</b> beside it', 'The latest four quarters’ margin less the four before, in points. Hover for both figures.'],
+              ['Sort or filter on it', 'Click the heading to rank, or type a range in the filter row to keep only the margins that widened.'],
+              ['Open the stock for the quarters', 'Its page shows revenue, profit and margin quarter by quarter, and the filing each figure came from.'],
+            ] },
+          { kind: 'stmts', kick: 'Worth knowing', title: 'Where the figure<br><span class="dim">is blank</span>',
+            rows: [
+              ['y', 'It needs eight quarters in a row', 'Two full years of filings, the newest recent. A company listed last year has no change to report yet.'],
+              ['y', 'Foreign filers are in dollars', 'A company reporting in another currency is converted at the exchange rate of each period, not at today’s.'],
+              ['x', 'Not every company has one', 'A fund files no statements, some banks report no revenue line, and a company with almost no revenue has no meaningful margin.'],
+            ] },
+        ],
+      });
     const howById = (id) => HOWTOS.find((t) => t.id === id) || HOWTOS[0];
 
     // NUMBERED, and the numbering is TRUE: these are steps performed in order,
