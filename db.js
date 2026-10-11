@@ -804,6 +804,26 @@ const SCHEMA = [
      data     text,
      at       integer not null
    )`,
+  // Which funds hold each stock, from Form N-PORT (2026-10-11): one row per
+  // stock for the newest data set on file. How many funds, the shares
+  // between them, the same for the set before, and the largest as JSON.
+  // Written by nport-load.js on the owner's machine, four times a year.
+  `create table if not exists fund_holders (
+     symbol      text primary key,
+     label       text not null,
+     prev_label  text,
+     funds       integer,
+     funds_prev  integer,
+     shares      real,
+     shares_prev real,
+     value       real,
+     added       integer,
+     exited      integer,
+     from_d      text,
+     to_d        text,
+     top         text,
+     at          integer not null
+   )`,
   `create table if not exists drawdown_stats (
      symbol    text primary key,
      n         integer,
@@ -4728,6 +4748,44 @@ async function readInstSummaries() {
   return out;
 }
 
+async function readCusipMap() {
+  await init();
+  const r = await db.execute('select cusip, symbol from cusip_map');
+  return new Map(r.rows.map((x) => [String(x.cusip), String(x.symbol)]));
+}
+
+// ---- which funds hold a stock (N-PORT) ------------------------------------
+async function writeFundHolders(rows) {
+  await init();
+  const list = (rows || []).filter((r) => r && r.symbol && r.label);
+  if (!list.length) return 0;
+  const now = Date.now();
+  const n = (v) => (v == null ? null : Number(v));
+  await db.batch(list.map((r) => ({
+    sql: `insert into fund_holders (symbol, label, prev_label, funds, funds_prev, shares, shares_prev, value, added, exited, from_d, to_d, top, at)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          on conflict(symbol) do update set label = excluded.label, prev_label = excluded.prev_label, funds = excluded.funds,
+            funds_prev = excluded.funds_prev, shares = excluded.shares, shares_prev = excluded.shares_prev, value = excluded.value,
+            added = excluded.added, exited = excluded.exited, from_d = excluded.from_d, to_d = excluded.to_d, top = excluded.top, at = excluded.at`,
+    args: [String(r.symbol).toUpperCase(), String(r.label), r.prevLabel || null, n(r.funds), n(r.fundsPrev), n(r.shares), n(r.sharesPrev),
+      n(r.value), n(r.added), n(r.exited), r.from || null, r.to || null, JSON.stringify(r.top || []), now],
+  })), 'write');
+  return list.length;
+}
+
+async function readFundHolders(symbol) {
+  await init();
+  const r = await db.execute({ sql: 'select * from fund_holders where symbol = ?', args: [String(symbol).toUpperCase()] });
+  if (!r.rows.length) return null;
+  const x = r.rows[0];
+  let top = [];
+  try { top = JSON.parse(x.top || '[]'); } catch { /* an unreadable list is an empty one */ }
+  const n = (v) => (v == null ? null : Number(v));
+  return { symbol: String(x.symbol), label: String(x.label), prevLabel: x.prev_label || null, funds: n(x.funds), fundsPrev: n(x.funds_prev),
+    shares: n(x.shares), sharesPrev: n(x.shares_prev), value: n(x.value), added: n(x.added), exited: n(x.exited),
+    from: x.from_d || null, to: x.to_d || null, top };
+}
+
 async function writeCusipMap(pairs) {
   await init();
   const list = (pairs || []).filter((p) => p && p.cusip && p.symbol);
@@ -4965,7 +5023,7 @@ async function readBarsFor(symbols, since) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'cusip_map', 'sec_segments',
+const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'cusip_map', 'sec_segments', 'fund_holders',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
   'sec_facts', 'sec_state', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
 
@@ -6689,6 +6747,7 @@ module.exports = {
   writeSecHolders, readSecHolders, readSecHolderAccns, readSecHoldersSince,
   writeInstHoldings, readInstHolding, readInstSummaries, writeCusipMap,
   writeSecSegments, readSecSegments, readSecSegmentAccn,
+  readCusipMap, writeFundHolders, readFundHolders,
   readMarginChange, writeMarginChange,
   readEarningsDates,
   barsSpan, coverageRollups,

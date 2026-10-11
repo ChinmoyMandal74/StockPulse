@@ -53,6 +53,7 @@
   let getMargins = () => null;
   let getHolders = () => null;
   let getSegments = () => null;
+  let getFundHolders = () => null;
   let getLineSeries = () => null;
   // One symbol’s month-end closes and the index’s, or null while it loads.
   let getMonths = () => null;
@@ -7605,6 +7606,79 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Fund holders: which funds hold one stock ----------------------------
+  //
+  // (2026-10-11.) The mutual funds and ETFs holding one stock, largest
+  // first, from their own portfolio reports to the SEC (Form N-PORT; the
+  // rules are nport.js on the server).
+  //
+  // TWO NUMBERS A ROW, ANSWERING TWO QUESTIONS. The bar and the first figure
+  // are how many shares the fund holds: who the big holders are. The second
+  // is how much of THE FUND this one stock is: 6.6% of an S&P 500 fund is
+  // the index weight, 14% of a sector fund is a concentrated one. They are
+  // headed separately because a reader could take the second for a share of
+  // the company.
+  //
+  // FUNDS, NOT MANAGERS, AND NOT TODAY. These are individual funds; the
+  // institutional-holdings figures are their managers and already contain
+  // them. Each fund's report is as of a month end two to five months back,
+  // and not the same one: the kicker gives the range.
+  const FH_ROWS = { portrait: 10, square: 6, story: 12 };
+  function fundHoldersNeed(tpl, opts) {
+    if (tpl !== 'fundholders') return null;
+    return { symbol: (opts && opts.fhSym) || null };
+  }
+  function tplFundHolders() {
+    const sym = O.fhSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((r) => r.symbol === sym);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!row) return shell('Nothing to show', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const data = getFundHolders(sym);
+    if (!data) return shell('Reading the fund reports', 'Finding', 'the funds\u2026');
+    const n = nameOf(row);
+    const F = data.funds;
+    if (!F || !F.count || !Array.isArray(F.top) || !F.top.length) {
+      return shell(n, 'Fund holders', 'none on file', 'No fund\u2019s latest public portfolio report lists a holding of ' + sym + '.');
+    }
+    const top = F.top.slice(0, FH_ROWS[size.id] || 10);
+    const sh = (v) => (v == null ? '\u2014' : v >= 1e9 ? (v / 1e9).toFixed(2) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(0) + 'K' : String(Math.round(v)));
+    const wt = (v) => (v == null ? '\u2014' : v > 0 && v < 0.01 ? '<0.01%' : v.toFixed(v >= 10 ? 1 : 2) + '%');
+    const SZ = ({
+      portrait: top.length <= 5 ? { f: 29, b: 28 } : top.length <= 8 ? { f: 25, b: 22 } : { f: 22, b: 18 },
+      square: top.length <= 4 ? { f: 24, b: 20 } : { f: 20, b: 14 },
+      story: top.length <= 6 ? { f: 38, b: 40 } : top.length <= 9 ? { f: 33, b: 32 } : { f: 29, b: 26 },
+    })[size.id] || { f: 25, b: 22 };
+    const scale = Math.max(1e-9, ...top.map((h) => h.shares || 0));
+    const vw = Math.ceil(Math.max(5, ...top.map((h) => sh(h.shares).length)) * SZ.f * 0.62) + 6;
+    const ww = Math.max(Math.ceil(Math.max(5, ...top.map((h) => wt(h.weight).length)) * SZ.f * 0.62) + 6, Math.ceil(SZ.f * 4.6));
+    const cols = 'minmax(0,46%) minmax(0,1fr) ' + vw + 'px ' + ww + 'px';
+    const rows = top.map((h) => '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+      + '<span class="bx-n">' + esc(h.name) + '</span>'
+      + '<span class="bx-t" style="height:' + SZ.b + 'px">' + (h.shares > 0 ? '<span class="bx-f" style="left:0;width:' + Math.max(0.6, h.shares / scale * 100).toFixed(2) + '%"></span>' : '') + '</span>'
+      + '<span class="bx-v">' + esc(sh(h.shares)) + '</span>'
+      + '<span class="bx-v rm-pct">' + esc(wt(h.weight)) + '</span></div>').join('');
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Fund</span>'
+      + '<span style="grid-column:2 / 4">Shares it holds</span><span class="sb-hr">Of the fund</span></div>';
+    const chg = F.sharesChange == null ? '' : ' Between them they hold ' + (Math.abs(F.sharesChange) < 0.05 ? 'the same number of shares as'
+      : Math.abs(F.sharesChange).toFixed(1) + '% ' + (F.sharesChange > 0 ? 'more' : 'fewer') + ' shares than') + ' in the reports a quarter earlier.';
+    const note = F.count.toLocaleString('en-US') + (F.count === 1 ? ' fund reports' : ' funds report') + ' holding ' + sym
+      + (F.pct == null ? '' : ', ' + (F.pct >= 10 ? F.pct.toFixed(0) : F.pct.toFixed(1)) + '% of its shares between them') + '; the ' + top.length + ' largest are shown.' + chg + ' '
+      + '\u201cOf the fund\u201d is how much of that fund\u2019s assets this one stock is, not a share of the company. '
+      + 'From each fund\u2019s own portfolio report to the SEC, as of ' + (F.asOf || 'the latest month end each has made public') + ': months old, and not the same date for every fund. '
+      + 'Mutual funds and ETFs only; a fund\u2019s manager reports these same shares again in its own filing. What was reported, not a forecast.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc((row.sector ? row.sector + ' \u00b7 ' : '') + sym + ' \u00b7 fund reports as of ' + (F.asOf || '')) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
+      + '<span class="dim">the funds that hold it</span></h2>'
+      + '<div class="bx-rows">' + hd + rows + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Revenue mix: where one company's revenue comes from ------------------
   //
   // (2026-10-11, the owner: "can you build revenue segments".) One company's
@@ -8927,6 +9001,7 @@
     corrections: tplCorrections,
     holders: tplHolders,
     revmix: tplRevMix,
+    fundholders: tplFundHolders,
     margins: () => marginsCard('margins'),
     secmargin: () => marginsCard('secmargin'),
     indmargin: () => marginsCard('indmargin'),
@@ -11143,6 +11218,7 @@
     marginsNeed, marginMetrics: () => MG_METRICS.map((p) => p.slice()),
     holdersNeed, holdersFold,
     revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()),
+    fundHoldersNeed,
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.
     drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
@@ -11247,6 +11323,7 @@
       getMargins = c.getMargins || (() => null);
       getHolders = c.getHolders || (() => null);
       getSegments = c.getSegments || (() => null);
+      getFundHolders = c.getFundHolders || (() => null);
       getLineSeries = c.getLineSeries || (() => null);
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);

@@ -10843,6 +10843,11 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const lnNeed = Cards.linesNeed(post.tpl, { stocks, myLists, screens, size: POST_SIZES[post.size], opts: post.opts || {} });
   if (lnNeed) { try { lines = await lineSeriesFor(lnNeed.symbols, lnNeed.quarters); } catch { lines = null; } }
 
+  // The Fund holders card, likewise.
+  let fholders = null;
+  const fhNeed = Cards.fundHoldersNeed(post.tpl, post.opts || {});
+  if (fhNeed && fhNeed.symbol) { try { fholders = await fundHoldersPayload(String(fhNeed.symbol).toUpperCase()); } catch { fholders = null; } }
+
   // The Revenue mix card, likewise.
   let rmix = null;
   const rmNeed = Cards.revMixNeed(post.tpl, post.opts || {});
@@ -10887,6 +10892,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getMargins: () => mgins,
       getHolders: () => lholders,
       getSegments: () => rmix,
+      getFundHolders: () => fholders,
       getLineSeries: () => lines,
       getHistory: () => hist,
       getEvolution: (s) => (Object.prototype.hasOwnProperty.call(evoBySym, s) ? evoBySym[s] : evo),
@@ -11801,6 +11807,7 @@ const Events8k = require('./events8k.js');
 const Holders13 = require('./holders13.js');
 const Inst13f = require('./inst13f.js');
 const Segments = require('./segments.js');
+const Nport = require('./nport.js');
 const HOLDER_DOCS = 3;             // documents fetched per company per refresh
 const mgCache = {};
 const mgWarm = (cut) => !!(mgCache[cut] && Date.now() - mgCache[cut].at < EG_TTL_MS);
@@ -12424,6 +12431,42 @@ const ShortInt = require('./shortint.js');
 //
 // DISPLAY ONLY. Which form a holder chose is a fact; nothing here says
 // what it means for the share.
+// ---- which funds hold one stock (Form N-PORT) ------------------------------------
+// How many mutual funds and ETFs hold it, the shares between them, and the
+// largest, each with how much of THAT FUND the stock is. Loaded by
+// nport-load.js; this reads one row. One function for the page route and
+// the saved-post route.
+//
+// DISPLAY ONLY. The funds' reports are as of different month ends and are
+// months old; the payload carries the range so no surface can present it
+// as today's. Never added to the 13F figures: a manager's 13F already
+// contains its funds.
+async function fundHoldersPayload(symbol) {
+  const h = await store.readFundHolders(symbol);
+  if (!h || !h.funds) return { symbol, funds: null };
+  let out = null;
+  try { const p = await store.readProfile(symbol); out = p && Number(p.sharesOutstanding) > 0 ? Number(p.sharesOutstanding) : null; } catch { out = null; }
+  // A share count the funds alone exceed is the wrong class's count (see
+  // inst13f.js); then no share of the company is offered.
+  if (out && h.shares > out) out = null;
+  return { symbol, funds: {
+    count: h.funds, countPrev: h.fundsPrev, shares: h.shares, sharesChange: Nport.change(h.shares, h.sharesPrev),
+    pct: Nport.pctOf(h.shares, out), value: h.value, added: h.added, exited: h.exited,
+    asOf: Nport.span(h.from, h.to), from: h.from, to: h.to, set: h.label,
+    top: (h.top || []).map((t) => ({ name: t.name, family: t.family, shares: t.shares, weight: t.weight, asOf: t.asOf,
+      pct: Nport.pctOf(t.shares, out), isNew: t.prev === 0, change: t.prev > 0 ? Nport.change(t.shares, t.prev) : null })),
+  } };
+}
+app.get('/api/fund-holders', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  res.json(await fundHoldersPayload(symbol));
+}));
+
 // ---- where one company's revenue comes from --------------------------------------
 // By product, by segment and by region, as the company tagged its own
 // annual report. One function for the page route and the saved-post route.

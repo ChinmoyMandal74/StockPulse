@@ -36,6 +36,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `public/app.css` | Shared design system — tokens, bezel, buttons, table base |
 | `barmath.js`, `techrow.js` | Indicators from bars alone; the one backtest row builder |
 | `secfacts.js`, `fx.js`, `insider.js`, `shortint.js`, `holdings.js`, `news.js` | Auxiliary data pulls (SEC filings, insiders, FINRA short interest, index membership, headlines) |
+| `nport.js`, `nport-load.js` | Which mutual funds and ETFs hold each stock, from Form N-PORT: the rules and the quarterly loader (local, by hand; streams a 460MB data set) |
 | `segments.js`, `sec-segments-load.js` | Where a company's revenue comes from, read from its annual report's XBRL instance: the parser and the first fill |
 | `inst13f.js`, `inst13f-load.js`, `zipread.js` | Form 13F institutional holdings: the rules, the quarterly loader (local, by hand, four times a year), and the ZIP reader it needs |
 | `holders13.js`, `sec-holders-load.js` | Schedule 13D and 13G filings about each company: the reader, and the first fill |
@@ -145,7 +146,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Signal and research** (file names keep the old word) — `the-advice-column` · `does-any-of-this-predict-anything` · `the-advice-backtest` · `adjusted-advice` · `the-adjusted-backtest` · `the-trend-only-backtest` · `the-strategy-backtest` · `the-single-stock-strategy` · `the-indicator-lab`
 
-**Regulatory and auxiliary data** — `sec-edgar` (140 KB: also insiders, FINRA short interest, index membership, the add-gate, the FUND/EARN/SHORT chart strips) · `the-sec-edgar-data-page` · `foreign-filers-and-euro-rates` · `8k-events` · `large-holder-filings` · `institutional-holdings-13f` · `revenue-segments` · `margins` (the Margins card and the Margin chg column) · `news` · `logos` (removed)
+**Regulatory and auxiliary data** — `sec-edgar` (140 KB: also insiders, FINRA short interest, index membership, the add-gate, the FUND/EARN/SHORT chart strips) · `the-sec-edgar-data-page` · `foreign-filers-and-euro-rates` · `8k-events` · `large-holder-filings` · `institutional-holdings-13f` · `fund-holders-nport` · `revenue-segments` · `margins` (the Margins card and the Margin chg column) · `news` · `logos` (removed)
 
 **Stock, group and comparison pages** — `charts-and-the-stock-page` · `earnings-history-on-the-stock-page` · `similar-stocks` · `against-its-peers` · `growth-and-profitability` (also promo template grouping and split history) · `the-basket-page` · `the-compare-page` · `the-pivot-view` · `consolidated` · `the-phone-page`
 
