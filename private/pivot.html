@@ -579,13 +579,13 @@
         label: 'Signal moves',
         each: (s) => (adviceMoved(s) ? 1 : 0),
         fmt: (v) => String(v),
-        noun: 'a count of verdicts that moved since the previous close',
+        noun: 'a count of signals that moved since the previous close',
         // A stock with no previous verdict did not "not move" — it cannot be
         // judged, and a zero that means two different things is the quietest
         // kind of lie this page keeps having to avoid.
         missing: (list) => list.filter((s) => adviceMove(s) === null).length,
         missingNote: (n) => '<b>' + n + '</b> of those ' + (n === 1 ? 'has' : 'have') +
-          ' no verdict from the previous close to compare against — new to the ' +
+          ' no signal from the previous close to compare against — new to the ' +
           'screener — so they count as neither moved nor unmoved.',
         placeNote: ' A move is counted once per placement, so these totals exceed the number of stocks that moved.',
         // The split is the point of the measure, and it is not derivable from

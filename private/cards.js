@@ -601,7 +601,7 @@
           `<div style="margin-top:34px">${top.map(([flag, n]) =>
             `<div class="frule"><span class="fn">\u00d7${n}</span><span class="ft">${esc(flag)}</span>` +
             `<span class="fs">${Math.round(n / rows.length * 100)}% of the list</span></div>`).join('')}</div>` +
-          '<p class="s-sub wide" style="--fs:19px;margin-top:26px">Every verdict names the one rule that fired first. Counting those rules says what kind of market this is \u2014 not what happens next.</p>' +
+          '<p class="s-sub wide" style="--fs:19px;margin-top:26px">Every signal names the one rule that fired first. Counting those rules says what kind of market this is \u2014 not what happens next.</p>' +
           '</div></div>' + chromeFoot();
       }
 
@@ -614,7 +614,7 @@
         if (!changes.length) {
           return chromeTop() +
             `<div class="s-body"><div><span class="s-kick">${esc(scope.label)}${esc(prof)}</span>` +
-            '<h2 class="s-title">Every verdict<br><span class="dim">held</span></h2>' +
+            '<h2 class="s-title">Every signal<br><span class="dim">held</span></h2>' +
             '<p class="s-empty">Nothing in this list changed its reading since the last session. The rules only speak when the tape moves \u2014 a quiet night is an answer too.</p>' +
             '</div></div>' + chromeFoot();
         }
@@ -638,7 +638,7 @@
             `<span class="ft">${esc(flag)}<span style="display:block;font-size:18px;font-weight:500;color:var(--faint);margin-top:4px">` +
             `now ${esc(g.action)} \u00b7 ${esc(g.syms.slice(0, 3).map(symOf).join(', '))}${g.syms.length > 3 ? ` +${g.syms.length - 3}` : ''}</span></span>` +
             '</div>').join('')}</div>` +
-          `<p class="s-sub wide" style="--fs:19px;margin-top:26px">${changes.length} of ${rows.length} verdicts moved \u2014 ` +
+          `<p class="s-sub wide" style="--fs:19px;margin-top:26px">${changes.length} of ${rows.length} signals moved \u2014 ` +
           `<span style="color:var(--green)">${ups} up</span>, <span style="color:var(--red)">${downs} down</span>. ` +
           'Same rules as yesterday; only the prices changed.</p>' +
           '</div></div>' + chromeFoot();
@@ -790,7 +790,7 @@
       const dials = '<div class="adial">'
         + '<div class="adl-big">' + bigSvg
           + '<div class="adl-w" style="color:' + pal.tints[LAD[at]] + '">' + esc(LAD[at]) + '</div>'
-          + '<div class="adl-k">' + esc('the average of ' + rows.length.toLocaleString('en-US') + ' verdicts') + '</div></div>'
+          + '<div class="adl-k">' + esc('the average of ' + rows.length.toLocaleString('en-US') + ' signals') + '</div></div>'
         + '<div class="adl-minis">' + MINIS.map(([lab, m]) => '<div class="adl-m">' + miniSvg(m.p)
           + '<div class="adl-v">' + Math.round(m.p * 100) + '%</div>'
           + '<div class="adl-k">' + esc(lab) + '</div></div>').join('') + '</div>'
@@ -806,8 +806,8 @@
           `<span class="arail"><span class="afill" style="display:block;width:${Math.max(2, counts[i] / max * 100)}%;background:${pal.tints[a]}"></span></span>` +
           `<span class="ac">${counts[i]}</span><span class="ap">${Math.round(counts[i] / total * 100)}%</span></div>`).join('')}</div>` +
         `<p class="s-sub wide" style="--fs:18px;margin-top:22px">${bull} of ${total} read Strong or better tonight. ` +
-        'The large dial is the average place of those verdicts on the six-step ladder — a summary of the tally, not a verdict of its own. ' +
-        'The small dials are shares of the stocks the rules could read; a verdict comes from ordered rules, not from averaging them. ' +
+        'The large dial is the average place of those signals on the six-step ladder — a summary of the tally, not a signal of its own. ' +
+        'The small dials are shares of the stocks the rules could read; a signal comes from ordered rules, not from averaging them. ' +
         'A reading of the tape by fixed rules — it says what is, never what is next.</p>' +
         '</div></div>' + chromeFoot();
     }
@@ -845,7 +845,7 @@
         id: 'what', name: 'What Tickr Lab is',
         slides: [
           { kind: 'cover', kick: 'Introducing', title: 'Tickr Lab',
-            sub: 'A stock screener that shows its work — every verdict, every rule, every number, explained on click.' },
+            sub: 'A stock screener that shows its work — every signal, every rule, every number, explained on click.' },
           { kind: 'steps', kick: 'The short version', title: 'Five things<br><span class="dim">it does</span>',
             rows: [
               ['screen', 'var(--green)', 'Screened nightly', 'Returns, trend and a 1–10 Quality score after every close, on an absolute scale — a 7 means the same thing in any market.'],
@@ -856,8 +856,8 @@
               // It now names what every member has had since: the filings and the
               // drawdown history, both on each stock's own page.
               ['chart', 'var(--amber)', 'The filings and the drawdowns', 'Revenue, profit and margins by quarter from each company’s SEC filings, and every correction in five years with its depth and length.'],
-              ['ask', 'var(--accent-2)', 'Alerts on what you follow', 'Watch one stock for one thing — a price level, a moving-average cross, a change of verdict — and see it when it happens.'],
-              ['guest', 'var(--red)', 'Try it in one click', 'A guest preview: twenty real stocks across every sector, the whole table and every verdict. No account, no card.'],
+              ['ask', 'var(--accent-2)', 'Alerts on what you follow', 'Watch one stock for one thing — a price level, a moving-average cross, a change of signal — and see it when it happens.'],
+              ['guest', 'var(--red)', 'Try it in one click', 'A guest preview: twenty real stocks across every sector, the whole table and every signal. No account, no card.'],
             ] },
           // The posts are PUBLIC first and the list is the convenience, which
           // is the order the slide states them in. Saying the terms on the
@@ -1017,7 +1017,7 @@
       return '<div class="flowend" style="margin-top:40px">' +
         '<div class="fl">No account needed</div>' +
         '<div class="fa">Try it free</div>' +
-        '<div class="fw">Twenty real stocks, the whole table and every verdict — one click on the login page.</div></div>' +
+        '<div class="fw">Twenty real stocks, the whole table and every signal — one click on the login page.</div></div>' +
         '<p class="s-sub wide" style="margin-top:30px">Want the whole screen? Ask for an invite code on the sign-up form and it is emailed to you. '
         + 'Or have the write-ups sent instead: <b>tickrlab.com/blog</b> — confirmed opt-in, one click to leave, and nothing else ever goes to that address.</p>';
     }
@@ -1030,7 +1030,7 @@
         : sl.kind === 'flow' ? 'Four readings, one word'
         : sl.kind === 'ladder' ? 'One rule decides' : topic.name);
       const title = sl.title || (sl.kind === 'close' ? 'See it<br><span class="dim">on real data</span>'
-        : sl.kind === 'flow' ? 'How a verdict<br><span class="dim">gets made</span>'
+        : sl.kind === 'flow' ? 'How a signal<br><span class="dim">gets made</span>'
         : sl.kind === 'ladder' ? 'The rule that<br><span class="dim">fired</span>'
         : sl.kind === 'mock' ? 'One click<br><span class="dim">per stock</span>' : topic.name);
       const body =
@@ -1071,7 +1071,7 @@
       member: 'Any signed-in member. A guest can read the screen but has no account to save one.',
       everyone: 'Everyone signed in, the guest preview included.',
       applyOnly: 'Everyone signed in can apply one. Starring needs an account; writing one is the owner’s.',
-      readOnly: 'Everyone sees the verdict and the rule that fired. The full rule ladder is the owner’s.',
+      readOnly: 'Everyone sees the signal and the rule that fired. The full rule ladder is the owner’s.',
     };
     // The default name for each slide kind. A slide may override it with its
     // own `label` where the generic one would not say what it holds.
@@ -3441,7 +3441,7 @@
         ? 'Forward P/E is blank: a multiple off a loss is arithmetic, not cheapness. ' : '') +
       (pe.counts.notReported ? 'No forward P/E is reported for it. ' : '') +
       (profile !== 'off'
-        ? 'The verdict is the ' + profile + ' rule set\u2019s mechanical reading, with the one rule that fired.'
+        ? 'The signal is the ' + profile + ' rule set\u2019s mechanical reading, with the one rule that fired.'
         : 'Every figure is to the close above.');
 
     // `sp-in` rather than a bare div: the wrapper below has to FILL what the
@@ -6072,7 +6072,7 @@
       + (noY ? noY + ' of these have no reading for the year yet and sit outside the '
         + 'medians. ' : '')
       + 'A short position is a bet against and also the fuel for a squeeze, which is why '
-      + 'the year is beside it rather than a verdict. One window, not a forecast.';
+      + 'the year is beside it rather than a signal. One window, not a forecast.';
 
     return chromeTop()
       + '<div class="s-body"><div class="hs-in">'
@@ -6760,7 +6760,7 @@
     ['fpe', 'forwardPe', 'forward P/E', 'x', 'Valuation', { co: 1, pos: 1, words: ['Highest', 'Lowest'], note: 'Price over next year’s expected earnings. A multiple off a loss is left out: it is arithmetic, not cheapness.' }],
     ['tpe', 'trailingPe', 'trailing P/E', 'x', 'Valuation', { co: 1, pos: 1, words: ['Highest', 'Lowest'], note: 'The data provider’s figure, struck at a close up to a week old. A multiple off a loss is left out.' }],
     ['lpe', 'peLive', 'P/E at today’s price', 'x', 'Valuation', { co: 1, pos: 1, words: ['Highest', 'Lowest'], note: 'Today’s price over trailing earnings per share. A multiple off a loss is left out.' }],
-    ['ppe', 'peerPe', 'P/E against their industry', 'x', 'Valuation', { co: 1, pos: 1, dp: 2, words: ['Dearest', 'Cheapest'], note: 'Forward P/E over the median of the company’s own industry; 1.00× is what the typical peer costs. On this screen the cheapest third have the weaker growth and margins, so cheap here is not a verdict.' }],
+    ['ppe', 'peerPe', 'P/E against their industry', 'x', 'Valuation', { co: 1, pos: 1, dp: 2, words: ['Dearest', 'Cheapest'], note: 'Forward P/E over the median of the company’s own industry; 1.00× is what the typical peer costs. On this screen the cheapest third have the weaker growth and margins, so cheap here is not a signal.' }],
     ['peg', 'peg', 'PEG', 'x', 'Valuation', { co: 1, pos: 1, dp: 2, words: ['Highest', 'Lowest'], note: 'P/E over expected growth, as the data provider reports it.' }],
     ['ps', 'priceToSales', 'price to sales', 'x', 'Valuation', { co: 1, pos: 1, coh: 1, words: ['Highest', 'Lowest'], note: 'Market value over trailing revenue.' }],
     ['eve', 'evToEbitda', 'EV / EBITDA', 'x', 'Valuation', { co: 1, pos: 1, coh: 1, noFin: 1, words: ['Highest', 'Lowest'], note: 'Enterprise value over EBITDA, as the data provider reports it.' }],

@@ -1513,7 +1513,7 @@
         <th class="grp-act left" data-key="actionGuards" title="Timing guards that cap the signal at Neutral: earnings within the blackout window, or too little price history to judge. Blank for most stocks — when this column speaks, it matters.">Guards</th>
         <th class="grp-act left av-col av-balanced" data-key="av:Balanced" title="What the fixed rules read for this stock today. A mechanical reading of the table, not a recommendation. First matching rule wins, and the cell's tooltip names the rule that fired.">Signal</th>
         <th class="grp-act" data-key="actionCushion" title="How far the rules let this stock fall before they exit, measured in its OWN monthly volatility — so it is comparable between a quiet stock and a wild one, which the raw percentage is not. It orders TAIL SIZE inside a signal tier, not return: over 307,965 stock-days the higher-cushion half of a tier had a thinner 10th-percentile loss in every era and horizon tested, while the average return difference stayed noise. Sorting by an advice column breaks ties on it.">Cushion</th>
-        <th class="grp-act" data-key="adviceDays" title="Market days the signal has stood. A reading that has held for weeks is a different proposition from one that turned this morning, and the chevron beside the verdict only says that it moved since the last close. It counts once a day, after the close — counting on the intraday rounds would advance it on a provisional bar and reset the run whenever a verdict flapped over lunch. A ≥ means the verdict has held since this column started watching: the run before that could not be recovered, because only one day of technicals is stored and a verdict replay needs fundamentals, which begin at the end of August.">Days held</th>
+        <th class="grp-act" data-key="adviceDays" title="Market days the signal has stood. A reading that has held for weeks is a different proposition from one that turned this morning, and the chevron beside the signal only says that it moved since the last close. It counts once a day, after the close — counting on the intraday rounds would advance it on a provisional bar and reset the run whenever a signal flapped over lunch. A ≥ means the signal has held since this column started watching: the run before that could not be recovered, because only one day of technicals is stored and a signal replay needs fundamentals, which begin at the end of August.">Days held</th>
         <th class="grp-chart" data-col="spark90" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
         <th class="grp-short" data-key="pricedAt" title="When this stock’s price was last fetched from the provider — a per-symbol clock, not the time the refresh ran. The two differ: price rounds are paced once the universe is large, so a round prices only the slice that fits inside the minute and reads the rest from the archive. It says we ASKED, which is a different fact from whether anything came back — a stock can be pulled on time and still carry a stale close, so read it beside the bar date rather than instead of it. Amber past a day.">Price<br>pulled</th>
         <th class="grp-short" data-key="todayPct">Today</th>
@@ -1581,7 +1581,7 @@
         <th class="grp-fund" data-key="forwardPe" title="Forward price/earnings ratio. Shown for reference but excluded from the Quality score when the company is loss-making, where it carries no meaning.">Fwd<br>P/E</th>
         <th class="grp-fund" data-key="trailingPe" title="Trailing price/earnings as the DATA PROVIDER reports it — the last twelve months of actual earnings, unlike the Fwd P/E beside it, which is an estimate. It arrives with the company profile, which is re-pulled about weekly, so it is struck at a close up to seven days old and will not divide exactly against the Price column: that is what the Live P/E beside it is for. Blank or meaningless for a loss-maker.">Trail<br>P/E</th>
         <th class="grp-fund" data-key="peLive" title="The same trailing price/earnings, recomputed here from today's Price and the EPS TTM column — so it moves with every intraday refresh and always divides against the Price on this row, where the provider's Trail P/E beside it is struck at whenever the profile was last pulled. A dash where the company loses money: a multiple off a loss is arithmetic, not cheapness, and sorting this column would otherwise put every loss-maker at the top as the cheapest thing on screen. NA for a fund — the provider's weighted figure for the holdings cannot be reproduced from a single EPS.">Live<br>P/E</th>
-        <th class="grp-fund" data-key="peerPe" title="Forward P/E as a multiple of the median forward P/E of its own industry. 0.62× means it costs 38% less than the typical company it is measured against; 1.40× means 40% more. A 25× semiconductor is cheap for a semiconductor and a 15× bank is dear for a bank — which the Fwd P/E column beside this one cannot say. Struck over the whole screener rather than the index, and only where the industry holds five or more companies with a usable multiple, which is about four stocks in five; the cell's own tooltip names the group and its median so the figure can be checked against the Fwd P/E on the same row. Blank where that group is too small, where no industry is recorded yet, or where the company loses money: a multiple off a loss is arithmetic, not cheapness. Deliberately uncoloured — measured over this universe the cheapest third of each industry grow more slowly, earn thinner margins and score lower on Quality than the dearest third, so cheap here is a fact to read beside the others on the row and not a verdict.">P/E vs<br>peers</th>
+        <th class="grp-fund" data-key="peerPe" title="Forward P/E as a multiple of the median forward P/E of its own industry. 0.62× means it costs 38% less than the typical company it is measured against; 1.40× means 40% more. A 25× semiconductor is cheap for a semiconductor and a 15× bank is dear for a bank — which the Fwd P/E column beside this one cannot say. Struck over the whole screener rather than the index, and only where the industry holds five or more companies with a usable multiple, which is about four stocks in five; the cell's own tooltip names the group and its median so the figure can be checked against the Fwd P/E on the same row. Blank where that group is too small, where no industry is recorded yet, or where the company loses money: a multiple off a loss is arithmetic, not cheapness. Deliberately uncoloured — measured over this universe the cheapest third of each industry grow more slowly, earn thinner margins and score lower on Quality than the dearest third, so cheap here is a fact to read beside the others on the row and not a signal.">P/E vs<br>peers</th>
         <th class="grp-fund" data-key="priceToBook" title="Price ÷ book value per share, most recent quarter. The classic value measure; of little use for asset-light software and misleading for banks.">P/B</th>
         <th class="grp-fund" data-key="priceToSales" title="Price ÷ revenue per share (TTM). The one valuation measure that still works for a company with no profits.">P/S</th>
         <th class="grp-fund" data-key="evToEbitda" title="Enterprise value ÷ EBITDA — a valuation that counts debt, so it compares a leveraged company with a debt-free one fairly.">EV/<br>EBITDA</th>
@@ -3338,7 +3338,7 @@
         (val === 'All' ? '' : `<span class="adot a-${val.toLowerCase().replace(/[^a-z]+/g, '-')}"></span>`) +
         `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>`;
       const note = blank
-        ? `${blank} ${blank === 1 ? 'row has' : 'rows have'} no verdict yet — not enough data for the rules to read.`
+        ? `${blank} ${blank === 1 ? 'row has' : 'rows have'} no signal yet — not enough data for the rules to read.`
         : '';
       $('advMenu').innerHTML = '<div class="picker-inner">' +
         row('All', 'All signals', inScope.length) +
@@ -3528,7 +3528,7 @@
         (val === 'All' ? '' : `<span class="adot mv-${val.toLowerCase()}"></span>`) +
         `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>`;
       const note = blank
-        ? `${blank} ${blank === 1 ? 'row has' : 'rows have'} no previous verdict to compare against yet.`
+        ? `${blank} ${blank === 1 ? 'row has' : 'rows have'} no previous signal to compare against yet.`
         : '';
       $('moveMenu').innerHTML = '<div class="picker-inner">' +
         row('All', 'Any', scope.length) +
@@ -3564,8 +3564,8 @@
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
       $('moveBtn').classList.toggle('on', on);
       $('moveBtn').title = on
-        ? `Showing rows whose Balanced verdict is ${moveFilter.toLowerCase()} since the previous close — open to change or clear`
-        : 'Filter by which way the Balanced verdict moved since the previous close';
+        ? `Showing rows whose Balanced signal is ${moveFilter.toLowerCase()} since the previous close — open to change or clear`
+        : 'Filter by which way the Balanced signal moved since the previous close';
     }
 
     // One row of the table. Pulled out of render() so a window repaint can
@@ -3910,7 +3910,7 @@
         const msg = activeColFilters().length && prefilterStocks().length
           ? 'Nothing matches the column filters \u2014 loosen one, or Clear filters in the bar above the table.'
           : moveFilter === 'Moved'
-          ? `Every verdict in ${where} held since the previous session — nothing moved to show.`
+          ? `Every signal in ${where} held since the previous session — nothing moved to show.`
           : moveFilter !== 'All'
           ? `No signal in ${where} was ${moveFilter.toLowerCase()} since the previous session.`
           : adviceFilter !== 'All'
@@ -5250,7 +5250,7 @@
         if ($('consolLink')) $('consolLink').style.display = 'none';
         const note = $('readonlyNote').querySelector('span');
         if (note) note.innerHTML = '<b>Guest preview.</b> Twenty stocks, one from each sector, with every column ' +
-          'and every verdict — the rest of the universe, the research pages, your own lists and alerts ' +
+          'and every signal — the rest of the universe, the research pages, your own lists and alerts ' +
           'need an account.';
       }
       // Signing in is its own page now, so this button is only a nudge back to
@@ -6497,7 +6497,7 @@
         ? 'no technical sell or avoid rule can be reached by price alone within \u221260%.'
         : held
           ? 'the technical rules alone already read <b>' + we(rk.action) + '</b> (\u201c' + we(rk.flag) +
-            '\u201d) \u2014 fundamentals are what hold this profile\u2019s verdict at <b>' + we(act) + '</b>.'
+            '\u201d) \u2014 fundamentals are what hold this profile\u2019s signal at <b>' + we(act) + '</b>.'
         : rk.drop === 0
           ? 'already at an exit \u2014 these rules read the stock as <b>' + we(rk.action) + '</b> today.'
           : 'a further <b>\u2212' + rk.drop.toFixed(1) + '%</b> flips this profile to <b>' + we(rk.action) +
@@ -6528,7 +6528,7 @@
         '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>' +
         est + `<div class="ap-chips">${chips.join('')}</div>` +
         apLadderHtml(e.rungs, false) +
-        `<div class="ap-note">First match wins — the lit rule is the verdict, and everything below it was never checked. Thresholds: the ${we(panelProfile)} profile.</div>` +
+        `<div class="ap-note">First match wins — the lit rule is the signal, and everything below it was never checked. Thresholds: the ${we(panelProfile)} profile.</div>` +
         apRiskHtml(s, e.action) +
         '<div class="ap-foot"><button class="ap-link" data-ap-model>How is this computed?</button><span></span></div></div>';
     }
@@ -6542,7 +6542,7 @@
         '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>' +
         `<div class="ap-tabs">${tabs}</div>` +
         apLadderHtml(rungs, true) +
-        '<div class="ap-note">Rules run top to bottom; the first whose conditions all hold is the verdict. ' +
+        '<div class="ap-note">Rules run top to bottom; the first whose conditions all hold is the signal. ' +
         'The shaded zone on each track is what passes. Full prose in <a href="/help#rules" target="_blank" rel="noopener">Help §12</a>.</div>' +
         `<div class="ap-foot">${apBackSym ? `<button class="ap-link" data-ap-back>← Back to ${we(apBackSym)}</button>` : '<span></span>'}<span></span></div></div>`;
     }

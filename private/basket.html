@@ -375,7 +375,7 @@
       const changes = rows.filter((s) => s.advicePrev && s.action && s.advicePrev !== s.action);
       const chg = changes.length
         ? changes.map((s) => `<span class="mono">${esc(s.symbol)}</span> ${esc(s.advicePrev)} → <b>${esc(s.action)}</b>`).join(' · ')
-        : 'none — every verdict in this list held today';
+        : 'none — every signal in this list held today';
       return '<section class="bezel card"><div class="core"><h2>Stance</h2>' +
         `<div class="stack">${stack}</div><div class="tags">${tags}</div>` +
         `<p class="chgline">${above}/${rows.length} above their 200-day. Signal: ${advLine || '—'}.</p>` +

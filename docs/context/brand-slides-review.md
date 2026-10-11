@@ -21,6 +21,12 @@ The owner: "revisit all the slides under brand and update anything if necessary,
 - **Announcement** (free text) and **Profile picture** (the mark).
 - *Build your own lists*, *Themes*, *Screens* and *Alerts*: checked against the limits in code (ten views, five alerts) and still true.
 
-**Not done, and worth a decision**: the tagline "From data to decisions" on every card's masthead, and "verdict" in several slides ("every verdict", "the whole table and every verdict"). Both predate the rename to Signal and were raised before; changing either touches every card.
+**"Verdict" became "signal" in everything a reader sees** (2026-10-11, the owner: "verdict should be replaced with signal"). 69 places: the cards (16), the screener's tooltips and messages (14), help (14), about (7), landing (5), four error messages from the server, and single lines on the stock, login, onboarding, phone setup, compare, group, pivot and studio pages.
+
+- **Text only.** Identifiers, comments, CSS classes (`.verdict`, `sc-verdict`, `r-verdict`) and the stored alert type id `verdict` are unchanged; a stored key is never renamed. Internal notes, including this folder, still say verdict.
+- Two places where the word did not mean the Signal were reworded instead: help's "the same verdict the whole ladder gets" is now "finding", and about's "decline to give a buy, sell or hold verdict of its own" is now "decline to give a recommendation of its own", which also takes the trading words off that page.
+- **Left as verdict**: the chatbot's system prompt, where it means a recommendation the assistant must not give, and the admin-only pages (refresh runs, where a "verdict" is a night's outcome; the backtests).
+
+**Not done, and worth a decision**: the tagline "From data to decisions" on every card's masthead. It predates the rename to Signal; changing it touches every card.
 
 Every slide was built on all three artboards in a Node suite (128 checks). None was rendered in a browser, so text fit on the changed slides is unverified; the new copy was kept to the length of the lines it sits among.

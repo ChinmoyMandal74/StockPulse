@@ -14314,7 +14314,7 @@ app.get('/api/trend-backtest', requireAdmin, route(async (req, res) => {
   const horizon = TB_HORIZONS[String(req.query.horizon || '')] ? String(req.query.horizon) : '3M';
   const tiers = String(req.query.tiers || 'Very Strong,Strong').split(',')
     .map((x) => x.trim()).filter((x) => Action.ACTIONS.indexOf(x) >= 0);
-  if (!tiers.length) return res.status(400).json({ error: 'Pick at least one verdict.' });
+  if (!tiers.length) return res.status(400).json({ error: 'Pick at least one signal.' });
   const rules = RULE_SETS.indexOf(String(req.query.rules || '')) >= 0
     ? String(req.query.rules) : 'Balanced';
   const everyMonths = Math.max(1, Math.min(12, parseInt(req.query.everyMonths, 10) || 1));
@@ -14415,13 +14415,13 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
   const floor = new Date(Date.now() - BT_MAX_BACK_DAYS * 86400000).toISOString().slice(0, 10);
   if (asked < floor) {
     return res.status(400).json({ error: `The earliest start date is ${floor} — two months. ` +
-      'Further back, almost the whole verdict would be imputed rather than replayed.' });
+      'Further back, almost the whole signal would be imputed rather than replayed.' });
   }
   if (asked >= today) return res.status(400).json({ error: 'Pick a date before today.' });
 
   const tiers = String(req.query.tiers || 'Very Strong').split(',')
     .map((x) => x.trim()).filter((x) => Action.ACTIONS.indexOf(x) >= 0);
-  if (!tiers.length) return res.status(400).json({ error: 'Pick at least one verdict.' });
+  if (!tiers.length) return res.status(400).json({ error: 'Pick at least one signal.' });
 
   // After validation, so a malformed request still gets the 400 that explains
   // it rather than being told to come back later and then refused again. The
@@ -14818,7 +14818,7 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
 
   const tiers = String(req.query.tiers || 'Very Strong').split(',')
     .map((x) => x.trim()).filter((x) => Action.ACTIONS.indexOf(x) >= 0);
-  if (!tiers.length) return res.status(400).json({ error: 'Pick at least one verdict.' });
+  if (!tiers.length) return res.status(400).json({ error: 'Pick at least one signal.' });
 
   const rules = RULE_SETS.indexOf(String(req.query.rules || '')) >= 0
     ? String(req.query.rules) : 'Balanced';

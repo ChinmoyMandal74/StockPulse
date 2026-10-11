@@ -171,7 +171,7 @@
       <div class="sec-h"><h2>1 · What this is</h2></div>
       <p>Tickr Lab watches a list of stocks and scores them on how their prices are behaving and how
         the underlying companies are doing. It is a <strong>screener</strong>: it narrows a list down to the
-        few names worth a closer look. The <strong>Signal</strong> column does carry a verdict, but it
+        few names worth a closer look. The <strong>Signal</strong> column does carry a signal, but it
         is the output of a plain rule set you can read in full under
         <a href="#rules">The Signal column</a> — a consistent reading of today's numbers, not a
         prediction.</p>
@@ -369,7 +369,7 @@
         <li><b>Signal</b> filters to one signal.</li>
         <li><b>Signal move</b> answers <em>which way</em>, not just whether: <b>Moved</b>,
           <b>Upgraded</b>, <b>Unchanged</b> or <b>Downgraded</b> since the previous session. A stock
-          with no previous verdict matches none of them — nothing to compare against is a different
+          with no previous signal matches none of them — nothing to compare against is a different
           fact from having held — and the menu counts those separately.</li>
         <li>These are not remembered between visits, deliberately: a filter surviving a reload is a
           table missing rows for no visible reason.</li>
@@ -519,7 +519,7 @@
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="pivot"><div class="core">
       <div class="sec-h"><h2>7 · The pivot view</h2></div>
-      <p><b>Pivot view</b> in the bar counts the screen by two things at once — sector against verdict,
+      <p><b>Pivot view</b> in the bar counts the screen by two things at once — sector against signal,
         theme against trend state, size against sector. Rows and columns are yours to choose, and
         every number is a count of stocks, their total market cap, or a return.</p>
 
@@ -680,8 +680,8 @@
 
       <h3>The guest preview</h3>
       <p>Anyone can try the screener without an account, from <b>Try as guest</b> on the sign-in page.
-        It is <strong>twenty real stocks</strong>, chosen to span every sector, size band and verdict
-        rather than to be the famous ones — the whole table, every column and every verdict, on those
+        It is <strong>twenty real stocks</strong>, chosen to span every sector, size band and signal
+        rather than to be the famous ones — the whole table, every column and every signal, on those
         twenty. What a guest does not get: personal lists, alerts, the pivot, compare, the studio and
         the research pages.</p>
 
@@ -739,11 +739,11 @@
 
       <h3>Why this stock says what it says</h3>
       <p><strong>Every Signal cell carries the one rule that fired</strong> — the phrase beside the
-        verdict, and the cell's tooltip, name it. That is the whole point of a first-match rule list
+        signal, and the cell's tooltip, name it. That is the whole point of a first-match rule list
         rather than a score: there is always exactly one reason, and it is written down. The four
         state columns beside it show the working, so the derivation reads left to right without
         anything to open.</p>
-      <p>A <strong>chevron</strong> before the word means the verdict moved since the previous
+      <p>A <strong>chevron</strong> before the word means the signal moved since the previous
         session, and names what it was. <b>Signal move</b> in the bar filters to exactly those rows.</p>
 
       <h3>The trend ribbon on the stock page</h3>
@@ -768,7 +768,7 @@
       <p>The dashed line trades one rule only: in during the green states, out otherwise. It
         deliberately does not replay the Signals — a full signal history cannot be
         reconstructed honestly, so the line claims only what the bars can prove. The model's
-        verdicts still appear as explanation: hover a day where the model and the trend disagree
+        signals still appear as explanation: hover a day where the model and the trend disagree
         and the readout names the blocking rule.</p>
       <p><strong>Why do these differ?</strong> in the ribbon legend opens a card below the chart
         that answers it with numbers: both rules' returns over the drawn range, then the largest
@@ -784,7 +784,7 @@
         deliberately no custom version: a signal should always be explainable by one named rule.
         Collapse the Signal group from the View menu (Standard), or use a view that leaves it out.</p>
       <h3>Cushion — how far it can fall before the rules change their mind</h3>
-      <p>Five Very Strongs on one screen leave you with a question the verdict cannot answer: which of
+      <p>Five Very Strongs on one screen leave you with a question the signal cannot answer: which of
         these hurts least when it goes wrong. Underneath <strong>Cushion</strong> is a simple measure —
         <em>the distance the price could fall before the technical rules flip that signal to Weak or
         worse</em>, with the moving averages, RSI and fundamentals held where they are today. It is a
@@ -801,7 +801,7 @@
         points. Sorting by the Signal column breaks ties on it, thickest cushion first — so five Very Strongs
         come back in an order that means something.</p>
       <p><strong>It ranks how bad the bad case is, never how good the good one is.</strong> Every average
-        return difference in that study was noise, which is the same verdict the whole ladder gets: it
+        return difference in that study was noise, which is the same finding the whole ladder gets: it
         manages risk, it does not pick winners. If you are choosing between stocks on one screen, cushion
         tells you which one is likely to hurt least when it goes wrong — nothing more.</p>
 
@@ -814,7 +814,7 @@
         fact shown beside the state, not a rule — no signal rule reads volume.</p>
 
       <h3>When the signal changes</h3>
-      <p>A small green or red chevron before the Signal word marks a verdict that moved since the
+      <p>A small green or red chevron before the Signal word marks a signal that moved since the
         previous trading session — yesterday's technical readings walked through the same rules,
         with the day-cached fundamentals standing for both days. The cell's tooltip and the hover
         card name yesterday's signal.</p>
@@ -823,7 +823,7 @@
         both directions at once. An upgrade is a step up the ladder, Very Strong being the top. A stock with no signal from
         the previous close appears under none of the four — there is nothing to compare it against,
         which is a different fact from having held. The picker is hidden until a refresh has stored
-        a previous verdict to compare with.</p>
+        a previous signal to compare with.</p>
 
       <h3>The thresholds (fixed defaults)</h3>
 
@@ -855,7 +855,7 @@
           ok {rg 15 · gross_margin 25 · fcf_margin −20 · short_float 15} · weak {rg 5 ·
           fcf_margin −20 · short_float 25}</td></tr>
         <tr><td><code>whipsaw</code></td><td>neutral_band_pct 0 — inside the band a stock counts as
-          neither above nor below its 200-day, so the verdict stops flapping on the line</td></tr>
+          neither above nor below its 200-day, so the signal stops flapping on the line</td></tr>
         <tr><td><code>fixes</code></td><td>blank_trend_holds true · weak_blocks_buy_with_risk true —
           two holes closed relative to the original brief; turning one off restores it</td></tr>
       </table>
@@ -891,7 +891,7 @@
 
       <h3>What a tile shows</h3>
       <p>Which fields sit under the chart, how tall the chart is, and which extras appear &mdash; the
-        verdict, the rule that fired, the trend word, the score chips, the sector &mdash; are one setting
+        signal, the rule that fired, the trend word, the score chips, the sector &mdash; are one setting
         for the whole site rather than a personal one, so a tile means the same thing to everyone
         looking at it — the same screenshot means the same thing in two people's hands.</p>
       <p>Tiles stop at sixty with a button for the next sixty: a tile is a great deal more markup than a
@@ -946,7 +946,7 @@
 
       <h3>What a row shows</h3>
       <p>The <strong>View</strong> button at the top switches between a few named views &mdash; Move,
-        Verdict, Value, and whatever else the owner has set up &mdash; each deciding which handful of
+        Signal, Value, and whatever else the owner has set up &mdash; each deciding which handful of
         fields sit under the price. The choice is remembered on that device. The views themselves are
         configured on a desktop; the phone only picks between them.</p>
       <p>The chart button beside it turns the charts on and off, and the strip under the title sets their
