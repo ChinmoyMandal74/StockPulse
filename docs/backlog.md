@@ -1820,6 +1820,58 @@ stop, not a retry.
 
 ---
 
+## 38. Accepting donations — 2026-10-11
+
+*Area: Pages · Status: Open · Note: waiting on the owner to choose a provider and create the link*
+
+The owner: "How to integrate payment, I want to keep the site at the moment
+but I am willing to accept donations." The site stays as it is; this is a
+way to accept support, not a paywall.
+
+**The approach: a hosted donation link.** The payment provider runs the
+checkout page and the site only links to it. No card data touches the app,
+nothing new is stored, no webhook, no new dependency.
+
+**Providers considered**
+
+- **Stripe Payment Link** (recommended): a "customer chooses what to pay"
+  link made in the Stripe dashboard, one-off or monthly. Lowest fees of the
+  three, pays into a bank account, and the same account would serve a paid
+  membership if that were ever wanted.
+- **Ko-fi or Buy Me a Coffee**: set up in minutes with no business details
+  and familiar to donors. Both pay out through Stripe or PayPal.
+- **GitHub Sponsors**: no platform fee and the repository is public, but a
+  donor needs a GitHub account, which most visitors will not have.
+
+Check each provider's current fees before choosing; they change.
+
+**What the build is, once there is a link**
+
+- a. A quiet "Support Tickr Lab" link in the footer of the landing and
+  About pages and in the screener's menu. The address comes from an
+  environment setting, so no link is drawn where none is set.
+- b. One line on About: the site is free and independent, and support goes
+  toward data and hosting.
+- c. One sentence on `/privacy`: payments are handled by the provider and
+  Tickr Lab never sees card details. In the same commit as the link.
+
+**What must hold**
+
+- **A donation buys nothing.** No feature, no faster approval, no access.
+  Once a payment unlocks something it is a sale, with refund, tax and
+  terms obligations, and it sits badly beside "not investment advice".
+- **It is income, not charity.** The wording says "support" and never
+  implies a charitable donation or a tax receipt. How it is taxed is a
+  question for an accountant where the owner lives.
+- The provider shows a business or personal name on a donor's receipt and
+  statement: the owner should choose that name knowingly.
+- No donor list, total or "top supporters" on the site.
+
+**Open with the owner:** which provider; one-off only or monthly as well
+(a setting on the link, not code).
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
