@@ -793,11 +793,15 @@
         <select id="rmKind"></select>
         <label>Period</label>
         <select id="rmPeriod"></select>
+        <label>Show</label>
+        <select id="rmView"></select>
         <p class="hint">The latest fiscal year or the latest quarter,
           split the way the company tagged it in its own report. A
           fourth quarter is never reported on its own, so it is worked
           out as the year less the three quarters before it, and the
-          card says so.
+          card says so. "How the mix has changed" draws one column a
+          year or a quarter, each split into shares; a period the
+          company reported on a different grouping is left out.
           Not every company reports
           all three; one it does not report falls back to the one it
           does. Subtotals are left out so nothing is counted twice, and
@@ -1991,7 +1995,7 @@
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
-      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'fhSym',
+      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -2531,7 +2535,8 @@
     // Revenue mix: the stock and which breakdown, the kinds from the module.
     for (const [v, label] of Cards.revMixKinds()) $('rmKind').add(new Option(label, v));
     for (const [v, label] of Cards.revMixPeriods()) $('rmPeriod').add(new Option(label, v));
-    ['rmSym', 'rmKind', 'rmPeriod'].forEach((id) =>
+    for (const [v, label] of Cards.revMixViews()) $('rmView').add(new Option(label, v));
+    ['rmSym', 'rmKind', 'rmPeriod', 'rmView'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'revmix') render(); }));
     // Large holders: one control.
     $('lhSym').addEventListener('change', () => { if (tpl === 'holders') render(); });

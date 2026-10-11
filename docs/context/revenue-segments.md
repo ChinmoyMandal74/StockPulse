@@ -45,6 +45,19 @@ The payload (`segmentsPayload`) gives two views, `views.FY` and `views.Q`, each 
 - **Stock page**: section `#seg`, "Where the revenue comes from", before Institutional holders. Fiscal year / Quarter tabs where both are on file, opening on the more recent. One table per breakdown (a subtotal is kept, set apart and greyed), and under it the same members period by period, oldest on the left. `loadSegments()`.
 - **Promo**: card `revmix`, "Revenue mix", in Stock spotlight. Controls `rmSym`, `rmKind` (auto, product, segment, geo) and `rmPeriod` (auto = most recent, FY, Q); a period it does not have falls back to the one it does, and the card's wording follows what is drawn. Draws the parts only; a breakdown the company does not report falls back to one it does and says so. Bars in the accent, the change in blue or orange (a change in sales, not in price). Through `ctx.getSegments`, asked by `Cards.revMixNeed`.
 
+## The mix over time (2026-10-11)
+
+The owner: "evolution of revenue mix on individual stock page and also on promo". One stacked column a period, each column a whole, so the eye reads how the proportions moved.
+
+- `Segments.mixOver(cur, hist)` -> `{ ends, derivedAt, parts: [{ name, other, shares }], skipped }` (oldest first) or null. Computed in `segmentsPayload` as `mix` on every breakdown of both views, over the same six years or eight quarters as the history table.
+- **A period is drawn only if it is the same breakdown as the newest one**: every part it names must be a part the company reports now. One that names another is a regrouping and is left out and counted in `skipped`; both surfaces say how many. A part absent from an earlier period is taken as not yet existing: a share of zero.
+- Also left out: a period with a negative part, and one whose parts do not add up where the newest one's do. A newest period with a negative part has no mix at all (Visa's client incentives).
+- **Shares are of the parts drawn**, so a column is always 100. Where the breakdown does not add up to the company's revenue the surfaces say "shares of the parts reported".
+- Six named parts at most, the largest in the newest period, and the rest as one "Other (n smaller)"; seven parts are all named. Fewer than three columns is not an evolution: null, and the card says there is too little history rather than drawing two columns.
+- **Stock page**: under each breakdown's history table, "How the mix has changed", with a legend giving each part's first and last share.
+- **Promo**: the same `revmix` card, control `rmView` (`latest`, `evo`), like the pyramid inside the Signal card. Legend with first share, last share and the change in percentage points (blue or orange). Colours come from `RM_INKS`; a part is not a price, so no green or red. The palette is repeated in `stock.html`.
+- Seen on real data: Amazon online stores 51% to 38% of revenue over six years while AWS went 12% to 18%; Nvidia by product has three columns and three left out (it regrouped).
+
 ## Known limits, seen in the dry runs
 
 - **Some breakdowns are partial and say so.** UnitedHealth's premiums are a different concept from the ones read here, so its product list covers a fifth of its revenue. Visa's includes client incentives as a negative member. Pfizer's drug-by-drug list is tagged on two axes and is not read.
@@ -54,4 +67,4 @@ The payload (`segmentsPayload`) gives two views, `views.FY` and `views.Q`, each 
 - Six quarterly reports give about nine quarters, not twelve: three a year, so their comparatives overlap.
 - Some companies' own standard labels are odd (Microsoft: "Microsoft Three Six Five Commercial Products And Cloud Services"). They are shown as filed.
 
-Tests were scratchpad Node suites (59 checks on the parser with three real annual reports among the fixtures, 37 on periods, the filing plan, `readReport` and the card, 15 on the fourth quarter and its guards) plus a committed run on five companies read back through the payload. Neither surface was rendered in a browser by the build.
+Tests were scratchpad Node suites (59 checks on the parser with three real annual reports among the fixtures, 37 on periods, the filing plan, `readReport` and the card, 15 on the fourth quarter and its guards, 32 on the mix over time including cards built from the real payload of seven companies) plus a committed run on five companies read back through the payload. Neither surface was rendered in a browser by the build.

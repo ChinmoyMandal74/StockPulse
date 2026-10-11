@@ -7699,6 +7699,10 @@
   const RM_ROWS = { portrait: 10, square: 6, story: 12 };
   // Which period: the newest on file whichever it is, or one named.
   const RM_PERIODS = [['auto', 'Most recent on file'], ['FY', 'Latest fiscal year'], ['Q', 'Latest quarter']];
+  // What to draw: the newest period's parts, or how their proportions have moved.
+  const RM_VIEWS = [['latest', 'The latest period'], ['evo', 'How the mix has changed']];
+  // A part is not a price: never green or red. The last is 'Other'.
+  const RM_INKS = ['#7c9cff', '#fb923c', '#a78bfa', '#38bdf8', '#f472b6', '#cbd5e1', '#8b93a7'];
   function revMixNeed(tpl, opts) {
     if (tpl !== 'revmix') return null;
     return { symbol: (opts && opts.rmSym) || null };
@@ -7735,6 +7739,41 @@
     const ch = (v) => (v == null ? '\u2014' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(Math.abs(v) >= 100 ? 0 : 1) + '%');
     const up = pal.ink('#60a5fa'), dn = pal.ink('#fb923c');
     const tone = (v) => (v == null || Math.abs(v) < 0.05 ? 'var(--muted)' : v > 0 ? up : dn);
+    // ---- how the mix has changed: one column a period, each a whole ----
+    if (O.rmView === 'evo') {
+      const M = K.mix;
+      if (!M || !Array.isArray(M.ends) || M.ends.length < 3) {
+        return shell(n, 'Revenue mix', 'over time', sym + ' has too few ' + (isQ ? 'quarters' : 'fiscal years') + ' on file with the same breakdown ' + (RM_WORD[K.kind] || '') + ' to show how its mix has changed.');
+      }
+      const xl = (iso) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t.getTime()) ? iso : isQ ? t.toLocaleDateString('en-US', { month: 'short' }) + ' ' + String(t.getFullYear()).slice(2) : String(t.getFullYear()); };
+      const inkOf = (p, i) => pal.ink(p.other ? RM_INKS[RM_INKS.length - 1] : RM_INKS[i % (RM_INKS.length - 1)]);
+      const sh = (v) => (v > 0 && v < 0.5 ? '<1' : String(Math.round(v))) + '%';
+      const last = M.ends.length - 1;
+      const colsH = M.ends.map((e, c) => '<div class="rme-col"><div class="rme-st">'
+        + M.parts.map((p, i) => (p.shares[c] > 0 ? '<div class="rme-sg" style="flex:' + p.shares[c].toFixed(3) + ' 0 0;background:' + inkOf(p, i) + '">' + (p.shares[c] >= 7 ? sh(p.shares[c]) : '') + '</div>' : '')).join('')
+        + '</div><div class="rme-x">' + esc(xl(e)) + (M.derivedAt[c] ? '*' : '') + '</div></div>').join('');
+      const pts = (v) => (Math.abs(v) < 0.5 ? '0' : (v > 0 ? '+' : '\u2212') + Math.round(Math.abs(v))) + ' pts';
+      const lg = '<span></span><span class="h" style="text-align:left">As the company reports it</span><span class="h">' + esc(xl(M.ends[0])) + '</span><span class="h">' + esc(xl(M.ends[last])) + '</span><span class="h">Change</span>'
+        + M.parts.map((p, i) => { const d = p.shares[last] - p.shares[0];
+          return '<i style="background:' + inkOf(p, i) + '"></i><span class="n">' + esc(p.name) + '</span><span class="v">' + esc(sh(p.shares[0])) + '</span><span class="v">' + esc(sh(p.shares[last])) + '</span>'
+            + '<span class="v" style="color:' + (Math.abs(d) < 0.5 ? 'var(--muted)' : d > 0 ? up : dn) + '">' + esc(pts(d)) + '</span>'; }).join('');
+      const noteE = 'Each column is one ' + (isQ ? 'quarter' : 'fiscal year') + ' of ' + sym + '\u2019s revenue, split into the parts the company reports and shown as shares'
+        + (K.complete ? ' of the whole. ' : ' of those parts, which do not add up to all of its revenue. ')
+        + 'The change is in percentage points of that share between the first column and the last. '
+        + (M.skipped ? (M.skipped === 1 ? 'One earlier period was' : M.skipped + ' earlier periods were') + ' reported on a different grouping and ' + (M.skipped === 1 ? 'is' : 'are') + ' left out. ' : '')
+        + (M.derivedAt.some(Boolean) ? 'A fourth quarter (*) is not reported on its own: it is the fiscal year less the three quarters before it. ' : '')
+        + 'The names and the groupings are the company\u2019s own, so they cannot be compared with another company\u2019s. '
+        + 'A share can fall while the amount grows. What was reported, not a forecast.';
+      return chromeTop()
+        + '<div class="s-body"><div class="bx-in">'
+        + '<span class="s-kick">' + esc((row.sector ? row.sector + ' \u00b7 ' : '') + sym + ' \u00b7 ' + xl(M.ends[0]) + ' to ' + xl(M.ends[last]) + (isQ ? ', by quarter' : ', by fiscal year')) + '</span>'
+        + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
+        + '<span class="dim">' + esc('revenue mix ' + (RM_WORD[K.kind] || '') + ', over time' + (fellBack ? ' \u2014 the one it reports' : '')) + '</span></h2>'
+        + '<div class="rme-ch">' + colsH + '</div>'
+        + '<div class="rme-lg">' + lg + '</div>'
+        + '<p class="s-sub wide" style="--fs:17px">' + esc(noteE) + '</p>'
+        + '</div></div>' + chromeFoot();
+    }
     const fy = (() => { const t = new Date((S.end || S.fyEnd) + 'T12:00:00'); return isNaN(t.getTime()) ? (S.end || S.fyEnd) : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); })();
     const SZ = ({
       portrait: top.length <= 5 ? { f: 30, b: 30 } : top.length <= 8 ? { f: 26, b: 24 } : { f: 23, b: 20 },
@@ -9245,6 +9284,26 @@
     .sz-story .sb-hd { font-size: 20px; }
     /* Revenue mix: the share beside the amount, a step quieter. */
     .bx-v.rm-pct { font-weight: 500; color: var(--muted); }
+    /* Revenue mix over time: one stacked column a period, each a whole. */
+    .rme-ch { flex: 1; min-height: 0; display: flex; gap: 14px; align-items: stretch; margin: 26px 0 6px; }
+    .rme-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .rme-st { flex: 1; min-height: 0; display: flex; flex-direction: column-reverse; border-radius: 8px; overflow: hidden; gap: 2px; }
+    .rme-sg { display: flex; align-items: center; justify-content: center; min-height: 0; overflow: hidden;
+      font: 600 20px var(--mono); color: rgba(8, 12, 24, 0.8); }
+    .rme-x { text-align: center; font: 500 19px var(--mono); color: var(--muted); padding-top: 10px; white-space: nowrap; }
+    .rme-lg { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto auto; column-gap: 20px; row-gap: 8px;
+      align-items: center; font-size: 24px; margin: 12px 0 4px; }
+    .rme-lg i { width: 22px; height: 22px; border-radius: 5px; display: block; }
+    .rme-lg .n { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rme-lg .v { font-family: var(--mono); text-align: right; white-space: nowrap; }
+    .rme-lg .h { font: 500 15px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-align: right; white-space: nowrap; }
+    .sz-square .rme-ch { margin-top: 16px; gap: 10px; }
+    .sz-square .rme-lg { font-size: 19px; row-gap: 4px; }
+    .sz-square .rme-sg, .sz-square .rme-x { font-size: 16px; }
+    .sz-story .rme-lg { font-size: 32px; row-gap: 14px; grid-template-columns: 30px minmax(0, 1fr) auto auto auto; }
+    .sz-story .rme-lg i { width: 30px; height: 30px; }
+    .sz-story .rme-lg .h { font-size: 20px; }
+    .sz-story .rme-sg, .sz-story .rme-x { font-size: 26px; }
     /* Large holders: the form and date beside each stake, and the line for
        those who have left. */
     .lh-form { font: 500 .78em var(--mono); color: var(--muted); text-align: right; white-space: nowrap; }
@@ -11225,7 +11284,7 @@
     earnAheadWindow: eaWindow,
     marginsNeed, marginMetrics: () => MG_METRICS.map((p) => p.slice()),
     holdersNeed, holdersFold,
-    revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()), revMixPeriods: () => RM_PERIODS.map((p) => p.slice()),
+    revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()), revMixPeriods: () => RM_PERIODS.map((p) => p.slice()), revMixViews: () => RM_VIEWS.map((p) => p.slice()),
     fundHoldersNeed,
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.

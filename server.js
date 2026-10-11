@@ -12521,7 +12521,10 @@ async function segmentsPayload(symbol) {
           pct: (K.total || d.total) > 0 ? m.v / (K.total || d.total) * 100 : null,
           change: m.prev > 0 ? (m.v / m.prev - 1) * 100 : null,
           // The same member in each earlier period, null where it was not reported.
-          past: at.map((mp) => (mp.has(m.key) ? mp.get(m.key) : null)) })) };
+          past: at.map((mp) => (mp.has(m.key) ? mp.get(m.key) : null)) })),
+        // How the proportions moved, period by period; null where there are too
+        // few periods on the same grouping to call it an evolution.
+        mix: Segments.mixOver(K, hist.map((h) => ({ end: h.end, derived: !!h.derived, kind: (h.data.kinds || {})[k] }))) };
     });
     if (!kinds.length) return null;
     return { ptype, end: cur.end, fyEnd: cur.end, currency: d.currency || null, total: d.total,

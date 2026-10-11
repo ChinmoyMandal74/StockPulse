@@ -316,6 +316,53 @@
     return { ptype: 'Q', end: fy.end, derived: true, currency: fy.currency || null, total, concept: fy.concept || null, kinds };
   }
 
+  // ---- the mix over time ----------------------------------------------------------
+  //
+  // (2026-10-11, the owner: "evolution of revenue mix on individual stock page
+  // and also on promo".) Each period's parts as SHARES of that period's parts,
+  // so every column is a whole and the eye reads how the proportions moved.
+  //
+  // A PERIOD IS DRAWN ONLY IF IT IS THE SAME BREAKDOWN AS THE NEWEST ONE: its
+  // parts must all be parts the company reports now. A period that names a
+  // part the newest does not is on another grouping (a reorganisation), and a
+  // column of it beside the others would show a change that is only a
+  // relabelling; it is left out and counted in `skipped`. A part that is not
+  // in an earlier period is taken as not yet existing there: a share of zero.
+  // Also left out: a period with a negative part (shares of a sum with
+  // negatives in it are not shares), and one whose parts do not add up where
+  // the newest one's do.
+  //
+  // AT MOST SIX NAMED PARTS, the largest in the newest period; the rest are
+  // one 'Other'. Fewer than three periods is not an evolution: null.
+  //   cur:  the newest period's breakdown { members: [{ key, name, v, subtotal }], complete }
+  //   hist: [{ end, derived, kind }] newest first, the newest included
+  const MIX_PARTS = 6;
+  function mixOver(cur, hist) {
+    if (!cur || !Array.isArray(cur.members)) return null;
+    const parts = cur.members.filter((m) => !m.subtotal);
+    if (parts.length < 2 || parts.some((m) => !(m.v >= 0))) return null;
+    const now = new Set(parts.map((m) => m.key));
+    const cols = [];
+    let skipped = 0;
+    for (const h of hist || []) {
+      const P = h && h.kind;
+      if (!P || !Array.isArray(P.members)) continue;                 // not reported that period: nothing to leave out
+      const mine = P.members.filter((m) => !m.subtotal);
+      const sum = mine.reduce((s, m) => s + m.v, 0);
+      if (!mine.length || mine.some((m) => !(m.v >= 0) || !now.has(m.key)) || !(sum > 0) || (cur.complete && !P.complete)) { skipped++; continue; }
+      cols.push({ end: h.end, derived: !!h.derived, at: new Map(mine.map((m) => [m.key, m.v / sum * 100])) });
+    }
+    if (cols.length < 3) return null;
+    cols.reverse();                                                  // oldest on the left
+    const last = cols[cols.length - 1].at;
+    const order = parts.slice().sort((x, y) => (last.get(y.key) || 0) - (last.get(x.key) || 0));
+    const named = order.length > MIX_PARTS + 1 ? order.slice(0, MIX_PARTS) : order;
+    const rest = order.slice(named.length);
+    const out = named.map((m) => ({ name: m.name, other: false, shares: cols.map((c) => c.at.get(m.key) || 0) }));
+    if (rest.length) out.push({ name: 'Other (' + rest.length + ' smaller)', other: true, shares: cols.map((c) => rest.reduce((s, m) => s + (c.at.get(m.key) || 0), 0)) });
+    return { ends: cols.map((c) => c.end), derivedAt: cols.map((c) => c.derived), parts: out, skipped };
+  }
+
   // A period beside the same period a year before: `prev` on each member
   // (matched by the company's own member code, which is stable across its
   // filings) and `totalPrev`. Null where the earlier one is not held, or
@@ -450,7 +497,7 @@
     return Object.assign(base, { data: parsed });
   }
 
-  const api = { AXES, REVENUE, KIND_NAME, SPANS, days, parse, periods, withPrior, fourthQuarter, contexts, labels, subtotals, nameOf, urls, latestAnnual, collect, reports, plan, readReport };
+  const api = { AXES, REVENUE, KIND_NAME, SPANS, days, parse, periods, withPrior, fourthQuarter, mixOver, contexts, labels, subtotals, nameOf, urls, latestAnnual, collect, reports, plan, readReport };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Segments = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
