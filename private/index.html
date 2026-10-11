@@ -1489,7 +1489,7 @@
         <th class="group grp-trend" data-group="trend" colspan="5">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
         <th class="group grp-fund" data-group="fund" colspan="23">Fundamentals</th>
-        <th class="group grp-own" data-group="own" colspan="7">Ownership</th>
+        <th class="group grp-own" data-group="own" colspan="8">Ownership</th>
         <th rowspan="2"></th>
       </tr>
       <tr>
@@ -1603,6 +1603,7 @@
         <th class="grp-own" data-key="shortPctOutstanding" title="Short interest as % of ALL shares, not just the float — the stricter of the two short measures.">Short<br>% Out</th>
         <th class="grp-own" data-key="insiderPct" title="Percentage of shares held by insiders — founders and management.">Insiders</th>
         <th class="grp-own" data-key="institutionPct" title="Percentage of shares held by institutions — funds, pensions and the like.">Instit.</th>
+        <th class="left grp-own" data-key="lastHolder" title="The newest Schedule 13D or 13G filed about the company in the last sixty days: the form, who filed it, the stake they report, and how many days ago. Anyone who comes to hold more than 5% of a company's shares must file one. A 13D is the form for a holder who may seek to influence the company and is shown in bold because it is the rarer of the two; a 13G is the short form for a passive holder such as an index fund. An amendment reports a change, and &quot;no holding&quot; means the stake is no longer reportable. Type 13D in the filter row to find them. Blank when nothing was filed in the window. Which form a holder chose is a fact; it does not say what follows for the share. From the SEC, updated as each company's filings are re-read.">5%<br>filing</th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
@@ -2309,6 +2310,17 @@
       const ago = days === 0 ? 'today' : days + 'd';
       return `<td class="name left grp-react nocard"${attr('8-K filed ' + s.lastEventDate + ': ' + s.lastEvent + '. Open the stock for the filing itself.')}>`
         + `${s.lastEventNotable ? '<b>' + we(s.lastEvent) + '</b>' : we(s.lastEvent)} <span class="na">${ago}</span></td>`;
+    }
+    // The newest 13D or 13G about the company in the last sixty days: the
+    // form, the holder and the stake, then how long ago. A 13D is set bold
+    // because it is the rarer form, not because it is better or worse news.
+    function lastHolderCell(s) {
+      if (!s.lastHolder || !s.lastHolderDate) {
+        return `<td class="name left grp-own nocard na" title="No 13D or 13G filed about this company in the last sixty days, or none on file yet.">\u2014</td>`;
+      }
+      const days = Math.max(0, Math.round((Date.now() - new Date(s.lastHolderDate + 'T12:00:00').getTime()) / 86400000));
+      return `<td class="name left grp-own nocard"${attr('Filed ' + s.lastHolderDate + ': ' + s.lastHolder + '. Open the stock for every filing and the link to each.')}>`
+        + `${s.lastHolderActive ? '<b>' + we(s.lastHolder) + '</b>' : we(s.lastHolder)} <span class="na">${days === 0 ? 'today' : days + 'd'}</span></td>`;
     }
     function capBandCell(s) {
       if (!s.capBand) {
@@ -3601,7 +3613,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="108">${s.error}</td>
+            <td class="na" colspan="109">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3731,14 +3743,15 @@
           ${isFund ? naRun(1, 'grp-fund') : periodCell(s)}
           ${isFund ? naRun(1, 'grp-fund') : reportedCell(s)}
           ${resultsCell(s)}
-          ${isFund ? naRun(7, 'grp-own') : `
+          ${isFund ? naRun(8, 'grp-own') : `
           ${bigNumCell(s.sharesOutstanding, null, 'grp-own', cacheTitle)}
           ${bigNumCell(s.floatShares, null, 'grp-own', cacheTitle)}
           ${numCell(s.shortRatio, 'grp-own', cacheTitle)}
           ${shortCell(s.shortPctFloat, 'grp-own', cacheTitle)}
           ${shortCell(s.shortPctOutstanding, 'grp-own', cacheTitle)}
           ${marginCell(s.insiderPct, 'grp-own', cacheTitle)}
-          ${marginCell(s.institutionPct, 'grp-own', cacheTitle)}`}
+          ${marginCell(s.institutionPct, 'grp-own', cacheTitle)}
+          ${lastHolderCell(s)}`}
           ${removeBtn}
         </tr>`;
     }
@@ -3753,7 +3766,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 113;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 114;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3934,7 +3947,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="110">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="111">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -3973,6 +3986,7 @@
         : sortKey === 'ddState' ? (x.ddState ? Filters.DD_ORDER.indexOf(x.ddState) : null)
         // By date, so a first click brings the newest filings to the top.
         : sortKey === 'lastEvent' ? (x.lastEventDate ? new Date(x.lastEventDate + 'T12:00:00').getTime() : null)
+        : sortKey === 'lastHolder' ? (x.lastHolderDate ? new Date(x.lastHolderDate + 'T12:00:00').getTime() : null)
         : x[sortKey]);
       // Sorting by an advice column leaves whole tiers tied — five Very Strongs
       // in a row, in whatever order they happened to arrive. Cushion breaks

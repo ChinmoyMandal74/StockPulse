@@ -746,6 +746,25 @@ const SCHEMA = [
      primary key (symbol, accn)
    )`,
   'create index if not exists idx_sec_events_filed on sec_events (filed)',
+  // Schedule 13D and 13G filings about a company, one row each (2026-10-11):
+  // who reported holding more than 5%, how much, and on which form. `kind`
+  // is 'D', 'G', or 'X' for a filing in the company's list that turned out
+  // not to be about it (or could not be read) -- kept so it is not fetched
+  // again, never shown. See holders13.js.
+  `create table if not exists sec_holders (
+     symbol   text not null,
+     accn     text not null,
+     filed    text not null,
+     form     text,
+     kind     text not null,
+     holder   text,
+     shares   real,
+     pct      real,
+     persons  integer,
+     event_d  text,
+     primary key (symbol, accn)
+   )`,
+  'create index if not exists idx_sec_holders_filed on sec_holders (filed)',
   `create table if not exists drawdown_stats (
      symbol    text primary key,
      n         integer,
@@ -4573,6 +4592,56 @@ async function readSecEventsSince(since) {
   return r.rows.map((x) => ({ symbol: String(x.symbol), filed: String(x.filed), items: x.items || '' }));
 }
 
+// ---- large-holder filings ------------------------------------------------
+async function writeSecHolders(symbol, rows, keepSince) {
+  await init();
+  const sym = String(symbol).toUpperCase();
+  const list = (rows || []).filter((e) => e && e.accn && e.filed && e.kind);
+  const stmts = list.map((e) => ({
+    sql: `insert into sec_holders (symbol, accn, filed, form, kind, holder, shares, pct, persons, event_d) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          on conflict(symbol, accn) do update set filed = excluded.filed, form = excluded.form, kind = excluded.kind,
+            holder = excluded.holder, shares = excluded.shares, pct = excluded.pct, persons = excluded.persons, event_d = excluded.event_d`,
+    args: [sym, String(e.accn), String(e.filed), e.form || null, String(e.kind), e.holder || null,
+      e.shares == null ? null : Number(e.shares), e.pct == null ? null : Number(e.pct),
+      e.persons == null ? null : Number(e.persons), e.eventDate || null],
+  }));
+  if (keepSince) stmts.push({ sql: 'delete from sec_holders where symbol = ? and filed < ?', args: [sym, String(keepSince)] });
+  if (!stmts.length) return 0;
+  await db.batch(stmts, 'write');
+  return list.length;
+}
+
+// Which filings are already on file for one company, the unreadable ones
+// included: this is what stops a document being fetched twice.
+async function readSecHolderAccns(symbol) {
+  await init();
+  const r = await db.execute({ sql: 'select accn from sec_holders where symbol = ?', args: [String(symbol).toUpperCase()] });
+  return new Set(r.rows.map((x) => String(x.accn)));
+}
+
+async function readSecHolders(symbol, limit) {
+  await init();
+  const r = await db.execute({
+    sql: `select accn, filed, form, kind, holder, shares, pct, persons, event_d from sec_holders
+          where symbol = ? and kind != 'X' order by filed desc, accn desc limit ?`,
+    args: [String(symbol).toUpperCase(), Math.max(1, Math.min(100, Number(limit) || 40))],
+  });
+  return r.rows.map((x) => ({ accn: String(x.accn), filed: String(x.filed), form: x.form || '', kind: String(x.kind),
+    holder: x.holder || '', shares: x.shares == null ? null : Number(x.shares), pct: x.pct == null ? null : Number(x.pct),
+    persons: x.persons == null ? null : Number(x.persons), eventDate: x.event_d || null }));
+}
+
+async function readSecHoldersSince(since) {
+  await init();
+  const r = await db.execute({
+    sql: `select symbol, filed, kind, holder, pct from sec_holders indexed by idx_sec_holders_filed
+          where filed >= ? and kind != 'X'`,
+    args: [String(since)],
+  });
+  return r.rows.map((x) => ({ symbol: String(x.symbol), filed: String(x.filed), kind: String(x.kind),
+    holder: x.holder || '', pct: x.pct == null ? null : Number(x.pct) }));
+}
+
 // ---- drawdown history, per symbol ----------------------------------------
 // The whole table: about 1,300 short rows, read when the stored readings
 // are rebuilt (every six hours at most) and once a night to pick a slice.
@@ -4767,7 +4836,7 @@ async function readBarsFor(symbols, since) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events',
+const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
   'sec_facts', 'sec_state', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
 
@@ -6488,6 +6557,7 @@ module.exports = {
   readPriceExtremes, writePriceExtremes, maxCloseBetween, firstBarDates,
   readDrawdownStats, writeDrawdownStats, readCloseSeries,
   writeSecEvents, readSecEvents, readSecEventsSince,
+  writeSecHolders, readSecHolders, readSecHolderAccns, readSecHoldersSince,
   readMarginChange, writeMarginChange,
   readEarningsDates,
   barsSpan, coverageRollups,

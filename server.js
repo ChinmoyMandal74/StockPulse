@@ -5153,7 +5153,7 @@ function filerLabel(st) {
   if (st.status === 'ok' && (st.taxonomy === 'us-gaap' || !st.taxonomy)) return 'US GAAP';
   return null;
 }
-const FLOWS_V = 5;          // bumped when the stored value gains a part
+const FLOWS_V = 6;          // bumped when the stored value gains a part
 const EVENT_RECENT_DAYS = 60;     // how far back the screener's 8-K column looks
 
 // ---- Drawdown history: corrections in five years, and the way back -------
@@ -5190,7 +5190,7 @@ let flowsMem = null;
 let flowsMemAt = 0;
 async function buildFlows() {
   const since = new Date(Date.now() - INSIDER_NET_DAYS * 86400000).toISOString().slice(0, 10);
-  const [sm, ids, net, secState, ddAll, mgAll, evAll] = await Promise.all([
+  const [sm, ids, net, secState, ddAll, mgAll, evAll, hdAll] = await Promise.all([
     shortMovesPayload().catch(() => null),
     filerIds().catch(() => ({})),
     store.readInsiderNetSince(since).catch(() => null),
@@ -5198,7 +5198,13 @@ async function buildFlows() {
     store.readDrawdownStats().catch(() => null),
     store.readMarginChange().catch(() => null),
     store.readSecEventsSince(new Date(Date.now() - EVENT_RECENT_DAYS * 86400000).toISOString().slice(0, 10)).catch(() => null),
+    store.readSecHoldersSince(new Date(Date.now() - EVENT_RECENT_DAYS * 86400000).toISOString().slice(0, 10)).catch(() => null),
   ]);
+  // Each company's NEWEST 13D or 13G in the same window: { SYM: [filed, kind, holder, pct] }.
+  const hd = {};
+  if (hdAll) {
+    for (const e of hdAll) { const had = hd[e.symbol]; if (!had || e.filed > had[0]) hd[e.symbol] = [e.filed, e.kind, e.holder, e.pct]; }
+  }
   // Each company's NEWEST 8-K in the window: { SYM: [filed, items] }.
   const ev = {};
   if (evAll) {
@@ -5240,6 +5246,7 @@ async function buildFlows() {
     // { SYM: [margin now, margin a year before] }, as stored.
     mg: mgAll && mgAll.m ? mgAll.m : null,
     ev: evAll ? ev : null,
+    hd: hdAll ? hd : null,
     shortFrom: sm ? sm.from : null, shortTo: sm ? sm.to : null, short,
     // null, not {}: "the read failed" must not be stored as "nobody traded".
     insiderSince: net ? since : null, insider: net ? insider : null };
@@ -5255,6 +5262,7 @@ async function flowsNow() {
     if (f && !fresh.dd) fresh.dd = f.dd || null;
     if (f && !fresh.mg) fresh.mg = f.mg || null;
     if (f && !fresh.ev) fresh.ev = f.ev || null;
+    if (f && !fresh.hd) fresh.hd = f.hd || null;
     if (f && !fresh.shortTo) { fresh.short = f.short || {}; fresh.shortFrom = f.shortFrom || null; fresh.shortTo = f.shortTo || null; }
     await store.writeFlows(fresh).catch(() => {});
     f = fresh;
@@ -5268,12 +5276,20 @@ async function flowsNow() {
 function flowsOf(row, f) {
   const out = { shortBuild: null, insiderNet: null, insiderBuyers: null, insiderSellers: null, filer: null,
     ddCount: null, ddMedBack: null, netMarginChg: null, netMarginNow: null, netMarginPrev: null,
-    lastEvent: null, lastEventDate: null, lastEventNotable: null };
+    lastEvent: null, lastEventDate: null, lastEventNotable: null,
+    lastHolder: null, lastHolderDate: null, lastHolderActive: null };
   if (!row || !f) return out;
   // Zero is a real count here (no drawdown of 10% in five years); the median
   // is null when none has recovered, and neither is ever invented.
   // The trailing year's net margin less the year before it, in points. Both
   // ends must be there; a missing one is never read as a margin of zero.
+  // The newest 13D or 13G in the window: the form, who, and how much.
+  const h13 = f.hd ? f.hd[String(row.symbol).toUpperCase()] : null;
+  if (h13 && h13[0]) {
+    out.lastHolderDate = String(h13[0]);
+    out.lastHolder = Holders13.label(h13[1], h13[2], h13[3] == null ? null : Number(h13[3]), 20);
+    out.lastHolderActive = h13[1] === 'D';
+  }
   // The newest 8-K in the window: what it was about, and when.
   const e8 = f.ev ? f.ev[String(row.symbol).toUpperCase()] : null;
   if (e8 && e8[0]) {
@@ -5329,6 +5345,9 @@ async function stampFlows(rows) {
     r.lastEvent = v.lastEvent;
     r.lastEventDate = v.lastEventDate;
     r.lastEventNotable = v.lastEventNotable;
+    r.lastHolder = v.lastHolder;
+    r.lastHolderDate = v.lastHolderDate;
+    r.lastHolderActive = v.lastHolderActive;
   }
 }
 
@@ -11281,6 +11300,22 @@ async function secFetchOne(symbol) {
           const since = Events8k.sinceDate();
           await store.writeSecEvents(sym, Events8k.parse(sj.filings && sj.filings.recent, since), since);
         } catch (e) { /* events ride along */ }
+        // THE 13D AND 13G FILINGS ABOUT THIS COMPANY (holders13.js). The
+        // list above names them; who filed and how much is in each
+        // filing's own small document, fetched once and never again. At
+        // most HOLDER_DOCS a company a run, so a company with a backlog
+        // catches up over a few rotations rather than holding this one.
+        // Its own catch, for the events' reason.
+        try {
+          const since = Holders13.sinceDate();
+          const got = await Holders13.collect({ cik, recent: sj.filings && sj.filings.recent, since,
+            have: await store.readSecHolderAccns(sym), max: HOLDER_DOCS,
+            getDoc: async (u) => {
+              const r = await fetch(u, { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(15000) });
+              return { status: r.status, text: r.ok ? await r.text() : '' };
+            } });
+          if (got.rows.length) await store.writeSecHolders(sym, got.rows, since);
+        } catch (e) { /* holders ride along */ }
       }
     } catch { /* the filings are the payload; this one rides along */ }
 
@@ -11714,6 +11749,8 @@ async function earnGrowthFor(cutIn) {
 // DISPLAY ONLY. Nothing here is read by the rules.
 const Margins = require('./margins.js');
 const Events8k = require('./events8k.js');
+const Holders13 = require('./holders13.js');
+const HOLDER_DOCS = 3;             // documents fetched per company per refresh
 const mgCache = {};
 const mgWarm = (cut) => !!(mgCache[cut] && Date.now() - mgCache[cut].at < EG_TTL_MS);
 // ONE SECTOR, OR ONE INDUSTRY (2026-10-10, the owner, of the index card:
@@ -12329,6 +12366,28 @@ const INSIDER_WINDOW_DAYS = Number(process.env.INSIDER_WINDOW_DAYS || 180);
 // Loaded locally by shortint-load.js — there is deliberately no route that
 // fetches from FINRA, so production never talks to them at all.
 const ShortInt = require('./shortint.js');
+
+// ---- large-holder filings for one company -------------------------------------
+// The 13D and 13G filings about it, newest first: who reported more than
+// 5%, how much, on which form, with a link to each on sec.gov.
+//
+// DISPLAY ONLY. Which form a holder chose is a fact; nothing here says
+// what it means for the share.
+app.get('/api/holders', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  const [rows, ids] = await Promise.all([store.readSecHolders(symbol, 40), filerIds().catch(() => ({}))]);
+  const cik = ids[symbol] || null;
+  res.json({ symbol, days: Holders13.KEEP_DAYS, filings: rows.map((e) => ({
+    filed: e.filed, form: e.form, kind: e.kind, active: e.kind === 'D', amended: /\/A$/.test(e.form),
+    holder: e.holder, pct: e.pct, pctText: Holders13.pctWord(e.pct), shares: e.shares, persons: e.persons,
+    eventDate: e.eventDate, url: Holders13.pageUrl(cik, e.accn),
+  })) });
+}));
 
 // ---- 8-K events for one company ---------------------------------------------
 // What it filed and what each filing was about, newest first, with a link

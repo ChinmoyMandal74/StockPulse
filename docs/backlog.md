@@ -1757,6 +1757,69 @@ the chatbot's care about attributing rather than summarising as fact.
 
 ---
 
+## 37. Other public data that could be read, by how much work each is — 2026-10-11
+
+*Area: Data · Status: Open · Note: large-holder filings (13D and 13G) being built 2026-10-11; the rest filed at the owner's request*
+
+The owner, after the 8-K events went in: "what was the other data that we
+can download", then "add all this to backlog first and then work on
+large-holder filings". Everything here is free from its source. Entry 36
+holds 13F and the 8-K follow-ons in more detail.
+
+**Already in the feed the filings refresh downloads** (the SEC's
+per-company submissions list, which names every form a company files, so
+none of these needs a new download to detect):
+
+- **a. Large-holder filings, Schedules 13D and 13G. Being built.** Someone
+  crossing 5% of a company. A 13D is a holder who may seek to influence
+  it; a 13G is a passive one. The list names the form but not the holder
+  or the stake, so each filing's own small document is fetched once.
+- **b. Late-filing notices, NT 10-K and NT 10-Q.** A company telling the
+  SEC it cannot file its accounts on time. Rare, and a fact a reader
+  would want pointed out. No second fetch needed: the form name is the
+  whole event. Would sit in the Company events list.
+- **c. Share offerings, S-3 and the 424B prospectuses.** A company
+  registering or selling new shares. Careful with the reading: an S-3ASR
+  is a shelf that a large company keeps on file as routine, and many 424B2
+  filings are debt, not shares (Apple files dozens). Telling an equity
+  offering from a note issue needs the document, so the cheap version is
+  only "filed a prospectus" and may mislead more than it informs.
+- **d. Planned insider sales, Form 144.** Notice that an insider intends
+  to sell. The app holds completed insider trades (Forms 3, 4, 5); this
+  is the advance notice. Structured since 2023. High volume at some
+  companies (Palantir: 234 in its recent list), so it wants a count or a
+  total rather than a row each.
+- **e. Proxy statements, DEF 14A.** The annual meeting document: pay, and
+  what is up for a vote. The form name gives only "a proxy was filed";
+  anything more is reading the document.
+
+**A separate download:**
+
+- **f. 13F institutional holdings.** See entry 36a. Quarterly, 45 days
+  stale by design, keyed by CUSIP, which the app does not map.
+- **g. Failures to deliver.** Shares sold and not delivered on time; the
+  SEC publishes it twice a month as one file for the whole market. Pairs
+  with the short-interest data already held. Also keyed by CUSIP.
+- **h. Daily short-sale volume.** FINRA publishes it every day, where the
+  short interest held now is twice a month. A different measure and
+  easily misread: it is the share of a day's volume that was sold short,
+  much of it market-making, not the open short position.
+
+**Outside the SEC:**
+
+- **i. Treasury yields and economic series** from the Federal Reserve's
+  free data service (FRED): rates, inflation, employment. Market context
+  for promo cards rather than anything per stock. The FRED address was
+  unreachable from this machine on 2026-10-10 (the Taiwan-dollar rate had
+  to come from elsewhere), so check access first.
+
+**What must hold for all of it.** Display only, never an input to the
+signal. A form name says what kind of filing it was and never whether it
+was good news. Sequential, declared requests to the SEC, and a 429 is a
+stop, not a retry.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's

@@ -460,6 +460,8 @@
     ['own',   'Short % out',    (s) => V.short(s.shortPctOutstanding)],
     ['own',   'Insiders',       (s) => V.lvl(s.insiderPct)],
     ['own',   'Institutions',   (s) => V.lvl(s.institutionPct)],
+    // The newest 13D or 13G filed about the company in the last sixty days.
+    ['own',   '5% filing',      (s) => (s.lastHolder ? { t: s.lastHolder + (s.lastHolderDate ? ' \u00b7 ' + shortDate(s.lastHolderDate) : ''), c: '' } : null)],
   ];
 
   const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'react', 'trend', 'size', 'fund', 'own'];
