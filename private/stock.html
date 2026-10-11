@@ -1039,6 +1039,22 @@
     /* The heading and its count share a row, and at 390px they overlapped —
        `.sec-h` is shared with #sec and #ins, so the wrap is scoped here
        rather than changed underneath them. */
+    /* Where the revenue comes from: one small table a breakdown. */
+    #seg .sg-k { margin: 16px 0 6px; font: 600 11.5px var(--sans); color: var(--muted); }
+    #seg .sg-k:first-child { margin-top: 0; }
+    #seg .sg-k span { font-weight: 400; color: var(--faint); margin-left: 8px; }
+    #seg table { width: 100%; border-collapse: collapse; }
+    #seg th { text-align: left; font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.06em;
+              color: var(--faint); padding: 0 12px 7px 0; }
+    #seg td { padding: 6px 12px 6px 0; border-top: 1px solid var(--hair); font-size: 12.5px; }
+    #seg td.n, #seg th.n { text-align: right; font-family: var(--mono); white-space: nowrap; }
+    #seg td.b { width: 34%; }
+    #seg td.b i { display: block; height: 8px; border-radius: 3px; background: var(--accent); min-width: 2px; }
+    #seg tr.sub td { color: var(--faint); }
+    #seg tr.sub td:first-child { font-style: italic; }
+    #seg tr.sub td.b i { background: var(--hair); }
+    #seg .snote { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+    #seg .snote a { color: var(--accent); text-decoration: none; }
     /* Institutional holders: the 13F quarter, its figures and its largest. */
     #inst .sum { display: flex; gap: 26px; flex-wrap: wrap; margin: 0 0 16px; }
     #inst .fig { display: flex; flex-direction: column; gap: 3px; }
@@ -3423,6 +3439,13 @@
              Its own card again: what the company files, what its officers do
              with their own money, and what the rest of the market has bet
              against it are three different questions. -->
+        <section class="bezel card" id="seg" data-jump="Revenue mix" data-icon="i-chart" hidden><div class="core">
+          <div class="sec-h"><h2>Where the revenue comes from</h2>
+            <span id="segWin" style="font-size:11.5px;color:var(--faint);font-family:var(--mono)"></span>
+          </div>
+          <div id="segBody"></div>
+        </div></section>
+
         <section class="bezel card" id="inst" data-jump="Institutions" data-icon="i-users" hidden><div class="core">
           <div class="sec-h"><h2>Institutional holders</h2>
             <span id="instWin" style="font-size:11.5px;color:var(--faint);font-family:var(--mono)"></span>
@@ -4598,6 +4621,44 @@
         } catch { card.remove(); }
       }
 
+      // Where the revenue comes from: the latest fiscal year, by product, by
+      // segment and by region, as the company tagged it. A subtotal is kept
+      // in the table, set apart, because here there is room to show that
+      // "Products" is the sum of the lines under it; its bar is greyed so
+      // the eye does not add it to them.
+      async function loadSegments() {
+        const card = document.getElementById('seg');
+        if (!card) return;
+        try {
+          const r = await fetch('/api/segments?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
+          if (!r.ok) { card.remove(); return; }
+          const S = (await r.json()).segments;
+          if (!S || !S.kinds || !S.kinds.length) { card.remove(); return; }
+          const cur = S.currency && S.currency !== 'USD' ? S.currency + ' ' : '$';
+          const money = (v) => (v == null ? '\u2014' : (v < 0 ? '\u2212' : '') + cur + (Math.abs(v) >= 1e12 ? (Math.abs(v) / 1e12).toFixed(2) + 'T' : Math.abs(v) >= 1e9 ? (Math.abs(v) / 1e9).toFixed(1) + 'B' : (Math.abs(v) / 1e6).toFixed(0) + 'M'));
+          const pc = (v) => (v == null ? '\u2014' : (v > 0 && v < 0.5 ? '<1' : Math.round(v)) + '%');
+          const ch = (v) => (v == null ? '\u2014' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(1) + '%');
+          const day = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const safe = (u) => (/^https:\/\/www\.sec\.gov\//.test(String(u || '')) ? u : '');
+          document.getElementById('segWin').textContent = 'year to ' + day(S.fyEnd) + ' \u00b7 ' + money(S.total);
+          document.getElementById('segBody').innerHTML = S.kinds.map((K) => {
+            const top = Math.max(1e-9, ...K.members.filter((m) => !m.subtotal).map((m) => Math.max(0, m.v)));
+            return '<div class="sg-k">' + esc(K.title) + '<span>' + (K.complete ? 'adds up to the total' : 'does not add up to the total') + '</span></div>'
+              + '<table><thead><tr><th>As reported</th><th></th><th class="n">Revenue</th><th class="n">Share</th><th class="n">vs yr ago</th></tr></thead><tbody>'
+              + K.members.map((m) => '<tr' + (m.subtotal ? ' class="sub"' : '') + '><td>' + esc(m.name) + (m.subtotal ? ' (subtotal)' : '') + '</td>'
+                + '<td class="b"><i style="width:' + Math.max(0, Math.min(100, m.v / top * 100)).toFixed(1) + '%"></i></td>'
+                + '<td class="n">' + esc(money(m.v)) + '</td><td class="n">' + esc(pc(m.pct)) + '</td><td class="n">' + esc(ch(m.change)) + '</td></tr>').join('')
+              + '</tbody></table>';
+          }).join('')
+            + '<p class="snote">From the company\u2019s own ' + esc(S.form || 'annual report') + (S.filed ? ', filed ' + esc(day(S.filed)) : '')
+            + (safe(S.url) ? ' (<a href="' + esc(S.url) + '" target="_blank" rel="noopener">the filing</a>)' : '') + '. '
+            + 'The names and groupings are the company\u2019s, so they cannot be compared with another company\u2019s. A subtotal is the sum of lines listed with it and is not counted again. '
+            + (S.currency && S.currency !== 'USD' ? 'Figures are in ' + esc(S.currency) + ', as reported. ' : '')
+            + 'Updated when the next annual report is filed.</p>';
+          card.hidden = false;
+        } catch { card.remove(); }
+      }
+
       // Institutional holders: the 13F quarter. A snapshot of a quarter end
       // that is months old by the time it can be shown, so the quarter is
       // in the heading and in every figure's label, never left implied.
@@ -4805,6 +4866,7 @@
       loadEvents();
       loadHolders();
       loadInstitutions();
+      loadSegments();
       const nb = document.getElementById('newsBtn');
       if (nb) nb.addEventListener('click', () => loadNews(true));
     })();

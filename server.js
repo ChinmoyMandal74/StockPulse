@@ -10843,6 +10843,11 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const lnNeed = Cards.linesNeed(post.tpl, { stocks, myLists, screens, size: POST_SIZES[post.size], opts: post.opts || {} });
   if (lnNeed) { try { lines = await lineSeriesFor(lnNeed.symbols, lnNeed.quarters); } catch { lines = null; } }
 
+  // The Revenue mix card, likewise.
+  let rmix = null;
+  const rmNeed = Cards.revMixNeed(post.tpl, post.opts || {});
+  if (rmNeed && rmNeed.symbol) { try { rmix = await segmentsPayload(String(rmNeed.symbol).toUpperCase()); } catch { rmix = null; } }
+
   // The Large holders card, likewise.
   let lholders = null;
   const lhNeed = Cards.holdersNeed(post.tpl, post.opts || {});
@@ -10881,6 +10886,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getEarnGrowth: () => egrow,
       getMargins: () => mgins,
       getHolders: () => lholders,
+      getSegments: () => rmix,
       getLineSeries: () => lines,
       getHistory: () => hist,
       getEvolution: (s) => (Object.prototype.hasOwnProperty.call(evoBySym, s) ? evoBySym[s] : evo),
@@ -11344,6 +11350,21 @@ async function secFetchOne(symbol) {
             } });
           if (got.rows.length) await store.writeSecHolders(sym, got.rows, since);
         } catch (e) { /* holders ride along */ }
+        // WHERE THE REVENUE COMES FROM (segments.js), from the newest annual
+        // report -- read only when that report is not the one already on
+        // file, so this is two requests a company a YEAR, not a rotation.
+        // The instance document is the one large thing here (up to about
+        // 15MB unpacked for a bank), so it has its own short clock and its
+        // own catch.
+        try {
+          const got = await Segments.collect({ cik, recent: sj.filings && sj.filings.recent,
+            haveAccn: await store.readSecSegmentAccn(sym),
+            getText: async (u) => {
+              const r = await fetch(u, { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(20000) });
+              return { status: r.status, text: r.ok ? await r.text() : '' };
+            } });
+          if (got && !got.throttled) await store.writeSecSegments(sym, got);
+        } catch (e) { /* segments ride along */ }
       }
     } catch { /* the filings are the payload; this one rides along */ }
 
@@ -11779,6 +11800,7 @@ const Margins = require('./margins.js');
 const Events8k = require('./events8k.js');
 const Holders13 = require('./holders13.js');
 const Inst13f = require('./inst13f.js');
+const Segments = require('./segments.js');
 const HOLDER_DOCS = 3;             // documents fetched per company per refresh
 const mgCache = {};
 const mgWarm = (cut) => !!(mgCache[cut] && Date.now() - mgCache[cut].at < EG_TTL_MS);
@@ -12402,6 +12424,39 @@ const ShortInt = require('./shortint.js');
 //
 // DISPLAY ONLY. Which form a holder chose is a fact; nothing here says
 // what it means for the share.
+// ---- where one company's revenue comes from --------------------------------------
+// By product, by segment and by region, as the company tagged its own
+// annual report. One function for the page route and the saved-post route.
+//
+// DISPLAY ONLY. Each list is a company's own description of itself and is
+// not comparable across companies; nothing here ranks one.
+async function segmentsPayload(symbol) {
+  const row = await store.readSecSegments(symbol);
+  if (!row || !row.data) return { symbol, segments: null };
+  const d = row.data;
+  const kinds = Object.keys(Segments.KIND_NAME).filter((k) => d.kinds && d.kinds[k]).map((k) => {
+    const K = d.kinds[k];
+    return { kind: k, title: Segments.KIND_NAME[k], complete: !!K.complete, total: K.total || d.total,
+      members: (K.members || []).map((m) => ({ name: m.name, v: m.v, subtotal: !!m.subtotal,
+        // Against this breakdown's own total, which is the company's except
+        // where the report measures the breakdown on a narrower revenue line.
+        pct: (K.total || d.total) > 0 ? m.v / (K.total || d.total) * 100 : null,
+        change: m.prev > 0 ? (m.v / m.prev - 1) * 100 : null })) };
+  });
+  return { symbol, segments: { fyEnd: d.fyEnd, currency: d.currency || null, total: d.total,
+    totalChange: d.totalPrev > 0 ? (d.total / d.totalPrev - 1) * 100 : null,
+    form: row.form, filed: row.filed, url: row.url, kinds } };
+}
+app.get('/api/segments', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  res.json(await segmentsPayload(symbol));
+}));
+
 // ---- institutional holdings (Form 13F) for one stock ----------------------------
 // Who held it at the last quarter end the SEC has published: how many
 // managers, the shares between them, the largest, and the change on the

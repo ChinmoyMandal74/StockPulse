@@ -791,6 +791,19 @@ const SCHEMA = [
      cusip  text primary key,
      symbol text not null
    )`,
+  // Where each company's revenue comes from, as tagged in its newest annual
+  // report (2026-10-11): by product, by segment and by region, as JSON.
+  // `data` is NULL for a filing that was read and had no breakdown, kept
+  // so the same filing is not fetched again. See segments.js.
+  `create table if not exists sec_segments (
+     symbol   text primary key,
+     accn     text not null,
+     filed    text,
+     form     text,
+     url      text,
+     data     text,
+     at       integer not null
+   )`,
   `create table if not exists drawdown_stats (
      symbol    text primary key,
      n         integer,
@@ -4727,6 +4740,37 @@ async function writeCusipMap(pairs) {
   return list.length;
 }
 
+// ---- revenue segments ----------------------------------------------------
+async function writeSecSegments(symbol, row) {
+  await init();
+  if (!row || !row.accn) return 0;
+  await db.execute({
+    sql: `insert into sec_segments (symbol, accn, filed, form, url, data, at) values (?, ?, ?, ?, ?, ?, ?)
+          on conflict(symbol) do update set accn = excluded.accn, filed = excluded.filed, form = excluded.form,
+            url = excluded.url, data = excluded.data, at = excluded.at`,
+    args: [String(symbol).toUpperCase(), String(row.accn), row.filed || null, row.form || null, row.url || null,
+      row.data ? JSON.stringify(row.data) : null, Date.now()],
+  });
+  return 1;
+}
+
+// Which filing is on file for a company: what stops it being read twice.
+async function readSecSegmentAccn(symbol) {
+  await init();
+  const r = await db.execute({ sql: 'select accn from sec_segments where symbol = ?', args: [String(symbol).toUpperCase()] });
+  return r.rows.length ? String(r.rows[0].accn) : null;
+}
+
+async function readSecSegments(symbol) {
+  await init();
+  const r = await db.execute({ sql: 'select accn, filed, form, url, data from sec_segments where symbol = ?', args: [String(symbol).toUpperCase()] });
+  if (!r.rows.length) return null;
+  const x = r.rows[0];
+  let data = null;
+  try { data = x.data ? JSON.parse(x.data) : null; } catch { data = null; }
+  return { accn: String(x.accn), filed: x.filed || null, form: x.form || null, url: x.url || null, data };
+}
+
 // ---- drawdown history, per symbol ----------------------------------------
 // The whole table: about 1,300 short rows, read when the stored readings
 // are rebuilt (every six hours at most) and once a night to pick a slice.
@@ -4921,7 +4965,7 @@ async function readBarsFor(symbols, since) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'cusip_map',
+const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'cusip_map', 'sec_segments',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
   'sec_facts', 'sec_state', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
 
@@ -6644,6 +6688,7 @@ module.exports = {
   writeSecEvents, readSecEvents, readSecEventsSince,
   writeSecHolders, readSecHolders, readSecHolderAccns, readSecHoldersSince,
   writeInstHoldings, readInstHolding, readInstSummaries, writeCusipMap,
+  writeSecSegments, readSecSegments, readSecSegmentAccn,
   readMarginChange, writeMarginChange,
   readEarningsDates,
   barsSpan, coverageRollups,

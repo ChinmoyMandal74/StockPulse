@@ -776,6 +776,19 @@
       <!-- Drawdowns. Like the other one-company cards, the card IS its own
            scope. An index is picked by its fund: SPY, QQQ, IWM, DIA. -->
       <!-- Large holders: one company, so the card is its own scope. -->
+      <div id="rmBox">
+        <label>Stock</label>
+        <select id="rmSym"></select>
+        <label>Break it down</label>
+        <select id="rmKind"></select>
+        <p class="hint">The latest fiscal year, split the way the company
+          tagged it in its own annual report. Not every company reports
+          all three; one it does not report falls back to the one it
+          does. Subtotals are left out so nothing is counted twice, and
+          the card says when the parts do not add up to the whole. The
+          groupings are each company's own, so two companies' cards
+          cannot be compared.</p>
+      </div>
       <div id="lhBox">
         <label>Stock</label>
         <select id="lhSym"></select>
@@ -1455,6 +1468,7 @@
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
       { id: 'corrections', name: 'Corrections', note: 'How many companies are in a pullback, a correction or a bear market — beside how far each index is from its own high' },
+      { id: 'revmix', name: 'Revenue mix', note: 'Where one company’s revenue comes from — by product, segment or region, as tagged in its own annual report' },
       { id: 'holders', name: 'Large holders', note: 'Who reports holding more than 5% of one company, and on which form — each holder at its newest filing' },
       { id: 'drawdown', name: 'Drawdowns', note: 'One stock or index below its own high, over the years — every drawdown, how deep it went and how long it took to come back' },
       { id: 'margins', name: 'Margins', note: 'An index’s profit as a share of its revenue — its combined margin over four years from the filings, and each sector now against a year ago' },
@@ -1528,6 +1542,7 @@
       ['evolution', 'Evolution', 'evoSym'],
       ['drawdown', 'Drawdowns', 'ddSym'],
       ['holders', 'Large holders', 'lhSym'],
+      ['revmix', 'Revenue mix', 'rmSym'],
     ];
     const spotView = (id) => SPOT_VIEWS.find((v) => v[0] === id) || null;
     // ---- Market: the whole market, five ways ---------------------------------
@@ -1727,6 +1742,24 @@
     // it lands is the half that matters.
     const prfCache = {};
     const prfPending = {};
+    // One company's revenue breakdown, for the Revenue mix card.
+    const rmCache = {};
+    const rmPending = {};
+    function getSegments(symbol) {
+      if (!symbol) return null;
+      if (rmCache[symbol]) return rmCache[symbol];
+      if (rmPending[symbol]) return null;
+      rmPending[symbol] = true;
+      fetch(`/api/segments?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          rmCache[symbol] = d && typeof d === 'object' && 'segments' in d ? d : { segments: null };
+          delete rmPending[symbol];
+          if (Cards.revMixNeed(tpl, controlOpts())) render();
+        })
+        .catch(() => { delete rmPending[symbol]; });
+      return null;
+    }
     // One company's 13D and 13G filings, for the Large holders card.
     const lhCache = {};
     const lhPending = {};
@@ -1922,7 +1955,7 @@
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
-      'lhSym',
+      'lhSym', 'rmSym', 'rmKind',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -1953,7 +1986,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: controlOpts(),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments,
       updatedAt: pulledAt,
     });
 
@@ -2042,6 +2075,7 @@
       $('imgBox').style.display = tpl === 'indmargin' ? 'block' : 'none';
       $('ddBox').style.display = tpl === 'drawdown' ? 'block' : 'none';
       $('lhBox').style.display = tpl === 'holders' ? 'block' : 'none';
+      $('rmBox').style.display = tpl === 'revmix' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
@@ -2455,6 +2489,10 @@
       $(id).addEventListener('change', () => { if (tpl === 'secmargin') render(); }));
     ['imgName', 'imgSp500', 'imgMetric'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'indmargin') render(); }));
+    // Revenue mix: the stock and which breakdown, the kinds from the module.
+    for (const [v, label] of Cards.revMixKinds()) $('rmKind').add(new Option(label, v));
+    ['rmSym', 'rmKind'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'revmix') render(); }));
     // Large holders: one control.
     $('lhSym').addEventListener('change', () => { if (tpl === 'holders') render(); });
     // Corrections and Drawdowns: their own listener lists.
@@ -3037,6 +3075,8 @@
         { const keep = $('monSym').value; $('monSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('monSym').options].some((o) => o.value === keep)) $('monSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;
+        { const keep = $('rmSym').value; $('rmSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('rmSym').options].some((o) => o.value === keep)) $('rmSym').value = keep; }
         { const keep = $('lhSym').value; $('lhSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('lhSym').options].some((o) => o.value === keep)) $('lhSym').value = keep; }
         { const keep = $('ddSym').value; $('ddSym').innerHTML = $('chtSym').innerHTML;

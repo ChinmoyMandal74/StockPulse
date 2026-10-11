@@ -52,6 +52,7 @@
   let getEarnGrowth = () => null;
   let getMargins = () => null;
   let getHolders = () => null;
+  let getSegments = () => null;
   let getLineSeries = () => null;
   // One symbol’s month-end closes and the index’s, or null while it loads.
   let getMonths = () => null;
@@ -7604,6 +7605,92 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Revenue mix: where one company's revenue comes from ------------------
+  //
+  // (2026-10-11, the owner: "can you build revenue segments".) One company's
+  // latest fiscal year broken down the way the company itself tagged it in
+  // its annual report: by product, by segment or by region. The reading and
+  // its rules are segments.js on the server.
+  //
+  // A SUBTOTAL IS NOT DRAWN. "Products" beside iPhone, Mac and iPad would
+  // count them twice; the server marks which members are sums of others and
+  // the card draws only the parts.
+  //
+  // WHERE THE PARTS DO NOT ADD UP TO THE COMPANY'S REVENUE, the card says so
+  // and still shows each part against the total: a list of what was tagged,
+  // not a pie with a slice missing. A bar is a size and takes the accent;
+  // the change is a change in sales, not in price, so it is blue or orange.
+  const RM_KINDS = [['auto', 'Whichever it reports first'], ['product', 'By product or service'], ['segment', 'By business segment'], ['geo', 'By region']];
+  const RM_WORD = { product: 'by product', segment: 'by segment', geo: 'by region' };
+  const RM_ROWS = { portrait: 10, square: 6, story: 12 };
+  function revMixNeed(tpl, opts) {
+    if (tpl !== 'revmix') return null;
+    return { symbol: (opts && opts.rmSym) || null };
+  }
+  function tplRevMix() {
+    const sym = O.rmSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((r) => r.symbol === sym);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!row) return shell('Nothing to show', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const data = getSegments(sym);
+    if (!data) return shell('Reading the filings', 'Finding', 'the breakdown\u2026');
+    const n = nameOf(row);
+    const S = data.segments;
+    if (!S || !Array.isArray(S.kinds) || !S.kinds.length) {
+      return shell(n, 'Revenue mix', 'not reported',
+        sym + '\u2019s latest annual report on file tags no breakdown of its revenue by product, segment or region. A fund has none.');
+    }
+    const want = O.rmKind && O.rmKind !== 'auto' ? S.kinds.find((k) => k.kind === O.rmKind) : null;
+    const K = want || S.kinds[0];
+    const fellBack = O.rmKind && O.rmKind !== 'auto' && !want;
+    const parts = (K.members || []).filter((m) => !m.subtotal && m.v != null);
+    const top = parts.slice().sort((a, b) => b.v - a.v).slice(0, RM_ROWS[size.id] || 10);
+    const cur = S.currency && S.currency !== 'USD' ? S.currency + ' ' : '$';
+    const money = (v) => (v == null ? '\u2014' : (v < 0 ? '\u2212' : '') + cur + fmtMoney(Math.abs(v)));
+    const pc = (v) => (v == null ? '\u2014' : (v > 0 && v < 0.5 ? '<1' : Math.round(v)) + '%');
+    const ch = (v) => (v == null ? '\u2014' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(Math.abs(v) >= 100 ? 0 : 1) + '%');
+    const up = pal.ink('#60a5fa'), dn = pal.ink('#fb923c');
+    const tone = (v) => (v == null || Math.abs(v) < 0.05 ? 'var(--muted)' : v > 0 ? up : dn);
+    const fy = (() => { const t = new Date(S.fyEnd + 'T12:00:00'); return isNaN(t.getTime()) ? S.fyEnd : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); })();
+    const SZ = ({
+      portrait: top.length <= 5 ? { f: 30, b: 30 } : top.length <= 8 ? { f: 26, b: 24 } : { f: 23, b: 20 },
+      square: top.length <= 4 ? { f: 25, b: 22 } : { f: 21, b: 16 },
+      story: top.length <= 6 ? { f: 40, b: 42 } : top.length <= 9 ? { f: 34, b: 34 } : { f: 30, b: 28 },
+    })[size.id] || { f: 26, b: 24 };
+    const scale = Math.max(1e-9, ...top.map((m) => Math.max(0, m.v)));
+    const mw = Math.ceil(Math.max(5, ...top.map((m) => money(m.v).length)) * SZ.f * 0.62) + 6;
+    const pw = Math.ceil(4 * SZ.f * 0.62) + 6;
+    const cw = Math.max(Math.ceil(Math.max(5, ...top.map((m) => ch(m.change).length)) * SZ.f * 0.62) + 6, Math.ceil(SZ.f * 4.4));
+    const cols = 'minmax(0,34%) minmax(0,1fr) ' + mw + 'px ' + pw + 'px ' + cw + 'px';
+    const rows = top.map((m) => '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+      + '<span class="bx-n">' + esc(m.name) + '</span>'
+      + '<span class="bx-t" style="height:' + SZ.b + 'px">' + (m.v > 0 ? '<span class="bx-f" style="left:0;width:' + Math.max(0.6, m.v / scale * 100).toFixed(2) + '%"></span>' : '') + '</span>'
+      + '<span class="bx-v">' + esc(money(m.v)) + '</span>'
+      + '<span class="bx-v rm-pct">' + esc(pc(m.pct)) + '</span>'
+      + '<span class="bx-v" style="color:' + tone(m.change) + '">' + esc(ch(m.change)) + '</span></div>').join('');
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>As the company reports it</span>'
+      + '<span style="grid-column:2 / 4">Revenue, fiscal year</span><span class="sb-hr">Share</span><span class="sb-hr">vs yr ago</span></div>';
+    const more = parts.length - top.length;
+    const note = (K.complete
+        ? 'These ' + (more > 0 ? 'are the ' + top.length + ' largest of ' + parts.length + ' parts, which together' : parts.length + ' parts') + ' add up to ' + sym + '\u2019s revenue of ' + money(S.total) + ' for the year to ' + fy + '. '
+        : 'These are the parts ' + sym + ' tagged in its report; they do not add up to its revenue of ' + money(S.total) + ' for the year to ' + fy + ', so the shares are of that total and something is left out. ')
+      + (S.totalChange == null ? '' : 'Revenue as a whole was ' + ch(S.totalChange) + ' on the year before. ')
+      + 'The names and the groupings are the company\u2019s own, from its ' + (S.form || 'annual report') + ', so they cannot be compared with another company\u2019s. '
+      + (S.currency && S.currency !== 'USD' ? 'Figures are in ' + S.currency + ', as reported. ' : '')
+      + 'What was reported, not a forecast.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc((row.sector ? row.sector + ' \u00b7 ' : '') + sym + ' \u00b7 year to ' + fy) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
+      + '<span class="dim">' + esc('revenue ' + (RM_WORD[K.kind] || '') + (fellBack ? ' \u2014 the one it reports' : '')) + '</span></h2>'
+      + '<div class="bx-rows">' + hd + rows + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Large holders: who reports more than 5% of one company ---------------
   //
   // (2026-10-11, the owner: "add a page in promo for large investor data,
@@ -8839,6 +8926,7 @@
     earnahead: tplEarnAhead,
     corrections: tplCorrections,
     holders: tplHolders,
+    revmix: tplRevMix,
     margins: () => marginsCard('margins'),
     secmargin: () => marginsCard('secmargin'),
     indmargin: () => marginsCard('indmargin'),
@@ -9072,6 +9160,8 @@
     .sb-hd .sb-hr { text-align: right; }
     .sz-square .sb-hd { font-size: 13px; }
     .sz-story .sb-hd { font-size: 20px; }
+    /* Revenue mix: the share beside the amount, a step quieter. */
+    .bx-v.rm-pct { font-weight: 500; color: var(--muted); }
     /* Large holders: the form and date beside each stake, and the line for
        those who have left. */
     .lh-form { font: 500 .78em var(--mono); color: var(--muted); text-align: right; white-space: nowrap; }
@@ -11052,6 +11142,7 @@
     earnAheadWindow: eaWindow,
     marginsNeed, marginMetrics: () => MG_METRICS.map((p) => p.slice()),
     holdersNeed, holdersFold,
+    revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()),
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.
     drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
@@ -11155,6 +11246,7 @@
       getEarnGrowth = c.getEarnGrowth || (() => null);
       getMargins = c.getMargins || (() => null);
       getHolders = c.getHolders || (() => null);
+      getSegments = c.getSegments || (() => null);
       getLineSeries = c.getLineSeries || (() => null);
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);
