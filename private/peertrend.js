@@ -196,6 +196,36 @@
   // safe inside it. The host supplies the size and styles the classes:
   //   pt-grid  pt-zero  pt-peer  pt-self  pt-dot  pt-ax  pt-lab
   // o: { w, h, left, right, fs, nameMax }
+  // HOW MUCH ROOM THE WORDS NEED, so a host can give the rest to the plot.
+  // The card used to reserve a fixed 318px for the names at the right and
+  // 80px for the axis at the left: enough for the longest label there could
+  // be, which on most cards left a blank strip down the right-hand side and,
+  // with a six-figure axis label, still clipped the dollar sign on the left
+  // (the owner, 2026-10-10: "this chart has a lot of space on the right").
+  //
+  // An ESTIMATE, since nothing here can measure text: characters times a
+  // width per character for each face, a little generous, so the worst case
+  // is a few spare pixels rather than a clipped name. The host passes its
+  // old fixed values as ceilings.
+  //   o: { fs, nameMax, stack, maxLeft, maxRight }
+  function fit(model, o) {
+    const fs = o.fs || 12, max = o.nameMax || 18;
+    const SANS = 0.6, MONO = 0.62;
+    let right = 0;
+    for (const l of model.lines) {
+      if (!l.last) continue;
+      const nm = l.name.length > max ? max : l.name.length;
+      const rank = model.view === 'rank' ? ('#' + l.last.rank + '  ').length : 0;
+      const figW = fmt(model.unit, l.last.v).length * fs * MONO;
+      const nameW = (rank + nm) * fs * SANS;
+      right = Math.max(right, o.stack ? Math.max(nameW, figW) : nameW + 8 + figW);
+    }
+    let left = 0;
+    for (const t of model.ticks || []) left = Math.max(left, String(t.label).length * fs * MONO);
+    // 12 is the gap svg() leaves before a name, 8 the one before an axis label.
+    return { left: Math.min(o.maxLeft || 1e9, Math.ceil(left + 8 + 6)), right: Math.min(o.maxRight || 1e9, Math.ceil(right + 12 + 10)) };
+  }
+
   function svg(model, o) {
     const w = o.w, h = o.h, fs = o.fs || 12;
     const x0 = o.left, x1 = w - o.right, y0 = fs, y1 = h - fs * 2.4;
@@ -222,6 +252,32 @@
     for (let i = n - 1; i >= 0; i -= step) {
       out += '<text class="pt-ax" x="' + X(i).toFixed(1) + '" y="' + (h - fs * 0.5).toFixed(1) + '" text-anchor="'
         + 'middle' + '" font-size="' + fs + '">' + esc((o.xLabel || qLabel)(model.quarters[i])) + '</text>';
+    }
+
+    // ---- an area under the company's own line (o.area) ----------------------
+    // Only its own, and only in the value view. Several filled areas on one
+    // scale hide each other, and a rank is a place, not a quantity to fill.
+    // The fill runs down to zero where the scale has one, otherwise to the
+    // foot of the plot. On a log scale that foot is not zero, so the area
+    // is emphasis and its size means nothing; the line is still the reading.
+    // A flat tint rather than a gradient: this markup travels through the
+    // PNG export, where a url(#id) reference is the first thing to be lost.
+    // Drawn before the lines so every line stays on top of it.
+    if (o.area && model.view !== 'rank') {
+      const me = model.lines.find((l) => l.self);
+      const base = model.zero != null ? Y(model.zero) : y1;
+      let run = [];
+      const flush = () => {
+        if (run.length > 1) {
+          out += '<path class="pt-area" d="M' + X(run[0].i).toFixed(1) + ' ' + base.toFixed(1)
+            + run.map((p) => 'L' + X(p.i).toFixed(1) + ' ' + Y(p.y).toFixed(1)).join('')
+            + 'L' + X(run[run.length - 1].i).toFixed(1) + ' ' + base.toFixed(1) + 'Z"/>';
+        }
+        run = [];
+      };
+      // A gap ends one area and starts the next, as it breaks the line.
+      for (const p of (me ? me.pts : [])) { if (p) run.push(p); else flush(); }
+      flush();
     }
 
     // the lines: peers first, the company itself last so it is never crossed out
@@ -280,5 +336,5 @@
     return out + '</svg>';
   }
 
-  global.PeerTrend = { METRICS, LINE_METRICS, VIEWS, build, svg, fmt, qLabel, measureNote };
+  global.PeerTrend = { METRICS, LINE_METRICS, VIEWS, build, svg, fit, fmt, qLabel, measureNote };
 })(typeof window !== 'undefined' ? window : globalThis);
