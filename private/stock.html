@@ -4712,7 +4712,7 @@
           const ch = (v) => (v == null ? '\u2014' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(1) + '%');
           const day = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
           const safe = (u) => (/^https:\/\/www\.sec\.gov\//.test(String(u || '')) ? u : '');
-          document.getElementById('segWin').textContent = (isQ ? 'quarter to ' : 'year to ') + day(S.end || S.fyEnd) + ' \u00b7 ' + money(S.total);
+          document.getElementById('segWin').textContent = (isQ ? 'quarter to ' : 'year to ') + day(S.end || S.fyEnd) + ' \u00b7 ' + money(S.total) + (S.derived ? ' \u00b7 worked out' : '');
           document.getElementById('segBody').innerHTML = S.kinds.map((K) => {
             const top = Math.max(1e-9, ...K.members.filter((m) => !m.subtotal).map((m) => Math.max(0, m.v)));
             return '<div class="sg-k">' + esc(K.title) + '<span>' + (K.complete ? 'adds up to the total' : 'does not add up to the total') + '</span></div>'
@@ -4725,7 +4725,7 @@
               // there is more than the one period already in the table above.
               + ((S.ends || []).length > 1
                 ? '<p class="sg-hl">' + (isQ ? 'Quarter by quarter' : 'Year by year') + '</p><div class="sg-hist"><table><thead><tr><th>' + (isQ ? 'Quarter to' : 'Year to') + '</th>'
-                  + S.ends.slice().reverse().map((e) => '<th class="n">' + esc(short(e)) + '</th>').join('') + '</tr></thead><tbody>'
+                  + S.ends.map((e, i) => '<th class="n">' + esc(short(e)) + ((S.derivedAt || [])[i] ? '*' : '') + '</th>').reverse().join('') + '</tr></thead><tbody>'
                   + K.members.filter((m) => !m.subtotal).map((m) => '<tr><td>' + esc(m.name) + '</td>'
                     + (m.past || []).slice().reverse().map((v) => '<td class="n">' + esc(money(v)) + '</td>').join('') + '</tr>').join('')
                   + '<tr class="tot"><td>All revenue</td>' + (S.totals || []).slice().reverse().map((v) => '<td class="n">' + esc(money(v)) + '</td>').join('') + '</tr>'
@@ -4736,7 +4736,7 @@
             + (safe(S.url) ? ' (<a href="' + esc(S.url) + '" target="_blank" rel="noopener">the filing</a>)' : '') + '. '
             + 'The names and groupings are the company\u2019s, so they cannot be compared with another company\u2019s. A subtotal is the sum of lines listed with it and is not counted again. '
             + (S.currency && S.currency !== 'USD' ? 'Figures are in ' + esc(S.currency) + ', as reported. ' : '')
-            + (isQ ? 'A fourth quarter is reported only inside the annual figure, so it is not among the quarters. ' : '')
+            + (isQ && (S.derivedAt || []).some(Boolean) ? 'A fourth quarter is never reported on its own: one marked * is worked out as the fiscal year less the three quarters before it' + (S.derived ? ', as the figures above are' : '') + '. ' : '')
             + 'An earlier period is shown as the newest report restates it. Updated as each annual and quarterly report is filed.</p>';
           };
           tabs.addEventListener('click', (ev) => { const b = ev.target.closest('.sg-tab'); if (b && views[b.dataset.p]) draw(views[b.dataset.p]); });

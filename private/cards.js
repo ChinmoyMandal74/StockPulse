@@ -7758,6 +7758,7 @@
     const note = (K.complete
         ? 'These ' + (more > 0 ? 'are the ' + top.length + ' largest of ' + parts.length + ' parts, which together' : parts.length + ' parts') + ' add up to ' + sym + '\u2019s revenue of ' + money(S.total) + ' for the ' + span + ' to ' + fy + '. '
         : 'These are the parts ' + sym + ' tagged in its report; they do not add up to its revenue of ' + money(S.total) + ' for the ' + span + ' to ' + fy + ', so the shares are of that total and something is left out. ')
+      + (S.derived ? 'A fourth quarter is not reported on its own: these figures are the fiscal year less the three quarters before it. ' : '')
       + (S.totalChange == null ? '' : 'Revenue as a whole was ' + ch(S.totalChange) + (isQ ? ' on the same quarter a year before. ' : ' on the year before. '))
       + 'The names and the groupings are the company\u2019s own, from its ' + (S.form || 'report') + ', so they cannot be compared with another company\u2019s. '
       + (S.currency && S.currency !== 'USD' ? 'Figures are in ' + S.currency + ', as reported. ' : '')

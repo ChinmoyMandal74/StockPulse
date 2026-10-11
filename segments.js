@@ -276,6 +276,46 @@
     return withPrior(all[0], all.find((p) => Math.abs(days(p.end, all[0].end) - 365) <= 12) || null);
   }
 
+  // ---- the fourth quarter ---------------------------------------------------------
+  //
+  // NO COMPANY FILES A REPORT FOR ITS FOURTH QUARTER: those three months are
+  // only inside the annual figure. (2026-10-11, the owner, seeing Microsoft's
+  // newest quarter stop at March with a June year end already filed: "why
+  // does microsoft last quarter point to march 2026", then "do the 4th
+  // quarter".) So it is WORKED OUT: the year less the three quarters before
+  // its end, line by line, and marked `derived` so every surface can say it
+  // was not reported as such.
+  //
+  // IT IS WITHHELD RATHER THAN GUESSED wherever the subtraction is not
+  // like-for-like: a quarter missing, another currency, a breakdown measured
+  // on a different revenue line, or a list of members that is not the same
+  // in the year and in all three quarters (a regrouping). A breakdown that
+  // fails is left out; with none left there is no fourth quarter.
+  function fourthQuarter(fy, quarters) {
+    if (!fy || !fy.end || !fy.kinds || !(fy.total > 0)) return null;
+    const at = (back) => (quarters || []).find((q) => q && q.end && Math.abs(days(q.end, fy.end) - back) <= 12) || null;
+    const three = [at(273), at(182), at(91)];
+    if (three.some((q) => !q || !(q.total > 0) || !q.kinds || (q.currency || null) !== (fy.currency || null))) return null;
+    const total = fy.total - three.reduce((s, q) => s + q.total, 0);
+    if (!(total > 0)) return null;
+    const kinds = {};
+    for (const k of Object.keys(fy.kinds)) {
+      const F = fy.kinds[k];
+      const maps = three.map((q) => (q.kinds[k] && q.kinds[k].concept === F.concept ? new Map(q.kinds[k].members.map((m) => [m.key, m.v])) : null));
+      if (maps.some((m) => !m)) continue;
+      const keys = F.members.map((m) => m.key);
+      if (maps.some((m) => m.size !== keys.length || keys.some((key) => !m.has(key)))) continue;
+      const base = F.total - three.reduce((s, q) => s + q.kinds[k].total, 0);
+      if (!(base > 0)) continue;
+      const members = F.members.map((m) => ({ key: m.key, name: m.name, v: m.v - maps.reduce((s, mp) => s + mp.get(m.key), 0), subtotal: !!m.subtotal }));
+      const sum = members.reduce((s, m) => s + (m.subtotal ? 0 : m.v), 0);
+      kinds[k] = { concept: F.concept, total: base, members: members.sort((x, y) => y.v - x.v), sum,
+        complete: Math.abs(sum - base) <= Math.abs(base) * 0.015 };
+    }
+    if (!Object.keys(kinds).length) return null;
+    return { ptype: 'Q', end: fy.end, derived: true, currency: fy.currency || null, total, concept: fy.concept || null, kinds };
+  }
+
   // A period beside the same period a year before: `prev` on each member
   // (matched by the company's own member code, which is stable across its
   // filings) and `totalPrev`. Null where the earlier one is not held, or
@@ -410,7 +450,7 @@
     return Object.assign(base, { data: parsed });
   }
 
-  const api = { AXES, REVENUE, KIND_NAME, SPANS, days, parse, periods, withPrior, contexts, labels, subtotals, nameOf, urls, latestAnnual, collect, reports, plan, readReport };
+  const api = { AXES, REVENUE, KIND_NAME, SPANS, days, parse, periods, withPrior, fourthQuarter, contexts, labels, subtotals, nameOf, urls, latestAnnual, collect, reports, plan, readReport };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Segments = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

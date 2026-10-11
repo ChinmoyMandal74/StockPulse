@@ -12484,15 +12484,27 @@ app.get('/api/fund-holders', requireAuth, route(async (req, res) => {
 // top level repeats whichever ended most recently, so a caller that asks
 // for nothing in particular gets the freshest figures on file.
 //
-// A FOURTH QUARTER IS NOT AMONG THE QUARTERS: companies report it only
-// inside the annual figure, and it is not derived here by subtraction.
+// THE FOURTH QUARTER IS WORKED OUT HERE, AT READ TIME, and never stored:
+// companies report it only inside the annual figure, so it is the year less
+// its three quarters (Segments.fourthQuarter), marked `derived`, and absent
+// wherever that subtraction is not like-for-like.
 //
 // DISPLAY ONLY. Each list is a company's own description of itself and is
 // not comparable across companies; nothing here ranks one.
 async function segmentsPayload(symbol) {
   const rows = await store.readSegPeriods(symbol);
   const view = (ptype) => {
-    const list = rows.filter((r) => r.ptype === ptype);
+    let list = rows.filter((r) => r.ptype === ptype);
+    if (ptype === 'Q') {
+      const qs = list.map((r) => Object.assign({ end: r.end }, r.data));
+      const extra = [];
+      for (const f of rows.filter((r) => r.ptype === 'FY')) {
+        if (list.some((q) => Math.abs(Segments.days(q.end, f.end)) <= 12)) continue;      // reported after all
+        const d = Segments.fourthQuarter(Object.assign({ end: f.end }, f.data), qs);
+        if (d) extra.push({ ptype: 'Q', end: f.end, form: f.form, filed: f.filed, url: f.url, data: d, derived: true });
+      }
+      list = list.concat(extra).sort((x, y) => (x.end < y.end ? 1 : x.end > y.end ? -1 : 0));
+    }
     const cur = list[0];
     if (!cur) return null;
     const yearBefore = (r) => list.find((x) => Math.abs(Segments.days(x.end, r.end) - 365) <= 12) || null;
@@ -12514,7 +12526,7 @@ async function segmentsPayload(symbol) {
     if (!kinds.length) return null;
     return { ptype, end: cur.end, fyEnd: cur.end, currency: d.currency || null, total: d.total,
       totalChange: d.totalPrev > 0 ? (d.total / d.totalPrev - 1) * 100 : null,
-      form: cur.form, filed: cur.filed, url: cur.url, kinds,
+      form: cur.form, filed: cur.filed, url: cur.url, kinds, derived: !!cur.derived, derivedAt: hist.map((h) => !!h.derived),
       ends: hist.map((h) => h.end), totals: hist.map((h) => (h.data.total != null ? h.data.total : null)) };
   };
   const views = { FY: view('FY'), Q: view('Q') };
