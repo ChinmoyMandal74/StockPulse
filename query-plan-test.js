@@ -33,7 +33,10 @@ const BIG = ['bars', 'fundamentals_history', 'earnings_history', 'news', 'activi
   // ~504 rows a session and append-only, so ~126k a year. On the list from
   // the day it shipped rather than after a scan bit, which is what
   // `insider_trans` above had to learn.
-  'fund_holdings'];
+  'fund_holdings',
+  // About eighteen rows a company (six years, twelve quarters) of JSON a
+  // few KB each: small in rows, not in bytes. Read by symbol only.
+  'seg_periods', 'seg_filings'];
 
 // Statements that scan on purpose, each with the reason it is allowed to.
 // A new entry here is a decision, which is the point of naming them.

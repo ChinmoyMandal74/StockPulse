@@ -791,6 +791,37 @@ const SCHEMA = [
      cusip  text primary key,
      symbol text not null
    )`,
+  // Where each company's revenue comes from, PERIOD BY PERIOD (2026-10-11):
+  // one row per company, per kind of period ('FY' a fiscal year, 'Q' a
+  // quarter) and per period end, holding the breakdowns by product, by
+  // segment and by region as JSON. History accumulates: a new report adds
+  // rows and replaces none but the periods it restates. See segments.js.
+  `create table if not exists seg_periods (
+     symbol   text not null,
+     ptype    text not null,
+     d        text not null,
+     accn     text not null,
+     form     text,
+     filed    text,
+     url      text,
+     data     text not null,
+     at       integer not null,
+     primary key (symbol, ptype, d)
+   )`,
+  // Which reports have been read for it, including the ones that had no
+  // breakdown: what stops a filing being fetched twice.
+  `create table if not exists seg_filings (
+     symbol   text not null,
+     accn     text not null,
+     filed    text,
+     ptype    text,
+     n        integer not null default 0,
+     at       integer not null,
+     primary key (symbol, accn)
+   )`,
+  // SUPERSEDED by the two above the day it shipped: one row per company,
+  // the newest fiscal year only. Nothing reads it; kept so the purge list
+  // names a table that exists.
   // Where each company's revenue comes from, as tagged in its newest annual
   // report (2026-10-11): by product, by segment and by region, as JSON.
   // `data` is NULL for a filing that was read and had no breakdown, kept
@@ -4799,6 +4830,53 @@ async function writeCusipMap(pairs) {
 }
 
 // ---- revenue segments ----------------------------------------------------
+// One report's periods, and the record that the report was read, in one
+// batch. A PERIOD ALREADY ON FILE IS REPLACED ONLY BY A LATER FILING: a
+// newer report restates its comparatives in the company's current
+// groupings, which is what makes a history line up; an older one read
+// afterwards (the backfill goes newest first) must not undo that.
+async function writeSegReport(symbol, rep) {
+  await init();
+  if (!rep || !rep.accn) return 0;
+  const sym = String(symbol).toUpperCase(), now = Date.now();
+  const list = (rep.periods || []).filter((p) => p && p.end && (p.ptype === 'FY' || p.ptype === 'Q') && p.kinds);
+  const stmts = list.map((p) => ({
+    sql: `insert into seg_periods (symbol, ptype, d, accn, form, filed, url, data, at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          on conflict(symbol, ptype, d) do update set accn = excluded.accn, form = excluded.form, filed = excluded.filed,
+            url = excluded.url, data = excluded.data, at = excluded.at
+          where excluded.filed >= coalesce(seg_periods.filed, '')`,
+    args: [sym, p.ptype, String(p.end), String(rep.accn), rep.form || null, rep.filed || null, rep.url || null,
+      JSON.stringify({ currency: p.currency || null, total: p.total, concept: p.concept || null, kinds: p.kinds }), now],
+  }));
+  stmts.push({
+    sql: `insert into seg_filings (symbol, accn, filed, ptype, n, at) values (?, ?, ?, ?, ?, ?)
+          on conflict(symbol, accn) do update set filed = excluded.filed, ptype = excluded.ptype, n = excluded.n, at = excluded.at`,
+    args: [sym, String(rep.accn), rep.filed || null, rep.ptype || null, list.length, now],
+  });
+  await db.batch(stmts, 'write');
+  return list.length;
+}
+
+// The reports already read for a company: Map accession -> filing date.
+async function readSegAccns(symbol) {
+  await init();
+  const r = await db.execute({ sql: 'select accn, filed from seg_filings where symbol = ?', args: [String(symbol).toUpperCase()] });
+  return new Map(r.rows.map((x) => [String(x.accn), x.filed ? String(x.filed) : '']));
+}
+
+// Every period on file for a company, newest first.
+async function readSegPeriods(symbol) {
+  await init();
+  const r = await db.execute({ sql: 'select ptype, d, accn, form, filed, url, data from seg_periods where symbol = ? order by d desc', args: [String(symbol).toUpperCase()] });
+  const out = [];
+  for (const x of r.rows) {
+    let data = null;
+    try { data = JSON.parse(x.data); } catch { data = null; }
+    if (data && data.kinds) out.push({ ptype: String(x.ptype), end: String(x.d), accn: String(x.accn), form: x.form || null, filed: x.filed || null, url: x.url || null, data });
+  }
+  return out;
+}
+
 async function writeSecSegments(symbol, row) {
   await init();
   if (!row || !row.accn) return 0;
@@ -5023,7 +5101,7 @@ async function readBarsFor(symbols, since) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'cusip_map', 'sec_segments', 'fund_holders',
+const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
   'sec_facts', 'sec_state', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
 
@@ -6746,7 +6824,7 @@ module.exports = {
   writeSecEvents, readSecEvents, readSecEventsSince,
   writeSecHolders, readSecHolders, readSecHolderAccns, readSecHoldersSince,
   writeInstHoldings, readInstHolding, readInstSummaries, writeCusipMap,
-  writeSecSegments, readSecSegments, readSecSegmentAccn,
+  writeSecSegments, readSecSegments, readSecSegmentAccn, writeSegReport, readSegAccns, readSegPeriods,
   readCusipMap, writeFundHolders, readFundHolders,
   readMarginChange, writeMarginChange,
   readEarningsDates,

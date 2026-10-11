@@ -7697,6 +7697,8 @@
   const RM_KINDS = [['auto', 'Whichever it reports first'], ['product', 'By product or service'], ['segment', 'By business segment'], ['geo', 'By region']];
   const RM_WORD = { product: 'by product', segment: 'by segment', geo: 'by region' };
   const RM_ROWS = { portrait: 10, square: 6, story: 12 };
+  // Which period: the newest on file whichever it is, or one named.
+  const RM_PERIODS = [['auto', 'Most recent on file'], ['FY', 'Latest fiscal year'], ['Q', 'Latest quarter']];
   function revMixNeed(tpl, opts) {
     if (tpl !== 'revmix') return null;
     return { symbol: (opts && opts.rmSym) || null };
@@ -7712,10 +7714,15 @@
     const data = getSegments(sym);
     if (!data) return shell('Reading the filings', 'Finding', 'the breakdown\u2026');
     const n = nameOf(row);
-    const S = data.segments;
+    const S0 = data.segments;
+    const wantP = O.rmPeriod === 'FY' || O.rmPeriod === 'Q' ? O.rmPeriod : null;
+    // A period it does not have falls back to the one it does, and the card says which it is showing.
+    const S = S0 && S0.views ? ((wantP && S0.views[wantP]) || S0) : S0;
+    const isQ = !!(S && S.ptype === 'Q');
+    const span = isQ ? 'quarter' : 'year';
     if (!S || !Array.isArray(S.kinds) || !S.kinds.length) {
       return shell(n, 'Revenue mix', 'not reported',
-        sym + '\u2019s latest annual report on file tags no breakdown of its revenue by product, segment or region. A fund has none.');
+        sym + '\u2019s reports on file tag no breakdown of its revenue by product, segment or region. A fund has none.');
     }
     const want = O.rmKind && O.rmKind !== 'auto' ? S.kinds.find((k) => k.kind === O.rmKind) : null;
     const K = want || S.kinds[0];
@@ -7728,7 +7735,7 @@
     const ch = (v) => (v == null ? '\u2014' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(Math.abs(v) >= 100 ? 0 : 1) + '%');
     const up = pal.ink('#60a5fa'), dn = pal.ink('#fb923c');
     const tone = (v) => (v == null || Math.abs(v) < 0.05 ? 'var(--muted)' : v > 0 ? up : dn);
-    const fy = (() => { const t = new Date(S.fyEnd + 'T12:00:00'); return isNaN(t.getTime()) ? S.fyEnd : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); })();
+    const fy = (() => { const t = new Date((S.end || S.fyEnd) + 'T12:00:00'); return isNaN(t.getTime()) ? (S.end || S.fyEnd) : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); })();
     const SZ = ({
       portrait: top.length <= 5 ? { f: 30, b: 30 } : top.length <= 8 ? { f: 26, b: 24 } : { f: 23, b: 20 },
       square: top.length <= 4 ? { f: 25, b: 22 } : { f: 21, b: 16 },
@@ -7746,18 +7753,18 @@
       + '<span class="bx-v rm-pct">' + esc(pc(m.pct)) + '</span>'
       + '<span class="bx-v" style="color:' + tone(m.change) + '">' + esc(ch(m.change)) + '</span></div>').join('');
     const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>As the company reports it</span>'
-      + '<span style="grid-column:2 / 4">Revenue, fiscal year</span><span class="sb-hr">Share</span><span class="sb-hr">vs yr ago</span></div>';
+      + '<span style="grid-column:2 / 4">Revenue, ' + (isQ ? 'the quarter' : 'fiscal year') + '</span><span class="sb-hr">Share</span><span class="sb-hr">vs yr ago</span></div>';
     const more = parts.length - top.length;
     const note = (K.complete
-        ? 'These ' + (more > 0 ? 'are the ' + top.length + ' largest of ' + parts.length + ' parts, which together' : parts.length + ' parts') + ' add up to ' + sym + '\u2019s revenue of ' + money(S.total) + ' for the year to ' + fy + '. '
-        : 'These are the parts ' + sym + ' tagged in its report; they do not add up to its revenue of ' + money(S.total) + ' for the year to ' + fy + ', so the shares are of that total and something is left out. ')
-      + (S.totalChange == null ? '' : 'Revenue as a whole was ' + ch(S.totalChange) + ' on the year before. ')
-      + 'The names and the groupings are the company\u2019s own, from its ' + (S.form || 'annual report') + ', so they cannot be compared with another company\u2019s. '
+        ? 'These ' + (more > 0 ? 'are the ' + top.length + ' largest of ' + parts.length + ' parts, which together' : parts.length + ' parts') + ' add up to ' + sym + '\u2019s revenue of ' + money(S.total) + ' for the ' + span + ' to ' + fy + '. '
+        : 'These are the parts ' + sym + ' tagged in its report; they do not add up to its revenue of ' + money(S.total) + ' for the ' + span + ' to ' + fy + ', so the shares are of that total and something is left out. ')
+      + (S.totalChange == null ? '' : 'Revenue as a whole was ' + ch(S.totalChange) + (isQ ? ' on the same quarter a year before. ' : ' on the year before. '))
+      + 'The names and the groupings are the company\u2019s own, from its ' + (S.form || 'report') + ', so they cannot be compared with another company\u2019s. '
       + (S.currency && S.currency !== 'USD' ? 'Figures are in ' + S.currency + ', as reported. ' : '')
       + 'What was reported, not a forecast.';
     return chromeTop()
       + '<div class="s-body"><div class="bx-in">'
-      + '<span class="s-kick">' + esc((row.sector ? row.sector + ' \u00b7 ' : '') + sym + ' \u00b7 year to ' + fy) + '</span>'
+      + '<span class="s-kick">' + esc((row.sector ? row.sector + ' \u00b7 ' : '') + sym + ' \u00b7 ' + span + ' to ' + fy) + '</span>'
       + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
       + '<span class="dim">' + esc('revenue ' + (RM_WORD[K.kind] || '') + (fellBack ? ' \u2014 the one it reports' : '')) + '</span></h2>'
       + '<div class="bx-rows">' + hd + rows + '</div>'
@@ -11217,7 +11224,7 @@
     earnAheadWindow: eaWindow,
     marginsNeed, marginMetrics: () => MG_METRICS.map((p) => p.slice()),
     holdersNeed, holdersFold,
-    revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()),
+    revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()), revMixPeriods: () => RM_PERIODS.map((p) => p.slice()),
     fundHoldersNeed,
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.

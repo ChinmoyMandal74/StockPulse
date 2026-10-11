@@ -136,14 +136,24 @@
     return out;
   }
 
-  // The instance and the label file -> the three breakdowns, or null where
-  // the file has no annual revenue to break down.
-  function parse(instanceXml, labelXml) {
+  // ---- reading an instance ------------------------------------------------------
+  //
+  // AN INSTANCE CARRIES MORE THAN ITS OWN PERIOD. An annual report gives the
+  // year and, as comparatives, the one or two before it; a quarterly report
+  // gives the quarter and the same quarter a year earlier (and year-to-date
+  // figures, which are neither a quarter nor a year and are not read). So
+  // one filing yields several periods, and `periods()` returns all of them.
+  //
+  // WHAT A PERIOD IS is decided by its length: 350 to 380 days is a fiscal
+  // year, 80 to 100 a quarter. A six- or nine-month figure is neither.
+  const SPANS = { FY: [350, 380], Q: [80, 100] };
+  const isSpan = (c, p) => c && c.s && c.e && days(c.s, c.e) >= SPANS[p][0] && days(c.s, c.e) <= SPANS[p][1];
+
+  // Everything parsed once: the contexts, the labels, every revenue fact.
+  function read(instanceXml, labelXml) {
     const xml = String(instanceXml || '');
     if (!/<(?:\w+:)?context\s/.test(xml)) return null;
     const ctx = contexts(xml);
-    const lab = labels(String(labelXml || ''));
-    // every revenue fact, with its context
     const facts = [];
     const re = /<((?:us-gaap|ifrs-full):[A-Za-z]+)\s([^>]*)>\s*(-?[\d.]+(?:[eE][-+]?\d+)?)\s*<\//g;
     for (const m of xml.matchAll(re)) {
@@ -153,46 +163,40 @@
       if (!c || !isFinite(v)) continue;
       facts.push({ concept: m[1], c, v, unit: attr(m[2], 'unitRef') });
     }
-    if (!facts.length) return null;
-    // THE YEAR is the newest full-year period any undimensioned revenue fact
-    // covers. Taken from the facts rather than from the cover page: a filing
-    // can carry a period-end date that differs by a day from its contexts.
-    const plain = facts.filter((f) => !f.c.dims.length && isYear(f.c));
-    if (!plain.length) return null;
-    const fyEnd = plain.map((f) => f.c.e).sort().pop();
-    const inYear = (c) => isYear(c) && c.e === fyEnd;
-    const inPrior = (c) => isYear(c) && Math.abs(days(c.e, fyEnd) - 365) <= 12;
-    const totalFact = REVENUE.map((r) => plain.find((f) => f.concept === r && f.c.e === fyEnd)).find(Boolean);
+    return facts.length ? { xml, facts, lab: labels(String(labelXml || '')) } : null;
+  }
+
+  // One period of one length: { ptype, end, currency, total, concept, kinds }
+  // or null where the instance has no undimensioned revenue for it.
+  function periodOf(R, ptype, end) {
+    const { xml, facts, lab } = R;
+    const inP = (c) => isSpan(c, ptype) && c.e === end;
+    const plain = facts.filter((f) => !f.c.dims.length && inP(f.c));
+    const totalFact = REVENUE.map((r) => plain.find((f) => f.concept === r)).find(Boolean);
     if (!totalFact) return null;
     const total = totalFact.v;
-    const priorFact = facts.find((f) => !f.c.dims.length && f.concept === totalFact.concept && inPrior(f.c));
     // the currency, from the unit the total was reported in
     const um = totalFact.unit ? new RegExp('<(?:\\w+:)?unit\\s+id="' + totalFact.unit.replace(/[^\w.\-]/g, '') + '"[^>]*>[\\s\\S]*?iso4217:([A-Z]{3})').exec(xml) : null;
     const currency = um ? um[1] : null;
-
     const kinds = {};
     for (const kind of Object.keys(AXES)) {
-      const mine = facts.filter((f) => f.c.dims.length === 1 && KIND_OF[f.c.dims[0][0]] === kind);
+      const mine = facts.filter((f) => f.c.dims.length === 1 && KIND_OF[f.c.dims[0][0]] === kind && inP(f.c));
       if (!mine.length) continue;
       // ONE CONCEPT PER BREAKDOWN: WHICHEVER THE COMPANY USED MOST ON THIS AXIS,
       // the total's own on a tie. Pfizer tags two small lines with the
       // contract-revenue concept and its whole drug list with plain Revenues;
       // preferring the total's concept drew the two small lines as the mix.
       const count = {};
-      for (const f of mine) if (inYear(f.c)) count[f.concept] = (count[f.concept] || 0) + 1;
+      for (const f of mine) count[f.concept] = (count[f.concept] || 0) + 1;
       const concept = Object.keys(count).sort((x, y) => count[y] - count[x] || (x === totalFact.concept ? -1 : y === totalFact.concept ? 1 : 0))[0];
       if (!concept) continue;
       // ...and the breakdown is measured against THAT concept's own total
       // where the report gives one, since the two can differ (a company's
       // contract revenue is not always all of its revenue).
-      const own = plain.find((f) => f.concept === concept && f.c.e === fyEnd);
+      const own = plain.find((f) => f.concept === concept);
       const base = own ? own.v : total;
-      const cur = new Map(), prev = new Map();
-      for (const f of mine) {
-        if (f.concept !== concept) continue;
-        const key = f.c.dims[0][1];
-        if (inYear(f.c)) cur.set(key, f.v); else if (inPrior(f.c)) prev.set(key, f.v);
-      }
+      const cur = new Map();
+      for (const f of mine) if (f.concept === concept) cur.set(f.c.dims[0][1], f.v);
       const keys = [...cur.keys()];
       if (keys.length < 2) continue;                       // one member is the total again, not a breakdown
       const vals = keys.map((k) => cur.get(k));
@@ -242,7 +246,7 @@
           if (best && best.length >= 2) { const keep = new Set(best); for (const i of idx) if (!keep.has(i)) subs.add(i); }
         }
       }
-      const members = keys.map((k, i) => ({ key: k, name: nameOf(k, lab), v: vals[i], prev: prev.has(k) ? prev.get(k) : null, subtotal: subs.has(i) }));
+      const members = keys.map((k, i) => ({ key: k, name: nameOf(k, lab), v: vals[i], subtotal: subs.has(i) }));
       const sum = sumOf(subs);
       kinds[kind] = {
         concept, total: base, members: members.sort((x, y) => y.v - x.v), sum,
@@ -251,15 +255,47 @@
       };
     }
     if (!Object.keys(kinds).length) return null;
-    return { fyEnd, currency, total, totalPrev: priorFact ? priorFact.v : null, concept: totalFact.concept, kinds };
+    return { ptype, end, currency, total, concept: totalFact.concept, kinds };
   }
 
+  // Every period of one length an instance carries, NEWEST FIRST. The first
+  // is the filing's own period; the rest are its comparatives.
+  function periods(instanceXml, labelXml, ptype) {
+    const R = read(instanceXml, labelXml);
+    if (!R || !SPANS[ptype]) return [];
+    const ends = [...new Set(R.facts.filter((f) => !f.c.dims.length && isSpan(f.c, ptype)).map((f) => f.c.e))].sort().reverse();
+    return ends.map((e) => periodOf(R, ptype, e)).filter(Boolean);
+  }
+
+  // The newest fiscal year alone, with last year's figure beside each member
+  // where the same instance carries it. The first shape this module had,
+  // kept for the one-year view.
+  function parse(instanceXml, labelXml) {
+    const all = periods(instanceXml, labelXml, 'FY');
+    if (!all.length) return null;
+    return withPrior(all[0], all.find((p) => Math.abs(days(p.end, all[0].end) - 365) <= 12) || null);
+  }
+
+  // A period beside the same period a year before: `prev` on each member
+  // (matched by the company's own member code, which is stable across its
+  // filings) and `totalPrev`. Null where the earlier one is not held, or
+  // where that member was not reported in it.
+  function withPrior(p, prior) {
+    if (!p) return null;
+    const out = { fyEnd: p.end, ptype: p.ptype, end: p.end, currency: p.currency, total: p.total,
+      totalPrev: prior ? prior.total : null, concept: p.concept, kinds: {} };
+    for (const k of Object.keys(p.kinds)) {
+      const was = new Map(((prior && prior.kinds[k] && prior.kinds[k].members) || []).map((m) => [m.key, m.v]));
+      out.kinds[k] = Object.assign({}, p.kinds[k], { members: p.kinds[k].members.map((m) => Object.assign({}, m, { prev: was.has(m.key) ? was.get(m.key) : null })) });
+    }
+    return out;
+  }
   // Where the two files of a filing live, from the feed's own row for it.
   function urls(cik, accn, primaryDoc) {
     if (!cik || !accn || !primaryDoc || !/^[\w.\-]+\.html?$/i.test(primaryDoc)) return null;
     const base = 'https://www.sec.gov/Archives/edgar/data/' + Number(cik) + '/' + String(accn).replace(/-/g, '') + '/';
     const stem = primaryDoc.replace(/\.html?$/i, '');
-    return { instance: base + stem + '_htm.xml', labels: base + stem + '_lab.xml', page: base + primaryDoc };
+    return { instance: base + stem + '_htm.xml', labels: base + stem + '_lab.xml', schema: base + stem + '.xsd', page: base + primaryDoc };
   }
   // The newest annual report in a company's list: { accn, filed, form, doc }.
   const ANNUAL = new Set(['10-K', '10-K/A', '20-F', '20-F/A', '40-F', '40-F/A']);
@@ -279,6 +315,77 @@
     return best;
   }
   const KIND_NAME = { product: 'By product or service', segment: 'By business segment', geo: 'By region' };
+
+  // ---- which filings to read ----------------------------------------------------
+  //
+  // (2026-10-11, the owner, of the first version, which kept one fiscal year:
+  // "annual data could be very old, why not store annual and quarter and also
+  // the history".) So both kinds of report are read, and every period each
+  // one carries is kept.
+  const QUARTERLY = new Set(['10-Q']);
+  // Every annual and quarterly report in a company's list, newest first:
+  // { accn, filed, form, doc, ptype }. Amendments are left out: they usually
+  // restate nothing and often carry no figures, and the original is there.
+  function reports(recent) {
+    if (!recent || !Array.isArray(recent.form)) return [];
+    const out = [];
+    for (let i = 0; i < recent.form.length; i++) {
+      const form = recent.form[i];
+      const ptype = QUARTERLY.has(form) ? 'Q' : ANNUAL.has(form) && !/\/A$/.test(form) ? 'FY' : null;
+      if (!ptype) continue;
+      const accn = String((recent.accessionNumber || [])[i] || ''), doc = String((recent.primaryDocument || [])[i] || '');
+      const filed = String((recent.filingDate || [])[i] || '').slice(0, 10);
+      if (!accn || !doc || !/^\d{4}-\d{2}-\d{2}$/.test(filed)) continue;
+      out.push({ accn, filed, form, doc, ptype });
+    }
+    return out.sort((x, y) => (x.filed < y.filed ? 1 : x.filed > y.filed ? -1 : 0));
+  }
+  // THE BACKFILL PLAN, chosen so a few filings cover several years: each
+  // annual report carries its year and usually the two before it, and each
+  // quarterly one its quarter and the same quarter a year earlier. So the
+  // newest annual report and the one three years older give about six
+  // years, and the six newest quarterly reports give about nine quarters
+  // (three a year, so their comparatives overlap).
+  function plan(recent) {
+    const all = reports(recent);
+    const fy = all.filter((r) => r.ptype === 'FY'), q = all.filter((r) => r.ptype === 'Q');
+    const out = [];
+    if (fy[0]) out.push(fy[0]);
+    const older = fy.find((r) => fy[0] && r.filed <= String(Number(fy[0].filed.slice(0, 4)) - 3) + fy[0].filed.slice(4));
+    if (older) out.push(older);
+    return out.concat(q.slice(0, 6));
+  }
+
+  // One report read: { accn, form, filed, url, ptype, periods: [...] }.
+  // `periods` is empty where the filing had no breakdown, which is still an
+  // answer and is recorded so the filing is not fetched again. A 429 is
+  // passed up as { throttled: true }; a server error returns null, to be
+  // tried again. `labelsFrom` lets a caller reuse the label file of a newer
+  // filing rather than fetch one per report: a company's member names
+  // rarely change between its filings.
+  async function readReport(o) {
+    const r = o.report;
+    const u = urls(o.cik, r.accn, r.doc);
+    const base = { accn: r.accn, form: r.form, filed: r.filed, ptype: r.ptype, url: u ? u.page : null };
+    if (!u) return Object.assign(base, { periods: [] });
+    const inst = await o.getText(u.instance);
+    if (inst.status === 429) return { throttled: true };
+    if (inst.status === 404) return Object.assign(base, { periods: [] });
+    if (inst.status !== 200) return null;
+    let labText = o.labelsFrom || '';
+    if (!labText) {
+      // NOT EVERY FILING HAS A LABEL FILE. Some carry the labels inside the
+      // schema instead (Microsoft's 2026 annual report: no _lab.xml, and its
+      // product lines came out as raw member codes). So a 404 tries the schema.
+      try {
+        let lab = await o.getText(u.labels);
+        if (lab.status === 404) lab = await o.getText(u.schema);
+        if (lab.status === 429) return { throttled: true };
+        if (lab.status === 200 && /<(?:\w+:)?label[\s>]/.test(lab.text)) labText = lab.text;
+      } catch (e) { /* names fall back to the member codes */ }
+    }
+    return Object.assign(base, { periods: periods(inst.text, labText, r.ptype), labels: labText });
+  }
 
   // One company's newest annual report, read if it is not the one already
   // stored. `getText(url)` returns { status, text }. Returns null when there
@@ -303,7 +410,7 @@
     return Object.assign(base, { data: parsed });
   }
 
-  const api = { AXES, REVENUE, KIND_NAME, parse, contexts, labels, subtotals, nameOf, urls, latestAnnual, collect };
+  const api = { AXES, REVENUE, KIND_NAME, SPANS, days, parse, periods, withPrior, contexts, labels, subtotals, nameOf, urls, latestAnnual, collect, reports, plan, readReport };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Segments = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -11356,20 +11356,28 @@ async function secFetchOne(symbol) {
             } });
           if (got.rows.length) await store.writeSecHolders(sym, got.rows, since);
         } catch (e) { /* holders ride along */ }
-        // WHERE THE REVENUE COMES FROM (segments.js), from the newest annual
-        // report -- read only when that report is not the one already on
-        // file, so this is two requests a company a YEAR, not a rotation.
-        // The instance document is the one large thing here (up to about
-        // 15MB unpacked for a bank), so it has its own short clock and its
-        // own catch.
+        // WHERE THE REVENUE COMES FROM (segments.js): any annual or quarterly
+        // report filed since the last one read, AT MOST TWO A VISIT, oldest
+        // first so the next visit carries on from there. A company never
+        // read starts with its newest of each; the deeper history is
+        // sec-segments-load.js's job, not this rotation's.
         try {
-          const got = await Segments.collect({ cik, recent: sj.filings && sj.filings.recent,
-            haveAccn: await store.readSecSegmentAccn(sym),
-            getText: async (u) => {
-              const r = await fetch(u, { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(20000) });
-              return { status: r.status, text: r.ok ? await r.text() : '' };
-            } });
-          if (got && !got.throttled) await store.writeSecSegments(sym, got);
+          const seen = await store.readSegAccns(sym);
+          const all = Segments.reports(sj.filings && sj.filings.recent);
+          const mark = [...seen.values()].sort().pop() || '';
+          const todo = seen.size
+            ? all.filter((r) => !seen.has(r.accn) && r.filed > mark).reverse().slice(0, 2)
+            : [all.find((r) => r.ptype === 'FY'), all.find((r) => r.ptype === 'Q')].filter(Boolean)
+              .sort((x, y) => (x.filed < y.filed ? -1 : 1));
+          for (const report of todo) {
+            const got = await Segments.readReport({ cik, report,
+              getText: async (u) => {
+                const r = await fetch(u, { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(20000) });
+                return { status: r.status, text: r.ok ? await r.text() : '' };
+              } });
+            if (!got || got.throttled) break;
+            await store.writeSegReport(sym, got);
+          }
         } catch (e) { /* segments ride along */ }
       }
     } catch { /* the filings are the payload; this one rides along */ }
@@ -12469,26 +12477,50 @@ app.get('/api/fund-holders', requireAuth, route(async (req, res) => {
 
 // ---- where one company's revenue comes from --------------------------------------
 // By product, by segment and by region, as the company tagged its own
-// annual report. One function for the page route and the saved-post route.
+// reports. One function for the page route and the saved-post route.
+//
+// TWO VIEWS, the newest fiscal year and the newest quarter, each beside the
+// same period a year before and each with the periods before it. The
+// top level repeats whichever ended most recently, so a caller that asks
+// for nothing in particular gets the freshest figures on file.
+//
+// A FOURTH QUARTER IS NOT AMONG THE QUARTERS: companies report it only
+// inside the annual figure, and it is not derived here by subtraction.
 //
 // DISPLAY ONLY. Each list is a company's own description of itself and is
 // not comparable across companies; nothing here ranks one.
 async function segmentsPayload(symbol) {
-  const row = await store.readSecSegments(symbol);
-  if (!row || !row.data) return { symbol, segments: null };
-  const d = row.data;
-  const kinds = Object.keys(Segments.KIND_NAME).filter((k) => d.kinds && d.kinds[k]).map((k) => {
-    const K = d.kinds[k];
-    return { kind: k, title: Segments.KIND_NAME[k], complete: !!K.complete, total: K.total || d.total,
-      members: (K.members || []).map((m) => ({ name: m.name, v: m.v, subtotal: !!m.subtotal,
-        // Against this breakdown's own total, which is the company's except
-        // where the report measures the breakdown on a narrower revenue line.
-        pct: (K.total || d.total) > 0 ? m.v / (K.total || d.total) * 100 : null,
-        change: m.prev > 0 ? (m.v / m.prev - 1) * 100 : null })) };
-  });
-  return { symbol, segments: { fyEnd: d.fyEnd, currency: d.currency || null, total: d.total,
-    totalChange: d.totalPrev > 0 ? (d.total / d.totalPrev - 1) * 100 : null,
-    form: row.form, filed: row.filed, url: row.url, kinds } };
+  const rows = await store.readSegPeriods(symbol);
+  const view = (ptype) => {
+    const list = rows.filter((r) => r.ptype === ptype);
+    const cur = list[0];
+    if (!cur) return null;
+    const yearBefore = (r) => list.find((x) => Math.abs(Segments.days(x.end, r.end) - 365) <= 12) || null;
+    const prior = yearBefore(cur);
+    const d = Segments.withPrior(Object.assign({ ptype, end: cur.end }, cur.data), prior ? prior.data : null);
+    const hist = list.slice(0, ptype === 'Q' ? 8 : 6);
+    const kinds = Object.keys(Segments.KIND_NAME).filter((k) => d.kinds && d.kinds[k]).map((k) => {
+      const K = d.kinds[k];
+      const at = hist.map((h) => new Map((((h.data.kinds || {})[k] || {}).members || []).map((m) => [m.key, m.v])));
+      return { kind: k, title: Segments.KIND_NAME[k], complete: !!K.complete, total: K.total || d.total,
+        members: (K.members || []).map((m) => ({ name: m.name, v: m.v, subtotal: !!m.subtotal,
+          // Against this breakdown's own total, which is the company's except
+          // where the report measures the breakdown on a narrower revenue line.
+          pct: (K.total || d.total) > 0 ? m.v / (K.total || d.total) * 100 : null,
+          change: m.prev > 0 ? (m.v / m.prev - 1) * 100 : null,
+          // The same member in each earlier period, null where it was not reported.
+          past: at.map((mp) => (mp.has(m.key) ? mp.get(m.key) : null)) })) };
+    });
+    if (!kinds.length) return null;
+    return { ptype, end: cur.end, fyEnd: cur.end, currency: d.currency || null, total: d.total,
+      totalChange: d.totalPrev > 0 ? (d.total / d.totalPrev - 1) * 100 : null,
+      form: cur.form, filed: cur.filed, url: cur.url, kinds,
+      ends: hist.map((h) => h.end), totals: hist.map((h) => (h.data.total != null ? h.data.total : null)) };
+  };
+  const views = { FY: view('FY'), Q: view('Q') };
+  const lead = views.FY && views.Q ? (views.Q.end > views.FY.end ? 'Q' : 'FY') : views.FY ? 'FY' : views.Q ? 'Q' : null;
+  if (!lead) return { symbol, segments: null };
+  return { symbol, segments: Object.assign({}, views[lead], { views }) };
 }
 app.get('/api/segments', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
