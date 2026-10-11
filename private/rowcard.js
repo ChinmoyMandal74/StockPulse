@@ -346,6 +346,8 @@
     ['react', 'Market rally',   (s) => V.smag(s.marketRally)],
     ['react', 'Short build',    (s) => V.smag(s.shortBuild)],
     ['react', 'Insider net',    (s) => V.smag(s.insiderNet, 2)],
+    // The newest 8-K in the last sixty days: what it was about, and its date.
+    ['react', 'Last 8-K',       (s) => (s.lastEvent ? { t: s.lastEvent + (s.lastEventDate ? ' \u00b7 ' + shortDate(s.lastEventDate) : ''), c: '' } : null)],
     ['trend', 'vs 50D MA',      (s) => V.pct(s.vs50ma)],
     ['trend', 'vs 200D MA',     (s) => V.pct(s.vs200ma)],
     ['trend', 'MA cross',       (s) => {

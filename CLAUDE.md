@@ -36,6 +36,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `public/app.css` | Shared design system — tokens, bezel, buttons, table base |
 | `barmath.js`, `techrow.js` | Indicators from bars alone; the one backtest row builder |
 | `secfacts.js`, `fx.js`, `insider.js`, `shortint.js`, `holdings.js`, `news.js` | Auxiliary data pulls (SEC filings, insiders, FINRA short interest, index membership, headlines) |
+| `events8k.js`, `sec-events-load.js` | 8-K filings: the item catalogue and parser, and the first fill. The filings refresh keeps them current |
 | `margins.js` | Aggregate margins from the filings, and one company's margin change: the arithmetic behind the Margins card and the Margin chg column |
 | `drawdowns.js`, `drawdown-load.js` | The stored drawdown figures behind two screener columns: a slice a night on the daily check, and the first fill |
 | `adjusted.js` | Filings-fed Signal overlay for `/adjusted` and `/adjustedbacktest` (admin research) |
@@ -141,7 +142,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Signal and research** (file names keep the old word) — `the-advice-column` · `does-any-of-this-predict-anything` · `the-advice-backtest` · `adjusted-advice` · `the-adjusted-backtest` · `the-trend-only-backtest` · `the-strategy-backtest` · `the-single-stock-strategy` · `the-indicator-lab`
 
-**Regulatory and auxiliary data** — `sec-edgar` (140 KB: also insiders, FINRA short interest, index membership, the add-gate, the FUND/EARN/SHORT chart strips) · `the-sec-edgar-data-page` · `foreign-filers-and-euro-rates` · `margins` (the Margins card and the Margin chg column) · `news` · `logos` (removed)
+**Regulatory and auxiliary data** — `sec-edgar` (140 KB: also insiders, FINRA short interest, index membership, the add-gate, the FUND/EARN/SHORT chart strips) · `the-sec-edgar-data-page` · `foreign-filers-and-euro-rates` · `8k-events` · `margins` (the Margins card and the Margin chg column) · `news` · `logos` (removed)
 
 **Stock, group and comparison pages** — `charts-and-the-stock-page` · `earnings-history-on-the-stock-page` · `similar-stocks` · `against-its-peers` · `growth-and-profitability` (also promo template grouping and split history) · `the-basket-page` · `the-compare-page` · `the-pivot-view` · `consolidated` · `the-phone-page`
 

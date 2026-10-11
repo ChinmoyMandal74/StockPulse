@@ -1699,6 +1699,64 @@ or red for a margin. Reported figures only, never a forecast.
 
 ---
 
+## 36. More public SEC data: 13F holdings, and what 8-K events could still feed — 2026-10-11
+
+*Area: Data · Status: Open · Note: 8-K events built 2026-10-11 (docs/context/8k-events.md); 13F and the follow-ons remain*
+
+**Where this came from.** The owner found FilingRail, a third-party API on
+RapidAPI (a small publisher; about 8,200 SEC filers, refreshed daily), and
+asked what other public data could be read. Its seven endpoints were
+compared with what the app holds. Five were already here from the SEC
+directly (company search, financials, financial history, insider trades,
+filing dates). Two were new: **8-K events** and **13F holdings**.
+
+**The decision on the API itself: not subscribed.** Everything it serves
+is the SEC's own public data. Its free tier is 50 calls a day and the
+universe is about 1,280 symbols, so one daily pass of one endpoint needs
+its $49 tier. Reading the SEC directly costs nothing, has no call limit
+and no dependence on a small publisher, and the source said nothing about
+redistribution. The one thing a middleman offers is distance from the
+SEC's own throttling, which this address has met before; the existing
+slow sequential reader already handles it.
+
+**Built: 8-K events**, from the feed the filings refresh already
+downloads. A stock-page list, a screener column, a text filter.
+
+**a. 13F institutional holdings. Not built.** What large institutions held
+at each quarter end and how it changed. The SEC publishes it as free
+quarterly bulk files (one row per manager per security). Things to settle
+before building:
+- It is **45 days stale by design** and covers long positions in listed
+  equities only, so it is context, never a live reading.
+- Positions are keyed by **CUSIP, not ticker**, and the app has no CUSIP
+  map. That mapping is most of the work.
+- The files are large (millions of rows a quarter). This is a local
+  loader writing per-symbol summaries, never a request-path read: count
+  of holders, shares held, change on the quarter, the largest holders.
+- The profile already carries `institutionPct` from the vendor. Check
+  what 13F adds beyond that one number before spending the effort; the
+  honest answer may be "the change, and the names".
+
+**b. An alert type for 8-K events.** "Tell me when this company files an
+8-K", or one of a kind (results, officer change, restatement warning).
+The alerts feature fires on new data arriving; events arrive with the
+filings refresh, so the lag is that rotation's, and the alert must say so.
+
+**c. A promo card of the week's 8-Ks.** Which companies filed what, by
+kind: the officer changes, the restatement warnings. Must stay a list of
+categories; an item number never says whether the news was good.
+
+**d. Results 8-Ks beside the earnings calendar.** Item 2.02 is the
+release itself. The Earnings ahead card shows who is due; a companion
+could show who reported this week, from the events table.
+
+**e. The filing's text.** An 8-K's exhibit 99.1 is the press release.
+Reading it would say what happened, which the item number cannot. That is
+a different order of work (fetching documents, not a feed) and would need
+the chatbot's care about attributing rather than summarising as fact.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's

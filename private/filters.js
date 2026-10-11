@@ -19,7 +19,7 @@
   // A score column filters on the 1-10 rating the cell shows, not the 0-100
   // score behind it.
   const RATING_FOR = { qualityScore: 'qualityRating' };
-  const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios']);
+  const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios', 'lastEvent']);
   const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh',
     'exchange', 'capBand', 'instrumentType', 'filer', 'ddState', 'spMember']);
 

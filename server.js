@@ -5153,7 +5153,8 @@ function filerLabel(st) {
   if (st.status === 'ok' && (st.taxonomy === 'us-gaap' || !st.taxonomy)) return 'US GAAP';
   return null;
 }
-const FLOWS_V = 4;          // bumped when the stored value gains a part
+const FLOWS_V = 5;          // bumped when the stored value gains a part
+const EVENT_RECENT_DAYS = 60;     // how far back the screener's 8-K column looks
 
 // ---- Drawdown history: corrections in five years, and the way back -------
 //
@@ -5189,14 +5190,20 @@ let flowsMem = null;
 let flowsMemAt = 0;
 async function buildFlows() {
   const since = new Date(Date.now() - INSIDER_NET_DAYS * 86400000).toISOString().slice(0, 10);
-  const [sm, ids, net, secState, ddAll, mgAll] = await Promise.all([
+  const [sm, ids, net, secState, ddAll, mgAll, evAll] = await Promise.all([
     shortMovesPayload().catch(() => null),
     filerIds().catch(() => ({})),
     store.readInsiderNetSince(since).catch(() => null),
     store.readSecState().catch(() => null),
     store.readDrawdownStats().catch(() => null),
     store.readMarginChange().catch(() => null),
+    store.readSecEventsSince(new Date(Date.now() - EVENT_RECENT_DAYS * 86400000).toISOString().slice(0, 10)).catch(() => null),
   ]);
+  // Each company's NEWEST 8-K in the window: { SYM: [filed, items] }.
+  const ev = {};
+  if (evAll) {
+    for (const e of evAll) { const had = ev[e.symbol]; if (!had || e.filed > had[0]) ev[e.symbol] = [e.filed, e.items]; }
+  }
   // [count, median days back to the high], and only for a symbol with
   // enough history to have a count at all.
   const dd = {};
@@ -5232,6 +5239,7 @@ async function buildFlows() {
   return { v: FLOWS_V, at: Date.now(), filer: secState ? filer : null, dd: ddAll ? dd : null,
     // { SYM: [margin now, margin a year before] }, as stored.
     mg: mgAll && mgAll.m ? mgAll.m : null,
+    ev: evAll ? ev : null,
     shortFrom: sm ? sm.from : null, shortTo: sm ? sm.to : null, short,
     // null, not {}: "the read failed" must not be stored as "nobody traded".
     insiderSince: net ? since : null, insider: net ? insider : null };
@@ -5246,6 +5254,7 @@ async function flowsNow() {
     if (f && !fresh.filer) fresh.filer = f.filer || null;
     if (f && !fresh.dd) fresh.dd = f.dd || null;
     if (f && !fresh.mg) fresh.mg = f.mg || null;
+    if (f && !fresh.ev) fresh.ev = f.ev || null;
     if (f && !fresh.shortTo) { fresh.short = f.short || {}; fresh.shortFrom = f.shortFrom || null; fresh.shortTo = f.shortTo || null; }
     await store.writeFlows(fresh).catch(() => {});
     f = fresh;
@@ -5258,12 +5267,20 @@ async function flowsNow() {
 // which is a different statement from "its insiders netted to nothing".
 function flowsOf(row, f) {
   const out = { shortBuild: null, insiderNet: null, insiderBuyers: null, insiderSellers: null, filer: null,
-    ddCount: null, ddMedBack: null, netMarginChg: null, netMarginNow: null, netMarginPrev: null };
+    ddCount: null, ddMedBack: null, netMarginChg: null, netMarginNow: null, netMarginPrev: null,
+    lastEvent: null, lastEventDate: null, lastEventNotable: null };
   if (!row || !f) return out;
   // Zero is a real count here (no drawdown of 10% in five years); the median
   // is null when none has recovered, and neither is ever invented.
   // The trailing year's net margin less the year before it, in points. Both
   // ends must be there; a missing one is never read as a margin of zero.
+  // The newest 8-K in the window: what it was about, and when.
+  const e8 = f.ev ? f.ev[String(row.symbol).toUpperCase()] : null;
+  if (e8 && e8[0]) {
+    out.lastEventDate = String(e8[0]);
+    out.lastEvent = Events8k.label(e8[1], 2);
+    out.lastEventNotable = Events8k.notable(e8[1]);
+  }
   const g = f.mg ? f.mg[String(row.symbol).toUpperCase()] : null;
   if (g && g[0] != null && g[1] != null && isFinite(Number(g[0])) && isFinite(Number(g[1]))) {
     out.netMarginNow = Number(g[0]);
@@ -5309,6 +5326,9 @@ async function stampFlows(rows) {
     r.netMarginChg = v.netMarginChg;
     r.netMarginNow = v.netMarginNow;
     r.netMarginPrev = v.netMarginPrev;
+    r.lastEvent = v.lastEvent;
+    r.lastEventDate = v.lastEventDate;
+    r.lastEventNotable = v.lastEventNotable;
   }
 }
 
@@ -11253,6 +11273,14 @@ async function secFetchOne(symbol) {
         const sj = await sr.json();
         const best = SecFacts.newestResults(sj.filings && sj.filings.recent);
         if (best) lastResults = best.d;
+        // EVERY 8-K IN THE SAME BLOCK, not only the newest results one
+        // (events8k.js). No further request: this is the response already
+        // in hand. Its own catch, so a failed write of events can cost
+        // neither the results date above nor the filings below.
+        try {
+          const since = Events8k.sinceDate();
+          await store.writeSecEvents(sym, Events8k.parse(sj.filings && sj.filings.recent, since), since);
+        } catch (e) { /* events ride along */ }
       }
     } catch { /* the filings are the payload; this one rides along */ }
 
@@ -11685,6 +11713,7 @@ async function earnGrowthFor(cutIn) {
 //
 // DISPLAY ONLY. Nothing here is read by the rules.
 const Margins = require('./margins.js');
+const Events8k = require('./events8k.js');
 const mgCache = {};
 const mgWarm = (cut) => !!(mgCache[cut] && Date.now() - mgCache[cut].at < EG_TTL_MS);
 // ONE SECTOR, OR ONE INDUSTRY (2026-10-10, the owner, of the index card:
@@ -12300,6 +12329,29 @@ const INSIDER_WINDOW_DAYS = Number(process.env.INSIDER_WINDOW_DAYS || 180);
 // Loaded locally by shortint-load.js — there is deliberately no route that
 // fetches from FINRA, so production never talks to them at all.
 const ShortInt = require('./shortint.js');
+
+// ---- 8-K events for one company ---------------------------------------------
+// What it filed and what each filing was about, newest first, with a link
+// to each on sec.gov. The names and the catalogue are events8k.js; the
+// rows are written by the filings refresh. Guests get their twenty.
+//
+// DISPLAY ONLY, and nothing here says whether an event is good news: an
+// item is a category, and the filing is where what happened is written.
+app.get('/api/events', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  const [rows, ids] = await Promise.all([store.readSecEvents(symbol, 40), filerIds().catch(() => ({}))]);
+  const cik = ids[symbol] || null;
+  res.json({ symbol, days: Events8k.KEEP_DAYS, events: rows.map((e) => ({
+    filed: e.filed, form: e.form, amended: e.form === '8-K/A', reportDate: e.reportDate,
+    label: Events8k.label(e.items, 3), notable: Events8k.notable(e.items),
+    items: Events8k.detail(e.items), url: Events8k.url(cik, e.accn, e.doc),
+  })) });
+}));
 
 app.get('/api/shortint', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');

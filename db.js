@@ -730,6 +730,22 @@ const SCHEMA = [
   // do so. Rebuilt from the bar archive a slice a night; `at` is when, and
   // is what picks the next slice. `n` is NULL for a symbol with too little
   // history to say, which is a different fact from zero drawdowns.
+  // 8-K filings, one row each (2026-10-11): the date, the form (8-K or an
+  // amendment) and the item numbers that say what it was about. Written by
+  // the filings refresh from a feed it already downloads, kept for about
+  // 400 days per company. `idx_sec_events_filed` is what lets the screener
+  // ask for "everything in the last sixty days" without walking the table.
+  `create table if not exists sec_events (
+     symbol      text not null,
+     accn        text not null,
+     filed       text not null,
+     form        text,
+     items       text,
+     report_date text,
+     doc         text,
+     primary key (symbol, accn)
+   )`,
+  'create index if not exists idx_sec_events_filed on sec_events (filed)',
   `create table if not exists drawdown_stats (
      symbol    text primary key,
      n         integer,
@@ -4515,6 +4531,48 @@ async function readPriceState() {
 
 // The whole table in one read — 1,182 rows, the `price_state` bargain. Never
 // a join against `bars`, which is the scan this table exists to avoid.
+// ---- 8-K events ----------------------------------------------------------
+// One company's events as just read from the SEC. Upserted, so an amended
+// item list replaces the old one, and anything older than `keepSince` is
+// dropped for that symbol in the same batch.
+async function writeSecEvents(symbol, events, keepSince) {
+  await init();
+  const sym = String(symbol).toUpperCase();
+  const rows = (events || []).filter((e) => e && e.accn && e.filed);
+  const stmts = rows.map((e) => ({
+    sql: `insert into sec_events (symbol, accn, filed, form, items, report_date, doc) values (?, ?, ?, ?, ?, ?, ?)
+          on conflict(symbol, accn) do update set filed = excluded.filed, form = excluded.form,
+            items = excluded.items, report_date = excluded.report_date, doc = excluded.doc`,
+    args: [sym, String(e.accn), String(e.filed), e.form || null, e.items || '', e.reportDate || null, e.doc || null],
+  }));
+  if (keepSince) stmts.push({ sql: 'delete from sec_events where symbol = ? and filed < ?', args: [sym, String(keepSince)] });
+  if (!stmts.length) return 0;
+  await db.batch(stmts, 'write');
+  return rows.length;
+}
+
+// One company's events, newest first: a seek on the primary key's symbol.
+async function readSecEvents(symbol, limit) {
+  await init();
+  const r = await db.execute({
+    sql: 'select accn, filed, form, items, report_date, doc from sec_events where symbol = ? order by filed desc, accn desc limit ?',
+    args: [String(symbol).toUpperCase(), Math.max(1, Math.min(100, Number(limit) || 40))],
+  });
+  return r.rows.map((x) => ({ accn: String(x.accn), filed: String(x.filed), form: x.form || '8-K', items: x.items || '',
+    reportDate: x.report_date || null, doc: x.doc || null }));
+}
+
+// Every company's events since a date, for the screener's column. The index
+// is named so the planner cannot choose to walk the table instead.
+async function readSecEventsSince(since) {
+  await init();
+  const r = await db.execute({
+    sql: 'select symbol, filed, items from sec_events indexed by idx_sec_events_filed where filed >= ?',
+    args: [String(since)],
+  });
+  return r.rows.map((x) => ({ symbol: String(x.symbol), filed: String(x.filed), items: x.items || '' }));
+}
+
 // ---- drawdown history, per symbol ----------------------------------------
 // The whole table: about 1,300 short rows, read when the stored readings
 // are rebuilt (every six hours at most) and once a night to pick a slice.
@@ -4709,7 +4767,7 @@ async function readBarsFor(symbols, since) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats',
+const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
   'sec_facts', 'sec_state', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
 
@@ -6429,6 +6487,7 @@ module.exports = {
   markRefreshPrices, readBarsFullFor, readBarsWindow, notePricePull, readPriceState,
   readPriceExtremes, writePriceExtremes, maxCloseBetween, firstBarDates,
   readDrawdownStats, writeDrawdownStats, readCloseSeries,
+  writeSecEvents, readSecEvents, readSecEventsSince,
   readMarginChange, writeMarginChange,
   readEarningsDates,
   barsSpan, coverageRollups,
