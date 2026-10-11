@@ -186,15 +186,45 @@
         <div class="bezel card"><div class="core">
           <span class="tag">Signal</span>
           <h3>Rules, not a black box</h3>
-          <p>Ordered rule lists where the first match wins, and the caution rules sit above every buy rule. Click a
+          <p>Ordered rule lists where the first match wins, and the caution rules sit above every Strong rule. Click a
             signal and the whole ladder opens: which rung fired, which were never reached, and how far the price
             can fall before the answer changes.</p>
         </div></div>
         <div class="bezel card"><div class="core">
           <span class="tag">Your view</span>
-          <h3>85 columns, or the nine you want</h3>
+          <h3><span class="colN">100+</span> columns, or the nine you want</h3>
           <p>Filter every column, save your own column views, keep personal lists over the shared universe, and
             start from ready-made screens — day gainers, fresh highs, cheap and growing.</p>
+        </div></div>
+      </div>
+    </section>
+
+    <section id="filings">
+      <span class="eyebrow">Beyond the price</span>
+      <h2>What the company filed, not only what it trades at.</h2>
+      <p class="lede">A price says what the market did. The rest comes from each company's own filings with the
+        SEC, read from the source and shown with a link back to the filing.</p>
+      <div class="cards">
+        <div class="bezel card"><div class="core">
+          <span class="tag">Filings</span>
+          <h3>Revenue, profit and margins by quarter</h3>
+          <p>From each company's own quarterly and annual reports, with whether its margin is wider or narrower
+            than a year ago. A company that reports in another currency is converted at the rate of each period,
+            not today's.</p>
+        </div></div>
+        <div class="bezel card"><div class="core">
+          <span class="tag">Drawdowns</span>
+          <h3>Corrections, counted</h3>
+          <p>Which stocks sit in a pullback, a correction or a bear market against their 52-week high, how often
+            each has fallen 10% or more in five years, and how long it took to come back. A record, never a
+            forecast.</p>
+        </div></div>
+        <div class="bezel card"><div class="core">
+          <span class="tag">Events</span>
+          <h3>What happened, and who holds it</h3>
+          <p>Every current report a company files, named by what it was about: results, an officer leaving, a
+            new agreement. Insider trades, short interest, and every holder reporting more than 5%, with the
+            stake they state.</p>
         </div></div>
       </div>
     </section>
@@ -223,7 +253,7 @@
           </tbody>
         </table>
       </div></div>
-      <p class="shot-note">Illustration, not live data — the names are made up. The live table carries 85 columns
+      <p class="shot-note">Illustration, not live data — the names are made up. The live table carries <span class="colN">100+</span> columns
         across thirteen groups.</p>
     </section>
 
@@ -231,8 +261,8 @@
       <span class="eyebrow">What we will not do</span>
       <h2>Tell you something works when it doesn't.</h2>
       <p class="lede">Every signal here has been tested against twenty years of bars, and the results are written
-        down — including the ones that failed. Seven framings have come back flat, and each feature built on one was
-        removed rather than quietly kept.</p>
+        down — including the ones that failed. Eleven framings have been tried and ten came back flat, and each feature
+        built on one was removed rather than quietly kept.</p>
       <div class="bezel quote" style="margin-top:28px"><div class="core">
         <p>The screener is descriptive rather than predictive, and that is a legitimate thing for it to be: a
           consistent way to see where every stock stands and how each got there.</p>
@@ -260,7 +290,8 @@
           <span class="tag">Fundamentals</span>
           <h3>Recorded, not just shown</h3>
           <p>Revenue, margins, cash, debt, share count and the dividend are stored each night, so the movement is
-            there later — the data provider only ever returns today.</p>
+            there later — the data provider only ever returns today. The SEC filings behind them are re-read
+            for every company about once a week.</p>
         </div></div>
       </div>
     </section>
@@ -275,18 +306,20 @@
             recommendation. Nothing here is personalised advice.</p></details>
         <details><summary>Can I try it without an account?</summary>
           <p>Yes. The guest preview opens the whole table on twenty stocks — every column, every signal, one from
-            each sector — with no account and no card. The research pages, your own lists and alerts need an
-            account; nothing is stored about you beyond a visit log.</p></details>
+            each sector — with no account and no card. The whole universe, your own lists and alerts need an
+            account: ask for an invite code on the sign-up form and it is emailed to you. Nothing is stored about
+            a visitor beyond a visit log.</p></details>
         <details><summary>Where does the data come from?</summary>
-          <p>Prices and fundamentals come from Twelve Data; headlines from public news feeds; the NASDAQ reference
-            list from NASDAQ. Quality, the trend states and the Signals are computed here from
-            those inputs.</p></details>
+          <p>Prices and fundamentals come from Twelve Data. Company filings, insider trades, current reports and
+            large-holder filings come from the SEC; short interest from FINRA; exchange rates from the European
+            Central Bank; headlines from public news feeds; the NASDAQ reference list from NASDAQ. Quality, the
+            trend states and the Signals are computed here from those inputs.</p></details>
         <details><summary>How often is it wrong?</summary>
           <p>A feed can be. ADR fundamentals in particular can be incoherent, and a refused data pull leaves a gap
             rather than a guess. Where a number is uncertain the table shows it blank instead of filling it in.</p></details>
         <details><summary>Who is it for?</summary>
           <p>Someone who follows a few dozen to a few hundred stocks and wants one consistent view of them, rather
-            than a tip service. It is a personal project run in the open, not a brokerage.</p></details>
+            than a tip service. It is an independent project run in the open, not a brokerage.</p></details>
       </div>
     </section>
 
@@ -335,7 +368,12 @@
     // fine if the call fails — the markup ships with the last known values.
     fetch('/api/about-stats').then((r) => r.json()).then((d) => {
       if (d && d.symbols) document.getElementById('sSymbols').textContent = d.symbols.toLocaleString();
-      if (d && d.columns) document.getElementById('sCols').textContent = d.columns;
+      if (d && d.columns) {
+        document.getElementById('sCols').textContent = d.columns;
+        // The same figure wherever the copy quotes it, so prose cannot go stale
+        // the way "85 columns" did while the strip above it stayed right.
+        document.querySelectorAll('.colN').forEach((el) => { el.textContent = d.columns; });
+      }
       if (d && d.bars && d.bars.earliest && d.bars.latest) {
         const y = Math.floor((Date.parse(d.bars.latest) - Date.parse(d.bars.earliest)) / 31557600000);
         if (y > 0) document.getElementById('sYears').textContent = y + ' yrs';
