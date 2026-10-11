@@ -3059,6 +3059,119 @@
       '</div></div>' + chromeFoot();
   }
 
+  // ---- Sector snapshot: the market Snapshot, for one sector ----------------
+  //
+  // (2026-10-11, the owner, of the market card: "can you also create sector
+  // snapshot".) The same three blocks one level down: four headline chips,
+  // the sector's industries where the market card has sectors, and both
+  // ends of the move among the sector's own companies. The layout and its
+  // classes are tplDay's, so the two read as a pair.
+  //
+  // WHAT DIFFERS, AND WHY.
+  //   The chips are the sector's own fund, the S&P 500, the gap between the
+  //   two in points, and how many of the sector's companies rose. The fund
+  //   is the published number for a sector (tplDay's reasoning); the count
+  //   is the one thing a fund's return hides, which is whether the sector
+  //   moved or three companies did.
+  //
+  //   The industries are CAP-WEIGHTED FROM OUR OWN ROWS, because no fund
+  //   divides a sector into its industries. One company, one listing
+  //   (foldListings), three companies or more, and the head says the basis.
+  //
+  //   THE INDEX CUT NARROWS THE WHOLE CARD HERE, where on the market card
+  //   it narrows the movers alone. There the other two blocks are index
+  //   readings already; here all three below the fund chip are made from
+  //   the same companies, and cutting one block and not another would put
+  //   two different sets of companies on one card with nothing to say so.
+  //   The fund chip is never cut: a fund is what it is.
+  //
+  // PERCENT ONLY. The market card's "value added" is today-only arithmetic
+  // and is left off rather than offered on one period of seven.
+  const SSN_IND = { portrait: 12, square: 6, story: 16 };
+  function tplSecSnap() {
+    const per = SNAP_PERIODS.some(([k]) => k === O.ssnPeriod) ? O.ssnPeriod : 'd';
+    const [pctField, perLabel] = MOV_PERIODS[per];
+    const cut = SP_CUTS.some(([k]) => k === O.ssnSp500) ? O.ssnSp500 : 'All';
+    const floor = Number(O.ssnFloor) || 0;
+    const CAP = { portrait: 10, square: 5, story: 15 };
+    const k = Math.min(Number(O.ssnCount) || 10, CAP[size.id] || CAP.portrait);
+    const names = sectorList(stocks, cut);
+    const name = names.some((g) => g.name === O.ssnName) ? O.ssnName : (names[0] ? names[0].name : null);
+    if (!name) {
+      return chromeTop() + '<div class="s-body"><div class="s-empty">No sector in this cut has three companies to read.</div></div>' + chromeFoot();
+    }
+    const num = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));   // a null is not a zero
+    const pool = spFilter(stocks.filter((x) => x && !x.error && !isFundRow(x)), cut).filter((x) => x.sector === name);
+    const read = pool.filter((x) => num(x[pctField]) != null);
+
+    // ---- the chips
+    const bySym = new Map(stocks.map((x) => [x.symbol, x]));
+    const etf = SECTOR_ETF.find(([n]) => n === name);
+    const fund = etf && bySym.get(etf[1]) ? num(bySym.get(etf[1])[pctField]) : null;
+    const spy = bySym.get('SPY') ? num(bySym.get('SPY')[pctField]) : null;
+    const up = read.filter((x) => Number(x[pctField]) > 0).length;
+    const pts = (v) => (v >= 0 ? '+' : '\u2212') + Math.abs(v).toFixed(1) + ' pts';
+    const chip = (label, val, cls) => '<span class="dy-chip"><b>' + esc(label) + '</b><i' + (cls ? ' class="' + cls + '"' : '') + '>' + esc(val) + '</i></span>';
+    const tone = (v) => (v >= 0 ? 'pos' : 'neg');
+    const chips = '<div class="dy-chips">'
+      + (fund != null ? chip(etf[1] + ' \u00b7 sector fund', pct(fund), tone(fund)) : '')
+      + (spy != null ? chip('S&P 500', pct(spy), tone(spy)) : '')
+      + (fund != null && spy != null ? chip('Against the S&P', pts(fund - spy), tone(fund - spy)) : '')
+      + (read.length ? chip('Companies up', up + ' of ' + read.length, '') : '')
+      + '</div>';
+
+    // ---- the industries, cap-weighted from the sector's own companies
+    const agg = new Map();
+    for (const x of foldListings(pool, pctField).rows) {
+      const w = Number(x.marketCap), v = num(x[pctField]);
+      if (!x.industry || !(w > 0) || v == null) continue;
+      const a = agg.get(x.industry) || { w: 0, wv: 0, n: 0 };
+      a.w += w; a.wv += w * v; a.n++;
+      agg.set(x.industry, a);
+    }
+    const allInd = [...agg.entries()].filter(([, a]) => a.n >= IND_MIN).map(([nm, a]) => ({ name: nm, v: a.wv / a.w, w: a.w }));
+    // The largest by market value when there are more than the card holds,
+    // then in order of the move.
+    const inds = allInd.slice().sort((a, b) => b.w - a.w).slice(0, SSN_IND[size.id] || 12).sort((a, b) => b.v - a.v);
+    const iMax = Math.max(...inds.map((x) => Math.abs(x.v)), 0.01);
+    const indBlock = inds.length
+      ? '<div class="dy-block"><div class="dy-head">' + esc('Industries \u00b7 cap-weighted'
+        + (inds.length < allInd.length ? ' \u00b7 the ' + inds.length + ' largest of ' + allInd.length : '')) + '</div>'
+        + '<div class="dy-grid">' + inds.map((x) => {
+          const w = Math.max(4, Math.round(Math.abs(x.v) / iMax * 100));
+          return '<div class="dy-row"><span class="dy-lab">' + esc(x.name) + '</span>'
+            + '<span class="dy-rail"><span class="dy-bar' + (x.v < 0 ? ' neg' : '') + '" style="width:' + w + '%;display:block"></span></span>'
+            + '<span class="dy-val ' + tone(x.v) + '">' + pct(x.v) + '</span></div>';
+        }).join('') + '</div></div>'
+      : '';
+
+    // ---- both ends of the move, among the sector's companies
+    const movers = read.filter((x) => !floor || Number(x.marketCap) > floor);
+    const ups = movers.filter((x) => x[pctField] > 0).sort((a, b) => b[pctField] - a[pctField]).slice(0, k);
+    const downs = movers.filter((x) => x[pctField] < 0).sort((a, b) => a[pctField] - b[pctField]).slice(0, k);
+    const mMax = Math.max(...ups.concat(downs).map((x) => Math.abs(x[pctField])), 0.01);
+    const col = (title, list, neg) => '<div class="dy-col"><div class="dy-head ' + (neg ? 'neg' : 'pos') + '">' + esc(title) + '</div>'
+      + (list.length ? list.map((x) => {
+        const w = Math.max(5, Math.round(Math.abs(x[pctField]) / mMax * 100));
+        return '<div class="dy-row"><span class="dy-lab">' + esc(nameOf(x)) + '</span>'
+          + '<span class="dy-rail"><span class="dy-bar' + (neg ? ' neg' : '') + '" style="width:' + w + '%;display:block"></span></span>'
+          + '<span class="dy-val ' + (neg ? 'neg' : 'pos') + '">' + pct(x[pctField]) + '</span></div>';
+      }).join('') : '<div class="mnone">nothing moved that way</div>') + '</div>';
+    const movBlock = (ups.length || downs.length)
+      ? '<div class="dy-block"><div class="dy-two">' + col('Top ' + ups.length, ups, false) + col('Bottom ' + downs.length, downs, true) + '</div></div>'
+      : '';
+
+    const kick = (cut === 'All' ? '' : cutKick(cut) + ' \u00b7 ') + pool.length.toLocaleString('en-US') + (pool.length === 1 ? ' company' : ' companies')
+      + (floor ? ' \u00b7 movers over $' + fmtMoney(floor) : '');
+    return chromeTop()
+      + '<div class="s-body"><div class="dy-in">'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (name.length > 30 ? ' mh-l2' : name.length > 18 ? ' mh-l1' : '') + '">' + esc(name) + '</span>'
+      + '<span class="dim">' + esc(perLabel) + '</span></h2>'
+      + '<div class="dy-wrap">' + chips + indBlock + movBlock + '</div>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Stock spotlight: one company, the whole picture --------------------
   //
   // "One card for a single stock" (the owner, 2026-09-30). Three templates
@@ -8558,7 +8671,7 @@
     movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
-    bubble: tplBubble, stock: tplStock, day: tplDay, spotlight: tplSpotlight,
+    bubble: tplBubble, stock: tplStock, day: tplDay, secsnap: tplSecSnap, spotlight: tplSpotlight,
     disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution,
     flow: tplFlow, histogram: tplHistogram,
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,

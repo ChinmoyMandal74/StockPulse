@@ -699,6 +699,34 @@
       <!-- Sector margins and Industry margins: the Margins card for one
            sector or one industry. Their own control ids, as every template
            has; the names come from the module's own lists. -->
+      <!-- Sector snapshot: the market Snapshot for one sector. Its own
+           control ids, as every template has. -->
+      <div id="ssnBox">
+        <label>Sector</label>
+        <select id="ssnName"></select>
+        <label>Period</label>
+        <select id="ssnPeriod"></select>
+        <label>How many each way</label>
+        <select id="ssnCount">
+          <option value="5">Top 5</option>
+          <option value="10" selected>Top 10</option>
+          <option value="15">Top 15</option>
+        </select>
+        <label>Smallest company in the movers</label>
+        <select id="ssnFloor">
+          <option value="0">No floor — every company</option>
+          <option value="1000000000" selected>Over $1B</option>
+          <option value="10000000000">Over $10B</option>
+          <option value="50000000000">Over $50B</option>
+        </select>
+        <label>Index</label>
+        <select id="ssnSp500"></select>
+        <p class="hint">The first chip is the sector's own fund and is never
+          cut. Everything under it is made from the sector's companies on
+          this screen, so the index narrows all of it: the count of
+          companies up, the industries (cap-weighted, three companies or
+          more) and the movers. The floor narrows the movers only.</p>
+      </div>
       <div id="smgBox">
         <label>Sector</label>
         <select id="smgName"></select>
@@ -1425,6 +1453,7 @@
       { id: 'treemap', name: 'Treemap', note: 'Every company as a tile — area is market value, colour is the move' },
       { id: 'waterfall', name: 'Waterfall', note: 'What actually moved the index, name by name, adding up to the whole' },
       { id: 'sectors', name: 'Sectors', note: 'Every sector as one row, ranked on a return, breadth, size or a median — made from its companies, not its fund' },
+      { id: 'secsnap', name: 'Sector snapshot', note: 'One sector over any window — its fund against the S&P 500, its industries, and both ends of the move among its companies' },
       { id: 'secmargin', name: 'Sector margins', note: 'One sector’s profit as a share of its revenue over four years, from the filings — and each of its industries now against a year ago' },
       { id: 'indmargin', name: 'Industry margins', note: 'One industry’s profit as a share of its revenue over four years, from the filings — and each of its companies now against a year ago' },
       { id: 'secspot', name: 'Sector spotlight', note: 'One sector in full — its line against the index, twelve figures, and where its companies sit' },
@@ -1545,6 +1574,7 @@
     // ---- Sector: the same two views, one step coarser ------------------------
     const SEC_VIEWS = [
       ['sectors', 'Ranking'],
+      ['secsnap', 'Snapshot'],
       ['secspot', 'Spotlight'],
       ['secmargin', 'Margins'],
     ];
@@ -1861,6 +1891,7 @@
       'corSp500', 'ddSym', 'ddYears', 'ddMin',
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
+      'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -1976,6 +2007,7 @@
       $('corBox').style.display = tpl === 'corrections' ? 'block' : 'none';
       $('mgBox').style.display = tpl === 'margins' ? 'block' : 'none';
       $('smgBox').style.display = tpl === 'secmargin' ? 'block' : 'none';
+      $('ssnBox').style.display = tpl === 'secsnap' ? 'block' : 'none';
       $('imgBox').style.display = tpl === 'indmargin' ? 'block' : 'none';
       $('ddBox').style.display = tpl === 'drawdown' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
@@ -2377,6 +2409,12 @@
       for (const [v, label] of Cards.earnGrowthCuts()) $(p + 'Sp500').add(new Option(label, v));
       for (const [v, label] of Cards.marginMetrics()) $(p + 'Metric').add(new Option(label, v));
     }
+    // Sector snapshot: the index refills the sector list first, the
+    // spotlight cards' rule.
+    const fillSsnNames = () => fillGroupNames('ssnName', 'ssnSp500', Cards.sectorList, false);
+    $('ssnSp500').addEventListener('change', fillSsnNames);
+    ['ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'secsnap') render(); }));
     const fillSmgNames = () => fillGroupNames('smgName', 'smgSp500', Cards.sectorList, false);
     const fillImgNames = () => fillGroupNames('imgName', 'imgSp500', Cards.industryList, true);
     $('smgSp500').addEventListener('change', fillSmgNames);
@@ -2507,6 +2545,8 @@
       fillSspNames();
       set('smgSp500');
       fillSmgNames();
+      set('ssnSp500');
+      fillSsnNames();
       set('imgSp500');
       fillImgNames();
       Object.keys(opts).forEach(set);
@@ -3024,7 +3064,7 @@
         const spOpts = Cards.spCuts().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
-          'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500', 'sbaSp500', 'eaSp500', 'corSp500',
+          'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500', 'sbaSp500', 'eaSp500', 'corSp500', 'ssnSp500',
           'shrtSp500', 'barSp500', 'linSp500', 'indSp500', 'ispSp500', 'secSp500', 'sspSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;
@@ -3037,6 +3077,7 @@
         fillSspNames();
         fillSmgNames();
         fillImgNames();
+        fillSsnNames();
         // FROM THE MODULE, never a copy in the markup: a key tplDay does not
         // know falls back to Today and draws the wrong window with nothing
         // saying so. The spCuts bargain.
@@ -3142,6 +3183,9 @@
         if ([...$('daySnapPeriod').options].some((o) => o.value === snapKeep)) {
           $('daySnapPeriod').value = snapKeep;
         }
+        { const keep = $('ssnPeriod').value;
+          $('ssnPeriod').innerHTML = $('daySnapPeriod').innerHTML;
+          $('ssnPeriod').value = [...$('ssnPeriod').options].some((o) => o.value === keep) ? keep : 'd'; }
         syncIndustries(true);
         paintControls();
         render();
