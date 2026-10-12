@@ -4846,9 +4846,17 @@
         } catch { card.remove(); }
       }
 
+      // A holder's name, as a link to its page for the admin (the pages are
+      // admin only: see /api/holder). Anyone else gets the name as text.
+      let holderAdmin = false;
+      const holderLink = (kind, id, name) => (holderAdmin && id && /^[A-Za-z0-9]{1,24}$/.test(String(id))
+        ? '<a href="/holder/' + kind + '/' + encodeURIComponent(id) + '" style="color:inherit;text-decoration:underline;text-decoration-color:var(--hair);text-underline-offset:3px">' + esc(name) + '</a>' : esc(name));
+      const holderReady = fetch('/api/me', { cache: 'no-store' }).then((r) => r.json()).then((me) => { holderAdmin = !!(me && me.admin); }).catch(() => {});
+
       async function loadFundHolders() {
         const card = document.getElementById('fundh');
         if (!card) return;
+        await holderReady;
         try {
           const r = await fetch('/api/fund-holders?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
           if (!r.ok) { card.remove(); return; }
@@ -4866,7 +4874,7 @@
             + fig('Change on the quarter', sg(F.sharesChange), F.added == null ? '' : F.added + ' new, ' + F.exited + ' gone')
             + '</div>'
             + '<table><thead><tr><th>Largest fund holders</th><th class="n">Shares</th><th class="n">Of the company</th><th class="n">Of the fund</th><th class="n">On the quarter</th><th class="n">As of</th></tr></thead><tbody>'
-            + (F.top || []).map((t) => '<tr><td>' + esc(t.name) + (t.family && t.family.toLowerCase() !== String(t.name).toLowerCase() ? '<span class="fam">' + esc(t.family) + '</span>' : '') + '</td>'
+            + (F.top || []).map((t) => '<tr><td>' + holderLink('F', t.id, t.name) + (t.family && t.family.toLowerCase() !== String(t.name).toLowerCase() ? '<span class="fam">' + esc(t.family) + '</span>' : '') + '</td>'
               + '<td class="n">' + esc(sh(t.shares)) + '</td><td class="n">' + esc(pc(t.pct)) + '</td><td class="n">' + esc(pc(t.weight)) + '</td>'
               + '<td class="n c">' + esc(t.isNew ? 'new' : sg(t.change)) + '</td><td class="n c">' + esc(mon(t.asOf)) + '</td></tr>').join('')
             + '</tbody></table>'
@@ -4962,6 +4970,7 @@
       async function loadInstitutions() {
         const card = document.getElementById('inst');
         if (!card) return;
+        await holderReady;
         try {
           const r = await fetch('/api/institutions?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
           if (!r.ok) { card.remove(); return; }
@@ -4983,7 +4992,7 @@
             + fig('Worth', usd(h.value), h.px == null ? '' : 'at $' + h.px.toFixed(2) + ', the quarter-end price')
             + '</div>'
             + '<table><thead><tr><th>Largest holders, ' + esc(h.quarter) + '</th><th class="n">Shares</th><th class="n">Of the company</th><th class="n">On the quarter</th></tr></thead><tbody>'
-            + (h.top || []).map((t) => '<tr><td>' + esc(t.name) + '</td><td class="n">' + esc(sh(t.shares)) + '</td><td class="n">' + esc(pc(t.pct)) + '</td>'
+            + (h.top || []).map((t) => '<tr><td>' + holderLink('M', t.id, t.name) + '</td><td class="n">' + esc(sh(t.shares)) + '</td><td class="n">' + esc(pc(t.pct)) + '</td>'
               + '<td class="n c">' + esc(t.isNew ? 'new' : sg(t.change)) + '</td></tr>').join('')
             + '</tbody></table>'
             + '<p class="inote">From Form 13F, which every institutional manager with more than $100 million in US-listed securities files within 45 days of a quarter end. '

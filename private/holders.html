@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Holders — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The shell is the Backlog page's. Everything this page adds is prefixed hd- . */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(167, 139, 250, 0.10), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: #a78bfa; box-shadow: 0 0 8px #a78bfa; }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 72ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+
+    .hd-bar { display: flex; align-items: center; gap: 10px; margin: 0 4px 12px; flex-wrap: wrap; }
+    .hd-tab { font: 500 12px var(--sans); padding: 7px 14px; border-radius: 999px; border: 1px solid var(--hair);
+              background: none; color: var(--muted); cursor: pointer; }
+    .hd-tab.on { color: var(--text); border-color: var(--accent); }
+    .hd-bar input { flex: 1; min-width: 220px; }
+    .hd-count { font-size: 12px; color: var(--faint); font-family: var(--mono); }
+    .hd-wrap { overflow-x: auto; }
+    .hd-wrap table { width: 100%; border-collapse: collapse; }
+    .hd-wrap th, .hd-wrap td { padding: 9px 16px; border-bottom: 1px solid var(--hair); font-size: 12.5px; white-space: nowrap; text-align: right; }
+    .hd-wrap th { font-weight: 500; color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .hd-wrap td { font-family: var(--mono); }
+    .hd-wrap th.l, .hd-wrap td.l { text-align: left; font-family: var(--sans); white-space: normal; }
+    .hd-wrap td.l a { color: var(--text); text-decoration: none; font-weight: 600; }
+    .hd-wrap td.l a:hover { color: var(--accent); }
+    .hd-wrap td.l span { display: block; color: var(--faint); font-size: 11px; font-weight: 400; }
+    .hd-wrap td.q { color: var(--muted); }
+    .hd-empty { padding: 28px; font-size: 13px; color: var(--muted); }
+    .hd-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 92ch; }
+    @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <a class="btn" href="/">Screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Admin</span>
+      <h1>Holders</h1>
+      <p class="lede">Every institutional manager and every fund that holds a stock tracked here, and what each one holds.
+        Managers are from their quarterly Form 13F; funds from their own portfolio reports (Form N-PORT). The list opens on
+        the largest by what they hold in tracked stocks; type the start of a name to find one.</p>
+    </header>
+
+    <div class="hd-bar">
+      <button class="hd-tab" data-k="M">Institutional managers</button>
+      <button class="hd-tab" data-k="F">Funds</button>
+      <input type="search" id="q" placeholder="Start of a name, e.g. vanguard" aria-label="Find a holder by the start of its name" />
+      <span class="hd-count" id="count"></span>
+    </div>
+
+    <div class="bezel"><div class="core" style="padding:0">
+      <div class="hd-wrap" id="wrap"><div class="hd-empty">Reading the list&hellip;</div></div>
+    </div></div>
+
+    <p class="hd-foot" id="foot"></p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const money = (v) => (v == null ? '—' : '$' + (v >= 1e12 ? (v / 1e12).toFixed(2) + 'T' : v >= 1e9 ? (v / 1e9).toFixed(1) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : Math.round(v / 1e3) + 'K'));
+    const mon = (iso) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t.getTime()) ? (iso || '') : t.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); };
+    let kind = new URLSearchParams(location.search).get('kind') === 'F' ? 'F' : 'M';
+    let seq = 0;
+
+    async function load() {
+      const mine = ++seq;
+      const q = $('q').value.trim();
+      document.querySelectorAll('.hd-tab').forEach((b) => b.classList.toggle('on', b.dataset.k === kind));
+      try {
+        const r = await fetch('/api/holders?kind=' + kind + (q ? '&q=' + encodeURIComponent(q) : ''), { cache: 'no-store' });
+        if (mine !== seq) return;                       // a later keystroke already asked
+        if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'This page is for the admin.' : 'The server answered ' + r.status + '.');
+        const list = (await r.json()).holders || [];
+        if (mine !== seq) return;
+        const fund = kind === 'F';
+        $('count').textContent = list.length + (q ? ' matching' : ' largest');
+        if (!list.length) { $('wrap').innerHTML = '<div class="hd-empty">' + (q ? 'No name starts with “' + we(q) + '”. The search matches the beginning of a name only.' : 'Nothing on file yet. The quarterly loaders fill this.') + '</div>'; return; }
+        $('wrap').innerHTML = '<table><thead><tr><th class="l">' + (fund ? 'Fund' : 'Manager') + '</th><th>In tracked stocks</th><th>Stocks held</th>'
+          + (fund ? '<th>Net assets</th>' : '') + '<th>New</th><th>Gone</th><th>As of</th></tr></thead><tbody>'
+          + list.map((h) => '<tr><td class="l"><a href="/holder/' + kind + '/' + encodeURIComponent(h.id) + '">' + we(h.name) + '</a>'
+            + (fund && h.family && h.family.toLowerCase() !== String(h.name).toLowerCase() ? '<span>' + we(h.family) + '</span>' : '') + '</td>'
+            + '<td>' + we(money(h.value)) + '</td><td>' + (h.positions == null ? '—' : Number(h.positions).toLocaleString('en-US')) + '</td>'
+            + (fund ? '<td class="q">' + we(money(h.nav)) + '</td>' : '')
+            + '<td class="q">' + (h.added == null ? '—' : h.added) + '</td><td class="q">' + (h.exited == null ? '—' : h.exited) + '</td>'
+            + '<td class="q">' + we(fund ? mon(h.asOf) : (h.label || '')) + '</td></tr>').join('')
+          + '</tbody></table>';
+        $('foot').textContent = (fund
+          ? 'Mutual funds and ETFs. A fund is inside its manager’s 13F figures too, so the two lists are never to be added. Reports are months old and not all as of the same date. '
+          : 'Every manager running over $100 million files. A manager’s figure includes the funds it runs. ')
+          + '“In tracked stocks” is what each holds among the stocks on this site, not its size. New and Gone are positions against the period before. Admin only.';
+      } catch (e) {
+        if (mine === seq) $('wrap').innerHTML = '<div class="hd-empty">' + we(e.message || 'Something went wrong.') + '</div>';
+      }
+    }
+    document.querySelectorAll('.hd-tab').forEach((b) => b.addEventListener('click', () => { kind = b.dataset.k; history.replaceState(null, '', '/holders?kind=' + kind); load(); }));
+    let timer = null;
+    $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(load, 250); });
+    load();
+  </script>
+</body>
+</html>

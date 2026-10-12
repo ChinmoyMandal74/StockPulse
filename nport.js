@@ -54,6 +54,18 @@
     const one = (w) => (KEEP.has(w.replace(/[.,()]/g, '')) || /\d/.test(w) ? w : w.charAt(0) + w.slice(1).toLowerCase());
     return t.split(' ').map((w) => w.split('-').map(one).join('-')).join(' ').slice(0, 90);
   }
+  // A FUND'S ID AS STORED AND AS IT APPEARS IN AN ADDRESS. A fund in a
+  // series has the SEC's own id (S000002277), which is used as it is. A
+  // single-fund registrant has none, and pickReports gives it one made of
+  // its names, which is not fit for an address: that becomes 'N' and a
+  // short fingerprint of the same string, stable from one data set to the next.
+  function fundKey(id) {
+    const s = String(id || '');
+    if (/^S\d{6,12}$/.test(s)) return s;
+    let a = 0x811c9dc5, b = 0x01000193;
+    for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 16777619) >>> 0; b = Math.imul(b + c, 2246822519) >>> 0; b ^= b >>> 13; }
+    return 'N' + a.toString(16).padStart(8, '0') + (b >>> 0).toString(16).padStart(8, '0');
+  }
   const cols = (line) => String(line).split('\t');
   const header = (line) => { const h = {}; cols(line).forEach((c, i) => { h[c.trim().toUpperCase()] = i; }); return h; };
 
@@ -126,7 +138,7 @@
     for (const [id, h] of before) { sharesPrev += h.shares; if (!have.has(id)) exited++; }
     const top = now.sort((a, b) => b[1].shares - a[1].shares).slice(0, topN || 15).map(([id, h]) => {
       const p = before.get(id);
-      return { name: h.name, family: h.family, shares: h.shares, asOf: h.asOf,
+      return { id: fundKey(id), name: h.name, family: h.family, shares: h.shares, asOf: h.asOf,
         // How much of the FUND this one stock is: its value over the fund's
         // net assets. Null where the fund reported neither.
         weight: h.nav > 0 && h.value > 0 ? h.value / h.nav * 100 : null,
@@ -148,7 +160,7 @@
     return a.getFullYear() === b.getFullYear() ? mo(a) + ' to ' + mo(b) + ' ' + b.getFullYear() : mo(a) + ' ' + a.getFullYear() + ' to ' + mo(b) + ' ' + b.getFullYear();
   }
 
-  const api = { isoDate, cols, header, tidyName, pickReports, holdingOf, dataset, summarise, pctOf, change, span };
+  const api = { isoDate, cols, header, tidyName, fundKey, pickReports, holdingOf, dataset, summarise, pctOf, change, span };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Nport = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -28,6 +28,7 @@ const path = require('path');
 const store = require('./db.js');
 const Zip = require('./zipread.js');
 const I = require('./inst13f.js');
+const HolderBook = require('./holderbook.js');
 
 const COMMIT = process.argv.includes('--commit');
 const arg = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; };
@@ -185,6 +186,21 @@ function readSet(zip, cusips) {
       console.log(`   ${h.name.slice(0, 38).padEnd(38)} ${(h.shares / 1e6).toFixed(1).padStart(9)}M${ch}`);
     }
   }
+  // EACH MANAGER'S BOOK, from the same holders: a position valued at the
+  // stock's one price and left out where the stock's summary left it out.
+  const pxOf = new Map(rows.map((r) => [r.symbol, r.px]));
+  const capOf = new Map(universe.map((s) => [s, I.shareCap(cur.holders.get(s), out[s])]));
+  const keep = (sym, h) => !(capOf.get(sym) && h.shares > capOf.get(sym));
+  const names = new Map();
+  const books = [...HolderBook.invert(cur.holders, prev ? prev.holders : null, {
+    keyOf: (cik) => String(cik), sharesOf: (h) => h.shares, keep,
+    valueOf: (sym, h) => (pxOf.get(sym) > 0 ? h.shares * pxOf.get(sym) : null),
+    meta: (cik, h) => ({ name: h.name, asOf: cur.period }),
+  }).values()].map((b) => HolderBook.finish(b)).filter((b) => b.positions > 0);
+  books.sort((a, b) => (b.value || 0) - (a.value || 0));
+  const BOOK_KIND = 'M', BOOK_LABEL = I.quarterName(cur.period);
+  console.log(`\n${books.length.toLocaleString()} managers hold at least one tracked stock. The largest in tracked stocks:`);
+  for (const b of books.slice(0, 8)) console.log(`   ${b.name.slice(0, 44).padEnd(44)} $${((b.value || 0) / 1e9).toFixed(0).padStart(5)}B in ${String(b.positions).padStart(5)} stocks` + (b.added == null ? '' : `, ${b.added} new, ${b.exited} gone`));
   if (COMMIT) {
     // IN SMALL BATCHES, EACH TRIED TWICE, and a batch that still fails is
     // reported and skipped rather than ending the run. The connection has sat
@@ -212,5 +228,27 @@ function readSet(zip, cusips) {
     console.log(`\nwritten: ${n} of ${rows.length} stocks, ${codes} security codes`);
     for (const f of failed) console.log('  NOT WRITTEN ' + f);
     if (failed.length) process.exitCode = 1;
+    // THE HOLDERS' BOOKS: the same rows turned round, one a holder.
+    {
+      const started = Date.now();
+      let bn = 0;
+      const bfailed = [];
+      for (let i = 0; i < books.length; i += 20) {
+        const part = books.slice(i, i + 20);
+        let done = false, why = '';
+        for (let attempt = 0; attempt < 2 && !done; attempt++) {
+          try { bn += await store.writeHolderBooks(BOOK_KIND, BOOK_LABEL, part); done = true; } catch (e) { why = e.message; await sleep(1500); }
+        }
+        if (!done) bfailed.push(part[0].name + ' ..: ' + why);
+        if ((i / 20) % 100 === 99) console.log(`  books: ${bn} of ${books.length} written`);
+      }
+      // Only after every batch went in: a holder absent from this load held
+      // something last time and nothing now.
+      let cleared = 0;
+      if (!bfailed.length) { try { cleared = await store.clearHolderBooks(BOOK_KIND, started); } catch (e) { console.log('old books not cleared: ' + e.message); } }
+      console.log(`books written: ${bn} of ${books.length}` + (cleared ? `, ${cleared} from an earlier load removed` : ''));
+      for (const f of bfailed.slice(0, 10)) console.log('  BOOK NOT WRITTEN ' + f);
+      if (bfailed.length) process.exitCode = 1;
+    }
   } else console.log('\nDRY RUN: nothing written. Re-run with --commit.');
 })().catch((e) => { console.error('FAILED:', e.message); process.exitCode = 1; });

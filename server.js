@@ -1516,6 +1516,19 @@ app.get('/quality', route(async (req, res) => {
 
 // Admin only: the backlog, as a table. The data is docs/backlog.md itself;
 // see /api/backlog below and backlog.js.
+// What one institution or one fund holds, and the directory of them. ADMIN
+// ONLY, see the routes behind them (/api/holder) for why.
+app.get('/holders', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'holders');
+  res.sendFile(path.join(__dirname, 'private', 'holders.html'));
+}));
+app.get('/holder/:kind/:id', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'holder:' + String(req.params.kind || '').slice(0, 1) + ':' + String(req.params.id || '').slice(0, 20));
+  res.sendFile(path.join(__dirname, 'private', 'holder.html'));
+}));
+
 app.get('/backlog', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'backlog');
@@ -11880,6 +11893,7 @@ const Segments = require('./segments.js');
 const Nport = require('./nport.js');
 const CapReturns = require('./capreturns.js');
 const OptionsOI = require('./optionsoi.js');
+const HolderBook = require('./holderbook.js');
 const HOLDER_DOCS = 3;             // documents fetched per company per refresh
 const mgCache = {};
 const mgWarm = (cut) => !!(mgCache[cut] && Date.now() - mgCache[cut].at < EG_TTL_MS);
@@ -12536,7 +12550,7 @@ async function fundHoldersPayload(symbol) {
     count: h.funds, countPrev: h.fundsPrev, shares: h.shares, sharesChange: Nport.change(h.shares, h.sharesPrev),
     pct: Nport.pctOf(h.shares, out), value: h.value, added: h.added, exited: h.exited,
     asOf: Nport.span(h.from, h.to), from: h.from, to: h.to, set: h.label,
-    top: (h.top || []).map((t) => ({ name: t.name, family: t.family, shares: t.shares, weight: t.weight, asOf: t.asOf,
+    top: (h.top || []).map((t) => ({ id: t.id || null, name: t.name, family: t.family, shares: t.shares, weight: t.weight, asOf: t.asOf,
       pct: Nport.pctOf(t.shares, out), isNew: t.prev === 0, change: t.prev > 0 ? Nport.change(t.shares, t.prev) : null })),
   } };
 }
@@ -12620,6 +12634,44 @@ app.get('/api/segments', requireAuth, route(async (req, res) => {
     return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   }
   res.json(await segmentsPayload(symbol));
+}));
+
+// ---- a holder's book -----------------------------------------------------------------
+// What one 13F manager ('M') or one fund ('F') holds among the tracked
+// stocks (holderbook.js), and the directory of them.
+//
+// ADMIN ONLY, AND THAT IS THE LICENSING QUESTION RATHER THAN A PERMISSION
+// ONE. A fund's page lists its positions with the weight of each, and for
+// an index fund that is the index's constituents with their weights: what
+// the holdings page is already kept behind the admin gate for. The source
+// here is the fund's own public SEC filing and it is months old, which may
+// well change the answer; that is the owner's decision to take, not a
+// default to slip in. A manager's 13F raises no such question, but the two
+// kinds share a page and are gated together until it is decided.
+const HOLDER_KINDS = { M: 'manager', F: 'fund' };
+app.get('/api/holders', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const kind = String(req.query.kind || 'M').toUpperCase();
+  if (!HOLDER_KINDS[kind]) return res.status(400).json({ error: 'Bad kind.' });
+  const q = String(req.query.q || '').trim().slice(0, 60);
+  const list = await store.listHolderBooks(kind, q, q ? 100 : 200);
+  res.json({ kind, q, holders: list.map((h) => ({ id: h.id, name: h.name, family: h.family, label: h.label, asOf: h.asOf,
+    positions: h.positions, value: h.value, nav: h.nav, added: h.added, exited: h.exited })) });
+}));
+app.get('/api/holder', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const kind = String(req.query.kind || '').toUpperCase();
+  const id = String(req.query.id || '').trim();
+  if (!HOLDER_KINDS[kind] || !/^[A-Za-z0-9]{1,24}$/.test(id)) return res.status(400).json({ error: 'Bad holder.' });
+  const book = await store.readHolderBook(kind, id);
+  if (!book) return res.json({ kind, id, holder: null });
+  const snap = await readSnapshot();
+  const by = new Map();
+  for (const r of ((snap && snap.stocks) || [])) if (r && r.symbol && !r.error) by.set(String(r.symbol).toUpperCase(), r);
+  const v = HolderBook.view(book, (s) => { const r = by.get(s); return r ? { name: r.shortName || r.name || null, sector: r.sector || null, sharesOutstanding: Number(r.sharesOutstanding) || 0 } : null; });
+  res.json({ kind, id, holder: { name: book.name, family: book.family, label: book.label, asOf: book.asOf, nav: book.nav,
+    positionsAll: book.positions, value: book.value, added: book.added, exited: book.exited,
+    positions: v.positions, gone: v.gone, sectors: v.sectors } });
 }));
 
 // ---- options open interest ---------------------------------------------------------
@@ -12768,7 +12820,7 @@ app.get('/api/institutions', requireAuth, route(async (req, res) => {
     managers: h.managers, managersPrev: h.managersPrev, shares: h.shares, sharesPrev: h.sharesPrev,
     sharesChange: Inst13f.change(h.shares, h.sharesPrev), value: h.value, px: h.px, added: h.added, exited: h.exited,
     sharesOut: out, pct,
-    top: (h.top || []).map((t) => ({ name: t.name, shares: t.shares, pct: Inst13f.pctOf(t.shares, out),
+    top: (h.top || []).map((t) => ({ id: t.cik == null ? null : String(t.cik), name: t.name, shares: t.shares, pct: Inst13f.pctOf(t.shares, out),
       isNew: t.prev === 0, change: t.prev > 0 ? Inst13f.change(t.shares, t.prev) : null })),
   } });
 }));

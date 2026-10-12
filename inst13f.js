@@ -114,6 +114,18 @@
   //   sharesOut  the company's shares outstanding, where known: a manager
   //              reporting more than all of them has made a units error (a
   //              few file in thousands) and is dropped, counted in `dropped`.
+  // The share count a position may not exceed, or null where the count on
+  // file is not to be trusted (see below). One function, so the stock's
+  // summary and a manager's book (holderbook.js) leave out the same rows.
+  function shareCap(cur, sharesOut) {
+    let out = sharesOut > 0 ? sharesOut : null;
+    if (out && cur) {
+      let over = 0;
+      for (const h of cur.values()) if (h.shares > out) over++;
+      if (over > 5 || (cur.size >= 50 && over > cur.size * 0.02)) out = null;
+    }
+    return out;
+  }
   function summarise(cur, prev, sharesOut, topN) {
     // THE SHARE COUNT ITSELF CAN BE THE WRONG ONE. For a company with two
     // classes the vendor's count may be the other class's: Berkshire's B
@@ -122,12 +134,7 @@
     // that. So it is trusted only while it is exceeded by a handful: more
     // than five managers, or more than two in a hundred, over the "whole
     // company" means the count is wrong, not the managers.
-    let out = sharesOut > 0 ? sharesOut : null;
-    if (out && cur) {
-      let over = 0;
-      for (const h of cur.values()) if (h.shares > out) over++;
-      if (over > 5 || (cur.size >= 50 && over > cur.size * 0.02)) out = null;
-    }
+    const out = shareCap(cur, sharesOut);
     const ok = (h) => !(out && h.shares > out);
     const now = [...(cur || new Map())].filter(([, h]) => ok(h));
     const dropped = (cur ? cur.size : 0) - now.length;
@@ -164,7 +171,7 @@
   // 'Q2 2026' for a period ending 2026-06-30.
   const quarterName = (period) => { const m = /^(\d{4})-(\d{2})/.exec(String(period || '')); return m ? 'Q' + Math.ceil(Number(m[2]) / 3) + ' ' + m[1] : ''; };
 
-  const api = { isoDate, cols, header, mainPeriod, chosen, holdingOf, quarter, summarise, pctOf, change, quarterName };
+  const api = { isoDate, cols, header, mainPeriod, chosen, holdingOf, quarter, summarise, shareCap, pctOf, change, quarterName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Inst13f = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Holder — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The shell is the Backlog page's, so the admin pages read as one set.
+       Everything this page adds is prefixed hb- . */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(167, 139, 250, 0.10), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: #a78bfa; box-shadow: 0 0 8px #a78bfa; }
+    h1 { margin: 20px 0 0; font-size: clamp(30px, 4.2vw, 50px); font-weight: 600; line-height: 1; letter-spacing: -0.04em; }
+    .lede { margin: 14px 0 0; max-width: 74ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+    .k { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+
+    .hb-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 16px; }
+    .hb-stat .core { padding: 18px 20px; }
+    .hb-val { margin-top: 10px; font-family: var(--mono); font-size: 28px; font-weight: 500; letter-spacing: -0.03em; line-height: 1; }
+    .hb-sub { margin-top: 8px; font-size: 11.5px; color: var(--faint); }
+    .hb-sec { display: flex; height: 12px; border-radius: 6px; overflow: hidden; margin: 14px 0 10px; gap: 2px; }
+    .hb-sec i { display: block; min-width: 2px; }
+    .hb-key { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12px; color: var(--muted); }
+    .hb-key i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+    .hb-key b { font: 500 11.5px var(--mono); color: var(--faint); margin-left: 6px; }
+    .hb-bar { display: flex; align-items: center; gap: 12px; margin: 18px 4px 10px; flex-wrap: wrap; }
+    .hb-bar input { flex: 1; min-width: 200px; }
+    .hb-count { font-size: 12px; color: var(--faint); font-family: var(--mono); }
+    .hb-wrap { overflow-x: auto; }
+    .hb-wrap table { width: 100%; border-collapse: collapse; }
+    .hb-wrap th, .hb-wrap td { padding: 8px 14px; border-bottom: 1px solid var(--hair); font-size: 12.5px; white-space: nowrap; text-align: right; }
+    .hb-wrap th { font-weight: 500; color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer; user-select: none; }
+    .hb-wrap th.on { color: var(--text); }
+    .hb-wrap td { font-family: var(--mono); }
+    .hb-wrap th.l, .hb-wrap td.l { text-align: left; font-family: var(--sans); }
+    .hb-wrap td.l a { color: var(--text); text-decoration: none; font-weight: 600; }
+    .hb-wrap td.l a:hover { color: var(--accent); }
+    .hb-wrap td.l span { color: var(--muted); margin-left: 9px; font-weight: 400; }
+    .hb-wrap td.q { color: var(--muted); }
+    .hb-wrap td.b { width: 14%; min-width: 90px; }
+    .hb-wrap td.b i { display: block; height: 7px; border-radius: 3px; background: var(--accent); min-width: 2px; }
+    .hb-new { font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+    .hb-empty { padding: 28px; font-size: 13px; color: var(--muted); }
+    .hb-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 92ch; }
+    .hb-gone { margin-top: 18px; }
+    .hb-gone > .core { padding: 20px 24px; }
+    .hb-gone p { margin: 10px 0 0; font-size: 12.5px; line-height: 1.8; color: var(--muted); }
+    .hb-gone a { color: var(--text); text-decoration: none; font-family: var(--mono); margin-right: 14px; }
+    @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/holders" id="backBtn"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>All holders</a>
+      <a class="btn" href="/">Screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span><span id="kind">Holder</span></span>
+      <h1 id="name">&hellip;</h1>
+      <p class="lede" id="lede"></p>
+    </header>
+
+    <div class="hb-stats" id="stats"></div>
+
+    <div class="bezel" id="secWrap" hidden><div class="core" style="padding:18px 22px">
+      <span class="k">By sector, of what is shown</span>
+      <div class="hb-sec" id="secBar"></div>
+      <div class="hb-key" id="secKey"></div>
+    </div></div>
+
+    <div class="hb-bar">
+      <input type="search" id="q" placeholder="Filter by symbol, name or sector" aria-label="Filter the holdings" />
+      <span class="hb-count" id="count"></span>
+    </div>
+
+    <div class="bezel"><div class="core" style="padding:0">
+      <div class="hb-wrap" id="wrap"><div class="hb-empty">Reading the holdings&hellip;</div></div>
+    </div></div>
+
+    <div class="bezel hb-gone" id="goneWrap" hidden><div class="core">
+      <span class="k" id="goneK">Held last time, not now</span>
+      <p id="goneBody"></p>
+    </div></div>
+
+    <p class="hb-foot" id="foot"></p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const parts = location.pathname.split('/').filter(Boolean);     // holder / M|F / id
+    const KIND = String(parts[1] || '').toUpperCase();
+    const ID = decodeURIComponent(parts[2] || '');
+    const isFund = KIND === 'F';
+
+    const money = (v) => (v == null ? '—' : '$' + (v >= 1e12 ? (v / 1e12).toFixed(2) + 'T' : v >= 1e9 ? (v / 1e9).toFixed(1) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : Math.round(v / 1e3) + 'K'));
+    const shares = (v) => (v == null ? '—' : v >= 1e9 ? (v / 1e9).toFixed(2) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'K' : String(Math.round(v)));
+    const pct = (v, d) => (v == null ? '—' : (v > 0 && v < 0.005 ? '<0.01' : v.toFixed(d == null ? 2 : d)) + '%');
+    const chg = (v) => (v == null ? '—' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '%');
+    const day = (iso) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+    // A part of a bar is not a price: never green or red.
+    const INK = ['#7c9cff', '#fb923c', '#a78bfa', '#38bdf8', '#f472b6', '#cbd5e1', '#818cf8', '#fdba74', '#c4b5fd', '#7dd3fc', '#f9a8d4', '#8b93a7'];
+
+    let H = null, sortKey = 'value', sortDir = -1;
+    const COLS = [
+      ['symbol', 'Stock', 'l'], ['bar', '', 'b'], ['value', 'Value', ''], ['ofBook', 'Of these holdings', ''],
+      ...(isFund ? [['ofFund', 'Of the fund', '']] : []),
+      ['shares', 'Shares', ''], ['ofCompany', 'Of the company', ''], ['change', 'Shares, on the period before', ''],
+    ];
+
+    function draw() {
+      const term = $('q').value.trim().toLowerCase();
+      let rows = H.positions.filter((p) => !term || p.symbol.toLowerCase().includes(term) || String(p.name || '').toLowerCase().includes(term) || String(p.sector || '').toLowerCase().includes(term));
+      const key = sortKey === 'bar' ? 'value' : sortKey;
+      // A missing figure sorts last whichever way the column is turned. A new
+      // position has no change to sort on and sits with the missing.
+      rows = rows.slice().sort((a, b) => {
+        const x = a[key], y = b[key];
+        if (key === 'symbol') return sortDir * (a.symbol < b.symbol ? -1 : 1);
+        if (x == null && y == null) return 0;
+        if (x == null) return 1;
+        if (y == null) return -1;
+        return sortDir * (x - y);
+      });
+      const top = Math.max(1e-9, ...H.positions.map((p) => p.value || 0));
+      $('count').textContent = rows.length + (rows.length === H.positions.length ? '' : ' of ' + H.positions.length) + ' shown';
+      if (!rows.length) { $('wrap').innerHTML = '<div class="hb-empty">Nothing matches.</div>'; return; }
+      $('wrap').innerHTML = '<table><thead><tr>' + COLS.map(([k, label, cls]) => '<th class="' + cls + (k === sortKey ? ' on' : '') + '" data-k="' + k + '">' + we(label) + (k === sortKey && label ? (sortDir < 0 ? ' ↓' : ' ↑') : '') + '</th>').join('') + '</tr></thead><tbody>'
+        + rows.map((p) => '<tr><td class="l"><a href="/stock/' + encodeURIComponent(p.symbol) + '">' + we(p.symbol) + '</a><span>' + we(p.name || '') + '</span></td>'
+          + '<td class="b"><i style="width:' + Math.max(0, (p.value || 0) / top * 100).toFixed(1) + '%"></i></td>'
+          + '<td>' + we(money(p.value)) + '</td><td class="q">' + we(pct(p.ofBook)) + '</td>'
+          + (isFund ? '<td class="q">' + we(pct(p.ofFund)) + '</td>' : '')
+          + '<td>' + we(shares(p.shares)) + '</td><td class="q">' + we(pct(p.ofCompany)) + '</td>'
+          + '<td>' + (p.isNew ? '<span class="hb-new">new</span>' : we(chg(p.change))) + '</td></tr>').join('')
+        + '</tbody></table>';
+    }
+
+    $('wrap').addEventListener('click', (e) => {
+      const th = e.target.closest('th[data-k]');
+      if (!th || !H) return;
+      const k = th.dataset.k;
+      if (k === 'bar') return;
+      if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = k === 'symbol' ? 1 : -1; }
+      draw();
+    });
+    $('q').addEventListener('input', () => { if (H) draw(); });
+
+    (async () => {
+      $('kind').textContent = isFund ? 'Fund' : 'Institutional manager';
+      $('backBtn').href = '/holders?kind=' + (isFund ? 'F' : 'M');
+      try {
+        const r = await fetch('/api/holder?kind=' + encodeURIComponent(KIND) + '&id=' + encodeURIComponent(ID), { cache: 'no-store' });
+        if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'This page is for the admin.' : 'The server answered ' + r.status + '.');
+        const j = await r.json();
+        H = j.holder;
+        if (!H) { $('name').textContent = 'Not on file'; $('wrap').innerHTML = '<div class="hb-empty">No holder with that id holds a tracked stock in the newest data on file.</div>'; return; }
+        document.title = H.name + ' — Tickr Lab';
+        $('name').textContent = H.name;
+        $('lede').textContent = isFund
+          ? (H.family && H.family.toLowerCase() !== H.name.toLowerCase() ? H.family + '. ' : '') + 'What this fund held among the stocks tracked here, from its own portfolio report to the SEC (Form N-PORT)' + (H.asOf ? ' as of ' + day(H.asOf) : '') + '. A fund’s report becomes public sixty days after the month it describes.'
+          : 'What this manager held among the stocks tracked here at the end of ' + (H.label || 'the last published quarter') + ', from its quarterly Form 13F. A manager reports every account it runs, its funds included, forty-five days after the quarter ends.';
+        const fig = (k, v, x) => '<div class="bezel hb-stat"><div class="core"><span class="k">' + we(k) + '</span><div class="hb-val">' + we(v) + '</div><div class="hb-sub">' + we(x || '') + '</div></div></div>';
+        $('stats').innerHTML = fig('In tracked stocks', money(H.value), isFund && H.nav > 0 && H.value != null ? pct(H.value / H.nav * 100, 1) + ' of the fund’s ' + money(H.nav) + ' net assets' : 'not the manager’s whole portfolio')
+          + fig('Tracked stocks held', Number(H.positionsAll).toLocaleString('en-US'), H.positions.length < H.positionsAll ? 'the ' + H.positions.length + ' largest are listed' : 'all listed below')
+          + fig('New since the period before', H.added == null ? '—' : String(H.added), H.added == null ? 'no earlier period on file' : 'held now, not then')
+          + fig('Gone since the period before', H.exited == null ? '—' : String(H.exited), H.exited == null ? '' : 'held then, not now');
+        if (H.sectors && H.sectors.length) {
+          $('secBar').innerHTML = H.sectors.map((s, i) => '<i style="flex:' + (s.pct || 0).toFixed(3) + ' 0 0;background:' + INK[i % INK.length] + '" title="' + we(s.name + ' ' + pct(s.pct, 1)) + '"></i>').join('');
+          $('secKey').innerHTML = H.sectors.map((s, i) => '<span><i style="background:' + INK[i % INK.length] + '"></i>' + we(s.name) + '<b>' + we(pct(s.pct, 1)) + '</b></span>').join('');
+          $('secWrap').hidden = false;
+        }
+        if (H.gone && H.gone.length) {
+          $('goneK').textContent = 'Held the period before, not now' + (H.exited > H.gone.length ? ' — the ' + H.gone.length + ' largest of ' + H.exited + ', by shares' : '');
+          $('goneBody').innerHTML = H.gone.map((g) => '<a href="/stock/' + encodeURIComponent(g.symbol) + '" title="' + we((g.name || g.symbol) + ': ' + shares(g.shares) + ' shares then') + '">' + we(g.symbol) + '</a>').join('');
+          $('goneWrap').hidden = false;
+        }
+        $('foot').textContent = (isFund
+          ? 'Long positions in the common shares only. Value is what the fund itself reported. “Of the fund” is that over the fund’s net assets; “of these holdings” is over the total listed here. '
+          : 'Value is the shares times one quarter-end price per stock (the median the reporting managers implied), not the dollars this manager filed, since some file in thousands. A position larger than the whole company is a units error and is left out. ')
+          + 'Only stocks tracked on this site are counted, so the total is not the size of the ' + (isFund ? 'fund' : 'manager') + '. “Of the company” is blank where the share count on file is smaller than the position. '
+          + 'A record of what was reported, months old by the time it is public; not a forecast and not a view on any stock. Admin only.';
+        draw();
+      } catch (e) {
+        $('name').textContent = 'Could not load';
+        $('wrap').innerHTML = '<div class="hb-empty">' + we(e.message || 'Something went wrong.') + '</div>';
+      }
+    })();
+  </script>
+</body>
+</html>

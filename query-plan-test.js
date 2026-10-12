@@ -39,7 +39,10 @@ const BIG = ['bars', 'fundamentals_history', 'earnings_history', 'news', 'activi
   'seg_periods', 'seg_filings',
   // One row a stock a trading day: about 320,000 a year. Read by symbol,
   // newest first, with a limit.
-  'options_oi'];
+  'options_oi',
+  // About 22,000 rows, each with a few KB of JSON: every manager and every
+  // fund. Read one holder at a time, or a page of the directory off an index.
+  'holder_books'];
 
 // Statements that scan on purpose, each with the reason it is allowed to.
 // A new entry here is a decision, which is the point of naming them.

@@ -855,6 +855,31 @@ const SCHEMA = [
      top         text,
      at          integer not null
    )`,
+  // A holder's book (2026-10-12): what one 13F manager ('M') or one fund
+  // ('F') holds among the tracked stocks, one row a holder, the positions
+  // as JSON and capped (holderbook.js). Written by the two quarterly
+  // loaders on the owner's machine. NOT in SYMBOL_TABLES: it is keyed by
+  // the holder, and a dropped symbol leaves on the next load.
+  `create table if not exists holder_books (
+     kind      text not null,
+     id        text not null,
+     name      text not null,
+     name_lc   text not null,
+     family    text,
+     label     text,
+     as_of     text,
+     positions integer,
+     value     real,
+     nav       real,
+     added     integer,
+     exited    integer,
+     data      text not null,
+     at        integer not null,
+     primary key (kind, id)
+   )`,
+  // The directory lists the largest, and finds one by the start of its name.
+  'create index if not exists idx_holder_value on holder_books (kind, value desc)',
+  'create index if not exists idx_holder_name on holder_books (kind, name_lc)',
   // Options open interest (2026-10-11), from the Options Clearing
   // Corporation's public series report. `options_state` is one row a stock:
   // the newest reading, with the breakdown by expiry and the largest
@@ -4834,6 +4859,65 @@ async function writeFundHolders(rows) {
   return list.length;
 }
 
+// ---- holders' books ---------------------------------------------------------
+// One kind at a time, upserts keyed on the holder. A holder on file from an
+// earlier load and absent from this one is removed by clearHolderBooks,
+// which the loader calls only after a full, successful write.
+async function writeHolderBooks(kind, label, rows) {
+  await init();
+  const list = (rows || []).filter((r) => r && r.key && r.name);
+  if (!list.length) return 0;
+  const now = Date.now();
+  const n = (v) => (v == null ? null : Number(v));
+  await db.batch(list.map((r) => ({
+    sql: `insert into holder_books (kind, id, name, name_lc, family, label, as_of, positions, value, nav, added, exited, data, at)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          on conflict(kind, id) do update set name = excluded.name, name_lc = excluded.name_lc, family = excluded.family,
+            label = excluded.label, as_of = excluded.as_of, positions = excluded.positions, value = excluded.value,
+            nav = excluded.nav, added = excluded.added, exited = excluded.exited, data = excluded.data, at = excluded.at`,
+    args: [String(kind), String(r.key), String(r.name).slice(0, 160), String(r.name).toLowerCase().slice(0, 160), r.family || null, label || null,
+      r.asOf || null, n(r.positions), n(r.value), n(r.nav), n(r.added), n(r.exited), JSON.stringify(r.data || {}), now],
+  })), 'write');
+  return list.length;
+}
+
+// Holders of one kind written before `before` (the start of a load that has
+// just finished): they held something last time and nothing now.
+async function clearHolderBooks(kind, before) {
+  await init();
+  const r = await db.execute({ sql: 'delete from holder_books where kind = ? and at < ?', args: [String(kind), Number(before)] });
+  return Number(r.rowsAffected) || 0;
+}
+
+const holderRow = (x, withData) => {
+  const n = (v) => (v == null ? null : Number(v));
+  const o = { kind: String(x.kind), id: String(x.id), name: String(x.name), family: x.family || null, label: x.label || null, asOf: x.as_of || null,
+    positions: n(x.positions), value: n(x.value), nav: n(x.nav), added: n(x.added), exited: n(x.exited), at: Number(x.at) || 0 };
+  if (withData) { try { o.data = JSON.parse(x.data || '{}'); } catch { o.data = {}; } }
+  return o;
+};
+
+async function readHolderBook(kind, id) {
+  await init();
+  const r = await db.execute({ sql: 'select * from holder_books where kind = ? and id = ?', args: [String(kind), String(id)] });
+  return r.rows.length ? holderRow(r.rows[0], true) : null;
+}
+
+// The directory: the largest of a kind, or those whose name STARTS with the
+// words typed. Both ride an index and stop at the limit; neither reads the
+// positions.
+async function listHolderBooks(kind, q, limit) {
+  await init();
+  const lim = Math.max(1, Math.min(300, Number(limit) || 100));
+  const cols = 'kind, id, name, family, label, as_of, positions, value, nav, added, exited, at';
+  const term = String(q || '').toLowerCase().trim().slice(0, 60);
+  const r = term
+    ? await db.execute({ sql: `select ${cols} from holder_books indexed by idx_holder_name where kind = ? and name_lc >= ? and name_lc < ? order by name_lc limit ?`,
+      args: [String(kind), term, term + '\uffff', lim] })
+    : await db.execute({ sql: `select ${cols} from holder_books indexed by idx_holder_value where kind = ? order by value desc limit ?`, args: [String(kind), lim] });
+  return r.rows.map((x) => holderRow(x, false));
+}
+
 // ---- options open interest -------------------------------------------------
 // One reading of one stock. A reading WITH figures replaces the state row
 // and adds (or corrects) that day's history row. A reading WITHOUT (the
@@ -6916,6 +7000,7 @@ module.exports = {
   writeOptions, readOptionsState, readOptionsHistory, readOptionsAll,
   writeSecSegments, readSecSegments, readSecSegmentAccn, writeSegReport, readSegAccns, readSegPeriods,
   readCusipMap, writeFundHolders, readFundHolders,
+  writeHolderBooks, clearHolderBooks, readHolderBook, listHolderBooks,
   readMarginChange, writeMarginChange,
   readEarningsDates,
   barsSpan, coverageRollups,

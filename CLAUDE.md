@@ -44,6 +44,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `margins.js` | Aggregate margins from the filings, and one company's margin change: the arithmetic behind the Margins card and the Margin chg column |
 | `capreturns.js`, `sec-reread.js` | Capital returns (buybacks, dividends, stock pay, share count) from the stored filings: the arithmetic, and the script that asks the deployed app to re-read every company after the reader changes |
 | `optionsoi.js`, `options-load.js` | Options open interest per stock from the Options Clearing Corporation: the reader and arithmetic, and the loader run from the owner's machine |
+| `holderbook.js`, `private/holder.html`, `holders.html` | What one 13F manager or one fund holds among the tracked stocks, turned round from the two quarterly loads: the arithmetic and the two admin pages (`/holders`, `/holder/<M or F>/<id>`) |
 | `drawdowns.js`, `drawdown-load.js` | The stored drawdown figures behind two screener columns: a slice a night on the daily check, and the first fill |
 | `adjusted.js` | Filings-fed Signal overlay for `/adjusted` and `/adjustedbacktest` (admin research) |
 | `analysis-db.js` | **Local SQLite copy of the archive for research.** `--full` rebuilds, no flag syncs, `--stats` reports |
@@ -148,7 +149,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Signal and research** (file names keep the old word) — `the-advice-column` · `does-any-of-this-predict-anything` · `the-advice-backtest` · `adjusted-advice` · `the-adjusted-backtest` · `the-trend-only-backtest` · `the-strategy-backtest` · `the-single-stock-strategy` · `the-indicator-lab`
 
-**Regulatory and auxiliary data** — `sec-edgar` (140 KB: also insiders, FINRA short interest, index membership, the add-gate, the FUND/EARN/SHORT chart strips) · `the-sec-edgar-data-page` · `foreign-filers-and-euro-rates` · `8k-events` · `large-holder-filings` · `institutional-holdings-13f` · `fund-holders-nport` · `revenue-segments` · `capital-returns` · `options-open-interest` · `insider-digest` · `margins` (the Margins card and the Margin chg column) · `news` · `logos` (removed)
+**Regulatory and auxiliary data** — `sec-edgar` (140 KB: also insiders, FINRA short interest, index membership, the add-gate, the FUND/EARN/SHORT chart strips) · `the-sec-edgar-data-page` · `foreign-filers-and-euro-rates` · `8k-events` · `large-holder-filings` · `institutional-holdings-13f` · `fund-holders-nport` · `holder-pages` · `revenue-segments` · `capital-returns` · `options-open-interest` · `insider-digest` · `margins` (the Margins card and the Margin chg column) · `news` · `logos` (removed)
 
 **Stock, group and comparison pages** — `charts-and-the-stock-page` · `earnings-history-on-the-stock-page` · `similar-stocks` · `against-its-peers` · `growth-and-profitability` (also promo template grouping and split history) · `the-basket-page` · `the-compare-page` · `the-pivot-view` · `consolidated` · `the-phone-page`
 
