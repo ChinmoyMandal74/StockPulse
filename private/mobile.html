@@ -373,7 +373,7 @@
         const d = await get('/api/m/posts');
         posts = d.posts || [];
         if (!posts.length) {
-          $('main').innerHTML = '<div class="msg">No saved posts yet. Save one from the Promo Studio ' +
+          $('main').innerHTML = '<div class="msg">No saved posts yet. Save one from Visuals ' +
             'on a desktop and it will appear here.</div>';
           return;
         }

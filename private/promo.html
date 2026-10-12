@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Promo Studio — Tickr Lab</title>
+  <title>Visuals — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -140,6 +140,11 @@
     /* MEMBER MODE (body.mem): the studio as a place to LOOK, not to make a
        post. No shape to choose and nothing to download. */
     body.mem #sizeLab, body.mem #sizeList, body.mem #dlBtn, body.mem #dlMsg { display: none; }
+    /* ...and no colour of card to choose (the owner, 2026-10-12: "end users
+       also don't need the option to select the color theme"). The grounds
+       exist to match a post to a feed; a member is reading, and reads the
+       site's own dark. */
+    body.mem #themeLab, body.mem #cardTheme { display: none; }
     body.mem .deck { padding: 14px; }
     /* A narrow screen: the controls on top, the card under them, the page
        scrolling as one. Side by side, a phone leaves the card 60px wide. */
@@ -161,7 +166,7 @@
 
   <div class="studio">
     <aside class="panel">
-      <h1 id="pgTitle">Promo Studio</h1>
+      <h1 id="pgTitle">Visuals</h1>
       <p class="sub" id="pgSub">Pick a template, screenshot the card, post it. Every card renders from
         tonight's data in the site's own theme, at a fixed artboard size.</p>
       <!-- Before anything is exported: when the prices behind these cards were
@@ -182,7 +187,7 @@
       <!-- The ground, for EVERY card. It sits here rather than in a
            per-template box because it applies to all of them — the same
            reason the artboard size does. -->
-      <label>Ground</label>
+      <label id="themeLab">Ground</label>
       <select id="cardTheme" aria-label="Ground">
         <option value="dark" selected>Dark</option>
         <option value="light">Light</option>
@@ -3346,8 +3351,11 @@
         memberMode = !me.admin;
         document.body.classList.toggle('mem', memberMode);
         if (memberMode) {
-          document.title = 'Charts \u2014 Tickr Lab';
-          $('pgTitle').textContent = 'Charts';
+          // The page is "Visuals" for everyone (the owner, 2026-10-12: "rename
+          // Charts to Visuals for everyone including me"); only the line under
+          // the heading differs, since a member is not making a post.
+          // A member has no ground to choose, so the card is the site's own.
+          $('cardTheme').value = 'dark';
           $('pgSub').textContent = 'Pick a view, then a stock, a sector or a ranking. Every card is drawn from the latest data on file; the date on a card is the date of its data.';
           if (MEMBER_HIDDEN.has(tpl)) tpl = 'movers';
         }

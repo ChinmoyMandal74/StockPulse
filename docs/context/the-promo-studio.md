@@ -177,3 +177,12 @@ The owner: members "don't need to select the size and we should do our best to m
 - **A narrow screen stacks the controls over the card** (under 820px), for the admin too.
 - **Nothing new was exposed.** Every data route the studio calls was already `requireAuth` or `requireMember`, and members could already reach them. The heavier ones (history, evolution, peer trend, line series, perf, months) keep an in-memory cache; more members clicking through cards means more rows read on a cold instance, which is the existing cost growing, not a new one. The page route still refuses guests.
 - Not rendered in a browser by the build. The shape rule and the wiring have a scratchpad suite (25 checks).
+
+## Called Visuals, and no colour theme for members (2026-10-12)
+
+The owner: "end users also don't need the option to select the color theme, Can you rename Charts to Visuals for everyone including me".
+
+- **The page is "Visuals" for everyone**: the title, the heading, the screener's button, the stock page's link, the phone's empty-posts line and the help page. "Charts" lasted a few hours and "Promo Studio" is no longer shown anywhere. The address is still `/promo`, the file `promo.html`, and these notes and the code still say "studio": stored keys and paths are not renamed.
+- **A member has no Ground to choose** (`body.mem #themeLab, #cardTheme` hidden, and the value set to `dark` on entering member mode). The four grounds exist to match a post to a feed. The admin keeps them.
+- **Help section 16 was rewritten** as "Visuals". It had described a Download PNG button and a "Cards" room with a Save image button, neither of which a member has.
+- Still true and worth knowing: a member can open a SAVED post on the phone page (`/m`, Posts), which hands over a real image. Saving is the admin's; reading is `requireMember`. That was not changed.

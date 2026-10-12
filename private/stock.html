@@ -3310,7 +3310,7 @@
               <button class="rng th-toggle${showTrendLine ? ' on' : ''}" id="thBtn"
                 title="Draw the dashed trend-hold line: what holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on. The trend ribbon under the chart is always shown.">TREND</button></span>
             <a class="rng" id="chartsLink" hidden href="/promo?tpl=spotlight&amp;sym=${encodeURIComponent(stock.symbol)}"
-              title="See this stock as cards: revenue mix, insiders, options, capital returns and more">Charts ▸</a>
+              title="See this stock as cards: revenue mix, insiders, options, capital returns and more">Visuals ▸</a>
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
           <!-- The three optional layers, in the owner's order (2026-09-29):
@@ -3868,7 +3868,7 @@
         document.querySelectorAll('.rng[data-r]').forEach((x) => x.classList.toggle('on', x.dataset.r === range.id));
         paintChart();
       });
-      // ---- the Charts link -------------------------------------------------------
+      // ---- the Visuals link ------------------------------------------------------
       // "SAVE CHART" WAS HERE, AND WAS REMOVED ON 2026-10-12 (the owner: "You can
       // remove the save the chart feature"). It exported this chart as a
       // branded image for a feed post or a story. Members do not need to
