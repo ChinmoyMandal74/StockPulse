@@ -12648,10 +12648,15 @@ app.post('/api/options/refresh', route(async (req, res) => {
   const size = Math.max(1, Math.min(40, Number(req.query.n) || 25));
   const universe = (await store.readUniverse()).map((s) => String(s).toUpperCase());
   const state = await store.readOptionsAll();
-  const stale = universe.filter((s) => !state[s] || Date.now() - state[s].at > OPT_FRESH_MS)
+  const date = OptionsOI.asOf();
+  // STALE: not read in twenty hours AND not already holding the day this
+  // read would be labelled. The first keeps the morning run from reading
+  // (the OCC may not have published the night's figures yet, and they would
+  // be stored under the wrong day); the second keeps a weekend or a second
+  // evening run from fetching 1,280 reports that cannot have changed.
+  const stale = universe.filter((s) => !state[s] || (Date.now() - state[s].at > OPT_FRESH_MS && state[s].d !== date))
     .sort((a, b) => ((state[a] && state[a].at) || 0) - ((state[b] && state[b].at) || 0));
   const pick = stale.slice(0, size);
-  const date = OptionsOI.asOf();
   const results = [];
   let blocked = false;
   for (const sym of pick) {

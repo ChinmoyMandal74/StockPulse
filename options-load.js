@@ -34,10 +34,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
   const universe = (await store.readUniverse()).map((s) => String(s).toUpperCase());
   const state = await store.readOptionsAll();
-  let syms = universe.filter((s) => !ONLY || ONLY.has(s))
-    .filter((s) => ALL || ONLY || !state[s] || Date.now() - state[s].at > FRESH_MS);
-  if (LIMIT) syms = syms.slice(0, LIMIT);
   const date = OptionsOI.asOf();
+  let syms = universe.filter((s) => !ONLY || ONLY.has(s))
+    .filter((s) => ALL || ONLY || !state[s] || (Date.now() - state[s].at > FRESH_MS && state[s].d !== date));
+  if (LIMIT) syms = syms.slice(0, LIMIT);
   console.log(`${syms.length} stocks to read (of ${universe.length}), as of ${date}; ` + (COMMIT ? 'COMMIT: writing options_state and options_oi' : 'DRY RUN: nothing will be written'));
   const t0 = Date.now();
   let ok = 0, none = 0, failed = 0, calls = 0, puts = 0;

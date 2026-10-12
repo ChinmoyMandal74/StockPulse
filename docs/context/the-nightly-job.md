@@ -89,3 +89,6 @@
 - `REPORT_TO` overrides the destination; unset it falls back to the owner account's email, so it works before anything is configured.
 - **Fundamentals rows are dated by `marketDay(rows)`** — the freshest bar in the universe, not the server clock. This mattered more at the old 8PM Eastern slot, where the server's UTC date was already tomorrow and dating by `new Date()` filed every automated run a day ahead of its own bars. At 4:15 PM Eastern the UTC date still agrees, but the rule stands: the bars decide the date, not the clock.
 
+## Options open interest joins the tail (2026-10-11)
+
+A sixth tail phase, `options`, after splits: `optionsRotate()` in `nightly-ping.js` calls `POST /api/options/refresh?n=25` until the route says nothing is stale (`OPT_MAX_BATCHES` 70 as a ceiling, `NIGHTLY_OPT_GAP_MS` 1500 between calls). It costs no Twelve Data credits. Only the evening run reads; the morning run finds everything fresh. See `options-open-interest.md`.

@@ -87,6 +87,13 @@ const SEC_BATCH = 5;
 // It adds about 45 seconds to a run and stays inside what the SEC asks.
 const SEC_MAX_BATCHES = Number(process.env.SEC_MAX_BATCHES) || 30;
 const SEC_GAP_MS = Number(process.env.NIGHTLY_SEC_GAP_MS) || 1500;
+// Options open interest, from the Options Clearing Corporation: 25 stocks a
+// call, so the universe is about 52 calls. The cap is a ceiling against a
+// loop that cannot finish, not a pace: the route itself skips a stock it
+// read in the last twenty hours, so only the evening run does the work.
+const OPT_BATCH = 25;
+const OPT_MAX_BATCHES = Number(process.env.OPT_MAX_BATCHES) || 70;
+const OPT_GAP_MS = Number(process.env.NIGHTLY_OPT_GAP_MS) || 1500;
 // Split history: at most this many calls a run, 20 symbols a call, a minute
 // apart -- each call is up to 400 of the 610 credits a minute.
 const SPLIT_MAX_CALLS = Number(process.env.SPLIT_MAX_CALLS) || 5;
@@ -475,18 +482,56 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
       }
     }
 
+    // Options open interest. The deployed app reads the clearing house's
+    // report for the stalest stocks, a batch a call, until none is stale.
+    // A refusal (`blocked`) ends it for the night rather than pressing on:
+    // what is on file stands, and tomorrow's run starts with the stalest.
+    async function optionsRotate() {
+      let fetched = 0, okN = 0;
+      let batches = 0;
+      for (; batches < OPT_MAX_BATCHES; batches += 1) {
+        let r; let text;
+        try {
+          r = await fetch(`${base}/api/options/refresh?n=${OPT_BATCH}`, {
+            method: 'POST',
+            signal: AbortSignal.timeout(300000),
+            headers: { Authorization: 'Bearer ' + secret },
+          });
+          text = await r.text();
+        } catch (e) {
+          say(`options    stopped after ${batches} batch(es) -- ${e.name === 'TimeoutError' ? 'timed out' : e.message}`);
+          return;
+        }
+        let j = null; try { j = JSON.parse(text); } catch { /* not json */ }
+        if (!r.ok || !j) {
+          say(`options    stopped after ${batches} batch(es) -- HTTP ${r.status} ${String(text).slice(0, 120)}`);
+          return;
+        }
+        fetched += j.fetched || 0; okN += j.ok || 0;
+        if (j.blocked) { say(`options    the clearing house refused after ${fetched} -- left for the next run`); return; }
+        if (j.done || !j.fetched) {
+          say(`options    up to date as of ${j.asOf || '?'} -- ${fetched} read (${okN} with options) in ${batches + 1} batch(es)`);
+          return;
+        }
+        // A batch that read nothing at all is a fault upstream, not progress.
+        if (!(j.ok || j.none)) { say(`options    a whole batch failed after ${fetched} -- left for the next run`); return; }
+        await sleep(OPT_GAP_MS);
+      }
+      say(`options    ${fetched} read in ${batches} batch(es) (cap) -- more next run`);
+    }
+
     let tailDone = false;
     async function tailPhases(why) {
       if (tailDone) return;
       tailDone = true;
-      if (why) say(`tail       ${why} -- running SEC, short interest, holdings, insiders and splits anyway`);
+      if (why) say(`tail       ${why} -- running SEC, short interest, holdings, insiders, splits and options anyway`);
       // EACH IS GUARDED SEPARATELY. One of them throwing must not cost the
       // other two their turn, which is the same mistake one level up that this
       // whole change exists to undo. All three are internally defensive today,
       // so reverting this loop currently fails nothing -- it is kept because
       // adding a FOURTH phase here is a one-line change, and a new phase is
       // exactly the thing likely to throw.
-      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate]]) {
+      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate]]) {
         try {
           await fn();
         } catch (e) {

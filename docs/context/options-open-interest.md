@@ -44,7 +44,11 @@ Tab-separated text, one request a stock, about 100KB for a heavily traded one. F
 
 ## Keeping it current
 
-Not yet automatic. `POST /api/options/refresh` exists for the nightly ping to drive, but whether the OCC answers the deployed app's address had not been confirmed when this was written; until it is, `node --use-system-ca options-load.js --commit` from the owner's machine refreshes every stock in about 35 minutes. History only accumulates on the days it is run.
+**The nightly ping drives it.** The deployed app was confirmed to reach the OCC (three of three read, not refused, 2026-10-11), so `nightly-ping.js` has an `options` phase after splits: it calls `POST /api/options/refresh?n=25` until nothing is stale, about 52 calls, and stops for the night on a refusal.
+
+- **A stock is stale when it was not read in the last twenty hours and does not already hold the day this read would be labelled.** The first keeps the 07:30 run from reading: the OCC may not have published the night's figures by then, and they would be stored under the wrong day. So the 19:30 run does the work and each reading is the previous close's. The second stops a weekend or repeated run fetching reports that cannot have changed.
+- History is therefore one row a stock a weekday, a session behind.
+- By hand, from the owner's machine: `node --use-system-ca options-load.js --commit` (about 35 minutes for every stock; `--all` to re-read the fresh ones).
 
 ## Seen on real data (close of 2026-10-09)
 
