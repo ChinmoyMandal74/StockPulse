@@ -1872,6 +1872,77 @@ Check each provider's current fees before choosing; they change.
 
 ---
 
+## 39. Public data beyond the SEC filings list — 2026-10-11
+
+*Area: Data · Status: Open · Note: capital returns (a) being built 2026-10-11; the rest filed at the owner's request, none of the addresses tested yet*
+
+The owner, after analyst ratings and price targets turned out to be
+licensed data with no public source: "any other public source I can
+explore to collect any other stock related data". Entry 37 holds the
+remaining SEC items and the Federal Reserve series; this is what lies
+beyond them. Listed from knowledge on the day: **check access and terms
+for each before building**, as entry 37 found the Federal Reserve address
+unreachable from this machine.
+
+**Already in data the refresh downloads**
+
+- **a. Capital returns. Being built.** Share buybacks, dividends paid,
+  stock-based pay and the change in share count, from the SEC company
+  facts already stored. What a company did with its cash, for the whole
+  universe, with no new source.
+
+**Market activity, per stock**
+
+- **b. Options open interest and volume.** The Options Clearing
+  Corporation publishes daily put and call volume and open interest by
+  symbol: a put/call reading per stock. One download a day.
+- **c. Off-exchange volume.** FINRA publishes weekly dark-pool and
+  over-the-counter volume by symbol.
+- **d. Threshold list and trading halts.** The exchanges' daily lists of
+  stocks with persistent delivery failures, and of halts with their
+  reason codes. Sits beside fails to deliver (37g).
+
+**Attention**
+
+- **e. Wikipedia page views.** A free official API, daily views per
+  company page. A measure of public attention; needs a symbol-to-page
+  map, and suits a promo card.
+
+**Government records, per company**
+
+- **f. Federal contracts.** USAspending.gov, every award by recipient.
+  Meaningful for defence, IT services and healthcare names; needs a
+  recipient-to-symbol map.
+- **g. Congress members' trades.** The House and Senate publish members'
+  transactions. Popular; the filings are messy documents, and the wording
+  needs care: a record of what was disclosed, never a tip to follow.
+- **h. Lobbying spend.** Quarterly Senate disclosures by company.
+- **i. Patents.** Grants by company from the patent office's open data.
+
+**Sector-specific** (part of the universe only, so cards rather than
+screener columns)
+
+- **j. Drug and trial data.** FDA approvals and recalls, and
+  ClinicalTrials.gov trial status by sponsor, for biotech and pharma.
+- **k. Energy.** The Energy Information Administration's weekly oil and
+  gas inventories and power data, for the energy and utility groups.
+- **l. Banks.** The consumer complaints database, by institution.
+- **m. Autos.** Safety recalls by manufacturer.
+
+**Not available publicly, so not on the list:** analyst ratings, price
+targets and earnings-call transcripts are licensed (brokers to an
+aggregator to a site such as Yahoo), and scraping a site that licenses
+them republishes someone else's data. Showing a price target would also
+need the owner to lift the standing rule against them. The press release
+attached to a results 8-K is public and is entry 36e.
+
+**Suggested order after (a):** b, then e. Each is one clean download.
+
+**What must hold for all of it.** Display only, never an input to the
+signal. Null where a source has nothing for a company, never zero.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
