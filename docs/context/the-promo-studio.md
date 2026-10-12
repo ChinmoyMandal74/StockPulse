@@ -153,3 +153,13 @@ Gaps between recorded rounds: 5m38s, 5m30s, **6m08s**. `RUN_ABANDON_MS` was **6 
 - **DO NOT ASK GIT BASH WHAT TIME IT IS IN NEW YORK.** On this machine `TZ=America/New_York date` **silently ignores `TZ` and prints UTC** — measured 2026-09-28, when it read 12:36 against a true 08:36 EDT. A four-hour error in the wrong direction puts a heavy job straight into the window the rule below exists to protect, and it reads as a plausible time, so nothing looks wrong. The bare `date` is right (it printed `08:36:22 EDT`), and `node -e "new Date().toLocaleString('en-US',{timeZone:'America/New_York'})"` is right. **It cost a wrong diagnosis the day it was found**: the intraday schedule was reported broken and the screener stale, when it was simply pre-market and the first slot was an hour away. The ping's own log is what caught it, by disagreeing.
 - **The rule this leaves: research reads belong on the LOCAL copy, and anything whole-table aimed at production must not run between 4:15 and 4:45 PM Eastern.** `analysis-db.js` exists precisely so a 100MB question never has to be asked of the live database; the benchmark above had a reason to hit production (it was measuring production's own wall) and still should have waited for the window to clear.
 
+## Stock pickers show the name and can be typed into (2026-10-12)
+
+The owner, about to open the studio to every member: "stock drop down is on ticker only .. make it on both ticker as well as name .. make it easy to search for a name by just typing".
+
+- **The option text is `TICKER — Short name`; the option VALUE is still the ticker alone**, which is what every card, the "stock carries across" rule and a saved post read. Nothing stored changed.
+- **Every stock select gets a text box over it** (`enhanceStockPickers`, in `promo.html`). A select is a stock picker if its id ends in `Sym`, `SymA`, `SymB` or `Sym2`: nineteen today, and a new one named that way is picked up with no further edit. The select stays in the page, hidden, as the one value; choosing in the box sets it and fires the select's own `change` event, so no listener was touched.
+- **Ranking** (`spMatches`): the ticker typed exactly, then tickers starting with it, then names starting with it, then a later word in the name starting with it, then anywhere in the name. Forty shown, with a count of the rest.
+- Options are read from the select as you type, never copied, so a reload of the rows needs nothing done.
+- `syncStockPickers()` runs at the top of `render()`, because code elsewhere sets a select's value directly.
+- Keyboard: arrows, Enter, Escape. Not rendered in a browser by the build; the ranking has a scratchpad suite (21 checks).

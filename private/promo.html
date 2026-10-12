@@ -71,6 +71,28 @@
       background-repeat: no-repeat; background-position: right 12px center;
     }
     .panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    /* A stock picker you can type into: the select stays underneath as the
+       value every card and saved post reads, hidden, and this sits on top. */
+    .panel .sp-wrap { position: relative; }
+    .panel .sp-wrap select { display: none; }
+    .panel .sp-in {
+      width: 100%; box-sizing: border-box; padding: 9px 30px 9px 11px; border-radius: 10px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      color: var(--text); font: 500 12.5px var(--sans); text-overflow: ellipsis;
+      background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa3b2' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+    }
+    .panel .sp-in:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .panel .sp-list {
+      position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); max-height: 264px; overflow-y: auto;
+      border-radius: 10px; border: 1px solid var(--hair-2, var(--hair)); background: #0d1016;
+      box-shadow: 0 18px 44px -14px rgba(0, 0, 0, 0.9);
+    }
+    .panel .sp-opt { display: flex; gap: 9px; align-items: baseline; padding: 7px 11px; cursor: pointer; font-size: 12.5px; white-space: nowrap; }
+    .panel .sp-opt b { font: 600 12px var(--mono); color: var(--text); min-width: 52px; }
+    .panel .sp-opt span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+    .panel .sp-opt.on, .panel .sp-opt:hover { background: rgba(124, 156, 255, 0.14); }
+    .panel .sp-none { padding: 9px 11px; font-size: 12px; color: var(--faint); }
     .hint { font-size: 10.5px; color: var(--faint); line-height: 1.55; margin-top: 14px; }
     .freshline { margin: 10px 0 0; padding: 7px 10px; border-radius: 9px; font-size: 11px;
                  line-height: 1.5; border: 1px solid var(--hair); background: var(--surface);
@@ -2161,7 +2183,101 @@
       });
     }
 
+    // ---- stock pickers you can type into ------------------------------------
+    //
+    // (2026-10-12, the owner, about to open the studio to every member: "make
+    // it easy to search for a name by just typing".) A plain select only
+    // jumps to an option by its first letters, which are the ticker's, so
+    // "apple" found nothing. Every stock select gets a text box over it:
+    // type a ticker or any part of a name, pick with the mouse or the arrow
+    // keys and Enter.
+    //
+    // THE SELECT IS KEPT, hidden, as the one value. Choosing here sets it and
+    // fires its own change event, so the nineteen pickers' listeners, the
+    // "stock carries across" rule and saved posts all work as they did.
+    // Options are read from the select when you type, never copied, so a
+    // reload of the rows needs nothing done here.
+    const SP_MAX = 40;
+    const isStockPicker = (el) => el && el.tagName === 'SELECT' && /Sym[AB2]?$/.test(el.id || '');
+    const spLabel = (sel) => { const o = sel.options[sel.selectedIndex]; return o ? o.textContent : ''; };
+    // Ticker matches first (exact, then the start), then a name that starts
+    // with what was typed, then a word in it that does, then anywhere.
+    function spMatches(sel, q) {
+      const term = String(q || '').trim().toLowerCase();
+      const out = [];
+      for (const o of sel.options) {
+        const sym = o.value, text = o.textContent, cut = text.indexOf(' \u2014 ');
+        const name = cut < 0 ? '' : text.slice(cut + 3);
+        if (!term) { out.push({ sym, name, rank: 9 }); continue; }
+        const s = sym.toLowerCase(), nm = name.toLowerCase();
+        const rank = s === term ? 0 : s.startsWith(term) ? 1 : nm.startsWith(term) ? 2
+          : nm.split(/[\s&.,\-\/]+/).some((w) => w.startsWith(term)) ? 3 : nm.includes(term) ? 4 : -1;
+        if (rank >= 0) out.push({ sym, name, rank });
+      }
+      if (term) out.sort((a, b) => a.rank - b.rank || a.sym.localeCompare(b.sym));
+      return out;
+    }
+    function enhanceStockPickers() {
+      for (const sel of document.querySelectorAll('.panel select')) {
+        if (!isStockPicker(sel) || sel.dataset.sp) continue;
+        sel.dataset.sp = '1';
+        const wrap = document.createElement('div');
+        wrap.className = 'sp-wrap';
+        sel.parentNode.insertBefore(wrap, sel);
+        wrap.appendChild(sel);
+        const inp = document.createElement('input');
+        inp.type = 'text'; inp.className = 'sp-in'; inp.autocomplete = 'off'; inp.spellcheck = false;
+        inp.setAttribute('role', 'combobox'); inp.setAttribute('aria-autocomplete', 'list'); inp.setAttribute('aria-expanded', 'false');
+        inp.setAttribute('aria-label', 'Stock: type a ticker or a company name');
+        inp.placeholder = 'Ticker or company name';
+        const list = document.createElement('div');
+        list.className = 'sp-list'; list.hidden = true; list.setAttribute('role', 'listbox');
+        wrap.appendChild(inp); wrap.appendChild(list);
+        let found = [], at = 0;
+        const close = () => { list.hidden = true; inp.setAttribute('aria-expanded', 'false'); inp.value = spLabel(sel); };
+        const draw = () => {
+          const all = spMatches(sel, inp.dataset.typed === '1' ? inp.value : '');
+          found = all.slice(0, SP_MAX);
+          if (at >= found.length) at = 0;
+          list.innerHTML = found.length
+            ? found.map((m, i) => `<div class="sp-opt${i === at ? ' on' : ''}" role="option" data-i="${i}"><b>${esc(m.sym)}</b><span>${esc(m.name)}</span></div>`).join('')
+              + (all.length > found.length ? `<div class="sp-none">${all.length - found.length} more \u2014 keep typing</div>` : '')
+            : '<div class="sp-none">Nothing on this screen matches.</div>';
+          list.hidden = false; inp.setAttribute('aria-expanded', 'true');
+          const on = list.querySelector('.sp-opt.on');
+          if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest' });
+        };
+        const choose = (m) => {
+          if (!m) return;
+          const changed = sel.value !== m.sym;
+          sel.value = m.sym;
+          close();
+          if (changed) sel.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+        inp.addEventListener('focus', () => { inp.dataset.typed = '0'; at = 0; inp.select(); draw(); });
+        inp.addEventListener('input', () => { inp.dataset.typed = '1'; at = 0; draw(); });
+        inp.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (list.hidden) { draw(); return; } at = (at + (e.key === 'ArrowDown' ? 1 : found.length - 1)) % Math.max(1, found.length); draw(); }
+          else if (e.key === 'Enter') { e.preventDefault(); if (!list.hidden) choose(found[at]); inp.blur(); }
+          else if (e.key === 'Escape') { close(); inp.blur(); }
+        });
+        // mousedown, not click: the input's blur would close the list first.
+        list.addEventListener('mousedown', (e) => { const o = e.target.closest('.sp-opt'); if (o) { e.preventDefault(); choose(found[Number(o.dataset.i)]); inp.blur(); } });
+        inp.addEventListener('blur', () => { setTimeout(close, 0); });
+      }
+      syncStockPickers();
+    }
+    // Show each picker's current choice. Called whenever a card is drawn,
+    // since code elsewhere sets a select's value directly.
+    function syncStockPickers() {
+      for (const sel of document.querySelectorAll('.panel select[data-sp]')) {
+        const inp = sel.parentNode.querySelector('.sp-in');
+        if (inp && document.activeElement !== inp) inp.value = spLabel(sel);
+      }
+    }
+
     function render() {
+      syncStockPickers();
       syncIndustries(false);
       const stage = $('stage');
       stage.style.height = size.h + 'px';
@@ -3215,7 +3331,11 @@
         $('chtScope').innerHTML = $('movScope').innerHTML;
         $('chtSym').innerHTML = stocks.slice()
           .sort((a, b) => a.symbol.localeCompare(b.symbol))
-          .map((r) => `<option value="${esc(r.symbol)}">${esc(r.symbol)}</option>`).join('');
+          // The name beside the ticker (owner, 2026-10-12: "make it on both
+          // ticker as well as name"). The VALUE is still the ticker alone,
+          // which is what every card and saved post reads.
+          .map((r) => { const nm = String(r.shortName || r.name || '').trim();
+            return `<option value="${esc(r.symbol)}">${esc(r.symbol)}${nm && nm.toUpperCase() !== r.symbol ? ' \u2014 ' + esc(nm) : ''}</option>`; }).join('');
         // The second picker defaults to a DIFFERENT stock: both landing on the
         // same symbol draws one line over itself, which is a comparison with
         // nothing. The card refuses that case too, in case a saved post or a
@@ -3268,6 +3388,7 @@
           if (keep && [...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
           else if ($(id).options.length > at) $(id).selectedIndex = at;
         }
+        enhanceStockPickers();
         // one sector list, built from the rows themselves so it can never
         // offer a sector nothing is in
         const secOpts = '<option value="All">All sectors</option>' +
