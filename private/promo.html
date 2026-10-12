@@ -1293,9 +1293,12 @@
         <select id="beatBench"></select>
         <label>Index</label>
         <select id="beatSp500"></select>
+        <label>Bars under the grid</label>
+        <select id="beatSplit"></select>
         <p class="hint">Green beat the index, blue moved the same way but by less, red fell (or, in a
           falling window, fell further). The index is the fund’s own price return (SPY or QQQ), so dividends are
-          left out on both sides. The bars under the grid show every window at once.</p>
+          left out on both sides. The bars under the grid show every window at once, or the chosen window
+          split by company size: mega, large and so on, each with how many companies it holds.</p>
       </div>
       <!-- Histogram: the shape of the screen on one measure, optionally
            with a subject pinned to it. `stock` is `screen` plus a pin, so
@@ -2169,7 +2172,7 @@
       'secMetric', 'secDir', 'secCount', 'secWeight', 'secScope', 'secCap', 'secScreen', 'secSp500',
       'sspName', 'sspWin', 'sspSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
-      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'egrSp500', 'egrQtr', 'egrCount',
+      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView',
@@ -2636,7 +2639,7 @@
     ['egrQtr', 'egrCount'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'earngrow') render(); }));
     // Beating the index: its own listener list, like every template here.
-    ['beatPeriod', 'beatSp500', 'beatBench'].forEach((id) =>
+    ['beatPeriod', 'beatSp500', 'beatBench', 'beatSplit'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'beat') render(); }));
     ['brdMode', 'brdSp500'].forEach((id) =>
       $(id).addEventListener('change', render));
@@ -3633,6 +3636,9 @@
         $('beatPeriod').innerHTML = Cards.beatPeriods().map(([v, lab]) =>
           `<option value="${esc(v)}"${v === 'ytd' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
         if ([...$('beatPeriod').options].some((o) => o.value === beatPerKeep)) $('beatPeriod').value = beatPerKeep;
+        { const keep = $('beatSplit').value;
+          $('beatSplit').innerHTML = Cards.beatSplits().map(([v, lab]) => `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
+          if ([...$('beatSplit').options].some((o) => o.value === keep)) $('beatSplit').value = keep; }
         const beatBnKeep = $('beatBench').value;
         $('beatBench').innerHTML = Cards.beatBenches().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');

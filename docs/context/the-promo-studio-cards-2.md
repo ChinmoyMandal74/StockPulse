@@ -530,3 +530,14 @@ Control ids `barMetric`, `barDir`, `barCount`, `barScope`, `barSector`, `barIndu
   - **`size-scope-test` loads cards.js into a sandbox where `window` and `globalThis` are two objects**, so the card could not see PeerTrend and drew its one-line shell for both cuts, which read as ignoring the control. The sandbox hands it over now.
   - `bars-test.js` fails one check with or without this change (confirmed by stashing): it asserts the retired three-value S&P cut where the Index picker now offers six.
 
+## Beating the index: the bars can split by company size (2026-10-12)
+
+The owner, of the card: "One thing this chart is not saying is how many of these are mega caps, or large caps etc, How to show that".
+
+- Control `beatSplit`: `win` (every window, as before, and the default) or `size`. Choices from `Cards.beatSplits()`.
+- In `size` the strip under the grid is the SAME window and the same companies, one bar a size band (the row's own `capBand`, in `BRD_CAP_ORDER`), in the same three colours. Beside each: the share of that band that beat the index, and how many companies are in it, which is what says how much a share of four deserves.
+- Only bands with a company are listed. A company with no market value is in no band; the note counts them. With no band on any row the windows are drawn instead of an empty strip.
+- The headline, the grid and the four figures do not change with the choice.
+- The note names what each drawn band means (`BEAT_BAND_RANGE`, `Filters.CAP_BANDS` restated).
+- The band is today's market value, not the value at the start of the window: a stock that rose a lot may have moved up a band because of it. Not said on the card; worth knowing when reading it.
+- Scratchpad suite, 19 checks. Not rendered in a browser by the build.

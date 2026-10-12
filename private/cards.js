@@ -6499,7 +6499,18 @@
   const BEAT_BENCH = [['SPY', 'S&P 500'], ['QQQ', 'Nasdaq 100']];
   const BEAT_COLS = { portrait: 46, square: 54, story: 40 };
 
+  // WHAT THE BARS UNDER THE GRID SPLIT BY. (2026-10-12, the owner, of the
+  // card: "One thing this chart is not saying is how many of these are mega
+  // caps, or large caps etc".) 'win' is every window, as it always was;
+  // 'size' is the SAME window and the same companies, a bar a size band, so
+  // it can be seen whether the ones beating the index are the largest or
+  // the rest. The band is the row's own capBand, the screener's column.
+  const BEAT_SPLITS = [['win', 'Every window'], ['size', 'By company size']];
+  // What each band means, said once in the note. Filters.CAP_BANDS restated,
+  // the BENCHMARKS bargain; BRD_CAP_ORDER is the order.
+  const BEAT_BAND_RANGE = { Mega: '$200B and up', Large: '$50B to $200B', 'Mid-Large': '$10B to $50B', Mid: '$2B to $10B', Small: '$300M to $2B', Micro: 'under $300M' };
   function tplBeat() {
+    const split = BEAT_SPLITS.some(([k]) => k === O.beatSplit) ? O.beatSplit : 'win';
     const cut = SP_CUTS.some(([k]) => k === O.beatSp500) ? O.beatSp500 : 'in';
     const per = BEAT_PERIODS.some(([k]) => k === O.beatPeriod) ? O.beatPeriod : 'ytd';
     const field = (k) => (MOV_PERIODS[k] || MOV_PERIODS.ytd)[0];
@@ -6582,8 +6593,36 @@
       + '<span class="bt-lp">' + esc(pc(n, R.n) + '%') + '</span>'
       + '<span class="bt-ll">' + esc(lab) + '</span></div>';
 
+    // ---- by company size: the same window, a bar a band ------------------
+    // The same test as `read`, a company at a time. A band is listed if it
+    // has a company in it at all; the count beside it is what says how much
+    // weight a share of four companies deserves. A company with no market
+    // value on file is in no band, and the note says how many.
+    const stateOf = (v) => (R.b >= 0 ? (v > R.b ? 'a' : v >= 0 ? 'm' : 'd') : (v >= 0 ? 'a' : v > R.b ? 'm' : 'd'));
+    const bands = BRD_CAP_ORDER.map((band) => {
+      const x = { band, n: 0, a: 0, m: 0, d: 0 };
+      for (const r of R.has) if (r.capBand === band) { x.n++; x[stateOf(num(r, R.f))]++; }
+      x.beat = R.b >= 0 ? x.a : x.a + x.m;
+      return x;
+    }).filter((x) => x.n > 0);
+    const unbanded = R.n - bands.reduce((s, x) => s + x.n, 0);
+    const sizeStrip = bands.map((x) => {
+      const w = (v) => (100 * v / x.n).toFixed(2) + '%';
+      return '<div class="bt-r">'
+        + '<span class="bt-rk">' + esc(x.band) + '</span>'
+        + '<span class="bt-rb">'
+          + (x.a ? '<i class="bt-a" style="width:' + w(x.a) + '"></i>' : '')
+          + (x.m ? '<i class="bt-m" style="width:' + w(x.m) + '"></i>' : '')
+          + (x.d ? '<i class="bt-d" style="width:' + w(x.d) + '"></i>' : '')
+        + '</span>'
+        + '<span class="bt-rv">' + esc(pc(x.beat, x.n) + '%') + '</span>'
+        + '<span class="bt-ri">' + esc(x.n.toLocaleString()) + '</span>'
+        + '</div>';
+    }).join('');
+    const bySize = split === 'size' && bands.length > 0;
+
     // ---- every window, the same three colours ---------------------------
-    const strip = BEAT_STRIP.map(([k, lab]) => {
+    const strip = bySize ? sizeStrip : BEAT_STRIP.map(([k, lab]) => {
       const x = k === per ? R : read(k);
       if (!x || !x.n) return '';
       const w = (v) => (100 * v / x.n).toFixed(2) + '%';
@@ -6606,7 +6645,11 @@
     const note = 'Each square is ' + (per1 > 1.001 ? 'about ' + per1.toFixed(1) + ' companies' : 'one company')
       + ', coloured by what its price did ' + words + ' against the ' + BN + '’s own '
       + sg(R.b) + ' (the ' + bench[0] + ' fund, price only — dividends are left out on both sides). '
-      + 'The bars repeat the count for every window; the figure beside each is the share that beat the index, then the index itself. '
+      + (bySize
+        ? 'The bars split the same companies by what each is worth today (' + bands.map((x) => x.band.toLowerCase() + ' is ' + BEAT_BAND_RANGE[x.band]).join(', ')
+          + '); the figure beside each is the share of that band that beat the index, then how many companies are in it. '
+          + (unbanded ? unbanded + ' with no market value on file ' + (unbanded === 1 ? 'is' : 'are') + ' in no band. ' : '')
+        : 'The bars repeat the count for every window; the figure beside each is the share that beat the index, then the index itself. ')
       + (R.missing ? R.missing + ' with no return for this window, listed since it began, are left out. ' : '')
       + foldNote(R.folded)
       + 'Funds are excluded. Only companies that still trade are here, so the longer windows flatter the count. '
@@ -6624,8 +6667,8 @@
         + '<div class="bt-legs">' + leg('bt-a', R.a, LAB[0]) + leg('bt-m', R.m, LAB[1]) + leg('bt-d', R.d, LAB[2]) + '</div>'
       + '</div>'
       + grid
-      + '<div class="bt-strip"><div class="bt-r bt-hd"><span class="bt-rk">every window</span><span class="bt-rb"></span>'
-        + '<span class="bt-rv">beat it</span><span class="bt-ri">index</span></div>' + strip + '</div>'
+      + '<div class="bt-strip"><div class="bt-r bt-hd"><span class="bt-rk">' + (bySize ? 'by size, ' + esc(words) : 'every window') + '</span><span class="bt-rb"></span>'
+        + '<span class="bt-rv">beat it</span><span class="bt-ri">' + (bySize ? 'companies' : 'index') + '</span></div>' + strip + '</div>'
       + '<div class="bt-stats">' + [['the index', sg(R.b)], ['the middle stock', sg(mid)],
         ['rose at all', pc(rose, R.n) + '%'], ['beat the index', pc(R.beat, R.n) + '%']].map(([k, v]) =>
         '<div class="bt-s"><span class="bt-sk">' + esc(k) + '</span><span class="bt-sv">' + esc(v) + '</span></div>').join('') + '</div>'
@@ -11684,6 +11727,7 @@
     earnGrowthNeed,
     earnGrowthCuts: () => EGR_CUTS.map((p) => p.slice()),
     beatBenches: () => BEAT_BENCH.map((p) => p.slice()),
+    beatSplits: () => BEAT_SPLITS.map((p) => p.slice()),
     // ...and which templates want the basket at all, with the window each
     // one asks for. Exported for the same reason: two hosts, one pairing.
     basketDays,
