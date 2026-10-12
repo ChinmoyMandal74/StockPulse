@@ -855,6 +855,28 @@ const SCHEMA = [
      top         text,
      at          integer not null
    )`,
+  // Options open interest (2026-10-11), from the Options Clearing
+  // Corporation's public series report. `options_state` is one row a stock:
+  // the newest reading, with the breakdown by expiry and the largest
+  // strikes as JSON. A stock with no listed options has a row with status
+  // 'none', so it is not asked again every time. `options_oi` is the
+  // history, one row a stock a trading day: calls and puts only.
+  `create table if not exists options_state (
+     symbol   text primary key,
+     d        text,
+     call_oi  real,
+     put_oi   real,
+     data     text,
+     status   text not null,
+     at       integer not null
+   )`,
+  `create table if not exists options_oi (
+     symbol   text not null,
+     d        text not null,
+     call_oi  real not null,
+     put_oi   real not null,
+     primary key (symbol, d)
+   )`,
   `create table if not exists drawdown_stats (
      symbol    text primary key,
      n         integer,
@@ -4812,6 +4834,65 @@ async function writeFundHolders(rows) {
   return list.length;
 }
 
+// ---- options open interest -------------------------------------------------
+// One reading of one stock. A reading WITH figures replaces the state row
+// and adds (or corrects) that day's history row. A reading WITHOUT (the
+// stock lists no options) records only that it was asked, and leaves any
+// history alone. A failed fetch is never passed here at all.
+async function writeOptions(symbol, o) {
+  await init();
+  const sym = String(symbol).toUpperCase(), now = Date.now();
+  if (!o || !o.status) return 0;
+  if (o.status !== 'ok') {
+    await db.execute({
+      sql: `insert into options_state (symbol, d, call_oi, put_oi, data, status, at) values (?, null, null, null, null, ?, ?)
+            on conflict(symbol) do update set status = excluded.status, at = excluded.at`,
+      args: [sym, String(o.status), now] });
+    return 0;
+  }
+  await db.batch([{
+    sql: `insert into options_state (symbol, d, call_oi, put_oi, data, status, at) values (?, ?, ?, ?, ?, 'ok', ?)
+          on conflict(symbol) do update set d = excluded.d, call_oi = excluded.call_oi, put_oi = excluded.put_oi,
+            data = excluded.data, status = excluded.status, at = excluded.at`,
+    args: [sym, String(o.d), Number(o.call), Number(o.put), JSON.stringify(o.data || {}), now],
+  }, {
+    sql: `insert into options_oi (symbol, d, call_oi, put_oi) values (?, ?, ?, ?)
+          on conflict(symbol, d) do update set call_oi = excluded.call_oi, put_oi = excluded.put_oi`,
+    args: [sym, String(o.d), Number(o.call), Number(o.put)],
+  }], 'write');
+  return 1;
+}
+
+async function readOptionsState(symbol) {
+  await init();
+  const r = await db.execute({ sql: 'select d, call_oi, put_oi, data, status, at from options_state where symbol = ?', args: [String(symbol).toUpperCase()] });
+  if (!r.rows.length) return null;
+  const x = r.rows[0];
+  let data = null;
+  try { data = x.data ? JSON.parse(x.data) : null; } catch { data = null; }
+  return { d: x.d || null, call: x.call_oi == null ? null : Number(x.call_oi), put: x.put_oi == null ? null : Number(x.put_oi), data, status: String(x.status), at: Number(x.at) };
+}
+
+// One stock's history, newest first: a seek on the key's leading column.
+async function readOptionsHistory(symbol, limit) {
+  await init();
+  const r = await db.execute({ sql: 'select d, call_oi, put_oi from options_oi where symbol = ? order by d desc limit ?',
+    args: [String(symbol).toUpperCase(), Math.max(1, Math.min(520, Number(limit) || 60))] });
+  return r.rows.map((x) => ({ d: String(x.d), call: Number(x.call_oi), put: Number(x.put_oi) }));
+}
+
+// Every stock's newest reading without the JSON: { SYM: { d, call, put, status, at } }.
+// The state table is one row a stock, so this is the whole of a small table.
+async function readOptionsAll() {
+  await init();
+  const r = await db.execute('select symbol, d, call_oi, put_oi, status, at from options_state');
+  const out = {};
+  for (const x of r.rows) {
+    out[String(x.symbol)] = { d: x.d || null, call: x.call_oi == null ? null : Number(x.call_oi), put: x.put_oi == null ? null : Number(x.put_oi), status: String(x.status), at: Number(x.at) };
+  }
+  return out;
+}
+
 async function readFundHolders(symbol) {
   await init();
   const r = await db.execute({ sql: 'select * from fund_holders where symbol = ?', args: [String(symbol).toUpperCase()] });
@@ -5109,7 +5190,7 @@ async function readBarsFor(symbols, since) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders',
+const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders', 'options_state', 'options_oi',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
   'sec_facts', 'sec_state', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
 
@@ -6832,6 +6913,7 @@ module.exports = {
   writeSecEvents, readSecEvents, readSecEventsSince,
   writeSecHolders, readSecHolders, readSecHolderAccns, readSecHoldersSince,
   writeInstHoldings, readInstHolding, readInstSummaries, writeCusipMap,
+  writeOptions, readOptionsState, readOptionsHistory, readOptionsAll,
   writeSecSegments, readSecSegments, readSecSegmentAccn, writeSegReport, readSegAccns, readSegPeriods,
   readCusipMap, writeFundHolders, readFundHolders,
   readMarginChange, writeMarginChange,

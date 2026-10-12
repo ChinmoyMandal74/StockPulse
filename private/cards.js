@@ -55,6 +55,7 @@
   let getSegments = () => null;
   let getFundHolders = () => null;
   let getCapReturns = () => null;
+  let getOptions = () => null;
   let getLineSeries = () => null;
   // One symbol’s month-end closes and the index’s, or null while it loads.
   let getMonths = () => null;
@@ -7704,6 +7705,78 @@
   // and not the same one: the kicker gives the range.
   const FH_ROWS = { portrait: 10, square: 6, story: 12 };
 
+  // ---- Options open interest: the contracts open on one stock -------------------
+  //
+  // (2026-10-11, the owner: "can you work on options open interest".) Calls
+  // and puts open on one stock, in total and at the expiry dates that hold
+  // the most, from the Options Clearing Corporation's own count.
+  //
+  // A COUNT, NOT A LEAN. Every contract has a buyer and a seller, and a put
+  // can be a bet, insurance, or one leg of a neutral trade. So the card
+  // says how much is open and where, and no word on it reads a direction
+  // into that. Calls take the accent and puts orange: two kinds of
+  // contract, neither of them a price, so never green or red.
+  //
+  // THE EXPIRIES ARE THE LARGEST, in date order -- for a heavily traded
+  // stock the nearest eight are weeklies holding a sliver of what is open.
+  const OI_ROWS = { portrait: 8, square: 6, story: 8 };
+  function optionsNeed(tpl, opts) {
+    if (tpl !== 'optoi') return null;
+    return { symbol: (opts && opts.oiSym) || null };
+  }
+  function tplOptions() {
+    const sym = O.oiSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((r) => r.symbol === sym);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!row) return shell('Nothing to show', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const data = getOptions(sym);
+    if (!data) return shell('Reading the count', 'Finding', 'the open contracts\u2026');
+    const n = nameOf(row);
+    const P = data.options;
+    if (!P || !(P.total > 0)) return shell(n, 'Options', 'none open', sym + ' has no listed options with contracts open, or none has been read yet.');
+    const cnt = (v) => (v == null ? '\u2014' : v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'K' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'K' : String(Math.round(v)));
+    const day = (iso) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+    const A = 'var(--accent)', B = pal.ink('#fb923c');
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || '\u00a0') + '</span></div>';
+    const figs = fig('Calls open', cnt(P.call), Math.round(P.call / P.total * 100) + '% of the contracts')
+      + fig('Puts open', cnt(P.put), Math.round(P.put / P.total * 100) + '% of the contracts')
+      + fig('Puts per call', P.pcr == null ? '\u2014' : P.pcr.toFixed(2), P.pcr == null ? 'no calls open' : '1.00 is as many of each')
+      + fig('Shares spoken for', P.ofShares == null ? '\u2014' : (P.ofShares < 0.05 ? '<0.1' : P.ofShares.toFixed(1)) + '%', P.ofShares == null ? 'no share count' : 'of the company, at 100 a contract');
+    const exps = (P.expiries || []).filter((e) => e.call + e.put > 0).slice(0, OI_ROWS[size.id] || 8);
+    const SZ = ({ portrait: { f: 25, b: 24 }, square: { f: 20, b: 16 }, story: { f: 33, b: 36 } })[size.id] || { f: 25, b: 24 };
+    const scale = Math.max(1e-9, ...exps.map((e) => e.call + e.put));
+    const vw = Math.ceil(6 * SZ.f * 0.62) + 6;
+    const cols = Math.ceil(10 * SZ.f * 0.56) + 'px minmax(0,1fr) ' + vw + 'px ' + vw + 'px';
+    const rows = exps.map((e) => { const a = e.call / scale * 100, b = e.put / scale * 100;
+      return '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+        + '<span class="bx-n">' + esc(day(e.exp)) + '</span>'
+        + '<span class="bx-t" style="height:' + SZ.b + 'px">'
+        + (a > 0 ? '<span class="cr-b" style="left:0;width:' + a.toFixed(2) + '%;background:' + A + '"></span>' : '')
+        + (b > 0 ? '<span class="cr-b" style="left:' + a.toFixed(2) + '%;width:' + b.toFixed(2) + '%;background:' + B + '"></span>' : '') + '</span>'
+        + '<span class="bx-v">' + esc(cnt(e.call)) + '</span><span class="bx-v">' + esc(cnt(e.put)) + '</span></div>'; }).join('');
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Expiry</span>'
+      + '<span>Contracts open</span><span class="sb-hr" style="color:' + A + '">Calls</span><span class="sb-hr" style="color:' + B + '">Puts</span></div>';
+    const tc = (P.topCalls || [])[0], tp = (P.topPuts || [])[0];
+    const strike = (s) => '$' + (Number(s.strike) % 1 ? Number(s.strike).toFixed(2) : Number(s.strike).toFixed(0)) + ' for ' + day(s.exp) + ' (' + cnt(s.oi) + ')';
+    const note = 'Option contracts open on ' + sym + ' at the close of ' + day(P.asOf) + ', as counted by the Options Clearing Corporation, which clears every listed US option. '
+      + (exps.length < (P.expiryCount || 0) ? 'These are the ' + exps.length + ' expiry dates holding the most, of ' + P.expiryCount + '. ' : '')
+      + (tc ? 'The single largest call position is the ' + strike(tc) + (tp ? ', and the largest put the ' + strike(tp) : '') + '. ' : tp ? 'The single largest put position is the ' + strike(tp) + '. ' : '')
+      + 'Every contract has a buyer and a seller, and a put can be a bet, insurance on shares already owned, or one side of a neutral trade: this is how much is outstanding, not which way anyone is leaning. '
+      + 'Standard contracts only. A count, not a forecast.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc((row.sector ? row.sector + ' \u00b7 ' : '') + sym + ' \u00b7 at the close of ' + day(P.asOf)) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
+      + '<span class="dim">options open interest</span></h2>'
+      + '<div class="cr-figs">' + figs + '</div>'
+      + '<div class="bx-rows">' + hd + rows + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Capital returns: what one company did with its cash ----------------------
   //
   // (2026-10-11, the owner: "lets work on capital returns".) Shares bought
@@ -9217,6 +9290,7 @@
     revmix: tplRevMix,
     fundholders: tplFundHolders,
     capreturn: tplCapReturn,
+    optoi: tplOptions,
     margins: () => marginsCard('margins'),
     secmargin: () => marginsCard('secmargin'),
     indmargin: () => marginsCard('indmargin'),
@@ -11480,6 +11554,7 @@
     revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()), revMixPeriods: () => RM_PERIODS.map((p) => p.slice()), revMixViews: () => RM_VIEWS.map((p) => p.slice()),
     fundHoldersNeed,
     capReturnNeed,
+    optionsNeed,
     buybackBys: () => BB_BY.map((p) => p.slice()), buybackFloors: () => BB_FLOORS.map((p) => p.slice()),
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.
@@ -11587,6 +11662,7 @@
       getSegments = c.getSegments || (() => null);
       getFundHolders = c.getFundHolders || (() => null);
       getCapReturns = c.getCapReturns || (() => null);
+      getOptions = c.getOptions || (() => null);
       getLineSeries = c.getLineSeries || (() => null);
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);

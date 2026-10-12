@@ -1053,6 +1053,23 @@
     #fundh td.c { color: var(--muted); }
     #fundh td .fam { display: block; font-size: 11px; color: var(--faint); }
     #fundh .fnote { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+    /* Options open interest: figures, a table by expiry, the largest strikes. */
+    #opt .sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px 22px; margin-bottom: 16px; }
+    #opt .fig { display: flex; flex-direction: column; gap: 3px; }
+    #opt .fig .k { color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); }
+    #opt .fig .v { font-family: var(--mono); font-size: 19px; color: var(--text); }
+    #opt .fig .x { color: var(--muted); font-size: 11.5px; }
+    #opt table { width: 100%; border-collapse: collapse; }
+    #opt th { text-align: left; font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.06em;
+              color: var(--faint); padding: 0 12px 7px 0; }
+    #opt td { padding: 6px 12px 6px 0; border-top: 1px solid var(--hair); font-size: 12.5px; }
+    #opt td.n, #opt th.n { text-align: right; font-family: var(--mono); white-space: nowrap; }
+    #opt td.b { width: 40%; }
+    #opt td.b span { display: flex; height: 8px; border-radius: 3px; overflow: hidden; }
+    #opt td.b i { display: block; height: 8px; }
+    #opt .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px 28px; margin-top: 16px; }
+    #opt .ohl { margin: 0 0 6px; font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
+    #opt .onote { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
     /* What it did with its cash: four figures and a table of fiscal years. */
     #capret .sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px 22px; margin-bottom: 16px; }
     #capret .fig { display: flex; flex-direction: column; gap: 3px; }
@@ -3489,6 +3506,13 @@
              Its own card again: what the company files, what its officers do
              with their own money, and what the rest of the market has bet
              against it are three different questions. -->
+        <section class="bezel card" id="opt" data-jump="Options" data-icon="i-chart" hidden><div class="core">
+          <div class="sec-h"><h2>Options open interest</h2>
+            <span id="optWin" style="font-size:11.5px;color:var(--faint);font-family:var(--mono)"></span>
+          </div>
+          <div id="optBody"></div>
+        </div></section>
+
         <section class="bezel card" id="capret" data-jump="Capital returns" data-icon="i-chart" hidden><div class="core">
           <div class="sec-h"><h2>What it did with its cash</h2>
             <span id="capretWin" style="font-size:11.5px;color:var(--faint);font-family:var(--mono)"></span>
@@ -4691,6 +4715,44 @@
       // What it did with its cash: buybacks, dividends, stock pay and the
       // share count, from its own cash-flow statements. A line the company
       // does not file is a dash, never a zero.
+      async function loadOptions() {
+        const card = document.getElementById('opt');
+        if (!card) return;
+        try {
+          const r = await fetch('/api/options?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
+          if (!r.ok) { card.remove(); return; }
+          const P = (await r.json()).options;
+          if (!P || !(P.total > 0)) { card.remove(); return; }
+          const cnt = (v) => (v == null ? '\u2014' : Number(v).toLocaleString('en-US'));
+          const sg = (v) => (v == null ? '' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(1) + '%');
+          const day = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const fig = (k, v, x) => '<div class="fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span>' + (x ? '<span class="x">' + esc(x) + '</span>' : '') + '</div>';
+          const A = 'var(--accent)', B = '#fb923c';
+          const strike = (v) => '$' + (Number(v) % 1 ? Number(v).toFixed(2) : Number(v).toFixed(0));
+          document.getElementById('optWin').textContent = 'at the close of ' + day(P.asOf);
+          const exps = (P.expiries || []).filter((e) => e.call + e.put > 0);
+          const top = Math.max(1e-9, ...exps.map((e) => e.call + e.put));
+          const list = (title, rows) => '<div><p class="ohl">' + title + '</p><table><thead><tr><th>Expiry</th><th class="n">Strike</th><th class="n">Contracts</th></tr></thead><tbody>'
+            + rows.map((s) => '<tr><td>' + esc(day(s.exp)) + '</td><td class="n">' + esc(strike(s.strike)) + '</td><td class="n">' + esc(cnt(s.oi)) + '</td></tr>').join('') + '</tbody></table></div>';
+          document.getElementById('optBody').innerHTML = '<div class="sum">'
+            + fig('Contracts open', cnt(P.total), P.change == null ? '' : sg(P.change) + ' on ' + day(P.prevDate))
+            + fig('Calls', cnt(P.call), Math.round(P.call / P.total * 100) + '% of the contracts')
+            + fig('Puts', cnt(P.put), Math.round(P.put / P.total * 100) + '% of the contracts')
+            + fig('Puts per call', P.pcr == null ? '\u2014' : P.pcr.toFixed(2), P.pcr == null ? 'no calls open' : '1.00 is as many of each')
+            + fig('Shares spoken for', P.ofShares == null ? '\u2014' : (P.ofShares < 0.05 ? '<0.1' : P.ofShares.toFixed(1)) + '%', P.ofShares == null ? '' : 'of the company, at 100 a contract')
+            + '</div><table><thead><tr><th>Expiry</th><th><span style="color:' + A + '">Calls</span> \u00b7 <span style="color:' + B + '">puts</span></th><th class="n">Calls</th><th class="n">Puts</th><th class="n">Puts per call</th></tr></thead><tbody>'
+            + exps.map((e) => '<tr><td>' + esc(day(e.exp)) + '</td><td class="b"><span><i style="width:' + (e.call / top * 100).toFixed(1) + '%;background:' + A + '"></i><i style="width:' + (e.put / top * 100).toFixed(1) + '%;background:' + B + '"></i></span></td>'
+              + '<td class="n">' + esc(cnt(e.call)) + '</td><td class="n">' + esc(cnt(e.put)) + '</td><td class="n">' + (e.call > 0 ? (e.put / e.call).toFixed(2) : '\u2014') + '</td></tr>').join('')
+            + '</tbody></table>'
+            + '<div class="two">' + ((P.topCalls || []).length ? list('Largest call positions', P.topCalls) : '') + ((P.topPuts || []).length ? list('Largest put positions', P.topPuts) : '') + '</div>'
+            + '<p class="onote">Counted by the Options Clearing Corporation, which clears every listed US option. '
+            + (P.expiryCount > exps.length ? 'The table is the ' + exps.length + ' expiry dates holding the most, of ' + P.expiryCount + '. ' : '')
+            + 'Open interest is how many contracts exist and have not been closed. Every one has a buyer and a seller, and a put can be a bet on a fall, insurance on shares already owned, or one side of a neutral trade, so this says how much is outstanding and not which way anyone is leaning. '
+            + 'Standard contracts only, each for 100 shares. Refreshed each trading day; the figures are the previous close\u2019s.</p>';
+          card.hidden = false;
+        } catch { card.remove(); }
+      }
+
       async function loadCapReturns() {
         const card = document.getElementById('capret');
         if (!card) return;
@@ -5048,6 +5110,7 @@
       loadEvents();
       loadHolders();
       loadInstitutions();
+      loadOptions();
       loadCapReturns();
       loadSegments();
       loadFundHolders();

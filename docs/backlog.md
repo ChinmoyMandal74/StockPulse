@@ -1874,7 +1874,7 @@ Check each provider's current fees before choosing; they change.
 
 ## 39. Public data beyond the SEC filings list — 2026-10-11
 
-*Area: Data · Status: Open · Note: capital returns (a) being built 2026-10-11; the rest filed at the owner's request, none of the addresses tested yet*
+*Area: Data · Status: Partly done · Note: capital returns (a) and options open interest (b) built 2026-10-11 (docs/context/capital-returns.md, options-open-interest.md); the rest remain, none of their addresses tested yet*
 
 The owner, after analyst ratings and price targets turned out to be
 licensed data with no public source: "any other public source I can
@@ -1886,14 +1886,14 @@ unreachable from this machine.
 
 **Already in data the refresh downloads**
 
-- **a. Capital returns. Being built.** Share buybacks, dividends paid,
+- **a. Capital returns. Built 2026-10-11.** Share buybacks, dividends paid,
   stock-based pay and the change in share count, from the SEC company
   facts already stored. What a company did with its cash, for the whole
   universe, with no new source.
 
 **Market activity, per stock**
 
-- **b. Options open interest and volume.** The Options Clearing
+- **b. Options open interest and volume. Open interest built 2026-10-11; volume not.** The Options Clearing
   Corporation publishes daily put and call volume and open interest by
   symbol: a put/call reading per stock. One download a day.
 - **c. Off-exchange volume.** FINRA publishes weekly dark-pool and

@@ -5153,7 +5153,7 @@ function filerLabel(st) {
   if (st.status === 'ok' && (st.taxonomy === 'us-gaap' || !st.taxonomy)) return 'US GAAP';
   return null;
 }
-const FLOWS_V = 8;          // bumped when the stored value gains a part
+const FLOWS_V = 9;          // bumped when the stored value gains a part
 const EVENT_RECENT_DAYS = 60;     // how far back the screener's 8-K column looks
 
 // ---- Drawdown history: corrections in five years, and the way back -------
@@ -5190,7 +5190,7 @@ let flowsMem = null;
 let flowsMemAt = 0;
 async function buildFlows() {
   const since = new Date(Date.now() - INSIDER_NET_DAYS * 86400000).toISOString().slice(0, 10);
-  const [sm, ids, net, secState, ddAll, mgAll, evAll, hdAll, instAll] = await Promise.all([
+  const [sm, ids, net, secState, ddAll, mgAll, evAll, hdAll, instAll, optAll] = await Promise.all([
     shortMovesPayload().catch(() => null),
     filerIds().catch(() => ({})),
     store.readInsiderNetSince(since).catch(() => null),
@@ -5200,6 +5200,7 @@ async function buildFlows() {
     store.readSecEventsSince(new Date(Date.now() - EVENT_RECENT_DAYS * 86400000).toISOString().slice(0, 10)).catch(() => null),
     store.readSecHoldersSince(new Date(Date.now() - EVENT_RECENT_DAYS * 86400000).toISOString().slice(0, 10)).catch(() => null),
     store.readInstSummaries().catch(() => null),
+    store.readOptionsAll().catch(() => null),
   ]);
   // 13F: { SYM: [managers, shares, sharesPrev, period] }.
   const inst = {};
@@ -5258,6 +5259,9 @@ async function buildFlows() {
     ev: evAll ? ev : null,
     hd: hdAll ? hd : null,
     inst: instAll ? inst : null,
+    // Options open interest: { SYM: [calls, puts, as-of date] }, the stocks
+    // with a reading only.
+    oi: optAll ? Object.keys(optAll).reduce((o, s) => { const x = optAll[s]; if (x.status === 'ok' && x.call != null && x.put != null) o[s] = [x.call, x.put, x.d]; return o; }, {}) : null,
     shortFrom: sm ? sm.from : null, shortTo: sm ? sm.to : null, short,
     // null, not {}: "the read failed" must not be stored as "nobody traded".
     insiderSince: net ? since : null, insider: net ? insider : null };
@@ -5276,6 +5280,7 @@ async function flowsNow() {
     if (f && !fresh.ev) fresh.ev = f.ev || null;
     if (f && !fresh.hd) fresh.hd = f.hd || null;
     if (f && !fresh.inst) fresh.inst = f.inst || null;
+    if (f && !fresh.oi) fresh.oi = f.oi || null;
     if (f && !fresh.shortTo) { fresh.short = f.short || {}; fresh.shortFrom = f.shortFrom || null; fresh.shortTo = f.shortTo || null; }
     await store.writeFlows(fresh).catch(() => {});
     f = fresh;
@@ -5292,7 +5297,8 @@ function flowsOf(row, f) {
     buybackTtm: null, buybackYield: null, buybackEnd: null, sharesChg: null,
     lastEvent: null, lastEventDate: null, lastEventNotable: null,
     lastHolder: null, lastHolderDate: null, lastHolderActive: null,
-    instManagers: null, instChange: null, instPeriod: null };
+    instManagers: null, instChange: null, instPeriod: null,
+    optCalls: null, optPuts: null, optPcr: null, optDate: null };
   if (!row || !f) return out;
   // Zero is a real count here (no drawdown of 10% in five years); the median
   // is null when none has recovered, and neither is ever invented.
@@ -5301,6 +5307,17 @@ function flowsOf(row, f) {
   // 13F: how many managers held it at the last published quarter end, and
   // the change in the shares between them on the quarter before. The change
   // needs both quarters; a missing one is blank, never zero.
+  // Options open interest: the contracts open on the stock, and puts for
+  // every call. A count of what is outstanding, never a direction. No
+  // ratio where there are no calls, and none on fewer than a thousand
+  // contracts in all: 3 puts to 1 call on a stock nobody trades options on
+  // is not a reading of 3.0.
+  const o9 = f.oi ? f.oi[String(row.symbol).toUpperCase()] : null;
+  if (o9 && o9[0] != null && o9[1] != null && isFinite(Number(o9[0])) && isFinite(Number(o9[1]))) {
+    out.optCalls = Number(o9[0]); out.optPuts = Number(o9[1]); out.optDate = o9[2] || null;
+    const pc = OptionsOI.pcr(out.optCalls, out.optPuts);
+    out.optPcr = pc == null || out.optCalls + out.optPuts < 1000 ? null : Math.round(pc * 100) / 100;
+  }
   const i13 = f.inst ? f.inst[String(row.symbol).toUpperCase()] : null;
   if (i13 && i13[0] != null) {
     out.instManagers = Number(i13[0]);
@@ -5387,6 +5404,10 @@ async function stampFlows(rows) {
     r.lastHolderDate = v.lastHolderDate;
     r.lastHolderActive = v.lastHolderActive;
     r.instManagers = v.instManagers;
+    r.optCalls = v.optCalls;
+    r.optPuts = v.optPuts;
+    r.optPcr = v.optPcr;
+    r.optDate = v.optDate;
     r.buybackTtm = v.buybackTtm;
     r.buybackYield = v.buybackYield;
     r.buybackEnd = v.buybackEnd;
@@ -10866,6 +10887,11 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const lnNeed = Cards.linesNeed(post.tpl, { stocks, myLists, screens, size: POST_SIZES[post.size], opts: post.opts || {} });
   if (lnNeed) { try { lines = await lineSeriesFor(lnNeed.symbols, lnNeed.quarters); } catch { lines = null; } }
 
+  // The Options open interest card, likewise.
+  let optoi = null;
+  const oiNeed = Cards.optionsNeed(post.tpl, post.opts || {});
+  if (oiNeed && oiNeed.symbol) { try { optoi = await optionsPayload(String(oiNeed.symbol).toUpperCase()); } catch { optoi = null; } }
+
   // The Capital returns card, likewise.
   let capret = null;
   const crNeed = Cards.capReturnNeed(post.tpl, post.opts || {});
@@ -10922,6 +10948,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getSegments: () => rmix,
       getFundHolders: () => fholders,
       getCapReturns: () => capret,
+      getOptions: () => optoi,
       getLineSeries: () => lines,
       getHistory: () => hist,
       getEvolution: (s) => (Object.prototype.hasOwnProperty.call(evoBySym, s) ? evoBySym[s] : evo),
@@ -11846,6 +11873,7 @@ const Inst13f = require('./inst13f.js');
 const Segments = require('./segments.js');
 const Nport = require('./nport.js');
 const CapReturns = require('./capreturns.js');
+const OptionsOI = require('./optionsoi.js');
 const HOLDER_DOCS = 3;             // documents fetched per company per refresh
 const mgCache = {};
 const mgWarm = (cut) => !!(mgCache[cut] && Date.now() - mgCache[cut].at < EG_TTL_MS);
@@ -12586,6 +12614,88 @@ app.get('/api/segments', requireAuth, route(async (req, res) => {
     return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   }
   res.json(await segmentsPayload(symbol));
+}));
+
+// ---- options open interest ---------------------------------------------------------
+// The contracts open on one stock, from the Options Clearing Corporation's
+// public series report (optionsoi.js). One function reads a stock; a route
+// reads a batch of the stalest, driven by the nightly ping the way the
+// filings rotation is; options-load.js does the same from the owner's
+// machine.
+//
+// A FAILED FETCH WRITES NOTHING, so yesterday's reading stands. A web page
+// where a report should be is the OCC's front door refusing this address:
+// the batch stops and says so rather than pressing on.
+//
+// DISPLAY ONLY, and a count rather than a view: every contract has a buyer
+// and a seller, so no surface reads a direction into it.
+const OPT_FRESH_MS = 20 * 60 * 60 * 1000;
+const OPT_GAP_MS = 200;
+async function optionsFetchOne(sym, date) {
+  const r = await fetch(OptionsOI.url(sym), { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(20000) });
+  if (r.status === 429 || r.status === 403) return { symbol: sym, status: 'blocked' };
+  if (!r.ok) return { symbol: sym, status: 'error' };
+  const got = OptionsOI.parse(await r.text(), sym);
+  if (got.status === 'blocked' || got.status === 'unread') return { symbol: sym, status: got.status === 'blocked' ? 'blocked' : 'error' };
+  if (got.status !== 'ok') { await store.writeOptions(sym, { status: 'none' }); return { symbol: sym, status: 'none' }; }
+  const s = OptionsOI.summarise(got.series, date);
+  await store.writeOptions(sym, { status: 'ok', d: date, call: s.call, put: s.put,
+    data: { expiries: s.expiries, expiryCount: s.expiryCount, seriesCount: s.seriesCount, topCalls: s.topCalls, topPuts: s.topPuts } });
+  return { symbol: sym, status: 'ok' };
+}
+app.post('/api/options/refresh', route(async (req, res) => {
+  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  const size = Math.max(1, Math.min(40, Number(req.query.n) || 25));
+  const universe = (await store.readUniverse()).map((s) => String(s).toUpperCase());
+  const state = await store.readOptionsAll();
+  const stale = universe.filter((s) => !state[s] || Date.now() - state[s].at > OPT_FRESH_MS)
+    .sort((a, b) => ((state[a] && state[a].at) || 0) - ((state[b] && state[b].at) || 0));
+  const pick = stale.slice(0, size);
+  const date = OptionsOI.asOf();
+  const results = [];
+  let blocked = false;
+  for (const sym of pick) {
+    let one;
+    try { one = await optionsFetchOne(sym, date); } catch (e) { one = { symbol: sym, status: 'error' }; }
+    results.push(one);
+    if (one.status === 'blocked') { blocked = true; break; }
+    await new Promise((r) => setTimeout(r, OPT_GAP_MS));
+  }
+  const done = results.filter((x) => x.status === 'ok' || x.status === 'none').length;
+  logAct(req, 'refresh', 'options ' + results.length);
+  res.json({ done: !blocked && stale.length - done <= 0, fetched: results.length, ok: results.filter((x) => x.status === 'ok').length,
+    none: results.filter((x) => x.status === 'none').length, failed: results.filter((x) => x.status === 'error').length,
+    blocked, remaining: Math.max(0, stale.length - done), universe: universe.length, asOf: date });
+}));
+
+// One function for the page route and the saved-post route.
+async function optionsPayload(symbol) {
+  const st = await store.readOptionsState(symbol);
+  if (!st || st.status !== 'ok' || st.call == null || st.put == null) return { symbol, options: null };
+  const hist = await store.readOptionsHistory(symbol, 30).catch(() => []);
+  let out = null;
+  try { const p = await store.readProfile(symbol); out = p && Number(p.sharesOutstanding) > 0 ? Number(p.sharesOutstanding) : null; } catch { out = null; }
+  const d = st.data || {};
+  const total = st.call + st.put;
+  // The reading before this one, and the oldest of the last thirty on file.
+  const prev = hist.find((h) => h.d < st.d) || null;
+  const first = hist.length > 1 ? hist[hist.length - 1] : null;
+  return { symbol, options: { asOf: st.d, call: st.call, put: st.put, total, pcr: OptionsOI.pcr(st.call, st.put),
+    ofShares: OptionsOI.ofShares(total, out),
+    prevDate: prev ? prev.d : null, change: prev ? OptionsOI.change(total, prev.call + prev.put) : null,
+    firstDate: first && first.d < st.d ? first.d : null, changeSince: first && first.d < st.d ? OptionsOI.change(total, first.call + first.put) : null,
+    expiries: d.expiries || [], expiryCount: d.expiryCount == null ? null : d.expiryCount, seriesCount: d.seriesCount == null ? null : d.seriesCount,
+    topCalls: d.topCalls || [], topPuts: d.topPuts || [],
+    history: hist.slice().reverse().map((h) => ({ d: h.d, call: h.call, put: h.put })) } };
+}
+app.get('/api/options', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  res.json(await optionsPayload(symbol));
 }));
 
 // ---- what one company did with its cash ------------------------------------------

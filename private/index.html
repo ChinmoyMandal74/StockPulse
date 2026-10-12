@@ -1489,7 +1489,7 @@
         <th class="group grp-trend" data-group="trend" colspan="5">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
         <th class="group grp-fund" data-group="fund" colspan="24">Fundamentals</th>
-        <th class="group grp-own" data-group="own" colspan="10">Ownership</th>
+        <th class="group grp-own" data-group="own" colspan="11">Ownership</th>
         <th rowspan="2"></th>
       </tr>
       <tr>
@@ -1607,6 +1607,7 @@
         <th class="grp-own" data-key="instManagers" title="How many institutional managers reported holding the stock on Form 13F at the last quarter end the SEC has published. Every manager with more than $100 million in US-listed securities files one within 45 days of the quarter end, so this is a snapshot that is months old, not today's. Long positions in shares only: options are left out. Hover a figure for the quarter. Blank for a fund, and for a stock whose security code could not be matched. Updated once a quarter.">13F<br>holders</th>
         <th class="grp-own" data-key="instChange" title="The change in the shares held by all 13F filers between them, last published quarter end against the one before, in percent. Up means institutions as a group held more shares than a quarter earlier. It includes managers who newly crossed the $100 million filing line, so a small rise is not always buying. A snapshot that is months old. Blank where either quarter is missing. Updated once a quarter.">13F<br>chg</th>
         <th class="left grp-own" data-key="lastHolder" title="The newest Schedule 13D or 13G filed about the company in the last sixty days: the form, who filed it, the stake they report, and how many days ago. Anyone who comes to hold more than 5% of a company's shares must file one. A 13D is the form for a holder who may seek to influence the company and is shown in bold because it is the rarer of the two; a 13G is the short form for a passive holder such as an index fund. An amendment reports a change, and &quot;no holding&quot; means the stake is no longer reportable. Type 13D in the filter row to find them. Blank when nothing was filed in the window. Which form a holder chose is a fact; it does not say what follows for the share. From the SEC, updated as each company's filings are re-read.">5%<br>filing</th>
+        <th class="grp-own" data-key="optPcr" title="Put options open on the stock for every call option open, from the Options Clearing Corporation&#39;s count as of the last trading day&#39;s close. 1.0 is as many puts as calls. It counts contracts outstanding and says nothing about direction: a put can be a bet on a fall, insurance on shares someone owns, or one leg of a neutral trade. Blank where the stock has no listed options or fewer than a thousand contracts open.">Put/Call<br>OI</th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
@@ -2306,6 +2307,17 @@
       const t = `${money} bought back in the twelve months to ${s.buybackEnd || 'the latest period on file'}`
         + (s.sharesChg == null ? '' : `; diluted share count ${s.sharesChg > 0 ? '+' : s.sharesChg < 0 ? '\u2212' : ''}${Math.abs(s.sharesChg).toFixed(1)}% on the fiscal year before`);
       return `<td class="grp-fund${v === 0 ? ' na' : ''}"${attr(t)}>${v > 0 && v < 0.05 ? '<0.1' : v.toFixed(1)}%</td>`;
+    }
+    // Puts open for every call open, from the clearing house's count. No
+    // colour: it is a count of contracts, not a price, and it does not say
+    // which way anyone is leaning. Shown for funds too, which have options.
+    function optPcrCell(s) {
+      const v = s.optPcr;
+      if (v == null || !isFinite(v)) {
+        return `<td class="na grp-own" title="No listed options, or fewer than a thousand contracts open.">\u2014</td>`;
+      }
+      const k = (n) => (n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(0) + 'K' : String(n));
+      return `<td class="grp-own"${attr(`${k(Number(s.optPuts))} puts and ${k(Number(s.optCalls))} calls open` + (s.optDate ? ` at the close of ${s.optDate}` : ''))}>${v.toFixed(2)}</td>`;
     }
     function marginChgCell(s) {
       const v = s.netMarginChg;
@@ -3630,7 +3642,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="112">${s.error}</td>
+            <td class="na" colspan="113">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3772,6 +3784,7 @@
           ${rangeCell(s.instManagers, 'grp-own', s.instPeriod ? 'Managers reporting a holding at ' + s.instPeriod : '')}
           ${signedPctCell(s.instChange, 'grp-own', s.instPeriod ? 'Shares held by 13F filers at ' + s.instPeriod + ' against the quarter before' : '')}
           ${lastHolderCell(s)}`}
+          ${optPcrCell(s)}
           ${removeBtn}
         </tr>`;
     }
@@ -3786,7 +3799,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 117;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 118;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3967,7 +3980,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="114">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="115">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

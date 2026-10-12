@@ -791,6 +791,16 @@
           share count did, since stock handed out as pay offsets a
           buyback. Square and Story show fewer rows than asked.</p>
       </div>
+      <div id="oiBox">
+        <label>Stock</label>
+        <select id="oiSym"></select>
+        <p class="hint">Call and put contracts open on one stock at the
+          last close, in total and at the expiry dates holding the
+          most, from the Options Clearing Corporation. It counts what
+          is outstanding and does not say which way anyone is
+          leaning: every contract has a buyer and a seller. Works for
+          the index funds too. Refreshed each trading day.</p>
+      </div>
       <div id="crBox">
         <label>Stock</label>
         <select id="crSym"></select>
@@ -1514,6 +1524,7 @@
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
       { id: 'corrections', name: 'Corrections', note: 'How many companies are in a pullback, a correction or a bear market — beside how far each index is from its own high' },
+      { id: 'optoi', name: 'Options open interest', note: 'Call and put contracts open on one stock at the last close, in total and by expiry, from the Options Clearing Corporation' },
       { id: 'capreturn', name: 'Capital returns', note: 'What one company did with its cash — shares bought back and dividends paid, year by year, from its own filings' },
       { id: 'fundholders', name: 'Fund holders', note: 'Which mutual funds and ETFs hold one stock, largest first — and how much of each fund it is' },
       { id: 'revmix', name: 'Revenue mix', note: 'Where one company’s revenue comes from — by product, segment or region, for the latest year or quarter, or how the mix has changed over time (set Show)' },
@@ -1594,6 +1605,7 @@
       ['revmix', 'Revenue mix', 'rmSym'],
       ['fundholders', 'Fund holders', 'fhSym'],
       ['capreturn', 'Capital returns', 'crSym'],
+      ['optoi', 'Options open interest', 'oiSym'],
     ];
     const spotView = (id) => SPOT_VIEWS.find((v) => v[0] === id) || null;
     // ---- Market: the whole market, five ways ---------------------------------
@@ -1795,6 +1807,24 @@
     const prfCache = {};
     const prfPending = {};
     // The funds holding one stock, for the Fund holders card.
+    // The Options open interest card's figures, fetched the same way.
+    const oiCache = {};
+    const oiPending = {};
+    function getOptions(symbol) {
+      if (!symbol) return null;
+      if (oiCache[symbol]) return oiCache[symbol];
+      if (oiPending[symbol]) return null;
+      oiPending[symbol] = true;
+      fetch(`/api/options?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          oiCache[symbol] = d && typeof d === 'object' && 'options' in d ? d : { options: null };
+          delete oiPending[symbol];
+          if (Cards.optionsNeed(tpl, controlOpts())) render();
+        })
+        .catch(() => { delete oiPending[symbol]; });
+      return null;
+    }
     // The Capital returns card's figures, fetched the same way.
     const crCache = {};
     const crPending = {};
@@ -2043,7 +2073,7 @@
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
-      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'crSym', 'bbBy', 'bbFloor', 'bbCount',
+      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -2074,7 +2104,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: controlOpts(),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getCapReturns,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getCapReturns, getOptions,
       updatedAt: pulledAt,
     });
 
@@ -2166,6 +2196,7 @@
       $('rmBox').style.display = tpl === 'revmix' ? 'block' : 'none';
       $('fhBox').style.display = tpl === 'fundholders' ? 'block' : 'none';
       $('crBox').style.display = tpl === 'capreturn' ? 'block' : 'none';
+      $('oiBox').style.display = tpl === 'optoi' ? 'block' : 'none';
       $('bbBox').style.display = tpl === 'buybacks' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
@@ -2583,6 +2614,7 @@
     // Fund holders: one control.
     $('fhSym').addEventListener('change', () => { if (tpl === 'fundholders') render(); });
     $('crSym').addEventListener('change', () => { if (tpl === 'capreturn') render(); });
+    $('oiSym').addEventListener('change', () => { if (tpl === 'optoi') render(); });
     // Buybacks ranking: the choices come from the module.
     for (const [v, label] of Cards.buybackBys()) $('bbBy').add(new Option(label, v));
     for (const [v, label] of Cards.buybackFloors()) $('bbFloor').add(new Option(label, v));
@@ -3176,6 +3208,8 @@
         { const keep = $('monSym').value; $('monSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('monSym').options].some((o) => o.value === keep)) $('monSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;
+        { const keep = $('oiSym').value; $('oiSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('oiSym').options].some((o) => o.value === keep)) $('oiSym').value = keep; }
         { const keep = $('crSym').value; $('crSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('crSym').options].some((o) => o.value === keep)) $('crSym').value = keep; }
         { const keep = $('fhSym').value; $('fhSym').innerHTML = $('chtSym').innerHTML;

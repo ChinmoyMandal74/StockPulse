@@ -468,6 +468,8 @@
     // quarter end, and the change in their combined shares on the quarter before.
     ['own',   '13F holders',    (s) => (ok(s.instManagers) ? { t: Number(s.instManagers).toLocaleString('en-US'), c: '' } : null)],
     ['own',   '13F shares chg', (s) => V.smag(s.instChange)],
+    // Put options open for every call open, from the clearing house's count.
+    ['own',   'Put/call OI',    (s) => (ok(s.optPcr) ? { t: Number(s.optPcr).toFixed(2), c: '' } : null)],
     ['own',   '5% filing',      (s) => (s.lastHolder ? { t: s.lastHolder + (s.lastHolderDate ? ' \u00b7 ' + shortDate(s.lastHolderDate) : ''), c: '' } : null)],
   ];
 

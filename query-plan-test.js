@@ -36,7 +36,10 @@ const BIG = ['bars', 'fundamentals_history', 'earnings_history', 'news', 'activi
   'fund_holdings',
   // About eighteen rows a company (six years, twelve quarters) of JSON a
   // few KB each: small in rows, not in bytes. Read by symbol only.
-  'seg_periods', 'seg_filings'];
+  'seg_periods', 'seg_filings',
+  // One row a stock a trading day: about 320,000 a year. Read by symbol,
+  // newest first, with a limit.
+  'options_oi'];
 
 // Statements that scan on purpose, each with the reason it is allowed to.
 // A new entry here is a decision, which is the point of naming them.
