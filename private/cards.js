@@ -54,6 +54,7 @@
   let getHolders = () => null;
   let getSegments = () => null;
   let getFundHolders = () => null;
+  let getCapReturns = () => null;
   let getLineSeries = () => null;
   // One symbol’s month-end closes and the index’s, or null while it loads.
   let getMonths = () => null;
@@ -7624,6 +7625,88 @@
   // them. Each fund's report is as of a month end two to five months back,
   // and not the same one: the kicker gives the range.
   const FH_ROWS = { portrait: 10, square: 6, story: 12 };
+
+  // ---- Capital returns: what one company did with its cash ----------------------
+  //
+  // (2026-10-11, the owner: "lets work on capital returns".) Shares bought
+  // back and dividends paid, year by year, from the cash-flow statements the
+  // company filed, with the latest twelve months above them.
+  //
+  // A LINE NOT FILED IS A DASH, NOT A ZERO, and a year with neither line is
+  // not drawn as an empty bar that reads as "paid nothing".
+  //
+  // BOUGHT BACK IS NOT NET OF SHARES HANDED OUT AS PAY, so the share count
+  // sits beside it: that is the test of whether the buybacks shrank it.
+  //
+  // TWO PARTS OF ONE BAR, neither of them a price: the accent and violet,
+  // never green or red. The card says what was paid and makes no claim that
+  // paying it was good or bad.
+  const CR_ROWS = { portrait: 6, square: 5, story: 6 };
+  function capReturnNeed(tpl, opts) {
+    if (tpl !== 'capreturn') return null;
+    return { symbol: (opts && opts.crSym) || null };
+  }
+  function tplCapReturn() {
+    const sym = O.crSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((r) => r.symbol === sym);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!row) return shell('Nothing to show', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const data = getCapReturns(sym);
+    if (!data) return shell('Reading the filings', 'Finding', 'the cash-flow statements\u2026');
+    const n = nameOf(row);
+    const R = data.returns;
+    const drawn = R && Array.isArray(R.years) ? R.years.filter((y) => y.returned != null).slice(0, CR_ROWS[size.id] || 6).reverse() : [];
+    if (!R || !R.last || !drawn.length) {
+      return shell(n, 'Capital returns', 'none reported',
+        sym + '\u2019s filings on file report no share buybacks and no dividends paid. A fund files no cash-flow statement, and a company that pays neither reports neither line.');
+    }
+    const L = R.last, X = R.ratios || {};
+    const money = (v) => (v == null ? '\u2014' : (v < 0 ? '\u2212' : '') + '$' + fmtMoney(Math.abs(v)));
+    const pc = (v, d) => (v == null ? null : (v > 0 && v < 0.05 ? '<0.1' : v.toFixed(d == null ? 1 : d)) + '%');
+    const sg = (v) => (v == null ? '\u2014' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(1) + '%');
+    const yr = (iso) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t.getTime()) ? iso : String(t.getFullYear()); };
+    const day = (iso) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+    const A = 'var(--accent)', B = pal.ink('#a78bfa');
+    const span = R.basis === 'TTM' ? 'the 12 months to ' + day(L.end) : 'the fiscal year to ' + day(L.end);
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || '\u00a0') + '</span></div>';
+    const figs = fig('Returned', money(L.returned), X.totalYield == null ? '' : pc(X.totalYield) + ' of market value')
+      + fig('Bought back', money(L.buybacks), L.buybacks == null ? 'not reported' : X.buybackYield == null ? '' : pc(X.buybackYield) + ' of market value')
+      + fig('Dividends paid', money(L.dividends), L.dividends == null ? 'not reported' : X.dividendYield == null ? '' : pc(X.dividendYield) + ' of market value')
+      + fig('Share count', sg(R.sharesChange), R.sharesChange == null ? 'no year-on-year figure' : 'diluted, on the year before');
+    const SZ = ({ portrait: { f: 26, b: 26 }, square: { f: 21, b: 18 }, story: { f: 34, b: 38 } })[size.id] || { f: 26, b: 26 };
+    const scale = Math.max(1e-9, ...drawn.map((y) => y.returned));
+    const vw = Math.ceil(7 * SZ.f * 0.62) + 6, pw = Math.ceil(5 * SZ.f * 0.62) + 6;
+    const cols = Math.ceil(4.2 * SZ.f * 0.62) + 'px minmax(0,1fr) ' + vw + 'px ' + vw + 'px ' + pw + 'px';
+    const rows = drawn.map((y) => { const a = (y.buybacks || 0) / scale * 100, b = (y.dividends || 0) / scale * 100;
+      const of = y.returned != null && y.fcf > 0 ? y.returned / y.fcf * 100 : null;
+      return '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+        + '<span class="bx-n">' + esc(yr(y.end)) + '</span>'
+        + '<span class="bx-t" style="height:' + SZ.b + 'px">'
+        + (a > 0 ? '<span class="cr-b" style="left:0;width:' + a.toFixed(2) + '%;background:' + A + '"></span>' : '')
+        + (b > 0 ? '<span class="cr-b" style="left:' + a.toFixed(2) + '%;width:' + b.toFixed(2) + '%;background:' + B + '"></span>' : '') + '</span>'
+        + '<span class="bx-v">' + esc(money(y.buybacks)) + '</span>'
+        + '<span class="bx-v">' + esc(money(y.dividends)) + '</span>'
+        + '<span class="bx-v rm-pct">' + esc(of == null ? '\u2014' : Math.round(of) + '%') + '</span></div>'; }).join('');
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Fiscal year</span>'
+      + '<span>Cash returned</span><span class="sb-hr" style="color:' + A + '">Bought back</span><span class="sb-hr" style="color:' + B + '">Dividends</span><span class="sb-hr">Of FCF</span></div>';
+    const note = 'Cash ' + sym + ' paid out to its shareholders, from the cash-flow statements it filed with the SEC; the figures above the bars are for ' + span + '. '
+      + '\u201cOf FCF\u201d is that cash as a share of the free cash flow the business generated in the year; over 100% means it paid out more than it made. '
+      + (L.stockComp != null ? 'Bought back is before new shares handed out as pay (' + money(L.stockComp) + ' of stock pay in the same period), so the share count is what shows whether buybacks reduced it. ' : 'Bought back is before any new shares handed out as pay, so the share count is what shows whether buybacks reduced it. ')
+      + (R.currency && R.currency !== 'USD' ? 'Filed in ' + R.currency + ' and converted to dollars at each period\u2019s rate. ' : '')
+      + 'A dash is a line the company did not report. What was paid, not a forecast, and not a view on whether it was the right use of the cash.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc((row.sector ? row.sector + ' \u00b7 ' : '') + sym + ' \u00b7 fiscal ' + yr(drawn[0].end) + (drawn.length > 1 ? ' to ' + yr(drawn[drawn.length - 1].end) : '')) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
+      + '<span class="dim">cash returned to shareholders</span></h2>'
+      + '<div class="cr-figs">' + figs + '</div>'
+      + '<div class="bx-rows">' + hd + rows + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
   function fundHoldersNeed(tpl, opts) {
     if (tpl !== 'fundholders') return null;
     return { symbol: (opts && opts.fhSym) || null };
@@ -9054,6 +9137,7 @@
     holders: tplHolders,
     revmix: tplRevMix,
     fundholders: tplFundHolders,
+    capreturn: tplCapReturn,
     margins: () => marginsCard('margins'),
     secmargin: () => marginsCard('secmargin'),
     indmargin: () => marginsCard('indmargin'),
@@ -9289,6 +9373,21 @@
     .sz-story .sb-hd { font-size: 20px; }
     /* Revenue mix: the share beside the amount, a step quieter. */
     .bx-v.rm-pct { font-weight: 500; color: var(--muted); }
+    /* Capital returns: four figures above the yearly bars, and a bar in two parts. */
+    .cr-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 26px 0 6px; }
+    .cr-fig { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .cr-fig .k { font: 500 15px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; }
+    .cr-fig .v { font: 600 36px var(--mono); color: var(--text); white-space: nowrap; }
+    .cr-fig .x { font-size: 16px; color: var(--muted); line-height: 1.3; }
+    .cr-b { position: absolute; top: 0; bottom: 0; }
+    .sz-square .cr-figs { margin-top: 16px; gap: 12px; }
+    .sz-square .cr-fig .v { font-size: 28px; }
+    .sz-square .cr-fig .k { font-size: 12px; }
+    .sz-square .cr-fig .x { font-size: 13px; }
+    .sz-story .cr-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px 24px; margin-top: 36px; }
+    .sz-story .cr-fig .v { font-size: 52px; }
+    .sz-story .cr-fig .k { font-size: 20px; }
+    .sz-story .cr-fig .x { font-size: 22px; }
     /* Revenue mix over time: one stacked column a period, each a whole. */
     .rme-ch { flex: 1; min-height: 0; display: flex; gap: 14px; align-items: stretch; margin: 26px 0 6px; }
     .rme-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -11299,6 +11398,7 @@
     holdersNeed, holdersFold,
     revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()), revMixPeriods: () => RM_PERIODS.map((p) => p.slice()), revMixViews: () => RM_VIEWS.map((p) => p.slice()),
     fundHoldersNeed,
+    capReturnNeed,
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.
     drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
@@ -11404,6 +11504,7 @@
       getHolders = c.getHolders || (() => null);
       getSegments = c.getSegments || (() => null);
       getFundHolders = c.getFundHolders || (() => null);
+      getCapReturns = c.getCapReturns || (() => null);
       getLineSeries = c.getLineSeries || (() => null);
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);

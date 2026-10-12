@@ -10843,6 +10843,11 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const lnNeed = Cards.linesNeed(post.tpl, { stocks, myLists, screens, size: POST_SIZES[post.size], opts: post.opts || {} });
   if (lnNeed) { try { lines = await lineSeriesFor(lnNeed.symbols, lnNeed.quarters); } catch { lines = null; } }
 
+  // The Capital returns card, likewise.
+  let capret = null;
+  const crNeed = Cards.capReturnNeed(post.tpl, post.opts || {});
+  if (crNeed && crNeed.symbol) { try { capret = await capReturnsPayload(String(crNeed.symbol).toUpperCase()); } catch { capret = null; } }
+
   // The Fund holders card, likewise.
   let fholders = null;
   const fhNeed = Cards.fundHoldersNeed(post.tpl, post.opts || {});
@@ -10893,6 +10898,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getHolders: () => lholders,
       getSegments: () => rmix,
       getFundHolders: () => fholders,
+      getCapReturns: () => capret,
       getLineSeries: () => lines,
       getHistory: () => hist,
       getEvolution: (s) => (Object.prototype.hasOwnProperty.call(evoBySym, s) ? evoBySym[s] : evo),
@@ -11816,6 +11822,7 @@ const Holders13 = require('./holders13.js');
 const Inst13f = require('./inst13f.js');
 const Segments = require('./segments.js');
 const Nport = require('./nport.js');
+const CapReturns = require('./capreturns.js');
 const HOLDER_DOCS = 3;             // documents fetched per company per refresh
 const mgCache = {};
 const mgWarm = (cut) => !!(mgCache[cut] && Date.now() - mgCache[cut].at < EG_TTL_MS);
@@ -12545,6 +12552,35 @@ app.get('/api/segments', requireAuth, route(async (req, res) => {
     return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   }
   res.json(await segmentsPayload(symbol));
+}));
+
+// ---- what one company did with its cash ------------------------------------------
+// Shares bought back, dividends paid, pay given in stock and the share count,
+// from the cash-flow statements already on file (capreturns.js). One function
+// for the page route and the saved-post route.
+//
+// THE RATIOS NEED THE MARKET VALUE, which is the one figure here that is not
+// from a filing; where the profile has none they are null and the amounts
+// stand alone.
+//
+// DISPLAY ONLY. Nothing here says whether handing cash back was the right
+// use of it, and nothing ranks one company's payout against another's.
+async function capReturnsPayload(symbol) {
+  const rows = SecFacts.latestFilled(await store.readSecFacts(symbol));
+  const c = CapReturns.build(rows, new Date().toISOString().slice(0, 10));
+  if (!c) return { symbol, returns: null };
+  let cap = null;
+  try { const p = await store.readProfile(symbol); cap = p && Number(p.marketCap) > 0 ? Number(p.marketCap) : null; } catch { cap = null; }
+  return { symbol, returns: Object.assign({}, c, { marketCap: cap, ratios: CapReturns.ratios(c.last, cap) }) };
+}
+app.get('/api/capital-returns', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  res.json(await capReturnsPayload(symbol));
 }));
 
 // ---- institutional holdings (Form 13F) for one stock ----------------------------

@@ -1276,6 +1276,12 @@ const ADDED_COLUMNS = [
   "alter table sec_facts add column currency text",
   "alter table sec_facts add column fx_avg real",
   "alter table sec_facts add column fx_end real",
+  // Capital returns (2026-10-11): shares bought back, dividends paid and pay
+  // given in stock, from the cash-flow statement. Null on every row written
+  // before the company was next re-read.
+  "alter table sec_facts add column buybacks real",
+  "alter table sec_facts add column dividends_paid real",
+  "alter table sec_facts add column stock_comp real",
   // The newest STATEMENT filing (10-K/10-Q/20-F/40-F) we hold for a symbol,
   // recorded by writeSecFacts, which already has the rows. It exists so the
   // vendor-vs-filings staleness check never has to ask sec_facts for a
@@ -2495,7 +2501,8 @@ const SEC_COLS = ['symbol', 'cik', 'accn', 'form', 'filed', 'fy', 'fp',
   // Set only where the figures were filed in another currency and converted
   // when read: which currency, and the two rates used (see secfacts.js,
   // toDollars). Null on every dollar filer, which is nearly all of them.
-  'currency', 'fx_avg', 'fx_end'];
+  'currency', 'fx_avg', 'fx_end',
+  'buybacks', 'dividends_paid', 'stock_comp'];
 // camelCase on the row -> snake_case in the table, named once.
 const SEC_FIELD = {
   cost_of_revenue: 'costOfRevenue', gross_profit: 'grossProfit',
@@ -2504,6 +2511,7 @@ const SEC_FIELD = {
   free_cash_flow: 'freeCashFlow', shares_diluted: 'sharesDiluted',
   period_start: 'periodStart', period_end: 'periodEnd', period_type: 'periodType',
   derived_fields: 'derivedFields', fx_avg: 'fxAvg', fx_end: 'fxEnd',
+  dividends_paid: 'dividendsPaid', stock_comp: 'stockComp',
 };
 const secVal = (row, col) => {
   const v = row[SEC_FIELD[col] || col];

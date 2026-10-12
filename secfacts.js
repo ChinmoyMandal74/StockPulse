@@ -49,6 +49,15 @@ const CONCEPTS = {
     'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'],
   debt: ['LongTermDebtNoncurrent', 'LongTermDebt'],
   sharesDiluted: ['WeightedAverageNumberOfDilutedSharesOutstanding'],
+  // WHAT THE COMPANY DID WITH ITS CASH (2026-10-11, the owner: "lets work on
+  // capital returns"). Three lines of the cash-flow statement, all filed as
+  // POSITIVE amounts paid: shares bought back, dividends paid to common
+  // holders, and pay given in stock (a cost that is not cash, added back).
+  // Like every cash-flow line they are year-to-date in a 10-Q, and the
+  // quarter is derived by the same subtraction as operating cash flow.
+  buybacks: ['PaymentsForRepurchaseOfCommonStock', 'PaymentsForRepurchaseOfEquity'],
+  dividendsPaid: ['PaymentsOfDividendsCommonStock', 'PaymentsOfDividends', 'PaymentsOfOrdinaryDividends'],
+  stockComp: ['ShareBasedCompensation', 'AllocatedShareBasedCompensationExpense'],
 };
 const CONCEPT_KEYS = Object.keys(CONCEPTS);
 
@@ -90,6 +99,9 @@ const IFRS_CONCEPTS = {
   cash: ['CashAndCashEquivalents'],
   debt: ['LongtermBorrowings', 'NoncurrentPortionOfNoncurrentBorrowings', 'Borrowings'],
   sharesDiluted: ['AdjustedWeightedAverageShares'],
+  buybacks: ['PaymentsToAcquireOrRedeemEntitysShares'],
+  dividendsPaid: ['DividendsPaidClassifiedAsFinancingActivities', 'DividendsPaidToEquityHoldersOfParentClassifiedAsFinancingActivities', 'DividendsPaid'],
+  stockComp: ['AdjustmentsForSharebasedPayments'],
 };
 
 // Which taxonomy speaks for this company. US GAAP where it carries any of
@@ -146,7 +158,7 @@ function currencyOf(facts) {
 // That is true of the dollar figure and is not the company's own growth;
 // margins, being a ratio inside one period, are untouched.
 const FLOWS = ['revenue', 'costOfRevenue', 'grossProfit', 'operatingIncome', 'netIncome',
-  'epsDiluted', 'operatingCashFlow', 'capex'];
+  'epsDiluted', 'operatingCashFlow', 'capex', 'buybacks', 'dividendsPaid', 'stockComp'];
 function toDollars(rows, currency, fx) {
   const out = [];
   for (const r of rows) {
@@ -490,7 +502,7 @@ function latestPerPeriod(rows) {
 const FILLABLE = ['periodStart', 'revenue', 'costOfRevenue', 'grossProfit',
   'operatingIncome', 'netIncome', 'epsDiluted', 'operatingCashFlow', 'capex',
   'freeCashFlow', 'assets', 'liabilities', 'equity', 'cash', 'debt',
-  'sharesDiluted'];
+  'sharesDiluted', 'buybacks', 'dividendsPaid', 'stockComp'];
 
 function latestFilled(rows) {
   const list = Array.isArray(rows) ? rows : [];

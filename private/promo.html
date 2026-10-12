@@ -776,6 +776,17 @@
       <!-- Drawdowns. Like the other one-company cards, the card IS its own
            scope. An index is picked by its fund: SPY, QQQ, IWM, DIA. -->
       <!-- Large holders: one company, so the card is its own scope. -->
+      <div id="crBox">
+        <label>Stock</label>
+        <select id="crSym"></select>
+        <p class="hint">Shares bought back and dividends paid, year by
+          year, from the cash-flow statements the company filed, with
+          the latest twelve months above. A line the company does not
+          report is a dash, not a zero. Bought back is before shares
+          handed out as pay, so the change in the share count is shown
+          beside it. What was paid, not a view on whether it should
+          have been.</p>
+      </div>
       <div id="fhBox">
         <label>Stock</label>
         <select id="fhSym"></select>
@@ -1488,6 +1499,7 @@
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
       { id: 'corrections', name: 'Corrections', note: 'How many companies are in a pullback, a correction or a bear market — beside how far each index is from its own high' },
+      { id: 'capreturn', name: 'Capital returns', note: 'What one company did with its cash — shares bought back and dividends paid, year by year, from its own filings' },
       { id: 'fundholders', name: 'Fund holders', note: 'Which mutual funds and ETFs hold one stock, largest first — and how much of each fund it is' },
       { id: 'revmix', name: 'Revenue mix', note: 'Where one company’s revenue comes from — by product, segment or region, for the latest year or quarter, or how the mix has changed over time (set Show)' },
       { id: 'holders', name: 'Large holders', note: 'Who reports holding more than 5% of one company, and on which form — each holder at its newest filing' },
@@ -1565,6 +1577,7 @@
       ['holders', 'Large holders', 'lhSym'],
       ['revmix', 'Revenue mix', 'rmSym'],
       ['fundholders', 'Fund holders', 'fhSym'],
+      ['capreturn', 'Capital returns', 'crSym'],
     ];
     const spotView = (id) => SPOT_VIEWS.find((v) => v[0] === id) || null;
     // ---- Market: the whole market, five ways ---------------------------------
@@ -1765,6 +1778,24 @@
     const prfCache = {};
     const prfPending = {};
     // The funds holding one stock, for the Fund holders card.
+    // The Capital returns card's figures, fetched the same way.
+    const crCache = {};
+    const crPending = {};
+    function getCapReturns(symbol) {
+      if (!symbol) return null;
+      if (crCache[symbol]) return crCache[symbol];
+      if (crPending[symbol]) return null;
+      crPending[symbol] = true;
+      fetch(`/api/capital-returns?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          crCache[symbol] = d && typeof d === 'object' && 'returns' in d ? d : { returns: null };
+          delete crPending[symbol];
+          if (Cards.capReturnNeed(tpl, controlOpts())) render();
+        })
+        .catch(() => { delete crPending[symbol]; });
+      return null;
+    }
     const fhCache = {};
     const fhPending = {};
     function getFundHolders(symbol) {
@@ -1995,7 +2026,7 @@
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
-      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym',
+      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'crSym',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -2026,7 +2057,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: controlOpts(),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getCapReturns,
       updatedAt: pulledAt,
     });
 
@@ -2117,6 +2148,7 @@
       $('lhBox').style.display = tpl === 'holders' ? 'block' : 'none';
       $('rmBox').style.display = tpl === 'revmix' ? 'block' : 'none';
       $('fhBox').style.display = tpl === 'fundholders' ? 'block' : 'none';
+      $('crBox').style.display = tpl === 'capreturn' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
@@ -2532,6 +2564,7 @@
       $(id).addEventListener('change', () => { if (tpl === 'indmargin') render(); }));
     // Fund holders: one control.
     $('fhSym').addEventListener('change', () => { if (tpl === 'fundholders') render(); });
+    $('crSym').addEventListener('change', () => { if (tpl === 'capreturn') render(); });
     // Revenue mix: the stock and which breakdown, the kinds from the module.
     for (const [v, label] of Cards.revMixKinds()) $('rmKind').add(new Option(label, v));
     for (const [v, label] of Cards.revMixPeriods()) $('rmPeriod').add(new Option(label, v));
@@ -3120,6 +3153,8 @@
         { const keep = $('monSym').value; $('monSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('monSym').options].some((o) => o.value === keep)) $('monSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;
+        { const keep = $('crSym').value; $('crSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('crSym').options].some((o) => o.value === keep)) $('crSym').value = keep; }
         { const keep = $('fhSym').value; $('fhSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('fhSym').options].some((o) => o.value === keep)) $('fhSym').value = keep; }
         { const keep = $('rmSym').value; $('rmSym').innerHTML = $('chtSym').innerHTML;

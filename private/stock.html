@@ -1053,6 +1053,22 @@
     #fundh td.c { color: var(--muted); }
     #fundh td .fam { display: block; font-size: 11px; color: var(--faint); }
     #fundh .fnote { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+    /* What it did with its cash: four figures and a table of fiscal years. */
+    #capret .sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px 22px; margin-bottom: 16px; }
+    #capret .fig { display: flex; flex-direction: column; gap: 3px; }
+    #capret .fig .k { color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); }
+    #capret .fig .v { font-family: var(--mono); font-size: 19px; color: var(--text); }
+    #capret .fig .x { color: var(--muted); font-size: 11.5px; }
+    #capret table { width: 100%; border-collapse: collapse; }
+    #capret th { text-align: left; font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.06em;
+                 color: var(--faint); padding: 0 12px 7px 0; }
+    #capret td { padding: 6px 12px 6px 0; border-top: 1px solid var(--hair); font-size: 12.5px; }
+    #capret td.n, #capret th.n { text-align: right; font-family: var(--mono); white-space: nowrap; }
+    #capret td.b { width: 26%; }
+    #capret td.b span { display: flex; height: 8px; border-radius: 3px; overflow: hidden; }
+    #capret td.b i { display: block; height: 8px; }
+    #capret .cnote { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+    #capret .tbl { overflow-x: auto; }
     /* Where the revenue comes from: one small table a breakdown. */
     #seg .sg-k { margin: 16px 0 6px; font: 600 11.5px var(--sans); color: var(--muted); }
     #seg .sg-k:first-child { margin-top: 0; }
@@ -3473,6 +3489,13 @@
              Its own card again: what the company files, what its officers do
              with their own money, and what the rest of the market has bet
              against it are three different questions. -->
+        <section class="bezel card" id="capret" data-jump="Capital returns" data-icon="i-chart" hidden><div class="core">
+          <div class="sec-h"><h2>What it did with its cash</h2>
+            <span id="capretWin" style="font-size:11.5px;color:var(--faint);font-family:var(--mono)"></span>
+          </div>
+          <div id="capretBody"></div>
+        </div></section>
+
         <section class="bezel card" id="seg" data-jump="Revenue mix" data-icon="i-chart" hidden><div class="core">
           <div class="sec-h"><h2>Where the revenue comes from</h2>
             <span><span class="sg-tabs" id="segTabs"></span><span id="segWin" style="font-size:11.5px;color:var(--faint);font-family:var(--mono)"></span></span>
@@ -4665,6 +4688,49 @@
       // Funds that hold it: mutual funds and ETFs, from their own portfolio
       // reports. Placed after Institutional holders and said to be INSIDE
       // those figures, so nobody adds the two sections together.
+      // What it did with its cash: buybacks, dividends, stock pay and the
+      // share count, from its own cash-flow statements. A line the company
+      // does not file is a dash, never a zero.
+      async function loadCapReturns() {
+        const card = document.getElementById('capret');
+        if (!card) return;
+        try {
+          const r = await fetch('/api/capital-returns?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
+          if (!r.ok) { card.remove(); return; }
+          const R = (await r.json()).returns;
+          if (!R || !R.last || !(R.years || []).some((y) => y.buybacks != null || y.dividends != null || y.stockComp != null)) { card.remove(); return; }
+          const L = R.last, X = R.ratios || {};
+          const money = (v) => (v == null ? '\u2014' : (v < 0 ? '\u2212' : '') + '$' + (Math.abs(v) >= 1e12 ? (Math.abs(v) / 1e12).toFixed(2) + 'T' : Math.abs(v) >= 1e9 ? (Math.abs(v) / 1e9).toFixed(1) + 'B' : (Math.abs(v) / 1e6).toFixed(0) + 'M'));
+          const pc = (v) => (v == null ? '' : (v > 0 && v < 0.05 ? '<0.1' : v.toFixed(1)) + '%');
+          const sg = (v) => (v == null ? '\u2014' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(1) + '%');
+          const sh = (v) => (v == null ? '\u2014' : v >= 1e9 ? (v / 1e9).toFixed(2) + 'B' : (v / 1e6).toFixed(0) + 'M');
+          const day = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const fig = (k, v, x) => '<div class="fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span>' + (x ? '<span class="x">' + esc(x) + '</span>' : '') + '</div>';
+          const A = 'var(--accent)', B = '#a78bfa';
+          document.getElementById('capretWin').textContent = (R.basis === 'TTM' ? '12 months to ' : 'fiscal year to ') + day(L.end);
+          const years = R.years.filter((y) => y.buybacks != null || y.dividends != null || y.stockComp != null || y.fcf != null);
+          const top = Math.max(1e-9, ...years.map((y) => y.returned || 0));
+          document.getElementById('capretBody').innerHTML = '<div class="sum">'
+            + fig('Returned to shareholders', money(L.returned), X.totalYield == null ? '' : pc(X.totalYield) + ' of market value' + (X.ofFcf == null ? '' : ', ' + Math.round(X.ofFcf) + '% of free cash flow'))
+            + fig('Shares bought back', money(L.buybacks), L.buybacks == null ? 'not reported' : X.buybackYield == null ? '' : pc(X.buybackYield) + ' of market value')
+            + fig('Dividends paid', money(L.dividends), L.dividends == null ? 'not reported' : X.dividendYield == null ? '' : pc(X.dividendYield) + ' of market value')
+            + fig('Pay given in stock', money(L.stockComp), X.stockCompOfRevenue == null ? '' : pc(X.stockCompOfRevenue) + ' of revenue')
+            + fig('Share count', sg(R.sharesChange), R.sharesChange == null ? 'no year-on-year figure' : 'diluted, on the fiscal year before')
+            + '</div><div class="tbl"><table><thead><tr><th>Fiscal year to</th><th><span style="color:' + A + '">Bought back</span> \u00b7 <span style="color:' + B + '">dividends</span></th>'
+            + '<th class="n">Bought back</th><th class="n">Dividends</th><th class="n">Free cash flow</th><th class="n">Stock pay</th><th class="n">Shares</th><th class="n">Chg</th></tr></thead><tbody>'
+            + years.map((y) => '<tr><td>' + esc(day(y.end)) + '</td><td class="b"><span>'
+              + '<i style="width:' + ((y.buybacks || 0) / top * 100).toFixed(1) + '%;background:' + A + '"></i><i style="width:' + ((y.dividends || 0) / top * 100).toFixed(1) + '%;background:' + B + '"></i></span></td>'
+              + '<td class="n">' + esc(money(y.buybacks)) + '</td><td class="n">' + esc(money(y.dividends)) + '</td><td class="n">' + esc(money(y.fcf)) + '</td>'
+              + '<td class="n">' + esc(money(y.stockComp)) + '</td><td class="n">' + esc(sh(y.shares)) + '</td><td class="n">' + esc(sg(y.sharesChange)) + '</td></tr>').join('')
+            + '</tbody></table></div>'
+            + '<p class="cnote">From the cash-flow statements the company filed with the SEC. A dash is a line it did not report, which is not the same as zero. '
+            + 'Bought back is before new shares handed out as pay, so the share count (diluted, the average over the year) is what shows whether buybacks reduced it; a change that looks like a stock split is left blank. '
+            + (R.currency && R.currency !== 'USD' ? 'Filed in ' + esc(R.currency) + ' and converted to dollars at each period\u2019s rate. ' : '')
+            + 'What was paid, not a view on whether it was the right use of the cash.</p>';
+          card.hidden = false;
+        } catch { card.remove(); }
+      }
+
       async function loadFundHolders() {
         const card = document.getElementById('fundh');
         if (!card) return;
@@ -4982,6 +5048,7 @@
       loadEvents();
       loadHolders();
       loadInstitutions();
+      loadCapReturns();
       loadSegments();
       loadFundHolders();
       const nb = document.getElementById('newsBtn');
