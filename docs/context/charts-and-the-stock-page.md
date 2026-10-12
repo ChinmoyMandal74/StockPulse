@@ -77,3 +77,11 @@ Charts are hand-rolled inline SVG in `rowcard.js` — no library, no build step.
   - **THAT ASSERTION HAS NOW GONE STALE ONCE AND BEEN UNDER-WRITTEN ONCE, which is the lesson.** It first checked the pill was not the CHIP's colour; the chips went accent and it failed over a page working as asked, so I replaced it with **box-only** checks — and the owner then reported the real fault by eye, *"all the pills are in blue"*, which a box check cannot see. Colour is asserted again and now **against every meaning the palette carries** (not the chip's, not the accent, not violet) plus *no hue at all* (channel spread ≤ 12) and *still bright* — so it cannot rot the same way a third time. **Proved by reverting**: putting `--accent` back fails 4, reproducing the reported symptom exactly.
 - The name cell links to `/stock/<SYMBOL>` on **both** the screener and the analysis page; the symbol cell still links out to Google Finance. All of them open in a new tab (`target="_blank" rel="noopener"`), so a click never loses your place in the list. `.namelink` lives in `app.css` because two pages use it; only the frozen-column truncation (`td.frz1 .namelink`) stays in index.html. `.namelink` inherits its colour and only underlines on hover — 69 rows of blue underlines would wreck the table.
 
+## Save chart was removed (2026-10-12)
+
+The stock page's chart toolbar had a "Save chart" menu since 2026-09-22: it exported the chart on screen as a branded 1080-wide image for a feed post or a story, through `cards.js` (the `stock` template) and `cardshot.js`. Removed at the owner's word ("You can remove the save the chart feature"), the same day the promo studio lost its download button for members: members do not need to export, and a branded image posted by a member reads as the site publishing it.
+
+- Gone from `stock.html`: the menu, its styles, the `saveCard` script and the `cardshot.js` include. `cards.js` is still loaded, for the drawdown block.
+- **Removed for the admin too.** The promo studio makes the same card (Compare, Chart) and still downloads for the admin.
+- In its place the toolbar has a "Charts" link to the studio for that stock, hidden from guests.
+- The `stock` card template in `cards.js` was left alone: saved posts and the phone may still name it.
