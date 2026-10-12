@@ -1943,6 +1943,51 @@ signal. Null where a source has nothing for a company, never zero.
 
 ---
 
+## 40. A security test of the app with Strix — 2026-10-12
+
+*Area: Infrastructure · Status: Open · Note: nothing run yet; the commands are the tool's README as read on the day, not tried*
+
+The owner found Strix (github.com/usestrix/strix), an open-source AI
+penetration tester: it reads code or probes a running app, looks for
+security flaws and tries to prove each with a working exploit. Apache 2.0.
+Worth doing before the promo studio and the holder pages are opened to
+every member.
+
+**What it needs**
+
+- Docker running (its work happens in a sandbox container).
+- An API key for a model provider; the tokens are the cost. `server.js`
+  alone is about 13,000 lines, so a full scan is not small. The README
+  names a `--scan-mode quick` for a cheaper first pass.
+- This machine is Windows and the installer is a bash script: run it in
+  WSL with Docker Desktop.
+
+**The steps, in order**
+
+- a. **Scan the public GitHub repository**, not the local folder:
+  `strix --target https://github.com/<owner>/StockPulse`. The local folder
+  holds `.env` (database token, API keys, the Instagram token), and a
+  local-folder scan would hand those to the tool and its model provider.
+- b. **Give it a focus** with `--instruction`: the four access tiers
+  (anonymous, guest, member, admin), the routes the cron secret opens,
+  sign-up, password reset and the request-access flow.
+- c. **Verify every finding against the code before acting on it.** Expect
+  false positives; fix the real ones, each with a test that fails first.
+- d. **A live test only against a copy.** Against a running site the tool
+  attacks: it tries to sign in, inject and write. Production has no
+  staging copy, and the local server talks to the production database
+  too, so neither is a safe target. A live test needs a Vercel preview
+  deployment pointed at a throwaway database first. That setup is its own
+  piece of work.
+
+**What must hold**
+
+- Never the production address and never a local server, until (d) exists.
+- Never a target that contains secrets.
+- The tool's own rule, which is also the law: only systems the owner owns.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
