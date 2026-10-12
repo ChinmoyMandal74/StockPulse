@@ -56,6 +56,7 @@
   let getFundHolders = () => null;
   let getCapReturns = () => null;
   let getOptions = () => null;
+  let getInsider = () => null;
   let getLineSeries = () => null;
   // One symbol’s month-end closes and the index’s, or null while it loads.
   let getMonths = () => null;
@@ -7705,6 +7706,88 @@
   // and not the same one: the kicker gives the range.
   const FH_ROWS = { portrait: 10, square: 6, story: 12 };
 
+  // ---- Insider activity: what one company's insiders did on the open market ----
+  //
+  // (2026-10-12, the owner: "summarize the insider transactions on individual
+  // stock page and promo".) Dollars bought and sold over three, six or twelve
+  // months, how many people, and who, from the Form 4s they filed.
+  //
+  // OPEN-MARKET TRADES ONLY, as on the stock page: a grant is pay, and
+  // shares withheld for tax are automatic.
+  //
+  // A SALE IS NOT A VERDICT, and the card carries the two things that say
+  // so: how much of the selling was under a plan set months before, and a
+  // note that people paid in stock sell for tax and to spread their
+  // savings. It reports what was filed and draws no conclusion from it.
+  //
+  // Bought takes the accent and sold orange: two kinds of trade, neither of
+  // them a price move, so never green or red.
+  const IN_WINS = [['365', 'Last 12 months'], ['180', 'Last 6 months'], ['90', 'Last 3 months']];
+  const IN_ROWS = { portrait: 8, square: 5, story: 10 };
+  function insiderNeed(tpl, opts) {
+    if (tpl !== 'insiders') return null;
+    return { symbol: (opts && opts.inSym) || null };
+  }
+  function tplInsiders() {
+    const sym = O.inSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((r) => r.symbol === sym);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!row) return shell('Nothing to show', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const data = getInsider(sym);
+    if (!data) return shell('Reading the filings', 'Finding', 'the insider trades\u2026');
+    const n = nameOf(row);
+    const days = IN_WINS.some((w) => w[0] === String(O.inWin)) ? Number(O.inWin) : 365;
+    const span = days === 365 ? '12 months' : days === 180 ? '6 months' : '3 months';
+    const W = data.digest && Array.isArray(data.digest.windows) ? data.digest.windows.find((w) => w.days === days) : null;
+    if (!W || !W.trades) {
+      return shell(n, 'Insider trades', 'none filed', 'No open-market purchase or sale by an insider of ' + sym + ' was filed in the last ' + span + '. Grants and option exercises are pay and are not counted; a fund has no insiders.');
+    }
+    const money = (v) => (v == null ? '\u2014' : (v < 0 ? '\u2212' : '') + '$' + fmtMoney(Math.abs(v)));
+    const ppl = (k) => k + (k === 1 ? ' person' : ' people');
+    const A = 'var(--accent)', B = pal.ink('#fb923c');
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || '\u00a0') + '</span></div>';
+    const figs = fig('Bought', W.bought.trades ? money(W.bought.value) : '\u2014', W.bought.trades ? ppl(W.bought.people) + ', ' + W.bought.trades + (W.bought.trades === 1 ? ' trade' : ' trades') : 'no purchases')
+      + fig('Sold', W.sold.trades ? money(W.sold.value) : '\u2014', W.sold.trades ? ppl(W.sold.people) + ', ' + W.sold.trades + (W.sold.trades === 1 ? ' trade' : ' trades') : 'no sales')
+      + fig('Net', W.net == null ? '\u2014' : (W.net > 0 ? '+' : '') + money(W.net), W.net == null ? 'no priced trades' : W.net > 0 ? 'more bought than sold' : W.net < 0 ? 'more sold than bought' : 'even')
+      + fig('Sold under a plan', W.plannedShare == null ? '\u2014' : Math.round(W.plannedShare) + '%', W.plannedShare == null ? 'no priced sales' : 'of the dollars sold');
+    const top = (W.people || []).slice(0, IN_ROWS[size.id] || 8);
+    const SZ = ({ portrait: top.length <= 5 ? { f: 26, b: 24 } : { f: 23, b: 20 }, square: { f: 20, b: 16 }, story: top.length <= 7 ? { f: 32, b: 32 } : { f: 28, b: 26 } })[size.id] || { f: 23, b: 20 };
+    const scale = Math.max(1e-9, ...top.map((p) => Math.max(p.bought, p.sold)));
+    const vw = Math.ceil(7 * SZ.f * 0.62) + 6;
+    const cols = 'minmax(0,40%) minmax(0,1fr) ' + vw + 'px ' + vw + 'px';
+    const rows = top.map((p) => { const a = p.bought / scale * 100, b = p.sold / scale * 100;
+      return '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+        + '<span class="bx-n">' + esc(p.name) + (p.role ? ' <span class="bb-nm">' + esc(p.role) + '</span>' : '') + '</span>'
+        + '<span class="bx-t in-t" style="height:' + SZ.b + 'px">'
+        + (a > 0 ? '<span class="in-b" style="top:0;height:50%;width:' + Math.max(0.6, a).toFixed(2) + '%;background:' + A + '"></span>' : '')
+        + (b > 0 ? '<span class="in-b" style="bottom:0;height:50%;width:' + Math.max(0.6, b).toFixed(2) + '%;background:' + B + '"></span>' : '') + '</span>'
+        + '<span class="bx-v">' + esc(p.bought > 0 ? money(p.bought) : '\u2014') + '</span>'
+        + '<span class="bx-v">' + esc(p.sold > 0 ? money(p.sold) + (p.allPlanned ? '*' : '') : '\u2014') + '</span></div>'; }).join('');
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Insider</span>'
+      + '<span>Open-market trades</span><span class="sb-hr" style="color:' + A + '">Bought</span><span class="sb-hr" style="color:' + B + '">Sold</span></div>';
+    const day = (iso) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+    const starred = top.some((p) => p.sold > 0 && p.allPlanned);
+    const note = 'Open-market purchases and sales of ' + sym + ' shares by its own officers, directors and largest holders, from the Form 4s filed with the SEC in the ' + span + ' to ' + day(data.digest.today) + '. '
+      + (W.peopleCount > top.length ? 'These are the ' + top.length + ' with the largest net amounts, of ' + W.peopleCount + '. ' : '')
+      + 'Stock received as pay, option exercises and shares withheld for tax are not trades and are left out. '
+      + (starred ? '* every one of that person\u2019s trades was under a plan set up months in advance. ' : '')
+      + 'People paid largely in stock sell regularly, for tax and to spread their savings, so a sale says less than it looks; a plan sale least of all. '
+      + (W.partial ? 'Only the newest trades on file are counted, so the earliest part of this period may be incomplete. ' : '')
+      + 'What was filed, not a forecast, and not a view on the company.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc((row.sector ? row.sector + ' \u00b7 ' : '') + sym + ' \u00b7 last ' + span) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
+      + '<span class="dim">what its insiders did</span></h2>'
+      + '<div class="cr-figs">' + figs + '</div>'
+      + '<div class="bx-rows">' + hd + rows + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Options open interest: the contracts open on one stock -------------------
   //
   // (2026-10-11, the owner: "can you work on options open interest".) Calls
@@ -9291,6 +9374,7 @@
     fundholders: tplFundHolders,
     capreturn: tplCapReturn,
     optoi: tplOptions,
+    insiders: tplInsiders,
     margins: () => marginsCard('margins'),
     secmargin: () => marginsCard('secmargin'),
     indmargin: () => marginsCard('indmargin'),
@@ -9533,6 +9617,9 @@
     .cr-fig .v { font: 600 36px var(--mono); color: var(--text); white-space: nowrap; }
     .cr-fig .x { font-size: 16px; color: var(--muted); line-height: 1.3; }
     .cr-b { position: absolute; top: 0; bottom: 0; }
+    /* Insider activity: bought on the upper half of the track, sold on the lower. */
+    .in-t { background: none; }
+    .in-b { position: absolute; left: 0; border-radius: 3px; }
     /* Buybacks ranking: the company's name after its symbol, a step quieter. */
     .bb-nm { font-weight: 400; color: var(--muted); }
     .sz-square .cr-figs { margin-top: 16px; gap: 12px; }
@@ -11555,6 +11642,7 @@
     fundHoldersNeed,
     capReturnNeed,
     optionsNeed,
+    insiderNeed, insiderWindows: () => IN_WINS.map((p) => p.slice()),
     buybackBys: () => BB_BY.map((p) => p.slice()), buybackFloors: () => BB_FLOORS.map((p) => p.slice()),
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.
@@ -11663,6 +11751,7 @@
       getFundHolders = c.getFundHolders || (() => null);
       getCapReturns = c.getCapReturns || (() => null);
       getOptions = c.getOptions || (() => null);
+      getInsider = c.getInsider || (() => null);
       getLineSeries = c.getLineSeries || (() => null);
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);

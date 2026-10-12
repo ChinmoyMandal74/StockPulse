@@ -10887,6 +10887,11 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const lnNeed = Cards.linesNeed(post.tpl, { stocks, myLists, screens, size: POST_SIZES[post.size], opts: post.opts || {} });
   if (lnNeed) { try { lines = await lineSeriesFor(lnNeed.symbols, lnNeed.quarters); } catch { lines = null; } }
 
+  // The Insider activity card, likewise.
+  let insd = null;
+  const inNeed = Cards.insiderNeed(post.tpl, post.opts || {});
+  if (inNeed && inNeed.symbol) { try { insd = await insiderPayload(String(inNeed.symbol).toUpperCase()); } catch { insd = null; } }
+
   // The Options open interest card, likewise.
   let optoi = null;
   const oiNeed = Cards.optionsNeed(post.tpl, post.opts || {});
@@ -10949,6 +10954,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getFundHolders: () => fholders,
       getCapReturns: () => capret,
       getOptions: () => optoi,
+      getInsider: () => insd,
       getLineSeries: () => lines,
       getHistory: () => hist,
       getEvolution: (s) => (Object.prototype.hasOwnProperty.call(evoBySym, s) ? evoBySym[s] : evo),
@@ -12840,22 +12846,31 @@ app.get('/api/insider', requireAuth, route(async (req, res) => {
   // The join is the issuer's CIK, never the ticker — 1.4% of filings carry
   // `NONE` as their symbol, and a ticker can be reassigned to another
   // company entirely. The filings loader already resolved it.
+  res.json(await insiderPayload(symbol));
+}));
+// One function for the page route and the saved-post route. The digest is
+// built over the newest INSIDER_DIGEST_ROWS trades (a year of even a heavy
+// seller); the page's table still gets the newest sixty.
+const INSIDER_DIGEST_ROWS = 500;
+async function insiderPayload(symbol) {
   const cik = await store.readSecCik(symbol);
-  if (!cik) return res.json({ symbol, cik: null, rows: [], summary: null });
-  const rows = await store.readInsider(cik, 60);
+  if (!cik) return { symbol, cik: null, rows: [], summary: null, digest: null };
+  const all = await store.readInsider(cik, INSIDER_DIGEST_ROWS);
+  const rows = all.slice(0, 60);
   const since = new Date(Date.now() - INSIDER_WINDOW_DAYS * 86400000)
     .toISOString().slice(0, 10);
-  res.json({
+  return {
     symbol,
     cik,
     windowDays: INSIDER_WINDOW_DAYS,
     summary: Insider.summarise(rows, since),
+    digest: Insider.digest(all, new Date().toISOString().slice(0, 10), INSIDER_DIGEST_ROWS),
     rows: rows.map((r) => Object.assign({}, r, {
       url: SecFacts.filingUrl(r.cik, r.accn),
       word: (Insider.CODES[r.code] || {}).word || r.code,
     })),
-  });
-}));
+  };
+}
 
 // ---- the daily top-up ----------------------------------------------------
 //

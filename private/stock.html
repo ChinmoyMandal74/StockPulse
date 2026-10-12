@@ -1028,6 +1028,23 @@
     #ins .sum { display: flex; gap: 22px; flex-wrap: wrap; margin: 0 0 14px;
                 font-size: 13px; color: var(--muted); }
     #ins .sum b { color: var(--text); font-weight: 600; }
+    /* The digest above the list: three windows, twelve months, and who.
+       Bought is the accent and sold orange here: these are amounts, and
+       green and red stay on the one word in the list below. */
+    #ins .dg { margin: 0 0 18px; }
+    #ins .dg .dgl { margin: 14px 0 6px; font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
+    #ins .dg .dgl:first-child { margin-top: 0; }
+    #ins .dg td.l, #ins .dg th.l { text-align: left; font-family: var(--sans); }
+    #ins .dg td.l .role { color: var(--faint); font-size: 11px; margin-left: 7px; }
+    #ins .dg td.q { color: var(--muted); }
+    #ins .mo { display: flex; gap: 5px; align-items: stretch; height: 120px; }
+    #ins .mo .mc { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    #ins .mo .mb { flex: 1; min-height: 0; display: flex; align-items: flex-end; gap: 2px; border-bottom: 1px solid var(--hair); }
+    #ins .mo .mb i { flex: 1; display: block; border-radius: 2px 2px 0 0; min-height: 0; }
+    #ins .mo .mx { text-align: center; font: 500 9.5px var(--mono); color: var(--faint); padding-top: 4px; white-space: nowrap; }
+    #ins .dg .key { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+    #ins .dg .key i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin: 0 5px 0 12px; }
+    #ins .dg .key i:first-child { margin-left: 0; }
     #ins .sum .bought b { color: var(--green); }
     #ins .sum .sold b { color: var(--red); }
     #ins .note { color: var(--faint); font-size: 11.5px; line-height: 1.6; margin: 12px 0 0; }
@@ -4609,6 +4626,41 @@
             '<span>No purchases in the window</span>') +
             (side(s.sold, 'sold', 'sold') || '') + '</div>';
 
+          // THE DIGEST: the same trades added up three ways, so a company
+          // whose officers sell every week is not sixty rows to read.
+          const D = j.digest;
+          if (D && D.windows && D.windows.some((w) => w.trades)) {
+            const A = 'var(--accent)', B = '#fb923c';
+            const mny = (v) => (v == null ? '\u2014' : (v < 0 ? '\u2212' : '') + secMoney(Math.abs(v)));
+            const lab = { 90: '3 months', 180: '6 months', 365: '12 months' };
+            const ppl = (s) => (s.trades ? mny(s.value) + ' <span class="q" style="color:var(--faint)">\u00b7 ' + s.people + (s.people === 1 ? ' person' : ' people') + ', ' + s.trades + (s.trades === 1 ? ' trade' : ' trades') + '</span>' : '\u2014');
+            let g = '<div class="dg"><p class="dgl">Added up</p><div class="stab"><table><thead><tr><th class="l">Filed in the last</th><th>Bought</th><th>Sold</th><th>Net</th><th>Sold under a plan</th></tr></thead><tbody>'
+              + D.windows.map((w) => '<tr><td class="l">' + lab[w.days] + (w.partial ? ' <span class="plan" title="Only the newest trades on file are counted, so the start of this period may be incomplete">partial</span>' : '') + '</td>'
+                + '<td>' + ppl(w.bought) + '</td><td>' + ppl(w.sold) + '</td>'
+                + '<td>' + (w.net == null ? '\u2014' : (w.net > 0 ? '+' : '') + mny(w.net)) + '</td>'
+                + '<td class="q">' + (w.plannedShare == null ? '\u2014' : Math.round(w.plannedShare) + '% of the dollars') + '</td></tr>').join('')
+              + '</tbody></table></div>';
+            const top = Math.max(1e-9, ...D.months.map((m) => Math.max(m.bought, m.sold)));
+            if (D.months.some((m) => m.bought > 0 || m.sold > 0)) {
+              g += '<p class="dgl">Month by month, by the date filed</p><div class="mo">'
+                + D.months.map((m) => '<div class="mc" title="' + esc(m.m + ': bought ' + mny(m.bought) + ' by ' + m.buyers + ', sold ' + mny(m.sold) + ' by ' + m.sellers) + '"><div class="mb">'
+                  + '<i style="height:' + (m.bought / top * 100).toFixed(1) + '%;background:' + A + '"></i><i style="height:' + (m.sold / top * 100).toFixed(1) + '%;background:' + B + '"></i></div>'
+                  + '<div class="mx">' + esc(new Date(m.m + '-15T12:00:00').toLocaleDateString('en-US', { month: 'short' })) + '</div></div>').join('')
+                + '</div><p class="key"><i style="background:' + A + '"></i>bought<i style="background:' + B + '"></i>sold</p>';
+            }
+            const Y = D.windows.find((w) => w.days === 365);
+            if (Y && Y.people && Y.people.length) {
+              g += '<p class="dgl">By person, last 12 months' + (Y.peopleCount > Y.people.length ? ' \u2014 the ' + Y.people.length + ' largest of ' + Y.peopleCount : '') + '</p><div class="stab"><table><thead><tr><th class="l">Insider</th><th>Bought</th><th>Sold</th><th>Net</th><th>Trades</th><th>Last filed</th><th>Held after</th></tr></thead><tbody>'
+                + Y.people.map((p) => '<tr><td class="l">' + esc(p.name) + (p.role ? '<span class="role">' + esc(p.role) + '</span>' : '') + '</td>'
+                  + '<td>' + (p.bought > 0 ? esc(mny(p.bought)) : '\u2014') + '</td><td>' + (p.sold > 0 ? esc(mny(p.sold)) : '\u2014') + (p.allPlanned && p.sold > 0 ? '<span class="plan" title="Every one of this person\u2019s trades was under a 10b5-1 plan">plan</span>' : '') + '</td>'
+                  + '<td>' + (p.net > 0 ? '+' : '') + esc(mny(p.net)) + '</td><td>' + p.trades + '</td><td>' + esc(p.last) + '</td>'
+                  + '<td>' + (p.after == null ? '\u2014' : Number(p.after).toLocaleString('en-US', { maximumFractionDigits: 0 })) + '</td></tr>').join('')
+                + '</tbody></table></div>';
+            }
+            g += '</div><p class="dgl" style="margin:0 0 6px;font:500 10.5px var(--mono);text-transform:uppercase;letter-spacing:0.06em;color:var(--faint)">Every trade, newest first</p>';
+            h = g;
+            document.getElementById('insWin').textContent = 'open-market trades, by the date filed';
+          }
           h += '<div class="stab"><table><thead><tr><th>Filed</th><th>Insider</th>' +
             '<th>Action</th><th>Shares</th><th>Price</th><th>Value</th><th>Held after</th>' +
             '<th>Traded</th></tr></thead><tbody>';
@@ -4638,6 +4690,7 @@
             'machinery rather than a decision, and they are about 93% of what gets filed. ' +
             '<b>Filed</b> is the date it became public, which is what you could have known; ' +
             '<b>Traded</b> is when it happened, usually two business days earlier. ' +
+            'People paid largely in stock sell regularly, for tax and to spread their savings, so a total of sales says less than it looks. ' +
             'Marked <span class="plan">plan</span> means a 10b5-1 schedule set up months in ' +
             'advance. Straight from the filer’s own Form 4 at SEC EDGAR, and read by ' +
             'nothing else in this app — not the Signal, not the screener.</p>';

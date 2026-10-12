@@ -174,6 +174,104 @@ function summarise(rows, sinceIso) {
   return { since: sinceIso || null, bought: side(true), sold: side(false), trades: within.length };
 }
 
+// ---- the digest ------------------------------------------------------------
+//
+// (2026-10-12, the owner: "can you summarize the insider transactions on
+// individual stock page and promo".) The card listed up to sixty trades
+// under one line of totals; a company whose officers sell every week is
+// sixty rows of the same thing. This adds it up three ways: over three, six
+// and twelve months; month by month; and person by person.
+//
+// THE SAME FILTER AS EVERYTHING ELSE HERE: open-market purchases and sales
+// only, counted by PEOPLE as well as trades, with FILED as the date.
+//
+// WHAT A TOTAL OF SALES DOES NOT SAY, and the digest keeps the figure that
+// qualifies it beside it: how much of the selling was under a 10b5-1 plan
+// set up months before. An officer paid mostly in stock sells all the
+// time, for tax and to diversify; a plan sale says least of all.
+//
+// NET IS OF THE TRADES THAT CARRY A PRICE. A transfer without one has no
+// value to add, and is counted as a trade and left out of the dollars.
+//
+// THE ROWS HANDED IN MAY BE CAPPED (the read takes the newest N). Where the
+// oldest row is newer than a window's start and the cap was hit, that
+// window is `partial`: it may be missing older trades, and says so.
+const DAY_MS = 86400000;
+const WINDOWS = [90, 180, 365];
+const PEOPLE_MAX = 10;
+// 'COOK TIMOTHY D' as filed -> 'Cook Timothy D'. The order is the filer's
+// and is left alone: turning it round would guess at which word is which.
+function tidyName(s) {
+  const t = String(s || '').replace(/\s+/g, ' ').trim();
+  if (!t || t !== t.toUpperCase()) return t;
+  return t.split(' ').map((w) => (w.length <= 3 && /^(LLC|LP|INC|II|III|IV|LTD|CO|JR|SR|NV|SA|AG|PLC)\.?$/.test(w) ? w : w.split('-').map((p) => (p.charAt(0) + p.slice(1).toLowerCase()).replace(/'([a-z])/g, (m, c) => "'" + c.toUpperCase())).join('-'))).join(' ');
+}
+function digest(rows, today, cap) {
+  const list = (Array.isArray(rows) ? rows : []).filter((r) => r && r.filed && (!today || r.filed <= today));
+  if (!list.length) return null;
+  const t0 = Date.parse(String(today) + 'T00:00:00Z');
+  if (!isFinite(t0)) return null;
+  const oldest = list.reduce((m, r) => (r.filed < m ? r.filed : m), list[0].filed);
+  const capped = !!cap && rows.length >= cap;
+  const key = (r) => String(r.ownerCik || r.ownerName || '?');
+  const side = (rs, buy) => {
+    const mine = rs.filter((r) => !!r.buy === buy);
+    const valued = mine.filter((r) => r.value != null);
+    const planned = valued.filter((r) => r.planned);
+    return { trades: mine.length, people: new Set(mine.map(key)).size, value: valued.reduce((a, r) => a + r.value, 0),
+      valued: valued.length, planned: mine.filter((r) => r.planned).length, plannedValue: planned.reduce((a, r) => a + r.value, 0) };
+  };
+  const peopleOf = (rs) => {
+    const by = new Map();
+    for (const r of rs) {
+      const k = key(r);
+      const p = by.get(k) || by.set(k, { name: tidyName(r.ownerName) || 'Unnamed filer', role: r.ownerRole || null, bought: 0, sold: 0, trades: 0, planned: 0, last: '', after: null, afterAt: '' }).get(k);
+      p.trades++;
+      if (r.planned) p.planned++;
+      if (r.value != null) { if (r.buy) p.bought += r.value; else p.sold += r.value; }
+      if (r.filed > p.last) p.last = r.filed;
+      // What the person held after their newest trade, where the filing says.
+      const at = (r.transDate || r.filed) + '|' + r.filed;
+      if (r.sharesAfter != null && at >= p.afterAt) { p.after = r.sharesAfter; p.afterAt = at; }
+      if (!p.role && r.ownerRole) p.role = r.ownerRole;
+    }
+    const all = [...by.values()].map((p) => ({ name: p.name, role: p.role, bought: p.bought, sold: p.sold, net: p.bought - p.sold,
+      trades: p.trades, allPlanned: p.trades > 0 && p.planned === p.trades, last: p.last, after: p.after }));
+    all.sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || b.trades - a.trades || (a.name < b.name ? -1 : 1));
+    return { count: all.length, top: all.slice(0, PEOPLE_MAX) };
+  };
+  const windows = WINDOWS.map((days) => {
+    const since = new Date(t0 - days * DAY_MS).toISOString().slice(0, 10);
+    const rs = list.filter((r) => r.filed >= since);
+    const bought = side(rs, true), sold = side(rs, false);
+    const ppl = peopleOf(rs);
+    return { days, since, trades: rs.length, bought, sold,
+      net: rs.some((r) => r.value != null) ? bought.value - sold.value : null,
+      // Of the dollars sold, how much was under a plan: null with no priced sale.
+      plannedShare: sold.value > 0 ? sold.plannedValue / sold.value * 100 : null,
+      people: ppl.top, peopleCount: ppl.count, partial: capped && oldest > since };
+  });
+  // The twelve calendar months ending with this one, oldest first.
+  const months = [];
+  const d0 = new Date(t0);
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() - i, 1));
+    months.push({ m: d.toISOString().slice(0, 7), bought: 0, sold: 0, buyers: new Set(), sellers: new Set() });
+  }
+  const at = new Map(months.map((m) => [m.m, m]));
+  for (const r of list) {
+    const m = at.get(r.filed.slice(0, 7));
+    if (!m) continue;
+    if (r.buy) { m.buyers.add(key(r)); if (r.value != null) m.bought += r.value; } else { m.sellers.add(key(r)); if (r.value != null) m.sold += r.value; }
+  }
+  const year = list.filter((r) => r.filed >= windows[2].since && r.value != null);
+  const big = year.slice().sort((a, b) => b.value - a.value)[0] || null;
+  return { today, windows,
+    months: months.map((m) => ({ m: m.m, bought: m.bought, sold: m.sold, buyers: m.buyers.size, sellers: m.sellers.size })),
+    largest: big ? { name: tidyName(big.ownerName) || 'Unnamed filer', role: big.ownerRole || null, buy: !!big.buy, value: big.value, filed: big.filed, planned: !!big.planned } : null,
+    oldest, capped };
+}
+
 // ---- the daily top-up ------------------------------------------------------
 //
 // The quarterly data sets are published AFTER a quarter ends, so a table fed
@@ -309,6 +407,7 @@ function parseDailyIndex(text, wantForms = new Set(['4', '4/A', '3', '5'])) {
 }
 
 module.exports = {
+  digest, tidyName, WINDOWS,
   CODES, KEEP, build, summarise, isoDate, cleanTicker, roleOf,
   parseForm4, parseDailyIndex, tagVal,
 };

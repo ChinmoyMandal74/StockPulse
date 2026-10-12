@@ -791,6 +791,19 @@
           share count did, since stock handed out as pay offsets a
           buyback. Square and Story show fewer rows than asked.</p>
       </div>
+      <div id="inBox">
+        <label>Stock</label>
+        <select id="inSym"></select>
+        <label>Over</label>
+        <select id="inWin"></select>
+        <p class="hint">What a company's own officers, directors and
+          largest holders bought and sold on the open market, added
+          up and by person, from the Form 4s they filed. Stock
+          received as pay is not counted. The card says how much of
+          the selling was under a plan set up in advance: people paid
+          in stock sell regularly, so a sale says less than it
+          looks.</p>
+      </div>
       <div id="oiBox">
         <label>Stock</label>
         <select id="oiSym"></select>
@@ -1524,6 +1537,7 @@
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
       { id: 'corrections', name: 'Corrections', note: 'How many companies are in a pullback, a correction or a bear market — beside how far each index is from its own high' },
+      { id: 'insiders', name: 'Insider activity', note: 'What one company’s insiders bought and sold on the open market, added up and by person, from their own filings' },
       { id: 'optoi', name: 'Options open interest', note: 'Call and put contracts open on one stock at the last close, in total and by expiry, from the Options Clearing Corporation' },
       { id: 'capreturn', name: 'Capital returns', note: 'What one company did with its cash — shares bought back and dividends paid, year by year, from its own filings' },
       { id: 'fundholders', name: 'Fund holders', note: 'Which mutual funds and ETFs hold one stock, largest first — and how much of each fund it is' },
@@ -1606,6 +1620,7 @@
       ['fundholders', 'Fund holders', 'fhSym'],
       ['capreturn', 'Capital returns', 'crSym'],
       ['optoi', 'Options open interest', 'oiSym'],
+      ['insiders', 'Insider activity', 'inSym'],
     ];
     const spotView = (id) => SPOT_VIEWS.find((v) => v[0] === id) || null;
     // ---- Market: the whole market, five ways ---------------------------------
@@ -1807,6 +1822,24 @@
     const prfCache = {};
     const prfPending = {};
     // The funds holding one stock, for the Fund holders card.
+    // The Insider activity card's figures, fetched the same way.
+    const inCache = {};
+    const inPending = {};
+    function getInsider(symbol) {
+      if (!symbol) return null;
+      if (inCache[symbol]) return inCache[symbol];
+      if (inPending[symbol]) return null;
+      inPending[symbol] = true;
+      fetch(`/api/insider?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          inCache[symbol] = d && typeof d === 'object' && 'digest' in d ? d : { digest: null };
+          delete inPending[symbol];
+          if (Cards.insiderNeed(tpl, controlOpts())) render();
+        })
+        .catch(() => { delete inPending[symbol]; });
+      return null;
+    }
     // The Options open interest card's figures, fetched the same way.
     const oiCache = {};
     const oiPending = {};
@@ -2073,7 +2106,7 @@
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
-      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym',
+      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'inSym', 'inWin',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -2104,7 +2137,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: controlOpts(),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getCapReturns, getOptions,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getCapReturns, getOptions, getInsider,
       updatedAt: pulledAt,
     });
 
@@ -2197,6 +2230,7 @@
       $('fhBox').style.display = tpl === 'fundholders' ? 'block' : 'none';
       $('crBox').style.display = tpl === 'capreturn' ? 'block' : 'none';
       $('oiBox').style.display = tpl === 'optoi' ? 'block' : 'none';
+      $('inBox').style.display = tpl === 'insiders' ? 'block' : 'none';
       $('bbBox').style.display = tpl === 'buybacks' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
@@ -2615,6 +2649,9 @@
     $('fhSym').addEventListener('change', () => { if (tpl === 'fundholders') render(); });
     $('crSym').addEventListener('change', () => { if (tpl === 'capreturn') render(); });
     $('oiSym').addEventListener('change', () => { if (tpl === 'optoi') render(); });
+    for (const [v, label] of Cards.insiderWindows()) $('inWin').add(new Option(label, v));
+    ['inSym', 'inWin'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'insiders') render(); }));
     // Buybacks ranking: the choices come from the module.
     for (const [v, label] of Cards.buybackBys()) $('bbBy').add(new Option(label, v));
     for (const [v, label] of Cards.buybackFloors()) $('bbFloor').add(new Option(label, v));
@@ -3208,6 +3245,8 @@
         { const keep = $('monSym').value; $('monSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('monSym').options].some((o) => o.value === keep)) $('monSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;
+        { const keep = $('inSym').value; $('inSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('inSym').options].some((o) => o.value === keep)) $('inSym').value = keep; }
         { const keep = $('oiSym').value; $('oiSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('oiSym').options].some((o) => o.value === keep)) $('oiSym').value = keep; }
         { const keep = $('crSym').value; $('crSym').innerHTML = $('chtSym').innerHTML;
