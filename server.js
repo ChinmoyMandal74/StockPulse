@@ -1516,15 +1516,17 @@ app.get('/quality', route(async (req, res) => {
 
 // Admin only: the backlog, as a table. The data is docs/backlog.md itself;
 // see /api/backlog below and backlog.js.
-// What one institution or one fund holds, and the directory of them. ADMIN
-// ONLY, see the routes behind them (/api/holder) for why.
+// What one institution or one fund holds, and the directory of them. For
+// members; a guest's preview is twenty stocks and these pages list hundreds.
 app.get('/holders', route(async (req, res) => {
-  if (!(await isAdmin(req))) return res.redirect('/');
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
   logAct(req, 'page', 'holders');
   res.sendFile(path.join(__dirname, 'private', 'holders.html'));
 }));
 app.get('/holder/:kind/:id', route(async (req, res) => {
-  if (!(await isAdmin(req))) return res.redirect('/');
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
   logAct(req, 'page', 'holder:' + String(req.params.kind || '').slice(0, 1) + ':' + String(req.params.id || '').slice(0, 20));
   res.sendFile(path.join(__dirname, 'private', 'holder.html'));
 }));
@@ -12640,16 +12642,23 @@ app.get('/api/segments', requireAuth, route(async (req, res) => {
 // What one 13F manager ('M') or one fund ('F') holds among the tracked
 // stocks (holderbook.js), and the directory of them.
 //
-// ADMIN ONLY, AND THAT IS THE LICENSING QUESTION RATHER THAN A PERMISSION
-// ONE. A fund's page lists its positions with the weight of each, and for
-// an index fund that is the index's constituents with their weights: what
-// the holdings page is already kept behind the admin gate for. The source
-// here is the fund's own public SEC filing and it is months old, which may
-// well change the answer; that is the owner's decision to take, not a
-// default to slip in. A manager's 13F raises no such question, but the two
-// kinds share a page and are gated together until it is decided.
+// FOR MEMBERS, BY THE OWNER'S DECISION (2026-10-12: "The page can be visible
+// to non-admin users too, they can come from the individual stock page").
+// They shipped admin only the same morning, because a fund's page lists its
+// positions with the weight of each, and for an index fund that resembles
+// what the holdings page (/holdings, the issuer's own daily file) is kept
+// behind the admin gate for. The owner drew the line between the two: THIS
+// is the fund's own public SEC filing, months old; THAT is an issuer's live
+// file and stays admin only. Nothing about /holdings changed.
+//
+// NOT FOR GUESTS: the preview is twenty stocks, and a holder's page lists
+// hundreds with a figure beside each.
 const HOLDER_KINDS = { M: 'manager', F: 'fund' };
-app.get('/api/holders', requireAdmin, route(async (req, res) => {
+// NAMED holder-directory, NOT /api/holders: that address is the 13D and 13G
+// filings about one stock (below), and the first version of this took it.
+// Express gave every request to whichever was registered first, so the stock
+// page's Large holders section and the promo card were handed a directory.
+app.get('/api/holder-directory', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const kind = String(req.query.kind || 'M').toUpperCase();
   if (!HOLDER_KINDS[kind]) return res.status(400).json({ error: 'Bad kind.' });
@@ -12658,7 +12667,7 @@ app.get('/api/holders', requireAdmin, route(async (req, res) => {
   res.json({ kind, q, holders: list.map((h) => ({ id: h.id, name: h.name, family: h.family, label: h.label, asOf: h.asOf,
     positions: h.positions, value: h.value, nav: h.nav, added: h.added, exited: h.exited })) });
 }));
-app.get('/api/holder', requireAdmin, route(async (req, res) => {
+app.get('/api/holder', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const kind = String(req.query.kind || '').toUpperCase();
   const id = String(req.query.id || '').trim();

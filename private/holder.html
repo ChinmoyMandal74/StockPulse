@@ -200,7 +200,7 @@
       $('backBtn').href = '/holders?kind=' + (isFund ? 'F' : 'M');
       try {
         const r = await fetch('/api/holder?kind=' + encodeURIComponent(KIND) + '&id=' + encodeURIComponent(ID), { cache: 'no-store' });
-        if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'This page is for the admin.' : 'The server answered ' + r.status + '.');
+        if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'This page is for members. Sign in with an account to see it.' : 'The server answered ' + r.status + '.');
         const j = await r.json();
         H = j.holder;
         if (!H) { $('name').textContent = 'Not on file'; $('wrap').innerHTML = '<div class="hb-empty">No holder with that id holds a tracked stock in the newest data on file.</div>'; return; }
@@ -228,7 +228,7 @@
           ? 'Long positions in the common shares only. Value is what the fund itself reported. “Of the fund” is that over the fund’s net assets; “of these holdings” is over the total listed here. '
           : 'Value is the shares times one quarter-end price per stock (the median the reporting managers implied), not the dollars this manager filed, since some file in thousands. A position larger than the whole company is a units error and is left out. ')
           + 'Only stocks tracked on this site are counted, so the total is not the size of the ' + (isFund ? 'fund' : 'manager') + '. “Of the company” is blank where the share count on file is smaller than the position. '
-          + 'A record of what was reported, months old by the time it is public; not a forecast and not a view on any stock. Admin only.';
+          + 'A record of what was reported, months old by the time it is public; not a forecast and not a view on any stock.';
         draw();
       } catch (e) {
         $('name').textContent = 'Could not load';

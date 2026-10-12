@@ -81,14 +81,13 @@
         <span class="wordmark hide-sm">Tickr Lab</span>
       </span>
       <span class="divider"></span>
-      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
-      <a class="btn" href="/">Screener</a>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Screener</a>
     </nav>
   </div>
 
   <main class="page">
     <header class="masthead">
-      <span class="eyebrow"><span class="pip"></span>Admin</span>
+      <span class="eyebrow"><span class="pip"></span>Ownership</span>
       <h1>Holders</h1>
       <p class="lede">Every institutional manager and every fund that holds a stock tracked here, and what each one holds.
         Managers are from their quarterly Form 13F; funds from their own portfolio reports (Form N-PORT). The list opens on
@@ -123,9 +122,9 @@
       const q = $('q').value.trim();
       document.querySelectorAll('.hd-tab').forEach((b) => b.classList.toggle('on', b.dataset.k === kind));
       try {
-        const r = await fetch('/api/holders?kind=' + kind + (q ? '&q=' + encodeURIComponent(q) : ''), { cache: 'no-store' });
+        const r = await fetch('/api/holder-directory?kind=' + kind + (q ? '&q=' + encodeURIComponent(q) : ''), { cache: 'no-store' });
         if (mine !== seq) return;                       // a later keystroke already asked
-        if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'This page is for the admin.' : 'The server answered ' + r.status + '.');
+        if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'This page is for members. Sign in with an account to see it.' : 'The server answered ' + r.status + '.');
         const list = (await r.json()).holders || [];
         if (mine !== seq) return;
         const fund = kind === 'F';
@@ -143,7 +142,7 @@
         $('foot').textContent = (fund
           ? 'Mutual funds and ETFs. A fund is inside its manager’s 13F figures too, so the two lists are never to be added. Reports are months old and not all as of the same date. '
           : 'Every manager running over $100 million files. A manager’s figure includes the funds it runs. ')
-          + '“In tracked stocks” is what each holds among the stocks on this site, not its size. New and Gone are positions against the period before. Admin only.';
+          + '“In tracked stocks” is what each holds among the stocks on this site, not its size. New and Gone are positions against the period before.';
       } catch (e) {
         if (mine === seq) $('wrap').innerHTML = '<div class="hd-empty">' + we(e.message || 'Something went wrong.') + '</div>';
       }

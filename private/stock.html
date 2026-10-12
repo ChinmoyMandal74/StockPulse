@@ -4846,12 +4846,12 @@
         } catch { card.remove(); }
       }
 
-      // A holder's name, as a link to its page for the admin (the pages are
-      // admin only: see /api/holder). Anyone else gets the name as text.
+      // A holder's name, as a link to its page for a member. A guest gets the
+      // name as text: the pages are not part of the preview (see /api/holder).
       let holderAdmin = false;
       const holderLink = (kind, id, name) => (holderAdmin && id && /^[A-Za-z0-9]{1,24}$/.test(String(id))
         ? '<a href="/holder/' + kind + '/' + encodeURIComponent(id) + '" style="color:inherit;text-decoration:underline;text-decoration-color:var(--hair);text-underline-offset:3px">' + esc(name) + '</a>' : esc(name));
-      const holderReady = fetch('/api/me', { cache: 'no-store' }).then((r) => r.json()).then((me) => { holderAdmin = !!(me && me.admin); }).catch(() => {});
+      const holderReady = fetch('/api/me', { cache: 'no-store' }).then((r) => r.json()).then((me) => { holderAdmin = !!(me && !me.guest && (me.signedIn || me.admin)); }).catch(() => {});
 
       async function loadFundHolders() {
         const card = document.getElementById('fundh');

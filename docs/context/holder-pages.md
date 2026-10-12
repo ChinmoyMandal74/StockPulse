@@ -11,12 +11,12 @@ Only each stock's largest fifteen holders were stored (`inst_holdings.top`, `fun
 - `holderbook.js` (root, pure): `invert(cur, prev, opts)`, `finish(book)`, `view(book, rowOf)`.
 - `db.js`: table `holder_books (kind, id)`, kind `M` (13F manager, id = its CIK) or `F` (fund, id = `N.fundKey`). The positions are JSON, capped at 250 by value; `positions` and `value` are of all of them. Indexes on `(kind, value desc)` and `(kind, name_lc)`. On the `query-plan-test.js` list. **Not** in `SYMBOL_TABLES`: it is keyed by the holder, and a dropped symbol leaves on the next load (the page drops it at once, since `view` asks the screen for each stock). `writeHolderBooks`, `clearHolderBooks`, `readHolderBook`, `listHolderBooks`.
 - `inst13f-load.js`, `nport-load.js`: after the per-stock rows, build and write the books, twenty a batch, each tried twice. Books from an earlier load that this one did not write are deleted **only after every batch went in**.
-- `server.js`: pages `/holders` and `/holder/:kind/:id`; `GET /api/holders?kind=&q=` and `GET /api/holder?kind=&id=`.
-- `private/holders.html` (the directory), `private/holder.html` (one holder). Linked from the admin console, and from each holder's name in the two tables on the stock page.
+- `server.js`: pages `/holders` and `/holder/:kind/:id`; `GET /api/holder-directory?kind=&q=` and `GET /api/holder?kind=&id=`.
+- `private/holders.html` (the directory), `private/holder.html` (one holder). Linked from each holder's name in the two tables on the stock page.
 
 ## Rules that must hold
 
-- **ADMIN ONLY, and that is the licensing question rather than a permission one.** A fund's page lists its positions with the weight of each; for an index fund that is the index's constituents with their weights, which is what the standing rule keeps behind the admin gate ("Index-fund holdings weights never leave admin"). The source here is the fund's own public SEC filing, months old, which may change the answer, but that is the owner's decision. A manager's 13F raises no such question; the two kinds share a page and are gated together until it is decided. The stock page links a holder's name only for the admin; everyone else sees the name as text, as before.
+- **For members, by the owner's decision (2026-10-12).** The pages shipped admin only that morning, because a fund's page lists positions with weights and for an index fund that resembles what `/holdings` is kept behind the admin gate for. Told so, the owner answered: "The page can be visible to non-admin users too, they can come from the individual stock page". So the line is drawn between sources: a fund's own public SEC filing, months old, is shown to members; the issuer's live daily file on `/holdings` stays admin only and is unchanged. **Guests are refused** (page routes redirect, the API answers 403): the preview is twenty stocks and a holder's page lists hundreds. The stock page links a holder's name for a member and leaves it as text for a guest.
 - **Only the tracked stocks.** A book's total is "in tracked stocks", never the size of the manager or the fund, and every surface says so.
 - **The same two decisions as the stock side, from the same code.** A 13F position is valued at the stock's one quarter-end price (the median the managers implied), not the dollars a manager filed; a position larger than the whole company is left out, by `Inst13f.shareCap`, the function `summarise` now uses too. A fund's position takes the value the fund itself reported.
 - **Last period's shares**: the figure where held, `0` for a new position, `null` where there is no earlier period at all. `added` and `exited` are null in that last case, not zero.
@@ -38,3 +38,7 @@ With the loaders, four times a year by hand: `inst13f-load.js --commit` then `np
 8,391 managers hold at least one tracked stock. The largest in tracked stocks: BlackRock $5.97T in 1,263 stocks, Vanguard Capital Management $4.39T, State Street $3.16T, Vanguard Portfolio Management $2.05T, FMR $1.99T.
 
 Tests were a scratchpad Node suite (32 checks). Neither page was rendered in a browser by the build.
+
+## A route name that was already taken (2026-10-12)
+
+The directory first shipped as `GET /api/holders`, which is the address of the 13D and 13G filings about one stock (`large-holder-filings.md`). Express gives a request to the first route registered for a path, and the new one sat above the old, so for about an hour the stock page's Large holders section and the promo Large holders card were handed the directory instead. Found while opening the pages to members, by grepping the route list. Renamed `/api/holder-directory`. **Before adding a route, grep `server.js` for the path**; `node --check` and booting both pass with a duplicate.

@@ -44,7 +44,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `margins.js` | Aggregate margins from the filings, and one company's margin change: the arithmetic behind the Margins card and the Margin chg column |
 | `capreturns.js`, `sec-reread.js` | Capital returns (buybacks, dividends, stock pay, share count) from the stored filings: the arithmetic, and the script that asks the deployed app to re-read every company after the reader changes |
 | `optionsoi.js`, `options-load.js` | Options open interest per stock from the Options Clearing Corporation: the reader and arithmetic, and the loader run from the owner's machine |
-| `holderbook.js`, `private/holder.html`, `holders.html` | What one 13F manager or one fund holds among the tracked stocks, turned round from the two quarterly loads: the arithmetic and the two admin pages (`/holders`, `/holder/<M or F>/<id>`) |
+| `holderbook.js`, `private/holder.html`, `holders.html` | What one 13F manager or one fund holds among the tracked stocks, turned round from the two quarterly loads: the arithmetic and the two member pages (`/holders`, `/holder/<M or F>/<id>`) |
 | `drawdowns.js`, `drawdown-load.js` | The stored drawdown figures behind two screener columns: a slice a night on the daily check, and the first fill |
 | `adjusted.js` | Filings-fed Signal overlay for `/adjusted` and `/adjustedbacktest` (admin research) |
 | `analysis-db.js` | **Local SQLite copy of the archive for research.** `--full` rebuilds, no flag syncs, `--stats` reports |
@@ -97,7 +97,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 **Access**
 - Four tiers: anonymous, guest (`GUEST_SYMBOLS`, 20), member, admin. Enforce in the route on every new endpoint; a hidden button is not security. Test auth changes as guest and as member.
 - Gates default closed (`REQUIRE_APPROVAL`, `REQUIRE_TERMS`). No account enumeration. Never echo upstream error bodies to a client. Logs hold facts, never content.
-- Research pages and the chatbot are admin only. Index-fund holdings weights never leave admin.
+- Research pages and the chatbot are admin only. Index-fund holdings weights from the issuer's daily file (`/holdings`) never leave admin. A fund's own SEC filing is a different source: the holder pages (`/holder/...`) show its positions to members, by the owner's decision of 2026-10-12, and never to guests.
 
 **Values**
 - **Null is not zero.** `Number(null)` is 0: reject empty before coercing. A missing value is blank (em dash), sorts last, matches no comparison, and is never bucketed. `spMember` is three-state — compare `=== true` / `=== false`.
