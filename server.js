@@ -3939,11 +3939,18 @@ async function fetchProfile(symbol) {
 }
 
 // Ensure sector/fundamentals are cached and fresh for the given symbols.
-async function ensureProfiles(symbols, cap) {
+// `force` re-pulls the symbols given whatever their age: the one-stock
+// refresh, which is asked for precisely because a day-old profile will not
+// do. (A cap of 0 still means the default batch, as it always has: the
+// rounds compute a cap that can come out 0, and changing what that means
+// would change every refresh. Pulling NO profiles is computeStocks' own
+// `noProfiles` option.)
+async function ensureProfiles(symbols, cap, force) {
   const profiles = await readProfiles();
   const now = Date.now();
   const stale = symbols.filter((s) => {
     const p = profiles[s];
+    if (force) return true;
     if (!p || !p.fetchedAt) return true; // never fetched
     return now - p.fetchedAt > PROFILE_TTL_MS; // otherwise refresh once a day
   });
@@ -7017,6 +7024,84 @@ async function runPriceSlice() {
   return { ok: true, out, m, ms: Date.now() - started, opts, T };
 }
 
+// ---- one stock, now -------------------------------------------------------------
+//
+// (2026-10-12, the owner: "an option for admin to refresh both price and
+// fundamental" for one stock, with no choices to make.) Every other refresh
+// works through the universe; a company that reported an hour ago waited
+// for its turn. This pulls ONE stock's fundamentals and price and rebuilds
+// the screen.
+//
+// THREE STEPS, each the path a full refresh already takes, so nothing here
+// can score a row differently:
+//   1. the profile, forced past its one-day age (about 80 credits);
+//   2. the price, shallow, and deep if the shallow pull does not meet the
+//      archive -- the guard a price sweep keeps, so twelve bars can never
+//      replace years (1 credit);
+//   3. the screen rebuilt from the archive, with NO other profile pulled
+//      (`noProfiles`), then saved the way a plain Refresh saves it.
+//
+// STEP 3 READS THE WHOLE ARCHIVE WINDOW, because a row is scored against the
+// others (ranks, peers, relative strength): there is no honest way to
+// rebuild one row alone. That is one ordinary round's worth of rows read,
+// for one click.
+//
+// IT STANDS ASIDE FOR A RUNNING REFRESH, like every other job, and it does
+// not touch the SEC filings, which have their own rotation.
+//
+// A REFUSED PULL CHANGES NOTHING AND SAYS SO: ensureProfiles keeps the
+// cached values, and no bar is written from a refused price.
+app.post('/api/admin/refresh-stock', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if (!API_KEY) return res.status(500).json({ error: 'No market data key is configured.' });
+  const universe = (await readUniverse()).map((s) => String(s).toUpperCase());
+  if (!universe.includes(symbol)) return res.status(404).json({ error: symbol + ' is not a tracked stock.' });
+  if (await standAside(res)) return;
+  const startedAt = Date.now();
+  const out = { symbol, fundamentals: 'refused', price: 'refused', lastBar: null };
+
+  // 1. fundamentals
+  const profiles = await ensureProfiles([symbol], 1, true);
+  const p = profiles[symbol];
+  if (p && p.fetchedAt && p.fetchedAt >= startedAt - 1000) out.fundamentals = 'refreshed';
+
+  // 2. price
+  const deadline = Date.now() + PRICE_PHASE_MS;
+  const newest = await store.barsMaxDates([symbol]);
+  const light = await pullPricesFor([symbol], () => `&outputsize=${LIGHT_BARS}`, deadline);
+  if (!light.refusal) {
+    const got = light.got;
+    const dOf = (b) => String(b.datetime).slice(0, 10);
+    const v = got[symbol] && got[symbol].values;
+    const have = newest.get(symbol);
+    const held = have && have.maxDate ? String(have.maxDate).slice(0, 10) : null;
+    let usable = Array.isArray(v) && v.length > 0;
+    if (!usable || !held || held < dOf(v[v.length - 1])) {
+      // The shallow window does not reach back to what is stored: ask deep.
+      const deep = await pullPricesFor([symbol], () => `&outputsize=${DEEP_BARS}`, deadline);
+      usable = false;
+      if (!deep.refusal) { Object.assign(got, deep.got); const dv = got[symbol] && got[symbol].values; usable = Array.isArray(dv) && dv.length > 0; }
+    }
+    if (usable) {
+      await persistBars([symbol], got);
+      await store.notePricePull([symbol]).catch(() => {});
+      out.price = 'refreshed';
+      out.lastBar = dOf(got[symbol].values[0]);
+    }
+  }
+
+  // 3. the screen, rebuilt from the archive and saved
+  const r = await computeStocks(null, { archivePrices: true, noProfiles: true });
+  if (!r.ok) return res.status(r.status || 502).json(Object.assign({ error: 'The pulls ran, but the screen could not be rebuilt: ' + r.error }, out));
+  await finishLiveRefresh(r.payload, {});
+  logAct(req, 'refresh', 'stock:' + symbol);
+  const row = (r.payload.stocks || []).find((x) => x && String(x.symbol).toUpperCase() === symbol) || null;
+  res.json(Object.assign({ ok: out.fundamentals === 'refreshed' && out.price === 'refreshed', ms: Date.now() - startedAt,
+    priceNow: row && row.price != null ? row.price : null, profileFetchedAt: row ? row.profileFetchedAt || null : null }, out));
+}));
+
 app.get('/api/refresh-prices', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const asked = Number(req.query.run) || null;
@@ -7174,7 +7259,10 @@ async function computeStocks(asOf, opts = {}) {
   const T = phaseTimer();
   const names = await readNames();
   const shortOverrides = await store.readShortNames();
-  const profiles = asOf ? {} : await ensureProfiles(symbols, opts.profileCap); // no point-in-time fundamentals
+  // `noProfiles`: use what is stored and pull nothing. The one-stock refresh
+  // has just pulled the one profile it wants and must not spend the rest of
+  // the minute on six other companies.
+  const profiles = asOf ? {} : opts.noProfiles ? await readProfiles() : await ensureProfiles(symbols, opts.profileCap); // no point-in-time fundamentals
   T.mark('profiles');
 
   try {

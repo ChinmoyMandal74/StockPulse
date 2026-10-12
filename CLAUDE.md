@@ -145,7 +145,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Fundamentals and the universe** — `fundamentals-data` · `scores-ratings` · `everything-the-profile-call-returns-is-kept-now` · `fundamentals-history` · `which-dates-the-fundamentals-actually-describe` · `the-universe-and-the-ballast-that-has-been-draining-out-of-it` · `the-universe-table` · `adding-a-stock` · `dropping-a-symbol` · `editing-portfolios-does-not-pull` · `the-nasdaq-reference-list`
 
-**Refreshing** — `the-refresh-budget` · `a-live-price-pull-is-shallow` · `fast-refresh` · `fill-missing` · `intraday-price-refreshes` · `refresh-runs` · `refresh-state` · `the-nightly-job` · `bar-archive` · `price-as-of`
+**Refreshing** — `the-refresh-budget` · `a-live-price-pull-is-shallow` · `fast-refresh` · `refresh-one-stock` · `fill-missing` · `intraday-price-refreshes` · `refresh-runs` · `refresh-state` · `the-nightly-job` · `bar-archive` · `price-as-of`
 
 **Signal and research** (file names keep the old word) — `the-advice-column` · `does-any-of-this-predict-anything` · `the-advice-backtest` · `adjusted-advice` · `the-adjusted-backtest` · `the-trend-only-backtest` · `the-strategy-backtest` · `the-single-stock-strategy` · `the-indicator-lab`
 
