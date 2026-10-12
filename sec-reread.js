@@ -53,8 +53,10 @@ function fromEnvFile(key) {
     let j = null; try { j = JSON.parse(text); } catch { /* not json */ }
     if (!r.ok || !j) { console.log(`stopped after ${calls} call(s): HTTP ${r.status} ${String(text).slice(0, 120)}. Resume with --since ${since}`); process.exitCode = 1; return; }
     calls++; fetched += j.fetched || 0; okN += j.ok || 0;
-    // A batch where nothing came back ok is the SEC refusing: stop, do not push on.
-    if (j.fetched && !j.ok) { console.log(`stopped after ${calls} call(s): a whole batch failed (${JSON.stringify((j.results || []).map((x) => x.status)).slice(0, 120)}). Resume with --since ${since}`); process.exitCode = 1; return; }
+    // A batch where EVERY company errored is the SEC refusing: stop, do not
+    // push on. A batch of funds is not that: a fund has no CIK and answers
+    // 'nocik', and five of them in a row stopped the first run 105 short.
+    if (j.fetched && (j.results || []).length && (j.results || []).every((x) => x.status === 'error')) { console.log(`stopped after ${calls} call(s): a whole batch failed (${JSON.stringify((j.results || []).map((x) => x.status)).slice(0, 120)}). Resume with --since ${since}`); process.exitCode = 1; return; }
     if (calls % 20 === 0) console.log(`  ${fetched} re-read (${okN} ok), ${j.remaining} to go, ${((Date.now() - t0) / 60000).toFixed(1)} min`);
     if (j.done || !j.fetched) break;
     await sleep(GAP_MS);
