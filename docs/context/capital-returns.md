@@ -36,7 +36,25 @@ The share count is `sharesDiluted`, which was already stored.
 
 - **Stock page**: section `#capret`, "What it did with its cash", before Revenue mix. Five figures (returned, bought back, dividends, stock pay, share count) and a table by fiscal year with a two-part bar. `loadCapReturns()`.
 - **Promo**: card `capreturn`, "Capital returns", in Stock spotlight; one control, `crSym`. Four figures above a row a fiscal year (up to six, oldest first): a bar in two parts, bought back, dividends, and the two as a share of free cash flow. Accent and violet, never green or red. Through `ctx.getCapReturns`, asked by `Cards.capReturnNeed`.
-- No screener column yet. A buyback yield and a share-count change would come from the pass `marginChangeBuild` already makes over every company's rows.
+- **Screener**: column `buybackYield`, "Buyback yield", in Fundamentals after Payout. Tooltip gives the dollars, the twelve months they cover and the share-count change. Uncoloured. One `FIELD_SPEC` row.
+- **Promo, Rankings**: card `buybacks`, "Buybacks". Controls `bbBy` (yield, amount), `bbFloor` (over $2B by default, $10B, $50B, every company) and `bbCount`. Reads the row, like the column, so the two cannot disagree; a company with no buyback line, or a filed zero, is not in the pool. Shows the share count beside each and says at how many of the listed it fell.
+
+## The screener column and the ranking (same day)
+
+The owner: "Yes add the buy back Yield column ... there should be a promo card on stocks doing buybacks under rank".
+
+- **Where the figures are stored**: `marginChangeBuild` already walks every company's rows once a day, so it also runs `CapReturns.build` and writes `cr: { SYM: [bought back, dividends, share change %, period end, basis] }` into the same `app_meta` value as the margins (`margin_chg`). `buildFlows` carries it as the `cr` part of the stored flows value (`FLOWS_V` 8), and `flowsOf` stamps `buybackTtm`, `buybackYield`, `buybackEnd` and `sharesChg` on the row.
+- **The yield is computed at read time** against the row's current market value, so it moves with the price between filings. Null where the company files no buyback line; `0` where it filed a zero; null where it would exceed 100% (a market value of the wrong share class).
+- **Column bookkeeping after this**: Fundamentals banner 24, `PAD_SPAN` 117, error row 112, empty row 114. The header row has `PAD_SPAN - 3` cells.
+
+## A US GAAP filer can report in another currency
+
+Found by this feature: JD.com read as a 59% buyback yield. It files under US GAAP **in Chinese yuan**, and `currencyOf` returned null for every US GAAP filer, so the reader took the figures as dollars. Its revenue had been shown as dollars too.
+
+- `secfacts.js` `currencyOf` now asks the same question of a US GAAP filer and still answers **null where it is dollars**, which leaves every US company's path as it was. `normalise` treats any non-dollar filer as `foreign`: read in that currency alone, converted by `toDollars`, and **no rows at all** where there is no rate, rather than yuan under a dollar sign.
+- The refresh already asked `currencyOf` and already had rates for about thirty currencies (`fx.js`), so nothing changed in `server.js`.
+- `sec_state.currency` is now set for these filers with `taxonomy` still `us-gaap`. The screener's "Foreign" label reads the taxonomy and is unchanged.
+- Known and not fixed: Toyota files IFRS now but still has old US GAAP facts, so it is read as a US GAAP filer in yen and its newest rows are years old; it gets no capital-returns figures.
 
 ## Seen on real data
 
@@ -50,4 +68,4 @@ Nvidia's fiscal 2022 share count predates its split and is ten times smaller tha
 - Preferred dividends are inside `PaymentsOfDividends` where the company does not file the common-only line.
 - Rows written before the company was next re-read hold null in the three columns; `sec-reread.js` was run once on 2026-10-11 to fill them.
 
-Tests were a scratchpad Node suite (38 checks, including the reader on a synthetic year-to-date ladder and cards built from three companies' live filings). Neither surface was rendered in a browser by the build.
+Tests were scratchpad Node suites (42 checks on the arithmetic, the reader, the currency case and the card, with cards built from three companies' live filings; 36 on the column, the stamp and the ranking card). No surface was rendered in a browser by the build.

@@ -5153,7 +5153,7 @@ function filerLabel(st) {
   if (st.status === 'ok' && (st.taxonomy === 'us-gaap' || !st.taxonomy)) return 'US GAAP';
   return null;
 }
-const FLOWS_V = 7;          // bumped when the stored value gains a part
+const FLOWS_V = 8;          // bumped when the stored value gains a part
 const EVENT_RECENT_DAYS = 60;     // how far back the screener's 8-K column looks
 
 // ---- Drawdown history: corrections in five years, and the way back -------
@@ -5251,6 +5251,10 @@ async function buildFlows() {
   return { v: FLOWS_V, at: Date.now(), filer: secState ? filer : null, dd: ddAll ? dd : null,
     // { SYM: [margin now, margin a year before] }, as stored.
     mg: mgAll && mgAll.m ? mgAll.m : null,
+    // { SYM: [bought back, dividends paid, share count change %, period end, basis] },
+    // the latest twelve months from the cash-flow statements, as stored
+    // beside the margins by the same daily pass.
+    cr: mgAll && mgAll.cr ? mgAll.cr : null,
     ev: evAll ? ev : null,
     hd: hdAll ? hd : null,
     inst: instAll ? inst : null,
@@ -5268,6 +5272,7 @@ async function flowsNow() {
     if (f && !fresh.filer) fresh.filer = f.filer || null;
     if (f && !fresh.dd) fresh.dd = f.dd || null;
     if (f && !fresh.mg) fresh.mg = f.mg || null;
+    if (f && !fresh.cr) fresh.cr = f.cr || null;
     if (f && !fresh.ev) fresh.ev = f.ev || null;
     if (f && !fresh.hd) fresh.hd = f.hd || null;
     if (f && !fresh.inst) fresh.inst = f.inst || null;
@@ -5284,6 +5289,7 @@ async function flowsNow() {
 function flowsOf(row, f) {
   const out = { shortBuild: null, insiderNet: null, insiderBuyers: null, insiderSellers: null, filer: null,
     ddCount: null, ddMedBack: null, netMarginChg: null, netMarginNow: null, netMarginPrev: null,
+    buybackTtm: null, buybackYield: null, buybackEnd: null, sharesChg: null,
     lastEvent: null, lastEventDate: null, lastEventNotable: null,
     lastHolder: null, lastHolderDate: null, lastHolderActive: null,
     instManagers: null, instChange: null, instPeriod: null };
@@ -5315,6 +5321,19 @@ function flowsOf(row, f) {
     out.lastEventDate = String(e8[0]);
     out.lastEvent = Events8k.label(e8[1], 2);
     out.lastEventNotable = Events8k.notable(e8[1]);
+  }
+  // Shares bought back over the latest twelve months on file, and that as a
+  // share of TODAY'S market value. A buyback line the company does not file
+  // is null, never a yield of zero; a filed zero is a zero. A yield over a
+  // hundred is a market value of the wrong share class, and is withheld.
+  const k = f.cr ? f.cr[String(row.symbol).toUpperCase()] : null;
+  if (k) {
+    const bb = k[0] == null || !isFinite(Number(k[0])) ? null : Number(k[0]);
+    const capNow = Number(row.marketCap);
+    out.buybackTtm = bb;
+    out.buybackEnd = k[3] || null;
+    if (bb != null && bb >= 0 && capNow > 0) { const y = bb / capNow * 100; out.buybackYield = y > 100 ? null : Math.round(y * 100) / 100; }
+    out.sharesChg = k[2] == null || !isFinite(Number(k[2])) ? null : Number(k[2]);
   }
   const g = f.mg ? f.mg[String(row.symbol).toUpperCase()] : null;
   if (g && g[0] != null && g[1] != null && isFinite(Number(g[0])) && isFinite(Number(g[1]))) {
@@ -5368,6 +5387,10 @@ async function stampFlows(rows) {
     r.lastHolderDate = v.lastHolderDate;
     r.lastHolderActive = v.lastHolderActive;
     r.instManagers = v.instManagers;
+    r.buybackTtm = v.buybackTtm;
+    r.buybackYield = v.buybackYield;
+    r.buybackEnd = v.buybackEnd;
+    r.sharesChg = v.sharesChg;
     r.instChange = v.instChange;
     r.instPeriod = v.instPeriod;
   }
@@ -11889,15 +11912,26 @@ async function marginChangeBuild(opts = {}) {
   const facts = await store.readSecFactsSince(universe, since);
   const today = new Date().toISOString().slice(0, 10);
   const m = {};
+  // Capital returns ride the same pass, since it already holds every
+  // company's rows: { SYM: [bought back, dividends, share change %, end, basis] }.
+  const cr = {};
   for (const sym of universe) {
     const rows = facts.get(String(sym).toUpperCase());
     if (!rows) continue;
-    const c = Margins.change(SecFacts.latestFilled(rows), today);
+    const filled = SecFacts.latestFilled(rows);
+    try {
+      const k = CapReturns.build(filled, today);
+      if (k && (k.last.buybacks != null || k.last.dividends != null)) {
+        cr[String(sym).toUpperCase()] = [k.last.buybacks == null ? null : Math.round(k.last.buybacks), k.last.dividends == null ? null : Math.round(k.last.dividends),
+          k.sharesChange == null ? null : Math.round(k.sharesChange * 100) / 100, k.last.end, k.basis];
+      }
+    } catch (e) { /* one company's figures never stop the pass */ }
+    const c = Margins.change(filled, today);
     if (c) m[String(sym).toUpperCase()] = [Math.round(c.now * 100) / 100, Math.round(c.prev * 100) / 100];
   }
   // A read that found nothing is not written over a value that has figures.
-  if (!opts.dry && Object.keys(m).length) await store.writeMarginChange({ at: Date.now(), m });
-  return { companies: Object.keys(m).length, universe: universe.length };
+  if (!opts.dry && Object.keys(m).length) await store.writeMarginChange({ at: Date.now(), m, cr });
+  return { companies: Object.keys(m).length, universe: universe.length, returns: Object.keys(cr).length };
 }
 
 app.get('/api/earnings-growth', requireMember, route(async (req, res) => {

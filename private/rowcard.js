@@ -402,6 +402,9 @@
     // The trailing year's net margin less the year before it, in points,
     // from the company's own filings.
     ['fund',  'Margin change',  (s) => (ok(s.netMarginChg) ? { t: (s.netMarginChg > 0 ? '+' : s.netMarginChg < 0 ? '\u2212' : '') + Math.abs(s.netMarginChg).toFixed(1) + ' pts', c: '' } : null)],
+    // Shares bought back over the latest twelve months on file, over today's
+    // market value, from the company's own cash-flow statements.
+    ['fund',  'Buyback yield',  (s) => (ok(s.buybackYield) ? { t: (s.buybackYield > 0 && s.buybackYield < 0.05 ? '<0.1' : s.buybackYield.toFixed(1)) + '%', c: '' } : null)],
     ['fund',  'ROE',            (s) => V.pct(s.roe)],
     // PEG leads the three P/E rows rather than sitting between them, the
     // screener's own column order since 2026-10-04: a PEG is a P/E with

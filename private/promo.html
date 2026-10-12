@@ -776,6 +776,21 @@
       <!-- Drawdowns. Like the other one-company cards, the card IS its own
            scope. An index is picked by its fund: SPY, QQQ, IWM, DIA. -->
       <!-- Large holders: one company, so the card is its own scope. -->
+      <div id="bbBox">
+        <label>Rank them by</label>
+        <select id="bbBy"></select>
+        <label>Among</label>
+        <select id="bbFloor"></select>
+        <label>How many</label>
+        <select id="bbCount"><option value="5">5</option><option value="8">8</option><option value="10" selected>10</option><option value="12">12</option></select>
+        <p class="hint">Cash each company spent buying back its own
+          shares over its latest twelve months on file, from its SEC
+          filings. By share of market value a small company can lead;
+          by dollars the largest companies do. A company that files
+          no buyback line is not listed. The last column is what the
+          share count did, since stock handed out as pay offsets a
+          buyback. Square and Story show fewer rows than asked.</p>
+      </div>
       <div id="crBox">
         <label>Stock</label>
         <select id="crSym"></select>
@@ -1525,6 +1540,7 @@
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'bars', name: 'Bars', note: 'Any one measure, ranked highest or lowest — returns, technicals, fundamentals' },
       { id: 'fund', name: 'Fundamentals', note: 'Size, margins, growth \u2014 four ways' },
+      { id: 'buybacks', name: 'Buybacks', note: 'Which companies spent the most buying back their own shares over the latest twelve months, by share of market value or in dollars' },
       { id: 'shorted', name: 'Most shorted', note: 'The level as last reported, beside what each one has done this year' },
       { id: 'shortbuild', name: 'Short build', note: 'Each company’s short position before and after the latest fortnight, as a share of its float' },
       { id: 'shortmoves', name: 'Short moves', note: 'Where the shorts built and where they covered, over the latest fortnight' },
@@ -1610,6 +1626,7 @@
       ['bars', 'Bars — any measure'],
       ['fund', 'Fundamentals'],
       ['shorted', 'Most shorted'],
+      ['buybacks', 'Buybacks'],
       ['shortmoves', 'Short moves'],
       ['shortbuild', 'Short build — before and after'],
     ];
@@ -2026,7 +2043,7 @@
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
-      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'crSym',
+      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'crSym', 'bbBy', 'bbFloor', 'bbCount',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -2149,6 +2166,7 @@
       $('rmBox').style.display = tpl === 'revmix' ? 'block' : 'none';
       $('fhBox').style.display = tpl === 'fundholders' ? 'block' : 'none';
       $('crBox').style.display = tpl === 'capreturn' ? 'block' : 'none';
+      $('bbBox').style.display = tpl === 'buybacks' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
@@ -2565,6 +2583,11 @@
     // Fund holders: one control.
     $('fhSym').addEventListener('change', () => { if (tpl === 'fundholders') render(); });
     $('crSym').addEventListener('change', () => { if (tpl === 'capreturn') render(); });
+    // Buybacks ranking: the choices come from the module.
+    for (const [v, label] of Cards.buybackBys()) $('bbBy').add(new Option(label, v));
+    for (const [v, label] of Cards.buybackFloors()) $('bbFloor').add(new Option(label, v));
+    ['bbBy', 'bbFloor', 'bbCount'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'buybacks') render(); }));
     // Revenue mix: the stock and which breakdown, the kinds from the module.
     for (const [v, label] of Cards.revMixKinds()) $('rmKind').add(new Option(label, v));
     for (const [v, label] of Cards.revMixPeriods()) $('rmPeriod').add(new Option(label, v));

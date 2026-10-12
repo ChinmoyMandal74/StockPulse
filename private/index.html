@@ -1488,7 +1488,7 @@
         <th class="group grp-react" data-group="react" colspan="6">Reactions</th>
         <th class="group grp-trend" data-group="trend" colspan="5">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
-        <th class="group grp-fund" data-group="fund" colspan="23">Fundamentals</th>
+        <th class="group grp-fund" data-group="fund" colspan="24">Fundamentals</th>
         <th class="group grp-own" data-group="own" colspan="10">Ownership</th>
         <th rowspan="2"></th>
       </tr>
@@ -1593,6 +1593,7 @@
         <th class="grp-fund" data-key="currentRatio" title="Current assets ÷ current liabilities, most recent quarter. Below 1 means short-term bills exceed short-term assets.">Curr<br>Ratio</th>
         <th class="grp-fund" data-key="divYield" title="Forward annual dividend yield. Every return column on this page is price-only, so a yield here is income the table does not otherwise show.">Div<br>Yield</th>
         <th class="grp-fund" data-key="payoutRatio" title="Dividend as a percentage of earnings. Above 100% the dividend is being paid out of something other than profit.">Payout</th>
+        <th class="grp-fund" data-key="buybackYield" title="Cash the company spent buying back its own shares over its latest twelve months on file, as a percentage of today's market value. From the cash-flow statements in its own SEC filings. Before shares handed out as pay, so it is not the fall in the share count. Blank where the company files no buyback line, which is not the same as zero.">Buyback<br>yield</th>
         <th class="grp-fund" data-key="mostRecentQuarter" title="THE PERIOD EVERY FIGURE IN THIS GROUP COVERS &mdash; revenue, the margins, ROE, net income and FCF are all a trailing twelve months ENDING on this date. Reported beside it is a different fact: that is when the company ANNOUNCED, which lands a median 30 days later, and on 1,250 rows measured the two were never the same day. The vendor rounds a 52/53-week fiscal calendar to month end, so it can sit a few days off the filing. Filters on DAYS SINCE the period end. A fund files no statements, so it reads NA.">Period</th>
         <th class="grp-fund" data-key="lastEarningsDate" title="When the company last reported — the announcement, which is what every figure in this group was struck at. It is NOT the period they cover: the announcement lands 23-29 days after the quarter it reports on, so a figure dated here describes a quarter that ended about a month earlier. Filters on DAYS SINCE, like Next Earn filters on days until: &gt;90 finds anything that has not reported in a quarter. Amber past 100 days, where the figures beside it are a quarter stale.">Reported</th>
         <th class="grp-fund" data-col="secResults" title="When the company told the SEC it had results — the newest 8-K carrying Item 2.02, &quot;Results of Operations and Financial Condition&quot;, which is the earnings release. A SECOND, INDEPENDENT answer to &quot;has this company reported&quot;, from the company itself rather than from the price feed: on 2026-10-01 Micron had announced on Sep 30 and the feed still said Jun 24. Amber when it is ahead of the Reported column, which means the feed has missed a report. Blank until the SEC dates are loaded; a fund files no 2.02.">Announced<br>(SEC)</th>
@@ -2292,6 +2293,20 @@
     // Net margin now against a year ago, in POINTS, from the filings. No
     // colour: green and red here mean a price that moved, and a margin is
     // not one. A change that rounds to nothing prints unsigned and faint.
+    // Shares bought back over the latest twelve months, over today's market
+    // value. No colour: this is cash spent, not a price that moved. A filed
+    // zero prints 0.0%; a company that files no such line is a dash.
+    function buybackCell(s) {
+      const v = s.buybackYield;
+      if (v == null || !isFinite(v)) {
+        return `<td class="na grp-fund" title="No buyback line in the company's cash-flow statements on file, or no market value to set it against.">\u2014</td>`;
+      }
+      const amt = Number(s.buybackTtm);
+      const money = amt >= 1e9 ? '$' + (amt / 1e9).toFixed(1) + 'B' : '$' + (amt / 1e6).toFixed(0) + 'M';
+      const t = `${money} bought back in the twelve months to ${s.buybackEnd || 'the latest period on file'}`
+        + (s.sharesChg == null ? '' : `; diluted share count ${s.sharesChg > 0 ? '+' : s.sharesChg < 0 ? '\u2212' : ''}${Math.abs(s.sharesChg).toFixed(1)}% on the fiscal year before`);
+      return `<td class="grp-fund${v === 0 ? ' na' : ''}"${attr(t)}>${v > 0 && v < 0.05 ? '<0.1' : v.toFixed(1)}%</td>`;
+    }
     function marginChgCell(s) {
       const v = s.netMarginChg;
       if (v == null || !isFinite(v)) {
@@ -3615,7 +3630,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="111">${s.error}</td>
+            <td class="na" colspan="112">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3742,6 +3757,7 @@
           ${numCell(s.currentRatio, 'grp-fund', cacheTitle)}`}
           ${marginCell(s.divYield, 'grp-fund', cacheTitle)}
           ${isFund ? naRun(1, 'grp-fund') : marginCell(s.payoutRatio, 'grp-fund', cacheTitle)}
+          ${isFund ? naRun(1, 'grp-fund') : buybackCell(s)}
           ${isFund ? naRun(1, 'grp-fund') : periodCell(s)}
           ${isFund ? naRun(1, 'grp-fund') : reportedCell(s)}
           ${resultsCell(s)}
@@ -3770,7 +3786,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 116;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 117;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -3951,7 +3967,7 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="113">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="114">${msg}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

@@ -117,12 +117,23 @@ function taxonomyOf(facts) {
 // THE REPORTING CURRENCY of an IFRS filer, read off its own facts: the unit
 // most of its revenue, profit and assets are stated in. Null for a US GAAP
 // filer, where this module has always taken the figures as dollars.
+//
+// A US GAAP FILER CAN REPORT IN ANOTHER CURRENCY TOO (2026-10-11). JD.com
+// and KE Holdings file under US GAAP in Chinese yuan. This returned null
+// for every US GAAP filer and the reader then took the figures as dollars:
+// JD's buybacks read as $21.4B against a $37B company, a 59% yield, which
+// is how it was caught. So the same question is asked of a US GAAP filer,
+// and the answer is still NULL WHERE IT IS DOLLARS, which is nearly all of
+// them and leaves their path exactly as it was.
 function currencyOf(facts) {
-  if (taxonomyOf(facts) !== 'ifrs-full') return null;
-  const g = facts.facts['ifrs-full'];
+  const tax = taxonomyOf(facts);
+  const ifrs = tax === 'ifrs-full';
+  const g = (facts && facts.facts && facts.facts[tax]) || null;
+  if (!g) return null;
+  const lists = ifrs ? IFRS_CONCEPTS : CONCEPTS;
   const tally = {};
   for (const c of ['revenue', 'netIncome', 'assets']) {
-    for (const tag of IFRS_CONCEPTS[c]) {
+    for (const tag of lists[c]) {
       const f = g[tag];
       if (!f || !f.units) continue;
       for (const unit of Object.keys(f.units)) {
@@ -131,7 +142,8 @@ function currencyOf(facts) {
     }
   }
   const best = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
-  return best || null;
+  if (ifrs) return best || null;
+  return best && best !== 'USD' ? best : null;
 }
 
 // ---- a euro figure, in dollars ----------------------------------------------
@@ -215,15 +227,18 @@ function normalise(facts, symbol, opts) {
   // note about a subsidiary, not the statement.
   const tax = taxonomyOf(facts);
   const ifrs = tax === 'ifrs-full';
-  const cur = ifrs ? currencyOf(facts) : null;
+  const cur = currencyOf(facts);
+  // FOREIGN: the statements are in a currency other than the dollar, under
+  // either taxonomy. Read in that currency alone and converted.
+  const foreign = ifrs ? cur !== 'USD' : !!cur;
   const fx = opts && opts.fx;
   // A currency this module cannot bring to dollars yields NO ROWS rather
   // than rows in the wrong unit under a dollar sign. The caller asks
   // currencyOf to tell that apart from a company with nothing filed.
-  if (ifrs && cur !== 'USD' && !(cur && fx && opts.fxCurrency === cur)) return [];
+  if (foreign && !(cur && fx && opts.fxCurrency === cur)) return [];
   const g = (facts && facts.facts && facts.facts[tax]) || {};
   const concepts = ifrs ? IFRS_CONCEPTS : CONCEPTS;
-  const unitOk = ifrs ? ((u) => u === cur || u === cur + '/shares' || u === 'shares') : (() => true);
+  const unitOk = (ifrs || foreign) ? ((u) => u === cur || u === cur + '/shares' || u === 'shares') : (() => true);
   const rows = new Map();           // accn|start|end -> row
   const instants = new Map();       // accn|end -> {concept: value}
 
@@ -276,7 +291,7 @@ function normalise(facts, symbol, opts) {
   }
   // Before anything is derived from these rows: a gross profit made of a
   // dollar revenue and a euro cost would be neither.
-  if (ifrs && cur !== 'USD') out = toDollars(out, cur, fx);
+  if (foreign) out = toDollars(out, cur, fx);
   relabel(out);
   for (const r of out) fill(r);
   const all = out.concat(deriveQuarters(out));
@@ -284,7 +299,7 @@ function normalise(facts, symbol, opts) {
   for (const r of all) fill(r);
   // A derived quarter is arithmetic on converted rows, so it carries the
   // currency it came from and no rate of its own.
-  if (ifrs && cur !== 'USD') for (const r of all) if (!r.currency) r.currency = cur;
+  if (foreign) for (const r of all) if (!r.currency) r.currency = cur;
   all.sort((a, b) => (a.periodEnd < b.periodEnd ? 1 : a.periodEnd > b.periodEnd ? -1
     : (a.filed < b.filed ? 1 : -1)));
   return all;

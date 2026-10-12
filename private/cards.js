@@ -5944,6 +5944,84 @@
   // falling is the shorts being right so far; heavily shorted and RISING is
   // them under water. The card draws both and forecasts neither -- the line
   // /terms draws, and the one this dataset makes easiest to cross.
+  // ---- Buybacks: which companies spent the most buying back their own shares ---
+  //
+  // (2026-10-11, the owner: "there should be a promo card on stocks doing
+  // buybacks under rank".) A list by buyback yield -- the cash spent over the
+  // latest twelve months on file as a share of today's market value -- or by
+  // the dollars themselves.
+  //
+  // IT READS THE ROW, like the screener column, so the card and the column
+  // cannot disagree. A company that files no buyback line is not in the
+  // pool at all: null is not a yield of zero, and it would otherwise sit in
+  // a 'lowest' list it does not belong in.
+  //
+  // A LIST OF WHAT WAS SPENT, NOT OF WHAT TO OWN. No colour of price, and
+  // the share count beside each: a buyback that only offsets stock handed
+  // out as pay leaves the count where it was, and the card shows that.
+  const BB_BY = [['yield', 'Share of market value'], ['amount', 'Dollars spent']];
+  const BB_FLOORS = [['2', 'Companies over $2B'], ['10', 'Companies over $10B'], ['50', 'Companies over $50B'], ['0', 'Every company']];
+  const BB_ROWS = { portrait: 10, square: 6, story: 12 };
+  function tplBuybacks() {
+    const by = O.bbBy === 'amount' ? 'amount' : 'yield';
+    const floor = BB_FLOORS.some((f) => f[0] === String(O.bbFloor)) ? Number(O.bbFloor) : 2;
+    const N = Math.min(Math.max(3, Math.min(12, Number(O.bbCount) || 10)), BB_ROWS[size.id] || 10);
+    const fin = (v) => (v != null && isFinite(Number(v)) ? Number(v) : null);
+    const universe = stocks.filter((x) => x && !x.error && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol)
+      && (floor === 0 || fin(x.marketCap) >= floor * 1e9));
+    const pool = [];
+    for (const r of universe) {
+      const y = fin(r.buybackYield), a = fin(r.buybackTtm);
+      if (y == null || a == null || !(a > 0)) continue;
+      pool.push({ sym: r.symbol, name: nameOf(r), y, a, sh: fin(r.sharesChg) });
+    }
+    const cut = floor === 0 ? 'every company on the screen' : 'companies worth over $' + floor + 'B';
+    if (pool.length < 3) {
+      return chromeTop() + '<div class="s-body"><div class="hs-in">'
+        + '<span class="s-kick">' + esc(cut) + '</span>'
+        + '<h2 class="s-title">Buybacks</h2>'
+        + '<p class="s-sub wide" style="--fs:20px">' + esc('Too few companies here report a share buyback to list \u2014 ' + pool.length + ' of ' + universe.length + '. Widen the cut.') + '</p></div></div>' + chromeFoot();
+    }
+    pool.sort((p, q) => (by === 'amount' ? q.a - p.a : q.y - p.y) || (p.sym < q.sym ? -1 : 1));
+    const top = pool.slice(0, N);
+    const money = (v) => '$' + fmtMoney(v);
+    const pc = (v) => (v > 0 && v < 0.05 ? '<0.1' : v.toFixed(1)) + '%';
+    const sg = (v) => (v == null ? '\u2014' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(1) + '%');
+    const SZ = ({
+      portrait: top.length <= 6 ? { f: 28, b: 28 } : top.length <= 8 ? { f: 25, b: 24 } : { f: 22, b: 20 },
+      square: top.length <= 4 ? { f: 24, b: 22 } : { f: 20, b: 16 },
+      story: top.length <= 8 ? { f: 34, b: 34 } : { f: 29, b: 28 },
+    })[size.id] || { f: 24, b: 22 };
+    const val = (p) => (by === 'amount' ? p.a : p.y);
+    const scale = Math.max(1e-9, ...top.map(val));
+    const vw = Math.ceil(7 * SZ.f * 0.62) + 6, pw = Math.ceil(6 * SZ.f * 0.62) + 6;
+    const cols = 'minmax(0,36%) minmax(0,1fr) ' + (by === 'amount' ? vw + 'px ' + pw + 'px ' : pw + 'px ' + vw + 'px ') + pw + 'px';
+    const first = (p) => '<span class="bx-v">' + esc(by === 'amount' ? money(p.a) : pc(p.y)) + '</span>';
+    const second = (p) => '<span class="bx-v rm-pct">' + esc(by === 'amount' ? pc(p.y) : money(p.a)) + '</span>';
+    const rows = top.map((p) => '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+      + '<span class="bx-n">' + esc(p.sym) + ' <span class="bb-nm">' + esc(p.name) + '</span></span>'
+      + '<span class="bx-t" style="height:' + SZ.b + 'px"><span class="bx-f" style="left:0;width:' + Math.max(0.6, val(p) / scale * 100).toFixed(2) + '%"></span></span>'
+      + first(p) + second(p)
+      + '<span class="bx-v rm-pct">' + esc(sg(p.sh)) + '</span></div>').join('');
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Company</span>'
+      + '<span>' + (by === 'amount' ? 'Bought back, 12 months' : 'Bought back, of market value') + '</span>'
+      + '<span class="sb-hr">' + (by === 'amount' ? 'Spent' : 'Yield') + '</span><span class="sb-hr">' + (by === 'amount' ? 'Yield' : 'Spent') + '</span><span class="sb-hr">Shares</span></div>';
+    const shrank = top.filter((p) => p.sh != null && p.sh < -0.05).length, known = top.filter((p) => p.sh != null).length;
+    const note = 'Cash each company spent buying back its own shares over its latest twelve months on file, from the cash-flow statements in its SEC filings'
+      + (by === 'amount' ? '; the yield is that as a share of today\u2019s market value. ' : ', as a share of today\u2019s market value. ')
+      + 'These are the ' + top.length + ' largest of the ' + pool.length + ' ' + cut + ' that report a buyback. '
+      + 'Bought back is before new shares handed out as pay, so \u201cShares\u201d is what the diluted count did on the fiscal year before'
+      + (known ? ': it fell at ' + shrank + ' of these ' + known + '. ' : '. ')
+      + 'What was spent, not a forecast, and not a view on any of these companies.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc('Latest twelve months \u00b7 ' + cut) + '</span>'
+      + '<h2 class="s-title">Buying back<br><span class="dim">' + esc(by === 'amount' ? 'the most shares, in dollars' : 'the largest share of themselves') + '</span></h2>'
+      + '<div class="bx-rows">' + hd + rows + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   function tplShorted() {
     const mk = SHRT_METRICS[O.shrtMetric] ? O.shrtMetric : 'pct';
     const [field, mName] = SHRT_METRICS[mk];
@@ -9129,6 +9207,7 @@
     disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution,
     flow: tplFlow, histogram: tplHistogram,
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
+    buybacks: tplBuybacks,
     shorted: tplShorted, breadth: tplBreadth, beat: tplBeat, earngrow: tplEarnGrow,
     bars: tplBars,
     shortbuild: tplShortBuild,
@@ -9380,6 +9459,8 @@
     .cr-fig .v { font: 600 36px var(--mono); color: var(--text); white-space: nowrap; }
     .cr-fig .x { font-size: 16px; color: var(--muted); line-height: 1.3; }
     .cr-b { position: absolute; top: 0; bottom: 0; }
+    /* Buybacks ranking: the company's name after its symbol, a step quieter. */
+    .bb-nm { font-weight: 400; color: var(--muted); }
     .sz-square .cr-figs { margin-top: 16px; gap: 12px; }
     .sz-square .cr-fig .v { font-size: 28px; }
     .sz-square .cr-fig .k { font-size: 12px; }
@@ -11399,6 +11480,7 @@
     revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()), revMixPeriods: () => RM_PERIODS.map((p) => p.slice()), revMixViews: () => RM_VIEWS.map((p) => p.slice()),
     fundHoldersNeed,
     capReturnNeed,
+    buybackBys: () => BB_BY.map((p) => p.slice()), buybackFloors: () => BB_FLOORS.map((p) => p.slice()),
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.
     drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
