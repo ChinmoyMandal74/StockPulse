@@ -1988,6 +1988,56 @@ every member.
 
 ---
 
+## 41. Knowing where visitors come from: Search Console, and whether to add analytics — 2026-10-12
+
+*Area: Pages · Status: Open · Note: the Google account steps are the owner's; nothing built*
+
+The owner asked whether the site needs Google Analytics, then what Google
+Search Console is. The answer given: not Analytics yet; Search Console
+first.
+
+**What the site already knows.** The visitor log (every anonymous hit:
+time, referrer, browser) and the activity log (what each signed-in account
+opens), both on admin pages. Its own data, no third party.
+
+**a. Google Search Console. Recommended.** A free Google tool showing how
+the site appears in Google Search: the words people typed, how often a
+page was shown and clicked, which pages are indexed and why others are
+not, and who links here. No script on the site, no cookies, no consent
+banner. It sees only the public pages (landing, about, blog, terms,
+privacy), which is all it should. It is the one gap the site's own logs
+cannot fill.
+
+- The owner: sign in at search.google.com/search-console, add the domain,
+  and prove ownership (a DNS record at the registrar, or a file or tag on
+  the site).
+- The build: serve the verification file or tag if that route is chosen,
+  and a `sitemap.xml` listing the public pages and the published blog
+  posts, generated from the same table the blog reads.
+
+**b. A "by source" summary on the visitors page.** Links posted to
+Instagram and elsewhere can carry a tag (`?src=ig-oct12`); the visitor log
+already records the address asked for. A small table of visits by tag
+would say which post brought whom, with nothing new collected.
+
+**c. Vercel Web Analytics**, if traffic charts for the public pages are
+wanted. Cookieless, so no banner. What the current Vercel plan includes
+was not checked.
+
+**d. Google Analytics. Not now.** It sets cookies and sends visitor data
+to Google: the privacy page would need rewriting and visitors from the EU,
+the UK and some US states a consent banner. It is weakest behind a login,
+which is most of this site, and a member's browsing of particular stocks
+would be visible to Google unless it were confined to the public pages.
+Worth revisiting only if paid advertising starts and conversions need
+measuring.
+
+**What must hold.** Anything that sets a cookie or sends visitor data to a
+third party changes `/privacy` in the same commit. Nothing third-party on
+the gated pages.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
