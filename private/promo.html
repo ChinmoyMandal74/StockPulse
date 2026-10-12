@@ -137,6 +137,18 @@
 
     /* ---- the artboard -------------------------------------------------- */
     #stageWrap { flex: none; }
+    /* MEMBER MODE (body.mem): the studio as a place to LOOK, not to make a
+       post. No shape to choose and nothing to download. */
+    body.mem #sizeLab, body.mem #sizeList, body.mem #dlBtn, body.mem #dlMsg { display: none; }
+    body.mem .deck { padding: 14px; }
+    /* A narrow screen: the controls on top, the card under them, the page
+       scrolling as one. Side by side, a phone leaves the card 60px wide. */
+    @media (max-width: 820px) {
+      body { overflow: auto; }
+      .studio { flex-direction: column; height: auto; min-height: 100dvh; }
+      .panel { width: auto; max-height: 46dvh; border-right: 0; border-bottom: 1px solid var(--hair); }
+      .deck { min-height: 70dvh; padding: 12px; }
+    }
     /* the artboard itself is .s-art in cards.js, beside the cards it holds */
 
     /* every card style now lives in cards.js, beside the markup it dresses */
@@ -149,8 +161,8 @@
 
   <div class="studio">
     <aside class="panel">
-      <h1>Promo Studio</h1>
-      <p class="sub">Pick a template, screenshot the card, post it. Every card renders from
+      <h1 id="pgTitle">Promo Studio</h1>
+      <p class="sub" id="pgSub">Pick a template, screenshot the card, post it. Every card renders from
         tonight's data in the site's own theme, at a fixed artboard size.</p>
       <!-- Before anything is exported: when the prices behind these cards were
            last pulled. The card carries the DATA's date; this says when that
@@ -1473,7 +1485,7 @@
           purpose: four surfaces state this one position and they have to agree.</p>
       </div>
 
-      <label>Size</label>
+      <label id="sizeLab">Size</label>
       <div class="sizes" id="sizeList"></div>
 
       <button class="btn" id="dlBtn" title="Render this card to a PNG at its exact pixel size">Download PNG</button>
@@ -1759,7 +1771,23 @@
     const SCOPE_PREFIX = { movers: 'mov', chart: 'cht', sparks: 'spk', range: 'rng', advboard: 'adv', fund: 'fund', size: 'size', bubble: 'bub', histogram: 'hist', shorted: 'shrt', bars: 'bar', lines: 'lin' };
     const OWNER_ONLY_TPLS = new Set(['announce']);
     let canAnnounce = false;
-    const visibleTpls = () => TPLS.filter((t) => canAnnounce || !OWNER_ONLY_TPLS.has(t.id));
+    // ---- member mode ---------------------------------------------------------
+    //
+    // (2026-10-12, the owner: members "don't need to select the size and we
+    // should do our best to make the best use of the available screen size";
+    // they "don't need ability to export or post to instagram".) For anyone
+    // who is not the admin the studio is a way to look at the data as
+    // pictures, not a way to make a post:
+    //   - no shape to pick: the one that fills the screen best is chosen,
+    //     and chosen again when the window changes;
+    //   - nothing to download. A card carries the brand, and a member
+    //     posting one would read as the site publishing it. (A screenshot
+    //     cannot be stopped; the invitation can be withdrawn.);
+    //   - no Brand group: those cards are the site's own marketing.
+    // Saved posts, the blog and Instagram were already the admin's alone.
+    let memberMode = false;
+    const MEMBER_HIDDEN = new Set(BRAND_VIEWS.map((v) => v[0]));
+    const visibleTpls = () => TPLS.filter((t) => (canAnnounce || !OWNER_ONLY_TPLS.has(t.id)) && !(memberMode && MEMBER_HIDDEN.has(t.id)));
     let portfolioNames = [];
 
     // The archive read for the chart card: the host owns the cache and the
@@ -2386,8 +2414,38 @@
       // With a second picker under it, "Stock" alone no longer says which.
       $('chtSymLab').textContent = cm === 'two' ? 'First stock' : 'Stock';
     }
+    // WHICH SHAPE FILLS THE SCREEN BEST, for a member. Each shape is scaled
+    // to fit and the one covering the most of the space wins -- except that
+    // the 4:5 card holds the most rows, so another shape has to cover a
+    // good deal more (a fifth for the square, a seventh for the tall one)
+    // before it is preferred. Where the HEIGHT is what limits the card, as on
+    // a wide desktop, the square is a quarter larger with text a quarter
+    // bigger, and wins; where the width limits it, the 4:5 does. A
+    // phone held upright gets the tall one.
+    const MEMBER_MAX_SCALE = 1.6, MEMBER_PAD = 20;
+    function bestSize(w, h) {
+      const area = (z) => { const s = Math.max(0, Math.min((w - MEMBER_PAD) / 1080, (h - MEMBER_PAD) / z.h, MEMBER_MAX_SCALE)); return 1080 * s * z.h * s; };
+      const by = (id) => SIZES.find((z) => z.id === id);
+      const p = area(by('portrait'));
+      if (area(by('story')) > p * 1.15 && area(by('story')) >= area(by('square'))) return by('story');
+      if (area(by('square')) > p * 1.2) return by('square');
+      return by('portrait');
+    }
     function fit() {
       const deck = document.querySelector('.deck');
+      if (memberMode) {
+        // On a narrow screen the page scrolls, so the height to fill is the
+        // window's, not the deck's own (which grows with its content).
+        const narrow = window.matchMedia('(max-width: 820px)').matches;
+        const w = deck.clientWidth, h = narrow ? Math.round(window.innerHeight * 0.92) : deck.clientHeight;
+        const z = bestSize(w, h);
+        if (z.id !== size.id) { size = z; render(); return; }       // render() comes back here with the new shape
+        const sm = Math.max(0.1, Math.min((w - MEMBER_PAD) / 1080, (h - MEMBER_PAD) / size.h, MEMBER_MAX_SCALE));
+        $('stage').style.transform = `scale(${sm})`;
+        $('stageWrap').style.width = 1080 * sm + 'px';
+        $('stageWrap').style.height = size.h * sm + 'px';
+        return;
+      }
       const s = Math.min((deck.clientWidth - 48) / 1080, (deck.clientHeight - 48) / size.h, 1);
       $('stage').style.transform = `scale(${s})`;
       $('stageWrap').style.width = 1080 * s + 'px';
@@ -2968,6 +3026,7 @@
       CardShot.shoot($('stage'), { w: 1080, h: size.h, fontCss, mime, quality });
 
     async function downloadPng() {
+      if (memberMode) return;                // the button is hidden; this is the lock behind it
       const btn = $('dlBtn'), msg = $('dlMsg');
       btn.disabled = true;
       msg.textContent = 'Rendering\u2026';
@@ -3284,6 +3343,14 @@
           return;
         }
         canAnnounce = !!me.admin;
+        memberMode = !me.admin;
+        document.body.classList.toggle('mem', memberMode);
+        if (memberMode) {
+          document.title = 'Charts \u2014 Tickr Lab';
+          $('pgTitle').textContent = 'Charts';
+          $('pgSub').textContent = 'Pick a view, then a stock, a sector or a ranking. Every card is drawn from the latest data on file; the date on a card is the date of its data.';
+          if (MEMBER_HIDDEN.has(tpl)) tpl = 'movers';
+        }
         $('postsBox').hidden = !me.admin;
         $('blogBox').hidden = !me.admin;
         $('igBox').hidden = !me.admin;
@@ -3389,6 +3456,20 @@
           else if ($(id).options.length > at) $(id).selectedIndex = at;
         }
         enhanceStockPickers();
+        // A link can open the studio on a view and a stock: /promo?tpl=revmix&sym=AAPL.
+        // Only on the first load, only a view this person may see, and only a
+        // stock that is on the screen. The second picker of a pair is left alone.
+        if (!reload) {
+          const qp = new URLSearchParams(location.search);
+          const qt = String(qp.get('tpl') || ''), qs = String(qp.get('sym') || '').toUpperCase();
+          if (qt && visibleTpls().some((t) => t.id === qt)) tpl = qt;
+          if (qs) {
+            for (const sel of document.querySelectorAll('.panel select[data-sp]')) {
+              if (/Sym(B|2)$/.test(sel.id)) continue;
+              if ([...sel.options].some((o) => o.value === qs)) sel.value = qs;
+            }
+          }
+        }
         // one sector list, built from the rows themselves so it can never
         // offer a sector nothing is in
         const secOpts = '<option value="All">All sectors</option>' +

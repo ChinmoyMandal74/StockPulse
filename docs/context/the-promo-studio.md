@@ -163,3 +163,17 @@ The owner, about to open the studio to every member: "stock drop down is on tick
 - Options are read from the select as you type, never copied, so a reload of the rows needs nothing done.
 - `syncStockPickers()` runs at the top of `render()`, because code elsewhere sets a select's value directly.
 - Keyboard: arrows, Enter, Escape. Not rendered in a browser by the build; the ranking has a scratchpad suite (21 checks).
+
+## Member mode: the studio as a place to look (2026-10-12)
+
+The owner: members "don't need to select the size and we should do our best to make the best use of the available screen size", and "don't need ability to export or post to instagram". The studio had been open to every account since 2026-09-15 with the admin's controls; for anyone who is not the admin it is now a viewer. `memberMode = !me.admin`, and `body.mem` carries it to the styles.
+
+- **No shape to pick.** `bestSize(w, h)` scales each of the three artboards to the space and takes the one covering most of it, except that the 4:5 holds the most rows and is kept unless the square covers a fifth more or the tall one a seventh more. In practice: where the HEIGHT limits the card (a wide desktop, a phone on its side) the square wins, a quarter larger with text a quarter bigger; where the width limits it, the 4:5; a phone held upright gets the tall one. Chosen again on resize; a change of shape redraws. A member's card may scale UP to 1.6, the admin's is still capped at full size so a screenshot is never soft.
+- **Not a reflow.** The cards are still fixed 1080-wide artboards, scaled. Cards that lay themselves out at any width would be a redesign of about sixty templates and were deliberately not started.
+- **Nothing to download.** The button is hidden and `downloadPng` returns at once in member mode. A card carries the brand, and a member posting one would read as the site publishing it. A screenshot cannot be stopped. The stock page's own "Save chart" is a separate, older feature and was not touched.
+- **No Brand group** (Intro, How to, Announcement, Disclaimer, Profile picture): `MEMBER_HIDDEN`, from `BRAND_VIEWS`, filtered in `visibleTpls()`.
+- **Called "Charts"** for a member: the page title and heading, and the screener's link (`admin-only` / `member-only` spans). The admin still sees "Promo Studio".
+- **A link can open it on a view and a stock**: `/promo?tpl=<id>&sym=<SYM>`, on the first load only, for a view the person may see and a stock on the screen. The stock page has a "Charts" link beside Save chart, hidden from guests.
+- **A narrow screen stacks the controls over the card** (under 820px), for the admin too.
+- **Nothing new was exposed.** Every data route the studio calls was already `requireAuth` or `requireMember`, and members could already reach them. The heavier ones (history, evolution, peer trend, line series, perf, months) keep an in-memory cache; more members clicking through cards means more rows read on a cold instance, which is the existing cost growing, not a new one. The page route still refuses guests.
+- Not rendered in a browser by the build. The shape rule and the wiring have a scratchpad suite (25 checks).

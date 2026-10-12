@@ -3339,6 +3339,8 @@
                 title="Open both of these on the compare page — every field, side by side">Compare ▸</a>
               <button class="rng th-toggle${showTrendLine ? ' on' : ''}" id="thBtn"
                 title="Draw the dashed trend-hold line: what holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on. The trend ribbon under the chart is always shown.">TREND</button></span>
+            <a class="rng" id="chartsLink" hidden href="/promo?tpl=spotlight&amp;sym=${encodeURIComponent(stock.symbol)}"
+              title="See this stock as cards: revenue mix, insiders, options, capital returns and more">Charts ▸</a>
             <span class="share" id="share" hidden>
               <button class="rng shr" id="shrBtn" type="button" aria-expanded="false" aria-haspopup="true"
                 title="Save this chart as a branded image, sized for a feed post or a story">
@@ -3929,7 +3931,7 @@
       // one thing the preview is not for.
       fetch('/api/me', { cache: 'no-store' })
         .then((r) => r.json())
-        .then((me) => { if (!me || !me.guest) share.hidden = false; })
+        .then((me) => { if (!me || !me.guest) { share.hidden = false; const cl = document.getElementById('chartsLink'); if (cl) cl.hidden = false; } })
         .catch(() => { share.hidden = false; });   // open mode, or /api/me down
 
       const closeShare = () => { shrMenu.hidden = true; shrBtn.setAttribute('aria-expanded', 'false'); };
