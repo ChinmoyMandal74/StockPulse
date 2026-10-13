@@ -6248,7 +6248,8 @@
 
     // THE HISTORY BEHIND A NUMBER (drillpop.js): a click on a fundamentals cell
     // that has one. Members and the admin; a guest's cells are left as they were.
-    DrillPop.init({
+    // Guarded: the table must work even if that one file did not arrive.
+    if (window.DrillPop) DrillPop.init({
       tbody: $('tbody'),
       rowOf: (sym) => stocks.find((x) => x.symbol === sym),
       allowed: () => !isGuest,
@@ -6341,7 +6342,7 @@
       th.addEventListener('click', () => toggleGroup(th.dataset.group));
     });
 
-    document.querySelector('.table-wrap').addEventListener('scroll', () => { hideTip(); hideRowCard(); DrillPop.close(); });
+    document.querySelector('.table-wrap').addEventListener('scroll', () => { hideTip(); hideRowCard(); if (window.DrillPop) DrillPop.close(); });
     window.addEventListener('scroll', () => { hideTip(); hideRowCard(); }, true);
 
     $('deleteBtn').addEventListener('click', deletePortfolio);
