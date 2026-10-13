@@ -205,3 +205,10 @@ The owner: "watermark should say the name of the app not the user email". The fi
 
 - The card mark now says whose picture it is, not whose screen it was. It no longer identifies the account a capture came from.
 - **The page watermark is a separate thing and was not changed**: `wmark.js` still tiles the account email at 5% across every data page, the Visuals page included, for members and guests. So on that page a member's card sits under both: the app's name in the card, and the faint email on the page. Whether the page mark should change too is the owner's call and was asked.
+
+### The page watermark says "Tickr Lab" too (2026-10-13, later the same day)
+
+Asked, the owner chose: "switch it to 'Tickr Lab' everywhere". `wmark.js` now tiles **Tickr Lab** for every member and guest (the guest's "Guest preview" went with the email); the admin and open mode are still skipped, and the tile, opacity and `.wmark` rule are unchanged. The paragraph above is therefore history: no surface carries the account email any more.
+
+- **What was given up, knowingly**: a capture can no longer be traced to the account it came from. The mark now says where a picture came from, not who took it. Do not restore the email without the owner asking.
+- `/help` "The watermark" was rewritten in the same commit; it had promised that a capture "identifies the account it came from".
