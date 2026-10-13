@@ -11,3 +11,14 @@
 - **It restates numbers that live in code** — the default weights, the 65/35 blend, the preset table. If those change, this page has to change with them; there is deliberately no attempt to generate it from `screens.js`, because the prose around each number matters more than the number.
 - The caution about fitting a weighting to today's list lives at the bottom of the presets section, next to the thing that invites it.
 
+## Brought up to date (2026-10-12)
+
+The owner: "Can you update the help page". It had last been rewritten on 2026-09-27 and said nothing of what was added from public records since.
+
+- **Section 2**: "over a hundred columns" (was "around ninety"), and a new subsection, *Columns that come from filings and the exchanges*, naming the ten newer columns by group and what each is: Drawdown, Corr. 5Y, Median recov., Margin chg, Buyback yield, Last 8-K, 13F holders, 13F chg, 5% filing, Put/Call OI.
+- **Section 5**: the Visuals link on the chart toolbar; P/E beside Fwd P/E in Similar stocks; and a new subsection, *More from the public record*, one bullet each for Drawdowns, Insider transactions (the summary), Options open interest, What it did with its cash, Where the revenue comes from, Institutional holders and Funds (with the holder pages), Large holders and Company events.
+- **A claim that had stopped being true was removed**: the SEC EDGAR subsection said companies reporting under international standards have no section. They do now, converted to dollars, and it says so.
+- **Section 11**: asking for an invite code by email; the guest list names Visuals and holder pages where it said "the studio".
+- Section 16 (Visuals) was rewritten earlier the same day.
+- **Left out on purpose**: the admin's Refresh button on the stock page and anything else only the admin sees. This page is for the people who can use what it describes.
+- Still not covered, and older than this pass: Month by month, Against its peers, Growth and profitability, Financial statements and Short interest on the stock page.

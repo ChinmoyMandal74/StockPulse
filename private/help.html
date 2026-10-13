@@ -134,7 +134,7 @@
         <li><a href="#start"><span class="no">1</span><span><span class="tt">What this is</span>
           <span class="td">The shape of the app, and why it exists at all</span></span></a></li>
         <li><a href="#table"><span class="no">2</span><span><span class="tt">Reading the table</span>
-          <span class="td">Ninety columns, views, filters and getting around them</span></span></a></li>
+          <span class="td">Over a hundred columns, views, filters and getting around them</span></span></a></li>
         <li><a href="#quality"><span class="no">3</span><span><span class="tt">The Quality score</span>
           <span class="td">Company numbers, and what happens without earnings</span></span></a></li>
         <li><a href="#screens"><span class="no">4</span><span><span class="tt">Narrowing it down</span>
@@ -207,7 +207,7 @@
     <section class="bezel card" id="table"><div class="core">
       <div class="sec-h"><h2>2 · Reading the table</h2></div>
 
-      <p>There are around ninety columns, arranged into groups you can collapse: <em>Info</em>,
+      <p>There are over a hundred columns, arranged into groups you can collapse: <em>Info</em>,
         <em>Scores</em>, <em>Signal</em>, <em>Chart</em>, <em>Short-term %</em>, <em>Long-term %</em>,
         <em>Relative</em>, <em>Trend</em>, <em>Volume</em>, <em>Size</em>, <em>Fundamentals</em> and
         <em>Ownership</em>. The <strong>View</strong> menu (top left) decides what the table shows.
@@ -229,6 +229,27 @@
         <li>The view you last used is the one the screener opens in. Filters on a column the view hides still apply
           (the filter strip marks them), and if the table is sorted by a hidden column a note beside the menu says so.</li>
       </ul>
+      <h3>Columns that come from filings and the exchanges</h3>
+      <p>Most columns come from prices and the company’s reported fundamentals. A newer set is read
+        straight from public records, and each says where it came from when you hover its heading:</p>
+      <ul>
+        <li><b>Drawdown</b>, <b>Corr. 5Y</b> and <b>Median recov.</b> (Relative): how far the price sits
+          below its high, how many falls of 10% or more it has had in five years, and the typical number
+          of days it took to get back.</li>
+        <li><b>Margin chg</b> and <b>Buyback yield</b> (Fundamentals): net margin over the latest four
+          quarters against the four before, in points; and the cash spent buying back shares over the
+          latest twelve months as a share of today’s market value. Both from the company’s own SEC
+          filings.</li>
+        <li><b>Last 8-K</b> (Reactions): the newest company announcement filed in the last sixty days,
+          and what kind it was.</li>
+        <li><b>13F holders</b>, <b>13F chg</b>, <b>5% filing</b> and <b>Put/Call OI</b> (Ownership): how
+          many institutional managers reported holding the stock last quarter and how their combined
+          shares changed; the newest filing by anyone crossing 5% of the company; and put option
+          contracts open for every call open, from the options clearing house.</li>
+      </ul>
+      <p>A blank in any of these means there is no reading, which is not the same as zero. None of them
+        feeds the Signal.</p>
+
       <h3>Getting around</h3>
       <ul>
         <li>In Standard, each group in the View menu has a <b>jump arrow</b> that scrolls that group into view —
@@ -415,6 +436,9 @@
         one opens that group's page. Then two pills, <b>Google Finance</b> and <b>Yahoo Finance</b>,
         which open this stock there in a new tab.</p>
 
+      <p>On the chart’s toolbar, <b>Visuals</b> opens this stock as a set of cards (see
+        <a href="#share" style="color:var(--muted)">section 16</a>).</p>
+
       <h3>The chart</h3>
       <ul>
         <li><b>Ranges</b> from one week to the full archive, which for most names runs back to 2006.</li>
@@ -434,7 +458,7 @@
 
       <h3>Similar stocks</h3>
       <p>At the foot of the page, up to six other companies in the same <b>industry</b>, the ones
-        closest to this one in market cap, with price, today, a year, market cap, forward P/E and the
+        closest to this one in market cap, with price, today, a year, market cap, P/E, forward P/E and the
         signal. Each row opens that stock; the <b>vs</b> pill opens the pair on the compare
         page.</p>
       <ul>
@@ -444,9 +468,11 @@
         <li><b>Funds have no peer group.</b> An ETF is not a company, so it neither gets a table nor
           appears in anyone else's. Nor does a stock whose sector and industry have not arrived yet —
           company profiles are re-pulled on a weekly rotation.</li>
-        <li><b>A dash under Fwd P/E is a company with no positive forward earnings</b>, or one that
-          reports none. A multiple off a loss is arithmetic, not cheapness, and printing it as a
-          negative number would make the loss-maker look like the cheapest name in the column.</li>
+        <li><b>P/E is today’s price over the last twelve months’ earnings; Fwd P/E is the same price
+          over the earnings expected for the next twelve.</b> A dash under either is a company with no
+          positive earnings on that basis, or one that reports none. A multiple off a loss is
+          arithmetic, not cheapness, and printing it as a negative number would make the loss-maker
+          look like the cheapest name in the column.</li>
         <li><b>It is not a ranking and not a shortlist.</b> Nothing is marked as better; it is who else
           is on this screen, measured the same way.</li>
       </ul>
@@ -479,12 +505,49 @@
           quarters are the difference between the cumulative periods either side. Hover for the
           reason.</li>
         <li><b>Later filings restate earlier periods</b>, and each row shows the most recent version.</li>
-        <li><b>A fund has no section at all</b>, because it files no financial statements. Neither do
-          companies reporting under international standards rather than US GAAP.</li>
+        <li><b>A fund has no section at all</b>, because it files no financial statements.</li>
+        <li><b>A company that reports in another currency is shown in dollars</b>, converted at each
+          period’s exchange rate, whether it files under US or international standards. Growth in
+          dollars therefore includes the currency’s move; margins do not.</li>
       </ul>
       <div class="note"><b>Nothing on that card feeds the Signal or the screener.</b> It is
         there to be read, not to move anything — a deliberate line, so that the rules stay driven by
         one consistent set of numbers.</div>
+
+      <h3>More from the public record</h3>
+      <p>Below the statements, a run of sections each read from one public source. A section with
+        nothing to show is left out rather than drawn empty, and <b>none of them feeds the Signal</b>.</p>
+      <ul>
+        <li><b>Drawdowns.</b> Every fall of 10% or more from a high in the price history, how deep it
+          went and how long it took to recover.</li>
+        <li><b>Insider transactions.</b> Open-market purchases and sales by the company’s own officers,
+          directors and largest holders, added up over three, six and twelve months, month by month,
+          and person by person, above the full list. Stock received as pay is left out. The summary
+          says how much of the selling was under a plan set up months in advance: people paid in stock
+          sell regularly, so a total of sales says less than it looks.</li>
+        <li><b>Options open interest.</b> Call and put contracts open at the last close, in total, by
+          expiry date and at the largest strikes. It counts what is outstanding and does not say which
+          way anyone is leaning: every contract has a buyer and a seller.</li>
+        <li><b>What it did with its cash.</b> Shares bought back, dividends paid and pay given in stock,
+          for the last twelve months and by fiscal year, with the change in the share count beside
+          them. Bought back is before new shares handed out as pay, so the share count is what shows
+          whether buybacks reduced it. A dash is a line the company did not report.</li>
+        <li><b>Where the revenue comes from.</b> Revenue by product, by business segment and by region,
+          as the company tagged it, for the latest fiscal year or the latest quarter, with the periods
+          before and a chart of how the mix has changed. The names and groupings are each company’s
+          own, so two companies’ lists cannot be compared. A fourth quarter is never reported on its
+          own; one marked * is worked out as the year less the three quarters before it.</li>
+        <li><b>Institutional holders</b> and <b>Funds that hold it.</b> The managers that reported the
+          stock on their quarterly Form 13F, and the mutual funds and ETFs holding it, largest first.
+          A fund is inside its manager’s figure too, so the two are never to be added. Both are months
+          old by the time they are public. <b>Each name opens that holder’s own page</b>: what it holds
+          among the stocks tracked here, by value, with what is new and what is gone since the period
+          before.</li>
+        <li><b>Large holders.</b> Filings by anyone who has crossed 5% of the company (Schedules 13D and
+          13G), with the stake reported.</li>
+        <li><b>Company events.</b> The company’s recent 8-K announcements, each named for what it
+          covered and linked to the filing.</li>
+      </ul>
       <a class="top" href="#top">↑ Contents</a>
     </div></section>
 
@@ -673,6 +736,8 @@
         one the guest preview is open to everyone. Change your password from the
         <strong>⋯</strong> menu; doing so signs out your other devices, which is the point. If you are
         locked out after too many attempts, it clears itself after fifteen minutes.</p>
+      <p>No code? On the sign-up form, <strong>Request one by email</strong> sends your address to the
+        site’s owner, who can reply with a code. Nothing else is asked for.</p>
       <p><strong>Sign in with Google</strong> works too, where it is switched on. The first time, it
         asks for the same invite code after Google comes back — the code is the door, whichever way
         you arrive at it — and after that you go straight in. If the address matches an account you
@@ -682,7 +747,7 @@
       <p>Anyone can try the screener without an account, from <b>Try as guest</b> on the sign-in page.
         It is <strong>twenty real stocks</strong>, chosen to span every sector, size band and signal
         rather than to be the famous ones — the whole table, every column and every signal, on those
-        twenty. What a guest does not get: personal lists, alerts, the pivot, compare, the studio and
+        twenty. What a guest does not get: personal lists, alerts, the pivot, compare, Visuals, holder pages and
         the research pages.</p>
 
       <div class="note"><b>Something wrong, or a ticker you would like added?</b> Use
