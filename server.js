@@ -12748,7 +12748,31 @@ app.get('/api/segments', requireAuth, route(async (req, res) => {
 // `dry=1` returns the fact sheet and the instructions and calls nothing;
 // `preview=1` calls the model and returns the draft without saving it.
 const SUMMARY_MODEL = process.env.SUMMARY_MODEL || CHAT_MODEL;
-const SUMMARY_MAX_TOKENS = 1400;
+// THE MODEL IS ASKED NOT TO REASON FIRST, and that is a fix, not a tuning.
+// (2026-10-12: the owner ran Micron and got "No summary written".) The
+// model reasons before it answers by default, and that reasoning is paid
+// for out of the same output allowance as the answer. On Micron it spent
+// all 1,400 tokens reasoning and returned no text at all; Apple, an hour
+// earlier, had happened to fit. This task is transcription under rules,
+// not a problem to think through: with reasoning off, Micron came back in
+// 9.6 seconds, 465 words, every check passing.
+//
+// A model that does not take the setting answers 400; then it is asked once
+// more without it, with room for both the reasoning and the answer.
+const SUMMARY_MAX_TOKENS = 2000;
+const SUMMARY_MAX_TOKENS_THINKING = 8000;
+async function summaryCall(pr, think) {
+  const body = { model: SUMMARY_MODEL, system: pr.system, messages: [{ role: 'user', content: pr.user }] };
+  if (think) body.max_tokens = SUMMARY_MAX_TOKENS_THINKING;
+  else { body.max_tokens = SUMMARY_MAX_TOKENS; body.thinking = { type: 'disabled' }; }
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(120000),
+  });
+  return { r, data: await r.json() };
+}
 async function summaryFacts(symbol) {
   const snap = await snapshotCached();
   const stocks = (snap && snap.stocks) || [];
@@ -12817,13 +12841,10 @@ app.post('/api/admin/company-summary', requireAdmin, route(async (req, res) => {
   }
   let data;
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: SUMMARY_MODEL, max_tokens: SUMMARY_MAX_TOKENS, system: pr.system, messages: [{ role: 'user', content: pr.user }] }),
-      signal: AbortSignal.timeout(120000),
-    });
-    data = await r.json();
+    let got = await summaryCall(pr, false);
+    if (got.r.status === 400) got = await summaryCall(pr, true);
+    const r = got.r;
+    data = got.data;
     if (!r.ok) {
       // Never the upstream body: it can echo the request, and the key rides in the same headers.
       console.error('summary: model error', r.status, data && data.error && data.error.type);
@@ -12834,7 +12855,13 @@ app.post('/api/admin/company-summary', requireAdmin, route(async (req, res) => {
     return res.status(502).json({ error: 'Could not reach the model. Nothing was saved.' });
   }
   const text = (data.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').trim();
-  if (!text) return res.status(502).json({ error: 'The model returned nothing. Nothing was saved.' });
+  if (!text) {
+    // Said plainly, because "returned nothing" sends nobody anywhere: the
+    // allowance ran out before the answer began.
+    const why = data.stop_reason === 'max_tokens' ? 'The model ran out of room before it wrote anything' : 'The model returned no text (' + (data.stop_reason || 'no reason given') + ')';
+    console.error('summary: no text', data.stop_reason, JSON.stringify(data.usage || {}));
+    return res.status(502).json({ error: why + '. Nothing was saved. Try again.' });
+  }
   const result = Summary.check(text, sections, d);
   const body = Summary.postBody(d, sections, text, result);
   const title = Summary.titleOf(d).slice(0, 160);

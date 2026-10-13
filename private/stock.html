@@ -3904,7 +3904,13 @@
           try {
             const r = await fetch('/api/admin/company-summary?symbol=' + encodeURIComponent(stock.symbol), { method: 'POST' });
             const j = await r.json().catch(() => ({}));
-            if (!r.ok || !j.ok) { sb.textContent = 'No summary written'; sb.title = j.error || ('The server answered ' + r.status); }
+            if (!r.ok || !j.ok) {
+              // The reason goes ON the button, not only in its tooltip: the first
+              // failure read "No summary written" and said nothing of why.
+              const why = j.error || ('The server answered ' + r.status);
+              sb.textContent = 'No summary: ' + why.replace(/\. Nothing was saved.*$/, '').slice(0, 70);
+              sb.title = why;
+            }
             else {
               const flagged = j.checks && !j.checks.ok;
               sb.textContent = flagged ? 'Draft saved \u2014 flagged, opening' : 'Draft saved \u2014 opening';
@@ -3912,7 +3918,7 @@
               setTimeout(() => { window.open(j.edit, '_blank', 'noopener'); }, 700);
             }
           } catch (e) { sb.textContent = 'No summary written'; sb.title = String(e && e.message || e); }
-          setTimeout(() => { sb.disabled = false; sb.textContent = was; }, 6000);
+          setTimeout(() => { sb.disabled = false; sb.textContent = was; }, 12000);
         });
       }
 

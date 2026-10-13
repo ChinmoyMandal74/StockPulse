@@ -36,3 +36,11 @@ Fifteen sections and about seventy figures on the sheet; 2,524 tokens in, 1,074 
 - The save path was not exercised by the build (it would have put a draft in the production blog); the first press is the owner's.
 
 Tests: a scratchpad suite, 47 checks, including the captured real fact sheet and the captured real draft.
+
+## The first press failed: the model spent its allowance reasoning (2026-10-12)
+
+The owner ran Micron and the button said "No summary written". The model reasons before answering by default, and that reasoning comes out of the same `max_tokens` as the answer: on Micron it used all 1,400 tokens reasoning and returned no text (`stop_reason: max_tokens`, 1,400 of 1,400 output tokens were thinking). Apple, the one case tried before shipping, had happened to fit. **One company is not a test of a path whose cost varies by company.**
+
+- `summaryCall` now sends `thinking: { type: "disabled" }` with 2,000 tokens. This is transcription under rules, not a problem to reason about. Measured: Micron 498 words, Nvidia 462, JPMorgan 465, each in 11 to 16 seconds, about 1,100 output tokens, every check passing.
+- A model that rejects the setting answers 400 and is asked once more without it, with 8,000 tokens for both.
+- No text now says why ("ran out of room before it wrote anything"), and the button shows the reason itself, not only in its tooltip.
