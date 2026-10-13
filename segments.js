@@ -359,7 +359,7 @@
       const mine = P.members.filter((m) => !m.subtotal);
       const sum = mine.reduce((s, m) => s + m.v, 0);
       if (!mine.length || mine.some((m) => !(m.v >= 0) || !now.has(m.key)) || !(sum > 0) || (cur.complete && !P.complete)) { out0.push(h.end); continue; }
-      cols.push({ end: h.end, derived: !!h.derived, at: new Map(mine.map((m) => [m.key, m.v / sum * 100])) });
+      cols.push({ end: h.end, derived: !!h.derived, at: new Map(mine.map((m) => [m.key, m.v / sum * 100])), val: new Map(mine.map((m) => [m.key, m.v])), sum });
     }
     if (cols.length < 3) return null;
     cols.reverse();                                                  // oldest on the left
@@ -374,7 +374,7 @@
         for (let g = missing; g >= 1; g--) {
           const want = iso(cols[i - 1].end, g * step);
           const known = (hist || []).find((h) => h && h.end && Math.abs(days(h.end, want)) <= 12);
-          cols.splice(i, 0, { end: known ? known.end : want, gap: true, derived: false, at: new Map() });
+          cols.splice(i, 0, { end: known ? known.end : want, gap: true, derived: false, at: new Map(), val: new Map(), sum: null });
         }
       }
     }
@@ -383,9 +383,18 @@
     const order = parts.slice().sort((x, y) => (last.get(y.key) || 0) - (last.get(x.key) || 0));
     const named = order.length > MIX_PARTS + 1 ? order.slice(0, MIX_PARTS) : order;
     const rest = order.slice(named.length);
-    const out = named.map((m) => ({ name: m.name, other: false, shares: cols.map((c) => shareAt(c, (at) => at.get(m.key) || 0)) }));
-    if (rest.length) out.push({ name: 'Other (' + rest.length + ' smaller)', other: true, shares: cols.map((c) => shareAt(c, (at) => rest.reduce((s, m) => s + (at.get(m.key) || 0), 0))) });
-    return { ends: cols.map((c) => c.end), derivedAt: cols.map((c) => c.derived), gapAt: cols.map((c) => !!c.gap), parts: out, skipped };
+    // THE AMOUNTS BESIDE THE SHARES (2026-10-13, the owner, of the card: "you are
+    // showing the %, can you also show the absolute value as another option").
+    // `values` is each part's figure in each column and `totals` the column's
+    // sum of parts, in the company's reporting currency; null in a gap, like
+    // the shares. A share alone cannot say whether the business grew.
+    const valueAt = (c, f) => (c.gap ? null : f(c.val));
+    const out = named.map((m) => ({ name: m.name, other: false, shares: cols.map((c) => shareAt(c, (at) => at.get(m.key) || 0)),
+      values: cols.map((c) => valueAt(c, (v) => v.get(m.key) || 0)) }));
+    if (rest.length) out.push({ name: 'Other (' + rest.length + ' smaller)', other: true, shares: cols.map((c) => shareAt(c, (at) => rest.reduce((s, m) => s + (at.get(m.key) || 0), 0))),
+      values: cols.map((c) => valueAt(c, (v) => rest.reduce((s, m) => s + (v.get(m.key) || 0), 0))) });
+    return { ends: cols.map((c) => c.end), derivedAt: cols.map((c) => c.derived), gapAt: cols.map((c) => !!c.gap), parts: out, skipped,
+      totals: cols.map((c) => (c.gap ? null : c.sum)) };
   }
 
   // A period beside the same period a year before: `prev` on each member

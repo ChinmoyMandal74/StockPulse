@@ -69,3 +69,15 @@ The owner: "evolution of revenue mix on individual stock page and also on promo"
 - Some companies' own standard labels are odd (Microsoft: "Microsoft Three Six Five Commercial Products And Cloud Services"). They are shown as filed.
 
 Tests were scratchpad Node suites (59 checks on the parser with three real annual reports among the fixtures, 37 on periods, the filing plan, `readReport` and the card, 15 on the fourth quarter and its guards, 32 on the mix over time including cards built from the real payload of seven companies) plus a committed run on five companies read back through the payload. Neither surface was rendered in a browser by the build.
+
+## The mix over time, in amounts (2026-10-13)
+
+The owner, of the mix-over-time card: "you are showing the %, can you also show the absolute value as another option". A third choice under Show on the Revenue mix card, `rmView: evoabs`, "How the amounts have changed".
+
+- `Segments.mixOver` now returns `values` on each part (the part's figure in each column) and `totals` (each column's sum of parts), in the reporting currency; null in a gap, like the shares. "Other" is the sum of the parts it stands for.
+- The card draws the same columns, each **as tall as that period's total on one scale**, with the total printed above it and each part labelled in money where there is room. The legend gives the first and last amounts and each part's **growth**, where the share view gives points of share.
+- The title reads "revenue by product, over time", not "revenue mix".
+- A payload with no amounts (cached from before they existed) draws the shares, not an empty chart.
+- Promo only. The stock page already has the amounts in the period-by-period table beside its share chart.
+- Seen on real data: Micron by quarter, $8.7B to $54.2B over eight quarters, where the share view shows DRAM at 73% at both ends.
+- Scratchpad suite, 21 checks including Micron's real payload. Not rendered in a browser by the build.

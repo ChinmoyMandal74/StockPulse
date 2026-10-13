@@ -8190,7 +8190,7 @@
   // Which period: the newest on file whichever it is, or one named.
   const RM_PERIODS = [['auto', 'Most recent on file'], ['FY', 'Latest fiscal year'], ['Q', 'Latest quarter']];
   // What to draw: the newest period's parts, or how their proportions have moved.
-  const RM_VIEWS = [['latest', 'The latest period'], ['evo', 'How the mix has changed']];
+  const RM_VIEWS = [['latest', 'The latest period'], ['evo', 'How the mix has changed'], ['evoabs', 'How the amounts have changed']];
   // A part is not a price: never green or red. The last is 'Other'.
   const RM_INKS = ['#7c9cff', '#fb923c', '#a78bfa', '#38bdf8', '#f472b6', '#cbd5e1', '#8b93a7'];
   function revMixNeed(tpl, opts) {
@@ -8230,8 +8230,13 @@
     const up = pal.ink('#60a5fa'), dn = pal.ink('#fb923c');
     const tone = (v) => (v == null || Math.abs(v) < 0.05 ? 'var(--muted)' : v > 0 ? up : dn);
     // ---- how the mix has changed: one column a period, each a whole ----
-    if (O.rmView === 'evo') {
+    if (O.rmView === 'evo' || O.rmView === 'evoabs') {
       const M = K.mix;
+      // THE AMOUNTS, not the shares: the same columns, each as tall as that
+      // period's revenue, so growth is visible where the share view shows only
+      // proportion. Asked of data that carries no amounts (a payload from
+      // before they were added), it falls back to the shares.
+      const abs = O.rmView === 'evoabs' && M && Array.isArray(M.totals) && M.parts.every((p) => Array.isArray(p.values));
       if (!M || !Array.isArray(M.ends) || M.ends.length < 3) {
         return shell(n, 'Revenue mix', 'over time', sym + ' has too few ' + (isQ ? 'quarters' : 'fiscal years') + ' on file with the same breakdown ' + (RM_WORD[K.kind] || '') + ' to show how its mix has changed.');
       }
@@ -8241,29 +8246,45 @@
       const last = M.ends.length - 1;
       const gapAt = M.gapAt || [];
       const gaps = gapAt.filter(Boolean).length;
+      const absTop = abs ? Math.max(1e-9, ...M.totals.filter((v) => v != null)) * 1.09 : 1;
       const colsH = M.ends.map((e, c) => (gapAt[c]
         ? '<div class="rme-col rme-gapc"><div class="rme-st rme-gap"><span>no comparable figures</span></div><div class="rme-x">' + esc(xl(e)) + '</div></div>'
-        : '<div class="rme-col"><div class="rme-st">'
-        + M.parts.map((p, i) => (p.shares[c] > 0 ? '<div class="rme-sg" style="flex:' + p.shares[c].toFixed(3) + ' 0 0;background:' + inkOf(p, i) + '">' + (p.shares[c] >= 7 ? sh(p.shares[c]) : '') + '</div>' : '')).join('')
+        : '<div class="rme-col"><div class="rme-st' + (abs ? ' rme-abs' : '') + '">'
+        + (abs
+          // Every column on ONE scale, the tallest total plus a little air; the
+          // space above a column holds its total. Parts read from the foot up.
+          ? M.parts.map((p, i) => (p.values[c] > 0 ? '<div class="rme-sg" style="flex:' + (p.values[c] / absTop * 100).toFixed(3) + ' 0 0;background:' + inkOf(p, i) + '">' + (p.values[c] / absTop >= 0.065 ? esc(money(p.values[c])) : '') + '</div>' : '')).join('')
+            + '<div class="rme-tot" style="flex:' + ((absTop - M.totals[c]) / absTop * 100).toFixed(3) + ' 0 0">' + esc(money(M.totals[c])) + '</div>'
+          : M.parts.map((p, i) => (p.shares[c] > 0 ? '<div class="rme-sg" style="flex:' + p.shares[c].toFixed(3) + ' 0 0;background:' + inkOf(p, i) + '">' + (p.shares[c] >= 7 ? sh(p.shares[c]) : '') + '</div>' : '')).join(''))
         + '</div><div class="rme-x">' + esc(xl(e)) + (M.derivedAt[c] ? '*' : '') + '</div></div>')).join('');
       const pts = (v) => (Math.abs(v) < 0.5 ? '0' : (v > 0 ? '+' : '\u2212') + Math.round(Math.abs(v))) + ' pts';
       const lg = '<span></span><span class="h" style="text-align:left">As the company reports it</span><span class="h">' + esc(xl(M.ends[0])) + '</span><span class="h">' + esc(xl(M.ends[last])) + '</span><span class="h">Change</span>'
         + M.parts.map((p, i) => { const d = p.shares[last] - p.shares[0];
+          if (abs) {
+            // Growth of the AMOUNT, first column to last; none where it started at nothing.
+            const a = p.values[0], b = p.values[last], g = a > 0 ? (b / a - 1) * 100 : null;
+            return '<i style="background:' + inkOf(p, i) + '"></i><span class="n">' + esc(p.name) + '</span><span class="v">' + esc(money(a)) + '</span><span class="v">' + esc(money(b)) + '</span>'
+              + '<span class="v" style="color:' + tone(g) + '">' + esc(ch(g)) + '</span>';
+          }
           return '<i style="background:' + inkOf(p, i) + '"></i><span class="n">' + esc(p.name) + '</span><span class="v">' + esc(sh(p.shares[0])) + '</span><span class="v">' + esc(sh(p.shares[last])) + '</span>'
             + '<span class="v" style="color:' + (Math.abs(d) < 0.5 ? 'var(--muted)' : d > 0 ? up : dn) + '">' + esc(pts(d)) + '</span>'; }).join('');
-      const noteE = 'Each column is one ' + (isQ ? 'quarter' : 'fiscal year') + ' of ' + sym + '\u2019s revenue, split into the parts the company reports and shown as shares'
-        + (K.complete ? ' of the whole. ' : ' of those parts, which do not add up to all of its revenue. ')
-        + 'The change is in percentage points of that share between the first column and the last. '
+      const noteE = (abs
+        ? 'Each column is one ' + (isQ ? 'quarter' : 'fiscal year') + ' of ' + sym + '\u2019s revenue' + (S.currency && S.currency !== 'USD' ? ' in ' + S.currency : '') + ', as tall as the amount and split into the parts the company reports'
+          + (K.complete ? '. ' : '; the parts do not add up to all of its revenue, and the figure over each column is their sum. ')
+          + 'The change is each part\u2019s growth between the first column and the last. '
+        : 'Each column is one ' + (isQ ? 'quarter' : 'fiscal year') + ' of ' + sym + '\u2019s revenue, split into the parts the company reports and shown as shares'
+          + (K.complete ? ' of the whole. ' : ' of those parts, which do not add up to all of its revenue. ')
+          + 'The change is in percentage points of that share between the first column and the last. ')
         + (gaps ? (gaps === 1 ? 'The dashed column is a ' : 'The ' + gaps + ' dashed columns are ') + (isQ ? (gaps === 1 ? 'quarter' : 'quarters') : (gaps === 1 ? 'year' : 'years')) + ' with no figures on this grouping: the company reported ' + (gaps === 1 ? 'it' : 'them') + ' on a different one, or not separately. ' : '')
         + (M.skipped > 0 ? (M.skipped === 1 ? 'One earlier period was' : M.skipped + ' earlier periods were') + ' reported on a different grouping and ' + (M.skipped === 1 ? 'is' : 'are') + ' left out. ' : '')
         + (M.derivedAt.some(Boolean) ? 'A fourth quarter (*) is not reported on its own: it is the fiscal year less the three quarters before it. ' : '')
         + 'The names and the groupings are the company\u2019s own, so they cannot be compared with another company\u2019s. '
-        + 'A share can fall while the amount grows. What was reported, not a forecast.';
+        + (abs ? '' : 'A share can fall while the amount grows. ') + 'What was reported, not a forecast.';
       return chromeTop()
         + '<div class="s-body"><div class="bx-in">'
         + '<span class="s-kick">' + esc((row.sector ? row.sector + ' \u00b7 ' : '') + sym + ' \u00b7 ' + xl(M.ends[0]) + ' to ' + xl(M.ends[last]) + (isQ ? ', by quarter' : ', by fiscal year')) + '</span>'
         + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
-        + '<span class="dim">' + esc('revenue mix ' + (RM_WORD[K.kind] || '') + ', over time' + (fellBack ? ' \u2014 the one it reports' : '')) + '</span></h2>'
+        + '<span class="dim">' + esc((abs ? 'revenue ' : 'revenue mix ') + (RM_WORD[K.kind] || '') + ', over time' + (fellBack ? ' \u2014 the one it reports' : '')) + '</span></h2>'
         + '<div class="rme-ch">' + colsH + '</div>'
         + '<div class="rme-lg">' + lg + '</div>'
         + '<p class="s-sub wide" style="--fs:17px">' + esc(noteE) + '</p>'
@@ -9816,6 +9837,14 @@
     .rme-sg { display: flex; align-items: center; justify-content: center; min-height: 0; overflow: hidden;
       font: 600 20px var(--mono); color: rgba(8, 12, 24, 0.8); }
     .rme-x { text-align: center; font: 500 19px var(--mono); color: var(--muted); padding-top: 10px; white-space: nowrap; }
+    /* The amounts view: a column is as tall as its total, so the stack is not
+       clipped to a rounded box, and the space above it carries the total. */
+    .rme-st.rme-abs { border-radius: 0; overflow: visible; }
+    .rme-st.rme-abs .rme-sg:first-child { border-radius: 0 0 6px 6px; }
+    .rme-tot { display: flex; align-items: flex-end; justify-content: center; min-height: 0; padding-bottom: 4px;
+      font: 600 19px var(--mono); color: var(--text); white-space: nowrap; }
+    .sz-square .rme-tot { font-size: 15px; }
+    .sz-story .rme-tot { font-size: 25px; }
     /* A period with nothing comparable: an empty dashed column, so two
        columns that are not consecutive never stand side by side. */
     .rme-st.rme-gap { border: 2px dashed rgba(148, 163, 184, 0.5); align-items: center; justify-content: center; flex-direction: column; }
