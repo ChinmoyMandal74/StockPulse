@@ -58,6 +58,30 @@ function feedFor(facts, tax) {
   return { by, newestFiled, newestEnd };
 }
 
+// THE SAME COUNT OVER EVERY SECTION OF THE FEED, not only the accounting
+// taxonomy the reader uses. Without it "the feed lacks this report" could mean
+// no more than "its figures are filed under a section we do not read" (`dei`,
+// a company's own extension, a taxonomy named differently) -- and that would
+// be the reader's fault, reported as the SEC's.
+function feedAnywhere(facts) {
+  const by = new Map();            // accn -> { section: n }
+  const all = (facts && facts.facts) || {};
+  for (const sec of Object.keys(all)) {
+    for (const tag of Object.keys(all[sec] || {})) {
+      const units = (all[sec][tag] && all[sec][tag].units) || {};
+      for (const u of Object.keys(units)) {
+        for (const x of units[u] || []) {
+          if (!x || !x.accn) continue;
+          let o = by.get(x.accn);
+          if (!o) { o = {}; by.set(x.accn, o); }
+          o[sec] = (o[sec] || 0) + 1;
+        }
+      }
+    }
+  }
+  return { by, sections: Object.keys(all) };
+}
+
 // The tags the reader knows, flat, for the taxonomy in hand.
 function knownTags(tax) {
   const cat = tax === 'ifrs-full' ? SecFacts.IFRS_CONCEPTS : SecFacts.CONCEPTS;
@@ -76,6 +100,7 @@ function probe({ symbol, cik, submissions, facts, readerRows, stored }) {
   const tax = facts ? SecFacts.taxonomyOf(facts) : null;
   const list = statements(submissions && submissions.filings && submissions.filings.recent);
   const feed = feedFor(facts, tax);
+  const anywhere = feedAnywhere(facts);
   const known = knownTags(tax);
   const rows = Array.isArray(readerRows) ? readerRows : [];
   const have = Array.isArray(stored) ? stored : [];
@@ -88,6 +113,7 @@ function probe({ symbol, cik, submissions, facts, readerRows, stored }) {
     return {
       accn: f.accn, form: f.form, filed: f.filed, period: f.period,
       feedFacts: inFeed ? inFeed.n : 0,
+      elsewhere: anywhere.by.get(f.accn) || null,
       feedTags: tags.length,
       knownTags: tags.filter((t) => known.has(t)).length,
       readerRows: readerAccn.get(f.accn) || 0,
@@ -101,8 +127,10 @@ function probe({ symbol, cik, submissions, facts, readerRows, stored }) {
     verdict = 'nolist'; why = 'The SEC lists no annual or quarterly report for this company.';
   } else if (!facts) {
     verdict = 'nofeed'; why = 'The SEC has no tagged figures for this company at all.';
+  } else if (!newest.feedFacts && newest.elsewhere) {
+    verdict = 'reader'; why = 'The feed carries the newest report, but only under sections our reader does not read: ' + Object.keys(newest.elsewhere).join(', ') + '.';
   } else if (!newest.feedFacts) {
-    verdict = 'feed'; why = 'The newest report is on the SEC\'s list but its figures are not in the SEC\'s facts feed. Nothing we read could contain it.';
+    verdict = 'feed'; why ='The newest report is on the SEC\'s list but its figures are not in the SEC\'s facts feed. Nothing we read could contain it.';
   } else if (!newest.readerRows) {
     verdict = 'reader'; why = newest.knownTags
       ? 'The feed carries the newest report and tags we know, but our reader made no row from it.'
@@ -118,7 +146,7 @@ function probe({ symbol, cik, submissions, facts, readerRows, stored }) {
     taxonomy: tax, currency: facts ? SecFacts.currencyOf(facts) : null,
     verdict, why,
     list: { statements: list.length, newestFiled: newest ? newest.filed : null, newestPeriod: newest ? newest.period : null },
-    feed: { newestFiled: feed.newestFiled, newestEnd: feed.newestEnd, filings: feed.by.size },
+    feed: { newestFiled: feed.newestFiled, newestEnd: feed.newestEnd, filings: feed.by.size, sections: anywhere.sections },
     reader: { rows: rows.length, newestEnd: maxOf(rows, (r) => r.periodEnd), newestFiled: maxOf(rows, (r) => r.filed) },
     stored: { rows: have.length, newestEnd: maxOf(have, (r) => r.periodEnd), newestFiled: maxOf(have, (r) => r.filed) },
     filings,
