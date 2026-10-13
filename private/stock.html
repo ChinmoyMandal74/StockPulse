@@ -1800,7 +1800,7 @@
           ? `<span class="self">${esc(r.name)}</span>`
           : `<a class="namelink" href="/stock/${encodeURIComponent(r.symbol)}">${esc(r.name)}</a>`}
           <span class="sym">${esc(r.symbol)}</span>${me ? '<span class="here">this stock</span>' : ''}</td>
-        ${cell(r.Price)}${cell(r.Today)}${cell(r['1Y'])}${cell(r['Market Cap'])}${cell(r['Trailing P/E'])}${cell(r['Fwd P/E'])}
+        ${cell(r.Price)}${cell(r.Today)}${cell(r['1Y'])}${cell(r['Market Cap'])}${cell(r['Live P/E'])}${cell(r['Fwd P/E'])}
         <td class="av ${r.Signal ? (r.Signal.c || '') : 'na'}"${
           r.why ? ` title="${esc(r.why)}"` : ''}>${esc(r.Signal ? r.Signal.t : '—')}</td>
         <td class="cmp">${me ? '' : `<a class="rng" href="/compare/${encodeURIComponent(sym)}/${
@@ -1816,7 +1816,7 @@
           <p class="summary">${basis}</p>
           <div class="ptab"><table>
             <thead><tr><th>Company</th><th>Price</th><th>Today</th><th>1Y</th>
-              <th>Market cap</th><th title="Today's price over the earnings of the last twelve months">P/E</th><th title="Today's price over the earnings analysts expect for the next twelve months">Fwd P/E</th><th>Signal</th><th></th></tr></thead>
+              <th>Market cap</th><th title="Today's price over the earnings per share of the last twelve months, recomputed from the price shown: the screener's Live P/E column">Live P/E</th><th title="Today's price over the earnings analysts expect for the next twelve months">Fwd P/E</th><th>Signal</th><th></th></tr></thead>
             <tbody>${body}</tbody>
           </table></div>
           <p class="note">${p.basis === 'moves'
@@ -1826,7 +1826,7 @@
             : `Same ${p.basis}, ranked by ${p.byName ? 'how close each one is in market cap' : 'size'}.`}
             It is who else is on this screen measured the same way — not a ranking, and not a list of
             better alternatives. Hover the Signal for the rule that fired.
-            P/E is today’s price over the last twelve months’ earnings; Fwd P/E is the same price over
+            Live P/E is today’s price over the last twelve months’ earnings per share; Fwd P/E is the same price over
             the earnings expected for the next twelve. A dash under either is a company with no positive
             earnings on that basis, or none reported — a multiple off a loss is arithmetic, not cheapness.</p>
         </div></section>`;
@@ -3314,6 +3314,8 @@
               title="See this stock as cards: revenue mix, insiders, options, capital returns and more">Visuals ▸</a>
             <button class="rng" id="rfBtn" type="button" hidden
               title="Admin: pull this stock's price and fundamentals from the provider now, then rebuild the screen. About a minute.">Refresh</button>
+            <button class="rng" id="sumBtn" type="button" hidden
+              title="Admin: have the AI model write a Company summary of this stock from the figures on this page, saved as a blog draft for you to read. Nothing is published.">Company summary</button>
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
           <!-- The three optional layers, in the owner's order (2026-09-29):
@@ -3882,8 +3884,37 @@
       fetch('/api/me', { cache: 'no-store' })
         .then((r) => r.json())
         .then((me) => { const cl = document.getElementById('chartsLink'); if (cl && (!me || !me.guest)) cl.hidden = false;
-          const rf = document.getElementById('rfBtn'); if (rf && me && me.admin) rf.hidden = false; })
+          const rf = document.getElementById('rfBtn'); if (rf && me && me.admin) rf.hidden = false;
+          const sb = document.getElementById('sumBtn'); if (sb && me && me.admin) sb.hidden = false; })
         .catch(() => { const cl = document.getElementById('chartsLink'); if (cl) cl.hidden = false; });   // open mode, or /api/me down
+
+      // ---- write a Company summary (admin) -------------------------------------
+      // The model writes a draft from this page's figures and the server saves
+      // it as a BLOG DRAFT. This only asks and then opens the editor; reading
+      // it and publishing it are the owner's. If the automatic checks flagged
+      // anything, the button says so before the editor opens, and the draft
+      // carries the same note at its top.
+      {
+        const sb = document.getElementById('sumBtn');
+        if (sb) sb.addEventListener('click', async () => {
+          if (sb.disabled) return;
+          sb.disabled = true;
+          const was = sb.textContent;
+          sb.textContent = 'Writing\u2026 about half a minute';
+          try {
+            const r = await fetch('/api/admin/company-summary?symbol=' + encodeURIComponent(stock.symbol), { method: 'POST' });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok || !j.ok) { sb.textContent = 'No summary written'; sb.title = j.error || ('The server answered ' + r.status); }
+            else {
+              const flagged = j.checks && !j.checks.ok;
+              sb.textContent = flagged ? 'Draft saved \u2014 flagged, opening' : 'Draft saved \u2014 opening';
+              sb.title = flagged ? 'Flagged: ' + j.checks.problems.join('. ') : 'A blog draft. Nothing is published until you publish it.';
+              setTimeout(() => { window.open(j.edit, '_blank', 'noopener'); }, 700);
+            }
+          } catch (e) { sb.textContent = 'No summary written'; sb.title = String(e && e.message || e); }
+          setTimeout(() => { sb.disabled = false; sb.textContent = was; }, 6000);
+        });
+      }
 
       // ---- refresh this one stock (admin) ------------------------------------
       // Price and fundamentals, pulled now. The button is shown only to the

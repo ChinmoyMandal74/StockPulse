@@ -9368,7 +9368,7 @@ function peersFor(stock, stocks, links) {
   // the payload to ~1KB: six whole snapshot rows would be ~18KB for six cells
   // each.
   const CELLS = ['info|Price', 'short|Today', 'long|1Y', 'info|Market Cap',
-    'fund|Trailing P/E', 'fund|Fwd P/E', 'act|Signal'];
+    'fund|Live P/E', 'fund|Fwd P/E', 'act|Signal'];
   const peerRow = (x) => {
     const v = RowCard.fieldValues(x);
     const out = { symbol: x.symbol, name: x.shortName || x.name || x.symbol, why: x.actionFlag || '' };
@@ -9389,11 +9389,14 @@ function peersFor(stock, stocks, links) {
     // loss-making company reading -41.7 at the head of the column it is
     // meant to be compared against would be the worst place of all for it.
     out['Fwd P/E'] = Number(x.forwardPe) > 0 ? out['Fwd P/E'] : null;
-    // The same rule for the P/E on the last twelve months' earnings, added
-    // beside it on 2026-10-12 (the owner: "add live P/E next to forward
-    // P/E"): today's price over what the company actually earned. A company
-    // that lost money over those twelve months has no such multiple.
-    out['Trailing P/E'] = Number(x.trailingPe) > 0 ? out['Trailing P/E'] : null;
+    // LIVE P/E, the screener's own column, beside it (2026-10-12, the owner:
+    // "add live P/E next to forward P/E"): today's price over the earnings
+    // per share of the last twelve months, recomputed from the price on this
+    // row. The first version of this showed the vendor's trailing P/E under
+    // the heading "P/E", which is a different figure on a different clock;
+    // the owner had named the column they meant. `peLive` is already null
+    // for a company that lost money, and the test is kept for the reason above.
+    out['Live P/E'] = Number(x.peLive) > 0 ? out['Live P/E'] : null;
     return out;
   };
   return {
@@ -11989,6 +11992,7 @@ const Nport = require('./nport.js');
 const CapReturns = require('./capreturns.js');
 const OptionsOI = require('./optionsoi.js');
 const HolderBook = require('./holderbook.js');
+const Summary = require('./summary.js');
 const HOLDER_DOCS = 3;             // documents fetched per company per refresh
 const mgCache = {};
 const mgWarm = (cut) => !!(mgCache[cut] && Date.now() - mgCache[cut].at < EG_TTL_MS);
@@ -12729,6 +12733,124 @@ app.get('/api/segments', requireAuth, route(async (req, res) => {
     return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   }
   res.json(await segmentsPayload(symbol));
+}));
+
+// ---- the Company summary ---------------------------------------------------------------
+// One stock written up from the data on file by an AI model, saved as a BLOG
+// DRAFT for the owner to read (summary.js has the fact sheet, the
+// instructions and the checks). Admin only, and never published from here.
+//
+// THE FIGURES ARE THE STOCK PAGE'S OWN: the row goes through the same stamps
+// and the same field catalogue, and each section comes from the payload
+// function its page section uses, so the summary cannot quote a number the
+// page does not show.
+//
+// `dry=1` returns the fact sheet and the instructions and calls nothing;
+// `preview=1` calls the model and returns the draft without saving it.
+const SUMMARY_MODEL = process.env.SUMMARY_MODEL || CHAT_MODEL;
+const SUMMARY_MAX_TOKENS = 1400;
+async function summaryFacts(symbol) {
+  const snap = await snapshotCached();
+  const stocks = (snap && snap.stocks) || [];
+  const stock = stocks.find((x) => x && !x.error && String(x.symbol).toUpperCase() === symbol);
+  if (!stock) return null;
+  stampCapDerived([stock]);
+  stampPeerValue(stocks);
+  await Promise.all([
+    stampPricedAt([stock]).catch(() => {}), stampAdviceAge([stock]).catch(() => {}), stampAthDistance([stock]).catch(() => {}),
+    stampSpMember([stock]).catch(() => {}), stampFlows([stock]).catch(() => {}), stampShortNames([stock]).catch(() => {}),
+  ]);
+  // A stored verdict may still carry the old words; the catalogue reads the row.
+  const row = ActionRules.canonRow ? (ActionRules.canonRow(Object.assign({}, stock)) || stock) : stock;
+  const quiet = (p) => p.catch(() => null);
+  const [profile, capret, seg, ins, opt, instRow, funds, hold, events, earnings] = await Promise.all([
+    quiet(store.readProfile(symbol)), quiet(capReturnsPayload(symbol)), quiet(segmentsPayload(symbol)), quiet(insiderPayload(symbol)),
+    quiet(optionsPayload(symbol)), quiet(store.readInstHolding(symbol)), quiet(fundHoldersPayload(symbol)), quiet(holdersPayload(symbol)),
+    quiet(store.readSecEvents(symbol, 6)), quiet(store.readEarnings(symbol)),
+  ]);
+  let inst = null;
+  if (instRow && instRow.managers) {
+    let out = profile && Number(profile.sharesOutstanding) > 0 ? Number(profile.sharesOutstanding) : null;
+    if (out && instRow.shares > out * 1.5) out = null;
+    inst = { managers: instRow.managers, quarter: Inst13f.quarterName(instRow.period), pct: Inst13f.pctOf(instRow.shares, out),
+      sharesChange: Inst13f.change(instRow.shares, instRow.sharesPrev),
+      top: (instRow.top || []).map((t) => ({ name: t.name, pct: Inst13f.pctOf(t.shares, out) })) };
+  }
+  const fields = RowCard.fieldValues(row);
+  const sig = fields['act|Signal'];
+  return {
+    symbol, name: row.shortName || row.name || symbol, asOf: (snap && snap.updatedAt) || null,
+    description: profile && profile.description ? profile.description : null,
+    signal: sig && sig.t ? sig.t : null,
+    fields,
+    capret: capret && capret.returns ? capret.returns : null,
+    segments: seg && seg.segments ? seg.segments : null,
+    insider: ins && ins.digest ? ins.digest : null,
+    options: opt && opt.options ? opt.options : null,
+    inst,
+    funds: funds && funds.funds ? funds.funds : null,
+    // A filing the company itself made about another issuer is not a holder of it.
+    holders: hold && hold.filings ? hold.filings.filter((e) => e.kind !== 'X') : [],
+    events: (events || []).map((e) => ({ filed: e.filed, label: Events8k.label(e.items, 3) })),
+    earnings: earnings || [],
+  };
+}
+app.post('/api/admin/company-summary', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  const d = await summaryFacts(symbol);
+  if (!d) return res.status(404).json({ error: symbol + ' is not on the screen.' });
+  const sections = Summary.factSheet(d);
+  if (sections.length < 3) return res.status(422).json({ error: 'Too little on file for ' + symbol + ' to write a summary from.' });
+  const pr = Summary.prompt(d, sections);
+  if (req.query.dry === '1') return res.json({ symbol, dry: true, sections, system: pr.system, user: pr.user });
+  if (!ANTHROPIC_KEY) return res.status(503).json({ error: 'No model key is configured: ANTHROPIC_API_KEY is unset.' });
+  const preview = req.query.preview === '1';
+  const slug = Summary.slugOf(symbol, d.asOf || new Date().toISOString());
+  if (!SLUG_RE.test(slug)) return res.status(400).json({ error: 'That symbol does not make a usable web address.' });
+  const existing = preview ? null : await store.readPost(slug, { publishedOnly: false });
+  // A PUBLISHED summary is never rewritten by a button. A draft is: writing it
+  // again is the point of pressing it again.
+  if (existing && existing.status === 'published') {
+    return res.status(409).json({ error: 'A summary for these figures is already published at /blog/' + slug + '. Edit it there, or wait for the next data refresh.' });
+  }
+  let data;
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: SUMMARY_MODEL, max_tokens: SUMMARY_MAX_TOKENS, system: pr.system, messages: [{ role: 'user', content: pr.user }] }),
+      signal: AbortSignal.timeout(120000),
+    });
+    data = await r.json();
+    if (!r.ok) {
+      // Never the upstream body: it can echo the request, and the key rides in the same headers.
+      console.error('summary: model error', r.status, data && data.error && data.error.type);
+      return res.status(502).json({ error: 'The model is unavailable right now (' + r.status + '). Nothing was saved.' });
+    }
+  } catch (err) {
+    console.error('summary: model call failed', err.message);
+    return res.status(502).json({ error: 'Could not reach the model. Nothing was saved.' });
+  }
+  const text = (data.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').trim();
+  if (!text) return res.status(502).json({ error: 'The model returned nothing. Nothing was saved.' });
+  const result = Summary.check(text, sections, d);
+  const body = Summary.postBody(d, sections, text, result);
+  const title = Summary.titleOf(d).slice(0, 160);
+  const usage = data.usage ? { input: data.usage.input_tokens, output: data.usage.output_tokens } : null;
+  if (preview) return res.json({ symbol, preview: true, slug, title, checks: result, usage, model: SUMMARY_MODEL, body });
+  const who = await currentUser(req);
+  await store.writePost({
+    slug, title, body,
+    summary: (d.name + ', in figures: price and trend, the business, cash and ownership, and recent filings. Data as of ' + String(d.asOf || '').slice(0, 10) + '.').slice(0, 300),
+    status: 'draft',
+    author: (existing && existing.author) || (who ? who.email.split('@')[0] : null),
+    publishedAt: null,
+    createdAt: (existing && existing.createdAt) || Date.now(),
+  });
+  logAct(req, 'post', ('draft:' + slug).slice(0, 80));
+  res.json({ ok: true, symbol, slug, title, checks: result, usage, model: SUMMARY_MODEL, edit: '/posts?slug=' + encodeURIComponent(slug) });
 }));
 
 // ---- a holder's book -----------------------------------------------------------------

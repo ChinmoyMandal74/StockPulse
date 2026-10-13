@@ -45,6 +45,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `capreturns.js`, `sec-reread.js` | Capital returns (buybacks, dividends, stock pay, share count) from the stored filings: the arithmetic, and the script that asks the deployed app to re-read every company after the reader changes |
 | `optionsoi.js`, `options-load.js` | Options open interest per stock from the Options Clearing Corporation: the reader and arithmetic, and the loader run from the owner's machine |
 | `holderbook.js`, `private/holder.html`, `holders.html` | What one 13F manager or one fund holds among the tracked stocks, turned round from the two quarterly loads: the arithmetic and the two member pages (`/holders`, `/holder/<M or F>/<id>`) |
+| `summary.js` | The Company summary: one stock written up by an AI model from a fact sheet and saved as a blog draft. The fact sheet, the instructions, the checks on what came back, and the post body |
 | `drawdowns.js`, `drawdown-load.js` | The stored drawdown figures behind two screener columns: a slice a night on the daily check, and the first fill |
 | `adjusted.js` | Filings-fed Signal overlay for `/adjusted` and `/adjustedbacktest` (admin research) |
 | `analysis-db.js` | **Local SQLite copy of the archive for research.** `--full` rebuilds, no flag syncs, `--stats` reports |
@@ -155,6 +156,6 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Promo studio** — `the-promo-studio` (also seven refresh post-mortems) · `cards-and-the-module-behind-them` · `the-promo-studio-cards` (180 KB) · `the-promo-studio-cards-2` (105 KB) · `the-industries-card` (also the Sector cards) · `sector-snapshot-card` · `evolution-two-stocks` · `short-build-card` · `brand-slides-review` · `earnings-ahead-card` · `signal-pyramid-view` · `post-to-instagram` · `saved-posts`
 
-**Admin pages and the public side** — `the-admin-console` · `the-architecture-diagram` · `the-build-log` · `the-data-quality-page` · `the-database-page` · `the-help-page` · `the-backlog-page` · `the-public-side` · `chatbot`
+**Admin pages and the public side** — `the-admin-console` · `the-architecture-diagram` · `the-build-log` · `the-data-quality-page` · `the-database-page` · `the-help-page` · `the-backlog-page` · `the-public-side` · `chatbot` · `company-summary`
 
 Also in `docs/`: `backlog.md`, `momentum-scoring.md`, `momentum-delta.md`.

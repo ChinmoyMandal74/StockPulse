@@ -34,3 +34,7 @@ The owner: "in the Similar stock section, add live P/E next to forward p/e". A c
 - The same rule as the forward column, for the same reason: a multiple off a loss is a dash, on the anchor row too (`Number(x.trailingPe) > 0`, which also rejects an empty value before coercing).
 - The note under the table now says what each of the two is.
 - A page loaded against an older server gets no such key and draws a dash; deploy order still does not matter.
+
+### Corrected the same day: it is the screener's Live P/E
+
+The first version showed the vendor's trailing P/E under the heading "P/E". The owner had said "live P/E", and **Live P/E is a column this app already has** (`peLive`: today's price over EPS TTM, recomputed from the price on the row, catalogue key `fund|Live P/E`). Found while listing the catalogue's keys for the Company summary. The column is now headed **Live P/E** and reads that field; the trailing figure is no longer in the table. When the owner names a figure, grep the field catalogue for that name before choosing one.
