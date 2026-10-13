@@ -9455,7 +9455,10 @@
       + esc(model.view === 'share' ? 'share of the group\u2019s ' + model.lower + (self.last ? ' \u2014 ' + PT.fmtShare(self.last.share) + ' today' : '')
         : model.view === 'rank' ? 'ranked on ' + model.lower + ' among its peers'
         : model.lower + ' against its peers'
-          + (self.last ? ' — #' + self.last.rank + ' of ' + model.N + ' today' : '')) + '</span></h2>'
+          + (self.last ? ' — #' + self.last.rank + ' of ' + model.N + ' today' : '')
+          // Asked for a share and given lines: said in the heading, where it is
+          // seen, as well as in the note.
+          + (model.shareRefused ? ' (no share view for this measure)' : '')) + '</span></h2>'
       + '<div class="pv-chart">' + chart + '</div>'
       + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();

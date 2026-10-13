@@ -45,3 +45,13 @@ The owner, of the peer card: "what do you think of making this in a stacked area
 - **The group is these companies, not the industry**, and both surfaces say so, with "a band can narrow while the company grows, if the others grew faster".
 - Seen on real data: Micron against Broadcom, Intel, AMD and Arm over fourteen quarters, Micron 13% to 41% of the five's combined revenue while Intel went 42% to 18%. Six earlier quarters are left off because Arm has no figure before then.
 - Scratchpad suite, 33 checks including Micron's real payload. Not rendered in a browser by the build.
+
+### The share view was refused where it should not have been (2026-10-13, the same day)
+
+The owner: "The stacked area chart is only working for Revenue and not the other measures". Two different things were behind that.
+
+- **Market value was a fault.** The first rule wanted every company to have a figure in every quarter drawn. One of Micron's peers was newly listed and had a single quarter of market value, so no run of complete quarters existed and the view was refused for all seven. It had been tested on revenue only, where that peer has no figures at all and so was never on the chart. **The window is now anchored on the company itself**: its unbroken run of positive figures back from its newest. A peer that cannot cover the window (eight quarters where the company has them, else four) is left out and named in the note, and the window is as long as the peers kept allow. Fewer than three companies kept is not a group.
+- **Net income is now offered**, as a share of the group's profit. A company with a loss in the window has no share of a profit and is left out by name ("Intel is left out: a loss in the period is no share of a profit").
+- **Profit margin and P/E are still refused, on purpose**: a margin or a multiple is not an amount, and five of them added together are not anything. The note now says that in words, and the card says "(no share view for this measure)" in its heading, where the first version said it only in the note and read as a card that had not worked.
+- Measured on Micron after the change: revenue 14 quarters, 5 companies; net income 9 quarters, 4 companies (Intel left out); market value 13 quarters, 6 companies (the new listing left out).
+- A view that depends on how complete the data is has to be tried on every measure it offers, on a real company, before it ships.

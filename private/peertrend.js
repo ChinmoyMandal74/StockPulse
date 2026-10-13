@@ -65,18 +65,21 @@
   // lines show: only the bottom band has a flat baseline, so no other
   // company's own rise or fall can be read off it, and crossings vanish.
   //
-  // ONLY WHERE ADDING UP MEANS SOMETHING: revenue and market value. Net
-  // income can be negative, and a margin, a multiple or a rank is not a
-  // quantity that sums. Asked for on any other measure, build() answers
-  // with the value view and says so in `shareRefused`.
+  // ONLY WHERE ADDING UP MEANS SOMETHING: revenue, net income and market
+  // value. A margin, a multiple or a rank is not a quantity that sums: five
+  // margins added together are not anything. Asked for on one of those,
+  // build() answers with the value view and says so in `shareRefused`.
+  // NET INCOME is a share of the group's PROFIT, so a company with a loss in
+  // the window has no share of it and is left out, by name.
   //
-  // ONLY QUARTERS WHERE EVERY COMPANY HAS A FIGURE. A company missing from a
-  // quarter would read as a share of nothing and hand its slice to the
-  // others. The chart is the unbroken run of complete quarters ending at
-  // the newest, and `dropped` says how many earlier ones were left off.
+  // EVERY COMPANY DRAWN HAS A FIGURE IN EVERY QUARTER DRAWN. A company
+  // missing from a quarter would read as a share of nothing and hand its
+  // slice to the others. See build() for how the companies and the quarters
+  // are chosen; `leftOut` names who was dropped and `dropped` counts the
+  // earlier quarters left off.
   //
   // THE GROUP IS THESE COMPANIES, NOT THE INDUSTRY, and every surface says so.
-  const SHARE_METRICS = new Set(['rev', 'cap']);
+  const SHARE_METRICS = new Set(['rev', 'ni', 'cap']);
   const SHARE_MIN_QUARTERS = 4;
   // Bands are identities, not directions: never green or red. The company
   // itself takes the accent; the peers take these in turn.
@@ -132,38 +135,66 @@
     }
 
     // ---- share of the group -----------------------------------------------------
-    if (wantShare && SHARE_METRICS.has(mk) && N >= 2) {
-      const full = (i) => companies.every((c) => ok(c.vals[i]) && c.vals[i] > 0);
+    //
+    // WHICH COMPANIES AND WHICH QUARTERS. The first version wanted every company
+    // to have a figure in every quarter drawn, and took the longest run where
+    // that held. (2026-10-13, the owner: "The stacked area chart is only working
+    // for Revenue and not the other measures".) On market value it was refused
+    // outright for Micron: one peer, newly listed, had a single quarter on file,
+    // so no run of complete quarters existed. One company with a sliver of
+    // history had switched the view off for the other six.
+    //
+    // So the window is anchored on THE COMPANY ITSELF: its unbroken run of
+    // positive figures back from its newest. A peer that cannot cover the
+    // window (eight quarters where the company has them, else four) is LEFT
+    // OUT and named, and the window is then as long as the peers kept allow.
+    // Fewer than three companies left is not a group: the value view.
+    if (wantShare && SHARE_METRICS.has(mk) && N >= 3) {
+      const pos = (c, i) => ok(c.vals[i]) && c.vals[i] > 0;
+      const me = companies.find((c) => c.self) || companies.slice().sort((x, y) => y.vals.filter(ok).length - x.vals.filter(ok).length)[0];
       let end = n - 1;
-      while (end >= 0 && !full(end)) end--;
-      let start = end;
-      while (start > 0 && full(start - 1)) start--;
-      if (end >= 0 && end - start + 1 >= SHARE_MIN_QUARTERS) {
-        const m = end - start + 1;
-        const share = companies.map((c) => Array.from({ length: m }, (_, j) => {
+      while (end >= 0 && !pos(me, end)) end--;
+      const runOf = (c) => { let r = 0; for (let i = end; i >= 0 && pos(c, i); i--) r++; return r; };
+      const mine = end >= 0 ? runOf(me) : 0;
+      let inc = [];
+      if (mine >= SHARE_MIN_QUARTERS) {
+        for (const want of [8, SHARE_MIN_QUARTERS]) {
+          const need = Math.min(want, mine);
+          inc = companies.filter((c) => runOf(c) >= need);
+          if (inc.length >= 3) break;
+        }
+      }
+      if (inc.length >= 3) {
+        const m = Math.min(...inc.map(runOf));
+        const start = end - m + 1;
+        // Who was left out, and why: a loss in the window where the measure can
+        // be one, otherwise no figure for part of it.
+        const leftOut = companies.filter((c) => !inc.includes(c)).map((c) => ({ name: c.name || c.symbol,
+          loss: c.vals.slice(start, end + 1).some((v) => ok(v) && v <= 0) }));
+        const share = inc.map((c) => Array.from({ length: m }, (_, j) => {
           const i = start + j; let sum = 0;
-          for (const o of companies) sum += o.vals[i];
+          for (const o of inc) sum += o.vals[i];
           return c.vals[i] / sum * 100;
         }));
         // The company itself at the foot, where the baseline is flat and its
         // own share can be read; the peers above it, largest today first.
-        const order = companies.map((_, k) => k).sort((a, b) => (companies[b].self ? 1 : 0) - (companies[a].self ? 1 : 0)
-          || share[b][m - 1] - share[a][m - 1] || (companies[a].symbol < companies[b].symbol ? -1 : 1));
+        const order = inc.map((_, k) => k).sort((x, y) => (inc[y].self ? 1 : 0) - (inc[x].self ? 1 : 0)
+          || share[y][m - 1] - share[x][m - 1] || (inc[x].symbol < inc[y].symbol ? -1 : 1));
         const cum = new Array(m).fill(0);
         let ink = 0;
         const bands = order.map((k) => {
-          const c = companies[k];
+          const c = inc[k], ck = companies.indexOf(c);
           const pts = Array.from({ length: m }, (_, j) => {
             const yb = 1 - cum[j] / 100; cum[j] += share[k][j];
-            return { i: j, v: c.vals[start + j], rank: ranks[k][start + j], share: share[k][j], y: 1 - cum[j] / 100, yb };
+            return { i: j, v: c.vals[start + j], rank: ranks[ck][start + j], share: share[k][j], y: 1 - cum[j] / 100, yb };
           });
           return { symbol: c.symbol, name: c.name || c.symbol, self: !!c.self, band: true, color: c.self ? SHARE_SELF : SHARE_INKS[ink++ % SHARE_INKS.length], pts, last: pts[m - 1] };
         });
         return { metric: mk, label: mLabel, unit, view: 'share', log: false, zero: null, quarters: quarters.slice(start, end + 1), lines: bands,
-          ticks: [{ y: 0, label: '100%' }, { y: 0.5, label: '50%' }, { y: 1, label: '0%' }], n: m, N,
+          ticks: [{ y: 0, label: '100%' }, { y: 0.5, label: '50%' }, { y: 1, label: '0%' }], n: m, N: inc.length,
           lower: /^P\//.test(mLabel) ? mLabel : mLabel.toLowerCase(), ceil: null, pinned: 0, gaps: 0,
-          // Quarters left off the start because some company had no figure yet.
-          dropped: start, shareRefused: false };
+          // Quarters left off the start, and the companies left out of the group.
+          dropped: start, leftOut, shareRefused: false };
       }
     }
     // Asked for a share and not given one: the measure does not add up, or
@@ -260,9 +291,16 @@
   // What the share view is, in words, defined once for both hosts.
   function shareNote(model) {
     if (model.view !== 'share') {
-      return model.shareRefused ? 'Share of the group is drawn for revenue and market value, and only where at least ' + SHARE_MIN_QUARTERS + ' quarters in a row have a figure for every company; this is the value view instead. ' : '';
+      if (!model.shareRefused) return '';
+      return SHARE_METRICS.has(model.metric)
+        ? 'Too few of these companies have ' + model.lower + ' on record for the same ' + SHARE_MIN_QUARTERS + ' quarters to draw shares of a group; this is the value view instead. '
+        : 'A ' + (model.unit === 'mult' ? 'multiple' : 'margin') + ' is not an amount, so the companies\u2019 figures do not add up to a whole to take a share of; this is the value view instead. ';
     }
+    const out = model.leftOut || [];
+    const names = out.map((x) => x.name);
+    const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
     return 'Each band is one company\u2019s share of these ' + model.N + ' companies\u2019 combined ' + model.lower + ', not of the industry. '
+      + (names.length ? list + (names.length === 1 ? ' is' : ' are') + ' left out: ' + (out.every((x) => x.loss) ? 'a loss in the period is no share of a profit' : out.some((x) => x.loss) ? 'a loss, or no figure, for part of the period' : 'no figure for most of the period') + '. ' : '')
       + (model.dropped ? 'It starts at the first quarter all ' + model.N + ' have a figure. ' : '')
       + 'A band can narrow while the company grows, if the others grew faster. ';
   }
