@@ -32,3 +32,12 @@ The owner: "drill down on numbers on the screener wherever possible ... only whe
 - **The real route against production**, from a local read-only server, for Microsoft: revenue 40 points from 2016, P/E, P/B and P/S 20 quarter ends, short interest 52 settlements, announcements 12; a fund answers empty; an unknown column and an unknown symbol are refused.
 - Taking a headless screenshot fires a resize, which closes the panel as it should. The fixture stops that event; the page does not.
 - **Not done by a person yet**: clicked on the live screener.
+
+### It shipped doing nothing, and how that was missed (2026-10-13, an hour later)
+
+The owner: "I don't see the click option on any number." The live header has a THIRD row, the column filters, built by `buildFilterRow()` at load: one cell a column, always present, hidden until switched on, and with no `data-key` on any cell. `columns()` took "the last header row" to be the row with the keys, read the filter row, found none, marked no cell and opened nothing. The browser test had passed because its header was the two rows in the markup.
+
+- `columns()` now takes **the row with the most keys**, whichever it is.
+- The fixture header has the filter row, and fails as shipped (0 cells marked).
+- **`real-page.js`: the real `index.html` in a headless browser**, every file the repository's own, `/api/stocks` answered from a stored snapshot, `/api/drill` by the real builder, everything else 404 (which the page reads as open mode), and a probe appended to the page. It reports three header rows, 118 cells a row, exactly 20 marked and which, that the marked revenue cell sits under the Revenue TTM heading, and that clicking it opens "NVIDIA · Revenue" with eight rows. As a guest: none marked, nothing opens.
+- **The lesson, twice in one feature**: a page that builds part of its own DOM at load cannot be tested from its markup. Test the page itself.

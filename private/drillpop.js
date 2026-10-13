@@ -149,9 +149,22 @@
     const rows = head ? head.rows : [];
     if (!rows.length) return [];
     if (rows.length === 1) return [...rows[0].cells];
+    // THE KEY ROW IS THE ONE WITH THE KEYS, not "the last row". The live page
+    // builds a third header row at load, the column filters, which is always
+    // there (hidden until switched on) and carries no key at all. The second
+    // version read that row, found nothing, and marked no cell: the feature
+    // shipped doing nothing, because the test header had two rows and the
+    // live one has three. The owner found it.
+    let keyRow = null, most = 0;
+    for (const r of rows) {
+      if (r === rows[0]) continue;
+      let k = 0; for (const c of r.cells) if (c.dataset && c.dataset.key) k++;
+      if (k > most) { most = k; keyRow = r; }
+    }
+    if (!keyRow) return [...rows[0].cells];
     const lead = [];
     for (const c of rows[0].cells) { if (c.rowSpan > 1) lead.push(c); else break; }
-    return lead.concat([...rows[rows.length - 1].cells]);
+    return lead.concat([...keyRow.cells]);
   }
   function keyOf(td) {
     const th = td ? columns()[td.cellIndex] : null;
