@@ -11082,8 +11082,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   // page around a picture to carry one. The admin's own are clean, since
   // those are the ones that get posted.
   if (!(await isAdmin(req))) {
-    const who = await currentUser(req);
-    html += Cards.watermark(who && who.email ? who.email : '');
+    html += Cards.watermark();   // the app's name only: the owner asked that it not carry the viewer's email
   }
   res.json({ id: post.id, name: post.name, tpl: post.tpl, size, html, style: Cards.STYLE,
     // The phone does not hold the post's controls, so the ground it has to

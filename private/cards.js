@@ -7771,7 +7771,8 @@
   // shows on a light ground as well as a dark one.
   const WM_COPIES = 110;
   function watermark(who) {
-    const label = 'tickrlab.com' + (who ? ' \u00b7 ' + String(who).slice(0, 80) : '');
+    // THE APP'S NAME, NOT THE VIEWER'S EMAIL (the owner, the same day: "watermark should say the name of the app not the user email"). The first version signed a card with the account it was shown to; `who` is ignored now and kept only so an older caller still works.
+    const label = 'Tickr Lab';
     const one = '<span>' + esc(label) + '</span>';
     return '<div class="s-wm" aria-hidden="true">' + one.repeat(WM_COPIES) + '</div>';
   }
@@ -9943,7 +9944,7 @@
        corner bare. The artboard clips it. */
     .s-wm { position: absolute; left: -45%; right: -45%; top: -25%; bottom: -25%; z-index: 9; pointer-events: none;
       display: flex; flex-wrap: wrap; align-content: space-between; justify-content: space-between; gap: 120px 90px;
-      transform: rotate(-24deg); color: var(--text); opacity: 0.085; font: 600 26px var(--sans); letter-spacing: 0.02em; }
+      transform: rotate(-24deg); color: var(--text); opacity: 0.085; font: 700 34px var(--sans); letter-spacing: 0.04em; }
     .s-wm span { white-space: nowrap; }
     /* Revenue mix: the share beside the amount, a step quieter. */
     .bx-v.rm-pct { font-weight: 500; color: var(--muted); }

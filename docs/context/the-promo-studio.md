@@ -198,3 +198,10 @@ The owner: "all visuals shown to non admin users should have a watermark".
 - `holder.html` and `holders.html` now load `wmark.js` like every other data page; they had shipped without it.
 - It prevents nothing; it signs. A crop of any part of a card still says where it came from and whose screen it was.
 - Not seen rendered by the build: the opacity (0.085) and spacing are a first setting and may want adjusting from a screenshot.
+
+### The card's watermark says "Tickr Lab", not the viewer's email (2026-10-13, the same day)
+
+The owner: "watermark should say the name of the app not the user email". The first version read "tickrlab.com · <account email>". `Cards.watermark()` now repeats **Tickr Lab** and takes no account; both hosts stopped passing one. Set a little larger and heavier, since two words carry less than a line of text did.
+
+- The card mark now says whose picture it is, not whose screen it was. It no longer identifies the account a capture came from.
+- **The page watermark is a separate thing and was not changed**: `wmark.js` still tiles the account email at 5% across every data page, the Visuals page included, for members and guests. So on that page a member's card sits under both: the app's name in the card, and the faint email on the page. Whether the page mark should change too is the owner's call and was asked.
