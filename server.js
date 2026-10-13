@@ -11705,6 +11705,46 @@ app.post('/api/sec/refresh', route(async (req, res) => {
   });
 }));
 
+// WHY IS ONE COMPANY'S NEWEST QUARTER MISSING (2026-10-13; secprobe.js).
+//
+// Asks the SEC about ONE company and says where its newest report stops: at
+// the SEC's facts feed, in our reader, or in what is stored. TWO REQUESTS,
+// SEQUENTIAL, AND NOTHING IS WRITTEN -- not the facts, not sec_state, not the
+// events that ride along on a real refresh. It is the refresh's read with the
+// writes taken out, so what it reports is what a refresh would have stored.
+//
+// The cron secret or an admin, the refresh route's own bargain: what the
+// secret buys here is a read of public filings. One company a call, by
+// design -- a sweep is the refresh's job, and this address has been refused
+// before for asking too fast.
+const SecProbe = require('./secprobe.js');
+app.get('/api/sec/probe', route(async (req, res) => {
+  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (!SEC_READY) return res.status(400).json({ error: 'No contact address configured. Set MAIL_FROM, REPORT_TO or SEC_UA.' });
+  const sym = String(req.query.symbol || '').toUpperCase().trim();
+  if (!/^[A-Z0-9.\-]{1,10}$/.test(sym)) return res.status(400).json({ error: 'Which symbol?' });
+  const cik = secLookup(await secCikMap(), sym);
+  if (!cik) return res.json({ symbol: sym, verdict: 'nocik', why: 'The SEC lists no company under this ticker.' });
+  const head = { 'User-Agent': SEC_UA, Accept: 'application/json' };
+  const id = String(cik).padStart(10, '0');
+  const sr = await fetch('https://data.sec.gov/submissions/CIK' + id + '.json',
+    { headers: head, signal: AbortSignal.timeout(SEC_TIMEOUT_MS) });
+  if (!sr.ok) return res.status(502).json({ error: 'The SEC answered ' + sr.status + ' for the filing list.' });
+  const submissions = await sr.json();
+  const fr = await fetch('https://data.sec.gov/api/xbrl/companyfacts/CIK' + id + '.json',
+    { headers: head, signal: AbortSignal.timeout(SEC_TIMEOUT_MS) });
+  if (!fr.ok && fr.status !== 404) return res.status(502).json({ error: 'The SEC answered ' + fr.status + ' for the facts feed.' });
+  const facts = fr.ok ? await fr.json() : null;
+  let readerRows = [];
+  if (facts) {
+    const cur = SecFacts.currencyOf(facts);
+    const conv = !!cur && cur !== 'USD' && Fx.supports(cur);
+    readerRows = SecFacts.normalise(facts, sym, conv ? { fx: await fxFor(cur), fxCurrency: cur } : undefined);
+  }
+  const stored = await store.readSecFacts(sym);
+  res.json(SecProbe.probe({ symbol: sym, cik, submissions, facts, readerRows, stored }));
+}));
+
 // What the admin page draws: coverage, never a row dump.
 app.get('/api/sec/coverage', requireAdmin, route(async (req, res) => {
   const universe = await store.readUniverse();
