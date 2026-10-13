@@ -7874,6 +7874,115 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Moves by sector: the pivot's grid, as a card ------------------------------
+  //
+  // (2026-10-13, the owner, of the pivot view with Sector down the side and
+  // The year so far across the top: "I like this pivot table, is there any
+  // way this can be built within Promo under Market".) Every company in the
+  // cut, counted once: its sector down the side, and across the top the band
+  // its share price change over the chosen period falls in.
+  //
+  // THE LADDERS ARE THE PIVOT'S, RESTATED (pivot.html: MOVE_BANDS and
+  // ladder()). The BENCHMARKS bargain: this module has no requires, and that
+  // page does not load this one. Same sizes, same words, same edges, and the
+  // card's test compares the two so they cannot drift unnoticed.
+  //
+  // A COUNT, like the pivot's cell and for its reason: percentages do not
+  // add, and averaging them needs a weighting that changes the answer.
+  //
+  // FUNDS ARE LEFT OUT. They have no sector and are not companies; on the
+  // pivot they are the blank row. A company with no sector on file keeps a
+  // row of its own, and one with no return for the period (too little
+  // history) a column of its own, so the grid still adds up to the cut.
+  //
+  // GREEN AND RED ARE THE BAND DOTS ONLY, where they mean what they mean
+  // everywhere here: the price rose or fell. The shading is the accent.
+  const MG_PERIODS = [['d', 'Today', 'todayPct', 1, 3, 'today'], ['w1', 'Past week', 'oneWeekPct', 2, 5, 'over the past week'],
+    ['m1', 'Past month', 'oneMonthPct', 5, 10, 'over the past month'], ['ytd', 'The year so far', 'ytdPct', 10, 30, 'this year so far'],
+    ['y1', 'Past year', 'oneYearPct', 10, 30, 'over the past year']];
+  function mgLadder(a, b) {
+    return [
+      ['Up ' + b + '%+', (v) => v >= b, 'var(--green)', 1],
+      ['Up ' + a + '-' + b + '%', (v) => v >= a && v < b, 'var(--green)', 0.62],
+      ['Up 0-' + a + '%', (v) => v > 0 && v < a, 'var(--green)', 0.34],
+      ['Unchanged', (v) => v === 0, 'var(--muted)', 0.7],
+      ['Down 0-' + a + '%', (v) => v < 0 && v > -a, 'var(--red)', 0.34],
+      ['Down ' + a + '-' + b + '%', (v) => v <= -a && v > -b, 'var(--red)', 0.62],
+      ['Down ' + b + '%+', (v) => v <= -b, 'var(--red)', 1],
+    ];
+  }
+  const MG_FONT = { portrait: [25, 15], square: [20, 13], story: [30, 16] };
+  function tplMoveGrid() {
+    const P = MG_PERIODS.find(([k]) => k === O.mgPeriod) || MG_PERIODS[3];
+    const cut = SP_CUTS.some(([k]) => k === O.mgSp500) ? O.mgSp500 : 'in';
+    const rungs = mgLadder(P[3], P[4]);
+    const cos = spFilter(stocks.filter((x) => x && !x.error && !isFundRow(x)), cut);
+    const where = cut === 'All' ? 'Every company tracked' : SP_CUT_LABEL[cut];
+    if (cos.length < 1) {
+      return chromeTop() + '<div class="s-body"><div><span class="s-kick">' + esc(where) + '</span><h2 class="s-title">Nothing to count<br><span class="dim">no company in this cut</span></h2></div></div>' + chromeFoot();
+    }
+    const NONE = rungs.length;                       // the column for "no return"
+    const bandOf = (r) => {
+      const raw = r[P[2]];
+      if (raw == null || raw === '' || !isFinite(Number(raw))) return NONE;
+      const i = rungs.findIndex((g) => g[1](Number(raw)));
+      return i < 0 ? NONE : i;
+    };
+    const by = new Map();
+    const tot = new Array(rungs.length + 1).fill(0);
+    for (const r of cos) {
+      const k = r.sector ? String(r.sector) : '';
+      const g = by.get(k) || by.set(k, { label: k, cells: new Array(rungs.length + 1).fill(0), n: 0 }).get(k);
+      const b = bandOf(r);
+      g.cells[b]++; g.n++; tot[b]++;
+    }
+    const rows = [...by.values()].filter((g) => g.label).sort((x, y) => y.n - x.n || (x.label < y.label ? -1 : 1));
+    if (by.has('')) rows.push(Object.assign(by.get(''), { label: 'No sector on file', odd: true }));
+    // A band nobody is in is not drawn, except that the six moving bands
+    // always are: an empty "Down 30%+" is a finding, an empty Unchanged is not.
+    const cols = [];
+    rungs.forEach((g, i) => { if (i !== 3 || tot[i] > 0) cols.push(i); });
+    if (tot[NONE] > 0) cols.push(NONE);
+    const peak = Math.max(1, ...rows.flatMap((g) => cols.map((i) => g.cells[i])));
+    const F = MG_FONT[size.id] || MG_FONT.portrait;
+    // All eight columns at once (a flat stock AND one with no return) leave
+    // each too narrow for the usual type: the names and headers step down.
+    const tight = cols.length > 7;
+    const grid = 'grid-template-columns:minmax(0,3.3fr) repeat(' + cols.length + ',minmax(0,1fr)) minmax(0,1.05fr)';
+    const head = (i) => {
+      if (i === NONE) return '<span class="mg-h"><span class="mg-h1">No</span><span class="mg-h2">return</span></span>';
+      const g = rungs[i]; const sp = g[0].indexOf(' ');
+      // 'Unchanged' is one word too long for a column this narrow: two lines, as the others are.
+      const a = sp < 0 ? 'No' : g[0].slice(0, sp), b = sp < 0 ? 'change' : g[0].slice(sp + 1);
+      return '<span class="mg-h"><span class="mg-h1"><i style="background:' + g[2] + ';opacity:' + g[3] + '"></i>' + esc(a) + '</span><span class="mg-h2">' + esc(b || '\u00a0') + '</span></span>';
+    };
+    const cell = (v, shade) => '<span class="mg-c">' + (shade && v > 0 ? '<i style="opacity:' + (0.07 + 0.5 * v / peak).toFixed(3) + '"></i>' : '')
+      + (v > 0 ? '<b>' + v.toLocaleString() + '</b>' : '<b class="mg-z">\u00b7</b>') + '</span>';
+    const line = (g, cls) => '<div class="mg-r' + (cls || '') + '" style="' + grid + '"><span class="mg-n">' + esc(g.label) + '</span>'
+      + cols.map((i) => cell(g.cells[i], !cls)).join('') + '<span class="mg-c mg-t"><b>' + g.n.toLocaleString() + '</b></span></div>';
+    const hd = '<div class="mg-r mg-hd" style="' + grid + '"><span class="mg-n">Sector</span>' + cols.map(head).join('') + '<span class="mg-h mg-t"><span class="mg-h1">Total</span><span class="mg-h2">\u00a0</span></span></div>';
+    const up = tot[0] + tot[1] + tot[2], down = tot[4] + tot[5] + tot[6];
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || '\u00a0') + '</span></div>';
+    const share = (n) => Math.round(n / cos.length * 100) + '% of them';
+    const figs = fig('Companies', cos.length.toLocaleString(), rows.filter((g) => !g.odd).length + ' sectors')
+      + fig('Higher', up.toLocaleString(), share(up))
+      + fig('Lower', down.toLocaleString(), share(down))
+      + fig(rungs[0][0], tot[0].toLocaleString(), rungs[6][0] + ': ' + tot[6].toLocaleString());
+    const note = 'Each company ' + (cut === 'All' ? 'tracked' : 'in ' + SP_CUT_PROSE[cut]) + ' is counted once, in the band its share price change ' + P[5] + ' falls in. '
+      + 'Price change only, with no dividends. A cell is shaded against the largest on the grid (' + peak.toLocaleString() + '). '
+      + (tot[NONE] ? tot[NONE].toLocaleString() + (tot[NONE] === 1 ? ' company has' : ' companies have') + ' no return for the period, usually too short a history. ' : '')
+      + 'A count of what happened, by sector. It says nothing about what comes next.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc(where + ' \u00b7 ' + cos.length.toLocaleString() + ' companies') + '</span>'
+      + '<h2 class="s-title">Moves by sector<br><span class="dim">' + esc(P[1].charAt(0).toLowerCase() + P[1].slice(1)) + '</span></h2>'
+      + '<div class="cr-figs">' + figs + '</div>'
+      + '<div class="mg-rows' + (tight ? ' mg-tight' : '') + '" style="font-size:' + F[0] + 'px;--mg-h:' + (tight ? Math.round(F[1] * 0.86) : F[1]) + 'px">' + hd + rows.map((g) => line(g)).join('')
+      + line({ label: 'Total', cells: tot, n: cos.length }, ' mg-sum') + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Options open interest, added up: the market, a sector, an industry --------
   //
   // (2026-10-12, the owner: "I don't think there is any option related page in
@@ -9706,6 +9815,7 @@
     covsize: () => coverageCard('covsize'),
     covsector: () => coverageCard('covsector'),
     covindex: () => coverageCard('covindex'),
+    movegrid: tplMoveGrid,
     optmkt: () => optGroupCard('optmkt'),
     optsec: () => optGroupCard('optsec'),
     optind: () => optGroupCard('optind'),
@@ -9881,6 +9991,31 @@
        backtick inside this block ends the STYLE template literal, which
        node --check PASSES because it is valid syntax and merely the wrong
        program. */
+    /* Moves by sector: the pivot's grid. The rows share the height left
+       over, so eleven sectors fill a portrait card and a story alike. */
+    .mg-rows { flex: 1 1 0; min-height: 0; display: grid; grid-auto-rows: minmax(0, 1fr); margin: 22px 0 6px; }
+    .mg-r { display: grid; align-items: stretch; border-bottom: 1px solid var(--hair); }
+    .mg-r .mg-n { align-self: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                  font-size: 0.86em; font-weight: 600; letter-spacing: -0.01em; padding-right: 10px; }
+    .mg-tight .mg-r .mg-n { font-size: 0.7em; }
+    .mg-tight .mg-hd .mg-n, .mg-tight .mg-sum .mg-n { font-size: var(--mg-h); }
+    .mg-r .mg-c { position: relative; display: flex; align-items: center; justify-content: flex-end; padding: 0 12px 0 4px;
+                  font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .mg-r .mg-c i { position: absolute; inset: 2px 1px; border-radius: 4px; background: var(--accent); }
+    .mg-r .mg-c b { position: relative; font-weight: 500; }
+    .mg-r .mg-c .mg-z { color: var(--faint); }
+    .mg-r .mg-t { border-left: 1px solid var(--hair); }
+    .mg-r .mg-t b { font-weight: 700; }
+    .mg-hd { border-bottom: 1px solid var(--muted); }
+    .mg-hd .mg-n { font-size: var(--mg-h); font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
+    .mg-hd .mg-h { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; padding: 0 12px 0 4px;
+                   font-size: var(--mg-h); line-height: 1.2; color: var(--muted); white-space: nowrap; }
+    .mg-hd .mg-h1 { display: inline-flex; align-items: center; gap: 5px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }
+    .mg-hd .mg-h1 i { width: 0.55em; height: 0.55em; border-radius: 50%; }
+    .mg-hd .mg-h2 { font-family: var(--mono); color: var(--text); }
+    .mg-sum { border-bottom: 0; border-top: 1px solid var(--muted); }
+    .mg-sum .mg-n { text-transform: uppercase; letter-spacing: 0.12em; font-size: var(--mg-h); color: var(--muted); }
+    .mg-sum .mg-c b { font-weight: 700; }
     .bx-in { display: flex; flex-direction: column; height: 100%; }
     /* A .dim span inside .s-title inherits the display size, and a measure
        name is a phrase rather than a word. Per card, because .s-title is
@@ -12032,6 +12167,8 @@
     earnGrowthCuts: () => EGR_CUTS.map((p) => p.slice()),
     beatBenches: () => BEAT_BENCH.map((p) => p.slice()),
     beatSplits: () => BEAT_SPLITS.map((p) => p.slice()),
+    moveGridPeriods: () => MG_PERIODS.map((p) => [p[0], p[1]]),
+    moveGridLadder: (k) => { const P = MG_PERIODS.find((p) => p[0] === k); return P ? { field: P[2], rungs: mgLadder(P[3], P[4]).map((g) => [g[0], g[1]]) } : null; },
     // ...and which templates want the basket at all, with the window each
     // one asks for. Exported for the same reason: two hosts, one pairing.
     basketDays,

@@ -1316,6 +1316,15 @@
       <!-- Beating the index: how many companies did better than the S&P 500
            over a window. Like the other Market cards it takes no scope,
            sector, size or screen, so INDUSTRY_PREFIXES is left alone. -->
+      <div id="mgBox">
+        <label>Period</label>
+        <select id="mgPeriod"></select>
+        <label>Index</label>
+        <select id="mgSp500"></select>
+        <p class="hint">Each company is counted once: its sector down the side, and across the top the band its
+          share price change over the period falls in. The same bands as the pivot view, sized to the period.
+          Funds are left out.</p>
+      </div>
       <div id="beatBox">
         <label>Window</label>
         <select id="beatPeriod"></select>
@@ -1608,6 +1617,7 @@
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
+      { id: 'movegrid', name: 'Moves by sector', note: 'Every company counted by sector and by how far its price moved over a period — the pivot view’s grid' },
       { id: 'corrections', name: 'Corrections', note: 'How many companies are in a pullback, a correction or a bear market — beside how far each index is from its own high' },
       { id: 'insiders', name: 'Insider activity', note: 'What one company’s insiders bought and sold on the open market, added up and by person, from their own filings' },
       { id: 'optoi', name: 'Options open interest', note: 'Call and put contracts open on one stock at the last close, in total and by expiry, from the Options Clearing Corporation' },
@@ -1711,6 +1721,7 @@
       ['day', 'Snapshot'],
       ['breadth', 'Narrow or broad'],
       ['beat', 'Beating the index'],
+      ['movegrid', 'Moves by sector'],
       ['earngrow', 'Earnings growth'],
       ['earnahead', 'Earnings ahead'],
       ['corrections', 'Corrections'],
@@ -2222,7 +2233,7 @@
       'secMetric', 'secDir', 'secCount', 'secWeight', 'secScope', 'secCap', 'secScreen', 'secSp500',
       'sspName', 'sspWin', 'sspSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
-      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'egrSp500', 'egrQtr', 'egrCount',
+      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mgPeriod', 'mgSp500', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView',
@@ -2442,6 +2453,7 @@
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
+      $('mgBox').style.display = tpl === 'movegrid' ? 'block' : 'none';
       $('egrBox').style.display = tpl === 'earngrow' ? 'block' : 'none';
       $('barBox').style.display = tpl === 'bars' ? 'block' : 'none';
       $('indBox').style.display = tpl === 'industries' ? 'block' : 'none';
@@ -2694,6 +2706,8 @@
     ['egrQtr', 'egrCount'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'earngrow') render(); }));
     // Beating the index: its own listener list, like every template here.
+    ['mgPeriod', 'mgSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'movegrid') render(); }));
     ['beatPeriod', 'beatSp500', 'beatBench', 'beatSplit'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'beat') render(); }));
     ['brdMode', 'brdSp500'].forEach((id) =>
@@ -3710,6 +3724,12 @@
         { const keep = $('beatSplit').value;
           $('beatSplit').innerHTML = Cards.beatSplits().map(([v, lab]) => `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
           if ([...$('beatSplit').options].some((o) => o.value === keep)) $('beatSplit').value = keep; }
+        { const keep = $('mgPeriod').value;
+          $('mgPeriod').innerHTML = Cards.moveGridPeriods().map(([v, lab]) => `<option value="${esc(v)}"${v === 'ytd' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
+          if ([...$('mgPeriod').options].some((o) => o.value === keep)) $('mgPeriod').value = keep; }
+        { const keep = $('mgSp500').value;
+          $('mgSp500').innerHTML = Cards.spCuts().map(([v, lab]) => `<option value="${esc(v)}"${v === 'in' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
+          if ([...$('mgSp500').options].some((o) => o.value === keep)) $('mgSp500').value = keep; }
         const beatBnKeep = $('beatBench').value;
         $('beatBench').innerHTML = Cards.beatBenches().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');

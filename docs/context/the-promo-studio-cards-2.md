@@ -541,3 +541,16 @@ The owner, of the card: "One thing this chart is not saying is how many of these
 - The note names what each drawn band means (`BEAT_BAND_RANGE`, `Filters.CAP_BANDS` restated).
 - The band is today's market value, not the value at the start of the window: a stock that rose a lot may have moved up a band because of it. Not said on the card; worth knowing when reading it.
 - Scratchpad suite, 19 checks. Not rendered in a browser by the build.
+
+## Moves by sector: the pivot's grid as a card (2026-10-13)
+
+The owner, of the pivot view with Sector down the side and The year so far across the top: "I like this pivot table, is there any way this can be built within Promo under Market." Template `movegrid`, under **Market**, visible to members.
+
+- **What it counts**: every company in the cut once, its sector down the side, and across the top the band its share price change over the chosen period falls in. Cells are counts, shaded in the accent against the largest cell on the grid; a row total, a column total, four figures above (companies, higher, lower, the two extreme bands) and a note.
+- **Two controls**: `mgPeriod` (`d`, `w1`, `m1`, `ytd`, `y1`; default the year so far) and `mgSp500` (the usual index cuts; default the S&P 500). Both in `CONTROL_IDS`, so a saved post keeps them. No scope, sector or size pickers, like the other Market cards.
+- **The ladders are the pivot's, restated** (`MG_PERIODS`, `mgLadder`): the BENCHMARKS bargain, since `cards.js` has no requires and the pivot does not load it. `Cards.moveGridLadder(k)` exposes them and the test walks every value from -60% to +60% in steps of 0.05 through both and requires the same band, with the same names in the same order, for all five periods. **Change a band size in one and that test fails.**
+- **Funds are left out** (no sector, not companies). A company with no sector keeps a row, last; one with no return for the period keeps a column, "No return"; so the grid adds up to the cut. The Unchanged column is drawn only when someone is exactly flat, headed "No change" because the one word does not fit a column.
+- **Green and red are the band dots only**, where they mean the price rose or fell. The dots fade with the size of the move.
+- **Looked at, in all three shapes**, drawn with headless Chrome from the real snapshot: the first cut had band headers running into each other and two sector names cut off; the header type was reduced, the name column widened, and with all eight columns showing (`mg-tight`) names and headers step down again.
+- No `ctx` channel: it reads the snapshot rows only, so the phone draws a saved one with no further work. Named in `mobile.html`.
+- 50 checks: each edge on both sides, funds and the out-of-cut left out, totals, shading, fallbacks, the three shapes, the ladders against the pivot's, the studio wiring, and the real snapshot adding up in every column.
