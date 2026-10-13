@@ -30,6 +30,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `action-test.js` | One case per rule. Run after touching any rule |
 | `private/index.html` | The screener — single page, vanilla JS, no build step |
 | `private/rowcard.js` | `FIELD_SPEC`, the one field catalogue, plus hover card and chart SVG. Feeds `/stock`, tiles, phone, `/compare` |
+| `drillhist.js`, `private/drillpop.js` | The history behind a screener number: click a cell, get a chart and a table. The one list of drillable columns and the builders (server), and the panel (page) |
 | `private/filters.js` | The column-filter grammar, defined once (`filterValue`, `screenRows`, `CAP_BANDS`) |
 | `private/cards.js`, `private/cardshot.js` | Promo card templates (global `Cards`) and the one rasteriser |
 | `private/stock.html`, `compare.html`, `basket.html`, `mobile.html` | `/stock/<SYM>`, `/compare/<A>/<B>`, the group page, the phone page `/m` |
@@ -144,7 +145,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Accounts and mail** — `auth-model` · `request-access` · `email` · `alerts` · `the-admin-announcement` · `activity-logging` · `visitor-logging` · `member-portfolios` · `saved-column-layout`
 
-**Screener front end** — `frontend-layout` · `design-system` · `table-specifics` · `column-groups` (190 KB: every column, plus tiles, views, the filter row, hidden columns) · `reactions-group` · `corrections` (the Drawdown column, the Corrections and Drawdowns cards) · `screens` · `analysis-screens` (retired) · `the-awesome-oscillator`
+**Screener front end** — `frontend-layout` · `design-system` · `table-specifics` · `screener-drill-down` · `column-groups` (190 KB: every column, plus tiles, views, the filter row, hidden columns) · `reactions-group` · `corrections` (the Drawdown column, the Corrections and Drawdowns cards) · `screens` · `analysis-screens` (retired) · `the-awesome-oscillator`
 
 **Fundamentals and the universe** — `fundamentals-data` · `scores-ratings` · `everything-the-profile-call-returns-is-kept-now` · `fundamentals-history` · `which-dates-the-fundamentals-actually-describe` · `the-universe-and-the-ballast-that-has-been-draining-out-of-it` · `the-universe-table` · `adding-a-stock` · `dropping-a-symbol` · `editing-portfolios-does-not-pull` · `the-nasdaq-reference-list`
 

@@ -12421,6 +12421,48 @@ app.get('/api/peer-trend', requireAuth, route(async (req, res) => {
   res.json(body);
 }));
 
+// ---- the history behind one number on the screener (drillhist.js) -------------
+// (2026-10-13.) A click on a cell asks for ONE company and ONE field. Members
+// and the admin only: the owner's call, and a guest's preview has no detail
+// views. What is read depends on the field's source and is always a seek on
+// one symbol -- its filings, its short-interest rows, its announcements, or
+// for a valuation trendSeries, the peer chart's own builder, for a list of
+// one (about twenty closes and the filings).
+//
+// DISPLAY ONLY. Nothing here is stamped on a row or stored. An answer is kept
+// in memory for ten minutes, since a reader opens the same cell twice.
+const DrillHist = require('./drillhist.js');
+const drillCache = new Map();
+app.get('/api/drill', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  const field = String(req.query.field || '');
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  const F = Object.prototype.hasOwnProperty.call(DrillHist.FIELDS, field) ? DrillHist.FIELDS[field] : null;
+  if (!F) return res.status(400).json({ error: 'No history is kept for that column.' });
+  const key = symbol + '|' + field;
+  const hit = drillCache.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return res.json(hit.body);
+  const snap = await snapshotCached();
+  const stocks = (snap && snap.stocks) || [];
+  if (!stocks.some((x) => String(x.symbol).toUpperCase() === symbol)) return res.status(404).json({ error: 'Not in the screener.' });
+  const data = {};
+  if (F.src === 'filings' || F.src === 'eps') data.facts = await store.readSecFacts(symbol);
+  else if (F.src === 'short') data.short = await store.readShortInterest(symbol, 400);
+  else if (F.src === 'earnings') data.earnings = await store.readEarnings(symbol);
+  else {
+    data.quarters = quarterEndsBefore(PEER_TREND_QUARTERS, new Date());
+    const t = await trendSeries([symbol], data.quarters, stocks, true);
+    data.series = {}; for (const k of Object.keys(t.series)) data.series[k] = t.series[k][symbol] || [];
+    data.carryDays = PEER_TREND_CARRY;
+    if (F.series === 'pb') data.facts = await store.readSecFacts(symbol);
+  }
+  const body = Object.assign({ symbol }, DrillHist.build(field, data));
+  if (drillCache.size > 400) drillCache.clear();
+  drillCache.set(key, { at: Date.now(), body });
+  res.json(body);
+}));
+
 // ---- Lines: any measure with a history, for a handful of companies -----------
 // (2026-10-09, owner's request: "like Bars -- any measure, but a line chart".)
 //

@@ -1633,6 +1633,7 @@
   <script src="/action.js"></script>
   <script src="/filters.js"></script>
   <script src="/rowcard.js"></script>
+  <script src="/drillpop.js"></script>
   <script src="/track.js"></script>
   <script src="/refresh-loop.js"></script>
   <script>
@@ -5296,6 +5297,8 @@
 
     function applyAdminUI() {
       applyLadderUI();
+      // Which cells are drillable depends on who is looking (drillpop.js).
+      if (window.DrillPop) DrillPop.restyle();
       document.querySelectorAll('.admin-only').forEach((el) => { el.style.display = isAdmin ? '' : 'none'; });
       document.querySelectorAll('.member-only').forEach((el) => { el.style.display = isAdmin ? 'none' : ''; });
       // A guest sees no doors that lead to 403s: the research menu and the
@@ -6242,6 +6245,15 @@
       if (!$('newsPop').hidden && !e.target.closest('#newsPop') && !e.target.closest('td.news')) closeNewsPop();
     });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNewsPop(); });
+
+    // THE HISTORY BEHIND A NUMBER (drillpop.js): a click on a fundamentals cell
+    // that has one. Members and the admin; a guest's cells are left as they were.
+    DrillPop.init({
+      tbody: $('tbody'),
+      rowOf: (sym) => stocks.find((x) => x.symbol === sym),
+      allowed: () => !isGuest,
+      before: () => { closePickers(); hideTip(); hideRowCard(); closeActionPanel(); closeNewsPop(); },
+    });
     window.addEventListener('resize', closeNewsPop);
 
     $('layToggle').addEventListener('click', (e) => {
@@ -6329,7 +6341,7 @@
       th.addEventListener('click', () => toggleGroup(th.dataset.group));
     });
 
-    document.querySelector('.table-wrap').addEventListener('scroll', () => { hideTip(); hideRowCard(); });
+    document.querySelector('.table-wrap').addEventListener('scroll', () => { hideTip(); hideRowCard(); DrillPop.close(); });
     window.addEventListener('scroll', () => { hideTip(); hideRowCard(); }, true);
 
     $('deleteBtn').addEventListener('click', deletePortfolio);
