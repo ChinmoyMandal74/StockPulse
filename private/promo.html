@@ -1316,11 +1316,11 @@
       <!-- Beating the index: how many companies did better than the S&P 500
            over a window. Like the other Market cards it takes no scope,
            sector, size or screen, so INDUSTRY_PREFIXES is left alone. -->
-      <div id="mgBox">
+      <div id="mvgBox">
         <label>Period</label>
-        <select id="mgPeriod"></select>
+        <select id="mvgPeriod"></select>
         <label>Index</label>
-        <select id="mgSp500"></select>
+        <select id="mvgSp500"></select>
         <p class="hint">Each company is counted once: its sector down the side, and across the top the band its
           share price change over the period falls in. The same bands as the pivot view, sized to the period.
           Funds are left out.</p>
@@ -2233,7 +2233,7 @@
       'secMetric', 'secDir', 'secCount', 'secWeight', 'secScope', 'secCap', 'secScreen', 'secSp500',
       'sspName', 'sspWin', 'sspSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
-      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mgPeriod', 'mgSp500', 'egrSp500', 'egrQtr', 'egrCount',
+      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView',
@@ -2453,7 +2453,7 @@
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
-      $('mgBox').style.display = tpl === 'movegrid' ? 'block' : 'none';
+      $('mvgBox').style.display = tpl === 'movegrid' ? 'block' : 'none';
       $('egrBox').style.display = tpl === 'earngrow' ? 'block' : 'none';
       $('barBox').style.display = tpl === 'bars' ? 'block' : 'none';
       $('indBox').style.display = tpl === 'industries' ? 'block' : 'none';
@@ -2706,7 +2706,7 @@
     ['egrQtr', 'egrCount'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'earngrow') render(); }));
     // Beating the index: its own listener list, like every template here.
-    ['mgPeriod', 'mgSp500'].forEach((id) =>
+    ['mvgPeriod', 'mvgSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'movegrid') render(); }));
     ['beatPeriod', 'beatSp500', 'beatBench', 'beatSplit'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'beat') render(); }));
@@ -3724,12 +3724,12 @@
         { const keep = $('beatSplit').value;
           $('beatSplit').innerHTML = Cards.beatSplits().map(([v, lab]) => `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
           if ([...$('beatSplit').options].some((o) => o.value === keep)) $('beatSplit').value = keep; }
-        { const keep = $('mgPeriod').value;
-          $('mgPeriod').innerHTML = Cards.moveGridPeriods().map(([v, lab]) => `<option value="${esc(v)}"${v === 'ytd' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
-          if ([...$('mgPeriod').options].some((o) => o.value === keep)) $('mgPeriod').value = keep; }
-        { const keep = $('mgSp500').value;
-          $('mgSp500').innerHTML = Cards.spCuts().map(([v, lab]) => `<option value="${esc(v)}"${v === 'in' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
-          if ([...$('mgSp500').options].some((o) => o.value === keep)) $('mgSp500').value = keep; }
+        { const keep = $('mvgPeriod').value;
+          $('mvgPeriod').innerHTML = Cards.moveGridPeriods().map(([v, lab]) => `<option value="${esc(v)}"${v === 'ytd' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
+          if ([...$('mvgPeriod').options].some((o) => o.value === keep)) $('mvgPeriod').value = keep; }
+        { const keep = $('mvgSp500').value;
+          $('mvgSp500').innerHTML = Cards.spCuts().map(([v, lab]) => `<option value="${esc(v)}"${v === 'in' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
+          if ([...$('mvgSp500').options].some((o) => o.value === keep)) $('mvgSp500').value = keep; }
         const beatBnKeep = $('beatBench').value;
         $('beatBench').innerHTML = Cards.beatBenches().map(([v, lab]) =>
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');

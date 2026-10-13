@@ -7913,8 +7913,8 @@
   }
   const MG_FONT = { portrait: [25, 15], square: [20, 13], story: [30, 16] };
   function tplMoveGrid() {
-    const P = MG_PERIODS.find(([k]) => k === O.mgPeriod) || MG_PERIODS[3];
-    const cut = SP_CUTS.some(([k]) => k === O.mgSp500) ? O.mgSp500 : 'in';
+    const P = MG_PERIODS.find(([k]) => k === O.mvgPeriod) || MG_PERIODS[3];
+    const cut = SP_CUTS.some(([k]) => k === O.mvgSp500) ? O.mvgSp500 : 'in';
     const rungs = mgLadder(P[3], P[4]);
     const cos = spFilter(stocks.filter((x) => x && !x.error && !isFundRow(x)), cut);
     const where = cut === 'All' ? 'Every company tracked' : SP_CUT_LABEL[cut];
