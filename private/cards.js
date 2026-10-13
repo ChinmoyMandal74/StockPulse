@@ -7749,6 +7749,33 @@
   // and not the same one: the kicker gives the range.
   const FH_ROWS = { portrait: 10, square: 6, story: 12 };
 
+  // ---- the watermark on a card a member sees --------------------------------------
+  //
+  // (2026-10-13, the owner: "all visuals shown to non admin users should have a
+  // watermark".) The data pages already tile the viewer's email across the
+  // window at 5%, and that reaches the studio page too; but it is the PAGE's,
+  // faint, and not part of the card, so the saved posts a member opens on the
+  // phone, which are handed over as real images, carried nothing at all.
+  //
+  // This one is IN THE CARD: the site's name and the account, repeated on the
+  // slant across the whole artboard, so a crop of any part of it still says
+  // where it came from and whose screen it was. It prevents nothing; it signs.
+  //
+  // THE HOST DECIDES WHO IS MARKED, not this module: a card has no idea who
+  // is looking. Both hosts add it for anyone who is not the admin, and the
+  // admin's cards, which are the ones that get posted, stay clean.
+  //
+  // REAL TEXT, NOT A BACKGROUND IMAGE: the phone turns the card into a picture
+  // through the rasteriser, and an image inside that is the one thing it
+  // cannot be trusted to carry. It takes the card's own text colour, so it
+  // shows on a light ground as well as a dark one.
+  const WM_COPIES = 110;
+  function watermark(who) {
+    const label = 'tickrlab.com' + (who ? ' \u00b7 ' + String(who).slice(0, 80) : '');
+    const one = '<span>' + esc(label) + '</span>';
+    return '<div class="s-wm" aria-hidden="true">' + one.repeat(WM_COPIES) + '</div>';
+  }
+
   // ---- Coverage: what this site tracks --------------------------------------------
   //
   // (2026-10-13, the owner: "is there any visualization talking about the
@@ -9911,6 +9938,13 @@
     .sb-hd .sb-hr { text-align: right; }
     .sz-square .sb-hd { font-size: 13px; }
     .sz-story .sb-hd { font-size: 20px; }
+    /* The watermark a member's card carries: the label on the slant, over
+       everything, far past the artboard's edges so the rotation leaves no
+       corner bare. The artboard clips it. */
+    .s-wm { position: absolute; left: -45%; right: -45%; top: -25%; bottom: -25%; z-index: 9; pointer-events: none;
+      display: flex; flex-wrap: wrap; align-content: space-between; justify-content: space-between; gap: 120px 90px;
+      transform: rotate(-24deg); color: var(--text); opacity: 0.085; font: 600 26px var(--sans); letter-spacing: 0.02em; }
+    .s-wm span { white-space: nowrap; }
     /* Revenue mix: the share beside the amount, a step quieter. */
     .bx-v.rm-pct { font-weight: 500; color: var(--muted); }
     /* Capital returns: four figures above the yearly bars, and a bar in two parts. */
@@ -11924,6 +11958,7 @@
     // The two pickers, from the module that DRAWS them, so a host cannot offer
     // a measure or a view the chart does not know.
     peerTrendMetrics: () => ((globalThis.PeerTrend || {}).METRICS || []).map((m) => [m[0], m[1]]),
+    watermark,
     peerTrendViews: () => ((globalThis.PeerTrend || {}).VIEWS || []).map((v) => v.slice()),
     monthViews: () => MON_VIEWS.map((v) => v.slice()),
     shortMovesNeed,

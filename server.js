@@ -11077,6 +11077,14 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   } catch (e) {
     return res.status(500).json({ error: 'That card could not be drawn.' });
   }
+  // A SAVED POST IS HANDED TO THE PHONE AS A REAL IMAGE, so for anyone who is
+  // not the admin the watermark is put in the card itself, here: there is no
+  // page around a picture to carry one. The admin's own are clean, since
+  // those are the ones that get posted.
+  if (!(await isAdmin(req))) {
+    const who = await currentUser(req);
+    html += Cards.watermark(who && who.email ? who.email : '');
+  }
   res.json({ id: post.id, name: post.name, tpl: post.tpl, size, html, style: Cards.STYLE,
     // The phone does not hold the post's controls, so the ground it has to
     // paint travels with the card rather than being re-derived there.

@@ -186,3 +186,15 @@ The owner: "end users also don't need the option to select the color theme, Can 
 - **A member has no Ground to choose** (`body.mem #themeLab, #cardTheme` hidden, and the value set to `dark` on entering member mode). The four grounds exist to match a post to a feed. The admin keeps them.
 - **Help section 16 was rewritten** as "Visuals". It had described a Download PNG button and a "Cards" room with a Save image button, neither of which a member has.
 - Still true and worth knowing: a member can open a SAVED post on the phone page (`/m`, Posts), which hands over a real image. Saving is the admin's; reading is `requireMember`. That was not changed.
+
+## A watermark in every card a non-admin sees (2026-10-13)
+
+The owner: "all visuals shown to non admin users should have a watermark".
+
+- **What was already there**: `wmark.js` tiles the viewer's email across the window at 5% on every data page, the studio page included. It belongs to the page, is faint, and is not part of the card.
+- **What was missing**: a saved post a member opens on the phone is handed over as a real image, with no page around it, so it carried nothing.
+- **`Cards.watermark(who)`** returns the mark as markup: "tickrlab.com · <account>" repeated as real text on the slant across the whole artboard (`.s-wm`), in the card's own text colour so it shows on a light ground too. Real text and not a background image, because the phone rasterises the card and an embedded image is the one thing that cannot be trusted to survive that.
+- **The host decides who is marked**; a card does not know who is looking, and `Cards.build` is unchanged. The studio adds it in member mode (`wmWho`, from `/api/me`). `GET /api/m/post` adds it for anyone who is not the admin. The admin's cards, which are the ones posted, stay clean.
+- `holder.html` and `holders.html` now load `wmark.js` like every other data page; they had shipped without it.
+- It prevents nothing; it signs. A crop of any part of a card still says where it came from and whose screen it was.
+- Not seen rendered by the build: the opacity (0.085) and spacing are a first setting and may want adjusting from a screenshot.

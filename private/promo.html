@@ -1843,6 +1843,7 @@
     //   - no Brand group: those cards are the site's own marketing.
     // Saved posts, the blog and Instagram were already the admin's alone.
     let memberMode = false;
+    let wmWho = '';                          // whose screen a member's cards are marked with
     const MEMBER_HIDDEN = new Set(BRAND_VIEWS.map((v) => v[0]));
     const visibleTpls = () => TPLS.filter((t) => (canAnnounce || !OWNER_ONLY_TPLS.has(t.id)) && !(memberMode && MEMBER_HIDDEN.has(t.id)));
     let portfolioNames = [];
@@ -2384,7 +2385,9 @@
       stage.classList.remove('sz-portrait', 'sz-square', 'sz-story');
       stage.classList.add('sz-' + size.id);
       stage.innerHTML = '<div class="s-aura"></div>' +
-        `<div class="s-in">${buildCard()}</div>`;
+        // A member's card carries the watermark; the admin's, which is the one
+        // that gets posted, does not. Outside .s-in so it spans the artboard.
+        `<div class="s-in">${buildCard()}</div>` + (memberMode ? Cards.watermark(wmWho) : '');
       fit();
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
       $('disBox').style.display = tpl === 'disclaimer' ? 'block' : 'none';
@@ -3418,6 +3421,7 @@
         }
         canAnnounce = !!me.admin;
         memberMode = !me.admin;
+        wmWho = memberMode && me.user && me.user.email ? String(me.user.email) : '';
         document.body.classList.toggle('mem', memberMode);
         if (memberMode) {
           // The page is "Visuals" for everyone (the owner, 2026-10-12: "rename
