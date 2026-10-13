@@ -34,4 +34,14 @@ Controls `ptrSym`, `ptrMetric`, `ptrView` — **152 against `POST_OPT_MAX` 200**
   - **THE NO-LINES GUARD FIRST REPORTED 0, AND IT WAS UNREACHABLE RATHER THAN UNIMPORTANT.** A sector of one and a fund both have `payload.peers` null, so the section is never rendered and `if (!usable) card.remove()` never runs. The fixture gained four real peers of each other with nothing on file and no share count — the table has rows, the chart has no lines — and the revert then fails 1. They sit in a sector of their own: put in Industrials they became the lone shipper's sector-fallback peers and broke a different check.
   - **Not exercised**: the 200-day carry bound (no fixture company stops filing mid-trail) and the guest 403 on the route.
 
+## A third view: Share of the group (2026-10-13)
 
+The owner, of the peer card: "what do you think of making this in a stacked area chart", then "yes build the third option". A 100% stacked area beside Value and Rank, in `peertrend.js`, so the stock page and the promo card both have it.
+
+- **A third view, not a replacement.** A stack hides what the lines show: only the bottom band has a flat baseline, so no other company's own path can be read, and crossings vanish. It answers a different question, who is taking share from whom.
+- **Revenue and market value only** (`SHARE_METRICS`). Net income can be negative; a margin, a multiple or a rank does not add up. Asked for on another measure, `build()` returns the value view with `shareRefused` and `shareNote()` says why. `viewsFor(metric)` is what the stock page offers, so it shows no button that would do nothing.
+- **Only quarters where every company has a positive figure**, and only the unbroken run of them ending at the newest; at least four. A company missing from a quarter would read as a share of nothing and hand its slice to the others. `dropped` counts the earlier quarters left off, and the note says the chart starts where all have a figure.
+- **The company itself is the bottom band**, where the baseline is flat; peers above, largest today first. The accent for the company and other inks for the peers, never green or red. Colours are inline because the markup also goes through the PNG export.
+- **The group is these companies, not the industry**, and both surfaces say so, with "a band can narrow while the company grows, if the others grew faster".
+- Seen on real data: Micron against Broadcom, Intel, AMD and Arm over fourteen quarters, Micron 13% to 41% of the five's combined revenue while Intel went 42% to 18%. Six earlier quarters are left off because Arm has no figure before then.
+- Scratchpad suite, 33 checks including Micron's real payload. Not rendered in a browser by the build.

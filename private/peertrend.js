@@ -55,7 +55,35 @@
     ['pe', 'P/E', 'mult'],
     ['ps', 'P/S', 'mult'],
   ];
-  const VIEWS = [['value', 'Value'], ['rank', 'Rank']];
+  const VIEWS = [['value', 'Value'], ['rank', 'Rank'], ['share', 'Share of the group']];
+  // SHARE OF THE GROUP (2026-10-13, the owner, of the peer card: "what do you
+  // think of making this in a stacked area chart", then "build the third
+  // option"). A 100% stacked area: each band is one company's share of the
+  // group's combined figure, so the picture is who is taking share from whom.
+  //
+  // IT IS A THIRD VIEW AND NOT A REPLACEMENT, because a stack hides what the
+  // lines show: only the bottom band has a flat baseline, so no other
+  // company's own rise or fall can be read off it, and crossings vanish.
+  //
+  // ONLY WHERE ADDING UP MEANS SOMETHING: revenue and market value. Net
+  // income can be negative, and a margin, a multiple or a rank is not a
+  // quantity that sums. Asked for on any other measure, build() answers
+  // with the value view and says so in `shareRefused`.
+  //
+  // ONLY QUARTERS WHERE EVERY COMPANY HAS A FIGURE. A company missing from a
+  // quarter would read as a share of nothing and hand its slice to the
+  // others. The chart is the unbroken run of complete quarters ending at
+  // the newest, and `dropped` says how many earlier ones were left off.
+  //
+  // THE GROUP IS THESE COMPANIES, NOT THE INDUSTRY, and every surface says so.
+  const SHARE_METRICS = new Set(['rev', 'cap']);
+  const SHARE_MIN_QUARTERS = 4;
+  // Bands are identities, not directions: never green or red. The company
+  // itself takes the accent; the peers take these in turn.
+  const SHARE_SELF = '#7c9cff';
+  const SHARE_INKS = ['#fb923c', '#a78bfa', '#38bdf8', '#f472b6', '#cbd5e1', '#818cf8', '#fdba74', '#94a3b8'];
+  const fmtShare = (s) => (ok(s) ? (s > 0 && s < 0.5 ? '<1' : String(Math.round(s))) + '%' : '\u2014');
+  const viewsFor = (metricKey) => VIEWS.filter(([k]) => k !== 'share' || SHARE_METRICS.has(metricKey));
   const metricOf = (k, cat) => (cat || METRICS).find((m) => m[0] === k) || (cat || METRICS)[0];
 
   const ok = (v) => v != null && isFinite(v);
@@ -90,6 +118,7 @@
       .map((c) => Object.assign({}, c, { vals: (src[c.symbol] || []).map((v) => (ok(v) ? Number(v) : null)) }))
       .filter((c) => c.vals.some(ok));
     const n = quarters.length, N = companies.length;
+    const wantShare = viewKey === 'share';
 
     // ---- rank, quarter by quarter -------------------------------------------
     // Only the companies WITH a figure that quarter are ranked. A missing one
@@ -101,6 +130,45 @@
         .sort((a, b) => b[1] - a[1])
         .forEach((x, r) => { ranks[x[0]][i] = r + 1; });
     }
+
+    // ---- share of the group -----------------------------------------------------
+    if (wantShare && SHARE_METRICS.has(mk) && N >= 2) {
+      const full = (i) => companies.every((c) => ok(c.vals[i]) && c.vals[i] > 0);
+      let end = n - 1;
+      while (end >= 0 && !full(end)) end--;
+      let start = end;
+      while (start > 0 && full(start - 1)) start--;
+      if (end >= 0 && end - start + 1 >= SHARE_MIN_QUARTERS) {
+        const m = end - start + 1;
+        const share = companies.map((c) => Array.from({ length: m }, (_, j) => {
+          const i = start + j; let sum = 0;
+          for (const o of companies) sum += o.vals[i];
+          return c.vals[i] / sum * 100;
+        }));
+        // The company itself at the foot, where the baseline is flat and its
+        // own share can be read; the peers above it, largest today first.
+        const order = companies.map((_, k) => k).sort((a, b) => (companies[b].self ? 1 : 0) - (companies[a].self ? 1 : 0)
+          || share[b][m - 1] - share[a][m - 1] || (companies[a].symbol < companies[b].symbol ? -1 : 1));
+        const cum = new Array(m).fill(0);
+        let ink = 0;
+        const bands = order.map((k) => {
+          const c = companies[k];
+          const pts = Array.from({ length: m }, (_, j) => {
+            const yb = 1 - cum[j] / 100; cum[j] += share[k][j];
+            return { i: j, v: c.vals[start + j], rank: ranks[k][start + j], share: share[k][j], y: 1 - cum[j] / 100, yb };
+          });
+          return { symbol: c.symbol, name: c.name || c.symbol, self: !!c.self, band: true, color: c.self ? SHARE_SELF : SHARE_INKS[ink++ % SHARE_INKS.length], pts, last: pts[m - 1] };
+        });
+        return { metric: mk, label: mLabel, unit, view: 'share', log: false, zero: null, quarters: quarters.slice(start, end + 1), lines: bands,
+          ticks: [{ y: 0, label: '100%' }, { y: 0.5, label: '50%' }, { y: 1, label: '0%' }], n: m, N,
+          lower: /^P\//.test(mLabel) ? mLabel : mLabel.toLowerCase(), ceil: null, pinned: 0, gaps: 0,
+          // Quarters left off the start because some company had no figure yet.
+          dropped: start, shareRefused: false };
+      }
+    }
+    // Asked for a share and not given one: the measure does not add up, or
+    // too few quarters have every company. The value view is drawn instead.
+    const shareRefused = wantShare;
 
     // ---- the value scale -----------------------------------------------------
     const all = [];
@@ -160,7 +228,7 @@
     return { metric: mk, label: mLabel, unit, view, log, zero, quarters, lines, ticks, n, N,
       // 'revenue', 'market value' -- but an initialism keeps its capitals.
       lower: /^P\//.test(mLabel) ? mLabel : mLabel.toLowerCase(),
-      ceil, pinned: lines.reduce((t, l) => t + l.pts.filter((p) => p && p.pinned).length, 0),
+      ceil, pinned: lines.reduce((t, l) => t + l.pts.filter((p) => p && p.pinned).length, 0), shareRefused, dropped: 0,
       // How many quarter-cells have no figure, so a host can say so.
       gaps: lines.reduce((t, l) => t + l.pts.filter((p) => !p).length, 0) };
   }
@@ -187,6 +255,16 @@
           + (model.pinned === 1 ? ' is' : ' are') + ' drawn at the top of the scale. ' : '');
     }
     return 'Each point is the trailing twelve months to the latest quarter that company had ended by that date, from its own filings. ';
+  }
+
+  // What the share view is, in words, defined once for both hosts.
+  function shareNote(model) {
+    if (model.view !== 'share') {
+      return model.shareRefused ? 'Share of the group is drawn for revenue and market value, and only where at least ' + SHARE_MIN_QUARTERS + ' quarters in a row have a figure for every company; this is the value view instead. ' : '';
+    }
+    return 'Each band is one company\u2019s share of these ' + model.N + ' companies\u2019 combined ' + model.lower + ', not of the industry. '
+      + (model.dropped ? 'It starts at the first quarter all ' + model.N + ' have a figure. ' : '')
+      + 'A band can narrow while the company grows, if the others grew faster. ';
   }
 
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
@@ -216,7 +294,7 @@
       if (!l.last) continue;
       const nm = l.name.length > max ? max : l.name.length;
       const rank = model.view === 'rank' ? ('#' + l.last.rank + '  ').length : 0;
-      const figW = fmt(model.unit, l.last.v).length * fs * MONO;
+      const figW = (model.view === 'share' ? fmtShare(l.last.share) : fmt(model.unit, l.last.v)).length * fs * MONO;
       const nameW = (rank + nm) * fs * SANS;
       right = Math.max(right, o.stack ? Math.max(nameW, figW) : nameW + 8 + figW);
     }
@@ -252,6 +330,37 @@
     for (let i = n - 1; i >= 0; i -= step) {
       out += '<text class="pt-ax" x="' + X(i).toFixed(1) + '" y="' + (h - fs * 0.5).toFixed(1) + '" text-anchor="'
         + 'middle' + '" font-size="' + fs + '">' + esc((o.xLabel || qLabel)(model.quarters[i])) + '</text>';
+    }
+
+    // ---- share of the group: bands, not lines ---------------------------------
+    if (model.view === 'share') {
+      for (const l of model.lines) {
+        let top = '', foot = '';
+        for (const p of l.pts) top += (top ? 'L' : 'M') + X(p.i).toFixed(1) + ' ' + Y(p.y).toFixed(1);
+        for (let j = l.pts.length - 1; j >= 0; j--) foot += 'L' + X(l.pts[j].i).toFixed(1) + ' ' + Y(l.pts[j].yb).toFixed(1);
+        const col = (o.colors && o.colors[l.symbol]) || l.color;
+        // Inline, because this markup also travels through the PNG export.
+        out += '<path class="pt-band" style="fill:' + col + ';fill-opacity:' + (l.self ? '0.95' : '0.78') + ';stroke:#0b0e14;stroke-width:1" d="' + top + foot + 'Z">'
+          + '<title>' + esc(l.name + ' \u00b7 ' + fmtShare(l.last.share) + ' of the group in ' + qLabel(model.quarters[l.last.i]) + ' \u00b7 ' + fmt(unit, l.last.v)) + '</title></path>';
+      }
+      // The names beside the middle of each band's right-hand edge, spread so
+      // none overprints, the same way the lines' names are.
+      const labsS = model.lines.map((l) => ({ l, y: Y((l.last.y + l.last.yb) / 2) })).sort((a, b) => a.y - b.y);
+      const gapS = fs * 1.45;
+      for (let i = 1; i < labsS.length; i++) if (labsS[i].y < labsS[i - 1].y + gapS) labsS[i].y = labsS[i - 1].y + gapS;
+      const overS = labsS.length ? labsS[labsS.length - 1].y - y1 : 0;
+      if (overS > 0) {
+        labsS[labsS.length - 1].y -= overS;
+        for (let i = labsS.length - 2; i >= 0; i--) if (labsS[i].y > labsS[i + 1].y - gapS) labsS[i].y = labsS[i + 1].y - gapS;
+      }
+      const maxS = o.nameMax || 18;
+      for (const { l, y } of labsS) {
+        const nm = l.name.length > maxS ? l.name.slice(0, maxS - 1).trimEnd() + '\u2026' : l.name;
+        const col = (o.colors && o.colors[l.symbol]) || l.color;
+        out += '<text class="pt-lab ' + (l.self ? 'pt-self' : 'pt-peer') + '" style="fill:' + col + '" x="' + (x1 + 12) + '" y="' + (y + fs * 0.34).toFixed(1) + '" font-size="' + fs + '">'
+          + esc(nm) + '<tspan class="pt-fig" style="fill:' + col + '" dx="8">' + esc(fmtShare(l.last.share)) + '</tspan></text>';
+      }
+      return out + '</svg>';
     }
 
     // the lines: peers first, the company itself last so it is never crossed out
@@ -310,5 +419,5 @@
     return out + '</svg>';
   }
 
-  global.PeerTrend = { METRICS, LINE_METRICS, VIEWS, build, svg, fit, fmt, qLabel, measureNote };
+  global.PeerTrend = { METRICS, LINE_METRICS, VIEWS, SHARE_METRICS, viewsFor, build, svg, fit, fmt, fmtShare, qLabel, measureNote, shareNote };
 })(typeof window !== 'undefined' ? window : globalThis);

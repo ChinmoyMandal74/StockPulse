@@ -2798,6 +2798,10 @@
       const box = document.getElementById('ptrendBody');
       if (!box || !ptData) return;
       const model = PeerTrend.build(ptData, ptMetric, ptView);
+      // Share of the group exists for revenue and market value only. On any
+      // other measure the module answers with the value view; the switch then
+      // shows that, and does not offer a third button that would do nothing.
+      ptView = model.view;
       const seg = (list, cur, attr) => '<span class="seg">' + list.map(([k, lab]) =>
         '<button type="button" class="rng' + (k === cur ? ' on' : '') + '" data-' + attr + '="' + k + '">' + esc(lab) + '</button>').join('') + '</span>';
       // Only the measures somebody here has a figure for are offered.
@@ -2809,17 +2813,22 @@
           fs: narrow ? 10.5 : 12, dot: 3.4, nameMax: narrow ? 9 : 20, xLabels: narrow ? 4 : 7 })
         : '';
       const self = model.lines.find((l) => l.self);
-      const head = self && self.last
+      const head = self && self.last && model.view === 'share'
+        ? esc(self.name) + ' has <b>' + esc(PeerTrend.fmtShare(self.last.share)) + '</b> of these ' + model.N + ' companies\u2019 combined ' + esc(model.lower)
+          + ' in the latest quarter, at <b>' + esc(PeerTrend.fmt(model.unit, self.last.v)) + '</b>.'
+        : self && self.last
         ? esc(self.name) + ' is <b>#' + self.last.rank + ' of ' + model.N + '</b> on ' + esc(model.lower)
           + ' in the latest quarter, at <b>' + esc(PeerTrend.fmt(model.unit, self.last.v)) + '</b>.'
         : 'No figure for ' + esc(stock.symbol) + ' on this measure.';
       box.innerHTML =
         '<p class="summary">' + head + '</p>' +
-        '<div class="pbar">' + seg(offered.map(([k, lab]) => [k, lab]), model.metric, 'm') + seg(PeerTrend.VIEWS, model.view, 'v') + '</div>' +
+        '<div class="pbar">' + seg(offered.map(([k, lab]) => [k, lab]), model.metric, 'm') + seg(PeerTrend.viewsFor(model.metric), model.view, 'v') + '</div>' +
         '<div class="pchart">' + chart + '</div>' +
         '<p class="note">' +
         esc(PeerTrend.measureNote(model, ptData)) +
-        (model.view === 'rank'
+        esc(PeerTrend.shareNote(model)) +
+        (model.view === 'share' ? 'Hover a band for the figure behind it. '
+          : model.view === 'rank'
           ? 'Rank 1 is the largest. A place can change on a small gap or a large one — hover a dot for the figure. '
           : (model.log ? 'Log scale, so equal distances are equal ratios. ' : '') + 'The figure beside each name is its latest. ') +
         (model.gaps && model.metric !== 'pe' ? 'A break in a line is a quarter with no figure on record; that company is left out of that quarter’s ranking rather than placed last. ' : '') +

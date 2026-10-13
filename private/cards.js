@@ -9421,7 +9421,9 @@
     const n = nameOf(row);
     const span = model.quarters.length ? PT.qLabel(model.quarters[0]) + ' to ' + PT.qLabel(model.quarters[model.n - 1]) : '';
     const note = PT.measureNote(model, data)
-      + (model.view === 'rank' ? 'Rank 1 is the largest; a place can change on a small gap or a large one. '
+      + PT.shareNote(model)
+      + (model.view === 'share' ? ''
+        : model.view === 'rank' ? 'Rank 1 is the largest; a place can change on a small gap or a large one. '
         : (model.log ? 'Log scale, so equal distances are equal ratios. ' : ''))
       + (model.gaps && model.metric !== 'pe' ? 'A break in a line is a quarter with no figure on record. ' : '')
       + 'The peers are today’s closest by industry and size. A record of what was reported, not a view on which is the better company.';
@@ -9429,7 +9431,8 @@
       + '<div class="s-body"><div class="pv-in">'
       + '<span class="s-kick">' + esc((data.group ? data.group + ' · ' : '') + model.N + ' companies · ' + span) + '</span>'
       + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span><span class="dim">'
-      + esc(model.view === 'rank' ? 'ranked on ' + model.lower + ' among its peers'
+      + esc(model.view === 'share' ? 'share of the group\u2019s ' + model.lower + (self.last ? ' \u2014 ' + PT.fmtShare(self.last.share) + ' today' : '')
+        : model.view === 'rank' ? 'ranked on ' + model.lower + ' among its peers'
         : model.lower + ' against its peers'
           + (self.last ? ' — #' + self.last.rank + ' of ' + model.N + ' today' : '')) + '</span></h2>'
       + '<div class="pv-chart">' + chart + '</div>'
