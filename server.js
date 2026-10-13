@@ -11359,6 +11359,7 @@ async function newsStalePlan(windowMs) {
 // The parsing lives in secfacts.js (pure, no network, no database), the
 // orchestration here — the news.js shape.
 const SecFacts = require('./secfacts.js');
+const SecInstance = require('./secinstance.js');
 // The SEC refuses an undeclared bot and asks for a way to reach the
 // operator. That address is already in the environment, so this needs no
 // new variable to work — SEC_UA only has to be set to override it.
@@ -11471,11 +11472,51 @@ async function fxFor(ccy) {
   return book;
 }
 
+// REPORTS THE FACTS FEED DOES NOT CARRY, read from the reports themselves
+// (secinstance.js, 2026-10-13). The feed was found two to three months
+// behind the SEC's own filing list for about 110 companies; this puts each
+// such report's figures into `facts`, in the feed's own shape, BEFORE the
+// reader runs, so everything after it is unchanged.
+//
+// A REPORT IS FETCHED ONCE. What was read is kept in `sec_instance` and
+// replayed on every later refresh for as long as the feed lacks it, so a
+// lagging company costs one extra request the first time and none after.
+// A report with no data file, or nothing usable in one, is recorded as
+// empty for the same reason. A 429 stops the loop and records nothing; any
+// other failure is left unrecorded and tried again next time.
+//
+// NEVER THE SYMBOL'S OUTCOME: the caller wraps this, and a failure leaves
+// the company exactly where the feed alone would have put it.
+const SEC_INSTANCE_MAX_BYTES = 60 * 1024 * 1024;
+async function secFillFromReports(sym, cik, recent, facts) {
+  const gaps = SecInstance.missing(recent, facts);
+  if (!gaps.length) return 0;
+  const have = await store.readSecInstance(sym);
+  let added = 0;
+  for (const report of gaps) {
+    let obs = have.get(report.accn);
+    if (!obs) {
+      const u = SecInstance.url(cik, report);
+      if (!u) { await store.writeSecInstance(sym, report, []); continue; }
+      const r = await fetch(u, { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(SEC_TIMEOUT_MS) });
+      if (r.status === 429) break;
+      if (r.status === 404) { await store.writeSecInstance(sym, report, []); continue; }
+      if (!r.ok) continue;
+      if (Number(r.headers.get('content-length') || 0) > SEC_INSTANCE_MAX_BYTES) continue;
+      obs = SecInstance.extract(await r.text());
+      await store.writeSecInstance(sym, report, obs);
+    }
+    if (SecInstance.inject(facts, report, obs)) added++;
+  }
+  return added;
+}
+
 async function secFetchOne(symbol) {
   const sym = String(symbol).toUpperCase();
   // Declared OUTSIDE the try: the catch path writes it too, and a `let`
   // inside the try block is invisible there.
   let lastResults = null;
+  let recent = null;               // the filing list, for the reports the feed lacks
   try {
     const map = await secCikMap();
     const cik = secLookup(map, sym);
@@ -11510,6 +11551,7 @@ async function secFetchOne(symbol) {
       });
       if (sr.ok) {
         const sj = await sr.json();
+        recent = (sj.filings && sj.filings.recent) || null;
         const best = SecFacts.newestResults(sj.filings && sj.filings.recent);
         if (best) lastResults = best.d;
         // EVERY 8-K IN THE SAME BLOCK, not only the newest results one
@@ -11575,6 +11617,10 @@ async function secFetchOne(symbol) {
     }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const facts = await r.json();
+    // Reports on the list that the feed does not carry. Its own catch: the
+    // feed is the payload and this rides along.
+    let filled = 0;
+    try { filled = await secFillFromReports(sym, cik, recent, facts); } catch (e) { /* the feed alone */ }
     // A FOREIGN FILER REPORTS IN ITS OWN CURRENCY (2026-10-10). Euros are
     // brought to dollars at the European Central Bank's rate for each period;
     // any other currency is not converted yet, and is recorded as exactly
@@ -11604,7 +11650,7 @@ async function secFetchOne(symbol) {
       (m, r) => (SecFacts.isStatement(r) && r.filed && (!m || r.filed > m) ? r.filed : m), null);
     await store.writeSecFacts(sym, rows, { cik, status: 'ok', lastFiled, lastResults,
       taxonomy: filer.taxonomy, currency: filer.currency });
-    return { symbol: sym, status: 'ok', rows: rows.length, cik, results: lastResults };
+    return { symbol: sym, status: 'ok', rows: rows.length, cik, results: lastResults, filled };
   } catch (e) {
     await store.noteSecMiss(sym, 'error', e.message).catch(() => {});
     // A companyfacts failure does not discard an announcement date we did
@@ -11742,7 +11788,51 @@ app.get('/api/sec/probe', route(async (req, res) => {
     readerRows = SecFacts.normalise(facts, sym, conv ? { fx: await fxFor(cur), fxCurrency: cur } : undefined);
   }
   const stored = await store.readSecFacts(sym);
-  res.json(SecProbe.probe({ symbol: sym, cik, submissions, facts, readerRows, stored }));
+  const out = SecProbe.probe({ symbol: sym, cik, submissions, facts, readerRows, stored });
+  const recent = (submissions.filings && submissions.filings.recent) || null;
+  const instance = async (report) => {
+    const u = SecInstance.url(cik, report);
+    if (!u) return { status: 0, text: '' };
+    const r = await fetch(u, { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(SEC_TIMEOUT_MS) });
+    return { status: r.status, text: r.ok ? await r.text() : '' };
+  };
+  // ?check=1 -- DOES THE REPORT READER AGREE WITH THE FEED. The newest report
+  // the feed DOES carry is read from its own data file and lined up against
+  // the feed's facts for it. One more request, nothing written.
+  if (req.query.check && facts && recent) {
+    const inFeed = SecProbe.feedFor(facts, out.taxonomy).by;
+    let report = null;
+    for (let i = 0; i < recent.form.length && !report; i++) {
+      const accn = String(recent.accessionNumber[i] || ''), doc = String((recent.primaryDocument || [])[i] || '');
+      if (/^(10-K|10-Q|20-F|40-F)$/i.test(String(recent.form[i])) && doc && inFeed.has(accn)) {
+        report = { accn, form: recent.form[i], filed: recent.filingDate[i], doc };
+      }
+    }
+    if (report) {
+      const got = await instance(report);
+      out.check = Object.assign({ accn: report.accn, form: report.form, filed: report.filed, status: got.status },
+        got.status === 200 ? SecInstance.compare(facts, report, SecInstance.extract(got.text)) : {});
+    }
+  }
+  // ?fill=1 -- WHAT A REFRESH WOULD ADD, without adding it: the reports the
+  // feed lacks are read, put into the feed's shape and run through the reader.
+  if (req.query.fill && facts && recent) {
+    const gaps = SecInstance.missing(recent, facts);
+    const reports = [];
+    for (const report of gaps) {
+      const got = await instance(report);
+      const obs = got.status === 200 ? SecInstance.extract(got.text) : [];
+      SecInstance.inject(facts, report, obs);
+      reports.push({ accn: report.accn, form: report.form, filed: report.filed, status: got.status, figures: obs.length });
+      if (got.status === 429) break;
+    }
+    const cur = SecFacts.currencyOf(facts);
+    const conv = !!cur && cur !== 'USD' && Fx.supports(cur);
+    const rows = SecFacts.normalise(facts, sym, conv ? { fx: await fxFor(cur), fxCurrency: cur } : undefined);
+    for (const x of reports) x.rows = rows.filter((r) => r.accn === x.accn).length;
+    out.fill = { reports, rows: rows.length, newestEnd: rows.reduce((m, r) => (r.periodEnd > m ? r.periodEnd : m), '') || null };
+  }
+  res.json(out);
 }));
 
 // What the admin page draws: coverage, never a row dump.

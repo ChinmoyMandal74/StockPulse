@@ -819,6 +819,22 @@ const SCHEMA = [
      at       integer not null,
      primary key (symbol, accn)
    )`,
+  // A REPORT THE SEC FACTS FEED DOES NOT CARRY, as read from the report
+  // itself (secinstance.js, 2026-10-13): the catalogue figures of one
+  // filing, a few KB of JSON. Kept so the report is fetched ONCE and not on
+  // every refresh while the feed stays behind. `n` is 0 where the report
+  // had no data file or nothing usable in it, which is still an answer.
+  // A few hundred rows; read by symbol only. Display only, like sec_facts.
+  `create table if not exists sec_instance (
+     symbol   text not null,
+     accn     text not null,
+     form     text,
+     filed    text,
+     n        integer not null default 0,
+     obs      text not null,
+     at       integer not null,
+     primary key (symbol, accn)
+   )`,
   // SUPERSEDED by the two above the day it shipped: one row per company,
   // the newest fiscal year only. Nothing reads it; kept so the purge list
   // names a table that exists.
@@ -5030,6 +5046,30 @@ async function writeSegReport(symbol, rep) {
   return list.length;
 }
 
+// Reports read from their own data file because the facts feed lacked them:
+// Map accession -> the figures, in the shape secinstance.inject takes.
+async function readSecInstance(symbol) {
+  await init();
+  const r = await db.execute({ sql: 'select accn, obs from sec_instance where symbol = ?', args: [String(symbol).toUpperCase()] });
+  const out = new Map();
+  for (const x of r.rows) {
+    let obs = []; try { obs = JSON.parse(x.obs) || []; } catch { obs = []; }
+    out.set(String(x.accn), Array.isArray(obs) ? obs : []);
+  }
+  return out;
+}
+
+async function writeSecInstance(symbol, report, obs) {
+  await init();
+  const list = Array.isArray(obs) ? obs : [];
+  await db.execute({
+    sql: `insert into sec_instance (symbol, accn, form, filed, n, obs, at) values (?, ?, ?, ?, ?, ?, ?)
+          on conflict(symbol, accn) do update set form = excluded.form, filed = excluded.filed, n = excluded.n, obs = excluded.obs, at = excluded.at`,
+    args: [String(symbol).toUpperCase(), String(report.accn), report.form || null, report.filed || null, list.length, JSON.stringify(list), Date.now()],
+  });
+  return list.length;
+}
+
 // The reports already read for a company: Map accession -> filing date.
 async function readSegAccns(symbol) {
   await init();
@@ -5276,7 +5316,7 @@ async function readBarsFor(symbols, since) {
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders', 'options_state', 'options_oi',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
-  'sec_facts', 'sec_state', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
+  'sec_facts', 'sec_state', 'sec_instance', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
 
 // Remove a symbol from the database entirely.
 //
@@ -6998,7 +7038,7 @@ module.exports = {
   writeSecHolders, readSecHolders, readSecHolderAccns, readSecHoldersSince,
   writeInstHoldings, readInstHolding, readInstSummaries, writeCusipMap,
   writeOptions, readOptionsState, readOptionsHistory, readOptionsAll,
-  writeSecSegments, readSecSegments, readSecSegmentAccn, writeSegReport, readSegAccns, readSegPeriods,
+  writeSecSegments, readSecSegments, readSecSegmentAccn, writeSegReport, readSegAccns, readSegPeriods, readSecInstance, writeSecInstance,
   readCusipMap, writeFundHolders, readFundHolders,
   writeHolderBooks, clearHolderBooks, readHolderBook, listHolderBooks,
   readMarginChange, writeMarginChange,

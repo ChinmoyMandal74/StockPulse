@@ -129,6 +129,8 @@ function probe({ symbol, cik, submissions, facts, readerRows, stored }) {
     verdict = 'nofeed'; why = 'The SEC has no tagged figures for this company at all.';
   } else if (!newest.feedFacts && newest.elsewhere) {
     verdict = 'reader'; why = 'The feed carries the newest report, but only under sections our reader does not read: ' + Object.keys(newest.elsewhere).join(', ') + '.';
+  } else if (!newest.feedFacts && newest.storedRows) {
+    verdict = 'filled'; why = 'The SEC\'s facts feed does not carry the newest report. Its figures were read from the report\'s own data file and are stored.';
   } else if (!newest.feedFacts) {
     verdict = 'feed'; why ='The newest report is on the SEC\'s list but its figures are not in the SEC\'s facts feed. Nothing we read could contain it.';
   } else if (!newest.readerRows) {

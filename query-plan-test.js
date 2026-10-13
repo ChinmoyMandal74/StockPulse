@@ -36,7 +36,7 @@ const BIG = ['bars', 'fundamentals_history', 'earnings_history', 'news', 'activi
   'fund_holdings',
   // About eighteen rows a company (six years, twelve quarters) of JSON a
   // few KB each: small in rows, not in bytes. Read by symbol only.
-  'seg_periods', 'seg_filings',
+  'seg_periods', 'seg_filings', 'sec_instance',
   // One row a stock a trading day: about 320,000 a year. Read by symbol,
   // newest first, with a limit.
   'options_oi',
